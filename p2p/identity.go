@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -54,14 +55,8 @@ func EnsureIdentity(dir string) (crypto.PrivKey, error) {
 		return nil, fmt.Errorf("ensure that directory %s exist: %w", dir, err)
 	}
 	info, err := identityInfoFromDir(dir)
-	if err == nil {
-		pk, err := crypto.UnmarshalPrivateKey(info.Key)
-		if err != nil {
-			return nil, fmt.Errorf("unmarshal privkey: %w", err)
-		}
-		return pk, nil
-	}
-	if errors.Is(err, os.ErrNotExist) {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
 		key, err := genIdentity()
 		if err != nil {
 			return nil, err
@@ -85,6 +80,13 @@ func EnsureIdentity(dir string) (crypto.PrivKey, error) {
 			return nil, fmt.Errorf("write identity data: %w", err)
 		}
 		return key, nil
+	case err != nil:
+		return nil, fmt.Errorf("read key from disk: %w", err)
 	}
-	return nil, fmt.Errorf("read key from disk: %w", err)
+
+	pk, err := crypto.UnmarshalPrivateKey(info.Key)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal privkey: %w", err)
+	}
+	return pk, nil
 }

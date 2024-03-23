@@ -1,10 +1,10 @@
 package tests
 
 import (
-	"crypto/ed25519"
 	"sync"
 	"testing"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +41,7 @@ func TestEquivocation(t *testing.T) {
 		zap.Int("honest", honest),
 		zap.Int("equivocators", len(keys)-honest),
 	)
-	cl := cluster.New(cctx, cluster.WithKeys(10))
+	cl := cluster.New(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
 	require.NoError(t, cl.AddBootstrappers(cctx))
 	require.NoError(t, cl.AddPoets(cctx))

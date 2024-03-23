@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 )
 
@@ -36,9 +37,9 @@ func TestAutoScaling(t *testing.T) {
 		return nil
 	})
 
-	events.EmitPostStart(nil)
-	events.EmitPostComplete(nil)
-	events.EmitPostFailure()
+	events.EmitPostStart(types.EmptyNodeID, nil)
+	events.EmitPostComplete(types.EmptyNodeID, nil)
+	events.EmitPostFailure(types.EmptyNodeID)
 	require.Eventually(t, done.Load, time.Second, 10*time.Millisecond)
 
 	close(stop)
@@ -48,13 +49,13 @@ func TestAutoScaling(t *testing.T) {
 func TestPostVerifierScaling(t *testing.T) {
 	// 0 workers - no one will verify the proof
 	mockVerifier := NewMockPostVerifier(gomock.NewController(t))
-	v := NewOffloadingPostVerifier(mockVerifier, 0, zaptest.NewLogger(t))
+	v := newOffloadingPostVerifier(mockVerifier, 0, zaptest.NewLogger(t))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
 	err := v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
-	require.Error(t, err, context.Canceled)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 
 	mockVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	v.scale(1)
@@ -62,8 +63,9 @@ func TestPostVerifierScaling(t *testing.T) {
 	require.NoError(t, err)
 
 	v.scale(0)
+
 	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	err = v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
-	require.Error(t, err, context.Canceled)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }

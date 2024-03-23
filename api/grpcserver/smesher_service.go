@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // SmesherService exposes endpoints to manage smeshing.
@@ -27,7 +29,9 @@ type SmesherService struct {
 	postSupervisor   postSupervisor
 
 	streamInterval time.Duration
+	cmdCfg         *activation.PostSupervisorConfig
 	postOpts       activation.PostSetupOpts
+	sig            *signing.EdSigner
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -50,17 +54,27 @@ func NewSmesherService(
 	postSupervisor postSupervisor,
 	streamInterval time.Duration,
 	postOpts activation.PostSetupOpts,
+	sig *signing.EdSigner,
 ) *SmesherService {
 	return &SmesherService{
 		smeshingProvider: smeshing,
 		postSupervisor:   postSupervisor,
 		streamInterval:   streamInterval,
 		postOpts:         postOpts,
+		sig:              sig,
 	}
+}
+
+// SetPostServiceConfig sets the post supervisor config.
+func (s *SmesherService) SetPostServiceConfig(cfg activation.PostSupervisorConfig) {
+	s.cmdCfg = &cfg
 }
 
 // IsSmeshing reports whether the node is smeshing.
 func (s SmesherService) IsSmeshing(context.Context, *emptypb.Empty) (*pb.IsSmeshingResponse, error) {
+	if s.sig == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "node is not configured for supervised smeshing")
+	}
 	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshingProvider.Smeshing()}, nil
 }
 
@@ -69,6 +83,17 @@ func (s SmesherService) StartSmeshing(
 	ctx context.Context,
 	in *pb.StartSmeshingRequest,
 ) (*pb.StartSmeshingResponse, error) {
+	if s.sig == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "node is not configured for supervised smeshing")
+	}
+	if s.cmdCfg == nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "post supervisor config is not set")
+	}
+	opts, err := s.postSetupOpts(in.Opts)
+	if err != nil {
+		status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
 	}
@@ -77,11 +102,7 @@ func (s SmesherService) StartSmeshing(
 		return nil, fmt.Errorf("failed to parse in.Coinbase.Address `%s`: %w", in.Coinbase.Address, err)
 	}
 
-	opts, err := s.postSetupOpts(in.Opts)
-	if err != nil {
-		status.Error(codes.InvalidArgument, err.Error())
-	}
-	if err := s.postSupervisor.Start(opts); err != nil {
+	if err := s.postSupervisor.Start(*s.cmdCfg, opts, s.sig); err != nil {
 		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to start post supervisor: %v", err))
 	}
@@ -96,16 +117,16 @@ func (s SmesherService) StartSmeshing(
 
 func (s SmesherService) postSetupOpts(in *pb.PostSetupOpts) (activation.PostSetupOpts, error) {
 	if in == nil {
-		return activation.PostSetupOpts{}, fmt.Errorf("`Opts` must be provided")
+		return activation.PostSetupOpts{}, errors.New("`Opts` must be provided")
 	}
 	if in.DataDir == "" {
-		return activation.PostSetupOpts{}, fmt.Errorf("`Opts.DataDir` must be provided")
+		return activation.PostSetupOpts{}, errors.New("`Opts.DataDir` must be provided")
 	}
 	if in.NumUnits == 0 {
-		return activation.PostSetupOpts{}, fmt.Errorf("`Opts.NumUnits` must be provided")
+		return activation.PostSetupOpts{}, errors.New("`Opts.NumUnits` must be provided")
 	}
 	if in.MaxFileSize == 0 {
-		return activation.PostSetupOpts{}, fmt.Errorf("`Opts.MaxFileSize` must be provided")
+		return activation.PostSetupOpts{}, errors.New("`Opts.MaxFileSize` must be provided")
 	}
 
 	// Overlay default with api provided opts
@@ -140,7 +161,16 @@ func (s SmesherService) StopSmeshing(
 
 // SmesherID returns the smesher ID of this node.
 func (s SmesherService) SmesherID(context.Context, *emptypb.Empty) (*pb.SmesherIDResponse, error) {
-	return &pb.SmesherIDResponse{PublicKey: s.smeshingProvider.SmesherID().Bytes()}, nil
+	return nil, status.Errorf(codes.Unimplemented, "this endpoint has been deprecated, use `SmesherIDs` instead")
+}
+
+func (s SmesherService) SmesherIDs(context.Context, *emptypb.Empty) (*pb.SmesherIDsResponse, error) {
+	ids := s.smeshingProvider.SmesherIDs()
+	res := &pb.SmesherIDsResponse{}
+	for _, id := range ids {
+		res.PublicKeys = append(res.PublicKeys, id.Bytes())
+	}
+	return res, nil
 }
 
 // Coinbase returns the current coinbase setting of this node.
@@ -253,8 +283,8 @@ func (s SmesherService) PostConfig(context.Context, *emptypb.Empty) (*pb.PostCon
 		LabelsPerUnit: cfg.LabelsPerUnit,
 		MinNumUnits:   cfg.MinNumUnits,
 		MaxNumUnits:   cfg.MaxNumUnits,
-		K1:            cfg.K1,
-		K2:            cfg.K2,
+		K1:            uint32(cfg.K1),
+		K2:            uint32(cfg.K2),
 	}, nil
 }
 

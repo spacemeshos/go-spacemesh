@@ -2,7 +2,7 @@ package types
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -58,11 +58,19 @@ type Ballot struct {
 	// the proof of the smeshers eligibility to vote and propose block content in this epoch.
 	// Eligibilities must be produced in the ascending order.
 	// the proofs are vrf signatures and need not be included in the ballot's signature.
-	// according to protocol there are 50 per layer, the rest is safety margin
-	EligibilityProofs []VotingEligibility `scale:"max=500"`
+	//
+	// The number of eligibility proofs depends on the smeshers weight and the total weight of the network.
+	// For epoch 16 the largest smesher had 888 SUs and the total weight of the network was ~20.2 Mio SUs.
+	// This means that the largest smesher received 888 / 20,200,000 = 0.0044% of all eligibility slots for the epoch.
+	// There are 4032 layers in an epoch and 50 eligibility slots per layer, so the largest smesher received
+	// 0.0044% * 4032 * 50 = ~9 eligibility slots.
+	//
+	// Assuming the largest smesher won't control more than 10% of space in the network, we can assume that the
+	// highest number of eligibilities in a single ballot will be below 25000. (10% of 4032 * 50 = 20160)
+	EligibilityProofs []VotingEligibility `scale:"max=25000"`
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	// only present in smesher's first ballot of the epoch
-	ActiveSet []ATXID `scale:"max=100000"`
+	ActiveSet []ATXID `scale:"max=2200000"`
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
@@ -241,7 +249,7 @@ type EpochData struct {
 // this should be called once all the other fields of the Ballot are set.
 func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
-		return fmt.Errorf("ballot already initialized")
+		return errors.New("ballot already initialized")
 	}
 
 	b.ballotID = BallotID(BytesToHash(b.HashInnerBytes()).ToHash20())

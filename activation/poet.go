@@ -39,7 +39,7 @@ type PoetPoW struct {
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
 	baseURL       *url.URL
-	poetServiceID types.PoetServiceID
+	poetServiceID []byte
 	client        *retryablehttp.Client
 	logger        *zap.Logger
 }
@@ -114,12 +114,10 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 	}
 
 	poetClient := &HTTPPoetClient{
-		baseURL: baseURL,
-		client:  client,
-		logger:  zap.NewNop(),
-		poetServiceID: types.PoetServiceID{
-			ServiceID: server.Pubkey.Bytes(),
-		},
+		baseURL:       baseURL,
+		client:        client,
+		logger:        zap.NewNop(),
+		poetServiceID: server.Pubkey.Bytes(),
 	}
 	for _, opt := range opts {
 		opt(poetClient)
@@ -187,7 +185,7 @@ func (c *HTTPPoetClient) Submit(
 }
 
 // PoetServiceID returns the public key of the PoET proving service.
-func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) types.PoetServiceID {
+func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) []byte {
 	return c.poetServiceID
 }
 
@@ -223,10 +221,6 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 		RoundID:       roundID,
 		Statement:     types.BytesToHash(statement),
 	}
-	if c.poetServiceID.ServiceID == nil {
-		c.poetServiceID.ServiceID = proof.PoetServiceID
-	}
-
 	return &proof, members, nil
 }
 

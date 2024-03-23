@@ -19,10 +19,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
+	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -69,7 +72,7 @@ func MainnetConfig() Config {
 			MetricsPort:           1010,
 			DatabaseConnections:   16,
 			DatabasePruneInterval: 30 * time.Minute,
-			DatabaseVacuumState:   8,
+			DatabaseVacuumState:   9,
 			PruneActivesetsFrom:   12, // starting from epoch 13 activesets below 12 will be pruned
 			NetworkHRP:            "sm",
 
@@ -93,10 +96,6 @@ func MainnetConfig() Config {
 					Pubkey:  types.MustBase64FromString("Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="),
 				},
 				{
-					Address: "https://mainnet-poet-2.spacemesh.network",
-					Pubkey:  types.MustBase64FromString("8RXEI0MwO3uJUINFFlOm/uTjJCneV9FidMpXmn55G8Y="),
-				},
-				{
 					Address: "https://poet-110.spacemesh.network",
 					Pubkey:  types.MustBase64FromString("8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="),
 				},
@@ -111,8 +110,9 @@ func MainnetConfig() Config {
 			},
 			RegossipAtxInterval: 2 * time.Hour,
 			ATXGradeDelay:       30 * time.Minute,
+			PostValidDelay:      time.Duration(math.MaxInt64),
 		},
-		Genesis: &GenesisConfig{
+		Genesis: GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
 			ExtraData:   "00000000000000000001a6bc150307b5c1998045752b3c87eccf3c013036f3cc",
 			Accounts:    MainnetAccounts(),
@@ -126,9 +126,12 @@ func MainnetConfig() Config {
 			MinimalActiveSetWeight: []types.EpochMinimalActiveWeight{
 				{Weight: 1_000_000},
 			},
+			HistoricalWindowSize: []tortoise.WindowSizeInterval{
+				{End: 30_000, Window: 10_000},
+			},
 		},
 		HARE3: hare3conf,
-		HareEligibility: eligConfig.Config{
+		HareEligibility: eligibility.Config{
 			ConfidenceParam: 200,
 		},
 		Certificate: blocks.CertConfig{
@@ -139,8 +142,8 @@ func MainnetConfig() Config {
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,
-			Q:                        big.NewRat(1, 3),
-			Theta:                    big.NewRat(1, 4),
+			Q:                        *big.NewRat(1, 3),
+			Theta:                    *big.NewRat(1, 4),
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
@@ -187,9 +190,16 @@ func MainnetConfig() Config {
 			Standalone:               false,
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 36, // 3h
-			DisableAtxReconciliation: true,
+			DisableMeshAgreement:     true,
+			AtxSync:                  atxsync.DefaultConfig(),
+			MalSync:                  malsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),
+		ActiveSet: miner.ActiveSetPreparation{
+			Window:        60 * time.Minute,
+			RetryInterval: time.Minute,
+			Tries:         20,
+		},
 	}
 }

@@ -5,6 +5,7 @@
 //
 //	mockgen -typed -package=log -destination=./log_mock.go -source=./log.go
 //
+
 // Package log is a generated GoMock package.
 package log
 
@@ -49,32 +50,32 @@ func (m *MockLogger) Debug(format string, args ...any) {
 }
 
 // Debug indicates an expected call of Debug.
-func (mr *MockLoggerMockRecorder) Debug(format any, args ...any) *LoggerDebugCall {
+func (mr *MockLoggerMockRecorder) Debug(format any, args ...any) *MockLoggerDebugCall {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{format}, args...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Debug", reflect.TypeOf((*MockLogger)(nil).Debug), varargs...)
-	return &LoggerDebugCall{Call: call}
+	return &MockLoggerDebugCall{Call: call}
 }
 
-// LoggerDebugCall wrap *gomock.Call
-type LoggerDebugCall struct {
+// MockLoggerDebugCall wrap *gomock.Call
+type MockLoggerDebugCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *LoggerDebugCall) Return() *LoggerDebugCall {
+func (c *MockLoggerDebugCall) Return() *MockLoggerDebugCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *LoggerDebugCall) Do(f func(string, ...any)) *LoggerDebugCall {
+func (c *MockLoggerDebugCall) Do(f func(string, ...any)) *MockLoggerDebugCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *LoggerDebugCall) DoAndReturn(f func(string, ...any)) *LoggerDebugCall {
+func (c *MockLoggerDebugCall) DoAndReturn(f func(string, ...any)) *MockLoggerDebugCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -90,32 +91,32 @@ func (m *MockLogger) Error(format string, args ...any) {
 }
 
 // Error indicates an expected call of Error.
-func (mr *MockLoggerMockRecorder) Error(format any, args ...any) *LoggerErrorCall {
+func (mr *MockLoggerMockRecorder) Error(format any, args ...any) *MockLoggerErrorCall {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{format}, args...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Error", reflect.TypeOf((*MockLogger)(nil).Error), varargs...)
-	return &LoggerErrorCall{Call: call}
+	return &MockLoggerErrorCall{Call: call}
 }
 
-// LoggerErrorCall wrap *gomock.Call
-type LoggerErrorCall struct {
+// MockLoggerErrorCall wrap *gomock.Call
+type MockLoggerErrorCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *LoggerErrorCall) Return() *LoggerErrorCall {
+func (c *MockLoggerErrorCall) Return() *MockLoggerErrorCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *LoggerErrorCall) Do(f func(string, ...any)) *LoggerErrorCall {
+func (c *MockLoggerErrorCall) Do(f func(string, ...any)) *MockLoggerErrorCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *LoggerErrorCall) DoAndReturn(f func(string, ...any)) *LoggerErrorCall {
+func (c *MockLoggerErrorCall) DoAndReturn(f func(string, ...any)) *MockLoggerErrorCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -131,32 +132,32 @@ func (m *MockLogger) Info(format string, args ...any) {
 }
 
 // Info indicates an expected call of Info.
-func (mr *MockLoggerMockRecorder) Info(format any, args ...any) *LoggerInfoCall {
+func (mr *MockLoggerMockRecorder) Info(format any, args ...any) *MockLoggerInfoCall {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{format}, args...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockLogger)(nil).Info), varargs...)
-	return &LoggerInfoCall{Call: call}
+	return &MockLoggerInfoCall{Call: call}
 }
 
-// LoggerInfoCall wrap *gomock.Call
-type LoggerInfoCall struct {
+// MockLoggerInfoCall wrap *gomock.Call
+type MockLoggerInfoCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *LoggerInfoCall) Return() *LoggerInfoCall {
+func (c *MockLoggerInfoCall) Return() *MockLoggerInfoCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *LoggerInfoCall) Do(f func(string, ...any)) *LoggerInfoCall {
+func (c *MockLoggerInfoCall) Do(f func(string, ...any)) *MockLoggerInfoCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *LoggerInfoCall) DoAndReturn(f func(string, ...any)) *LoggerInfoCall {
+func (c *MockLoggerInfoCall) DoAndReturn(f func(string, ...any)) *MockLoggerInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -172,32 +173,32 @@ func (m *MockLogger) Panic(format string, args ...any) {
 }
 
 // Panic indicates an expected call of Panic.
-func (mr *MockLoggerMockRecorder) Panic(format any, args ...any) *LoggerPanicCall {
+func (mr *MockLoggerMockRecorder) Panic(format any, args ...any) *MockLoggerPanicCall {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{format}, args...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Panic", reflect.TypeOf((*MockLogger)(nil).Panic), varargs...)
-	return &LoggerPanicCall{Call: call}
+	return &MockLoggerPanicCall{Call: call}
 }
 
-// LoggerPanicCall wrap *gomock.Call
-type LoggerPanicCall struct {
+// MockLoggerPanicCall wrap *gomock.Call
+type MockLoggerPanicCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *LoggerPanicCall) Return() *LoggerPanicCall {
+func (c *MockLoggerPanicCall) Return() *MockLoggerPanicCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *LoggerPanicCall) Do(f func(string, ...any)) *LoggerPanicCall {
+func (c *MockLoggerPanicCall) Do(f func(string, ...any)) *MockLoggerPanicCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *LoggerPanicCall) DoAndReturn(f func(string, ...any)) *LoggerPanicCall {
+func (c *MockLoggerPanicCall) DoAndReturn(f func(string, ...any)) *MockLoggerPanicCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -213,32 +214,32 @@ func (m *MockLogger) Warning(format string, args ...any) {
 }
 
 // Warning indicates an expected call of Warning.
-func (mr *MockLoggerMockRecorder) Warning(format any, args ...any) *LoggerWarningCall {
+func (mr *MockLoggerMockRecorder) Warning(format any, args ...any) *MockLoggerWarningCall {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{format}, args...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Warning", reflect.TypeOf((*MockLogger)(nil).Warning), varargs...)
-	return &LoggerWarningCall{Call: call}
+	return &MockLoggerWarningCall{Call: call}
 }
 
-// LoggerWarningCall wrap *gomock.Call
-type LoggerWarningCall struct {
+// MockLoggerWarningCall wrap *gomock.Call
+type MockLoggerWarningCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *LoggerWarningCall) Return() *LoggerWarningCall {
+func (c *MockLoggerWarningCall) Return() *MockLoggerWarningCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *LoggerWarningCall) Do(f func(string, ...any)) *LoggerWarningCall {
+func (c *MockLoggerWarningCall) Do(f func(string, ...any)) *MockLoggerWarningCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *LoggerWarningCall) DoAndReturn(f func(string, ...any)) *LoggerWarningCall {
+func (c *MockLoggerWarningCall) DoAndReturn(f func(string, ...any)) *MockLoggerWarningCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -252,31 +253,31 @@ func (m *MockLogger) With() FieldLogger {
 }
 
 // With indicates an expected call of With.
-func (mr *MockLoggerMockRecorder) With() *LoggerWithCall {
+func (mr *MockLoggerMockRecorder) With() *MockLoggerWithCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "With", reflect.TypeOf((*MockLogger)(nil).With))
-	return &LoggerWithCall{Call: call}
+	return &MockLoggerWithCall{Call: call}
 }
 
-// LoggerWithCall wrap *gomock.Call
-type LoggerWithCall struct {
+// MockLoggerWithCall wrap *gomock.Call
+type MockLoggerWithCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *LoggerWithCall) Return(arg0 FieldLogger) *LoggerWithCall {
+func (c *MockLoggerWithCall) Return(arg0 FieldLogger) *MockLoggerWithCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *LoggerWithCall) Do(f func() FieldLogger) *LoggerWithCall {
+func (c *MockLoggerWithCall) Do(f func() FieldLogger) *MockLoggerWithCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *LoggerWithCall) DoAndReturn(f func() FieldLogger) *LoggerWithCall {
+func (c *MockLoggerWithCall) DoAndReturn(f func() FieldLogger) *MockLoggerWithCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -290,31 +291,31 @@ func (m *MockLogger) WithContext(arg0 context.Context) Log {
 }
 
 // WithContext indicates an expected call of WithContext.
-func (mr *MockLoggerMockRecorder) WithContext(arg0 any) *LoggerWithContextCall {
+func (mr *MockLoggerMockRecorder) WithContext(arg0 any) *MockLoggerWithContextCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithContext", reflect.TypeOf((*MockLogger)(nil).WithContext), arg0)
-	return &LoggerWithContextCall{Call: call}
+	return &MockLoggerWithContextCall{Call: call}
 }
 
-// LoggerWithContextCall wrap *gomock.Call
-type LoggerWithContextCall struct {
+// MockLoggerWithContextCall wrap *gomock.Call
+type MockLoggerWithContextCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *LoggerWithContextCall) Return(arg0 Log) *LoggerWithContextCall {
+func (c *MockLoggerWithContextCall) Return(arg0 Log) *MockLoggerWithContextCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *LoggerWithContextCall) Do(f func(context.Context) Log) *LoggerWithContextCall {
+func (c *MockLoggerWithContextCall) Do(f func(context.Context) Log) *MockLoggerWithContextCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *LoggerWithContextCall) DoAndReturn(f func(context.Context) Log) *LoggerWithContextCall {
+func (c *MockLoggerWithContextCall) DoAndReturn(f func(context.Context) Log) *MockLoggerWithContextCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -328,31 +329,31 @@ func (m *MockLogger) WithName(arg0 string) Log {
 }
 
 // WithName indicates an expected call of WithName.
-func (mr *MockLoggerMockRecorder) WithName(arg0 any) *LoggerWithNameCall {
+func (mr *MockLoggerMockRecorder) WithName(arg0 any) *MockLoggerWithNameCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithName", reflect.TypeOf((*MockLogger)(nil).WithName), arg0)
-	return &LoggerWithNameCall{Call: call}
+	return &MockLoggerWithNameCall{Call: call}
 }
 
-// LoggerWithNameCall wrap *gomock.Call
-type LoggerWithNameCall struct {
+// MockLoggerWithNameCall wrap *gomock.Call
+type MockLoggerWithNameCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *LoggerWithNameCall) Return(arg0 Log) *LoggerWithNameCall {
+func (c *MockLoggerWithNameCall) Return(arg0 Log) *MockLoggerWithNameCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *LoggerWithNameCall) Do(f func(string) Log) *LoggerWithNameCall {
+func (c *MockLoggerWithNameCall) Do(f func(string) Log) *MockLoggerWithNameCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *LoggerWithNameCall) DoAndReturn(f func(string) Log) *LoggerWithNameCall {
+func (c *MockLoggerWithNameCall) DoAndReturn(f func(string) Log) *MockLoggerWithNameCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

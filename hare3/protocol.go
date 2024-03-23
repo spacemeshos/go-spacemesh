@@ -482,7 +482,9 @@ func thresholdTallies[T interface {
 	comparable
 	fmt.Stringer
 }](
-	state map[messageKey]*gossipInput, filter IterRound, msgGrade grade,
+	state map[messageKey]*gossipInput,
+	filter IterRound,
+	msgGrade grade,
 	tally func(tally map[T]tallyStats[T], inp *gossipInput),
 ) map[T]tallyStats[T] {
 	all := map[T]tallyStats[T]{}

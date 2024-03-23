@@ -4,9 +4,10 @@ package node
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,17 +23,21 @@ import (
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/mitchellh/mapstructure"
+	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/poet/server"
-	"github.com/spacemeshos/post/verifying"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -47,9 +52,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -63,16 +68,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
+	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -82,10 +91,11 @@ import (
 )
 
 const (
-	edKeyFileName   = "key.bin"
 	genesisFileName = "genesis.json"
 	dbFile          = "state.sql"
-	localDbFile     = "node_state.sql"
+
+	oldLocalDbFile = "node_state.sql"
+	localDbFile    = "local.sql"
 )
 
 // Logger names.
@@ -94,12 +104,14 @@ const (
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	PostServiceLogger      = "postService"
-	StateDbLogger          = "stateDbStore"
+	PostInfoServiceLogger  = "postInfoService"
+	StateDbLogger          = "stateDb"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
 	TrtlLogger             = "trtl"
 	ATXHandlerLogger       = "atxHandler"
+	ATXBuilderLogger       = "atxBuilder"
 	MeshLogger             = "mesh"
 	SyncLogger             = "sync"
 	HareOracleLogger       = "hareOracle"
@@ -108,6 +120,7 @@ const (
 	BlockGenLogger         = "blockGenerator"
 	BlockHandlerLogger     = "blockHandler"
 	TxHandlerLogger        = "txHandler"
+	ProposalStoreLogger    = "proposalStore"
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
 	NipostBuilderLogger    = "nipostBuilder"
@@ -123,106 +136,143 @@ const (
 )
 
 func GetCommand() *cobra.Command {
+	conf := config.MainnetConfig()
+	var configPath *string
 	c := &cobra.Command{
 		Use:   "node",
 		Short: "start node",
-		Run: func(c *cobra.Command, args []string) {
-			conf, err := loadConfig(c)
-			if err != nil {
-				log.With().Fatal("failed to initialize config", log.Err(err))
-			}
-
-			if conf.LOGGING.Encoder == config.JSONLogEncoder {
-				log.JSONLog(true)
-			}
-
-			if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
-				log.With().Fatal("this is a testnet-only build not intended for mainnet")
+		RunE: func(c *cobra.Command, args []string) error {
+			if err := configure(c, *configPath, &conf); err != nil {
+				return err
 			}
 
 			app := New(
-				WithConfig(conf),
+				WithConfig(&conf),
 				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
 				// otherwise it will fail later when child logger will try to increase level.
-				WithLog(log.RegisterHooks(
-					log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel)),
-					events.EventHook()),
-				),
+				WithLog(log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel), events.EventHook())),
 			)
 
-			run := func(ctx context.Context) error {
-				types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-				// ensure all data folders exist
-				if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
-					return fmt.Errorf("ensure folders exist: %w", err)
-				}
-
-				if err := app.Lock(); err != nil {
-					return fmt.Errorf("failed to get exclusive file lock: %w", err)
-				}
-				defer app.Unlock()
-
-				if err := app.Initialize(); err != nil {
-					return err
-				}
-
-				/* Create or load miner identity */
-				if app.edSgn, err = app.LoadOrCreateEdSigner(); err != nil {
-					return fmt.Errorf("could not retrieve identity: %w", err)
-				}
-
-				app.preserve, err = app.LoadCheckpoint(ctx)
-				if err != nil {
-					return err
-				}
-
-				// This blocks until the context is finished or until an error is produced
-				err = app.Start(ctx)
-				cleanupCtx, cleanupCancel := context.WithTimeout(
-					context.Background(),
-					30*time.Second,
-				)
-				defer cleanupCancel()
-				done := make(chan struct{}, 1)
-				// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
-				go func() {
-					app.Cleanup(cleanupCtx)
-					_ = app.eg.Wait()
-					close(done)
-				}()
-				select {
-				case <-done:
-				case <-cleanupCtx.Done():
-					app.log.With().Error("app failed to clean up in time")
-				}
-				return err
-			}
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
-			if err := run(ctx); err != nil {
-				app.log.With().Fatal(err.Error())
+
+			types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
+			// ensure all data folders exist
+			if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
+				return fmt.Errorf("ensure folders exist: %w", err)
 			}
+
+			if err := app.Lock(); err != nil {
+				return fmt.Errorf("getting exclusive file lock: %w", err)
+			}
+			defer app.Unlock()
+
+			if err := app.Initialize(); err != nil {
+				return fmt.Errorf("initializing app: %w", err)
+			}
+
+			// Migrate legacy identity to new location
+			if err := app.MigrateExistingIdentity(); err != nil {
+				return fmt.Errorf("migrating existing identity: %w", err)
+			}
+
+			var err error
+			if app.signers, err = app.TestIdentity(); err != nil {
+				return fmt.Errorf("testing identity: %w", err)
+			}
+
+			if app.signers == nil {
+				err := app.LoadIdentities()
+				switch {
+				case errors.Is(err, fs.ErrNotExist):
+					app.log.Info("Identity file not found. Creating new identity...")
+					if err := app.NewIdentity(); err != nil {
+						return fmt.Errorf("creating new identity: %w", err)
+					}
+				case err != nil:
+					return fmt.Errorf("loading identities: %w", err)
+				}
+			}
+
+			// Don't print usage on error from this point forward
+			c.SilenceUsage = true
+
+			app.preserve, err = app.LoadCheckpoint(ctx)
+			if err != nil {
+				return fmt.Errorf("loading checkpoint: %w", err)
+			}
+
+			// This blocks until the context is finished or until an error is produced
+			err = app.Start(ctx)
+			cleanupCtx, cleanupCancel := context.WithTimeout(
+				context.Background(),
+				30*time.Second,
+			)
+			defer cleanupCancel()
+			done := make(chan struct{}, 1)
+			// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
+			go func() {
+				app.Cleanup(cleanupCtx)
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-cleanupCtx.Done():
+				app.log.Error("app failed to clean up in time")
+			}
+			return err
 		},
 	}
 
-	cmd.AddCommands(c)
+	configPath = cmd.AddFlags(c.PersistentFlags(), &conf)
 
 	// versionCmd returns the current version of spacemesh.
-	versionCmd := cobra.Command{
+	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show version info",
 		Run: func(c *cobra.Command, args []string) {
 			fmt.Print(cmd.Version)
-			if cmd.Commit != "" {
-				fmt.Printf("+%s", cmd.Commit)
-			}
 			fmt.Println()
 		},
 	}
-	c.AddCommand(&versionCmd)
+	c.AddCommand(versionCmd)
+
+	relayCmd := cobra.Command{
+		Use:          "relay",
+		Short:        "Run relay server",
+		SilenceUsage: true,
+		RunE: func(c *cobra.Command, args []string) error {
+			if err := configure(c, *configPath, &conf); err != nil {
+				return err
+			}
+			return runRelay(c.Context(), &conf)
+		},
+	}
+	c.AddCommand(&relayCmd)
 
 	return c
+}
+
+func configure(c *cobra.Command, configPath string, conf *config.Config) error {
+	preset := conf.Preset // might be set via CLI flag
+	if err := loadConfig(conf, preset, configPath); err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	// apply CLI args to config
+	if err := c.ParseFlags(os.Args[1:]); err != nil {
+		return fmt.Errorf("parsing flags: %w", err)
+	}
+
+	if conf.LOGGING.Encoder == config.JSONLogEncoder {
+		log.JSONLog(true)
+	}
+
+	if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
+		return errors.New("this is a testnet-only build not intended for mainnet")
+	}
+
+	return nil
 }
 
 var (
@@ -235,32 +285,28 @@ func init() {
 	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
 }
 
-func loadConfig(c *cobra.Command) (*config.Config, error) {
-	conf, err := LoadConfigFromFile()
-	if err != nil {
-		return nil, err
+// loadConfig loads config and preset (if provided) into the provided config.
+// It first loads the preset and then overrides it with values from the config file.
+func loadConfig(cfg *config.Config, preset, path string) error {
+	v := viper.New()
+	// read in config from file
+	if err := config.LoadConfig(path, v); err != nil {
+		return err
 	}
-	if err := cmd.EnsureCLIFlags(c, conf); err != nil {
-		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
-	}
-	return conf, nil
-}
 
-// LoadConfigFromFile tries to load configuration file if the config parameter was specified.
-func LoadConfigFromFile() (*config.Config, error) {
-	// read in default config if passed as param using viper
-	if err := config.LoadConfig(viper.GetString("config"), viper.GetViper()); err != nil {
-		return nil, err
+	// override default config with preset if provided
+	if len(preset) == 0 && v.IsSet("preset") {
+		preset = v.GetString("preset")
 	}
-	conf := config.MainnetConfig()
-	if name := viper.GetString("preset"); len(name) > 0 {
-		preset, err := presets.Get(name)
+	if len(preset) > 0 {
+		p, err := presets.Get(preset)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		conf = preset
+		*cfg = p
 	}
 
+	// Unmarshall config file into config struct
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
@@ -271,16 +317,35 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
-	// load config if it was loaded to the viper
-	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook), withZeroFields()); err != nil {
-		return nil, fmt.Errorf("unmarshal viper: %w", err)
+	opts := []viper.DecoderConfigOption{
+		viper.DecodeHook(hook),
+		WithZeroFields(),
+		WithIgnoreUntagged(),
+		withErrorUnused(),
 	}
-	return &conf, nil
+
+	// load config if it was loaded to the viper
+	if err := v.Unmarshal(cfg, opts...); err != nil {
+		return fmt.Errorf("unmarshal config: %w", err)
+	}
+	return nil
 }
 
-func withZeroFields() viper.DecoderConfigOption {
+func WithZeroFields() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.ZeroFields = true
+	}
+}
+
+func WithIgnoreUntagged() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.IgnoreUntaggedFields = true
+	}
+}
+
+func withErrorUnused() viper.DecoderConfigOption {
+	return func(cfg *mapstructure.DecoderConfig) {
+		cfg.ErrorUnused = true
 	}
 }
 
@@ -305,11 +370,12 @@ func WithConfig(conf *config.Config) Option {
 func New(opts ...Option) *App {
 	defaultConfig := config.DefaultConfig()
 	app := &App{
-		Config:  &defaultConfig,
-		log:     appLog,
-		loggers: make(map[string]*zap.AtomicLevel),
-		started: make(chan struct{}),
-		eg:      &errgroup.Group{},
+		Config:       &defaultConfig,
+		log:          appLog,
+		loggers:      make(map[string]*zap.AtomicLevel),
+		grpcServices: make(map[grpcserver.Service]grpcserver.ServiceAPI),
+		started:      make(chan struct{}),
+		eg:           &errgroup.Group{},
 	}
 	for _, opt := range opts {
 		opt(app)
@@ -328,7 +394,7 @@ func New(opts ...Option) *App {
 type App struct {
 	*cobra.Command
 	fileLock          *flock.Flock
-	edSgn             *signing.EdSigner
+	signers           []*signing.EdSigner
 	Config            *config.Config
 	db                *sql.Database
 	cachedDB          *datastore.CachedDB
@@ -336,9 +402,10 @@ type App struct {
 	localDB           *localsql.Database
 	grpcPublicServer  *grpcserver.Server
 	grpcPrivateServer *grpcserver.Server
+	grpcPostServer    *grpcserver.Server
 	grpcTLSServer     *grpcserver.Server
 	jsonAPIServer     *grpcserver.JSONHTTPServer
-	grpcPostService   *grpcserver.PostService
+	grpcServices      map[grpcserver.Service]grpcserver.ServiceAPI
 	pprofService      *http.Server
 	profilerService   *pyroscope.Profiler
 	syncer            *syncer.Syncer
@@ -359,6 +426,7 @@ type App struct {
 	edVerifier        *signing.EdVerifier
 	beaconProtocol    *beacon.ProtocolDriver
 	log               log.Log
+	syncLogger        log.Log
 	svm               *vm.VM
 	conState          *txs.ConservativeState
 	fetcher           *fetch.Fetch
@@ -366,7 +434,7 @@ type App struct {
 	tortoise          *tortoise.Tortoise
 	updater           *bootstrap.Updater
 	poetDb            *activation.PoetDb
-	postVerifier      *activation.OffloadingPostVerifier
+	postVerifier      activation.PostVerifier
 	postSupervisor    *activation.PostSupervisor
 	preserve          *checkpoint.PreservedData
 	errCh             chan error
@@ -385,7 +453,11 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 		return nil, nil
 	}
 	if restore == 0 {
-		return nil, fmt.Errorf("restore layer not set")
+		return nil, errors.New("restore layer not set")
+	}
+	nodeIDs := make([]types.NodeID, len(app.signers))
+	for i, sig := range app.signers {
+		nodeIDs[i] = sig.NodeID()
 	}
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
@@ -393,7 +465,7 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 		DbFile:         dbFile,
 		LocalDbFile:    localDbFile,
 		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
-		NodeID:         app.edSgn.NodeID(),
+		NodeIDs:        nodeIDs,
 		Uri:            checkpointFile,
 		Restore:        restore,
 	}
@@ -410,11 +482,11 @@ func (app *App) Started() <-chan struct{} {
 
 // Lock locks the app for exclusive use. It returns an error if the app is already locked.
 func (app *App) Lock() error {
-	lockdir := filepath.Dir(app.Config.FileLock)
-	if _, err := os.Stat(lockdir); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(lockdir, os.ModePerm)
+	lockDir := filepath.Dir(app.Config.FileLock)
+	if _, err := os.Stat(lockDir); errors.Is(err, fs.ErrNotExist) {
+		err := os.Mkdir(lockDir, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("creating dir %s for lock %s: %w", lockdir, app.Config.FileLock, err)
+			return fmt.Errorf("creating dir %s for lock %s: %w", lockDir, app.Config.FileLock, err)
 		}
 	}
 	fl := flock.New(app.Config.FileLock)
@@ -446,7 +518,7 @@ func (app *App) Initialize() error {
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
+		if !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
 		}
 		if err := app.Config.Genesis.Validate(); err != nil {
@@ -456,12 +528,12 @@ func (app *App) Initialize() error {
 			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
 		}
 	} else {
-		diff := existing.Diff(app.Config.Genesis)
+		diff := existing.Diff(&app.Config.Genesis)
 		if len(diff) > 0 {
 			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
 				" at %s.\ndiff:\n%s", gpath, diff,
 			)
-			return fmt.Errorf("genesis config updated after node initialization")
+			return errors.New("genesis config updated after node initialization")
 		}
 	}
 
@@ -500,33 +572,25 @@ func (app *App) getAppInfo() string {
 func (app *App) Cleanup(ctx context.Context) {
 	app.log.Info("app cleanup starting...")
 	app.stopServices(ctx)
-	// add any other Cleanup tasks here....
+	app.eg.Wait()
 	app.log.Info("app cleanup completed")
 }
 
 // Wrap the top-level logger to add context info and set the level for a
-// specific module.
+// specific module. Calling this method and will create a new logger every time
+// and not re-use an existing logger with the same name.
+//
+// This method is not safe to be called concurrently.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
-	lvl := zap.NewAtomicLevel()
-	loggers, err := decodeLoggers(app.Config.LOGGING)
+	lvl, err := decodeLoggerLevel(app.Config, name)
 	if err != nil {
 		app.log.With().Panic("unable to decode loggers into map[string]string", log.Err(err))
 	}
-	level, ok := loggers[name]
-	if ok {
-		if err := lvl.UnmarshalText([]byte(level)); err != nil {
-			app.log.Error("cannot parse logging for %v error %v", name, err)
-			lvl.SetLevel(log.DefaultLevel())
-		}
-	} else {
-		lvl.SetLevel(log.DefaultLevel())
-	}
-
 	if logger.Check(lvl.Level()) {
 		app.loggers[name] = &lvl
 		logger = logger.SetLevel(&lvl)
 	}
-	return logger.WithName(name).WithFields(log.String("module", name))
+	return logger.WithName(name)
 }
 
 func (app *App) getLevel(name string) log.Level {
@@ -554,28 +618,30 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 func (app *App) initServices(ctx context.Context) error {
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
-	lg := app.log.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
+	lg := app.log
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
 
-	nipostValidatorLogger := app.addLogger(NipostValidatorLogger, lg)
+	opts := []activation.PostVerifierOpt{
+		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
+		activation.WithAutoscaling(),
+	}
+	for _, sig := range app.signers {
+		opts = append(opts, activation.WithPrioritizedID(sig.NodeID()))
+	}
 
-	lg.Debug("creating post verifier")
 	verifier, err := activation.NewPostVerifier(
 		app.Config.POST,
-		nipostValidatorLogger.Zap(),
-		verifying.WithPowFlags(app.Config.SMESHING.VerifyingOpts.Flags.Value()),
+		app.addLogger(NipostValidatorLogger, lg).Zap(),
+		opts...,
 	)
-	lg.With().Debug("created post verifier", log.Err(err))
 	if err != nil {
-		return err
+		return fmt.Errorf("creating post verifier: %w", err)
 	}
-	workers := app.Config.SMESHING.VerifyingOpts.Workers
-	minWorkers := min(app.Config.SMESHING.VerifyingOpts.MinWorkers, workers)
-	app.postVerifier = activation.NewOffloadingPostVerifier(verifier, workers, nipostValidatorLogger.Zap())
-	app.postVerifier.Autoscale(minWorkers, workers)
+	app.postVerifier = verifier
 
 	validator := activation.NewValidator(
+		app.db,
 		poetDb,
 		app.Config.POST,
 		app.Config.SMESHING.Opts.Scrypt,
@@ -629,11 +695,12 @@ func (app *App) initServices(ctx context.Context) error {
 		vrfVerifier,
 		app.cachedDB,
 		app.clock,
-		beacon.WithContext(ctx),
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
 	)
-	beaconProtocol.Register(app.edSgn)
+	for _, sig := range app.signers {
+		beaconProtocol.Register(sig)
+	}
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
@@ -648,10 +715,12 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.With().Info("tortoise will trace execution")
 		trtlopts = append(trtlopts, tortoise.WithTracer())
 	}
+	app.log.Info("initializing tortoise")
 	start := time.Now()
 	trtl, err := tortoise.Recover(
 		ctx,
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		app.clock.CurrentLayer(), trtlopts...,
 	)
 	if err != nil {
@@ -668,13 +737,14 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	executor := mesh.NewExecutor(
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		state,
 		app.conState,
 		app.addLogger(ExecutorLogger, lg),
 	)
 	mlog := app.addLogger(MeshLogger, lg)
-	msh, err := mesh.NewMesh(app.cachedDB, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
@@ -703,40 +773,21 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
-		app.Config.POET,
 	)
+	for _, sig := range app.signers {
+		atxHandler.Register(sig)
+	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
 	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
 		return fmt.Errorf(
-			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. layers-per-epoch: %d",
+			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
+				"layers-per-epoch: %d",
 			app.Config.HareEligibility.ConfidenceParam,
 			app.Config.BaseConfig.LayersPerEpoch,
 		)
 	}
-
-	proposalListener := proposals.NewHandler(
-		app.db,
-		app.atxsdata,
-		app.edVerifier,
-		app.host,
-		fetcherWrapped,
-		beaconProtocol,
-		msh,
-		trtl,
-		vrfVerifier,
-		app.clock,
-		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
-		proposals.WithConfig(proposals.Config{
-			LayerSize:              layerSize,
-			LayersPerEpoch:         layersPerEpoch,
-			GoldenATXID:            goldenATXID,
-			MaxExceptions:          trtlCfg.MaxExceptions,
-			Hdist:                  trtlCfg.Hdist,
-			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
-		}),
-	)
 
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, trtl, msh,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
@@ -749,11 +800,12 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.hOracle = eligibility.New(
 		beaconProtocol,
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
-		app.Config.HareEligibility,
-		app.addLogger(HareOracleLogger, lg),
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg)),
 	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
@@ -774,7 +826,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
 	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
 	app.certifier = blocks.NewCertifier(
-		app.cachedDB,
+		app.db,
 		app.hOracle,
 		app.edVerifier,
 		app.host,
@@ -784,10 +836,18 @@ func (app *App) initServices(ctx context.Context) error {
 		blocks.WithCertConfig(app.Config.Certificate),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
 	)
-	app.certifier.Register(app.edSgn)
+	for _, sig := range app.signers {
+		app.certifier.Register(sig)
+	}
+
+	proposalsStore := store.New(
+		store.WithEvictedLayer(app.clock.CurrentLayer()),
+		store.WithLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
+		store.WithCapacity(app.Config.Tortoise.Zdist+1),
+	)
 
 	flog := app.addLogger(Fetcher, lg)
-	fetcher := fetch.NewFetch(app.cachedDB, msh, beaconProtocol, app.host,
+	fetcher := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog),
@@ -802,6 +862,11 @@ func (app *App) initServices(ctx context.Context) error {
 	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
 	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	syncerConf.Standalone = app.Config.Standalone
+
+	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
+		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
+	}
+	app.syncLogger = app.addLogger(SyncLogger, lg)
 	newSyncer := syncer.NewSyncer(
 		app.cachedDB,
 		app.clock,
@@ -811,23 +876,44 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcher,
 		patrol,
 		app.certifier,
+		atxsync.New(fetcher, app.db, app.localDB,
+			atxsync.WithConfig(app.Config.Sync.AtxSync),
+			atxsync.WithLogger(app.syncLogger.Zap()),
+		),
+		malsync.New(fetcher, app.db, app.localDB,
+			malsync.WithConfig(app.Config.Sync.MalSync),
+			malsync.WithLogger(app.syncLogger.Zap()),
+			malsync.WithPeerErrMetric(syncer.MalPeerError),
+		),
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.addLogger(SyncLogger, lg)),
+		syncer.WithLogger(app.syncLogger),
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
 	app.hOracle.SetSync(newSyncer)
 
-	if err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration); err != nil {
+	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
+	if err != nil {
 		return err
 	}
 	logger := app.addLogger(HareLogger, lg).Zap()
+
 	app.hare3 = hare3.New(
-		app.clock, app.host, app.cachedDB, app.edVerifier, app.hOracle, newSyncer, patrol,
+		app.clock,
+		app.host,
+		app.db,
+		app.atxsdata,
+		proposalsStore,
+		app.edVerifier,
+		app.hOracle,
+		newSyncer,
+		patrol,
 		hare3.WithLogger(logger),
 		hare3.WithConfig(app.Config.HARE3),
 	)
-	app.hare3.Register(app.edSgn)
+	for _, sig := range app.signers {
+		app.hare3.Register(sig)
+	}
 	app.hare3.Start()
 	app.eg.Go(func() error {
 		compat.ReportWeakcoin(
@@ -839,9 +925,33 @@ func (app *App) initServices(ctx context.Context) error {
 		return nil
 	})
 
+	proposalListener := proposals.NewHandler(
+		app.db,
+		app.atxsdata,
+		app.hare3,
+		app.edVerifier,
+		app.host,
+		fetcherWrapped,
+		beaconProtocol,
+		msh,
+		trtl,
+		vrfVerifier,
+		app.clock,
+		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
+		proposals.WithConfig(proposals.Config{
+			LayerSize:              layerSize,
+			LayersPerEpoch:         layersPerEpoch,
+			GoldenATXID:            goldenATXID,
+			MaxExceptions:          trtlCfg.MaxExceptions,
+			Hdist:                  trtlCfg.Hdist,
+			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
+		}),
+	)
+
 	app.blockGen = blocks.NewGenerator(
 		app.db,
 		app.atxsdata,
+		proposalsStore,
 		executor,
 		msh,
 		fetcherWrapped,
@@ -862,7 +972,9 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	proposalBuilder := miner.New(
 		app.clock,
-		app.cachedDB,
+		app.db,
+		app.localDB,
+		app.atxsdata,
 		app.host,
 		trtl,
 		newSyncer,
@@ -875,45 +987,37 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
 	)
-	proposalBuilder.Register(app.edSgn)
-
-	u := url.URL{
-		Scheme: "http",
-		Host:   app.Config.API.PrivateListener,
+	for _, sig := range app.signers {
+		proposalBuilder.Register(sig)
 	}
-	app.Config.POSTService.NodeAddress = u.String()
+
 	postSetupMgr, err := activation.NewPostSetupManager(
-		app.edSgn.NodeID(),
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB, goldenATXID,
+		app.cachedDB,
+		goldenATXID,
+		newSyncer,
+		app.validator,
+		activation.PostValidityDelay(app.Config.PostValidDelay),
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)
 	}
 
-	app.postSupervisor, err = activation.NewPostSupervisor(
-		app.log.Zap(),
-		app.Config.POSTService,
-		app.Config.POST,
-		app.Config.SMESHING.ProvingOpts,
-		postSetupMgr,
-		newSyncer,
-	)
+	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
+	grpcPostService, err := app.grpcService(grpcserver.Post, lg)
 	if err != nil {
-		return fmt.Errorf("init post service: %w", err)
+		return fmt.Errorf("init post grpc service: %w", err)
 	}
-
-	app.grpcPostService = grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
 	nipostBuilder, err := activation.NewNIPostBuilder(
+		app.localDB,
 		poetDb,
-		app.grpcPostService,
+		grpcPostService.(*grpcserver.PostService),
 		app.Config.PoetServers,
-		app.Config.SMESHING.Opts.DataDir,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
-		app.edSgn,
 		app.Config.POET,
 		app.clock,
+		activation.NipostbuilderWithPostStates(postStates),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -921,34 +1025,61 @@ func (app *App) initServices(ctx context.Context) error {
 
 	builderConfig := activation.Config{
 		GoldenATXID:      goldenATXID,
-		LayersPerEpoch:   layersPerEpoch,
+		LabelsPerUnit:    app.Config.POST.LabelsPerUnit,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.edSgn,
 		app.cachedDB,
 		app.localDB,
 		app.host,
-		app.grpcPostService,
 		nipostBuilder,
 		app.clock,
 		newSyncer,
-		app.addLogger("atxBuilder", lg).Zap(),
+		app.addLogger(ATXBuilderLogger, lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
+		activation.WithPostValidityDelay(app.Config.PostValidDelay),
+		activation.WithPostStates(postStates),
 	)
+	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
+		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
+		// Any setup with more than one signer is considered a remote setup. If there is only one signer it
+		// is considered a remote setup if the key for the signer has not been sourced from `supervisedIDKeyFileName`.
+		//
+		// In a supervised setup the postSetupManager will register at the atxBuilder when
+		// it finished initializing, to avoid warning about a missing connection when the supervised post
+		// service isn't ready yet.
+		for _, sig := range app.signers {
+			atxBuilder.Register(sig)
+		}
+	}
+	app.postSupervisor = activation.NewPostSupervisor(
+		app.log.Zap(),
+		app.Config.POST,
+		app.Config.SMESHING.ProvingOpts,
+		postSetupMgr,
+		atxBuilder,
+	)
+	if err != nil {
+		return fmt.Errorf("init post service: %w", err)
+	}
 
+	nodeIDs := make([]types.NodeID, 0, len(app.signers))
+	for _, s := range app.signers {
+		nodeIDs = append(nodeIDs, s.NodeID())
+	}
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
 		app.addLogger(MalfeasanceLogger, lg),
 		app.host.ID(),
-		app.edSgn.NodeID(),
+		nodeIDs,
 		app.edVerifier,
 		trtl,
+		app.postVerifier,
 	)
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
@@ -1189,7 +1320,7 @@ func (app *App) listenToUpdates(ctx context.Context) {
 						if err := atxsync.Download(
 							ctx,
 							10*time.Second,
-							app.addLogger(SyncLogger, app.log).Zap(),
+							app.syncLogger.Zap(),
 							app.db,
 							app.fetcher,
 							set,
@@ -1231,17 +1362,6 @@ func (app *App) startServices(ctx context.Context) error {
 		}
 	}
 
-	if app.Config.SMESHING.Start {
-		if app.Config.SMESHING.CoinbaseAccount == "" {
-			return fmt.Errorf("smeshing enabled but no coinbase account provided")
-		}
-		if err := app.postSupervisor.Start(app.Config.SMESHING.Opts); err != nil {
-			return fmt.Errorf("start post service: %w", err)
-		}
-	} else {
-		app.log.Info("smeshing not started, waiting to be triggered via smesher api")
-	}
-
 	if app.ptimesync != nil {
 		app.ptimesync.Start()
 	}
@@ -1252,17 +1372,22 @@ func (app *App) startServices(ctx context.Context) error {
 	return nil
 }
 
-func (app *App) initService(
-	ctx context.Context,
-	svc grpcserver.Service,
-) (grpcserver.ServiceAPI, error) {
+func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.ServiceAPI, error) {
+	if service, ok := app.grpcServices[svc]; ok {
+		return service, nil
+	}
+
 	switch svc {
 	case grpcserver.Debug:
-		return grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle), nil
+		service := grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle, app.loggers)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.GlobalState:
-		return grpcserver.NewGlobalStateService(app.mesh, app.conState), nil
+		service := grpcserver.NewGlobalStateService(app.mesh, app.conState)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Mesh:
-		return grpcserver.NewMeshService(
+		service := grpcserver.NewMeshService(
 			app.cachedDB,
 			app.mesh,
 			app.conState,
@@ -1272,41 +1397,85 @@ func (app *App) initService(
 			app.Config.LayerDuration,
 			app.Config.LayerAvgSize,
 			uint32(app.Config.TxsPerProposal),
-		), nil
+		)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Node:
-		return grpcserver.NewNodeService(
+		service := grpcserver.NewNodeService(
 			app.host,
 			app.mesh,
 			app.clock,
 			app.syncer,
 			cmd.Version,
 			cmd.Commit,
-		), nil
+		)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Admin:
-		return grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host), nil
+		service := grpcserver.NewAdminService(app.db, app.Config.DataDir(), app.host)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Smesher:
-		return grpcserver.NewSmesherService(
+		var sig *signing.EdSigner
+		if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+			// StartSmeshing is only supported in a supervised setup (single signer)
+			sig = app.signers[0]
+		}
+		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
 			app.Config.API.SmesherStreamInterval,
 			app.Config.SMESHING.Opts,
-		), nil
+			sig,
+		)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Post:
-		return app.grpcPostService, nil
+		service := grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
+		app.grpcServices[svc] = service
+		return service, nil
+	case grpcserver.PostInfo:
+		service := grpcserver.NewPostInfoService(app.addLogger(PostInfoServiceLogger, lg).Zap(), app.atxBuilder)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Transaction:
-		return grpcserver.NewTransactionService(
+		service := grpcserver.NewTransactionService(
 			app.db,
 			app.host,
 			app.mesh,
 			app.conState,
 			app.syncer,
 			app.txHandler,
-		), nil
+		)
+		app.grpcServices[svc] = service
+		return service, nil
 	case grpcserver.Activation:
-		return grpcserver.NewActivationService(
-			app.cachedDB,
-			types.ATXID(app.Config.Genesis.GoldenATX()),
-		), nil
+		service := grpcserver.NewActivationService(app.cachedDB, types.ATXID(app.Config.Genesis.GoldenATX()))
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.Activation:
+		service := v2alpha1.NewActivationService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.ActivationStream:
+		service := v2alpha1.NewActivationStreamService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.Reward:
+		service := v2alpha1.NewRewardService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.RewardStream:
+		service := v2alpha1.NewRewardStreamService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.Network:
+		service := v2alpha1.NewNetworkService(
+			app.clock.GenesisTime(),
+			app.Config.Genesis.GenesisID(),
+			app.Config.LayerDuration)
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -1314,54 +1483,77 @@ func (app *App) initService(
 func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
+
 	var (
-		// TODO(mafa): instead of checking for uniqueness of services across endpoints
-		// check uniqueness per endpoint and make them singletons
-		unique        = map[grpcserver.Service]struct{}{}
-		public        []grpcserver.ServiceAPI
-		private       []grpcserver.ServiceAPI
-		authenticated []grpcserver.ServiceAPI
+		publicSvcs        = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PublicServices))
+		privateSvcs       = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PrivateServices))
+		postSvcs          = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PostServices))
+		authenticatedSvcs = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.TLSServices))
 	)
 
 	// check services for uniques across all endpoints
 	for _, svc := range app.Config.API.PublicServices {
-		if _, exists := unique[svc]; exists {
-			return fmt.Errorf("can't start more than one %s", svc)
+		if _, exists := publicSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on public grpc endpoint", svc)
 		}
-		gsvc, err := app.initService(ctx, svc)
+		gsvc, err := app.grpcService(svc, app.log)
 		if err != nil {
 			return err
 		}
 		logger.Info("registering public service %s", svc)
-		public = append(public, gsvc)
-		unique[svc] = struct{}{}
+		publicSvcs[svc] = gsvc
 	}
 	for _, svc := range app.Config.API.PrivateServices {
-		if _, exists := unique[svc]; exists {
-			return fmt.Errorf("can't start more than one %s", svc)
+		if _, exists := privateSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on private grpc endpoint", svc)
 		}
-		gsvc, err := app.initService(ctx, svc)
+		gsvc, err := app.grpcService(svc, app.log)
 		if err != nil {
 			return err
 		}
 		logger.Info("registering private service %s", svc)
-		private = append(private, gsvc)
-		unique[svc] = struct{}{}
+		privateSvcs[svc] = gsvc
+	}
+	for _, svc := range app.Config.API.PostServices {
+		if _, exists := postSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on post grpc endpoint", svc)
+		}
+		gsvc, err := app.grpcService(svc, app.log)
+		if err != nil {
+			return err
+		}
+		logger.Info("registering local service %s", svc)
+		postSvcs[svc] = gsvc
 	}
 	for _, svc := range app.Config.API.TLSServices {
-		gsvc, err := app.initService(ctx, svc)
+		if _, exists := authenticatedSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on authenticated grpc endpoint", svc)
+		}
+		gsvc, err := app.grpcService(svc, app.log)
 		if err != nil {
 			return err
 		}
 		logger.Info("registering authenticated service %s", svc)
-		authenticated = append(authenticated, gsvc)
-		unique[svc] = struct{}{}
+		authenticatedSvcs[svc] = gsvc
 	}
 
 	// start servers if at least one endpoint is defined for them
-	if len(public) > 0 {
+	if len(publicSvcs) > 0 {
 		var err error
-		app.grpcPublicServer, err = grpcserver.NewPublic(logger.Zap(), app.Config.API, public)
+		app.grpcPublicServer, err = grpcserver.NewWithServices(
+			app.Config.API.PublicListener,
+			logger.Zap(),
+			app.Config.API,
+			maps.Values(publicSvcs),
+			// public server needs restriction on max connection age to prevent attacks
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				MaxConnectionIdle:     2 * time.Hour,
+				MaxConnectionAge:      3 * time.Hour,
+				MaxConnectionAgeGrace: 10 * time.Minute,
+				Time:                  time.Minute,
+				Timeout:               10 * time.Second,
+			}),
+		)
 		if err != nil {
 			return err
 		}
@@ -1369,9 +1561,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(private) > 0 {
+	if len(privateSvcs) > 0 {
 		var err error
-		app.grpcPrivateServer, err = grpcserver.NewPrivate(logger.Zap(), app.Config.API, private)
+		app.grpcPrivateServer, err = grpcserver.NewWithServices(
+			app.Config.API.PrivateListener,
+			logger.Zap(),
+			app.Config.API,
+			maps.Values(privateSvcs),
+		)
 		if err != nil {
 			return err
 		}
@@ -1379,9 +1576,57 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 	}
-	if len(authenticated) > 0 && app.Config.API.TLSListener != "" {
+	if len(postSvcs) > 0 && app.Config.API.PostListener != "" {
 		var err error
-		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, authenticated)
+		app.grpcPostServer, err = grpcserver.NewWithServices(
+			app.Config.API.PostListener,
+			logger.Zap(),
+			app.Config.API,
+			maps.Values(postSvcs),
+		)
+		if err != nil {
+			return err
+		}
+		if err := app.grpcPostServer.Start(); err != nil {
+			return err
+		}
+		host, port, err := net.SplitHostPort(app.grpcPostServer.BoundAddress)
+		if err != nil {
+			return fmt.Errorf("parse grpc-post-listener: %w", err)
+		}
+		ip := net.ParseIP(host)
+		if ip.IsUnspecified() { // 0.0.0.0 isn't a valid address to connect to on windows
+			host = "127.0.0.1"
+		}
+		app.Config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
+		svc, err := app.grpcService(grpcserver.Smesher, app.log)
+		if err != nil {
+			return err
+		}
+		svc.(*grpcserver.SmesherService).SetPostServiceConfig(app.Config.POSTService)
+		if app.Config.SMESHING.Start {
+			if app.Config.SMESHING.CoinbaseAccount == "" {
+				return errors.New("smeshing enabled but no coinbase account provided")
+			}
+			if len(app.signers) > 1 {
+				return errors.New("supervised smeshing cannot be started in a multi-smeshing setup")
+			}
+			if err := app.postSupervisor.Start(
+				app.Config.POSTService,
+				app.Config.SMESHING.Opts,
+				app.signers[0],
+			); err != nil {
+				return fmt.Errorf("start post service: %w", err)
+			}
+		} else if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+			// supervised setup but not started
+			app.log.Info("smeshing not started, waiting to be triggered via smesher api")
+		}
+	}
+
+	if len(authenticatedSvcs) > 0 && app.Config.API.TLSListener != "" {
+		var err error
+		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, maps.Values(authenticatedSvcs))
 		if err != nil {
 			return err
 		}
@@ -1391,14 +1636,14 @@ func (app *App) startAPIServices(ctx context.Context) error {
 	}
 
 	if len(app.Config.API.JSONListener) > 0 {
-		if len(public) == 0 {
-			return fmt.Errorf("start json server without public services")
+		if len(publicSvcs) == 0 {
+			return errors.New("start json server without public services")
 		}
 		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
 			app.Config.API.JSONListener,
 			logger.Zap().Named("JSON"),
 		)
-		if err := app.jsonAPIServer.StartService(ctx, public...); err != nil {
+		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
 	}
@@ -1419,6 +1664,10 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.grpcPrivateServer != nil {
 		app.log.Info("stopping private grpc service")
 		app.grpcPrivateServer.Close() // err is always nil
+	}
+	if app.grpcPostServer != nil {
+		app.log.Info("stopping local grpc service")
+		app.grpcPostServer.Close() // err is always nil
 	}
 	if app.grpcTLSServer != nil {
 		app.log.Info("stopping tls grpc service")
@@ -1514,64 +1763,6 @@ func (app *App) stopServices(ctx context.Context) {
 	grpczap.SetGrpcLoggerV2(grpclog, log.NewNop().Zap())
 }
 
-// LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
-func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
-	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
-	app.log.Info("Looking for identity file at `%v`", filename)
-
-	var data []byte
-	if len(app.Config.TestConfig.SmesherKey) > 0 {
-		app.log.With().Error("!!!TESTING!!! using pre-configured smesher key")
-		data = []byte(app.Config.TestConfig.SmesherKey)
-	} else {
-		var err error
-		data, err = os.ReadFile(filename)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to read identity file: %w", err)
-			}
-
-			app.log.Info("Identity file not found. Creating new identity...")
-
-			edSgn, err := signing.NewEdSigner(
-				signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create identity: %w", err)
-			}
-			if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
-				return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
-			}
-
-			err = os.WriteFile(filename, []byte(hex.EncodeToString(edSgn.PrivateKey())), 0o600)
-			if err != nil {
-				return nil, fmt.Errorf("failed to write identity file: %w", err)
-			}
-
-			app.log.With().Info("created new identity", edSgn.PublicKey())
-			return edSgn, nil
-		}
-	}
-	dst := make([]byte, signing.PrivateKeySize)
-	n, err := hex.Decode(dst, data)
-	if err != nil {
-		return nil, fmt.Errorf("decoding private key: %w", err)
-	}
-	if n != signing.PrivateKeySize {
-		return nil, fmt.Errorf("invalid key size %d/%d", n, signing.PrivateKeySize)
-	}
-	edSgn, err := signing.NewEdSigner(
-		signing.WithPrivateKey(dst),
-		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
-	}
-
-	app.log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
-	return edSgn, nil
-}
-
 func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	dbPath := app.Config.DataDir()
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
@@ -1581,11 +1772,19 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
+	dbLog := app.addLogger(StateDbLogger, lg)
 	dbopts := []sql.Opt{
+		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
+		sql.WithQueryCache(app.Config.DatabaseQueryCache),
+		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
+			atxs.CacheKindEpochATXs:           app.Config.DatabaseQueryCacheSizes.EpochATXs,
+			atxs.CacheKindATXBlob:             app.Config.DatabaseQueryCacheSizes.ATXBlob,
+			activesets.CacheKindActiveSetBlob: app.Config.DatabaseQueryCacheSizes.ActiveSetBlob,
+		}),
 	}
 	if len(app.Config.DatabaseSkipMigrations) > 0 {
 		dbopts = append(dbopts, sql.WithSkipMigrations(app.Config.DatabaseSkipMigrations...))
@@ -1599,14 +1798,19 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
 			ctx,
 			app.db,
-			app.addLogger(StateDbLogger, lg),
+			dbLog,
 			app.Config.DatabaseSizeMeteringInterval,
 		)
+	}
+	app.log.Info("starting cache warmup")
+	applied, err := layers.GetLastApplied(app.db)
+	if err != nil {
+		return err
 	}
 	start := time.Now()
 	data, err := atxsdata.Warm(
 		app.db,
-		atxsdata.WithCapacityFromLayers(app.Config.Tortoise.WindowSize, app.Config.LayersPerEpoch),
+		app.Config.Tortoise.WindowSizeEpochs(applied),
 	)
 	if err != nil {
 		return err
@@ -1617,20 +1821,96 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
+	clients := make([]localsql.PoetClient, len(app.Config.PoetServers))
+	for i, server := range app.Config.PoetServers {
+		clients[i], err = activation.NewHTTPPoetClient(server, app.Config.POET)
+		if err != nil {
+			return fmt.Errorf("failed to create poet client: %w", err)
+		}
+	}
+
+	// Migrate `node_state.sql` to `local.sql`
+	if err := app.MigrateLocalDB(dbLog.Zap(), dbPath, clients); err != nil {
+		return err
+	}
+
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
 		return fmt.Errorf("load local migrations: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
+		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
 		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
 		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0003Migration(dbLog.Zap(), app.Config.SMESHING.Opts.DataDir, clients)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
 	app.localDB = localDB
+	return nil
+}
+
+// MigrateLocalDB migrates the old node_state.sql to the new local.sql
+//
+// This function is idempotent and can be called multiple times without side effects.
+// It will only migrate the old db to the new db if the old db exists and the new db does not.
+//
+// TODO(mafa): this can be removed in the future when we are sure that all nodes have migrated to the new db.
+func (app *App) MigrateLocalDB(lg *zap.Logger, dbPath string, clients []localsql.PoetClient) error {
+	oldDBFile := filepath.Join(dbPath, oldLocalDbFile)
+	dbFile := filepath.Join(dbPath, localDbFile)
+	_, err := os.Stat(oldDBFile)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil // no old db to migrate
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", oldDBFile, err)
+	}
+
+	_, err = os.Stat(dbFile)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// no new db, migrate old to new
+	case err == nil:
+		// both exist, error
+		return fmt.Errorf("%w: both %s and %s exist", fs.ErrExist, oldDBFile, dbFile)
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", dbFile, err)
+	}
+
+	lg.Info("migrating local DB",
+		zap.String("old db", oldDBFile),
+		zap.String("new db", dbFile),
+	)
+	migrations, err := sql.LocalMigrations()
+	if err != nil {
+		return fmt.Errorf("load local migrations: %w", err)
+	}
+	oldDB, err := localsql.Open("file:"+oldDBFile,
+		sql.WithLogger(lg),
+		sql.WithMigrations(migrations),
+		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
+		sql.WithMigration(localsql.New0003Migration(lg, app.Config.SMESHING.Opts.DataDir, clients)),
+		sql.WithConnections(app.Config.DatabaseConnections),
+	)
+	if err != nil {
+		return fmt.Errorf("open sqlite db %w", err)
+	}
+	defer oldDB.Close()
+
+	if _, err := oldDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", dbFile), nil, nil); err != nil {
+		return fmt.Errorf("vacuum %s to %s: %w", oldDBFile, dbFile, err)
+	}
+	if err := oldDB.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", oldDBFile, err)
+	}
+	if err := atomic.ReplaceFile(oldDBFile, fmt.Sprintf("%s.bak", oldDBFile)); err != nil {
+		return fmt.Errorf("renaming %s to %s: %w", oldDBFile, fmt.Sprintf("%s.bak", oldDBFile), err)
+	}
 	return nil
 }
 
@@ -1652,6 +1932,10 @@ func (app *App) Start(ctx context.Context) error {
 			return nil
 		})
 	}
+
+	// uncomment to verify ATXs signatures
+	// app.verifyDB(ctx)
+
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
@@ -1660,6 +1944,43 @@ func (app *App) Start(ctx context.Context) error {
 	case err = <-app.errCh:
 		return err
 	}
+}
+
+// verifyDB performs a verification of ATX signatures in the database.
+//
+//lint:ignore U1000 This function is currently unused but is left here for future use.
+func (app *App) verifyDB(ctx context.Context) {
+	app.eg.Go(func() error {
+		app.log.Info("checking ATX signatures")
+		count := 0
+
+		// check ATX signatures
+		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.VerifiedActivationTx) bool {
+			select {
+			case <-ctx.Done():
+				// stop on context cancellation
+				return false
+			default:
+			}
+
+			// verify atx signature
+			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+				app.log.With().Error("ATX signature verification failed",
+					log.Stringer("atx_id", atx.ID()),
+					log.Stringer("smesher", atx.SmesherID),
+				)
+			}
+
+			count++
+			if count%1000 == 0 {
+				app.log.With().Info("verifying ATX signatures", log.Int("count", count))
+			}
+			return true
+		})
+
+		app.log.With().Info("ATX signatures verified", log.Int("count", count))
+		return nil
+	})
 }
 
 func (app *App) startSynchronous(ctx context.Context) (err error) {
@@ -1716,8 +2037,6 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		}
 	}
 
-	lg := logger.Named(app.edSgn.NodeID().ShortString()).WithFields(app.edSgn.NodeID())
-
 	/* Initialize all protocol services */
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
@@ -1728,17 +2047,17 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(gTime),
-		timesync.WithLogger(app.addLogger(ClockLogger, lg)),
+		timesync.WithLogger(app.addLogger(ClockLogger, logger).Zap()),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)
 	}
 
-	lg.Info("initializing p2p services")
+	logger.Info("initializing p2p services")
 
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	p2plog := app.addLogger(P2PLogger, lg)
+	p2plog := app.addLogger(P2PLogger, logger)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
 	prologue := fmt.Sprintf("%x-%v",
@@ -1759,7 +2078,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		return fmt.Errorf("initialize p2p host: %w", err)
 	}
 
-	if err := app.setupDBs(ctx, lg); err != nil {
+	if err := app.setupDBs(ctx, logger); err != nil {
 		return err
 	}
 	if err := app.initServices(ctx); err != nil {
@@ -1860,12 +2179,23 @@ type layerFetcher struct {
 	system.Fetcher
 }
 
-func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
-	rst := map[string]string{}
-	if err := mapstructure.Decode(cfg, &rst); err != nil {
-		return nil, fmt.Errorf("mapstructure decode: %w", err)
+func decodeLoggerLevel(cfg *config.Config, name string) (zap.AtomicLevel, error) {
+	lvl := zap.NewAtomicLevel()
+	loggers := map[string]string{}
+	if err := mapstructure.Decode(cfg.LOGGING, &loggers); err != nil {
+		return zap.AtomicLevel{}, fmt.Errorf("error decoding mapstructure: %w", err)
 	}
-	return rst, nil
+
+	level, ok := loggers[name]
+	if ok {
+		if err := lvl.UnmarshalText([]byte(level)); err != nil {
+			return zap.AtomicLevel{}, fmt.Errorf("cannot parse logging for %v: %w", name, err)
+		}
+	} else {
+		lvl.SetLevel(log.DefaultLevel())
+	}
+
+	return lvl, nil
 }
 
 type tortoiseWeakCoin struct {

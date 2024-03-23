@@ -36,10 +36,11 @@ func TestPing(t *testing.T) {
 			cfg1.DataDir = t.TempDir()
 			cfg1.Listen = tc.listen
 			cfg1.EnableQUICTransport = tc.enableQUIC
+			cfg1.IP4Blocklist = nil
 			nc := []byte("foobar")
 			h1, err := New(context.Background(), logtest.New(t), cfg1, nc, nc)
 			require.NoError(t, err)
-			h1.discovery.Start()
+			require.NoError(t, h1.Start())
 			t.Cleanup(func() { h1.Stop() })
 
 			cfg2 := DefaultConfig()
@@ -47,6 +48,7 @@ func TestPing(t *testing.T) {
 			cfg2.Listen = tc.listen
 			cfg2.EnableQUICTransport = tc.enableQUIC
 			cfg2.PingPeers = []string{h1.ID().String()}
+			cfg2.IP4Blocklist = nil
 			h2, err := New(context.Background(), logtest.New(t), cfg2, nc, nc)
 			require.NoError(t, err)
 			h2.discovery.Start()

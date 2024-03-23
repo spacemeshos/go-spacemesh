@@ -34,6 +34,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	conf1.DataDirParent = t.TempDir()
 	conf1.FileLock = filepath.Join(conf1.DataDirParent, "LOCK")
 	conf1.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
+	conf1.P2P.IP4Blocklist = nil
 	// We setup the api to listen on an OS assigned port, which avoids the second instance getting stuck when
 	conf1.API.PublicListener = "0.0.0.0:0"
 	conf1.API.PrivateListener = "0.0.0.0:0"
@@ -43,10 +44,11 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	// same genesis ID, otherwise they will not be able to connect to each
 	// other.
 	conf2 := config.DefaultTestConfig()
-	*conf2.Genesis = *conf1.Genesis
+	conf2.Genesis = conf1.Genesis
 	conf2.DataDirParent = t.TempDir()
 	conf2.FileLock = filepath.Join(conf2.DataDirParent, "LOCK")
 	conf2.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
+	conf2.P2P.IP4Blocklist = nil
 	conf2.API.PublicListener = "0.0.0.0:0"
 	conf2.API.PrivateListener = "0.0.0.0:0"
 	app2 := NewApp(t, &conf2, l)
@@ -59,7 +61,6 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	<-app1.Started()
 	t.Cleanup(func() {
 		app1.Cleanup(ctx)
-		app1.eg.Wait()
 	})
 	eg.Go(func() error {
 		return app2.Start(grpContext)
@@ -67,7 +68,6 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	<-app2.Started()
 	t.Cleanup(func() {
 		app2.Cleanup(ctx)
-		app2.eg.Wait()
 	})
 
 	// Connect app2 to app1
@@ -78,7 +78,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	require.NoError(t, err)
 
 	conns := app2.Host().Network().ConnsToPeer(app1.Host().ID())
-	require.Equal(t, 1, len(conns))
+	require.Len(t, conns, 1)
 
 	// Wait for streams to be established, one outbound and one inbound.
 	require.Eventually(t, func() bool {
@@ -105,7 +105,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	// Verify that connections remain up
 	for i := 0; i < 5; i++ {
 		conns := app2.Host().Network().ConnsToPeer(app1.Host().ID())
-		require.Equal(t, 1, len(conns))
+		require.Len(t, conns, 1)
 		time.Sleep(100 * time.Millisecond)
 	}
 

@@ -127,7 +127,6 @@ func (s GlobalStateService) AccountDataQuery(
 	}
 
 	// Read the filter flags
-	// filterTxReceipt := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT) != 0
 	_ = in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT) != 0
 	filterReward := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD) != 0
 	filterAccount := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT) != 0
@@ -235,7 +234,7 @@ func (s GlobalStateService) AccountDataStream(
 	// Subscribe to the various streams
 	var (
 		accountCh      <-chan events.Account
-		rewardsCh      <-chan events.Reward
+		rewardsCh      <-chan types.Reward
 		receiptsCh     <-chan any
 		accountBufFull <-chan struct{}
 		rewardsBufFull <-chan struct{}
@@ -247,7 +246,7 @@ func (s GlobalStateService) AccountDataStream(
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-			rewardsCh, rewardsBufFull = consumeEvents[events.Reward](stream.Context(), rewardsSubscription)
+			rewardsCh, rewardsBufFull = consumeEvents[types.Reward](stream.Context(), rewardsSubscription)
 		}
 	}
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
@@ -287,7 +286,7 @@ func (s GlobalStateService) AccountDataStream(
 				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
 					Reward: &pb.Reward{
 						Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
-						Total:       &pb.Amount{Value: reward.Total},
+						Total:       &pb.Amount{Value: reward.TotalReward},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
 						Coinbase:    &pb.AccountId{Address: addr.String()},
 						Smesher:     &pb.SmesherId{Id: reward.SmesherID[:]},
@@ -363,7 +362,7 @@ func (s GlobalStateService) GlobalStateStream(
 	// Subscribe to the various streams
 	var (
 		accountCh      <-chan events.Account
-		rewardsCh      <-chan events.Reward
+		rewardsCh      <-chan types.Reward
 		layersCh       <-chan events.LayerUpdate
 		accountBufFull <-chan struct{}
 		rewardsBufFull <-chan struct{}
@@ -376,7 +375,7 @@ func (s GlobalStateService) GlobalStateStream(
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-			rewardsCh, rewardsBufFull = consumeEvents[events.Reward](stream.Context(), rewardsSubscription)
+			rewardsCh, rewardsBufFull = consumeEvents[types.Reward](stream.Context(), rewardsSubscription)
 		}
 	}
 
@@ -418,7 +417,7 @@ func (s GlobalStateService) GlobalStateStream(
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
 					Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
-					Total:       &pb.Amount{Value: reward.Total},
+					Total:       &pb.Amount{Value: reward.TotalReward},
 					LayerReward: &pb.Amount{Value: reward.LayerReward},
 					Coinbase:    &pb.AccountId{Address: reward.Coinbase.String()},
 					Smesher:     &pb.SmesherId{Id: reward.SmesherID[:]},

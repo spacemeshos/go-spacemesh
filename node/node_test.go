@@ -3,10 +3,10 @@ package node
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,12 +19,15 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
@@ -48,6 +51,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 const layersPerEpoch = 3
@@ -57,82 +62,6 @@ func TestMain(m *testing.M) {
 
 	res := m.Run()
 	os.Exit(res)
-}
-
-func TestSpacemeshApp_getEdIdentity(t *testing.T) {
-	r := require.New(t)
-
-	tempdir := t.TempDir()
-
-	// setup spacemesh app
-	app := New(WithLog(logtest.New(t)))
-	app.Config.SMESHING.Opts.DataDir = tempdir
-	app.log = logtest.New(t)
-
-	// Create new identity.
-	signer1, err := app.LoadOrCreateEdSigner()
-	r.NoError(err)
-	infos, err := os.ReadDir(tempdir)
-	r.NoError(err)
-	r.Len(infos, 1)
-
-	// Load existing identity.
-	signer2, err := app.LoadOrCreateEdSigner()
-	r.NoError(err)
-	infos, err = os.ReadDir(tempdir)
-	r.NoError(err)
-	r.Len(infos, 1)
-	r.Equal(signer1.PublicKey(), signer2.PublicKey())
-
-	// Invalidate the identity by changing its file name.
-	filename := filepath.Join(tempdir, infos[0].Name())
-	err = os.Rename(filename, filename+"_")
-	r.NoError(err)
-
-	// Create new identity.
-	signer3, err := app.LoadOrCreateEdSigner()
-	r.NoError(err)
-	infos, err = os.ReadDir(tempdir)
-	r.NoError(err)
-	r.Len(infos, 2)
-	r.NotEqual(signer1.PublicKey(), signer3.PublicKey())
-
-	t.Run("bad length", func(t *testing.T) {
-		testLoadOrCreateEdSigner(t,
-			bytes.Repeat([]byte("ab"), signing.PrivateKeySize-1),
-			"invalid key size 63/64",
-		)
-	})
-	t.Run("bad hex", func(t *testing.T) {
-		testLoadOrCreateEdSigner(t,
-			bytes.Repeat([]byte("CV"), signing.PrivateKeySize),
-			"decoding private key: encoding/hex: invalid byte",
-		)
-	})
-	t.Run("good key", func(t *testing.T) {
-		_, priv, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-		testLoadOrCreateEdSigner(t,
-			[]byte(hex.EncodeToString(priv)),
-			"",
-		)
-	})
-}
-
-func testLoadOrCreateEdSigner(t *testing.T, data []byte, expect string) {
-	tempdir := t.TempDir()
-	app := New(WithLog(logtest.New(t)))
-	app.Config.SMESHING.Opts.DataDir = tempdir
-	keyfile := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
-	require.NoError(t, os.WriteFile(keyfile, data, 0o600))
-	signer, err := app.LoadOrCreateEdSigner()
-	if len(expect) > 0 {
-		require.ErrorContains(t, err, expect)
-		require.Nil(t, signer)
-	} else {
-		require.NoError(t, err)
-		require.NotEmpty(t, signer)
-	}
 }
 
 func newLogger(buf *bytes.Buffer) log.Log {
@@ -148,22 +77,23 @@ func newLogger(buf *bytes.Buffer) log.Log {
 func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	r := require.New(t)
 
-	var buf1, buf2 bytes.Buffer
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
 
-	app := New(WithLog(logtest.New(t)))
-	mylogger := "anton"
+	var buf1, buf2 bytes.Buffer
+	myLogger := "anton"
 	myLog := newLogger(&buf1)
 	myLog2 := newLogger(&buf2)
 
-	app.log = app.addLogger(mylogger, myLog)
+	app.log = app.addLogger(myLogger, myLog)
 	msg1 := "hi there"
 	app.log.Info(msg1)
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg1, mylogger),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, msg1),
 		buf1.String(),
 	)
-	r.NoError(app.SetLogLevel(mylogger, "warn"))
-	r.Equal("warn", app.loggers[mylogger].String())
+	r.NoError(app.SetLogLevel(myLogger, "warn"))
+	r.Equal("warn", app.loggers[myLogger].String())
 	buf1.Reset()
 
 	msg1 = "other logger"
@@ -175,19 +105,19 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	// This one should be printed
 	app.log.Warning(msg3)
 	r.Equal(
-		fmt.Sprintf("WARN\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg3, mylogger),
+		fmt.Sprintf("WARN\t%s\t%s\n", myLogger, msg3),
 		buf1.String(),
 	)
 	r.Equal(fmt.Sprintf("INFO\t%s\n", msg1), buf2.String())
 	buf1.Reset()
 
-	r.NoError(app.SetLogLevel(mylogger, "info"))
+	r.NoError(app.SetLogLevel(myLogger, "info"))
 
-	msg4 := "nihao"
+	msg4 := "你好"
 	app.log.Info(msg4)
-	r.Equal("info", app.loggers[mylogger].String())
+	r.Equal("info", app.loggers[myLogger].String())
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, msg4, mylogger),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, msg4),
 		buf1.String(),
 	)
 
@@ -195,24 +125,26 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	r.Error(app.SetLogLevel("anton3", "warn"))
 
 	// test bad loglevel
-	r.Error(app.SetLogLevel(mylogger, "lulu"))
-	r.Equal("info", app.loggers[mylogger].String())
+	r.Error(app.SetLogLevel(myLogger, "lulu"))
+	r.Equal("info", app.loggers[myLogger].String())
 }
 
 func TestSpacemeshApp_AddLogger(t *testing.T) {
 	r := require.New(t)
 
 	var buf bytes.Buffer
-
 	lg := newLogger(&buf)
-	app := New(WithLog(logtest.New(t)))
-	mylogger := "anton"
-	subLogger := app.addLogger(mylogger, lg)
+
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+
+	myLogger := "anton"
+	subLogger := app.addLogger(myLogger, lg)
 	subLogger.Debug("should not get printed")
 	teststr := "should get printed"
 	subLogger.Info(teststr)
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\t{\"module\": \"%s\"}\n", mylogger, teststr, mylogger),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, teststr),
 		buf.String(),
 	)
 }
@@ -230,41 +162,33 @@ func testArgs(ctx context.Context, root *cobra.Command, args ...string) (string,
 	return buf.String(), err
 }
 
-func cmdWithRun(run func(*cobra.Command, []string)) *cobra.Command {
-	cmd := GetCommand()
-	cmd.Run = run
-	return cmd
+func cmdWithRun(run func(*cobra.Command, []string) error) *cobra.Command {
+	c := GetCommand()
+	c.RunE = run
+	return c
 }
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
 
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
 	r.Equal(config.ConsoleLogEncoder, app.Config.LOGGING.Encoder)
 
 	// Test an illegal flag
-	c := cmdWithRun(func(*cobra.Command, []string) {
+	c := cmdWithRun(func(*cobra.Command, []string) error {
 		// We don't expect this to be called at all
 		r.Fail("Command.Run not expected to run")
+		return nil
 	})
 
 	str, err := testArgs(context.Background(), c, "illegal")
 	r.Error(err)
 	r.Equal(expected, err.Error())
 	r.Equal(expected2, str)
-
-	// Test a legal flag
-	c = cmdWithRun(func(c *cobra.Command, args []string) {
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
-	})
-
-	str, err = testArgs(context.Background(), c, "--log-encoder", "json")
-
-	r.NoError(err)
-	r.Empty(str)
-	r.Equal(config.JSONLogEncoder, app.Config.LOGGING.Encoder)
 }
 
 func marshalProto(t *testing.T, msg proto.Message) []byte {
@@ -289,21 +213,30 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	listener := "127.0.0.1:1242"
 
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+	cfg := getTestDefaultConfig(t)
+	cfg.API.PublicListener = listener
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	err := app.NewIdentity()
+	require.NoError(t, err)
 
-	path := t.TempDir()
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
 
-	run := func(c *cobra.Command, args []string) {
-		app.Config.API.PublicListener = listener
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
-		app.Config.DataDirParent = path
-		app.startAPIServices(context.Background())
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
+
+	run := func(c *cobra.Command, args []string) error {
+		return app.startAPIServices(context.Background())
 	}
 	defer app.stopServices(context.Background())
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err := grpc.DialContext(
+	_, err = grpc.DialContext(
 		ctx,
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -314,12 +247,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	events.CloseEventReporter()
 
 	// Test starting the server from the command line
-	str, err := testArgs(
-		context.Background(),
-		cmdWithRun(run),
-		"--grpc-public-listener",
-		listener,
-	)
+	str, err := testArgs(context.Background(), cmdWithRun(run))
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(listener, app.Config.API.PublicListener)
@@ -348,13 +276,24 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	err := app.NewIdentity()
+	require.NoError(t, err)
+
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
 
 	// Make sure the service is not running by default
-	run := func(c *cobra.Command, args []string) {
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
-		app.Config.DataDirParent = t.TempDir()
-		app.startAPIServices(context.Background())
+	run := func(c *cobra.Command, args []string) error {
+		return app.startAPIServices(context.Background())
 	}
 
 	str, err := testArgs(context.Background(), cmdWithRun(run))
@@ -362,58 +301,51 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	r.NoError(err)
 	defer app.stopServices(context.Background())
 
-	// Try talking to the server
-	const message = "nihao shijie"
-
-	// generate request payload (api input params)
-	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-
-	// We expect this one to fail
-	url := fmt.Sprintf("http://%s/%s", app.Config.API.JSONListener, "v1/node/echo")
-	_, err = http.Post(url, "application/json", bytes.NewReader(payload))
-	r.Error(err)
-
-	events.CloseEventReporter()
+	require.Nil(t, app.jsonAPIServer)
 }
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
-	const message = "nihao shijie"
+
+	const message = "你好世界"
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	listener := "127.0.0.1:0"
+
+	cfg := getTestDefaultConfig(t)
+	cfg.API.JSONListener = listener
+	cfg.API.PrivateServices = nil
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
 
 	// Make sure the service is not running by default
-	run := func(c *cobra.Command, args []string) {
-		app.Config.API.PrivateServices = nil
-		r.NoError(cmd.EnsureCLIFlags(c, app.Config))
-		app.Config.DataDirParent = t.TempDir()
-		app.startAPIServices(context.Background())
+	run := func(c *cobra.Command, args []string) error {
+		return app.startAPIServices(context.Background())
 	}
 
 	// Test starting the JSON server from the command line
 	// uses Cmd.Run from above
-	listener := "127.0.0.1:1234"
-	str, err := testArgs(
-		context.Background(),
-		cmdWithRun(run),
-		"--grpc-json-listener",
-		listener,
-	)
+
+	str, err := testArgs(context.Background(), cmdWithRun(run))
 	r.Empty(str)
 	r.NoError(err)
 	defer app.stopServices(context.Background())
-	r.Equal(listener, app.Config.API.JSONListener)
 
 	var (
 		respBody   []byte
 		respStatus int
 	)
+	endpoint := fmt.Sprintf("http://%s/v1/node/echo", app.jsonAPIServer.BoundAddress)
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpoint(
-			t,
-			fmt.Sprintf("http://%s/v1/node/echo", app.Config.API.JSONListener),
-			payload,
-		)
+		respBody, respStatus = callEndpoint(t, endpoint, payload)
 		return respStatus == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
@@ -424,27 +356,28 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, message, msg.Msg.Value)
 }
 
+type noopHook struct{}
+
+func (f *noopHook) OnWrite(*zapcore.CheckedEntry, []zapcore.Field) {}
+
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
 	logger := logtest.New(t)
-	errlog := log.RegisterHooks(
-		logtest.New(t, zap.ErrorLevel),
-		events.EventHook(),
-	) // errlog is used to simulate errors in the app
+	// errlog is used to simulate errors in the app
+	errlog := log.NewFromLog(
+		zaptest.NewLogger(
+			t,
+			zaptest.Level(zap.ErrorLevel),
+			zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{})),
+		),
+	)
 
-	// Use a unique port
-	port := 1240
+	cfg := getTestDefaultConfig(t)
+	app := New(WithConfig(cfg), WithLog(logger))
 
-	app := New(WithLog(logger))
-	app.Config = getTestDefaultConfig(t)
-	types.SetNetworkHRP(app.Config.NetworkHRP) // ensure that the correct HRP is set when generating the address below
-	app.Config.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
-	app.Config.SMESHING.Opts.DataDir = t.TempDir()
-	app.Config.SMESHING.Opts.Scrypt.N = 2
-
-	edSgn, err := signing.NewEdSigner()
+	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	app.edSgn = edSgn
+	app.signers = []*signing.EdSigner{signer}
 
 	mesh, err := mocknet.WithNPeers(1)
 	require.NoError(t, err)
@@ -452,12 +385,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 	app.host = h
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
 
-	run := func(c *cobra.Command, args []string) {
-		require.NoError(t, cmd.EnsureCLIFlags(c, app.Config))
-
+	run := func(c *cobra.Command, args []string) error {
 		// Give the error channel a buffer
 		events.CloseEventReporter()
 		events.InitializeReporter()
@@ -466,31 +397,31 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		app.Config.Sync.Interval = time.Second
 		app.Config.LayerDuration = 2 * time.Second
 		app.Config.DataDirParent = t.TempDir()
+		app.Config.API.PublicListener = "localhost:0"
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start(context.Background()))
+		return app.Start(appCtx)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
 	var eg errgroup.Group
 	eg.Go(func() error {
-		str, err := testArgs(
-			ctx,
-			cmdWithRun(run),
-			"--grpc-public-listener",
-			fmt.Sprintf("localhost:%d", port),
-		)
+		str, err := testArgs(ctx, cmdWithRun(run))
 		assert.Empty(t, str)
 		assert.NoError(t, err)
 		return nil
 	})
 
+	<-app.Started()
 	conn, err := grpc.DialContext(
 		ctx,
-		fmt.Sprintf("localhost:%d", port),
+		app.grpcPublicServer.BoundAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -531,7 +462,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	eg.Go(func() error {
 		errlog.Error("test123")
 		errlog.Error("test456")
-		assert.Panics(t, func() { errlog.Panic("testPANIC") })
+		errlog.Panic("testPANIC")
 		return nil
 	})
 
@@ -551,6 +482,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Cleanup stops all services and thereby the app
 	<-app.Started() // prevents races when app is not started yet
+	appCancel()
 	app.Cleanup(context.Background())
 
 	// Wait for everything to stop cleanly before ending test
@@ -559,22 +491,22 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 // E2E app test of the transaction service.
 func TestSpacemeshApp_TransactionService(t *testing.T) {
-	r := require.New(t)
-
 	listener := "127.0.0.1:14236"
 
-	app := New(WithLog(logtest.New(t)))
 	cfg := config.DefaultTestConfig()
 	cfg.DataDirParent = t.TempDir()
-	app.Config = &cfg
+	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 
 	signer, err := signing.NewEdSigner()
-	r.NoError(err)
-	app.edSgn = signer
+	require.NoError(t, err)
+	app.signers = []*signing.EdSigner{signer}
 	address := wallet.Address(signer.PublicKey().Bytes())
 
-	run := func(c *cobra.Command, args []string) {
-		r.NoError(app.Initialize())
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
+	run := func(c *cobra.Command, args []string) error {
+		require.NoError(t, app.Initialize())
 
 		// GRPC configuration
 		app.Config.API.PublicListener = listener
@@ -594,7 +526,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.HARE3.PreroundDelay = 100 * time.Millisecond
 		app.Config.HARE3.RoundDuration = 100 * time.Millisecond
 
-		app.Config.Genesis = &config.GenesisConfig{
+		app.Config.Genesis = config.GenesisConfig{
 			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
 			Accounts: map[string]uint64{
 				address.String(): 100_000_000,
@@ -604,7 +536,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
-		require.NoError(t, app.Start(context.Background()))
+		return app.Start(appCtx)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -612,12 +544,13 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(1)
+	//nolint:testifylint
 	go func() {
 		str, err := testArgs(ctx, cmdWithRun(run))
-		r.Empty(str)
-		r.NoError(err)
+		require.Empty(t, str)
+		require.NoError(t, err)
 		wg.Done()
 	}()
 
@@ -637,8 +570,8 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
-	r.NoError(err)
-	t.Cleanup(func() { r.NoError(conn.Close()) })
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
 	tx1 := types.NewRawTx(
@@ -654,8 +587,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	require.NoError(t, err)
 
 	// TODO(dshulyak) synchronization below is messed up
-	wg2 := sync.WaitGroup{}
+	var wg2 sync.WaitGroup
 	wg2.Add(1)
+	//nolint:testifylint
 	go func() {
 		defer wg2.Done()
 
@@ -685,6 +619,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// This stops the app
 	// Cleanup stops all services and thereby the app
+	appCancel()
 	app.Cleanup(context.Background())
 
 	// Wait for it to stop
@@ -698,77 +633,53 @@ func TestConfig_Preset(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
-		c := &cobra.Command{}
-		cmd.AddCommands(c)
-
-		viper.Set("preset", name)
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-		conf, err := loadConfig(c)
-		require.NoError(t, err)
-		require.Equal(t, preset, *conf)
+		conf := config.Config{}
+		require.NoError(t, loadConfig(&conf, name, ""))
+		require.Equal(t, preset, conf)
 	})
 
 	t.Run("PresetOverwrittenByFlags", func(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
-		c := &cobra.Command{}
-		cmd.AddCommands(c)
-		const lowPeers = 1234
-		require.NoError(t, c.ParseFlags([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
+		conf := config.Config{}
+		var flags pflag.FlagSet
+		cmd.AddFlags(&flags, &conf)
 
-		viper.Set("preset", name)
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-		conf, err := loadConfig(c)
-		require.NoError(t, err)
+		const lowPeers = 1234
+		require.NoError(t, loadConfig(&conf, name, ""))
+		require.NoError(t, flags.Parse([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 		preset.P2P.LowPeers = lowPeers
-		require.Equal(t, preset, *conf)
+		require.Equal(t, preset, conf)
 	})
 
 	t.Run("PresetOverWrittenByConfigFile", func(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
-		c := &cobra.Command{}
-		cmd.AddCommands(c)
+		conf := config.Config{}
 		const lowPeers = 1234
-
 		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-		viper.Set("preset", name)
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-		conf, err := loadConfig(c)
-		require.NoError(t, err)
+		require.NoError(t, loadConfig(&conf, name, path))
 		preset.P2P.LowPeers = lowPeers
-		preset.ConfigFile = path
-		require.Equal(t, preset, *conf)
+		require.Equal(t, preset, conf)
 	})
 
 	t.Run("LoadedFromConfigFile", func(t *testing.T) {
 		preset, err := presets.Get(name)
 		require.NoError(t, err)
 
-		c := &cobra.Command{}
-		cmd.AddCommands(c)
-
+		conf := config.Config{}
 		content := fmt.Sprintf(`{"preset": "%s"}`, name)
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-
-		conf, err := loadConfig(c)
+		require.NoError(t, loadConfig(&conf, name, path))
 		require.NoError(t, err)
-		preset.ConfigFile = path
-		require.Equal(t, preset, *conf)
+		require.Equal(t, preset, conf)
 	})
 }
 
@@ -790,9 +701,11 @@ func TestConfig_CustomTypes(t *testing.T) {
 			},
 		},
 		{
-			name:   "post-pow-difficulty",
-			cli:    "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-			config: `{"post": {"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}}`,
+			name: "post-pow-difficulty",
+			cli:  "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+			config: `{"post": {
+				"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+				}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
 				diff, err := hex.DecodeString(
 					"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
@@ -834,78 +747,54 @@ func TestConfig_CustomTypes(t *testing.T) {
 			mainnet := config.MainnetConfig()
 			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
 
-			c := &cobra.Command{}
-			cmd.AddCommands(c)
-			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
+			conf := config.MainnetConfig()
+			var flags pflag.FlagSet
+			cmd.AddFlags(&flags, &conf)
 
-			t.Cleanup(viper.Reset)
-			t.Cleanup(cmd.ResetConfig)
-
-			conf, err := loadConfig(c)
-			require.NoError(t, err)
+			require.NoError(t, loadConfig(&conf, "", ""))
+			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
 			tc.updatePreset(t, &mainnet)
-			require.Equal(t, mainnet, *conf)
+			require.Equal(t, mainnet, conf)
 		})
 
 		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
 			mainnet := config.MainnetConfig()
 			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
 
-			c := &cobra.Command{}
-			cmd.AddCommands(c)
-
+			conf := config.MainnetConfig()
 			path := filepath.Join(t.TempDir(), "config.json")
 			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
-			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-			t.Cleanup(viper.Reset)
-			t.Cleanup(cmd.ResetConfig)
-
-			conf, err := loadConfig(c)
-			require.NoError(t, err)
+			require.NoError(t, loadConfig(&conf, "", path))
 			tc.updatePreset(t, &mainnet)
-			mainnet.ConfigFile = path
-			require.Equal(t, mainnet, *conf)
+			require.Equal(t, mainnet, conf)
 		})
 
 		t.Run(fmt.Sprintf("%s_PresetOverwrittenByFlags", tc.name), func(t *testing.T) {
 			preset, err := presets.Get(name)
 			require.NoError(t, err)
 
-			c := &cobra.Command{}
-			cmd.AddCommands(c)
-			require.NoError(t, c.ParseFlags(strings.Fields(tc.cli)))
+			conf := config.Config{}
+			var flags pflag.FlagSet
+			cmd.AddFlags(&flags, &conf)
 
-			viper.Set("preset", name)
-			t.Cleanup(viper.Reset)
-			t.Cleanup(cmd.ResetConfig)
-
-			conf, err := loadConfig(c)
-			require.NoError(t, err)
+			require.NoError(t, loadConfig(&conf, name, ""))
+			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
 			tc.updatePreset(t, &preset)
-			require.Equal(t, preset, *conf)
+			require.Equal(t, preset, conf)
 		})
 
 		t.Run(fmt.Sprintf("%s_PresetOverWrittenByConfigFile", tc.name), func(t *testing.T) {
 			preset, err := presets.Get(name)
 			require.NoError(t, err)
 
-			c := &cobra.Command{}
-			cmd.AddCommands(c)
-
+			conf := config.Config{}
 			path := filepath.Join(t.TempDir(), "config.json")
 			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
-			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-			viper.Set("preset", name)
-			t.Cleanup(viper.Reset)
-			t.Cleanup(cmd.ResetConfig)
-
-			conf, err := loadConfig(c)
-			require.NoError(t, err)
+			require.NoError(t, loadConfig(&conf, name, path))
 			tc.updatePreset(t, &preset)
-			preset.ConfigFile = path
-			require.Equal(t, preset, *conf)
+			require.Equal(t, preset, conf)
 		})
 	}
 }
@@ -935,37 +824,21 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(fmt.Sprintf("%s_Flags", tc.name), func(t *testing.T) {
-			c := &cobra.Command{}
-			cmd.AddCommands(c)
-			t.Cleanup(cmd.ResetConfig)
+			conf := config.Config{}
+			var flags pflag.FlagSet
+			cmd.AddFlags(&flags, &conf)
 
-			err := c.ParseFlags([]string{fmt.Sprintf("--smeshing-opts-provider=%s", tc.cliValue)})
+			err := flags.Parse([]string{fmt.Sprintf("--smeshing-opts-provider=%s", tc.cliValue)})
 			require.ErrorContains(t, err, "failed to parse PoST Provider ID")
 		})
 
 		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
-			c := &cobra.Command{}
-			cmd.AddCommands(c)
+			conf := config.Config{}
 
 			path := filepath.Join(t.TempDir(), "config.json")
-			require.NoError(
-				t,
-				os.WriteFile(
-					path,
-					[]byte(
-						fmt.Sprintf(
-							`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`,
-							tc.configValue,
-						),
-					),
-					0o600,
-				),
-			)
-			require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
-
-			t.Cleanup(cmd.ResetConfig)
-
-			_, err := loadConfig(c)
+			cfg := fmt.Sprintf(`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`, tc.configValue)
+			require.NoError(t, os.WriteFile(path, []byte(cfg), 0o600))
+			err := loadConfig(&conf, "", path)
 			require.ErrorContains(t, err, "invalid provider ID value")
 		})
 	}
@@ -973,75 +846,62 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 
 func TestConfig_Load(t *testing.T) {
 	t.Run("invalid fails to load", func(t *testing.T) {
-		c := &cobra.Command{}
-		cmd.AddCommands(c)
+		conf := config.Config{}
 
 		path := filepath.Join(t.TempDir(), "config.json")
 		require.NoError(t, os.WriteFile(path, []byte("}"), 0o600))
-		require.NoError(t, c.ParseFlags([]string{"--config=" + path}))
 
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-
-		_, err := loadConfig(c)
+		err := loadConfig(&conf, "", path)
 		require.ErrorContains(t, err, path)
 	})
 	t.Run("missing default doesn't fail", func(t *testing.T) {
-		c := &cobra.Command{}
-		cmd.AddCommands(c)
-		require.NoError(t, c.ParseFlags([]string{}))
+		conf := config.Config{}
+		var flags pflag.FlagSet
+		cmd.AddFlags(&flags, &conf)
 
-		t.Cleanup(viper.Reset)
-		t.Cleanup(cmd.ResetConfig)
-
-		_, err := loadConfig(c)
-		require.NoError(t, err)
+		require.NoError(t, loadConfig(&conf, "", ""))
+		require.NoError(t, flags.Parse([]string{}))
 	})
 }
 
 func TestConfig_GenesisAccounts(t *testing.T) {
-	t.Run("OverwriteDefaults", func(t *testing.T) {
-		c := &cobra.Command{}
-		cmd.AddCommands(c)
-		t.Cleanup(cmd.ResetConfig)
+	conf := config.Config{
+		Genesis: config.GenesisConfig{
+			Accounts: make(map[string]uint64),
+		},
+	}
+	var flags pflag.FlagSet
+	cmd.AddFlags(&flags, &conf)
 
-		const value = 100
-		keys := []string{"0x03", "0x04"}
-		args := []string{}
-		for _, key := range keys {
-			args = append(args, fmt.Sprintf("-a %s=%d", key, value))
-		}
-		require.NoError(t, c.ParseFlags(args))
+	const value = 100
+	keys := []string{"0x03", "0x04"}
+	args := []string{}
+	for _, key := range keys {
+		args = append(args, fmt.Sprintf("-a %s=%d", key, value))
+	}
 
-		conf, err := loadConfig(c)
-		require.NoError(t, err)
-		for _, key := range keys {
-			require.EqualValues(t, conf.Genesis.Accounts[key], value)
-		}
-	})
+	require.NoError(t, loadConfig(&conf, "", ""))
+	require.NoError(t, flags.Parse(args))
+	for _, key := range keys {
+		require.EqualValues(t, value, conf.Genesis.Accounts[key])
+	}
 }
 
 func TestHRP(t *testing.T) {
-	c := &cobra.Command{}
-	cmd.AddCommands(c)
-	t.Cleanup(cmd.ResetConfig)
-
+	conf := config.Config{}
 	data := `{"main": {"network-hrp": "TEST"}}`
 	cfg := filepath.Join(t.TempDir(), "config.json")
 	require.NoError(t, os.WriteFile(cfg, []byte(data), 0o600))
-	require.NoError(t, c.ParseFlags([]string{"-c=" + cfg}))
-	conf, err := loadConfig(c)
-	require.NoError(t, err)
-	app := New(WithConfig(conf))
+	require.NoError(t, loadConfig(&conf, "", cfg))
+	app := New(WithConfig(&conf))
 	require.NotNil(t, app)
 	require.Equal(t, "TEST", types.NetworkHRP())
 }
 
 func TestGenesisConfig(t *testing.T) {
 	t.Run("config is written to a file", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Initialize())
 		t.Cleanup(func() { app.Cleanup(context.Background()) })
@@ -1051,13 +911,12 @@ func TestGenesisConfig(t *testing.T) {
 			t,
 			existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)),
 		)
-		require.Empty(t, existing.Diff(app.Config.Genesis))
+		require.Empty(t, existing.Diff(&app.Config.Genesis))
 	})
 
 	t.Run("no error if no diff", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Initialize())
 		app.Cleanup(context.Background())
@@ -1067,9 +926,8 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("fatal error on a diff", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Initialize())
 		t.Cleanup(func() { app.Cleanup(context.Background()) })
@@ -1081,18 +939,17 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("not valid time", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
-		app.Config.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+		cfg := getTestDefaultConfig(t)
+		cfg.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
+		app := New(WithConfig(cfg))
 
 		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
 	})
+
 	t.Run("long extra data", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.DataDirParent = t.TempDir()
-		app.Config.Genesis.ExtraData = string(make([]byte, 256))
+		cfg := getTestDefaultConfig(t)
+		cfg.Genesis.ExtraData = string(make([]byte, 256))
+		app := New(WithConfig(cfg))
 
 		require.ErrorContains(t, app.Initialize(), "extra-data")
 	})
@@ -1100,8 +957,8 @@ func TestGenesisConfig(t *testing.T) {
 
 func TestFlock(t *testing.T) {
 	t.Run("sanity", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Lock())
 		t.Cleanup(app.Unlock)
@@ -1113,13 +970,95 @@ func TestFlock(t *testing.T) {
 	})
 
 	t.Run("dir doesn't exist", func(t *testing.T) {
-		app := New()
-		app.Config = getTestDefaultConfig(t)
-		app.Config.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
+		cfg := getTestDefaultConfig(t)
+		cfg.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
+		app := New(WithConfig(cfg))
 
 		require.NoError(t, app.Lock())
 		t.Cleanup(app.Unlock)
 	})
+}
+
+func TestMigrateLocalDB(t *testing.T) {
+	t.Run("no DB exists", func(t *testing.T) {
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
+
+		lg := zaptest.NewLogger(t)
+		ctrl := gomock.NewController(t)
+		client := localsql.NewMockPoetClient(ctrl)
+		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
+
+		// no-op
+		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+	})
+
+	t.Run("new DB exists", func(t *testing.T) {
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
+
+		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), localDbFile))
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+
+		lg := zaptest.NewLogger(t)
+		ctrl := gomock.NewController(t)
+		client := localsql.NewMockPoetClient(ctrl)
+		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
+
+		// no-op
+		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+	})
+
+	t.Run("old DB exists", func(t *testing.T) {
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
+
+		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+
+		lg := zaptest.NewLogger(t)
+		ctrl := gomock.NewController(t)
+		client := localsql.NewMockPoetClient(ctrl)
+		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
+
+		// migrates existing file
+		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+	})
+
+	t.Run("both DBs exist", func(t *testing.T) {
+		cfg := getTestDefaultConfig(t)
+		app := New(WithConfig(cfg))
+
+		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
+
+		db, err = localsql.Open(filepath.Join(app.Config.DataDir(), localDbFile))
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
+
+		lg := zaptest.NewLogger(t)
+		ctrl := gomock.NewController(t)
+		client := localsql.NewMockPoetClient(ctrl)
+		err = app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client})
+		require.ErrorIs(t, err, fs.ErrExist)
+	})
+}
+
+func TestEmptyExtraData(t *testing.T) {
+	cfg := getTestDefaultConfig(t)
+	cfg.Genesis.ExtraData = ""
+	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+	require.Error(t, app.Initialize())
 }
 
 func TestAdminEvents(t *testing.T) {
@@ -1130,21 +1069,19 @@ func TestAdminEvents(t *testing.T) {
 	require.NoError(t, err)
 	cfg.DataDirParent = t.TempDir()
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
-	cfg.SMESHING.Opts.DataDir = cfg.DataDirParent
+	cfg.SMESHING.Opts.DataDir = t.TempDir()
 	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.SMESHING.Start = true
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
-	cfg.HARE3.PreroundDelay = 100 * time.Millisecond
-	cfg.HARE3.RoundDuration = 1 * time.Millisecond
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	logger := logtest.New(t, zapcore.DebugLevel)
 	app := New(WithConfig(&cfg), WithLog(logger))
-	signer, err := app.LoadOrCreateEdSigner()
-	require.NoError(t, err)
-	app.edSgn = signer // https://github.com/spacemeshos/go-spacemesh/issues/4653
 	require.NoError(t, app.Initialize())
+	require.NoError(t, app.NewIdentity())
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var eg errgroup.Group
@@ -1153,7 +1090,6 @@ func TestAdminEvents(t *testing.T) {
 			return err
 		}
 		app.Cleanup(context.Background())
-		app.eg.Wait() // https://github.com/spacemeshos/go-spacemesh/issues/4653
 		return nil
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
@@ -1162,7 +1098,7 @@ func TestAdminEvents(t *testing.T) {
 	defer cancel()
 	conn, err := grpc.DialContext(
 		grpcCtx,
-		cfg.API.PrivateListener,
+		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -1200,16 +1136,236 @@ func TestAdminEvents(t *testing.T) {
 	}
 }
 
-func TestEmptyExtraData(t *testing.T) {
-	cfg := getTestDefaultConfig(t)
-	cfg.Genesis.ExtraData = ""
-	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
-	require.Error(t, app.Initialize())
+func TestAdminEvents_MultiSmesher(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	cfg, err := presets.Get("standalone")
+	require.NoError(t, err)
+	cfg.DataDirParent = t.TempDir()
+	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
+	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.SMESHING.Start = false
+	cfg.API.PostListener = "0.0.0.0:10094"
+	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
+
+	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+
+	logger := logtest.New(t)
+	app := New(WithConfig(&cfg), WithLog(logger))
+
+	dir := filepath.Join(app.Config.DataDir(), keyDir)
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	for i := 0; i < 2; i++ {
+		signer, err := signing.NewEdSigner(
+			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+		)
+		require.NoError(t, err)
+
+		keyFile := filepath.Join(dir, fmt.Sprintf("node_%d.key", i))
+		dst := make([]byte, hex.EncodedLen(len(signer.PrivateKey())))
+		hex.Encode(dst, signer.PrivateKey())
+		require.NoError(t, os.WriteFile(keyFile, dst, 0o600))
+	}
+
+	require.NoError(t, app.LoadIdentities())
+	require.Len(t, app.signers, 2)
+	require.NoError(t, app.Initialize())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var eg errgroup.Group
+	eg.Go(func() error {
+		if err := app.Start(ctx); err != nil {
+			return err
+		}
+		app.Cleanup(context.Background())
+		return nil
+	})
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
+
+	<-app.Started()
+	for _, signer := range app.signers {
+		signer := signer
+		mgr, err := activation.NewPostSetupManager(
+			cfg.POST,
+			logger.Zap(),
+			app.cachedDB,
+			types.ATXID(app.Config.Genesis.GoldenATX()),
+			app.syncer,
+			app.validator,
+		)
+		require.NoError(t, err)
+
+		cfg.SMESHING.Opts.DataDir = t.TempDir()
+		t.Cleanup(launchPostSupervisor(t,
+			logger.Zap(),
+			mgr,
+			signer,
+			"127.0.0.1:10094",
+			cfg.POST,
+			cfg.SMESHING.Opts,
+		))
+	}
+
+	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		grpcCtx,
+		"127.0.0.1:10093",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
+	client := pb.NewAdminServiceClient(conn)
+
+	tctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+
+	// 4 is arbitrary, if we received events once, they must be
+	// cached and should be returned immediately
+	for i := 0; i < 4; i++ {
+		stream, err := client.EventsStream(tctx, &pb.EventStreamRequest{})
+		require.NoError(t, err)
+
+		matchers := map[int]func(pb.IsEventDetails) bool{
+			0: func(ev pb.IsEventDetails) bool {
+				_, ok := ev.(*pb.Event_Beacon)
+				return ok
+			},
+			1: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[0].NodeID().Bytes()) &&
+					bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			2: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[0].NodeID().Bytes()) &&
+					bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			3: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[1].NodeID().Bytes()) &&
+					bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			4: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[1].NodeID().Bytes()) &&
+					bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			5: func(ev pb.IsEventDetails) bool {
+				// TODO(mafa): this event happens once for each NodeID, but should probably only happen once for all
+				_, ok := ev.(*pb.Event_PoetWaitRound)
+				return ok
+			},
+			6: func(ev pb.IsEventDetails) bool {
+				// TODO(mafa): this event happens once for each NodeID, but should probably only happen once for all
+				_, ok := ev.(*pb.Event_PoetWaitProof)
+				return ok
+			},
+			7: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[0].NodeID().Bytes()) &&
+					!bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			8: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[0].NodeID().Bytes()) &&
+					!bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			9: func(ev pb.IsEventDetails) bool {
+				startEv, ok := ev.(*pb.Event_PostStart)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(startEv.PostStart.Smesher, app.signers[1].NodeID().Bytes()) &&
+					!bytes.Equal(startEv.PostStart.Challenge, shared.ZeroChallenge)
+			},
+			10: func(ev pb.IsEventDetails) bool {
+				completeEv, ok := ev.(*pb.Event_PostComplete)
+				if !ok {
+					return false
+				}
+				return bytes.Equal(completeEv.PostComplete.Smesher, app.signers[1].NodeID().Bytes()) &&
+					!bytes.Equal(completeEv.PostComplete.Challenge, shared.ZeroChallenge)
+			},
+			11: func(ev pb.IsEventDetails) bool {
+				_, ok := ev.(*pb.Event_AtxPublished)
+				return ok
+			},
+			12: func(ev pb.IsEventDetails) bool {
+				_, ok := ev.(*pb.Event_AtxPublished)
+				return ok
+			},
+		}
+		for {
+			msg, err := stream.Recv()
+			require.NoError(t, err, "stream %d", i)
+			for idx, matcher := range matchers {
+				if matcher(msg.Details) {
+					t.Log("matched event", idx)
+					delete(matchers, idx)
+					break
+				}
+			}
+			if len(matchers) == 0 {
+				break
+			}
+		}
+		require.NoError(t, stream.CloseSend())
+	}
+}
+
+func launchPostSupervisor(
+	tb testing.TB,
+	log *zap.Logger,
+	mgr *activation.PostSetupManager,
+	sig *signing.EdSigner,
+	address string,
+	postCfg activation.PostConfig,
+	postOpts activation.PostSetupOpts,
+) func() {
+	cmdCfg := activation.DefaultTestPostServiceConfig()
+	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", address)
+	provingOpts := activation.DefaultPostProvingOpts()
+	provingOpts.RandomXMode = activation.PostRandomXModeLight
+
+	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
+	builder.EXPECT().Register(sig)
+	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
+	require.NoError(tb, ps.Start(cmdCfg, postOpts, sig))
+	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {
-	cfg, err := LoadConfigFromFile()
-	require.NoError(tb, err, "cannot load config from file")
+	cfg := config.MainnetConfig()
+	types.SetNetworkHRP(cfg.NetworkHRP)
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+
+	tmp := tb.TempDir()
+	cfg.DataDirParent = tmp
+	cfg.FileLock = filepath.Join(tmp, "LOCK")
+	cfg.LayerDuration = 20 * time.Second
 
 	// is set to 0 to make sync start immediately when node starts
 	cfg.P2P.MinPeers = 0
@@ -1221,8 +1377,11 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.POST.K2 = 4
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()
-	cfg.SMESHING.Start = true
+	cfg.SMESHING.Start = false
+	cfg.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
+	cfg.SMESHING.Opts.DataDir = filepath.Join(tmp, "post")
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
+	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
 
 	cfg.HARE3.RoundDuration = 2
@@ -1234,24 +1393,17 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.Tortoise.Hdist = 5
 	cfg.Tortoise.Zdist = 5
 
-	cfg.LayerDuration = 20 * time.Second
 	cfg.HareEligibility.ConfidenceParam = 1
 	cfg.Sync.Interval = 2 * time.Second
-	tmp := tb.TempDir()
-	cfg.DataDirParent = tmp
-	cfg.FileLock = filepath.Join(tmp, "LOCK")
 
-	cfg.FETCH.RequestTimeout = 10
+	cfg.FETCH.RequestTimeout = 10 * time.Second
+	cfg.FETCH.RequestHardTimeout = 20 * time.Second
 	cfg.FETCH.BatchSize = 5
-	cfg.FETCH.BatchTimeout = 5
+	cfg.FETCH.BatchTimeout = 5 * time.Second
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
-
 	cfg.Genesis = config.DefaultTestGenesisConfig()
+	cfg.POSTService = activation.DefaultTestPostServiceConfig()
 
-	cfg.POSTService = config.DefaultTestConfig().POSTService
-
-	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
-
-	return cfg
+	return &cfg
 }

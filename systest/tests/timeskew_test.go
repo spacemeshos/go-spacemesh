@@ -17,7 +17,7 @@ func TestShortTimeskew(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 
 	var (
@@ -72,7 +72,9 @@ func TestShortTimeskew(t *testing.T) {
 				return false, nil
 			}
 			if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
-				tctx.Log.Debugw("layer applied", "layer", layer.Layer.Number.Number, "hash", prettyHex(layer.Layer.Hash))
+				tctx.Log.Debugw(
+					"layer applied", "layer", layer.Layer.Number.Number, "hash", prettyHex(layer.Layer.Hash),
+				)
 				confirmed = layer.Layer.Number.Number
 				if confirmed >= stopSkew {
 					return false, nil

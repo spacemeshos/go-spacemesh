@@ -11,7 +11,7 @@ import (
 type PowDifficulty [32]byte
 
 func (d PowDifficulty) String() string {
-	return fmt.Sprintf("%X", d[:])
+	return hex.EncodeToString(d[:])
 }
 
 // Set implements pflag.Value.Set.
@@ -46,7 +46,7 @@ func (id PostProviderID) String() string {
 	if id.value == nil {
 		return ""
 	}
-	return fmt.Sprintf("%d", *id.value)
+	return strconv.FormatUint(uint64(*id.value), 10)
 }
 
 // Type implements pflag.Value.Type.

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -31,12 +31,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-var ErrMissingBlock = errors.New("missing blocks")
-
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
 	logger   log.Log
-	cdb      *datastore.CachedDB
+	cdb      *sql.Database
 	atxsdata *atxsdata.Data
 	clock    layerClock
 
@@ -59,7 +57,7 @@ type Mesh struct {
 
 // NewMesh creates a new instant of a mesh.
 func NewMesh(
-	cdb *datastore.CachedDB,
+	db *sql.Database,
 	atxsdata *atxsdata.Data,
 	c layerClock,
 	trtl system.Tortoise,
@@ -69,7 +67,7 @@ func NewMesh(
 ) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
-		cdb:                 cdb,
+		cdb:                 db,
 		atxsdata:            atxsdata,
 		clock:               c,
 		trtl:                trtl,
@@ -82,7 +80,7 @@ func NewMesh(
 	msh.latestLayerInState.Store(types.LayerID(0))
 	msh.processedLayer.Store(types.LayerID(0))
 
-	lid, err := ballots.LatestLayer(cdb)
+	lid, err := ballots.LatestLayer(db)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("get latest layer %w", err)
 	}
@@ -93,7 +91,7 @@ func NewMesh(
 	}
 
 	genesis := types.GetEffectiveGenesis()
-	if err = cdb.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+	if err = db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		if err = layers.SetProcessed(dbtx, genesis); err != nil {
 			return fmt.Errorf("mesh init: %w", err)
 		}
@@ -189,6 +187,21 @@ func (msh *Mesh) GetLayer(lid types.LayerID) (*types.Layer, error) {
 		return nil, fmt.Errorf("layer blks: %w", err)
 	}
 	return types.NewExistingLayer(lid, blts, blks), nil
+}
+
+// GetLayerVerified returns the verified, canonical block for a layer (or none for an empty layer).
+func (msh *Mesh) GetLayerVerified(lid types.LayerID) (*types.Block, error) {
+	applied, err := layers.GetApplied(msh.cdb, lid)
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("get applied %v: %w", lid, err)
+	case applied.IsEmpty():
+		return nil, nil
+	default:
+		return blocks.Get(msh.cdb, applied)
+	}
 }
 
 // ProcessedLayer returns the last processed layer ID.
@@ -295,21 +308,15 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 		)
 	}
 	applicable, missing := filterMissing(results, next)
-	if len(missing) > 0 {
-		select {
-		case <-ctx.Done():
-		case msh.missingBlocks <- missing:
-		}
-		if len(applicable) == 0 {
-			return fmt.Errorf("%w: request missing blocks %v", ErrMissingBlock, missing)
-		}
-	}
-
 	if err := msh.ensureStateConsistent(ctx, applicable); err != nil {
 		return err
 	}
 	if err := msh.applyResults(ctx, applicable); err != nil {
 		return err
+	}
+	// apply what we were able to download, as it will allow to prune some of the data from tortoise
+	if len(missing) > 0 {
+		return &MissingBlocksError{Blocks: missing}
 	}
 	return nil
 }
@@ -384,15 +391,17 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 		}); err != nil {
 			return err
 		}
-		msh.trtl.OnApplied(layer.Layer, layer.Opinion)
 		if layer.Verified {
+			// tortoise will evict layer when OnApplied is called.
+			// however we also apply layers before contextual validity was determined (e.g block.Valid field)
+			// in such case we would apply block because of hare, and then we may evict event when block.Valid was set
+			// but before it was saved to database
+			msh.trtl.OnApplied(layer.Layer, layer.Opinion)
 			events.ReportLayerUpdate(events.LayerUpdate{
 				LayerID: layer.Layer,
 				Status:  events.LayerStatusTypeApplied,
 			})
 		}
-
-		msh.atxsdata.OnEpoch(layer.Layer.GetEpoch())
 		if layer.Layer > msh.LatestLayerInState() {
 			msh.setLatestLayerInState(layer.Layer)
 		}
@@ -445,16 +454,8 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid type
 	}); err != nil {
 		return err
 	}
-	switch len(certs) {
-	case 0:
-		msh.trtl.OnHareOutput(lid, bid)
-	case 1:
-		msh.logger.With().Debug("already synced certificate",
-			log.Context(ctx),
-			log.Stringer("cert_block_id", certs[0].Block),
-			log.Bool("cert_valid", certs[0].Valid))
-	default: // more than 1 cert
-		msh.logger.With().Warning("multiple certs found in network",
+	if len(certs) > 1 {
+		msh.logger.With().Warning("multiple certificates found in network",
 			log.Context(ctx),
 			log.Object("certificates", log.ObjectMarshallerFunc(func(encoder zapcore.ObjectEncoder) error {
 				for _, cert := range certs {
@@ -464,7 +465,10 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid type
 				return nil
 			})),
 		)
+		return nil
 	}
+	// otherwise always notify tortoise about hare output
+	msh.trtl.OnHareOutput(lid, bid)
 	return nil
 }
 
@@ -487,7 +491,18 @@ func (msh *Mesh) ProcessLayerPerHareOutput(
 			return fmt.Errorf("optimistically applied for %v/%v: %w", layerID, blockID, err)
 		}
 	}
-	return msh.ProcessLayer(ctx, layerID)
+	err := msh.ProcessLayer(ctx, layerID)
+	if err != nil {
+		missing := &MissingBlocksError{}
+		if errors.As(err, &missing) {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case msh.missingBlocks <- missing.Blocks:
+			}
+		}
+	}
+	return err
 }
 
 func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
@@ -519,17 +534,14 @@ func (msh *Mesh) AddBallot(
 	ctx context.Context,
 	ballot *types.Ballot,
 ) (*types.MalfeasanceProof, error) {
-	malicious, err := msh.cdb.IsMalicious(ballot.SmesherID)
-	if err != nil {
-		return nil, err
-	}
+	malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
 	if malicious {
 		ballot.SetMalicious()
 	}
 	var proof *types.MalfeasanceProof
 	// ballots.LayerBallotByNodeID and ballots.Add should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
-	if err = msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		if !malicious {
 			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -569,7 +581,7 @@ func (msh *Mesh) AddBallot(
 				)
 			}
 		}
-		if err = ballots.Add(dbtx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		if err := ballots.Add(dbtx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return err
 		}
 		return nil
@@ -577,7 +589,7 @@ func (msh *Mesh) AddBallot(
 		return nil, err
 	}
 	if proof != nil {
-		msh.cdb.CacheMalfeasanceProof(ballot.SmesherID, proof)
+		msh.atxsdata.SetMalicious(ballot.SmesherID)
 		msh.trtl.OnMalfeasance(ballot.SmesherID)
 	}
 	return proof, nil
@@ -599,27 +611,6 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 	return nil
 }
 
-// GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.
-func (msh *Mesh) GetATXs(
-	ctx context.Context,
-	atxIds []types.ATXID,
-) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
-	var mIds []types.ATXID
-	atxs := make(map[types.ATXID]*types.VerifiedActivationTx, len(atxIds))
-	for _, id := range atxIds {
-		t, err := msh.cdb.GetFullAtx(id)
-		if err != nil {
-			msh.logger.WithContext(ctx).
-				With().
-				Warning("could not get atx from database", id, log.Err(err))
-			mIds = append(mIds, id)
-		} else {
-			atxs[t.ID()] = t
-		}
-	}
-	return atxs, mIds
-}
-
 // GetRewardsByCoinbase retrieves account's rewards by the coinbase address.
 func (msh *Mesh) GetRewardsByCoinbase(coinbase types.Address) ([]*types.Reward, error) {
 	return rewards.ListByCoinbase(msh.cdb, coinbase)
@@ -633,4 +624,23 @@ func (msh *Mesh) GetRewardsBySmesherId(smesherID types.NodeID) ([]*types.Reward,
 // LastVerified returns the latest layer verified by tortoise.
 func (msh *Mesh) LastVerified() types.LayerID {
 	return msh.trtl.LatestComplete()
+}
+
+type MissingBlocksError struct {
+	Blocks []types.BlockID
+}
+
+func (e *MissingBlocksError) Error() string {
+	if len(e.Blocks) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	builder.WriteString("missing blocks: ")
+	for i, b := range e.Blocks {
+		if i > 0 {
+			builder.WriteString(", ")
+		}
+		builder.WriteString(b.String())
+	}
+	return builder.String()
 }

@@ -20,10 +20,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -54,6 +56,7 @@ func testnet() config.Config {
 	hare3conf.ProtocolName = ""
 	defaultdir := filepath.Join(home, "spacemesh-testnet", "/")
 	return config.Config{
+		Preset: "testnet",
 		BaseConfig: config.BaseConfig{
 			DataDirParent:                defaultdir,
 			FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
@@ -75,7 +78,7 @@ func testnet() config.Config {
 			RegossipAtxInterval: time.Hour,
 			ATXGradeDelay:       30 * time.Minute,
 		},
-		Genesis: &config.GenesisConfig{
+		Genesis: config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
 			ExtraData:   "0000000000000000000000c76c58ebac180989673fd6d237b40e66ed5c976ec3",
 		},
@@ -88,13 +91,13 @@ func testnet() config.Config {
 			MinimalActiveSetWeight:   []types.EpochMinimalActiveWeight{{Weight: 10_000}},
 		},
 		HARE3: hare3conf,
-		HareEligibility: eligConfig.Config{
+		HareEligibility: eligibility.Config{
 			ConfidenceParam: 20,
 		},
 		Beacon: beacon.Config{
 			Kappa:                    40,
-			Q:                        big.NewRat(1, 3),
-			Theta:                    big.NewRat(1, 4),
+			Q:                        *big.NewRat(1, 3),
+			Theta:                    *big.NewRat(1, 4),
 			GracePeriodDuration:      10 * time.Minute,
 			ProposalDuration:         4 * time.Minute,
 			FirstVotingRoundDuration: 30 * time.Minute,
@@ -136,10 +139,11 @@ func testnet() config.Config {
 		LOGGING:  config.DefaultLoggingConfig(),
 		Sync: syncer.Config{
 			Interval:                 time.Minute,
-			EpochEndFraction:         0.8,
+			EpochEndFraction:         0.5,
 			MaxStaleDuration:         time.Hour,
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 10,
+			AtxSync:                  atxsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),
@@ -148,6 +152,11 @@ func testnet() config.Config {
 			// but certifier continues to use 200 committee size.
 			// this will be upgraded in future with scheduled upgrade.
 			CommitteeSize: 200,
+		},
+		ActiveSet: miner.ActiveSetPreparation{
+			Window:        10 * time.Minute,
+			RetryInterval: time.Minute,
+			Tries:         5,
 		},
 	}
 }

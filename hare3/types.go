@@ -1,6 +1,7 @@
 package hare3
 
 import (
+	"errors"
 	"fmt"
 
 	"go.uber.org/zap/zapcore"
@@ -75,7 +76,19 @@ func (ir IterRound) Absolute() uint32 {
 
 type Value struct {
 	// Proposals is set in messages for preround and propose rounds.
-	Proposals []types.ProposalID `scale:"max=500"`
+	//
+	// Worst case scenario is that a single smesher identity has > 99.97% of the total weight of the network.
+	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
+	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
+	//
+	// If we expect 2.2 Mio ATXs that would be a total of 2.2 Mio + 50 * 4032 = 2,401,600 slots.
+	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
+	// 2,401,600 / 4032 = 595.7 eligibilities in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(2,401,600 * 1/4032 * 4031/4032) = 24.4
+	//
+	// This means that we can expect a maximum of 595.7 + 6*24.4 = 743 eligibilities in a layer with
+	// > 99.9997% probability.
+	Proposals []types.ProposalID `scale:"max=800"`
 	// Reference is set in messages for commit and notify rounds.
 	Reference *types.Hash32
 }
@@ -130,7 +143,7 @@ func (m *Message) ToBytes() []byte {
 
 func (m *Message) Validate() error {
 	if (m.Round == commit || m.Round == notify) && m.Value.Reference == nil {
-		return fmt.Errorf("reference can't be nil in commit or notify rounds")
+		return errors.New("reference can't be nil in commit or notify rounds")
 	} else if (m.Round == preround || m.Round == propose) && m.Value.Reference != nil {
 		return fmt.Errorf("reference is set to not nil in round %s", m.Round)
 	}

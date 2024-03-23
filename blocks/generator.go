@@ -12,12 +12,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -29,13 +29,14 @@ type Generator struct {
 	eg     errgroup.Group
 	stop   func()
 
-	db       *sql.Database
-	atxs     *atxsdata.Data
-	msh      meshProvider
-	executor executor
-	fetcher  system.ProposalFetcher
-	cert     certifier
-	patrol   layerPatrol
+	db        *sql.Database
+	atxs      *atxsdata.Data
+	proposals *store.Store
+	msh       meshProvider
+	executor  executor
+	fetcher   system.ProposalFetcher
+	cert      certifier
+	patrol    layerPatrol
 
 	hareCh           <-chan hare3.ConsensusOutput
 	optimisticOutput map[types.LayerID]*proposalMetadata
@@ -84,6 +85,7 @@ func WithHareOutputChan(ch <-chan hare3.ConsensusOutput) GeneratorOpt {
 func NewGenerator(
 	db *sql.Database,
 	atxs *atxsdata.Data,
+	proposals *store.Store,
 	exec executor,
 	m meshProvider,
 	f system.ProposalFetcher,
@@ -96,6 +98,7 @@ func NewGenerator(
 		cfg:              defaultConfig(),
 		db:               db,
 		atxs:             atxs,
+		proposals:        proposals,
 		msh:              m,
 		executor:         exec,
 		fetcher:          f,
@@ -121,6 +124,9 @@ func (g *Generator) Start(ctx context.Context) {
 
 // Stop stops listening to hare output.
 func (g *Generator) Stop() {
+	if g.stop == nil {
+		return
+	}
 	g.stop()
 	err := g.eg.Wait()
 	if err != nil && !errors.Is(err, context.Canceled) {
@@ -171,21 +177,6 @@ func (g *Generator) run(ctx context.Context) error {
 	}
 }
 
-func (g *Generator) getProposals(pids []types.ProposalID) ([]*types.Proposal, error) {
-	var (
-		result = make([]*types.Proposal, 0, len(pids))
-		p      *types.Proposal
-		err    error
-	)
-	for _, pid := range pids {
-		if p, err = proposals.Get(g.db, pid); err != nil {
-			return nil, err
-		}
-		result = append(result, p)
-	}
-	return result, nil
-}
-
 func (g *Generator) processHareOutput(ctx context.Context, out hare3.ConsensusOutput) (*types.Block, error) {
 	var md *proposalMetadata
 	if len(out.Proposals) > 0 {
@@ -195,12 +186,9 @@ func (g *Generator) processHareOutput(ctx context.Context, out hare3.ConsensusOu
 				failFetchCnt.Inc()
 				return fmt.Errorf("preprocess fetch layer %d proposals: %w", out.Layer, err)
 			}
-			// now all proposals should be in local DB
-			props, err := g.getProposals(out.Proposals)
-			if err != nil {
-				failErrCnt.Inc()
-				return fmt.Errorf("preprocess get layer %d proposals: %w", out.Layer, err)
-			}
+			// now all proposals should be in the local store
+			props := g.proposals.GetMany(out.Layer, out.Proposals...)
+			var err error
 			md, err = getProposalMetadata(ctx, g.logger, g.db, g.atxs, g.cfg, out.Layer, props)
 			if err != nil {
 				return err
@@ -234,7 +222,7 @@ func (g *Generator) processHareOutput(ctx context.Context, out hare3.ConsensusOu
 		}
 		block.Initialize()
 		hareOutput = block.ID()
-		g.logger.With().Info("generated block", out.Layer, block.ID())
+		g.logger.With().Debug("generated block", out.Layer, block.ID())
 	}
 	if err := g.saveAndCertify(ctx, out.Layer, block); err != nil {
 		return block, err
@@ -266,14 +254,14 @@ func (g *Generator) processOptimisticLayers(max types.LayerID) {
 				failGenCnt.Inc()
 				return err
 			}
-			g.logger.With().Info("generated block (optimistic)", lid, block.ID())
+			g.logger.With().Debug("generated block (optimistic)", lid, block.ID())
 			if err = g.msh.ProcessLayerPerHareOutput(md.ctx, lid, block.ID(), true); err != nil {
 				return err
 			}
 			return nil
 		}
 		if err = doit(); err != nil {
-			g.logger.With().Error("failed to process optimistic layer",
+			g.logger.With().Warning("failed to process optimistic layer",
 				log.Context(md.ctx),
 				lid,
 				log.Err(err),

@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
@@ -57,7 +58,7 @@ func TestFullBallotFilter(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			state := newState()
+			state := newState(atxsdata.New())
 			state.last = tc.last
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
@@ -331,18 +332,16 @@ func TestFullCountVotes(t *testing.T) {
 			)
 			for i := range tc.activeset {
 				atxid := types.ATXID{byte(i + 1)}
-				header := &types.ActivationTxHeader{
-					ID:                atxid,
-					NumUnits:          1,
-					EffectiveNumUnits: 1,
-					BaseTickHeight:    tc.activeset[i].BaseHeight,
-					TickCount:         tc.activeset[i].TickCount,
+				atx := atxsdata.ATX{
+					Weight:     tc.activeset[i].TickCount,
+					BaseHeight: tc.activeset[i].BaseHeight,
+					Height:     tc.activeset[i].BaseHeight + tc.activeset[i].TickCount,
 				}
-				header.PublishEpoch = 1
-				tortoise.OnAtx(header.ToData())
+				tortoise.trtl.atxsdata.AddAtx(2, atxid, &atx)
+				tortoise.OnAtx(2, atxid, &atx)
 				activeset = append(activeset, atxid)
-				weights = append(weights, header.GetWeight())
-				total += header.GetWeight()
+				weights = append(weights, atx.Weight)
+				total += atx.Weight
 			}
 
 			consensus := tortoise.trtl
@@ -404,7 +403,7 @@ func TestFullCountVotes(t *testing.T) {
 						}
 						ballot.Votes.Base = ballotsList[b.Base[0]][b.Base[1]].ID()
 					}
-					ballot.OpinionHash = types.RandomHash() // fake opinion, only to make sure each ballot has a unique ID
+					ballot.OpinionHash = types.RandomHash() // fake opinion, to make sure each ballot has a unique ID
 					ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 					ballot.SmesherID = signer.NodeID()
 					require.NoError(t, ballot.Initialize())
@@ -543,7 +542,7 @@ func TestFullVerify(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			full := newFullTortoise(Config{}, newState())
+			full := newFullTortoise(Config{}, newState(atxsdata.New()))
 			full.epochs = epochs
 			full.last = last
 			full.processed = last

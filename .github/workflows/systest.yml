@@ -2,6 +2,13 @@ name: System tests
 on:
   # Allow manually triggering this workflow
   workflow_dispatch:
+    inputs:
+      test_name:
+        description: "Test to run"
+        default: "."
+      log_level:
+        description: "Log level"
+        default: "debug"
   push:
     branches:
       - staging
@@ -38,7 +45,7 @@ jobs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v2
+      - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
@@ -56,7 +63,7 @@ jobs:
 
       - name: Setup kubectl
         id: install
-        uses: azure/setup-kubectl@v3
+        uses: azure/setup-kubectl@v4
         with:
           version: "v1.23.15"
 
@@ -113,11 +120,12 @@ jobs:
           label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
-          size: 50
+          size: 30
           bootstrap: 4m
-          level: info
+          level: ${{ inputs.log_level }}
           clusters: 4
-        run: make -C systest run test_name=.
+          norbac: 1
+        run: make -C systest run test_name=${{ inputs.test_name }}
 
       - name: Delete pod
         if: always()

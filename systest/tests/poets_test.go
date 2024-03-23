@@ -28,7 +28,7 @@ func TestPoetsFailures(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	tctx.Log.Debug("TestPoetsFailures start")
 
-	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(10))
+	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 	tctx.Log.Debug("Obtained cluster")
 
@@ -126,7 +126,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 		t.Skip("Skipping test for using different poets - test configured with less then 2 poets")
 	}
 
-	cl := cluster.New(tctx, cluster.WithKeys(10))
+	cl := cluster.New(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, cl.AddBootnodes(tctx, 2))
 	require.NoError(t, cl.AddBootstrappers(tctx))
 	require.NoError(t, cl.AddPoets(tctx))
@@ -195,10 +195,10 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	firstEpochWithEligibility := uint32(math.Max(2.0, float64(first/layersPerEpoch)))
 	epochsInTest := last/layersPerEpoch - firstEpochWithEligibility + 1
 	for id, eligibleEpochs := range smeshers {
-		assert.EqualValues(
+		assert.Len(
 			t,
-			epochsInTest,
-			len(eligibleEpochs),
+			eligibleEpochs,
+			int(epochsInTest),
 			fmt.Sprintf("smesher ID: %v, its epochs: %v", hex.EncodeToString([]byte(id)), eligibleEpochs),
 		)
 	}

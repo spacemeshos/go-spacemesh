@@ -2,22 +2,20 @@
 package miner
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"runtime"
 	"slices"
-	"sort"
 	"sync"
 	"time"
 
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/minweight"
@@ -29,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
-	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -50,10 +47,6 @@ type votesEncoder interface {
 	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Opinion, error)
 }
 
-type mesh interface {
-	GetMalfeasanceProof(nodeID types.NodeID) (*types.MalfeasanceProof, error)
-}
-
 type layerClock interface {
 	AwaitLayer(layerID types.LayerID) <-chan struct{}
 	CurrentLayer() types.LayerID
@@ -65,23 +58,21 @@ type ProposalBuilder struct {
 	logger log.Log
 	cfg    config
 
-	cdb       *datastore.CachedDB
+	db        sql.Executor
+	localdb   sql.Executor
+	atxsdata  *atxsdata.Data
 	clock     layerClock
 	publisher pubsub.Publisher
 	conState  conservativeState
 	tortoise  votesEncoder
 	syncer    system.SyncStateProvider
+	activeGen *activeSetGenerator
 
 	signers struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
 	shared sharedSession
-
-	fallback struct {
-		mu   sync.Mutex
-		data map[types.EpochID][]types.ATXID
-	}
 }
 
 type signerSession struct {
@@ -96,6 +87,7 @@ type sharedSession struct {
 	epoch  types.EpochID
 	beacon types.Beacon
 	active struct {
+		id     types.Hash32
 		set    types.ATXIDList
 		weight uint64
 	}
@@ -160,6 +152,25 @@ type config struct {
 	minActiveSetWeight []types.EpochMinimalActiveWeight
 	// used to determine whether a node has enough information on the active set this epoch
 	goodAtxPercent int
+	activeSet      ActiveSetPreparation
+}
+
+// ActiveSetPreparation is a configuration to enable computation of activeset in advance.
+type ActiveSetPreparation struct {
+	// Window describes how much in advance the active set should be prepared.
+	Window time.Duration `mapstructure:"window"`
+	// RetryInterval describes how often the active set is retried.
+	RetryInterval time.Duration `mapstructure:"retry-interval"`
+	// Tries describes how many times the active set is retried.
+	Tries int `mapstructure:"tries"`
+}
+
+func DefaultActiveSetPrepartion() ActiveSetPreparation {
+	return ActiveSetPreparation{
+		Window:        1 * time.Second,
+		RetryInterval: 1 * time.Second,
+		Tries:         3,
+	}
 }
 
 func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -168,6 +179,9 @@ func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("hdist", c.hdist)
 	encoder.AddDuration("network delay", c.networkDelay)
 	encoder.AddInt("good atx percent", c.goodAtxPercent)
+	encoder.AddDuration("active set window", c.activeSet.Window)
+	encoder.AddDuration("active set retry interval", c.activeSet.RetryInterval)
+	encoder.AddInt("active set tries", c.activeSet.Tries)
 	return nil
 }
 
@@ -237,10 +251,19 @@ func WithSigners(signers ...*signing.EdSigner) Opt {
 	}
 }
 
+// WithActiveSetPrepation overwrites configuration for activeset preparation.
+func WithActiveSetPrepation(prep ActiveSetPreparation) Opt {
+	return func(pb *ProposalBuilder) {
+		pb.cfg.activeSet = prep
+	}
+}
+
 // New creates a struct of block builder type.
 func New(
 	clock layerClock,
-	cdb *datastore.CachedDB,
+	db sql.Executor,
+	localdb sql.Executor,
+	atxsdata *atxsdata.Data,
 	publisher pubsub.Publisher,
 	trtl votesEncoder,
 	syncer system.SyncStateProvider,
@@ -250,10 +273,13 @@ func New(
 	pb := &ProposalBuilder{
 		cfg: config{
 			workersLimit: runtime.NumCPU(),
+			activeSet:    DefaultActiveSetPrepartion(),
 		},
 		logger:    log.NewNop(),
 		clock:     clock,
-		cdb:       cdb,
+		db:        db,
+		localdb:   localdb,
+		atxsdata:  atxsdata,
 		publisher: publisher,
 		tortoise:  trtl,
 		syncer:    syncer,
@@ -264,38 +290,41 @@ func New(
 		}{
 			signers: map[types.NodeID]*signerSession{},
 		},
-		fallback: struct {
-			mu   sync.Mutex
-			data map[types.EpochID][]types.ATXID
-		}{
-			data: map[types.EpochID][]types.ATXID{},
-		},
 	}
 	for _, opt := range opts {
 		opt(pb)
 	}
+	pb.activeGen = newActiveSetGenerator(pb.cfg, pb.logger.Zap(), pb.db, pb.localdb, pb.atxsdata, pb.clock)
 	return pb
 }
 
-func (pb *ProposalBuilder) Register(signer *signing.EdSigner) {
+func (pb *ProposalBuilder) Register(sig *signing.EdSigner) {
 	pb.signers.mu.Lock()
 	defer pb.signers.mu.Unlock()
-	_, exist := pb.signers.signers[signer.NodeID()]
+	_, exist := pb.signers.signers[sig.NodeID()]
 	if !exist {
-		pb.signers.signers[signer.NodeID()] = &signerSession{
-			signer: signer,
-			log:    pb.logger.WithFields(log.String("signer", signer.NodeID().ShortString())),
+		pb.logger.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+		pb.signers.signers[sig.NodeID()] = &signerSession{
+			signer: sig,
+			log:    pb.logger.WithFields(log.String("signer", sig.NodeID().ShortString())),
 		}
 	}
 }
 
 // Start the loop that listens to layers and build proposals.
 func (pb *ProposalBuilder) Run(ctx context.Context) error {
-	next := pb.clock.CurrentLayer().Add(1)
+	current := pb.clock.CurrentLayer()
+	next := current + 1
 	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("next", next.Uint32()))
+	var eg errgroup.Group
+	prepareDisabled := pb.cfg.activeSet.Tries == 0 || pb.cfg.activeSet.RetryInterval == 0
+	if prepareDisabled {
+		pb.logger.With().Warning("activeset will not be prepared in advance")
+	}
 	for {
 		select {
 		case <-ctx.Done():
+			eg.Wait()
 			return nil
 		case <-pb.clock.AwaitLayer(next):
 			current := pb.clock.CurrentLayer()
@@ -308,13 +337,24 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 			}
 			next = current.Add(1)
 			ctx := log.WithNewSessionID(ctx)
-			if current <= types.GetEffectiveGenesis() || !pb.syncer.IsSynced(ctx) {
+			synced := pb.syncer.IsSynced(ctx)
+			if !prepareDisabled {
+				eg.Go(func() error {
+					pb.runPrepare(ctx, current)
+					return nil
+				})
+				prepareDisabled = true
+			}
+			if current <= types.GetEffectiveGenesis() || !synced {
 				continue
 			}
 			if err := pb.build(ctx, current); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
-					pb.logger.With().
-						Debug("signer is not active in epoch", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
+					pb.logger.With().Debug("signer is not active in epoch",
+						log.Context(ctx),
+						log.Uint32("lid", current.Uint32()),
+						log.Err(err),
+					)
 				} else {
 					pb.logger.With().Warning("failed to build proposal",
 						log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err),
@@ -323,6 +363,20 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (pb *ProposalBuilder) runPrepare(ctx context.Context, current types.LayerID) {
+	nextEpoch := current.GetEpoch() + 1
+	wait := time.Until(
+		pb.clock.LayerToTime((nextEpoch).FirstLayer()).Add(-pb.cfg.activeSet.Window))
+	if wait > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+	}
+	pb.activeGen.ensure(ctx, nextEpoch)
 }
 
 // only output the mesh hash in the proposal when the following conditions are met:
@@ -356,7 +410,7 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	)
 
 	for lid := minVerified.Add(1); lid.Before(current); lid = lid.Add(1) {
-		_, err := certificates.GetHareOutput(pb.cdb, lid)
+		_, err := certificates.GetHareOutput(pb.db, lid)
 		if err != nil {
 			pb.logger.With().Warning("missing hare output for layer within hdist",
 				log.Context(ctx),
@@ -374,7 +428,7 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 		log.Stringer("to", current.Sub(1)),
 	)
 
-	mesh, err := layers.GetAggregatedHash(pb.cdb, current.Sub(1))
+	mesh, err := layers.GetAggregatedHash(pb.db, current.Sub(1))
 	if err != nil {
 		pb.logger.With().Warning("failed to get mesh hash",
 			log.Context(ctx),
@@ -386,26 +440,16 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	return mesh
 }
 
-func (pb *ProposalBuilder) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
-	pb.logger.With().Info("received activeset update",
-		epoch,
-		log.Int("size", len(activeSet)),
-	)
-	pb.fallback.mu.Lock()
-	defer pb.fallback.mu.Unlock()
-	if _, ok := pb.fallback.data[epoch]; ok {
-		pb.logger.With().Debug("fallback active set already exists", epoch)
-		return
-	}
-	pb.fallback.data[epoch] = activeSet
+func (pb *ProposalBuilder) UpdateActiveSet(target types.EpochID, set []types.ATXID) {
+	pb.activeGen.updateFallback(target, set)
 }
 
-func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID) error {
-	if pb.shared.epoch != lid.GetEpoch() {
-		pb.shared = sharedSession{epoch: lid.GetEpoch()}
+func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.LayerID) error {
+	if pb.shared.epoch != current.GetEpoch() {
+		pb.shared = sharedSession{epoch: current.GetEpoch()}
 	}
 	if pb.shared.beacon == types.EmptyBeacon {
-		beacon, err := beacons.Get(pb.cdb, pb.shared.epoch)
+		beacon, err := beacons.Get(pb.db, pb.shared.epoch)
 		if err != nil || beacon == types.EmptyBeacon {
 			return fmt.Errorf("missing beacon for epoch %d", pb.shared.epoch)
 		}
@@ -414,31 +458,17 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, lid types.LayerID
 	if pb.shared.active.set != nil {
 		return nil
 	}
-
-	if weight, set, err := pb.fallbackActiveSet(pb.shared.epoch); err == nil {
-		pb.logger.With().Info("using fallback active set",
-			pb.shared.epoch,
-			log.Int("size", len(set)),
-		)
-		sort.Slice(set, func(i, j int) bool {
-			return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
-		})
-		pb.shared.active.set = set
-		pb.shared.active.weight = weight
-		return nil
-	}
-
-	weight, set, err := generateActiveSet(
-		pb.logger,
-		pb.cdb,
-		pb.shared.epoch,
-		pb.clock.LayerToTime(pb.shared.epoch.FirstLayer()),
-		pb.cfg.goodAtxPercent,
-		pb.cfg.networkDelay,
-	)
+	id, weight, set, err := pb.activeGen.generate(current, current.GetEpoch())
 	if err != nil {
 		return err
 	}
+	pb.logger.With().Info("loaded prepared active set",
+		pb.shared.epoch,
+		log.ShortStringer("id", id),
+		log.Int("size", len(set)),
+		log.Uint64("weight", weight),
+	)
+	pb.shared.active.id = id
 	pb.shared.active.set = set
 	pb.shared.active.weight = weight
 	return nil
@@ -453,25 +483,23 @@ func (pb *ProposalBuilder) initSignerData(
 		ss.session = session{epoch: lid.GetEpoch()}
 	}
 	if ss.session.atx == types.EmptyATXID {
-		atx, err := atxs.GetByEpochAndNodeID(pb.cdb, ss.session.epoch-1, ss.signer.NodeID())
+		atxid, err := atxs.GetIDByEpochAndNodeID(pb.db, ss.session.epoch-1, ss.signer.NodeID())
 		if err != nil {
 			if errors.Is(err, sql.ErrNotFound) {
 				err = errAtxNotAvailable
 			}
 			return fmt.Errorf("get atx in epoch %v: %w", ss.session.epoch-1, err)
 		}
-		ss.session.atx = atx.ID()
-		ss.session.atxWeight = atx.GetWeight()
-	}
-	if ss.session.nonce == 0 {
-		nonce, err := pb.cdb.VRFNonce(ss.signer.NodeID(), ss.session.epoch)
-		if err != nil {
-			return fmt.Errorf("missing nonce: %w", err)
+		atx := pb.atxsdata.Get(ss.session.epoch, atxid)
+		if atx == nil {
+			return fmt.Errorf("missing atx in atxsdata %v", atxid)
 		}
-		ss.session.nonce = nonce
+		ss.session.atx = atxid
+		ss.session.atxWeight = atx.Weight
+		ss.session.nonce = atx.Nonce
 	}
 	if ss.session.prev == 0 {
-		prev, err := ballots.LastInEpoch(pb.cdb, ss.session.atx, ss.session.epoch)
+		prev, err := ballots.LastInEpoch(pb.db, ss.session.atx, ss.session.epoch)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return err
 		}
@@ -480,7 +508,7 @@ func (pb *ProposalBuilder) initSignerData(
 		}
 	}
 	if ss.session.ref == types.EmptyBallotID {
-		ballot, err := ballots.FirstInEpoch(pb.cdb, ss.session.atx, ss.session.epoch)
+		ballot, err := ballots.FirstInEpoch(pb.db, ss.session.atx, ss.session.epoch)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return fmt.Errorf("get refballot %w", err)
 		}
@@ -513,6 +541,7 @@ func (pb *ProposalBuilder) initSignerData(
 		)
 		ss.log.With().Info("proposal eligibilities for an epoch", log.Inline(&ss.session))
 		events.EmitEligibilities(
+			ss.signer.NodeID(),
 			ss.session.epoch,
 			ss.session.beacon,
 			ss.session.atx,
@@ -618,7 +647,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 
 		// needs to be saved before publishing, as we will query it in handler
 		if ss.session.ref == types.EmptyBallotID {
-			if err := activesets.Add(pb.cdb, pb.shared.active.set.Hash(), &types.EpochActiveSet{
+			if err := activesets.Add(pb.db, pb.shared.active.id, &types.EpochActiveSet{
 				Epoch: ss.session.epoch,
 				Set:   pb.shared.active.set,
 			}); err != nil && !errors.Is(err, sql.ErrObjectExists) {
@@ -648,9 +677,13 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 				)
 			} else {
 				ss.latency.publish = time.Now()
-				ss.log.With().Info("proposal created", log.Context(ctx), log.Inline(proposal), log.Object("latency", &ss.latency))
+				ss.log.With().Info("proposal created",
+					log.Context(ctx),
+					log.Inline(proposal),
+					log.Object("latency", &ss.latency),
+				)
 				proposalBuild.Observe(ss.latency.total().Seconds())
-				events.EmitProposal(lid, proposal.ID())
+				events.EmitProposal(ss.signer.NodeID(), lid, proposal.ID())
 				events.ReportProposal(events.ProposalCreated, proposal)
 			}
 			return nil
@@ -702,145 +735,6 @@ func createProposal(
 	return p
 }
 
-func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
-	bid, err := layers.FirstAppliedInEpoch(db, epoch)
-	if err != nil {
-		return nil, fmt.Errorf("first block in epoch %d not found: %w", epoch, err)
-	}
-	return activeSetFromBlock(db, bid)
-}
-
-func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, error) {
-	block, err := blocks.Get(db, bid)
-	if err != nil {
-		return nil, fmt.Errorf("actives get block: %w", err)
-	}
-	activeMap := make(map[types.ATXID]struct{})
-	// the active set is the union of all active sets recorded in rewarded miners' ref ballot
-	for _, r := range block.Rewards {
-		activeMap[r.AtxID] = struct{}{}
-		ballot, err := ballots.FirstInEpoch(db, r.AtxID, block.LayerIndex.GetEpoch())
-		if err != nil {
-			return nil, fmt.Errorf("actives get ballot: %w", err)
-		}
-		actives, err := activesets.Get(db, ballot.EpochData.ActiveSetHash)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"actives get active hash for ballot %s: %w",
-				ballot.ID().String(),
-				err,
-			)
-		}
-		for _, id := range actives.Set {
-			activeMap[id] = struct{}{}
-		}
-	}
-	return maps.Keys(activeMap), nil
-}
-
-func activesFromFirstBlock(
-	cdb *datastore.CachedDB,
-	target types.EpochID,
-) (uint64, []types.ATXID, error) {
-	set, err := ActiveSetFromEpochFirstBlock(cdb, target)
-	if err != nil {
-		return 0, nil, err
-	}
-	var totalWeight uint64
-	for _, id := range set {
-		atx, err := cdb.GetAtxHeader(id)
-		if err != nil {
-			return 0, nil, err
-		}
-		totalWeight += atx.GetWeight()
-	}
-	return totalWeight, set, nil
-}
-
-func (pb *ProposalBuilder) fallbackActiveSet(targetEpoch types.EpochID) (uint64, []types.ATXID, error) {
-	pb.fallback.mu.Lock()
-	defer pb.fallback.mu.Unlock()
-	set, ok := pb.fallback.data[targetEpoch]
-	if !ok {
-		return 0, nil, fmt.Errorf("no fallback active set for epoch %d", targetEpoch)
-	}
-
-	var totalWeight uint64
-	for _, id := range set {
-		atx, err := pb.cdb.GetAtxHeader(id)
-		if err != nil {
-			return 0, nil, err
-		}
-		totalWeight += atx.GetWeight()
-	}
-	return totalWeight, set, nil
-}
-
-func generateActiveSet(
-	logger log.Log,
-	cdb *datastore.CachedDB,
-	target types.EpochID,
-	epochStart time.Time,
-	goodAtxPercent int,
-	networkDelay time.Duration,
-) (uint64, []types.ATXID, error) {
-	var (
-		totalWeight uint64
-		set         []types.ATXID
-		numOmitted  = 0
-	)
-	if err := cdb.IterateEpochATXHeaders(target, func(header *types.ActivationTxHeader) error {
-		grade, err := gradeAtx(cdb, header.NodeID, header.Received, epochStart, networkDelay)
-		if err != nil {
-			return err
-		}
-		if grade != good {
-			logger.With().Debug("atx omitted from active set",
-				header.ID,
-				log.Int("grade", int(grade)),
-				log.Stringer("smesher", header.NodeID),
-				log.Time("received", header.Received),
-				log.Time("epoch_start", epochStart),
-			)
-			numOmitted++
-			return nil
-		}
-		totalWeight += header.GetWeight()
-		set = append(set, header.ID)
-		return nil
-	}); err != nil {
-		return 0, nil, err
-	}
-
-	if total := numOmitted + len(set); total == 0 {
-		return 0, nil, fmt.Errorf("empty active set")
-	} else if numOmitted*100/total > 100-goodAtxPercent {
-		// if the node is not synced during `targetEpoch-1`, it doesn't have the correct receipt timestamp
-		// for all the atx and malfeasance proof. this active set is not usable.
-		// TODO: change after timing info of ATXs and malfeasance proofs is sync'ed from peers as well
-		var err error
-		totalWeight, set, err = activesFromFirstBlock(cdb, target)
-		if err != nil {
-			return 0, nil, err
-		}
-		logger.With().Info("miner not synced during prior epoch, active set from first block",
-			log.Int("all atx", total),
-			log.Int("num omitted", numOmitted),
-			log.Int("num block atx", len(set)),
-		)
-	} else {
-		logger.With().Info("active set selected for proposal using grades",
-			log.Int("num atx", len(set)),
-			log.Int("num omitted", numOmitted),
-			log.Int("min atx good pct", goodAtxPercent),
-		)
-	}
-	sort.Slice(set, func(i, j int) bool {
-		return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
-	})
-	return totalWeight, set, nil
-}
-
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
 func calcEligibilityProofs(
@@ -861,40 +755,4 @@ func calcEligibilityProofs(
 		})
 	}
 	return proofs
-}
-
-// atxGrade describes the grade of an ATX as described in
-// https://community.spacemesh.io/t/grading-atxs-for-the-active-set/335
-//
-// let s be the start of the epoch, and δ the network propagation time.
-// grade 0: ATX was received at time t >= s-3δ, or an equivocation proof was received by time s-δ.
-// grade 1: ATX was received at time t < s-3δ before the start of the epoch, and no equivocation proof by time s-δ.
-// grade 2: ATX was received at time t < s-4δ, and no equivocation proof was received for that id until time s.
-type atxGrade int
-
-const (
-	evil atxGrade = iota
-	acceptable
-	good
-)
-
-func gradeAtx(
-	msh mesh,
-	nodeID types.NodeID,
-	atxReceived, epochStart time.Time,
-	delta time.Duration,
-) (atxGrade, error) {
-	proof, err := msh.GetMalfeasanceProof(nodeID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return good, err
-	}
-	if atxReceived.Before(epochStart.Add(-4*delta)) &&
-		(proof == nil || !proof.Received().Before(epochStart)) {
-		return good, nil
-	}
-	if atxReceived.Before(epochStart.Add(-3*delta)) &&
-		(proof == nil || !proof.Received().Before(epochStart.Add(-delta))) {
-		return acceptable, nil
-	}
-	return evil, nil
 }

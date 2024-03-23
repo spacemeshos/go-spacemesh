@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"testing"
 	"time"
 
@@ -166,7 +167,7 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 		IncludeProof: true,
 	}
 	resp, err := client.MalfeasanceQuery(context.Background(), req)
-	require.Equal(t, status.Code(err), codes.InvalidArgument)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
 	require.Nil(t, resp)
 
 	req.SmesherHex = hex.EncodeToString(nodeID.Bytes())
@@ -238,7 +239,7 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 		case pb.MalfeasanceProof_MALFEASANCE_HARE:
 			hare++
 		}
-		require.EqualValues(t, got.Layer.Number, layer)
+		require.EqualValues(t, layer, got.Layer.Number)
 	}
 	require.Equal(t, 30, total)
 	require.Equal(t, 10, atx)
@@ -255,4 +256,105 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	resp, err = stream.Recv()
 	require.NoError(t, err)
 	require.Equal(t, events.ToMalfeasancePB(id, proof, false), resp.Proof)
+}
+
+type MeshAPIMockInstrumented struct {
+	MeshAPIMock
+}
+
+var (
+	instrumentedErr         error
+	instrumentedBlock       *types.Block
+	instrumentedMissing     bool
+	instrumentedNoStateRoot bool
+)
+
+func (m *MeshAPIMockInstrumented) GetLayerVerified(tid types.LayerID) (*types.Block, error) {
+	return instrumentedBlock, instrumentedErr
+}
+
+type ConStateAPIMockInstrumented struct {
+	ConStateAPIMock
+}
+
+func (t *ConStateAPIMockInstrumented) GetMeshTransactions(
+	txIds []types.TransactionID,
+) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
+	txs, missing = t.ConStateAPIMock.GetMeshTransactions(txIds)
+	if instrumentedMissing {
+		// arbitrarily return one missing tx
+		missing = map[types.TransactionID]struct{}{
+			txs[0].ID: {},
+		}
+	}
+	return
+}
+
+func (t *ConStateAPIMockInstrumented) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
+	if instrumentedNoStateRoot {
+		return stateRoot, errors.New("error")
+	}
+	return stateRoot, nil
+}
+
+func TestReadLayer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	genTime := NewMockgenesisTimeAPI(ctrl)
+	db := sql.InMemory()
+	srv := NewMeshService(
+		datastore.NewCachedDB(db, logtest.New(t)),
+		&MeshAPIMockInstrumented{},
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	instrumentedErr = errors.New("error")
+	_, err := srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.ErrorContains(t, err, "error reading layer data")
+
+	instrumentedErr = nil
+	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.NoError(t, err)
+
+	srv = NewMeshService(
+		datastore.NewCachedDB(db, logtest.New(t)),
+		meshAPIMock,
+		conStateAPI,
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
+	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.NoError(t, err)
+
+	// now instrument conStateAPI to return errors
+	srv = NewMeshService(
+		datastore.NewCachedDB(db, logtest.New(t)),
+		meshAPIMock,
+		&ConStateAPIMockInstrumented{*conStateAPI},
+		genTime,
+		layersPerEpoch,
+		types.Hash20{},
+		layerDuration,
+		layerAvgSize,
+		txsPerProposal,
+	)
+	instrumentedMissing = true
+	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.ErrorContains(t, err, "error retrieving tx data")
+
+	instrumentedMissing = false
+	instrumentedNoStateRoot = true
+	_, err = srv.readLayer(ctx, layer, pb.Layer_LAYER_STATUS_UNSPECIFIED)
+	require.NoError(t, err)
 }

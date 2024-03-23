@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,7 +23,15 @@ func BytesToATXID(buf []byte) (id ATXID) {
 	return id
 }
 
-// ATXID is a 32-bit hash used to identify an activation transaction.
+type Validity int
+
+const (
+	Unknown Validity = iota
+	Valid
+	Invalid
+)
+
+// ATXID is a 32 byte hash used to identify an activation transaction.
 type ATXID Hash32
 
 const (
@@ -161,6 +170,7 @@ type InnerActivationTx struct {
 	id                ATXID     // non-exported cache of the ATXID
 	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
 	received          time.Time // time received by node, gossiped or synced
+	validity          Validity  // whether the chain is fully verified and OK
 }
 
 // ATXMetadata is the data of ActivationTx that is signed.
@@ -267,7 +277,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 // Initialize calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) Initialize() error {
 	if atx.ID() != EmptyATXID {
-		return fmt.Errorf("ATX already initialized")
+		return errors.New("ATX already initialized")
 	}
 
 	atx.id = ATXID(BytesToHash(atx.HashInnerBytes()))
@@ -313,6 +323,14 @@ func (atx *ActivationTx) Received() time.Time {
 	return atx.received
 }
 
+func (atx *ActivationTx) Validity() Validity {
+	return atx.validity
+}
+
+func (atx *ActivationTx) SetValidity(validity Validity) {
+	atx.validity = validity
+}
+
 // Verify an ATX for a given base TickHeight and TickCount.
 func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
 	if atx.id == EmptyATXID {
@@ -321,10 +339,10 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 		}
 	}
 	if atx.effectiveNumUnits == 0 {
-		return nil, fmt.Errorf("effective num units not set")
+		return nil, errors.New("effective num units not set")
 	}
 	if !atx.Golden() && atx.received.IsZero() {
-		return nil, fmt.Errorf("received time not set")
+		return nil, errors.New("received time not set")
 	}
 	vAtx := &VerifiedActivationTx{
 		ActivationTx: atx,
@@ -503,5 +521,5 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=1000000"`
+	Set   []ATXID `scale:"max=2200000"` // to be in line with `EpochData` in fetch/wire_types.go
 }

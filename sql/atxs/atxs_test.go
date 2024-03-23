@@ -1,6 +1,8 @@
 package atxs_test
 
 import (
+	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -377,6 +379,7 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 
 func TestGetIDsByEpoch(t *testing.T) {
 	db := sql.InMemory()
+	ctx := context.Background()
 
 	sig1, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -400,18 +403,126 @@ func TestGetIDsByEpoch(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
-	ids1, err := atxs.GetIDsByEpoch(db, e1)
+	ids1, err := atxs.GetIDsByEpoch(ctx, db, e1)
 	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx1.ID()}, ids1)
+	require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids1)
 
-	ids2, err := atxs.GetIDsByEpoch(db, e2)
+	ids2, err := atxs.GetIDsByEpoch(ctx, db, e2)
 	require.NoError(t, err)
 	require.Contains(t, ids2, atx2.ID())
 	require.Contains(t, ids2, atx3.ID())
 
-	ids3, err := atxs.GetIDsByEpoch(db, e3)
+	ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
 	require.NoError(t, err)
-	require.EqualValues(t, []types.ATXID{atx4.ID()}, ids3)
+	require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
+}
+
+func TestGetIDsByEpochCached(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+	ctx := context.Background()
+
+	sig1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	sig2, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	e1 := types.EpochID(1)
+	e2 := types.EpochID(2)
+	e3 := types.EpochID(3)
+
+	atx1, err := newAtx(sig1, withPublishEpoch(e1))
+	require.NoError(t, err)
+	atx2, err := newAtx(sig1, withPublishEpoch(e2))
+	require.NoError(t, err)
+	atx3, err := newAtx(sig2, withPublishEpoch(e2))
+	require.NoError(t, err)
+	atx4, err := newAtx(sig2, withPublishEpoch(e3))
+	require.NoError(t, err)
+	atx5, err := newAtx(sig2, withPublishEpoch(e3))
+	require.NoError(t, err)
+	atx6, err := newAtx(sig2, withPublishEpoch(e3))
+	require.NoError(t, err)
+
+	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
+		require.NoError(t, atxs.Add(db, atx))
+		atxs.AtxAdded(db, atx)
+	}
+
+	require.Equal(t, 4, db.QueryCount())
+
+	for i := 0; i < 3; i++ {
+		ids1, err := atxs.GetIDsByEpoch(ctx, db, e1)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids1)
+		require.Equal(t, 5, db.QueryCount())
+	}
+
+	for i := 0; i < 3; i++ {
+		ids2, err := atxs.GetIDsByEpoch(ctx, db, e2)
+		require.NoError(t, err)
+		require.Contains(t, ids2, atx2.ID())
+		require.Contains(t, ids2, atx3.ID())
+		require.Equal(t, 6, db.QueryCount())
+	}
+
+	for i := 0; i < 3; i++ {
+		ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
+		require.Equal(t, 7, db.QueryCount())
+	}
+
+	require.NoError(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		atxs.Add(tx, atx5)
+		return nil
+	}))
+	atxs.AtxAdded(db, atx5)
+	require.Equal(t, 8, db.QueryCount())
+
+	ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
+	require.Equal(t, 8, db.QueryCount()) // not incremented after Add
+
+	require.Error(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		atxs.Add(tx, atx6)
+		return errors.New("fail") // rollback
+	}))
+
+	// atx6 should not be in the cache
+	ids4, err := atxs.GetIDsByEpoch(ctx, db, e3)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids4)
+	require.Equal(t, 10, db.QueryCount()) // not incremented after Add
+}
+
+func TestForIDsByEpochEarlyStop(t *testing.T) {
+	db := sql.InMemory()
+
+	e1 := types.EpochID(1)
+	m := make(map[types.ATXID]struct{})
+	for i := 0; i < 4; i++ {
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		atx, err := newAtx(sig, withPublishEpoch(e1))
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(db, atx))
+		m[atx.ID()] = struct{}{}
+	}
+
+	n := 0
+	err := atxs.IterateIDsByEpoch(db, e1, func(total int, id types.ATXID) error {
+		require.Equal(t, 4, total)
+		delete(m, id)
+		n++
+		if n >= 2 {
+			return errors.New("test error")
+		}
+		return nil
+	})
+	require.ErrorContains(t, err, "test error")
+	require.Equal(t, 2, n)
+	require.Len(t, m, 2)
 }
 
 func TestVRFNonce(t *testing.T) {
@@ -463,8 +574,57 @@ func TestVRFNonce(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
-func TestGetBlob(t *testing.T) {
+func TestLoadBlob(t *testing.T) {
 	db := sql.InMemory()
+	ctx := context.Background()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx1, err := newAtx(sig, withPublishEpoch(1))
+	require.NoError(t, err)
+
+	require.NoError(t, atxs.Add(db, atx1))
+
+	var blob1 sql.Blob
+	require.NoError(t, atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1))
+	encoded := codec.MustEncode(atx1.ActivationTx)
+	require.Equal(t, encoded, blob1.Bytes)
+
+	blobSizes, err := atxs.GetBlobSizes(db, [][]byte{atx1.ID().Bytes()})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes)}, blobSizes)
+
+	var blob2 sql.Blob
+	atx2, err := newAtx(sig, withPublishEpoch(1))
+	nodeID := types.RandomNodeID()
+	atx2.NodeID = &nodeID // ensure ATXs differ in size
+	require.NoError(t, err)
+	require.NoError(t, atxs.Add(db, atx2))
+	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))
+	encoded = codec.MustEncode(atx2.ActivationTx)
+	require.Equal(t, encoded, blob2.Bytes)
+	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
+		atx1.ID().Bytes(),
+		atx2.ID().Bytes(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes)}, blobSizes)
+
+	noSuchID := types.RandomATXID()
+	require.ErrorIs(t, atxs.LoadBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
+
+	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
+		atx1.ID().Bytes(),
+		noSuchID.Bytes(),
+		atx2.ID().Bytes(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, []int{len(blob1.Bytes), -1, len(blob2.Bytes)}, blobSizes)
+}
+
+func TestGetBlobCached(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+	ctx := context.Background()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -472,15 +632,61 @@ func TestGetBlob(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, atxs.Add(db, atx))
-	buf, err := atxs.GetBlob(db, atx.ID().Bytes())
-	require.NoError(t, err)
 	encoded, err := codec.Encode(atx.ActivationTx)
 	require.NoError(t, err)
-	require.Equal(t, encoded, buf)
+	require.Equal(t, 1, db.QueryCount())
+
+	for i := 0; i < 3; i++ {
+		var b sql.Blob
+		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
+		require.Equal(t, encoded, b.Bytes)
+		require.Equal(t, 2, db.QueryCount())
+	}
+}
+
+func TestCachedBlobEviction(t *testing.T) {
+	db := sql.InMemory(
+		sql.WithQueryCache(true),
+		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
+			atxs.CacheKindATXBlob: 10,
+		}))
+	ctx := context.Background()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	addedATXs := make([]*types.VerifiedActivationTx, 11)
+	blobs := make([][]byte, 11)
+	var b sql.Blob
+	for n := range addedATXs {
+		atx, err := newAtx(sig, withPublishEpoch(1))
+		require.NoError(t, err)
+		require.NoError(t, atxs.Add(db, atx))
+		addedATXs[n] = atx
+		encoded, err := codec.Encode(atx.ActivationTx)
+		require.NoError(t, err)
+		blobs[n] = encoded
+		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
+		require.Equal(t, encoded, b.Bytes)
+	}
+
+	require.Equal(t, 22, db.QueryCount())
+
+	// The ATXs except the first one stay in place
+	for n, atx := range addedATXs[1:] {
+		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
+		require.Equal(t, blobs[n+1], b.Bytes)
+		require.Equal(t, 22, db.QueryCount())
+	}
+
+	// The first ATX is evicted. We check it after the loop to avoid additional evictions.
+	require.NoError(t, atxs.LoadBlob(ctx, db, addedATXs[0].ID().Bytes(), &b))
+	require.Equal(t, blobs[0], b.Bytes)
+	require.Equal(t, 23, db.QueryCount())
 }
 
 func TestCheckpointATX(t *testing.T) {
 	db := sql.InMemory()
+	ctx := context.Background()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -520,9 +726,9 @@ func TestCheckpointATX(t *testing.T) {
 	require.Equal(t, catx.VRFNonce, gotvrf)
 
 	// checkpoint atx does not have actual atx data
-	blob, err := atxs.GetBlob(db, catx.ID.Bytes())
-	require.NoError(t, err)
-	require.Nil(t, blob)
+	var blob sql.Blob
+	require.NoError(t, atxs.LoadBlob(ctx, db, catx.ID.Bytes(), &blob))
+	require.Empty(t, blob.Bytes)
 }
 
 func TestAdd(t *testing.T) {
@@ -578,30 +784,47 @@ func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActi
 	return atx.Verify(0, 1)
 }
 
-func createIdentities(tb testing.TB, db sql.Executor, n int, midxs ...int) []*signing.EdSigner {
-	var sigs []*signing.EdSigner
-	for i := 0; i < n; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(tb, err)
-		sigs = append(sigs, sig)
+type header struct {
+	coinbase    types.Address
+	base, count uint64
+	epoch       types.EpochID
+	malicious   bool
+	filteredOut bool
+}
+
+func createAtx(tb testing.TB, db *sql.Database, hdr header) (types.ATXID, *signing.EdSigner) {
+	full := &types.ActivationTx{
+		InnerActivationTx: types.InnerActivationTx{
+			NIPostChallenge: types.NIPostChallenge{
+				PublishEpoch: hdr.epoch,
+			},
+			Coinbase: hdr.coinbase,
+			NumUnits: 2,
+		},
 	}
-	for _, idx := range midxs {
-		require.NoError(tb, identities.SetMalicious(db, sigs[idx].NodeID(), []byte("bad"), time.Now()))
+	sig, err := signing.NewEdSigner()
+	require.NoError(tb, err)
+
+	require.NoError(tb, activation.SignAndFinalizeAtx(sig, full))
+
+	full.SetEffectiveNumUnits(full.NumUnits)
+	full.SetReceived(time.Now())
+	vAtx, err := full.Verify(hdr.base, hdr.count)
+	require.NoError(tb, err)
+
+	require.NoError(tb, atxs.Add(db, vAtx))
+	if hdr.malicious {
+		require.NoError(tb, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
 	}
-	return sigs
+
+	return full.ID(), sig
 }
 
 func TestGetIDWithMaxHeight(t *testing.T) {
-	type header struct {
-		coinbase    types.Address
-		base, count uint64
-		epoch       types.EpochID
-	}
 	for _, tc := range []struct {
 		desc   string
 		atxs   []header
 		pref   int
-		midxs  []int
 		expect int
 	}{
 		{
@@ -648,23 +871,21 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 		{
 			desc: "skip malicious id",
 			atxs: []header{
-				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
-				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1},
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1, malicious: true},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1, malicious: true},
 				{coinbase: types.Address{3}, base: 1, count: 1, epoch: 2},
 			},
 			pref:   1,
-			midxs:  []int{0, 1},
 			expect: 2,
 		},
 		{
 			desc: "skip malicious id not found",
 			atxs: []header{
-				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1},
-				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1},
-				{coinbase: types.Address{3}, base: 1, count: 2, epoch: 2},
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1, malicious: true},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1, malicious: true},
+				{coinbase: types.Address{3}, base: 1, count: 2, epoch: 2, malicious: true},
 			},
 			pref:   1,
-			midxs:  []int{0, 1, 2},
 			expect: -1,
 		},
 		{
@@ -676,36 +897,41 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 			pref:   -1,
 			expect: 0,
 		},
+		{
+			desc: "by filter",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 30, epoch: 3, filteredOut: true},
+				{coinbase: types.Address{2}, base: 1, count: 20, epoch: 3, filteredOut: true},
+				{coinbase: types.Address{3}, base: 1, count: 10, epoch: 2, filteredOut: true},
+				{coinbase: types.Address{4}, base: 1, count: 1, epoch: 2},
+				{coinbase: types.Address{5}, base: 1, count: 100, epoch: 1},
+			},
+			pref:   -1,
+			expect: 3,
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			db := sql.InMemory()
-			sigs := createIdentities(t, db, len(tc.atxs), tc.midxs...)
-			ids := []types.ATXID{}
-			for i, atx := range tc.atxs {
-				full := &types.ActivationTx{
-					InnerActivationTx: types.InnerActivationTx{
-						NIPostChallenge: types.NIPostChallenge{
-							PublishEpoch: atx.epoch,
-						},
-						Coinbase: atx.coinbase,
-						NumUnits: 2,
-					},
+			var sigs []*signing.EdSigner
+			var ids []types.ATXID
+			filtered := make(map[types.ATXID]struct{})
+
+			for _, atx := range tc.atxs {
+				id, sig := createAtx(t, db, atx)
+				ids = append(ids, id)
+				sigs = append(sigs, sig)
+				if atx.filteredOut {
+					filtered[id] = struct{}{}
 				}
-				require.NoError(t, activation.SignAndFinalizeAtx(sigs[i], full))
-
-				full.SetEffectiveNumUnits(full.NumUnits)
-				full.SetReceived(time.Now())
-				vAtx, err := full.Verify(atx.base, atx.count)
-				require.NoError(t, err)
-
-				require.NoError(t, atxs.Add(db, vAtx))
-				ids = append(ids, full.ID())
 			}
 			var pref types.NodeID
 			if tc.pref > 0 {
 				pref = sigs[tc.pref].NodeID()
 			}
-			rst, err := atxs.GetIDWithMaxHeight(db, pref)
+			rst, err := atxs.GetIDWithMaxHeight(db, pref, func(id types.ATXID) bool {
+				_, ok := filtered[id]
+				return !ok
+			})
 			if len(tc.atxs) == 0 || tc.expect < 0 {
 				require.ErrorIs(t, err, sql.ErrNotFound)
 			} else {

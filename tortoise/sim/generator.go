@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -68,6 +69,7 @@ type config struct {
 	LayerSize      uint32
 	LayersPerEpoch uint32
 	StateInstances int
+	WindowSize     uint32
 }
 
 func defaults() config {
@@ -75,6 +77,7 @@ func defaults() config {
 		LayerSize:      30,
 		LayersPerEpoch: types.GetLayersPerEpoch(),
 		StateInstances: 1,
+		WindowSize:     2,
 	}
 }
 
@@ -91,7 +94,8 @@ func New(opts ...GenOpt) *Generator {
 	}
 	// TODO support multiple persist states.
 	for i := 0; i < g.conf.StateInstances; i++ {
-		g.states = append(g.states, newState(g.logger, g.conf))
+		atxdata := atxsdata.New()
+		g.states = append(g.states, newState(g.logger, g.conf, atxdata))
 	}
 	return g
 }

@@ -1,16 +1,15 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -25,22 +24,22 @@ func TestServer(t *testing.T) {
 	proto := "test"
 	request := []byte("test request")
 	testErr := errors.New("test error")
-	errch := make(chan error, 1)
-	respch := make(chan []byte, 1)
 
-	handler := Handler(func(_ context.Context, msg []byte) ([]byte, error) {
+	handler := func(_ context.Context, msg []byte) ([]byte, error) {
 		return msg, nil
-	})
-	errhandler := Handler(func(_ context.Context, _ []byte) ([]byte, error) {
+	}
+	errhandler := func(_ context.Context, _ []byte) ([]byte, error) {
 		return nil, testErr
-	})
+	}
 	opts := []Opt{
 		WithTimeout(100 * time.Millisecond),
 		WithLog(logtest.New(t)),
+		WithMetrics(),
 	}
-	client := New(mesh.Hosts()[0], proto, handler, append(opts, WithRequestSizeLimit(2*limit))...)
-	srv1 := New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
-	srv2 := New(mesh.Hosts()[2], proto, errhandler, append(opts, WithRequestSizeLimit(limit))...)
+	client := New(mesh.Hosts()[0], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(2*limit))...)
+	srv1 := New(mesh.Hosts()[1], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(limit))...)
+	srv2 := New(mesh.Hosts()[2], proto, WrapHandler(errhandler), append(opts, WithRequestSizeLimit(limit))...)
+	srv3 := New(mesh.Hosts()[3], "otherproto", WrapHandler(errhandler), append(opts, WithRequestSizeLimit(limit))...)
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -49,6 +48,9 @@ func TestServer(t *testing.T) {
 	eg.Go(func() error {
 		return srv2.Run(ctx)
 	})
+	eg.Go(func() error {
+		return srv3.Run(ctx)
+	})
 	require.Eventually(t, func() bool {
 		for _, h := range mesh.Hosts()[1:] {
 			if len(h.Mux().Protocols()) == 0 {
@@ -61,227 +63,38 @@ func TestServer(t *testing.T) {
 		cancel()
 		eg.Wait()
 	})
-	respHandler := func(msg []byte) {
-		select {
-		case <-ctx.Done():
-		case respch <- msg:
-		}
-	}
-	respErrHandler := func(err error) {
-		select {
-		case <-ctx.Done():
-		case errch <- err:
-		}
-	}
+
 	t.Run("ReceiveMessage", func(t *testing.T) {
-		require.NoError(
-			t,
-			client.Request(ctx, mesh.Hosts()[1].ID(), request, respHandler, respErrHandler),
-		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for message response")
-		case response := <-respch:
-			require.Equal(t, request, response)
-			require.NotEmpty(t, mesh.Hosts()[2].Network().ConnsToPeer(mesh.Hosts()[0].ID()))
-		}
+		n := srv1.NumAcceptedRequests()
+		response, err := client.Request(ctx, mesh.Hosts()[1].ID(), request)
+		require.NoError(t, err)
+		require.Equal(t, request, response)
+		require.NotEmpty(t, mesh.Hosts()[2].Network().ConnsToPeer(mesh.Hosts()[0].ID()))
+		require.Equal(t, n+1, srv1.NumAcceptedRequests())
 	})
 	t.Run("ReceiveError", func(t *testing.T) {
-		require.NoError(
-			t,
-			client.Request(ctx, mesh.Hosts()[2].ID(), request, respHandler, respErrHandler),
-		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for error response")
-		case err := <-errch:
-			require.Equal(t, testErr, err)
-		}
+		n := srv1.NumAcceptedRequests()
+		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
+		require.ErrorIs(t, err, &ServerError{})
+		require.ErrorContains(t, err, "peer error")
+		require.ErrorContains(t, err, testErr.Error())
+		require.Equal(t, n+1, srv1.NumAcceptedRequests())
 	})
 	t.Run("DialError", func(t *testing.T) {
-		require.NoError(
-			t,
-			client.Request(ctx, mesh.Hosts()[3].ID(), request, respHandler, respErrHandler),
-		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for dial error")
-		case err := <-errch:
-			require.Error(t, err)
-		}
+		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
+		require.Error(t, err)
 	})
 	t.Run("NotConnected", func(t *testing.T) {
-		require.ErrorIs(
-			t,
-			client.Request(ctx, "unknown", request, respHandler, respErrHandler),
-			ErrNotConnected,
-		)
+		_, err := client.Request(ctx, "unknown", request)
+		require.ErrorIs(t, err, ErrNotConnected)
 	})
 	t.Run("limit overflow", func(t *testing.T) {
-		require.NoError(
-			t,
-			client.Request(
-				ctx,
-				mesh.Hosts()[2].ID(),
-				make([]byte, limit+1),
-				respHandler,
-				respErrHandler,
-			),
+		_, err := client.Request(
+			ctx,
+			mesh.Hosts()[2].ID(),
+			make([]byte, limit+1),
 		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for error response")
-		case err := <-errch:
-			require.Error(t, err)
-		}
-	})
-}
-
-func TestInteractive(t *testing.T) {
-	const limit = 1024
-
-	mesh, err := mocknet.FullMeshConnected(2)
-	require.NoError(t, err)
-	proto := "itest"
-	errch := make(chan error, 1)
-	respch := make(chan []string, 1)
-
-	handler := InteractiveHandler(func(ctx context.Context, i Interactor) (time.Duration, error) {
-		hi, err := i.Receive()
-		if err != nil {
-			return 0, err
-		}
-		if string(hi) != "<hi>" {
-			return 0, fmt.Errorf("server: bad greeting message: %q", hi)
-		}
-		if err := i.Send([]byte("<hi>")); err != nil {
-			return 0, err
-		}
-
-		var b bytes.Buffer
-		for {
-			msg, err := i.Receive()
-			if err != nil {
-				return 0, err
-			}
-			m := string(msg)
-			if m == "<end>" {
-				break
-			} else if m == "<hi>" {
-				retErr := errors.New("duplicate <hi>")
-				if err := i.SendError(retErr); err != nil {
-					return 0, err
-				}
-				return 0, retErr
-			} else {
-				b.WriteString("+" + m)
-			}
-		}
-
-		for _, s := range []string{b.String(), "foo", "bar", "baz", "<end>"} {
-			if err := i.Send([]byte(s)); err != nil {
-				return 0, err
-			}
-		}
-
-		return 0, nil
-	})
-	opts := []Opt{
-		WithTimeout(100 * time.Millisecond),
-		WithLog(logtest.New(t)),
-	}
-	client := New(mesh.Hosts()[0], proto, handler, append(opts, WithRequestSizeLimit(2*limit))...)
-	srv1 := New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
-	ctx, cancel := context.WithCancel(context.Background())
-	var eg errgroup.Group
-	eg.Go(func() error {
-		return srv1.Run(ctx)
-	})
-	require.Eventually(t, func() bool {
-		for _, h := range mesh.Hosts()[1:] {
-			if len(h.Mux().Protocols()) == 0 {
-				return false
-			}
-		}
-		return true
-	}, time.Second, 10*time.Millisecond)
-	t.Cleanup(func() {
-		cancel()
-		eg.Wait()
-	})
-	makeRespHandler := func(strs ...string) InteractiveHandler {
-		return func(ctx context.Context, i Interactor) (time.Duration, error) {
-			hi, err := i.Receive()
-			if err != nil {
-				return 0, err
-			}
-			if string(hi) != "<hi>" {
-				return 0, fmt.Errorf("client: bad greeting message: %q", hi)
-			}
-
-			for _, s := range append(strs, "<end>") {
-				if err := i.Send([]byte(s)); err != nil {
-					return 0, err
-				}
-			}
-
-			var strs []string
-			for {
-				msg, err := i.Receive()
-				if err != nil {
-					return 0, err
-				}
-				m := string(msg)
-				switch m {
-				case "<end>":
-					respch <- strs
-					return 0, nil
-				case "<hi>":
-					return 0, errors.New("duplicate <hi>")
-				default:
-					strs = append(strs, m)
-				}
-			}
-		}
-	}
-	respErrHandler := func(err error) {
-		select {
-		case <-ctx.Done():
-		case errch <- err:
-		}
-	}
-	initReq := []byte("<hi>")
-
-	t.Run("ReceiveMessage", func(t *testing.T) {
-		respHandler := makeRespHandler("abc", "def", "ghi")
-		require.NoError(
-			t,
-			client.InteractiveRequest(ctx, mesh.Hosts()[1].ID(), initReq, respHandler, respErrHandler),
-		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for interaction to finish")
-		case strs := <-respch:
-			require.Equal(t, []string{"+abc+def+ghi", "foo", "bar", "baz"}, strs)
-		case err := <-errch:
-			require.Fail(t, "unexpected error", "%v", err)
-		}
-	})
-
-	t.Run("ReceiveError", func(t *testing.T) {
-		respHandler := makeRespHandler("abc", "def", "<hi>")
-		require.NoError(
-			t,
-			client.InteractiveRequest(ctx, mesh.Hosts()[1].ID(), initReq, respHandler, respErrHandler),
-		)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for error response")
-		case <-respch:
-			require.FailNow(t, "got unexpected response")
-		case err := <-errch:
-			require.ErrorContains(t, err, "peer reported an error: duplicate <hi>")
-		}
+		require.Error(t, err)
 	})
 }
 
@@ -300,7 +113,7 @@ func TestQueued(t *testing.T) {
 	srv := New(
 		mesh.Hosts()[1],
 		proto,
-		Handler(func(_ context.Context, msg []byte) ([]byte, error) {
+		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
 			return msg, nil
 		}),
 		WithQueueSize(total/4),
@@ -316,18 +129,18 @@ func TestQueued(t *testing.T) {
 		return srv.Run(ctx)
 	})
 	t.Cleanup(func() {
-		eg.Wait()
+		assert.NoError(t, eg.Wait())
 	})
 	for i := 0; i < total; i++ {
-		require.NoError(t, client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"),
-			func(b []byte) {
-				success.Add(1)
-				wait <- struct{}{}
-			}, func(err error) {
+		eg.Go(func() error {
+			if _, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping")); err != nil {
 				failure.Add(1)
-				wait <- struct{}{}
-			},
-		))
+			} else {
+				success.Add(1)
+			}
+			wait <- struct{}{}
+			return nil
+		})
 	}
 	for i := 0; i < total; i++ {
 		<-wait

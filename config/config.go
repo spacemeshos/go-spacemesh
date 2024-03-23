@@ -20,8 +20,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -46,27 +47,29 @@ func init() {
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Genesis         *GenesisConfig        `mapstructure:"genesis"`
+	Preset          string                `mapstructure:"preset"`
+	Genesis         GenesisConfig         `mapstructure:"genesis"`
 	PublicMetrics   PublicMetrics         `mapstructure:"public-metrics"`
 	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
 	P2P             p2p.Config            `mapstructure:"p2p"`
 	API             grpcserver.Config     `mapstructure:"api"`
 	HARE3           hare3.Config          `mapstructure:"hare3"`
-	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
+	HareEligibility eligibility.Config    `mapstructure:"hare-eligibility"`
 	Certificate     blocks.CertConfig     `mapstructure:"certificate"`
 	Beacon          beacon.Config         `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig `mapstructure:"time"`
 	VM              vm.Config             `mapstructure:"vm"`
 	POST            activation.PostConfig `mapstructure:"post"`
 	POSTService     activation.PostSupervisorConfig
-	POET            activation.PoetConfig `mapstructure:"poet"`
-	SMESHING        SmeshingConfig        `mapstructure:"smeshing"`
-	LOGGING         LoggerConfig          `mapstructure:"logging"`
-	FETCH           fetch.Config          `mapstructure:"fetch"`
-	Bootstrap       bootstrap.Config      `mapstructure:"bootstrap"`
-	Sync            syncer.Config         `mapstructure:"syncer"`
-	Recovery        checkpoint.Config     `mapstructure:"recovery"`
-	Cache           datastore.Config      `mapstructure:"cache"`
+	POET            activation.PoetConfig      `mapstructure:"poet"`
+	SMESHING        SmeshingConfig             `mapstructure:"smeshing"`
+	LOGGING         LoggerConfig               `mapstructure:"logging"`
+	FETCH           fetch.Config               `mapstructure:"fetch"`
+	Bootstrap       bootstrap.Config           `mapstructure:"bootstrap"`
+	Sync            syncer.Config              `mapstructure:"syncer"`
+	Recovery        checkpoint.Config          `mapstructure:"recovery"`
+	Cache           datastore.Config           `mapstructure:"cache"`
+	ActiveSet       miner.ActiveSetPreparation `mapstructure:"active-set-preparation"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
@@ -86,8 +89,6 @@ type BaseConfig struct {
 
 	TestConfig TestConfig `mapstructure:"testing"`
 	Standalone bool       `mapstructure:"standalone"`
-
-	ConfigFile string `mapstructure:"config"`
 
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
@@ -111,12 +112,14 @@ type BaseConfig struct {
 	OptFilterThreshold int    `mapstructure:"optimistic-filtering-threshold"`
 	TickSize           uint64 `mapstructure:"tick-size"`
 
-	DatabaseConnections          int           `mapstructure:"db-connections"`
-	DatabaseLatencyMetering      bool          `mapstructure:"db-latency-metering"`
-	DatabaseSizeMeteringInterval time.Duration `mapstructure:"db-size-metering-interval"`
-	DatabasePruneInterval        time.Duration `mapstructure:"db-prune-interval"`
-	DatabaseVacuumState          int           `mapstructure:"db-vacuum-state"`
-	DatabaseSkipMigrations       []int         `mapstructure:"db-skip-migrations"`
+	DatabaseConnections          int                     `mapstructure:"db-connections"`
+	DatabaseLatencyMetering      bool                    `mapstructure:"db-latency-metering"`
+	DatabaseSizeMeteringInterval time.Duration           `mapstructure:"db-size-metering-interval"`
+	DatabasePruneInterval        time.Duration           `mapstructure:"db-prune-interval"`
+	DatabaseVacuumState          int                     `mapstructure:"db-vacuum-state"`
+	DatabaseSkipMigrations       []int                   `mapstructure:"db-skip-migrations"`
+	DatabaseQueryCache           bool                    `mapstructure:"db-query-cache"`
+	DatabaseQueryCacheSizes      DatabaseQueryCacheSizes `mapstructure:"db-query-cache-sizes"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
@@ -129,11 +132,23 @@ type BaseConfig struct {
 	RegossipAtxInterval time.Duration `mapstructure:"regossip-atx-interval"`
 
 	// ATXGradeDelay is used to grade ATXs for selection in tortoise active set.
-	// See grading fuction in miner/proposals_builder.go
+	// See grading function in miner/proposals_builder.go
 	ATXGradeDelay time.Duration `mapstructure:"atx-grade-delay"`
+
+	// PostValidDelay is the time after which a PoST is considered valid
+	// counting from the time an ATX was received.
+	// Before that time, the PoST must be fully verified.
+	// After that time, we depend on PoST malfeasance proofs.
+	PostValidDelay time.Duration `mapstructure:"post-valid-delay"`
 
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
 	NoMainOverride bool `mapstructure:"no-main-override"`
+}
+
+type DatabaseQueryCacheSizes struct {
+	EpochATXs     int `mapstructure:"epoch-atxs"`
+	ATXBlob       int `mapstructure:"atx-blob"`
+	ActiveSetBlob int `mapstructure:"active-set-blob"`
 }
 
 type DeprecatedPoETServers struct{}
@@ -170,7 +185,7 @@ func DefaultConfig() Config {
 		P2P:             p2p.DefaultConfig(),
 		API:             grpcserver.DefaultConfig(),
 		HARE3:           hare3.DefaultConfig(),
-		HareEligibility: eligConfig.DefaultConfig(),
+		HareEligibility: eligibility.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		VM:              vm.DefaultConfig(),
@@ -184,6 +199,7 @@ func DefaultConfig() Config {
 		Sync:            syncer.DefaultConfig(),
 		Recovery:        checkpoint.DefaultConfig(),
 		Cache:           datastore.DefaultConfig(),
+		ActiveSet:       miner.DefaultActiveSetPrepartion(),
 	}
 }
 
@@ -217,8 +233,14 @@ func defaultBaseConfig() BaseConfig {
 		DatabaseConnections:          16,
 		DatabaseSizeMeteringInterval: 10 * time.Minute,
 		DatabasePruneInterval:        30 * time.Minute,
-		NetworkHRP:                   "sm",
-		ATXGradeDelay:                10 * time.Second,
+		DatabaseQueryCacheSizes: DatabaseQueryCacheSizes{
+			EpochATXs:     20,
+			ATXBlob:       10000,
+			ActiveSetBlob: 200,
+		},
+		NetworkHRP:     "sm",
+		ATXGradeDelay:  10 * time.Second,
+		PostValidDelay: 12 * time.Hour,
 	}
 }
 

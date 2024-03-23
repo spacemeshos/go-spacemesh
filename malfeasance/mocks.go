@@ -5,14 +5,18 @@
 //
 //	mockgen -typed -package=malfeasance -destination=./mocks.go -source=./interface.go
 //
+
 // Package malfeasance is a generated GoMock package.
 package malfeasance
 
 import (
+	context "context"
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
+	shared "github.com/spacemeshos/post/shared"
+	verifying "github.com/spacemeshos/post/verifying"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -48,31 +52,31 @@ func (m *MockSigVerifier) Verify(arg0 signing.Domain, arg1 types.NodeID, arg2 []
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockSigVerifierMockRecorder) Verify(arg0, arg1, arg2, arg3 any) *SigVerifierVerifyCall {
+func (mr *MockSigVerifierMockRecorder) Verify(arg0, arg1, arg2, arg3 any) *MockSigVerifierVerifyCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockSigVerifier)(nil).Verify), arg0, arg1, arg2, arg3)
-	return &SigVerifierVerifyCall{Call: call}
+	return &MockSigVerifierVerifyCall{Call: call}
 }
 
-// SigVerifierVerifyCall wrap *gomock.Call
-type SigVerifierVerifyCall struct {
+// MockSigVerifierVerifyCall wrap *gomock.Call
+type MockSigVerifierVerifyCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *SigVerifierVerifyCall) Return(arg0 bool) *SigVerifierVerifyCall {
+func (c *MockSigVerifierVerifyCall) Return(arg0 bool) *MockSigVerifierVerifyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *SigVerifierVerifyCall) Do(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *SigVerifierVerifyCall {
+func (c *MockSigVerifierVerifyCall) Do(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *MockSigVerifierVerifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *SigVerifierVerifyCall) DoAndReturn(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *SigVerifierVerifyCall {
+func (c *MockSigVerifierVerifyCall) DoAndReturn(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *MockSigVerifierVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -107,31 +111,97 @@ func (m *Mocktortoise) OnMalfeasance(arg0 types.NodeID) {
 }
 
 // OnMalfeasance indicates an expected call of OnMalfeasance.
-func (mr *MocktortoiseMockRecorder) OnMalfeasance(arg0 any) *tortoiseOnMalfeasanceCall {
+func (mr *MocktortoiseMockRecorder) OnMalfeasance(arg0 any) *MocktortoiseOnMalfeasanceCall {
 	mr.mock.ctrl.T.Helper()
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnMalfeasance", reflect.TypeOf((*Mocktortoise)(nil).OnMalfeasance), arg0)
-	return &tortoiseOnMalfeasanceCall{Call: call}
+	return &MocktortoiseOnMalfeasanceCall{Call: call}
 }
 
-// tortoiseOnMalfeasanceCall wrap *gomock.Call
-type tortoiseOnMalfeasanceCall struct {
+// MocktortoiseOnMalfeasanceCall wrap *gomock.Call
+type MocktortoiseOnMalfeasanceCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *tortoiseOnMalfeasanceCall) Return() *tortoiseOnMalfeasanceCall {
+func (c *MocktortoiseOnMalfeasanceCall) Return() *MocktortoiseOnMalfeasanceCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *tortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *tortoiseOnMalfeasanceCall {
+func (c *MocktortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *MocktortoiseOnMalfeasanceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *tortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *tortoiseOnMalfeasanceCall {
+func (c *MocktortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *MocktortoiseOnMalfeasanceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockpostVerifier is a mock of postVerifier interface.
+type MockpostVerifier struct {
+	ctrl     *gomock.Controller
+	recorder *MockpostVerifierMockRecorder
+}
+
+// MockpostVerifierMockRecorder is the mock recorder for MockpostVerifier.
+type MockpostVerifierMockRecorder struct {
+	mock *MockpostVerifier
+}
+
+// NewMockpostVerifier creates a new mock instance.
+func NewMockpostVerifier(ctrl *gomock.Controller) *MockpostVerifier {
+	mock := &MockpostVerifier{ctrl: ctrl}
+	mock.recorder = &MockpostVerifierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpostVerifier) EXPECT() *MockpostVerifierMockRecorder {
+	return m.recorder
+}
+
+// Verify mocks base method.
+func (m_2 *MockpostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+	m_2.ctrl.T.Helper()
+	varargs := []any{ctx, p, m}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m_2.ctrl.Call(m_2, "Verify", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Verify indicates an expected call of Verify.
+func (mr *MockpostVerifierMockRecorder) Verify(ctx, p, m any, opts ...any) *MockpostVerifierVerifyCall {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, p, m}, opts...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockpostVerifier)(nil).Verify), varargs...)
+	return &MockpostVerifierVerifyCall{Call: call}
+}
+
+// MockpostVerifierVerifyCall wrap *gomock.Call
+type MockpostVerifierVerifyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockpostVerifierVerifyCall) Return(arg0 error) *MockpostVerifierVerifyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockpostVerifierVerifyCall) Do(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error) *MockpostVerifierVerifyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockpostVerifierVerifyCall) DoAndReturn(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error) *MockpostVerifierVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

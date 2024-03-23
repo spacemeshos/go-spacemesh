@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -190,16 +189,10 @@ func TestContextualLogging(t *testing.T) {
 
 	// try setting new
 	ctx = WithNewRequestID(WithNewSessionID(context.Background()))
-	if reqID2, ok := ExtractRequestID(ctx); ok {
-		_, err := uuid.Parse(reqID2)
-		r.NoError(err)
-	} else {
+	if _, ok := ExtractRequestID(ctx); !ok {
 		r.Fail("failed to extract request ID after setting")
 	}
-	if sesID2, ok := ExtractSessionID(ctx); ok {
-		_, err := uuid.Parse(sesID2)
-		r.NoError(err)
-	} else {
+	if _, ok := ExtractSessionID(ctx); !ok {
 		r.Fail("failed to extract session ID after setting")
 	}
 

@@ -113,7 +113,7 @@ func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient)
 		return nil, err
 	}
 	if response.Txstate == nil {
-		return nil, fmt.Errorf("tx state should not be nil")
+		return nil, errors.New("tx state should not be nil")
 	}
 	return response.Txstate.Id.Id, nil
 }
@@ -148,7 +148,11 @@ func stateHashStream(
 		state, err := states.Recv()
 		s, ok := status.FromError(err)
 		if ok && s.Code() != codes.OK {
-			logger.Warn("global state stream error", zap.String("client", node.Name), zap.Error(err), zap.Any("status", s))
+			logger.Warn("global state stream error",
+				zap.String("client", node.Name),
+				zap.Error(err),
+				zap.Any("status", s),
+			)
 			if s.Code() == codes.Unavailable {
 				return nil
 			}
@@ -200,6 +204,39 @@ func layersStream(
 			return err
 		}
 		if cont, err := collector(layer); !cont {
+			return err
+		}
+	}
+}
+
+func malfeasanceStream(
+	ctx context.Context,
+	node *cluster.NodeClient,
+	logger *zap.Logger,
+	collector func(*pb.MalfeasanceStreamResponse) (bool, error),
+) error {
+	meshapi := pb.NewMeshServiceClient(node.PubConn())
+	layers, err := meshapi.MalfeasanceStream(ctx, &pb.MalfeasanceStreamRequest{IncludeProof: true})
+	if err != nil {
+		return err
+	}
+	for {
+		proof, err := layers.Recv()
+		s, ok := status.FromError(err)
+		if ok && s.Code() != codes.OK {
+			logger.Warn("malfeasance stream error",
+				zap.String("client", node.Name),
+				zap.Error(err),
+				zap.Any("status", s),
+			)
+			if s.Code() == codes.Unavailable {
+				return nil
+			}
+		}
+		if err != nil {
+			return err
+		}
+		if cont, err := collector(proof); !cont {
 			return err
 		}
 	}
@@ -282,7 +319,11 @@ func watchTransactionResults(ctx context.Context,
 			rst, err := rsts.Recv()
 			s, ok := status.FromError(err)
 			if ok && s.Code() != codes.OK {
-				log.Warn("transactions stream error", zap.String("client", client.Name), zap.Error(err), zap.Any("status", s))
+				log.Warn("transactions stream error",
+					zap.String("client", client.Name),
+					zap.Error(err),
+					zap.Any("status", s),
+				)
 				if s.Code() == codes.Unavailable {
 					return nil
 				}
@@ -314,11 +355,13 @@ func watchProposals(
 			proposal, err := proposals.Recv()
 			s, ok := status.FromError(err)
 			if ok && s.Code() != codes.OK {
-				if ok && s.Code() != codes.OK {
-					log.Warn("proposals stream error", zap.String("client", client.Name), zap.Error(err), zap.Any("status", s))
-					if s.Code() == codes.Unavailable {
-						return nil
-					}
+				log.Warn("proposals stream error",
+					zap.String("client", client.Name),
+					zap.Error(err),
+					zap.Any("status", s),
+				)
+				if s.Code() == codes.Unavailable {
+					return nil
 				}
 			}
 			if err != nil {

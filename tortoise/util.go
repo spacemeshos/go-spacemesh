@@ -96,6 +96,7 @@ func zapBlocks(blocks []*blockInfo) zap.Field {
 		for i := range blocks {
 			encoder.AppendObject(zapcore.ObjectMarshalerFunc(func(encoder zapcore.ObjectEncoder) error {
 				encoder.AddString("decision", blocks[i].validity.String())
+				encoder.AddString("hare", blocks[i].hare.String())
 				encoder.AddString("id", blocks[i].id.String())
 				encoder.AddString("weight", blocks[i].margin.String())
 				encoder.AddUint64("height", blocks[i].height)

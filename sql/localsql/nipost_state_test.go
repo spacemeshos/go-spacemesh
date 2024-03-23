@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/natefinch/atomic"
+	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 )
 
@@ -112,4 +113,12 @@ func TestCorrupted(t *testing.T) {
 	got, err := read(path)
 	require.ErrorContains(t, err, "wrong checksum")
 	require.Nil(t, got)
+}
+
+func FuzzBuilderStateConsistency(f *testing.F) {
+	tester.FuzzConsistency[NIPostBuilderState](f)
+}
+
+func FuzzBuilderStateSafety(f *testing.F) {
+	tester.FuzzSafety[NIPostBuilderState](f)
 }

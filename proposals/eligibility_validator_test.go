@@ -155,7 +155,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(1, 2),
 			),
 		},
@@ -170,7 +171,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(3, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(3, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(1, 2),
 			),
 		},
@@ -302,7 +304,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, (epoch + 1).FirstLayer(), gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
+				types.NodeID{1}, (epoch + 1).FirstLayer(),
+				gdata(10, types.Beacon{1}, gactiveset(types.ATXID{1}).Hash()),
 				geligibilities(1, 2),
 			),
 			fail: true,
@@ -479,7 +482,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(2, 1, 3),
 			),
 			fail: true,
@@ -495,7 +499,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(15),
 			),
 			fail: true,
@@ -511,7 +516,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilities(14),
 			),
 			vrfFailed: true,
@@ -528,7 +534,8 @@ func TestEligibilityValidator(t *testing.T) {
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
-				types.NodeID{1}, epoch.FirstLayer(), gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
+				types.NodeID{1}, epoch.FirstLayer(),
+				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
 				geligibilityWithSig(1, "adjust layer"),
 			),
 			fail: true,
@@ -556,9 +563,8 @@ func TestEligibilityValidator(t *testing.T) {
 			}).AnyTimes()
 
 			lg := logtest.New(t)
-			const capacity = 2
-			c := atxsdata.New(atxsdata.WithCapacity(capacity))
-			c.OnEpoch(tc.evicted + capacity)
+			c := atxsdata.New()
+			c.EvictEpoch(tc.evicted)
 			tv := NewEligibilityValidator(
 				layerAvgSize,
 				layersPerEpoch,
@@ -571,13 +577,8 @@ func TestEligibilityValidator(t *testing.T) {
 				ms.mvrf,
 			)
 			for _, atx := range tc.atxs {
-				c.Add(
-					atx.TargetEpoch(),
-					atx.SmesherID,
-					atx.ID(),
-					atx.GetWeight(),
-					atx.BaseTickHeight(),
-					atx.TickHeight(),
+				c.AddFromHeader(
+					atx.ToHeader(),
 					0,
 					false,
 				)
@@ -590,8 +591,7 @@ func TestEligibilityValidator(t *testing.T) {
 					ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
 			totalWeight, _ := c.WeightForSet(tc.executed.Layer.GetEpoch(), tc.actives)
-			rst, err := tv.CheckEligibility(context.Background(), &tc.executed, totalWeight)
-			assert.Equal(t, !tc.fail, rst)
+			err := tv.CheckEligibility(context.Background(), &tc.executed, totalWeight)
 			if len(tc.err) == 0 {
 				assert.Empty(t, err)
 			} else {

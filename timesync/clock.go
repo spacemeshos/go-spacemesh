@@ -6,10 +6,10 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
@@ -37,7 +37,7 @@ type NodeClock struct {
 	stop chan struct{}
 	once sync.Once
 
-	log log.Log
+	log *zap.Logger
 	eg  errgroup.Group
 }
 
@@ -55,9 +55,9 @@ func NewClock(opts ...OptionFunc) (*NodeClock, error) {
 	}
 
 	gtime := cfg.genesisTime.Local()
-	cfg.log.With().Info("converting genesis time to local time",
-		log.Time("genesis", cfg.genesisTime),
-		log.Time("local", gtime),
+	cfg.log.Info("converting genesis time to local time",
+		zap.Time("genesis", cfg.genesisTime),
+		zap.Time("local", gtime),
 	)
 	t := &NodeClock{
 		LayerConverter: LayerConverter{duration: cfg.layerDuration, genesis: gtime},
@@ -66,7 +66,7 @@ func NewClock(opts ...OptionFunc) (*NodeClock, error) {
 		layerChannels:  make(map[types.LayerID]chan struct{}),
 		genesis:        gtime,
 		stop:           make(chan struct{}),
-		log:            *cfg.log,
+		log:            cfg.log,
 	}
 
 	t.eg.Go(t.startClock)
@@ -74,18 +74,18 @@ func NewClock(opts ...OptionFunc) (*NodeClock, error) {
 }
 
 func (t *NodeClock) startClock() error {
-	t.log.With().Info("starting global clock",
-		log.Time("now", t.clock.Now()),
-		log.Time("genesis", t.genesis),
-		log.Duration("layer_duration", t.duration),
-		log.Duration("tick_interval", t.tickInterval),
+	t.log.Info("starting global clock",
+		zap.Time("now", t.clock.Now()),
+		zap.Time("genesis", t.genesis),
+		zap.Duration("layer_duration", t.duration),
+		zap.Duration("tick_interval", t.tickInterval),
 	)
 
 	ticker := t.clock.NewTicker(t.tickInterval)
 	for {
 		currLayer := t.TimeToLayer(t.clock.Now())
-		t.log.With().Debug("global clock going to sleep before next tick",
-			log.Stringer("curr_layer", currLayer),
+		t.log.Debug("global clock going to sleep before next tick",
+			zap.Stringer("curr_layer", currLayer),
 		)
 
 		select {
@@ -111,7 +111,7 @@ func (t *NodeClock) Close() {
 		t.log.Info("stopping clock")
 		close(t.stop)
 		if err := t.eg.Wait(); err != nil {
-			t.log.Error("errgroup: %v", err)
+			t.log.Error("failed to stop clock", zap.Error(err))
 		}
 		t.log.Info("clock stopped")
 	})
@@ -130,17 +130,17 @@ func (t *NodeClock) tick() {
 	layer := t.TimeToLayer(t.clock.Now())
 	switch {
 	case layer.Before(t.lastTicked):
-		t.log.With().Info("clock ticked back in time",
-			log.Stringer("layer", layer),
-			log.Stringer("last_ticked_layer", t.lastTicked),
+		t.log.Info("clock ticked back in time",
+			zap.Stringer("layer", layer),
+			zap.Stringer("last_ticked_layer", t.lastTicked),
 		)
 		d := t.lastTicked.Difference(layer)
 		tickDistance.Observe(float64(-d))
 	// don't warn right after fresh startup
 	case layer.Difference(t.lastTicked) > 1 && t.lastTicked > 0:
-		t.log.With().Warning("clock skipped layers",
-			log.Stringer("layer", layer),
-			log.Stringer("last_ticked_layer", t.lastTicked),
+		t.log.Warn("clock skipped layers",
+			zap.Stringer("layer", layer),
+			zap.Stringer("last_ticked_layer", t.lastTicked),
 		)
 		d := layer.Difference(t.lastTicked)
 		tickDistance.Observe(float64(d))

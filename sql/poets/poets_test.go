@@ -87,8 +87,18 @@ func TestGet(t *testing.T) {
 		require.Equal(t, proofs[i], proof)
 	}
 
-	_, err := Get(db, types.PoetProofRef{0xab, 0xba})
+	noSuchRef := types.PoetProofRef{0xab, 0xba}
+	_, err := Get(db, noSuchRef)
 	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	sizes, err := GetBlobSizes(db, [][]byte{refs[0][:], refs[1][:], refs[2][:], noSuchRef[:]})
+	require.NoError(t, err)
+	require.Equal(t, []int{
+		len(proofs[0]),
+		len(proofs[1]),
+		len(proofs[2]),
+		-1,
+	}, sizes)
 }
 
 func TestAdd(t *testing.T) {

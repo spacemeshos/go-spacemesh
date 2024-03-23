@@ -2,12 +2,15 @@ package signing
 
 import (
 	"bytes"
-	"crypto/ed25519"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
 
-	oasis "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -50,6 +53,7 @@ func (d Domain) String() string {
 
 type edSignerOption struct {
 	priv   PrivateKey
+	file   string
 	prefix []byte
 }
 
@@ -64,11 +68,65 @@ func WithPrefix(prefix []byte) EdSignerOptionFunc {
 	}
 }
 
+// ToFile writes the private key to a file after creation.
+func ToFile(path string) EdSignerOptionFunc {
+	return func(opt *edSignerOption) error {
+		if opt.file != "" {
+			return errors.New("invalid option ToFile: file already set")
+		}
+		opt.file = path
+		return nil
+	}
+}
+
+// FromFile loads the private key from a file.
+func FromFile(path string) EdSignerOptionFunc {
+	return func(opt *edSignerOption) error {
+		if opt.priv != nil {
+			return errors.New("invalid option FromFile: private key already set")
+		}
+
+		if opt.file != "" {
+			return errors.New("invalid option FromFile: file already set")
+		}
+
+		// read hex data from file
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to open identity file at %s: %w", path, err)
+		}
+
+		if n := hex.DecodedLen(len(data)); n != PrivateKeySize {
+			return fmt.Errorf("invalid key size %d/%d for %s", n, PrivateKeySize, filepath.Base(path))
+		}
+
+		dst := make([]byte, PrivateKeySize)
+		n, err := hex.Decode(dst, data)
+		if err != nil || n != PrivateKeySize {
+			return fmt.Errorf("decoding private key in %s: %w", filepath.Base(path), err)
+		}
+
+		priv := PrivateKey(dst)
+		keyPair := ed25519.NewKeyFromSeed(priv[:32])
+		if !bytes.Equal(keyPair[32:], priv.Public().(ed25519.PublicKey)) {
+			return errors.New("private and public do not match")
+		}
+
+		opt.priv = priv
+		opt.file = filepath.Base(path)
+		return nil
+	}
+}
+
 // WithPrivateKey sets the private key used by EdSigner.
 func WithPrivateKey(priv PrivateKey) EdSignerOptionFunc {
 	return func(opt *edSignerOption) error {
+		if opt.priv != nil {
+			return errors.New("invalid option WithPrivateKey: private key already set")
+		}
+
 		if len(priv) != ed25519.PrivateKeySize {
-			return errors.New("could not create EdSigner from the provided key: too small")
+			return errors.New("could not create EdSigner: invalid key length")
 		}
 
 		keyPair := ed25519.NewKeyFromSeed(priv[:32])
@@ -97,6 +155,7 @@ func WithKeyFromRand(rand io.Reader) EdSignerOptionFunc {
 // EdSigner represents an ED25519 signer.
 type EdSigner struct {
 	priv PrivateKey
+	file string
 
 	prefix []byte
 }
@@ -117,10 +176,30 @@ func NewEdSigner(opts ...EdSignerOptionFunc) (*EdSigner, error) {
 			return nil, fmt.Errorf("could not generate key pair: %w", err)
 		}
 		cfg.priv = priv
+
+		if cfg.file != "" {
+			_, err := os.Stat(cfg.file)
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+			// continue
+			case err != nil:
+				return nil, fmt.Errorf("stat identity file %s: %w", filepath.Base(cfg.file), err)
+			default: // err == nil
+				return nil, fmt.Errorf("save identity file %s: %w", filepath.Base(cfg.file), fs.ErrExist)
+			}
+
+			dst := make([]byte, hex.EncodedLen(len(cfg.priv)))
+			hex.Encode(dst, cfg.priv)
+			err = os.WriteFile(cfg.file, dst, 0o600)
+			if err != nil {
+				return nil, fmt.Errorf("failed to write identity file: %w", err)
+			}
+		}
 	}
 	sig := &EdSigner{
 		priv:   cfg.priv,
 		prefix: cfg.prefix,
+		file:   cfg.file,
 	}
 	return sig, nil
 }
@@ -150,14 +229,34 @@ func (es *EdSigner) PrivateKey() PrivateKey {
 	return es.priv
 }
 
+// Name returns the name of the signer. This is the filename of the identity file.
+func (es *EdSigner) Name() string {
+	if es.file == "" {
+		return ""
+	}
+	return filepath.Base(es.file)
+}
+
 // VRFSigner wraps same ed25519 key to provide ecvrf.
 func (es *EdSigner) VRFSigner() *VRFSigner {
 	return &VRFSigner{
-		privateKey: oasis.PrivateKey(es.priv),
+		privateKey: ed25519.PrivateKey(es.priv),
 		nodeID:     es.NodeID(),
 	}
 }
 
 func (es *EdSigner) Prefix() []byte {
 	return es.prefix
+}
+
+// Matches implements the gomock.Matcher interface for testing.
+func (es *EdSigner) Matches(x any) bool {
+	if other, ok := x.(*EdSigner); ok {
+		return bytes.Equal(es.priv, other.priv)
+	}
+	return false
+}
+
+func (es *EdSigner) String() string {
+	return es.NodeID().ShortString()
 }

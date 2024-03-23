@@ -29,9 +29,11 @@ import (
 )
 
 func TestSmeshing(t *testing.T) {
+	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
 
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx.RemoteSize = tctx.ClusterSize / 4 // 25% of nodes are remote
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
 		prepareVesting(t, 5, 8, 20, 1e15, 10e15),
@@ -39,7 +41,7 @@ func TestSmeshing(t *testing.T) {
 		prepareVesting(t, 1, 8, 20, 0, 1e15),
 	}
 	cl, err := cluster.ReuseWait(tctx,
-		cluster.WithKeys(10),
+		cluster.WithKeys(tctx.ClusterSize),
 		cluster.WithGenesisBalances(vests.genesisBalances()...),
 	)
 	require.NoError(t, err)
@@ -57,7 +59,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	last := first + limit
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 
-	createdch := make(chan *pb.Proposal, cl.Total()*(limit+1))
+	createdCh := make(chan *pb.Proposal, cl.Total()*(limit+1))
 	includedAll := make([]map[uint32][]*pb.Proposal, cl.Total())
 	for i := 0; i < cl.Total(); i++ {
 		includedAll[i] = map[uint32][]*pb.Proposal{}
@@ -83,7 +85,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 				return false, nil
 			}
 			if proposal.Status == pb.Proposal_Created {
-				createdch <- proposal
+				createdCh <- proposal
 			} else {
 				includedAll[i][proposal.Layer.Number] = append(includedAll[i][proposal.Layer.Number], proposal)
 			}
@@ -92,12 +94,12 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	}
 
 	require.NoError(t, eg.Wait())
-	close(createdch)
+	close(createdCh)
 
 	created := map[uint32][]*pb.Proposal{}
 	beacons := map[uint32]map[string]struct{}{}
 	beaconSet := map[string]struct{}{}
-	for proposal := range createdch {
+	for proposal := range createdCh {
 		created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)
 		if edata := proposal.GetData(); edata != nil {
 			if _, exist := beacons[proposal.Epoch.Number]; !exist {

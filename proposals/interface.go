@@ -17,7 +17,7 @@ type meshProvider interface {
 }
 
 type eligibilityValidator interface {
-	CheckEligibility(context.Context, *types.Ballot, uint64) (bool, error)
+	CheckEligibility(context.Context, *types.Ballot, uint64) error
 }
 
 type tortoiseProvider interface {
@@ -33,4 +33,9 @@ type vrfVerifier interface {
 type layerClock interface {
 	CurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
+}
+
+type proposalsConsumer interface {
+	IsKnown(types.LayerID, types.ProposalID) bool
+	OnProposal(p *types.Proposal) error
 }

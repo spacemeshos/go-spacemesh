@@ -6,13 +6,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type requester interface {
 	Run(context.Context) error
-	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
+	Request(context.Context, p2p.Peer, []byte, ...string) ([]byte, error)
+	StreamRequest(context.Context, p2p.Peer, []byte, server.StreamRequestCallback, ...string) error
 }
 
 // The ValidatorFunc type is an adapter to allow the use of functions as
@@ -38,10 +40,6 @@ type SyncValidator interface {
 
 type PoetValidator interface {
 	ValidateAndStoreMsg(context.Context, types.Hash32, p2p.Peer, []byte) error
-}
-
-type meshProvider interface {
-	LastVerified() types.LayerID
 }
 
 type host interface {

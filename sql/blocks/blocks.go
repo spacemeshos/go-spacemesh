@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -56,6 +57,17 @@ func Has(db sql.Executor, id types.BlockID) (bool, error) {
 	return rows > 0, nil
 }
 
+// GetBlobSizes returns the sizes of the blobs corresponding to blocks with specified
+// ids. For non-existent balots, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(block) from blocks where id in", ids)
+}
+
+// LoadBlob loads block as an encoded blob, ready to be sent over the wire.
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, b *sql.Blob) error {
+	return sql.LoadBlob(db, "select block from blocks where id = ?1", id, b)
+}
+
 // Get block with id from database.
 func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 	if rows, err := db.Exec("select block from blocks where id = ?1;", func(stmt *sql.Statement) {
@@ -69,6 +81,26 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 		return nil, fmt.Errorf("get block %s: %w", id, sql.ErrNotFound)
 	}
 	return rst, err
+}
+
+func LastValid(db sql.Executor) (types.LayerID, error) {
+	var lid types.LayerID
+	// it doesn't use max(layer) in order to get rows == 0 when there are no layers.
+	// aggregation always returns rows == 1, hence the check below doesn't work.
+	rows, err := db.Exec(
+		"select layer from blocks where validity = 1 order by layer desc limit 1;",
+		nil,
+		func(stmt *sql.Statement) bool {
+			lid = types.LayerID(uint32(stmt.ColumnInt64(0)))
+			return false
+		},
+	)
+	if err != nil {
+		return lid, fmt.Errorf("get last valid layer: %w", err)
+	} else if rows == 0 {
+		return lid, fmt.Errorf("%w: no valid layers", sql.ErrNotFound)
+	}
+	return lid, nil
 }
 
 func UpdateValid(db sql.Executor, id types.BlockID, valid bool) error {

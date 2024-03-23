@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -18,13 +19,12 @@ type data struct {
 }
 
 func (d *data) latency(global float64) float64 {
-	if d.success+d.failures == 0 {
-		return 0.8 * global // to prioritize trying out new peer
+	switch {
+	case d.success+d.failures == 0:
+		return 0.9 * global // to prioritize trying out new peer
+	default:
+		return d.averageLatency + d.failRate*global
 	}
-	if d.success == 0 {
-		return global + d.failRate*global
-	}
-	return d.averageLatency + d.failRate*global
 }
 
 func (p *data) less(other *data, global float64) bool {
@@ -54,14 +54,15 @@ type Peers struct {
 	globalLatency float64
 }
 
-func (p *Peers) Add(id peer.ID) {
+func (p *Peers) Add(id peer.ID) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	_, exist := p.peers[id]
 	if exist {
-		return
+		return false
 	}
 	p.peers[id] = &data{id: id}
+	return true
 }
 
 func (p *Peers) Delete(id peer.ID) {
@@ -70,37 +71,46 @@ func (p *Peers) Delete(id peer.ID) {
 	delete(p.peers, id)
 }
 
-func (p *Peers) OnFailure(id peer.ID) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	peer, exist := p.peers[id]
-	if !exist {
-		return
-	}
-	peer.failures++
-	peer.failRate = float64(peer.failures) / float64(peer.success+peer.failures)
-}
-
 // OnLatency updates average peer and global latency.
-func (p *Peers) OnLatency(id peer.ID, latency time.Duration) {
+func (p *Peers) onLatency(id peer.ID, size int, latency time.Duration, failed bool) {
+	// We assume that latency is proportional to the size of the message
+	// and define it as a duration to transmit 1kiB.
+	// To account for the additional overhead of transmitting small messages,
+	// we treat them as if they were 1kiB.
+	latency = latency / time.Duration(max(size/1024, 1))
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	peer, exist := p.peers[id]
 	if !exist {
 		return
 	}
-	peer.success++
+	if failed {
+		peer.failures++
+	} else {
+		peer.success++
+	}
 	peer.failRate = float64(peer.failures) / float64(peer.success+peer.failures)
 	if peer.averageLatency != 0 {
-		peer.averageLatency = 0.8*peer.averageLatency + 0.2*float64(latency)
+		delta := (float64(latency) - float64(peer.averageLatency)) / 10 // 86% of the value is the last 19
+		peer.averageLatency += delta
 	} else {
 		peer.averageLatency = float64(latency)
 	}
 	if p.globalLatency != 0 {
-		p.globalLatency = 0.8*p.globalLatency + 0.2*float64(latency)
+		delta := (float64(latency) - float64(p.globalLatency)) / 25 // 86% of the value is the last 49
+		p.globalLatency += delta
 	} else {
 		p.globalLatency = float64(latency)
 	}
+}
+
+func (p *Peers) OnFailure(id peer.ID, size int, latency time.Duration) {
+	p.onLatency(id, size, latency, true)
+}
+
+// OnLatency updates average peer and global latency.
+func (p *Peers) OnLatency(id peer.ID, size int, latency time.Duration) {
+	p.onLatency(id, size, latency, false)
 }
 
 // SelectBest peer with preferences.
@@ -161,4 +171,60 @@ func (p *Peers) Total() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return len(p.peers)
+}
+
+func (p *Peers) Stats() Stats {
+	best := p.SelectBest(5)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	stats := Stats{
+		Total:                len(p.peers),
+		GlobalAverageLatency: time.Duration(p.globalLatency),
+	}
+	for _, peer := range best {
+		peerData, exist := p.peers[peer]
+		if !exist {
+			continue
+		}
+		stats.BestPeers = append(stats.BestPeers, PeerStats{
+			ID:       peerData.id,
+			Success:  peerData.success,
+			Failures: peerData.failures,
+			Latency:  time.Duration(peerData.averageLatency),
+		})
+	}
+	return stats
+}
+
+type Stats struct {
+	Total                int
+	GlobalAverageLatency time.Duration
+	BestPeers            []PeerStats
+}
+
+func (s *Stats) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddInt("total", s.Total)
+	enc.AddDuration("global average latency", s.GlobalAverageLatency)
+	enc.AddArray("best peers", zapcore.ArrayMarshalerFunc(func(arrEnc zapcore.ArrayEncoder) error {
+		for _, peer := range s.BestPeers {
+			arrEnc.AppendObject(&peer)
+		}
+		return nil
+	}))
+	return nil
+}
+
+type PeerStats struct {
+	ID       peer.ID
+	Success  int
+	Failures int
+	Latency  time.Duration
+}
+
+func (p *PeerStats) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("id", p.ID.String())
+	enc.AddInt("success", p.Success)
+	enc.AddInt("failures", p.Failures)
+	enc.AddDuration("latency per 1024 bytes", p.Latency)
+	return nil
 }

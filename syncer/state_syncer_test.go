@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 func opinions(prevHash types.Hash32) []*fetch.LayerOpinion {
@@ -53,7 +54,8 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 		lid := lid
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, true, peers).DoAndReturn(
-			func(context.Context, types.LayerID, bool, []p2p.Peer) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
+			func(context.Context, types.LayerID, bool, []p2p.Peer,
+			) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
 				prevLid := lid.Sub(1)
 				prevHash, err := layers.GetAggregatedHash(ts.cdb, prevLid)
 				require.NoError(t, err)
@@ -80,6 +82,14 @@ func TestProcessLayers_MultiLayers(t *testing.T) {
 				require.Equal(t, adopted[lid], gotC.BlockID)
 				require.NoError(t, certificates.Add(ts.cdb, lid, gotC))
 				return nil
+			})
+		ts.mTortoise.EXPECT().
+			OnHareOutput(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(lid types.LayerID, bid types.BlockID) {
+				exists, err := blocks.Has(ts.cdb, bid)
+				require.NoError(t, err)
+				require.True(t, exists)
+				require.Equal(t, adopted[lid], bid)
 			})
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().DoAndReturn(func() []result.Layer {
@@ -292,10 +302,12 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 			ts.mLyrPatrol.EXPECT().IsHareInCharge(lid).Return(false)
 		}
 		peers := test.GeneratePeerIDs(3)
-		ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		ts.mDataFetcher.EXPECT().
-			PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).
-			Return(nil, nil, nil)
+		if lid.Add(ts.syncer.cfg.SyncCertDistance).After(current) {
+			ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
+			ts.mDataFetcher.EXPECT().
+				PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).
+				Return(nil, nil, nil)
+		}
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
 		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
@@ -395,7 +407,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		} else {
 			ts.mForkFinder.EXPECT().NeedResync(instate.Sub(1), opns[i].PrevAggHash).Return(true)
 			if i != 4 {
-				ts.mAtxCache.EXPECT().GetMissingActiveSet(epoch, eds[i].AtxIDs).Return(eds[i].AtxIDs)
+				ts.mTortoise.EXPECT().GetMissingActiveSet(epoch, eds[i].AtxIDs).Return(eds[i].AtxIDs)
 			}
 		}
 	}
@@ -415,26 +427,26 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 	ts.mDataFetcher.EXPECT().
 		PeerEpochInfo(gomock.Any(), opns[5].Peer(), epoch-1).
 		Return(eds[5], nil)
-	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID) error {
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
 			require.ElementsMatch(t, eds[0].AtxIDs, got)
 			return nil
 		},
 	)
-	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID) error {
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
 			require.ElementsMatch(t, eds[2].AtxIDs, got)
 			return nil
 		},
 	)
-	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID) error {
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
 			require.ElementsMatch(t, eds[3].AtxIDs, got)
 			return errors.New("not available")
 		},
 	)
-	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID) error {
+	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
 			require.ElementsMatch(t, eds[5].AtxIDs, got)
 			return nil
 		},
@@ -508,10 +520,12 @@ func TestProcessLayers_NoHashResolutionForNewlySyncedNode(t *testing.T) {
 	for lid := instate; lid <= current; lid++ {
 		ts.mLyrPatrol.EXPECT().IsHareInCharge(lid)
 		peers := test.GeneratePeerIDs(3)
-		ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-		ts.mDataFetcher.EXPECT().
-			PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).
-			Return(opns, nil, nil)
+		if lid.Add(ts.syncer.cfg.SyncCertDistance) > current {
+			ts.mDataFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
+			ts.mDataFetcher.EXPECT().
+				PollLayerOpinions(gomock.Any(), lid, gomock.Any(), peers).
+				Return(opns, nil, nil)
+		}
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().
 			Updates().

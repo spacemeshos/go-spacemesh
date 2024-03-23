@@ -36,12 +36,13 @@ func TestData(t *testing.T) {
 					c.Add(
 						types.EpochID(epoch)+1,
 						d.Node,
+						d.Coinbase,
 						atxids[epoch][i],
 						d.Weight,
 						d.BaseHeight,
 						d.Height,
 						d.Nonce,
-						d.Malicious,
+						d.malicious,
 					)
 				}
 			}
@@ -57,16 +58,27 @@ func TestData(t *testing.T) {
 		c := New()
 		node := types.NodeID{1}
 		for epoch := 1; epoch <= 10; epoch++ {
-			c.Add(types.EpochID(epoch), node, types.ATXID{byte(epoch)}, 2, 0, 0, 0, false)
+			c.Add(
+				types.EpochID(epoch),
+				node,
+				types.Address{},
+				types.ATXID{byte(epoch)},
+				2,
+				0,
+				0,
+				0,
+				false,
+			)
 			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
 			require.NotNil(t, data)
-			require.False(t, data.Malicious)
+			require.False(t, data.malicious)
 		}
 		c.SetMalicious(node)
 		for epoch := 1; epoch <= 10; epoch++ {
 			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
-			require.True(t, data.Malicious)
+			require.True(t, data.malicious)
 		}
+		require.True(t, c.IsMalicious(node))
 	})
 	t.Run("eviction", func(t *testing.T) {
 		const (
@@ -74,15 +86,16 @@ func TestData(t *testing.T) {
 			capacity = 3
 			applied  = epochs / 2
 		)
-		c := New(WithCapacity(capacity))
+		c := New()
 		node := types.NodeID{1}
 		for epoch := 1; epoch <= epochs; epoch++ {
-			c.Add(types.EpochID(epoch), node, types.ATXID{}, 2, 0, 0, 0, false)
+			c.Add(types.EpochID(epoch), node, types.Address{}, types.ATXID{}, 2, 0, 0, 0, false)
 			data := c.Get(types.EpochID(epoch), types.ATXID{})
 			require.NotNil(t, data)
 		}
-		c.OnEpoch(applied)
+
 		evicted := applied - capacity
+		c.EvictEpoch(types.EpochID(evicted))
 		require.EqualValues(t, evicted, c.Evicted())
 		for epoch := 1; epoch <= epochs; epoch++ {
 			require.Equal(t, epoch <= evicted, c.IsEvicted(types.EpochID(epoch)), "epoch=%v", epoch)
@@ -93,20 +106,20 @@ func TestData(t *testing.T) {
 		require.Nil(t, c.Get(0, types.ATXID{}))
 		require.Nil(t, c.Get(1, types.ATXID{}))
 
-		c.Add(1, types.NodeID{1}, types.ATXID{1}, 2, 0, 0, 0, false)
+		c.Add(1, types.NodeID{1}, types.Address{}, types.ATXID{1}, 2, 0, 0, 0, false)
 		require.Nil(t, c.Get(1, types.ATXID{}))
 	})
 	t.Run("multiple atxs", func(t *testing.T) {
 		c := New()
-		c.Add(1, types.NodeID{1}, types.ATXID{1}, 1, 0, 0, 0, false)
-		c.Add(1, types.NodeID{1}, types.ATXID{2}, 2, 0, 0, 0, false)
+		c.Add(1, types.NodeID{1}, types.Address{}, types.ATXID{1}, 1, 0, 0, 0, false)
+		c.Add(1, types.NodeID{1}, types.Address{}, types.ATXID{2}, 2, 0, 0, 0, false)
 		require.NotNil(t, c.Get(1, types.ATXID{1}))
 		require.NotNil(t, c.Get(1, types.ATXID{2}))
 	})
 	t.Run("weight for set", func(t *testing.T) {
 		c := New()
-		c.Add(1, types.NodeID{1}, types.ATXID{1}, 1, 0, 0, 0, false)
-		c.Add(1, types.NodeID{1}, types.ATXID{2}, 2, 0, 0, 0, false)
+		c.Add(1, types.NodeID{1}, types.Address{}, types.ATXID{1}, 1, 0, 0, 0, false)
+		c.Add(1, types.NodeID{1}, types.Address{}, types.ATXID{2}, 2, 0, 0, 0, false)
 
 		weight, used := c.WeightForSet(1, []types.ATXID{{1}, {2}, {3}})
 		require.Equal(t, []bool{true, true, false}, used)
@@ -118,18 +131,11 @@ func TestData(t *testing.T) {
 	})
 	t.Run("adding after eviction", func(t *testing.T) {
 		c := New()
-		c.OnEpoch(0)
-		c.OnEpoch(3)
-		c.Add(1, types.NodeID{1}, types.ATXID{1}, 500, 100, 0, 0, false)
+		c.EvictEpoch(0)
+		c.EvictEpoch(3)
+		c.Add(1, types.NodeID{1}, types.Address{}, types.ATXID{1}, 500, 100, 0, 0, false)
 		require.Nil(t, c.Get(3, types.ATXID{1}))
-		c.OnEpoch(3)
-	})
-
-	t.Run("capacity from layers", func(t *testing.T) {
-		c := New(WithCapacityFromLayers(10, 3))
-		c.OnEpoch(5)
-		require.True(t, c.IsEvicted(1))
-		require.False(t, c.IsEvicted(2))
+		c.EvictEpoch(3)
 	})
 }
 
@@ -147,20 +153,20 @@ func TestMemory(t *testing.T) {
 			)
 			binary.PutUvarint(node[:], uint64(i))
 			binary.PutUvarint(atx[:], uint64(i))
-			c.Add(1, node, atx, 500, 100, 0, 0, false)
+			c.Add(1, node, types.Address{}, atx, 500, 100, 0, 0, false)
 		}
 		runtime.GC()
 		var after runtime.MemStats
 		runtime.ReadMemStats(&after)
 		require.InDelta(t, after.HeapInuse-before.HeapInuse, memory, float64(delta))
 
-		c.OnEpoch(0) // otherwise cache will be gc'ed
+		c.EvictEpoch(0) // otherwise cache will be gc'ed
 	}
 	t.Run("1_000_000", func(t *testing.T) {
-		test(t, 1_000_000, 173_801_472, 300_000)
+		test(t, 1_000_000, 189_956_096, 300_000)
 	})
 	t.Run("100_000", func(t *testing.T) {
-		test(t, 100_000, 26_034_176, 200_000)
+		test(t, 100_000, 27_656_192, 200_000)
 	})
 }
 
@@ -177,7 +183,7 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 		)
 		binary.PutUvarint(node[:], uint64(i))
 		binary.PutUvarint(atx[:], uint64(i))
-		c.Add(epoch, node, atx, 500, 100, 0, 0, false)
+		c.Add(epoch, node, types.Address{}, atx, 500, 100, 0, 0, false)
 	}
 	b.ResetTimer()
 
@@ -194,7 +200,7 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 			if i%writeFraction == 0 {
 				binary.PutUvarint(node[:], size+i*core)
 				binary.PutUvarint(atx[:], size+i*core)
-				c.Add(epoch, node, atx, 500, 100, 0, 0, false)
+				c.Add(epoch, node, types.Address{}, atx, 500, 100, 0, 0, false)
 			} else {
 				binary.PutUvarint(node[:], i%size)
 				binary.PutUvarint(atx[:], i%size)
@@ -218,7 +224,7 @@ func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
 		binary.PutUvarint(node[:], uint64(i))
 		binary.PutUvarint(atx[:], uint64(i))
 		atxs = append(atxs, atx)
-		c.Add(epoch, node, atx, 500, 100, 0, 0, false)
+		c.Add(epoch, node, types.Address{}, atx, 500, 100, 0, 0, false)
 	}
 	rng.Shuffle(size, func(i, j int) {
 		atxs[i], atxs[j] = atxs[j], atxs[i]

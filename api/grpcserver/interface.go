@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -56,8 +57,13 @@ type atxProvider interface {
 	GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error)
 }
 
+type postState interface {
+	// PostStates returns the current state of all registered IDs.
+	PostStates() map[types.IdentityDescriptor]types.PostState
+}
+
 type postSupervisor interface {
-	Start(opts activation.PostSetupOpts) error
+	Start(cmdCfg activation.PostSupervisorConfig, opts activation.PostSetupOpts, sig *signing.EdSigner) error
 	Stop(deleteFiles bool) error
 
 	Config() activation.PostConfig
@@ -85,8 +91,8 @@ type genesisTimeAPI interface {
 
 // meshAPI is an api for getting mesh status about layers/blocks/rewards.
 type meshAPI interface {
-	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
+	GetLayerVerified(types.LayerID) (*types.Block, error)
 	GetRewardsByCoinbase(types.Address) ([]*types.Reward, error)
 	GetRewardsBySmesherId(id types.NodeID) ([]*types.Reward, error)
 	LatestLayer() types.LayerID

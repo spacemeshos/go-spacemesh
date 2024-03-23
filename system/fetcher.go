@@ -26,9 +26,21 @@ type BlockFetcher interface {
 	GetBlocks(context.Context, []types.BlockID) error
 }
 
+type GetAtxOpts struct {
+	LimitingOff bool
+}
+
+type GetAtxOpt func(*GetAtxOpts)
+
+func WithoutLimiting() GetAtxOpt {
+	return func(opts *GetAtxOpts) {
+		opts.LimitingOff = true
+	}
+}
+
 // AtxFetcher defines an interface for fetching ATXs from remote peers.
 type AtxFetcher interface {
-	GetAtxs(context.Context, []types.ATXID) error
+	GetAtxs(context.Context, []types.ATXID, ...GetAtxOpt) error
 }
 
 // TxFetcher defines an interface for fetching transactions from remote peers.
@@ -55,6 +67,11 @@ type ProposalFetcher interface {
 // ActiveSetFetcher defines an interface downloading active set.
 type ActiveSetFetcher interface {
 	GetActiveSet(context.Context, types.Hash32) error
+}
+
+// MalfeasanceProofFetcher defines an interface for fetching malfeasance proofs.
+type MalfeasanceProofFetcher interface {
+	GetMalfeasanceProofs(context.Context, []types.NodeID) error
 }
 
 // PeerTracker defines an interface to track peer hashes.

@@ -2,6 +2,7 @@ package multisig
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -22,7 +23,7 @@ func Register(registry *registry.Registry) {
 }
 
 var (
-	_               (core.Handler) = (*handler)(nil)
+	_               core.Handler = (*handler)(nil)
 	TemplateAddress core.Address
 )
 
@@ -51,7 +52,7 @@ func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (o
 func (h *handler) New(args any) (core.Template, error) {
 	spawn := args.(*SpawnArguments)
 	if spawn.Required == 0 {
-		return nil, fmt.Errorf("number of required signatures must be larger than zero")
+		return nil, errors.New("number of required signatures must be larger than zero")
 	}
 	if len(spawn.PublicKeys) < int(spawn.Required) {
 		return nil, fmt.Errorf("multisig requires atleast %d keys", spawn.Required)

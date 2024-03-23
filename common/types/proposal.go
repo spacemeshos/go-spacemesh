@@ -2,7 +2,7 @@ package types
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"sort"
 
 	"github.com/google/go-cmp/cmp"
@@ -49,6 +49,8 @@ type Proposal struct {
 
 	// the following fields are kept private and from being serialized
 	proposalID ProposalID
+	// beacon that this proposal references either via its ballot's EpochData or RefBallot
+	beacon Beacon
 }
 
 func (p Proposal) Equal(other Proposal) bool {
@@ -74,7 +76,7 @@ type InnerProposal struct {
 // this should be called once all the other fields of the Proposal are set.
 func (p *Proposal) Initialize() error {
 	if p.proposalID != EmptyProposalID {
-		return fmt.Errorf("proposal already initialized")
+		return errors.New("proposal already initialized")
 	}
 	if err := p.Ballot.Initialize(); err != nil {
 		return err
@@ -123,6 +125,14 @@ func (p *Proposal) SetID(pid ProposalID) {
 	p.proposalID = pid
 }
 
+func (p *Proposal) Beacon() Beacon {
+	return p.beacon
+}
+
+func (p *Proposal) SetBeacon(beacon Beacon) {
+	p.beacon = beacon
+}
+
 // MarshalLogObject implements logging interface.
 func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("proposal_id", p.ID().String())
@@ -164,12 +174,6 @@ func ToProposalIDs(proposals []*Proposal) []ProposalID {
 		ids = append(ids, p.ID())
 	}
 	return ids
-}
-
-// SortProposals sorts a list of Proposal in their ID's lexicographic order, in-place.
-func SortProposals(proposals []*Proposal) []*Proposal {
-	sort.Slice(proposals, func(i, j int) bool { return proposals[i].ID().Compare(proposals[j].ID()) })
-	return proposals
 }
 
 // SortProposalIDs sorts a list of ProposalID in lexicographic order, in-place.

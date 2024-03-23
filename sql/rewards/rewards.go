@@ -1,11 +1,34 @@
 package rewards
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
+
+const fullQuery = `select pubkey, coinbase, layer, total_reward, layer_reward from rewards`
+
+type decoderCallback func(*types.Reward, error) bool
+
+func decoder(fn decoderCallback) sql.Decoder {
+	return func(stmt *sql.Statement) bool {
+		smID := types.NodeID{}
+		cbase := types.Address{}
+		stmt.ColumnBytes(0, smID[:])
+		stmt.ColumnBytes(1, cbase[:])
+		reward := &types.Reward{
+			SmesherID:   smID,
+			Coinbase:    cbase,
+			Layer:       types.LayerID(uint32(stmt.ColumnInt64(2))),
+			TotalReward: uint64(stmt.ColumnInt64(3)),
+			LayerReward: uint64(stmt.ColumnInt64(4)),
+		}
+		return fn(reward, nil)
+	}
+}
 
 // Add reward to the database.
 func Add(db sql.Executor, reward *types.Reward) error {
@@ -55,11 +78,11 @@ func ListByKey(db sql.Executor, coinbase *types.Address, smesherID *types.NodeID
 			stmt.BindBytes(1, smesherID[:])
 		}
 	} else {
-		return nil, fmt.Errorf("must specify coinbase and/or smesherID")
+		return nil, errors.New("must specify coinbase and/or smesherID")
 	}
 	stmt := fmt.Sprintf(
-		"select pubkey, coinbase, layer, total_reward, layer_reward from rewards where %s order by layer;",
-		whereClause)
+		"%s where %s order by layer;",
+		fullQuery, whereClause)
 	_, err = db.Exec(stmt, binder, func(stmt *sql.Statement) bool {
 		smID := types.NodeID{}
 		cbase := types.Address{}
@@ -86,4 +109,27 @@ func ListByCoinbase(db sql.Executor, coinbase types.Address) (rst []*types.Rewar
 // ListBySmesherId lists rewards from all layers for the smesher ID.
 func ListBySmesherId(db sql.Executor, smesherID types.NodeID) (rst []*types.Reward, err error) {
 	return ListByKey(db, nil, &smesherID)
+}
+
+func IterateRewardsOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(reward *types.Reward) bool,
+) error {
+	var derr error
+	_, err := db.Exec(
+		fullQuery+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		decoder(func(reward *types.Reward, err error) bool {
+			if reward != nil {
+				fn(reward)
+			}
+			derr = err
+			return derr == nil
+		}),
+	)
+	if err != nil {
+		return err
+	}
+	return derr
 }

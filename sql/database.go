@@ -4,16 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
 	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 var (
@@ -23,6 +28,8 @@ var (
 	ErrNotFound = errors.New("database: not found")
 	// ErrObjectExists is returned if database constraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
+	// ErrTooNew is returned if database version is newer than expected.
+	ErrTooNew = errors.New("database version is too new")
 )
 
 const (
@@ -63,6 +70,7 @@ func defaultConf() *conf {
 		connections:   16,
 		migrations:    migrations,
 		skipMigration: map[int]struct{}{},
+		logger:        zap.NewNop(),
 	}
 }
 
@@ -73,12 +81,21 @@ type conf struct {
 	vacuumState   int
 	migrations    []Migration
 	enableLatency bool
+	cache         bool
+	cacheSizes    map[QueryCacheKind]int
+	logger        *zap.Logger
 }
 
 // WithConnections overwrites number of pooled connections.
 func WithConnections(n int) Opt {
 	return func(c *conf) {
 		c.connections = n
+	}
+}
+
+func WithLogger(logger *zap.Logger) Opt {
+	return func(c *conf) {
+		c.logger = logger
 	}
 }
 
@@ -137,6 +154,24 @@ func WithLatencyMetering(enable bool) Opt {
 	}
 }
 
+// WithQueryCache enables in-memory caching of results of some queries.
+func WithQueryCache(enable bool) Opt {
+	return func(c *conf) {
+		c.cache = enable
+	}
+}
+
+// WithQueryCacheSizes sets query cache sizes for the specified cache kinds.
+func WithQueryCacheSizes(sizes map[QueryCacheKind]int) Opt {
+	return func(c *conf) {
+		if c.cacheSizes == nil {
+			c.cacheSizes = maps.Clone(sizes)
+		} else {
+			maps.Copy(c.cacheSizes, sizes)
+		}
+	}
+}
+
 // Opt for configuring database.
 type Opt func(c *conf)
 
@@ -168,12 +203,30 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
+	//nolint:nestif
 	if config.migrations != nil {
 		before, err := version(db)
 		if err != nil {
 			return nil, err
 		}
-		log.With().Info("running migrations", log.Int("current version", before))
+		after := 0
+		if len(config.migrations) > 0 {
+			after = config.migrations[len(config.migrations)-1].Order()
+		}
+		if before > after {
+			pool.Close()
+			config.logger.Error("database version is newer than expected - downgrade is not supported",
+				zap.String("uri", uri),
+				zap.Int("current version", before),
+				zap.Int("target version", after),
+			)
+			return nil, fmt.Errorf("%w: %d > %d", ErrTooNew, before, after)
+		}
+		config.logger.Info("running migrations",
+			zap.String("uri", uri),
+			zap.Int("current version", before),
+			zap.Int("target version", after),
+		)
 		tx, err := db.Tx(context.Background())
 		if err != nil {
 			return nil, err
@@ -210,25 +263,41 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			}
 		}
 	}
+	if config.cache {
+		config.logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
+		db.queryCache = &queryCache{cacheSizesByKind: config.cacheSizes}
+	}
+	db.queryCount.Store(0)
 	return db, nil
 }
 
 // Database is an instance of sqlite database.
 type Database struct {
+	*queryCache
 	pool *sqlitex.Pool
 
 	closed   bool
 	closeMux sync.Mutex
 
-	latency *prometheus.HistogramVec
+	latency    *prometheus.HistogramVec
+	queryCount atomic.Int64
+}
+
+func (db *Database) getConn(ctx context.Context) *sqlite.Conn {
+	start := time.Now()
+	conn := db.pool.Get(ctx)
+	if conn != nil {
+		connWaitLatency.Observe(time.Since(start).Seconds())
+	}
+	return conn
 }
 
 func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
-	conn := db.pool.Get(ctx)
+	conn := db.getConn(ctx)
 	if conn == nil {
 		return nil, ErrNoConnection
 	}
-	tx := &Tx{db: db, conn: conn}
+	tx := &Tx{queryCache: db.queryCache, db: db, conn: conn}
 	if err := tx.begin(initstmt); err != nil {
 		return nil, err
 	}
@@ -242,6 +311,7 @@ func (db *Database) withTx(ctx context.Context, initstmt string, exec func(*Tx) 
 	}
 	defer tx.Release()
 	if err := exec(tx); err != nil {
+		tx.queryCache.ClearCache()
 		return err
 	}
 	return tx.Commit()
@@ -288,7 +358,8 @@ func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) e
 // Note that Exec will block until database is closed or statement has finished.
 // If application needs to control statement execution lifetime use one of the transaction.
 func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
-	conn := db.pool.Get(context.Background())
+	db.queryCount.Add(1)
+	conn := db.getConn(context.Background())
 	if conn == nil {
 		return 0, ErrNoConnection
 	}
@@ -316,6 +387,17 @@ func (db *Database) Close() error {
 	return nil
 }
 
+// QueryCount returns the number of queries executed, including failed
+// queries, but not counting transaction start / commit / rollback.
+func (db *Database) QueryCount() int {
+	return int(db.queryCount.Load())
+}
+
+// Return database's QueryCache.
+func (db *Database) QueryCache() QueryCache {
+	return db.queryCache
+}
+
 func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
 	stmt, err := conn.Prepare(query)
 	if err != nil {
@@ -331,7 +413,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 		row, err := stmt.Step()
 		if err != nil {
 			code := sqlite.ErrCode(err)
-			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY {
+			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY || code == sqlite.SQLITE_CONSTRAINT_UNIQUE {
 				return 0, ErrObjectExists
 			}
 			return 0, fmt.Errorf("step %d: %w", rows, err)
@@ -355,6 +437,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 
 // Tx is wrapper for database transaction.
 type Tx struct {
+	*queryCache
 	db        *Database
 	conn      *sqlite.Conn
 	committed bool
@@ -394,6 +477,7 @@ func (tx *Tx) Release() error {
 
 // Exec query.
 func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	tx.db.queryCount.Add(1)
 	if tx.db.latency != nil {
 		start := time.Now()
 		defer func() {
@@ -401,4 +485,81 @@ func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) 
 		}()
 	}
 	return exec(tx.conn, query, encoder, decoder)
+}
+
+// Blob represents a binary blob data. It can be reused efficiently
+// across multiple data retrieval operations, minimizing reallocations
+// of the underlying byte slice.
+type Blob struct {
+	Bytes []byte
+}
+
+func (b *Blob) resize(n int) {
+	if cap(b.Bytes) < n {
+		b.Bytes = slices.Grow(b.Bytes, n)
+	}
+	b.Bytes = b.Bytes[:n]
+}
+
+func (b *Blob) fromColumn(stmt *Statement, col int) {
+	if l := stmt.ColumnLen(col); l != 0 {
+		b.resize(l)
+		stmt.ColumnBytes(col, b.Bytes)
+	} else {
+		b.resize(0)
+	}
+}
+
+// GetBlobSizes returns a slice containing the sizes of blobs
+// corresponding to the specified ids. For non-existent ids the
+// corresponding value is -1.
+func GetBlobSizes(db Executor, cmd string, ids [][]byte) (sizes []int, err error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	cmd += fmt.Sprintf(" (?%s)", strings.Repeat(",?", len(ids)-1))
+	sizes = make([]int, len(ids))
+	for n := range sizes {
+		sizes[n] = -1
+	}
+	m := make(map[string]int)
+	for n, id := range ids {
+		m[string(id)] = n
+	}
+	id := make([]byte, len(ids[0]))
+	if _, err := db.Exec(cmd,
+		func(stmt *Statement) {
+			for n, id := range ids {
+				stmt.BindBytes(n+1, id)
+			}
+		}, func(stmt *Statement) bool {
+			stmt.ColumnBytes(0, id[:])
+			n, found := m[string(id)]
+			if !found {
+				panic("BUG: bad ID retrieved from DB")
+			}
+			sizes[n] = stmt.ColumnInt(1)
+			return true
+		}); err != nil {
+		return nil, fmt.Errorf("get blob sizes: %w", err)
+	}
+
+	return sizes, nil
+}
+
+// LoadBlob loads an encoded blob.
+func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
+	if rows, err := db.Exec(cmd,
+		func(stmt *Statement) {
+			stmt.BindBytes(1, id)
+		}, func(stmt *Statement) bool {
+			blob.fromColumn(stmt, 0)
+			return true
+		}); err != nil {
+		return fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
+	} else if rows == 0 {
+		return fmt.Errorf("%w: object %s", ErrNotFound, util.Encode(id))
+	}
+	return nil
 }

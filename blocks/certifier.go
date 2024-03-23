@@ -12,8 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -81,7 +80,7 @@ type Certifier struct {
 	stop    func()
 	stopped atomic.Bool
 
-	db         *datastore.CachedDB
+	db         *sql.Database
 	oracle     eligibility.Rolacle
 	signers    map[types.NodeID]*signing.EdSigner
 	edVerifier *signing.EdVerifier
@@ -99,7 +98,7 @@ type Certifier struct {
 
 // NewCertifier creates new block certifier.
 func NewCertifier(
-	db *datastore.CachedDB,
+	db *sql.Database,
 	o eligibility.Rolacle,
 
 	v *signing.EdVerifier,
@@ -131,16 +130,16 @@ func NewCertifier(
 	return c
 }
 
-func (c *Certifier) Register(s *signing.EdSigner) {
+func (c *Certifier) Register(sig *signing.EdSigner) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if _, exists := c.signers[s.NodeID()]; exists {
-		c.logger.With().Error("signing key already registered", log.ShortStringer("id", s.NodeID()))
+	if _, exists := c.signers[sig.NodeID()]; exists {
+		c.logger.With().Error("signing key already registered", log.ShortStringer("id", sig.NodeID()))
 		return
 	}
 
-	c.logger.With().Info("registered signing key", log.ShortStringer("id", s.NodeID()))
-	c.signers[s.NodeID()] = s
+	c.logger.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+	c.signers[sig.NodeID()] = sig
 }
 
 // Start starts the background goroutine for periodic pruning.
@@ -465,7 +464,7 @@ func (c *Certifier) tryGenCert(
 		return nil
 	}
 
-	logger.With().Info("generating certificate",
+	logger.With().Debug("generating certificate",
 		log.Uint16("eligibility_count", c.certifyMsgs[lid][bid].totalEligibility),
 		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)),
 	)
@@ -527,7 +526,6 @@ func (c *Certifier) checkAndSave(
 		return errMultipleCerts
 	}
 	c.addCertCount(lid.GetEpoch())
-	c.tortoise.OnHareOutput(lid, cert.BlockID)
 	return nil
 }
 

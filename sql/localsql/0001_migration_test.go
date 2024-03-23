@@ -2,6 +2,7 @@ package localsql
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +14,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+func saveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
+	if err := save(filepath.Join(dir, challengeFilename), ch); err != nil {
+		return fmt.Errorf("saving nipost challenge: %w", err)
+	}
+	return nil
+}
+
+func savePost(dir string, post *types.Post) error {
+	if err := save(filepath.Join(dir, postFilename), post); err != nil {
+		return fmt.Errorf("saving post: %w", err)
+	}
+	return nil
+}
 
 func Test_0001Migration_CompatibleSQL(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "test1.db")

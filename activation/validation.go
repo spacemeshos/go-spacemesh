@@ -11,10 +11,13 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type ErrAtxNotFound struct {
@@ -36,8 +39,21 @@ func (e *ErrAtxNotFound) Is(target error) bool {
 	return false
 }
 
+type validatorOptions struct {
+	postSubsetSeed []byte
+}
+
+// PostSubset configures the validator to validate only a subset of the POST indices.
+// The `seed` is used to randomize the selection of indices.
+func PostSubset(seed []byte) validatorOption {
+	return func(o *validatorOptions) {
+		o.postSubsetSeed = seed
+	}
+}
+
 // Validator contains the dependencies required to validate NIPosts.
 type Validator struct {
+	db           sql.Executor
 	poetDb       poetDbAPI
 	cfg          PostConfig
 	scrypt       config.ScryptParams
@@ -45,8 +61,14 @@ type Validator struct {
 }
 
 // NewValidator returns a new NIPost validator.
-func NewValidator(poetDb poetDbAPI, cfg PostConfig, scrypt config.ScryptParams, postVerifier PostVerifier) *Validator {
-	return &Validator{poetDb, cfg, scrypt, postVerifier}
+func NewValidator(
+	db sql.Executor,
+	poetDb poetDbAPI,
+	cfg PostConfig,
+	scrypt config.ScryptParams,
+	postVerifier PostVerifier,
+) *Validator {
+	return &Validator{db, poetDb, cfg, scrypt, postVerifier}
 }
 
 // NIPost validates a NIPost, given a node id and expected challenge. It returns an error if the NIPost is invalid.
@@ -61,6 +83,7 @@ func (v *Validator) NIPost(
 	nipost *types.NIPost,
 	expectedChallenge types.Hash32,
 	numUnits uint32,
+	opts ...validatorOption,
 ) (uint64, error) {
 	if err := v.NumUnits(&v.cfg, numUnits); err != nil {
 		return 0, err
@@ -70,7 +93,7 @@ func (v *Validator) NIPost(
 		return 0, err
 	}
 
-	if err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits); err != nil {
+	if err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
 		return 0, fmt.Errorf("invalid Post: %w", err)
 	}
 
@@ -109,13 +132,17 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 			hexNodes = append(hexNodes, n.Hex())
 		}
 		return fmt.Errorf(
-			"invalid merkle proof, calculated root does not match the proof root, leaf: %v, nodes: %v, expected root: %v",
+			"invalid merkle proof, calculated root does not match proof root, leaf: %v, nodes: %v, expected root: %v",
 			util.Encode(leaf),
 			hexNodes,
 			util.Encode(expectedRoot),
 		)
 	}
 	return nil
+}
+
+func (v *Validator) IsVerifyingFullPost() bool {
+	return v.cfg.K3 >= v.cfg.K2
 }
 
 // Post validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
@@ -127,6 +154,7 @@ func (v *Validator) Post(
 	PoST *types.Post,
 	PostMetadata *types.PostMetadata,
 	numUnits uint32,
+	opts ...validatorOption,
 ) error {
 	p := (*shared.Proof)(PoST)
 
@@ -138,8 +166,17 @@ func (v *Validator) Post(
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
+	options := &validatorOptions{}
+	for _, opt := range opts {
+		opt(options)
+	}
+	verifyOpts := []verifying.OptionFunc{verifying.WithLabelScryptParams(v.scrypt)}
+	if options.postSubsetSeed != nil {
+		verifyOpts = append(verifyOpts, verifying.Subset(v.cfg.K3, options.postSubsetSeed))
+	}
+
 	start := time.Now()
-	if err := v.postVerifier.Verify(ctx, p, m, verifying.WithLabelScryptParams(v.scrypt)); err != nil {
+	if err := v.postVerifier.Verify(ctx, p, m, verifyOpts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())
@@ -186,7 +223,8 @@ func (v *Validator) VRFNonce(
 		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
 	}
 
-	if err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta, verifying.WithLabelScryptParams(v.scrypt)); err != nil {
+	err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta, verifying.WithLabelScryptParams(v.scrypt))
+	if err != nil {
 		return fmt.Errorf("verify VRF nonce: %w", err)
 	}
 	return nil
@@ -238,7 +276,7 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 	}
 
 	if prevATX.Sequence+1 != challenge.Sequence {
-		return fmt.Errorf("sequence number is not one more than prev sequence number")
+		return errors.New("sequence number is not one more than prev sequence number")
 	}
 	return nil
 }
@@ -261,6 +299,165 @@ func (v *Validator) PositioningAtx(
 	}
 	if posAtx.PublishEpoch >= pubepoch {
 		return fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)
+	}
+	return nil
+}
+
+type verifyChainOpts struct {
+	assumedValidTime time.Time
+	trustedNodeID    types.NodeID
+	logger           *zap.Logger
+}
+
+type verifyChainOptsNs struct{}
+
+var VerifyChainOpts verifyChainOptsNs
+
+type VerifyChainOption func(*verifyChainOpts)
+
+// AssumeValidBefore configures the validator to assume that ATXs received before the given time are valid.
+func (verifyChainOptsNs) AssumeValidBefore(val time.Time) VerifyChainOption {
+	return func(o *verifyChainOpts) {
+		o.assumedValidTime = val
+	}
+}
+
+// WithTrustedID configures the validator to assume that ATXs created by the given node ID are valid.
+func (verifyChainOptsNs) WithTrustedID(val types.NodeID) VerifyChainOption {
+	return func(o *verifyChainOpts) {
+		o.trustedNodeID = val
+	}
+}
+
+func (verifyChainOptsNs) WithLogger(log *zap.Logger) VerifyChainOption {
+	return func(o *verifyChainOpts) {
+		o.logger = log
+	}
+}
+
+type InvalidChainError struct {
+	ID  types.ATXID
+	src error
+}
+
+func (e *InvalidChainError) Error() string {
+	msg := fmt.Sprintf("invalid POST found in ATX chain for ID %v", e.ID.String())
+	if e.src != nil {
+		msg = fmt.Sprintf("%s: %v", msg, e.src)
+	}
+	return msg
+}
+
+func (e *InvalidChainError) Unwrap() error { return e.src }
+
+func (e *InvalidChainError) Is(target error) bool {
+	if err, ok := target.(*InvalidChainError); ok {
+		return err.ID == e.ID
+	}
+	return false
+}
+
+func (v *Validator) VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error {
+	options := verifyChainOpts{
+		logger: zap.NewNop(),
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	options.logger.Info("verifying ATX chain", zap.Stringer("atx_id", id))
+	return v.verifyChainWithOpts(ctx, id, goldenATXID, options)
+}
+
+func (v *Validator) verifyChainWithOpts(
+	ctx context.Context,
+	id, goldenATXID types.ATXID,
+	opts verifyChainOpts,
+) error {
+	log := opts.logger
+	atx, err := atxs.Get(v.db, id)
+	if err != nil {
+		return fmt.Errorf("get atx: %w", err)
+	}
+
+	switch {
+	case atx.Validity() == types.Valid:
+		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "already verified"))
+		return nil
+	case atx.Validity() == types.Invalid:
+		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "invalid"))
+		return &InvalidChainError{ID: id}
+	case atx.Received().Before(opts.assumedValidTime):
+		log.Debug(
+			"not verifying ATX chain",
+			zap.Stringer("atx_id", id),
+			zap.String("reason", "assumed valid"),
+			zap.Time("received", atx.Received()),
+			zap.Time("valid_before", opts.assumedValidTime),
+		)
+		return nil
+	case atx.SmesherID == opts.trustedNodeID:
+		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "trusted"))
+		return nil
+	}
+
+	// validate POST fully
+	commitmentAtxId := atx.CommitmentATX
+	if commitmentAtxId == nil {
+		if atxId, err := atxs.CommitmentATX(v.db, atx.SmesherID); err != nil {
+			return fmt.Errorf("getting commitment atx: %w", err)
+		} else {
+			commitmentAtxId = &atxId
+		}
+	}
+	if err := v.Post(
+		ctx,
+		atx.SmesherID,
+		*commitmentAtxId,
+		atx.NIPost.Post,
+		atx.NIPost.PostMetadata,
+		atx.NumUnits,
+	); err != nil {
+		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {
+			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))
+		}
+		return &InvalidChainError{ID: id, src: err}
+	}
+
+	err = v.verifyChainDeps(ctx, atx.ActivationTx, goldenATXID, opts)
+	invalidChain := &InvalidChainError{}
+	switch {
+	case err == nil:
+		if err := atxs.SetValidity(v.db, id, types.Valid); err != nil {
+			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))
+		}
+	case errors.As(err, &invalidChain):
+		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {
+			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))
+		}
+	}
+	return err
+}
+
+func (v *Validator) verifyChainDeps(
+	ctx context.Context,
+	atx *types.ActivationTx,
+	goldenATXID types.ATXID,
+	opts verifyChainOpts,
+) error {
+	if atx.PrevATXID != types.EmptyATXID {
+		if err := v.verifyChainWithOpts(ctx, atx.PrevATXID, goldenATXID, opts); err != nil {
+			return fmt.Errorf("validating previous ATX %s chain: %w", atx.PrevATXID.ShortString(), err)
+		}
+	}
+	if atx.PositioningATX != goldenATXID {
+		if err := v.verifyChainWithOpts(ctx, atx.PositioningATX, goldenATXID, opts); err != nil {
+			return fmt.Errorf("validating positioning ATX %s chain: %w", atx.PositioningATX.ShortString(), err)
+		}
+	}
+	if atx.CommitmentATX != nil && *atx.CommitmentATX != goldenATXID {
+		if err := v.verifyChainWithOpts(ctx, *atx.CommitmentATX, goldenATXID, opts); err != nil {
+			return fmt.Errorf("validating commitment ATX %s chain: %w", atx.CommitmentATX.ShortString(), err)
+		}
 	}
 	return nil
 }

@@ -13,7 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/syncer/atxsync/mocks"
+	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 func atx(id types.ATXID) *types.VerifiedActivationTx {
@@ -104,16 +105,16 @@ func TestDownload(t *testing.T) {
 			logger := logtest.New(t)
 			db := sql.InMemory()
 			ctrl := gomock.NewController(t)
-			fetcher := mocks.NewMockatxFetcher(ctrl)
+			fetcher := mocks.NewMockAtxFetcher(ctrl)
 			for _, atx := range tc.existing {
 				require.NoError(t, atxs.Add(db, atx))
 			}
 			for i := range tc.fetched {
 				req := tc.fetched[i]
 				fetcher.EXPECT().
-					GetAtxs(tc.ctx, req.request).
+					GetAtxs(tc.ctx, req.request, gomock.Any()).
 					Times(1).
-					DoAndReturn(func(_ context.Context, _ []types.ATXID) error {
+					DoAndReturn(func(_ context.Context, _ []types.ATXID, _ ...system.GetAtxOpt) error {
 						for _, atx := range req.result {
 							require.NoError(t, atxs.Add(db, atx))
 						}

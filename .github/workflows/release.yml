@@ -22,8 +22,7 @@ jobs:
             outname_sufix: "linux-arm64"
           - os: macos-12-large
             outname_sufix: "mac-amd64"
-          - os: macos-13-xlarge
-
+          - os: [go-spacemesh, m2-pro]
             outname_sufix: "mac-arm64"
           - os: windows-latest
             outname_sufix: "win-amd64"
@@ -59,6 +58,10 @@ jobs:
         run: |
           make install
           make build VERSION=${{ github.ref_name }}
+      - name: Build merge-nodes
+        shell: bash
+        run: |
+          make merge-nodes VERSION=${{ github.ref_name }}
 
       - name: Create release archive
         shell: bash
@@ -77,6 +80,8 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: "450.0.0"
 
       - name: Upload zip
         uses: google-github-actions/upload-cloud-storage@v2
@@ -85,7 +90,7 @@ jobs:
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
 
       - name: Install coreutils
-        if: ${{ matrix.os == 'macos-12-large' || matrix.os == 'macos-13-xlarge' }}
+        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[go-spacemesh, m2-pro]' }}
         run: brew install coreutils
 
       - name: Calculate the hashsum of the zip file
@@ -141,6 +146,8 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: "450.0.0"
 
       - name: Upload sha256sums
         uses: google-github-actions/upload-cloud-storage@v2
@@ -149,7 +156,7 @@ jobs:
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         id: create_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

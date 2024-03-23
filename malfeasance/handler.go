@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
+
+	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -27,36 +31,39 @@ var (
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {
-	logger     log.Log
-	cdb        *datastore.CachedDB
-	self       p2p.Peer
-	nodeID     types.NodeID
-	edVerifier SigVerifier
-	tortoise   tortoise
+	logger       log.Log
+	cdb          *datastore.CachedDB
+	self         p2p.Peer
+	nodeIDs      []types.NodeID
+	edVerifier   SigVerifier
+	tortoise     tortoise
+	postVerifier postVerifier
 }
 
 func NewHandler(
 	cdb *datastore.CachedDB,
 	lg log.Log,
 	self p2p.Peer,
-	nodeID types.NodeID,
+	nodeID []types.NodeID,
 	edVerifier SigVerifier,
 	tortoise tortoise,
+	postVerifier postVerifier,
 ) *Handler {
 	return &Handler{
-		logger:     lg,
-		cdb:        cdb,
-		self:       self,
-		nodeID:     nodeID,
-		edVerifier: edVerifier,
-		tortoise:   tortoise,
+		logger:       lg,
+		cdb:          cdb,
+		self:         self,
+		nodeIDs:      nodeID,
+		edVerifier:   edVerifier,
+		tortoise:     tortoise,
+		postVerifier: postVerifier,
 	}
 }
 
 func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *types.MalfeasanceProof) {
 	h.tortoise.OnMalfeasance(smesher)
 	events.ReportMalfeasance(smesher, mp)
-	if h.nodeID == smesher {
+	if slices.Contains(h.nodeIDs, smesher) {
 		events.EmitOwnMalfeasanceProof(smesher, mp)
 	}
 }
@@ -95,7 +102,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		return errMalformedData
 	}
 	if peer == h.self {
-		id, err := Validate(ctx, h.logger, h.cdb, h.edVerifier, &p)
+		id, err := Validate(ctx, h.logger, h.cdb, h.edVerifier, h.postVerifier, &p)
 		if err != nil {
 			return err
 		}
@@ -116,7 +123,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *types.MalfeasanceGossi
 			pubsub.ErrValidationReject,
 		)
 	}
-	nodeID, err := Validate(ctx, h.logger, h.cdb, h.edVerifier, p)
+	nodeID, err := Validate(ctx, h.logger, h.cdb, h.edVerifier, h.postVerifier, p)
 	if err != nil {
 		return types.EmptyNodeID, err
 	}
@@ -161,6 +168,7 @@ func Validate(
 	logger log.Log,
 	cdb *datastore.CachedDB,
 	edVerifier SigVerifier,
+	postVerifier postVerifier,
 	p *types.MalfeasanceGossip,
 ) (types.NodeID, error) {
 	var (
@@ -174,6 +182,9 @@ func Validate(
 		nodeID, err = validateMultipleATXs(ctx, logger, cdb, edVerifier, &p.MalfeasanceProof)
 	case types.MultipleBallots:
 		nodeID, err = validateMultipleBallots(ctx, logger, cdb, edVerifier, &p.MalfeasanceProof)
+	case types.InvalidPostIndex:
+		proof := p.MalfeasanceProof.Proof.Data.(*types.InvalidPostIndexProof) // guaranteed to work by scale func
+		nodeID, err = validateInvalidPostIndex(ctx, logger, cdb, edVerifier, postVerifier, proof)
 	default:
 		return nodeID, errors.New("unknown malfeasance type")
 	}
@@ -198,6 +209,8 @@ func updateMetrics(tp types.Proof) {
 		numProofsATX.Inc()
 	case types.MultipleBallots:
 		numProofsBallot.Inc()
+	case types.InvalidPostIndex:
+		numProofsPostIndex.Inc()
 	}
 }
 
@@ -362,4 +375,43 @@ func validateMultipleBallots(
 	)
 	numInvalidProofsBallot.Inc()
 	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
+}
+
+func validateInvalidPostIndex(ctx context.Context,
+	logger log.Log,
+	db sql.Executor,
+	edVerifier SigVerifier,
+	postVerifier postVerifier,
+	proof *types.InvalidPostIndexProof,
+) (types.NodeID, error) {
+	atx := &proof.Atx
+	if !edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+		return types.EmptyNodeID, errors.New("invalid signature")
+	}
+	commitmentAtx := atx.CommitmentATX
+	if commitmentAtx == nil {
+		atx, err := atxs.CommitmentATX(db, atx.SmesherID)
+		if err != nil {
+			return types.EmptyNodeID, fmt.Errorf("getting commitment ATX: %w", err)
+		}
+		commitmentAtx = &atx
+	}
+	post := (*shared.Proof)(atx.NIPost.Post)
+	meta := &shared.ProofMetadata{
+		NodeId:          atx.SmesherID.Bytes(),
+		CommitmentAtxId: commitmentAtx.Bytes(),
+		NumUnits:        atx.NumUnits,
+		Challenge:       atx.NIPost.PostMetadata.Challenge,
+		LabelsPerUnit:   atx.NIPost.PostMetadata.LabelsPerUnit,
+	}
+	if err := postVerifier.Verify(
+		ctx,
+		post,
+		meta,
+		verifying.SelectedIndex(int(proof.InvalidIdx)),
+	); err != nil {
+		return atx.SmesherID, nil
+	}
+	numInvalidProofsPostIndex.Inc()
+	return types.EmptyNodeID, errors.New("invalid post index malfeasance proof - POST is valid")
 }

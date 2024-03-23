@@ -11,20 +11,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-func Warm(db *sql.Database, opts ...Opt) (*Data, error) {
-	cache := New(opts...)
+func Warm(db *sql.Database, keep types.EpochID) (*Data, error) {
+	cache := New()
 	tx, err := db.Tx(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Release()
-	if err := Warmup(tx, cache); err != nil {
+	if err := Warmup(tx, cache, keep); err != nil {
 		return nil, fmt.Errorf("warmup %w", err)
 	}
 	return cache, nil
 }
 
-func Warmup(db sql.Executor, cache *Data) error {
+func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 	latest, err := atxs.LatestEpoch(db)
 	if err != nil {
 		return err
@@ -33,32 +33,47 @@ func Warmup(db sql.Executor, cache *Data) error {
 	if err != nil {
 		return err
 	}
-	cache.OnEpoch(applied.GetEpoch())
+	var evict types.EpochID
+	if applied.GetEpoch() > keep {
+		evict = applied.GetEpoch() - keep - 1
+	}
+	cache.EvictEpoch(evict)
 
 	var ierr error
-	if err := atxs.IterateAtxs(db, cache.Evicted(), latest, func(vatx *types.VerifiedActivationTx) bool {
-		nonce, err := atxs.VRFNonce(db, vatx.SmesherID, vatx.TargetEpoch())
-		if err != nil {
-			ierr = fmt.Errorf("missing nonce %w", err)
-			return false
-		}
-		malicious, err := identities.IsMalicious(db, vatx.SmesherID)
-		if err != nil {
-			ierr = err
-			return false
-		}
-		cache.Add(
-			vatx.TargetEpoch(),
-			vatx.SmesherID,
-			vatx.ID(),
-			vatx.GetWeight(),
-			vatx.BaseTickHeight(),
-			vatx.TickHeight(),
-			nonce,
-			malicious,
-		)
-		return true
-	}); err != nil {
+	if err := atxs.IterateAtxsData(db, cache.Evicted(), latest,
+		func(
+			id types.ATXID,
+			node types.NodeID,
+			epoch types.EpochID,
+			coinbase types.Address,
+			weight,
+			base,
+			height uint64,
+		) bool {
+			target := epoch + 1
+			nonce, err := atxs.VRFNonce(db, node, target)
+			if err != nil {
+				ierr = fmt.Errorf("missing nonce %w", err)
+				return false
+			}
+			malicious, err := identities.IsMalicious(db, node)
+			if err != nil {
+				ierr = err
+				return false
+			}
+			cache.Add(
+				target,
+				node,
+				coinbase,
+				id,
+				weight,
+				base,
+				height,
+				nonce,
+				malicious,
+			)
+			return true
+		}); err != nil {
 		return err
 	}
 	return ierr

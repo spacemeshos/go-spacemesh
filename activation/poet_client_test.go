@@ -98,7 +98,6 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 	poETServers := []string{
 		"https://mainnet-poet-0.spacemesh.network",
 		"https://mainnet-poet-1.spacemesh.network",
-		"https://mainnet-poet-2.spacemesh.network",
 		"https://poet-110.spacemesh.network",
 		"https://poet-111.spacemesh.network",
 	}
@@ -160,5 +159,5 @@ func Test_HTTPPoetClient_PoetServiceID(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	require.Equal(t, key.Bytes(), client.PoetServiceID(context.Background()).ServiceID)
+	require.Equal(t, key.Bytes(), client.PoetServiceID(context.Background()))
 }

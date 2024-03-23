@@ -65,7 +65,9 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer,
 	err := th.VerifyAndCacheTx(ctx, msg)
 	updateMetrics(err, gossipTxCount)
 	if err != nil {
-		th.logger.WithContext(ctx).With().Warning("failed to handle tx", log.Err(err))
+		if !errors.Is(err, errDuplicateTX) {
+			th.logger.WithContext(ctx).With().Warning("failed to handle tx", log.Err(err))
+		}
 		return err
 	}
 	return nil

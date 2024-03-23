@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
-	"github.com/spacemeshos/go-spacemesh/sql/proposals"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -69,9 +68,7 @@ func Run(ctx context.Context, p *Pruner, clock *timesync.NodeClock, interval tim
 func (p *Pruner) Prune(current types.LayerID) error {
 	oldest := current - types.LayerID(p.safeDist)
 	start := time.Now()
-	if err := proposals.DeleteBefore(p.db, oldest); err != nil {
-		return err
-	}
+
 	proposalLatency.Observe(time.Since(start).Seconds())
 	start = time.Now()
 	if err := certificates.DeleteCertBefore(p.db, oldest); err != nil {
