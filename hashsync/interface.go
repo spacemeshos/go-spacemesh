@@ -9,5 +9,5 @@ import (
 
 type requester interface {
 	Run(context.Context) error
-	InteractiveRequest(context.Context, p2p.Peer, []byte, server.InteractiveHandler, func(error)) error
+	StreamRequest(context.Context, p2p.Peer, []byte, server.StreamRequestCallback, ...string) error
 }

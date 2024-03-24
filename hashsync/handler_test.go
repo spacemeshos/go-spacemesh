@@ -1,10 +1,11 @@
 package hashsync
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"slices"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,67 +19,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-type fakeMessage struct {
-	data  []byte
-	error string
-}
-
-type fakeInteractor struct {
-	fr     *fakeRequester
-	ctx    context.Context
-	sendCh chan fakeMessage
-	recvCh chan fakeMessage
-}
-
-func (i *fakeInteractor) Send(data []byte) error {
-	// fmt.Fprintf(os.Stderr, "%p: send %q\n", i, data)
-	select {
-	case i.sendCh <- fakeMessage{data: data}:
-		atomic.AddUint32(&i.fr.bytesSent, uint32(len(data)))
-		return nil
-	case <-i.ctx.Done():
-		return i.ctx.Err()
-	}
-}
-
-func (i *fakeInteractor) SendError(err error) error {
-	// fmt.Fprintf(os.Stderr, "%p: send error %q\n", i, err)
-	select {
-	case i.sendCh <- fakeMessage{error: err.Error()}:
-		atomic.AddUint32(&i.fr.bytesSent, uint32(len(err.Error())))
-		return nil
-	case <-i.ctx.Done():
-		return i.ctx.Err()
-	}
-}
-
-func (i *fakeInteractor) Receive() ([]byte, error) {
-	// fmt.Fprintf(os.Stderr, "%p: receive\n", i)
-	var m fakeMessage
-	select {
-	case m = <-i.recvCh:
-	case <-i.ctx.Done():
-		return nil, i.ctx.Err()
-	}
-	// fmt.Fprintf(os.Stderr, "%p: received %#v\n", i, m)
-	if m.error != "" {
-		atomic.AddUint32(&i.fr.bytesReceived, uint32(len(m.error)))
-		return nil, fmt.Errorf("%w: %s", server.RemoteError, m.error)
-	}
-	atomic.AddUint32(&i.fr.bytesReceived, uint32(len(m.data)))
-	return m.data, nil
-}
-
 type incomingRequest struct {
-	sendCh chan fakeMessage
-	recvCh chan fakeMessage
+	initialRequest []byte
+	stream         io.ReadWriter
 }
-
-var _ server.Interactor = &fakeInteractor{}
 
 type fakeRequester struct {
 	id            p2p.Peer
-	handler       server.ServerHandler
+	handler       server.StreamHandler
 	peers         map[p2p.Peer]*fakeRequester
 	reqCh         chan incomingRequest
 	bytesSent     uint32
@@ -87,7 +35,7 @@ type fakeRequester struct {
 
 var _ requester = &fakeRequester{}
 
-func newFakeRequester(id p2p.Peer, handler server.ServerHandler, peers ...requester) *fakeRequester {
+func newFakeRequester(id p2p.Peer, handler server.StreamHandler, peers ...requester) *fakeRequester {
 	fr := &fakeRequester{
 		id:      id,
 		handler: handler,
@@ -112,13 +60,9 @@ func (fr *fakeRequester) Run(ctx context.Context) error {
 			return nil
 		case req = <-fr.reqCh:
 		}
-		i := &fakeInteractor{
-			fr:     fr,
-			ctx:    ctx,
-			sendCh: req.sendCh,
-			recvCh: req.recvCh,
+		if err := fr.handler(ctx, req.initialRequest, req.stream); err != nil {
+			panic("handler error: " + err.Error())
 		}
-		fr.handler.Handle(ctx, i)
 	}
 }
 
@@ -126,45 +70,41 @@ func (fr *fakeRequester) request(
 	ctx context.Context,
 	pid p2p.Peer,
 	initialRequest []byte,
-	handler server.InteractiveHandler,
+	callback server.StreamRequestCallback,
 ) error {
 	p, found := fr.peers[pid]
 	if !found {
 		return fmt.Errorf("bad peer %q", pid)
 	}
-	i := &fakeInteractor{
-		fr:     fr,
-		ctx:    ctx,
-		sendCh: make(chan fakeMessage, 1),
-		recvCh: make(chan fakeMessage),
+	r, w := io.Pipe()
+	defer r.Close()
+	defer w.Close()
+	stream := struct {
+		io.Reader
+		io.Writer
+	}{
+		Reader: r,
+		Writer: w,
 	}
-	i.sendCh <- fakeMessage{data: initialRequest}
 	select {
 	case p.reqCh <- incomingRequest{
-		sendCh: i.recvCh,
-		recvCh: i.sendCh,
+		initialRequest: initialRequest,
+		stream:         stream,
 	}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	_, err := handler(ctx, i)
-	return err
+	return callback(ctx, stream)
 }
 
-func (fr *fakeRequester) InteractiveRequest(
+func (fr *fakeRequester) StreamRequest(
 	ctx context.Context,
 	pid p2p.Peer,
 	initialRequest []byte,
-	handler server.InteractiveHandler,
-	failure func(error),
+	callback server.StreamRequestCallback,
+	extraProtocols ...string,
 ) error {
-	go func() {
-		err := fr.request(ctx, pid, initialRequest, handler)
-		if err != nil {
-			failure(err)
-		}
-	}()
-	return nil
+	return fr.request(ctx, pid, initialRequest, callback)
 }
 
 type sliceIterator struct {
@@ -235,18 +175,14 @@ type fakeRound struct {
 }
 
 func (r *fakeRound) handleMessages(t *testing.T, c Conduit) error {
-	// fmt.Fprintf(os.Stderr, "fakeRound %q: handleMessages\n", r.name)
 	var msgs []SyncMessage
 	for {
 		msg, err := c.NextMessage()
 		if err != nil {
-			// fmt.Fprintf(os.Stderr, "fakeRound %q: error getting message: %v\n", r.name, err)
 			return fmt.Errorf("NextMessage(): %w", err)
 		} else if msg == nil {
-			// fmt.Fprintf(os.Stderr, "fakeRound %q: consumed all messages\n", r.name)
 			break
 		}
-		// fmt.Fprintf(os.Stderr, "fakeRound %q: got message %#v\n", r.name, msg)
 		msgs = append(msgs, msg)
 		if msg.Type() == MessageTypeDone || msg.Type() == MessageTypeEndRound {
 			break
@@ -268,25 +204,35 @@ func (r *fakeRound) handleConversation(t *testing.T, c *wireConduit) error {
 	return nil
 }
 
-func makeTestHandler(t *testing.T, c *wireConduit, newValue NewValueFunc, done chan struct{}, rounds []fakeRound) server.InteractiveHandler {
-	return func(ctx context.Context, i server.Interactor) (time.Duration, error) {
-		defer func() {
-			if done != nil {
-				close(done)
-			}
-		}()
+func makeTestStreamHandler(t *testing.T, c *wireConduit, newValue NewValueFunc, rounds []fakeRound) server.StreamHandler {
+	cbk := makeTestRequestCallback(t, c, newValue, rounds)
+	return func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
+		t.Logf("init request bytes: %d", len(initialRequest))
+		s := struct {
+			io.Reader
+			io.Writer
+		}{
+			// prepend the received request to data being read
+			Reader: io.MultiReader(bytes.NewBuffer(initialRequest), stream),
+			Writer: stream,
+		}
+		return cbk(ctx, s)
+	}
+}
+
+func makeTestRequestCallback(t *testing.T, c *wireConduit, newValue NewValueFunc, rounds []fakeRound) server.StreamRequestCallback {
+	return func(ctx context.Context, stream io.ReadWriter) error {
 		if c == nil {
-			c = &wireConduit{i: i, newValue: newValue}
+			c = &wireConduit{stream: stream, newValue: newValue}
 		} else {
-			c.i = i
+			c.stream = stream
 		}
 		for _, round := range rounds {
 			if err := round.handleConversation(t, c); err != nil {
-				done = nil
-				return 0, err
+				return err
 			}
 		}
-		return 0, nil
+		return nil
 	}
 }
 
@@ -296,7 +242,7 @@ func TestWireConduit(t *testing.T) {
 		hs[n] = types.RandomHash()
 	}
 	fp := types.Hash12(hs[2][:12])
-	srvHandler := makeTestHandler(t, nil, func() any { return new(fakeValue) }, nil, []fakeRound{
+	srvHandler := makeTestStreamHandler(t, nil, func() any { return new(fakeValue) }, []fakeRound{
 		{
 			name: "server got 1st request",
 			expectMsgs: []SyncMessage{
@@ -369,8 +315,7 @@ func TestWireConduit(t *testing.T) {
 		return c.SendEndRound()
 	})
 	require.NoError(t, err)
-	done := make(chan struct{})
-	clientHandler := makeTestHandler(t, &c, c.newValue, done, []fakeRound{
+	clientCbk := makeTestRequestCallback(t, &c, c.newValue, []fakeRound{
 		{
 			name: "client got 1st response",
 			expectMsgs: []SyncMessage{
@@ -410,15 +355,11 @@ func TestWireConduit(t *testing.T) {
 			},
 		},
 	})
-	err = client.InteractiveRequest(context.Background(), "srv", initReq, clientHandler, func(err error) {
-		t.Errorf("fail handler called: %v", err)
-		close(done)
-	})
+	err = client.StreamRequest(context.Background(), "srv", initReq, clientCbk)
 	require.NoError(t, err)
-	<-done
 }
 
-type getRequesterFunc func(name string, handler server.InteractiveHandler, peers ...requester) (requester, p2p.Peer)
+type getRequesterFunc func(name string, handler server.StreamHandler, peers ...requester) (requester, p2p.Peer)
 
 func withClientServer(
 	storeA, storeB ItemStore,
@@ -443,7 +384,7 @@ func withClientServer(
 }
 
 func fakeRequesterGetter(t *testing.T) getRequesterFunc {
-	return func(name string, handler server.InteractiveHandler, peers ...requester) (requester, p2p.Peer) {
+	return func(name string, handler server.StreamHandler, peers ...requester) (requester, p2p.Peer) {
 		pid := p2p.Peer(name)
 		return newFakeRequester(pid, handler, peers...), pid
 	}
@@ -457,7 +398,7 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 		server.WithTimeout(10 * time.Second),
 		server.WithLog(logtest.New(t)),
 	}
-	return func(name string, handler server.InteractiveHandler, peers ...requester) (requester, p2p.Peer) {
+	return func(name string, handler server.StreamHandler, peers ...requester) (requester, p2p.Peer) {
 		if len(peers) == 0 {
 			return server.New(mesh.Hosts()[0], proto, handler, opts...), mesh.Hosts()[0].ID()
 		}

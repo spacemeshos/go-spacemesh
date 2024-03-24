@@ -80,11 +80,10 @@ type NewValueFunc func() any
 
 // Conduit handles receiving and sending peer messages
 type Conduit interface {
-	// NextMessage returns the next SyncMessage, or nil if there
-	// are no more SyncMessages. NextMessage is only called after
-	// a NextItem call indicates that there are no more items.
-	// NextMessage will not be called after any of Send...()
-	// methods is invoked
+	// NextMessage returns the next SyncMessage, or nil if there are no more
+	// SyncMessages for this session. NextMessage is only called after a NextItem call
+	// indicates that there are no more items. NextMessage should not be called after
+	// any of Send...() methods is invoked
 	NextMessage() (SyncMessage, error)
 	// SendFingerprint sends range fingerprint to the peer.
 	// Count must be > 0
