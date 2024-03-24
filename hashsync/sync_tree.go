@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 )
 
 type Ordered interface {
@@ -32,6 +33,14 @@ func (fpred FingerprintPredicate) Match(y any) bool {
 }
 
 type SyncTree interface {
+	// Make a copy of the tree. The copy shares the structure with
+	// this tree but all its nodes are copy-on-write, so any
+	// changes in the copied tree do not affect this one and are
+	// safe to perform in another goroutine. The copy operation is
+	// O(n) where n is the number of nodes added to this tree
+	// since its creation via either NewSyncTree function or this
+	// Copy method, or the last call of this Copy method for this
+	// tree, whichever occurs last. The call to Copy is thread-safe.
 	Copy() SyncTree
 	Fingerprint() any
 	Add(k Ordered)
@@ -302,6 +311,7 @@ func (sn *syncTreeNode) cleanCloned() {
 }
 
 type syncTree struct {
+	rootMtx      sync.Mutex
 	m            Monoid
 	root         *syncTreeNode
 	cachedMinPtr *syncTreePointer
@@ -313,9 +323,11 @@ func NewSyncTree(m Monoid) SyncTree {
 }
 
 func (st *syncTree) Copy() SyncTree {
-	// Clean flagCloned from any nodes created specifically
-	// for this subtree. This will mean they will have to be
-	// re-cloned if they need to be changed again.
+	st.rootMtx.Lock()
+	defer st.rootMtx.Unlock()
+	// Clean flagCloned from any nodes created specifically for
+	// this tree. This will mean they will have to be re-cloned if
+	// they need to be changed again.
 	st.root.cleanCloned()
 	// Don't reuse cachedMinPtr / cachedMaxPtr for the cloned
 	// tree to be on the safe side
@@ -501,6 +513,8 @@ func (st *syncTree) Set(k Ordered, v any) {
 }
 
 func (st *syncTree) add(k Ordered, v any, set bool) {
+	st.rootMtx.Lock()
+	st.rootMtx.Unlock()
 	st.root = st.insert(st.root, k, v, true, set)
 	if st.root.flags&flagBlack == 0 {
 		st.root = st.ensureCloned(st.root)
@@ -890,8 +904,6 @@ func (st *syncTree) Dump() string {
 	return sb.String()
 }
 
-// TBD: !!! values and Lookup (via findGTENode) !!!
-// TODO: rename SyncTreeNode to just Node, SyncTree to SyncTree
 // TODO: use sync.Pool for node alloc
 //       see also:
 //         https://www.akshaydeo.com/blog/2017/12/23/How-did-I-improve-latency-by-700-percent-using-syncPool/
