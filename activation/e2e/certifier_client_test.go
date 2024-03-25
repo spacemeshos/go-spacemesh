@@ -85,7 +85,8 @@ func TestCertification(t *testing.T) {
 		for i := 0; i < 2; i++ {
 			poet := spawnPoet(t, WithCertifier(certifierCfg))
 			address := poet.RestURL().String()
-			client, err := activation.NewHTTPPoetClient(types.PoetServer{Address: address}, activation.DefaultPoetConfig())
+			cfg := activation.DefaultPoetConfig()
+			client, err := activation.NewHTTPPoetClient(types.PoetServer{Address: address}, cfg)
 			require.NoError(t, err)
 			poets = append(poets, client)
 		}

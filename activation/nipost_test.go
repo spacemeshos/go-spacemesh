@@ -521,7 +521,8 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	require.NoError(t, err)
 
 	mCertifier := NewMockcertifierService(ctrl)
-	mCertifier.EXPECT().GetCertificate(poetProver.Address()).AnyTimes().Return(&certifier.PoetCert{Data: []byte("cert")})
+	mCertifier.EXPECT().
+		GetCertificate(poetProver.Address()).AnyTimes().Return(&certifier.PoetCert{Data: []byte("cert")})
 	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, mCertifier)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
@@ -751,8 +752,9 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetDb := NewMockpoetDbAPI(ctrl)
 		mclock := defaultLayerClockMock(ctrl)
 		poetProver := NewMockPoetClient(ctrl)
+		auth := PoetAuth{PoetCert: cert}
 		poetProver.EXPECT().
-			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), sig.NodeID(), PoetAuth{PoetCert: cert}).
+			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), sig.NodeID(), auth).
 			Return(nil, errors.New("test"))
 		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		postService := NewMockpostService(ctrl)
@@ -781,8 +783,9 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetDb := NewMockpoetDbAPI(ctrl)
 		mclock := defaultLayerClockMock(ctrl)
 		poetProver := NewMockPoetClient(ctrl)
+		auth := PoetAuth{PoetCert: cert}
 		poetProver.EXPECT().
-			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), sig.NodeID(), PoetAuth{PoetCert: cert}).
+			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), sig.NodeID(), auth).
 			DoAndReturn(func(
 				ctx context.Context,
 				_ time.Time,
@@ -1113,8 +1116,9 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	buildCtx, cancel := context.WithCancel(context.Background())
 
 	poet := NewMockPoetClient(ctrl)
+	auth := PoetAuth{PoetCert: cert}
 	poet.EXPECT().
-		Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), sig.NodeID(), PoetAuth{PoetCert: cert}).
+		Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), sig.NodeID(), auth).
 		DoAndReturn(func(
 			_ context.Context,
 			_ time.Time,

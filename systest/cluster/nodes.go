@@ -340,7 +340,7 @@ func deployCertifierD(ctx *testcontext.Context, id, privkey string) (*NodeClient
 						WithArgs(args...).
 						WithEnv(corev1.EnvVar().WithName("CERTIFIER_SIGNING_KEY").WithValue(privkey)).
 						WithPorts(
-							corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(certifierPort),
+							corev1.ContainerPort().WithProtocol("TCP").WithContainerPort(certifierPort),
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),

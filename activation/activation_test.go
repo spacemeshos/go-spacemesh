@@ -1546,7 +1546,8 @@ func TestBuilder_obtainPost(t *testing.T) {
 		tab.mnipost.EXPECT().
 			Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).
 			Return(&post, &postInfo, nil)
-		tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), postInfo.CommitmentATX, &post, gomock.Any(), gomock.Any())
+		tab.mValidator.EXPECT().
+			Post(gomock.Any(), sig.NodeID(), postInfo.CommitmentATX, &post, gomock.Any(), gomock.Any())
 		_, _, _, err := tab.obtainPost(context.Background(), sig.NodeID())
 		require.NoError(t, err)
 	})
@@ -1561,7 +1562,8 @@ func TestBuilder_obtainPost(t *testing.T) {
 		tab.mnipost.EXPECT().
 			Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).
 			Return(&post, &postInfo, nil)
-		tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), postInfo.CommitmentATX, &post, gomock.Any(), gomock.Any())
+		tab.mValidator.EXPECT().
+			Post(gomock.Any(), sig.NodeID(), postInfo.CommitmentATX, &post, gomock.Any(), gomock.Any())
 
 		_, _, err := tab.buildInitialPost(context.Background(), sig.NodeID())
 		require.NoError(t, err)
@@ -1679,7 +1681,8 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 	)
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, meta, numUnits).
 		Return(nil)
-	require.ErrorContains(t, tab.buildInitialPost(context.Background(), sig.NodeID()), "nil VRF nonce")
+	_, _, err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.ErrorContains(t, err, "nil VRF nonce")
 
 	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
 	require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
@@ -1701,7 +1704,8 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		},
 		nil,
 	)
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	_, _, err = tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 }
 
 func TestWaitPositioningAtx(t *testing.T) {
