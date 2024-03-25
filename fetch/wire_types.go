@@ -22,7 +22,7 @@ type RequestMessage struct {
 // ResponseMessage is sent to the node as a response.
 type ResponseMessage struct {
 	Hash types.Hash32
-	Data []byte `scale:"max=89128960"` // limit to 85 MiB - keep in line with Response.Data in `p2p/server/server.go`
+	Data []byte `scale:"max=104857600"` // limit to 100 MiB - keep in line with Response.Data in `p2p/server/server.go`
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
@@ -114,7 +114,7 @@ type EpochData struct {
 	// - the size of `Rewards` in the type `InnerBlock` in common/types/block.go
 	// - the size of `Ballots` in the type `LayerData` below
 	// - the size of `Proposals` in the type `Value` in hare3/types.go
-	AtxIDs []types.ATXID `scale:"max=2200000"`
+	AtxIDs []types.ATXID `scale:"max=2700000"`
 }
 
 // LayerData is the data response for a given layer ID.
@@ -125,14 +125,14 @@ type LayerData struct {
 	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
 	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
 	//
-	// If we expect 2.2 Mio ATXs that would be a total of 2.2 Mio + 50 * 4032 = 2,401,600 slots.
+	// If we expect 2.7 Mio ATXs that would be a total of 2.7 Mio + 50 * 4032 = 2 901 600 slots.
 	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 2,401,600 / 4032 = 595.7 ballots in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(2,401,600 * 1/4032 * 4031/4032) = 24.4
+	// 2 901 600 / 4032 = 719.6 ballots in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(2 901 600 * 1/4032 * 4031/4032) = 26.8
 	//
-	// This means that we can expect a maximum of 595.7 + 6*24.4 = 743 ballots per layer with
+	// This means that we can expect a maximum of 719.6 + 6*26.8 = 880.6 ballots per layer with
 	// > 99.9997% probability.
-	Ballots []types.BallotID `scale:"max=800"`
+	Ballots []types.BallotID `scale:"max=900"`
 }
 
 type OpinionRequest struct {
