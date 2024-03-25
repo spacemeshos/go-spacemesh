@@ -140,8 +140,8 @@ func (err *ServerError) Error() string {
 
 // Response is a server response.
 type Response struct {
-	Data  []byte `scale:"max=89128960"` // 85 MiB
-	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
+	Data  []byte `scale:"max=104857600"` // 100 MiB - keep in line with ResponseMessage.Data in `fetch/wire_types.go`
+	Error string `scale:"max=1024"`      // TODO(mafa): make error code instead of string
 }
 
 // Server for the Handler.
