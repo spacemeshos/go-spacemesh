@@ -134,7 +134,7 @@ func (ps *PostSupervisor) Start(cmdCfg PostSupervisorConfig, opts PostSetupOpts,
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 	if ps.stop != nil {
-		return fmt.Errorf("post service already started")
+		return errors.New("post service already started")
 	}
 
 	if _, err := os.Stat(cmdCfg.PostServiceCmd); err != nil {

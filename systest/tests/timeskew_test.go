@@ -72,7 +72,9 @@ func TestShortTimeskew(t *testing.T) {
 				return false, nil
 			}
 			if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
-				tctx.Log.Debugw("layer applied", "layer", layer.Layer.Number.Number, "hash", prettyHex(layer.Layer.Hash))
+				tctx.Log.Debugw(
+					"layer applied", "layer", layer.Layer.Number.Number, "hash", prettyHex(layer.Layer.Hash),
+				)
 				confirmed = layer.Layer.Number.Number
 				if confirmed >= stopSkew {
 					return false, nil

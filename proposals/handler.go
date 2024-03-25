@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -306,11 +307,11 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 
 	if !h.edVerifier.Verify(signing.PROPOSAL, p.SmesherID, p.SignedBytes(), p.Signature) {
 		badSigProposal.Inc()
-		return fmt.Errorf("failed to verify proposal signature")
+		return errors.New("failed to verify proposal signature")
 	}
 	if !h.edVerifier.Verify(signing.BALLOT, p.Ballot.SmesherID, p.Ballot.SignedBytes(), p.Ballot.Signature) {
 		badSigBallot.Inc()
-		return fmt.Errorf("failed to verify ballot signature")
+		return errors.New("failed to verify ballot signature")
 	}
 
 	// set the proposal ID when received
@@ -413,7 +414,7 @@ func (h *Handler) setProposalBeacon(p *types.Proposal) error {
 		return nil
 	}
 	if p.RefBallot == types.EmptyBallotID {
-		return fmt.Errorf("empty refballot")
+		return errors.New("empty refballot")
 	}
 	refBallot, err := ballots.Get(h.db, p.RefBallot)
 	if err != nil {
@@ -481,11 +482,16 @@ func (h *Handler) checkBallotSyntacticValidity(
 	ballotDuration.WithLabelValues(fetchRef).Observe(float64(time.Since(t1)))
 
 	t2 := time.Now()
-	// ballot can be decoded only if all dependencies (blocks, ballots, atxs) were downloaded
+	// ballot can be decoded only if all dependencies (ballots, atxs) were downloaded
 	// and added to the tortoise.
 	decoded, err := h.tortoise.DecodeBallot(b.ToTortoiseData())
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode ballot id %s err %w", b.ID().AsHash32().ShortString(), err)
+		return nil, fmt.Errorf(
+			"%w: failed to decode ballot id %s. %v",
+			fetch.ErrIgnore,
+			b.ID().AsHash32().ShortString(),
+			err,
+		)
 	}
 	ballotDuration.WithLabelValues(decode).Observe(float64(time.Since(t2)))
 
@@ -513,6 +519,7 @@ func (h *Handler) checkBallotSyntacticValidity(
 }
 
 func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) (uint64, error) {
+	//nolint:nestif
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {
@@ -543,6 +550,7 @@ func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot)
 						b.ID().String(),
 					)
 				}
+
 				computed, used := h.atxsdata.WeightForSet(set.Epoch, set.Set)
 				for i := range used {
 					if !used[i] {

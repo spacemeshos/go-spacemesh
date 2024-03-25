@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -268,7 +269,7 @@ func readCookie(r io.Reader) (nc NetworkCookie, mayHaveCookie bool, err error) {
 		return nil, true, err
 	}
 	if !bytes.Equal(cookieStreamPrefix, buf) {
-		return nil, false, fmt.Errorf("the remote endpoint doesn't have a cookie")
+		return nil, false, errors.New("the remote endpoint doesn't have a cookie")
 	}
 	b, err := msgio.NewVarintReaderSize(r, maxCookieSize).ReadMsg()
 	if err != nil {

@@ -52,6 +52,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 const layersPerEpoch = 3
@@ -218,6 +219,16 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
+
 	run := func(c *cobra.Command, args []string) error {
 		return app.startAPIServices(context.Background())
 	}
@@ -270,6 +281,16 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
+
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
 		return app.startAPIServices(context.Background())
@@ -294,6 +315,16 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	cfg.API.JSONListener = listener
 	cfg.API.PrivateServices = nil
 	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
@@ -515,6 +546,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// If there's an error in the args, it will return immediately.
 	var wg sync.WaitGroup
 	wg.Add(1)
+	//nolint:testifylint
 	go func() {
 		str, err := testArgs(ctx, cmdWithRun(run))
 		require.Empty(t, str)
@@ -557,6 +589,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// TODO(dshulyak) synchronization below is messed up
 	var wg2 sync.WaitGroup
 	wg2.Add(1)
+	//nolint:testifylint
 	go func() {
 		defer wg2.Done()
 
@@ -668,9 +701,11 @@ func TestConfig_CustomTypes(t *testing.T) {
 			},
 		},
 		{
-			name:   "post-pow-difficulty",
-			cli:    "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-			config: `{"post": {"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}}`,
+			name: "post-pow-difficulty",
+			cli:  "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+			config: `{"post": {
+				"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+				}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
 				diff, err := hex.DecodeString(
 					"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",

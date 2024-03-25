@@ -203,6 +203,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
+	//nolint:nestif
 	if config.migrations != nil {
 		before, err := version(db)
 		if err != nil {

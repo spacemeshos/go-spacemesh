@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -265,7 +266,7 @@ func (v *offloadingPostVerifier) Verify(
 	select {
 	case jobChannel <- job:
 	case <-v.stop:
-		return fmt.Errorf("verifier is closed")
+		return errors.New("verifier is closed")
 	case <-ctx.Done():
 		return fmt.Errorf("submitting verifying job: %w", ctx.Err())
 	}
@@ -274,7 +275,7 @@ func (v *offloadingPostVerifier) Verify(
 	case res := <-job.result:
 		return res
 	case <-v.stop:
-		return fmt.Errorf("verifier is closed")
+		return errors.New("verifier is closed")
 	case <-ctx.Done():
 		return fmt.Errorf("waiting for verification result: %w", ctx.Err())
 	}

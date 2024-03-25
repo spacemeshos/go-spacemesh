@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"container/list"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc64"
 	"io"
@@ -414,7 +415,7 @@ func recover(known map[ID]*addressInfo, r io.Reader) error {
 	stored := uint64(0)
 	for scanner.Scan() {
 		if len(scanner.Bytes()) == 0 {
-			return fmt.Errorf("corrupted data: empty lines are not expected")
+			return errors.New("corrupted data: empty lines are not expected")
 		}
 		if scanner.Bytes()[0] != '{' {
 			var err error

@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -74,7 +75,7 @@ func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 	}
 	meta := metadataResp.GetMeta()
 	if meta == nil {
-		return fmt.Errorf("expected metadata, got empty response")
+		return errors.New("expected metadata, got empty response")
 	}
 
 	con := make(chan postCommand)
@@ -108,7 +109,7 @@ func (s *PostService) setConnection(nodeId types.NodeID, con chan postCommand) e
 	defer s.clientMtx.Unlock()
 
 	if _, ok := s.client[nodeId]; ok {
-		return fmt.Errorf("post service already registered")
+		return errors.New("post service already registered")
 	}
 	s.client[nodeId] = newPostClient(con)
 	s.log.Info("post service registered", zap.Stringer("node_id", nodeId))

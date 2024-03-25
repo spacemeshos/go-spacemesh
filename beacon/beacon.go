@@ -1161,9 +1161,9 @@ func buildSignedProposal(
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
 	proposal := ProposalFromVrf(vrfSig)
-	logger.WithContext(ctx).
-		With().
-		Debug("calculated beacon proposal", epoch, nonce, log.Inline(proposal), log.ShortStringer("id", signer.NodeID()))
+	logger.WithContext(ctx).With().Debug(
+		"calculated beacon proposal", epoch, nonce, log.Inline(proposal), log.ShortStringer("id", signer.NodeID()),
+	)
 	return vrfSig
 }
 

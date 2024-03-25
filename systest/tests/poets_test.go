@@ -198,10 +198,10 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	firstEpochWithEligibility := uint32(math.Max(2.0, float64(first/layersPerEpoch)))
 	epochsInTest := last/layersPerEpoch - firstEpochWithEligibility + 1
 	for id, eligibleEpochs := range smeshers {
-		assert.EqualValues(
+		assert.Len(
 			t,
-			epochsInTest,
-			len(eligibleEpochs),
+			eligibleEpochs,
+			int(epochsInTest),
 			fmt.Sprintf("smesher ID: %v, its epochs: %v", hex.EncodeToString([]byte(id)), eligibleEpochs),
 		)
 	}

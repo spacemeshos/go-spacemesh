@@ -263,7 +263,7 @@ func (mgr *PostSetupManager) StartSession(ctx context.Context, nodeID types.Node
 		mgr.mu.Lock()
 		defer mgr.mu.Unlock()
 		if mgr.state != PostSetupStatePrepared {
-			return fmt.Errorf("post session not prepared")
+			return errors.New("post session not prepared")
 		}
 		mgr.state = PostSetupStateInProgress
 		return nil
@@ -332,7 +332,7 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 	if mgr.state == PostSetupStatePrepared || mgr.state == PostSetupStateInProgress {
-		return fmt.Errorf("post setup session in progress")
+		return errors.New("post setup session in progress")
 	}
 
 	var err error

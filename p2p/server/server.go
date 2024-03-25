@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-varint"
+	dto "github.com/prometheus/client_model/go"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 
@@ -316,7 +317,7 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 }
 
 // Request sends a binary request to the peer.
-func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, error) {
+func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, extraProtocols ...string) ([]byte, error) {
 	var r Response
 	if err := s.StreamRequest(ctx, pid, req, func(ctx context.Context, stream io.ReadWriter) error {
 		rd := bufio.NewReader(stream)
@@ -327,7 +328,7 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, 
 			return &ServerError{msg: r.Error}
 		}
 		return nil
-	}); err != nil {
+	}, extraProtocols...); err != nil {
 		return nil, err
 	}
 	return r.Data, nil
@@ -335,7 +336,13 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte) ([]byte, 
 
 // StreamRequest sends a binary request to the peer. The response is read from the stream
 // by the specified callback.
-func (s *Server) StreamRequest(ctx context.Context, pid peer.ID, req []byte, callback StreamRequestCallback) error {
+func (s *Server) StreamRequest(
+	ctx context.Context,
+	pid peer.ID,
+	req []byte,
+	callback StreamRequestCallback,
+	extraProtocols ...string,
+) error {
 	start := time.Now()
 	if len(req) > s.requestLimit {
 		return fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
@@ -346,7 +353,7 @@ func (s *Server) StreamRequest(ctx context.Context, pid peer.ID, req []byte, cal
 
 	ctx, cancel := context.WithTimeout(ctx, s.hardTimeout)
 	defer cancel()
-	stream, err := s.streamRequest(ctx, pid, req)
+	stream, err := s.streamRequest(ctx, pid, req, extraProtocols...)
 	if err == nil {
 		err = callback(ctx, stream)
 		s.logger.WithContext(ctx).With().Debug("request execution time",
@@ -373,11 +380,21 @@ func (s *Server) StreamRequest(ctx context.Context, pid peer.ID, req []byte, cal
 	return err
 }
 
-func (s *Server) streamRequest(ctx context.Context, pid peer.ID, req []byte) (stm io.ReadWriteCloser, err error) {
+func (s *Server) streamRequest(
+	ctx context.Context,
+	pid peer.ID,
+	req []byte,
+	extraProtocols ...string,
+) (stm io.ReadWriteCloser, err error) {
+	protoIDs := make([]protocol.ID, len(extraProtocols)+1)
+	for n, p := range extraProtocols {
+		protoIDs[n] = protocol.ID(p)
+	}
+	protoIDs[len(extraProtocols)] = protocol.ID(s.protocol)
 	stream, err := s.h.NewStream(
 		network.WithNoDial(ctx, "existing connection"),
 		pid,
-		protocol.ID(s.protocol),
+		protoIDs...,
 	)
 	if err != nil {
 		return nil, err
@@ -404,6 +421,19 @@ func (s *Server) streamRequest(ctx context.Context, pid peer.ID, req []byte) (st
 			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 	return dadj, nil
+}
+
+// NumAcceptedRequests returns the number of accepted requests for this server.
+// It is used for testing.
+func (s *Server) NumAcceptedRequests() int {
+	if s.metrics == nil {
+		return -1
+	}
+	m := &dto.Metric{}
+	if err := s.metrics.accepted.Write(m); err != nil {
+		panic("failed to get metric: " + err.Error())
+	}
+	return int(m.Counter.GetValue())
 }
 
 func writeResponse(w io.Writer, resp *Response) error {

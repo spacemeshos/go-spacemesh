@@ -431,11 +431,11 @@ func Test_0003Migration_Phase0_MainnetPoet2(t *testing.T) {
 	secondLog := observedLogs.All()[0]
 	require.Equal(t, zapcore.InfoLevel, secondLog.Level)
 	require.Contains(t, secondLog.Message, "PoET registration added to database")
-	require.Equal(t, secondLog.ContextMap()["node_id"], nodeID.ShortString())
-	require.Equal(t, secondLog.ContextMap()["poet_service_id"], base64.StdEncoding.EncodeToString([]byte("service1")))
-	require.Equal(t, secondLog.ContextMap()["address"], "http://poet1.com")
-	require.Equal(t, secondLog.ContextMap()["round_id"], "101")
-	require.Equal(t, secondLog.ContextMap()["round_end"].(time.Time).UTC(), endTime.UTC())
+	require.Equal(t, nodeID.ShortString(), secondLog.ContextMap()["node_id"])
+	require.Equal(t, base64.StdEncoding.EncodeToString([]byte("service1")), secondLog.ContextMap()["poet_service_id"])
+	require.Equal(t, "http://poet1.com", secondLog.ContextMap()["address"])
+	require.Equal(t, "101", secondLog.ContextMap()["round_id"])
+	require.Equal(t, endTime.UTC(), secondLog.ContextMap()["round_end"].(time.Time).UTC())
 
 	_, err = db.Exec("select hash, address, round_id, round_end from poet_registration where id = ?1;",
 		func(stmt *sql.Statement) {

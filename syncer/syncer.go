@@ -13,25 +13,31 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
+	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Config is the config params for syncer.
 type Config struct {
-	Interval                 time.Duration `mapstructure:"interval"`
-	EpochEndFraction         float64       `mapstructure:"epochendfraction"`
-	HareDelayLayers          uint32
-	SyncCertDistance         uint32
+	Interval         time.Duration `mapstructure:"interval"`
+	EpochEndFraction float64       `mapstructure:"epochendfraction"`
+	HareDelayLayers  uint32
+	SyncCertDistance uint32
+	// TallyVotesFrequency how often to tally votes during layers sync.
+	// Setting this to 0.25 will tally votes after downloading data for quarter of the epoch.
+	TallyVotesFrequency      float64
 	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
 	GossipDuration           time.Duration  `mapstructure:"gossipduration"`
 	DisableMeshAgreement     bool           `mapstructure:"disable-mesh-agreement"`
 	OutOfSyncThresholdLayers uint32         `mapstructure:"out-of-sync-threshold"`
 	AtxSync                  atxsync.Config `mapstructure:"atx-sync"`
+	MalSync                  malsync.Config `mapstructure:"malfeasance-sync"`
 }
 
 // DefaultConfig for the syncer.
@@ -41,10 +47,12 @@ func DefaultConfig() Config {
 		EpochEndFraction:         0.5,
 		HareDelayLayers:          10,
 		SyncCertDistance:         10,
+		TallyVotesFrequency:      0.25,
 		MaxStaleDuration:         time.Second,
 		GossipDuration:           15 * time.Second,
 		OutOfSyncThresholdLayers: 3,
 		AtxSync:                  atxsync.DefaultConfig(),
+		MalSync:                  malsync.DefaultConfig(),
 	}
 }
 
@@ -117,6 +125,7 @@ type Syncer struct {
 	cfg          Config
 	cdb          *datastore.CachedDB
 	atxsyncer    atxSyncer
+	malsyncer    malSyncer
 	ticker       layerTicker
 	beacon       system.BeaconGetter
 	mesh         *mesh.Mesh
@@ -142,6 +151,12 @@ type Syncer struct {
 		cancel context.CancelFunc
 	}
 
+	// malSync runs malfeasant identity sync in the background
+	malSync struct {
+		started bool
+		eg      errgroup.Group
+	}
+
 	// awaitATXSyncedCh is the list of subscribers' channels to notify when this node enters ATX synced state
 	awaitATXSyncedCh chan struct{}
 
@@ -160,6 +175,7 @@ func NewSyncer(
 	patrol layerPatrol,
 	ch certHandler,
 	atxSyncer atxSyncer,
+	malSyncer malSyncer,
 	opts ...Option,
 ) *Syncer {
 	s := &Syncer{
@@ -167,6 +183,7 @@ func NewSyncer(
 		cfg:              DefaultConfig(),
 		cdb:              cdb,
 		atxsyncer:        atxSyncer,
+		malsyncer:        malSyncer,
 		ticker:           ticker,
 		beacon:           beacon,
 		mesh:             mesh,
@@ -399,16 +416,22 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return true
 		}
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
-		for layerID := s.getLastSyncedLayer().Add(1); layerID.Before(s.ticker.CurrentLayer()); layerID = layerID.Add(1) {
-			if err := s.syncLayer(ctx, layerID); err != nil {
-				if !errors.Is(err, context.Canceled) {
-					// BatchError spams too much, in case of no progress enable debug mode for sync
+		for layer := s.getLastSyncedLayer().Add(1); layer.Before(s.ticker.CurrentLayer()); layer = layer.Add(1) {
+			if err := s.syncLayer(ctx, layer); err != nil {
+				batchError := &fetch.BatchError{}
+				if errors.As(err, &batchError) && batchError.Ignore() {
 					s.logger.With().
-						Debug("failed to sync layer", log.Context(ctx), log.Err(err), layerID)
+						Info("remaining ballots are rejected in the layer", log.Context(ctx), log.Err(err), layer)
+				} else {
+					if !errors.Is(err, context.Canceled) {
+						// BatchError spams too much, in case of no progress enable debug mode for sync
+						s.logger.With().
+							Debug("failed to sync layer", log.Context(ctx), log.Err(err), layer)
+					}
+					return false
 				}
-				return false
 			}
-			s.setLastSyncedLayer(layerID)
+			s.setLastSyncedLayer(layer)
 		}
 		s.logger.WithContext(ctx).With().Debug("data is synced",
 			log.Stringer("current", s.ticker.CurrentLayer()),
@@ -445,7 +468,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 
 		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/3987
 		s.logger.With().Info("syncing malicious proofs", log.Context(ctx))
-		if err := s.syncMalfeasance(ctx); err != nil {
+		if err := s.syncMalfeasance(ctx, current.GetEpoch()); err != nil {
 			return err
 		}
 		s.logger.With().Info("malicious IDs synced", log.Context(ctx))
@@ -484,6 +507,21 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			}
 			s.backgroundSync.epoch.Store(0)
 			return err
+		})
+	}
+	if !s.malSync.started {
+		s.malSync.started = true
+		s.malSync.eg.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-s.awaitATXSyncedCh:
+				err := s.malsyncer.DownloadLoop(ctx)
+				if err != nil && !errors.Is(err, context.Canceled) {
+					s.logger.WithContext(ctx).Error("malfeasance sync failed", log.Err(err))
+				}
+				return nil
+			}
 		})
 	}
 	return nil
@@ -574,16 +612,18 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	}
 }
 
-func (s *Syncer) syncMalfeasance(ctx context.Context) error {
-	if err := s.dataFetcher.PollMaliciousProofs(ctx); err != nil {
-		return fmt.Errorf("PollMaliciousProofs: %w", err)
+func (s *Syncer) syncMalfeasance(ctx context.Context, epoch types.EpochID) error {
+	epochStart := s.ticker.LayerToTime(epoch.FirstLayer())
+	epochEnd := s.ticker.LayerToTime(epoch.Add(1).FirstLayer())
+	if err := s.malsyncer.EnsureInSync(ctx, epochStart, epochEnd); err != nil {
+		return fmt.Errorf("syncing malfeasance proof: %w", err)
 	}
 	return nil
 }
 
 func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID, peers ...p2p.Peer) error {
 	if err := s.dataFetcher.PollLayerData(ctx, layerID, peers...); err != nil {
-		return fmt.Errorf("download layer data %v: %w", layerID, err)
+		return err
 	}
 	dataLayer.Set(float64(layerID))
 	return nil

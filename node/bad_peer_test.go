@@ -78,7 +78,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	require.NoError(t, err)
 
 	conns := app2.Host().Network().ConnsToPeer(app1.Host().ID())
-	require.Equal(t, 1, len(conns))
+	require.Len(t, conns, 1)
 
 	// Wait for streams to be established, one outbound and one inbound.
 	require.Eventually(t, func() bool {
@@ -105,7 +105,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	// Verify that connections remain up
 	for i := 0; i < 5; i++ {
 		conns := app2.Host().Network().ConnsToPeer(app1.Host().ID())
-		require.Equal(t, 1, len(conns))
+		require.Len(t, conns, 1)
 		time.Sleep(100 * time.Millisecond)
 	}
 

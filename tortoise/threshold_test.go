@@ -103,6 +103,22 @@ func TestComputeThreshold(t *testing.T) {
 			},
 			expectedGlobal: fixed.From(11.25),
 		},
+		{
+			desc: "historical window size based on the target layer",
+			config: Config{
+				WindowSize: 2,
+				HistoricalWindowSize: []WindowSizeInterval{
+					{End: genesis.Add(length), Window: 4},
+				},
+			},
+			last:   genesis.Add(2 * length),
+			target: genesis,
+			epochs: map[types.EpochID]*epochInfo{
+				2: {weight: fixed.From(45)},
+				3: {weight: fixed.From(45)},
+			},
+			expectedGlobal: fixed.From(15),
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {

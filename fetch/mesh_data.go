@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -225,27 +226,30 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	}
 }
 
-func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]byte, error) {
+func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.NodeID, error) {
+	var malIDs MaliciousIDs
 	if f.cfg.Streaming {
-		var b []byte
 		if err := f.meteredStreamRequest(
 			ctx, malProtocol, peer, []byte{},
 			func(ctx context.Context, s io.ReadWriter) (int, error) {
 				return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
-					b = make([]byte, respLen)
-					if _, err := io.ReadFull(s, b); err != nil {
-						return 0, err
-					}
-					return int(respLen), nil
+					return codec.DecodeFrom(s, &malIDs)
 				})
 			},
 		); err != nil {
 			return nil, err
 		}
-		return b, nil
 	} else {
-		return f.meteredRequest(ctx, malProtocol, peer, []byte{})
+		data, err := f.meteredRequest(ctx, malProtocol, peer, []byte{})
+		if err != nil {
+			return nil, err
+		}
+		if err := codec.Decode(data, &malIDs); err != nil {
+			return nil, err
+		}
 	}
+	f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
+	return malIDs.NodeIDs, nil
 }
 
 // GetLayerData get layer data from peers.
@@ -397,6 +401,8 @@ func (f *Fetch) GetCert(
 	return nil, fmt.Errorf("failed to get cert %v/%s from %d peers: %w", lid, bid.String(), len(peers), ctx.Err())
 }
 
+var ErrIgnore = errors.New("fetch: ignore")
+
 type BatchError struct {
 	Errors map[types.Hash32]error
 }
@@ -421,4 +427,25 @@ func (b *BatchError) Error() string {
 		builder.WriteString(err.Error())
 	}
 	return builder.String()
+}
+
+func (b *BatchError) Ignore() bool {
+	for hash := range b.Errors {
+		if !b.IsIgnored(hash) {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *BatchError) IsIgnored(hash types.Hash32) bool {
+	err := b.Errors[hash]
+	if err == nil {
+		return false
+	}
+	nested := &BatchError{}
+	if errors.As(err, &nested) && nested.Ignore() {
+		return true
+	}
+	return errors.Is(err, pubsub.ErrValidationReject) || errors.Is(err, ErrIgnore)
 }

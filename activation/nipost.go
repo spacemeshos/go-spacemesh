@@ -472,7 +472,7 @@ func membersContainChallenge(members []types.Member, challenge types.Hash32) (ui
 			return uint64(id), nil
 		}
 	}
-	return 0, fmt.Errorf("challenge is not a member of the proof")
+	return 0, errors.New("challenge is not a member of the proof")
 }
 
 func (nb *NIPostBuilder) getBestProof(

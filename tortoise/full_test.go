@@ -403,7 +403,7 @@ func TestFullCountVotes(t *testing.T) {
 						}
 						ballot.Votes.Base = ballotsList[b.Base[0]][b.Base[1]].ID()
 					}
-					ballot.OpinionHash = types.RandomHash() // fake opinion, only to make sure each ballot has a unique ID
+					ballot.OpinionHash = types.RandomHash() // fake opinion, to make sure each ballot has a unique ID
 					ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 					ballot.SmesherID = signer.NodeID()
 					require.NoError(t, ballot.Initialize())

@@ -23,7 +23,8 @@ func TestGenesisID(t *testing.T) {
 	t.Run("consistent", func(t *testing.T) {
 		cfg := GenesisConfig{ExtraData: "one", GenesisTime: "2023-03-15T18:00:00Z"}
 		require.NoError(t, cfg.Validate())
-		require.Equal(t, cfg.GenesisID(), cfg.GenesisID())
+		genID := cfg.GenesisID()
+		require.Equal(t, genID, cfg.GenesisID())
 	})
 	t.Run("stable", func(t *testing.T) {
 		unixtime := time.Unix(10101, 0)
