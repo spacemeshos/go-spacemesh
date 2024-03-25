@@ -3,7 +3,6 @@ package activation
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -346,16 +345,17 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 	if !bytes.Equal(certRespose.PubKey, pubkey) {
 		return nil, errors.New("pubkey is invalid")
 	}
-	if !ed25519.Verify(pubkey, certRespose.Certificate, certRespose.Signature) {
-		return nil, errors.New("signature is invalid")
+
+	opaqueCert := &shared.OpaqueCert{
+		Data:      certRespose.Certificate,
+		Signature: certRespose.Signature,
 	}
-	cert, err := shared.DecodeCert(certRespose.Certificate)
+
+	cert, err := shared.VerifyCertificate(opaqueCert, pubkey, c.Id().Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("decoding certificate: %w", err)
+		return nil, fmt.Errorf("verifying certificate: %w", err)
 	}
-	if !bytes.Equal(cert.Pubkey, c.Id().Bytes()) {
-		return nil, errors.New("certificate pubkey doesn't match node ID")
-	}
+
 	if cert.Expiration != nil {
 		c.logger.Info("certificate has expiration date", zap.Time("expiration", *cert.Expiration))
 		if time.Until(*cert.Expiration) < 0 {
@@ -364,7 +364,7 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 	}
 
 	return &certifier.PoetCert{
-		Data:      certRespose.Certificate,
-		Signature: certRespose.Signature,
+		Data:      opaqueCert.Data,
+		Signature: opaqueCert.Signature,
 	}, nil
 }

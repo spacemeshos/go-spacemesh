@@ -153,7 +153,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		MaxRequestRetries: 10,
 	}
 
-	pubKey, addr := spawnTestCertifier(t, cfg, verifying.WithLabelScryptParams(opts.Scrypt))
+	pubKey, addr := spawnTestCertifier(t, cfg, nil, verifying.WithLabelScryptParams(opts.Scrypt))
 	certifierCfg := &registration.CertifierConfig{
 		URL:    "http://" + addr.String(),
 		PubKey: registration.Base64Enc(pubKey),

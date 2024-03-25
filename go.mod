@@ -41,7 +41,7 @@ require (
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.1.13
 	github.com/spacemeshos/merkle-tree v0.2.3
-	github.com/spacemeshos/poet v0.10.3-0.20240321171438-96878e4dfa8d
+	github.com/spacemeshos/poet v0.10.3-0.20240325083037-7ba2761c0a35
 	github.com/spacemeshos/post v0.12.5
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/cobra v1.8.0
