@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
-	certifier_db "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
 type CertifierClientConfig struct {
@@ -125,7 +124,7 @@ func NewCertifier(
 }
 
 func (c *Certifier) GetCertificate(poet string) *certifier.PoetCert {
-	cert, err := certifier_db.Certificate(c.db, c.client.Id(), poet)
+	cert, err := certifier.Certificate(c.db, c.client.Id(), poet)
 	switch {
 	case err == nil:
 		return cert
@@ -145,7 +144,7 @@ func (c *Certifier) Recertify(ctx context.Context, poet PoetClient) (*certifier.
 		return nil, fmt.Errorf("certifying POST for %s at %v: %w", poet.Address(), url, err)
 	}
 
-	if err := certifier_db.AddCertificate(c.db, c.client.Id(), *cert, poet.Address()); err != nil {
+	if err := certifier.AddCertificate(c.db, c.client.Id(), *cert, poet.Address()); err != nil {
 		c.logger.Warn("failed to persist poet cert", zap.Error(err))
 	}
 
@@ -237,7 +236,7 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 			zap.Binary("cert signature", cert.Signature),
 		)
 		for _, poet := range svc.poets {
-			if err := certifier_db.AddCertificate(c.db, c.client.Id(), *cert, poet); err != nil {
+			if err := certifier.AddCertificate(c.db, c.client.Id(), *cert, poet); err != nil {
 				c.logger.Warn("failed to persist poet cert", zap.Error(err))
 			}
 			certs[poet] = cert
