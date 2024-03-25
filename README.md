@@ -99,7 +99,7 @@ Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activat
 
 Building is supported on OS X, Linux, FreeBSD, and Windows.
 
-Install [Go 1.21 or later](https://golang.org/dl/) for your platform, if you haven't already.
+Install [Go 1.22 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
 On Windows you need to install `make` via [msys2](https://www.msys2.org/), [MingGW-w64](http://mingw-w64.org/doku.php)
 or [mingw](https://chocolatey.org/packages/mingw).
