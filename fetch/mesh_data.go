@@ -333,19 +333,19 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 
 	if f.cfg.Streaming {
 		return f.peerMeshHashesStreamed(ctx, peer, reqData)
-	} else {
-		data, err := f.meteredRequest(ctx, meshHashProtocol, peer, reqData)
-		if err != nil {
-			return nil, err
-		}
-		hashes, err := codec.DecodeSlice[types.Hash32](data)
-		if err != nil {
-			return nil, fmt.Errorf("decoding hashes response: %w", err)
-		}
-		return &MeshHashes{
-			Hashes: hashes,
-		}, nil
 	}
+
+	data, err := f.meteredRequest(ctx, meshHashProtocol, peer, reqData)
+	if err != nil {
+		return nil, err
+	}
+	hashes, err := codec.DecodeSlice[types.Hash32](data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding hashes response: %w", err)
+	}
+	return &MeshHashes{
+		Hashes: hashes,
+	}, nil
 }
 
 func (f *Fetch) GetCert(
@@ -442,21 +442,16 @@ func (b *BatchError) IsIgnored(hash types.Hash32) bool {
 
 func readIDSlice[V any, H scale.DecodablePtr[V]](r io.Reader, slice *[]V, limit uint32) (int, error) {
 	return server.ReadResponse(r, func(respLen uint32) (int, error) {
-		var (
-			lth   uint32
-			total int
-			err   error
-		)
 		d := scale.NewDecoder(r)
-		lth, total, err = scale.DecodeLen(d, limit)
+		length, total, err := scale.DecodeLen(d, limit)
 		if err != nil {
 			return total, err
 		}
-		if int(lth*types.Hash32Length)+total != int(respLen) {
+		if int(length*types.Hash32Length)+total != int(respLen) {
 			return total, errors.New("bad slice length")
 		}
-		*slice = make([]V, lth)
-		for i := uint32(0); i < lth; i++ {
+		*slice = make([]V, length)
+		for i := uint32(0); i < length; i++ {
 			n, err := H(&(*slice)[i]).DecodeScale(d)
 			total += n
 			if err != nil {
