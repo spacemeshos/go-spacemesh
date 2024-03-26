@@ -46,7 +46,7 @@ const (
 type NIPostBuilder struct {
 	localDB *localsql.Database
 
-	poetProvers map[string]poetClient
+	poetProvers map[string]PoetClient
 	poetDB      poetDbAPI
 	postService postService
 	log         *zap.Logger
@@ -57,10 +57,9 @@ type NIPostBuilder struct {
 
 type NIPostBuilderOption func(*NIPostBuilder)
 
-// withPoetClients allows to pass in clients directly (for testing purposes).
-func withPoetClients(clients []poetClient) NIPostBuilderOption {
+func WithPoetClients(clients ...PoetClient) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
-		nb.poetProvers = make(map[string]poetClient, len(clients))
+		nb.poetProvers = make(map[string]PoetClient, len(clients))
 		for _, client := range clients {
 			nb.poetProvers[client.Address()] = client
 		}
@@ -78,25 +77,14 @@ func NewNIPostBuilder(
 	db *localsql.Database,
 	poetDB poetDbAPI,
 	postService postService,
-	poetServers []types.PoetServer,
 	lg *zap.Logger,
 	poetCfg PoetConfig,
 	layerClock layerClock,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
-	poetClients := make(map[string]poetClient, len(poetServers))
-	for _, server := range poetServers {
-		client, err := NewHTTPPoetClient(server, poetCfg, WithLogger(lg.Named("poet")))
-		if err != nil {
-			return nil, fmt.Errorf("cannot create poet client: %w", err)
-		}
-		poetClients[client.Address()] = client
-	}
-
 	b := &NIPostBuilder{
 		localDB: db,
 
-		poetProvers: poetClients,
 		poetDB:      poetDB,
 		postService: postService,
 		log:         lg,
@@ -179,6 +167,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	ctx context.Context,
 	signer *signing.EdSigner,
 	challenge *types.NIPostChallenge,
+	certifier certifierService,
 ) (*nipost.NIPostState, error) {
 	logger := nb.log.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
 	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
@@ -235,7 +224,9 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
-		if err := nb.submitPoetChallenges(submitCtx, signer, poetProofDeadline, challenge.Hash().Bytes()); err != nil {
+
+		ch := challenge.Hash().Bytes()
+		if err := nb.submitPoetChallenges(submitCtx, signer, poetProofDeadline, ch, certifier); err != nil {
 			return nil, fmt.Errorf("submitting to poets: %w", err)
 		}
 		count, err := nipost.PoetRegistrationCount(nb.localDB, signer.NodeID())
@@ -346,9 +337,10 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	ctx context.Context,
 	nodeID types.NodeID,
 	deadline time.Time,
-	client poetClient,
+	client PoetClient,
 	prefix, challenge []byte,
 	signature types.EdSignature,
+	certifier certifierService,
 ) error {
 	logger := nb.log.With(
 		log.ZContext(ctx),
@@ -356,40 +348,63 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		log.ZShortStringer("smesherID", nodeID),
 	)
 
-	logger.Debug("querying for poet pow parameters")
-	powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-	defer cancel()
-	powParams, err := client.PowParams(powCtx)
-	if err != nil {
-		return &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
+	// FIXME: remove support for deprecated poet PoW
+	auth := PoetAuth{
+		PoetCert: certifier.GetCertificate(client.Address()),
 	}
-
-	logger.Debug("doing pow with params", zap.Any("pow_params", powParams))
-	startTime := time.Now()
-	nonce, err := shared.FindSubmitPowNonce(
-		ctx,
-		powParams.Challenge,
-		challenge,
-		nodeID.Bytes(),
-		powParams.Difficulty,
-	)
-	metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
-	if err != nil {
-		return fmt.Errorf("running poet PoW: %w", err)
+	if auth.PoetCert == nil {
+		logger.Info("missing poet cert - falling back to PoW")
+		powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
+		defer cancel()
+		powParams, err := client.PowParams(powCtx)
+		if err != nil {
+			return &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
+		}
+		logger.Debug("doing pow with params", zap.Any("pow_params", powParams))
+		startTime := time.Now()
+		nonce, err := shared.FindSubmitPowNonce(
+			ctx,
+			powParams.Challenge,
+			challenge,
+			nodeID.Bytes(),
+			powParams.Difficulty,
+		)
+		metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+		if err != nil {
+			return fmt.Errorf("running poet PoW: %w", err)
+		}
+		auth.PoetPoW = &PoetPoW{
+			Nonce:  nonce,
+			Params: *powParams,
+		}
+	} else {
+		logger.Info("registering with a certificate", zap.Binary("cert", auth.PoetCert.Data))
 	}
 
 	logger.Debug("submitting challenge to poet proving service")
 
 	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
-	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, PoetPoW{
-		Nonce:  nonce,
-		Params: *powParams,
-	})
-	if err != nil {
-		return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
-	}
+	var (
+		round *types.PoetRound
+		err   error
+	)
 
+	for try := 0; try < 2; try++ {
+		round, err = client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, auth)
+		if err == nil {
+			break
+		}
+		if errors.Is(err, ErrUnathorized) && try == 0 {
+			logger.Warn("failed to submit challenge as unathorized - recertifying", zap.Error(err))
+			auth.PoetCert, err = certifier.Recertify(ctx, client)
+			if err != nil {
+				return &PoetSvcUnstableError{msg: "failed to regenerate poet certificate", source: err}
+			}
+		} else {
+			return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
+		}
+	}
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
 	return nipost.AddPoetRegistration(nb.localDB, nodeID, nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
@@ -405,6 +420,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	signer *signing.EdSigner,
 	deadline time.Time,
 	challenge []byte,
+	certifier certifierService,
 ) error {
 	signature := signer.Sign(signing.POET, challenge)
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
@@ -414,7 +430,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	for _, poetClient := range nb.poetProvers {
 		client := poetClient
 		g.Go(func() error {
-			errChan <- nb.submitPoetChallenge(ctx, nodeID, deadline, client, prefix, challenge, signature)
+			errChan <- nb.submitPoetChallenge(ctx, nodeID, deadline, client, prefix, challenge, signature, certifier)
 			return nil
 		})
 	}
@@ -440,7 +456,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	return nil
 }
 
-func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) poetClient {
+func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) PoetClient {
 	for _, client := range nb.poetProvers {
 		if address == client.Address() {
 			return client

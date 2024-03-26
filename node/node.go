@@ -1009,15 +1009,29 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
 	}
+
+	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoetServers))
+	for _, poet := range app.Config.PoetServers {
+		client, err := activation.NewHTTPPoetClient(
+			poet,
+			app.Config.POET,
+			activation.WithLogger(lg.Zap().Named("poet")),
+		)
+		if err != nil {
+			app.log.Panic("failed to create poet client: %v", err)
+		}
+		poetClients = append(poetClients, client)
+	}
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.localDB,
 		poetDb,
 		grpcPostService.(*grpcserver.PostService),
-		app.Config.PoetServers,
 		app.addLogger(NipostBuilderLogger, lg).Zap(),
 		app.Config.POET,
 		app.clock,
 		activation.NipostbuilderWithPostStates(postStates),
+		activation.WithPoetClients(poetClients...),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -1042,6 +1056,8 @@ func (app *App) initServices(ctx context.Context) error {
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
+		activation.WithPoets(poetClients...),
+		activation.WithCertifierConfig(app.Config.Certifier),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 		activation.WithPostStates(postStates),
 	)
@@ -2123,6 +2139,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 
 func (app *App) preserveAfterRecovery(ctx context.Context) {
 	if app.preserve == nil {
+		app.log.Info("no need to preserve data after recovery")
 		return
 	}
 	for i, poetProof := range app.preserve.Proofs {

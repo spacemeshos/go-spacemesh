@@ -75,10 +75,12 @@ type Builder struct {
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
 	validator         nipostValidator
+	certifierConfig   CertifierConfig
 	layerClock        layerClock
 	syncer            syncer
 	log               *zap.Logger
 	parentCtx         context.Context
+	poets             []PoetClient
 	poetCfg           PoetConfig
 	poetRetryInterval time.Duration
 	// delay before PoST in ATX is considered valid (counting from the time it was received)
@@ -91,6 +93,7 @@ type Builder struct {
 	// since they (can) modify the fields below.
 	smeshingMutex sync.Mutex
 	signers       map[types.NodeID]*signing.EdSigner
+	certifiers    map[types.NodeID]certifierService
 	eg            errgroup.Group
 	stop          context.CancelFunc
 }
@@ -125,6 +128,12 @@ func WithPoetConfig(c PoetConfig) BuilderOption {
 	}
 }
 
+func WithPoets(poets ...PoetClient) BuilderOption {
+	return func(b *Builder) {
+		b.poets = poets
+	}
+}
+
 func WithValidator(v nipostValidator) BuilderOption {
 	return func(b *Builder) {
 		b.validator = v
@@ -134,6 +143,12 @@ func WithValidator(v nipostValidator) BuilderOption {
 func WithPostStates(ps PostStates) BuilderOption {
 	return func(b *Builder) {
 		b.postStates = ps
+	}
+}
+
+func WithCertifierConfig(c CertifierConfig) BuilderOption {
+	return func(b *Builder) {
+		b.certifierConfig = c
 	}
 }
 
@@ -163,6 +178,8 @@ func NewBuilder(
 		poetRetryInterval: defaultPoetRetryInterval,
 		postValidityDelay: 12 * time.Hour,
 		postStates:        NewPostStates(log),
+		certifiers:        make(map[types.NodeID]certifierService),
+		certifierConfig:   DefaultCertifierConfig(),
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -302,39 +319,24 @@ func (b *Builder) SmesherIDs() []types.NodeID {
 	return maps.Keys(b.signers)
 }
 
-func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) error {
-	// Generate the initial POST if we don't have an ATX...
-	if _, err := b.cdb.GetLastAtx(nodeID); err == nil {
-		return nil
-	}
-	// ...and if we haven't stored an initial post yet.
-	_, err := nipost.InitialPost(b.localDB, nodeID)
-	switch {
-	case err == nil:
-		b.log.Info("load initial post from db")
-		return nil
-	case errors.Is(err, sql.ErrNotFound):
-		b.log.Info("creating initial post")
-	default:
-		return fmt.Errorf("get initial post: %w", err)
-	}
-
-	// Create the initial post and save it.
+// Create the initial post and save it.
+func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) (*types.Post, *types.PostInfo, error) {
 	startTime := time.Now()
 	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge)
 	if err != nil {
-		return fmt.Errorf("post execution: %w", err)
+		return nil, nil, fmt.Errorf("post execution: %w", err)
 	}
 	if postInfo.Nonce == nil {
 		b.log.Error("initial PoST is invalid: missing VRF nonce. Check your PoST data",
 			log.ZShortStringer("smesherID", nodeID),
 		)
-		return errors.New("nil VRF nonce")
+		return nil, nil, errors.New("nil VRF nonce")
 	}
 	initialPost := nipost.Post{
-		Nonce:   post.Nonce,
-		Indices: post.Indices,
-		Pow:     post.Pow,
+		Nonce:     post.Nonce,
+		Indices:   post.Indices,
+		Pow:       post.Pow,
+		Challenge: shared.ZeroChallenge,
 
 		NumUnits:      postInfo.NumUnits,
 		CommitmentATX: postInfo.CommitmentATX,
@@ -346,35 +348,143 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	}, postInfo.NumUnits)
 	if err != nil {
 		b.log.Error("initial POST is invalid", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
-		if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
-			b.log.Fatal("failed to remove initial post", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
-		}
-		return fmt.Errorf("initial POST is invalid: %w", err)
+		return nil, nil, fmt.Errorf("initial POST is invalid: %w", err)
+	}
+
+	if err := nipost.AddPost(b.localDB, nodeID, initialPost); err != nil {
+		b.log.Error("failed to save initial post", zap.Error(err))
 	}
 
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
 	public.PostSeconds.Set(float64(time.Since(startTime)))
 	b.log.Info("created the initial post")
-
-	return nipost.AddInitialPost(b.localDB, nodeID, initialPost)
+	return post, postInfo, nil
 }
 
-func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
-	defer b.log.Info("atx builder stopped")
+// Obtain certificates for the poets.
+// We want to certify immediately after the startup or creating the initial POST
+// to avoid all nodes spamming the certifier at the same time when
+// submitting to the poets.
+func (b *Builder) certifyPost(ctx context.Context, post *types.Post, meta *types.PostInfo, ch []byte) {
+	client := NewCertifierClient(b.log, post, meta, ch, WithCertifierClientConfig(b.certifierConfig.Client))
+	certifier := NewCertifier(b.localDB, b.log, client)
+	certifier.CertifyAll(ctx, b.poets)
 
+	b.smeshingMutex.Lock()
+	b.certifiers[meta.NodeID] = certifier
+	b.smeshingMutex.Unlock()
+}
+
+func (b *Builder) obtainPostFromLastAtx(
+	ctx context.Context,
+	nodeId types.NodeID,
+) (*types.Post, *types.PostInfo, []byte, error) {
+	atxid, err := atxs.GetLastIDByNodeID(b.cdb, nodeId)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("no existing ATX found: %w", err)
+	}
+	atx, err := b.cdb.GetFullAtx(atxid)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to retrieve ATX: %w", err)
+	}
+	if atx.NIPost == nil {
+		return nil, nil, nil, errors.New("no NIPoST found in last ATX")
+	}
+	if atx.CommitmentATX == nil {
+		if commitmentAtx, err := atxs.CommitmentATX(b.cdb, nodeId); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to retrieve commitment ATX: %w", err)
+		} else {
+			atx.CommitmentATX = &commitmentAtx
+		}
+	}
+	if atx.VRFNonce == nil {
+		if nonce, err := atxs.VRFNonce(b.cdb, nodeId, b.layerClock.CurrentLayer().GetEpoch()); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to retrieve VRF nonce: %w", err)
+		} else {
+			atx.VRFNonce = &nonce
+		}
+	}
+
+	b.log.Info("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
+	meta := &types.PostInfo{
+		NodeID:        nodeId,
+		CommitmentATX: *atx.CommitmentATX,
+		Nonce:         atx.VRFNonce,
+		NumUnits:      atx.NumUnits,
+		LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
+	}
+
+	return atx.NIPost.Post, meta, atx.NIPost.PostMetadata.Challenge, nil
+}
+
+func (b *Builder) obtainPost(ctx context.Context, nodeID types.NodeID) (*types.Post, *types.PostInfo, []byte, error) {
+	b.log.Info("looking for POST for poet certification")
+	post, err := nipost.GetPost(b.localDB, nodeID)
+	switch {
+	case err == nil:
+		meta := &types.PostInfo{
+			NodeID:        nodeID,
+			CommitmentATX: post.CommitmentATX,
+			Nonce:         &post.VRFNonce,
+			NumUnits:      post.NumUnits,
+		}
+		challenge := post.Challenge
+		post := &types.Post{
+			Nonce:   post.Nonce,
+			Indices: post.Indices,
+			Pow:     post.Pow,
+		}
+		b.log.Info("found POST in local DB")
+		return post, meta, challenge, nil
+	case errors.Is(err, sql.ErrNotFound):
+		// no post found
+	default:
+		return nil, nil, nil, fmt.Errorf("loading initial post from db: %w", err)
+	}
+
+	b.log.Info("POST not found in local DB. Trying to obtain POST from an existing ATX")
+	if post, postInfo, ch, err := b.obtainPostFromLastAtx(ctx, nodeID); err == nil {
+		b.log.Info("found POST in an existing ATX")
+		postToPersist := nipost.Post{
+			Nonce:         post.Nonce,
+			Indices:       post.Indices,
+			Pow:           post.Pow,
+			Challenge:     ch,
+			NumUnits:      postInfo.NumUnits,
+			CommitmentATX: postInfo.CommitmentATX,
+			VRFNonce:      *postInfo.Nonce,
+		}
+		if err := nipost.AddPost(b.localDB, nodeID, postToPersist); err != nil {
+			b.log.Error("failed to save post", zap.Error(err))
+		}
+		return post, postInfo, ch, nil
+	}
+
+	b.log.Info("POST not found in existing ATXs. Generating the initial POST")
 	for {
-		err := b.buildInitialPost(ctx, sig.NodeID())
+		post, postInfo, err := b.buildInitialPost(ctx, nodeID)
 		if err == nil {
-			break
+			return post, postInfo, shared.ZeroChallenge, nil
 		}
 		b.log.Error("failed to generate initial proof:", zap.Error(err))
 		currentLayer := b.layerClock.CurrentLayer()
 		select {
 		case <-ctx.Done():
-			return
+			return nil, nil, nil, ctx.Err()
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 		}
 	}
+}
+
+func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
+	defer b.log.Info("atx builder stopped")
+
+	post, meta, ch, err := b.obtainPost(ctx, sig.NodeID())
+	if err != nil {
+		b.log.Error("failed to obtain post for certification", zap.Error(err))
+		return
+	}
+	b.certifyPost(ctx, post, meta, ch)
 
 	for {
 		err := b.PublishActivationTx(ctx, sig)
@@ -499,7 +609,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		// initial ATX challenge
-		post, err := nipost.InitialPost(b.localDB, nodeID)
+		post, err := nipost.GetPost(b.localDB, nodeID)
 		if err != nil {
 			return nil, fmt.Errorf("get initial post: %w", err)
 		}
@@ -515,7 +625,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		}, post.NumUnits)
 		if err != nil {
 			logger.Error("initial POST is invalid", zap.Error(err))
-			if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
+			if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
 				logger.Fatal("failed to remove initial post", zap.Error(err))
 			}
 			return nil, fmt.Errorf("initial POST is invalid: %w", err)
@@ -626,7 +736,11 @@ func (b *Builder) createAtx(
 ) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
 
-	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge)
+	b.smeshingMutex.Lock()
+	certifier := b.certifiers[sig.NodeID()]
+	b.smeshingMutex.Unlock()
+
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge, certifier)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}

@@ -64,7 +64,7 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 		nil,
 		types.EmptyEdSignature,
 		types.NodeID{},
-		PoetPoW{},
+		PoetAuth{},
 	)
 	require.NoError(t, err)
 }
