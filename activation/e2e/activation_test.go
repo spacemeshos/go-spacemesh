@@ -104,6 +104,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
 	)
+	client, err := poetProver.Client(poetCfg)
+	require.NoError(t, err)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
@@ -122,11 +124,11 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		localDB,
 		poetDb,
 		svc,
-		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
 		activation.NipostbuilderWithPostStates(postStates),
+		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)
 

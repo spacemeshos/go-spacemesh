@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -69,6 +70,8 @@ func TestValidator_Validate(t *testing.T) {
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
 	)
+	client, err := activation.NewHTTPPoetClient(types.PoetServer{Address: poetProver.RestURL().String()}, poetCfg)
+	require.NoError(t, err)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
@@ -94,6 +97,11 @@ func TestValidator_Validate(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
+	postClient, err := svc.Client(sig.NodeID())
+	require.NoError(t, err)
+	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
+	require.NoError(t, err)
+
 	db := localsql.InMemory()
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
@@ -104,14 +112,16 @@ func TestValidator_Validate(t *testing.T) {
 		localsql.InMemory(),
 		poetDb,
 		svc,
-		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		mclock,
+		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
+	certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(cdb, poetDb, cfg, opts.Scrypt, verifier)

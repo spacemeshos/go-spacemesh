@@ -51,7 +51,6 @@ func TestPostState_OnProof(t *testing.T) {
 		nil,
 		nil,
 		mPostService,
-		[]types.PoetServer{},
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		nil,
