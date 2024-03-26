@@ -450,7 +450,7 @@ func readIDSlice[V any, H scale.DecodablePtr[V]](r io.Reader, slice *[]V, limit 
 		d := scale.NewDecoder(r)
 		lth, total, err = scale.DecodeLen(d, limit)
 		if err != nil {
-			return 0, err
+			return total, err
 		}
 		if int(lth*types.Hash32Length)+total != int(respLen) {
 			return total, errors.New("bad slice length")
