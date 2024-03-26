@@ -54,7 +54,15 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		// target database exists, check if there is at least one key in the target key directory
 		// not named supervisedIDKeyFileName
 		if err := checkIdentities(dbLog, to); err != nil {
-			dbLog.Error("target appears to be a supervised node - only merging of remote smeshers is supported")
+			switch {
+			case errors.Is(err, ErrSupervisedNode):
+				dbLog.Sugar().Errorf(
+					"target appears to be a supervised node (found %s in %s)"+
+						"- only merging to remote smeshers is supported",
+					supervisedIDKeyFileName,
+					filepath.Join(to, keyDir),
+				)
+			}
 			return err
 		}
 	}
@@ -69,7 +77,15 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	}
 
 	if err := checkIdentities(dbLog, from); err != nil {
-		dbLog.Error("source appears to be a supervised node - only merging of remote smeshers is supported")
+		switch {
+		case errors.Is(err, ErrSupervisedNode):
+			dbLog.Sugar().Errorf(
+				"source appears to be a supervised node (found %s in %s)"+
+					" - only merging from remote smeshers is supported",
+				supervisedIDKeyFileName,
+				filepath.Join(from, keyDir),
+			)
+		}
 		return err
 	}
 
