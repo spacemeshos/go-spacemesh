@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/spacemeshos/go-scale"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -232,9 +233,7 @@ func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.Nod
 		if err := f.meteredStreamRequest(
 			ctx, malProtocol, peer, []byte{},
 			func(ctx context.Context, s io.ReadWriter) (int, error) {
-				return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
-					return codec.DecodeFrom(s, &malIDs)
-				})
+				return readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
 			},
 		); err != nil {
 			return nil, err
@@ -270,9 +269,7 @@ func (f *Fetch) peerEpochInfoStreamed(ctx context.Context, peer p2p.Peer, epochB
 	if err := f.meteredStreamRequest(
 		ctx, atxProtocol, peer, epochBytes,
 		func(ctx context.Context, s io.ReadWriter) (int, error) {
-			return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
-				return codec.DecodeFrom(s, &ed)
-			})
+			return readIDSlice(s, &ed.AtxIDs, maxEpochDataAtxIDs)
 		},
 	); err != nil {
 		return nil, err
@@ -310,20 +307,17 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	return ed, nil
 }
 
-func (f *Fetch) peerMeshHashesStreamed(ctx context.Context, peer p2p.Peer, reqBytes []byte) ([]types.Hash32, error) {
-	var hashes []types.Hash32
+func (f *Fetch) peerMeshHashesStreamed(ctx context.Context, peer p2p.Peer, reqBytes []byte) (*MeshHashes, error) {
+	var mh MeshHashes
 	if err := f.meteredStreamRequest(
 		ctx, meshHashProtocol, peer, reqBytes,
 		func(ctx context.Context, s io.ReadWriter) (int, error) {
-			return server.ReadResponse(s, func(respLen uint32) (n int, err error) {
-				hashes, n, err = codec.ReadSlice[types.Hash32](s)
-				return n, err
-			})
+			return readIDSlice(s, &mh.Hashes, maxMeshHashes)
 		},
 	); err != nil {
 		return nil, err
 	}
-	return hashes, nil
+	return &mh, nil
 }
 
 func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHashRequest) (*MeshHashes, error) {
@@ -337,21 +331,17 @@ func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHash
 		f.logger.With().Fatal("failed to encode mesh hash request", log.Err(err))
 	}
 
-	var hashes []types.Hash32
 	if f.cfg.Streaming {
-		hashes, err = f.peerMeshHashesStreamed(ctx, peer, reqData)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		data, err := f.meteredRequest(ctx, meshHashProtocol, peer, reqData)
-		if err != nil {
-			return nil, err
-		}
-		hashes, err = codec.DecodeSlice[types.Hash32](data)
-		if err != nil {
-			return nil, fmt.Errorf("decoding hashes response: %w", err)
-		}
+		return f.peerMeshHashesStreamed(ctx, peer, reqData)
+	}
+
+	data, err := f.meteredRequest(ctx, meshHashProtocol, peer, reqData)
+	if err != nil {
+		return nil, err
+	}
+	hashes, err := codec.DecodeSlice[types.Hash32](data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding hashes response: %w", err)
 	}
 	return &MeshHashes{
 		Hashes: hashes,
@@ -448,4 +438,26 @@ func (b *BatchError) IsIgnored(hash types.Hash32) bool {
 		return true
 	}
 	return errors.Is(err, pubsub.ErrValidationReject) || errors.Is(err, ErrIgnore)
+}
+
+func readIDSlice[V any, H scale.DecodablePtr[V]](r io.Reader, slice *[]V, limit uint32) (int, error) {
+	return server.ReadResponse(r, func(respLen uint32) (int, error) {
+		d := scale.NewDecoder(r)
+		length, total, err := scale.DecodeLen(d, limit)
+		if err != nil {
+			return total, err
+		}
+		if int(length*types.Hash32Length)+total != int(respLen) {
+			return total, errors.New("bad slice length")
+		}
+		*slice = make([]V, length)
+		for i := uint32(0); i < length; i++ {
+			n, err := H(&(*slice)[i]).DecodeScale(d)
+			total += n
+			if err != nil {
+				return total, err
+			}
+		}
+		return total, err
+	})
 }

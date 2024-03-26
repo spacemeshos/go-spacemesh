@@ -3,6 +3,8 @@ package fetch
 import (
 	"fmt"
 
+	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -12,6 +14,18 @@ import (
 //go:generate scalegen
 
 const MaxHashesInReq = 100
+
+var (
+	maxEpochDataAtxIDs = scale.MustGetMaxElements[EpochData]("AtxIDs")
+	maxMaliciousIDs    = scale.MustGetMaxElements[MaliciousIDs]("NodeIDs")
+	maxMeshHashes      = scale.MustGetMaxElements[MeshHashes]("Hashes")
+)
+
+func init() {
+	if maxEpochDataAtxIDs != types.MaxEpochActiveSetSize {
+		panic("MaxEpochDataAtxIDs and MaxEpochActiveSetSize differ")
+	}
+}
 
 // RequestMessage is sent to the peer for hash query.
 type RequestMessage struct {
