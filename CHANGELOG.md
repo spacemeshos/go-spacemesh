@@ -2,6 +2,19 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#5777](https://github.com/spacemeshos/go-spacemesh/pull/5777) Adjusted GRPC keepalive parameters on node to allow
+  pings every 60 seconds and send keepalive pings every 10 minutes if no activity from the client is observed.
+
 ## Release v1.4.3
 
 ### Improvements
