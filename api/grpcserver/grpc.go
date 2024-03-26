@@ -140,8 +140,11 @@ func New(listener string, logger *zap.Logger, config Config, grpcOpts ...grpc.Se
 		),
 		grpc.MaxSendMsgSize(config.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(config.GrpcRecvMsgSize),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime: 1 * time.Minute, // keep alive more often than once per `MinTime` will be disconnected
+		}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			Time:    time.Minute,
+			Time:    10 * time.Minute,
 			Timeout: 10 * time.Second,
 		}),
 	}
