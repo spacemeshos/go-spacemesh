@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -31,6 +32,12 @@ type Hash20 [hash20Length]byte
 
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash12) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
+
+// String implements the stringer interface and is used also by the logger when
+// doing full logging into a file.
+func (h Hash12) String() string {
+	return util.Encode(h[:5])
+}
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
@@ -180,6 +187,16 @@ func (h Hash32) String() string {
 // ShortString returns the first 5 hex-encoded bytes of the hash, for logging purposes.
 func (h Hash32) ShortString() string {
 	return hex.EncodeToString(h[:5])
+}
+
+// Compare compares a Hash32 to another hash and returns
+//
+//	-1 if this hash is less than the other
+//	 0 if the hashes are equal
+//	 1 if this hash is greater than the other
+func (h Hash32) Compare(other any) int {
+	oh := other.(Hash32)
+	return bytes.Compare(h[:], oh[:])
 }
 
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
