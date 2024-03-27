@@ -1265,7 +1265,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	atx := newAtx(challenge, nipost.NIPost, 100, types.Address{})
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
-	ok := signing.NewEdVerifier().Verify(signing.ATX, sig.NodeID(), atx.SignedBytes(), atx.Signature)
+	ok := signing.NewEdVerifier().Verify(signing.ATX, sig.NodeID(), atx.ToWireV1().SignedBytes(), atx.Signature)
 	require.True(t, ok)
 	require.Equal(t, sig.NodeID(), atx.SmesherID)
 }

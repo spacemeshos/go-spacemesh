@@ -8,29 +8,22 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
-	// Hash32Length is 32, the expected length of the hash.
 	Hash32Length = 32
 	hash20Length = 20
-	hash12Length = 12
 )
 
-// Hash12 represents the first 12 bytes of blake3 hash, mostly used for internal caches.
-type Hash12 [hash12Length]byte
-
 // Hash32 represents the 32-byte blake3 hash of arbitrary data.
-type Hash32 [Hash32Length]byte
+type Hash32 wire.Hash32
 
 // Hash20 represents the 20-byte blake3 hash of arbitrary data.
-type Hash20 [hash20Length]byte
-
-// Field returns a log field. Implements the LoggableField interface.
-func (h Hash12) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
+type Hash20 wire.Hash20
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
@@ -99,13 +92,6 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash20) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
-// CalcHash12 returns the 12-byte prefix of the blake3 sum of the given byte slice.
-func CalcHash12(data []byte) (h Hash12) {
-	h32 := hash.Sum(data)
-	copy(h[:], h32[:])
-	return
-}
-
 // CalcProposalsHash32 returns the 32-byte blake3 sum of the IDs, sorted in lexicographic order. The pre-image is
 // prefixed with additionalBytes.
 func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
@@ -139,11 +125,6 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 	var res Hash32
 	hash.Sum(res[:0])
 	return res
-}
-
-// CalcMessageHash12 returns the 12-byte blake3 sum of the given msg suffixed with protocol.
-func CalcMessageHash12(msg []byte, protocol string) Hash12 {
-	return CalcHash12(append(msg, protocol...))
 }
 
 var hashT = reflect.TypeOf(Hash32{})
@@ -230,7 +211,6 @@ func (h Hash32) ToHash20() (h20 Hash20) {
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash32) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
-// EncodeScale implements scale codec interface.
 func (h *Hash32) EncodeScale(e *scale.Encoder) (int, error) {
 	return scale.EncodeByteArray(e, h[:])
 }

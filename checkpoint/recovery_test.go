@@ -256,7 +256,7 @@ func validateAndPreserveData(
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for i, vatx := range deps {
-		encoded, err := codec.Encode(vatx)
+		encoded, err := codec.Encode(vatx.ToWireV1())
 		require.NoError(tb, err)
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
@@ -279,6 +279,7 @@ func validateAndPreserveData(
 		} else {
 			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
 		}
+
 		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
 		mvalidator.EXPECT().
 			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits, gomock.Any()).
@@ -331,7 +332,7 @@ func newChainedAtx(
 	atx.SmesherID = sig.NodeID()
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
-	atx.Signature = sig.Sign(signing.ATX, atx.SignedBytes())
+	atx.Signature = sig.Sign(signing.ATX, atx.ToWireV1().SignedBytes())
 	return newvAtx(tb, atx)
 }
 

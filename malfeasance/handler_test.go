@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
@@ -1135,8 +1136,8 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 			Layer: types.LayerID(11),
 			Proof: types.Proof{
 				Type: types.InvalidPostIndex,
-				Data: &types.InvalidPostIndexProof{
-					Atx:        atx,
+				Data: &wire.InvalidPostIndexProofV1{
+					Atx:        *atx.ToWireV1(),
 					InvalidIdx: 7,
 				},
 			},
@@ -1173,8 +1174,8 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 			Layer: types.LayerID(11),
 			Proof: types.Proof{
 				Type: types.InvalidPostIndex,
-				Data: &types.InvalidPostIndexProof{
-					Atx:        atx,
+				Data: &wire.InvalidPostIndexProofV1{
+					Atx:        *atx.ToWireV1(),
 					InvalidIdx: 7,
 				},
 			},
@@ -1212,8 +1213,8 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 			Layer: types.LayerID(11),
 			Proof: types.Proof{
 				Type: types.InvalidPostIndex,
-				Data: &types.InvalidPostIndexProof{
-					Atx:        atx,
+				Data: &wire.InvalidPostIndexProofV1{
+					Atx:        *atx.ToWireV1(),
 					InvalidIdx: 7,
 				},
 			},

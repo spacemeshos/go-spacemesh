@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -229,28 +230,6 @@ func (atx *ActivationTx) SetGolden() {
 	atx.golden = true
 }
 
-// SignedBytes returns a signed data of the ActivationTx.
-func (atx *ActivationTx) SignedBytes() []byte {
-	data, err := codec.Encode(&ATXMetadata{
-		PublishEpoch: atx.PublishEpoch,
-		MsgHash:      BytesToHash(atx.HashInnerBytes()),
-	})
-	if err != nil {
-		log.With().Fatal("failed to serialize ATXMetadata", log.Err(err))
-	}
-	return data
-}
-
-// HashInnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
-func (atx *ActivationTx) HashInnerBytes() []byte {
-	h := hash.New()
-	_, err := codec.EncodeTo(h, &atx.InnerActivationTx)
-	if err != nil {
-		log.Fatal("failed to encode InnerActivationTx for hashing")
-	}
-	return h.Sum(nil)
-}
-
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
@@ -280,7 +259,7 @@ func (atx *ActivationTx) Initialize() error {
 		return errors.New("ATX already initialized")
 	}
 
-	atx.id = ATXID(BytesToHash(atx.HashInnerBytes()))
+	atx.id = ATXID(Hash32(atx.ToWireV1().HashInnerBytes()))
 	return nil
 }
 
@@ -522,4 +501,115 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 type EpochActiveSet struct {
 	Epoch EpochID
 	Set   []ATXID `scale:"max=2200000"` // to be in line with `EpochData` in fetch/wire_types.go
+}
+
+func (p *Post) ToWireV1() *wire.PostV1 {
+	if p == nil {
+		return nil
+	}
+	return &wire.PostV1{
+		Nonce:   p.Nonce,
+		Indices: p.Indices,
+		Pow:     p.Pow,
+	}
+}
+
+func (n *NIPost) ToWireV1() *wire.NIPostV1 {
+	if n == nil {
+		return nil
+	}
+	poetMembership := wire.MerkleProofV1{
+		Nodes:     make([]wire.Hash32, 0, len(n.Membership.Nodes)),
+		LeafIndex: n.Membership.LeafIndex,
+	}
+	for _, node := range n.Membership.Nodes {
+		poetMembership.Nodes = append(poetMembership.Nodes, wire.Hash32(node))
+	}
+	return &wire.NIPostV1{
+		Membership: poetMembership,
+		Post:       n.Post.ToWireV1(),
+		PostMetadata: &wire.PostMetadataV1{
+			Challenge:     n.PostMetadata.Challenge,
+			LabelsPerUnit: n.PostMetadata.LabelsPerUnit,
+		},
+	}
+}
+
+func (a *ActivationTx) ToWireV1() *wire.ActivationTxV1 {
+	return &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
+				PublishEpoch:   a.PublishEpoch.Uint32(),
+				Sequence:       a.Sequence,
+				PrevATXID:      wire.Hash32(a.PrevATXID),
+				PositioningATX: wire.Hash32(a.PositioningATX),
+				CommitmentATX:  (*wire.Hash32)(a.CommitmentATX),
+				InitialPost:    a.InitialPost.ToWireV1(),
+			},
+			Coinbase: wire.Address(a.Coinbase),
+			NumUnits: a.NumUnits,
+			NIPost:   a.NIPost.ToWireV1(),
+			NodeID:   (*wire.Hash32)(a.NodeID),
+			VRFNonce: (*wire.VRFPostIndex)(a.VRFNonce),
+		},
+		SmesherID: wire.Hash32(a.SmesherID),
+		Signature: a.Signature,
+	}
+}
+
+func ActivationTxFromWireV1(atx *wire.ActivationTxV1) *ActivationTx {
+	return &ActivationTx{
+		InnerActivationTx: InnerActivationTx{
+			NIPostChallenge: NIPostChallenge{
+				PublishEpoch:   EpochID(atx.PublishEpoch),
+				Sequence:       atx.Sequence,
+				PrevATXID:      ATXID(atx.PrevATXID),
+				PositioningATX: ATXID(atx.PositioningATX),
+				CommitmentATX:  (*ATXID)(atx.CommitmentATX),
+				InitialPost:    PostFromWireV1(atx.InitialPost),
+			},
+			Coinbase: Address(atx.Coinbase),
+			NumUnits: atx.NumUnits,
+			NIPost:   NIPostFromWireV1(atx.NIPost),
+			NodeID:   (*NodeID)(atx.NodeID),
+			VRFNonce: (*VRFPostIndex)(atx.VRFNonce),
+		},
+		SmesherID: NodeID(atx.SmesherID),
+		Signature: atx.Signature,
+	}
+}
+
+func NIPostFromWireV1(nipost *wire.NIPostV1) *NIPost {
+	if nipost == nil {
+		return nil
+	}
+	poetMembershipProof := MerkleProof{
+		LeafIndex: nipost.Membership.LeafIndex,
+	}
+	for _, node := range nipost.Membership.Nodes {
+		if poetMembershipProof.Nodes == nil {
+			poetMembershipProof.Nodes = make([]Hash32, 0, len(nipost.Membership.Nodes))
+		}
+		poetMembershipProof.Nodes = append(poetMembershipProof.Nodes, Hash32(node))
+	}
+
+	return &NIPost{
+		Membership: poetMembershipProof,
+		Post:       PostFromWireV1(nipost.Post),
+		PostMetadata: &PostMetadata{
+			Challenge:     nipost.PostMetadata.Challenge,
+			LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
+		},
+	}
+}
+
+func PostFromWireV1(post *wire.PostV1) *Post {
+	if post == nil {
+		return nil
+	}
+	return &Post{
+		Nonce:   post.Nonce,
+		Indices: post.Indices,
+		Pow:     post.Pow,
+	}
 }

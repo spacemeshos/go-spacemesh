@@ -187,7 +187,7 @@ func TestRegossip(t *testing.T) {
 		for _, sig := range tab.signers {
 			atx := newActivationTx(t,
 				sig, 0, types.EmptyATXID, types.EmptyATXID, nil,
-				layer.GetEpoch(), 0, 1, types.Address{}, 1, &types.NIPost{})
+				layer.GetEpoch(), 0, 1, types.Address{}, 1, nil)
 			require.NoError(t, atxs.Add(tab.cdb, atx))
 
 			if refAtx == nil {

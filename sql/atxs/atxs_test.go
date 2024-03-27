@@ -121,7 +121,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	atx2, err := newAtx(sig1, withPublishEpoch(2))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(signing.ATX, atx2.SignedBytes())
+	atx2.Signature = sig1.Sign(signing.ATX, atx2.ToWireV1().SignedBytes())
 
 	atx3, err := newAtx(sig2, withPublishEpoch(3))
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	atx4, err := newAtx(sig2, withPublishEpoch(4))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(signing.ATX, atx4.SignedBytes())
+	atx4.Signature = sig2.Sign(signing.ATX, atx4.ToWireV1().SignedBytes())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
@@ -301,7 +301,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx2, err := newAtx(sig1, withPublishEpoch(2))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(signing.ATX, atx2.SignedBytes())
+	atx2.Signature = sig1.Sign(signing.ATX, atx2.ToWireV1().SignedBytes())
 
 	atx3, err := newAtx(sig2, withPublishEpoch(3))
 	require.NoError(t, err)
@@ -309,7 +309,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx4, err := newAtx(sig2, withPublishEpoch(4))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(signing.ATX, atx4.SignedBytes())
+	atx4.Signature = sig2.Sign(signing.ATX, atx4.ToWireV1().SignedBytes())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))

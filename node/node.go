@@ -1964,7 +1964,7 @@ func (app *App) verifyDB(ctx context.Context) {
 			}
 
 			// verify atx signature
-			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.ToWireV1().SignedBytes(), atx.Signature) {
 				app.log.With().Error("ATX signature verification failed",
 					log.Stringer("atx_id", atx.ID()),
 					log.Stringer("smesher", atx.SmesherID),

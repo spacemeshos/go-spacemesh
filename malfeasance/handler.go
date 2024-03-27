@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -183,7 +184,7 @@ func Validate(
 	case types.MultipleBallots:
 		nodeID, err = validateMultipleBallots(ctx, logger, cdb, edVerifier, &p.MalfeasanceProof)
 	case types.InvalidPostIndex:
-		proof := p.MalfeasanceProof.Proof.Data.(*types.InvalidPostIndexProof) // guaranteed to work by scale func
+		proof := p.MalfeasanceProof.Proof.Data.(*wire.InvalidPostIndexProofV1) // guaranteed to work by scale func
 		nodeID, err = validateInvalidPostIndex(ctx, logger, cdb, edVerifier, postVerifier, proof)
 	default:
 		return nodeID, errors.New("unknown malfeasance type")
@@ -382,24 +383,24 @@ func validateInvalidPostIndex(ctx context.Context,
 	db sql.Executor,
 	edVerifier SigVerifier,
 	postVerifier postVerifier,
-	proof *types.InvalidPostIndexProof,
+	proof *wire.InvalidPostIndexProofV1,
 ) (types.NodeID, error) {
 	atx := &proof.Atx
-	if !edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+	if !edVerifier.Verify(signing.ATX, types.NodeID(atx.SmesherID), atx.SignedBytes(), atx.Signature) {
 		return types.EmptyNodeID, errors.New("invalid signature")
 	}
 	commitmentAtx := atx.CommitmentATX
 	if commitmentAtx == nil {
-		atx, err := atxs.CommitmentATX(db, atx.SmesherID)
+		atx, err := atxs.CommitmentATX(db, types.NodeID(atx.SmesherID))
 		if err != nil {
 			return types.EmptyNodeID, fmt.Errorf("getting commitment ATX: %w", err)
 		}
-		commitmentAtx = &atx
+		commitmentAtx = (*wire.Hash32)(&atx)
 	}
 	post := (*shared.Proof)(atx.NIPost.Post)
 	meta := &shared.ProofMetadata{
-		NodeId:          atx.SmesherID.Bytes(),
-		CommitmentAtxId: commitmentAtx.Bytes(),
+		NodeId:          atx.SmesherID[:],
+		CommitmentAtxId: commitmentAtx[:],
 		NumUnits:        atx.NumUnits,
 		Challenge:       atx.NIPost.PostMetadata.Challenge,
 		LabelsPerUnit:   atx.NIPost.PostMetadata.LabelsPerUnit,
@@ -410,7 +411,7 @@ func validateInvalidPostIndex(ctx context.Context,
 		meta,
 		verifying.SelectedIndex(int(proof.InvalidIdx)),
 	); err != nil {
-		return atx.SmesherID, nil
+		return types.NodeID(atx.SmesherID), nil
 	}
 	numInvalidProofsPostIndex.Inc()
 	return types.EmptyNodeID, errors.New("invalid post index malfeasance proof - POST is valid")
