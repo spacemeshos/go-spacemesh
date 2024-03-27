@@ -472,8 +472,17 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	if until <= 0 {
 		metrics.PublishLateWindowLatency.Observe(-until.Seconds())
 		current++
+
+		// check `until` is positive after `current` is incremented
 		until = time.Until(b.poetRoundStart(current))
+		if until <= 0 {
+			logger.Fatal(
+				"Invalid configuration detected. `phase-shift` must be > 0 and less than the duration of an epoch",
+				zap.Duration("phase-shift", b.poetCfg.PhaseShift),
+			)
+		}
 	}
+
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
