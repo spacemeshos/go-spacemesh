@@ -12,9 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -441,9 +439,8 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			func(ctx context.Context, _ string, got []byte) error {
 				atxMtx.Lock()
 				defer atxMtx.Unlock()
-				var gotAtx wire.ActivationTxV1
-				require.NoError(t, codec.Decode(got, &gotAtx))
-				atx := types.ActivationTxFromWireV1(&gotAtx)
+				atx, err := types.AcivationTxFromBytes(got)
+				require.NoError(t, err)
 				atxs[atx.SmesherID] = *atx
 				return nil
 			},
