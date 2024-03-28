@@ -587,18 +587,18 @@ func generateEpochData(t *testing.T) (*EpochData, []byte) {
 
 func Test_PeerEpochInfo(t *testing.T) {
 	peer := p2p.Peer("p0")
-	errUnknown := errors.New("unknown")
 	tt := []struct {
 		name      string
-		err       error
+		err       string
 		streaming bool
+		padding   int
 	}{
 		{
 			name: "success",
 		},
 		{
 			name: "fail",
-			err:  errUnknown,
+			err:  "unknown",
 		},
 		{
 			name:      "success (streamed)",
@@ -606,8 +606,20 @@ func Test_PeerEpochInfo(t *testing.T) {
 		},
 		{
 			name:      "fail (streamed)",
-			err:       errUnknown,
+			err:       "unknown",
 			streaming: true,
+		},
+		{
+			name:      "fail (streamed, padding)",
+			err:       "bad slice length",
+			streaming: true,
+			padding:   10,
+		},
+		{
+			name:      "fail (streamed, truncated)",
+			err:       "bad slice length",
+			streaming: true,
+			padding:   -1,
 		},
 	}
 
@@ -632,32 +644,39 @@ func Test_PeerEpochInfo(t *testing.T) {
 							cbk server.StreamRequestCallback,
 							extraProtocols ...string,
 						) error {
-							if tc.err == nil {
+							if tc.err == "" || tc.padding != 0 {
 								var r server.Response
 								expected, r.Data = generateEpochData(t)
+								if tc.padding > 0 {
+									r.Data = append(r.Data, make([]byte, tc.padding)...)
+								} else {
+									r.Data = r.Data[:len(r.Data)+tc.padding]
+								}
 								var b bytes.Buffer
 								codec.MustEncodeTo(&b, &r)
 								return cbk(ctx, &b)
 							}
-							return tc.err
+							return errors.New(tc.err)
 						})
 			} else {
 				f.mAtxS.EXPECT().
 					Request(gomock.Any(), peer, epochIDBytes).
 					DoAndReturn(
 						func(context.Context, p2p.Peer, []byte, ...string) ([]byte, error) {
-							if tc.err == nil {
+							if tc.err == "" {
 								var data []byte
 								expected, data = generateEpochData(t)
 								return data, nil
 							}
-							return nil, tc.err
+							return nil, errors.New(tc.err)
 						})
 			}
 			got, err := f.PeerEpochInfo(context.Background(), peer, types.EpochID(111))
-			require.ErrorIs(t, err, tc.err)
-			if tc.err == nil {
+			if tc.err == "" {
+				require.NoError(t, err)
 				require.Equal(t, expected, got)
+			} else {
+				require.ErrorContains(t, err, tc.err)
 			}
 		})
 	}
