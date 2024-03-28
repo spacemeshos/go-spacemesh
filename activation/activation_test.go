@@ -54,7 +54,7 @@ func TestMain(m *testing.M) {
 
 func newAtx(
 	challenge types.NIPostChallenge,
-	nipost *types.NIPost,
+	nipost types.NIPost,
 	numUnits uint32,
 	coinbase types.Address,
 ) *types.ActivationTx {
@@ -84,7 +84,7 @@ func newActivationTx(
 	startTick, numTicks uint64,
 	coinbase types.Address,
 	numUnits uint32,
-	nipost *types.NIPost,
+	nipost types.NIPost,
 	opts ...atxOption,
 ) *types.VerifiedActivationTx {
 	challenge := types.NIPostChallenge{

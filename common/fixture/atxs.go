@@ -65,11 +65,11 @@ func (g *AtxsGenerator) newNIPost() *types.NIPost {
 		Membership: types.MerkleProof{
 			Nodes: nodesH32,
 		},
-		Post: &types.Post{
+		Post: types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
 		},
-		PostMetadata: &types.PostMetadata{
+		PostMetadata: types.PostMetadata{
 			Challenge:     poetRef,
 			LabelsPerUnit: 2048,
 		},
@@ -104,7 +104,7 @@ func (g *AtxsGenerator) Next() *types.VerifiedActivationTx {
 				Coinbase: wallet.Address(signer.PublicKey().Bytes()),
 				NumUnits: g.rng.Uint32(),
 				NodeID:   &nodeId,
-				NIPost:   g.newNIPost(),
+				NIPost:   *g.newNIPost(),
 			},
 			SmesherID: nodeId,
 		},

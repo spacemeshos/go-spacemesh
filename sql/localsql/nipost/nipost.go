@@ -10,7 +10,7 @@ import (
 )
 
 type NIPostState struct {
-	*types.NIPost
+	types.NIPost
 
 	NumUnits uint32
 	VRFNonce types.VRFPostIndex
@@ -66,11 +66,11 @@ func NIPost(db sql.Executor, nodeID types.NodeID) (*NIPostState, error) {
 	}
 	dec := func(stmt *sql.Statement) bool {
 		nipost = &NIPostState{
-			NIPost: &types.NIPost{},
+			NIPost: types.NIPost{},
 		}
 
 		n := stmt.ColumnLen(1)
-		nipost.Post = &types.Post{
+		nipost.Post = types.Post{
 			Nonce:   uint32(stmt.ColumnInt64(0)),
 			Indices: make([]byte, n),
 			Pow:     uint64(stmt.ColumnInt64(2)),
@@ -84,7 +84,7 @@ func NIPost(db sql.Executor, nodeID types.NodeID) (*NIPostState, error) {
 		_, decodeErr = codec.DecodeFrom(stmt.ColumnReader(5), &membershipV1)
 		nipost.Membership = *types.MerkleProofFromWireV1(membershipV1)
 
-		nipost.PostMetadata = &types.PostMetadata{
+		nipost.PostMetadata = types.PostMetadata{
 			Challenge:     make([]byte, stmt.ColumnLen(6)),
 			LabelsPerUnit: uint64(stmt.ColumnInt64(7)),
 		}

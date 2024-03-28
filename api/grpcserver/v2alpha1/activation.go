@@ -3,7 +3,6 @@ package v2alpha1
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -180,18 +179,6 @@ func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2alpha1.ActivationV1 {
 			Indices: atx.InitialPost.Indices,
 			Pow:     atx.InitialPost.Pow,
 		}
-	}
-
-	if atx.NIPost == nil {
-		panic(fmt.Sprintf("nil nipost for atx %s", atx.ShortString()))
-	}
-
-	if atx.NIPost.Post == nil {
-		panic(fmt.Sprintf("nil nipost post for atx %s", atx.ShortString()))
-	}
-
-	if atx.NIPost.PostMetadata == nil {
-		panic(fmt.Sprintf("nil nipost post metadata for atx %s", atx.ShortString()))
 	}
 
 	nipost := atx.NIPost

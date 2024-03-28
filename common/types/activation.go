@@ -142,7 +142,7 @@ type InnerActivationTx struct {
 	Coinbase Address
 	NumUnits uint32
 
-	NIPost   *NIPost
+	NIPost   NIPost
 	NodeID   *NodeID
 	VRFNonce *VRFPostIndex
 
@@ -181,7 +181,7 @@ type ActivationTx struct {
 func NewActivationTx(
 	challenge NIPostChallenge,
 	coinbase Address,
-	nipost *NIPost,
+	nipost NIPost,
 	numUnits uint32,
 	nonce *VRFPostIndex,
 ) *ActivationTx {
@@ -332,12 +332,12 @@ type NIPost struct {
 
 	// Post is the proof that the prover data is still stored (or was recomputed) at
 	// the time he learned the challenge constructed from the PoET.
-	Post *Post
+	Post Post
 
 	// PostMetadata is the Post metadata, associated with the proof.
 	// The proof should be verified upon the metadata during the syntactic validation,
 	// while the metadata should be verified during the contextual validation.
-	PostMetadata *PostMetadata
+	PostMetadata PostMetadata
 }
 
 // VRFPostIndex is the nonce generated using Pow during post initialization. It is used as a mitigation for
@@ -475,10 +475,15 @@ func AcivationTxFromBytes(data []byte) (*ActivationTx, error) {
 		return nil, fmt.Errorf("decoding ATX: %w", err)
 	}
 
-	return ActivationTxFromWireV1(&wireAtx), nil
+	return ActivationTxFromWireV1(&wireAtx)
 }
 
-func ActivationTxFromWireV1(atx *wire.ActivationTxV1) *ActivationTx {
+func ActivationTxFromWireV1(atx *wire.ActivationTxV1) (*ActivationTx, error) {
+	nipost, err := NIPostFromWireV1(atx.NIPost)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
 			NIPostChallenge: NIPostChallenge{
@@ -491,13 +496,13 @@ func ActivationTxFromWireV1(atx *wire.ActivationTxV1) *ActivationTx {
 			},
 			Coinbase: Address(atx.Coinbase),
 			NumUnits: atx.NumUnits,
-			NIPost:   NIPostFromWireV1(atx.NIPost),
+			NIPost:   *nipost,
 			NodeID:   (*NodeID)(atx.NodeID),
 			VRFNonce: (*VRFPostIndex)(atx.VRFNonce),
 		},
 		SmesherID: NodeID(atx.SmesherID),
 		Signature: atx.Signature,
-	}
+	}, nil
 }
 
 func NIPostChallengeFromWireV1(ch wire.NIPostChallengeV1) *NIPostChallenge {
@@ -511,19 +516,24 @@ func NIPostChallengeFromWireV1(ch wire.NIPostChallengeV1) *NIPostChallenge {
 	}
 }
 
-func NIPostFromWireV1(nipost *wire.NIPostV1) *NIPost {
+func NIPostFromWireV1(nipost *wire.NIPostV1) (*NIPost, error) {
 	if nipost == nil {
-		return nil
+		return nil, errors.New("nil nipost")
 	}
-
+	if nipost.Post == nil {
+		return nil, errors.New("nil post")
+	}
+	if nipost.PostMetadata == nil {
+		return nil, errors.New("nil post metadata")
+	}
 	return &NIPost{
 		Membership: *MerkleProofFromWireV1(nipost.Membership),
-		Post:       PostFromWireV1(nipost.Post),
-		PostMetadata: &PostMetadata{
+		Post:       *PostFromWireV1(nipost.Post),
+		PostMetadata: PostMetadata{
 			Challenge:     nipost.PostMetadata.Challenge,
 			LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
 		},
-	}
+	}, nil
 }
 
 func PostFromWireV1(post *wire.PostV1) *Post {

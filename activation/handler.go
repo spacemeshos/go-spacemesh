@@ -148,9 +148,6 @@ func (h *Handler) processVerifiedATX(
 }
 
 func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.ActivationTx) error {
-	if atx.NIPost == nil {
-		return fmt.Errorf("nil nipst for atx %s", atx.ShortString())
-	}
 	current := h.clock.CurrentLayer().GetEpoch()
 	if atx.PublishEpoch > current+1 {
 		return fmt.Errorf("atx publish epoch is too far in the future: %d > %d", atx.PublishEpoch, current+1)
@@ -182,7 +179,7 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 
 		// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
 		// as expected from the initial Post.
-		initialPostMetadata := *atx.NIPost.PostMetadata
+		initialPostMetadata := atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
 		if err := h.nipostValidator.VRFNonce(
 			atx.SmesherID, *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits,
@@ -250,7 +247,7 @@ func (h *Handler) SyntacticallyValidateDeps(
 		ctx,
 		atx.SmesherID,
 		*commitmentATX,
-		atx.NIPost,
+		&atx.NIPost,
 		expectedChallengeHash,
 		atx.NumUnits,
 		PostSubset([]byte(h.local)), // use the local peer ID as seed for random subset
@@ -319,7 +316,7 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 	}
 
 	if nonce != nil {
-		err = h.nipostValidator.VRFNonce(atx.SmesherID, commitmentATX, nonce, atx.NIPost.PostMetadata, atx.NumUnits)
+		err = h.nipostValidator.VRFNonce(atx.SmesherID, commitmentATX, nonce, &atx.NIPost.PostMetadata, atx.NumUnits)
 		if err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
@@ -569,7 +566,10 @@ func (h *Handler) handleAtx(
 		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
 	}
 
-	atx := types.ActivationTxFromWireV1(&atxOnWire)
+	atx, err := types.ActivationTxFromWireV1(&atxOnWire)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
+	}
 
 	atx.SetReceived(receivedTime.Local())
 	if err := atx.Initialize(); err != nil {

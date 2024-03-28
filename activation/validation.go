@@ -89,11 +89,11 @@ func (v *Validator) NIPost(
 		return 0, err
 	}
 
-	if err := v.PostMetadata(&v.cfg, nipost.PostMetadata); err != nil {
+	if err := v.PostMetadata(&v.cfg, &nipost.PostMetadata); err != nil {
 		return 0, err
 	}
 
-	if err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
+	if err := v.Post(ctx, nodeId, commitmentAtxId, &nipost.Post, &nipost.PostMetadata, numUnits, opts...); err != nil {
 		return 0, fmt.Errorf("invalid Post: %w", err)
 	}
 
@@ -413,8 +413,8 @@ func (v *Validator) verifyChainWithOpts(
 		ctx,
 		atx.SmesherID,
 		*commitmentAtxId,
-		atx.NIPost.Post,
-		atx.NIPost.PostMetadata,
+		&atx.NIPost.Post,
+		&atx.NIPost.PostMetadata,
 		atx.NumUnits,
 	); err != nil {
 		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {

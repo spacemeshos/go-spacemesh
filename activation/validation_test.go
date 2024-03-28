@@ -610,7 +610,7 @@ func TestVerifyChainDeps(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
-		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
+		v.EXPECT().Verify(ctx, (*shared.Proof)(&atx.NIPost.Post), gomock.Any(), gomock.Any())
 
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
@@ -635,7 +635,7 @@ func TestVerifyChainDeps(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
-		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
+		v.EXPECT().Verify(ctx, (*shared.Proof)(&atx.NIPost.Post), gomock.Any(), gomock.Any())
 
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
@@ -661,7 +661,7 @@ func TestVerifyChainDeps(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
-		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
+		v.EXPECT().Verify(ctx, (*shared.Proof)(&atx.NIPost.Post), gomock.Any(), gomock.Any())
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
 		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
@@ -733,7 +733,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
 		expected := errors.New("post is invalid")
-		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).Return(expected)
+		v.EXPECT().Verify(ctx, (*shared.Proof)(&atx.NIPost.Post), gomock.Any(), gomock.Any()).Return(expected)
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
 		require.ErrorIs(t, err, &InvalidChainError{ID: vAtx.ID()})

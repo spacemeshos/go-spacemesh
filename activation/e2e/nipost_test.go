@@ -204,7 +204,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
-		nipost.NIPost,
+		&nipost.NIPost,
 		challenge.Hash(),
 		nipost.NumUnits,
 	)
@@ -349,7 +349,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		context.Background(),
 		sig.NodeID(),
 		goldenATX,
-		nipost.NIPost,
+		&nipost.NIPost,
 		challenge.Hash(),
 		nipost.NumUnits,
 	)
@@ -468,7 +468,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 				context.Background(),
 				sig.NodeID(),
 				goldenATX,
-				nipost.NIPost,
+				&nipost.NIPost,
 				challenge.Hash(),
 				nipost.NumUnits,
 			)

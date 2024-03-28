@@ -312,10 +312,10 @@ func (nb *NIPostBuilder) BuildNIPost(
 		public.PostSeconds.Set(postGenDuration.Seconds())
 
 		nipostState = &nipost.NIPostState{
-			NIPost: &types.NIPost{
-				Post:       proof,
+			NIPost: types.NIPost{
+				Post:       *proof,
 				Membership: *membership,
-				PostMetadata: &types.PostMetadata{
+				PostMetadata: types.PostMetadata{
 					Challenge:     poetProofRef[:],
 					LabelsPerUnit: postInfo.LabelsPerUnit,
 				},

@@ -15,8 +15,8 @@ func Test_AddNIPost(t *testing.T) {
 
 	nodeID := types.RandomNodeID()
 	refNipost := &NIPostState{
-		NIPost: &types.NIPost{
-			Post: &types.Post{
+		NIPost: types.NIPost{
+			Post: types.Post{
 				Nonce:   1,
 				Indices: []byte{1, 2, 3},
 				Pow:     1,
@@ -25,7 +25,7 @@ func Test_AddNIPost(t *testing.T) {
 				Nodes:     []types.Hash32{types.RandomHash()},
 				LeafIndex: 1,
 			},
-			PostMetadata: &types.PostMetadata{
+			PostMetadata: types.PostMetadata{
 				Challenge:     types.RandomHash().Bytes(),
 				LabelsPerUnit: 1,
 			},
@@ -53,8 +53,8 @@ func Test_AddNIPost_NoDuplicates(t *testing.T) {
 	db := localsql.InMemory()
 
 	refNipost := &NIPostState{
-		NIPost: &types.NIPost{
-			Post: &types.Post{
+		NIPost: types.NIPost{
+			Post: types.Post{
 				Nonce:   1,
 				Indices: []byte{1, 2, 3},
 				Pow:     1,
@@ -63,7 +63,7 @@ func Test_AddNIPost_NoDuplicates(t *testing.T) {
 				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
 				LeafIndex: 1,
 			},
-			PostMetadata: &types.PostMetadata{
+			PostMetadata: types.PostMetadata{
 				Challenge:     types.RandomHash().Bytes(),
 				LabelsPerUnit: 1,
 			},
@@ -72,8 +72,8 @@ func Test_AddNIPost_NoDuplicates(t *testing.T) {
 		VRFNonce: types.VRFPostIndex(1),
 	}
 	refNipost2 := &NIPostState{
-		NIPost: &types.NIPost{
-			Post: &types.Post{
+		NIPost: types.NIPost{
+			Post: types.Post{
 				Nonce:   2,
 				Indices: []byte{1, 2, 3},
 				Pow:     1,
@@ -82,7 +82,7 @@ func Test_AddNIPost_NoDuplicates(t *testing.T) {
 				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
 				LeafIndex: 1,
 			},
-			PostMetadata: &types.PostMetadata{
+			PostMetadata: types.PostMetadata{
 				Challenge:     types.RandomHash().Bytes(),
 				LabelsPerUnit: 1,
 			},

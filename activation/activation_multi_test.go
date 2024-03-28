@@ -186,7 +186,7 @@ func TestRegossip(t *testing.T) {
 		for _, sig := range tab.signers {
 			atx := newActivationTx(t,
 				sig, 0, types.EmptyATXID, types.EmptyATXID, nil,
-				layer.GetEpoch(), 0, 1, types.Address{}, 1, nil)
+				layer.GetEpoch(), 0, 1, types.Address{}, 1, types.NIPost{})
 			require.NoError(t, atxs.Add(tab.cdb, atx))
 
 			if refAtx == nil {
@@ -388,14 +388,14 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		}
 
 		state := &nipost.NIPostState{
-			NIPost: &types.NIPost{
+			NIPost: types.NIPost{
 				Membership: types.MerkleProof{},
-				Post: &types.Post{
+				Post: types.Post{
 					Indices: types.RandomBytes(10),
 					Nonce:   rand.Uint32(),
 					Pow:     rand.Uint64(),
 				},
-				PostMetadata: &types.PostMetadata{
+				PostMetadata: types.PostMetadata{
 					LabelsPerUnit: 128,
 					Challenge:     shared.ZeroChallenge,
 				},

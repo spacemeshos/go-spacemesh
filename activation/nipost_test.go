@@ -346,8 +346,8 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 	require.NoError(t, err)
 
 	nipost.AddNIPost(db, sig.NodeID(), &nipost.NIPostState{
-		NIPost: &types.NIPost{
-			Post: &types.Post{
+		NIPost: types.NIPost{
+			Post: types.Post{
 				Nonce:   1,
 				Indices: []byte{1, 2, 3},
 				Pow:     1,
@@ -356,7 +356,7 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
 				LeafIndex: 1,
 			},
-			PostMetadata: &types.PostMetadata{
+			PostMetadata: types.PostMetadata{
 				Challenge:     types.RandomHash().Bytes(),
 				LabelsPerUnit: 1,
 			},

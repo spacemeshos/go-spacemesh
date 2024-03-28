@@ -202,8 +202,8 @@ func newAtx(
 				Sequence:      seq,
 				CommitmentATX: commitAtx,
 			},
-			NIPost: &types.NIPost{
-				PostMetadata: &types.PostMetadata{
+			NIPost: types.NIPost{
+				PostMetadata: types.PostMetadata{
 					Challenge: types.RandomBytes(5),
 				},
 			},

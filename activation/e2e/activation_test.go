@@ -194,7 +194,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			context.Background(),
 			sig.NodeID(),
 			*atx.CommitmentATX,
-			atx.NIPost,
+			&atx.NIPost,
 			atx.NIPostChallenge.Hash(),
 			atx.NumUnits,
 		)
@@ -204,7 +204,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			sig.NodeID(),
 			*atx.CommitmentATX,
 			atx.VRFNonce,
-			atx.NIPost.PostMetadata,
+			&atx.NIPost.PostMetadata,
 			atx.NumUnits,
 		)
 		require.NoError(t, err)

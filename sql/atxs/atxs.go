@@ -35,7 +35,11 @@ func decoder(fn decoderCallback) sql.Decoder {
 			if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &atxV1); err != nil {
 				return fn(nil, fmt.Errorf("decode %w", err))
 			}
-			a = *types.ActivationTxFromWireV1(&atxV1)
+			atx, err := types.ActivationTxFromWireV1(&atxV1)
+			if err != nil {
+				panic(fmt.Sprintf("failed to decode ATX: %v", err))
+			}
+			a = *atx
 		}
 		a.SetID(id)
 		baseTickHeight := uint64(stmt.ColumnInt64(2))

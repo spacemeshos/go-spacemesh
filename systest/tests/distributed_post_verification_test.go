@@ -208,7 +208,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	verifyingOpts.Workers = 1
 	verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
 	require.NoError(t, err)
-	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
+	err = verifier.Verify(ctx, (*shared.Proof)(&nipost.Post), &shared.ProofMetadata{
 		NodeId:          signer.NodeID().Bytes(),
 		CommitmentAtxId: challenge.CommitmentATX.Bytes(),
 		NumUnits:        nipost.NumUnits,

@@ -168,7 +168,7 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil)
+	atx := types.NewActivationTx(challenge, addr1, *nipost, numUnits, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
@@ -181,7 +181,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil)
+	atx2 := types.NewActivationTx(challenge, addr2, *nipost, numUnits, nil)
 	atx2.SetEffectiveNumUnits(numUnits)
 	atx2.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
@@ -235,11 +235,11 @@ func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPo
 		Membership: types.MerkleProof{
 			Nodes: nodesH32,
 		},
-		Post: &types.Post{
+		Post: types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
 		},
-		PostMetadata: &types.PostMetadata{
+		PostMetadata: types.PostMetadata{
 			Challenge:     poetRef,
 			LabelsPerUnit: labelsPerUnit,
 		},
