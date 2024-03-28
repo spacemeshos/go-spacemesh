@@ -1,6 +1,9 @@
 package localsql
 
-import "github.com/spacemeshos/go-spacemesh/common/types"
+import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
+)
 
 //go:generate scalegen
 
@@ -20,7 +23,7 @@ type PoetRequest struct {
 type NIPostBuilderState struct {
 	Challenge types.Hash32
 
-	NIPost *types.NIPost
+	NIPost *wire.NIPostV1
 
 	PoetRequests []PoetRequest `scale:"max=100"` // max number of poets a node connects to
 

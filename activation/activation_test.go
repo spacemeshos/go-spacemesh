@@ -228,10 +228,10 @@ func publishAtx(
 	var built *types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			var gotAtx types.ActivationTx
-			require.NoError(tb, codec.Decode(got, &gotAtx))
+			gotAtx, err := types.AcivationTxFromBytes(got)
+			require.NoError(tb, err)
 			gotAtx.SetReceived(time.Now().Local())
-			built = &gotAtx
+			built = gotAtx
 			require.NoError(tb, built.Initialize())
 			built.SetEffectiveNumUnits(gotAtx.NumUnits)
 			vatx, err := built.Verify(0, 1)
@@ -547,10 +547,10 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// first publish fails
 		func(_ context.Context, _ string, got []byte) error {
-			var gotAtx types.ActivationTx
-			require.NoError(t, codec.Decode(got, &gotAtx))
-			gotAtx.SetReceived(time.Now().Local())
-			built = &gotAtx
+			gotAtx, err := types.AcivationTxFromBytes(got)
+			require.NoError(t, err)
+			built = gotAtx
+			built.SetReceived(time.Now().Local())
 			require.NoError(t, built.Initialize())
 			return errors.New("something went wrong")
 		},
@@ -562,11 +562,11 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// second publish succeeds
 		func(_ context.Context, _ string, got []byte) error {
-			var gotAtx types.ActivationTx
-			require.NoError(t, codec.Decode(got, &gotAtx))
-			gotAtx.SetReceived(built.Received())
-			require.NoError(t, gotAtx.Initialize())
-			require.Equal(t, built, &gotAtx)
+			atx, err := types.AcivationTxFromBytes(got)
+			require.NoError(t, err)
+			atx.SetReceived(built.Received())
+			require.NoError(t, atx.Initialize())
+			require.Equal(t, built, atx)
 			return nil
 		},
 	)
@@ -650,8 +650,8 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// publish succeeds
 		func(_ context.Context, _ string, got []byte) error {
-			var gotAtx types.ActivationTx
-			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx, err := types.AcivationTxFromBytes(got)
+			require.NoError(t, err)
 			gotAtx.SetReceived(time.Now().Local())
 			require.NoError(t, gotAtx.Initialize())
 			require.Equal(t, *ch, gotAtx.NIPostChallenge)
@@ -719,10 +719,10 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	var built *types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			var gotAtx types.ActivationTx
-			require.NoError(t, codec.Decode(got, &gotAtx))
+			gotAtx, err := types.AcivationTxFromBytes(got)
+			require.NoError(t, err)
 			gotAtx.SetReceived(time.Now().Local())
-			built = &gotAtx
+			built = gotAtx
 			require.NoError(t, built.Initialize())
 
 			// advance time to the next epoch to trigger the context timeout
@@ -1009,8 +1009,8 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	tab.mpub.EXPECT().
 		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
-			var atx types.ActivationTx
-			require.NoError(t, codec.Decode(msg, &atx))
+			atx, err := types.AcivationTxFromBytes(msg)
+			require.NoError(t, err)
 			atx.SetReceived(time.Now().Local())
 
 			atx.SetEffectiveNumUnits(atx.NumUnits)
@@ -1108,8 +1108,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	tab.mpub.EXPECT().
 		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
-			var atx types.ActivationTx
-			require.NoError(t, codec.Decode(msg, &atx))
+			atx, err := types.AcivationTxFromBytes(msg)
+			require.NoError(t, err)
 			atx.SetReceived(time.Now().Local())
 
 			atx.SetEffectiveNumUnits(atx.NumUnits)
@@ -1200,7 +1200,6 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -1220,7 +1219,6 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 		100,
 		nipost.NIPost,
 	)
-	require.NoError(t, atxs.Add(cdb, atx))
 
 	act := newActivationTx(t,
 		sig,
@@ -1236,14 +1234,13 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 		nipost.NIPost,
 	)
 
-	bt, err := codec.Encode(act)
+	bt, err := codec.Encode(act.ToWireV1())
 	require.NoError(t, err)
 
-	var a types.ActivationTx
-	require.NoError(t, codec.Decode(bt, &a))
-	a.SetReceived(time.Now().Local())
+	a, err := types.AcivationTxFromBytes(bt)
+	require.NoError(t, err)
 
-	bt2, err := codec.Encode(&a)
+	bt2, err := codec.Encode(a.ToWireV1())
 	require.NoError(t, err)
 
 	require.Equal(t, bt, bt2)
@@ -1365,7 +1362,9 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	var atx types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(ctx context.Context, s string, b []byte) error {
-			require.NoError(t, codec.Decode(b, &atx))
+			decoded, err := types.AcivationTxFromBytes(b)
+			require.NoError(t, err)
+			atx = *decoded
 			atx.SetReceived(time.Now().Local())
 			require.NoError(t, atx.Initialize())
 
@@ -1606,8 +1605,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(2).FirstLayer()).Return(closed).AnyTimes()
 			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ string, got []byte) error {
-					var gotAtx types.ActivationTx
-					require.NoError(t, codec.Decode(got, &gotAtx))
+					gotAtx, err := types.AcivationTxFromBytes(got)
+					require.NoError(t, err)
 					require.Equal(t, tc.targetEpoch, gotAtx.TargetEpoch())
 					return nil
 				})

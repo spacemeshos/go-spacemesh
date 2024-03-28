@@ -685,7 +685,8 @@ func (b *Builder) createAtx(
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
-	buf, err := codec.Encode(atx)
+	// TODO: in future, encode the right ATX version depending on the epoch.
+	buf, err := codec.Encode(atx.ToWireV1())
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %w", err)
 	}

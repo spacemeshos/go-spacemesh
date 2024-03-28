@@ -13,6 +13,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 )
 
 const (
@@ -114,11 +115,11 @@ func save(filename string, src scale.Encodable) error {
 }
 
 func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
-	var ch types.NIPostChallenge
+	var ch wire.NIPostChallengeV1
 	if err := load(filepath.Join(dir, challengeFilename), &ch); err != nil {
 		return nil, fmt.Errorf("loading nipost challenge: %w", err)
 	}
-	return &ch, nil
+	return types.NIPostChallengeFromWireV1(ch), nil
 }
 
 func discardNipostChallenge(dir string) error {

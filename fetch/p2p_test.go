@@ -354,7 +354,7 @@ func TestP2PGetATXs(t *testing.T) {
 						context.Background(), []types.ATXID{atx.ID()})
 				},
 				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
-				codec.MustEncode(atx))
+				codec.MustEncode(atx.ToWireV1()))
 		})
 }
 

@@ -248,12 +248,12 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	got, err := getBytes(ctx, bs, datastore.ATXDB, atx.ID())
 	require.NoError(t, err)
 
-	var gotA types.ActivationTx
-	require.NoError(t, codec.Decode(got, &gotA))
+	gotA, err := types.AcivationTxFromBytes(got)
+	require.NoError(t, err)
 	require.NoError(t, gotA.Initialize())
 	gotA.SetEffectiveNumUnits(gotA.NumUnits)
 	gotA.SetReceived(atx.Received())
-	require.Equal(t, *atx, gotA)
+	require.Equal(t, atx, gotA)
 
 	_, err = getBytes(ctx, bs, datastore.BallotDB, atx.ID())
 	require.ErrorIs(t, err, datastore.ErrNotFound)

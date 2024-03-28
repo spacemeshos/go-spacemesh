@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -108,7 +109,7 @@ func UpdatePoetProofRef(
 	ref types.PoetProofRef,
 	membership *types.MerkleProof,
 ) error {
-	buf, err := codec.Encode(membership)
+	buf, err := codec.Encode(membership.ToWireV1())
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
@@ -139,8 +140,9 @@ func PoetProofRef(db sql.Executor, nodeID types.NodeID) (types.PoetProofRef, *ty
 	dec := func(stmt *sql.Statement) bool {
 		stmt.ColumnBytes(0, ref[:])
 		if stmt.ColumnLen(1) > 0 {
-			membership = &types.MerkleProof{}
-			_, decodeErr = codec.DecodeFrom(stmt.ColumnReader(1), membership)
+			membershipV1 := wire.MerkleProofV1{}
+			_, decodeErr = codec.DecodeFrom(stmt.ColumnReader(1), &membershipV1)
+			membership = types.MerkleProofFromWireV1(membershipV1)
 		}
 		return true
 	}

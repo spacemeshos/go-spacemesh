@@ -587,7 +587,7 @@ func TestLoadBlob(t *testing.T) {
 
 	var blob1 sql.Blob
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1))
-	encoded := codec.MustEncode(atx1.ActivationTx)
+	encoded := codec.MustEncode(atx1.ActivationTx.ToWireV1())
 	require.Equal(t, encoded, blob1.Bytes)
 
 	blobSizes, err := atxs.GetBlobSizes(db, [][]byte{atx1.ID().Bytes()})
@@ -601,7 +601,7 @@ func TestLoadBlob(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, atx2))
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))
-	encoded = codec.MustEncode(atx2.ActivationTx)
+	encoded = codec.MustEncode(atx2.ActivationTx.ToWireV1())
 	require.Equal(t, encoded, blob2.Bytes)
 	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
 		atx1.ID().Bytes(),
@@ -632,7 +632,7 @@ func TestGetBlobCached(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, atxs.Add(db, atx))
-	encoded, err := codec.Encode(atx.ActivationTx)
+	encoded, err := codec.Encode(atx.ActivationTx.ToWireV1())
 	require.NoError(t, err)
 	require.Equal(t, 1, db.QueryCount())
 
@@ -662,7 +662,7 @@ func TestCachedBlobEviction(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(db, atx))
 		addedATXs[n] = atx
-		encoded, err := codec.Encode(atx.ActivationTx)
+		encoded, err := codec.Encode(atx.ActivationTx.ToWireV1())
 		require.NoError(t, err)
 		blobs[n] = encoded
 		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))

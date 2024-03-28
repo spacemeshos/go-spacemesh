@@ -12,35 +12,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen -types PoetChallenge,PoetProof,PoetProofMessage,PoetRound,ProcessingError
+//go:generate scalegen -types PoetProof,PoetProofMessage,PoetRound,ProcessingError
 
 type PoetServer struct {
 	Address string    `mapstructure:"address" json:"address"`
 	Pubkey  Base64Enc `mapstructure:"pubkey" json:"pubkey"`
-}
-
-type PoetChallenge struct {
-	*NIPostChallenge
-	InitialPost         *Post
-	InitialPostMetadata *PostMetadata
-	NumUnits            uint32
-}
-
-func (c *PoetChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
-	if c == nil {
-		return nil
-	}
-	if err := encoder.AddObject("NIPostChallenge", c.NIPostChallenge); err != nil {
-		return err
-	}
-	if err := encoder.AddObject("InitialPost", c.InitialPost); err != nil {
-		return err
-	}
-	if err := encoder.AddObject("InitialPostMetadata", c.InitialPostMetadata); err != nil {
-		return err
-	}
-	encoder.AddUint32("NumUnits", c.NumUnits)
-	return nil
 }
 
 type Member [32]byte

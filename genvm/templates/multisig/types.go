@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	// required to help scalegen find the types
+	// required to help scalegen find the types.
 	_ "github.com/spacemeshos/go-spacemesh/common/types/primitive"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"

@@ -33,7 +33,7 @@ func TestActivationEncoding(t *testing.T) {
 
 	buf := bytes.NewBuffer(nil)
 	enc := scale.NewEncoder(buf)
-	_, err := object.EncodeScale(enc)
+	_, err := object.ToWireV1().EncodeScale(enc)
 	require.NoError(t, err)
 
 	var epoch types.EpochID

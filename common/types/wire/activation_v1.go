@@ -68,6 +68,14 @@ type NIPostChallengeV1 struct {
 	InitialPost   *PostV1
 }
 
+// Hash serializes the NIPostChallenge and returns its hash.
+// The serialized challenge is first prepended with a byte 0x00, and then hashed
+// for second preimage resistance of poet membership merkle tree.
+func (challenge *NIPostChallengeV1) Hash() primitive.Hash32 {
+	ncBytes := codec.MustEncode(challenge)
+	return hash.Sum([]byte{0x00}, ncBytes)
+}
+
 type PostV1 struct {
 	Nonce   uint32
 	Indices []byte `scale:"max=800"` // up to K2=100

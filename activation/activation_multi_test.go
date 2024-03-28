@@ -14,6 +14,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -440,9 +441,10 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			func(ctx context.Context, _ string, got []byte) error {
 				atxMtx.Lock()
 				defer atxMtx.Unlock()
-				var gotAtx types.ActivationTx
+				var gotAtx wire.ActivationTxV1
 				require.NoError(t, codec.Decode(got, &gotAtx))
-				atxs[gotAtx.SmesherID] = gotAtx
+				atx := types.ActivationTxFromWireV1(&gotAtx)
+				atxs[atx.SmesherID] = *atx
 				return nil
 			},
 		)
