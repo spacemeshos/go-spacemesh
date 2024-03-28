@@ -519,11 +519,11 @@ func (n *NIPost) ToWireV1() *wire.NIPostV1 {
 		return nil
 	}
 	poetMembership := wire.MerkleProofV1{
-		Nodes:     make([]wire.Hash32, 0, len(n.Membership.Nodes)),
+		Nodes:     make([]Hash32, 0, len(n.Membership.Nodes)),
 		LeafIndex: n.Membership.LeafIndex,
 	}
 	for _, node := range n.Membership.Nodes {
-		poetMembership.Nodes = append(poetMembership.Nodes, wire.Hash32(node))
+		poetMembership.Nodes = append(poetMembership.Nodes, Hash32(node))
 	}
 	return &wire.NIPostV1{
 		Membership: poetMembership,
@@ -541,18 +541,18 @@ func (a *ActivationTx) ToWireV1() *wire.ActivationTxV1 {
 			NIPostChallengeV1: wire.NIPostChallengeV1{
 				PublishEpoch:   a.PublishEpoch.Uint32(),
 				Sequence:       a.Sequence,
-				PrevATXID:      wire.Hash32(a.PrevATXID),
-				PositioningATX: wire.Hash32(a.PositioningATX),
-				CommitmentATX:  (*wire.Hash32)(a.CommitmentATX),
+				PrevATXID:      Hash32(a.PrevATXID),
+				PositioningATX: Hash32(a.PositioningATX),
+				CommitmentATX:  (*Hash32)(a.CommitmentATX),
 				InitialPost:    a.InitialPost.ToWireV1(),
 			},
 			Coinbase: wire.Address(a.Coinbase),
 			NumUnits: a.NumUnits,
 			NIPost:   a.NIPost.ToWireV1(),
-			NodeID:   (*wire.Hash32)(a.NodeID),
+			NodeID:   (*Hash32)(a.NodeID),
 			VRFNonce: (*wire.VRFPostIndex)(a.VRFNonce),
 		},
-		SmesherID: wire.Hash32(a.SmesherID),
+		SmesherID: Hash32(a.SmesherID),
 		Signature: a.Signature,
 	}
 }

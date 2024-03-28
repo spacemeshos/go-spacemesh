@@ -395,7 +395,7 @@ func validateInvalidPostIndex(ctx context.Context,
 		if err != nil {
 			return types.EmptyNodeID, fmt.Errorf("getting commitment ATX: %w", err)
 		}
-		commitmentAtx = (*wire.Hash32)(&atx)
+		commitmentAtx = (*types.Hash32)(&atx)
 	}
 	post := (*shared.Proof)(atx.NIPost.Post)
 	meta := &shared.ProofMetadata{

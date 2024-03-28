@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types/primitive"
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
@@ -37,7 +38,7 @@ func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
 type ActivationTxV1 struct {
 	InnerActivationTxV1
 
-	SmesherID Hash32
+	SmesherID primitive.Hash32
 	Signature [64]byte
 }
 
@@ -48,8 +49,8 @@ type InnerActivationTxV1 struct {
 	NumUnits uint32
 
 	NIPost   *NIPostV1
-	NodeID   *Hash32       // only present in initial ATX to make hash of the first InnerActivationTxV2 unique
-	VRFNonce *VRFPostIndex // only present when the nonce changed (or initial ATX)
+	NodeID   *primitive.Hash32 // only present in initial ATX to make hash of the first InnerActivationTxV2 unique
+	VRFNonce *VRFPostIndex     // only present when the nonce changed (or initial ATX)
 }
 
 type NIPostChallengeV1 struct {
@@ -59,11 +60,11 @@ type NIPostChallengeV1 struct {
 	// that miner.
 	Sequence uint64
 	// the previous ATX's ID (for all but the first in the sequence)
-	PrevATXID      Hash32
-	PositioningATX Hash32
+	PrevATXID      primitive.Hash32
+	PositioningATX primitive.Hash32
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
-	CommitmentATX *Hash32
+	CommitmentATX *primitive.Hash32
 	InitialPost   *PostV1
 }
 
@@ -75,7 +76,7 @@ type PostV1 struct {
 
 type MerkleProofV1 struct {
 	// Nodes on path from leaf to root (not including leaf)
-	Nodes     []Hash32 `scale:"max=32"`
+	Nodes     []primitive.Hash32 `scale:"max=32"`
 	LeafIndex uint64
 }
 
@@ -103,7 +104,7 @@ type PostMetadataV1 struct {
 
 type ATXMetadataV1 struct {
 	PublishEpoch uint32
-	MsgHash      Hash32
+	MsgHash      primitive.Hash32
 }
 
 func (atx *ActivationTxV1) SignedBytes() []byte {
@@ -114,7 +115,7 @@ func (atx *ActivationTxV1) SignedBytes() []byte {
 	return data
 }
 
-func (atx *ActivationTxV1) HashInnerBytes() (result Hash32) {
+func (atx *ActivationTxV1) HashInnerBytes() (result primitive.Hash32) {
 	h := hash.New()
 	codec.MustEncodeTo(h, &atx.InnerActivationTxV1)
 	h.Sum(result[:0])

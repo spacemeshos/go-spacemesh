@@ -5,6 +5,7 @@ package wire
 
 import (
 	"github.com/spacemeshos/go-scale"
+	"github.com/spacemeshos/go-spacemesh/common/types/primitive"
 )
 
 func (t *ActivationTxV1) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -135,7 +136,7 @@ func (t *InnerActivationTxV1) DecodeScale(dec *scale.Decoder) (total int, err er
 		t.NIPost = field
 	}
 	{
-		field, n, err := scale.DecodeOption[Hash32](dec)
+		field, n, err := scale.DecodeOption[primitive.Hash32](dec)
 		if err != nil {
 			return total, err
 		}
@@ -231,7 +232,7 @@ func (t *NIPostChallengeV1) DecodeScale(dec *scale.Decoder) (total int, err erro
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeOption[Hash32](dec)
+		field, n, err := scale.DecodeOption[primitive.Hash32](dec)
 		if err != nil {
 			return total, err
 		}
@@ -322,7 +323,7 @@ func (t *MerkleProofV1) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *MerkleProofV1) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[Hash32](dec, 32)
+		field, n, err := scale.DecodeStructSliceWithLimit[primitive.Hash32](dec, 32)
 		if err != nil {
 			return total, err
 		}
