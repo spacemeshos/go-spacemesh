@@ -7,6 +7,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
@@ -30,9 +31,11 @@ func decoder(fn decoderCallback) sql.Decoder {
 		stmt.ColumnBytes(0, id[:])
 		checkpointed := stmt.ColumnLen(1) == 0
 		if !checkpointed {
-			if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &a); err != nil {
+			var atxV1 wire.ActivationTxV1
+			if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &atxV1); err != nil {
 				return fn(nil, fmt.Errorf("decode %w", err))
 			}
+			a = *types.ActivationTxFromWireV1(&atxV1)
 		}
 		a.SetID(id)
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
@@ -352,7 +355,7 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err e
 
 // Add adds an ATX for a given ATX ID.
 func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
-	buf, err := codec.Encode(atx.ActivationTx)
+	buf, err := codec.Encode(atx.ActivationTx.ToWireV1())
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}

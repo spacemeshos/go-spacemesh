@@ -685,7 +685,8 @@ func (b *Builder) createAtx(
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
-	buf, err := codec.Encode(atx)
+	// TODO: in future, encode the right ATX version depending on the epoch.
+	buf, err := codec.Encode(atx.ToWireV1())
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %w", err)
 	}
@@ -739,7 +740,8 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
-	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
+	// FIXME - there is no need to sign types.ActivationTX (only wire.ActivationTxVx)
+	atx.Signature = signer.Sign(signing.ATX, atx.ToWireV1().SignedBytes())
 	atx.SmesherID = signer.NodeID()
 	return atx.Initialize()
 }

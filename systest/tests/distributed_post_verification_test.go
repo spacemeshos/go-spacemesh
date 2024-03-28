@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -245,7 +246,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	eg.Go(func() error {
 		for {
 			logger.Sugar().Infow("publishing ATX", "atx", atx)
-			buf, err := codec.Encode(atx)
+			buf, err := codec.Encode(atx.ToWireV1())
 			require.NoError(t, err)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
 			require.NoError(t, err)
@@ -269,7 +270,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		var proof types.MalfeasanceProof
 		require.NoError(t, codec.Decode(malfeasance.Proof.Proof, &proof))
 		require.Equal(t, types.InvalidPostIndex, proof.Proof.Type)
-		invalidPostProof := proof.Proof.Data.(*types.InvalidPostIndexProof)
+		invalidPostProof := proof.Proof.Data.(*wire.InvalidPostIndexProofV1)
 		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
 		invalidAtx := invalidPostProof.Atx
 		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
@@ -280,12 +281,12 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.Equal(t, atx.Signature, invalidAtx.Signature)
 		require.Equal(t, atx.Coinbase, invalidAtx.Coinbase)
 		require.Equal(t, *atx.CommitmentATX, *invalidAtx.CommitmentATX)
-		require.Equal(t, atx.NIPostChallenge, invalidAtx.NIPostChallenge)
+		require.Equal(t, atx.NIPostChallenge, invalidAtx.NIPostChallengeV1)
 		require.Equal(t, atx.NIPost.Post.Indices, invalidAtx.NIPost.Post.Indices)
 
 		meta := &shared.ProofMetadata{
-			NodeId:          invalidAtx.NodeID.Bytes(),
-			CommitmentAtxId: invalidAtx.CommitmentATX.Bytes(),
+			NodeId:          invalidAtx.NodeID[:],
+			CommitmentAtxId: invalidAtx.CommitmentATX[:],
 			NumUnits:        invalidAtx.NumUnits,
 			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
 			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,

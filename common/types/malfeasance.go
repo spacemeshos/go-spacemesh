@@ -10,10 +10,11 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata,InvalidPostIndexProof
+//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata
 
 const (
 	MultipleATXs byte = iota + 1
@@ -67,11 +68,12 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		}
 	case InvalidPostIndex:
 		encoder.AddString("type", "invalid post index")
-		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
+		p, ok := mp.Proof.Data.(*wire.InvalidPostIndexProofV1)
 		if ok {
-			p.Atx.Initialize()
-			encoder.AddString("atx_id", p.Atx.ID().String())
-			encoder.AddString("smesher", p.Atx.SmesherID.String())
+			// FIXME
+			// p.Atx.Initialize()
+			// encoder.AddString("atx_id", p.Atx.ID().String())
+			// encoder.AddString("smesher", p.Atx.SmesherID.String())
 			encoder.AddUint32("invalid index", p.InvalidIdx)
 		}
 	default:
@@ -144,7 +146,7 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 		e.Data = &proof
 		total += n
 	case InvalidPostIndex:
-		var proof InvalidPostIndexProof
+		var proof wire.InvalidPostIndexProofV1
 		n, err := proof.DecodeScale(dec)
 		if err != nil {
 			return total, err
@@ -224,13 +226,6 @@ func (m *AtxProofMsg) SignedBytes() []byte {
 		log.With().Fatal("failed to serialize AtxProofMsg", log.Err(err))
 	}
 	return data
-}
-
-type InvalidPostIndexProof struct {
-	Atx ActivationTx
-
-	// Which index in POST is invalid
-	InvalidIdx uint32
 }
 
 type BallotProofMsg struct {
@@ -355,17 +350,19 @@ func MalfeasanceInfo(smesher NodeID, mp *MalfeasanceProof) string {
 			)
 		}
 	case InvalidPostIndex:
-		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
-		if ok {
-			p.Atx.Initialize()
-			b.WriteString(
-				fmt.Sprintf(
-					"cause: smesher published ATX %s with invalid post index %d in epoch %d\n",
-					p.Atx.ID().ShortString(),
-					p.InvalidIdx,
-					p.Atx.PublishEpoch,
-				))
-		}
+		// FIXME
+		// p, ok := mp.Proof.Data.(*wire.InvalidPostIndexProofV1)
+		// if ok {
+
+		// p.Atx.Initialize()
+		// b.WriteString(
+		// 	fmt.Sprintf(
+		// 		"cause: smesher published ATX %s with invalid post index %d in epoch %d\n",
+		// 		p.Atx.ID().ShortString(),
+		// 		p.InvalidIdx,
+		// 		p.Atx.PublishEpoch,
+		// 	))
+		// }
 	}
 	return b.String()
 }

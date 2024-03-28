@@ -1964,7 +1964,7 @@ func (app *App) verifyDB(ctx context.Context) {
 			}
 
 			// verify atx signature
-			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.ToWireV1().SignedBytes(), atx.Signature) {
 				app.log.With().Error("ATX signature verification failed",
 					log.Stringer("atx_id", atx.ID()),
 					log.Stringer("smesher", atx.SmesherID),
@@ -2150,7 +2150,7 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 		)
 	}
 	for _, vatx := range app.preserve.Deps {
-		encoded, err := codec.Encode(vatx)
+		encoded, err := codec.Encode(vatx.ToWireV1())
 		if err != nil {
 			app.log.With().Error("failed to encode atx after checkpoint",
 				log.Inline(vatx),

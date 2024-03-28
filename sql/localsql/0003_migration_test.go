@@ -22,6 +22,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -491,8 +492,8 @@ func Test_0003Migration_Phase1_Complete(t *testing.T) {
 		PoetProofRef: types.PoetProofRef{
 			4, 5, 6,
 		},
-		NIPost: &types.NIPost{
-			Membership: types.MerkleProof{
+		NIPost: &wire.NIPostV1{
+			Membership: wire.MerkleProofV1{
 				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
 				LeafIndex: 1,
 			},
@@ -620,17 +621,17 @@ func Test_0003Migration_Phase2_Complete(t *testing.T) {
 	state := &NIPostBuilderState{
 		Challenge:    ch.Hash(),
 		PoetProofRef: poetProofRef,
-		NIPost: &types.NIPost{
-			Post: &types.Post{
+		NIPost: &wire.NIPostV1{
+			Post: &wire.PostV1{
 				Pow:     7,
 				Indices: []byte{1, 2, 3},
 				Nonce:   4,
 			},
-			PostMetadata: &types.PostMetadata{
+			PostMetadata: &wire.PostMetadataV1{
 				Challenge:     poetProofRef[:],
 				LabelsPerUnit: 1024,
 			},
-			Membership: types.MerkleProof{
+			Membership: wire.MerkleProofV1{
 				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
 				LeafIndex: 1,
 			},
@@ -782,17 +783,17 @@ func Test_0003Migration_Rollback(t *testing.T) {
 	state := &NIPostBuilderState{
 		Challenge:    ch.Hash(),
 		PoetProofRef: poetProofRef,
-		NIPost: &types.NIPost{
-			Post: &types.Post{
+		NIPost: &wire.NIPostV1{
+			Post: &wire.PostV1{
 				Pow:     7,
 				Indices: []byte{1, 2, 3},
 				Nonce:   4,
 			},
-			PostMetadata: &types.PostMetadata{
+			PostMetadata: &wire.PostMetadataV1{
 				Challenge:     poetProofRef[:],
 				LabelsPerUnit: 1024,
 			},
-			Membership: types.MerkleProof{
+			Membership: wire.MerkleProofV1{
 				Nodes:     []types.Hash32{types.RandomHash(), types.RandomHash()},
 				LeafIndex: 1,
 			},

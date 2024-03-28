@@ -32,7 +32,7 @@ func TestCodec_MultipleATXs(t *testing.T) {
 		atxProof.Messages[i] = types.AtxProofMsg{
 			InnerMsg: types.ATXMetadata{
 				PublishEpoch: a.PublishEpoch,
-				MsgHash:      types.BytesToHash(a.HashInnerBytes()),
+				MsgHash:      types.Hash32(a.ToWireV1().HashInnerBytes()),
 			},
 			SmesherID: a.SmesherID,
 			Signature: a.Signature,

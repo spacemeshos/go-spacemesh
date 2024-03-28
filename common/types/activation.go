@@ -10,12 +10,13 @@ import (
 	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types/primitive"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen
+//go:generate scalegen -types ATXMetadata,EpochActiveSet
 
 // BytesToATXID is a helper to copy buffer into a ATXID.
 func BytesToATXID(buf []byte) (id ATXID) {
@@ -126,17 +127,6 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// Hash serializes the NIPostChallenge and returns its hash.
-// The serialized challenge is first prepended with a byte 0x00, and then hashed
-// for second preimage resistance of poet membership merkle tree.
-func (challenge *NIPostChallenge) Hash() Hash32 {
-	ncBytes, err := codec.Encode(challenge)
-	if err != nil {
-		log.With().Fatal("failed to encode NIPostChallenge", log.Err(err))
-	}
-	return hash.Sum([]byte{0x00}, ncBytes)
-}
-
 // String returns a string representation of the NIPostChallenge, for logging purposes.
 // It implements the Stringer interface.
 func (challenge *NIPostChallenge) String() string {
@@ -152,6 +142,10 @@ func (challenge *NIPostChallenge) String() string {
 // to participate thanks to the ATX.
 func (challenge *NIPostChallenge) TargetEpoch() EpochID {
 	return challenge.PublishEpoch + 1
+}
+
+func (challenge *NIPostChallenge) Hash() primitive.Hash32 {
+	return challenge.ToWireV1().Hash()
 }
 
 // InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
@@ -229,28 +223,6 @@ func (atx *ActivationTx) SetGolden() {
 	atx.golden = true
 }
 
-// SignedBytes returns a signed data of the ActivationTx.
-func (atx *ActivationTx) SignedBytes() []byte {
-	data, err := codec.Encode(&ATXMetadata{
-		PublishEpoch: atx.PublishEpoch,
-		MsgHash:      BytesToHash(atx.HashInnerBytes()),
-	})
-	if err != nil {
-		log.With().Fatal("failed to serialize ATXMetadata", log.Err(err))
-	}
-	return data
-}
-
-// HashInnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
-func (atx *ActivationTx) HashInnerBytes() []byte {
-	h := hash.New()
-	_, err := codec.EncodeTo(h, &atx.InnerActivationTx)
-	if err != nil {
-		log.Fatal("failed to encode InnerActivationTx for hashing")
-	}
-	return h.Sum(nil)
-}
-
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
@@ -280,7 +252,7 @@ func (atx *ActivationTx) Initialize() error {
 		return errors.New("ATX already initialized")
 	}
 
-	atx.id = ATXID(BytesToHash(atx.HashInnerBytes()))
+	atx.id = ATXID(Hash32(atx.ToWireV1().HashInnerBytes()))
 	return nil
 }
 
@@ -389,86 +361,8 @@ type VRFPostIndex uint64
 // Field returns a log field. Implements the LoggableField interface.
 func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
 
-func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(*v))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		value, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		*v = VRFPostIndex(value)
-	}
-	return total, nil
-}
-
 // Post is an alias to postShared.Proof.
 type Post shared.Proof
-
-// EncodeScale implements scale codec interface.
-func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(p.Nonce))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, p.Indices, 8000) // needs to hold K2*8 bytes at most
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, p.Pow)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Nonce = field
-	}
-	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000) // needs to hold K2*8 bytes at most
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Indices = field
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Pow = field
-	}
-	return total, nil
-}
 
 func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if p == nil {
@@ -525,3 +419,153 @@ type EpochActiveSet struct {
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")
+
+func (p *Post) ToWireV1() *wire.PostV1 {
+	if p == nil {
+		return nil
+	}
+	return &wire.PostV1{
+		Nonce:   p.Nonce,
+		Indices: p.Indices,
+		Pow:     p.Pow,
+	}
+}
+
+func (n *NIPost) ToWireV1() *wire.NIPostV1 {
+	if n == nil {
+		return nil
+	}
+
+	return &wire.NIPostV1{
+		Membership: *n.Membership.ToWireV1(),
+		Post:       n.Post.ToWireV1(),
+		PostMetadata: &wire.PostMetadataV1{
+			Challenge:     n.PostMetadata.Challenge,
+			LabelsPerUnit: n.PostMetadata.LabelsPerUnit,
+		},
+	}
+}
+
+func (p *MerkleProof) ToWireV1() *wire.MerkleProofV1 {
+	if p == nil {
+		return nil
+	}
+	nodes := make([]Hash32, 0, len(p.Nodes))
+	for _, node := range p.Nodes {
+		nodes = append(nodes, Hash32(node))
+	}
+	return &wire.MerkleProofV1{
+		Nodes:     nodes,
+		LeafIndex: p.LeafIndex,
+	}
+}
+
+func (c *NIPostChallenge) ToWireV1() *wire.NIPostChallengeV1 {
+	return &wire.NIPostChallengeV1{
+		PublishEpoch:   c.PublishEpoch.Uint32(),
+		Sequence:       c.Sequence,
+		PrevATXID:      primitive.Hash32(c.PrevATXID),
+		PositioningATX: primitive.Hash32(c.PositioningATX),
+		CommitmentATX:  (*primitive.Hash32)(c.CommitmentATX),
+		InitialPost:    c.InitialPost.ToWireV1(),
+	}
+}
+
+func (a *ActivationTx) ToWireV1() *wire.ActivationTxV1 {
+	return &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: *a.NIPostChallenge.ToWireV1(),
+			Coinbase:          wire.Address(a.Coinbase),
+			NumUnits:          a.NumUnits,
+			NIPost:            a.NIPost.ToWireV1(),
+			NodeID:            (*primitive.Hash32)(a.NodeID),
+			VRFNonce:          (*wire.VRFPostIndex)(a.VRFNonce),
+		},
+		SmesherID: Hash32(a.SmesherID),
+		Signature: a.Signature,
+	}
+}
+
+// Decode ActivationTx from bytes.
+// In future it should decide which version of ActivationTx to decode based on the publish epoch.
+func AcivationTxFromBytes(data []byte) (*ActivationTx, error) {
+	var wireAtx wire.ActivationTxV1
+	err := codec.Decode(data, &wireAtx)
+	if err != nil {
+		return nil, fmt.Errorf("decoding ATX: %w", err)
+	}
+
+	return ActivationTxFromWireV1(&wireAtx), nil
+}
+
+func ActivationTxFromWireV1(atx *wire.ActivationTxV1) *ActivationTx {
+	return &ActivationTx{
+		InnerActivationTx: InnerActivationTx{
+			NIPostChallenge: NIPostChallenge{
+				PublishEpoch:   EpochID(atx.PublishEpoch),
+				Sequence:       atx.Sequence,
+				PrevATXID:      ATXID(atx.PrevATXID),
+				PositioningATX: ATXID(atx.PositioningATX),
+				CommitmentATX:  (*ATXID)(atx.CommitmentATX),
+				InitialPost:    PostFromWireV1(atx.InitialPost),
+			},
+			Coinbase: Address(atx.Coinbase),
+			NumUnits: atx.NumUnits,
+			NIPost:   NIPostFromWireV1(atx.NIPost),
+			NodeID:   (*NodeID)(atx.NodeID),
+			VRFNonce: (*VRFPostIndex)(atx.VRFNonce),
+		},
+		SmesherID: NodeID(atx.SmesherID),
+		Signature: atx.Signature,
+	}
+}
+
+func NIPostChallengeFromWireV1(ch wire.NIPostChallengeV1) *NIPostChallenge {
+	return &NIPostChallenge{
+		PublishEpoch:   EpochID(ch.PublishEpoch),
+		Sequence:       ch.Sequence,
+		PrevATXID:      ATXID(ch.PrevATXID),
+		PositioningATX: ATXID(ch.PositioningATX),
+		CommitmentATX:  (*ATXID)(ch.CommitmentATX),
+		InitialPost:    PostFromWireV1(ch.InitialPost),
+	}
+}
+
+func NIPostFromWireV1(nipost *wire.NIPostV1) *NIPost {
+	if nipost == nil {
+		return nil
+	}
+
+	return &NIPost{
+		Membership: *MerkleProofFromWireV1(nipost.Membership),
+		Post:       PostFromWireV1(nipost.Post),
+		PostMetadata: &PostMetadata{
+			Challenge:     nipost.PostMetadata.Challenge,
+			LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
+		},
+	}
+}
+
+func PostFromWireV1(post *wire.PostV1) *Post {
+	if post == nil {
+		return nil
+	}
+	return &Post{
+		Nonce:   post.Nonce,
+		Indices: post.Indices,
+		Pow:     post.Pow,
+	}
+}
+
+func MerkleProofFromWireV1(proofV1 wire.MerkleProofV1) *MerkleProof {
+	proof := &MerkleProof{
+		LeafIndex: proofV1.LeafIndex,
+	}
+	for _, node := range proofV1.Nodes {
+		if proof.Nodes == nil {
+			proof.Nodes = make([]Hash32, 0, len(proofV1.Nodes))
+		}
+		proof.Nodes = append(proof.Nodes, Hash32(node))
+	}
+	return proof
+}

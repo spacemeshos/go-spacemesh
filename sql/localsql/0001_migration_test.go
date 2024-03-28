@@ -16,14 +16,14 @@ import (
 )
 
 func saveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
-	if err := save(filepath.Join(dir, challengeFilename), ch); err != nil {
+	if err := save(filepath.Join(dir, challengeFilename), ch.ToWireV1()); err != nil {
 		return fmt.Errorf("saving nipost challenge: %w", err)
 	}
 	return nil
 }
 
 func savePost(dir string, post *types.Post) error {
-	if err := save(filepath.Join(dir, postFilename), post); err != nil {
+	if err := save(filepath.Join(dir, postFilename), post.ToWireV1()); err != nil {
 		return fmt.Errorf("saving post: %w", err)
 	}
 	return nil

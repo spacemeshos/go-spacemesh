@@ -12,7 +12,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -187,7 +186,7 @@ func TestRegossip(t *testing.T) {
 		for _, sig := range tab.signers {
 			atx := newActivationTx(t,
 				sig, 0, types.EmptyATXID, types.EmptyATXID, nil,
-				layer.GetEpoch(), 0, 1, types.Address{}, 1, &types.NIPost{})
+				layer.GetEpoch(), 0, 1, types.Address{}, 1, nil)
 			require.NoError(t, atxs.Add(tab.cdb, atx))
 
 			if refAtx == nil {
@@ -440,9 +439,9 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			func(ctx context.Context, _ string, got []byte) error {
 				atxMtx.Lock()
 				defer atxMtx.Unlock()
-				var gotAtx types.ActivationTx
-				require.NoError(t, codec.Decode(got, &gotAtx))
-				atxs[gotAtx.SmesherID] = gotAtx
+				atx, err := types.AcivationTxFromBytes(got)
+				require.NoError(t, err)
+				atxs[atx.SmesherID] = *atx
 				return nil
 			},
 		)

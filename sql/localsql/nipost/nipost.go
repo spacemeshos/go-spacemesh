@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -16,7 +17,7 @@ type NIPostState struct {
 }
 
 func AddNIPost(db sql.Executor, nodeID types.NodeID, nipost *NIPostState) error {
-	buf, err := codec.Encode(&nipost.Membership)
+	buf, err := codec.Encode(nipost.Membership.ToWireV1())
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
@@ -79,8 +80,9 @@ func NIPost(db sql.Executor, nodeID types.NodeID) (*NIPostState, error) {
 		nipost.NumUnits = uint32(stmt.ColumnInt64(3))
 		nipost.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(4))
 
-		nipost.Membership = types.MerkleProof{}
-		_, decodeErr = codec.DecodeFrom(stmt.ColumnReader(5), &nipost.Membership)
+		var membershipV1 wire.MerkleProofV1
+		_, decodeErr = codec.DecodeFrom(stmt.ColumnReader(5), &membershipV1)
+		nipost.Membership = *types.MerkleProofFromWireV1(membershipV1)
 
 		nipost.PostMetadata = &types.PostMetadata{
 			Challenge:     make([]byte, stmt.ColumnLen(6)),

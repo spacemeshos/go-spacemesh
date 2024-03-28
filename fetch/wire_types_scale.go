@@ -6,6 +6,7 @@ package fetch
 import (
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/primitive"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 )
 
@@ -223,7 +224,7 @@ func (t *MeshHashes) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *MeshHashes) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 1000)
+		field, n, err := scale.DecodeStructSliceWithLimit[primitive.Hash32](dec, 1000)
 		if err != nil {
 			return total, err
 		}

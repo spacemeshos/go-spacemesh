@@ -33,7 +33,7 @@ func TestActivationEncoding(t *testing.T) {
 
 	buf := bytes.NewBuffer(nil)
 	enc := scale.NewEncoder(buf)
-	_, err := object.EncodeScale(enc)
+	_, err := object.ToWireV1().EncodeScale(enc)
 	require.NoError(t, err)
 
 	var epoch types.EpochID
@@ -83,20 +83,4 @@ func FuzzRoundEndConsistency(f *testing.F) {
 
 func FuzzRoundEndStateSafety(f *testing.F) {
 	tester.FuzzSafety[types.RoundEnd](f)
-}
-
-func FuzzVRFPostIndexConsistency(f *testing.F) {
-	tester.FuzzConsistency[types.VRFPostIndex](f)
-}
-
-func FuzzVRFPostIndexTxStateSafety(f *testing.F) {
-	tester.FuzzSafety[types.VRFPostIndex](f)
-}
-
-func FuzzPostConsistency(f *testing.F) {
-	tester.FuzzConsistency[types.Post](f)
-}
-
-func FuzzPostStateSafety(f *testing.F) {
-	tester.FuzzSafety[types.Post](f)
 }
