@@ -361,86 +361,8 @@ type VRFPostIndex uint64
 // Field returns a log field. Implements the LoggableField interface.
 func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
 
-func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(*v))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		value, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		*v = VRFPostIndex(value)
-	}
-	return total, nil
-}
-
 // Post is an alias to postShared.Proof.
 type Post shared.Proof
-
-// EncodeScale implements scale codec interface.
-func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(p.Nonce))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, p.Indices, 8000) // needs to hold K2*8 bytes at most
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, p.Pow)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Nonce = field
-	}
-	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000) // needs to hold K2*8 bytes at most
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Indices = field
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Pow = field
-	}
-	return total, nil
-}
 
 func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if p == nil {

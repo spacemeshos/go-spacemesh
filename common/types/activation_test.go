@@ -84,19 +84,3 @@ func FuzzRoundEndConsistency(f *testing.F) {
 func FuzzRoundEndStateSafety(f *testing.F) {
 	tester.FuzzSafety[types.RoundEnd](f)
 }
-
-func FuzzVRFPostIndexConsistency(f *testing.F) {
-	tester.FuzzConsistency[types.VRFPostIndex](f)
-}
-
-func FuzzVRFPostIndexTxStateSafety(f *testing.F) {
-	tester.FuzzSafety[types.VRFPostIndex](f)
-}
-
-func FuzzPostConsistency(f *testing.F) {
-	tester.FuzzConsistency[types.Post](f)
-}
-
-func FuzzPostStateSafety(f *testing.F) {
-	tester.FuzzSafety[types.Post](f)
-}

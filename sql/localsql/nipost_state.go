@@ -149,11 +149,11 @@ func discardBuilderState(dir string) error {
 }
 
 func loadPost(dir string) (*types.Post, error) {
-	var post types.Post
+	var post wire.PostV1
 	if err := load(filepath.Join(dir, postFilename), &post); err != nil {
 		return nil, fmt.Errorf("loading post: %w", err)
 	}
-	return &post, nil
+	return types.PostFromWireV1(&post), nil
 }
 
 func discardPost(dir string) error {
