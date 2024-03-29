@@ -449,7 +449,7 @@ func collect(
 	if err != nil {
 		return fmt.Errorf("get ref atx: %w", err)
 	}
-	if atx.Golden() {
+	if atx.Golden {
 		return fmt.Errorf("atx %v belong to previous snapshot. cannot be preserved", ref)
 	}
 	if atx.CommitmentATX != nil {

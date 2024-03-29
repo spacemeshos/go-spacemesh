@@ -48,7 +48,7 @@ func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
 
 		BaseTickHeight: vatx.BaseTickHeight(),
 		TickCount:      vatx.TickCount(),
-		Golden:         vatx.Golden(),
+		Golden:         vatx.Golden,
 	}
 }
 

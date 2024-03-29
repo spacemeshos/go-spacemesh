@@ -714,7 +714,7 @@ func TestCheckpointATX(t *testing.T) {
 	require.Equal(t, catx.Sequence, got.Sequence)
 	require.Equal(t, catx.Coinbase, got.Coinbase)
 	require.True(t, got.Received().IsZero(), got.Received())
-	require.True(t, got.Golden())
+	require.True(t, got.Golden)
 
 	gotcommit, err := atxs.CommitmentATX(db, sig.NodeID())
 	require.NoError(t, err)

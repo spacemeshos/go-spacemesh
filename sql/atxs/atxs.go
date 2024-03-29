@@ -48,7 +48,7 @@ func decoder(fn decoderCallback) sql.Decoder {
 		effectiveNumUnits := uint32(stmt.ColumnInt32(5))
 		a.SetEffectiveNumUnits(effectiveNumUnits)
 		if checkpointed {
-			a.SetGolden()
+			a.Golden = true
 			a.NumUnits = effectiveNumUnits
 			a.SetReceived(time.Time{})
 		} else {

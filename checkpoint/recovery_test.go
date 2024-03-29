@@ -58,7 +58,7 @@ func atxEqual(
 	require.True(tb, bytes.Equal(sAtx.PublicKey, vAtx.SmesherID.Bytes()))
 	require.Equal(tb, sAtx.Sequence, vAtx.Sequence)
 	require.True(tb, bytes.Equal(sAtx.Coinbase, vAtx.Coinbase.Bytes()))
-	require.True(tb, vAtx.Golden())
+	require.True(tb, vAtx.Golden)
 }
 
 func accountEqual(tb testing.TB, cacct types.AccountSnapshot, acct *types.Account) {

@@ -163,7 +163,7 @@ type ActivationTx struct {
 	SmesherID NodeID
 	Signature EdSignature
 
-	golden            bool
+	Golden            bool
 	id                ATXID     // non-exported cache of the ATXID
 	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
 	received          time.Time // time received by node, gossiped or synced
@@ -186,17 +186,6 @@ func NewActivationTx(
 		VRFNonce:        nonce,
 	}
 	return atx
-}
-
-// Golden returns true if atx is from a checkpoint snapshot.
-// a golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
-func (atx *ActivationTx) Golden() bool {
-	return atx.golden
-}
-
-// SetGolden set atx to golden.
-func (atx *ActivationTx) SetGolden() {
-	atx.golden = true
 }
 
 // MarshalLogObject implements logging interface.
@@ -281,7 +270,7 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	if atx.effectiveNumUnits == 0 {
 		return nil, errors.New("effective num units not set")
 	}
-	if !atx.Golden() && atx.received.IsZero() {
+	if !atx.Golden && atx.received.IsZero() {
 		return nil, errors.New("received time not set")
 	}
 	vAtx := &VerifiedActivationTx{
