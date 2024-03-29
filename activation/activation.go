@@ -435,13 +435,16 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		// build new challenge
+		logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", current.Uint32()))
 	case err != nil:
+		logger.Info("failed to load NiPoST challenge from local state", zap.Error(err))
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
 	case challenge.PublishEpoch < current:
 		logger.Info(
-			"existing NiPOST challenge is stale, resetting state",
+			"existing NiPoST challenge is stale, resetting state",
 			zap.Uint32("current_epoch", current.Uint32()),
-			zap.Uint32("challenge publish epoch", challenge.PublishEpoch.Uint32()),
+			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
+			zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
 		)
 		// Reset the state to idle because we won't be building POST until we get a new PoET proof
 		// (typically more than epoch time from now).
@@ -454,9 +457,13 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		}
 	default:
 		// challenge is fresh
+		logger.Info("loaded NiPoST challenge from local state",
+			zap.Uint32("current_epoch", current.Uint32()),
+			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
+			zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
+		)
 		return challenge, nil
 	}
-	logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", current.Uint32()))
 
 	prev, err := b.cdb.GetLastAtx(nodeID)
 	switch {
