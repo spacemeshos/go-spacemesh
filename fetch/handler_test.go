@@ -267,13 +267,11 @@ func TestHandleMeshHashReq(t *testing.T) {
 func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	t.Helper()
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: published,
-				PrevATXID:    types.RandomATXID(),
-			},
-			NumUnits: 2,
+		NIPostChallenge: types.NIPostChallenge{
+			PublishEpoch: published,
+			PrevATXID:    types.RandomATXID(),
 		},
+		NumUnits: 2,
 	}
 
 	signer, err := signing.NewEdSigner()

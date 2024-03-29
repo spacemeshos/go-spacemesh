@@ -18,12 +18,12 @@ import (
 )
 
 func atx(id types.ATXID) *types.VerifiedActivationTx {
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+	atx := &types.ActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PublishEpoch: 1,
 		},
 		NumUnits: 1,
-	}}
+	}
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(1)
 	atx.SetReceived(time.Now())

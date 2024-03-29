@@ -228,12 +228,12 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 		eg.Go(func() error {
 			numUnits := uint32(12)
 
-			post := &types.Post{
+			post := types.Post{
 				Indices: types.RandomBytes(10),
 				Nonce:   rand.Uint32(),
 				Pow:     rand.Uint64(),
 			}
-			meta := &types.PostMetadata{
+			meta := types.PostMetadata{
 				Challenge:     shared.ZeroChallenge,
 				LabelsPerUnit: tab.conf.LabelsPerUnit,
 			}
@@ -241,7 +241,7 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 			commitmentATX := types.RandomATXID()
 			tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, post, meta, numUnits).Return(nil)
 			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
-				post,
+				&post,
 				&types.PostInfo{
 					CommitmentATX: commitmentATX,
 					Nonce:         new(types.VRFPostIndex),
@@ -285,12 +285,12 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		}
 		initialPost[sig.NodeID()] = &nipost
 
-		post := &types.Post{
+		post := types.Post{
 			Indices: nipost.Indices,
 			Nonce:   nipost.Nonce,
 			Pow:     nipost.Pow,
 		}
-		meta := &types.PostMetadata{
+		meta := types.PostMetadata{
 			Challenge:     shared.ZeroChallenge,
 			LabelsPerUnit: tab.conf.LabelsPerUnit,
 		}
@@ -300,11 +300,6 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 				<-initialPostChan
 				close(ch)
-				post := &types.Post{
-					Indices: nipost.Indices,
-					Nonce:   nipost.Nonce,
-					Pow:     nipost.Pow,
-				}
 				postInfo := &types.PostInfo{
 					NumUnits:      nipost.NumUnits,
 					CommitmentATX: nipost.CommitmentATX,
@@ -312,7 +307,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 					LabelsPerUnit: tab.conf.LabelsPerUnit,
 				}
 
-				return post, postInfo, nil
+				return &post, postInfo, nil
 			},
 		)
 	}
@@ -344,12 +339,12 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		)
 
 		nipost := initialPost[sig.NodeID()]
-		post := &types.Post{
+		post := types.Post{
 			Indices: nipost.Indices,
 			Nonce:   nipost.Nonce,
 			Pow:     nipost.Pow,
 		}
-		meta := &types.PostMetadata{
+		meta := types.PostMetadata{
 			Challenge:     shared.ZeroChallenge,
 			LabelsPerUnit: tab.conf.LabelsPerUnit,
 		}
@@ -511,7 +506,6 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		require.Equal(t, types.Address{}, atx.Coinbase)
 		require.Equal(t, nipostState[sig.NodeID()].NumUnits, atx.NumUnits)
 		require.Equal(t, nipostState[sig.NodeID()].NIPost, atx.NIPost)
-		require.Equal(t, sig.NodeID(), *atx.NodeID)
 		require.Equal(t, nipostState[sig.NodeID()].VRFNonce, *atx.VRFNonce)
 	}
 

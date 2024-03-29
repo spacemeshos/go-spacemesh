@@ -596,8 +596,6 @@ func TestLoadBlob(t *testing.T) {
 
 	var blob2 sql.Blob
 	atx2, err := newAtx(sig, withPublishEpoch(1))
-	nodeID := types.RandomNodeID()
-	atx2.NodeID = &nodeID // ensure ATXs differ in size
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, atx2))
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))
@@ -767,13 +765,11 @@ func withSequence(seq uint64) createAtxOpt {
 
 func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActivationTx, error) {
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PrevATXID: types.RandomATXID(),
-			},
-			Coinbase: types.Address{1, 2, 3},
-			NumUnits: 2,
+		NIPostChallenge: types.NIPostChallenge{
+			PrevATXID: types.RandomATXID(),
 		},
+		Coinbase: types.Address{1, 2, 3},
+		NumUnits: 2,
 	}
 	for _, opt := range opts {
 		opt(atx)
@@ -794,13 +790,11 @@ type header struct {
 
 func createAtx(tb testing.TB, db *sql.Database, hdr header) (types.ATXID, *signing.EdSigner) {
 	full := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: hdr.epoch,
-			},
-			Coinbase: hdr.coinbase,
-			NumUnits: 2,
+		NIPostChallenge: types.NIPostChallenge{
+			PublishEpoch: hdr.epoch,
 		},
+		Coinbase: hdr.coinbase,
+		NumUnits: 2,
 	}
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -955,10 +949,8 @@ func TestLatest(t *testing.T) {
 			db := sql.InMemory()
 			for i, epoch := range tc.epochs {
 				full := &types.ActivationTx{
-					InnerActivationTx: types.InnerActivationTx{
-						NIPostChallenge: types.NIPostChallenge{
-							PublishEpoch: types.EpochID(epoch),
-						},
+					NIPostChallenge: types.NIPostChallenge{
+						PublishEpoch: types.EpochID(epoch),
 					},
 				}
 				full.SetEffectiveNumUnits(1)

@@ -2506,12 +2506,12 @@ func TestVMAccountUpdates(t *testing.T) {
 func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*types.VerifiedActivationTx {
 	all := make([]*types.VerifiedActivationTx, 0, len(atxids))
 	for _, id := range atxids {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+		atx := &types.ActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
 				PublishEpoch: epoch,
 			},
 			NumUnits: 1,
-		}}
+		}
 		atx.SetID(id)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())

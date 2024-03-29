@@ -45,16 +45,14 @@ func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 
 	atx := types.VerifiedActivationTx{
 		ActivationTx: &types.ActivationTx{
-			InnerActivationTx: types.InnerActivationTx{
-				NIPostChallenge: types.NIPostChallenge{
-					Sequence:       rand.Uint64(),
-					PrevATXID:      types.RandomATXID(),
-					PublishEpoch:   0,
-					PositioningATX: types.RandomATXID(),
-				},
-				Coinbase: types.GenerateAddress(types.RandomBytes(32)),
-				NumUnits: rand.Uint32(),
+			NIPostChallenge: types.NIPostChallenge{
+				Sequence:       rand.Uint64(),
+				PrevATXID:      types.RandomATXID(),
+				PublishEpoch:   0,
+				PositioningATX: types.RandomATXID(),
 			},
+			Coinbase: types.GenerateAddress(types.RandomBytes(32)),
+			NumUnits: rand.Uint32(),
 		},
 	}
 	id := types.RandomATXID()
@@ -117,16 +115,14 @@ func TestGet_HappyPath(t *testing.T) {
 	id := types.RandomATXID()
 	atx := types.VerifiedActivationTx{
 		ActivationTx: &types.ActivationTx{
-			InnerActivationTx: types.InnerActivationTx{
-				NIPostChallenge: types.NIPostChallenge{
-					Sequence:       rand.Uint64(),
-					PrevATXID:      types.RandomATXID(),
-					PublishEpoch:   0,
-					PositioningATX: types.RandomATXID(),
-				},
-				Coinbase: types.GenerateAddress(types.RandomBytes(32)),
-				NumUnits: rand.Uint32(),
+			NIPostChallenge: types.NIPostChallenge{
+				Sequence:       rand.Uint64(),
+				PrevATXID:      types.RandomATXID(),
+				PublishEpoch:   0,
+				PositioningATX: types.RandomATXID(),
 			},
+			Coinbase: types.GenerateAddress(types.RandomBytes(32)),
+			NumUnits: rand.Uint32(),
 		},
 	}
 	atx.SetID(id)
@@ -155,16 +151,14 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	id := types.RandomATXID()
 	atx := types.VerifiedActivationTx{
 		ActivationTx: &types.ActivationTx{
-			InnerActivationTx: types.InnerActivationTx{
-				NIPostChallenge: types.NIPostChallenge{
-					Sequence:       rand.Uint64(),
-					PrevATXID:      types.RandomATXID(),
-					PublishEpoch:   0,
-					PositioningATX: types.RandomATXID(),
-				},
-				Coinbase: types.GenerateAddress(types.RandomBytes(32)),
-				NumUnits: rand.Uint32(),
+			NIPostChallenge: types.NIPostChallenge{
+				Sequence:       rand.Uint64(),
+				PrevATXID:      types.RandomATXID(),
+				PublishEpoch:   0,
+				PositioningATX: types.RandomATXID(),
 			},
+			Coinbase:  types.GenerateAddress(types.RandomBytes(32)),
+			NumUnits:  rand.Uint32(),
 			SmesherID: smesher,
 		},
 	}

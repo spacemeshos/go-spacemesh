@@ -161,9 +161,6 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 		if atx.InitialPost == nil {
 			return errors.New("no prev atx declared, but initial post is not included")
 		}
-		if atx.InnerActivationTx.NodeID == nil {
-			return errors.New("no prev atx declared, but node id is missing")
-		}
 		if atx.VRFNonce == nil {
 			return errors.New("no prev atx declared, but vrf nonce is missing")
 		}
@@ -192,9 +189,6 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 			return fmt.Errorf("invalid initial post: %w", err)
 		}
 	default:
-		if atx.InnerActivationTx.NodeID != nil {
-			return errors.New("prev atx declared, but node id is included")
-		}
 		if atx.InitialPost != nil {
 			return errors.New("prev atx declared, but initial post is included")
 		}

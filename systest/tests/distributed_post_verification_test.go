@@ -225,8 +225,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		nipost.NumUnits,
 		&nipost.VRFNonce,
 	)
-	nodeID := signer.NodeID()
-	atx.InnerActivationTx.NodeID = &nodeID
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 
 	// 3. Wait for publish epoch
@@ -275,7 +273,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		invalidAtx := invalidPostProof.Atx
 		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
 		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)
-		require.Equal(t, atx.NodeID, invalidAtx.NodeID)
 		require.Equal(t, atx.PositioningATX, invalidAtx.PositioningATX)
 		require.Equal(t, atx.PrevATXID, invalidAtx.PrevATXID)
 		require.Equal(t, atx.Signature, invalidAtx.Signature)

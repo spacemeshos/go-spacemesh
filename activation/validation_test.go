@@ -48,7 +48,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	r.NoError(init.Initialize(context.Background()))
 	r.NotNil(init.Nonce())
 
-	nonce := (*types.VRFPostIndex)(init.Nonce())
+	nonce := *(*types.VRFPostIndex)(init.Nonce())
 	require.NotNil(t, nonce)
 
 	v := NewValidator(nil, poetDbAPI, postCfg, initOpts.Scrypt, nil)
@@ -57,7 +57,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	t.Run("valid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, *nonce, meta, initOpts.NumUnits))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
 	})
 
 	t.Run("invalid vrf nonce", func(t *testing.T) {
@@ -70,13 +70,13 @@ func Test_Validation_VRFNonce(t *testing.T) {
 		t.Parallel()
 
 		commitmentAtxId := types.ATXID{1, 2, 3}
-		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, *nonce, meta, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
 	})
 
 	t.Run("numUnits can be smaller", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, *nonce, meta, initOpts.NumUnits-1))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits-1))
 	})
 }
 

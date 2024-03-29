@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 )
 
 func TestRoundEndSerialization(t *testing.T) {
@@ -51,6 +52,115 @@ func TestActivation_BadMsgHash(t *testing.T) {
 	atx.SmesherID = types.RandomNodeID()
 	atx.SetID(types.RandomATXID())
 	require.Error(t, atx.Initialize())
+}
+
+func TestActivationTxFromWireV1(t *testing.T) {
+	t.Run("parse valid initial ATX", func(t *testing.T) {
+		t.Parallel()
+		atxV1 := wire.ActivationTxV1{
+			InnerActivationTxV1: wire.InnerActivationTxV1{
+				NodeID: &types.Hash32{4, 5, 6},
+				NIPostChallengeV1: wire.NIPostChallengeV1{
+					PositioningATX: types.Hash32{1, 2, 3},
+					InitialPost:    &wire.PostV1{},
+					CommitmentATX:  &types.Hash32{1, 2, 3},
+				},
+				NIPost: &wire.NIPostV1{
+					Post:         &wire.PostV1{},
+					PostMetadata: &wire.PostMetadataV1{},
+				},
+			},
+		}
+		_, err := types.ActivationTxFromWireV1(&atxV1)
+		require.NoError(t, err)
+	})
+	t.Run("parse valid non-initial ATX", func(t *testing.T) {
+		t.Parallel()
+		atxV1 := wire.ActivationTxV1{
+			InnerActivationTxV1: wire.InnerActivationTxV1{
+				NIPostChallengeV1: wire.NIPostChallengeV1{
+					PositioningATX: types.Hash32{1, 2, 3},
+					PrevATXID:      types.Hash32{1, 2, 3},
+					Sequence:       1,
+				},
+				NIPost: &wire.NIPostV1{
+					Post:         &wire.PostV1{},
+					PostMetadata: &wire.PostMetadataV1{},
+				},
+			},
+		}
+		_, err := types.ActivationTxFromWireV1(&atxV1)
+		require.NoError(t, err)
+	})
+	t.Run("prevAtx declared but NodeID is included", func(t *testing.T) {
+		t.Parallel()
+
+		atxV1 := wire.ActivationTxV1{
+			InnerActivationTxV1: wire.InnerActivationTxV1{
+				NodeID: &types.Hash32{4, 5, 6},
+				NIPostChallengeV1: wire.NIPostChallengeV1{
+					PrevATXID: types.Hash32{1, 2, 3},
+				},
+			},
+		}
+		_, err := types.ActivationTxFromWireV1(&atxV1)
+		require.ErrorContains(t, err, "non-nil NodeID in non-initial ATX")
+	})
+	t.Run("prevAtx NOT declared but NodeID is nil", func(t *testing.T) {
+		t.Parallel()
+
+		atxV1 := wire.ActivationTxV1{}
+		_, err := types.ActivationTxFromWireV1(&atxV1)
+		require.ErrorContains(t, err, "nil NodeID in initial ATX")
+	})
+	t.Run("nipost not present", func(t *testing.T) {
+		t.Parallel()
+		atxV1 := wire.ActivationTxV1{
+			InnerActivationTxV1: wire.InnerActivationTxV1{
+				NIPostChallengeV1: wire.NIPostChallengeV1{
+					PositioningATX: types.Hash32{1, 2, 3},
+					PrevATXID:      types.Hash32{1, 2, 3},
+					Sequence:       1,
+				},
+			},
+		}
+		_, err := types.ActivationTxFromWireV1(&atxV1)
+		require.ErrorContains(t, err, "nil nipost")
+	})
+	t.Run("nipost.post not present", func(t *testing.T) {
+		t.Parallel()
+		atxV1 := wire.ActivationTxV1{
+			InnerActivationTxV1: wire.InnerActivationTxV1{
+				NIPostChallengeV1: wire.NIPostChallengeV1{
+					PositioningATX: types.Hash32{1, 2, 3},
+					PrevATXID:      types.Hash32{1, 2, 3},
+					Sequence:       1,
+				},
+				NIPost: &wire.NIPostV1{
+					PostMetadata: &wire.PostMetadataV1{},
+				},
+			},
+		}
+		_, err := types.ActivationTxFromWireV1(&atxV1)
+		require.ErrorContains(t, err, "nil nipost.post")
+	})
+	t.Run("nipost.postmetadata not present", func(t *testing.T) {
+		t.Parallel()
+		atxV1 := wire.ActivationTxV1{
+			InnerActivationTxV1: wire.InnerActivationTxV1{
+				NIPostChallengeV1: wire.NIPostChallengeV1{
+					PositioningATX: types.Hash32{1, 2, 3},
+					PrevATXID:      types.Hash32{1, 2, 3},
+					Sequence:       1,
+				},
+				NIPost: &wire.NIPostV1{
+					Post: &wire.PostV1{},
+				},
+			},
+		}
+		_, err := types.ActivationTxFromWireV1(&atxV1)
+		require.ErrorContains(t, err, "nil nipost.postmetadata")
+	})
 }
 
 func FuzzEpochIDConsistency(f *testing.F) {

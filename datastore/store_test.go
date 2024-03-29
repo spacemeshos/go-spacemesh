@@ -150,13 +150,11 @@ func TestIdentityExists(t *testing.T) {
 	require.False(t, exists)
 
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(22),
-				Sequence:     11,
-			},
-			NumUnits: 11,
+		NIPostChallenge: types.NIPostChallenge{
+			PublishEpoch: types.EpochID(22),
+			Sequence:     11,
 		},
+		NumUnits: 11,
 	}
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
 	atx.SetReceived(time.Now())
@@ -174,22 +172,18 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 
 	atx3 := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(3),
-				Sequence:     11,
-			},
-			NumUnits: 11,
+		NIPostChallenge: types.NIPostChallenge{
+			PublishEpoch: types.EpochID(3),
+			Sequence:     11,
 		},
+		NumUnits: 11,
 	}
 	atx4 := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(4),
-				Sequence:     12,
-			},
-			NumUnits: 11,
+		NIPostChallenge: types.NIPostChallenge{
+			PublishEpoch: types.EpochID(4),
+			Sequence:     12,
 		},
+		NumUnits: 11,
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -217,13 +211,11 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	ctx := context.Background()
 
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(22),
-				Sequence:     11,
-			},
-			NumUnits: 11,
+		NIPostChallenge: types.NIPostChallenge{
+			PublishEpoch: types.EpochID(22),
+			Sequence:     11,
 		},
+		NumUnits: 11,
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)

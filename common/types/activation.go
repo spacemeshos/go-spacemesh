@@ -137,22 +137,6 @@ func (challenge *NIPostChallenge) Hash() primitive.Hash32 {
 	return challenge.ToWireV1().Hash()
 }
 
-type InnerActivationTx struct {
-	NIPostChallenge
-	Coinbase Address
-	NumUnits uint32
-
-	NIPost   NIPost
-	NodeID   *NodeID
-	VRFNonce *VRFPostIndex
-
-	// the following fields are kept private and from being serialized
-	id                ATXID     // non-exported cache of the ATXID
-	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
-	received          time.Time // time received by node, gossiped or synced
-	validity          Validity  // whether the chain is fully verified and OK
-}
-
 // ATXMetadata is the data of ActivationTx that is signed.
 // It is also used for Malfeasance proofs.
 type ATXMetadata struct {
@@ -169,12 +153,21 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
-	InnerActivationTx
+	NIPostChallenge
+	Coinbase Address
+	NumUnits uint32
+
+	NIPost   NIPost
+	VRFNonce *VRFPostIndex
 
 	SmesherID NodeID
 	Signature EdSignature
 
-	golden bool
+	golden            bool
+	id                ATXID     // non-exported cache of the ATXID
+	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
+	received          time.Time // time received by node, gossiped or synced
+	validity          Validity  // whether the chain is fully verified and OK
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -186,14 +179,11 @@ func NewActivationTx(
 	nonce *VRFPostIndex,
 ) *ActivationTx {
 	atx := &ActivationTx{
-		InnerActivationTx: InnerActivationTx{
-			NIPostChallenge: challenge,
-			Coinbase:        coinbase,
-			NumUnits:        numUnits,
-
-			NIPost:   nipost,
-			VRFNonce: nonce,
-		},
+		NIPostChallenge: challenge,
+		Coinbase:        coinbase,
+		NumUnits:        numUnits,
+		NIPost:          nipost,
+		VRFNonce:        nonce,
 	}
 	return atx
 }
@@ -452,18 +442,21 @@ func (c *NIPostChallenge) ToWireV1() *wire.NIPostChallengeV1 {
 }
 
 func (a *ActivationTx) ToWireV1() *wire.ActivationTxV1 {
-	return &wire.ActivationTxV1{
+	atxV1 := wire.ActivationTxV1{
 		InnerActivationTxV1: wire.InnerActivationTxV1{
 			NIPostChallengeV1: *a.NIPostChallenge.ToWireV1(),
 			Coinbase:          wire.Address(a.Coinbase),
 			NumUnits:          a.NumUnits,
 			NIPost:            a.NIPost.ToWireV1(),
-			NodeID:            (*primitive.Hash32)(a.NodeID),
 			VRFNonce:          (*wire.VRFPostIndex)(a.VRFNonce),
 		},
 		SmesherID: Hash32(a.SmesherID),
 		Signature: a.Signature,
 	}
+	if a.PrevATXID == EmptyATXID {
+		atxV1.InnerActivationTxV1.NodeID = &atxV1.SmesherID
+	}
+	return &atxV1
 }
 
 // Decode ActivationTx from bytes.
@@ -479,27 +472,33 @@ func AcivationTxFromBytes(data []byte) (*ActivationTx, error) {
 }
 
 func ActivationTxFromWireV1(atx *wire.ActivationTxV1) (*ActivationTx, error) {
+	if (atx.PrevATXID == Hash32{}) {
+		if atx.InnerActivationTxV1.NodeID == nil {
+			return nil, errors.New("nil NodeID in initial ATX")
+		}
+	} else {
+		if atx.InnerActivationTxV1.NodeID != nil {
+			return nil, errors.New("non-nil NodeID in non-initial ATX")
+		}
+	}
 	nipost, err := NIPostFromWireV1(atx.NIPost)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ActivationTx{
-		InnerActivationTx: InnerActivationTx{
-			NIPostChallenge: NIPostChallenge{
-				PublishEpoch:   EpochID(atx.PublishEpoch),
-				Sequence:       atx.Sequence,
-				PrevATXID:      ATXID(atx.PrevATXID),
-				PositioningATX: ATXID(atx.PositioningATX),
-				CommitmentATX:  (*ATXID)(atx.CommitmentATX),
-				InitialPost:    PostFromWireV1(atx.InitialPost),
-			},
-			Coinbase: Address(atx.Coinbase),
-			NumUnits: atx.NumUnits,
-			NIPost:   *nipost,
-			NodeID:   (*NodeID)(atx.NodeID),
-			VRFNonce: (*VRFPostIndex)(atx.VRFNonce),
+		NIPostChallenge: NIPostChallenge{
+			PublishEpoch:   EpochID(atx.PublishEpoch),
+			Sequence:       atx.Sequence,
+			PrevATXID:      ATXID(atx.PrevATXID),
+			PositioningATX: ATXID(atx.PositioningATX),
+			CommitmentATX:  (*ATXID)(atx.CommitmentATX),
+			InitialPost:    PostFromWireV1(atx.InitialPost),
 		},
+		Coinbase:  Address(atx.Coinbase),
+		NumUnits:  atx.NumUnits,
+		NIPost:    *nipost,
+		VRFNonce:  (*VRFPostIndex)(atx.VRFNonce),
 		SmesherID: NodeID(atx.SmesherID),
 		Signature: atx.Signature,
 	}, nil
@@ -521,10 +520,10 @@ func NIPostFromWireV1(nipost *wire.NIPostV1) (*NIPost, error) {
 		return nil, errors.New("nil nipost")
 	}
 	if nipost.Post == nil {
-		return nil, errors.New("nil post")
+		return nil, errors.New("nil nipost.post")
 	}
 	if nipost.PostMetadata == nil {
-		return nil, errors.New("nil post metadata")
+		return nil, errors.New("nil nipost.postmetadata")
 	}
 	return &NIPost{
 		Membership: *MerkleProofFromWireV1(nipost.Membership),

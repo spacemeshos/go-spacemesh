@@ -95,10 +95,6 @@ func newActivationTx(
 		CommitmentATX:  cATX,
 	}
 	atx := newAtx(challenge, nipost, numUnits, coinbase)
-	if sequence == 0 {
-		nodeID := sig.NodeID()
-		atx.NodeID = &nodeID
-	}
 
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
@@ -804,12 +800,12 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
 	}
 	require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), post))
-	initialPost := &types.Post{
+	initialPost := types.Post{
 		Nonce:   post.Nonce,
 		Indices: post.Indices,
 		Pow:     post.Pow,
 	}
-	meta := &types.PostMetadata{
+	meta := types.PostMetadata{
 		Challenge:     shared.ZeroChallenge,
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
@@ -860,12 +856,12 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
 	}
 	require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), refPost))
-	initialPost := &types.Post{
+	initialPost := types.Post{
 		Nonce:   refPost.Nonce,
 		Indices: refPost.Indices,
 		Pow:     refPost.Pow,
 	}
-	meta := &types.PostMetadata{
+	meta := types.PostMetadata{
 		Challenge:     shared.ZeroChallenge,
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
@@ -1140,12 +1136,12 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
 	}
 	require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), post))
-	initialPost := &types.Post{
+	initialPost := types.Post{
 		Nonce:   post.Nonce,
 		Indices: post.Indices,
 		Pow:     post.Pow,
 	}
-	meta := &types.PostMetadata{
+	meta := types.PostMetadata{
 		Challenge:     shared.ZeroChallenge,
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
@@ -1419,13 +1415,13 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
 	}
-	initialPost := &types.Post{
+	initialPost := types.Post{
 		Nonce:   post.Nonce,
 		Indices: post.Indices,
 		Pow:     post.Pow,
 	}
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
-		initialPost,
+		&initialPost,
 		&types.PostInfo{
 			NodeID:        sig.NodeID(),
 			CommitmentATX: post.CommitmentATX,
@@ -1436,7 +1432,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 		},
 		nil,
 	)
-	meta := &types.PostMetadata{
+	meta := types.PostMetadata{
 		Challenge:     shared.ZeroChallenge,
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
@@ -1486,17 +1482,17 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	commitmentATX := types.RandomATXID()
 	nonce := types.VRFPostIndex(rand.Uint64())
 	numUnits := uint32(12)
-	initialPost := &types.Post{
+	initialPost := types.Post{
 		Nonce:   rand.Uint32(),
 		Indices: types.RandomBytes(10),
 		Pow:     rand.Uint64(),
 	}
-	meta := &types.PostMetadata{
+	meta := types.PostMetadata{
 		Challenge:     shared.ZeroChallenge,
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
-		initialPost,
+		&initialPost,
 		&types.PostInfo{
 			NodeID:        sig.NodeID(),
 			CommitmentATX: commitmentATX,
@@ -1521,17 +1517,17 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 
 	commitmentATX := types.RandomATXID()
 	numUnits := uint32(12)
-	initialPost := &types.Post{
+	initialPost := types.Post{
 		Nonce:   rand.Uint32(),
 		Indices: types.RandomBytes(10),
 		Pow:     rand.Uint64(),
 	}
-	meta := &types.PostMetadata{
+	meta := types.PostMetadata{
 		Challenge:     shared.ZeroChallenge,
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
-		initialPost,
+		&initialPost,
 		&types.PostInfo{
 			NodeID:        sig.NodeID(),
 			CommitmentATX: commitmentATX,
@@ -1554,7 +1550,7 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 	// postClient.Proof() should be called again and no error if vrf nonce is provided
 	nonce := types.VRFPostIndex(rand.Uint64())
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
-		initialPost,
+		&initialPost,
 		&types.PostInfo{
 			NodeID:        sig.NodeID(),
 			CommitmentATX: commitmentATX,
@@ -1621,12 +1617,12 @@ func TestWaitPositioningAtx(t *testing.T) {
 				VRFNonce:      types.VRFPostIndex(rand.Uint64()),
 			}
 			require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), post))
-			initialPost := &types.Post{
+			initialPost := types.Post{
 				Nonce:   post.Nonce,
 				Indices: post.Indices,
 				Pow:     post.Pow,
 			}
-			meta := &types.PostMetadata{
+			meta := types.PostMetadata{
 				Challenge:     shared.ZeroChallenge,
 				LabelsPerUnit: tab.conf.LabelsPerUnit,
 			}

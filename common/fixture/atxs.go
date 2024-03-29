@@ -94,18 +94,15 @@ func (g *AtxsGenerator) Next() *types.VerifiedActivationTx {
 
 	atx = types.VerifiedActivationTx{
 		ActivationTx: &types.ActivationTx{
-			InnerActivationTx: types.InnerActivationTx{
-				NIPostChallenge: types.NIPostChallenge{
-					Sequence:       g.rng.Uint64(),
-					PrevATXID:      prevAtxId,
-					PublishEpoch:   g.Epochs[g.rng.Intn(len(g.Epochs))],
-					PositioningATX: posAtxId,
-				},
-				Coinbase: wallet.Address(signer.PublicKey().Bytes()),
-				NumUnits: g.rng.Uint32(),
-				NodeID:   &nodeId,
-				NIPost:   *g.newNIPost(),
+			NIPostChallenge: types.NIPostChallenge{
+				Sequence:       g.rng.Uint64(),
+				PrevATXID:      prevAtxId,
+				PublishEpoch:   g.Epochs[g.rng.Intn(len(g.Epochs))],
+				PositioningATX: posAtxId,
 			},
+			Coinbase:  wallet.Address(signer.PublicKey().Bytes()),
+			NumUnits:  g.rng.Uint32(),
+			NIPost:    *g.newNIPost(),
 			SmesherID: nodeId,
 		},
 	}

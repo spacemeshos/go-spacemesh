@@ -169,7 +169,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 			{
 				desc: "NodeID",
 				request: &spacemeshv2alpha1.ActivationStreamRequest{
-					NodeId:     streamed[3].NodeID.Bytes(),
+					NodeId:     streamed[3].SmesherID.Bytes(),
 					StartEpoch: start,
 					Watch:      true,
 				},

@@ -269,13 +269,13 @@ func validateAndPreserveData(
 				gomock.Any(),
 				vatx.SmesherID,
 				*vatx.CommitmentATX,
-				vatx.InitialPost,
+				*vatx.InitialPost,
 				gomock.Any(),
 				vatx.NumUnits,
 				gomock.Any(),
 			)
 			mvalidator.EXPECT().
-				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
+				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, *vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
 		} else {
 			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
 		}
@@ -304,27 +304,23 @@ func newChainedAtx(
 	sig *signing.EdSigner,
 ) *types.VerifiedActivationTx {
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:   types.EpochID(epoch),
-				Sequence:       seq,
-				PrevATXID:      prev,
-				PositioningATX: pos,
-				CommitmentATX:  commitAtx,
-			},
-			NIPost: types.NIPost{
-				PostMetadata: types.PostMetadata{
-					Challenge: types.RandomBytes(5),
-				},
-			},
-			NumUnits: 2,
-			Coinbase: types.Address{1, 2, 3},
+		NIPostChallenge: types.NIPostChallenge{
+			PublishEpoch:   types.EpochID(epoch),
+			Sequence:       seq,
+			PrevATXID:      prev,
+			PositioningATX: pos,
+			CommitmentATX:  commitAtx,
 		},
+		NIPost: types.NIPost{
+			PostMetadata: types.PostMetadata{
+				Challenge: types.RandomBytes(5),
+			},
+		},
+		NumUnits: 2,
+		Coinbase: types.Address{1, 2, 3},
 	}
 	if prev == types.EmptyATXID {
 		atx.InitialPost = &types.Post{}
-		nodeID := sig.NodeID()
-		atx.NodeID = &nodeID
 	}
 	if vrfNonce != 0 {
 		atx.VRFNonce = (*types.VRFPostIndex)(&vrfNonce)

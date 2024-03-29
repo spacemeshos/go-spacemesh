@@ -649,11 +649,8 @@ func (b *Builder) createAtx(
 	}
 
 	var nonce *types.VRFPostIndex
-	var atxNodeID *types.NodeID
 	switch {
 	case challenge.PrevATXID == types.EmptyATXID:
-		atxNodeID = new(types.NodeID)
-		*atxNodeID = sig.NodeID()
 		nonce = &nipostState.VRFNonce
 	default:
 		oldNonce, err := atxs.VRFNonce(b.cdb, sig.NodeID(), challenge.PublishEpoch)
@@ -673,7 +670,6 @@ func (b *Builder) createAtx(
 		nipostState.NumUnits,
 		nonce,
 	)
-	atx.InnerActivationTx.NodeID = atxNodeID
 	if err = SignAndFinalizeAtx(sig, atx); err != nil {
 		return nil, fmt.Errorf("sign atx: %w", err)
 	}
@@ -737,8 +733,8 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
 	// FIXME - there is no need to sign types.ActivationTX (only wire.ActivationTxVx)
-	atx.Signature = signer.Sign(signing.ATX, atx.ToWireV1().SignedBytes())
 	atx.SmesherID = signer.NodeID()
+	atx.Signature = signer.Sign(signing.ATX, atx.ToWireV1().SignedBytes())
 	return atx.Initialize()
 }
 

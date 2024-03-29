@@ -215,6 +215,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		require.Equal(t, uint64(0), atx.NIPostChallenge.Sequence)
 
 		require.Equal(t, types.Address{}, atx.Coinbase)
-		require.Equal(t, sig.NodeID(), *atx.NodeID)
+		require.Equal(t, sig.NodeID(), atx.SmesherID)
 	}
 }

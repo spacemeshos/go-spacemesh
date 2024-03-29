@@ -235,16 +235,16 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 }
 
 func createAtx(t *testing.T, db *sql.Database, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
+	atx := &types.ActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PublishEpoch: epoch,
 		},
-		NumUnits: 1,
-	}}
+		NumUnits:  1,
+		SmesherID: nodeID,
+	}
 	atx.SetID(atxID)
 	atx.SetEffectiveNumUnits(1)
 	atx.SetReceived(time.Now())
-	atx.SmesherID = nodeID
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, vAtx))
