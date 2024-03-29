@@ -562,7 +562,7 @@ func (h *Handler) handleAtx(
 		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
 	}
 
-	atx.SetReceived(receivedTime.Local())
+	atx.Received = receivedTime.Local()
 	if err := atx.Initialize(); err != nil {
 		return nil, fmt.Errorf("failed to derive ID from atx: %w", err)
 	}

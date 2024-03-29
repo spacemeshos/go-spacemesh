@@ -162,7 +162,7 @@ func createModifiedATXs(
 			nil,
 		)
 		atx.SetEffectiveNumUnits(numUnit)
-		atx.SetReceived(time.Now())
+		atx.Received = time.Now()
 		require.NoError(tb, activation.SignAndFinalizeAtx(signer, atx))
 		vAtx, err := onAtx(atx)
 		require.NoError(tb, err)

@@ -382,12 +382,12 @@ func (v *Validator) verifyChainWithOpts(
 	case atx.Validity == types.Invalid:
 		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "invalid"))
 		return &InvalidChainError{ID: id}
-	case atx.Received().Before(opts.assumedValidTime):
+	case atx.Received.Before(opts.assumedValidTime):
 		log.Debug(
 			"not verifying ATX chain",
 			zap.Stringer("atx_id", id),
 			zap.String("reason", "assumed valid"),
-			zap.Time("received", atx.Received()),
+			zap.Time("received", atx.Received),
 			zap.Time("valid_before", opts.assumedValidTime),
 		)
 		return nil

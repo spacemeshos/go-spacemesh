@@ -1167,7 +1167,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	vrfNonce := types.VRFPostIndex(0)
 	atx.VRFNonce = &vrfNonce
 	atx.SetEffectiveNumUnits(100)
-	atx.SetReceived(time.Now())
+	atx.Received = time.Now()
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))
 	_, err = atx.Verify(0, 100)
 	require.NoError(t, err)

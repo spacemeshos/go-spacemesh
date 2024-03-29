@@ -713,7 +713,7 @@ func TestCheckpointATX(t *testing.T) {
 	require.Equal(t, catx.SmesherID, got.SmesherID)
 	require.Equal(t, catx.Sequence, got.Sequence)
 	require.Equal(t, catx.Coinbase, got.Coinbase)
-	require.True(t, got.Received().IsZero(), got.Received())
+	require.True(t, got.Received.IsZero(), got.Received)
 	require.True(t, got.Golden)
 
 	gotcommit, err := atxs.CommitmentATX(db, sig.NodeID())
@@ -777,7 +777,7 @@ func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActi
 	}
 	activation.SignAndFinalizeAtx(signer, atx)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now().Local())
+	atx.Received = time.Now().Local()
 	return atx.Verify(0, 1)
 }
 
@@ -803,7 +803,7 @@ func createAtx(tb testing.TB, db *sql.Database, hdr header) (types.ATXID, *signi
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, full))
 
 	full.SetEffectiveNumUnits(full.NumUnits)
-	full.SetReceived(time.Now())
+	full.Received = time.Now()
 	vAtx, err := full.Verify(hdr.base, hdr.count)
 	require.NoError(tb, err)
 
@@ -955,7 +955,7 @@ func TestLatest(t *testing.T) {
 					},
 				}
 				full.SetEffectiveNumUnits(1)
-				full.SetReceived(time.Now())
+				full.Received = time.Now()
 				full.SetID(types.ATXID{byte(i)})
 				vAtx, err := full.Verify(0, 1)
 				require.NoError(t, err)

@@ -50,9 +50,9 @@ func decoder(fn decoderCallback) sql.Decoder {
 		if checkpointed {
 			a.Golden = true
 			a.NumUnits = effectiveNumUnits
-			a.SetReceived(time.Time{})
+			a.Received = time.Time{}
 		} else {
-			a.SetReceived(time.Unix(0, stmt.ColumnInt64(6)).Local())
+			a.Received = time.Unix(0, stmt.ColumnInt64(6)).Local()
 		}
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
 		a.Sequence = uint64(stmt.ColumnInt64(8))
@@ -380,7 +380,7 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 		}
 		stmt.BindBytes(6, atx.SmesherID.Bytes())
 		stmt.BindBytes(7, buf)
-		stmt.BindInt64(8, atx.Received().UnixNano())
+		stmt.BindInt64(8, atx.Received.UnixNano())
 		stmt.BindInt64(9, int64(atx.BaseTickHeight()))
 		stmt.BindInt64(10, int64(atx.TickCount()))
 		stmt.BindInt64(11, int64(atx.Sequence))

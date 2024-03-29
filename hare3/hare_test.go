@@ -165,7 +165,7 @@ func (n *node) withAtx(min, max int) *node {
 	n.t.rng.Read(id[:])
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(n.t.start)
+	atx.Received = n.t.start
 	nonce := types.VRFPostIndex(n.t.rng.Uint64())
 	atx.VRFNonce = &nonce
 	verified, err := atx.Verify(0, 100)
@@ -767,7 +767,7 @@ func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, base, heigh
 	atx.SmesherID = smesher
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Time{}.Add(1))
+	atx.Received = time.Time{}.Add(1)
 	nonce := types.VRFPostIndex(1)
 	atx.VRFNonce = &nonce
 	verified, err := atx.Verify(base, height-base)

@@ -245,7 +245,7 @@ func (g *Generator) generateAtxs() {
 			panic(err)
 		}
 		atx.SetEffectiveNumUnits(atx.NumUnits)
-		atx.SetReceived(time.Now())
+		atx.Received = time.Now()
 		vatx, err := atx.Verify(g.prevHeight[i], ticks)
 		if err != nil {
 			panic(err)

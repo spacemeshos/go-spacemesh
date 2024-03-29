@@ -26,7 +26,7 @@ func atx(id types.ATXID) *types.VerifiedActivationTx {
 	}
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(1)
-	atx.SetReceived(time.Now())
+	atx.Received = time.Now()
 	copy(atx.SmesherID[:], id[:])
 	vatx, err := atx.Verify(0, 1)
 	if err != nil {

@@ -125,7 +125,7 @@ func createATX(
 	)
 
 	atx.SetEffectiveNumUnits(numUnits)
-	atx.SetReceived(received)
+	atx.Received = received
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)

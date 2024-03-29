@@ -56,7 +56,7 @@ func genAtxWithNonce(nonce types.VRFPostIndex) genAtxOpt {
 
 func genAtxWithReceived(received time.Time) genAtxOpt {
 	return func(atx *types.ActivationTx) {
-		atx.SetReceived(received)
+		atx.Received = received
 	}
 }
 
@@ -75,7 +75,7 @@ func gatx(
 	atx.SmesherID = smesher
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Time{}.Add(1))
+	atx.Received = time.Time{}.Add(1)
 	nonce := types.VRFPostIndex(0)
 	atx.VRFNonce = &nonce
 	for _, opt := range opts {

@@ -60,7 +60,7 @@ func newAtx(
 ) *types.ActivationTx {
 	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
 	atx.SetEffectiveNumUnits(numUnits)
-	atx.SetReceived(time.Now())
+	atx.Received = time.Now()
 	atx.Validity = types.Valid
 	return atx
 }
@@ -97,7 +97,7 @@ func newActivationTx(
 	atx := newAtx(challenge, nipost, numUnits, coinbase)
 
 	atx.SetEffectiveNumUnits(numUnits)
-	atx.SetReceived(time.Now())
+	atx.Received = time.Now()
 	for _, opt := range opts {
 		opt(atx)
 	}
@@ -226,7 +226,7 @@ func publishAtx(
 		func(_ context.Context, _ string, got []byte) error {
 			gotAtx, err := types.AcivationTxFromBytes(got)
 			require.NoError(tb, err)
-			gotAtx.SetReceived(time.Now().Local())
+			gotAtx.Received = time.Now().Local()
 			built = gotAtx
 			require.NoError(tb, built.Initialize())
 			built.SetEffectiveNumUnits(gotAtx.NumUnits)
@@ -543,7 +543,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			gotAtx, err := types.AcivationTxFromBytes(got)
 			require.NoError(t, err)
 			built = gotAtx
-			built.SetReceived(time.Now().Local())
+			built.Received = time.Now().Local()
 			require.NoError(t, built.Initialize())
 			return errors.New("something went wrong")
 		},
@@ -557,7 +557,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 		func(_ context.Context, _ string, got []byte) error {
 			atx, err := types.AcivationTxFromBytes(got)
 			require.NoError(t, err)
-			atx.SetReceived(built.Received())
+			atx.Received = built.Received
 			require.NoError(t, atx.Initialize())
 			require.Equal(t, built, atx)
 			return nil
@@ -645,7 +645,7 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 		func(_ context.Context, _ string, got []byte) error {
 			gotAtx, err := types.AcivationTxFromBytes(got)
 			require.NoError(t, err)
-			gotAtx.SetReceived(time.Now().Local())
+			gotAtx.Received = time.Now().Local()
 			require.NoError(t, gotAtx.Initialize())
 			require.Equal(t, *ch, gotAtx.NIPostChallenge)
 			return nil
@@ -714,7 +714,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 		func(_ context.Context, _ string, got []byte) error {
 			gotAtx, err := types.AcivationTxFromBytes(got)
 			require.NoError(t, err)
-			gotAtx.SetReceived(time.Now().Local())
+			gotAtx.Received = time.Now().Local()
 			built = gotAtx
 			require.NoError(t, built.Initialize())
 
@@ -1002,7 +1002,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
 			atx, err := types.AcivationTxFromBytes(msg)
 			require.NoError(t, err)
-			atx.SetReceived(time.Now().Local())
+			atx.Received = time.Now().Local()
 
 			atx.SetEffectiveNumUnits(atx.NumUnits)
 			vAtx, err := atx.Verify(0, 1)
@@ -1101,7 +1101,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
 			atx, err := types.AcivationTxFromBytes(msg)
 			require.NoError(t, err)
-			atx.SetReceived(time.Now().Local())
+			atx.Received = time.Now().Local()
 
 			atx.SetEffectiveNumUnits(atx.NumUnits)
 			vAtx, err := atx.Verify(0, 1)
@@ -1356,7 +1356,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 			decoded, err := types.AcivationTxFromBytes(b)
 			require.NoError(t, err)
 			atx = *decoded
-			atx.SetReceived(time.Now().Local())
+			atx.Received = time.Now().Local()
 			require.NoError(t, atx.Initialize())
 
 			// advance time to the next epoch

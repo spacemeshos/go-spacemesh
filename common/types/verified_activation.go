@@ -41,7 +41,7 @@ func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
 		NumUnits:          vatx.NumUnits,
 		EffectiveNumUnits: vatx.EffectiveNumUnits(),
 		VRFNonce:          vatx.VRFNonce,
-		Received:          vatx.Received(),
+		Received:          vatx.Received,
 
 		ID:     vatx.ID(),
 		NodeID: vatx.SmesherID,

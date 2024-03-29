@@ -80,7 +80,7 @@ func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.A
 	)
 
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now())
+	atx.Received = time.Now()
 	require.NoError(t.tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t.tb, err)

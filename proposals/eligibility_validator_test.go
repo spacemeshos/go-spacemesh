@@ -27,7 +27,7 @@ func gatx(
 	atx.SmesherID = smesher
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Time{}.Add(1))
+	atx.Received = time.Time{}.Add(1)
 	atx.VRFNonce = &nonce
 	verified, err := atx.Verify(0, 100)
 	if err != nil {
@@ -49,7 +49,7 @@ func gatxZeroHeight(
 	atx.SmesherID = smesher
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Time{}.Add(1))
+	atx.Received = time.Time{}.Add(1)
 	atx.VRFNonce = &nonce
 	verified, err := atx.Verify(0, 0)
 	if err != nil {
@@ -65,7 +65,7 @@ func gatxNilNonce(id types.ATXID, epoch types.EpochID, smesher types.NodeID, uni
 	atx.SmesherID = smesher
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Time{}.Add(1))
+	atx.Received = time.Time{}.Add(1)
 	verified, err := atx.Verify(0, 100)
 	if err != nil {
 		panic(err)

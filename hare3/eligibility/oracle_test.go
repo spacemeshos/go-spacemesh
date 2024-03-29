@@ -151,7 +151,7 @@ func (t *testOracle) createActiveSet(
 		atx.VRFNonce = &nonce
 		atx.SetID(id)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
-		atx.SetReceived(time.Now())
+		atx.Received = time.Now()
 		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t.tb, err)
@@ -386,7 +386,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx1.VRFNonce = &nonce
 	atx1.SetID(activeSet[0])
 	atx1.SetEffectiveNumUnits(atx1.NumUnits)
-	atx1.SetReceived(time.Now())
+	atx1.Received = time.Now()
 	atx1.SmesherID = signer.NodeID()
 	vAtx1, err := atx1.Verify(0, 1)
 	require.NoError(t, err)
@@ -405,7 +405,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx2.VRFNonce = &nonce
 	atx2.SetID(activeSet[1])
 	atx2.SetEffectiveNumUnits(atx2.NumUnits)
-	atx2.SetReceived(time.Now())
+	atx2.Received = time.Now()
 	atx2.SmesherID = signer2.NodeID()
 	vAtx2, err := atx2.Verify(0, 1)
 	require.NoError(t, err)
@@ -756,7 +756,7 @@ func TestActiveSetMatrix(t *testing.T) {
 		}
 		atx.SetID(id)
 		atx.SetEffectiveNumUnits(1)
-		atx.SetReceived(time.Time{}.Add(1))
+		atx.Received = time.Time{}.Add(1)
 		verified, err := atx.Verify(0, 1)
 		require.NoError(t, err)
 		for _, opt := range option {

@@ -327,7 +327,7 @@ func newChainedAtx(
 	}
 	atx.SmesherID = sig.NodeID()
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now().Local())
+	atx.Received = time.Now().Local()
 	atx.Signature = sig.Sign(signing.ATX, atx.ToWireV1().SignedBytes())
 	return newvAtx(tb, atx)
 }

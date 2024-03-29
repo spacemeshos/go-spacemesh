@@ -215,7 +215,7 @@ func newAtx(
 	}
 	atx.SmesherID = nodeID
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now().Local())
+	atx.Received = time.Now().Local()
 	return atx
 }
 

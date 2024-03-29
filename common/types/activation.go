@@ -166,7 +166,7 @@ type ActivationTx struct {
 	Golden            bool
 	id                ATXID     // non-exported cache of the ATXID
 	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
-	received          time.Time // time received by node, gossiped or synced
+	Received          time.Time // time received by node, gossiped or synced
 	Validity          Validity  // whether the chain is fully verified and OK
 }
 
@@ -252,14 +252,6 @@ func (atx *ActivationTx) SetEffectiveNumUnits(numUnits uint32) {
 	atx.effectiveNumUnits = numUnits
 }
 
-func (atx *ActivationTx) SetReceived(received time.Time) {
-	atx.received = received
-}
-
-func (atx *ActivationTx) Received() time.Time {
-	return atx.received
-}
-
 // Verify an ATX for a given base TickHeight and TickCount.
 func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
 	if atx.id == EmptyATXID {
@@ -270,7 +262,7 @@ func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActi
 	if atx.effectiveNumUnits == 0 {
 		return nil, errors.New("effective num units not set")
 	}
-	if !atx.Golden && atx.received.IsZero() {
+	if !atx.Golden && atx.Received.IsZero() {
 		return nil, errors.New("received time not set")
 	}
 	vAtx := &VerifiedActivationTx{

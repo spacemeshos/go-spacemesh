@@ -28,7 +28,7 @@ func gatx(
 	atx.SmesherID = smesher
 	atx.SetID(id)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Time{}.Add(1))
+	atx.Received = time.Time{}.Add(1)
 	atx.VRFNonce = nonce
 	verified, err := atx.Verify(0, 100)
 	if err != nil {

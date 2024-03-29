@@ -156,7 +156,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}
 		atx.SetEffectiveNumUnits(atx.NumUnits)
-		atx.SetReceived(time.Now())
+		atx.Received = time.Now()
 		vAtx, err := atx.Verify(1, 2)
 		if err != nil {
 			c.logger.With().Fatal("failed to verify atx", log.Err(err))
