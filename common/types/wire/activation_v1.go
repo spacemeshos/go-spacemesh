@@ -42,6 +42,8 @@ type ActivationTxV1 struct {
 	Signature [64]byte
 }
 
+// InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
+// structure is serialized and signed.
 type InnerActivationTxV1 struct {
 	NIPostChallengeV1
 

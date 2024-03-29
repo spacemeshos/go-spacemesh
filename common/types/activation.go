@@ -127,17 +127,6 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// String returns a string representation of the NIPostChallenge, for logging purposes.
-// It implements the Stringer interface.
-func (challenge *NIPostChallenge) String() string {
-	return fmt.Sprintf("<seq: %v, prevATX: %v, publish epoch: %v, posATX: %s>",
-		challenge.Sequence,
-		challenge.PrevATXID.ShortString(),
-		challenge.PublishEpoch,
-		challenge.PositioningATX.ShortString(),
-	)
-}
-
 // TargetEpoch returns the target epoch of the NIPostChallenge. This is the epoch in which the miner is eligible
 // to participate thanks to the ATX.
 func (challenge *NIPostChallenge) TargetEpoch() EpochID {
@@ -148,9 +137,6 @@ func (challenge *NIPostChallenge) Hash() primitive.Hash32 {
 	return challenge.ToWireV1().Hash()
 }
 
-// InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
-// structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
-// for validation: the NIPost and the initial Post.
 type InnerActivationTx struct {
 	NIPostChallenge
 	Coinbase Address
@@ -371,12 +357,6 @@ func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("nonce", p.Nonce)
 	encoder.AddString("indices", hex.EncodeToString(p.Indices))
 	return nil
-}
-
-// String returns a string representation of the PostProof, for logging purposes.
-// It implements the Stringer interface.
-func (p *Post) String() string {
-	return fmt.Sprintf("nonce: %v, indices: %s", p.Nonce, hex.EncodeToString(p.Indices))
 }
 
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere
