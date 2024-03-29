@@ -1568,7 +1568,7 @@ func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
 	atxHdlr.mValidator.EXPECT().VRFNonce(nodeID, goldenATXID, &vrfNonce, gomock.Any(), atx.NumUnits)
 	atxHdlr.mValidator.EXPECT().
 		Post(gomock.Any(), atx.SmesherID, goldenATXID, atx.InitialPost, gomock.Any(), atx.NumUnits).DoAndReturn(
-		func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...validatorOption,
+		func(context.Context, types.NodeID, types.ATXID, types.Post, types.PostMetadata, uint32, ...validatorOption,
 		) error {
 			time.Sleep(100 * time.Millisecond)
 			return nil

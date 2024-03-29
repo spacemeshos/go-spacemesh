@@ -53,8 +53,8 @@ type nipostValidator interface {
 		ctx context.Context,
 		nodeId types.NodeID,
 		commitmentAtxId types.ATXID,
-		Post *types.Post,
-		PostMetadata *types.PostMetadata,
+		Post types.Post,
+		PostMetadata types.PostMetadata,
 		numUnits uint32,
 		opts ...validatorOption,
 	) error
@@ -63,8 +63,8 @@ type nipostValidator interface {
 	VRFNonce(
 		nodeId types.NodeID,
 		commitmentAtxId types.ATXID,
-		vrfNonce *types.VRFPostIndex,
-		PostMetadata *types.PostMetadata,
+		vrfNonce types.VRFPostIndex,
+		PostMetadata types.PostMetadata,
 		numUnits uint32,
 	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error

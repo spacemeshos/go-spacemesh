@@ -182,12 +182,12 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 		initialPostMetadata := atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
 		if err := h.nipostValidator.VRFNonce(
-			atx.SmesherID, *atx.CommitmentATX, atx.VRFNonce, &initialPostMetadata, atx.NumUnits,
+			atx.SmesherID, *atx.CommitmentATX, *atx.VRFNonce, initialPostMetadata, atx.NumUnits,
 		); err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
 		if err := h.nipostValidator.Post(
-			ctx, atx.SmesherID, *atx.CommitmentATX, atx.InitialPost, &initialPostMetadata, atx.NumUnits,
+			ctx, atx.SmesherID, *atx.CommitmentATX, *atx.InitialPost, initialPostMetadata, atx.NumUnits,
 		); err != nil {
 			return fmt.Errorf("invalid initial post: %w", err)
 		}
@@ -316,7 +316,7 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 	}
 
 	if nonce != nil {
-		err = h.nipostValidator.VRFNonce(atx.SmesherID, commitmentATX, nonce, &atx.NIPost.PostMetadata, atx.NumUnits)
+		err = h.nipostValidator.VRFNonce(atx.SmesherID, commitmentATX, *nonce, atx.NIPost.PostMetadata, atx.NumUnits)
 		if err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}

@@ -27,7 +27,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 	postCfg.LabelsPerUnit = 128
-	meta := &types.PostMetadata{
+	meta := types.PostMetadata{
 		LabelsPerUnit: postCfg.LabelsPerUnit,
 	}
 
@@ -49,6 +49,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	r.NotNil(init.Nonce())
 
 	nonce := (*types.VRFPostIndex)(init.Nonce())
+	require.NotNil(t, nonce)
 
 	v := NewValidator(nil, poetDbAPI, postCfg, initOpts.Scrypt, nil)
 
@@ -56,27 +57,26 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	t.Run("valid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, *nonce, meta, initOpts.NumUnits))
 	})
 
 	t.Run("invalid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
-		nonce := types.VRFPostIndex(1)
-		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, &nonce, meta, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, types.VRFPostIndex(1), meta, initOpts.NumUnits))
 	})
 
 	t.Run("wrong commitmentAtxId", func(t *testing.T) {
 		t.Parallel()
 
 		commitmentAtxId := types.ATXID{1, 2, 3}
-		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, *nonce, meta, initOpts.NumUnits))
 	})
 
 	t.Run("numUnits can be smaller", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits-1))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, *nonce, meta, initOpts.NumUnits-1))
 	})
 }
 
@@ -339,12 +339,12 @@ func Test_Validation_Post(t *testing.T) {
 	meta := types.PostMetadata{}
 
 	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).Return(nil)
-	require.NoError(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
+	require.NoError(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), post, meta, 1))
 
 	postVerifier.EXPECT().
 		Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).
 		Return(errors.New("invalid"))
-	require.Error(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
+	require.Error(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), post, meta, 1))
 }
 
 func Test_Validation_PositioningAtx(t *testing.T) {

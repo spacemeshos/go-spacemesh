@@ -340,10 +340,8 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 		CommitmentATX: postInfo.CommitmentATX,
 		VRFNonce:      *postInfo.Nonce,
 	}
-	err = b.validator.Post(ctx, nodeID, postInfo.CommitmentATX, post, &types.PostMetadata{
-		Challenge:     shared.ZeroChallenge,
-		LabelsPerUnit: postInfo.LabelsPerUnit,
-	}, postInfo.NumUnits)
+	meta := types.PostMetadata{Challenge: shared.ZeroChallenge, LabelsPerUnit: postInfo.LabelsPerUnit}
+	err = b.validator.Post(ctx, nodeID, postInfo.CommitmentATX, *post, meta, postInfo.NumUnits)
 	if err != nil {
 		b.log.Error("initial POST is invalid", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
 		if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
@@ -504,15 +502,13 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			return nil, fmt.Errorf("get initial post: %w", err)
 		}
 		logger.Info("verifying the initial post")
-		initialPost := &types.Post{
+		initialPost := types.Post{
 			Nonce:   post.Nonce,
 			Indices: post.Indices,
 			Pow:     post.Pow,
 		}
-		err = b.validator.Post(ctx, nodeID, post.CommitmentATX, initialPost, &types.PostMetadata{
-			Challenge:     shared.ZeroChallenge,
-			LabelsPerUnit: b.conf.LabelsPerUnit,
-		}, post.NumUnits)
+		meta := types.PostMetadata{Challenge: shared.ZeroChallenge, LabelsPerUnit: b.conf.LabelsPerUnit}
+		err = b.validator.Post(ctx, nodeID, post.CommitmentATX, initialPost, meta, post.NumUnits)
 		if err != nil {
 			logger.Error("initial POST is invalid", zap.Error(err))
 			if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {

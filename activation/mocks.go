@@ -502,7 +502,7 @@ func (c *MocknipostValidatorPositioningAtxCall) DoAndReturn(f func(types.ATXID, 
 }
 
 // Post mocks base method.
-func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...validatorOption) error {
+func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, Post types.Post, PostMetadata types.PostMetadata, numUnits uint32, opts ...validatorOption) error {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, nodeId, commitmentAtxId, Post, PostMetadata, numUnits}
 	for _, a := range opts {
@@ -533,13 +533,13 @@ func (c *MocknipostValidatorPostCall) Return(arg0 error) *MocknipostValidatorPos
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...validatorOption) error) *MocknipostValidatorPostCall {
+func (c *MocknipostValidatorPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, types.Post, types.PostMetadata, uint32, ...validatorOption) error) *MocknipostValidatorPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...validatorOption) error) *MocknipostValidatorPostCall {
+func (c *MocknipostValidatorPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, types.Post, types.PostMetadata, uint32, ...validatorOption) error) *MocknipostValidatorPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -583,7 +583,7 @@ func (c *MocknipostValidatorPostMetadataCall) DoAndReturn(f func(*PostConfig, *t
 }
 
 // VRFNonce mocks base method.
-func (m *MocknipostValidator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func (m *MocknipostValidator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce types.VRFPostIndex, PostMetadata types.PostMetadata, numUnits uint32) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "VRFNonce", nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
 	ret0, _ := ret[0].(error)
@@ -609,13 +609,13 @@ func (c *MocknipostValidatorVRFNonceCall) Return(arg0 error) *MocknipostValidato
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorVRFNonceCall) Do(f func(types.NodeID, types.ATXID, *types.VRFPostIndex, *types.PostMetadata, uint32) error) *MocknipostValidatorVRFNonceCall {
+func (c *MocknipostValidatorVRFNonceCall) Do(f func(types.NodeID, types.ATXID, types.VRFPostIndex, types.PostMetadata, uint32) error) *MocknipostValidatorVRFNonceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorVRFNonceCall) DoAndReturn(f func(types.NodeID, types.ATXID, *types.VRFPostIndex, *types.PostMetadata, uint32) error) *MocknipostValidatorVRFNonceCall {
+func (c *MocknipostValidatorVRFNonceCall) DoAndReturn(f func(types.NodeID, types.ATXID, types.VRFPostIndex, types.PostMetadata, uint32) error) *MocknipostValidatorVRFNonceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
