@@ -18,6 +18,11 @@ const (
 	Hash20Length = 20
 )
 
+var (
+	hash20T = reflect.TypeOf(Hash32{})
+	hash32T = reflect.TypeOf(Hash32{})
+)
+
 // Hash32 represents the 32-byte blake3 hash of arbitrary data.
 type Hash32 [32]byte
 
@@ -60,7 +65,7 @@ func (h *Hash20) UnmarshalText(input []byte) error {
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash20) UnmarshalJSON(input []byte) error {
-	if err := util.UnmarshalFixedJSON(hashT, input, h[:]); err != nil {
+	if err := util.UnmarshalFixedJSON(hash20T, input, h[:]); err != nil {
 		return fmt.Errorf("unmarshal JSON: %w", err)
 	}
 
@@ -90,8 +95,6 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash20) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
-
-var hashT = reflect.TypeOf(Hash32{})
 
 // CalcHash32 returns the 32-byte blake3 sum of the given data.
 func CalcHash32(data []byte) Hash32 {
@@ -149,7 +152,7 @@ func (h *Hash32) UnmarshalText(input []byte) error {
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash32) UnmarshalJSON(input []byte) error {
-	if err := util.UnmarshalFixedJSON(hashT, input, h[:]); err != nil {
+	if err := util.UnmarshalFixedJSON(hash32T, input, h[:]); err != nil {
 		return fmt.Errorf("unmarshal JSON: %w", err)
 	}
 
