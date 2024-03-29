@@ -584,7 +584,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	require.NoError(t, SignAndFinalizeAtx(signer, invalidAtx))
 	vInvalidAtx, err := invalidAtx.Verify(0, 1)
 	require.NoError(t, err)
-	vInvalidAtx.SetValidity(types.Invalid)
+	vInvalidAtx.Validity = types.Invalid
 	require.NoError(t, atxs.Add(db, vInvalidAtx))
 
 	t.Run("invalid prev ATX", func(t *testing.T) {
@@ -600,7 +600,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		vAtx.Validity = types.Unknown
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -624,7 +624,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		vAtx.Validity = types.Unknown
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -649,7 +649,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		vAtx.Validity = types.Unknown
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -672,7 +672,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		vAtx.Validity = types.Unknown
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -694,7 +694,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		vAtx.Validity = types.Unknown
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -717,7 +717,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, SignAndFinalizeAtx(signer, atx))
 		vAtx, err := atx.Verify(0, 1)
 		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		vAtx.Validity = types.Unknown
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)

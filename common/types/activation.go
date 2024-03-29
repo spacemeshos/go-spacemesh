@@ -167,7 +167,7 @@ type ActivationTx struct {
 	id                ATXID     // non-exported cache of the ATXID
 	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
 	received          time.Time // time received by node, gossiped or synced
-	validity          Validity  // whether the chain is fully verified and OK
+	Validity          Validity  // whether the chain is fully verified and OK
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -269,14 +269,6 @@ func (atx *ActivationTx) SetReceived(received time.Time) {
 
 func (atx *ActivationTx) Received() time.Time {
 	return atx.received
-}
-
-func (atx *ActivationTx) Validity() Validity {
-	return atx.validity
-}
-
-func (atx *ActivationTx) SetValidity(validity Validity) {
-	atx.validity = validity
 }
 
 // Verify an ATX for a given base TickHeight and TickCount.

@@ -61,7 +61,7 @@ func newAtx(
 	atx := types.NewActivationTx(challenge, coinbase, nipost, numUnits, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
-	atx.SetValidity(types.Valid)
+	atx.Validity = types.Valid
 	return atx
 }
 

@@ -2222,12 +2222,12 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 		handler.mValidator.EXPECT().IsVerifyingFullPost().Return(true)
 
 		atx := newAtx(challenge, nipost, 2, types.Address{1, 2, 3, 4})
-		atx.SetValidity(types.Unknown)
+		atx.Validity = types.Unknown
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 		_, proof, err := handler.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
 		require.Nil(t, proof)
-		require.Equal(t, types.Valid, atx.Validity())
+		require.Equal(t, types.Valid, atx.Validity)
 	})
 	t.Run("post verified fully", func(t *testing.T) {
 		t.Parallel()
@@ -2240,12 +2240,12 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 		handler.mValidator.EXPECT().IsVerifyingFullPost().Return(false)
 
 		atx := newAtx(challenge, nipost, 2, types.Address{1, 2, 3, 4})
-		atx.SetValidity(types.Unknown)
+		atx.Validity = types.Unknown
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 		_, proof, err := handler.SyntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
 		require.Nil(t, proof)
-		require.Equal(t, types.Unknown, atx.Validity())
+		require.Equal(t, types.Unknown, atx.Validity)
 	})
 	require.NoError(t, err)
 }

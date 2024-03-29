@@ -57,7 +57,7 @@ func decoder(fn decoderCallback) sql.Decoder {
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
 		a.Sequence = uint64(stmt.ColumnInt64(8))
 		stmt.ColumnBytes(9, a.Coinbase[:])
-		a.SetValidity(types.Validity(stmt.ColumnInt(10)))
+		a.Validity = types.Validity(stmt.ColumnInt(10))
 		v, err := a.Verify(baseTickHeight, tickCount)
 		if err != nil {
 			return fn(nil, err)
@@ -385,7 +385,7 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 		stmt.BindInt64(10, int64(atx.TickCount()))
 		stmt.BindInt64(11, int64(atx.Sequence))
 		stmt.BindBytes(12, atx.Coinbase.Bytes())
-		stmt.BindInt64(13, int64(atx.Validity()))
+		stmt.BindInt64(13, int64(atx.Validity))
 	}
 
 	_, err = db.Exec(`

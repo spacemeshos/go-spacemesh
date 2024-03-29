@@ -268,7 +268,7 @@ func (h *Handler) SyntacticallyValidateDeps(
 		return nil, nil, fmt.Errorf("invalid nipost: %w", err)
 	}
 	if h.nipostValidator.IsVerifyingFullPost() {
-		atx.SetValidity(types.Valid)
+		atx.Validity = types.Valid
 	}
 	vAtx, err := atx.Verify(baseTickHeight, leaves/h.tickSize)
 	return vAtx, nil, err
