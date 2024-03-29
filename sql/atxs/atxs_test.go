@@ -766,6 +766,7 @@ func withSequence(seq uint64) createAtxOpt {
 func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActivationTx, error) {
 	atx := &types.ActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
+			Sequence:  1,
 			PrevATXID: types.RandomATXID(),
 		},
 		Coinbase: types.Address{1, 2, 3},

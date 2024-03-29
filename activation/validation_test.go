@@ -101,7 +101,6 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
 		challenge := types.NIPostChallenge{
-			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   2,
 			PositioningATX: posAtxId,
@@ -126,9 +125,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 
 		challenge := types.NIPostChallenge{
-			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   0,
 			PositioningATX: posAtxId,
 			CommitmentATX:  &goldenATXID,
 		}
@@ -147,7 +144,6 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
 		challenge := types.NIPostChallenge{
-			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   1,
 			PositioningATX: posAtxId,
@@ -578,7 +574,6 @@ func TestVerifyChainDeps(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := types.NIPostChallenge{
-		Sequence:       1,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   postGenesisEpoch,
 		PositioningATX: goldenATXID,
@@ -619,7 +614,6 @@ func TestVerifyChainDeps(t *testing.T) {
 
 	t.Run("invalid pos ATX", func(t *testing.T) {
 		ch := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   postGenesisEpoch,
 			PositioningATX: vInvalidAtx.ID(),
@@ -645,7 +639,6 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("invalid commitment ATX", func(t *testing.T) {
 		commitmentAtxID := vInvalidAtx.ID()
 		ch := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   postGenesisEpoch,
 			PositioningATX: goldenATXID,
@@ -669,7 +662,6 @@ func TestVerifyChainDeps(t *testing.T) {
 
 	t.Run("with trusted node ID", func(t *testing.T) {
 		ch := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   postGenesisEpoch,
 			PositioningATX: vInvalidAtx.ID(),
@@ -692,7 +684,6 @@ func TestVerifyChainDeps(t *testing.T) {
 
 	t.Run("assume valid if older than X", func(t *testing.T) {
 		ch := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   postGenesisEpoch,
 			PositioningATX: vInvalidAtx.ID(),
@@ -716,7 +707,6 @@ func TestVerifyChainDeps(t *testing.T) {
 
 	t.Run("invalid top-level", func(t *testing.T) {
 		ch := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   postGenesisEpoch,
 			PositioningATX: vInvalidAtx.ID(),

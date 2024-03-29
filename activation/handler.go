@@ -170,9 +170,6 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 		if *atx.CommitmentATX == types.EmptyATXID {
 			return errors.New("empty commitment atx")
 		}
-		if atx.Sequence != 0 {
-			return errors.New("no prev atx declared, but sequence number not zero")
-		}
 
 		// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
 		// as expected from the initial Post.

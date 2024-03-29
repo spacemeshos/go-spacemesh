@@ -527,7 +527,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		ctxID := posAtx.ID()
 		challenge := types.NIPostChallenge{
-			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   currentLayer.GetEpoch(),
 			PositioningATX: posAtx.ID(),
@@ -647,7 +646,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		cATX := posAtx.ID()
 		challenge := types.NIPostChallenge{
-			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   currentLayer.GetEpoch(),
 			PositioningATX: posAtx.ID(),
@@ -682,7 +680,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		cATX := posAtx.ID()
 		challenge := types.NIPostChallenge{
-			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   currentLayer.GetEpoch(),
 			PositioningATX: posAtx.ID(),
@@ -706,7 +703,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		ctxID := posAtx.ID()
 		challenge := types.NIPostChallenge{
-			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   currentLayer.GetEpoch(),
 			PositioningATX: posAtx.ID(),
@@ -849,7 +845,6 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		atxHdlr := newTestHandler(t, goldenATXID)
 
 		challenge := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   0,
 			PositioningATX: goldenATXID,
@@ -870,7 +865,6 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		require.NoError(t, atxs.Add(atxHdlr.cdb, prevAtx))
 
 		challenge := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   currentLayer.GetEpoch(),
 			PositioningATX: goldenATXID,
@@ -1937,7 +1931,6 @@ func TestHandler_FetchReferences(t *testing.T) {
 
 		coinbase := types.Address{2, 4, 5}
 		challenge := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   postGenesisEpoch,
 			PositioningATX: posATX,
@@ -1959,7 +1952,6 @@ func TestHandler_FetchReferences(t *testing.T) {
 
 		coinbase := types.Address{2, 4, 5}
 		challenge := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   postGenesisEpoch,
 			PositioningATX: posATX,
@@ -1980,7 +1972,6 @@ func TestHandler_FetchReferences(t *testing.T) {
 
 		coinbase := types.Address{2, 4, 5}
 		challenge := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   postGenesisEpoch,
 			PositioningATX: types.EmptyATXID,
@@ -2019,10 +2010,9 @@ func TestHandler_FetchReferences(t *testing.T) {
 
 		coinbase := types.Address{2, 4, 5}
 		challenge := types.NIPostChallenge{
-			Sequence:       1,
 			PrevATXID:      types.EmptyATXID,
 			PublishEpoch:   postGenesisEpoch,
-			PositioningATX: types.EmptyATXID,
+			PositioningATX: goldenATXID,
 			CommitmentATX:  nil,
 		}
 		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
@@ -2214,7 +2204,6 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 
 	goldenATXID := types.ATXID{2, 3, 4}
 	challenge := types.NIPostChallenge{
-		Sequence:       0,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   2,
 		PositioningATX: goldenATXID,

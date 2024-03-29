@@ -99,6 +99,7 @@ func TestActivationTxFromWireV1(t *testing.T) {
 			InnerActivationTxV1: wire.InnerActivationTxV1{
 				NodeID: &types.Hash32{4, 5, 6},
 				NIPostChallengeV1: wire.NIPostChallengeV1{
+					Sequence:  1,
 					PrevATXID: types.Hash32{1, 2, 3},
 				},
 			},
@@ -160,6 +161,44 @@ func TestActivationTxFromWireV1(t *testing.T) {
 		}
 		_, err := types.ActivationTxFromWireV1(&atxV1)
 		require.ErrorContains(t, err, "nil nipost.postmetadata")
+	})
+	t.Run("zero sequence in non-initial ATX", func(t *testing.T) {
+		t.Parallel()
+		atxV1 := wire.ActivationTxV1{
+			InnerActivationTxV1: wire.InnerActivationTxV1{
+				NIPostChallengeV1: wire.NIPostChallengeV1{
+					PositioningATX: types.Hash32{1, 2, 3},
+					PrevATXID:      types.Hash32{1, 2, 3},
+					Sequence:       0,
+				},
+				NIPost: &wire.NIPostV1{
+					Post:         &wire.PostV1{},
+					PostMetadata: &wire.PostMetadataV1{},
+				},
+			},
+		}
+		_, err := types.ActivationTxFromWireV1(&atxV1)
+		require.ErrorContains(t, err, "zero sequence in non-initial ATX")
+	})
+	t.Run("zero sequence in non-initial ATX", func(t *testing.T) {
+		t.Parallel()
+		atxV1 := wire.ActivationTxV1{
+			InnerActivationTxV1: wire.InnerActivationTxV1{
+				NodeID: &types.Hash32{4, 5, 6},
+				NIPostChallengeV1: wire.NIPostChallengeV1{
+					PositioningATX: types.Hash32{1, 2, 3},
+					InitialPost:    &wire.PostV1{},
+					CommitmentATX:  &types.Hash32{1, 2, 3},
+					Sequence:       1,
+				},
+				NIPost: &wire.NIPostV1{
+					Post:         &wire.PostV1{},
+					PostMetadata: &wire.PostMetadataV1{},
+				},
+			},
+		}
+		_, err := types.ActivationTxFromWireV1(&atxV1)
+		require.ErrorContains(t, err, "non-zero sequence in initial ATX")
 	})
 }
 

@@ -175,6 +175,7 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 		NIPostChallenge: types.NIPostChallenge{
 			PublishEpoch: types.EpochID(3),
 			Sequence:     11,
+			PrevATXID:    types.ATXID{1, 2, 3, 4},
 		},
 		NumUnits: 11,
 	}
@@ -182,6 +183,7 @@ func TestStore_GetAtxByNodeID(t *testing.T) {
 		NIPostChallenge: types.NIPostChallenge{
 			PublishEpoch: types.EpochID(4),
 			Sequence:     12,
+			PrevATXID:    types.ATXID{5, 6, 7, 8},
 		},
 		NumUnits: 11,
 	}
@@ -213,7 +215,6 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	atx := &types.ActivationTx{
 		NIPostChallenge: types.NIPostChallenge{
 			PublishEpoch: types.EpochID(22),
-			Sequence:     11,
 		},
 		NumUnits: 11,
 	}

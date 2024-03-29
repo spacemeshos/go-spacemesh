@@ -473,10 +473,16 @@ func AcivationTxFromBytes(data []byte) (*ActivationTx, error) {
 
 func ActivationTxFromWireV1(atx *wire.ActivationTxV1) (*ActivationTx, error) {
 	if (atx.PrevATXID == Hash32{}) {
+		if atx.Sequence != 0 {
+			return nil, errors.New("non-zero sequence in initial ATX")
+		}
 		if atx.InnerActivationTxV1.NodeID == nil {
 			return nil, errors.New("nil NodeID in initial ATX")
 		}
 	} else {
+		if atx.Sequence == 0 {
+			return nil, errors.New("zero sequence in non-initial ATX")
+		}
 		if atx.InnerActivationTxV1.NodeID != nil {
 			return nil, errors.New("non-nil NodeID in non-initial ATX")
 		}

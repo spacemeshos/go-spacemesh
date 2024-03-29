@@ -394,7 +394,6 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	posEpoch := postGenesisEpoch
 	currLayer := posEpoch.FirstLayer()
 	ch := types.NIPostChallenge{
-		Sequence:       1,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   posEpoch,
 		PositioningATX: tab.goldenATXID,
@@ -437,7 +436,6 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	// current layer is too late to be able to build a nipost on time
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
 	ch := types.NIPostChallenge{
-		Sequence:       1,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   postGenesisEpoch,
 		PositioningATX: tab.goldenATXID,
@@ -493,7 +491,6 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	posEpoch := postGenesisEpoch
 	currLayer := postGenesisEpoch.FirstLayer()
 	ch := types.NIPostChallenge{
-		Sequence:       1,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   postGenesisEpoch,
 		PositioningATX: tab.goldenATXID,
@@ -936,7 +933,6 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	postAtxPubEpoch := postGenesisEpoch
 
 	challenge := types.NIPostChallenge{
-		Sequence:       1,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   postAtxPubEpoch,
 		PositioningATX: tab.goldenATXID,
@@ -951,7 +947,6 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	r.NoError(atxs.Add(tab.cdb, vPosAtx))
 
 	challenge = types.NIPostChallenge{
-		Sequence:       0,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   prevAtxPostEpoch,
 		PositioningATX: posAtx.ID(),
@@ -1442,7 +1437,6 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 
 	posEpoch := postGenesisEpoch + 1
 	challenge := types.NIPostChallenge{
-		Sequence:       1,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   posEpoch,
 		PositioningATX: tab.goldenATXID,
@@ -1678,7 +1672,6 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	sigInvalid, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	ch := types.NIPostChallenge{
-		Sequence:       1,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   postGenesisEpoch,
 		PositioningATX: tab.goldenATXID,
