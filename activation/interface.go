@@ -58,7 +58,7 @@ type nipostValidator interface {
 		numUnits uint32,
 		opts ...validatorOption,
 	) error
-	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
+	PostMetadata(cfg *PostConfig, metadata types.PostMetadata) error
 
 	VRFNonce(
 		nodeId types.NodeID,

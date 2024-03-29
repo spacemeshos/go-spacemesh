@@ -505,7 +505,7 @@ func Test_Validate_PostMetadata(t *testing.T) {
 	t.Run("valid post metadata", func(t *testing.T) {
 		t.Parallel()
 
-		meta := &types.PostMetadata{
+		meta := types.PostMetadata{
 			LabelsPerUnit: postCfg.LabelsPerUnit,
 		}
 
@@ -516,7 +516,7 @@ func Test_Validate_PostMetadata(t *testing.T) {
 	t.Run("wrong labels per unit", func(t *testing.T) {
 		t.Parallel()
 
-		meta := &types.PostMetadata{
+		meta := types.PostMetadata{
 			LabelsPerUnit: postCfg.LabelsPerUnit - 1,
 		}
 

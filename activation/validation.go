@@ -89,7 +89,7 @@ func (v *Validator) NIPost(
 		return 0, err
 	}
 
-	if err := v.PostMetadata(&v.cfg, &nipost.PostMetadata); err != nil {
+	if err := v.PostMetadata(&v.cfg, nipost.PostMetadata); err != nil {
 		return 0, err
 	}
 
@@ -194,7 +194,7 @@ func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 	return nil
 }
 
-func (*Validator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
+func (*Validator) PostMetadata(cfg *PostConfig, metadata types.PostMetadata) error {
 	if metadata.LabelsPerUnit < cfg.LabelsPerUnit {
 		return fmt.Errorf(
 			"invalid `LabelsPerUnit`; expected: >=%d, given: %d",

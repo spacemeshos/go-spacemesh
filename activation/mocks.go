@@ -545,7 +545,7 @@ func (c *MocknipostValidatorPostCall) DoAndReturn(f func(context.Context, types.
 }
 
 // PostMetadata mocks base method.
-func (m *MocknipostValidator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
+func (m *MocknipostValidator) PostMetadata(cfg *PostConfig, metadata types.PostMetadata) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PostMetadata", cfg, metadata)
 	ret0, _ := ret[0].(error)
@@ -571,13 +571,13 @@ func (c *MocknipostValidatorPostMetadataCall) Return(arg0 error) *MocknipostVali
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorPostMetadataCall) Do(f func(*PostConfig, *types.PostMetadata) error) *MocknipostValidatorPostMetadataCall {
+func (c *MocknipostValidatorPostMetadataCall) Do(f func(*PostConfig, types.PostMetadata) error) *MocknipostValidatorPostMetadataCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorPostMetadataCall) DoAndReturn(f func(*PostConfig, *types.PostMetadata) error) *MocknipostValidatorPostMetadataCall {
+func (c *MocknipostValidatorPostMetadataCall) DoAndReturn(f func(*PostConfig, types.PostMetadata) error) *MocknipostValidatorPostMetadataCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
