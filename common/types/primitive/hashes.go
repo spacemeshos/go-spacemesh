@@ -76,10 +76,10 @@ func (h Hash20) MarshalText() ([]byte, error) {
 // If b is larger than len(h), b will be cropped from the left.
 func (h *Hash20) SetBytes(b []byte) {
 	if len(b) > len(h) {
-		b = b[len(b)-32:]
+		b = b[len(b)-20:]
 	}
 
-	copy(h[32-len(b):], b)
+	copy(h[20-len(b):], b)
 }
 
 // ToHash32 returns a Hash32 whose first 20 bytes are the bytes of this Hash20, it is right-padded with zeros.
