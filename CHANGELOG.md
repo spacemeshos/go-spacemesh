@@ -2,6 +2,18 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up cache warmup
+
 ## Release v1.4.4
 
 ### Improvements
