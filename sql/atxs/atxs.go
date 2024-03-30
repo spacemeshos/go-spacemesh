@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	sqlite "github.com/go-llsqlite/crawshaw"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -569,27 +571,53 @@ func IterateAtxsData(
 		weight uint64,
 		base uint64,
 		height uint64,
+		nonce *types.VRFPostIndex,
+		isMalicious bool,
 	) bool,
 ) error {
 	_, err := db.Exec(
-		`select id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count
-		from atxs where epoch between ?1 and ?2;`,
-		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(from.Uint32()))
-			stmt.BindInt64(2, int64(to.Uint32()))
-		},
+		`select
+                   a.id, a.pubkey, a.epoch, a.coinbase, a.effective_num_units,
+                   a.base_tick_height, a.tick_count,
+                   coalesce(a.nonce, (
+		     select a1.nonce
+		     from atxs a1
+		     where a1.pubkey = a.pubkey and a1.epoch < a.epoch and a1.nonce is not null
+		     order by a1.epoch desc
+		     limit 1
+		   )) as nonce,
+                   iif(idn.proof is null, 0, 1) as is_malicious
+		from atxs a left join identities idn on a.pubkey = idn.pubkey`,
+		// SQLite happens to process the query much faster if we don't
+		// filter it by epoch
+		// where a.epoch between ? and ?`,
+		// func(stmt *sql.Statement) {
+		// 	stmt.BindInt64(1, int64(from.Uint32()))
+		// 	stmt.BindInt64(2, int64(to.Uint32()))
+		// },
+		nil,
 		func(stmt *sql.Statement) bool {
+			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
+			if epoch < from || epoch > to {
+				return true
+			}
 			var id types.ATXID
 			stmt.ColumnBytes(0, id[:])
 			var node types.NodeID
 			stmt.ColumnBytes(1, node[:])
-			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
 			var coinbase types.Address
 			stmt.ColumnBytes(3, coinbase[:])
 			effectiveUnits := uint64(stmt.ColumnInt64(4))
 			baseHeight := uint64(stmt.ColumnInt64(5))
 			ticks := uint64(stmt.ColumnInt64(6))
-			return fn(id, node, epoch, coinbase, effectiveUnits*ticks, baseHeight, baseHeight+ticks)
+			var vrfNonce *types.VRFPostIndex
+			if stmt.ColumnType(7) != sqlite.SQLITE_NULL {
+				nonce := types.VRFPostIndex(stmt.ColumnInt64(7))
+				vrfNonce = &nonce
+			}
+			isMalicious := stmt.ColumnInt(8) != 0
+			return fn(id, node, epoch, coinbase, effectiveUnits*ticks,
+				baseHeight, baseHeight+ticks, vrfNonce, isMalicious)
 		},
 	)
 	if err != nil {
