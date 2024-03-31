@@ -21,6 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/conninfo"
 	discovery "github.com/spacemeshos/go-spacemesh/p2p/dhtdiscovery"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -75,6 +76,12 @@ func WithRelayCandidateChannel(relayCh chan<- peer.AddrInfo) Opt {
 	}
 }
 
+func WithConnInfoTracker(ct *conninfo.ConnInfoTracker) Opt {
+	return func(fh *Host) {
+		fh.ConnInfoTracker = ct
+	}
+}
+
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -91,6 +98,7 @@ type Host struct {
 	}
 
 	host.Host
+	*conninfo.ConnInfoTracker
 	pubsub.PubSub
 
 	nodeReporter func()
@@ -270,10 +278,14 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 
 	var connections []ConnectionInfo
 	for _, c := range conns {
+		info := fh.EnsureConnInfo(c)
 		connections = append(connections, ConnectionInfo{
-			Address:  c.RemoteMultiaddr(),
-			Uptime:   time.Since(c.Stat().Opened),
-			Outbound: c.Stat().Direction == network.DirOutbound,
+			Address:         c.RemoteMultiaddr(),
+			Uptime:          time.Since(c.Stat().Opened),
+			Outbound:        c.Stat().Direction == network.DirOutbound,
+			Kind:            info.Kind(),
+			ClientConnStats: grabPeerConnStats(&info.ClientConnStats),
+			ServerConnStats: grabPeerConnStats(&info.ServerConnStats),
 		})
 	}
 	var tags []string
@@ -455,4 +467,20 @@ func (fh *Host) trackNetEvents() error {
 			return fh.ctx.Err()
 		}
 	}
+}
+
+func (fh *Host) SetStreamHandler(pid protocol.ID, handler network.StreamHandler) {
+	fh.Host.SetStreamHandler(pid, fh.WrapStreamHandler(handler))
+}
+
+func (fh *Host) SetStreamHandlerMatch(pid protocol.ID, match func(protocol.ID) bool, handler network.StreamHandler) {
+	fh.Host.SetStreamHandlerMatch(pid, match, fh.WrapStreamHandler(handler))
+}
+
+func (fh *Host) NewStream(ctx context.Context, p peer.ID, pids ...protocol.ID) (network.Stream, error) {
+	s, err := fh.Host.NewStream(ctx, p, pids...)
+	if err != nil {
+		return nil, err
+	}
+	return fh.WrapClientStream(s), nil
 }

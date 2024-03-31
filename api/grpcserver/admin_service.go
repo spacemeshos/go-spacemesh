@@ -22,6 +22,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/conninfo"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -169,9 +171,12 @@ func (a AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_Pe
 			connections := make([]*pb.ConnectionInfo, len(info.Connections))
 			for j, c := range info.Connections {
 				connections[j] = &pb.ConnectionInfo{
-					Address:  c.Address.String(),
-					Uptime:   durationpb.New(c.Uptime),
-					Outbound: c.Outbound,
+					Address:     c.Address.String(),
+					Uptime:      durationpb.New(c.Uptime),
+					Outbound:    c.Outbound,
+					Kind:        connKind(c.Kind),
+					ClientStats: connPeerStats(c.ClientConnStats),
+					ServerStats: connPeerStats(c.ServerConnStats),
 				}
 			}
 			err := stream.Send(&pb.PeerInfo{
@@ -186,4 +191,41 @@ func (a AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_Pe
 	}
 
 	return nil
+}
+
+func connKind(kind conninfo.Kind) pb.ConnectionInfo_Kind {
+	switch kind {
+	case conninfo.KindInbound:
+		return pb.ConnectionInfo_Inbound
+	case conninfo.KindOutbound:
+		return pb.ConnectionInfo_Outbound
+	case conninfo.KindHolePunchInbound:
+		return pb.ConnectionInfo_HPInbound
+	case conninfo.KindHolePunchOutbound:
+		return pb.ConnectionInfo_HPOutbound
+	case conninfo.KindRelayInbound:
+		return pb.ConnectionInfo_RelayInbound
+	case conninfo.KindRelayOutbound:
+		return pb.ConnectionInfo_RelayOutbound
+	default:
+		return pb.ConnectionInfo_Uknown
+	}
+}
+
+func connPeerStats(stats p2p.PeerConnectionStats) *pb.PeerConnectionStats {
+	if stats.SuccessCount == 0 && stats.FailureCount == 0 &&
+		stats.BytesSent == 0 && stats.BytesReceived == 0 {
+		return nil
+	}
+	var latency *durationpb.Duration
+	if stats.SuccessCount > 0 || stats.FailureCount > 0 {
+		latency = durationpb.New(stats.Latency)
+	}
+	return &pb.PeerConnectionStats{
+		SuccessCount:  uint64(stats.SuccessCount),
+		FailureCount:  uint64(stats.FailureCount),
+		Latency:       latency,
+		BytesSent:     uint64(stats.BytesSent),
+		BytesReceived: uint64(stats.BytesReceived),
+	}
 }

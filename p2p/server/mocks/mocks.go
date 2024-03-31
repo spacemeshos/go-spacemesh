@@ -18,6 +18,7 @@ import (
 	network "github.com/libp2p/go-libp2p/core/network"
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	protocol "github.com/libp2p/go-libp2p/core/protocol"
+	conninfo "github.com/spacemeshos/go-spacemesh/p2p/conninfo"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -80,6 +81,44 @@ func (c *MockHostConnManagerCall) Do(f func() connmgr.ConnManager) *MockHostConn
 func (c *MockHostConnManagerCall) DoAndReturn(f func() connmgr.ConnManager) *MockHostConnManagerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
+}
+
+// EnsureConnInfo mocks base method.
+func (m *MockHost) EnsureConnInfo(c network.Conn) *conninfo.Info {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureConnInfo", c)
+	ret0, _ := ret[0].(*conninfo.Info)
+	return ret0
+}
+
+// EnsureConnInfo indicates an expected call of EnsureConnInfo.
+func (mr *MockHostMockRecorder) EnsureConnInfo(c any) *MockHostEnsureConnInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureConnInfo", reflect.TypeOf((*MockHost)(nil).EnsureConnInfo), c)
+	return &MockHostEnsureConnInfoCall{Call: call}
+}
+
+// MockHostEnsureConnInfoCall wrap *gomock.Call
+type MockHostEnsureConnInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c_2 *MockHostEnsureConnInfoCall) Return(arg0 *conninfo.Info) *MockHostEnsureConnInfoCall {
+	c_2.Call = c_2.Call.Return(arg0)
+	return c_2
+}
+
+// Do rewrite *gomock.Call.Do
+func (c_2 *MockHostEnsureConnInfoCall) Do(f func(network.Conn) *conninfo.Info) *MockHostEnsureConnInfoCall {
+	c_2.Call = c_2.Call.Do(f)
+	return c_2
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c_2 *MockHostEnsureConnInfoCall) DoAndReturn(f func(network.Conn) *conninfo.Info) *MockHostEnsureConnInfoCall {
+	c_2.Call = c_2.Call.DoAndReturn(f)
+	return c_2
 }
 
 // Network mocks base method.

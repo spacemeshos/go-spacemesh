@@ -23,6 +23,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
+	"github.com/libp2p/go-libp2p/p2p/protocol/holepunch"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/quicreuse"
@@ -32,6 +33,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/conninfo"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
@@ -340,8 +342,12 @@ func New(
 			}),
 		)
 	}
+	var hpt *conninfo.HolePunchTracer
 	if cfg.EnableHolepunching {
-		lopts = append(lopts, libp2p.EnableHolePunching())
+		mt := holepunch.NewMetricsTracer(holepunch.WithRegisterer(prometheus.DefaultRegisterer))
+		hpt = conninfo.NewHolePunchTracer(mt)
+		lopts = append(lopts,
+			libp2p.EnableHolePunching(holepunch.WithMetricsTracer(hpt)))
 	}
 	if cfg.Relay {
 		if cfg.RelayServer.Enable {
@@ -397,12 +403,17 @@ func New(
 	logger.Zap().Info("local node identity", zap.Stringer("identity", h.ID()))
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
+	t := conninfo.NewConnInfoTracker(h.Network())
+	if hpt != nil {
+		hpt.SetConnInfo(t)
+	}
 	opts = append(
 		opts,
 		WithConfig(cfg),
 		WithLog(logger),
 		WithBootnodes(bootnodesMap),
 		WithDirectNodes(g.direct),
+		WithConnInfoTracker(t),
 	)
 	return Upgrade(h, opts...)
 }
