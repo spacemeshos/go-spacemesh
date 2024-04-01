@@ -76,12 +76,6 @@ func WithRelayCandidateChannel(relayCh chan<- peer.AddrInfo) Opt {
 	}
 }
 
-func WithConnInfoTracker(ct *conninfo.ConnInfoTracker) Opt {
-	return func(fh *Host) {
-		fh.ConnInfoTracker = ct
-	}
-}
-
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -98,7 +92,7 @@ type Host struct {
 	}
 
 	host.Host
-	*conninfo.ConnInfoTracker
+	conninfo.ConnInfo
 	pubsub.PubSub
 
 	nodeReporter func()
@@ -131,6 +125,10 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		cfg:    DefaultConfig(),
 		logger: log.NewNop(),
 		Host:   h,
+	}
+	ci, ok := h.(conninfo.ConnInfo)
+	if ok {
+		fh.ConnInfo = ci
 	}
 	for _, opt := range opts {
 		opt(fh)
@@ -269,6 +267,9 @@ func (fh *Host) Connected(p Peer) bool {
 // ConnectedPeerInfo retrieves a peer info object for the given peer.ID, if the
 // given peer is not connected then nil is returned.
 func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
+	if fh.ConnInfo == nil {
+		panic("no ConnInfo")
+	}
 	conns := fh.Network().ConnsToPeer(id)
 	// there's no sync between  Peers() and ConnsToPeer() so by the time we
 	// try to get the conns they may not exist.
@@ -278,7 +279,7 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 
 	var connections []ConnectionInfo
 	for _, c := range conns {
-		info := fh.EnsureConnInfo(c)
+		info := fh.ConnInfo.EnsureConnInfo(c)
 		connections = append(connections, ConnectionInfo{
 			Address:         c.RemoteMultiaddr(),
 			Uptime:          time.Since(c.Stat().Opened),
@@ -467,29 +468,4 @@ func (fh *Host) trackNetEvents() error {
 			return fh.ctx.Err()
 		}
 	}
-}
-
-func (fh *Host) SetStreamHandler(pid protocol.ID, handler network.StreamHandler) {
-	if fh.ConnInfoTracker != nil {
-		handler = fh.WrapStreamHandler(handler)
-	}
-	fh.Host.SetStreamHandler(pid, handler)
-}
-
-func (fh *Host) SetStreamHandlerMatch(pid protocol.ID, match func(protocol.ID) bool, handler network.StreamHandler) {
-	if fh.ConnInfoTracker != nil {
-		handler = fh.WrapStreamHandler(handler)
-	}
-	fh.Host.SetStreamHandlerMatch(pid, match, handler)
-}
-
-func (fh *Host) NewStream(ctx context.Context, p peer.ID, pids ...protocol.ID) (network.Stream, error) {
-	s, err := fh.Host.NewStream(ctx, p, pids...)
-	if err != nil {
-		return nil, err
-	}
-	if fh.ConnInfoTracker != nil {
-		return fh.WrapClientStream(s), nil
-	}
-	return s, nil
 }

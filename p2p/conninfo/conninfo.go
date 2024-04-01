@@ -1,10 +1,14 @@
 package conninfo
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/protocol/holepunch"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -155,4 +159,29 @@ func (h *HolePunchTracer) HolePunchFinished(
 		kind = KindHolePunchInbound
 	}
 	h.ci.EnsureConnInfo(directConn.(network.Conn)).SetKind(kind)
+}
+
+type Host struct {
+	host.Host
+	*ConnInfoTracker
+}
+
+func NewHost(h host.Host) *Host {
+	return &Host{Host: h, ConnInfoTracker: NewConnInfoTracker(h.Network())}
+}
+
+func (h *Host) SetStreamHandler(pid protocol.ID, handler network.StreamHandler) {
+	h.Host.SetStreamHandler(pid, h.WrapStreamHandler(handler))
+}
+
+func (h *Host) SetStreamHandlerMatch(pid protocol.ID, match func(protocol.ID) bool, handler network.StreamHandler) {
+	h.Host.SetStreamHandlerMatch(pid, match, h.WrapStreamHandler(handler))
+}
+
+func (h *Host) NewStream(ctx context.Context, p peer.ID, pids ...protocol.ID) (network.Stream, error) {
+	s, err := h.Host.NewStream(ctx, p, pids...)
+	if err != nil {
+		return nil, err
+	}
+	return h.WrapClientStream(s), nil
 }

@@ -7,10 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/network"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
@@ -20,40 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/conninfo"
 )
-
-type fakeHost struct {
-	host.Host
-	*conninfo.ConnInfoTracker
-}
-
-func newFakeHost(h host.Host) *fakeHost {
-	return &fakeHost{
-		Host:            h,
-		ConnInfoTracker: conninfo.NewConnInfoTracker(h.Network()),
-	}
-}
-
-func (fh *fakeHost) SetStreamHandler(pid protocol.ID, handler network.StreamHandler) {
-	fh.Host.SetStreamHandler(pid, fh.WrapStreamHandler(handler))
-}
-
-func (fh *fakeHost) SetStreamHandlerMatch(
-	pid protocol.ID,
-	match func(protocol.ID) bool,
-	handler network.StreamHandler,
-) {
-	fh.Host.SetStreamHandlerMatch(pid, match, fh.WrapStreamHandler(handler))
-}
-
-func (fh *fakeHost) NewStream(ctx context.Context, p peer.ID, pids ...protocol.ID) (network.Stream, error) {
-	s, err := fh.Host.NewStream(ctx, p, pids...)
-	if err != nil {
-		return nil, err
-	}
-	return fh.WrapClientStream(s), nil
-}
-
-var _ conninfo.ConnInfo = &fakeHost{}
 
 func TestServer(t *testing.T) {
 	const limit = 1024
@@ -76,25 +38,25 @@ func TestServer(t *testing.T) {
 		WithMetrics(),
 	}
 	client := New(
-		newFakeHost(mesh.Hosts()[0]),
+		conninfo.NewHost(mesh.Hosts()[0]),
 		proto,
 		WrapHandler(handler),
 		append(opts, WithRequestSizeLimit(2*limit))...,
 	)
 	srv1 := New(
-		newFakeHost(mesh.Hosts()[1]),
+		conninfo.NewHost(mesh.Hosts()[1]),
 		proto,
 		WrapHandler(handler),
 		append(opts, WithRequestSizeLimit(limit))...,
 	)
 	srv2 := New(
-		newFakeHost(mesh.Hosts()[2]),
+		conninfo.NewHost(mesh.Hosts()[2]),
 		proto,
 		WrapHandler(errhandler),
 		append(opts, WithRequestSizeLimit(limit))...,
 	)
 	srv3 := New(
-		newFakeHost(mesh.Hosts()[3]),
+		conninfo.NewHost(mesh.Hosts()[3]),
 		"otherproto",
 		WrapHandler(errhandler),
 		append(opts, WithRequestSizeLimit(limit))...,
@@ -199,9 +161,9 @@ func TestQueued(t *testing.T) {
 		wait             = make(chan struct{}, total)
 	)
 
-	client := New(newFakeHost(mesh.Hosts()[0]), proto, nil)
+	client := New(conninfo.NewHost(mesh.Hosts()[0]), proto, nil)
 	srv := New(
-		newFakeHost(mesh.Hosts()[1]),
+		conninfo.NewHost(mesh.Hosts()[1]),
 		proto,
 		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
 			return msg, nil

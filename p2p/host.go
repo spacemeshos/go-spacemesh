@@ -403,9 +403,9 @@ func New(
 	logger.Zap().Info("local node identity", zap.Stringer("identity", h.ID()))
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
-	t := conninfo.NewConnInfoTracker(h.Network())
+	cih := conninfo.NewHost(h)
 	if hpt != nil {
-		hpt.SetConnInfo(t)
+		hpt.SetConnInfo(cih)
 	}
 	opts = append(
 		opts,
@@ -413,9 +413,8 @@ func New(
 		WithLog(logger),
 		WithBootnodes(bootnodesMap),
 		WithDirectNodes(g.direct),
-		WithConnInfoTracker(t),
 	)
-	return Upgrade(h, opts...)
+	return Upgrade(cih, opts...)
 }
 
 // AutoStart initializes a new host and starts it.
