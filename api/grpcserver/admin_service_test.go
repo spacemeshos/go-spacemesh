@@ -225,6 +225,6 @@ func TestAdminService_PeerInfo(t *testing.T) {
 	require.Equal(t, uint64(50), msg.Connections[0].ServerStats.BytesReceived)
 	require.Equal(t, []string{"t3"}, msg.Tags)
 
-	msg, err = stream.Recv()
+	_, err = stream.Recv()
 	require.ErrorIs(t, err, io.EOF)
 }

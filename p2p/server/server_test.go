@@ -37,7 +37,11 @@ func (fh *fakeHost) SetStreamHandler(pid protocol.ID, handler network.StreamHand
 	fh.Host.SetStreamHandler(pid, fh.WrapStreamHandler(handler))
 }
 
-func (fh *fakeHost) SetStreamHandlerMatch(pid protocol.ID, match func(protocol.ID) bool, handler network.StreamHandler) {
+func (fh *fakeHost) SetStreamHandlerMatch(
+	pid protocol.ID,
+	match func(protocol.ID) bool,
+	handler network.StreamHandler,
+) {
 	fh.Host.SetStreamHandlerMatch(pid, match, fh.WrapStreamHandler(handler))
 }
 

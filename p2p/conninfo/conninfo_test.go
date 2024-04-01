@@ -9,7 +9,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/libp2p/go-libp2p/p2p/protocol/holepunch"
-	multiaddr "github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 )
 
@@ -78,7 +78,7 @@ func (t *fakeMetricsTracer) DirectDialFinished(success bool) {
 func (t *fakeMetricsTracer) HolePunchFinished(
 	side string,
 	attemptNum int,
-	theirAddrs, ourAddr []multiaddr.Multiaddr,
+	theirAddrs, ourAddr []ma.Multiaddr,
 	directConn network.ConnMultiaddrs,
 ) {
 	t.holePunchCount++
@@ -92,6 +92,7 @@ func TestHolePunchTracer(t *testing.T) {
 	hpt := NewHolePunchTracer(&mt)
 	hpt.SetConnInfo(ct)
 	c1, err := mesh.ConnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[1].ID())
+	require.NoError(t, err)
 	c2, err := mesh.ConnectPeers(mesh.Hosts()[0].ID(), mesh.Hosts()[2].ID())
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
