@@ -470,11 +470,17 @@ func (fh *Host) trackNetEvents() error {
 }
 
 func (fh *Host) SetStreamHandler(pid protocol.ID, handler network.StreamHandler) {
-	fh.Host.SetStreamHandler(pid, fh.WrapStreamHandler(handler))
+	if fh.ConnInfoTracker != nil {
+		handler = fh.WrapStreamHandler(handler)
+	}
+	fh.Host.SetStreamHandler(pid, handler)
 }
 
 func (fh *Host) SetStreamHandlerMatch(pid protocol.ID, match func(protocol.ID) bool, handler network.StreamHandler) {
-	fh.Host.SetStreamHandlerMatch(pid, match, fh.WrapStreamHandler(handler))
+	if fh.ConnInfoTracker != nil {
+		handler = fh.WrapStreamHandler(handler)
+	}
+	fh.Host.SetStreamHandlerMatch(pid, match, handler)
 }
 
 func (fh *Host) NewStream(ctx context.Context, p peer.ID, pids ...protocol.ID) (network.Stream, error) {
@@ -482,5 +488,8 @@ func (fh *Host) NewStream(ctx context.Context, p peer.ID, pids ...protocol.ID) (
 	if err != nil {
 		return nil, err
 	}
-	return fh.WrapClientStream(s), nil
+	if fh.ConnInfoTracker != nil {
+		return fh.WrapClientStream(s), nil
+	}
+	return s, nil
 }
