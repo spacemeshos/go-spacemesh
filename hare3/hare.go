@@ -79,7 +79,6 @@ func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if cfg.CommiteeUpgrade != nil {
 		encoder.AddUint32("committee upgrade layer", cfg.CommiteeUpgrade.Layer.Uint32())
 		encoder.AddUint16("committee upgrade size", cfg.CommiteeUpgrade.Size)
-
 	}
 	encoder.AddUint16("leaders", cfg.Leaders)
 	encoder.AddUint8("iterations limit", cfg.IterationsLimit)
