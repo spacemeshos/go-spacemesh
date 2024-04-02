@@ -31,11 +31,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+type CommiteeUpgrade struct {
+	Layer types.LayerID
+	Size  uint16
+}
+
 type Config struct {
 	Enable          bool          `mapstructure:"enable"`
 	EnableLayer     types.LayerID `mapstructure:"enable-layer"`
 	DisableLayer    types.LayerID `mapstructure:"disable-layer"`
 	Committee       uint16        `mapstructure:"committee"`
+	CommiteeUpgrade *CommiteeUpgrade
 	Leaders         uint16        `mapstructure:"leaders"`
 	IterationsLimit uint8         `mapstructure:"iterations-limit"`
 	PreroundDelay   time.Duration `mapstructure:"preround-delay"`
@@ -44,6 +50,13 @@ type Config struct {
 	// This requires additional computation and should be used for debugging only.
 	LogStats     bool   `mapstructure:"log-stats"`
 	ProtocolName string `mapstructure:"protocolname"`
+}
+
+func (cfg *Config) CommiteeFor(layer types.LayerID) uint16 {
+	if cfg.CommiteeUpgrade != nil && layer >= cfg.CommiteeUpgrade.Layer {
+		return cfg.CommiteeUpgrade.Size
+	}
+	return cfg.Committee
 }
 
 func (cfg *Config) Validate(zdist time.Duration) error {
@@ -63,6 +76,11 @@ func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("enabled layer", cfg.EnableLayer.Uint32())
 	encoder.AddUint32("disabled layer", cfg.DisableLayer.Uint32())
 	encoder.AddUint16("committee", cfg.Committee)
+	if cfg.CommiteeUpgrade != nil {
+		encoder.AddUint32("committee upgrade layer", cfg.CommiteeUpgrade.Layer.Uint32())
+		encoder.AddUint16("committee upgrade size", cfg.CommiteeUpgrade.Size)
+
+	}
 	encoder.AddUint16("leaders", cfg.Leaders)
 	encoder.AddUint8("iterations limit", cfg.IterationsLimit)
 	encoder.AddDuration("preround delay", cfg.PreroundDelay)
@@ -352,7 +370,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		beacon:  beacon,
 		signers: maps.Values(h.signers),
 		vrfs:    make([]*types.HareEligibility, len(h.signers)),
-		proto:   newProtocol(h.config.Committee/2 + 1),
+		proto:   newProtocol(h.config.CommiteeFor(layer)/2 + 1),
 	}
 	h.sessions[layer] = s.proto
 	h.mu.Unlock()
