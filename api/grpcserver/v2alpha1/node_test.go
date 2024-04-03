@@ -25,6 +25,8 @@ func TestNodeService_Status(t *testing.T) {
 		timesync.WithGenesisTime(time.Now()),
 		timesync.WithLogger(zaptest.NewLogger(t)))
 	require.NoError(t, err)
+	defer clock.Close()
+
 	svc := NewNodeService(peerCounter, meshAPI, clock, syncer)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
