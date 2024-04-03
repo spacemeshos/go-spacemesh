@@ -80,7 +80,7 @@ func TestGet_RejectInvalidAtxID(t *testing.T) {
 
 	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: []byte{1, 2, 3}})
 	require.Error(t, err)
-	require.Equal(t, status.Code(err), codes.InvalidArgument)
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestGet_AtxNotPresent(t *testing.T) {
@@ -93,7 +93,7 @@ func TestGet_AtxNotPresent(t *testing.T) {
 
 	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.Error(t, err)
-	require.Equal(t, status.Code(err), codes.NotFound)
+	require.Equal(t, codes.NotFound, status.Code(err))
 }
 
 func TestGet_AtxProviderReturnsFailure(t *testing.T) {
@@ -106,7 +106,7 @@ func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 
 	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.Error(t, err)
-	require.Equal(t, status.Code(err), codes.NotFound)
+	require.Equal(t, codes.NotFound, status.Code(err))
 }
 
 func TestGet_HappyPath(t *testing.T) {

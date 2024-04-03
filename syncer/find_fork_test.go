@@ -107,7 +107,7 @@ func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, 
 	hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
 
 	expCount := int(req.Count())
-	require.Equal(t, expCount, len(hashes), fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, len(hashes)))
+	require.Len(t, hashes, expCount, fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, len(hashes)))
 	mh := &fetch.MeshHashes{
 		Hashes: hashes,
 	}
@@ -149,7 +149,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
 		tf.UpdateAgreement("shorty", types.LayerID(111), types.RandomHash(), time.Now())
-		require.Equal(t, tf.NumPeersCached(), 2)
+		require.Equal(t, 2, tf.NumPeersCached())
 		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 				mh := &fetch.MeshHashes{
@@ -160,7 +160,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 
 		_, err := tf.FindFork(context.Background(), peer, types.LayerID(37), types.RandomHash())
 		require.ErrorIs(t, err, syncer.ErrPeerMeshChangedMidSession)
-		require.Equal(t, tf.NumPeersCached(), 1)
+		require.Equal(t, 1, tf.NumPeersCached())
 	})
 
 	t.Run("node mesh changed", func(t *testing.T) {
@@ -170,7 +170,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
 		tf.UpdateAgreement("shorty", types.LayerID(111), types.RandomHash(), time.Now())
-		require.Equal(t, tf.NumPeersCached(), 2)
+		require.Equal(t, 2, tf.NumPeersCached())
 		lastDiffLid := types.LayerID(37)
 		lastDiffHash := types.RandomHash()
 		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
@@ -187,7 +187,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 
 		_, err := tf.FindFork(context.Background(), peer, lastDiffLid, lastDiffHash)
 		require.ErrorIs(t, err, syncer.ErrNodeMeshChangedMidSession)
-		require.Equal(t, tf.NumPeersCached(), 0)
+		require.Equal(t, 0, tf.NumPeersCached())
 	})
 }
 

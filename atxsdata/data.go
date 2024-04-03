@@ -7,10 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// minCapacity is set to 2 epochs because we are using data from current epoch for tortoise
-// and at the start of current epoch we still need data from previous epoch for hare oracle.
-const minCapacity = 2
-
 // SAFETY: all exported fields are read-only and are safe to read concurrently.
 // Thanks to the fact that ATX is immutable, it is safe to return a pointer to it.
 type ATX struct {
@@ -25,43 +21,15 @@ type ATX struct {
 	malicious bool
 }
 
-type Opt func(*Data)
-
-// WithCapacity sets the number of epochs from the latest applied
-// that cache will maintain in memory.
-func WithCapacity(capacity types.EpochID) Opt {
-	return func(cache *Data) {
-		cache.capacity = max(minCapacity, capacity)
-	}
-}
-
-// WithCapacityFromLayers sets capacity to include all layers in the window.
-func WithCapacityFromLayers(window, epochSize uint32) Opt {
-	capacity := window / epochSize
-	if window%epochSize != 0 {
-		capacity++
-	}
-	return WithCapacity(types.EpochID(capacity))
-}
-
-func New(opts ...Opt) *Data {
-	cache := &Data{
-		capacity:  2,
+func New() *Data {
+	return &Data{
 		malicious: map[types.NodeID]struct{}{},
 		epochs:    map[types.EpochID]epochCache{},
 	}
-	for _, opt := range opts {
-		opt(cache)
-	}
-	return cache
 }
 
 type Data struct {
 	evicted atomic.Uint32
-
-	// number of epochs to keep
-	// capacity is not enforced by the cache itself
-	capacity types.EpochID
 
 	mu        sync.RWMutex
 	malicious map[types.NodeID]struct{}
@@ -80,15 +48,11 @@ func (d *Data) IsEvicted(epoch types.EpochID) bool {
 	return d.evicted.Load() >= epoch.Uint32()
 }
 
-// OnEpoch is a notification for cache to evict epochs that are not useful
+// EvictEpoch is a notification for cache to evict epochs that are not useful
 // to keep in memory.
-func (d *Data) OnEpoch(applied types.EpochID) {
+func (d *Data) EvictEpoch(evict types.EpochID) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if applied < d.capacity {
-		return
-	}
-	evict := applied - d.capacity
 	if d.IsEvicted(evict) {
 		return
 	}

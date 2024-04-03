@@ -79,6 +79,8 @@ func NewWithServices(
 	ip := net.ParseIP(host)
 	if host != "localhost" && !ip.IsPrivate() && !ip.IsLoopback() {
 		logger.Warn("unsecured grpc server is listening on a public IP address", zap.String("address", listener))
+	} else {
+		logger.Info("grpc server is listening on a private IP address", zap.String("address", listener))
 	}
 
 	server := New(listener, logger, config, grpcOpts...)
@@ -106,7 +108,7 @@ func NewTLS(logger *zap.Logger, config Config, svc []ServiceAPI) (*Server, error
 
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("setup CA certificate")
+		return nil, errors.New("setup CA certificate")
 	}
 
 	tlsConfig := &tls.Config{
@@ -138,8 +140,11 @@ func New(listener string, logger *zap.Logger, config Config, grpcOpts ...grpc.Se
 		),
 		grpc.MaxSendMsgSize(config.GrpcSendMsgSize),
 		grpc.MaxRecvMsgSize(config.GrpcRecvMsgSize),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime: 1 * time.Minute, // keep alive more often than once per `MinTime` will be disconnected
+		}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			Time:    time.Minute,
+			Time:    10 * time.Minute,
 			Timeout: 10 * time.Second,
 		}),
 	}
@@ -170,6 +175,7 @@ func (s *Server) Start() error {
 	}
 	s.BoundAddress = lis.Addr().String()
 	reflection.Register(s.GrpcServer)
+	s.logger.Info("bound to address", zap.String("address", s.BoundAddress))
 	s.grp.Go(func() error {
 		if err := s.GrpcServer.Serve(lis); err != nil {
 			s.logger.Error("serving grpc server", zap.Error(err))

@@ -157,9 +157,10 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 			continue
 		}
 
+		poetPubKey := base64.StdEncoding.EncodeToString(req.PoetServiceID.ServiceID)
 		address, err := m.getAddress(req.PoetServiceID)
 		if err != nil {
-			return fmt.Errorf("get address for poet service id %x: %w", req.PoetServiceID.ServiceID, err)
+			return fmt.Errorf("get address for poet service id %s: %w", poetPubKey, err)
 		}
 
 		enc := func(stmt *sql.Statement) {
@@ -173,12 +174,14 @@ func (m migration0003) moveNipostStateToDb(db sql.Executor, dataDir string) erro
 			insert into poet_registration (id, hash, address, round_id, round_end)
 			values (?1, ?2, ?3, ?4, ?5);`, enc, nil,
 		); err != nil {
-			return fmt.Errorf("insert poet registration for %s: %w", types.BytesToNodeID(meta.NodeId).ShortString(), err)
+			return fmt.Errorf("insert poet registration for %s: %w",
+				types.BytesToNodeID(meta.NodeId).ShortString(), err,
+			)
 		}
 
 		m.logger.Info("PoET registration added to database",
 			zap.String("node_id", types.BytesToNodeID(meta.NodeId).ShortString()),
-			zap.String("poet_service_id", base64.StdEncoding.EncodeToString(req.PoetServiceID.ServiceID)),
+			zap.String("poet_service_id", poetPubKey),
 			zap.String("address", address),
 			zap.String("round_id", req.PoetRound.ID),
 			zap.Time("round_end", req.PoetRound.End.IntoTime()),
@@ -252,7 +255,8 @@ func (m migration0003) getAddress(serviceID PoetServiceID) (string, error) {
 			return client.Address(), nil
 		}
 	}
-	return "", fmt.Errorf("no poet client found for service id %x", serviceID.ServiceID)
+	key := base64.StdEncoding.EncodeToString(serviceID.ServiceID)
+	return "", fmt.Errorf("no poet client found for service id %s", key)
 }
 
 func (m migration0003) getChallengeHash(db sql.Executor, nodeID types.NodeID) (types.Hash32, error) {

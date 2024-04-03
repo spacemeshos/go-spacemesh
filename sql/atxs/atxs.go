@@ -216,6 +216,52 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 	return id, err
 }
 
+// IterateIDsByEpoch invokes the specified callback for each ATX ID in a given epoch.
+// It stops if the callback returns an error.
+func IterateIDsByEpoch(
+	db sql.Executor,
+	epoch types.EpochID,
+	callback func(total int, id types.ATXID) error,
+) error {
+	if sql.IsCached(db) {
+		// If the slices are cached, let's not do more SELECTs
+		ids, err := GetIDsByEpoch(context.Background(), db, epoch)
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := callback(len(ids), id); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	var callbackErr error
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch))
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var id types.ATXID
+		total := stmt.ColumnInt(0)
+		stmt.ColumnBytes(1, id[:])
+		if callbackErr = callback(total, id); callbackErr != nil {
+			return false
+		}
+		return true
+	}
+
+	// Get total count in the same select statement to avoid the need for transaction
+	if _, err := db.Exec(
+		"select (select count(*) from atxs where epoch = ?1) as total, id from atxs where epoch = ?1;",
+		enc, dec,
+	); err != nil {
+		return fmt.Errorf("exec epoch %v: %w", epoch, err)
+	}
+
+	return callbackErr
+}
+
 // GetIDsByEpoch gets ATX IDs for a given epoch.
 func GetIDsByEpoch(ctx context.Context, db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindEpochATXs, epoch.String())
@@ -264,8 +310,26 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 	return nonce, err
 }
 
-// GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
-func GetBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err error) {
+// GetBlobSizes returns the sizes of the blobs corresponding to ATXs with specified
+// ids. For non-existent ATXs, the corresponding items are set to -1.
+func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
+	return sql.GetBlobSizes(db, "select id, length(atx) from atxs where id in", ids)
+}
+
+// LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) error {
+	if sql.IsCached(db) {
+		b, err := getBlob(ctx, db, id)
+		if err != nil {
+			return err
+		}
+		blob.Bytes = b
+		return nil
+	}
+	return sql.LoadBlob(db, "select atx from atxs where id = ?1", id, blob)
+}
+
+func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
 	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
 		if rows, err := db.Exec("select atx from atxs where id = ?1",
@@ -324,9 +388,13 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
+	return nil
+}
+
+// AtxAdded updates epoch query cache with new ATX, if the query cache is enabled.
+func AtxAdded(db sql.Executor, atx *types.VerifiedActivationTx) {
 	epochCacheKey := sql.QueryCacheKey(CacheKindEpochATXs, atx.PublishEpoch.String())
 	sql.AppendToCachedSlice(db, epochCacheKey, atx.ID())
-	return nil
 }
 
 type Filter func(types.ATXID) bool
@@ -575,4 +643,30 @@ func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint3
 		},
 	)
 	return
+}
+
+// IterateForGrading selects every atx from publish epoch and joins identities to load malfeasence proofs if they exist.
+func IterateForGrading(
+	db sql.Executor,
+	epoch types.EpochID,
+	fn func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool,
+) error {
+	if _, err := db.Exec(`
+		select atxs.id, atxs.received, identities.received, effective_num_units, tick_count from atxs
+		left join identities on atxs.pubkey = identities.pubkey
+		where atxs.epoch == ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(epoch))
+		}, func(stmt *sql.Statement) bool {
+			id := types.ATXID{}
+			stmt.ColumnBytes(0, id[:])
+			atxtime := stmt.ColumnInt64(1)
+			prooftime := stmt.ColumnInt64(2)
+			units := uint64(stmt.ColumnInt64(3))
+			ticks := uint64(stmt.ColumnInt64(4))
+			return fn(id, atxtime, prooftime, units*ticks)
+		}); err != nil {
+		return fmt.Errorf("iterate for grading: %w", err)
+	}
+	return nil
 }

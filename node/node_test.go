@@ -52,6 +52,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 const layersPerEpoch = 3
@@ -218,6 +219,16 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
+
 	run := func(c *cobra.Command, args []string) error {
 		return app.startAPIServices(context.Background())
 	}
@@ -270,6 +281,16 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
+
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
 		return app.startAPIServices(context.Background())
@@ -294,6 +315,16 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	cfg.API.JSONListener = listener
 	cfg.API.PrivateServices = nil
 	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
+
+	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	require.NoError(t, err)
+
+	app.clock, err = timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(gTime),
+		timesync.WithLogger(zaptest.NewLogger(t)))
+	require.NoError(t, err)
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
@@ -513,8 +544,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 	wg.Add(1)
+	//nolint:testifylint
 	go func() {
 		str, err := testArgs(ctx, cmdWithRun(run))
 		require.Empty(t, str)
@@ -555,8 +587,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	require.NoError(t, err)
 
 	// TODO(dshulyak) synchronization below is messed up
-	wg2 := sync.WaitGroup{}
+	var wg2 sync.WaitGroup
 	wg2.Add(1)
+	//nolint:testifylint
 	go func() {
 		defer wg2.Done()
 
@@ -668,9 +701,11 @@ func TestConfig_CustomTypes(t *testing.T) {
 			},
 		},
 		{
-			name:   "post-pow-difficulty",
-			cli:    "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-			config: `{"post": {"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"}}`,
+			name: "post-pow-difficulty",
+			cli:  "--post-pow-difficulty=00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+			config: `{"post": {
+				"post-pow-difficulty": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+				}}`,
 			updatePreset: func(t *testing.T, c *config.Config) {
 				diff, err := hex.DecodeString(
 					"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
@@ -1036,6 +1071,7 @@ func TestAdminEvents(t *testing.T) {
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
 	cfg.SMESHING.Opts.DataDir = t.TempDir()
 	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.SMESHING.Start = true
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
@@ -1043,9 +1079,9 @@ func TestAdminEvents(t *testing.T) {
 
 	logger := logtest.New(t, zapcore.DebugLevel)
 	app := New(WithConfig(&cfg), WithLog(logger))
-
-	require.NoError(t, app.NewIdentity())
 	require.NoError(t, app.Initialize())
+	require.NoError(t, app.NewIdentity())
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var eg errgroup.Group
@@ -1110,6 +1146,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	cfg.FileLock = filepath.Join(cfg.DataDirParent, "LOCK")
 	cfg.SMESHING.Opts.Scrypt.N = 2
 	cfg.SMESHING.Start = false
+	cfg.API.PostListener = "0.0.0.0:10094"
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
@@ -1166,7 +1203,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 			logger.Zap(),
 			mgr,
 			signer,
-			cfg.API.PostListener,
+			"127.0.0.1:10094",
 			cfg.POST,
 			cfg.SMESHING.Opts,
 		))
@@ -1315,10 +1352,8 @@ func launchPostSupervisor(
 
 	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
 	builder.EXPECT().Register(sig)
-	ps, err := activation.NewPostSupervisor(log, cmdCfg, postCfg, provingOpts, mgr, builder)
-	require.NoError(tb, err)
-	require.NotNil(tb, ps)
-	require.NoError(tb, ps.Start(postOpts, sig))
+	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
+	require.NoError(tb, ps.Start(cmdCfg, postOpts, sig))
 	return func() { assert.NoError(tb, ps.Stop(false)) }
 }
 
@@ -1342,7 +1377,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.POST.K2 = 4
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()
-	cfg.SMESHING.Start = true
+	cfg.SMESHING.Start = false
 	cfg.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
 	cfg.SMESHING.Opts.DataDir = filepath.Join(tmp, "post")
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1

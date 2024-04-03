@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -806,7 +807,9 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 
 	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
 	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, expected)
-	require.ErrorIs(t, th.HandleSyncedBallot(context.Background(), b.ID().AsHash32(), peer, data), expected)
+	err := th.HandleSyncedBallot(context.Background(), b.ID().AsHash32(), peer, data)
+	require.ErrorIs(t, err, fetch.ErrIgnore)
+	require.Contains(t, err.Error(), expected.Error())
 }
 
 func TestBallot_DecodedStoreFailure(t *testing.T) {
@@ -1093,7 +1096,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 		require.Error(t, res2)
 	} else {
 		require.Error(t, res1)
-		require.Nil(t, res2)
+		require.NoError(t, res2)
 	}
 }
 
@@ -1214,7 +1217,7 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 			} else {
 				th.mconsumer.EXPECT().OnProposal(gomock.Any())
 				th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.Layer, p.ID(), p.TxIDs).Return(nil).Times(1)
-				require.Equal(t, nil, th.HandleProposal(context.Background(), peer, data))
+				require.NoError(t, th.HandleProposal(context.Background(), peer, data))
 			}
 		})
 	}

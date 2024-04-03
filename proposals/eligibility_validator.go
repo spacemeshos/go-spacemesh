@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/minweight"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -114,14 +115,15 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 			MustSerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), atx.Nonce, proof.J), proof.Sig) {
 			return fmt.Errorf(
 				"%w: proof contains incorrect VRF signature. beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
-				pubsub.ErrValidationReject,
+				fetch.ErrIgnore,
 				data.Beacon.ShortString(),
 				ballot.Layer.GetEpoch(),
 				proof.J,
 				proof.Sig,
 			)
 		}
-		if eligible := CalcEligibleLayer(ballot.Layer.GetEpoch(), v.layersPerEpoch, proof.Sig); ballot.Layer != eligible {
+		eligible := CalcEligibleLayer(ballot.Layer.GetEpoch(), v.layersPerEpoch, proof.Sig)
+		if ballot.Layer != eligible {
 			return fmt.Errorf("%w: ballot has incorrect layer index. ballot layer (%v), eligible layer (%v)",
 				pubsub.ErrValidationReject, ballot.Layer, eligible)
 		}

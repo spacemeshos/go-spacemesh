@@ -477,10 +477,10 @@ func (c *MockfetchLogicGetMalfeasanceProofsCall) DoAndReturn(f func(context.Cont
 }
 
 // GetMaliciousIDs mocks base method.
-func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]byte, error) {
+func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]types.NodeID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].([]types.NodeID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -498,19 +498,19 @@ type MockfetchLogicGetMaliciousIDsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockfetchLogicGetMaliciousIDsCall) Return(arg0 []byte, arg1 error) *MockfetchLogicGetMaliciousIDsCall {
+func (c *MockfetchLogicGetMaliciousIDsCall) Return(arg0 []types.NodeID, arg1 error) *MockfetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockfetchLogicGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]byte, error)) *MockfetchLogicGetMaliciousIDsCall {
+func (c *MockfetchLogicGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]byte, error)) *MockfetchLogicGetMaliciousIDsCall {
+func (c *MockfetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetchLogicGetMaliciousIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -676,44 +676,6 @@ func (c *MockfetchLogicPollLayerOpinionsCall) DoAndReturn(f func(context.Context
 	return c
 }
 
-// PollMaliciousProofs mocks base method.
-func (m *MockfetchLogic) PollMaliciousProofs(ctx context.Context) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PollMaliciousProofs", ctx)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// PollMaliciousProofs indicates an expected call of PollMaliciousProofs.
-func (mr *MockfetchLogicMockRecorder) PollMaliciousProofs(ctx any) *MockfetchLogicPollMaliciousProofsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PollMaliciousProofs", reflect.TypeOf((*MockfetchLogic)(nil).PollMaliciousProofs), ctx)
-	return &MockfetchLogicPollMaliciousProofsCall{Call: call}
-}
-
-// MockfetchLogicPollMaliciousProofsCall wrap *gomock.Call
-type MockfetchLogicPollMaliciousProofsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockfetchLogicPollMaliciousProofsCall) Return(arg0 error) *MockfetchLogicPollMaliciousProofsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockfetchLogicPollMaliciousProofsCall) Do(f func(context.Context) error) *MockfetchLogicPollMaliciousProofsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetchLogicPollMaliciousProofsCall) DoAndReturn(f func(context.Context) error) *MockfetchLogicPollMaliciousProofsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // RegisterPeerHashes mocks base method.
 func (m *MockfetchLogic) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	m.ctrl.T.Helper()
@@ -845,6 +807,105 @@ func (c *MockatxSyncerDownloadCall) Do(f func(context.Context, types.EpochID, ti
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockatxSyncerDownloadCall) DoAndReturn(f func(context.Context, types.EpochID, time.Time) error) *MockatxSyncerDownloadCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockmalSyncer is a mock of malSyncer interface.
+type MockmalSyncer struct {
+	ctrl     *gomock.Controller
+	recorder *MockmalSyncerMockRecorder
+}
+
+// MockmalSyncerMockRecorder is the mock recorder for MockmalSyncer.
+type MockmalSyncerMockRecorder struct {
+	mock *MockmalSyncer
+}
+
+// NewMockmalSyncer creates a new mock instance.
+func NewMockmalSyncer(ctrl *gomock.Controller) *MockmalSyncer {
+	mock := &MockmalSyncer{ctrl: ctrl}
+	mock.recorder = &MockmalSyncerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmalSyncer) EXPECT() *MockmalSyncerMockRecorder {
+	return m.recorder
+}
+
+// DownloadLoop mocks base method.
+func (m *MockmalSyncer) DownloadLoop(parent context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DownloadLoop", parent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DownloadLoop indicates an expected call of DownloadLoop.
+func (mr *MockmalSyncerMockRecorder) DownloadLoop(parent any) *MockmalSyncerDownloadLoopCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DownloadLoop", reflect.TypeOf((*MockmalSyncer)(nil).DownloadLoop), parent)
+	return &MockmalSyncerDownloadLoopCall{Call: call}
+}
+
+// MockmalSyncerDownloadLoopCall wrap *gomock.Call
+type MockmalSyncerDownloadLoopCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmalSyncerDownloadLoopCall) Return(arg0 error) *MockmalSyncerDownloadLoopCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmalSyncerDownloadLoopCall) Do(f func(context.Context) error) *MockmalSyncerDownloadLoopCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmalSyncerDownloadLoopCall) DoAndReturn(f func(context.Context) error) *MockmalSyncerDownloadLoopCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// EnsureInSync mocks base method.
+func (m *MockmalSyncer) EnsureInSync(parent context.Context, epochStart, epochEnd time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureInSync", parent, epochStart, epochEnd)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnsureInSync indicates an expected call of EnsureInSync.
+func (mr *MockmalSyncerMockRecorder) EnsureInSync(parent, epochStart, epochEnd any) *MockmalSyncerEnsureInSyncCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureInSync", reflect.TypeOf((*MockmalSyncer)(nil).EnsureInSync), parent, epochStart, epochEnd)
+	return &MockmalSyncerEnsureInSyncCall{Call: call}
+}
+
+// MockmalSyncerEnsureInSyncCall wrap *gomock.Call
+type MockmalSyncerEnsureInSyncCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmalSyncerEnsureInSyncCall) Return(arg0 error) *MockmalSyncerEnsureInSyncCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmalSyncerEnsureInSyncCall) Do(f func(context.Context, time.Time, time.Time) error) *MockmalSyncerEnsureInSyncCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmalSyncerEnsureInSyncCall) DoAndReturn(f func(context.Context, time.Time, time.Time) error) *MockmalSyncerEnsureInSyncCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1147,10 +1208,10 @@ func (c *MockfetcherGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context
 }
 
 // GetMaliciousIDs mocks base method.
-func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]byte, error) {
+func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]types.NodeID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].([]types.NodeID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1168,19 +1229,19 @@ type MockfetcherGetMaliciousIDsCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockfetcherGetMaliciousIDsCall) Return(arg0 []byte, arg1 error) *MockfetcherGetMaliciousIDsCall {
+func (c *MockfetcherGetMaliciousIDsCall) Return(arg0 []types.NodeID, arg1 error) *MockfetcherGetMaliciousIDsCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockfetcherGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]byte, error)) *MockfetcherGetMaliciousIDsCall {
+func (c *MockfetcherGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherGetMaliciousIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]byte, error)) *MockfetcherGetMaliciousIDsCall {
+func (c *MockfetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherGetMaliciousIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -272,8 +272,9 @@ To disable the internal PoST service and disable smeshing on your node you can u
 }
 ```
 
-or use the `--smeshing-start=false` flag. This will disable smeshing on your node causing it not generate any PoST
-proofs until a remote post service connects. Be aware that you still need to set your coinbase via
+or use the `--smeshing-start=false` flag. Additionally rename the `local.key` in your `data/identities` folder to a
+unique name for your node (e.g. `nodeA.key`). This will disable smeshing on your node causing, i.e. it will not generate
+any PoST proofs until a remote post service connects. Be aware that you still need to set your coinbase via
 
 ```json
 "smeshing": {
@@ -283,8 +284,36 @@ proofs until a remote post service connects. Be aware that you still need to set
 
 or use the `--smeshing-coinbase` CLI parameter, otherwise your node will not be able to receive rewards.
 
-If you want to allow connections from post services on other hosts to your node, you need to set a public endpoint via
-the `grpc-tls-listener` configuration parameter and setup TLS for the connection.
+Additionally you will have to set `grpc-post-listener` to e.g. `0.0.0.0:9094` in your `api` config to allow the remote
+post service to connect to your node.
+
+#### Merging multiple existing nodes into a single one with multiple remote PoST services
+
+To help in the process of merging multiple nodes into a single one, you can use `merge-nodes` tool. This tool will
+copy over identities and merge their local states into a single node. Ensure that all nodes are running the latest
+version of `go-spacemesh` and were started at least once after upgrading. We recommend to back up the `data` directory
+of the nodes you want to merge before running this tool to avoid data loss. Specifically the `local.sql` files and the
+`identities` directories.
+
+Stop the two nodes you want to merge and ensure that they have been set up for remote smeshing (i.e. `smeshing-start`
+is false and `local.key` has been renamed). `src` is the node that will be merged into `dst`:
+
+```bash
+merge-nodes --src /path/to/src/data --dst /path/to/dst/data
+```
+
+This will copy over the identities from `src` to `dst` and merge the local states of both nodes. The command will tell
+you if it encounters any issues merging the identities or the local states.
+
+You can repeat this process with as many nodes as you want to merge into `dst`. After you have completed the merging
+process, you can start `dst`. For every identity setup a post service to use the existing PoST data for that identity
+and connect to the node. For details refer to the
+[post-service README](https://github.com/spacemeshos/post-rs/blob/main/service/README.md).
+
+#### Using a remote PoST service over insecure connections
+
+If you want to allow connections from post services over the internet to your node, we strongly recommend not to connect
+via `grpc-post-listener` but rather use the `grpc-tls-listener` configuration parameter and setup TLS for the connection.
 
 This is useful for example if you want to run a node on a cloud provider with fewer resources and run PoST on a local
 machine with more resources. The post service only needs to be online for the initial proof (i.e. when joining the
@@ -403,7 +432,7 @@ are covered by tests and which not.
 
 ### Continuous Integration
 
-We've enabled continuous integration on this repository in GitHub. You can read more about [our CI workflows](ci.md).
+We've enabled continuous integration on this repository in GitHub. You can see more details about our CI workflows on the [Actions tab](https://github.com/spacemeshos/go-spacemesh/actions).
 
 ### Docker
 

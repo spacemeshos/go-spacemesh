@@ -1,7 +1,7 @@
 package timesync
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -19,23 +19,23 @@ type option struct {
 
 func (o *option) validate() error {
 	if o.genesisTime.IsZero() {
-		return fmt.Errorf("bad configuration: genesis time is zero")
+		return errors.New("bad configuration: genesis time is zero")
 	}
 
 	if o.layerDuration == 0 {
-		return fmt.Errorf("bad configuration: layer duration is zero")
+		return errors.New("bad configuration: layer duration is zero")
 	}
 
 	if o.tickInterval == 0 {
-		return fmt.Errorf("bad configuration: tick interval is zero")
+		return errors.New("bad configuration: tick interval is zero")
 	}
 
 	if o.tickInterval < 0 || o.tickInterval > o.layerDuration {
-		return fmt.Errorf("bad configuration: tick interval must be between 0 and layer duration")
+		return errors.New("bad configuration: tick interval must be between 0 and layer duration")
 	}
 
 	if o.log == nil {
-		return fmt.Errorf("bad configuration: logger is nil")
+		return errors.New("bad configuration: logger is nil")
 	}
 	return nil
 }

@@ -32,7 +32,7 @@ func withEvents(events []event) *Peers {
 			tracker.Add(ev.id)
 		}
 		for i := 0; i < ev.failure; i++ {
-			tracker.OnFailure(ev.id)
+			tracker.OnFailure(ev.id, 0, ev.latency)
 		}
 		for i := 0; i < ev.success; i++ {
 			tracker.OnLatency(ev.id, max(ev.size, testSize), ev.latency)
@@ -74,6 +74,28 @@ func TestSelect(t *testing.T) {
 			expect:     []peer.ID{"a", "b"},
 			selectFrom: []peer.ID{"b", "a"},
 			best:       peer.ID("a"),
+		},
+		{
+			desc: "change average on failure",
+			events: []event{
+				{id: "a", failure: 2, latency: 8, add: true},
+				{id: "b", failure: 2, latency: 9, add: true},
+			},
+			n:          5,
+			expect:     []peer.ID{"a", "b"},
+			selectFrom: []peer.ID{"b", "a"},
+			best:       peer.ID("a"),
+		},
+		{
+			desc: "same latency different fail rate",
+			events: []event{
+				{id: "a", success: 2, failure: 2, latency: 8, add: true},
+				{id: "b", success: 4, failure: 2, latency: 9, add: true},
+			},
+			n:          5,
+			expect:     []peer.ID{"b", "a"},
+			selectFrom: []peer.ID{"b", "a"},
+			best:       peer.ID("b"),
 		},
 		{
 			desc: "latency adjusted based on size",
@@ -157,7 +179,7 @@ func TestSelect(t *testing.T) {
 			desc: "unresponsive",
 			events: []event{
 				{id: "a", success: 1, latency: 10, add: true},
-				{id: "b", failure: 1, add: true},
+				{id: "b", failure: 1, latency: 10, add: true},
 			},
 			n:          2,
 			expect:     []peer.ID{"a", "b"},

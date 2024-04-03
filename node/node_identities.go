@@ -68,6 +68,28 @@ func (app *App) MigrateExistingIdentity() error {
 		return fmt.Errorf("failed to create directory for identity file: %w", err)
 	}
 
+	_, err = os.Stat(newKey)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// no new key, migrate old to new
+	case err == nil:
+		// both exist, error
+		return fmt.Errorf("%w: both %s and %s exist", fs.ErrExist, newKey, oldKey)
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", newKey, err)
+	}
+
+	_, err = os.Stat(oldKey + ".bak")
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// no backup, migrate old to new
+	case err == nil:
+		// backup already exists - something is wrong
+		return fmt.Errorf("%w: backup %s already exists", fs.ErrExist, oldKey+".bak")
+	case err != nil:
+		return fmt.Errorf("stat %s: %w", oldKey+".bak", err)
+	}
+
 	dst, err := os.Create(newKey)
 	if err != nil {
 		return fmt.Errorf("failed to create new identity file: %w", err)
@@ -98,23 +120,13 @@ func (app *App) NewIdentity() error {
 		return fmt.Errorf("failed to create directory for identity file: %w", err)
 	}
 
+	keyFile := filepath.Join(dir, supervisedIDKeyFileName)
 	signer, err := signing.NewEdSigner(
 		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+		signing.ToFile(keyFile),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	keyFile := filepath.Join(dir, supervisedIDKeyFileName)
-	if _, err := os.Stat(keyFile); err == nil {
-		return fmt.Errorf("identity file %s already exists: %w", supervisedIDKeyFileName, fs.ErrExist)
-	}
-
-	dst := make([]byte, hex.EncodedLen(len(signer.PrivateKey())))
-	hex.Encode(dst, signer.PrivateKey())
-	err = os.WriteFile(keyFile, dst, 0o600)
-	if err != nil {
-		return fmt.Errorf("failed to write identity file: %w", err)
 	}
 
 	app.log.With().Info("Created new identity",
@@ -183,7 +195,7 @@ func (app *App) LoadIdentities() error {
 		seen[sig.PublicKey().String()] = sig.Name()
 	}
 	if collision {
-		return fmt.Errorf("duplicate key found in identity files")
+		return errors.New("duplicate key found in identity files")
 	}
 
 	if len(signers) > 1 {
@@ -195,10 +207,10 @@ func (app *App) LoadIdentities() error {
 					supervisedIDKeyFileName,
 				)
 				app.log.Error(
-					"Please ensure you do not have a key file named %s in your identities directory when using remote smeshing.",
+					"Ensure you do not have a file named %s in your identities directory when using remote smeshing.",
 					supervisedIDKeyFileName,
 				)
-				return fmt.Errorf("supervised key found in remote smeshing mode")
+				return errors.New("supervised key found in remote smeshing mode")
 			}
 		}
 	}

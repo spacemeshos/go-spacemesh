@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -536,8 +535,10 @@ func TestNewLocalServer(t *testing.T) {
 			grpcService, err := NewWithServices(cfg.PostListener, logger, cfg, []ServiceAPI{svc})
 			if tc.warn {
 				require.Equal(t, 1, observedLogs.Len(), "Expected a warning log")
-				require.Equal(t, observedLogs.All()[0].Message, "unsecured grpc server is listening on a public IP address")
-				require.Equal(t, observedLogs.All()[0].ContextMap()["address"], tc.listener)
+				require.Equal(t, "unsecured grpc server is listening on a public IP address",
+					observedLogs.All()[0].Message,
+				)
+				require.Equal(t, tc.listener, observedLogs.All()[0].ContextMap()["address"])
 				return
 			}
 
@@ -562,9 +563,10 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 		smeshingProvider,
 		postSupervisor,
 		10*time.Millisecond,
-		sig,
 		activation.DefaultPostSetupOpts(),
+		sig,
 	)
+	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -584,7 +586,11 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 func TestSmesherService(t *testing.T) {
 	t.Run("IsSmeshing", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t, nil)
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		c, ctx := setupSmesherService(t, sig)
 		c.smeshingProvider.EXPECT().Smeshing().Return(false)
 		res, err := c.IsSmeshing(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
@@ -593,8 +599,12 @@ func TestSmesherService(t *testing.T) {
 
 	t.Run("StartSmeshingMissingArgs", func(t *testing.T) {
 		t.Parallel()
-		c, ctx := setupSmesherService(t, nil)
-		_, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{})
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		c, ctx := setupSmesherService(t, sig)
+		_, err = c.StartSmeshing(ctx, &pb.StartSmeshingRequest{})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
 
@@ -611,15 +621,18 @@ func TestSmesherService(t *testing.T) {
 
 		c, ctx := setupSmesherService(t, sig)
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
-		c.postSupervisor.EXPECT().Start(gomock.All(
-			gomock.Cond(func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir }),
-			gomock.Cond(
-				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits },
-			),
-			gomock.Cond(
-				func(postOpts any) bool { return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize },
-			),
-		), sig).Return(nil)
+		c.postSupervisor.EXPECT().Start(gomock.Any(),
+			gomock.All(
+				gomock.Cond(func(postOpts any) bool {
+					return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir
+				}),
+				gomock.Cond(func(postOpts any) bool {
+					return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits
+				}),
+				gomock.Cond(func(postOpts any) bool {
+					return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize
+				}),
+			), sig).Return(nil)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
@@ -637,7 +650,7 @@ func TestSmesherService(t *testing.T) {
 
 		coinbase := &pb.AccountId{Address: addr1.String()}
 
-		c, ctx := setupSmesherService(t, nil) // in multi smeshing setup the node id is nil and start smeshing should fail
+		c, ctx := setupSmesherService(t, nil) // in 1:n the node id is nil and start smeshing should fail
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
@@ -664,7 +677,7 @@ func TestSmesherService(t *testing.T) {
 		c.smeshingProvider.EXPECT().SmesherIDs().Return([]types.NodeID{nodeId})
 		res, err := c.SmesherIDs(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
-		require.Equal(t, 1, len(res.PublicKeys))
+		require.Len(t, res.PublicKeys, 1)
 		require.Equal(t, nodeId.Bytes(), res.PublicKeys[0])
 	})
 
@@ -864,7 +877,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 				{
@@ -906,7 +919,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 				{
@@ -921,7 +934,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 				{
@@ -954,7 +967,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
+						require.Len(t, res.Data, 1)
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
 				},
@@ -970,7 +983,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 				{
@@ -988,7 +1001,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
+						require.Len(t, res.Data, 1)
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
 				},
@@ -1006,7 +1019,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 1, len(res.Data))
+						require.Len(t, res.Data, 1)
 						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
 				},
@@ -1025,7 +1038,7 @@ func TestMeshService(t *testing.T) {
 						})
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Empty(t, res.Data)
 					},
 				},
 			}
@@ -1138,7 +1151,7 @@ func TestMeshService(t *testing.T) {
 				return func(t *testing.T) {
 					res, err := c.LayersQuery(context.Background(), req)
 					require.NoError(t, err, "query returned an unexpected error")
-					require.Equal(t, numResults, len(res.Layer), "unexpected number of layer results")
+					require.Len(t, res.Layer, numResults, "unexpected number of layer results")
 				}
 			}
 			generateRunFnError := func(msg string, req *pb.LayersQueryRequest) func(*testing.T) {
@@ -1255,7 +1268,7 @@ func TestMeshService(t *testing.T) {
 
 						// endpoint inclusive so add one
 						numLayers := layerLatest.Difference(layerFirst) + 1
-						require.EqualValues(t, numLayers, len(res.Layer))
+						require.Len(t, res.Layer, int(numLayers))
 						checkLayer(t, res.Layer[0])
 
 						resLayerNine := res.Layer[9]
@@ -1441,8 +1454,8 @@ func TestTransactionService(t *testing.T) {
 			})
 			res, err := c.TransactionsState(context.Background(), req)
 			require.NoError(t, err)
-			require.Equal(t, 1, len(res.TransactionsState))
-			require.Equal(t, 0, len(res.Transactions))
+			require.Len(t, res.TransactionsState, 1)
+			require.Empty(t, res.Transactions)
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 		}},
@@ -1454,8 +1467,8 @@ func TestTransactionService(t *testing.T) {
 			})
 			res, err := c.TransactionsState(context.Background(), req)
 			require.NoError(t, err)
-			require.Equal(t, 1, len(res.TransactionsState))
-			require.Equal(t, 1, len(res.Transactions))
+			require.Len(t, res.TransactionsState, 1)
+			require.Len(t, res.Transactions, 1)
 			require.Equal(t, globalTx.ID.Bytes(), res.TransactionsState[0].Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_PROCESSED, res.TransactionsState[0].State)
 
@@ -1556,19 +1569,18 @@ func TestTransactionService(t *testing.T) {
 
 			// Simulate the process by which a newly-broadcast tx lands in the mempool
 			broadcastSignal := make(chan struct{})
-			var wgBroadcast sync.WaitGroup
-			wgBroadcast.Add(1)
-			go func() {
-				defer wgBroadcast.Done()
+			var eg errgroup.Group
+
+			eg.Go(func() error {
 				select {
 				case <-ctx.Done():
-					require.Fail(t, "context deadline exceeded while waiting for broadcast signal")
-					return
+					return ctx.Err()
 				case <-broadcastSignal:
 					// We assume the data is valid here, and put it directly into the txpool
 					conStateAPI.put(globalTx.ID, globalTx)
+					return nil
 				}
-			}()
+			})
 
 			stream, err := c.TransactionsStateStream(ctx, req)
 			require.NoError(t, err)
@@ -1583,7 +1595,7 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, globalTx.ID.Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 			close(broadcastSignal)
-			wgBroadcast.Wait()
+			require.NoError(t, eg.Wait())
 
 			response, err := stream.Recv()
 			require.NoError(t, err)
@@ -1681,8 +1693,8 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, uint32(0), l.Number.Number, "first layer is zero")
 	require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, l.Status, "first layer is confirmed")
 
-	require.Equal(t, atxPerLayer, len(l.Activations), "unexpected number of activations in layer")
-	require.Equal(t, blkPerLayer, len(l.Blocks), "unexpected number of blocks in layer")
+	require.Len(t, l.Activations, atxPerLayer, "unexpected number of activations in layer")
+	require.Len(t, l.Blocks, blkPerLayer, "unexpected number of blocks in layer")
 	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
 	resBlock := l.Blocks[0]
@@ -2106,7 +2118,7 @@ func TestDebugService(t *testing.T) {
 	t.Run("Accounts", func(t *testing.T) {
 		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{})
 		require.NoError(t, err)
-		require.Equal(t, 2, len(res.AccountWrapper))
+		require.Len(t, res.AccountWrapper, 2)
 
 		// Get the list of addresses and compare them regardless of order
 		var addresses []string
@@ -2129,7 +2141,7 @@ func TestDebugService(t *testing.T) {
 		}
 		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{Layer: lid.Uint32()})
 		require.NoError(t, err)
-		require.Equal(t, 2, len(res.AccountWrapper))
+		require.Len(t, res.AccountWrapper, 2)
 
 		// Get the list of addresses and compare them regardless of order
 		var addresses []string
@@ -2218,7 +2230,7 @@ func TestDebugService(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Equal(t, testLog.Level().String(), "debug")
+		require.Equal(t, zapcore.DebugLevel, testLog.Level())
 	})
 
 	t.Run("ChangeLogLevel module not found", func(t *testing.T) {
@@ -2230,7 +2242,7 @@ func TestDebugService(t *testing.T) {
 
 		s, ok := status.FromError(err)
 		require.True(t, ok)
-		require.Equal(t, s.Message(), "cannot find logger unknown-module")
+		require.Equal(t, "cannot find logger unknown-module", s.Message())
 	})
 
 	t.Run("ChangeLogLevel unknown level", func(t *testing.T) {
@@ -2242,7 +2254,7 @@ func TestDebugService(t *testing.T) {
 
 		s, ok := status.FromError(err)
 		require.True(t, ok)
-		require.Equal(t, s.Message(), "parse level: unrecognized level: \"unknown-level\"")
+		require.Equal(t, "parse level: unrecognized level: \"unknown-level\"", s.Message())
 	})
 
 	t.Run("ChangeLogLevel '*' to debug", func(t *testing.T) {
@@ -2252,7 +2264,7 @@ func TestDebugService(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Equal(t, testLog.Level().String(), "debug")
+		require.Equal(t, zapcore.DebugLevel, testLog.Level())
 	})
 }
 

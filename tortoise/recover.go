@@ -40,12 +40,12 @@ func Recover(
 	}
 
 	start := types.GetEffectiveGenesis() + 1
-	if applied > types.LayerID(trtl.cfg.WindowSize) {
+	if size := trtl.cfg.WindowSizeLayers(applied); applied > size {
 		// we want to emulate the same condition as during genesis with one difference.
 		// genesis starts with zero opinion (aggregated hash) - see computeOpinion method.
 		// but in this case first processed layer should use non-zero opinion of the the previous layer.
 
-		window := applied - types.LayerID(trtl.cfg.WindowSize)
+		window := applied - size
 		// we start tallying votes from the first layer of the epoch to guarantee that we load reference ballots.
 		// reference ballots track beacon and eligibilities
 		window = window.GetEpoch().FirstLayer()

@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -46,7 +47,7 @@ func (pc *postClient) Info(ctx context.Context) (*types.PostInfo, error) {
 	}
 	meta := metadataResp.GetMeta()
 	if meta == nil {
-		return nil, fmt.Errorf("post metadata is nil")
+		return nil, errors.New("post metadata is nil")
 	}
 	var nonce *types.VRFPostIndex
 	if meta.Nonce != nil {
@@ -110,14 +111,14 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 	proof := proofResp.GetProof()
 	metadata := proofResp.GetMetadata()
 	if metadata == nil {
-		return nil, nil, fmt.Errorf("proof metadata is nil")
+		return nil, nil, errors.New("proof metadata is nil")
 	}
 	if !bytes.Equal(metadata.GetChallenge(), challenge) {
 		return nil, nil, fmt.Errorf("unexpected challenge: %x", metadata.GetChallenge())
 	}
 	proofMeta := metadata.GetMeta()
 	if proofMeta == nil {
-		return nil, nil, fmt.Errorf("post metadata is nil")
+		return nil, nil, errors.New("post metadata is nil")
 	}
 	post := &types.Post{
 		Nonce:   proof.GetNonce(),

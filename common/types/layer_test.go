@@ -72,17 +72,18 @@ func TestLayerIDWraparound(t *testing.T) {
 func TestLayerIDComparison(t *testing.T) {
 	t.Run("After", func(t *testing.T) {
 		require.True(t, LayerID(10).After(LayerID(5)))
-		require.True(t, !LayerID(10).After(LayerID(10)))
-		require.True(t, !LayerID(10).After(LayerID(20)))
+		require.False(t, LayerID(10).After(LayerID(10)))
+		require.False(t, LayerID(10).After(LayerID(20)))
 	})
 	t.Run("Before", func(t *testing.T) {
 		require.True(t, LayerID(5).Before(LayerID(10)))
-		require.True(t, !LayerID(5).Before(LayerID(5)))
-		require.True(t, !LayerID(5).Before(LayerID(3)))
+		require.False(t, LayerID(5).Before(LayerID(5)))
+		require.False(t, LayerID(5).Before(LayerID(3)))
 	})
 	t.Run("Equal", func(t *testing.T) {
-		require.Equal(t, LayerID(1), LayerID(1))
-		require.NotEqual(t, LayerID(1), LayerID(10))
+		layer := LayerID(1)
+		require.Equal(t, layer, LayerID(1))
+		require.NotEqual(t, layer, LayerID(10))
 	})
 }
 

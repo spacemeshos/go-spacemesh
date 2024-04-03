@@ -34,10 +34,12 @@ func TestServer(t *testing.T) {
 	opts := []Opt{
 		WithTimeout(100 * time.Millisecond),
 		WithLog(logtest.New(t)),
+		WithMetrics(),
 	}
-	client := New(mesh.Hosts()[0], proto, handler, append(opts, WithRequestSizeLimit(2*limit))...)
-	srv1 := New(mesh.Hosts()[1], proto, handler, append(opts, WithRequestSizeLimit(limit))...)
-	srv2 := New(mesh.Hosts()[2], proto, errhandler, append(opts, WithRequestSizeLimit(limit))...)
+	client := New(mesh.Hosts()[0], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(2*limit))...)
+	srv1 := New(mesh.Hosts()[1], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(limit))...)
+	srv2 := New(mesh.Hosts()[2], proto, WrapHandler(errhandler), append(opts, WithRequestSizeLimit(limit))...)
+	srv3 := New(mesh.Hosts()[3], "otherproto", WrapHandler(errhandler), append(opts, WithRequestSizeLimit(limit))...)
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -45,6 +47,9 @@ func TestServer(t *testing.T) {
 	})
 	eg.Go(func() error {
 		return srv2.Run(ctx)
+	})
+	eg.Go(func() error {
+		return srv3.Run(ctx)
 	})
 	require.Eventually(t, func() bool {
 		for _, h := range mesh.Hosts()[1:] {
@@ -60,15 +65,20 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("ReceiveMessage", func(t *testing.T) {
+		n := srv1.NumAcceptedRequests()
 		response, err := client.Request(ctx, mesh.Hosts()[1].ID(), request)
 		require.NoError(t, err)
 		require.Equal(t, request, response)
 		require.NotEmpty(t, mesh.Hosts()[2].Network().ConnsToPeer(mesh.Hosts()[0].ID()))
+		require.Equal(t, n+1, srv1.NumAcceptedRequests())
 	})
 	t.Run("ReceiveError", func(t *testing.T) {
+		n := srv1.NumAcceptedRequests()
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
+		require.ErrorIs(t, err, &ServerError{})
 		require.ErrorContains(t, err, "peer error")
 		require.ErrorContains(t, err, testErr.Error())
+		require.Equal(t, n+1, srv1.NumAcceptedRequests())
 	})
 	t.Run("DialError", func(t *testing.T) {
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
@@ -103,9 +113,9 @@ func TestQueued(t *testing.T) {
 	srv := New(
 		mesh.Hosts()[1],
 		proto,
-		func(_ context.Context, msg []byte) ([]byte, error) {
+		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
 			return msg, nil
-		},
+		}),
 		WithQueueSize(total/4),
 		WithRequestsPerInterval(50, time.Second),
 		WithMetrics(),

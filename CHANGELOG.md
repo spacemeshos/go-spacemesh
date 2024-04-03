@@ -2,6 +2,68 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.4.4
+
+### Improvements
+
+* [#5777](https://github.com/spacemeshos/go-spacemesh/pull/5777) Adjusted GRPC keepalive parameters on node to allow
+  pings every 60 seconds and send keepalive pings every 10 minutes if no activity from the client is observed.
+
+## Release v1.4.3
+
+### Improvements
+
+* [#5753](https://github.com/spacemeshos/go-spacemesh/pull/5753) Fix for a possible segmentation fault in setups with
+  remote post services when an identity does their initial proof.
+
+* [#5755](https://github.com/spacemeshos/go-spacemesh/pull/5755) improve efficiency of downloading and applying blocks
+  after ballots were counted.
+
+* [#5761](https://github.com/spacemeshos/go-spacemesh/pull/5761) don't interrupt sync if ballots in a layer were
+  ignored or rejected.
+
+* [#5762](https://github.com/spacemeshos/go-spacemesh/pull/5762) Fix a bug where the node could get stuck in a loop
+  when trying to fetch a block that is not in the mesh.
+
+## Release v1.4.2
+
+### Improvements
+
+* [#5730](https://github.com/spacemeshos/go-spacemesh/pull/5730) Fixed a bug where the node behaves incorrectly when
+  first started with supervised smeshing.
+
+* [#5731](https://github.com/spacemeshos/go-spacemesh/pull/5731) The default listen address for `PostService` is now
+  `127.0.0.1:0` instead of `127.0.0.1:9094`. This will ensure that a node binds the post service to a random free port
+  and prevents multiple instances of the post service from binding to the same port.
+
+* [#5735](https://github.com/spacemeshos/go-spacemesh/pull/5735) Don't hold database connections for long in fetcher
+  streaming mode
+
+* [#5736](https://github.com/spacemeshos/go-spacemesh/pull/5736) Fixed slow POST initialization on Windows.
+
+* [#5738](https://github.com/spacemeshos/go-spacemesh/pull/5738) sql: fix epoch ATX ID cache deadlock
+
+## Release v1.4.1
+
+### Improvements
+
+* [#5707](https://github.com/spacemeshos/go-spacemesh/pull/5707) Fix a race on closing a channel when the node is
+  shutting down.
+
+* [#5709](https://github.com/spacemeshos/go-spacemesh/pull/5709) Prevent users from accidentally deleting their keys,
+  if they downgrade to v1.3.x and upgrade again.
+
+* [#5710](https://github.com/spacemeshos/go-spacemesh/pull/5710) Node now checks the database version and will refuse to
+  start if it is newer than expected.
+
+* [#5562](https://github.com/spacemeshos/go-spacemesh/pull/5562) Add streaming mode for fetcher. This should lessen
+  GC pressure during sync
+
+* [#5684](https://github.com/spacemeshos/go-spacemesh/pull5684) Use separate fetcher protocol for active sets.
+  This enables separate pacers for active set requests
+
+* [#5718](https://github.com/spacemeshos/go-spacemesh/pull/5718) Sync malfeasance proofs continuously.
+
 ## Release v1.4.0
 
 ### Upgrade information
@@ -128,7 +190,7 @@ To add a new identity to a node, initialize PoST data with `postcli` and let it 
 
 Make sure to replace `provider` with your provider of choice and `numUnits` with the number of PoST units you want to
 initialize. The `commitmentAtxId` is the commitment ATX ID for the identity you want to initialize. For details on the
-usage of `postcli` please refer to [postcli README](https://github.com/spacemeshos/post/cmd/postcli/README.md).
+usage of `postcli` please refer to [postcli README](https://github.com/spacemeshos/post/blob/develop/cmd/postcli/README.md).
 
 During initialization `postcli` will generate a new private key and store it in the PoST data directory as `identity.key`.
 Copy this file to your `data/identities` directory and rename it to `xxx.key` where `xxx` is a unique identifier for
@@ -143,20 +205,21 @@ node. For details refer to the [post-service README](https://github.com/spacemes
 If you have multiple nodes running and want to migrate to use only one node for all identities:
 
 1. Stop all nodes.
-2. Copy the `identity.key` files from the PoST data directories of all nodes to the `data/identities` directory of the
-   node you want to use for those identities. The choose names for the key files that makes it easy to distinguish which
-   key belongs to which identity.
-3. Start the node managing the identities.
-4. For every identity setup a post service to use the existing PoST data for that identity and connect to the node.
+2. Convert the nodes to remote nodes by setting `smeshing-start` to `false` in the configuration/cli parameters and
+   renaming the `local.key` file to a unique  name in the PoST data directory.
+3. Use the `merge-nodes` CLI tool to merge your remote nodes into one. Follow the instructions of the tool to do so.
+   It will copy your keys (as long as you gave all of them unique names) and merge your `local.sql` databases.
+4. Start the node that you used as target for `merge-nodes` and is now managing the identities.
+5. For every identity setup a post service to use the existing PoST data for that identity and connect to the node.
    For details refer to the [post-service README](https://github.com/spacemeshos/post-rs/blob/main/service/README.md).
 
-**WARNING:** DO NOT run multiple nodes with the same identity at the same time. This will result in an equivocation
+**WARNING:** DO NOT run multiple nodes with the same identity at the same time! This will result in an equivocation
 and permanent ineligibility for rewards.
 
 ### Highlights
 
 * [#5599](https://github.com/spacemeshos/go-spacemesh/pull/5599) new atx sync that is less fragile to network failures.
-  
+
   new atx sync will avoid blocking startup, and additionally will be running in background to ask peers for atxs.
   by default it does that every 4 hours by requesting known atxs from 2 peers. configuration can be adjusted by providing
 
@@ -226,14 +289,22 @@ and permanent ineligibility for rewards.
   }
   ```
 
+* [#5685](https://github.com/spacemeshos/go-spacemesh/pull/5685) A new tool `merge-nodes` was added to the repository
+  and release artifact. It can be used to merge multiple nodes into one. This is useful for users that have multiple
+  nodes running and want to migrate to use only one node for all identities. See the
+  [Upgrade Information](#migrating-existing-identitiespost-services-to-a-node) for details.
+
 ### Features
 
-* [#5678](https://github.com/spacemeshos/go-spacemesh/pull/5678) API to for changing log level without restarting a node. Examples: 
-  > grpcurl -plaintext -d '{"module": "sync", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
+* [#5678](https://github.com/spacemeshos/go-spacemesh/pull/5678) API to for changing log level without restarting a
+  node. Examples:
 
+  > grpcurl -plaintext -d '{"module": "sync", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
   > grpcurl -plaintext -d '{"module": "*", "level": "debug"}' 127.0.0.1:9093 spacemesh.v1.DebugService.ChangeLogLevel
 
   "*" will replace log level for all known modules, expect that some of them will spam too much.
+* [#5612](https://github.com/spacemeshos/go-spacemesh/pull/5612)
+  Add relay command for running dedicated relay nodes
 
 ### Improvements
 

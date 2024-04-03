@@ -594,9 +594,8 @@ func TestConsistentHandling(t *testing.T) {
 			failed.EXPECT().Parse().Times(1).Return(nil, errors.New("test"))
 			instances[1].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(failed)
 
-			require.Equal(
+			require.NoError(
 				t,
-				nil,
 				instances[0].handler().HandleGossipTransaction(context.Background(), p2p.NoPeer, txs[i].Raw),
 			)
 			require.NoError(

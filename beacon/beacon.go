@@ -63,13 +63,6 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
-// WithContext defines context for beacon.
-func WithContext(ctx context.Context) Opt {
-	return func(pd *ProtocolDriver) {
-		pd.ctx = ctx
-	}
-}
-
 // WithConfig defines protocol parameters.
 func WithConfig(cfg Config) Opt {
 	return func(pd *ProtocolDriver) {
@@ -93,7 +86,6 @@ func New(
 	opts ...Opt,
 ) *ProtocolDriver {
 	pd := &ProtocolDriver{
-		ctx:            context.Background(),
 		logger:         log.NewNop(),
 		config:         DefaultConfig(),
 		publisher:      publisher,
@@ -107,6 +99,7 @@ func New(
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		states:         make(map[types.EpochID]*state),
 		results:        make(chan result.Beacon, 100),
+		closed:         make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(pd)
@@ -116,7 +109,6 @@ func New(
 		conf:  pd.config,
 	}
 
-	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
 	pd.theta = new(big.Float).SetRat(&pd.config.Theta)
 
 	if pd.weakCoin == nil {
@@ -167,9 +159,8 @@ type ProtocolDriver struct {
 	inProtocol uint64
 	logger     log.Log
 	eg         errgroup.Group
-	ctx        context.Context
-	cancel     context.CancelFunc
 	startOnce  sync.Once
+	closed     chan struct{}
 
 	config    Config
 	sync      system.SyncStateProvider
@@ -210,7 +201,9 @@ type ProtocolDriver struct {
 	// the map key is the epoch when the ballot is published. the beacon value is calculated in the
 	// previous epoch and used in the current epoch.
 	ballotsBeacons map[types.EpochID]map[types.Beacon]*beaconWeight
-	results        chan result.Beacon
+
+	resultsMtx sync.Mutex
+	results    chan result.Beacon
 
 	// metrics
 	metricsCollector *metrics.BeaconMetricsCollector
@@ -259,18 +252,32 @@ func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon)
 
 // Close closes ProtocolDriver.
 func (pd *ProtocolDriver) Close() {
+	pd.resultsMtx.Lock()
+	defer pd.resultsMtx.Unlock()
+
+	if pd.isClosed() {
+		return
+	}
+
 	pd.logger.Info("closing beacon protocol")
 	pd.metricsCollector.Stop()
-	pd.cancel()
+	close(pd.closed)
 	pd.logger.Info("waiting for beacon goroutines to finish")
 	if err := pd.eg.Wait(); err != nil {
 		pd.logger.With().Info("received error waiting for goroutines to finish", log.Err(err))
 	}
 	close(pd.results)
+	pd.results = nil
 	pd.logger.Info("beacon goroutines finished")
 }
 
 func (pd *ProtocolDriver) onResult(epoch types.EpochID, beacon types.Beacon) {
+	pd.resultsMtx.Lock()
+	defer pd.resultsMtx.Unlock()
+	if pd.results == nil {
+		return
+	}
+
 	select {
 	case pd.results <- result.Beacon{Epoch: epoch, Beacon: beacon}:
 	default:
@@ -283,13 +290,15 @@ func (pd *ProtocolDriver) onResult(epoch types.EpochID, beacon types.Beacon) {
 
 // Results notifies waiter that beacon for a target epoch has completed.
 func (pd *ProtocolDriver) Results() <-chan result.Beacon {
+	pd.resultsMtx.Lock()
+	defer pd.resultsMtx.Unlock()
 	return pd.results
 }
 
 // isClosed returns true if the beacon protocol is shutting down.
 func (pd *ProtocolDriver) isClosed() bool {
 	select {
-	case <-pd.ctx.Done():
+	case <-pd.closed:
 		return true
 	default:
 		return false
@@ -692,7 +701,7 @@ func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 	layer := currentEpoch.Add(1).FirstLayer()
 	for {
 		select {
-		case <-pd.ctx.Done():
+		case <-pd.closed:
 			return
 		case <-pd.clock.AwaitLayer(layer):
 			current := pd.clock.CurrentLayer()
@@ -831,8 +840,8 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 
 	select {
 	case <-ctx.Done():
-	case <-pd.ctx.Done():
-		return pd.ctx.Err()
+	case <-pd.closed:
+		return errors.New("protocol closed")
 	}
 
 	finished := time.Now()
@@ -1152,9 +1161,9 @@ func buildSignedProposal(
 	p := buildProposal(logger, epoch, nonce)
 	vrfSig := signer.Sign(p)
 	proposal := ProposalFromVrf(vrfSig)
-	logger.WithContext(ctx).
-		With().
-		Debug("calculated beacon proposal", epoch, nonce, log.Inline(proposal), log.ShortStringer("id", signer.NodeID()))
+	logger.WithContext(ctx).With().Debug(
+		"calculated beacon proposal", epoch, nonce, log.Inline(proposal), log.ShortStringer("id", signer.NodeID()),
+	)
 	return vrfSig
 }
 

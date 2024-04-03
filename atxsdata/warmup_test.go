@@ -56,21 +56,21 @@ func TestWarmup(t *testing.T) {
 		}
 		require.NoError(t, layers.SetApplied(db, applied, types.BlockID{1}))
 
-		c, err := Warm(db, WithCapacity(1))
+		c, err := Warm(db, 1)
 		require.NoError(t, err)
 		for _, atx := range data[2:] {
 			require.NotNil(t, c.Get(atx.TargetEpoch(), atx.ID()))
 		}
 	})
 	t.Run("no data", func(t *testing.T) {
-		c, err := Warm(sql.InMemory(), WithCapacity(1))
+		c, err := Warm(sql.InMemory(), 1)
 		require.NoError(t, err)
 		require.NotNil(t, c)
 	})
 	t.Run("closed db", func(t *testing.T) {
 		db := sql.InMemory()
 		require.NoError(t, db.Close())
-		c, err := Warm(db, WithCapacity(1))
+		c, err := Warm(db, 1)
 		require.Error(t, err)
 		require.Nil(t, c)
 	})
@@ -78,7 +78,7 @@ func TestWarmup(t *testing.T) {
 		db := sql.InMemory()
 		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nil)
 		require.NoError(t, atxs.Add(db, &data))
-		c, err := Warm(db)
+		c, err := Warm(db, 1)
 		require.Error(t, err)
 		require.Nil(t, c)
 	})
@@ -105,7 +105,7 @@ func TestWarmup(t *testing.T) {
 			AnyTimes()
 		for i := 0; i < 5; i++ {
 			c := New()
-			require.Error(t, Warmup(exec, c))
+			require.Error(t, Warmup(exec, c, 1))
 			fail++
 			call = 0
 		}

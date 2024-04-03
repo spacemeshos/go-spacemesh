@@ -69,6 +69,11 @@ type ActiveSetFetcher interface {
 	GetActiveSet(context.Context, types.Hash32) error
 }
 
+// MalfeasanceProofFetcher defines an interface for fetching malfeasance proofs.
+type MalfeasanceProofFetcher interface {
+	GetMalfeasanceProofs(context.Context, []types.NodeID) error
+}
+
 // PeerTracker defines an interface to track peer hashes.
 type PeerTracker interface {
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)

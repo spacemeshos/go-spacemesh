@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       test_name:
-        description: 'Test to run'
-        default: '.'
+        description: "Test to run"
+        default: "."
       log_level:
-        description: 'Log level'
-        default: 'info'
+        description: "Log level"
+        default: "debug"
   push:
     branches:
       - staging
@@ -76,7 +76,7 @@ jobs:
       - name: Configure gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          version: "450.0.0"
+          version: "469.0.0"
 
       - name: Configure gke authentication plugin
         run: gcloud components install gke-gcloud-auth-plugin --quiet
@@ -124,6 +124,7 @@ jobs:
           bootstrap: 4m
           level: ${{ inputs.log_level }}
           clusters: 4
+          norbac: 1
         run: make -C systest run test_name=${{ inputs.test_name }}
 
       - name: Delete pod

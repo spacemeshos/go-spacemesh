@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/urfave/cli/v2"
@@ -17,7 +17,8 @@ func main() {
 	cfg.Encoding = "console"
 	dbLog, err := cfg.Build()
 	if err != nil {
-		log.Fatalln("create logger:", err)
+		fmt.Println("create logger:", err)
+		os.Exit(1)
 	}
 	defer dbLog.Sync()
 
@@ -40,7 +41,7 @@ func main() {
 			&cli.StringFlag{
 				Name:     "to",
 				Aliases:  []string{"t"},
-				Usage:    "The `data` folder to write the merged node to. Can be an existing remote node or an empty folder.",
+				Usage:    "The `data` folder to write the merged node to. Can be an existing remote node or empty.",
 				Required: true,
 			},
 		},
@@ -50,8 +51,7 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		dbLog.Fatal("app run:",
-			zap.Error(err),
-		)
+		dbLog.Sugar().Warnln("app run:", err)
+		os.Exit(1)
 	}
 }

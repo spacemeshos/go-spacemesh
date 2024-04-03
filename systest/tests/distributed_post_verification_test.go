@@ -129,16 +129,14 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	builder := activation.NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(signer)
-	postSupervisor, err := activation.NewPostSupervisor(
+	postSupervisor := activation.NewPostSupervisor(
 		logger.Named("post-supervisor"),
-		cfg.POSTService,
 		cfg.POST,
 		cfg.SMESHING.ProvingOpts,
 		postSetupMgr,
 		builder,
 	)
-	require.NoError(t, err)
-	require.NoError(t, postSupervisor.Start(cfg.SMESHING.Opts, signer))
+	require.NoError(t, postSupervisor.Start(cfg.POSTService, cfg.SMESHING.Opts, signer))
 	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
 
 	// 2. create ATX with invalid POST labels

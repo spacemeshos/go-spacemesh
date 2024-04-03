@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -15,8 +15,10 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -156,7 +158,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, protocol string, data []byte) error {
 			for i, node := range testNodes {
-				peer := p2p.Peer(fmt.Sprint(i))
+				peer := p2p.Peer(strconv.Itoa(i))
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
 					require.NoError(t, node.HandleProposal(ctx, peer, data))
@@ -203,15 +205,14 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 			}
 		}
 	}
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	for _, node := range testNodes {
-		wg.Add(1)
-		go func(testNode *testProtocolDriver) {
-			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
-			wg.Done()
-		}(node)
+		node := node
+		eg.Go(func() error {
+			return node.onNewEpoch(context.Background(), types.EpochID(2))
+		})
 	}
-	wg.Wait()
+	require.NoError(t, eg.Wait())
 	beacons := make(map[types.Beacon]struct{})
 	for _, node := range testNodes {
 		got, err := node.GetBeacon(types.EpochID(3))
@@ -231,11 +232,11 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 			for i, node := range testNodes {
 				switch protocol {
 				case pubsub.BeaconProposalProtocol:
-					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(fmt.Sprint(i)), data))
+					require.NoError(t, node.HandleProposal(ctx, p2p.Peer(strconv.Itoa(i)), data))
 				case pubsub.BeaconFirstVotesProtocol:
-					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(fmt.Sprint(i)), data))
+					require.NoError(t, node.HandleFirstVotes(ctx, p2p.Peer(strconv.Itoa(i)), data))
 				case pubsub.BeaconFollowingVotesProtocol:
-					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(fmt.Sprint(i)), data))
+					require.NoError(t, node.HandleFollowingVotes(ctx, p2p.Peer(strconv.Itoa(i)), data))
 				case pubsub.BeaconWeakCoinProtocol:
 				}
 			}
@@ -273,15 +274,14 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 			}
 		}
 	}
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	for _, node := range testNodes {
-		wg.Add(1)
-		go func(testNode *testProtocolDriver) {
-			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
-			wg.Done()
-		}(node)
+		node := node
+		eg.Go(func() error {
+			return node.onNewEpoch(context.Background(), types.EpochID(2))
+		})
 	}
-	wg.Wait()
+	require.NoError(t, eg.Wait())
 	beacons := make(map[types.Beacon]struct{})
 	for _, node := range testNodes {
 		got, err := node.GetBeacon(types.EpochID(3))
@@ -326,15 +326,14 @@ func TestBeacon_NoProposals(t *testing.T) {
 			}
 		}
 	}
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	for _, node := range testNodes {
-		wg.Add(1)
-		go func(testNode *testProtocolDriver) {
-			require.NoError(t, testNode.onNewEpoch(context.Background(), types.EpochID(2)))
-			wg.Done()
-		}(node)
+		node := node
+		eg.Go(func() error {
+			return node.onNewEpoch(context.Background(), types.EpochID(2))
+		})
 	}
-	wg.Wait()
+	require.NoError(t, eg.Wait())
 	for _, node := range testNodes {
 		got, err := node.GetBeacon(types.EpochID(3))
 		require.Error(t, err)
@@ -452,6 +451,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 		tpd.recordBeacon(thisEpoch, &b, beacon2, fixed.New64(1))
 
 		count := layer.OrdinalInEpoch() + 1
+		//nolint:lll
 		expected := fmt.Sprintf(`
 			# HELP spacemesh_beacons_beacon_observed_total Number of beacons collected from blocks for each epoch and value
 			# TYPE spacemesh_beacons_beacon_observed_total counter
@@ -469,6 +469,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 		require.NoError(t, err)
 
 		weight := layer.OrdinalInEpoch() + 1
+		//nolint:lll
 		expected = fmt.Sprintf(`
 			# HELP spacemesh_beacons_beacon_observed_weight Weight of beacons collected from blocks for each epoch and value
 			# TYPE spacemesh_beacons_beacon_observed_weight counter
@@ -494,6 +495,38 @@ func TestBeaconWithMetrics(t *testing.T) {
 	}
 
 	tpd.Close()
+}
+
+func TestBeacon_NoRaceOnClose(t *testing.T) {
+	mclock := NewMocklayerClock(gomock.NewController(t))
+	pd := &ProtocolDriver{
+		logger:           logtest.New(t).WithName("Beacon"),
+		beacons:          make(map[types.EpochID]types.Beacon),
+		cdb:              datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		clock:            mclock,
+		closed:           make(chan struct{}),
+		results:          make(chan result.Beacon, 100),
+		metricsCollector: metrics.NewBeaconMetricsCollector(nil, logtest.New(t).WithName("metrics")),
+	}
+	// check for a race between onResult and Close
+	var eg errgroup.Group
+	eg.Go(func() error {
+		for i := 0; i < 1000; i++ {
+			time.Sleep(1 * time.Millisecond)
+			pd.onResult(types.EpochID(i), types.Beacon{})
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		resultChan := pd.Results()
+		for result := range resultChan {
+			t.Log(result)
+		}
+		return nil
+	})
+	time.Sleep(300 * time.Millisecond)
+	pd.Close()
+	require.NoError(t, eg.Wait())
 }
 
 func TestBeacon_BeaconsWithDatabase(t *testing.T) {
@@ -588,11 +621,11 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		pd.ReportBeaconFromBallot(e, &b, types.RandomBeacon(), fixed.New64(1))
 		pd.cleanupEpoch(e)
-		require.Equal(t, i+1, len(pd.beacons))
-		require.Equal(t, i+1, len(pd.ballotsBeacons))
+		require.Len(t, pd.beacons, i+1)
+		require.Len(t, pd.ballotsBeacons, i+1)
 	}
-	require.Equal(t, numEpochsToKeep, len(pd.beacons))
-	require.Equal(t, numEpochsToKeep, len(pd.ballotsBeacons))
+	require.Len(t, pd.beacons, numEpochsToKeep)
+	require.Len(t, pd.ballotsBeacons, numEpochsToKeep)
 
 	epoch = epoch + numEpochsToKeep
 	err := pd.setBeacon(epoch, types.RandomBeacon())
@@ -600,11 +633,11 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	b := types.NewExistingBallot(types.RandomBallotID(), types.EmptyEdSignature, types.EmptyNodeID, epoch.FirstLayer())
 	b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 	pd.recordBeacon(epoch, &b, types.RandomBeacon(), fixed.New64(1))
-	require.Equal(t, numEpochsToKeep+1, len(pd.beacons))
-	require.Equal(t, numEpochsToKeep+1, len(pd.ballotsBeacons))
+	require.Len(t, pd.beacons, numEpochsToKeep+1)
+	require.Len(t, pd.ballotsBeacons, numEpochsToKeep+1)
 	pd.cleanupEpoch(epoch)
-	require.Equal(t, numEpochsToKeep, len(pd.beacons))
-	require.Equal(t, numEpochsToKeep, len(pd.ballotsBeacons))
+	require.Len(t, pd.beacons, numEpochsToKeep)
+	require.Len(t, pd.ballotsBeacons, numEpochsToKeep)
 }
 
 func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
@@ -956,6 +989,7 @@ func TestBeacon_atxThreshold(t *testing.T) {
 
 	kappa := 40
 	q := big.NewRat(1, 3)
+	//nolint:lll
 	tt := []struct {
 		name      string
 		w         int

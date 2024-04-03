@@ -187,7 +187,7 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 	}
 }
 
-// Smeshing returns true iff atx builder is smeshing.
+// Smeshing returns true if atx builder is smeshing.
 func (b *Builder) Smeshing() bool {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -324,6 +324,12 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge)
 	if err != nil {
 		return fmt.Errorf("post execution: %w", err)
+	}
+	if postInfo.Nonce == nil {
+		b.log.Error("initial PoST is invalid: missing VRF nonce. Check your PoST data",
+			log.ZShortStringer("smesherID", nodeID),
+		)
+		return errors.New("nil VRF nonce")
 	}
 	initialPost := nipost.Post{
 		Nonce:   post.Nonce,
@@ -717,14 +723,14 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	} else if err != nil {
 		return err
 	}
-	blob, err := atxs.GetBlob(ctx, b.cdb, atx.Bytes())
-	if err != nil {
+	var blob sql.Blob
+	if err := atxs.LoadBlob(ctx, b.cdb, atx.Bytes(), &blob); err != nil {
 		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
 	}
-	if len(blob) == 0 {
+	if len(blob.Bytes) == 0 {
 		return nil // checkpoint
 	}
-	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
+	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob.Bytes); err != nil {
 		return fmt.Errorf("republish %s: %w", atx.ShortString(), err)
 	}
 	b.log.Debug("re-gossipped atx", log.ZShortStringer("atx", atx))
