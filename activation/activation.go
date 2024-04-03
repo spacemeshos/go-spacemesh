@@ -477,7 +477,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
-		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better positioning ATX",
+		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better posATX",
 			zap.Duration("till poet round", until),
 			zap.Uint32("current epoch", current.Uint32()),
 			zap.Time("waiting until", wait),
@@ -685,7 +685,7 @@ func (b *Builder) createAtx(
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
-	b.log.Info("broadcasting atx", log.ZShortStringer("atx_id", atx.ID()), log.ZShortStringer("smesherID", atx.SmesherID))
+	b.log.Info("broadcasting", log.ZShortStringer("atx_id", atx.ID()), log.ZShortStringer("smesherID", atx.SmesherID))
 	buf, err := codec.Encode(atx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %w", err)
