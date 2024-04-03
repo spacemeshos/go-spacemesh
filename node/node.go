@@ -1476,9 +1476,9 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			app.Config.LayerDuration)
 		app.grpcServices[svc] = service
 		return service, nil
-  case v2alpha1.Node:
+	case v2alpha1.Node:
 		service := v2alpha1.NewNodeService(app.host, app.mesh, app.clock, app.syncer)
-    app.grpcServices[svc] = service
+		app.grpcServices[svc] = service
 		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)

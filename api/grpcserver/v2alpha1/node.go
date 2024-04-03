@@ -2,24 +2,22 @@ package v2alpha1
 
 import (
 	"context"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 const (
 	Node = "node_v2alpha1"
 )
 
-func NewNodeService(peers peerCounter,
-	msh meshAPI,
-	genTime genesisTimeAPI,
-	syncer syncer) *NodeService {
+func NewNodeService(peers peerCounter, msh meshAPI, clock *timesync.NodeClock, syncer syncer) *NodeService {
 	return &NodeService{
 		mesh:        msh,
-		genTime:     genTime,
+		clock:       clock,
 		peerCounter: peers,
 		syncer:      syncer,
 	}
@@ -27,7 +25,7 @@ func NewNodeService(peers peerCounter,
 
 type NodeService struct {
 	mesh        meshAPI
-	genTime     genesisTimeAPI
+	clock       *timesync.NodeClock
 	peerCounter peerCounter
 	syncer      syncer
 }
@@ -45,20 +43,11 @@ func (s *NodeService) String() string {
 	return "NodeService"
 }
 
-func (s *NodeService) Status(ctx context.Context, _ *emptypb.Empty) (*spacemeshv2alpha1.NodeStatusResponse, error) {
-	curLayer, latestLayer, verifiedLayer := s.getLayers()
-	layer, err := s.mesh.GetLayer(s.mesh.LatestLayer())
-	if err != nil {
-		return nil, err
-	}
+func (s *NodeService) Status(ctx context.Context, _ *spacemeshv2alpha1.NodeStatusRequest) (
+	*spacemeshv2alpha1.NodeStatusResponse, error,
+) {
+	var status spacemeshv2alpha1.NodeStatusResponse_SyncStatus
 
-	var blockId types.BlockID
-	if len(layer.BlocksIDs()) > 0 {
-		blockId = layer.BlocksIDs()[0]
-	}
-
-	// Get more info from syncer
-	status := spacemeshv2alpha1.NodeStatusResponse_SYNC_STATUS_UNSPECIFIED
 	if s.syncer.IsSynced(ctx) {
 		status = spacemeshv2alpha1.NodeStatusResponse_SYNC_STATUS_SYNCED
 	} else {
@@ -68,25 +57,9 @@ func (s *NodeService) Status(ctx context.Context, _ *emptypb.Empty) (*spacemeshv
 	return &spacemeshv2alpha1.NodeStatusResponse{
 		ConnectedPeers: s.peerCounter.PeerCount(),
 		Status:         status,
-		SyncedLayer:    latestLayer,   // last layer node has synced
-		VerifiedLayer:  verifiedLayer, // last layer node has verified
-		HeadLayer:      latestLayer,   // current chain head; the last layer the node has gossiped or seen
-		CurrentLayer:   curLayer,      // current layer, based on clock time
-		HeadBlockId:    blockId.Bytes(),
+		LatestLayer:    s.mesh.LatestLayer().Uint32(),        // latest layer node has seen from blocks
+		AppliedLayer:   s.mesh.LatestLayerInState().Uint32(), // last layer node has applied to the state
+		ProcessedLayer: s.mesh.ProcessedLayer().Uint32(),     // last layer whose votes have been processed
+		CurrentLayer:   s.clock.CurrentLayer().Uint32(),      // current layer, based on clock time
 	}, nil
-}
-
-func (s *NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
-	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
-	// epochs, so just return the current layer instead
-	curLayerObj := s.genTime.CurrentLayer()
-	curLayer = curLayerObj.Uint32()
-	if curLayerObj <= types.GetEffectiveGenesis() {
-		latestLayer = s.mesh.LatestLayer().Uint32()
-		verifiedLayer = latestLayer
-	} else {
-		latestLayer = s.mesh.LatestLayer().Uint32()
-		verifiedLayer = s.mesh.LatestLayerInState().Uint32()
-	}
-	return
 }
