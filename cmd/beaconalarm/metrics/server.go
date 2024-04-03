@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -50,7 +51,7 @@ func NewServer(addr string) (*Server, error) {
 func (s *Server) Start() error {
 	select {
 	case <-s.started:
-		return fmt.Errorf("server already started")
+		return errors.New("server already started")
 	default:
 		close(s.started)
 	}
@@ -71,7 +72,7 @@ func (s *Server) Start() error {
 func (s *Server) Stop(ctx context.Context) error {
 	select {
 	case <-s.stopped:
-		return fmt.Errorf("server already stopped")
+		return errors.New("server already stopped")
 	default:
 		close(s.stopped)
 	}
@@ -93,12 +94,12 @@ func (s *Server) UpdateAlarm(epoch string, alarm bool) error {
 	select {
 	case <-s.started:
 	default:
-		return fmt.Errorf("server not started")
+		return errors.New("server not started")
 	}
 
 	select {
 	case <-s.stopped:
-		return fmt.Errorf("server already stopped")
+		return errors.New("server already stopped")
 	default:
 	}
 

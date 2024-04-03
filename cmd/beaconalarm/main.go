@@ -111,7 +111,11 @@ func getCommand() *cobra.Command {
 						continue
 					default:
 					}
-					logger.With().Info("beacon value fetched", log.FieldNamed("epoch", epoch), log.String("value", value))
+					logger.With().Info(
+						"beacon value fetched",
+						log.FieldNamed("epoch", epoch),
+						log.String("value", value),
+					)
 					server.UpdateAlarm(epoch.String(), false)
 				}
 			})

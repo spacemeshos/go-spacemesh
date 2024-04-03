@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -103,11 +104,11 @@ func (c *Client) FetchBeaconValue(ctx context.Context, namespace string, epoch t
 	// Check if the result is a vector
 	vector, ok := result.(model.Vector)
 	if !ok {
-		return "", fmt.Errorf("query result is not a vector")
+		return "", errors.New("query result is not a vector")
 	}
 
 	if len(vector) != 1 {
-		return "", fmt.Errorf("nodes did not find consensus on a single beacon value")
+		return "", errors.New("nodes did not find consensus on a single beacon value")
 	}
 
 	beaconValue := string(vector[0].Metric["beacon"])
