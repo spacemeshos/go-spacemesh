@@ -1079,6 +1079,12 @@ func TestAdminEvents(t *testing.T) {
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
+	select {
+	case <-app.Started():
+	case <-time.After(10 * time.Second):
+		require.Fail(t, "app did not start in time")
+	}
+
 	conn, err := grpc.NewClient(
 		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -1167,7 +1173,12 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
-	<-app.Started()
+	select {
+	case <-app.Started():
+	case <-time.After(10 * time.Second):
+		require.Fail(t, "app did not start in time")
+	}
+
 	for _, signer := range app.signers {
 		signer := signer
 		mgr, err := activation.NewPostSetupManager(
