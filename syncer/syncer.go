@@ -292,6 +292,7 @@ func (s *Syncer) setATXSynced() {
 	select {
 	case <-s.awaitATXSyncedCh:
 	default:
+		s.logger.Info("reached ATX synced state")
 		close(s.awaitATXSyncedCh)
 		atxSynced.Set(1)
 	}

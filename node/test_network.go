@@ -62,9 +62,8 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		err := app.beaconProtocol.UpdateBeacon(bootstrapEpoch, bootstrapBeacon)
 		require.NoError(t, err, "failed to bootstrap beacon for node %q", i)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		conn, err := grpc.DialContext(ctx, app.grpcPublicServer.BoundAddress,
+		conn, err := grpc.NewClient(
+			app.grpcPublicServer.BoundAddress,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		)
