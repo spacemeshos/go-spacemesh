@@ -435,13 +435,16 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		// build new challenge
+		logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", current.Uint32()))
 	case err != nil:
+		logger.Info("failed to load NiPoST challenge from local state", zap.Error(err))
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
 	case challenge.PublishEpoch < current:
 		logger.Info(
-			"existing NiPOST challenge is stale, resetting state",
+			"existing NiPoST challenge is stale, resetting state",
 			zap.Uint32("current_epoch", current.Uint32()),
-			zap.Uint32("challenge publish epoch", challenge.PublishEpoch.Uint32()),
+			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
+			zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
 		)
 		// Reset the state to idle because we won't be building POST until we get a new PoET proof
 		// (typically more than epoch time from now).
@@ -454,9 +457,13 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		}
 	default:
 		// challenge is fresh
+		logger.Info("loaded NiPoST challenge from local state",
+			zap.Uint32("current_epoch", current.Uint32()),
+			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
+			zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
+		)
 		return challenge, nil
 	}
-	logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", current.Uint32()))
 
 	prev, err := b.cdb.GetLastAtx(nodeID)
 	switch {
@@ -477,10 +484,10 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
-		logger.Debug("waiting for fresh atxs",
+		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better posATX",
 			zap.Duration("till poet round", until),
 			zap.Uint32("current epoch", current.Uint32()),
-			zap.Duration("wait", time.Until(wait)),
+			zap.Time("waiting until", wait),
 		)
 		events.EmitPoetWaitRound(nodeID, current, current+1, wait)
 		select {
@@ -494,11 +501,12 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 	}
+	logger.Info("selected positioning atx", log.ZShortStringer("atx_id", posAtx))
 
 	prevAtx, err := b.cdb.GetLastAtx(nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
-		// initial ATX challenge
+		logger.Info("no previous ATX found, creating an initial nipost challenge")
 		post, err := nipost.InitialPost(b.localDB, nodeID)
 		if err != nil {
 			return nil, fmt.Errorf("get initial post: %w", err)
@@ -543,7 +551,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			PositioningATX: posAtx,
 		}
 	}
-
+	logger.Info("persisting the new NiPOST challenge", zap.Object("challenge", challenge))
 	if err := nipost.AddChallenge(b.localDB, nodeID, challenge); err != nil {
 		return nil, fmt.Errorf("add nipost challenge: %w", err)
 	}
@@ -575,8 +583,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	b.log.Info("atx challenge is ready",
 		log.ZShortStringer("smesherID", sig.NodeID()),
 		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
-		zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
-		zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
+		zap.Object("challenge", challenge),
 	)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime((challenge.TargetEpoch()).FirstLayer()))
 	defer cancel()
@@ -685,6 +692,7 @@ func (b *Builder) createAtx(
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
+	b.log.Info("broadcasting", log.ZShortStringer("atx_id", atx.ID()), log.ZShortStringer("smesherID", atx.SmesherID))
 	buf, err := codec.Encode(atx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %w", err)
@@ -697,19 +705,24 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 
 // getPositioningAtx returns atx id with the highest tick height.
 func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (types.ATXID, error) {
+	logger := b.log.With(log.ZShortStringer("smesherID", nodeID))
+	logger.Info("searching for positioning atx")
 	id, err := findFullyValidHighTickAtx(
 		ctx,
 		b.cdb,
 		nodeID,
 		b.conf.GoldenATXID,
 		b.validator,
-		b.log,
+		logger,
 		VerifyChainOpts.AssumeValidBefore(time.Now().Add(-b.postValidityDelay)),
 		VerifyChainOpts.WithTrustedID(nodeID),
 		VerifyChainOpts.WithLogger(b.log),
 	)
-	if errors.Is(err, sql.ErrNotFound) {
-		b.log.Info("using golden atx as positioning atx", log.ZShortStringer("smesherID", nodeID))
+	switch {
+	case err == nil:
+		return id, nil
+	case errors.Is(err, sql.ErrNotFound):
+		logger.Info("using golden atx as positioning atx")
 		return b.conf.GoldenATXID, nil
 	}
 	return id, err
@@ -733,7 +746,7 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob.Bytes); err != nil {
 		return fmt.Errorf("republish %s: %w", atx.ShortString(), err)
 	}
-	b.log.Debug("re-gossipped atx", log.ZShortStringer("atx", atx))
+	b.log.Debug("re-gossipped atx", log.ZShortStringer("smesherID", nodeID), log.ZShortStringer("atx", atx))
 	return nil
 }
 
@@ -755,7 +768,7 @@ func findFullyValidHighTickAtx(
 	prefNodeID types.NodeID,
 	goldenATXID types.ATXID,
 	validator nipostValidator,
-	log *zap.Logger,
+	logger *zap.Logger,
 	opts ...VerifyChainOption,
 ) (types.ATXID, error) {
 	rejectedAtxs := make(map[types.ATXID]struct{})
@@ -774,9 +787,9 @@ func findFullyValidHighTickAtx(
 		if err != nil {
 			return types.ATXID{}, err
 		}
-
+		logger.Info("found candidate for high-tick atx, verifying its chain", log.ZShortStringer("atx_id", id))
 		if err := validator.VerifyChain(ctx, id, goldenATXID, opts...); err != nil {
-			log.Info("rejecting candidate for high-tick atx", zap.Error(err), zap.Stringer("atx_id", id))
+			logger.Info("rejecting candidate for high-tick atx", zap.Error(err), log.ZShortStringer("atx_id", id))
 			rejectedAtxs[id] = struct{}{}
 		} else {
 			return id, nil

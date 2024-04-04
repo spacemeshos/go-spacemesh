@@ -2,6 +2,18 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Highlights
+
+### Improvements
+
+* [#5796](https://github.com/spacemeshos/go-spacemesh/pull/5796) Reject p2p messages containing invalid malfeasance proofs.
+
+* [#5797](https://github.com/spacemeshos/go-spacemesh/pull/5797) Improve logging around ATX building process.
+
+### Features
+
 ## Release v1.4.4
 
 ### Improvements
