@@ -549,8 +549,7 @@ func (f *Fetch) receiveResponse(data []byte, batch *batchInfo) {
 		f.mu.Unlock()
 
 		if !ok {
-			f.logger.With().Warning("response received for unknown hash",
-				log.Stringer("hash", resp.Hash))
+			f.logger.With().Warning("response received for unknown hash", log.Stringer("hash", resp.Hash))
 			continue
 		}
 

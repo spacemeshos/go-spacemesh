@@ -12,6 +12,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5797](https://github.com/spacemeshos/go-spacemesh/pull/5797) Improve logging around ATX building process.
 
+* [#5802](https://github.com/spacemeshos/go-spacemesh/pull/5802) Increase the number of supported ATX per epoch to 3.5 Mio.
+
 ### Features
 
 ## Release v1.4.4

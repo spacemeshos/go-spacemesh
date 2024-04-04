@@ -140,7 +140,8 @@ func (err *ServerError) Error() string {
 
 // Response is a server response.
 type Response struct {
-	Data  []byte `scale:"max=104857600"` // 100 MiB - keep in line with ResponseMessage.Data in `fetch/wire_types.go`
+	// keep in line with limit of ResponseMessage.Data in `fetch/wire_types.go`
+	Data  []byte `scale:"max=125829120"` // 120 MiB > 3.5 mio ATX * 32 bytes per ID
 	Error string `scale:"max=1024"`      // TODO(mafa): make error code instead of string
 }
 
