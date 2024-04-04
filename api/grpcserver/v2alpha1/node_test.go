@@ -16,9 +16,9 @@ import (
 
 func TestNodeService_Status(t *testing.T) {
 	ctrl, ctx := gomock.WithContext(context.Background(), t)
-	peerCounter := NewMockpeerCounter(ctrl)
-	meshAPI := NewMockmeshAPI(ctrl)
-	syncer := NewMocksyncer(ctrl)
+	peerCounter := NewMocknodePeerCounter(ctrl)
+	meshAPI := NewMocknodeMeshAPI(ctrl)
+	syncer := NewMocknodeSyncer(ctrl)
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(layerDuration),
 		timesync.WithTickInterval(1*time.Second),

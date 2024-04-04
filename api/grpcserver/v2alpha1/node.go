@@ -2,6 +2,7 @@ package v2alpha1
 
 import (
 	"context"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
@@ -14,7 +15,24 @@ const (
 	Node = "node_v2alpha1"
 )
 
-func NewNodeService(peers peerCounter, msh meshAPI, clock *timesync.NodeClock, syncer syncer) *NodeService {
+// nodePeerCounter is an api to get current peer count
+type nodePeerCounter interface {
+	PeerCount() uint64
+}
+
+// nodeMeshAPI is an api for getting mesh status.
+type nodeMeshAPI interface {
+	LatestLayer() types.LayerID
+	LatestLayerInState() types.LayerID
+	ProcessedLayer() types.LayerID
+}
+
+// nodeSyncer is an API to get sync status.
+type nodeSyncer interface {
+	IsSynced(context.Context) bool
+}
+
+func NewNodeService(peers nodePeerCounter, msh nodeMeshAPI, clock *timesync.NodeClock, syncer nodeSyncer) *NodeService {
 	return &NodeService{
 		mesh:        msh,
 		clock:       clock,
@@ -24,10 +42,10 @@ func NewNodeService(peers peerCounter, msh meshAPI, clock *timesync.NodeClock, s
 }
 
 type NodeService struct {
-	mesh        meshAPI
+	mesh        nodeMeshAPI
 	clock       *timesync.NodeClock
-	peerCounter peerCounter
-	syncer      syncer
+	peerCounter nodePeerCounter
+	syncer      nodeSyncer
 }
 
 func (s *NodeService) RegisterService(server *grpc.Server) {
