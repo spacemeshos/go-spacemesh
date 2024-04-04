@@ -18,8 +18,11 @@ const (
 	CacheKindATXBlob   sql.QueryCacheKind = "atx-blob"
 )
 
-const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,
-	effective_num_units, received, epoch, sequence, coinbase, validity from atxs`
+const fullQuery = `select id,
+        (select atx from atx_blobs b where a.id = b.id) as atx,
+        base_tick_height, tick_count, pubkey,
+	effective_num_units, received, epoch, sequence, coinbase, validity
+	from atxs a`
 
 type decoderCallback func(*types.VerifiedActivationTx, error) bool
 
@@ -315,7 +318,7 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 // GetBlobSizes returns the sizes of the blobs corresponding to ATXs with specified
 // ids. For non-existent ATXs, the corresponding items are set to -1.
 func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
-	return sql.GetBlobSizes(db, "select id, length(atx) from atxs where id in", ids)
+	return sql.GetBlobSizes(db, "select id, length(atx) from atx_blobs where id in", ids)
 }
 
 // LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
@@ -328,13 +331,13 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) e
 		blob.Bytes = b
 		return nil
 	}
-	return sql.LoadBlob(db, "select atx from atxs where id = ?1", id, blob)
+	return sql.LoadBlob(db, "select atx from atx_blobs where id = ?1", id, blob)
 }
 
 func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
 	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
-		if rows, err := db.Exec("select atx from atxs where id = ?1",
+		if rows, err := db.Exec("select atx from atx_blobs where id = ?1",
 			func(stmt *sql.Statement) {
 				stmt.BindBytes(1, id)
 			}, func(stmt *sql.Statement) bool {
@@ -374,22 +377,31 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 			stmt.BindNull(5)
 		}
 		stmt.BindBytes(6, atx.SmesherID.Bytes())
-		stmt.BindBytes(7, buf)
-		stmt.BindInt64(8, atx.Received().UnixNano())
-		stmt.BindInt64(9, int64(atx.BaseTickHeight()))
-		stmt.BindInt64(10, int64(atx.TickCount()))
-		stmt.BindInt64(11, int64(atx.Sequence))
-		stmt.BindBytes(12, atx.Coinbase.Bytes())
-		stmt.BindInt64(13, int64(atx.Validity()))
+		stmt.BindInt64(7, atx.Received().UnixNano())
+		stmt.BindInt64(8, int64(atx.BaseTickHeight()))
+		stmt.BindInt64(9, int64(atx.TickCount()))
+		stmt.BindInt64(10, int64(atx.Sequence))
+		stmt.BindBytes(11, atx.Coinbase.Bytes())
+		stmt.BindInt64(12, int64(atx.Validity()))
 	}
 
 	_, err = db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
-			 pubkey, atx, received, base_tick_height, tick_count, sequence, coinbase, validity)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);`, enc, nil)
+			 pubkey, received, base_tick_height, tick_count, sequence, coinbase, validity)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
+
+	enc = func(stmt *sql.Statement) {
+		stmt.BindBytes(1, atx.ID().Bytes())
+		stmt.BindBytes(2, buf)
+	}
+	_, err = db.Exec("insert into atx_blobs (id, atx) values (?1, ?2)", enc, nil)
+	if err != nil {
+		return fmt.Errorf("insert ATX blob %v: %w", atx.ID(), err)
+	}
+
 	return nil
 }
 
@@ -523,9 +535,16 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
 			base_tick_height, tick_count, sequence, pubkey, coinbase, received)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0);`, enc, nil)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert checkpoint ATX %v: %w", catx.ID, err)
+	}
+	enc = func(stmt *sql.Statement) {
+		stmt.BindBytes(1, catx.ID.Bytes())
+	}
+	_, err = db.Exec("insert into atx_blobs (id) values (?1)", enc, nil)
+	if err != nil {
+		return fmt.Errorf("insert checkpoint ATX blob %v: %w", catx.ID, err)
 	}
 	return nil
 }

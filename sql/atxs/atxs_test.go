@@ -448,13 +448,14 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		atxs.AtxAdded(db, atx)
 	}
 
-	require.Equal(t, 4, db.QueryCount())
+	// insert atx + insert blob for each ATX
+	require.Equal(t, 8, db.QueryCount())
 
 	for i := 0; i < 3; i++ {
 		ids1, err := atxs.GetIDsByEpoch(ctx, db, e1)
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids1)
-		require.Equal(t, 5, db.QueryCount())
+		require.Equal(t, 9, db.QueryCount())
 	}
 
 	for i := 0; i < 3; i++ {
@@ -462,14 +463,14 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, ids2, atx2.ID())
 		require.Contains(t, ids2, atx3.ID())
-		require.Equal(t, 6, db.QueryCount())
+		require.Equal(t, 10, db.QueryCount())
 	}
 
 	for i := 0; i < 3; i++ {
 		ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
-		require.Equal(t, 7, db.QueryCount())
+		require.Equal(t, 11, db.QueryCount())
 	}
 
 	require.NoError(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
@@ -477,12 +478,12 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		return nil
 	}))
 	atxs.AtxAdded(db, atx5)
-	require.Equal(t, 8, db.QueryCount())
+	require.Equal(t, 13, db.QueryCount())
 
 	ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
-	require.Equal(t, 8, db.QueryCount()) // not incremented after Add
+	require.Equal(t, 13, db.QueryCount()) // not incremented after Add
 
 	require.Error(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
 		atxs.Add(tx, atx6)
@@ -493,7 +494,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	ids4, err := atxs.GetIDsByEpoch(ctx, db, e3)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids4)
-	require.Equal(t, 10, db.QueryCount()) // not incremented after Add
+	require.Equal(t, 16, db.QueryCount()) // not incremented after Add
 }
 
 func TestForIDsByEpochEarlyStop(t *testing.T) {
@@ -634,13 +635,13 @@ func TestGetBlobCached(t *testing.T) {
 	require.NoError(t, atxs.Add(db, atx))
 	encoded, err := codec.Encode(atx.ActivationTx)
 	require.NoError(t, err)
-	require.Equal(t, 1, db.QueryCount())
+	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
 
 	for i := 0; i < 3; i++ {
 		var b sql.Blob
 		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
 		require.Equal(t, encoded, b.Bytes)
-		require.Equal(t, 2, db.QueryCount())
+		require.Equal(t, 3, db.QueryCount())
 	}
 }
 
@@ -669,19 +670,20 @@ func TestCachedBlobEviction(t *testing.T) {
 		require.Equal(t, encoded, b.Bytes)
 	}
 
-	require.Equal(t, 22, db.QueryCount())
+	// insert atx + insert blob + load blob each time
+	require.Equal(t, 33, db.QueryCount())
 
 	// The ATXs except the first one stay in place
 	for n, atx := range addedATXs[1:] {
 		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
 		require.Equal(t, blobs[n+1], b.Bytes)
-		require.Equal(t, 22, db.QueryCount())
+		require.Equal(t, 33, db.QueryCount())
 	}
 
 	// The first ATX is evicted. We check it after the loop to avoid additional evictions.
 	require.NoError(t, atxs.LoadBlob(ctx, db, addedATXs[0].ID().Bytes(), &b))
 	require.Equal(t, blobs[0], b.Bytes)
-	require.Equal(t, 23, db.QueryCount())
+	require.Equal(t, 34, db.QueryCount())
 }
 
 func TestCheckpointATX(t *testing.T) {
