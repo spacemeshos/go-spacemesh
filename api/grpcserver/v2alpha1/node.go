@@ -2,12 +2,12 @@ package v2alpha1
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"google.golang.org/grpc"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -15,7 +15,7 @@ const (
 	Node = "node_v2alpha1"
 )
 
-// nodePeerCounter is an api to get current peer count
+// nodePeerCounter is an api to get current peer count.
 type nodePeerCounter interface {
 	PeerCount() uint64
 }
