@@ -12,6 +12,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5797](https://github.com/spacemeshos/go-spacemesh/pull/5797) Improve logging around ATX building process.
 
+* [#5803](https://github.com/spacemeshos/go-spacemesh/pull/5803) Fixed PoST verifiers autoscaling for 1:N setups.
+
 ### Features
 
 ## Release v1.4.4
