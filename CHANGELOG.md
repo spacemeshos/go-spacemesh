@@ -2,6 +2,39 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Highlights
+
+### Improvements
+
+* [#5796](https://github.com/spacemeshos/go-spacemesh/pull/5796) Reject p2p messages containing invalid malfeasance proofs.
+
+### Features
+
+## Release v1.4.4
+
+### Improvements
+
+* [#5777](https://github.com/spacemeshos/go-spacemesh/pull/5777) Adjusted GRPC keepalive parameters on node to allow
+  pings every 60 seconds and send keepalive pings every 10 minutes if no activity from the client is observed.
+
+## Release v1.4.3
+
+### Improvements
+
+* [#5753](https://github.com/spacemeshos/go-spacemesh/pull/5753) Fix for a possible segmentation fault in setups with
+  remote post services when an identity does their initial proof.
+
+* [#5755](https://github.com/spacemeshos/go-spacemesh/pull/5755) improve efficiency of downloading and applying blocks
+  after ballots were counted.
+
+* [#5761](https://github.com/spacemeshos/go-spacemesh/pull/5761) don't interrupt sync if ballots in a layer were
+  ignored or rejected.
+
+* [#5762](https://github.com/spacemeshos/go-spacemesh/pull/5762) Fix a bug where the node could get stuck in a loop
+  when trying to fetch a block that is not in the mesh.
+
 ## Release v1.4.2
 
 ### Improvements
@@ -35,6 +68,11 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5562](https://github.com/spacemeshos/go-spacemesh/pull/5562) Add streaming mode for fetcher. This should lessen
   GC pressure during sync
+
+* [#5684](https://github.com/spacemeshos/go-spacemesh/pull5684) Use separate fetcher protocol for active sets.
+  This enables separate pacers for active set requests
+
+* [#5718](https://github.com/spacemeshos/go-spacemesh/pull/5718) Sync malfeasance proofs continuously.
 
 ## Release v1.4.0
 

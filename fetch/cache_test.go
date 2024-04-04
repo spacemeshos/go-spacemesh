@@ -45,7 +45,7 @@ func TestAdd(t *testing.T) {
 		}()
 		wg.Wait()
 		hashPeers, _ := getCachedEntry(cache, hash)
-		require.Equal(t, 3, len(hashPeers))
+		require.Len(t, hashPeers, 3)
 	})
 	t.Run("2Hashes1Peer", func(t *testing.T) {
 		cache := NewHashPeersCache(10)
@@ -64,9 +64,9 @@ func TestAdd(t *testing.T) {
 		}()
 		wg.Wait()
 		hash1Peers, _ := getCachedEntry(cache, hash1)
-		require.Equal(t, 1, len(hash1Peers))
+		require.Len(t, hash1Peers, 1)
 		hash2Peers, _ := getCachedEntry(cache, hash2)
-		require.Equal(t, 1, len(hash2Peers))
+		require.Len(t, hash2Peers, 1)
 	})
 }
 
@@ -138,11 +138,11 @@ func TestRegisterPeerHashes(t *testing.T) {
 		peer1 := p2p.Peer("test_peer_1")
 		cache.RegisterPeerHashes(peer1, []types.Hash32{hash1, hash2, hash3})
 		hash1Peers, _ := getCachedEntry(cache, hash1)
-		require.Equal(t, 1, len(hash1Peers))
+		require.Len(t, hash1Peers, 1)
 		hash2Peers, _ := getCachedEntry(cache, hash2)
-		require.Equal(t, 1, len(hash2Peers))
+		require.Len(t, hash2Peers, 1)
 		hash3Peers, _ := getCachedEntry(cache, hash3)
-		require.Equal(t, 1, len(hash3Peers))
+		require.Len(t, hash3Peers, 1)
 	})
 }
 

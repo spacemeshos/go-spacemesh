@@ -41,7 +41,7 @@ func main() {
 			&cli.StringFlag{
 				Name:     "to",
 				Aliases:  []string{"t"},
-				Usage:    "The `data` folder to write the merged node to. Can be an existing remote node or an empty folder.",
+				Usage:    "The `data` folder to write the merged node to. Can be an existing remote node or empty.",
 				Required: true,
 			},
 		},

@@ -55,12 +55,14 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 
 	// used to make sure we only resync from the same peer once during each run.
 	resyncPeers := make(map[p2p.Peer]struct{})
-	for lid := start; lid <= s.getLastSyncedLayer(); lid++ {
+	last := s.getLastSyncedLayer()
+	for lid := start; lid <= last; lid++ {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
+		current := s.ticker.CurrentLayer()
 
 		// layers should be processed in order. once we skip one layer, there is no point
 		// continuing with later layers. return on error
@@ -77,49 +79,33 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 			}
 		}
 
-		if opinions, certs, err := s.layerOpinions(ctx, lid); err == nil {
-			if len(certs) > 0 {
-				if err = s.adopt(ctx, lid, certs); err != nil {
-					s.logger.WithContext(ctx).
-						With().
-						Warning("failed to adopt peer opinions", lid, log.Err(err))
-				}
-			}
-			if s.IsSynced(ctx) && !s.cfg.DisableMeshAgreement {
-				if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil &&
-					errors.Is(err, errMeshHashDiverged) {
-					s.logger.WithContext(ctx).
-						With().
-						Debug("mesh hash diverged, trying to reach agreement",
-							lid,
-							log.Stringer("diverged", lid.Sub(1)),
-						)
-					if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
-						s.logger.WithContext(ctx).
-							With().
-							Debug("failed to reach mesh agreement with peers",
-								lid,
-								log.Err(err),
-							)
-						hashResolve.Inc()
+		// certificate is effective only within hare distance, outside it we don't vote according to other rules.
+		certEffective := lid.Add(s.cfg.SyncCertDistance).After(current)
+		if certEffective {
+			s.processLayerOpinions(ctx, lid, resyncPeers)
+		}
+		// there is no point in tortoise counting after every single layer, in fact it is wasteful.
+		// we periodically invoke counting to evict executed layers.
+		if lid.Uint32()%(uint32(max(float64(types.GetLayersPerEpoch())*s.cfg.TallyVotesFrequency, 1))) == 0 ||
+			lid == last || s.stateErr.Load() {
+			err1 := s.mesh.ProcessLayer(ctx, lid)
+			if err1 != nil {
+				missing := &mesh.MissingBlocksError{}
+				if errors.As(err1, &missing) {
+					// we try once as we cannot assume that all blocks that reported as missing are valid
+					// we need to continue download layers, as they may be deemed as invalid after counting more votes
+					if err := s.dataFetcher.GetBlocks(ctx, missing.Blocks); err == nil {
+						err1 = s.mesh.ProcessLayer(ctx, lid)
 					} else {
-						hashResolveFail.Inc()
+						s.logger.With().Debug("failed to download blocks", log.Err(err))
 					}
+				} else {
+					s.logger.With().Warning("failed to process layer", log.Context(ctx), lid, log.Err(err1))
 				}
 			}
+			s.stateErr.Store(err1 != nil)
 		}
-		// even if it fails to fetch opinions, we still go ahead to ProcessLayer so that the tortoise
-		// has a chance to count ballots and form its own opinions
-		if err := s.mesh.ProcessLayer(ctx, lid); err != nil {
-			if !errors.Is(err, mesh.ErrMissingBlock) {
-				s.logger.WithContext(ctx).
-					With().
-					Warning("mesh failed to process layer from sync", lid, log.Err(err))
-			}
-			s.stateErr.Store(true)
-		} else {
-			s.stateErr.Store(false)
-		}
+
 	}
 	s.logger.WithContext(ctx).With().Debug("end of state sync",
 		log.Bool("state_synced", s.stateSynced()),
@@ -129,6 +115,40 @@ func (s *Syncer) processLayers(ctx context.Context) error {
 		log.Stringer("last_synced", s.getLastSyncedLayer()),
 	)
 	return nil
+}
+
+func (s *Syncer) processLayerOpinions(ctx context.Context, lid types.LayerID, resyncPeers map[p2p.Peer]struct{}) {
+	if opinions, certs, err := s.layerOpinions(ctx, lid); err == nil {
+		if len(certs) > 0 {
+			if err = s.adopt(ctx, lid, certs); err != nil {
+				s.logger.WithContext(ctx).
+					With().
+					Warning("failed to adopt peer opinions", lid, log.Err(err))
+			}
+		}
+		if s.IsSynced(ctx) && !s.cfg.DisableMeshAgreement {
+			if err = s.checkMeshAgreement(ctx, lid, opinions); err != nil &&
+				errors.Is(err, errMeshHashDiverged) {
+				s.logger.WithContext(ctx).
+					With().
+					Debug("mesh hash diverged, trying to reach agreement",
+						lid,
+						log.Stringer("diverged", lid.Sub(1)),
+					)
+				if err = s.ensureMeshAgreement(ctx, lid, opinions, resyncPeers); err != nil {
+					s.logger.WithContext(ctx).
+						With().
+						Debug("failed to reach mesh agreement with peers",
+							lid,
+							log.Err(err),
+						)
+					hashResolve.Inc()
+				} else {
+					hashResolveFail.Inc()
+				}
+			}
+		}
+	}
 }
 
 func (s *Syncer) needCert(ctx context.Context, lid types.LayerID) (bool, error) {
@@ -234,10 +254,10 @@ func (s *Syncer) certCutoffLayer() types.LayerID {
 
 func (s *Syncer) adoptCert(ctx context.Context, lid types.LayerID, cert *types.Certificate) error {
 	if err := s.certHandler.HandleSyncedCertificate(ctx, lid, cert); err != nil {
-		return fmt.Errorf("opnions adopt cert: %w", err)
+		return fmt.Errorf("opinions adopt cert: %w", err)
 	}
-	// it is safer to ask for block after certificate was downloaded, as we know that we ask for block signed by committee
-	// so we should not reorder this
+	// it is safer to ask for block after certificate was downloaded, as we know that we ask for block signed by
+	// committee so we should not reorder this
 	if cert.BlockID != types.EmptyBlockID {
 		if err := s.dataFetcher.GetBlocks(ctx, []types.BlockID{cert.BlockID}); err != nil {
 			return fmt.Errorf("fetch block in cert %v: %w", cert.BlockID, err)

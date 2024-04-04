@@ -187,7 +187,7 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 	}
 }
 
-// Smeshing returns true iff atx builder is smeshing.
+// Smeshing returns true if atx builder is smeshing.
 func (b *Builder) Smeshing() bool {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -324,6 +324,12 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge)
 	if err != nil {
 		return fmt.Errorf("post execution: %w", err)
+	}
+	if postInfo.Nonce == nil {
+		b.log.Error("initial PoST is invalid: missing VRF nonce. Check your PoST data",
+			log.ZShortStringer("smesherID", nodeID),
+		)
+		return errors.New("nil VRF nonce")
 	}
 	initialPost := nipost.Post{
 		Nonce:   post.Nonce,

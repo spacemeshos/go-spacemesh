@@ -189,7 +189,7 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			}
 			f.mHashS.EXPECT().
 				Request(gomock.Any(), peer, gomock.Any()).
-				DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte) ([]byte, error) {
+				DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte, extraProtocols ...string) ([]byte, error) {
 					if tc.nErr != nil {
 						return nil, tc.nErr
 					}
@@ -254,7 +254,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	h3 := types.RandomHash()
 	f.mHashS.EXPECT().
 		Request(gomock.Any(), peer, gomock.Any()).
-		DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte) ([]byte, error) {
+		DoAndReturn(func(_ context.Context, _ p2p.Peer, req []byte, extraProtocols ...string) ([]byte, error) {
 			var rb RequestBatch
 			err := codec.Decode(req, &rb)
 			require.NoError(t, err)
@@ -359,7 +359,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(h.GetPeers()))
+	require.Len(t, h.GetPeers(), 1)
 
 	// This handler returns a ResponseBatch with an empty response that will fail validation on the remote peer
 	badPeerHandler := func(_ context.Context, data []byte) ([]byte, error) {
@@ -411,7 +411,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	// Verify that connections remain up
 	for i := 0; i < 5; i++ {
 		conns := h.Network().ConnsToPeer(badPeerHost.ID())
-		require.Equal(t, 1, len(conns))
+		require.Len(t, conns, 1)
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -442,5 +442,5 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return len(h.Host.Network().ConnsToPeer(badPeerHost.ID())) == 0
 	}, time.Second*15, time.Millisecond*200)
-	require.Equal(t, 0, len(h.GetPeers()))
+	require.Empty(t, h.GetPeers())
 }

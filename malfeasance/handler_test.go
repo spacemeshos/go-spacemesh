@@ -219,7 +219,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
@@ -441,7 +441,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -473,7 +473,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
@@ -522,7 +522,9 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	t.Run("unknown identity", func(t *testing.T) {
 		hp := hareProof
 		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
+		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
+		hp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -534,7 +536,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		}
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -543,13 +545,12 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 
 	createIdentity(t, db, sig)
 
-	t.Run("same msg hash", func(t *testing.T) {
-		msgHash := types.RandomHash()
+	t.Run("invalid signature", func(t *testing.T) {
 		hp := hareProof
-		hp.Messages[0].InnerMsg.MsgHash = msgHash
-		hp.Messages[1].InnerMsg.MsgHash = msgHash
 		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
+		hp.Messages[0].SmesherID = sig.NodeID()
+		hp.Messages[1].Signature = types.RandomEdSignature()
+		hp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -561,7 +562,35 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		}
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
+
+		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Nil(t, malProof)
+	})
+
+	t.Run("same msg hash", func(t *testing.T) {
+		msgHash := types.RandomHash()
+		hp := hareProof
+		hp.Messages[0].InnerMsg.MsgHash = msgHash
+		hp.Messages[1].InnerMsg.MsgHash = msgHash
+		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
+		hp.Messages[0].SmesherID = sig.NodeID()
+		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
+		hp.Messages[1].SmesherID = sig.NodeID()
+
+		gossip := &types.MalfeasanceGossip{
+			MalfeasanceProof: types.MalfeasanceProof{
+				Layer: lid,
+				Proof: types.Proof{
+					Type: types.HareEquivocation,
+					Data: &hp,
+				},
+			},
+		}
+		data, err := codec.Encode(gossip)
+		require.NoError(t, err)
+		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -572,7 +601,9 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp := hareProof
 		hp.Messages[1].InnerMsg.Layer = lid.Sub(1)
 		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
+		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
+		hp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -584,7 +615,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		}
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -595,7 +626,9 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp := hareProof
 		hp.Messages[0].InnerMsg.Round = hp.Messages[1].InnerMsg.Round + 1
 		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
+		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
+		hp.Messages[1].SmesherID = sig.NodeID()
 		gossip := &types.MalfeasanceGossip{
 			MalfeasanceProof: types.MalfeasanceProof{
 				Layer: lid,
@@ -607,7 +640,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		}
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -631,14 +664,14 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		}
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, malProof)
 	})
 
-	t.Run("invalid hare eligibility", func(t *testing.T) {
+	t.Run("hare eligibility is deprecated", func(t *testing.T) {
 		hp := hareProof
 		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
@@ -656,7 +689,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		}
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
 	})
 
 	t.Run("valid", func(t *testing.T) {
@@ -677,7 +710,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
@@ -709,72 +742,10 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
 
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.Equal(t, nil, h.HandleMalfeasanceProof(context.Background(), "self", data))
+		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "self", data))
 		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.NoError(t, err)
 		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
-	})
-}
-
-func TestHandler_HandleMalfeasanceProof_validateHare(t *testing.T) {
-	db := sql.InMemory()
-	lg := logtest.New(t)
-	ctrl := gomock.NewController(t)
-	trt := malfeasance.NewMocktortoise(ctrl)
-	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
-
-	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
-		lg,
-		"self",
-		[]types.NodeID{types.RandomNodeID()},
-		signing.NewEdVerifier(),
-		trt,
-		postVerifier,
-	)
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	createIdentity(t, db, sig)
-	lid := types.LayerID(11)
-
-	bp := types.BallotProof{
-		Messages: [2]types.BallotProofMsg{
-			{
-				InnerMsg: types.BallotMetadata{
-					Layer:   lid,
-					MsgHash: types.RandomHash(),
-				},
-			},
-			{
-				InnerMsg: types.BallotMetadata{
-					Layer:   lid,
-					MsgHash: types.RandomHash(),
-				},
-			},
-		},
-	}
-	bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
-	bp.Messages[0].SmesherID = sig.NodeID()
-	bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
-	bp.Messages[1].SmesherID = sig.NodeID()
-	gossip := &types.MalfeasanceGossip{
-		MalfeasanceProof: types.MalfeasanceProof{
-			Layer: lid,
-			Proof: types.Proof{
-				Type: types.MultipleBallots,
-				Data: &bp,
-			},
-		},
-	}
-
-	t.Run("different node id", func(t *testing.T) {
-		gs := gossip
-		gs.Eligibility = &types.HareEligibilityGossip{
-			NodeID: types.RandomNodeID(),
-		}
-		data, err := codec.Encode(gs)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
 	})
 }
 
@@ -1142,7 +1113,8 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 			},
 		}
 
-		postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("invalid"))
+		postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errors.New("invalid"))
 		trt.EXPECT().OnMalfeasance(sig.NodeID())
 		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
 		require.NoError(t, err)
@@ -1181,7 +1153,7 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 
 		postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
-		require.Error(t, err)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
 		malicious, err := identities.IsMalicious(db, sig.NodeID())
 		require.NoError(t, err)
@@ -1219,6 +1191,7 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 		}
 
 		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 		require.ErrorContains(t, err, "invalid signature")
 
 		malicious, err := identities.IsMalicious(db, sig.NodeID())

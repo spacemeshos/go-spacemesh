@@ -350,8 +350,11 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 			}
 			if err := pb.build(ctx, current); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
-					pb.logger.With().
-						Debug("signer is not active in epoch", log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err))
+					pb.logger.With().Debug("signer is not active in epoch",
+						log.Context(ctx),
+						log.Uint32("lid", current.Uint32()),
+						log.Err(err),
+					)
 				} else {
 					pb.logger.With().Warning("failed to build proposal",
 						log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err),
@@ -674,7 +677,11 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 				)
 			} else {
 				ss.latency.publish = time.Now()
-				ss.log.With().Info("proposal created", log.Context(ctx), log.Inline(proposal), log.Object("latency", &ss.latency))
+				ss.log.With().Info("proposal created",
+					log.Context(ctx),
+					log.Inline(proposal),
+					log.Object("latency", &ss.latency),
+				)
 				proposalBuild.Observe(ss.latency.total().Seconds())
 				events.EmitProposal(ss.signer.NodeID(), lid, proposal.ID())
 				events.ReportProposal(events.ProposalCreated, proposal)

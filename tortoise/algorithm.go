@@ -16,10 +16,11 @@ import (
 
 // Config for protocol parameters.
 type Config struct {
-	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare output lookback distance
-	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
-	WindowSize uint32 `mapstructure:"tortoise-window-size"` // size of the tortoise sliding window (in layers)
+	Hdist                uint32 `mapstructure:"tortoise-hdist"`       // hare output lookback distance
+	Zdist                uint32 `mapstructure:"tortoise-zdist"`       // hare result wait distance
+	WindowSize           uint32 `mapstructure:"tortoise-window-size"` // size of the tortoise sliding window (in layers)
+	HistoricalWindowSize []WindowSizeInterval
 	// ignored if candidate for base ballot has more than max exceptions
 	MaxExceptions int `mapstructure:"tortoise-max-exceptions"`
 	// number of layers to delay votes for blocks with bad beacon values during self-healing. ideally a full epoch.
@@ -36,6 +37,12 @@ type Config struct {
 	LayerSize      uint32
 }
 
+type WindowSizeInterval struct {
+	Start  types.LayerID
+	End    types.LayerID
+	Window uint32
+}
+
 // DefaultConfig for Tortoise.
 func DefaultConfig() Config {
 	return Config{
@@ -46,6 +53,24 @@ func DefaultConfig() Config {
 		BadBeaconVoteDelayLayers: 0,
 		MaxExceptions:            50 * 100, // 100 layers of average size
 	}
+}
+
+func (c *Config) WindowSizeLayers(applied types.LayerID) types.LayerID {
+	for _, interval := range c.HistoricalWindowSize {
+		if applied >= interval.Start && applied <= interval.End {
+			return types.LayerID(interval.Window)
+		}
+	}
+	return types.LayerID(c.WindowSize)
+}
+
+func (c *Config) WindowSizeEpochs(applied types.LayerID) types.EpochID {
+	layers := c.WindowSizeLayers(applied)
+	quo := layers / types.LayerID(types.GetLayersPerEpoch())
+	if layers%types.LayerID(types.GetLayersPerEpoch()) != 0 {
+		quo++
+	}
+	return types.EpochID(quo)
 }
 
 // Tortoise is a thread safe verifying tortoise wrapper, it just locks all actions.

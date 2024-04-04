@@ -27,6 +27,7 @@ var (
 	ErrKnownProof    = errors.New("known proof")
 	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
+	errInvalidProof  = fmt.Errorf("%w: invalid proof", pubsub.ErrValidationReject)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
@@ -186,19 +187,17 @@ func Validate(
 		proof := p.MalfeasanceProof.Proof.Data.(*types.InvalidPostIndexProof) // guaranteed to work by scale func
 		nodeID, err = validateInvalidPostIndex(ctx, logger, cdb, edVerifier, postVerifier, proof)
 	default:
-		return nodeID, errors.New("unknown malfeasance type")
+		return nodeID, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
 	}
 
-	if err != nil {
-		if !errors.Is(err, ErrKnownProof) {
-			logger.WithContext(ctx).With().Warning("failed to validate malfeasance proof",
-				log.Inline(p),
-				log.Err(err),
-			)
-		}
+	switch {
+	case err == nil:
+		return nodeID, nil
+	case errors.Is(err, ErrKnownProof):
 		return nodeID, err
 	}
-	return nodeID, nil
+	logger.WithContext(ctx).With().Warning("malfeasance proof failed validation", log.Inline(p), log.Err(err))
+	return nodeID, fmt.Errorf("%w: %v", errInvalidProof, err)
 }
 
 func updateMetrics(tp types.Proof) {

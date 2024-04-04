@@ -13,8 +13,8 @@ import (
 
 type requester interface {
 	Run(context.Context) error
-	Request(context.Context, p2p.Peer, []byte) ([]byte, error)
-	StreamRequest(context.Context, p2p.Peer, []byte, server.StreamRequestCallback) error
+	Request(context.Context, p2p.Peer, []byte, ...string) ([]byte, error)
+	StreamRequest(context.Context, p2p.Peer, []byte, server.StreamRequestCallback, ...string) error
 }
 
 // The ValidatorFunc type is an adapter to allow the use of functions as

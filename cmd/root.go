@@ -58,8 +58,8 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
 	flagSet.Uint64Var(&cfg.TickSize, "tick-size", cfg.TickSize, "number of poet leaves in a single tick")
-	flagSet.StringVar(&cfg.ProfilerURL, "profiler-url",
-		cfg.ProfilerURL, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
+	flagSet.StringVar(&cfg.ProfilerURL, "profiler-url", cfg.ProfilerURL,
+		"send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
 	flagSet.StringVar(&cfg.ProfilerName, "profiler-name",
 		cfg.ProfilerName, "the name to use when sending profiles")
 
@@ -107,7 +107,7 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.P2P.LowPeers, "low watermark for the number of connections")
 	flagSet.IntVar(&cfg.P2P.HighPeers, "high-peers",
 		cfg.P2P.HighPeers,
-		"high watermark for the number of connections; once reached, connections are pruned until low watermark remains")
+		"high watermark for number of connections; once reached, connections are pruned until low watermark remains")
 	flagSet.IntVar(&cfg.P2P.MinPeers, "min-peers",
 		cfg.P2P.MinPeers, "actively search for peers until you get this much")
 	flagSet.StringSliceVar(&cfg.P2P.Bootnodes, "bootnodes",
@@ -146,8 +146,8 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.TIME.Peersync.RoundRetryInterval, "how long to wait for a round to complete")
 	flagSet.DurationVar(&cfg.TIME.Peersync.MaxClockOffset, "peersync-max-clock-offset",
 		cfg.TIME.Peersync.MaxClockOffset, "max difference between local clock and peers clock")
-	flagSet.IntVar(&cfg.TIME.Peersync.MaxOffsetErrors, "peersync-max-offset-errors",
-		cfg.TIME.Peersync.MaxOffsetErrors, "the node will exit when max number of consecutive offset errors will be reached")
+	flagSet.IntVar(&cfg.TIME.Peersync.MaxOffsetErrors, "peersync-max-offset-errors", cfg.TIME.Peersync.MaxOffsetErrors,
+		"node will exit when max number of consecutive offset errors has been reached")
 	flagSet.IntVar(&cfg.TIME.Peersync.RequiredResponses, "peersync-required-responses",
 		cfg.TIME.Peersync.RequiredResponses, "min number of clock samples fetched from others to verify time")
 
@@ -187,7 +187,7 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.IntVar(&cfg.Beacon.Kappa, "beacon-kappa",
 		cfg.Beacon.Kappa, "Security parameter (for calculating ATX threshold)")
 	flagSet.Var((*types.RatVar)(&cfg.Beacon.Q), "beacon-q",
-		"Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
+		"Ratio of dishonest spacetime (for calculating ATX threshold). Should be a string representing a rational.")
 	flagSet.Uint32Var((*uint32)(&cfg.Beacon.RoundsNumber), "beacon-rounds-number",
 		uint32(cfg.Beacon.RoundsNumber), "Amount of rounds in every epoch")
 	flagSet.DurationVar(&cfg.Beacon.GracePeriodDuration, "beacon-grace-period-duration",

@@ -295,7 +295,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	oracleLatency.Observe(time.Since(start).Seconds())
 	if g == grade0 {
 		oracleError.Inc()
-		return fmt.Errorf("zero grade")
+		return errors.New("zero grade")
 	}
 	start = time.Now()
 	input := &input{
@@ -321,7 +321,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	}
 	if !gossip {
 		droppedMessages.Inc()
-		return fmt.Errorf("dropped by graded gossip")
+		return errors.New("dropped by graded gossip")
 	}
 	expected := h.nodeclock.LayerToTime(msg.Layer).Add(h.config.roundStart(msg.IterRound))
 	metrics.ReportMessageLatency(h.config.ProtocolName, msg.Round.String(), time.Since(expected))
@@ -453,7 +453,7 @@ func (h *Hare) run(session *session) error {
 			}
 			if out.terminated {
 				if !result {
-					return fmt.Errorf("terminated without result")
+					return errors.New("terminated without result")
 				}
 				return nil
 			}

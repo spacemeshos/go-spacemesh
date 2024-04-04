@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -54,10 +55,11 @@ func TestReplayMainnet(t *testing.T) {
 	db, err := sql.Open(fmt.Sprintf("file:%s?mode=ro", *dbpath))
 	require.NoError(t, err)
 
+	applied, err := layers.GetLastApplied(db)
+	require.NoError(t, err)
+
 	start := time.Now()
-	atxsdata, err := atxsdata.Warm(db,
-		atxsdata.WithCapacityFromLayers(cfg.Tortoise.WindowSize, cfg.LayersPerEpoch),
-	)
+	atxsdata, err := atxsdata.Warm(db, cfg.Tortoise.WindowSizeEpochs(applied))
 	require.NoError(t, err)
 	trtl, err := tortoise.Recover(
 		context.Background(),

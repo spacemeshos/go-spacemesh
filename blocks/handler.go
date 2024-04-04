@@ -112,7 +112,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 // ValidateRewards syntactically validates rewards.
 func ValidateRewards(rewards []types.AnyReward) error {
 	if len(rewards) == 0 {
-		return fmt.Errorf("empty rewards")
+		return errors.New("empty rewards")
 	}
 	unique := map[types.ATXID]struct{}{}
 	for _, reward := range rewards {

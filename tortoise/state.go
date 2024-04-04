@@ -482,7 +482,9 @@ func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types
 	}
 	// FIXME(dshulyak) this needs to be ignored when recovering from disk
 	// if from <= evicted {
-	// 	return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)", from, evicted)
+	// 	return votes{}, 0, fmt.Errorf("votes for a block in the layer (%d) outside the window (evicted %d)",
+	// 	 from, evicted,
+	// 	)
 	// }
 
 	// inherit opinion from the base ballot by copying votes

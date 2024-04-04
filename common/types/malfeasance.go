@@ -159,7 +159,7 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 
 type MalfeasanceGossip struct {
 	MalfeasanceProof
-	Eligibility *HareEligibilityGossip // optional, only useful in live hare rounds
+	Eligibility *HareEligibilityGossip // deprecated - to be removed in the next version
 }
 
 func (mg *MalfeasanceGossip) MarshalLogObject(encoder log.ObjectEncoder) error {

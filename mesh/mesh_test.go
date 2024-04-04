@@ -489,6 +489,7 @@ func TestProcessLayer(t *testing.T) {
 					),
 					executed: map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
 					applied:  map[types.LayerID]types.BlockID{start: idg("1"), start + 1: idg("2")},
+					err:      "missing blocks: 3300000000",
 				},
 				{
 					updates: rlayers(

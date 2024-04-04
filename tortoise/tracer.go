@@ -155,7 +155,7 @@ func (c *ConfigTrace) New() traceEvent {
 func (c *ConfigTrace) Run(r *traceRunner) error {
 	types.SetLayersPerEpoch(c.EpochSize)
 	types.SetEffectiveGenesis(c.EffectiveGenesis)
-	r.atxdata = atxsdata.New(atxsdata.WithCapacityFromLayers(c.WindowSize, c.EpochSize))
+	r.atxdata = atxsdata.New()
 	trt, err := New(
 		r.atxdata,
 		append(r.opts, WithConfig(Config{
