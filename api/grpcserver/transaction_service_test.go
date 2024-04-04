@@ -106,7 +106,6 @@ func TestTransactionService_StreamResults(t *testing.T) {
 				},
 			},
 		} {
-			tc := tc
 			t.Run(tc.desc, func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -286,7 +285,6 @@ func TestParseTransactions(t *testing.T) {
 			expectParseError(codes.InvalidArgument, "signature is invalid"),
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			resp, err := client.ParseTransaction(context.Background(), &pb.ParseTransactionRequest{
 				Transaction: tc.tx,

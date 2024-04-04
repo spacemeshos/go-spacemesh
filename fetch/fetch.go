@@ -406,7 +406,6 @@ func (f *Fetch) Start() error {
 			return nil
 		})
 		for _, srv := range f.servers {
-			srv := srv
 			f.eg.Go(func() error {
 				return srv.Run(f.shutdownCtx)
 			})
@@ -554,10 +553,9 @@ func (f *Fetch) receiveResponse(data []byte, batch *batchInfo) {
 			continue
 		}
 
-		rsp := resp
 		f.eg.Go(func() error {
 			// validation fetch data recursively. offload to another goroutine
-			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, rsp.Hash, batch.peer, rsp.Data))
+			f.hashValidationDone(resp.Hash, req.validator(req.ctx, resp.Hash, batch.peer, resp.Data))
 			return nil
 		})
 		delete(batchMap, resp.Hash)
@@ -659,9 +657,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 
 	peer2batches := f.organizeRequests(requests)
 	for peer, batches := range peer2batches {
-		peer := peer
 		for _, batch := range batches {
-			batch := batch
 			go func() {
 				if f.cfg.Streaming {
 					if err := f.streamBatch(peer, batch); err != nil {

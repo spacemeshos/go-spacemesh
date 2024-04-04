@@ -52,7 +52,6 @@ func testTransactions(
 	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := 0; i < cl.Total(); i++ {
-		i := i
 		client := cl.Client(i)
 		watchTransactionResults(
 			tctx.Context,

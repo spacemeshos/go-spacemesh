@@ -520,7 +520,6 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active().round(commit).ref("a", "b"),
 		),
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
 				proto  *protocol

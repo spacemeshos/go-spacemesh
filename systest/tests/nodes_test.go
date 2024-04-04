@@ -69,7 +69,6 @@ func TestAddNodes(t *testing.T) {
 
 	created := make([][]*pb.Proposal, cl.Total())
 	for i := 0; i < cl.Total(); i++ {
-		i := i
 		client := cl.Client(i)
 		watchProposals(
 			tctx,
@@ -162,7 +161,6 @@ func TestFailedNodes(t *testing.T) {
 		hashes[i] = map[uint32]string{}
 	}
 	for i := 0; i < cl.Total()-failed; i++ {
-		i := i
 		client := cl.Client(i)
 		watchLayers(
 			ctx,

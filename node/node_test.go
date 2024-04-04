@@ -1187,7 +1187,6 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 
 	<-app.Started()
 	for _, signer := range app.signers {
-		signer := signer
 		mgr, err := activation.NewPostSetupManager(
 			cfg.POST,
 			logger.Zap(),

@@ -293,7 +293,6 @@ func (d *Discovery) connect(ctx context.Context, eg *errgroup.Group, nodes []pee
 	conCtx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 	for _, boot := range nodes {
-		boot := boot
 		if boot.ID == d.h.ID() {
 			d.logger.Debug("not dialing self")
 			continue
@@ -427,7 +426,7 @@ func (d *Discovery) advertiseNS(ctx context.Context, ns string, active func() bo
 
 func (d *Discovery) discoverPeers(ctx context.Context) error {
 	for p := range d.findPeersContinuously(ctx, discoveryNS) {
-		wasSuspended := false
+		wasSuspended := false //nolint:copyloopvar
 		for !d.h.NeedPeerDiscovery() {
 			wasSuspended = true
 			d.logger.Info("suspending routing discovery",

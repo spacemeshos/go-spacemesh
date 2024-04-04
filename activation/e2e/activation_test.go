@@ -63,7 +63,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	var eg errgroup.Group
 	i := uint32(1)
 	for _, sig := range signers {
-		sig := sig
 		opts := opts
 		opts.DataDir = t.TempDir()
 		opts.NumUnits = min(i*2, cfg.MaxNumUnits)

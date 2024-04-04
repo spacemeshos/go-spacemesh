@@ -80,7 +80,6 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	stateCh := make(chan *stateUpdate, uint32(cl.Total())*numLayers*10)
 	tctx.Log.Debug("listening to state hashes...")
 	for i := 0; i < cl.Total(); i++ {
-		i := i
 		client := cl.Client(i)
 		watchStateHashes(ctx, eg, client, tctx.Log.Desugar(), func(state *pb.GlobalStateStreamResponse) (bool, error) {
 			data := state.Datum.Datum

@@ -1581,7 +1581,6 @@ func TestWaitPositioningAtx(t *testing.T) {
 		{"wait", 200 * time.Millisecond, 0, 2},
 		{"round started", 0, 0, 3},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{
 				PhaseShift:  tc.shift,

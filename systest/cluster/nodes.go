@@ -549,7 +549,6 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 		)
 	}
 	for i := from; i < to; i++ {
-		i := i
 		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
 		copy(finalFlags, cfg.flags)
 		if !cfg.noDefaultPoets {
@@ -623,7 +622,6 @@ func deployRemoteNodes(ctx *testcontext.Context, from, to int,
 		)
 	}
 	for i := from; i < to; i++ {
-		i := i
 		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
 		copy(finalFlags, cfg.flags)
 		if !cfg.noDefaultPoets {

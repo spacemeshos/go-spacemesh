@@ -253,7 +253,6 @@ func BenchmarkWeightForSet(b *testing.B) {
 		{1_000_000, 400_000},
 		{1_000_000, 1_000_000},
 	} {
-		bc := bc
 		b.Run(fmt.Sprintf("size=%d set_size=%d", bc.size, bc.setSize), func(b *testing.B) {
 			benchmarkkWeightForSet(b, bc.size, bc.setSize)
 		})

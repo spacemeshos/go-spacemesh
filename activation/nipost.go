@@ -411,8 +411,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	nodeID := signer.NodeID()
 	g, ctx := errgroup.WithContext(ctx)
 	errChan := make(chan error, len(nb.poetProvers))
-	for _, poetClient := range nb.poetProvers {
-		client := poetClient
+	for _, client := range nb.poetProvers {
 		g.Go(func() error {
 			errChan <- nb.submitPoetChallenge(ctx, nodeID, deadline, client, prefix, challenge, signature)
 			return nil

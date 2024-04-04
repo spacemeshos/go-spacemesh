@@ -365,7 +365,6 @@ func Test_run(t *testing.T) {
 			expNumTxs:  numTXs,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			tg := createTestGenerator(t)
 			tg.cfg.BlockGasLimit = tc.gasLimit

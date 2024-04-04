@@ -24,7 +24,6 @@ func TestGossip(t *testing.T) {
 	received := make(chan []byte, count)
 
 	for _, h := range mesh.Hosts() {
-		h := h
 		ps, err := New(ctx, logtest.New(t), h, Config{Flood: true, IsBootnode: true, QueueSize: 1000, Throttle: 1000})
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)

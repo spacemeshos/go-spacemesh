@@ -714,7 +714,6 @@ func (c *Cluster) WaitAllTimeout(timeout time.Duration) error {
 func (c *Cluster) CloseClients() {
 	var eg errgroup.Group
 	for _, client := range c.clients {
-		client := client
 		eg.Go(func() error {
 			client.Close()
 			return nil
@@ -826,7 +825,6 @@ func ExtractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 	)
 	defer cancel()
 	for i := range nodes {
-		i := i
 		n := nodes[i]
 		eg.Go(func() error {
 			ip, err := n.Resolve(ctx)

@@ -67,7 +67,6 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 
 	eg, ctx := errgroup.WithContext(tctx)
 	for i := 0; i < cl.Total(); i++ {
-		i := i
 		client := cl.Client(i)
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
 		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {

@@ -225,7 +225,6 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 
 	var eg errgroup.Group
 	for _, sig := range tab.signers {
-		sig := sig
 		eg.Go(func() error {
 			numUnits := uint32(12)
 

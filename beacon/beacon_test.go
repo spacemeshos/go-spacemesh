@@ -207,7 +207,6 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	}
 	var eg errgroup.Group
 	for _, node := range testNodes {
-		node := node
 		eg.Go(func() error {
 			return node.onNewEpoch(context.Background(), types.EpochID(2))
 		})
@@ -276,7 +275,6 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	}
 	var eg errgroup.Group
 	for _, node := range testNodes {
-		node := node
 		eg.Go(func() error {
 			return node.onNewEpoch(context.Background(), types.EpochID(2))
 		})
@@ -328,7 +326,6 @@ func TestBeacon_NoProposals(t *testing.T) {
 	}
 	var eg errgroup.Group
 	for _, node := range testNodes {
-		node := node
 		eg.Go(func() error {
 			return node.onNewEpoch(context.Background(), types.EpochID(2))
 		})
@@ -674,7 +671,6 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -972,7 +968,6 @@ func TestBeacon_atxThresholdFraction(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1016,7 +1011,6 @@ func TestBeacon_atxThreshold(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1052,7 +1046,6 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1099,7 +1092,6 @@ func TestBeacon_buildProposal(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1133,7 +1125,6 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
