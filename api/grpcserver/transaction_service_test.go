@@ -78,7 +78,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 		gen = fixture.NewTransactionResultGenerator().
 			WithAddresses(2).WithLayers(start, 10)
 		var streamed []*types.TransactionWithResult
-		for i := 0; i < n; i++ {
+		for range n {
 			streamed = append(streamed, gen.Next())
 		}
 
@@ -106,7 +106,6 @@ func TestTransactionService_StreamResults(t *testing.T) {
 				},
 			},
 		} {
-			tc := tc
 			t.Run(tc.desc, func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -149,7 +148,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	)
 	tx, err := db.Tx(ctx)
 	require.NoError(b, err)
-	for i := 0; i < 1_000; i++ {
+	for range 1_000 {
 		rst := gen.Next()
 		for _, addr := range rst.Addresses {
 			count[addr]++
@@ -175,7 +174,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	b.ReportAllocs()
 
 	stats := runtime.MemStats{}
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		stream, err := client.StreamResults(ctx, &pb.TransactionResultsRequest{Address: maxaddr.String()})
 		if err != nil {
 			b.Fatal(err)
@@ -286,7 +285,6 @@ func TestParseTransactions(t *testing.T) {
 			expectParseError(codes.InvalidArgument, "signature is invalid"),
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			resp, err := client.ParseTransaction(context.Background(), &pb.ParseTransactionRequest{
 				Transaction: tc.tx,

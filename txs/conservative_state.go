@@ -2,9 +2,10 @@ package txs
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -107,7 +108,9 @@ func getProposalTXs(
 		return result
 	}
 	// randomly select transactions from the predicted block.
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var seed [32]byte
+	binary.LittleEndian.PutUint64(seed[:], uint64(time.Now().UnixNano()))
+	rng := rand.New(rand.NewChaCha8(seed))
 	return ShuffleWithNonceOrder(logger, rng, numTXs, predictedBlock, byAddrAndNonce)
 }
 

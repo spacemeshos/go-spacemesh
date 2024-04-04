@@ -96,8 +96,6 @@ func TestStepTransactions(t *testing.T) {
 
 	var eg errgroup.Group
 	for i, client := range clients {
-		i := i
-		client := client
 		eg.Go(func() error {
 			rng := rand.New(rand.NewSource(time.Now().Unix() + int64(i)))
 			n := rng.Intn(batch) + batch
@@ -172,7 +170,7 @@ func TestStepReplaceNodes(t *testing.T) {
 
 	var (
 		max      = cctx.ClusterSize * 2 / 10
-		delete   = rand.New(rand.NewSource(time.Now().Unix())).Intn(max) + 1
+		delete   = rand.Intn(max) + 1
 		deleting []*cluster.NodeClient
 	)
 	for i := cl.Bootnodes(); i < cl.Total() && len(deleting) < delete; i++ {
@@ -214,12 +212,7 @@ func TestStepVerifyConsistency(t *testing.T) {
 	// if one of the nodes are slightly behind
 	assert.Eventually(t, func() bool {
 		var eg errgroup.Group
-		for i, node := range synced {
-			if i == 0 {
-				continue
-			}
-			i := i
-			node := node
+		for i, node := range synced[1:] {
 			eg.Go(func() error {
 				layer, err := getLayer(cctx, node, reference.Number.Number)
 				if err != nil {

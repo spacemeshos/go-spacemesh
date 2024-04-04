@@ -79,7 +79,6 @@ func TestRound(t *testing.T) {
 			notReady: true,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			round := tc.round
 			for i, resp := range tc.responses {

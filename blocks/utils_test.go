@@ -2,7 +2,7 @@ package blocks
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"testing"
 
@@ -41,7 +41,7 @@ func Test_getBlockTXs(t *testing.T) {
 	mtxs := make([]*types.MeshTransaction, 0, maxNumTxs*len(accounts))
 	byTid := make(map[types.TransactionID]*types.MeshTransaction)
 	for i := 0; i < numAccounts; i++ {
-		numTxs := rand.Intn(maxNumTxs)
+		numTxs := rand.IntN(maxNumTxs)
 		if numTxs == 0 {
 			numTxs = i + 1
 		}
