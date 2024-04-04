@@ -135,7 +135,7 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 
 func dialGrpc(ctx context.Context, tb testing.TB, cfg Config) *grpc.ClientConn {
 	tb.Helper()
-	conn, err := grpc.DialContext(ctx,
+	conn, err := grpc.NewClient(
 		cfg.PublicListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
