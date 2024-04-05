@@ -46,6 +46,10 @@ func (atxh *ActivationTxHeader) GetWeight() uint64 {
 	return getWeight(uint64(atxh.EffectiveNumUnits), atxh.TickCount)
 }
 
+func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
+	return atxh.PublishEpoch + 1
+}
+
 func getWeight(numUnits, tickCount uint64) uint64 {
 	return safeMul(numUnits, tickCount)
 }

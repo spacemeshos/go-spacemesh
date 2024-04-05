@@ -148,12 +148,6 @@ func (challenge *NIPostChallenge) String() string {
 	)
 }
 
-// TargetEpoch returns the target epoch of the NIPostChallenge. This is the epoch in which the miner is eligible
-// to participate thanks to the ATX.
-func (challenge *NIPostChallenge) TargetEpoch() EpochID {
-	return challenge.PublishEpoch + 1
-}
-
 // InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
 // for validation: the NIPost and the initial Post.
@@ -216,6 +210,12 @@ func NewActivationTx(
 		},
 	}
 	return atx
+}
+
+// TargetEpoch returns the target epoch of the ATX. This is the epoch in which the miner is eligible
+// to participate thanks to the ATX.
+func (atx *ActivationTx) TargetEpoch() EpochID {
+	return atx.PublishEpoch + 1
 }
 
 // Golden returns true if atx is from a checkpoint snapshot.

@@ -209,7 +209,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		require.Equal(t, postGenesisEpoch, atx.NIPostChallenge.TargetEpoch())
+		require.Equal(t, postGenesisEpoch, atx.TargetEpoch())
 		require.Equal(t, types.EmptyATXID, atx.NIPostChallenge.PrevATXID)
 		require.Equal(t, goldenATX, atx.NIPostChallenge.PositioningATX)
 		require.Equal(t, uint64(0), atx.NIPostChallenge.Sequence)
