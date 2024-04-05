@@ -444,7 +444,6 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			"existing NiPoST challenge is stale, resetting state",
 			zap.Uint32("current_epoch", current.Uint32()),
 			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
-			zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
 		)
 		// Reset the state to idle because we won't be building POST until we get a new PoET proof
 		// (typically more than epoch time from now).
@@ -460,7 +459,6 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		logger.Info("loaded NiPoST challenge from local state",
 			zap.Uint32("current_epoch", current.Uint32()),
 			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
-			zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
 		)
 		return challenge, nil
 	}
@@ -585,7 +583,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
 		zap.Object("challenge", challenge),
 	)
-	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime((challenge.TargetEpoch()).FirstLayer()))
+	targetEpoch := challenge.PublishEpoch.Add(1)
+	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime(targetEpoch.FirstLayer()))
 	defer cancel()
 	atx, err := b.createAtx(ctx, sig, challenge)
 	if err != nil {
@@ -633,7 +632,7 @@ func (b *Builder) createAtx(
 ) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
 
-	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge)
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge.PublishEpoch, challenge.Hash())
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
@@ -652,8 +651,8 @@ func (b *Builder) createAtx(
 	b.log.Debug("publication epoch has arrived!", log.ZShortStringer("smesherID", sig.NodeID()))
 
 	if challenge.PublishEpoch < b.layerClock.CurrentLayer().GetEpoch() {
-		if challenge.InitialPost != nil {
-			// initial post is not discarded; don't return ErrATXChallengeExpired
+		if challenge.PrevATXID == types.EmptyATXID {
+			// initial NIPoST challenge is not discarded; don't return ErrATXChallengeExpired
 			return nil, errors.New("atx publish epoch has passed during nipost construction")
 		}
 		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)

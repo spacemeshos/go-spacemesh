@@ -195,7 +195,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		break
 	}
 
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge)
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST

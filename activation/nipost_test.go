@@ -413,7 +413,7 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -455,7 +455,7 @@ func TestPostSetup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -519,7 +519,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 
@@ -542,7 +542,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, errors.New("error"))
 
 	// check that proof ref is not called again
-	nipost, err = nb.BuildNIPost(context.Background(), sig, &challenge)
+	nipost, err = nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 	require.Nil(t, nipost)
 	require.Error(t, err)
 
@@ -567,7 +567,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	)
 
 	// check that proof ref is not called again
-	nipost, err = nb.BuildNIPost(context.Background(), sig, &challenge)
+	nipost, err = nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -661,7 +661,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	require.NoError(t, err)
 
 	// Act
-	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 
 	// Verify
@@ -729,7 +729,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act
-	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 
 	// Verify
@@ -774,7 +774,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -812,7 +812,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]poetClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -836,7 +836,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]poetClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -863,7 +863,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]poetClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -907,7 +907,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		challenge := types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()}
-		nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet round has already started")
 		require.Nil(t, nipost)
@@ -950,7 +950,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		nipost, err := nb.BuildNIPost(context.Background(), sig, challenge)
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet proof for pub epoch")
 		require.Nil(t, nipost)
@@ -997,7 +997,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		err = nipost.UpdatePoetProofRef(db, sig.NodeID(), [32]byte{1, 2, 3}, &types.MerkleProof{})
 		require.NoError(t, err)
 
-		nipost, err := nb.BuildNIPost(context.Background(), sig, challenge)
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "deadline to publish ATX for pub epoch")
 		require.Nil(t, nipost)
@@ -1073,7 +1073,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act
-	nipost, err := nb.BuildNIPost(buildCtx, sig, &challenge)
+	nipost, err := nb.BuildNIPost(buildCtx, sig, challenge.PublishEpoch, challenge.Hash())
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, nipost)
 
@@ -1082,7 +1082,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&types.PoetRound{}, nil)
 
-	nipost, err = nb.BuildNIPost(context.Background(), sig, &challenge)
+	nipost, err = nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 
 	// Verify
@@ -1221,7 +1221,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge)
+			nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 			require.NoError(t, err)
 			require.NotNil(t, nipost)
 		})
