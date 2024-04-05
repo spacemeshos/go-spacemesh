@@ -521,7 +521,7 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=2700000"` // to be in line with `EpochData` in fetch/wire_types.go
+	Set   []ATXID `scale:"max=3500000"` // to be in line with `EpochData` in fetch/wire_types.go
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")

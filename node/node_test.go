@@ -234,16 +234,6 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	}
 	defer app.stopServices(context.Background())
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_, err = grpc.DialContext(
-		ctx,
-		listener,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
-	r.ErrorContains(err, "context deadline exceeded")
-
 	events.CloseEventReporter()
 
 	// Test starting the server from the command line
@@ -252,10 +242,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(listener, app.Config.API.PublicListener)
 
-	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
@@ -419,8 +406,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	})
 
 	<-app.Started()
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		app.grpcPublicServer.BoundAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
@@ -564,8 +550,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
@@ -1094,10 +1079,13 @@ func TestAdminEvents(t *testing.T) {
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
-	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	conn, err := grpc.DialContext(
-		grpcCtx,
+	select {
+	case <-app.Started():
+	case <-time.After(10 * time.Second):
+		require.Fail(t, "app did not start in time")
+	}
+
+	conn, err := grpc.NewClient(
 		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
@@ -1185,9 +1173,13 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
-	<-app.Started()
+	select {
+	case <-app.Started():
+	case <-time.After(10 * time.Second):
+		require.Fail(t, "app did not start in time")
+	}
+
 	for _, signer := range app.signers {
-		signer := signer
 		mgr, err := activation.NewPostSetupManager(
 			cfg.POST,
 			logger.Zap(),
@@ -1209,10 +1201,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 		))
 	}
 
-	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	conn, err := grpc.DialContext(
-		grpcCtx,
+	conn, err := grpc.NewClient(
 		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),

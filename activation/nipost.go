@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -411,8 +411,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	nodeID := signer.NodeID()
 	g, ctx := errgroup.WithContext(ctx)
 	errChan := make(chan error, len(nb.poetProvers))
-	for _, poetClient := range nb.poetProvers {
-		client := poetClient
+	for _, client := range nb.poetProvers {
 		g.Go(func() error {
 			errChan <- nb.submitPoetChallenge(ctx, nodeID, deadline, client, prefix, challenge, signature)
 			return nil
@@ -589,7 +588,7 @@ func constructMerkleProof(challenge types.Hash32, members []types.Member) (*type
 }
 
 func randomDurationInRange(min, max time.Duration) time.Duration {
-	return min + time.Duration(rand.Int63n(int64(max-min+1)))
+	return min + rand.N(max-min+1)
 }
 
 // Calculate the time to wait before querying for the proof

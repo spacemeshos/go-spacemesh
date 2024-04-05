@@ -1148,7 +1148,6 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1232,7 +1231,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 func TestRandomDurationInRange(t *testing.T) {
 	t.Parallel()
 	test := func(min, max time.Duration) {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			waitTime := randomDurationInRange(min, max)
 			require.LessOrEqual(t, waitTime, max)
 			require.GreaterOrEqual(t, waitTime, min)

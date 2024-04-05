@@ -68,8 +68,7 @@ func TestAddNodes(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	created := make([][]*pb.Proposal, cl.Total())
-	for i := 0; i < cl.Total(); i++ {
-		i := i
+	for i := range cl.Total() {
 		client := cl.Client(i)
 		watchProposals(
 			tctx,
@@ -158,11 +157,10 @@ func TestFailedNodes(t *testing.T) {
 	)
 
 	hashes := make([]map[uint32]string, cl.Total())
-	for i := 0; i < cl.Total(); i++ {
+	for i := range cl.Total() {
 		hashes[i] = map[uint32]string{}
 	}
-	for i := 0; i < cl.Total()-failed; i++ {
-		i := i
+	for i := range cl.Total() - failed {
 		client := cl.Client(i)
 		watchLayers(
 			ctx,
