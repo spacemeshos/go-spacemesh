@@ -621,10 +621,10 @@ func (app *App) initServices(ctx context.Context) error {
 	lg := app.log
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
-
+	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
-		activation.WithAutoscaling(),
+		activation.WithAutoscaling(postStates),
 	}
 	for _, sig := range app.signers {
 		opts = append(opts, activation.WithPrioritizedID(sig.NodeID()))
@@ -1004,7 +1004,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("create post setup manager: %v", err)
 	}
 
-	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	grpcPostService, err := app.grpcService(grpcserver.Post, lg)
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
