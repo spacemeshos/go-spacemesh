@@ -227,41 +227,42 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			zap.Int("current version", before),
 			zap.Int("target version", after),
 		)
-		tx, err := db.Tx(context.Background())
-		if err != nil {
-			return nil, err
-		}
 		for i, m := range config.migrations {
 			if m.Order() <= before {
 				continue
 			}
-			if _, ok := config.skipMigration[m.Order()]; !ok {
-				if err := m.Apply(tx); err != nil {
-					for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
-						if e := config.migrations[j].Rollback(); e != nil {
-							err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
-							break
+			if err := db.WithTx(context.Background(), func(tx *Tx) error {
+				if _, ok := config.skipMigration[m.Order()]; !ok {
+					if err := m.Apply(tx); err != nil {
+						for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
+							if e := config.migrations[j].Rollback(); e != nil {
+								err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
+								break
+							}
 						}
+
+						return fmt.Errorf("apply %s: %w", m.Name(), err)
 					}
-
-					tx.Release()
-					err = errors.Join(err, db.Close())
-					return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
 				}
-			}
-			// version is set intentionally even if actual migration was skipped
-			if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
-				return nil, fmt.Errorf("update user_version to %d: %w", m.Order(), err)
-			}
-		}
-		tx.Commit()
-		tx.Release()
-
-		if config.vacuumState != 0 && before <= config.vacuumState {
-			if err := Vacuum(db); err != nil {
+				// version is set intentionally even if actual migration was skipped
+				if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
+					return fmt.Errorf("update user_version to %d: %w", m.Order(), err)
+				}
+				return nil
+			}); err != nil {
+				err = errors.Join(err, db.Close())
 				return nil, err
 			}
+
+			if config.vacuumState != 0 && before <= config.vacuumState {
+				if err := Vacuum(db); err != nil {
+					err = errors.Join(err, db.Close())
+					return nil, err
+				}
+			}
+			before = m.Order()
 		}
+
 	}
 	if config.cache {
 		config.logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
