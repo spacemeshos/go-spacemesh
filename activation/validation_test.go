@@ -110,11 +110,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: 1,
-			},
-		}, nil)
+		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 1}, nil)
 
 		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID)
 		require.NoError(t, err)
@@ -156,11 +152,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: 2,
-			},
-		}, nil)
+		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 2}, nil)
 
 		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID)
 		require.EqualError(t, err, "challenge pubepoch (1) must be after commitment atx pubepoch (2)")
@@ -198,11 +190,9 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: 1,
-				Sequence:     9,
-			},
-			NodeID: nodeId,
+			PublishEpoch: 1,
+			Sequence:     9,
+			NodeID:       nodeId,
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
@@ -252,11 +242,9 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(888),
-				Sequence:     9,
-			},
-			NodeID: otherNodeId,
+			PublishEpoch: types.EpochID(888),
+			Sequence:     9,
+			NodeID:       otherNodeId,
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
@@ -281,11 +269,9 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: 3,
-				Sequence:     9,
-			},
-			NodeID: nodeId,
+			PublishEpoch: 3,
+			Sequence:     9,
+			NodeID:       nodeId,
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
@@ -310,11 +296,9 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: 1,
-				Sequence:     10,
-			},
-			NodeID: nodeId,
+			PublishEpoch: 1,
+			Sequence:     10,
+			NodeID:       nodeId,
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
@@ -368,10 +352,8 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: 1,
-				Sequence:     9,
-			},
+			PublishEpoch: 1,
+			Sequence:     9,
 		}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 2)
@@ -422,10 +404,8 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: 5,
-				Sequence:     9,
-			},
+			PublishEpoch: 5,
+			Sequence:     9,
 		}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 3)
@@ -440,10 +420,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: 1,
-				Sequence:     9,
-			},
+			PublishEpoch: 1,
 		}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 10)
