@@ -266,6 +266,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 
 func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	t.Helper()
+	nonce := types.VRFPostIndex(123)
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -273,6 +274,7 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 				PrevATXID:    types.RandomATXID(),
 			},
 			NumUnits: 2,
+			VRFNonce: &nonce,
 		},
 	}
 

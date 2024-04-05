@@ -563,3 +563,8 @@ func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
 	}
 	return nil
 }
+
+// IsNull returns true if the specified result column is null.
+func IsNull(stmt *Statement, col int) bool {
+	return stmt.ColumnType(col) == sqlite.SQLITE_NULL
+}

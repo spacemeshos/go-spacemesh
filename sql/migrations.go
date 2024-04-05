@@ -73,8 +73,7 @@ func LocalMigrations() ([]Migration, error) {
 	return sqlMigrations("local")
 }
 
-func sqlMigrations(dbname string) ([]Migration, error) {
-	var migrations []Migration
+func sqlMigrations(dbname string, migrations ...Migration) ([]Migration, error) {
 	root := fmt.Sprintf("migrations/%s", dbname)
 	err := fs.WalkDir(embedded, root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

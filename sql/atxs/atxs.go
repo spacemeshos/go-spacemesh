@@ -2,6 +2,7 @@ package atxs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,6 +19,9 @@ const (
 	CacheKindATXBlob   sql.QueryCacheKind = "atx-blob"
 )
 
+// Query to retrieve ATXs.
+// Can't use inner join for the ATX blob here b/c this will break
+// filters that refer to the id column.
 const fullQuery = `select id,
         (select atx from atx_blobs b where a.id = b.id) as atx,
         base_tick_height, tick_count, pubkey,
@@ -355,8 +359,46 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err e
 	})
 }
 
+func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}
+	gotNonce := false
+	dec := func(stmt *sql.Statement) bool {
+		if stmt.ColumnType(0) != sqlite.SQLITE_NULL {
+			nonce = types.VRFPostIndex(stmt.ColumnInt64(0))
+			gotNonce = true
+		}
+		return true
+	}
+
+	if rows, err := db.Exec("select nonce from atxs where id = ?1", enc, dec); err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get nonce for ATX id %v: %w", id, err)
+	} else if rows == 0 || !gotNonce {
+		return types.VRFPostIndex(0), sql.ErrNotFound
+	}
+
+	return nonce, err
+}
+
 // Add adds an ATX for a given ATX ID.
 func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
+	if atx.ActivationTx.VRFNonce == nil && atx.PrevATXID != types.EmptyATXID {
+		nonce, err := NonceByID(db, atx.PrevATXID)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return fmt.Errorf("error getting nonce: %w", err)
+		}
+		if err == nil {
+			atx.VRFNonce = &nonce
+		}
+	}
+
+	return AddMaybeNoNonce(db, atx)
+}
+
+// AddMaybeNoNonce adds an ATX for a given ATX ID. It doesn't try
+// to set the nonce field if VRFNonce is not set in the ATX.
+func AddMaybeNoNonce(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	buf, err := codec.Encode(atx.ActivationTx)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
@@ -597,14 +639,7 @@ func IterateAtxsData(
 	_, err := db.Exec(
 		`select
                    a.id, a.pubkey, a.epoch, a.coinbase, a.effective_num_units,
-                   a.base_tick_height, a.tick_count,
-                   coalesce(a.nonce, (
-		     select a1.nonce
-		     from atxs a1
-		     where a1.pubkey = a.pubkey and a1.epoch < a.epoch and a1.nonce is not null
-		     order by a1.epoch desc
-		     limit 1
-		   )) as nonce,
+                   a.base_tick_height, a.tick_count, a.nonce,
                    iif(idn.proof is null, 0, 1) as is_malicious
 		from atxs a left join identities idn on a.pubkey = idn.pubkey`,
 		// SQLite happens to process the query much faster if we don't

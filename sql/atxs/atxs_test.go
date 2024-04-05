@@ -54,7 +54,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestAll(t *testing.T) {
-	db := sql.InMemory()
+	db := sql.InMemory(sql.WithConnections(10000))
 
 	atxList := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {
@@ -534,19 +534,19 @@ func TestVRFNonce(t *testing.T) {
 	require.NoError(t, err)
 
 	nonce1 := types.VRFPostIndex(333)
-	atx1, err := newAtx(sig, withPublishEpoch(types.EpochID(20)))
+	atx1, err := newAtx(sig, withPublishEpoch(types.EpochID(20)), withNonce(nonce1))
 	require.NoError(t, err)
-	atx1.VRFNonce = &nonce1
 	require.NoError(t, atxs.Add(db, atx1))
 
-	atx2, err := newAtx(sig, withPublishEpoch(types.EpochID(30)))
+	atx2, err := newAtx(sig, withPublishEpoch(types.EpochID(30)), withNoNonce(),
+		withPrevATXID(atx1.ID()))
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, atx2))
 
 	nonce3 := types.VRFPostIndex(777)
-	atx3, err := newAtx(sig, withPublishEpoch(types.EpochID(50)))
+	atx3, err := newAtx(sig, withPublishEpoch(types.EpochID(50)), withNonce(nonce3),
+		withPrevATXID(atx2.ID()))
 	require.NoError(t, err)
-	atx3.VRFNonce = &nonce3
 	require.NoError(t, atxs.Add(db, atx3))
 
 	// Act & Assert
@@ -767,7 +767,26 @@ func withSequence(seq uint64) createAtxOpt {
 	}
 }
 
+func withNonce(nonce types.VRFPostIndex) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.VRFNonce = &nonce
+	}
+}
+
+func withNoNonce() createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.VRFNonce = nil
+	}
+}
+
+func withPrevATXID(id types.ATXID) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.PrevATXID = id
+	}
+}
+
 func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActivationTx, error) {
+	nonce := types.VRFPostIndex(42)
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -775,6 +794,7 @@ func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActi
 			},
 			Coinbase: types.Address{1, 2, 3},
 			NumUnits: 2,
+			VRFNonce: &nonce,
 		},
 	}
 	for _, opt := range opts {
