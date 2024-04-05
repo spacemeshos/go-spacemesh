@@ -743,7 +743,6 @@ func TestBuild(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
 				ctx       = context.Background()
@@ -1035,7 +1034,6 @@ func TestGradeAtx(t *testing.T) {
 			result:      evil,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			epochStart := time.Now()
 			atxReceived := epochStart.Add(time.Duration(tc.atxReceived) * time.Second)

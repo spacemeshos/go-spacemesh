@@ -88,7 +88,6 @@ func TestOpinionHasher(t *testing.T) {
 			expected: "ae4b107c66",
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			var prev *types.Hash32

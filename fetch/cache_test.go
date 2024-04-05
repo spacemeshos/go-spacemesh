@@ -1,7 +1,8 @@
 package fetch
 
 import (
-	"math/rand"
+	"encoding/binary"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -75,7 +76,9 @@ func TestGetRandom(t *testing.T) {
 	t.Run("no hash peers", func(t *testing.T) {
 		cache := NewHashPeersCache(10)
 		hash := types.RandomHash()
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		var seed [32]byte
+		binary.LittleEndian.PutUint64(seed[:], uint64(time.Now().UnixNano()))
+		rng := rand.New(rand.NewChaCha8(seed))
 		peers := cache.GetRandom(hash, datastore.TXDB, rng)
 		require.Empty(t, peers)
 	})
@@ -100,7 +103,9 @@ func TestGetRandom(t *testing.T) {
 			cache.Add(hash, peer3)
 		}()
 		wg.Wait()
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		var seed [32]byte
+		binary.LittleEndian.PutUint64(seed[:], uint64(time.Now().UnixNano()))
+		rng := rand.New(rand.NewChaCha8(seed))
 		peers := cache.GetRandom(hash, datastore.TXDB, rng)
 		require.ElementsMatch(t, []p2p.Peer{peer1, peer2, peer3}, peers)
 	})
@@ -120,7 +125,9 @@ func TestGetRandom(t *testing.T) {
 			cache.Add(hash2, peer)
 		}()
 		wg.Wait()
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		var seed [32]byte
+		binary.LittleEndian.PutUint64(seed[:], uint64(time.Now().UnixNano()))
+		rng := rand.New(rand.NewChaCha8(seed))
 		randomPeers := cache.GetRandom(hash1, datastore.TXDB, rng)
 		require.Equal(t, []p2p.Peer{peer}, randomPeers)
 		randomPeers = cache.GetRandom(hash2, datastore.TXDB, rng)
@@ -151,7 +158,9 @@ func TestRace(t *testing.T) {
 	hash := types.RandomHash()
 	peer1 := p2p.Peer("test_peer_1")
 	peer2 := p2p.Peer("test_peer_2")
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var seed [32]byte
+	binary.LittleEndian.PutUint64(seed[:], uint64(time.Now().UnixNano()))
+	rng := rand.New(rand.NewChaCha8(seed))
 	var wg sync.WaitGroup
 	wg.Add(4)
 	go func() {

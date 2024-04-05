@@ -37,8 +37,7 @@ func sendTransactions(
 	receiver types.Address,
 	batch, amount int,
 ) error {
-	for i := 0; i < cl.Accounts(); i++ {
-		i := i
+	for i := range cl.Accounts() {
 		client := cl.Client(i % cl.Total())
 		nonce, err := getNonce(ctx, client, cl.Address(i))
 		if err != nil {
@@ -414,8 +413,7 @@ func currentLayer(ctx context.Context, tb testing.TB, client *cluster.NodeClient
 
 func waitAll(tctx *testcontext.Context, cl *cluster.Cluster) error {
 	var eg errgroup.Group
-	for i := 0; i < cl.Total(); i++ {
-		i := i
+	for i := range cl.Total() {
 		eg.Go(func() error {
 			return cl.Wait(tctx, i)
 		})

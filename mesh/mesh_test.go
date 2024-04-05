@@ -759,7 +759,6 @@ func TestProcessLayer(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
@@ -972,7 +971,6 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			tm := createTestMesh(t)
