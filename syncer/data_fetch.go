@@ -25,7 +25,6 @@ type DataFetch struct {
 
 	logger   log.Log
 	msh      meshProvider
-	ids      idProvider
 	tortoise system.Tortoise
 
 	mu        sync.Mutex
@@ -36,7 +35,6 @@ type DataFetch struct {
 func NewDataFetch(
 	msh meshProvider,
 	fetch fetcher,
-	ids idProvider,
 	tortoise system.Tortoise,
 	lg log.Log,
 ) *DataFetch {
@@ -44,7 +42,6 @@ func NewDataFetch(
 		fetcher:   fetch,
 		logger:    lg,
 		msh:       msh,
-		ids:       ids,
 		tortoise:  tortoise,
 		atxSynced: map[types.EpochID]map[p2p.Peer]struct{}{},
 	}
