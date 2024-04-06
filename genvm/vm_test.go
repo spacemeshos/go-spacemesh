@@ -1430,12 +1430,12 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 							t,
 							types.TransactionSuccess.String(),
 							rst.Status.String(),
-							"layer=%s ith=%d",
+							"layer=%s txnum=%d",
 							lid,
 							i,
 						)
 					} else {
-						require.Equal(t, types.TransactionFailure, rst.Status, "layer=%s ith=%d", lid, i)
+						require.Equal(t, types.TransactionFailure.String(), rst.Status.String(), "layer=%s ith=%d", lid, i)
 						require.Equal(t, expected.Error(), rst.Message)
 					}
 				}
@@ -1790,6 +1790,7 @@ func TestVestingWithVault(t *testing.T) {
 						20: spawned{template: vaultTemplate},
 					},
 				},
+				{}, // note empty layer, wait for vesting to start, initial is actually zero
 				{
 					txs: []testTx{
 						&drainVault{0, 20, 11, 500},
@@ -1857,11 +1858,12 @@ func TestVestingWithVault(t *testing.T) {
 						20: spawned{template: vaultTemplate},
 					},
 				},
+				{}, // note the layer without transactions
 				{
 					txs: []testTx{
 						&drainVault{
 							owner: 0, vault: 20, recipient: 11,
-							amount: 1001,
+							amount: 5501, // only 5500 available
 						},
 						&drainVault{
 							owner: 0, vault: 20, recipient: 11,
@@ -1869,7 +1871,7 @@ func TestVestingWithVault(t *testing.T) {
 						},
 						&drainVault{
 							owner: 0, vault: 20, recipient: 11,
-							amount: 1000,
+							amount: 4501, // only 4500 available
 						},
 					},
 					failed: map[int]error{
@@ -1890,7 +1892,7 @@ func TestVestingWithVault(t *testing.T) {
 					txs: []testTx{
 						&drainVault{
 							owner: 0, vault: 20, recipient: 10,
-							amount: 10000,
+							amount: 10001, // only 10000 available, 4500 from before + 5500 new
 						},
 						&drainVault{
 							owner: 0, vault: 20, recipient: 10,
@@ -1907,7 +1909,6 @@ func TestVestingWithVault(t *testing.T) {
 						20: spent{amount: 5000},
 					},
 				},
-				{}, // note the layer without transactions
 				{
 					txs: []testTx{
 						&drainVault{
