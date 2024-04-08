@@ -142,6 +142,12 @@ func WithAdvertiseInterval(value time.Duration) Opt {
 	}
 }
 
+func WithAdvertiseIntervalSpread(value time.Duration) Opt {
+	return func(d *Discovery) {
+		d.advertiseIntervalSpread = value
+	}
+}
+
 func WithFindPeersRetryDelay(value time.Duration) Opt {
 	return func(d *Discovery) {
 		d.findPeersRetryDelay = value
