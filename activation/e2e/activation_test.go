@@ -53,6 +53,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	}).AnyTimes()
 
 	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 

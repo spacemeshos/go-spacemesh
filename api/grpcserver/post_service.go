@@ -10,6 +10,8 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -21,8 +23,9 @@ import (
 type PostService struct {
 	log *zap.Logger
 
-	clientMtx sync.Mutex
-	client    map[types.NodeID]*postClient
+	clientMtx        sync.Mutex
+	allowConnections bool
+	client           map[types.NodeID]*postClient
 }
 
 type postCommand struct {
@@ -52,11 +55,29 @@ func NewPostService(log *zap.Logger) *PostService {
 	}
 }
 
+// AllowConnections sets if the grpc service accepts new incoming connections from post services.
+func (s *PostService) AllowConnections(allow bool) {
+	s.clientMtx.Lock()
+	defer s.clientMtx.Unlock()
+	s.allowConnections = allow
+}
+
+// connectionAllowed returns if the grpc service accepts new incoming connections from post services.
+func (s *PostService) connectionAllowed() bool {
+	s.clientMtx.Lock()
+	defer s.clientMtx.Unlock()
+	return s.allowConnections
+}
+
 // Register is called by the PoST service to connect with the node.
 // It creates a bidirectional stream that is kept open until either side closes it.
 // The other functions on this service are called by services of the node to send
 // requests to the PoST node and receive responses.
 func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
+	if !s.connectionAllowed() {
+		return status.Error(codes.PermissionDenied, "connection not allowed: node has no coinbase set in config")
+	}
+
 	err := stream.SendMsg(&pb.NodeRequest{
 		Kind: &pb.NodeRequest_Metadata{
 			Metadata: &pb.MetadataRequest{},

@@ -1420,9 +1420,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			// StartSmeshing is only supported in a supervised setup (single signer)
 			sig = app.signers[0]
 		}
+		postService, err := app.grpcService(grpcserver.Post, lg)
+		if err != nil {
+			return nil, err
+		}
 		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
+			postService.(*grpcserver.PostService),
 			app.Config.API.SmesherStreamInterval,
 			app.Config.SMESHING.Opts,
 			sig,
@@ -1431,6 +1436,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case grpcserver.Post:
 		service := grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
+		service.AllowConnections(app.Config.SMESHING.CoinbaseAccount != "")
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.PostInfo:

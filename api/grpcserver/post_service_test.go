@@ -7,12 +7,17 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -112,6 +117,7 @@ func launchPostSupervisorTLS(
 func Test_GenerateProof(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	svc := NewPostService(log)
+	svc.AllowConnections(true)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -158,6 +164,7 @@ func Test_GenerateProof(t *testing.T) {
 func Test_GenerateProof_TLS(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	svc := NewPostService(log)
+	svc.AllowConnections(true)
 	certDir := genKeys(t)
 	cfg, cleanup := launchTLSServer(t, certDir, svc)
 	t.Cleanup(cleanup)
@@ -208,6 +215,7 @@ func Test_GenerateProof_TLS(t *testing.T) {
 func Test_GenerateProof_Cancel(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	svc := NewPostService(log)
+	svc.AllowConnections(true)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -247,6 +255,7 @@ func Test_GenerateProof_Cancel(t *testing.T) {
 func Test_Metadata(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	svc := NewPostService(log)
+	svc.AllowConnections(true)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -290,6 +299,7 @@ func Test_Metadata(t *testing.T) {
 func Test_GenerateProof_MultipleServices(t *testing.T) {
 	log := zaptest.NewLogger(t)
 	svc := NewPostService(log)
+	svc.AllowConnections(true)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -329,4 +339,29 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, proof)
 	require.NotNil(t, meta)
+}
+
+func Test_PostService_Connection_NotAllowed(t *testing.T) {
+	log := zaptest.NewLogger(t)
+	svc := NewPostService(log)
+	svc.AllowConnections(false)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	conn, err := grpc.NewClient(
+		cfg.PublicListener,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	require.NoError(t, err)
+
+	client := pb.NewPostServiceClient(conn)
+
+	stream, err := client.Register(context.Background())
+	require.NoError(t, err)
+
+	_, err = stream.Recv()
+	require.Error(t, err)
+	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	require.ErrorContains(t, err, "connection not allowed")
 }
