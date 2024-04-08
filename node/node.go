@@ -1842,6 +1842,10 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
+	if err := app.verifyVersionUpgrades(); err != nil {
+		return err
+	}
+
 	err := app.startSynchronous(ctx)
 	if err != nil {
 		app.log.With().Error("failed to start App", log.Err(err))
