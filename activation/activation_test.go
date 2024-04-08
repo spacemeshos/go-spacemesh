@@ -228,7 +228,7 @@ func publishAtx(
 	var built *types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.AcivationTxFromBytes(got)
+			gotAtx, err := types.ActivationTxFromBytes(got)
 			require.NoError(tb, err)
 			gotAtx.SetReceived(time.Now().Local())
 			built = gotAtx
@@ -547,7 +547,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// first publish fails
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.AcivationTxFromBytes(got)
+			gotAtx, err := types.ActivationTxFromBytes(got)
 			require.NoError(t, err)
 			built = gotAtx
 			built.SetReceived(time.Now().Local())
@@ -562,7 +562,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// second publish succeeds
 		func(_ context.Context, _ string, got []byte) error {
-			atx, err := types.AcivationTxFromBytes(got)
+			atx, err := types.ActivationTxFromBytes(got)
 			require.NoError(t, err)
 			atx.SetReceived(built.Received())
 			require.NoError(t, atx.Initialize())
@@ -650,7 +650,7 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// publish succeeds
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.AcivationTxFromBytes(got)
+			gotAtx, err := types.ActivationTxFromBytes(got)
 			require.NoError(t, err)
 			gotAtx.SetReceived(time.Now().Local())
 			require.NoError(t, gotAtx.Initialize())
@@ -719,7 +719,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	var built *types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := types.AcivationTxFromBytes(got)
+			gotAtx, err := types.ActivationTxFromBytes(got)
 			require.NoError(t, err)
 			gotAtx.SetReceived(time.Now().Local())
 			built = gotAtx
@@ -1009,7 +1009,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	tab.mpub.EXPECT().
 		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
-			atx, err := types.AcivationTxFromBytes(msg)
+			atx, err := types.ActivationTxFromBytes(msg)
 			require.NoError(t, err)
 			atx.SetReceived(time.Now().Local())
 
@@ -1108,7 +1108,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	tab.mpub.EXPECT().
 		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
-			atx, err := types.AcivationTxFromBytes(msg)
+			atx, err := types.ActivationTxFromBytes(msg)
 			require.NoError(t, err)
 			atx.SetReceived(time.Now().Local())
 
@@ -1237,7 +1237,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	bt, err := codec.Encode(act.ToWireV1())
 	require.NoError(t, err)
 
-	a, err := types.AcivationTxFromBytes(bt)
+	a, err := types.ActivationTxFromBytes(bt)
 	require.NoError(t, err)
 
 	bt2, err := codec.Encode(a.ToWireV1())
@@ -1362,7 +1362,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	var atx types.ActivationTx
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(ctx context.Context, s string, b []byte) error {
-			decoded, err := types.AcivationTxFromBytes(b)
+			decoded, err := types.ActivationTxFromBytes(b)
 			require.NoError(t, err)
 			atx = *decoded
 			atx.SetReceived(time.Now().Local())
@@ -1605,7 +1605,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(2).FirstLayer()).Return(closed).AnyTimes()
 			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ string, got []byte) error {
-					gotAtx, err := types.AcivationTxFromBytes(got)
+					gotAtx, err := types.ActivationTxFromBytes(got)
 					require.NoError(t, err)
 					require.Equal(t, tc.targetEpoch, gotAtx.TargetEpoch())
 					return nil

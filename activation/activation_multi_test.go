@@ -439,7 +439,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			func(ctx context.Context, _ string, got []byte) error {
 				atxMtx.Lock()
 				defer atxMtx.Unlock()
-				atx, err := types.AcivationTxFromBytes(got)
+				atx, err := types.ActivationTxFromBytes(got)
 				require.NoError(t, err)
 				atxs[atx.SmesherID] = *atx
 				return nil

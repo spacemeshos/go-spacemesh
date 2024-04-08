@@ -142,7 +142,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		func(ctx context.Context, topic string, got []byte) error {
 			atxMtx.Lock()
 			defer atxMtx.Unlock()
-			gotAtx, err := types.AcivationTxFromBytes(got)
+			gotAtx, err := types.ActivationTxFromBytes(got)
 			require.NoError(t, err)
 			atxs[gotAtx.SmesherID] = *gotAtx
 			if len(atxs) == numSigners {

@@ -248,7 +248,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	got, err := getBytes(ctx, bs, datastore.ATXDB, atx.ID())
 	require.NoError(t, err)
 
-	gotA, err := types.AcivationTxFromBytes(got)
+	gotA, err := types.ActivationTxFromBytes(got)
 	require.NoError(t, err)
 	require.NoError(t, gotA.Initialize())
 	gotA.SetEffectiveNumUnits(gotA.NumUnits)

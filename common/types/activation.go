@@ -468,7 +468,7 @@ func (a *ActivationTx) ToWireV1() *wire.ActivationTxV1 {
 
 // Decode ActivationTx from bytes.
 // In future it should decide which version of ActivationTx to decode based on the publish epoch.
-func AcivationTxFromBytes(data []byte) (*ActivationTx, error) {
+func ActivationTxFromBytes(data []byte) (*ActivationTx, error) {
 	var wireAtx wire.ActivationTxV1
 	err := codec.Decode(data, &wireAtx)
 	if err != nil {
