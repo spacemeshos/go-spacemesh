@@ -96,10 +96,11 @@ func DefaultConfig() Config {
 			ResetPeriod: time.Minute,
 		},
 		DiscoveryTimings: DiscoveryTimings{
-			AdvertiseDelay:      time.Hour,
-			AdvertiseInterval:   time.Hour,
-			AdvertiseRetryDelay: time.Minute,
-			FindPeersRetryDelay: time.Minute,
+			AdvertiseDelay:          time.Hour,
+			AdvertiseInterval:       2 * time.Hour,
+			AdvertiseIntervalSpread: time.Hour,
+			AdvertiseRetryDelay:     time.Minute,
+			FindPeersRetryDelay:     time.Minute,
 		},
 	}
 }
@@ -161,10 +162,11 @@ type Config struct {
 }
 
 type DiscoveryTimings struct {
-	AdvertiseDelay      time.Duration `mapstructure:"advertise-delay"`
-	AdvertiseInterval   time.Duration `mapstructure:"advertise-interval"`
-	AdvertiseRetryDelay time.Duration `mapstructure:"advertise-retry-delay"`
-	FindPeersRetryDelay time.Duration `mapstructure:"find-peers-retry-delay"`
+	AdvertiseDelay          time.Duration `mapstructure:"advertise-delay"`
+	AdvertiseInterval       time.Duration `mapstructure:"advertise-interval"`
+	AdvertiseIntervalSpread time.Duration `mapstructure:"advertise-interval-spread"`
+	AdvertiseRetryDelay     time.Duration `mapstructure:"advertise-retry-delay"`
+	FindPeersRetryDelay     time.Duration `mapstructure:"find-peers-retry-delay"`
 }
 
 type AutoNATServer struct {
@@ -207,6 +209,10 @@ func (cfg *Config) Validate() error {
 				PublicReachability, PrivateReachability, cfg.ForceReachability,
 			)
 		}
+	}
+
+	if cfg.DiscoveryTimings.AdvertiseIntervalSpread > cfg.DiscoveryTimings.AdvertiseInterval {
+		return errors.New("advertise-interval-spread cannot be greater than advertise-interval")
 	}
 
 	return nil
