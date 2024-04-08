@@ -1435,7 +1435,12 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 							i,
 						)
 					} else {
-						require.Equal(t, types.TransactionFailure.String(), rst.Status.String(), "layer=%s ith=%d", lid, i)
+						require.Equal(t,
+							types.TransactionFailure.String(),
+							rst.Status.String(),
+							"layer=%s ith=%d",
+							lid,
+							i)
 						require.Equal(t, expected.Error(), rst.Message)
 					}
 				}
