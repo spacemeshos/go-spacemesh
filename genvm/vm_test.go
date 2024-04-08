@@ -1809,6 +1809,61 @@ func TestVestingWithVault(t *testing.T) {
 			},
 		},
 		{
+			// Test SMIP-0002 changes: initial balance is not added at start layer
+			desc: "initial is zero",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spawnTx{0, 20},
+						&drainVault{0, 20, 11, 1},
+					},
+					failed: map[int]error{
+						2: vault.ErrAmountNotAvailable,
+					},
+					expected: map[int]change{
+						0:  spawned{template: vestingTemplate},
+						20: spawned{template: vaultTemplate},
+					},
+				},
+				{
+					txs: []testTx{
+						// no coins have vested, so any attempt to send should fail
+						&drainVault{0, 20, 11, 1},
+					},
+					failed: map[int]error{
+						0: vault.ErrAmountNotAvailable,
+					},
+					expected: map[int]change{
+						// gas was spent on failed tx
+						0: spent{amount: ref.estimateDrainGas(0, 20, 11, 1, 2)},
+					},
+				},
+				{
+					txs: []testTx{
+						// attempt to drain more than vested amount should fail
+						&drainVault{0, 20, 11, 5501},
+						// drain total amount in vault at first vest layer
+						&drainVault{0, 20, 11, 5500},
+						// attempt to send more should fail
+						&drainVault{0, 20, 11, 1},
+					},
+					failed: map[int]error{
+						0: vault.ErrAmountNotAvailable,
+						2: vault.ErrAmountNotAvailable,
+					},
+					expected: map[int]change{
+						// gas spent on one successful and two unsuccessful txs
+						0: spent{amount: ref.estimateDrainGas(0, 20, 11, 5501, 2) +
+							ref.estimateDrainGas(0, 20, 11, 5500, 2) +
+							ref.estimateDrainGas(0, 20, 11, 1, 3)},
+						20: spent{amount: 5500},
+						11: earned{amount: 5500},
+					},
+				},
+			},
+		},
+		{
 			desc: "owner is not overwritten by principal",
 			layers: []layertc{
 				{
