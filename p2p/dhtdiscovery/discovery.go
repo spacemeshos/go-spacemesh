@@ -293,6 +293,7 @@ func (d *Discovery) connect(ctx context.Context, eg *errgroup.Group, nodes []pee
 	conCtx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 	for _, boot := range nodes {
+		boot := boot
 		if boot.ID == d.h.ID() {
 			d.logger.Debug("not dialing self")
 			continue
