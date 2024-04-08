@@ -12,6 +12,8 @@ var (
 	ErrInvalidNonce = errors.New("invalid nonce")
 	// ErrNoBalance raised if transaction run out of balance during execution.
 	ErrNoBalance = errors.New("no balance")
+	// ErrOutOfGas raised if account doesn't have enough funds to cover gas during execution.
+	ErrOutOfGas = errors.New("out of gas")
 	// ErrMaxGas raised if tx consumed over MaxGas value.
 	ErrMaxGas = errors.New("max gas")
 	// ErrMaxSpend raised if tx transferred over MaxSpend value.
@@ -20,7 +22,7 @@ var (
 	ErrSpawned = errors.New("account already spawned")
 	// ErrNotSpawned raised if account is not spawned.
 	ErrNotSpawned = errors.New("account is not spawned")
-	// ErrMismatchedTemplate raised if target account doesn't match template account.
+	// ErrTemplateMismatch raised if target account doesn't match template account.
 	ErrTemplateMismatch = errors.New("relay template mismatch")
 	// ErrTxLimit overflows max tx size.
 	ErrTxLimit = errors.New("overflows tx limit")

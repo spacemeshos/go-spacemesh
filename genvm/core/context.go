@@ -177,7 +177,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 	amount := gas * c.Header.GasPrice
 	if amount > c.PrincipalAccount.Balance {
 		amount = c.PrincipalAccount.Balance
-		err = ErrNoBalance
+		err = ErrOutOfGas
 	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed
 		amount = gas * c.Header.GasPrice
