@@ -6,6 +6,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Highlights
 
+* [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
+  Updating to this version requires going through v1.4 first.
+
 ### Improvements
 
 * [#5796](https://github.com/spacemeshos/go-spacemesh/pull/5796) Reject p2p messages containing invalid malfeasance proofs.
