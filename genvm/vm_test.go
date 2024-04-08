@@ -2492,7 +2492,8 @@ func TestVestingData(t *testing.T) {
 			}
 			vestaddr := core.ComputePrincipal(vesting.TemplateAddress, vestArgs)
 			vaultArgs := &vault.SpawnArguments{
-				Owner:               vestaddr,
+				Owner: vestaddr,
+				// Note: InitialUnlockAmount is now ignored due to SMIP-0002
 				InitialUnlockAmount: uint64(meta.Initial),
 				TotalAmount:         uint64(meta.Total),
 				VestingStart:        constants.VestStart,
@@ -2508,8 +2509,8 @@ func TestVestingData(t *testing.T) {
 				[]core.Account{
 					{
 						Address: vestaddr,
-						Balance: 300_000,
-					}, // give a bit to vesting account as it needs to get funds for 2 spawns and drain vault
+						Balance: 350_000,
+					}, // give a bit to vesting account as it needs to get funds for 2 spawns and 2 drain vault txs
 					{Address: vaultaddr, Balance: uint64(meta.Total)},
 				},
 			))
@@ -2522,43 +2523,47 @@ func TestVestingData(t *testing.T) {
 				},
 			}
 			nonce := uint64(0)
-			ineffective, _, err := vm.Apply(ApplyContext{Layer: genesis + 1},
+			ineffective, rst, err := vm.Apply(ApplyContext{Layer: genesis + 1},
 				notVerified(types.NewRawTx(vestaccount.selfSpawn(nonce))),
 				nil,
 			)
 			require.Empty(t, ineffective)
 			require.NoError(t, err)
+			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
 			nonce++
-			ineffective, _, err = vm.Apply(ApplyContext{Layer: genesis + 2},
+			ineffective, rst, err = vm.Apply(ApplyContext{Layer: genesis + 2},
 				notVerified(types.NewRawTx(vestaccount.spawn(vault.TemplateAddress, vaultArgs, nonce))),
 				nil,
 			)
 			require.Empty(t, ineffective)
 			require.NoError(t, err)
+			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
 			nonce++
 
 			before, err := vm.GetBalance(vestaddr)
 			require.NoError(t, err)
-			ineffective, rst, err := vm.Apply(ApplyContext{Layer: constants.VestStart},
+			ineffective, rst, err = vm.Apply(ApplyContext{Layer: constants.VestStart},
 				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(meta.Initial), nonce))),
 				nil,
 			)
 			require.Empty(t, ineffective)
 			require.NoError(t, err)
+			// Expect this tx to fail as no balance has vested yet
+			require.Equal(t, types.TransactionFailure, rst[0].TransactionResult.Status)
 			after, err := vm.GetBalance(vestaddr)
 			require.NoError(t, err)
-			require.Equal(t, before+uint64(meta.Initial)-rst[0].Fee, after)
+			require.Equal(t, before-rst[0].Fee, after)
 			nonce++
 
 			drained := uint64(0)
-			remaining := uint64(meta.Total - meta.Initial)
+			remaining := uint64(meta.Total)
 			fee := 0
 			// execute drain tx every 1000 layers
 			for i := constants.VestStart + 1; i < constants.VestEnd; i += 1000 {
 				before, err := vm.GetBalance(vestaddr)
 				require.NoError(t, err)
 
-				drain := new(big.Int).SetUint64(uint64(meta.Total - meta.Initial))
+				drain := new(big.Int).SetUint64(uint64(meta.Total))
 				drain.Mul(drain, new(big.Int).SetUint64(uint64(i)-constants.VestStart))
 				drain.Div(drain, new(big.Int).SetUint64(constants.VestEnd-constants.VestStart))
 				drain.Sub(drain, new(big.Int).SetUint64(drained))
@@ -2566,12 +2571,13 @@ func TestVestingData(t *testing.T) {
 				ineffective, rst, err = vm.Apply(
 					ApplyContext{Layer: types.LayerID(i)},
 					notVerified(
-						types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(drain.Uint64()), nonce)),
+						types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, drain.Uint64(), nonce)),
 					),
 					nil,
 				)
 				require.Empty(t, ineffective)
 				require.NoError(t, err)
+				require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
 				nonce++
 				fee += int(rst[0].Fee)
 				drained += drain.Uint64()
@@ -2579,10 +2585,10 @@ func TestVestingData(t *testing.T) {
 
 				after, err := vm.GetBalance(vestaddr)
 				require.NoError(t, err)
-				require.Equal(t, int(before+uint64(drain.Uint64())-rst[0].Fee), int(after))
+				require.Equal(t, int(before+drain.Uint64()-rst[0].Fee), int(after))
 			}
 			ineffective, _, err = vm.Apply(ApplyContext{Layer: constants.VestEnd},
-				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(remaining), nonce))),
+				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, remaining, nonce))),
 				nil,
 			)
 			require.Empty(t, ineffective)
