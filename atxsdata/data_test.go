@@ -140,6 +140,8 @@ func TestData(t *testing.T) {
 }
 
 func TestMemory(t *testing.T) {
+	t.Skip("memory layouts can change from one go version to the next and might differ on different architectures")
+
 	test := func(t *testing.T, size, memory, delta uint64) {
 		runtime.GC()
 		var before runtime.MemStats
