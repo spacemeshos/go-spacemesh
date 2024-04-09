@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ const (
 	discoveryHighPeersDelay = 10 * time.Second
 	protocolPrefix          = "/spacekad"
 	ProtocolID              = protocolPrefix + "/kad/1.0.0"
+	recheckInterval         = time.Minute
 )
 
 type Opt func(*Discovery)
@@ -140,6 +142,12 @@ func WithAdvertiseInterval(value time.Duration) Opt {
 	}
 }
 
+func WithAdvertiseIntervalSpread(value time.Duration) Opt {
+	return func(d *Discovery) {
+		d.advertiseIntervalSpread = value
+	}
+}
+
 func WithFindPeersRetryDelay(value time.Duration) Opt {
 	return func(d *Discovery) {
 		d.findPeersRetryDelay = value
@@ -197,14 +205,15 @@ type Discovery struct {
 	// how often to check if we have enough peers
 	period time.Duration
 	// timeout used for connections
-	timeout             time.Duration
-	bootstrapDuration   time.Duration
-	minPeers, highPeers int
-	backup, bootnodes   []peer.AddrInfo
-	advertiseDelay      time.Duration
-	advertiseInterval   time.Duration
-	advertiseRetryDelay time.Duration
-	findPeersRetryDelay time.Duration
+	timeout                 time.Duration
+	bootstrapDuration       time.Duration
+	minPeers, highPeers     int
+	backup, bootnodes       []peer.AddrInfo
+	advertiseDelay          time.Duration
+	advertiseInterval       time.Duration
+	advertiseIntervalSpread time.Duration
+	advertiseRetryDelay     time.Duration
+	findPeersRetryDelay     time.Duration
 }
 
 func (d *Discovery) FindPeer(ctx context.Context, p peer.ID) (peer.AddrInfo, error) {
@@ -395,6 +404,14 @@ func (d *Discovery) peerHasTag(p peer.ID) bool {
 	return found
 }
 
+func (d *Discovery) advInterval() time.Duration {
+	if d.advertiseIntervalSpread == 0 {
+		return d.advertiseInterval
+	}
+
+	return d.advertiseInterval - d.advertiseIntervalSpread + rand.N(2*d.advertiseIntervalSpread)
+}
+
 func (d *Discovery) advertiseNS(ctx context.Context, ns string, active func() bool) error {
 	if d.advertiseDelay != 0 {
 		select {
@@ -408,13 +425,16 @@ func (d *Discovery) advertiseNS(ctx context.Context, ns string, active func() bo
 		if active == nil || active() {
 			var err error
 			d.logger.Debug("advertising for routing discovery", zap.String("ns", ns))
-			ttl, err = d.disc.Advertise(ctx, ns, p2pdisc.TTL(d.advertiseInterval))
+			ttl, err = d.disc.Advertise(ctx, ns, p2pdisc.TTL(d.advInterval()))
 			if err != nil {
 				d.logger.Error("failed to re-advertise for discovery", zap.String("ns", ns), zap.Error(err))
 				ttl = d.advertiseRetryDelay
 			}
 		} else {
-			ttl = d.advertiseInterval
+			// At this moment, advertisement is not needed.
+			// There was previous delay already, just need to recheck if we need
+			// to start advertising again
+			ttl = recheckInterval
 		}
 		select {
 		case <-ctx.Done():
