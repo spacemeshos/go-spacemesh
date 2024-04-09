@@ -18,7 +18,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5815](https://github.com/spacemeshos/go-spacemesh/pull/5815) Add spread to the discovery advertisement interval.
 
-### Features
+* [#5819](https://github.com/spacemeshos/go-spacemesh/pull/5819) The node will now refuse connections from post services
+  if no coinbase account is set.
 
 ## Release v1.4.4
 

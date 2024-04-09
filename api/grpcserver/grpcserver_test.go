@@ -553,15 +553,18 @@ type smesherServiceConn struct {
 
 	smeshingProvider *activation.MockSmeshingProvider
 	postSupervisor   *MockpostSupervisor
+	grpcPostService  *MockgrpcPostService
 }
 
 func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceConn, context.Context) {
 	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := NewMockpostSupervisor(ctrl)
+	grpcPostService := NewMockgrpcPostService(ctrl)
 	svc := NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
+		grpcPostService,
 		10*time.Millisecond,
 		activation.DefaultPostSetupOpts(),
 		sig,
@@ -580,6 +583,7 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 
 		smeshingProvider: smeshingProvider,
 		postSupervisor:   postSupervisor,
+		grpcPostService:  grpcPostService,
 	}, mockCtx
 }
 
@@ -633,6 +637,7 @@ func TestSmesherService(t *testing.T) {
 					return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize
 				}),
 			), sig).Return(nil)
+		c.grpcPostService.EXPECT().AllowConnections(true)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,

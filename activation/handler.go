@@ -491,15 +491,6 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	return proof, nil
 }
 
-// GetEpochAtxs returns all valid ATXs received in the epoch epochID.
-func (h *Handler) GetEpochAtxs(ctx context.Context, epochID types.EpochID) (ids []types.ATXID, err error) {
-	ids, err = atxs.GetIDsByEpoch(ctx, h.cdb, epochID)
-	h.log.With().Debug("returned epoch atxs", epochID,
-		log.Int("count", len(ids)),
-		log.String("atxs", fmt.Sprint(ids)))
-	return
-}
-
 // HandleSyncedAtx handles atxs received by sync.
 func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
 	_, err := h.handleAtx(ctx, expHash, peer, data)

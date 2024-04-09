@@ -1264,6 +1264,65 @@ func (c *MockpostSupervisorStopCall) DoAndReturn(f func(bool) error) *MockpostSu
 	return c
 }
 
+// MockgrpcPostService is a mock of grpcPostService interface.
+type MockgrpcPostService struct {
+	ctrl     *gomock.Controller
+	recorder *MockgrpcPostServiceMockRecorder
+}
+
+// MockgrpcPostServiceMockRecorder is the mock recorder for MockgrpcPostService.
+type MockgrpcPostServiceMockRecorder struct {
+	mock *MockgrpcPostService
+}
+
+// NewMockgrpcPostService creates a new mock instance.
+func NewMockgrpcPostService(ctrl *gomock.Controller) *MockgrpcPostService {
+	mock := &MockgrpcPostService{ctrl: ctrl}
+	mock.recorder = &MockgrpcPostServiceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockgrpcPostService) EXPECT() *MockgrpcPostServiceMockRecorder {
+	return m.recorder
+}
+
+// AllowConnections mocks base method.
+func (m *MockgrpcPostService) AllowConnections(allow bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AllowConnections", allow)
+}
+
+// AllowConnections indicates an expected call of AllowConnections.
+func (mr *MockgrpcPostServiceMockRecorder) AllowConnections(allow any) *MockgrpcPostServiceAllowConnectionsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllowConnections", reflect.TypeOf((*MockgrpcPostService)(nil).AllowConnections), allow)
+	return &MockgrpcPostServiceAllowConnectionsCall{Call: call}
+}
+
+// MockgrpcPostServiceAllowConnectionsCall wrap *gomock.Call
+type MockgrpcPostServiceAllowConnectionsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockgrpcPostServiceAllowConnectionsCall) Return() *MockgrpcPostServiceAllowConnectionsCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockgrpcPostServiceAllowConnectionsCall) Do(f func(bool)) *MockgrpcPostServiceAllowConnectionsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockgrpcPostServiceAllowConnectionsCall) DoAndReturn(f func(bool)) *MockgrpcPostServiceAllowConnectionsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockpeerCounter is a mock of peerCounter interface.
 type MockpeerCounter struct {
 	ctrl     *gomock.Controller

@@ -24,6 +24,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@v4
+      with:
+        ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
     - name: Build docker images
       run: |
         export VERSION="${{ github.ref_name }}"

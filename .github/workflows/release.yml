@@ -1,8 +1,5 @@
 name: Build and Release
 run-name: Release ${{ github.ref_name }}
-env:
-  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
 on:
   push:
@@ -47,6 +44,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - uses: extractions/netrc@v1
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
