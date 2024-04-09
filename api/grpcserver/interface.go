@@ -72,6 +72,10 @@ type postSupervisor interface {
 	Benchmark(p activation.PostSetupProvider) (int, error)
 }
 
+type grpcPostService interface {
+	AllowConnections(allow bool)
+}
+
 // peerCounter is an api to get amount of connected peers.
 type peerCounter interface {
 	PeerCount() uint64
