@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"syscall"
 	"time"
@@ -1566,7 +1567,9 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger.With().Info("public grpc service started",
 			log.String("address", app.Config.API.PublicListener),
 			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-				for svc := range publicSvcs {
+				services := maps.Keys(publicSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
 					encoder.AppendString(svc)
 				}
 				return nil
@@ -1590,7 +1593,9 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger.With().Info("private grpc service started",
 			log.String("address", app.Config.API.PrivateListener),
 			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-				for svc := range privateSvcs {
+				services := maps.Keys(privateSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
 					encoder.AppendString(svc)
 				}
 				return nil
@@ -1614,7 +1619,9 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger.With().Info("post grpc service started",
 			log.String("address", app.Config.API.PostListener),
 			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-				for svc := range postSvcs {
+				services := maps.Keys(postSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
 					encoder.AppendString(svc)
 				}
 				return nil
@@ -1667,7 +1674,9 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger.With().Info("authenticated grpc service started",
 			log.String("address", app.Config.API.TLSListener),
 			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-				for svc := range authenticatedSvcs {
+				services := maps.Keys(authenticatedSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
 					encoder.AppendString(svc)
 				}
 				return nil
@@ -1689,7 +1698,9 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger.With().Info("json listener started",
 			log.String("address", app.Config.API.JSONListener),
 			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-				for svc := range publicSvcs {
+				services := maps.Keys(publicSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
 					encoder.AppendString(svc)
 				}
 				return nil
