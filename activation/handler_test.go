@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
+	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -1118,7 +1119,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 		atxHdlr.cdb,
 		atxHdlr.edVerifier,
 		nil,
-		&types.MalfeasanceGossip{
+		&mwire.MalfeasanceGossip{
 			MalfeasanceProof: *proof,
 		},
 	)
@@ -1219,7 +1220,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	_, err = atx.Verify(0, 100)
 	require.NoError(t, err)
 
-	var got types.MalfeasanceGossip
+	var got mwire.MalfeasanceGossip
 	atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 	atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), goldenATXID, gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mValidator.EXPECT().
@@ -1249,8 +1250,8 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 				)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
-				require.Equal(t, types.InvalidPostIndex, got.Proof.Type)
-				p, ok := got.Proof.Data.(*types.InvalidPostIndexProof)
+				require.Equal(t, mwire.InvalidPostIndex, got.Proof.Type)
+				p, ok := got.Proof.Data.(*mwire.InvalidPostIndexProof)
 				require.True(t, ok)
 				require.EqualValues(t, 2, p.InvalidIdx)
 				return nil
@@ -1671,7 +1672,7 @@ func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 	atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
 
-	var got types.MalfeasanceGossip
+	var got mwire.MalfeasanceGossip
 	if !synced {
 		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ string, data []byte) error {

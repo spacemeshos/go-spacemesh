@@ -15,6 +15,7 @@ import (
 	time "time"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	tortoise "github.com/spacemeshos/go-spacemesh/tortoise"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -43,10 +44,10 @@ func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
 }
 
 // AddBallot mocks base method.
-func (m *MockmeshProvider) AddBallot(arg0 context.Context, arg1 *types.Ballot) (*types.MalfeasanceProof, error) {
+func (m *MockmeshProvider) AddBallot(arg0 context.Context, arg1 *types.Ballot) (*wire.MalfeasanceProof, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddBallot", arg0, arg1)
-	ret0, _ := ret[0].(*types.MalfeasanceProof)
+	ret0, _ := ret[0].(*wire.MalfeasanceProof)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -64,19 +65,19 @@ type MockmeshProviderAddBallotCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockmeshProviderAddBallotCall) Return(arg0 *types.MalfeasanceProof, arg1 error) *MockmeshProviderAddBallotCall {
+func (c *MockmeshProviderAddBallotCall) Return(arg0 *wire.MalfeasanceProof, arg1 error) *MockmeshProviderAddBallotCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockmeshProviderAddBallotCall) Do(f func(context.Context, *types.Ballot) (*types.MalfeasanceProof, error)) *MockmeshProviderAddBallotCall {
+func (c *MockmeshProviderAddBallotCall) Do(f func(context.Context, *types.Ballot) (*wire.MalfeasanceProof, error)) *MockmeshProviderAddBallotCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmeshProviderAddBallotCall) DoAndReturn(f func(context.Context, *types.Ballot) (*types.MalfeasanceProof, error)) *MockmeshProviderAddBallotCall {
+func (c *MockmeshProviderAddBallotCall) DoAndReturn(f func(context.Context, *types.Ballot) (*wire.MalfeasanceProof, error)) *MockmeshProviderAddBallotCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

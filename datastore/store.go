@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -51,7 +52,7 @@ type CachedDB struct {
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
-	malfeasanceCache *lru.Cache[types.NodeID, *types.MalfeasanceProof]
+	malfeasanceCache *lru.Cache[types.NodeID, *wire.MalfeasanceProof]
 }
 
 type Config struct {
@@ -101,7 +102,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 		lg.Fatal("failed to create atx cache", err)
 	}
 
-	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](o.cfg.MalfeasanceSize)
+	malfeasanceCache, err := lru.New[types.NodeID, *wire.MalfeasanceProof](o.cfg.MalfeasanceSize)
 	if err != nil {
 		lg.Fatal("failed to create malfeasance cache", err)
 	}
@@ -153,7 +154,7 @@ func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
 }
 
 // GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
-func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error) {
+func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
 	if id == types.EmptyNodeID {
 		db.logger.Fatal("invalid argument to GetMalfeasanceProof")
 	}
@@ -175,7 +176,7 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 	return proof, err
 }
 
-func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof) {
+func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *wire.MalfeasanceProof) {
 	if id == types.EmptyNodeID {
 		db.logger.Fatal("invalid argument to CacheMalfeasanceProof")
 	}
@@ -287,7 +288,7 @@ func (db *CachedDB) IterateEpochATXHeaders(
 }
 
 func (db *CachedDB) IterateMalfeasanceProofs(
-	iter func(types.NodeID, *types.MalfeasanceProof) error,
+	iter func(types.NodeID, *wire.MalfeasanceProof) error,
 ) error {
 	ids, err := identities.GetMalicious(db)
 	if err != nil {

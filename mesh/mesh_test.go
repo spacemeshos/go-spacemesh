@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -411,7 +412,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 		tm.cdb,
 		signing.NewEdVerifier(),
 		malfeasance.NewMockpostVerifier(gomock.NewController(t)),
-		&types.MalfeasanceGossip{MalfeasanceProof: *malProof},
+		&wire.MalfeasanceGossip{MalfeasanceProof: *malProof},
 	)
 	require.NoError(t, err)
 	require.Equal(t, sig.NodeID(), nodeID)
