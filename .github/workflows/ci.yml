@@ -38,6 +38,8 @@ jobs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -62,6 +64,8 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -85,6 +89,8 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -120,6 +126,8 @@ jobs:
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -157,6 +165,8 @@ jobs:
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -208,6 +218,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - name: set up go
         uses: actions/setup-go@v5
         with:
