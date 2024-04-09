@@ -1436,7 +1436,11 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case grpcserver.Post:
 		service := grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
-		service.AllowConnections(app.Config.SMESHING.CoinbaseAccount != "")
+		isCoinbaseSet := app.Config.SMESHING.CoinbaseAccount != ""
+		if !isCoinbaseSet {
+			lg.Warning("coinbase account is not set, connections from remote post services will be rejected")
+		}
+		service.AllowConnections(isCoinbaseSet)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.PostInfo:

@@ -362,6 +362,6 @@ func Test_PostService_Connection_NotAllowed(t *testing.T) {
 
 	_, err = stream.Recv()
 	require.Error(t, err)
-	require.Equal(t, codes.PermissionDenied, status.Code(err))
+	require.Equal(t, codes.FailedPrecondition, status.Code(err))
 	require.ErrorContains(t, err, "connection not allowed")
 }

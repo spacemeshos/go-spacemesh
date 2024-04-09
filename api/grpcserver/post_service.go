@@ -75,7 +75,7 @@ func (s *PostService) connectionAllowed() bool {
 // requests to the PoST node and receive responses.
 func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 	if !s.connectionAllowed() {
-		return status.Error(codes.PermissionDenied, "connection not allowed: node has no coinbase set in config")
+		return status.Error(codes.FailedPrecondition, "connection not allowed: node has no coinbase set in config")
 	}
 
 	err := stream.SendMsg(&pb.NodeRequest{
