@@ -129,7 +129,7 @@ jobs:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
           # - macos-12-large
-          - [go-spacemesh, m2-pro]
+          - [go-spacemesh]
           - windows-latest
     steps:
       - name: Add OpenCL support - Ubuntu
@@ -175,7 +175,7 @@ jobs:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
           # - macos-12-large
-          - [go-spacemesh, m2-pro]
+          - [go-spacemesh]
           - windows-latest
     steps:
       - name: Add OpenCL support - Ubuntu
@@ -219,7 +219,7 @@ jobs:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
           # - macos-12-large
-          - [go-spacemesh, m2-pro]
+          - [go-spacemesh]
           - windows-latest
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
@@ -231,7 +231,7 @@ jobs:
           sudo ethtool -K eth0 rx off
 
       - name: disable TCP/UDP offload - MacOS
-        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[go-spacemesh, m2-pro]' }}
+        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[go-spacemesh]' }}
         run: |
           sudo sysctl -w net.link.generic.system.hwcksum_tx=0
           sudo sysctl -w net.link.generic.system.hwcksum_rx=0

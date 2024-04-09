@@ -19,7 +19,7 @@ jobs:
             outname_sufix: "linux-arm64"
           - os: macos-12-large
             outname_sufix: "mac-amd64"
-          - os: [go-spacemesh, m2-pro]
+          - os: [go-spacemesh]
             outname_sufix: "mac-arm64"
           - os: windows-latest
             outname_sufix: "win-amd64"
@@ -95,7 +95,7 @@ jobs:
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
 
       - name: Install coreutils
-        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[go-spacemesh, m2-pro]' }}
+        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[go-spacemesh]' }}
         run: brew install coreutils
 
       - name: Calculate the hashsum of the zip file
