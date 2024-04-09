@@ -1,8 +1,8 @@
 package localsql
 
 import (
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 )
 
 //go:generate scalegen

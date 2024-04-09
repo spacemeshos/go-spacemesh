@@ -11,9 +11,9 @@ import (
 	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 )
 
 const (
@@ -119,7 +119,7 @@ func loadNipostChallenge(dir string) (*types.NIPostChallenge, error) {
 	if err := load(filepath.Join(dir, challengeFilename), &ch); err != nil {
 		return nil, fmt.Errorf("loading nipost challenge: %w", err)
 	}
-	return types.NIPostChallengeFromWireV1(ch), nil
+	return wire.NIPostChallengeFromWireV1(ch), nil
 }
 
 func discardNipostChallenge(dir string) error {
@@ -153,7 +153,7 @@ func loadPost(dir string) (*types.Post, error) {
 	if err := load(filepath.Join(dir, postFilename), &post); err != nil {
 		return nil, fmt.Errorf("loading post: %w", err)
 	}
-	return types.PostFromWireV1(&post), nil
+	return wire.PostFromWireV1(&post), nil
 }
 
 func discardPost(dir string) error {

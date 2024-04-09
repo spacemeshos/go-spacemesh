@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -121,7 +122,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	atx2, err := newAtx(sig1, withPublishEpoch(2))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(signing.ATX, atx2.ToWireV1().SignedBytes())
+	atx2.Signature = sig1.Sign(signing.ATX, wire.ActivationTxToWireV1(atx2.ActivationTx).SignedBytes())
 
 	atx3, err := newAtx(sig2, withPublishEpoch(3))
 	require.NoError(t, err)
@@ -129,7 +130,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	atx4, err := newAtx(sig2, withPublishEpoch(4))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(signing.ATX, atx4.ToWireV1().SignedBytes())
+	atx4.Signature = sig2.Sign(signing.ATX, wire.ActivationTxToWireV1(atx4.ActivationTx).SignedBytes())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
@@ -301,7 +302,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx2, err := newAtx(sig1, withPublishEpoch(2))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(signing.ATX, atx2.ToWireV1().SignedBytes())
+	atx2.Signature = sig1.Sign(signing.ATX, wire.ActivationTxToWireV1(atx2.ActivationTx).SignedBytes())
 
 	atx3, err := newAtx(sig2, withPublishEpoch(3))
 	require.NoError(t, err)
@@ -309,7 +310,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx4, err := newAtx(sig2, withPublishEpoch(4))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(signing.ATX, atx4.ToWireV1().SignedBytes())
+	atx4.Signature = sig2.Sign(signing.ATX, wire.ActivationTxToWireV1(atx4.ActivationTx).SignedBytes())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
@@ -587,7 +588,7 @@ func TestLoadBlob(t *testing.T) {
 
 	var blob1 sql.Blob
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1))
-	encoded := codec.MustEncode(atx1.ActivationTx.ToWireV1())
+	encoded := codec.MustEncode(wire.ActivationTxToWireV1(atx1.ActivationTx))
 	require.Equal(t, encoded, blob1.Bytes)
 
 	blobSizes, err := atxs.GetBlobSizes(db, [][]byte{atx1.ID().Bytes()})
@@ -601,7 +602,7 @@ func TestLoadBlob(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, atx2))
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))
-	encoded = codec.MustEncode(atx2.ActivationTx.ToWireV1())
+	encoded = codec.MustEncode(wire.ActivationTxToWireV1(atx2.ActivationTx))
 	require.Equal(t, encoded, blob2.Bytes)
 	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
 		atx1.ID().Bytes(),
@@ -632,7 +633,7 @@ func TestGetBlobCached(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, atxs.Add(db, atx))
-	encoded, err := codec.Encode(atx.ActivationTx.ToWireV1())
+	encoded, err := codec.Encode(wire.ActivationTxToWireV1(atx.ActivationTx))
 	require.NoError(t, err)
 	require.Equal(t, 1, db.QueryCount())
 
@@ -662,7 +663,7 @@ func TestCachedBlobEviction(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(db, atx))
 		addedATXs[n] = atx
-		encoded, err := codec.Encode(atx.ActivationTx.ToWireV1())
+		encoded, err := codec.Encode(wire.ActivationTxToWireV1(atx.ActivationTx))
 		require.NoError(t, err)
 		blobs[n] = encoded
 		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))

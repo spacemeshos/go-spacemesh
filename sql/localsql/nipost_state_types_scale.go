@@ -5,8 +5,8 @@ package localsql
 
 import (
 	"github.com/spacemeshos/go-scale"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 )
 
 func (t *PoetServiceID) EncodeScale(enc *scale.Encoder) (total int, err error) {

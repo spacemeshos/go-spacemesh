@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -384,7 +385,7 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	poetProvider := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
 	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
 		PoetProof: types.PoetProof{},
-	}, []types.Member{types.Member(challenge.Hash())}, nil)
+	}, []types.Member{types.Member(wire.NIPostChallengeToWireV1(&challenge).Hash())}, nil)
 
 	poetDb := NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
@@ -429,7 +430,7 @@ func TestPostSetup(t *testing.T) {
 	poetProvider := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
 	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
 		PoetProof: types.PoetProof{},
-	}, []types.Member{types.Member(challenge.Hash())}, nil)
+	}, []types.Member{types.Member(wire.NIPostChallengeToWireV1(&challenge).Hash())}, nil)
 
 	poetDb := NewMockpoetDbAPI(ctrl)
 	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
@@ -486,9 +487,9 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		&types.PoetProofMessage{
 			PoetProof: types.PoetProof{},
 		}, []types.Member{
-			types.Member(challenge.Hash()),
-			types.Member(challenge2.Hash()),
-			types.Member(challenge3.Hash()),
+			types.Member(wire.NIPostChallengeToWireV1(&challenge).Hash()),
+			types.Member(wire.NIPostChallengeToWireV1(&challenge2).Hash()),
+			types.Member(wire.NIPostChallengeToWireV1(&challenge3).Hash()),
 		}, nil,
 	)
 
@@ -627,7 +628,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 			Return(&types.PoetRound{}, nil)
 		poet.EXPECT().
 			Proof(gomock.Any(), gomock.Any()).
-			Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
+			Return(proof, []types.Member{types.Member(wire.NIPostChallengeToWireV1(&challenge).Hash())}, nil)
 		poet.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
 		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9998")
 		poets = append(poets, poet)
@@ -676,6 +677,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 2,
 	}
+	challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
 
 	proofWorse := &types.PoetProofMessage{
 		PoetProof: types.PoetProof{
@@ -696,12 +698,12 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	poets := make([]poetClient, 0, 2)
 	{
 		poet := defaultPoetServiceMock(ctrl, []byte("poet0"), "http://localhost:9999")
-		poet.EXPECT().Proof(gomock.Any(), "").Return(proofWorse, []types.Member{types.Member(challenge.Hash())}, nil)
+		poet.EXPECT().Proof(gomock.Any(), "").Return(proofWorse, []types.Member{types.Member(challengeHash)}, nil)
 		poets = append(poets, poet)
 	}
 	{
 		poet := defaultPoetServiceMock(ctrl, []byte("poet1"), "http://localhost:9998")
-		poet.EXPECT().Proof(gomock.Any(), "").Return(proofBetter, []types.Member{types.Member(challenge.Hash())}, nil)
+		poet.EXPECT().Proof(gomock.Any(), "").Return(proofBetter, []types.Member{types.Member(challengeHash)}, nil)
 		poets = append(poets, poet)
 	}
 
@@ -943,7 +945,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 		// successfully registered to at least one poet
 		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
-			ChallengeHash: challenge.Hash(),
+			ChallengeHash: wire.NIPostChallengeToWireV1(challenge).Hash(),
 			Address:       "http://poet1.com",
 			RoundID:       "1",
 			RoundEnd:      time.Now().Add(10 * time.Second),
@@ -986,7 +988,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 		// successfully registered to at least one poet
 		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
-			ChallengeHash: challenge.Hash(),
+			ChallengeHash: wire.NIPostChallengeToWireV1(challenge).Hash(),
 			Address:       "http://poet1.com",
 			RoundID:       "1",
 			RoundEnd:      time.Now().Add(10 * time.Second),
@@ -1013,6 +1015,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: postGenesisEpoch + 1,
 	}
+	challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
 
 	proof := &types.PoetProofMessage{
 		PoetProof: types.PoetProof{
@@ -1042,7 +1045,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 			return &types.PoetRound{}, context.Canceled
 		})
 	poet.EXPECT().PowParams(gomock.Any()).Times(2).Return(&PoetPowParams{}, nil)
-	poet.EXPECT().Proof(gomock.Any(), "").Return(proof, []types.Member{types.Member(challenge.Hash())}, nil)
+	poet.EXPECT().Proof(gomock.Any(), "").Return(proof, []types.Member{types.Member(challengeHash)}, nil)
 	poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 
 	poetCfg := PoetConfig{
@@ -1092,7 +1095,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 
 func TestConstructingMerkleProof(t *testing.T) {
 	challenge := types.NIPostChallenge{}
-	challengeHash := challenge.Hash()
+	challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
 
 	t.Run("members empty", func(t *testing.T) {
 		_, err := constructMerkleProof(challengeHash, []types.Member{})
@@ -1107,7 +1110,7 @@ func TestConstructingMerkleProof(t *testing.T) {
 		otherChallenge := types.NIPostChallenge{Sequence: 1}
 		members := []types.Member{
 			types.Member(challengeHash),
-			types.Member(otherChallenge.Hash()),
+			types.Member(wire.NIPostChallengeToWireV1(&otherChallenge).Hash()),
 		}
 		proof, err := constructMerkleProof(challengeHash, members)
 		require.NoError(t, err)
@@ -1121,7 +1124,7 @@ func TestConstructingMerkleProof(t *testing.T) {
 	t.Run("is even member", func(t *testing.T) {
 		otherChallenge := types.NIPostChallenge{Sequence: 1}
 		members := []types.Member{
-			types.Member(otherChallenge.Hash()),
+			types.Member(wire.NIPostChallengeToWireV1(&otherChallenge).Hash()),
 			types.Member(challengeHash),
 		}
 		proof, err := constructMerkleProof(challengeHash, members)
@@ -1171,7 +1174,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 				// proof is fetched from PoET
 				poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
 					PoetProof: types.PoetProof{},
-				}, []types.Member{types.Member(challenge.Hash())}, nil)
+				}, []types.Member{types.Member(wire.NIPostChallengeToWireV1(&challenge).Hash())}, nil)
 				poets = append(poets, poetProvider)
 			}
 
@@ -1183,7 +1186,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 				// proof is still fetched from PoET
 				poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
 					PoetProof: types.PoetProof{},
-				}, []types.Member{types.Member(challenge.Hash())}, nil)
+				}, []types.Member{types.Member(wire.NIPostChallengeToWireV1(&challenge).Hash())}, nil)
 
 				poets = append(poets, poetProvider)
 			}

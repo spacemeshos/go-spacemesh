@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -205,7 +206,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		sig.NodeID(),
 		goldenATX,
 		nipost.NIPost,
-		challenge.Hash(),
+		wire.NIPostChallengeToWireV1(&challenge).Hash(),
 		nipost.NumUnits,
 	)
 	require.NoError(t, err)
@@ -350,7 +351,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		sig.NodeID(),
 		goldenATX,
 		nipost.NIPost,
-		challenge.Hash(),
+		wire.NIPostChallengeToWireV1(&challenge).Hash(),
 		nipost.NumUnits,
 	)
 	require.NoError(t, err)
@@ -469,7 +470,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 				sig.NodeID(),
 				goldenATX,
 				nipost.NIPost,
-				challenge.Hash(),
+				wire.NIPostChallengeToWireV1(&challenge).Hash(),
 				nipost.NumUnits,
 			)
 			require.NoError(t, err)

@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -294,5 +295,5 @@ func (m migration0003) getChallengeHash(db sql.Executor, nodeID types.NodeID) (t
 	if ch == nil {
 		return types.Hash32{}, fmt.Errorf("get challenge from node id %s: %w", nodeID.ShortString(), sql.ErrNotFound)
 	}
-	return ch.Hash(), nil
+	return wire.NIPostChallengeToWireV1(ch).Hash(), nil
 }

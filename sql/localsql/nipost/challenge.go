@@ -3,9 +3,9 @@ package nipost
 import (
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -109,7 +109,7 @@ func UpdatePoetProofRef(
 	ref types.PoetProofRef,
 	membership *types.MerkleProof,
 ) error {
-	buf, err := codec.Encode(membership.ToWireV1())
+	buf, err := codec.Encode(wire.MerkleProofToWireV1(*membership))
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
@@ -142,7 +142,7 @@ func PoetProofRef(db sql.Executor, nodeID types.NodeID) (types.PoetProofRef, *ty
 		if stmt.ColumnLen(1) > 0 {
 			membershipV1 := wire.MerkleProofV1{}
 			_, decodeErr = codec.DecodeFrom(stmt.ColumnReader(1), &membershipV1)
-			membership = types.MerkleProofFromWireV1(membershipV1)
+			membership = wire.MerkleProofFromWireV1(membershipV1)
 		}
 		return true
 	}

@@ -11,19 +11,20 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func saveNipostChallenge(dir string, ch *types.NIPostChallenge) error {
-	if err := save(filepath.Join(dir, challengeFilename), ch.ToWireV1()); err != nil {
+	if err := save(filepath.Join(dir, challengeFilename), wire.NIPostChallengeToWireV1(ch)); err != nil {
 		return fmt.Errorf("saving nipost challenge: %w", err)
 	}
 	return nil
 }
 
 func savePost(dir string, post *types.Post) error {
-	if err := save(filepath.Join(dir, postFilename), post.ToWireV1()); err != nil {
+	if err := save(filepath.Join(dir, postFilename), wire.PostToWireV1(post)); err != nil {
 		return fmt.Errorf("saving post: %w", err)
 	}
 	return nil

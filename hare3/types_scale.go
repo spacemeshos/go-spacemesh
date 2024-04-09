@@ -6,7 +6,6 @@ package hare3
 import (
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/primitive"
 )
 
 func (t *IterRound) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -75,7 +74,7 @@ func (t *Value) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Proposals = field
 	}
 	{
-		field, n, err := scale.DecodeOption[primitive.Hash32](dec)
+		field, n, err := scale.DecodeOption[types.Hash32](dec)
 		if err != nil {
 			return total, err
 		}

@@ -3,15 +3,11 @@ package types
 import (
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/post/shared"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/types/primitive"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -133,10 +129,6 @@ func (challenge *NIPostChallenge) TargetEpoch() EpochID {
 	return challenge.PublishEpoch + 1
 }
 
-func (challenge *NIPostChallenge) Hash() primitive.Hash32 {
-	return challenge.ToWireV1().Hash()
-}
-
 type InnerActivationTx struct {
 	NIPostChallenge
 	Coinbase Address
@@ -212,7 +204,7 @@ func (atx *ActivationTx) SetGolden() {
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
-	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
+	// encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
 	encoder.AddString("smesher", atx.SmesherID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
@@ -229,16 +221,6 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddUint64("effective_num_units", uint64(atx.effectiveNumUnits))
 	}
 	encoder.AddUint64("sequence_number", atx.Sequence)
-	return nil
-}
-
-// Initialize calculates and sets the cached ID field. This field must be set before calling the ID() method.
-func (atx *ActivationTx) Initialize() error {
-	if atx.ID() != EmptyATXID {
-		return errors.New("ATX already initialized")
-	}
-
-	atx.id = ATXID(Hash32(atx.ToWireV1().HashInnerBytes()))
 	return nil
 }
 
@@ -291,11 +273,6 @@ func (atx *ActivationTx) SetValidity(validity Validity) {
 
 // Verify an ATX for a given base TickHeight and TickCount.
 func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
-	if atx.id == EmptyATXID {
-		if err := atx.Initialize(); err != nil {
-			return nil, err
-		}
-	}
 	if atx.effectiveNumUnits == 0 {
 		return nil, errors.New("effective num units not set")
 	}
@@ -399,153 +376,3 @@ type EpochActiveSet struct {
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")
-
-func (p *Post) ToWireV1() *wire.PostV1 {
-	if p == nil {
-		return nil
-	}
-	return &wire.PostV1{
-		Nonce:   p.Nonce,
-		Indices: p.Indices,
-		Pow:     p.Pow,
-	}
-}
-
-func (n *NIPost) ToWireV1() *wire.NIPostV1 {
-	if n == nil {
-		return nil
-	}
-
-	return &wire.NIPostV1{
-		Membership: *n.Membership.ToWireV1(),
-		Post:       n.Post.ToWireV1(),
-		PostMetadata: &wire.PostMetadataV1{
-			Challenge:     n.PostMetadata.Challenge,
-			LabelsPerUnit: n.PostMetadata.LabelsPerUnit,
-		},
-	}
-}
-
-func (p *MerkleProof) ToWireV1() *wire.MerkleProofV1 {
-	if p == nil {
-		return nil
-	}
-	nodes := make([]Hash32, 0, len(p.Nodes))
-	for _, node := range p.Nodes {
-		nodes = append(nodes, Hash32(node))
-	}
-	return &wire.MerkleProofV1{
-		Nodes:     nodes,
-		LeafIndex: p.LeafIndex,
-	}
-}
-
-func (c *NIPostChallenge) ToWireV1() *wire.NIPostChallengeV1 {
-	return &wire.NIPostChallengeV1{
-		PublishEpoch:   c.PublishEpoch.Uint32(),
-		Sequence:       c.Sequence,
-		PrevATXID:      primitive.Hash32(c.PrevATXID),
-		PositioningATX: primitive.Hash32(c.PositioningATX),
-		CommitmentATX:  (*primitive.Hash32)(c.CommitmentATX),
-		InitialPost:    c.InitialPost.ToWireV1(),
-	}
-}
-
-func (a *ActivationTx) ToWireV1() *wire.ActivationTxV1 {
-	return &wire.ActivationTxV1{
-		InnerActivationTxV1: wire.InnerActivationTxV1{
-			NIPostChallengeV1: *a.NIPostChallenge.ToWireV1(),
-			Coinbase:          wire.Address(a.Coinbase),
-			NumUnits:          a.NumUnits,
-			NIPost:            a.NIPost.ToWireV1(),
-			NodeID:            (*primitive.Hash32)(a.NodeID),
-			VRFNonce:          (*wire.VRFPostIndex)(a.VRFNonce),
-		},
-		SmesherID: Hash32(a.SmesherID),
-		Signature: a.Signature,
-	}
-}
-
-// Decode ActivationTx from bytes.
-// In future it should decide which version of ActivationTx to decode based on the publish epoch.
-func ActivationTxFromBytes(data []byte) (*ActivationTx, error) {
-	var wireAtx wire.ActivationTxV1
-	err := codec.Decode(data, &wireAtx)
-	if err != nil {
-		return nil, fmt.Errorf("decoding ATX: %w", err)
-	}
-
-	return ActivationTxFromWireV1(&wireAtx), nil
-}
-
-func ActivationTxFromWireV1(atx *wire.ActivationTxV1) *ActivationTx {
-	return &ActivationTx{
-		InnerActivationTx: InnerActivationTx{
-			NIPostChallenge: NIPostChallenge{
-				PublishEpoch:   EpochID(atx.PublishEpoch),
-				Sequence:       atx.Sequence,
-				PrevATXID:      ATXID(atx.PrevATXID),
-				PositioningATX: ATXID(atx.PositioningATX),
-				CommitmentATX:  (*ATXID)(atx.CommitmentATX),
-				InitialPost:    PostFromWireV1(atx.InitialPost),
-			},
-			Coinbase: Address(atx.Coinbase),
-			NumUnits: atx.NumUnits,
-			NIPost:   NIPostFromWireV1(atx.NIPost),
-			NodeID:   (*NodeID)(atx.NodeID),
-			VRFNonce: (*VRFPostIndex)(atx.VRFNonce),
-		},
-		SmesherID: NodeID(atx.SmesherID),
-		Signature: atx.Signature,
-	}
-}
-
-func NIPostChallengeFromWireV1(ch wire.NIPostChallengeV1) *NIPostChallenge {
-	return &NIPostChallenge{
-		PublishEpoch:   EpochID(ch.PublishEpoch),
-		Sequence:       ch.Sequence,
-		PrevATXID:      ATXID(ch.PrevATXID),
-		PositioningATX: ATXID(ch.PositioningATX),
-		CommitmentATX:  (*ATXID)(ch.CommitmentATX),
-		InitialPost:    PostFromWireV1(ch.InitialPost),
-	}
-}
-
-func NIPostFromWireV1(nipost *wire.NIPostV1) *NIPost {
-	if nipost == nil {
-		return nil
-	}
-
-	return &NIPost{
-		Membership: *MerkleProofFromWireV1(nipost.Membership),
-		Post:       PostFromWireV1(nipost.Post),
-		PostMetadata: &PostMetadata{
-			Challenge:     nipost.PostMetadata.Challenge,
-			LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
-		},
-	}
-}
-
-func PostFromWireV1(post *wire.PostV1) *Post {
-	if post == nil {
-		return nil
-	}
-	return &Post{
-		Nonce:   post.Nonce,
-		Indices: post.Indices,
-		Pow:     post.Pow,
-	}
-}
-
-func MerkleProofFromWireV1(proofV1 wire.MerkleProofV1) *MerkleProof {
-	proof := &MerkleProof{
-		LeafIndex: proofV1.LeafIndex,
-	}
-	for _, node := range proofV1.Nodes {
-		if proof.Nodes == nil {
-			proof.Nodes = make([]Hash32, 0, len(proofV1.Nodes))
-		}
-		proof.Nodes = append(proof.Nodes, Hash32(node))
-	}
-	return proof
-}

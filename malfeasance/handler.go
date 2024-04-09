@@ -10,9 +10,9 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -395,7 +395,7 @@ func validateInvalidPostIndex(ctx context.Context,
 		if err != nil {
 			return types.EmptyNodeID, fmt.Errorf("getting commitment ATX: %w", err)
 		}
-		commitmentAtx = (*types.Hash32)(&atx)
+		commitmentAtx = &atx
 	}
 	post := (*shared.Proof)(atx.NIPost.Post)
 	meta := &shared.ProofMetadata{

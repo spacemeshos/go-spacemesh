@@ -22,10 +22,10 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -246,7 +246,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	eg.Go(func() error {
 		for {
 			logger.Sugar().Infow("publishing ATX", "atx", atx)
-			buf, err := codec.Encode(atx.ToWireV1())
+			buf, err := codec.Encode(wire.ActivationTxToWireV1(atx))
 			require.NoError(t, err)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
 			require.NoError(t, err)

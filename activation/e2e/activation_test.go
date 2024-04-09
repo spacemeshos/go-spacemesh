@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -142,7 +143,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		func(ctx context.Context, topic string, got []byte) error {
 			atxMtx.Lock()
 			defer atxMtx.Unlock()
-			gotAtx, err := types.ActivationTxFromBytes(got)
+			gotAtx, err := wire.ActivationTxFromBytes(got)
 			require.NoError(t, err)
 			atxs[gotAtx.SmesherID] = *gotAtx
 			if len(atxs) == numSigners {
@@ -195,7 +196,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			sig.NodeID(),
 			*atx.CommitmentATX,
 			atx.NIPost,
-			atx.NIPostChallenge.Hash(),
+			wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(),
 			atx.NumUnits,
 		)
 		require.NoError(t, err)

@@ -20,9 +20,9 @@ import (
 	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -128,7 +128,7 @@ func Test_0003Migration_BeforePhase0(t *testing.T) {
 	err = addChallenge(db, nodeID, ch)
 	require.NoError(t, err)
 	state := &NIPostBuilderState{
-		Challenge: ch.Hash(),
+		Challenge: wire.NIPostChallengeToWireV1(ch).Hash(),
 	}
 	require.NoError(t, saveBuilderState(dataDir, state))
 	require.FileExists(t, filepath.Join(dataDir, builderFilename))
@@ -235,7 +235,7 @@ func Test_0003Migration_Phase0_missing_poet_client(t *testing.T) {
 	require.NoError(t, err)
 
 	state := &NIPostBuilderState{
-		Challenge: ch.Hash(),
+		Challenge: wire.NIPostChallengeToWireV1(ch).Hash(),
 		PoetRequests: []PoetRequest{
 			{
 				PoetRound: &types.PoetRound{
@@ -382,7 +382,7 @@ func Test_0003Migration_Phase0_MainnetPoet2(t *testing.T) {
 
 	endTime := time.Now()
 	state := &NIPostBuilderState{
-		Challenge: ch.Hash(),
+		Challenge: wire.NIPostChallengeToWireV1(ch).Hash(),
 		PoetRequests: []PoetRequest{
 			{
 				PoetRound: &types.PoetRound{
@@ -488,7 +488,7 @@ func Test_0003Migration_Phase1_Complete(t *testing.T) {
 
 	endTime := time.Now()
 	state := &NIPostBuilderState{
-		Challenge: ch.Hash(),
+		Challenge: wire.NIPostChallengeToWireV1(ch).Hash(),
 		PoetProofRef: types.PoetProofRef{
 			4, 5, 6,
 		},
@@ -619,7 +619,7 @@ func Test_0003Migration_Phase2_Complete(t *testing.T) {
 		4, 5, 6,
 	}
 	state := &NIPostBuilderState{
-		Challenge:    ch.Hash(),
+		Challenge:    wire.NIPostChallengeToWireV1(ch).Hash(),
 		PoetProofRef: poetProofRef,
 		NIPost: &wire.NIPostV1{
 			Post: &wire.PostV1{
@@ -781,7 +781,7 @@ func Test_0003Migration_Rollback(t *testing.T) {
 		4, 5, 6,
 	}
 	state := &NIPostBuilderState{
-		Challenge:    ch.Hash(),
+		Challenge:    wire.NIPostChallengeToWireV1(ch).Hash(),
 		PoetProofRef: poetProofRef,
 		NIPost: &wire.NIPostV1{
 			Post: &wire.PostV1{

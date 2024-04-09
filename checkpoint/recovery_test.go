@@ -19,6 +19,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
@@ -256,7 +257,7 @@ func validateAndPreserveData(
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for i, vatx := range deps {
-		encoded, err := codec.Encode(vatx.ToWireV1())
+		encoded, err := codec.Encode(wire.ActivationTxToWireV1(vatx.ActivationTx))
 		require.NoError(tb, err)
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
@@ -332,7 +333,7 @@ func newChainedAtx(
 	atx.SmesherID = sig.NodeID()
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
-	atx.Signature = sig.Sign(signing.ATX, atx.ToWireV1().SignedBytes())
+	atx.Signature = sig.Sign(signing.ATX, wire.ActivationTxToWireV1(atx).SignedBytes())
 	return newvAtx(tb, atx)
 }
 

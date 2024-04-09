@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -248,9 +249,8 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	got, err := getBytes(ctx, bs, datastore.ATXDB, atx.ID())
 	require.NoError(t, err)
 
-	gotA, err := types.ActivationTxFromBytes(got)
+	gotA, err := wire.ActivationTxFromBytes(got)
 	require.NoError(t, err)
-	require.NoError(t, gotA.Initialize())
 	gotA.SetEffectiveNumUnits(gotA.NumUnits)
 	gotA.SetReceived(atx.Received())
 	require.Equal(t, atx, gotA)

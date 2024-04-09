@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -686,7 +687,7 @@ func (b *Builder) createAtx(
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
 	// TODO: in future, encode the right ATX version depending on the epoch.
-	buf, err := codec.Encode(atx.ToWireV1())
+	buf, err := codec.Encode(wire.ActivationTxToWireV1(atx))
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %w", err)
 	}
@@ -740,10 +741,12 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
-	// FIXME - there is no need to sign types.ActivationTX (only wire.ActivationTxVx)
-	atx.Signature = signer.Sign(signing.ATX, atx.ToWireV1().SignedBytes())
+	// FIXME - there is no need to sign types.ActivationTX (only ActivationTxVx)
+	wireAtx := wire.ActivationTxToWireV1(atx)
+	atx.Signature = signer.Sign(signing.ATX, wireAtx.SignedBytes())
 	atx.SmesherID = signer.NodeID()
-	return atx.Initialize()
+	atx.SetID(types.ATXID(wireAtx.HashInnerBytes()))
+	return nil
 }
 
 func buildNipostChallengeStartDeadline(roundStart time.Time, gracePeriod time.Duration) time.Time {

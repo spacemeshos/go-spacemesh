@@ -5,7 +5,7 @@ package multisig
 
 import (
 	"github.com/spacemeshos/go-scale"
-	"github.com/spacemeshos/go-spacemesh/common/types/primitive"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func (t *MultiSig) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -36,7 +36,7 @@ func (t *MultiSig) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Required = uint8(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[primitive.Hash32](dec, 10)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 10)
 		if err != nil {
 			return total, err
 		}

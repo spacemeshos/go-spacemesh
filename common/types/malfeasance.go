@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/types/wire"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -68,14 +67,14 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		}
 	case InvalidPostIndex:
 		encoder.AddString("type", "invalid post index")
-		p, ok := mp.Proof.Data.(*wire.InvalidPostIndexProofV1)
-		if ok {
-			// FIXME
-			// p.Atx.Initialize()
-			// encoder.AddString("atx_id", p.Atx.ID().String())
-			// encoder.AddString("smesher", p.Atx.SmesherID.String())
-			encoder.AddUint32("invalid index", p.InvalidIdx)
-		}
+		// p, ok := mp.Proof.Data.(*wire.InvalidPostIndexProofV1)
+		// if ok {
+		// FIXME
+		// p.Atx.Initialize()
+		// encoder.AddString("atx_id", p.Atx.ID().String())
+		// encoder.AddString("smesher", p.Atx.SmesherID.String())
+		// encoder.AddUint32("invalid index", p.InvalidIdx)
+		// }
 	default:
 		encoder.AddString("type", "unknown")
 	}
@@ -146,13 +145,13 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 		e.Data = &proof
 		total += n
 	case InvalidPostIndex:
-		var proof wire.InvalidPostIndexProofV1
-		n, err := proof.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		e.Data = &proof
-		total += n
+		// var proof wire.InvalidPostIndexProofV1
+		// n, err := proof.DecodeScale(dec)
+		// if err != nil {
+		// 	return total, err
+		// }
+		// e.Data = &proof
+		// total += n
 	default:
 		return total, errors.New("unknown malfeasance proof type")
 	}
