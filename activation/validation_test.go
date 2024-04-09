@@ -302,7 +302,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		}, nil)
 
 		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
-		require.EqualError(t, err, "sequence number is not one more than prev sequence number")
+		require.EqualError(t, err, "sequence number (10) is not one more than the prev one (10)")
 	})
 }
 
