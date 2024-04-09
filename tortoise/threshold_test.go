@@ -120,7 +120,6 @@ func TestComputeThreshold(t *testing.T) {
 			expectedGlobal: fixed.From(15),
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			global := computeGlobalThreshold(
 				tc.config, weight{}, tc.epochs,

@@ -135,7 +135,7 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 
 func dialGrpc(ctx context.Context, tb testing.TB, cfg Config) *grpc.ClientConn {
 	tb.Helper()
-	conn, err := grpc.DialContext(ctx,
+	conn, err := grpc.NewClient(
 		cfg.PublicListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
@@ -553,15 +553,18 @@ type smesherServiceConn struct {
 
 	smeshingProvider *activation.MockSmeshingProvider
 	postSupervisor   *MockpostSupervisor
+	grpcPostService  *MockgrpcPostService
 }
 
 func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceConn, context.Context) {
 	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := NewMockpostSupervisor(ctrl)
+	grpcPostService := NewMockgrpcPostService(ctrl)
 	svc := NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
+		grpcPostService,
 		10*time.Millisecond,
 		activation.DefaultPostSetupOpts(),
 		sig,
@@ -580,6 +583,7 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 
 		smeshingProvider: smeshingProvider,
 		postSupervisor:   postSupervisor,
+		grpcPostService:  grpcPostService,
 	}, mockCtx
 }
 
@@ -633,6 +637,7 @@ func TestSmesherService(t *testing.T) {
 					return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize
 				}),
 			), sig).Return(nil)
+		c.grpcPostService.EXPECT().AllowConnections(true)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
@@ -749,7 +754,7 @@ func TestSmesherService(t *testing.T) {
 		require.NoError(t, err)
 
 		// Expecting the stream to return updates before closing.
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			_, err = stream.Recv()
 			require.NoError(t, err)
 		}
@@ -1390,7 +1395,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	defer cancel()
 	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
-	for i := 0; i < numTxs; i++ {
+	for range numTxs {
 		res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{
 			Transaction: globalTx.Raw,
 		})
@@ -1620,7 +1625,7 @@ func TestTransactionService(t *testing.T) {
 
 			const subscriberCount = 10
 			streams := make([]pb.TransactionService_TransactionsStateStreamClient, 0, subscriberCount)
-			for i := 0; i < subscriberCount; i++ {
+			for range subscriberCount {
 				stream, err := c.TransactionsStateStream(ctx, req)
 				require.NoError(t, err)
 				streams = append(streams, stream)
@@ -1659,11 +1664,11 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			for i := 0; i < subscriptionChanBufSize*2; i++ {
+			for range subscriptionChanBufSize * 2 {
 				events.ReportNewTx(0, globalTx)
 			}
 
-			for i := 0; i < subscriptionChanBufSize; i++ {
+			for range subscriptionChanBufSize {
 				_, err := stream.Recv()
 				if err != nil {
 					st, ok := status.FromError(err)

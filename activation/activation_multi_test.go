@@ -2,7 +2,7 @@ package activation
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -66,7 +66,7 @@ func Test_Builder_Multi_RestartSmeshing(t *testing.T) {
 
 	t.Run("Single threaded", func(t *testing.T) {
 		builder := getBuilder(t)
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			require.NoError(t, builder.StartSmeshing(types.Address{}))
 			require.True(t, builder.Smeshing())
 			require.NoError(t, builder.StopSmeshing(false))
@@ -82,7 +82,7 @@ func Test_Builder_Multi_RestartSmeshing(t *testing.T) {
 		var eg errgroup.Group
 		for worker := 0; worker < 10; worker += 1 {
 			eg.Go(func() error {
-				for i := 0; i < 50; i++ {
+				for range 50 {
 					builder.StartSmeshing(types.Address{})
 					builder.StopSmeshing(false)
 				}
@@ -225,7 +225,6 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 
 	var eg errgroup.Group
 	for _, sig := range tab.signers {
-		sig := sig
 		eg.Go(func() error {
 			numUnits := uint32(12)
 
@@ -374,13 +373,13 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			},
 		)
 
-		post := &types.Post{
+		post := &wire.PostV1{
 			Indices: initialPost[sig.NodeID()].Indices,
 			Nonce:   initialPost[sig.NodeID()].Nonce,
 			Pow:     initialPost[sig.NodeID()].Pow,
 		}
-		ref := &types.NIPostChallenge{
-			PublishEpoch:   postGenesisEpoch + 1,
+		ref := &wire.NIPostChallengeV1{
+			PublishEpoch:   postGenesisEpoch.Uint32() + 1,
 			CommitmentATX:  &initialPost[sig.NodeID()].CommitmentATX,
 			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
@@ -405,7 +404,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			VRFNonce: types.VRFPostIndex(rand.Uint64()),
 		}
 		nipostState[sig.NodeID()] = state
-		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref).Return(state, nil)
+		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash()).Return(state, nil)
 
 		// awaiting atx publication epoch log
 		tab.mclock.EXPECT().CurrentLayer().DoAndReturn(

@@ -190,6 +190,12 @@ func NewActivationTx(
 	return atx
 }
 
+// TargetEpoch returns the target epoch of the ATX. This is the epoch in which the miner is eligible
+// to participate thanks to the ATX.
+func (atx *ActivationTx) TargetEpoch() EpochID {
+	return atx.PublishEpoch + 1
+}
+
 // Golden returns true if atx is from a checkpoint snapshot.
 // a golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
 func (atx *ActivationTx) Golden() bool {
@@ -372,7 +378,7 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=2700000"` // to be in line with `EpochData` in fetch/wire_types.go
+	Set   []ATXID `scale:"max=3500000"` // to be in line with `EpochData` in fetch/wire_types.go
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")

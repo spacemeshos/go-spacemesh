@@ -1,7 +1,7 @@
 package txs
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 

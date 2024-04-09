@@ -222,7 +222,6 @@ func TestDataFetch_PollLayerOpinions(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -286,58 +285,4 @@ func TestDataFetch_PollLayerOpinions_MalformedData(t *testing.T) {
 	td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers[0], types.LayerID(10)).Return([]byte("malformed"), nil)
 	_, _, err := td.PollLayerOpinions(context.Background(), 10, false, peers)
 	require.ErrorContains(t, err, "decode")
-}
-
-func TestDataFetch_GetEpochATXs(t *testing.T) {
-	const numPeers = 4
-	peers := GenPeers(numPeers)
-	epoch := types.EpochID(11)
-	errGetID := errors.New("err get id")
-	errFetch := errors.New("err fetch")
-	tt := []struct {
-		name                  string
-		err, getErr, fetchErr error
-	}{
-		{
-			name: "success",
-		},
-		{
-			name:   "get failure",
-			getErr: errGetID,
-			err:    errGetID,
-		},
-		{
-			name:     "fetch failure",
-			fetchErr: errFetch,
-			err:      errFetch,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			td := newTestDataFetch(t)
-			ed := &fetch.EpochData{
-				AtxIDs: types.RandomActiveSet(11),
-			}
-			td.mFetcher.EXPECT().SelectBestShuffled(gomock.Any()).Return(peers)
-			if tc.getErr == nil {
-				td.mTortoise.EXPECT().GetMissingActiveSet(epoch+1, ed.AtxIDs).Return(ed.AtxIDs[1:])
-			}
-			td.mFetcher.EXPECT().PeerEpochInfo(gomock.Any(), gomock.Any(), epoch).DoAndReturn(
-				func(_ context.Context, peer p2p.Peer, _ types.EpochID) (*fetch.EpochData, error) {
-					require.Contains(t, peers, peer)
-					if tc.getErr != nil {
-						return nil, tc.getErr
-					} else {
-						td.mFetcher.EXPECT().RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-						td.mFetcher.EXPECT().GetAtxs(gomock.Any(), ed.AtxIDs[1:]).Return(tc.fetchErr)
-						return ed, nil
-					}
-				})
-			require.ErrorIs(t, td.GetEpochATXs(context.TODO(), epoch), tc.err)
-		})
-	}
 }

@@ -151,6 +151,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Cleanup(clock.Close)
 
 	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
+	grpcPostService.AllowConnections(true)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Named("grpc"))
 	grpcPrivateServer, err := grpcserver.NewWithServices(
 		cfg.API.PostListener,
@@ -195,8 +196,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		}
 		break
 	}
-
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge)
+	challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challengeHash)
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST

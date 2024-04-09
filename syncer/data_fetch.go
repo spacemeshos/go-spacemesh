@@ -27,9 +27,6 @@ type DataFetch struct {
 	msh      meshProvider
 	ids      idProvider
 	tortoise system.Tortoise
-
-	mu        sync.Mutex
-	atxSynced map[types.EpochID]map[p2p.Peer]struct{}
 }
 
 // NewDataFetch creates a new DataFetch instance.
@@ -41,12 +38,11 @@ func NewDataFetch(
 	lg log.Log,
 ) *DataFetch {
 	return &DataFetch{
-		fetcher:   fetch,
-		logger:    lg,
-		msh:       msh,
-		ids:       ids,
-		tortoise:  tortoise,
-		atxSynced: map[types.EpochID]map[p2p.Peer]struct{}{},
+		fetcher:  fetch,
+		logger:   lg,
+		msh:      msh,
+		ids:      ids,
+		tortoise: tortoise,
 	}
 }
 
@@ -75,7 +71,6 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 	var eg errgroup.Group
 	fetchErr := threadSafeErr{}
 	for _, peer := range peers {
-		peer := peer
 		eg.Go(func() error {
 			data, err := d.fetcher.GetLayerData(ctx, peer, lid)
 			if err != nil {
@@ -140,7 +135,6 @@ func (d *DataFetch) PollLayerOpinions(
 	var eg errgroup.Group
 	fetchErr := threadSafeErr{}
 	for _, peer := range peers {
-		peer := peer
 		eg.Go(func() error {
 			data, err := d.fetcher.GetLayerOpinions(ctx, peer, lid)
 			if err != nil {
@@ -204,69 +198,4 @@ func (d *DataFetch) PollLayerOpinions(
 		}
 	}
 	return allOpinions, certs, nil
-}
-
-func (d *DataFetch) pickAtxPeer(epoch types.EpochID, peers []p2p.Peer) p2p.Peer {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if _, ok := d.atxSynced[epoch]; !ok {
-		d.atxSynced[epoch] = map[p2p.Peer]struct{}{}
-		delete(d.atxSynced, epoch-1)
-	}
-	for _, p := range peers {
-		if _, ok := d.atxSynced[epoch][p]; !ok {
-			return p
-		}
-	}
-	return p2p.NoPeer
-}
-
-func (d *DataFetch) updateAtxPeer(epoch types.EpochID, peer p2p.Peer) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.atxSynced[epoch][peer] = struct{}{}
-}
-
-// GetEpochATXs fetches all ATXs published in the specified epoch from a peer.
-func (d *DataFetch) GetEpochATXs(ctx context.Context, epoch types.EpochID) error {
-	peers := d.fetcher.SelectBestShuffled(fetch.RedundantPeers)
-	if len(peers) == 0 {
-		return errNoPeers
-	}
-	peer := d.pickAtxPeer(epoch, peers)
-	if peer == p2p.NoPeer {
-		d.logger.WithContext(ctx).With().Debug("synced atxs from all peers",
-			epoch,
-			log.Int("peers", len(peers)),
-		)
-		return nil
-	}
-
-	ed, err := d.fetcher.PeerEpochInfo(ctx, peer, epoch)
-	if err != nil {
-		atxPeerError.Inc()
-		return fmt.Errorf("get epoch info (peer %v): %w", peer, err)
-	}
-	if len(ed.AtxIDs) == 0 {
-		d.logger.WithContext(ctx).With().Debug("peer have zero atx",
-			epoch,
-			log.Stringer("peer", peer),
-		)
-		return nil
-	}
-	d.updateAtxPeer(epoch, peer)
-	d.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(ed.AtxIDs))
-	missing := d.tortoise.GetMissingActiveSet(epoch+1, ed.AtxIDs)
-	d.logger.WithContext(ctx).With().Debug("fetching atxs",
-		epoch,
-		log.Stringer("peer", peer),
-		log.Int("total", len(ed.AtxIDs)),
-		log.Int("missing", len(missing)),
-	)
-	if len(missing) > 0 {
-		if err := d.fetcher.GetAtxs(ctx, missing); err != nil {
-			return fmt.Errorf("get ATXs: %w", err)
-		}
-	}
-	return nil
 }

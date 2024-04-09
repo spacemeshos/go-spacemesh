@@ -89,7 +89,7 @@ func EmitPoetWaitRound(nodeID types.NodeID, current, publish types.EpochID, wait
 	)
 }
 
-func EmitPoetWaitProof(nodeID types.NodeID, publish, target types.EpochID, wait time.Time) {
+func EmitPoetWaitProof(nodeID types.NodeID, publish types.EpochID, wait time.Time) {
 	const help = "Node is waiting for PoET to complete. " +
 		"After it's complete, the node will fetch the PoET proof, generate a PoST proof, " +
 		"and finally publish an ATX to establish eligibility for rewards in the target epoch."
@@ -99,7 +99,7 @@ func EmitPoetWaitProof(nodeID types.NodeID, publish, target types.EpochID, wait 
 		&pb.Event_PoetWaitProof{
 			PoetWaitProof: &pb.EventPoetWaitProof{
 				Publish: publish.Uint32(),
-				Target:  target.Uint32(),
+				Target:  publish.Add(1).Uint32(),
 				Wait:    durationpb.New(time.Until(wait)),
 				Until:   timestamppb.New(wait),
 				Smesher: nodeID.Bytes(),

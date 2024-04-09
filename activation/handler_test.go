@@ -47,15 +47,14 @@ func setID(atx *types.ActivationTx) {
 	atx.SetID(types.ATXID(wireAtx.HashInnerBytes()))
 }
 
-func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Hash32) (types.MerkleProof, types.Hash32) {
+func newMerkleProof(t testing.TB, leafs []types.Hash32) (types.MerkleProof, types.Hash32) {
 	t.Helper()
 	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(poetShared.HashMembershipTreeNode).
 		WithLeavesToProve(map[uint64]bool{0: true}).
 		Build()
 	require.NoError(t, err)
-	require.NoError(t, tree.AddLeaf(challenge[:]))
-	for _, m := range otherLeafs {
+	for _, m := range leafs {
 		require.NoError(t, tree.AddLeaf(m[:]))
 	}
 	root, nodes := tree.RootAndProof()
@@ -68,9 +67,10 @@ func newMerkleProof(t testing.TB, challenge types.Hash32, otherLeafs []types.Has
 	}, types.BytesToHash(root)
 }
 
-func newNIPostWithChallenge(t testing.TB, challenge types.Hash32, poetRef []byte) *nipost.NIPostState {
+func newNIPostWithPoet(t testing.TB, poetRef []byte) *nipost.NIPostState {
 	t.Helper()
-	proof, _ := newMerkleProof(t, challenge, []types.Hash32{
+	proof, _ := newMerkleProof(t, []types.Hash32{
+		types.BytesToHash([]byte("challenge")),
 		types.BytesToHash([]byte("leaf2")),
 		types.BytesToHash([]byte("leaf3")),
 		types.BytesToHash([]byte("leaf4")),
@@ -168,12 +168,11 @@ func TestHandler_processBlockATXs(t *testing.T) {
 	coinbase1 := types.GenerateAddress([]byte("aaaa"))
 	coinbase2 := types.GenerateAddress([]byte("bbbb"))
 	coinbase3 := types.GenerateAddress([]byte("cccc"))
-	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x76, 0x45}
 	numTicks := uint64(100)
 	numUnits := uint32(100)
 
-	npst := newNIPostWithChallenge(t, chlng, poetRef)
+	npst := newNIPostWithPoet(t, poetRef)
 	posATX := newActivationTx(
 		t,
 		sig,
@@ -236,7 +235,7 @@ func TestHandler_processBlockATXs(t *testing.T) {
 		),
 	}
 	for _, atx := range atxList {
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		proof, err := atxHdlr.processVerifiedATX(context.Background(), atx)
 		r.NoError(err)
 		r.Nil(proof)
@@ -288,7 +287,7 @@ func TestHandler_processBlockATXs(t *testing.T) {
 		),
 	}
 	for _, atx := range atxList2 {
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		proof, err := atxHdlr.processVerifiedATX(context.Background(), atx)
 		r.NoError(err)
 		r.Nil(proof)
@@ -320,9 +319,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	goldenATXID := types.ATXID{2, 3, 4}
 	currentLayer := types.LayerID(1012)
 
-	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
-	npst := newNIPostWithChallenge(t, chlng, poetRef)
+	npst := newNIPostWithPoet(t, poetRef)
 	prevAtx := newActivationTx(
 		t,
 		sig,
@@ -370,7 +368,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		}
 		nipost := types.NIPost{PostMetadata: &types.PostMetadata{}}
 		atx := newAtx(challenge, &nipost, 100, types.GenerateAddress([]byte("aaaa")))
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
@@ -402,7 +400,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		nonce := types.VRFPostIndex(999)
 		nipost := types.NIPost{PostMetadata: &types.PostMetadata{}}
 		atx := newAtx(challenge, &nipost, 100, types.GenerateAddress([]byte("aaaa")))
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		atx.VRFNonce = &nonce
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
@@ -439,7 +437,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		// numunits decreased from 100 to 90 between atx and prevAtx
 		nipost := types.NIPost{PostMetadata: &types.PostMetadata{}}
 		atx := newAtx(challenge, &nipost, 90, types.GenerateAddress([]byte("aaaa")))
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
@@ -473,7 +471,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		// numunits increased from 100 to 110 between atx and prevAtx
 		nipost := types.NIPost{PostMetadata: &types.PostMetadata{}}
 		atx := newAtx(challenge, &nipost, 110, types.GenerateAddress([]byte("aaaa")))
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
@@ -510,7 +508,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		// numunits increased from 100 to 110 between atx and prevAtx
 		nipost := types.NIPost{PostMetadata: &types.PostMetadata{}}
 		atx := newAtx(challenge, &nipost, 110, types.GenerateAddress([]byte("aaaa")))
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
@@ -548,7 +546,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		*atx.VRFNonce = 1
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
 		*atx.InnerActivationTx.NodeID = sig.NodeID()
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
@@ -584,7 +582,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		}
 		nipost := types.NIPost{PostMetadata: &types.PostMetadata{}}
 		atx := newAtx(challenge, &nipost, 100, types.GenerateAddress([]byte("aaaa")))
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
@@ -757,7 +755,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		*atx.VRFNonce = 1
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
 		*atx.InnerActivationTx.NodeID = sig.NodeID()
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(currentLayer)
@@ -862,7 +860,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		}
 		nipost := types.NIPost{PostMetadata: &types.PostMetadata{}}
 		atx := newAtx(challenge, &nipost, 100, types.GenerateAddress([]byte("aaaa")))
-		atx.NIPost = newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(), poetRef).NIPost
+		atx.NIPost = newNIPostWithPoet(t, poetRef).NIPost
 		atx.InnerActivationTx.NodeID = new(types.NodeID)
 		*atx.InnerActivationTx.NodeID = sig.NodeID()
 		require.NoError(t, SignAndFinalizeAtx(sig, atx))
@@ -886,9 +884,8 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	require.NoError(t, err)
 
 	coinbase := types.GenerateAddress([]byte("aaaa"))
-	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x56, 0xbe}
-	npst := newNIPostWithChallenge(t, chlng, poetRef)
+	npst := newNIPostWithPoet(t, poetRef)
 	prevAtx := newActivationTx(
 		t,
 		sig,
@@ -1231,7 +1228,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 		CommitmentATX:  &goldenATXID,
 		InitialPost:    &types.Post{},
 	}
-	nipost := newNIPostWithChallenge(t, types.HexToHash32("0x3333"), []byte{0x76, 0x45})
+	nipost := newNIPostWithPoet(t, []byte{0x76, 0x45})
 
 	atx := newAtx(ch, nipost.NIPost, 100, types.GenerateAddress([]byte("aaaa")))
 	atx.NodeID = &nodeID
@@ -1397,16 +1394,17 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	poetBytes := []byte("66666")
 	coinbase := types.Address{2, 4, 5}
 	sigs := make([]*signing.EdSigner, 0, numOfMiners)
-	for i := 0; i < numOfMiners; i++ {
+	for range numOfMiners {
 		sig, err := signing.NewEdSigner()
 		r.NoError(err)
 		sigs = append(sigs, sig)
 	}
+	r.Len(sigs, numOfMiners)
 
 	start := time.Now()
 	eStart := time.Now()
 	for epoch := postGenesisEpoch; epoch < postGenesisEpoch+numOfEpochs; epoch++ {
-		for i := 0; i < numOfMiners; i++ {
+		for i := range numOfMiners {
 			challenge := types.NIPostChallenge{
 				Sequence:       1,
 				PrevATXID:      prevAtxs[i],
@@ -1414,7 +1412,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 				PositioningATX: posAtx,
 				CommitmentATX:  nil,
 			}
-			npst := newNIPostWithChallenge(b, wire.NIPostChallengeToWireV1(&challenge).Hash(), poetBytes)
+			npst := newNIPostWithPoet(b, poetBytes)
 			atx = newAtx(challenge, npst.NIPost, npst.NumUnits, coinbase)
 			SignAndFinalizeAtx(sigs[i], atx)
 			vAtx, err := atx.Verify(0, 1)
@@ -1453,7 +1451,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	sig1, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nodeID1 := sig1.NodeID()
-	nipost := newNIPostWithChallenge(t, types.HexToHash32("0x3333"), []byte{0xba, 0xbe})
+	nipost := newNIPostWithPoet(t, []byte{0xba, 0xbe})
 	vrfNonce := types.VRFPostIndex(12345)
 	first := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
@@ -1545,7 +1543,7 @@ func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nodeID := sig.NodeID()
-	nipost := newNIPostWithChallenge(t, types.HexToHash32("0x3333"), []byte{0xba, 0xbe})
+	nipost := newNIPostWithPoet(t, []byte{0xba, 0xbe})
 	vrfNonce := types.VRFPostIndex(12345)
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
@@ -1590,7 +1588,7 @@ func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 
 	var eg errgroup.Group
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		eg.Go(func() error {
 			return atxHdlr.HandleGossipAtx(context.Background(), "", atxData)
 		})
@@ -1894,7 +1892,7 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 		stop uint64
 		wg   sync.WaitGroup
 	)
-	for i := 0; i < runtime.NumCPU()/2; i++ {
+	for range runtime.NumCPU() / 2 {
 		wg.Add(1)
 		//nolint:testifylint
 		go func() {
@@ -1929,7 +1927,7 @@ func BenchmarkGetAtxHeaderWithConcurrentProcessAtx(b *testing.B) {
 		}()
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_, err := atxHdlr.cdb.GetAtxHeader(types.ATXID{1, 1, 1})
 		require.ErrorIs(b, err, sql.ErrNotFound)
 	}
@@ -1958,7 +1956,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 			PositioningATX: posATX,
 			CommitmentATX:  nil,
 		}
-		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost := newNIPostWithPoet(t, []byte("66666"))
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
@@ -1980,7 +1978,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 			PositioningATX: goldenATXID,
 			CommitmentATX:  nil,
 		}
-		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost := newNIPostWithPoet(t, []byte("66666"))
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
@@ -2000,7 +1998,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 			PositioningATX: types.EmptyATXID,
 			CommitmentATX:  nil,
 		}
-		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost := newNIPostWithPoet(t, []byte("66666"))
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
@@ -2020,7 +2018,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 			PositioningATX: posATX,
 			CommitmentATX:  nil,
 		}
-		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost := newNIPostWithPoet(t, []byte("66666"))
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 		atx.CommitmentATX = &commitATX
 
@@ -2042,7 +2040,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 			PositioningATX: posATX,
 			CommitmentATX:  nil,
 		}
-		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost := newNIPostWithPoet(t, []byte("66666"))
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 		atx.CommitmentATX = &goldenATXID
 
@@ -2063,7 +2061,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 			PositioningATX: types.EmptyATXID,
 			CommitmentATX:  nil,
 		}
-		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost := newNIPostWithPoet(t, []byte("66666"))
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
@@ -2082,7 +2080,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 			PositioningATX: prevATX,
 			CommitmentATX:  nil,
 		}
-		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost := newNIPostWithPoet(t, []byte("66666"))
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
@@ -2102,7 +2100,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 			PositioningATX: types.EmptyATXID,
 			CommitmentATX:  nil,
 		}
-		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost := newNIPostWithPoet(t, []byte("66666"))
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef()).Return(errors.New("pooh"))
@@ -2121,7 +2119,7 @@ func TestHandler_FetchReferences(t *testing.T) {
 			PositioningATX: prevATX,
 			CommitmentATX:  nil,
 		}
-		nipost := newNIPostWithChallenge(t, types.HexToHash32("55555"), []byte("66666"))
+		nipost := newNIPostWithPoet(t, []byte("66666"))
 		atx := newAtx(challenge, nipost.NIPost, 2, coinbase)
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
@@ -2307,7 +2305,7 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 		PositioningATX: goldenATXID,
 		CommitmentATX:  &goldenATXID,
 	}
-	nipost := newNIPostWithChallenge(t, wire.NIPostChallengeToWireV1(&challenge).Hash(), []byte("poet")).NIPost
+	nipost := newNIPostWithPoet(t, []byte("poet")).NIPost
 
 	t.Run("post verified fully", func(t *testing.T) {
 		t.Parallel()

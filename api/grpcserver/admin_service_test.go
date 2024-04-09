@@ -44,7 +44,7 @@ func newAtx(tb testing.TB, db *sql.Database) {
 }
 
 func createMesh(tb testing.TB, db *sql.Database) {
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		newAtx(tb, db)
 	}
 	acct := &types.Account{

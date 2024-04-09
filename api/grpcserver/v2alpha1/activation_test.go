@@ -183,7 +183,6 @@ func TestActivationStreamService_Stream(t *testing.T) {
 				},
 			},
 		} {
-			tc := tc
 			t.Run(tc.desc, func(t *testing.T) {
 				stream, err := client.Stream(ctx, tc.request)
 				require.NoError(t, err)

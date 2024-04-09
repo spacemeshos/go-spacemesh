@@ -10,12 +10,15 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 )
+
+//go:generate mockgen -typed -source=post_verifier.go -destination=mocks/subscription.go -package=mocks
 
 type verifyPostJob struct {
 	ctx      context.Context // context of Verify() call
@@ -25,11 +28,31 @@ type verifyPostJob struct {
 	result   chan error
 }
 
-type autoscaler struct {
-	sub *events.BufferedSubscription[events.UserEvent]
+type postStatesGetter interface {
+	Get() map[types.NodeID]types.PostState
 }
 
-func newAutoscaler() (*autoscaler, error) {
+type subscription[T any] interface {
+	Close()
+	Out() <-chan T
+	Full() <-chan struct{}
+}
+type autoscaler struct {
+	sub        subscription[events.UserEvent]
+	bufferSize int
+	logger     *zap.Logger
+	postStates postStatesGetter
+}
+
+func newAutoscaler(logger *zap.Logger, postStates postStatesGetter, bufferSize int) *autoscaler {
+	return &autoscaler{
+		bufferSize: bufferSize,
+		postStates: postStates,
+		logger:     logger.Named("autoscaler"),
+	}
+}
+
+func (a *autoscaler) subscribe() error {
 	sub, err := events.SubscribeMatched(func(t *events.UserEvent) bool {
 		switch t.Event.Details.(type) {
 		case *pb.Event_PostStart:
@@ -39,20 +62,55 @@ func newAutoscaler() (*autoscaler, error) {
 		default:
 			return false
 		}
-	}, events.WithBuffer(5))
-
-	return &autoscaler{sub: sub}, err
+	}, events.WithBuffer(a.bufferSize))
+	if err != nil {
+		return err
+	}
+	a.sub = sub
+	return nil
 }
 
 func (a autoscaler) run(stop chan struct{}, s scaler, min, target int) {
+	nodeIDs := make(map[types.NodeID]struct{})
+
 	for {
 		select {
+		case <-a.sub.Full():
+			a.logger.Warn("post autoscaler events subscription overflow, restarting")
+			if err := a.subscribe(); err != nil {
+				a.logger.Error("failed to restart post autoscaler events subscription", zap.Error(err))
+				return
+			}
+			clear(nodeIDs)
+			for id, state := range a.postStates.Get() {
+				if state == types.PostStateProving {
+					nodeIDs[id] = struct{}{}
+				}
+			}
+			if len(nodeIDs) == 0 {
+				s.scale(target)
+			} else {
+				s.scale(min)
+			}
 		case e := <-a.sub.Out():
-			switch e.Event.Details.(type) {
+			switch event := e.Event.Details.(type) {
 			case *pb.Event_PostStart:
+				nodeIDs[types.BytesToNodeID(event.PostStart.Smesher)] = struct{}{}
 				s.scale(min)
 			case *pb.Event_PostComplete:
-				s.scale(target)
+				delete(nodeIDs, types.BytesToNodeID(event.PostComplete.Smesher))
+				if len(nodeIDs) == 0 {
+					s.scale(target)
+				} else {
+					a.logger.Debug(
+						"not scaling up, some nodes are still proving",
+						zap.Array("smesherIDs", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+							for id := range nodeIDs {
+								enc.AppendString(id.ShortString())
+							}
+							return nil
+						})))
+				}
 			}
 		case <-stop:
 			a.sub.Close()
@@ -102,7 +160,9 @@ func (v *postVerifier) Verify(
 type postVerifierOpts struct {
 	opts           PostProofVerifyingOpts
 	prioritizedIds []types.NodeID
-	autoscaling    bool
+	autoscaling    *struct {
+		postStates postStatesGetter
+	}
 }
 
 type PostVerifierOpt func(v *postVerifierOpts)
@@ -119,9 +179,9 @@ func WithPrioritizedID(id types.NodeID) PostVerifierOpt {
 	}
 }
 
-func WithAutoscaling() PostVerifierOpt {
+func WithAutoscaling(postStates postStatesGetter) PostVerifierOpt {
 	return func(v *postVerifierOpts) {
-		v.autoscaling = true
+		v.autoscaling = &struct{ postStates postStatesGetter }{}
 	}
 }
 
@@ -152,8 +212,8 @@ func NewPostVerifier(cfg PostConfig, logger *zap.Logger, opts ...PostVerifierOpt
 		logger,
 		options.prioritizedIds...,
 	)
-	if options.autoscaling && minWorkers != workers {
-		offloadingVerifier.autoscale(minWorkers, workers)
+	if options.autoscaling != nil && minWorkers != workers {
+		offloadingVerifier.autoscale(minWorkers, workers, options.autoscaling.postStates)
 	}
 	return offloadingVerifier, nil
 }
@@ -192,10 +252,10 @@ func newOffloadingPostVerifier(
 
 // Turn on automatic scaling of the number of workers.
 // The number of workers will be scaled between `min` and `target` (inclusive).
-func (v *offloadingPostVerifier) autoscale(min, target int) {
-	a, err := newAutoscaler()
-	if err != nil {
-		v.log.Panic("failed to create autoscaler", zap.Error(err))
+func (v *offloadingPostVerifier) autoscale(min, target int, postStates postStatesGetter) {
+	a := newAutoscaler(v.log, postStates, len(v.prioritizedIds)*3)
+	if err := a.subscribe(); err != nil {
+		v.log.Panic("failed to subscribe to post events", zap.Error(err))
 	}
 	v.eg.Go(func() error { a.run(v.stop, v, min, target); return nil })
 }

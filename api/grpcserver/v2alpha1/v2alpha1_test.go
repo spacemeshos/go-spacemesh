@@ -38,7 +38,7 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 
 func dialGrpc(ctx context.Context, tb testing.TB, cfg grpcserver.Config) *grpc.ClientConn {
 	tb.Helper()
-	conn, err := grpc.DialContext(ctx,
+	conn, err := grpc.NewClient(
 		cfg.PublicListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),

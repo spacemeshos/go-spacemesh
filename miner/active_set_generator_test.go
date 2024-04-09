@@ -245,7 +245,6 @@ func TestActiveSetGenerate(t *testing.T) {
 			expect:         expectSet([]types.ATXID{{1}, {2}}, 4*ticks),
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			tester := newTesterActiveSetGenerator(

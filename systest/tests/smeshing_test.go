@@ -61,13 +61,12 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 
 	createdCh := make(chan *pb.Proposal, cl.Total()*(limit+1))
 	includedAll := make([]map[uint32][]*pb.Proposal, cl.Total())
-	for i := 0; i < cl.Total(); i++ {
+	for i := range cl.Total() {
 		includedAll[i] = map[uint32][]*pb.Proposal{}
 	}
 
 	eg, ctx := errgroup.WithContext(tctx)
-	for i := 0; i < cl.Total(); i++ {
-		i := i
+	for i := range cl.Total() {
 		client := cl.Client(i)
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
 		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
@@ -176,8 +175,7 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 		eg      errgroup.Group
 		genesis = cl.GenesisID()
 	)
-	for i := range accs {
-		acc := accs[i]
+	for i, acc := range accs {
 		client := cl.Client(i % cl.Total())
 		eg.Go(func() error {
 			var subeg errgroup.Group
