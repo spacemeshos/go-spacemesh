@@ -1890,7 +1890,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
-		datastore.WithConsensusCache(data),
 	)
 	clients := make([]localsql.PoetClient, len(app.Config.PoetServers))
 	for i, server := range app.Config.PoetServers {

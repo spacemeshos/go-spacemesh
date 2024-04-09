@@ -36,11 +36,11 @@ func (vatx *VerifiedActivationTx) TickHeight() uint64 {
 
 func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
 	return &ActivationTxHeader{
-		NIPostChallenge:   vatx.NIPostChallenge,
+		PublishEpoch:      vatx.PublishEpoch,
+		Sequence:          vatx.Sequence,
 		Coinbase:          vatx.Coinbase,
 		NumUnits:          vatx.NumUnits,
 		EffectiveNumUnits: vatx.EffectiveNumUnits(),
-		VRFNonce:          vatx.VRFNonce,
 		Received:          vatx.Received(),
 
 		ID:     vatx.ID(),
@@ -48,7 +48,6 @@ func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
 
 		BaseTickHeight: vatx.BaseTickHeight(),
 		TickCount:      vatx.TickCount(),
-		Golden:         vatx.Golden(),
 	}
 }
 

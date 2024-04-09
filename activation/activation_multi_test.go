@@ -188,7 +188,7 @@ func TestRegossip(t *testing.T) {
 			atx := newActivationTx(t,
 				sig, 0, types.EmptyATXID, types.EmptyATXID, nil,
 				layer.GetEpoch(), 0, 1, types.Address{}, 1, nil)
-			require.NoError(t, atxs.Add(tab.cdb, atx))
+			require.NoError(t, atxs.Add(tab.db, atx))
 
 			if refAtx == nil {
 				refAtx = atx
@@ -196,7 +196,7 @@ func TestRegossip(t *testing.T) {
 		}
 
 		var blob sql.Blob
-		require.NoError(t, atxs.LoadBlob(context.Background(), tab.cdb, refAtx.ID().Bytes(), &blob))
+		require.NoError(t, atxs.LoadBlob(context.Background(), tab.db, refAtx.ID().Bytes(), &blob))
 
 		// atx will be regossiped once (by the smesher)
 		tab.mclock.EXPECT().CurrentLayer().Return(layer)
@@ -213,7 +213,7 @@ func TestRegossip(t *testing.T) {
 				Epoch:     layer.GetEpoch(),
 				SmesherID: sig.NodeID(),
 			}
-			require.NoError(t, atxs.AddCheckpointed(tab.cdb, &atx))
+			require.NoError(t, atxs.AddCheckpointed(tab.db, &atx))
 			tab.mclock.EXPECT().CurrentLayer().Return(layer)
 			require.NoError(t, tab.Regossip(context.Background(), sig.NodeID()))
 		}
