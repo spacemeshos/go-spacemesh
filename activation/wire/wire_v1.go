@@ -58,7 +58,7 @@ type InnerActivationTxV1 struct {
 }
 
 type NIPostChallengeV1 struct {
-	PublishEpoch uint32
+	Publish types.EpochID
 	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against
 	// that miner.
@@ -115,14 +115,14 @@ type PostMetadataV1 struct {
 }
 
 type ATXMetadataV1 struct {
-	PublishEpoch uint32
-	MsgHash      types.Hash32
+	Publish types.EpochID
+	MsgHash types.Hash32
 }
 
 func (atx *ActivationTxV1) SignedBytes() []byte {
 	data := codec.MustEncode(&ATXMetadataV1{
-		PublishEpoch: atx.PublishEpoch,
-		MsgHash:      atx.HashInnerBytes(),
+		Publish: atx.Publish,
+		MsgHash: atx.HashInnerBytes(),
 	})
 	return data
 }
@@ -161,19 +161,15 @@ func NIPostToWireV1(n *types.NIPost) *NIPostV1 {
 }
 
 func MerkleProofToWireV1(p types.MerkleProof) *MerkleProofV1 {
-	nodes := make([]types.Hash32, 0, len(p.Nodes))
-	for _, node := range p.Nodes {
-		nodes = append(nodes, types.Hash32(node))
-	}
 	return &MerkleProofV1{
-		Nodes:     nodes,
+		Nodes:     p.Nodes,
 		LeafIndex: p.LeafIndex,
 	}
 }
 
 func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 	return &NIPostChallengeV1{
-		PublishEpoch:   c.PublishEpoch.Uint32(),
+		Publish:        c.PublishEpoch,
 		Sequence:       c.Sequence,
 		PrevATXID:      c.PrevATXID,
 		PositioningATX: c.PositioningATX,
@@ -213,20 +209,20 @@ func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
 	result := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:   types.EpochID(atx.PublishEpoch),
+				PublishEpoch:   atx.Publish,
 				Sequence:       atx.Sequence,
-				PrevATXID:      types.ATXID(atx.PrevATXID),
-				PositioningATX: types.ATXID(atx.PositioningATX),
-				CommitmentATX:  (*types.ATXID)(atx.CommitmentATX),
+				PrevATXID:      atx.PrevATXID,
+				PositioningATX: atx.PositioningATX,
+				CommitmentATX:  atx.CommitmentATX,
 				InitialPost:    PostFromWireV1(atx.InitialPost),
 			},
 			Coinbase: atx.Coinbase,
 			NumUnits: atx.NumUnits,
 			NIPost:   NIPostFromWireV1(atx.NIPost),
-			NodeID:   (*types.NodeID)(atx.NodeID),
+			NodeID:   atx.NodeID,
 			VRFNonce: (*types.VRFPostIndex)(atx.VRFNonce),
 		},
-		SmesherID: types.NodeID(atx.SmesherID),
+		SmesherID: atx.SmesherID,
 		Signature: atx.Signature,
 	}
 
@@ -236,11 +232,11 @@ func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
 
 func NIPostChallengeFromWireV1(ch NIPostChallengeV1) *types.NIPostChallenge {
 	return &types.NIPostChallenge{
-		PublishEpoch:   types.EpochID(ch.PublishEpoch),
+		PublishEpoch:   ch.Publish,
 		Sequence:       ch.Sequence,
-		PrevATXID:      types.ATXID(ch.PrevATXID),
-		PositioningATX: types.ATXID(ch.PositioningATX),
-		CommitmentATX:  (*types.ATXID)(ch.CommitmentATX),
+		PrevATXID:      ch.PrevATXID,
+		PositioningATX: ch.PositioningATX,
+		CommitmentATX:  ch.CommitmentATX,
 		InitialPost:    PostFromWireV1(ch.InitialPost),
 	}
 }
@@ -272,14 +268,8 @@ func PostFromWireV1(post *PostV1) *types.Post {
 }
 
 func MerkleProofFromWireV1(proofV1 MerkleProofV1) *types.MerkleProof {
-	proof := &types.MerkleProof{
+	return &types.MerkleProof{
 		LeafIndex: proofV1.LeafIndex,
+		Nodes:     proofV1.Nodes,
 	}
-	for _, node := range proofV1.Nodes {
-		if proof.Nodes == nil {
-			proof.Nodes = make([]types.Hash32, 0, len(proofV1.Nodes))
-		}
-		proof.Nodes = append(proof.Nodes, types.Hash32(node))
-	}
-	return proof
 }

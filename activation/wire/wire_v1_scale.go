@@ -156,7 +156,7 @@ func (t *InnerActivationTxV1) DecodeScale(dec *scale.Decoder) (total int, err er
 
 func (t *NIPostChallengeV1) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.PublishEpoch))
+		n, err := scale.EncodeCompact32(enc, uint32(t.Publish))
 		if err != nil {
 			return total, err
 		}
@@ -207,7 +207,7 @@ func (t *NIPostChallengeV1) DecodeScale(dec *scale.Decoder) (total int, err erro
 			return total, err
 		}
 		total += n
-		t.PublishEpoch = uint32(field)
+		t.Publish = types.EpochID(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
@@ -433,7 +433,7 @@ func (t *PostMetadataV1) DecodeScale(dec *scale.Decoder) (total int, err error) 
 
 func (t *ATXMetadataV1) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.PublishEpoch))
+		n, err := scale.EncodeCompact32(enc, uint32(t.Publish))
 		if err != nil {
 			return total, err
 		}
@@ -456,7 +456,7 @@ func (t *ATXMetadataV1) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.PublishEpoch = uint32(field)
+		t.Publish = types.EpochID(field)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.MsgHash[:])

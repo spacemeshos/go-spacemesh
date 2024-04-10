@@ -275,7 +275,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
 		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
 		invalidAtx := invalidPostProof.Atx
-		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
+		require.Equal(t, atx.PublishEpoch, invalidAtx.Publish)
 		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)
 		require.Equal(t, atx.NodeID, invalidAtx.NodeID)
 		require.Equal(t, atx.PositioningATX, invalidAtx.PositioningATX)
