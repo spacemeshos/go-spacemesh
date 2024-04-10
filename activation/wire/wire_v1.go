@@ -3,39 +3,12 @@ package wire
 import (
 	"fmt"
 
-	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 //go:generate scalegen
-
-type VRFPostIndex uint64
-
-func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(*v))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		value, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		*v = VRFPostIndex(value)
-	}
-	return total, nil
-}
 
 type ActivationTxV1 struct {
 	InnerActivationTxV1
@@ -54,7 +27,7 @@ type InnerActivationTxV1 struct {
 
 	NIPost   *NIPostV1
 	NodeID   *types.NodeID // only present in initial ATX to make hash of the first InnerActivationTxV2 unique
-	VRFNonce *VRFPostIndex // only present when the nonce changed (or initial ATX)
+	VRFNonce *uint64       // only present when the nonce changed (or initial ATX)
 }
 
 type NIPostChallengeV1 struct {
@@ -186,7 +159,7 @@ func ActivationTxToWireV1(a *types.ActivationTx) *ActivationTxV1 {
 			NumUnits:          a.NumUnits,
 			NIPost:            NIPostToWireV1(a.NIPost),
 			NodeID:            a.NodeID,
-			VRFNonce:          (*VRFPostIndex)(a.VRFNonce),
+			VRFNonce:          (*uint64)(a.VRFNonce),
 		},
 		SmesherID: a.SmesherID,
 		Signature: a.Signature,

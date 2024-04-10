@@ -6,20 +6,11 @@ import (
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/spacemeshos/go-scale"
-	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
-
-func FuzzVRFPostIndexConsistency(f *testing.F) {
-	tester.FuzzConsistency[wire.VRFPostIndex](f)
-}
-
-func FuzzVRFPostIndexTxStateSafety(f *testing.F) {
-	tester.FuzzSafety[wire.VRFPostIndex](f)
-}
 
 func TestActivationTxEncoding(t *testing.T) {
 	var atx types.ActivationTx

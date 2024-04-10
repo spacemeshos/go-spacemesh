@@ -328,7 +328,7 @@ func newChainedAtx(
 		watx.NodeID = &nodeID
 	}
 	if vrfNonce != 0 {
-		watx.VRFNonce = (*wire.VRFPostIndex)(&vrfNonce)
+		watx.VRFNonce = (*uint64)(&vrfNonce)
 	}
 	watx.Signature = sig.Sign(signing.ATX, watx.SignedBytes())
 

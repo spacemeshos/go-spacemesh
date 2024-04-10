@@ -95,7 +95,7 @@ func (t *InnerActivationTxV1) EncodeScale(enc *scale.Encoder) (total int, err er
 		total += n
 	}
 	{
-		n, err := scale.EncodeOption(enc, t.VRFNonce)
+		n, err := scale.EncodeCompact64Ptr(enc, t.VRFNonce)
 		if err != nil {
 			return total, err
 		}
@@ -144,7 +144,7 @@ func (t *InnerActivationTxV1) DecodeScale(dec *scale.Decoder) (total int, err er
 		t.NodeID = field
 	}
 	{
-		field, n, err := scale.DecodeOption[VRFPostIndex](dec)
+		field, n, err := scale.DecodeCompact64Ptr(dec)
 		if err != nil {
 			return total, err
 		}
