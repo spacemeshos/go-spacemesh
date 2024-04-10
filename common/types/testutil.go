@@ -71,7 +71,7 @@ func RandomBallotID() BallotID {
 	if err != nil {
 		return EmptyBallotID
 	}
-	return BallotID(id)
+	return id
 }
 
 // RandomProposalID generates a random ProposalID for testing.
@@ -81,7 +81,7 @@ func RandomProposalID() ProposalID {
 	if err != nil {
 		return ProposalID{}
 	}
-	return ProposalID(id)
+	return id
 }
 
 // RandomBlockID generates a random ProposalID for testing.
