@@ -24,7 +24,6 @@ import (
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/mitchellh/mapstructure"
-	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -1891,18 +1890,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
 	)
-	clients := make([]localsql.PoetClient, len(app.Config.PoetServers))
-	for i, server := range app.Config.PoetServers {
-		clients[i], err = activation.NewHTTPPoetClient(server, app.Config.POET)
-		if err != nil {
-			return fmt.Errorf("failed to create poet client: %w", err)
-		}
-	}
-
-	// Migrate `node_state.sql` to `local.sql`
-	if err := app.MigrateLocalDB(dbLog.Zap(), dbPath, clients); err != nil {
-		return err
-	}
 
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
@@ -1911,9 +1898,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
-		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0003Migration(dbLog.Zap(), app.Config.SMESHING.Opts.DataDir, clients)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
@@ -1923,69 +1907,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	return nil
 }
 
-// MigrateLocalDB migrates the old node_state.sql to the new local.sql
-//
-// This function is idempotent and can be called multiple times without side effects.
-// It will only migrate the old db to the new db if the old db exists and the new db does not.
-//
-// TODO(mafa): this can be removed in the future when we are sure that all nodes have migrated to the new db.
-func (app *App) MigrateLocalDB(lg *zap.Logger, dbPath string, clients []localsql.PoetClient) error {
-	oldDBFile := filepath.Join(dbPath, oldLocalDbFile)
-	dbFile := filepath.Join(dbPath, localDbFile)
-	_, err := os.Stat(oldDBFile)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil // no old db to migrate
-	case err != nil:
-		return fmt.Errorf("stat %s: %w", oldDBFile, err)
-	}
-
-	_, err = os.Stat(dbFile)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		// no new db, migrate old to new
-	case err == nil:
-		// both exist, error
-		return fmt.Errorf("%w: both %s and %s exist", fs.ErrExist, oldDBFile, dbFile)
-	case err != nil:
-		return fmt.Errorf("stat %s: %w", dbFile, err)
-	}
-
-	lg.Info("migrating local DB",
-		zap.String("old db", oldDBFile),
-		zap.String("new db", dbFile),
-	)
-	migrations, err := sql.LocalMigrations()
-	if err != nil {
-		return fmt.Errorf("load local migrations: %w", err)
-	}
-	oldDB, err := localsql.Open("file:"+oldDBFile,
-		sql.WithLogger(lg),
-		sql.WithMigrations(migrations),
-		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0003Migration(lg, app.Config.SMESHING.Opts.DataDir, clients)),
-		sql.WithConnections(app.Config.DatabaseConnections),
-	)
-	if err != nil {
-		return fmt.Errorf("open sqlite db %w", err)
-	}
-	defer oldDB.Close()
-
-	if _, err := oldDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", dbFile), nil, nil); err != nil {
-		return fmt.Errorf("vacuum %s to %s: %w", oldDBFile, dbFile, err)
-	}
-	if err := oldDB.Close(); err != nil {
-		return fmt.Errorf("close %s: %w", oldDBFile, err)
-	}
-	if err := atomic.ReplaceFile(oldDBFile, fmt.Sprintf("%s.bak", oldDBFile)); err != nil {
-		return fmt.Errorf("renaming %s to %s: %w", oldDBFile, fmt.Sprintf("%s.bak", oldDBFile), err)
-	}
-	return nil
-}
-
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
+	if err := app.verifyVersionUpgrades(); err != nil {
+		return fmt.Errorf("version upgrade verification failed: %w", err)
+	}
+
 	err := app.startSynchronous(ctx)
 	if err != nil {
 		app.log.With().Error("failed to start App", log.Err(err))
