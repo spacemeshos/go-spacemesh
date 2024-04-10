@@ -2,6 +2,19 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED (v1.5.0)
+
+### Upgrade information
+
+* [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
+  Updating to this version requires going through v1.4 first.
+
+### Highlights
+
+### Features
+
+### Improvements
+
 ## Release v1.4.5
 
 ### Improvements
