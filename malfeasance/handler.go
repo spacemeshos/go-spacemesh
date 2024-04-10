@@ -385,12 +385,12 @@ func validateInvalidPostIndex(ctx context.Context,
 	proof *wire.InvalidPostIndexProof,
 ) (types.NodeID, error) {
 	atx := &proof.Atx
-	if !edVerifier.Verify(signing.ATX, types.NodeID(atx.SmesherID), atx.SignedBytes(), atx.Signature) {
+	if !edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return types.EmptyNodeID, errors.New("invalid signature")
 	}
 	commitmentAtx := atx.CommitmentATX
 	if commitmentAtx == nil {
-		atx, err := atxs.CommitmentATX(db, types.NodeID(atx.SmesherID))
+		atx, err := atxs.CommitmentATX(db, atx.SmesherID)
 		if err != nil {
 			return types.EmptyNodeID, fmt.Errorf("getting commitment ATX: %w", err)
 		}
@@ -410,7 +410,7 @@ func validateInvalidPostIndex(ctx context.Context,
 		meta,
 		verifying.SelectedIndex(int(proof.InvalidIdx)),
 	); err != nil {
-		return types.NodeID(atx.SmesherID), nil
+		return atx.SmesherID, nil
 	}
 	numInvalidProofsPostIndex.Inc()
 	return types.EmptyNodeID, errors.New("invalid post index malfeasance proof - POST is valid")
