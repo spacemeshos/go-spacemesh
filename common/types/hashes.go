@@ -29,9 +29,6 @@ type Hash32 [Hash32Length]byte
 // Hash20 represents the 20-byte blake3 hash of arbitrary data.
 type Hash20 [hash20Length]byte
 
-// Field returns a log field. Implements the LoggableField interface.
-func (h Hash12) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
-
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
 
@@ -95,9 +92,6 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 	copy(h32[:], h[:])
 	return
 }
-
-// Field returns a log field. Implements the LoggableField interface.
-func (h Hash20) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
 // CalcHash12 returns the 12-byte prefix of the blake3 sum of the given byte slice.
 func CalcHash12(data []byte) (h Hash12) {
@@ -227,8 +221,21 @@ func (h Hash32) ToHash20() (h20 Hash20) {
 	return
 }
 
+type hexBytesStringer []byte
+
+func (l hexBytesStringer) String() string {
+	return hex.EncodeToString(l)
+}
+
 // Field returns a log field. Implements the LoggableField interface.
-func (h Hash32) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
+func (h Hash20) Field() log.Field {
+	return log.Stringer("hash", hexBytesStringer(h[:]))
+}
+
+// Field returns a log field. Implements the LoggableField interface.
+func (h Hash32) Field() log.Field {
+	return log.Stringer("hash", hexBytesStringer(h[:]))
+}
 
 // EncodeScale implements scale codec interface.
 func (h *Hash32) EncodeScale(e *scale.Encoder) (int, error) {
