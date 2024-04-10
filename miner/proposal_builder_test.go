@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -201,9 +202,9 @@ func gidentity(id types.NodeID, received time.Time) identity {
 	return identity{
 		id: id,
 		// kind of proof is irrelevant for this test, we want to avoid validation failing
-		proof: types.MalfeasanceProof{Proof: types.Proof{
-			Type: types.HareEquivocation,
-			Data: &types.HareProof{},
+		proof: wire.MalfeasanceProof{Proof: wire.Proof{
+			Type: wire.HareEquivocation,
+			Data: &wire.HareProof{},
 		}},
 		received: received,
 	}
@@ -211,7 +212,7 @@ func gidentity(id types.NodeID, received time.Time) identity {
 
 type identity struct {
 	id       types.NodeID
-	proof    types.MalfeasanceProof
+	proof    wire.MalfeasanceProof
 	received time.Time
 }
 
@@ -513,9 +514,9 @@ func TestBuild(t *testing.T) {
 					},
 					identities: []identity{{
 						id: types.NodeID{2},
-						proof: types.MalfeasanceProof{Proof: types.Proof{
-							Type: types.HareEquivocation,
-							Data: &types.HareProof{},
+						proof: wire.MalfeasanceProof{Proof: wire.Proof{
+							Type: wire.HareEquivocation,
+							Data: &wire.HareProof{},
 						}},
 					}},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
@@ -743,7 +744,6 @@ func TestBuild(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
 				ctx       = context.Background()
@@ -1035,7 +1035,6 @@ func TestGradeAtx(t *testing.T) {
 			result:      evil,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			epochStart := time.Now()
 			atxReceived := epochStart.Add(time.Duration(tc.atxReceived) * time.Second)

@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -150,6 +151,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Cleanup(clock.Close)
 
 	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
+	grpcPostService.AllowConnections(true)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Named("grpc"))
 	grpcPrivateServer, err := grpcserver.NewWithServices(
 		cfg.API.PostListener,
@@ -195,7 +197,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		break
 	}
 
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge)
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST
@@ -266,10 +268,10 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.Equal(t, malfeasance.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
 		require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_POST_INDEX, malfeasance.GetProof().GetKind())
 
-		var proof types.MalfeasanceProof
+		var proof wire.MalfeasanceProof
 		require.NoError(t, codec.Decode(malfeasance.Proof.Proof, &proof))
-		require.Equal(t, types.InvalidPostIndex, proof.Proof.Type)
-		invalidPostProof := proof.Proof.Data.(*types.InvalidPostIndexProof)
+		require.Equal(t, wire.InvalidPostIndex, proof.Proof.Type)
+		invalidPostProof := proof.Proof.Data.(*wire.InvalidPostIndexProof)
 		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
 		invalidAtx := invalidPostProof.Atx
 		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)

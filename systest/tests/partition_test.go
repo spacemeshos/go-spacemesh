@@ -79,8 +79,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	// assuming each client can update state for the same layer up to 10 times
 	stateCh := make(chan *stateUpdate, uint32(cl.Total())*numLayers*10)
 	tctx.Log.Debug("listening to state hashes...")
-	for i := 0; i < cl.Total(); i++ {
-		i := i
+	for i := range cl.Total() {
 		client := cl.Client(i)
 		watchStateHashes(ctx, eg, client, tctx.Log.Desugar(), func(state *pb.GlobalStateStreamResponse) (bool, error) {
 			data := state.Datum.Datum

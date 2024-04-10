@@ -71,7 +71,7 @@ type Ballot struct {
 	EligibilityProofs []VotingEligibility `scale:"max=25000"`
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	// only present in smesher's first ballot of the epoch
-	ActiveSet []ATXID `scale:"max=2700000"`
+	ActiveSet []ATXID `scale:"max=3500000"`
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID

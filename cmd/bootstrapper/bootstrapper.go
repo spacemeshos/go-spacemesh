@@ -213,7 +213,8 @@ func runServer(ctx context.Context, srv *Server) error {
 }
 
 func queryNetworkParams(ctx context.Context, endpoint string) (*NetworkParam, error) {
-	conn, err := grpc.DialContext(ctx, endpoint,
+	conn, err := grpc.NewClient(
+		endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {

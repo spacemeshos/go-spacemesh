@@ -161,7 +161,7 @@ func (n *NodeClient) Resolve(ctx context.Context) (string, error) {
 	return pod.Status.PodIP, nil
 }
 
-func (n *NodeClient) ensurePubConn(ctx context.Context) (*grpc.ClientConn, error) {
+func (n *NodeClient) ensurePubConn() (*grpc.ClientConn, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if n.pubConn != nil {
@@ -171,7 +171,7 @@ func (n *NodeClient) ensurePubConn(ctx context.Context) (*grpc.ClientConn, error
 	if err != nil {
 		return nil, err
 	}
-	conn, err := grpc.DialContext(ctx,
+	conn, err := grpc.NewClient(
 		fmt.Sprintf("%s:%d", pod.Status.PodIP, n.GRPC_PUB),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -191,7 +191,7 @@ func (n *NodeClient) resetPubConn(conn *grpc.ClientConn) {
 	}
 }
 
-func (n *NodeClient) ensurePrivConn(ctx context.Context) (*grpc.ClientConn, error) {
+func (n *NodeClient) ensurePrivConn() (*grpc.ClientConn, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if n.privConn != nil {
@@ -201,7 +201,7 @@ func (n *NodeClient) ensurePrivConn(ctx context.Context) (*grpc.ClientConn, erro
 	if err != nil {
 		return nil, err
 	}
-	conn, err := grpc.DialContext(ctx,
+	conn, err := grpc.NewClient(
 		fmt.Sprintf("%s:%d", pod.Status.PodIP, n.GRPC_PRIV),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -230,7 +230,7 @@ type PubNodeClient struct {
 }
 
 func (n *PubNodeClient) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
-	conn, err := n.ensurePubConn(ctx)
+	conn, err := n.ensurePubConn()
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func (n *PubNodeClient) NewStream(
 	method string,
 	opts ...grpc.CallOption,
 ) (grpc.ClientStream, error) {
-	conn, err := n.ensurePubConn(ctx)
+	conn, err := n.ensurePubConn()
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +272,7 @@ type PrivNodeClient struct {
 }
 
 func (n *PrivNodeClient) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
-	conn, err := n.ensurePrivConn(ctx)
+	conn, err := n.ensurePrivConn()
 	if err != nil {
 		return err
 	}
@@ -294,7 +294,7 @@ func (n *PrivNodeClient) NewStream(
 	method string,
 	opts ...grpc.CallOption,
 ) (grpc.ClientStream, error) {
-	conn, err := n.ensurePrivConn(ctx)
+	conn, err := n.ensurePrivConn()
 	if err != nil {
 		return nil, err
 	}
@@ -549,7 +549,6 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 		)
 	}
 	for i := from; i < to; i++ {
-		i := i
 		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
 		copy(finalFlags, cfg.flags)
 		if !cfg.noDefaultPoets {
@@ -623,7 +622,6 @@ func deployRemoteNodes(ctx *testcontext.Context, from, to int,
 		)
 	}
 	for i := from; i < to; i++ {
-		i := i
 		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
 		copy(finalFlags, cfg.flags)
 		if !cfg.noDefaultPoets {

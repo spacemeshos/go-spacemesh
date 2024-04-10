@@ -7,6 +7,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -40,7 +41,7 @@ func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
 }
 
 // GetMalfeasanceProof returns the malfeasance proof for the given identity.
-func GetMalfeasanceProof(db sql.Executor, nodeID types.NodeID) (*types.MalfeasanceProof, error) {
+func GetMalfeasanceProof(db sql.Executor, nodeID types.NodeID) (*wire.MalfeasanceProof, error) {
 	var (
 		data     []byte
 		received time.Time
@@ -60,7 +61,7 @@ func GetMalfeasanceProof(db sql.Executor, nodeID types.NodeID) (*types.Malfeasan
 	if rows == 0 {
 		return nil, sql.ErrNotFound
 	}
-	var proof types.MalfeasanceProof
+	var proof wire.MalfeasanceProof
 	if err = codec.Decode(data, &proof); err != nil {
 		return nil, err
 	}

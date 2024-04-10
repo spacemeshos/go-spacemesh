@@ -272,6 +272,16 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	return db, nil
 }
 
+func Version(uri string) (int, error) {
+	pool, err := sqlitex.Open(uri, sqlite.SQLITE_OPEN_READONLY, 1)
+	if err != nil {
+		return 0, fmt.Errorf("open db %s: %w", uri, err)
+	}
+	db := &Database{pool: pool}
+	defer db.Close()
+	return version(db)
+}
+
 // Database is an instance of sqlite database.
 type Database struct {
 	*queryCache

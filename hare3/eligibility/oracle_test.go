@@ -296,7 +296,6 @@ func TestCalcEligibilityWithSpaceUnit(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			o := defaultOracle(t)
 			o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
@@ -921,7 +920,6 @@ func TestActiveSetMatrix(t *testing.T) {
 			expect:  "missing atx in atxsdata 4/0200000000",
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			oracle := defaultOracle(t)

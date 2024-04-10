@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -533,12 +534,12 @@ func (msh *Mesh) AddTXsFromProposal(
 func (msh *Mesh) AddBallot(
 	ctx context.Context,
 	ballot *types.Ballot,
-) (*types.MalfeasanceProof, error) {
+) (*wire.MalfeasanceProof, error) {
 	malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
 	if malicious {
 		ballot.SetMalicious()
 	}
-	var proof *types.MalfeasanceProof
+	var proof *wire.MalfeasanceProof
 	// ballots.LayerBallotByNodeID and ballots.Add should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
 	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
@@ -548,9 +549,9 @@ func (msh *Mesh) AddBallot(
 				return err
 			}
 			if prev != nil && prev.ID() != ballot.ID() {
-				var ballotProof types.BallotProof
+				var ballotProof wire.BallotProof
 				for i, b := range []*types.Ballot{prev, ballot} {
-					ballotProof.Messages[i] = types.BallotProofMsg{
+					ballotProof.Messages[i] = wire.BallotProofMsg{
 						InnerMsg: types.BallotMetadata{
 							Layer:   b.Layer,
 							MsgHash: types.BytesToHash(b.HashInnerBytes()),
@@ -559,10 +560,10 @@ func (msh *Mesh) AddBallot(
 						SmesherID: b.SmesherID,
 					}
 				}
-				proof = &types.MalfeasanceProof{
+				proof = &wire.MalfeasanceProof{
 					Layer: ballot.Layer,
-					Proof: types.Proof{
-						Type: types.MultipleBallots,
+					Proof: wire.Proof{
+						Type: wire.MultipleBallots,
 						Data: &ballotProof,
 					},
 				}

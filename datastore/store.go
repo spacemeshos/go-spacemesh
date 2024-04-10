@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -51,7 +52,7 @@ type CachedDB struct {
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
-	malfeasanceCache *lru.Cache[types.NodeID, *types.MalfeasanceProof]
+	malfeasanceCache *lru.Cache[types.NodeID, *wire.MalfeasanceProof]
 }
 
 type Config struct {
@@ -70,8 +71,7 @@ func DefaultConfig() Config {
 }
 
 type cacheOpts struct {
-	cfg      Config
-	atxsdata *atxsdata.Data
+	cfg Config
 }
 
 type Opt func(*cacheOpts)
@@ -79,12 +79,6 @@ type Opt func(*cacheOpts)
 func WithConfig(cfg Config) Opt {
 	return func(o *cacheOpts) {
 		o.cfg = cfg
-	}
-}
-
-func WithConsensusCache(c *atxsdata.Data) Opt {
-	return func(o *cacheOpts) {
-		o.atxsdata = c
 	}
 }
 
@@ -101,7 +95,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 		lg.Fatal("failed to create atx cache", err)
 	}
 
-	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](o.cfg.MalfeasanceSize)
+	malfeasanceCache, err := lru.New[types.NodeID, *wire.MalfeasanceProof](o.cfg.MalfeasanceSize)
 	if err != nil {
 		lg.Fatal("failed to create malfeasance cache", err)
 	}
@@ -114,7 +108,6 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 	return &CachedDB{
 		Executor:         db,
 		QueryCache:       db.QueryCache(),
-		atxsdata:         o.atxsdata,
 		logger:           lg,
 		atxHdrCache:      atxHdrCache,
 		malfeasanceCache: malfeasanceCache,
@@ -129,7 +122,7 @@ func (db *CachedDB) MalfeasanceCacheSize() int {
 // IsMalicious returns true if the NodeID is malicious.
 func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
 	if id == types.EmptyNodeID {
-		db.logger.Fatal("invalid argument to IsMalicious")
+		panic("invalid argument to IsMalicious")
 	}
 
 	db.mu.Lock()
@@ -153,9 +146,9 @@ func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
 }
 
 // GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
-func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error) {
+func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
 	if id == types.EmptyNodeID {
-		db.logger.Fatal("invalid argument to GetMalfeasanceProof")
+		panic("invalid argument to GetMalfeasanceProof")
 	}
 
 	db.mu.Lock()
@@ -175,9 +168,9 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 	return proof, err
 }
 
-func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof) {
+func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *wire.MalfeasanceProof) {
 	if id == types.EmptyNodeID {
-		db.logger.Fatal("invalid argument to CacheMalfeasanceProof")
+		panic("invalid argument to CacheMalfeasanceProof")
 	}
 	if db.atxsdata != nil {
 		db.atxsdata.SetMalicious(id)
@@ -250,19 +243,15 @@ func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTxHeader
 }
 
 // GetEpochWeight returns the total weight of ATXs targeting the given epochID.
-func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, error) {
-	var (
-		weight uint64
-		ids    []types.ATXID
-	)
+func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, error) {
+	var weight uint64
 	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
 		weight += header.GetWeight()
-		ids = append(ids, header.ID)
 		return nil
 	}); err != nil {
-		return 0, nil, err
+		return 0, err
 	}
-	return weight, ids, nil
+	return weight, nil
 }
 
 // IterateEpochATXHeaders iterates over ActivationTxs that target an epoch.
@@ -287,7 +276,7 @@ func (db *CachedDB) IterateEpochATXHeaders(
 }
 
 func (db *CachedDB) IterateMalfeasanceProofs(
-	iter func(types.NodeID, *types.MalfeasanceProof) error,
+	iter func(types.NodeID, *wire.MalfeasanceProof) error,
 ) error {
 	ids, err := identities.GetMalicious(db)
 	if err != nil {
@@ -303,43 +292,6 @@ func (db *CachedDB) IterateMalfeasanceProofs(
 		}
 	}
 	return nil
-}
-
-// GetLastAtx gets the last atx header of specified node ID.
-func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, error) {
-	if atxid, err := atxs.GetLastIDByNodeID(db, nodeID); err != nil {
-		return nil, fmt.Errorf("no prev atx found: %w", err)
-	} else if atx, err := db.GetAtxHeader(atxid); err != nil {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
-	} else {
-		return atx, nil
-	}
-}
-
-// GetEpochAtx gets the atx header of specified node ID published in the specified epoch.
-func (db *CachedDB) GetEpochAtx(
-	epoch types.EpochID,
-	nodeID types.NodeID,
-) (*types.ActivationTxHeader, error) {
-	vatx, err := atxs.GetByEpochAndNodeID(db, epoch, nodeID)
-	if err != nil {
-		return nil, fmt.Errorf("no epoch atx found: %w", err)
-	}
-	header := vatx.ToHeader()
-	db.atxHdrCache.Add(vatx.ID(), header)
-	return header, nil
-}
-
-// IdentityExists returns true if this NodeID has published any ATX.
-func (db *CachedDB) IdentityExists(nodeID types.NodeID) (bool, error) {
-	_, err := atxs.GetLastIDByNodeID(db, nodeID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
 }
 
 func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {

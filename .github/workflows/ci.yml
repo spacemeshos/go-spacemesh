@@ -1,7 +1,7 @@
 name: CI
 
 env:
-  go-version: "1.21"
+  go-version: "1.22"
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -14,6 +14,7 @@ env:
   TD_QUEUE_ZONE: ${{ secrets.TD_QUEUE_ZONE }}
   DUMP_QUEUE_NAME: ${{ secrets.DUMP_QUEUE_NAME }}
   DUMP_QUEUE_ZONE: ${{ secrets.DUMP_QUEUE_ZONE }}
+  # If needed the variable GOPRIVATE can be set in the repository settings :: Secrets and Variables > action > Variables : GOPRIVATE
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
@@ -38,6 +39,8 @@ jobs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -62,6 +65,15 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -85,6 +97,15 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -108,7 +129,7 @@ jobs:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
           # - macos-12-large
-          - [go-spacemesh, m2-pro]
+          - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-latest
     steps:
       - name: Add OpenCL support - Ubuntu
@@ -120,6 +141,15 @@ jobs:
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -145,7 +175,7 @@ jobs:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
           # - macos-12-large
-          - [go-spacemesh, m2-pro]
+          - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-latest
     steps:
       - name: Add OpenCL support - Ubuntu
@@ -157,6 +187,15 @@ jobs:
           Set-MpPreference -DisableRealtimeMonitoring $true
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -180,7 +219,7 @@ jobs:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
           # - macos-12-large
-          - [go-spacemesh, m2-pro]
+          - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-latest
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
@@ -192,7 +231,7 @@ jobs:
           sudo ethtool -K eth0 rx off
 
       - name: disable TCP/UDP offload - MacOS
-        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[go-spacemesh, m2-pro]' }}
+        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
         run: |
           sudo sysctl -w net.link.generic.system.hwcksum_tx=0
           sudo sysctl -w net.link.generic.system.hwcksum_rx=0
@@ -208,6 +247,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:

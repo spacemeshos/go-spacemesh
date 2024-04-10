@@ -3,12 +3,13 @@ package events
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
 // EventMalfeasance includes the malfeasance proof.
 type EventMalfeasance struct {
 	Smesher types.NodeID
-	Proof   *types.MalfeasanceProof
+	Proof   *wire.MalfeasanceProof
 }
 
 // SubscribeMalfeasance subscribes malfeasance events.
@@ -26,7 +27,7 @@ func SubscribeMalfeasance() Subscription {
 }
 
 // ReportMalfeasance reports a malfeasance proof.
-func ReportMalfeasance(nodeID types.NodeID, mp *types.MalfeasanceProof) {
+func ReportMalfeasance(nodeID types.NodeID, mp *wire.MalfeasanceProof) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if reporter != nil {

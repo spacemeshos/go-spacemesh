@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -116,7 +117,7 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 func (h *Handler) processVerifiedATX(
 	ctx context.Context,
 	atx *types.VerifiedActivationTx,
-) (*types.MalfeasanceProof, error) {
+) (*mwire.MalfeasanceProof, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -210,7 +211,7 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 func (h *Handler) SyntacticallyValidateDeps(
 	ctx context.Context,
 	atx *types.ActivationTx,
-) (*types.VerifiedActivationTx, *types.MalfeasanceProof, error) {
+) (*types.VerifiedActivationTx, *mwire.MalfeasanceProof, error) {
 	var (
 		commitmentATX *types.ATXID
 		err           error
@@ -257,11 +258,11 @@ func (h *Handler) SyntacticallyValidateDeps(
 	var invalidIdx *verifying.ErrInvalidIndex
 	if errors.As(err, &invalidIdx) {
 		h.log.WithContext(ctx).With().Info("ATX with invalid post index", atx.ID(), log.Int("index", invalidIdx.Index))
-		proof := &types.MalfeasanceProof{
+		proof := &mwire.MalfeasanceProof{
 			Layer: atx.PublishEpoch.FirstLayer(),
-			Proof: types.Proof{
-				Type: types.InvalidPostIndex,
-				Data: &types.InvalidPostIndexProof{
+			Proof: mwire.Proof{
+				Type: mwire.InvalidPostIndex,
+				Data: &mwire.InvalidPostIndexProof{
 					Atx:        *atx,
 					InvalidIdx: uint32(invalidIdx.Index),
 				},
@@ -405,12 +406,12 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) *
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*types.MalfeasanceProof, error) {
+func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*mwire.MalfeasanceProof, error) {
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("checking if node is malicious: %w", err)
 	}
-	var proof *types.MalfeasanceProof
+	var proof *mwire.MalfeasanceProof
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		if malicious {
 			if err := atxs.Add(tx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
@@ -434,9 +435,9 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				)
 			}
 
-			var atxProof types.AtxProof
+			var atxProof mwire.AtxProof
 			for i, a := range []*types.VerifiedActivationTx{prev, atx} {
-				atxProof.Messages[i] = types.AtxProofMsg{
+				atxProof.Messages[i] = mwire.AtxProofMsg{
 					InnerMsg: types.ATXMetadata{
 						PublishEpoch: a.PublishEpoch,
 						MsgHash:      types.BytesToHash(a.HashInnerBytes()),
@@ -445,10 +446,10 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 					Signature: a.Signature,
 				}
 			}
-			proof = &types.MalfeasanceProof{
+			proof = &mwire.MalfeasanceProof{
 				Layer: atx.PublishEpoch.FirstLayer(),
-				Proof: types.Proof{
-					Type: types.MultipleATXs,
+				Proof: mwire.Proof{
+					Type: mwire.MultipleATXs,
 					Data: &atxProof,
 				},
 			}
@@ -489,15 +490,6 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
 
 	return proof, nil
-}
-
-// GetEpochAtxs returns all valid ATXs received in the epoch epochID.
-func (h *Handler) GetEpochAtxs(ctx context.Context, epochID types.EpochID) (ids []types.ATXID, err error) {
-	ids, err = atxs.GetIDsByEpoch(ctx, h.cdb, epochID)
-	h.log.With().Debug("returned epoch atxs", epochID,
-		log.Int("count", len(ids)),
-		log.String("atxs", fmt.Sprint(ids)))
-	return
 }
 
 // HandleSyncedAtx handles atxs received by sync.
@@ -542,7 +534,7 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	// broadcast malfeasance proof last as the verification of the proof will take place
 	// in the same goroutine
 	if proof != nil {
-		gossip := types.MalfeasanceGossip{
+		gossip := mwire.MalfeasanceGossip{
 			MalfeasanceProof: *proof,
 		}
 		encodedProof := codec.MustEncode(&gossip)
@@ -560,7 +552,7 @@ func (h *Handler) handleAtx(
 	expHash types.Hash32,
 	peer p2p.Peer,
 	msg []byte,
-) (*types.MalfeasanceProof, error) {
+) (*mwire.MalfeasanceProof, error) {
 	receivedTime := time.Now()
 	var atx types.ActivationTx
 	if err := codec.Decode(msg, &atx); err != nil {
@@ -607,7 +599,7 @@ func (h *Handler) processATX(
 	expHash types.Hash32,
 	peer p2p.Peer,
 	atx types.ActivationTx,
-) (*types.MalfeasanceProof, error) {
+) (*mwire.MalfeasanceProof, error) {
 	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return nil, fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
 	}

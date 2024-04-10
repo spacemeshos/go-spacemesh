@@ -197,7 +197,7 @@ func NewSyncer(
 	}
 
 	if s.dataFetcher == nil {
-		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, tortoise, s.logger)
+		s.dataFetcher = NewDataFetch(mesh, fetcher, tortoise, s.logger)
 	}
 	if s.forkFinder == nil {
 		s.forkFinder = NewForkFinder(s.logger, cdb, fetcher, s.cfg.MaxStaleDuration)
@@ -292,6 +292,7 @@ func (s *Syncer) setATXSynced() {
 	select {
 	case <-s.awaitATXSyncedCh:
 	default:
+		s.logger.Info("reached ATX synced state")
 		close(s.awaitATXSyncedCh)
 		atxSynced.Set(1)
 	}

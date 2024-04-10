@@ -2,9 +2,15 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## UNRELEASED (v1.5.0)
 
 ### Upgrade information
+
+* [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
+  Updating to this version requires going through v1.4 first.
+
+* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
+  This also fixes ambiguity of nonces for equivocating identities.
 
 ### Highlights
 
@@ -12,7 +18,23 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
-* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up cache warmup
+## Release v1.4.5
+
+### Improvements
+
+* [#5796](https://github.com/spacemeshos/go-spacemesh/pull/5796) Reject p2p messages containing invalid malfeasance proofs.
+
+* [#5797](https://github.com/spacemeshos/go-spacemesh/pull/5797) Improve logging around ATX building process.
+
+* [#5802](https://github.com/spacemeshos/go-spacemesh/pull/5802) Increase the number of supported ATX per epoch to 3.5 Mio.
+
+* [#5803](https://github.com/spacemeshos/go-spacemesh/pull/5803) Fixed PoST verifiers autoscaling for 1:N setups.
+
+* [#5815](https://github.com/spacemeshos/go-spacemesh/pull/5815) Add spread to the discovery advertisement interval.
+
+* [#5819](https://github.com/spacemeshos/go-spacemesh/pull/5819) The node will now refuse connections from post services
+  if no coinbase account is set.
+>>>>>>> develop
 
 ## Release v1.4.4
 

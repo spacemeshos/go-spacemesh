@@ -79,7 +79,7 @@ func TestPostVerifierNoRaceOnClose(t *testing.T) {
 		return offloadingVerifier.Close()
 	})
 
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		ms := 10 * i
 		eg.Go(func() error {
 			time.Sleep(time.Duration(ms) * time.Millisecond)
