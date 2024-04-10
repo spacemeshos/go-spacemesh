@@ -14,20 +14,23 @@ import (
 )
 
 const (
+	// Hash32Length is 32, the expected length of the hash.
 	Hash32Length = 32
-	Hash20Length = 20
+	hash20Length = 20
+	hash12Length = 12
 )
 
-var (
-	hash20T = reflect.TypeOf(Hash32{})
-	hash32T = reflect.TypeOf(Hash32{})
-)
+// Hash12 represents the first 12 bytes of blake3 hash, mostly used for internal caches.
+type Hash12 [hash12Length]byte
 
 // Hash32 represents the 32-byte blake3 hash of arbitrary data.
-type Hash32 [32]byte
+type Hash32 [Hash32Length]byte
 
 // Hash20 represents the 20-byte blake3 hash of arbitrary data.
-type Hash20 [20]byte
+type Hash20 [hash20Length]byte
+
+// Field returns a log field. Implements the LoggableField interface.
+func (h Hash12) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
@@ -65,7 +68,7 @@ func (h *Hash20) UnmarshalText(input []byte) error {
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash20) UnmarshalJSON(input []byte) error {
-	if err := util.UnmarshalFixedJSON(hash20T, input, h[:]); err != nil {
+	if err := util.UnmarshalFixedJSON(hashT, input, h[:]); err != nil {
 		return fmt.Errorf("unmarshal JSON: %w", err)
 	}
 
@@ -81,10 +84,10 @@ func (h Hash20) MarshalText() ([]byte, error) {
 // If b is larger than len(h), b will be cropped from the left.
 func (h *Hash20) SetBytes(b []byte) {
 	if len(b) > len(h) {
-		b = b[len(b)-20:]
+		b = b[len(b)-32:]
 	}
 
-	copy(h[20-len(b):], b)
+	copy(h[32-len(b):], b)
 }
 
 // ToHash32 returns a Hash32 whose first 20 bytes are the bytes of this Hash20, it is right-padded with zeros.
@@ -96,14 +99,58 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash20) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
+// CalcHash12 returns the 12-byte prefix of the blake3 sum of the given byte slice.
+func CalcHash12(data []byte) (h Hash12) {
+	h32 := hash.Sum(data)
+	copy(h[:], h32[:])
+	return
+}
+
+// CalcProposalsHash32 returns the 32-byte blake3 sum of the IDs, sorted in lexicographic order. The pre-image is
+// prefixed with additionalBytes.
+func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
+	sortedView := make([]ProposalID, len(view))
+	copy(sortedView, view)
+	SortProposalIDs(sortedView)
+	return CalcProposalHash32Presorted(sortedView, additionalBytes)
+}
+
+// CalcProposalHash32Presorted returns the 32-byte blake3 sum of the IDs, in the order given. The pre-image is
+// prefixed with additionalBytes.
+func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
+	hasher := hash.New()
+	hasher.Write(additionalBytes)
+	for _, id := range sortedView {
+		hasher.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
+	}
+	var res Hash32
+	hasher.Sum(res[:0])
+	return res
+}
+
+// CalcBlockHash32Presorted returns the 32-byte blake3 sum of the IDs, in the order given. The pre-image is
+// prefixed with additionalBytes.
+func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash32 {
+	hash := hash.New()
+	hash.Write(additionalBytes)
+	for _, id := range sortedView {
+		hash.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
+	}
+	var res Hash32
+	hash.Sum(res[:0])
+	return res
+}
+
+// CalcMessageHash12 returns the 12-byte blake3 sum of the given msg suffixed with protocol.
+func CalcMessageHash12(msg []byte, protocol string) Hash12 {
+	return CalcHash12(append(msg, protocol...))
+}
+
+var hashT = reflect.TypeOf(Hash32{})
+
 // CalcHash32 returns the 32-byte blake3 sum of the given data.
 func CalcHash32(data []byte) Hash32 {
 	return hash.Sum(data)
-}
-
-// CalcHash20 returns the 20-byte blake3 sum of the given data.
-func CalcHash20(data []byte) Hash20 {
-	return hash.Sum20(data)
 }
 
 // BytesToHash sets b to hash.
@@ -152,7 +199,7 @@ func (h *Hash32) UnmarshalText(input []byte) error {
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash32) UnmarshalJSON(input []byte) error {
-	if err := util.UnmarshalFixedJSON(hash32T, input, h[:]); err != nil {
+	if err := util.UnmarshalFixedJSON(hashT, input, h[:]); err != nil {
 		return fmt.Errorf("unmarshal JSON: %w", err)
 	}
 
@@ -183,6 +230,7 @@ func (h Hash32) ToHash20() (h20 Hash20) {
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash32) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
+// EncodeScale implements scale codec interface.
 func (h *Hash32) EncodeScale(e *scale.Encoder) (int, error) {
 	return scale.EncodeByteArray(e, h[:])
 }
@@ -190,39 +238,4 @@ func (h *Hash32) EncodeScale(e *scale.Encoder) (int, error) {
 // DecodeScale implements scale codec interface.
 func (h *Hash32) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, h[:])
-}
-
-// CalcProposalsHash32 returns the 32-byte blake3 sum of the IDs, sorted in lexicographic order. The pre-image is
-// prefixed with additionalBytes.
-func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
-	sortedView := make([]ProposalID, len(view))
-	copy(sortedView, view)
-	SortProposalIDs(sortedView)
-	return CalcProposalHash32Presorted(sortedView, additionalBytes)
-}
-
-// CalcProposalHash32Presorted returns the 32-byte blake3 sum of the IDs, in the order given. The pre-image is
-// prefixed with additionalBytes.
-func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
-	hasher := hash.New()
-	hasher.Write(additionalBytes)
-	for _, id := range sortedView {
-		hasher.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
-	}
-	var res Hash32
-	hasher.Sum(res[:0])
-	return res
-}
-
-// CalcBlockHash32Presorted returns the 32-byte blake3 sum of the IDs, in the order given. The pre-image is
-// prefixed with additionalBytes.
-func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash32 {
-	hash := hash.New()
-	hash.Write(additionalBytes)
-	for _, id := range sortedView {
-		hash.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
-	}
-	var res Hash32
-	hash.Sum(res[:0])
-	return res
 }

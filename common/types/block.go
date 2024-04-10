@@ -128,7 +128,7 @@ type CoinbaseReward struct {
 
 // Initialize calculates and sets the Block's cached blockID.
 func (b *Block) Initialize() {
-	b.blockID = BlockID(CalcHash20(b.Bytes()))
+	b.blockID = BlockID(CalcHash32(b.Bytes()).ToHash20())
 }
 
 // Bytes returns the serialization of the InnerBlock.
