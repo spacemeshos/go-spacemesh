@@ -107,7 +107,7 @@ func (atx *ActivationTxV1) HashInnerBytes() (result types.Hash32) {
 	return result
 }
 
-func PostToWireV1(p *types.Post) *PostV1 {
+func postToWireV1(p *types.Post) *PostV1 {
 	if p == nil {
 		return nil
 	}
@@ -118,14 +118,14 @@ func PostToWireV1(p *types.Post) *PostV1 {
 	}
 }
 
-func NIPostToWireV1(n *types.NIPost) *NIPostV1 {
+func niPostToWireV1(n *types.NIPost) *NIPostV1 {
 	if n == nil {
 		return nil
 	}
 
 	return &NIPostV1{
 		Membership: *MerkleProofToWireV1(n.Membership),
-		Post:       PostToWireV1(n.Post),
+		Post:       postToWireV1(n.Post),
 		PostMetadata: &PostMetadataV1{
 			Challenge:     n.PostMetadata.Challenge,
 			LabelsPerUnit: n.PostMetadata.LabelsPerUnit,
@@ -147,7 +147,7 @@ func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 		PrevATXID:      c.PrevATXID,
 		PositioningATX: c.PositioningATX,
 		CommitmentATX:  c.CommitmentATX,
-		InitialPost:    PostToWireV1(c.InitialPost),
+		InitialPost:    postToWireV1(c.InitialPost),
 	}
 }
 
@@ -157,7 +157,7 @@ func ActivationTxToWireV1(a *types.ActivationTx) *ActivationTxV1 {
 			NIPostChallengeV1: *NIPostChallengeToWireV1(&a.NIPostChallenge),
 			Coinbase:          a.Coinbase,
 			NumUnits:          a.NumUnits,
-			NIPost:            NIPostToWireV1(a.NIPost),
+			NIPost:            niPostToWireV1(a.NIPost),
 			NodeID:            a.NodeID,
 			VRFNonce:          (*uint64)(a.VRFNonce),
 		},
@@ -187,11 +187,11 @@ func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
 				PrevATXID:      atx.PrevATXID,
 				PositioningATX: atx.PositioningATX,
 				CommitmentATX:  atx.CommitmentATX,
-				InitialPost:    PostFromWireV1(atx.InitialPost),
+				InitialPost:    postFromWireV1(atx.InitialPost),
 			},
 			Coinbase: atx.Coinbase,
 			NumUnits: atx.NumUnits,
-			NIPost:   NIPostFromWireV1(atx.NIPost),
+			NIPost:   niPostFromWireV1(atx.NIPost),
 			NodeID:   atx.NodeID,
 			VRFNonce: (*types.VRFPostIndex)(atx.VRFNonce),
 		},
@@ -210,18 +210,18 @@ func NIPostChallengeFromWireV1(ch NIPostChallengeV1) *types.NIPostChallenge {
 		PrevATXID:      ch.PrevATXID,
 		PositioningATX: ch.PositioningATX,
 		CommitmentATX:  ch.CommitmentATX,
-		InitialPost:    PostFromWireV1(ch.InitialPost),
+		InitialPost:    postFromWireV1(ch.InitialPost),
 	}
 }
 
-func NIPostFromWireV1(nipost *NIPostV1) *types.NIPost {
+func niPostFromWireV1(nipost *NIPostV1) *types.NIPost {
 	if nipost == nil {
 		return nil
 	}
 
 	return &types.NIPost{
 		Membership: *MerkleProofFromWireV1(nipost.Membership),
-		Post:       PostFromWireV1(nipost.Post),
+		Post:       postFromWireV1(nipost.Post),
 		PostMetadata: &types.PostMetadata{
 			Challenge:     nipost.PostMetadata.Challenge,
 			LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
@@ -229,7 +229,7 @@ func NIPostFromWireV1(nipost *NIPostV1) *types.NIPost {
 	}
 }
 
-func PostFromWireV1(post *PostV1) *types.Post {
+func postFromWireV1(post *PostV1) *types.Post {
 	if post == nil {
 		return nil
 	}
