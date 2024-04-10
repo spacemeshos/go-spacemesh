@@ -16,7 +16,7 @@ func TestUpgradeToV15(t *testing.T) {
 		cfg := config.DefaultTestConfig()
 		cfg.DataDirParent = t.TempDir()
 
-		require.NoError(t, verifyUpgradeToV15(&cfg))
+		require.NoError(t, verifyLocalDbMigrations(&cfg))
 	})
 
 	t.Run("migrated DB passes", func(t *testing.T) {
@@ -28,7 +28,7 @@ func TestUpgradeToV15(t *testing.T) {
 		require.NoError(t, err)
 		localDb.Close()
 
-		require.NoError(t, verifyUpgradeToV15(&cfg))
+		require.NoError(t, verifyLocalDbMigrations(&cfg))
 	})
 
 	t.Run("not fully migrated DB fails", func(t *testing.T) {
@@ -44,6 +44,6 @@ func TestUpgradeToV15(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, db.Close())
 
-		require.ErrorContains(t, verifyUpgradeToV15(&cfg), "please upgrade")
+		require.ErrorContains(t, verifyLocalDbMigrations(&cfg), "please upgrade")
 	})
 }

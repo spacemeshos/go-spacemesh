@@ -11,11 +11,11 @@ import (
 )
 
 func (app *App) verifyVersionUpgrades() error {
-	return verifyUpgradeToV15(app.Config)
+	return verifyLocalDbMigrations(app.Config)
 }
 
-// v1.5 requires going through v1.4 first as it removed in-code migrations.
-func verifyUpgradeToV15(cfg *config.Config) error {
+// v1.5 requires going through v1.4 first as it removed in-code migrations 1 - 3.
+func verifyLocalDbMigrations(cfg *config.Config) error {
 	dbPath := filepath.Join(cfg.DataDir(), localDbFile)
 	// if local DB doesnt exist, it's a fresh db and doesn't require in-code migrations
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {

@@ -1909,7 +1909,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
 	if err := app.verifyVersionUpgrades(); err != nil {
-		return err
+		return fmt.Errorf("version upgrade verification failed: %w", err)
 	}
 
 	err := app.startSynchronous(ctx)
