@@ -46,7 +46,7 @@ jobs:
           lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
 
-      - uses: extractions/netrc@v1
+      - uses: extractions/netrc@v2
         with:
           machine: github.com
           username: ${{ secrets.GH_ACTION_TOKEN_USER }}
