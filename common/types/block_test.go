@@ -74,7 +74,7 @@ func Test_NewExistingBlock(t *testing.T) {
 func Test_BlockInitialize(t *testing.T) {
 	testBlock := types.NewExistingBlock(types.BlockID{1, 1}, types.InnerBlock{LayerIndex: types.LayerID(1)})
 
-	expectedBlockID := types.BlockID(types.CalcHash32(testBlock.Bytes()).ToHash20())
+	expectedBlockID := types.BlockID(types.CalcHash20(testBlock.Bytes()))
 	// Initialize the block for compute actual Block ID
 	testBlock.Initialize()
 	actualBlockID := testBlock.ID()
