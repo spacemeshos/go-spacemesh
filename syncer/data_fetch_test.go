@@ -23,7 +23,6 @@ type testDataFetch struct {
 	*syncer.DataFetch
 	mMesh     *mocks.MockmeshProvider
 	mFetcher  *mocks.Mockfetcher
-	mIDs      *mocks.MockidProvider
 	mTortoise *smocks.MockTortoise
 }
 
@@ -33,10 +32,9 @@ func newTestDataFetch(t *testing.T) *testDataFetch {
 	tl := &testDataFetch{
 		mMesh:     mocks.NewMockmeshProvider(ctrl),
 		mFetcher:  mocks.NewMockfetcher(ctrl),
-		mIDs:      mocks.NewMockidProvider(ctrl),
 		mTortoise: smocks.NewMockTortoise(ctrl),
 	}
-	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mIDs, tl.mTortoise, lg)
+	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mTortoise, lg)
 	return tl
 }
 

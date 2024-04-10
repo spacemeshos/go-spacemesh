@@ -7,8 +7,9 @@ import (
 // ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPostChallenge, as
 // well as the coinbase address and total weight.
 type ActivationTxHeader struct {
-	NIPostChallenge
-	Coinbase Address
+	PublishEpoch EpochID
+	Sequence     uint64 // TODO(poszu): remove after after refactoring ATX handler to not use CDB.
+	Coinbase     Address
 
 	// NumUnits holds the count of space units that have been reserved by the node for the
 	// current epoch; a unit represents a configurable amount of data for PoST
@@ -20,9 +21,6 @@ type ActivationTxHeader struct {
 	// been generated for it, which is published with the next epoch's ATX.
 	EffectiveNumUnits uint32
 
-	// VRFNonce is the nonce found during PoST initialization
-	VRFNonce *VRFPostIndex
-
 	ID     ATXID  // the ID of the ATX
 	NodeID NodeID // the id of the Node that created the ATX (public key)
 
@@ -33,7 +31,6 @@ type ActivationTxHeader struct {
 	TickCount uint64
 
 	Received time.Time
-	Golden   bool
 }
 
 // GetWeight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is

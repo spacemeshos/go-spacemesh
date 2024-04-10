@@ -2,9 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
-
-### Highlights
+## Release v1.4.5
 
 ### Improvements
 
@@ -16,7 +14,10 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5803](https://github.com/spacemeshos/go-spacemesh/pull/5803) Fixed PoST verifiers autoscaling for 1:N setups.
 
-### Features
+* [#5815](https://github.com/spacemeshos/go-spacemesh/pull/5815) Add spread to the discovery advertisement interval.
+
+* [#5819](https://github.com/spacemeshos/go-spacemesh/pull/5819) The node will now refuse connections from post services
+  if no coinbase account is set.
 
 ## Release v1.4.4
 

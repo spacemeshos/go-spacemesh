@@ -89,7 +89,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			return
 		}
 		if c.refBallot == nil {
-			total, _, err := c.cdb.GetEpochWeight(ev.LayerID.GetEpoch())
+			total, err := c.cdb.GetEpochWeight(ev.LayerID.GetEpoch())
 			if err != nil {
 				panic(err)
 			}
