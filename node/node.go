@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"syscall"
 	"time"
@@ -1419,9 +1420,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			// StartSmeshing is only supported in a supervised setup (single signer)
 			sig = app.signers[0]
 		}
+		postService, err := app.grpcService(grpcserver.Post, lg)
+		if err != nil {
+			return nil, err
+		}
 		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
+			postService.(*grpcserver.PostService),
 			app.Config.API.SmesherStreamInterval,
 			app.Config.SMESHING.Opts,
 			sig,
@@ -1430,6 +1436,11 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case grpcserver.Post:
 		service := grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
+		isCoinbaseSet := app.Config.SMESHING.CoinbaseAccount != ""
+		if !isCoinbaseSet {
+			lg.Warning("coinbase account is not set, connections from remote post services will be rejected")
+		}
+		service.AllowConnections(isCoinbaseSet)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.PostInfo:
@@ -1524,7 +1535,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		logger.Info("registering local service %s", svc)
+		logger.Info("registering post service %s", svc)
 		postSvcs[svc] = gsvc
 	}
 	for _, svc := range app.Config.API.TLSServices {
@@ -1562,6 +1573,17 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcPublicServer.Start(); err != nil {
 			return err
 		}
+		logger.With().Info("public grpc service started",
+			log.String("address", app.Config.API.PublicListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(publicSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
 	}
 	if len(privateSvcs) > 0 {
 		var err error
@@ -1577,6 +1599,17 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcPrivateServer.Start(); err != nil {
 			return err
 		}
+		logger.With().Info("private grpc service started",
+			log.String("address", app.Config.API.PrivateListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(privateSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
 	}
 	if len(postSvcs) > 0 && app.Config.API.PostListener != "" {
 		var err error
@@ -1592,6 +1625,18 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcPostServer.Start(); err != nil {
 			return err
 		}
+		logger.With().Info("post grpc service started",
+			log.String("address", app.Config.API.PostListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(postSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
+
 		host, port, err := net.SplitHostPort(app.grpcPostServer.BoundAddress)
 		if err != nil {
 			return fmt.Errorf("parse grpc-post-listener: %w", err)
@@ -1635,6 +1680,17 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcTLSServer.Start(); err != nil {
 			return err
 		}
+		logger.With().Info("authenticated grpc service started",
+			log.String("address", app.Config.API.TLSListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(authenticatedSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
 	}
 
 	if len(app.Config.API.JSONListener) > 0 {
@@ -1648,6 +1704,17 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
+		logger.With().Info("json listener started",
+			log.String("address", app.Config.API.JSONListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(publicSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
 	}
 	return nil
 }
@@ -1821,7 +1888,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
-		datastore.WithConsensusCache(data),
 	)
 
 	migrations, err = sql.LocalMigrations()

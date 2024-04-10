@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
@@ -70,7 +69,7 @@ type Builder struct {
 	accountLock       sync.RWMutex
 	coinbaseAccount   types.Address
 	conf              Config
-	cdb               *datastore.CachedDB
+	db                sql.Executor
 	localDB           *localsql.Database
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
@@ -140,7 +139,7 @@ func WithPostStates(ps PostStates) BuilderOption {
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(
 	conf Config,
-	cdb *datastore.CachedDB,
+	db sql.Executor,
 	localDB *localsql.Database,
 	publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder,
@@ -153,7 +152,7 @@ func NewBuilder(
 		parentCtx:         context.Background(),
 		signers:           make(map[types.NodeID]*signing.EdSigner),
 		conf:              conf,
-		cdb:               cdb,
+		db:                db,
 		localDB:           localDB,
 		publisher:         publisher,
 		nipostBuilder:     nipostBuilder,
@@ -304,7 +303,7 @@ func (b *Builder) SmesherIDs() []types.NodeID {
 
 func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) error {
 	// Generate the initial POST if we don't have an ATX...
-	if _, err := b.cdb.GetLastAtx(nodeID); err == nil {
+	if _, err := atxs.GetLastIDByNodeID(b.db, nodeID); err == nil {
 		return nil
 	}
 	// ...and if we haven't stored an initial post yet.
@@ -463,10 +462,10 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		return challenge, nil
 	}
 
-	prev, err := b.cdb.GetLastAtx(nodeID)
+	prevAtx, err := b.GetPrevAtx(nodeID)
 	switch {
 	case err == nil:
-		current = max(current, prev.PublishEpoch)
+		current = max(current, prevAtx.PublishEpoch)
 	case errors.Is(err, sql.ErrNotFound):
 		// no previous ATX
 	case err != nil:
@@ -501,7 +500,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	}
 	logger.Info("selected positioning atx", log.ZShortStringer("atx_id", posAtx))
 
-	prevAtx, err := b.cdb.GetLastAtx(nodeID)
+	prevAtx, err = b.GetPrevAtx(nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		logger.Info("no previous ATX found, creating an initial nipost challenge")
@@ -545,7 +544,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		challenge = &types.NIPostChallenge{
 			PublishEpoch:   current + 1,
 			Sequence:       prevAtx.Sequence + 1,
-			PrevATXID:      prevAtx.ID,
+			PrevATXID:      prevAtx.ID(),
 			PositioningATX: posAtx,
 		}
 	}
@@ -554,6 +553,14 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		return nil, fmt.Errorf("add nipost challenge: %w", err)
 	}
 	return challenge, nil
+}
+
+func (b *Builder) GetPrevAtx(nodeID types.NodeID) (*types.VerifiedActivationTx, error) {
+	id, err := atxs.GetLastIDByNodeID(b.db, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("getting last ATXID: %w", err)
+	}
+	return atxs.Get(b.db, id)
 }
 
 // SetCoinbase sets the address rewardAddress to be the coinbase account written into the activation transaction
@@ -666,7 +673,7 @@ func (b *Builder) createAtx(
 		*atxNodeID = sig.NodeID()
 		nonce = &nipostState.VRFNonce
 	default:
-		oldNonce, err := atxs.VRFNonce(b.cdb, sig.NodeID(), challenge.PublishEpoch)
+		oldNonce, err := atxs.VRFNonce(b.db, sig.NodeID(), challenge.PublishEpoch)
 		if err != nil {
 			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
 			break
@@ -708,7 +715,7 @@ func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (t
 	logger.Info("searching for positioning atx")
 	id, err := findFullyValidHighTickAtx(
 		ctx,
-		b.cdb,
+		b.db,
 		nodeID,
 		b.conf.GoldenATXID,
 		b.validator,
@@ -729,14 +736,14 @@ func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (t
 
 func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	epoch := b.layerClock.CurrentLayer().GetEpoch()
-	atx, err := atxs.GetIDByEpochAndNodeID(b.cdb, epoch, nodeID)
+	atx, err := atxs.GetIDByEpochAndNodeID(b.db, epoch, nodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		return nil
 	} else if err != nil {
 		return err
 	}
 	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, b.cdb, atx.Bytes(), &blob); err != nil {
+	if err := atxs.LoadBlob(ctx, b.db, atx.Bytes(), &blob); err != nil {
 		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
 	}
 	if len(blob.Bytes) == 0 {

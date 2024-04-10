@@ -289,12 +289,12 @@ func TestHandler_processBlockATXs(t *testing.T) {
 
 	// Assert
 	// 1 posATX + 3 atx from `atxList`; weight = 4 * numTicks * numUnit
-	epochWeight, _, err := atxHdlr.cdb.GetEpochWeight(2)
+	epochWeight, err := atxHdlr.cdb.GetEpochWeight(2)
 	r.NoError(err)
 	r.Equal(4*numTicks*uint64(numUnits), epochWeight)
 
 	// 3 atx from `atxList2`; weight = 3 * numTicks * numUnit
-	epochWeight, _, err = atxHdlr.cdb.GetEpochWeight(3)
+	epochWeight, err = atxHdlr.cdb.GetEpochWeight(3)
 	r.NoError(err)
 	r.Equal(3*numTicks*uint64(numUnits), epochWeight)
 }

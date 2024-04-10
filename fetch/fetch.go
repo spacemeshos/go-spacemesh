@@ -180,6 +180,7 @@ func DefaultConfig() Config {
 			// 64 bytes
 			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
 		},
+		Streaming:          true,
 		GetAtxsConcurrency: 100,
 		DecayingTag: server.DecayingTagSpec{
 			Interval: time.Minute,
