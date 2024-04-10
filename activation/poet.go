@@ -181,7 +181,7 @@ func (c *HTTPPoetClient) Submit(
 		roundEnd = time.Now().Add(resBody.RoundEnd.AsDuration())
 	}
 
-	return &types.PoetRound{ID: resBody.RoundId, End: types.RoundEnd(roundEnd)}, nil
+	return &types.PoetRound{ID: resBody.RoundId, End: roundEnd}, nil
 }
 
 // PoetServiceID returns the public key of the PoET proving service.

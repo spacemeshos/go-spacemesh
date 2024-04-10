@@ -394,7 +394,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		ChallengeHash: types.Hash32(challenge),
 		Address:       client.Address(),
 		RoundID:       round.ID,
-		RoundEnd:      round.End.IntoTime(),
+		RoundEnd:      round.End,
 	})
 }
 
