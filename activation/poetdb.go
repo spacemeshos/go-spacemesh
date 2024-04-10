@@ -160,7 +160,7 @@ func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *type
 	return &proofMessage.PoetProof, &proofMessage.Statement, nil
 }
 
-func calcRoot(leaves []types.Member) ([]byte, error) {
+func calcRoot(leaves []types.Hash32) ([]byte, error) {
 	tree, err := merkle.NewTreeBuilder().WithHashFunc(shared.HashMembershipTreeNode).Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tree: %w", err)

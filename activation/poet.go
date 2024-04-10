@@ -190,7 +190,7 @@ func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) []byte {
 }
 
 // Proof implements PoetProvingServiceClient.
-func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error) {
+func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
 	resBody := rpcapi.ProofResponse{}
 	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody); err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
@@ -199,7 +199,7 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 	p := resBody.Proof.GetProof()
 
 	pMembers := resBody.Proof.GetMembers()
-	members := make([]types.Member, len(pMembers))
+	members := make([]types.Hash32, len(pMembers))
 	for i, m := range pMembers {
 		copy(members[i][:], m)
 	}
