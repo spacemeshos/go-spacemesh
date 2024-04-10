@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -594,7 +595,7 @@ func (s MeshService) MalfeasanceStream(
 	}
 
 	// first serve those already existed locally.
-	if err := s.cdb.IterateMalfeasanceProofs(func(id types.NodeID, mp *types.MalfeasanceProof) error {
+	if err := s.cdb.IterateMalfeasanceProofs(func(id types.NodeID, mp *wire.MalfeasanceProof) error {
 		select {
 		case <-stream.Context().Done():
 			return nil

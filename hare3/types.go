@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
 type Round uint8
@@ -114,16 +115,16 @@ func (m *Message) ToHash() types.Hash32 {
 	return rst
 }
 
-func (m *Message) ToMetadata() types.HareMetadata {
-	return types.HareMetadata{
+func (m *Message) ToMetadata() wire.HareMetadata {
+	return wire.HareMetadata{
 		Layer:   m.Layer,
 		Round:   m.Absolute(),
 		MsgHash: m.ToHash(),
 	}
 }
 
-func (m *Message) ToMalfeasanceProof() types.HareProofMsg {
-	return types.HareProofMsg{
+func (m *Message) ToMalfeasanceProof() wire.HareProofMsg {
+	return wire.HareProofMsg{
 		InnerMsg:  m.ToMetadata(),
 		SmesherID: m.Sender,
 		Signature: m.Signature,

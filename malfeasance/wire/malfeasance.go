@@ -1,4 +1,4 @@
-package types
+package wire
 
 import (
 	"encoding/hex"
@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -24,7 +25,7 @@ const (
 
 type MalfeasanceProof struct {
 	// for network upgrade
-	Layer LayerID
+	Layer types.LayerID
 	Proof Proof
 
 	received time.Time
@@ -159,7 +160,7 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 
 type MalfeasanceGossip struct {
 	MalfeasanceProof
-	Eligibility *HareEligibilityGossip // deprecated - to be removed in the next version
+	Eligibility *types.HareEligibilityGossip // deprecated - to be removed in the next version
 }
 
 func (mg *MalfeasanceGossip) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -211,10 +212,10 @@ func (hp *HareProof) ToMalfeasanceProof() *MalfeasanceProof {
 }
 
 type AtxProofMsg struct {
-	InnerMsg ATXMetadata
+	InnerMsg types.ATXMetadata
 
-	SmesherID NodeID
-	Signature EdSignature
+	SmesherID types.NodeID
+	Signature types.EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a AtxProofMsg.
@@ -227,17 +228,17 @@ func (m *AtxProofMsg) SignedBytes() []byte {
 }
 
 type InvalidPostIndexProof struct {
-	Atx ActivationTx
+	Atx types.ActivationTx
 
 	// Which index in POST is invalid
 	InvalidIdx uint32
 }
 
 type BallotProofMsg struct {
-	InnerMsg BallotMetadata
+	InnerMsg types.BallotMetadata
 
-	SmesherID NodeID
-	Signature EdSignature
+	SmesherID types.NodeID
+	Signature types.EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a BallotProofMsg.
@@ -250,11 +251,11 @@ func (m *BallotProofMsg) SignedBytes() []byte {
 }
 
 type HareMetadata struct {
-	Layer LayerID
+	Layer types.LayerID
 	// the round counter (K)
 	Round uint32
 	// hash of hare.Message.InnerMessage
-	MsgHash Hash32
+	MsgHash types.Hash32
 }
 
 func (hm *HareMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -281,8 +282,8 @@ func (hm HareMetadata) ToBytes() []byte {
 type HareProofMsg struct {
 	InnerMsg HareMetadata
 
-	SmesherID NodeID
-	Signature EdSignature
+	SmesherID types.NodeID
+	Signature types.EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a HareProofMsg.
@@ -290,7 +291,7 @@ func (m *HareProofMsg) SignedBytes() []byte {
 	return m.InnerMsg.ToBytes()
 }
 
-func MalfeasanceInfo(smesher NodeID, mp *MalfeasanceProof) string {
+func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("generate layer: %v\n", mp.Layer))
 	b.WriteString(fmt.Sprintf("smesher id: %s\n", smesher.String()))
