@@ -94,14 +94,3 @@ type PoetRound struct {
 	ID  string `scale:"max=32"`
 	End time.Time
 }
-
-// ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
-// from validation errors.
-type ProcessingError struct {
-	Err string // TODO(mafa): make error code instead of string
-}
-
-// Error returns the processing error as a string. It implements the error interface.
-func (s ProcessingError) Error() string {
-	return s.Err
-}
