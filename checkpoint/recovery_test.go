@@ -303,36 +303,39 @@ func newChainedAtx(
 	seq, vrfNonce uint64,
 	sig *signing.EdSigner,
 ) *types.VerifiedActivationTx {
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:   types.EpochID(epoch),
+	watx := &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
+				Publish:        types.EpochID(epoch),
 				Sequence:       seq,
 				PrevATXID:      prev,
 				PositioningATX: pos,
 				CommitmentATX:  commitAtx,
 			},
-			NIPost: &types.NIPost{
-				PostMetadata: &types.PostMetadata{
+			NIPost: &wire.NIPostV1{
+				PostMetadata: &wire.PostMetadataV1{
 					Challenge: types.RandomBytes(5),
 				},
 			},
 			NumUnits: 2,
 			Coinbase: types.Address{1, 2, 3},
 		},
+		SmesherID: sig.NodeID(),
 	}
 	if prev == types.EmptyATXID {
-		atx.InitialPost = &types.Post{}
+		watx.InitialPost = &wire.PostV1{}
 		nodeID := sig.NodeID()
-		atx.NodeID = &nodeID
+		watx.NodeID = &nodeID
 	}
 	if vrfNonce != 0 {
-		atx.VRFNonce = (*types.VRFPostIndex)(&vrfNonce)
+		watx.VRFNonce = (*wire.VRFPostIndex)(&vrfNonce)
 	}
-	atx.SmesherID = sig.NodeID()
+	watx.Signature = sig.Sign(signing.ATX, watx.SignedBytes())
+
+	atx := wire.ActivationTxFromWireV1(watx)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
-	atx.Signature = sig.Sign(signing.ATX, wire.ActivationTxToWireV1(atx).SignedBytes())
+
 	return newvAtx(tb, atx)
 }
 
