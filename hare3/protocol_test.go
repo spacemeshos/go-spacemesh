@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
 func castIds(strings ...string) []types.ProposalID {
@@ -28,7 +29,7 @@ type tinput struct {
 
 type response struct {
 	gossip       bool
-	equivocation *types.HareProof
+	equivocation *wire.HareProof
 }
 
 func (t *tinput) ensureMsg() {
@@ -105,7 +106,7 @@ func (t *tinput) gossip() *tinput {
 func (t *tinput) equi() *tinput {
 	// TODO(dshulyak) do i want to test that it constructed correctly here?
 	t.ensureResponse()
-	t.expect.equivocation = &types.HareProof{}
+	t.expect.equivocation = &wire.HareProof{}
 	return t
 }
 

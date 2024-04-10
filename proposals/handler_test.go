@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmock "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -743,7 +744,7 @@ func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), b, gomock.Any()).Return(nil)
-	th.mm.EXPECT().AddBallot(context.Background(), b).Return(&types.MalfeasanceProof{Layer: lid}, nil)
+	th.mm.EXPECT().AddBallot(context.Background(), b).Return(&wire.MalfeasanceProof{Layer: lid}, nil)
 	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
 	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
@@ -958,7 +959,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})
@@ -990,7 +991,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})
@@ -1026,7 +1027,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})
@@ -1070,7 +1071,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).MinTimes(1).MaxTimes(2)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil).MinTimes(1).MaxTimes(2)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			_ = ballots.Add(th.db, got)
 			return nil, nil
 		}).MinTimes(1).MaxTimes(2)
@@ -1126,21 +1127,21 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{pMal.Votes.Base})
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{pMal.AtxID})
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &pMal.Ballot, gomock.Any()).Return(nil)
-	ballotProof := types.BallotProof{
-		Messages: [2]types.BallotProofMsg{
+	ballotProof := wire.BallotProof{
+		Messages: [2]wire.BallotProofMsg{
 			{},
 			{},
 		},
 	}
-	proof := &types.MalfeasanceProof{
+	proof := &wire.MalfeasanceProof{
 		Layer: lid,
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
+		Proof: wire.Proof{
+			Type: wire.MultipleBallots,
 			Data: &ballotProof,
 		},
 	}
 	th.mm.EXPECT().AddBallot(context.Background(), &pMal.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			got.SetMalicious()
 			_ = ballots.Add(th.db, got)
 			return proof, nil
@@ -1149,7 +1150,7 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), pMal.Layer, pMal.ID(), pMal.TxIDs)
 	th.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
-			var gossip types.MalfeasanceGossip
+			var gossip wire.MalfeasanceGossip
 			require.NoError(t, codec.Decode(data, &gossip))
 			require.Equal(t, *proof, gossip.MalfeasanceProof)
 			return nil
@@ -1245,7 +1246,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})
@@ -1284,7 +1285,7 @@ func TestMetrics(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})

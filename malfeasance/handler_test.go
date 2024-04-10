@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -64,8 +65,8 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	require.NoError(t, err)
 	lid := types.LayerID(11)
 
-	atxProof := types.AtxProof{
-		Messages: [2]types.AtxProofMsg{
+	atxProof := wire.AtxProof{
+		Messages: [2]wire.AtxProofMsg{
 			{
 				InnerMsg: types.ATXMetadata{
 					PublishEpoch: types.EpochID(3),
@@ -87,11 +88,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		ap.Messages[0].SmesherID = sig.NodeID()
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		ap.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleATXs,
+				Proof: wire.Proof{
+					Type: wire.MultipleATXs,
 					Data: &ap,
 				},
 			},
@@ -114,11 +115,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		ap.Messages[1].InnerMsg.MsgHash = msgHash
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleATXs,
+				Proof: wire.Proof{
+					Type: wire.MultipleATXs,
 					Data: &ap,
 				},
 			},
@@ -137,11 +138,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		ap.Messages[0].InnerMsg.PublishEpoch = ap.Messages[1].InnerMsg.PublishEpoch + 1
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleATXs,
+				Proof: wire.Proof{
+					Type: wire.MultipleATXs,
 					Data: &ap,
 				},
 			},
@@ -161,11 +162,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		sig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		ap.Messages[1].Signature = sig2.Sign(signing.ATX, ap.Messages[1].SignedBytes())
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleATXs,
+				Proof: wire.Proof{
+					Type: wire.MultipleATXs,
 					Data: &ap,
 				},
 			},
@@ -183,11 +184,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		ap := atxProof
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleATXs,
+				Proof: wire.Proof{
+					Type: wire.MultipleATXs,
 					Data: &ap,
 				},
 			},
@@ -206,11 +207,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		ap.Messages[0].SmesherID = sig.NodeID()
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		ap.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleATXs,
+				Proof: wire.Proof{
+					Type: wire.MultipleATXs,
 					Data: &ap,
 				},
 			},
@@ -234,11 +235,11 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		ap.Messages[0].SmesherID = sig.NodeID()
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		ap.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid.Add(11),
-				Proof: types.Proof{
-					Type: types.MultipleATXs,
+				Proof: wire.Proof{
+					Type: wire.MultipleATXs,
 					Data: &ap,
 				},
 			},
@@ -278,8 +279,8 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	require.NoError(t, err)
 	lid := types.LayerID(11)
 
-	ballotProof := types.BallotProof{
-		Messages: [2]types.BallotProofMsg{
+	ballotProof := wire.BallotProof{
+		Messages: [2]wire.BallotProofMsg{
 			{
 				InnerMsg: types.BallotMetadata{
 					Layer:   lid,
@@ -301,11 +302,11 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleBallots,
+				Proof: wire.Proof{
+					Type: wire.MultipleBallots,
 					Data: &bp,
 				},
 			},
@@ -330,11 +331,11 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleBallots,
+				Proof: wire.Proof{
+					Type: wire.MultipleBallots,
 					Data: &bp,
 				},
 			},
@@ -355,11 +356,11 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleBallots,
+				Proof: wire.Proof{
+					Type: wire.MultipleBallots,
 					Data: &bp,
 				},
 			},
@@ -381,11 +382,11 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		require.NoError(t, err)
 		bp.Messages[1].Signature = sig2.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig2.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleBallots,
+				Proof: wire.Proof{
+					Type: wire.MultipleBallots,
 					Data: &bp,
 				},
 			},
@@ -405,11 +406,11 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleBallots,
+				Proof: wire.Proof{
+					Type: wire.MultipleBallots,
 					Data: &bp,
 				},
 			},
@@ -428,11 +429,11 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.MultipleBallots,
+				Proof: wire.Proof{
+					Type: wire.MultipleBallots,
 					Data: &bp,
 				},
 			},
@@ -455,11 +456,11 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 		bp.Messages[0].SmesherID = sig.NodeID()
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid.Add(11),
-				Proof: types.Proof{
-					Type: types.MultipleBallots,
+				Proof: wire.Proof{
+					Type: wire.MultipleBallots,
 					Data: &bp,
 				},
 			},
@@ -499,17 +500,17 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	require.NoError(t, err)
 	lid := types.LayerID(11)
 
-	hareProof := types.HareProof{
-		Messages: [2]types.HareProofMsg{
+	hareProof := wire.HareProof{
+		Messages: [2]wire.HareProofMsg{
 			{
-				InnerMsg: types.HareMetadata{
+				InnerMsg: wire.HareMetadata{
 					Layer:   lid,
 					Round:   3,
 					MsgHash: types.RandomHash(),
 				},
 			},
 			{
-				InnerMsg: types.HareMetadata{
+				InnerMsg: wire.HareMetadata{
 					Layer:   lid,
 					Round:   3,
 					MsgHash: types.RandomHash(),
@@ -524,11 +525,11 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.HareEquivocation,
+				Proof: wire.Proof{
+					Type: wire.HareEquivocation,
 					Data: &hp,
 				},
 			},
@@ -550,11 +551,11 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = types.RandomEdSignature()
 		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.HareEquivocation,
+				Proof: wire.Proof{
+					Type: wire.HareEquivocation,
 					Data: &hp,
 				},
 			},
@@ -578,11 +579,11 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.HareEquivocation,
+				Proof: wire.Proof{
+					Type: wire.HareEquivocation,
 					Data: &hp,
 				},
 			},
@@ -603,11 +604,11 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.HareEquivocation,
+				Proof: wire.Proof{
+					Type: wire.HareEquivocation,
 					Data: &hp,
 				},
 			},
@@ -628,11 +629,11 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.HareEquivocation,
+				Proof: wire.Proof{
+					Type: wire.HareEquivocation,
 					Data: &hp,
 				},
 			},
@@ -652,11 +653,11 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		sig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		hp.Messages[1].Signature = sig2.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.HareEquivocation,
+				Proof: wire.Proof{
+					Type: wire.HareEquivocation,
 					Data: &hp,
 				},
 			},
@@ -674,11 +675,11 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp := hareProof
 		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.HareEquivocation,
+				Proof: wire.Proof{
+					Type: wire.HareEquivocation,
 					Data: &hp,
 				},
 			},
@@ -697,11 +698,11 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid,
-				Proof: types.Proof{
-					Type: types.HareEquivocation,
+				Proof: wire.Proof{
+					Type: wire.HareEquivocation,
 					Data: &hp,
 				},
 			},
@@ -724,11 +725,11 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 		hp.Messages[0].SmesherID = sig.NodeID()
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &types.MalfeasanceGossip{
-			MalfeasanceProof: types.MalfeasanceProof{
+		gossip := &wire.MalfeasanceGossip{
+			MalfeasanceProof: wire.MalfeasanceProof{
 				Layer: lid.Add(11),
-				Proof: types.Proof{
-					Type: types.HareEquivocation,
+				Proof: wire.Proof{
+					Type: wire.HareEquivocation,
 					Data: &hp,
 				},
 			},
@@ -782,13 +783,13 @@ func TestHandler_CrossDomain(t *testing.T) {
 	m2buf, err := codec.Encode(&m2)
 	require.NoError(t, err)
 
-	msg, err := codec.Encode(&types.MalfeasanceGossip{
-		MalfeasanceProof: types.MalfeasanceProof{
+	msg, err := codec.Encode(&wire.MalfeasanceGossip{
+		MalfeasanceProof: wire.MalfeasanceProof{
 			Layer: types.LayerID(11),
-			Proof: types.Proof{
-				Type: types.MultipleBallots,
-				Data: &types.BallotProof{
-					Messages: [2]types.BallotProofMsg{
+			Proof: wire.Proof{
+				Type: wire.MultipleBallots,
+				Data: &wire.BallotProof{
+					Messages: [2]wire.BallotProofMsg{
 						{
 							InnerMsg:  m1,
 							Signature: sig.Sign(signing.BALLOT, m1buf),
@@ -837,8 +838,8 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	require.False(t, malicious)
 
 	lid := types.LayerID(11)
-	ap := types.AtxProof{
-		Messages: [2]types.AtxProofMsg{
+	ap := wire.AtxProof{
+		Messages: [2]wire.AtxProofMsg{
 			{
 				InnerMsg: types.ATXMetadata{
 					PublishEpoch: types.EpochID(3),
@@ -858,10 +859,10 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	ap.Messages[0].SmesherID = sig.NodeID()
 	ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 	ap.Messages[1].SmesherID = sig.NodeID()
-	proof := types.MalfeasanceProof{
+	proof := wire.MalfeasanceProof{
 		Layer: lid,
-		Proof: types.Proof{
-			Type: types.MultipleATXs,
+		Proof: wire.Proof{
+			Type: wire.MultipleATXs,
 			Data: &ap,
 		},
 	}
@@ -900,8 +901,8 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 	require.False(t, malicious)
 
 	lid := types.LayerID(11)
-	bp := types.BallotProof{
-		Messages: [2]types.BallotProofMsg{
+	bp := wire.BallotProof{
+		Messages: [2]wire.BallotProofMsg{
 			{
 				InnerMsg: types.BallotMetadata{
 					Layer:   lid,
@@ -920,10 +921,10 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 	bp.Messages[0].SmesherID = sig.NodeID()
 	bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 	bp.Messages[1].SmesherID = sig.NodeID()
-	proof := types.MalfeasanceProof{
+	proof := wire.MalfeasanceProof{
 		Layer: lid,
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
+		Proof: wire.Proof{
+			Type: wire.MultipleBallots,
 			Data: &bp,
 		},
 	}
@@ -962,17 +963,17 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	require.False(t, malicious)
 
 	lid := types.LayerID(11)
-	hp := types.HareProof{
-		Messages: [2]types.HareProofMsg{
+	hp := wire.HareProof{
+		Messages: [2]wire.HareProofMsg{
 			{
-				InnerMsg: types.HareMetadata{
+				InnerMsg: wire.HareMetadata{
 					Layer:   lid,
 					Round:   3,
 					MsgHash: types.RandomHash(),
 				},
 			},
 			{
-				InnerMsg: types.HareMetadata{
+				InnerMsg: wire.HareMetadata{
 					Layer:   lid,
 					Round:   3,
 					MsgHash: types.RandomHash(),
@@ -985,10 +986,10 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 	hp.Messages[1].SmesherID = sig.NodeID()
 
-	proof := types.MalfeasanceProof{
+	proof := wire.MalfeasanceProof{
 		Layer: lid,
-		Proof: types.Proof{
-			Type: types.HareEquivocation,
+		Proof: wire.Proof{
+			Type: wire.HareEquivocation,
 			Data: &hp,
 		},
 	}
@@ -1027,8 +1028,8 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 	require.False(t, malicious)
 
 	lid := types.LayerID(11)
-	bp := types.BallotProof{
-		Messages: [2]types.BallotProofMsg{
+	bp := wire.BallotProof{
+		Messages: [2]wire.BallotProofMsg{
 			{
 				InnerMsg: types.BallotMetadata{
 					Layer:   lid,
@@ -1047,10 +1048,10 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 	bp.Messages[0].SmesherID = sig.NodeID()
 	bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 	bp.Messages[1].SmesherID = sig.NodeID()
-	proof := types.MalfeasanceProof{
+	proof := wire.MalfeasanceProof{
 		Layer: lid,
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
+		Proof: wire.Proof{
+			Type: wire.MultipleBallots,
 			Data: &bp,
 		},
 	}
@@ -1101,11 +1102,11 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 // 			postVerifier,
 // 		)
 
-// 		proof := types.MalfeasanceProof{
+// 		proof := wire.MalfeasanceProof{
 // 			Layer: types.LayerID(11),
-// 			Proof: types.Proof{
-// 				Type: types.InvalidPostIndex,
-// 				Data: &wire.InvalidPostIndexProofV1{
+// 			Proof: wire.Proof{
+// 				Type: wire.InvalidPostIndex,
+// 				Data: &wire.InvalidPostIndexProof{
 // 					Atx:        *atx.ToWireV1(),
 // 					InvalidIdx: 7,
 // 				},
@@ -1139,11 +1140,11 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 // 			postVerifier,
 // 		)
 
-// 		proof := types.MalfeasanceProof{
+// 		proof := wire.MalfeasanceProof{
 // 			Layer: types.LayerID(11),
-// 			Proof: types.Proof{
-// 				Type: types.InvalidPostIndex,
-// 				Data: &wire.InvalidPostIndexProofV1{
+// 			Proof: wire.Proof{
+// 				Type: wire.InvalidPostIndex,
+// 				Data: &wire.InvalidPostIndexProof{
 // 					Atx:        *atx.ToWireV1(),
 // 					InvalidIdx: 7,
 // 				},
@@ -1178,11 +1179,11 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 // 		atx := atx
 // 		atx.NIPost.Post.Pow += 1 // invalidate signature by changing content
 
-// 		proof := types.MalfeasanceProof{
+// 		proof := wire.MalfeasanceProof{
 // 			Layer: types.LayerID(11),
-// 			Proof: types.Proof{
-// 				Type: types.InvalidPostIndex,
-// 				Data: &wire.InvalidPostIndexProofV1{
+// 			Proof: wire.Proof{
+// 				Type: wire.InvalidPostIndex,
+// 				Data: &wire.InvalidPostIndexProof{
 // 					Atx:        *atx.ToWireV1(),
 // 					InvalidIdx: 7,
 // 				},

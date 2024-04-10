@@ -1,4 +1,4 @@
-package types
+package wire
 
 import (
 	"encoding/hex"
@@ -9,11 +9,13 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata
+//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata,InvalidPostIndexProof
 
 const (
 	MultipleATXs byte = iota + 1
@@ -24,7 +26,7 @@ const (
 
 type MalfeasanceProof struct {
 	// for network upgrade
-	Layer LayerID
+	Layer types.LayerID
 	Proof Proof
 
 	received time.Time
@@ -67,14 +69,13 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		}
 	case InvalidPostIndex:
 		encoder.AddString("type", "invalid post index")
-		// p, ok := mp.Proof.Data.(*wire.InvalidPostIndexProofV1)
-		// if ok {
-		// FIXME
-		// p.Atx.Initialize()
-		// encoder.AddString("atx_id", p.Atx.ID().String())
-		// encoder.AddString("smesher", p.Atx.SmesherID.String())
-		// encoder.AddUint32("invalid index", p.InvalidIdx)
-		// }
+		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
+		if ok {
+			atx := wire.ActivationTxFromWireV1(&p.Atx)
+			encoder.AddString("atx_id", atx.ID().String())
+			encoder.AddString("smesher", p.Atx.SmesherID.String())
+			encoder.AddUint32("invalid index", p.InvalidIdx)
+		}
 	default:
 		encoder.AddString("type", "unknown")
 	}
@@ -145,13 +146,13 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 		e.Data = &proof
 		total += n
 	case InvalidPostIndex:
-		// var proof wire.InvalidPostIndexProofV1
-		// n, err := proof.DecodeScale(dec)
-		// if err != nil {
-		// 	return total, err
-		// }
-		// e.Data = &proof
-		// total += n
+		var proof InvalidPostIndexProof
+		n, err := proof.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		e.Data = &proof
+		total += n
 	default:
 		return total, errors.New("unknown malfeasance proof type")
 	}
@@ -160,7 +161,7 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 
 type MalfeasanceGossip struct {
 	MalfeasanceProof
-	Eligibility *HareEligibilityGossip // deprecated - to be removed in the next version
+	Eligibility *types.HareEligibilityGossip // deprecated - to be removed in the next version
 }
 
 func (mg *MalfeasanceGossip) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -212,10 +213,10 @@ func (hp *HareProof) ToMalfeasanceProof() *MalfeasanceProof {
 }
 
 type AtxProofMsg struct {
-	InnerMsg ATXMetadata
+	InnerMsg types.ATXMetadata
 
-	SmesherID NodeID
-	Signature EdSignature
+	SmesherID types.NodeID
+	Signature types.EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a AtxProofMsg.
@@ -227,11 +228,18 @@ func (m *AtxProofMsg) SignedBytes() []byte {
 	return data
 }
 
-type BallotProofMsg struct {
-	InnerMsg BallotMetadata
+type InvalidPostIndexProof struct {
+	Atx wire.ActivationTxV1
 
-	SmesherID NodeID
-	Signature EdSignature
+	// Which index in POST is invalid
+	InvalidIdx uint32
+}
+
+type BallotProofMsg struct {
+	InnerMsg types.BallotMetadata
+
+	SmesherID types.NodeID
+	Signature types.EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a BallotProofMsg.
@@ -244,11 +252,11 @@ func (m *BallotProofMsg) SignedBytes() []byte {
 }
 
 type HareMetadata struct {
-	Layer LayerID
+	Layer types.LayerID
 	// the round counter (K)
 	Round uint32
 	// hash of hare.Message.InnerMessage
-	MsgHash Hash32
+	MsgHash types.Hash32
 }
 
 func (hm *HareMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
@@ -275,8 +283,8 @@ func (hm HareMetadata) ToBytes() []byte {
 type HareProofMsg struct {
 	InnerMsg HareMetadata
 
-	SmesherID NodeID
-	Signature EdSignature
+	SmesherID types.NodeID
+	Signature types.EdSignature
 }
 
 // SignedBytes returns the actual data being signed in a HareProofMsg.
@@ -284,7 +292,7 @@ func (m *HareProofMsg) SignedBytes() []byte {
 	return m.InnerMsg.ToBytes()
 }
 
-func MalfeasanceInfo(smesher NodeID, mp *MalfeasanceProof) string {
+func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("generate layer: %v\n", mp.Layer))
 	b.WriteString(fmt.Sprintf("smesher id: %s\n", smesher.String()))
@@ -349,19 +357,17 @@ func MalfeasanceInfo(smesher NodeID, mp *MalfeasanceProof) string {
 			)
 		}
 	case InvalidPostIndex:
-		// FIXME
-		// p, ok := mp.Proof.Data.(*wire.InvalidPostIndexProofV1)
-		// if ok {
-
-		// p.Atx.Initialize()
-		// b.WriteString(
-		// 	fmt.Sprintf(
-		// 		"cause: smesher published ATX %s with invalid post index %d in epoch %d\n",
-		// 		p.Atx.ID().ShortString(),
-		// 		p.InvalidIdx,
-		// 		p.Atx.PublishEpoch,
-		// 	))
-		// }
+		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
+		if ok {
+			atx := wire.ActivationTxFromWireV1(&p.Atx)
+			b.WriteString(
+				fmt.Sprintf(
+					"cause: smesher published ATX %s with invalid post index %d in epoch %d\n",
+					atx.ID().ShortString(),
+					p.InvalidIdx,
+					p.Atx.PublishEpoch,
+				))
+		}
 	}
 	return b.String()
 }

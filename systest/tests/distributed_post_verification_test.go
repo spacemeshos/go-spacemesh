@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -268,10 +269,10 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.Equal(t, malfeasance.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
 		require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_POST_INDEX, malfeasance.GetProof().GetKind())
 
-		var proof types.MalfeasanceProof
+		var proof mwire.MalfeasanceProof
 		require.NoError(t, codec.Decode(malfeasance.Proof.Proof, &proof))
-		require.Equal(t, types.InvalidPostIndex, proof.Proof.Type)
-		invalidPostProof := proof.Proof.Data.(*wire.InvalidPostIndexProofV1)
+		require.Equal(t, mwire.InvalidPostIndex, proof.Proof.Type)
+		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
 		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
 		invalidAtx := invalidPostProof.Atx
 		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)

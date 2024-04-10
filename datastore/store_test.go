@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -93,12 +94,12 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
 
 	// but an add will update the cache
-	proof := &types.MalfeasanceProof{
+	proof := &mwire.MalfeasanceProof{
 		Layer: types.LayerID(11),
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
-			Data: &types.BallotProof{
-				Messages: [2]types.BallotProofMsg{
+		Proof: mwire.Proof{
+			Type: mwire.MultipleBallots,
+			Data: &mwire.BallotProof{
+				Messages: [2]mwire.BallotProofMsg{
 					{},
 					{},
 				},
@@ -118,12 +119,12 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
 	// a bad guy
-	proof := &types.MalfeasanceProof{
+	proof := &mwire.MalfeasanceProof{
 		Layer: types.LayerID(11),
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
-			Data: &types.BallotProof{
-				Messages: [2]types.BallotProofMsg{
+		Proof: mwire.Proof{
+			Type: mwire.MultipleBallots,
+			Data: &mwire.BallotProof{
+				Messages: [2]mwire.BallotProofMsg{
 					{},
 					{},
 				},
@@ -357,12 +358,12 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
-	proof := &types.MalfeasanceProof{
+	proof := &mwire.MalfeasanceProof{
 		Layer: types.LayerID(11),
-		Proof: types.Proof{
-			Type: types.HareEquivocation,
-			Data: &types.HareProof{
-				Messages: [2]types.HareProofMsg{{}, {}},
+		Proof: mwire.Proof{
+			Type: mwire.HareEquivocation,
+			Data: &mwire.HareProof{
+				Messages: [2]mwire.HareProofMsg{{}, {}},
 			},
 		},
 	}

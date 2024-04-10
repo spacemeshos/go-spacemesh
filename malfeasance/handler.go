@@ -10,12 +10,12 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -62,7 +62,7 @@ func NewHandler(
 	}
 }
 
-func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *types.MalfeasanceProof) {
+func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *wire.MalfeasanceProof) {
 	h.tortoise.OnMalfeasance(smesher)
 	events.ReportMalfeasance(smesher, mp)
 	if slices.Contains(h.nodeIDs, smesher) {
@@ -77,13 +77,13 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 	_ p2p.Peer,
 	data []byte,
 ) error {
-	var p types.MalfeasanceProof
+	var p wire.MalfeasanceProof
 	if err := codec.Decode(data, &p); err != nil {
 		numMalformed.Inc()
 		h.logger.With().Error("malformed message (sync)", log.Context(ctx), log.Err(err))
 		return errMalformedData
 	}
-	nodeID, err := h.validateAndSave(ctx, &types.MalfeasanceGossip{MalfeasanceProof: p})
+	nodeID, err := h.validateAndSave(ctx, &wire.MalfeasanceGossip{MalfeasanceProof: p})
 	if err == nil && types.Hash32(nodeID) != expHash {
 		return fmt.Errorf(
 			"%w: malfesance proof want %s, got %s",
@@ -97,7 +97,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 
 // HandleMalfeasanceProof is the gossip receiver for MalfeasanceGossip.
 func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, data []byte) error {
-	var p types.MalfeasanceGossip
+	var p wire.MalfeasanceGossip
 	if err := codec.Decode(data, &p); err != nil {
 		numMalformed.Inc()
 		h.logger.With().Error("malformed message", log.Context(ctx), log.Err(err))
@@ -118,7 +118,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 	return err
 }
 
-func (h *Handler) validateAndSave(ctx context.Context, p *types.MalfeasanceGossip) (types.NodeID, error) {
+func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, error) {
 	if p.Eligibility != nil {
 		return types.EmptyNodeID, fmt.Errorf(
 			"%w: eligibility field was deprecated with hare3",
@@ -171,21 +171,21 @@ func Validate(
 	cdb *datastore.CachedDB,
 	edVerifier SigVerifier,
 	postVerifier postVerifier,
-	p *types.MalfeasanceGossip,
+	p *wire.MalfeasanceGossip,
 ) (types.NodeID, error) {
 	var (
 		nodeID types.NodeID
 		err    error
 	)
 	switch p.Proof.Type {
-	case types.HareEquivocation:
+	case wire.HareEquivocation:
 		nodeID, err = validateHareEquivocation(ctx, logger, cdb, edVerifier, &p.MalfeasanceProof)
-	case types.MultipleATXs:
+	case wire.MultipleATXs:
 		nodeID, err = validateMultipleATXs(ctx, logger, cdb, edVerifier, &p.MalfeasanceProof)
-	case types.MultipleBallots:
+	case wire.MultipleBallots:
 		nodeID, err = validateMultipleBallots(ctx, logger, cdb, edVerifier, &p.MalfeasanceProof)
-	case types.InvalidPostIndex:
-		proof := p.MalfeasanceProof.Proof.Data.(*wire.InvalidPostIndexProofV1) // guaranteed to work by scale func
+	case wire.InvalidPostIndex:
+		proof := p.MalfeasanceProof.Proof.Data.(*wire.InvalidPostIndexProof) // guaranteed to work by scale func
 		nodeID, err = validateInvalidPostIndex(ctx, logger, cdb, edVerifier, postVerifier, proof)
 	default:
 		return nodeID, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
@@ -201,15 +201,15 @@ func Validate(
 	return nodeID, fmt.Errorf("%w: %v", errInvalidProof, err)
 }
 
-func updateMetrics(tp types.Proof) {
+func updateMetrics(tp wire.Proof) {
 	switch tp.Type {
-	case types.HareEquivocation:
+	case wire.HareEquivocation:
 		numProofsHare.Inc()
-	case types.MultipleATXs:
+	case wire.MultipleATXs:
 		numProofsATX.Inc()
-	case types.MultipleBallots:
+	case wire.MultipleBallots:
 		numProofsBallot.Inc()
-	case types.InvalidPostIndex:
+	case wire.InvalidPostIndex:
 		numProofsPostIndex.Inc()
 	}
 }
@@ -230,20 +230,20 @@ func validateHareEquivocation(
 	logger log.Log,
 	db sql.Executor,
 	edVerifier SigVerifier,
-	proof *types.MalfeasanceProof,
+	proof *wire.MalfeasanceProof,
 ) (types.NodeID, error) {
-	if proof.Proof.Type != types.HareEquivocation {
+	if proof.Proof.Type != wire.HareEquivocation {
 		return types.EmptyNodeID, fmt.Errorf(
 			"wrong malfeasance type. want %v, got %v",
-			types.HareEquivocation,
+			wire.HareEquivocation,
 			proof.Proof.Type,
 		)
 	}
 	var (
 		firstNid types.NodeID
-		firstMsg types.HareProofMsg
+		firstMsg wire.HareProofMsg
 	)
-	hp, ok := proof.Proof.Data.(*types.HareProof)
+	hp, ok := proof.Proof.Data.(*wire.HareProof)
 	if !ok {
 		return types.EmptyNodeID, errors.New("wrong message type for hare equivocation")
 	}
@@ -281,20 +281,20 @@ func validateMultipleATXs(
 	logger log.Log,
 	db sql.Executor,
 	edVerifier SigVerifier,
-	proof *types.MalfeasanceProof,
+	proof *wire.MalfeasanceProof,
 ) (types.NodeID, error) {
-	if proof.Proof.Type != types.MultipleATXs {
+	if proof.Proof.Type != wire.MultipleATXs {
 		return types.EmptyNodeID, fmt.Errorf(
 			"wrong malfeasance type. want %v, got %v",
-			types.MultipleATXs,
+			wire.MultipleATXs,
 			proof.Proof.Type,
 		)
 	}
 	var (
 		firstNid types.NodeID
-		firstMsg types.AtxProofMsg
+		firstMsg wire.AtxProofMsg
 	)
-	ap, ok := proof.Proof.Data.(*types.AtxProof)
+	ap, ok := proof.Proof.Data.(*wire.AtxProof)
 	if !ok {
 		return types.EmptyNodeID, errors.New("wrong message type for multiple ATXs")
 	}
@@ -331,21 +331,21 @@ func validateMultipleBallots(
 	logger log.Log,
 	db sql.Executor,
 	edVerifier SigVerifier,
-	proof *types.MalfeasanceProof,
+	proof *wire.MalfeasanceProof,
 ) (types.NodeID, error) {
-	if proof.Proof.Type != types.MultipleBallots {
+	if proof.Proof.Type != wire.MultipleBallots {
 		return types.EmptyNodeID, fmt.Errorf(
 			"wrong malfeasance type. want %v, got %v",
-			types.MultipleBallots,
+			wire.MultipleBallots,
 			proof.Proof.Type,
 		)
 	}
 	var (
 		firstNid types.NodeID
-		firstMsg types.BallotProofMsg
+		firstMsg wire.BallotProofMsg
 		err      error
 	)
-	bp, ok := proof.Proof.Data.(*types.BallotProof)
+	bp, ok := proof.Proof.Data.(*wire.BallotProof)
 	if !ok {
 		return types.EmptyNodeID, errors.New("wrong message type for multi ballots")
 	}
@@ -382,7 +382,7 @@ func validateInvalidPostIndex(ctx context.Context,
 	db sql.Executor,
 	edVerifier SigVerifier,
 	postVerifier postVerifier,
-	proof *wire.InvalidPostIndexProofV1,
+	proof *wire.InvalidPostIndexProof,
 ) (types.NodeID, error) {
 	atx := &proof.Atx
 	if !edVerifier.Verify(signing.ATX, types.NodeID(atx.SmesherID), atx.SignedBytes(), atx.Signature) {

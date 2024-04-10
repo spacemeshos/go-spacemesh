@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -28,11 +29,11 @@ const (
 	layer = 123
 )
 
-func AtxMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *types.MalfeasanceProof) {
+func AtxMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *wire.MalfeasanceProof) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	ap := types.AtxProof{
-		Messages: [2]types.AtxProofMsg{
+	ap := wire.AtxProof{
+		Messages: [2]wire.AtxProofMsg{
 			{
 				InnerMsg: types.ATXMetadata{
 					PublishEpoch: types.EpochID(epoch),
@@ -51,10 +52,10 @@ func AtxMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *types.Malfea
 	ap.Messages[0].SmesherID = sig.NodeID()
 	ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 	ap.Messages[1].SmesherID = sig.NodeID()
-	mp := &types.MalfeasanceProof{
+	mp := &wire.MalfeasanceProof{
 		Layer: types.LayerID(layer),
-		Proof: types.Proof{
-			Type: types.MultipleATXs,
+		Proof: wire.Proof{
+			Type: wire.MultipleATXs,
 			Data: &ap,
 		},
 	}
@@ -64,11 +65,11 @@ func AtxMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *types.Malfea
 	return sig.NodeID(), mp
 }
 
-func BallotMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *types.MalfeasanceProof) {
+func BallotMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *wire.MalfeasanceProof) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	bp := types.BallotProof{
-		Messages: [2]types.BallotProofMsg{
+	bp := wire.BallotProof{
+		Messages: [2]wire.BallotProofMsg{
 			{
 				InnerMsg: types.BallotMetadata{
 					Layer:   types.LayerID(layer),
@@ -87,10 +88,10 @@ func BallotMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *types.Mal
 	bp.Messages[0].SmesherID = sig.NodeID()
 	bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 	bp.Messages[1].SmesherID = sig.NodeID()
-	mp := &types.MalfeasanceProof{
+	mp := &wire.MalfeasanceProof{
 		Layer: types.LayerID(layer),
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
+		Proof: wire.Proof{
+			Type: wire.MultipleBallots,
 			Data: &bp,
 		},
 	}
@@ -100,20 +101,20 @@ func BallotMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *types.Mal
 	return sig.NodeID(), mp
 }
 
-func HareMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *types.MalfeasanceProof) {
+func HareMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *wire.MalfeasanceProof) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	hp := types.HareProof{
-		Messages: [2]types.HareProofMsg{
+	hp := wire.HareProof{
+		Messages: [2]wire.HareProofMsg{
 			{
-				InnerMsg: types.HareMetadata{
+				InnerMsg: wire.HareMetadata{
 					Layer:   types.LayerID(layer),
 					Round:   3,
 					MsgHash: types.RandomHash(),
 				},
 			},
 			{
-				InnerMsg: types.HareMetadata{
+				InnerMsg: wire.HareMetadata{
 					Layer:   types.LayerID(layer),
 					Round:   3,
 					MsgHash: types.RandomHash(),
@@ -125,10 +126,10 @@ func HareMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *types.Malfe
 	hp.Messages[0].SmesherID = sig.NodeID()
 	hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 	hp.Messages[1].SmesherID = sig.NodeID()
-	mp := &types.MalfeasanceProof{
+	mp := &wire.MalfeasanceProof{
 		Layer: types.LayerID(layer),
-		Proof: types.Proof{
-			Type: types.HareEquivocation,
+		Proof: wire.Proof{
+			Type: wire.HareEquivocation,
 			Data: &hp,
 		},
 	}
@@ -178,7 +179,7 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_BALLOT, resp.Proof.Kind)
 	require.Equal(t, events.ToMalfeasancePB(nodeID, proof, true), resp.Proof)
 	require.NotEmpty(t, resp.Proof.Proof)
-	var got types.MalfeasanceProof
+	var got wire.MalfeasanceProof
 	require.NoError(t, codec.Decode(resp.Proof.Proof, &got))
 	require.Equal(t, *proof, got)
 
