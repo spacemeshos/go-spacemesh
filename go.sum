@@ -558,8 +558,8 @@ github.com/sourcegraph/conc v0.3.0/go.mod h1:Sdozi7LEKbFPqYX2/J+iBAM6HpqSLTASQIK
 github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
 github.com/spacemeshos/api/release/go v1.36.0 h1:FzK+v5ZbgY8goWC6XDqVgb2hjNGzZQkMApPycynLg6E=
 github.com/spacemeshos/api/release/go v1.36.0/go.mod h1:3vIzTSkbLZBwgiaOzl/kVa0Jd++X6n67FlN9RdCJXZI=
-github.com/spacemeshos/economics v0.1.2 h1:kw8cE5SMa/7svHOGorCd2w8ef1y8iP0p47/2VDOK8Ns=
-github.com/spacemeshos/economics v0.1.2/go.mod h1:ngeWn5E/jy9dJP1MHyuk3ehF8NBMTYhchqVDhAHUUNk=
+github.com/spacemeshos/economics v0.1.3 h1:ACkq3mTebIky4Zwbs9SeSSRZrUCjU/Zk0wq9Z0BTh2A=
+github.com/spacemeshos/economics v0.1.3/go.mod h1:FH7u0FzTIm6Kpk+X5HOZDvpkgNYBKclmH86rVwYaDAo=
 github.com/spacemeshos/fixed v0.1.1 h1:N1y4SUpq1EV+IdJrWJwUCt1oBFzeru/VKVcBsvPc2Fk=
 github.com/spacemeshos/fixed v0.1.1/go.mod h1:B/moObha9wGnwljZP+w/dYAwzv097aL9VV8Oyv2cM/E=
 github.com/spacemeshos/go-scale v1.1.14 h1:q+M/8WDfaETTT8ENKYig/ENv4XnjAsjjKMIEpiLydtU=
