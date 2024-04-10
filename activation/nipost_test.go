@@ -376,9 +376,9 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	t.Parallel()
 
+	challenge := types.RandomHash()
 	ctrl := gomock.NewController(t)
 
-	challenge := types.RandomHash()
 	poetProvider := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
 	poetProvider.EXPECT().Proof(gomock.Any(), "").Return(&types.PoetProofMessage{
 		PoetProof: types.PoetProof{},
@@ -411,7 +411,7 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -451,7 +451,7 @@ func TestPostSetup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -579,7 +579,6 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	t.Parallel()
 	// Arrange
 	challenge := types.RandomHash()
-
 	proof := &types.PoetProofMessage{PoetProof: types.PoetProof{}}
 
 	ctrl := gomock.NewController(t)
@@ -648,7 +647,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	require.NoError(t, err)
 
 	// Act
-	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 	require.NoError(t, err)
 
 	// Verify
@@ -661,7 +660,6 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 
 	// Arrange
 	challenge := types.RandomHash()
-
 	proofWorse := &types.PoetProofMessage{
 		PoetProof: types.PoetProof{
 			LeafCount: 111,
@@ -714,7 +712,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act
-	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 	require.NoError(t, err)
 
 	// Verify
@@ -757,7 +755,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -795,7 +793,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]poetClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -819,7 +817,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]poetClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -846,7 +844,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			withPoetClients([]poetClient{poetProver}),
 		)
 		require.NoError(t, err)
-		nipst, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+		nipst, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -920,9 +918,9 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		challenge := &types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch() - 1}
+		challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
 		err = nipost.AddChallenge(db, sig.NodeID(), challenge)
 		require.NoError(t, err)
-		challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
 
 		// successfully registered to at least one poet
 		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
@@ -933,7 +931,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		nipost, err := nb.BuildNIPost(context.Background(), sig, currLayer.GetEpoch()-1, challengeHash)
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challengeHash)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet proof for pub epoch")
 		require.Nil(t, nipost)
@@ -964,9 +962,9 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		challenge := &types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch() - 1}
+		challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
 		err = nipost.AddChallenge(db, sig.NodeID(), challenge)
 		require.NoError(t, err)
-		challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
 
 		// successfully registered to at least one poet
 		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
@@ -981,7 +979,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		err = nipost.UpdatePoetProofRef(db, sig.NodeID(), [32]byte{1, 2, 3}, &types.MerkleProof{})
 		require.NoError(t, err)
 
-		nipost, err := nb.BuildNIPost(context.Background(), sig, currLayer.GetEpoch()-1, challengeHash)
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challengeHash)
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "deadline to publish ATX for pub epoch")
 		require.Nil(t, nipost)
@@ -995,7 +993,6 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 
 	// Arrange
 	challenge := types.RandomHash()
-
 	proof := &types.PoetProofMessage{
 		PoetProof: types.PoetProof{
 			LeafCount: 777,
@@ -1055,7 +1052,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act
-	nipost, err := nb.BuildNIPost(buildCtx, sig, 7, challenge)
+	nipost, err := nb.BuildNIPost(buildCtx, sig, postGenesisEpoch+2, challenge)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, nipost)
 
@@ -1064,7 +1061,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&types.PoetRound{}, nil)
 
-	nipost, err = nb.BuildNIPost(context.Background(), sig, 7, challenge)
+	nipost, err = nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 	require.NoError(t, err)
 
 	// Verify
@@ -1073,46 +1070,43 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 }
 
 func TestConstructingMerkleProof(t *testing.T) {
-	challenge := types.NIPostChallenge{}
-	challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
+	challenge := types.RandomHash()
 
 	t.Run("members empty", func(t *testing.T) {
-		_, err := constructMerkleProof(challengeHash, []types.Member{})
+		_, err := constructMerkleProof(challenge, []types.Member{})
 		require.Error(t, err)
 	})
 	t.Run("not a member", func(t *testing.T) {
-		_, err := constructMerkleProof(challengeHash, []types.Member{{}, {}})
+		_, err := constructMerkleProof(challenge, []types.Member{{}, {}})
 		require.Error(t, err)
 	})
 
 	t.Run("is odd member", func(t *testing.T) {
-		otherChallenge := types.NIPostChallenge{Sequence: 1}
 		members := []types.Member{
-			types.Member(challengeHash),
-			types.Member(wire.NIPostChallengeToWireV1(&otherChallenge).Hash()),
+			types.Member(challenge),
+			types.Member(types.RandomHash()),
 		}
-		proof, err := constructMerkleProof(challengeHash, members)
+		proof, err := constructMerkleProof(challenge, members)
 		require.NoError(t, err)
 
 		root, err := calcRoot(members)
 		require.NoError(t, err)
 
-		err = validateMerkleProof(challengeHash[:], proof, root)
+		err = validateMerkleProof(challenge[:], proof, root)
 		require.NoError(t, err)
 	})
 	t.Run("is even member", func(t *testing.T) {
-		otherChallenge := types.NIPostChallenge{Sequence: 1}
 		members := []types.Member{
-			types.Member(wire.NIPostChallengeToWireV1(&otherChallenge).Hash()),
-			types.Member(challengeHash),
+			types.Member(types.RandomHash()),
+			types.Member(challenge),
 		}
-		proof, err := constructMerkleProof(challengeHash, members)
+		proof, err := constructMerkleProof(challenge, members)
 		require.NoError(t, err)
 
 		root, err := calcRoot(members)
 		require.NoError(t, err)
 
-		err = validateMerkleProof(challengeHash[:], proof, root)
+		err = validateMerkleProof(challenge[:], proof, root)
 		require.NoError(t, err)
 	})
 }
@@ -1134,7 +1128,6 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			t.Parallel()
 
 			challenge := types.RandomHash()
-
 			ctrl := gomock.NewController(t)
 			poets := make([]poetClient, 0, 2)
 			{

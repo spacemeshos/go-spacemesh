@@ -95,7 +95,6 @@ func TestValidator_Validate(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	challenge := types.RandomHash()
-
 	nb, err := activation.NewNIPostBuilder(
 		localsql.InMemory(),
 		poetDb,
@@ -107,7 +106,7 @@ func TestValidator_Validate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(cdb, poetDb, cfg, opts.Scrypt, verifier)
@@ -142,7 +141,6 @@ func TestValidator_Validate(t *testing.T) {
 	newPostCfg = cfg
 	newPostCfg.MaxNumUnits = nipost.NumUnits - 1
 	v = activation.NewValidator(cdb, poetDb, newPostCfg, opts.Scrypt, nil)
-
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, nipost.NIPost, challenge, nipost.NumUnits)
 	require.EqualError(
 		t,
