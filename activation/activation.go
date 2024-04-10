@@ -652,12 +652,24 @@ func (b *Builder) createAtx(
 		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
 	}
 
+	var nonce *types.VRFPostIndex
 	var atxNodeID *types.NodeID
-	if challenge.PrevATXID == types.EmptyATXID {
+	switch {
+	case challenge.PrevATXID == types.EmptyATXID:
 		atxNodeID = new(types.NodeID)
 		*atxNodeID = sig.NodeID()
+		nonce = &nipostState.VRFNonce
+	default:
+		oldNonce, err := atxs.VRFNonce(b.cdb, sig.NodeID(), challenge.PublishEpoch)
+		if err != nil {
+			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
+			break
+		}
+		if nipostState.VRFNonce != oldNonce {
+			nonce = &nipostState.VRFNonce
+		}
 	}
-	nonce := &nipostState.VRFNonce
+
 	atx := types.NewActivationTx(
 		*challenge,
 		b.Coinbase(),
