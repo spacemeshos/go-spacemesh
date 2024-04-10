@@ -18,7 +18,7 @@ type PoetServer struct {
 	Pubkey  Base64Enc `mapstructure:"pubkey" json:"pubkey"`
 }
 
-type PoetProofRef [32]byte
+type PoetProofRef Hash32
 
 // EmptyPoetProofRef is an empty PoET proof reference.
 var EmptyPoetProofRef = PoetProofRef{}
