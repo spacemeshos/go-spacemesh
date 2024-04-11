@@ -74,6 +74,14 @@ func TestWarmup(t *testing.T) {
 		require.Error(t, err)
 		require.Nil(t, c)
 	})
+	t.Run("missing nonce", func(t *testing.T) {
+		db := sql.InMemory()
+		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nil)
+		require.NoError(t, atxs.AddMaybeNoNonce(db, &data))
+		c, err := Warm(db, 1)
+		require.Error(t, err)
+		require.Nil(t, c)
+	})
 	t.Run("db failures", func(t *testing.T) {
 		db := sql.InMemory()
 		nonce := types.VRFPostIndex(1)
