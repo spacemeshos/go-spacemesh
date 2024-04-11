@@ -58,6 +58,9 @@ func (c *Context) GetGenesisID() Hash20 {
 	return c.GenesisID
 }
 
+// Balance returns the account balance.
+func (c *Context) Balance() uint64 { return c.PrincipalAccount.Balance }
+
 // Template of the principal account.
 func (c *Context) Template() Template {
 	return c.PrincipalTemplate

@@ -37,17 +37,17 @@ func (v *Vault) isOwner(address core.Address) bool {
 	return v.Owner == address
 }
 
-func (v *Vault) Available(lid core.LayerID) uint64 {
+func (v *Vault) Vested(lid core.LayerID) uint64 {
 	if lid.Before(v.VestingStart) {
 		return 0
 	}
 	if !lid.Before(v.VestingEnd) {
 		return v.TotalAmount
 	}
-	incremental := new(big.Int).SetUint64(v.TotalAmount)
-	incremental.Mul(incremental, new(big.Int).SetUint64(uint64(lid.Difference(v.VestingStart))))
-	incremental.Div(incremental, new(big.Int).SetUint64(uint64(v.VestingEnd.Difference(v.VestingStart))))
-	return incremental.Uint64()
+	vested := new(big.Int).SetUint64(v.TotalAmount)
+	vested.Mul(vested, new(big.Int).SetUint64(uint64(lid.Difference(v.VestingStart))))
+	vested.Div(vested, new(big.Int).SetUint64(uint64(v.VestingEnd.Difference(v.VestingStart))))
+	return vested.Uint64()
 }
 
 // Spend transaction.
@@ -55,11 +55,22 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 	if !v.isOwner(host.Principal()) {
 		return ErrNotOwner
 	}
-	available := v.Available(host.Layer())
-	if available > v.TotalAmount {
+	vested := v.Vested(host.Layer())
+
+	// sanity checks
+
+	// cannot vest more than initial endowment
+	if vested > v.TotalAmount {
 		panic("wrong math")
 	}
-	if amount > available-v.DrainedSoFar {
+
+	// account must contain at least unvested portion of initial endowment
+	if host.Balance() < v.TotalAmount-vested {
+		panic("wrong math")
+	}
+
+	// consider only current balance (including coins received) and vested portion of initial endowment
+	if amount > host.Balance()-v.TotalAmount+vested {
 		return ErrAmountNotAvailable
 	}
 	if err := host.Transfer(to, amount); err != nil {
