@@ -359,7 +359,7 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err e
 	})
 }
 
-// NonceByID retrieves VRFNonce corresponding to the specified ATX ID
+// NonceByID retrieves VRFNonce corresponding to the specified ATX ID.
 func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
