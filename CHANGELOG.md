@@ -34,7 +34,6 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5819](https://github.com/spacemeshos/go-spacemesh/pull/5819) The node will now refuse connections from post services
   if no coinbase account is set.
->>>>>>> develop
 
 ## Release v1.4.4
 
