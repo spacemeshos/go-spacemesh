@@ -3,7 +3,6 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"reflect"
 
 	"github.com/spacemeshos/go-scale"
@@ -14,7 +13,6 @@ import (
 )
 
 const (
-	// Hash32Length is 32, the expected length of the hash.
 	Hash32Length = 32
 	Hash20Length = 20
 )
@@ -33,16 +31,10 @@ type Hash20 [Hash20Length]byte
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
 
-// Big converts a hash to a big integer.
-func (h Hash20) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
-
-// Hex converts a hash to a hex string.
-func (h Hash20) Hex() string { return util.Encode(h[:]) }
-
 // String implements the stringer interface and is used also by the logger when
 // doing full logging into a file.
 func (h Hash20) String() string {
-	return h.Hex()
+	return hex.EncodeToString(h[:])
 }
 
 // ShortString returns a the first 5 hex-encoded bytes of the hash, for logging purposes.
@@ -154,13 +146,10 @@ func HexToHash32(s string) Hash32 { return BytesToHash(util.FromHex(s)) }
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash32) Bytes() []byte { return h[:] }
 
-// Hex converts a hash to a hex string.
-func (h Hash32) Hex() string { return util.Encode(h[:]) }
-
 // String implements the stringer interface and is used also by the logger when
 // doing full logging into a file.
 func (h Hash32) String() string {
-	return h.ShortString()
+	return hex.EncodeToString(h[:])
 }
 
 // ShortString returns the first 5 hex-encoded bytes of the hash, for logging purposes.
@@ -213,20 +202,14 @@ func (h Hash32) ToHash20() (h20 Hash20) {
 	return
 }
 
-type hexBytesStringer []byte
-
-func (l hexBytesStringer) String() string {
-	return hex.EncodeToString(l)
-}
-
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash20) Field() log.Field {
-	return log.Stringer("hash", hexBytesStringer(h[:]))
+	return log.Stringer("hash", h)
 }
 
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash32) Field() log.Field {
-	return log.Stringer("hash", hexBytesStringer(h[:]))
+	return log.Stringer("hash", h)
 }
 
 // EncodeScale implements scale codec interface.

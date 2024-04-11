@@ -112,7 +112,7 @@ func TestOpinionHasher(t *testing.T) {
 				rst := hasher.Hash()
 				prev = &rst
 			}
-			require.Equal(t, tc.expected, prev.String())
+			require.Equal(t, tc.expected, prev.ShortString())
 		})
 	}
 }
