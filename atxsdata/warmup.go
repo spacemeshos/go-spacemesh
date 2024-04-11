@@ -50,7 +50,7 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 			base,
 			height uint64,
 			nonce *types.VRFPostIndex,
-			isMalicious bool,
+			malicious bool,
 		) bool {
 			if nonce == nil {
 				ierr = errors.New("missing nonce")
@@ -65,7 +65,7 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 				base,
 				height,
 				*nonce,
-				isMalicious,
+				malicious,
 			)
 			return true
 		}); err != nil {
