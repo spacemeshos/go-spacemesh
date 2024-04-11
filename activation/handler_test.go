@@ -199,6 +199,7 @@ func TestHandler_processBlockATXs(t *testing.T) {
 			coinbase1,
 			numUnits,
 			&types.NIPost{},
+			withVrfNonce(123),
 		),
 		newActivationTx(
 			t,
@@ -213,6 +214,7 @@ func TestHandler_processBlockATXs(t *testing.T) {
 			coinbase2,
 			numUnits,
 			&types.NIPost{},
+			withVrfNonce(123),
 		),
 		newActivationTx(
 			t,
@@ -227,6 +229,7 @@ func TestHandler_processBlockATXs(t *testing.T) {
 			coinbase3,
 			numUnits,
 			&types.NIPost{},
+			withVrfNonce(123),
 		),
 	}
 	for _, atx := range atxList {

@@ -384,17 +384,32 @@ func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err e
 
 // Add adds an ATX for a given ATX ID.
 func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
+	_, err := AddGettingNonce(db, atx)
+	return err
+}
+
+// AddGettingNonce adds an ATX for a given ATX ID and returns the nonce for the newly added ATX.
+func AddGettingNonce(db sql.Executor, atx *types.VerifiedActivationTx) (*types.VRFPostIndex, error) {
 	if atx.ActivationTx.VRFNonce == nil && atx.PrevATXID != types.EmptyATXID {
 		nonce, err := NonceByID(db, atx.PrevATXID)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			return fmt.Errorf("error getting nonce: %w", err)
+			return nil, fmt.Errorf("error getting nonce: %w", err)
 		}
 		if err == nil {
-			return add(db, atx, &nonce)
+			err = add(db, atx, &nonce)
+			if err != nil {
+				return nil, err
+			} else {
+				return &nonce, nil
+			}
 		}
 	}
 
-	return add(db, atx, atx.VRFNonce)
+	if err := add(db, atx, atx.VRFNonce); err != nil {
+		return nil, err
+	}
+
+	return atx.VRFNonce, nil
 }
 
 // AddMaybeNoNonce adds an ATX for a given ATX ID. It doesn't try
