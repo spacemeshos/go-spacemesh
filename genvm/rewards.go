@@ -82,7 +82,7 @@ func (v *VM) addRewards(
 		log.Uint64("subsidy estimated", subsidy),
 		log.Uint64("fee", fees),
 		log.Uint64("total estimated", total),
-		log.Uint64("total transffered", transferred),
+		log.Uint64("total transferred", transferred),
 		log.Uint64("total burnt", total-transferred),
 	)
 	feesCount.Add(float64(fees))

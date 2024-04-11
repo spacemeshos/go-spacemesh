@@ -5,33 +5,20 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spacemeshos/go-scale"
 	poetShared "github.com/spacemeshos/poet/shared"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen -types PoetProof,PoetProofMessage,PoetRound,ProcessingError
+//go:generate scalegen -types PoetProof,PoetProofMessage
 
 type PoetServer struct {
 	Address string    `mapstructure:"address" json:"address"`
 	Pubkey  Base64Enc `mapstructure:"pubkey" json:"pubkey"`
 }
 
-type Member [32]byte
-
-// EncodeScale implements scale codec interface.
-func (m *Member) EncodeScale(e *scale.Encoder) (int, error) {
-	return scale.EncodeByteArray(e, m[:])
-}
-
-// DecodeScale implements scale codec interface.
-func (m *Member) DecodeScale(d *scale.Decoder) (int, error) {
-	return scale.DecodeByteArray(d, m[:])
-}
-
-type PoetProofRef [32]byte
+type PoetProofRef Hash32
 
 // EmptyPoetProofRef is an empty PoET proof reference.
 var EmptyPoetProofRef = PoetProofRef{}
@@ -102,52 +89,8 @@ func (p *PoetProofMessage) Ref() (PoetProofRef, error) {
 	return (PoetProofRef)(h), nil
 }
 
-type RoundEnd time.Time
-
-func (re RoundEnd) Equal(other RoundEnd) bool {
-	return (time.Time)(re).Equal((time.Time)(other))
-}
-
-func (re *RoundEnd) IntoTime() time.Time {
-	return (time.Time)(*re)
-}
-
-func (p *RoundEnd) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	t := p.IntoTime()
-	n, err := scale.EncodeString(enc, t.Format(time.RFC3339Nano))
-	if err != nil {
-		return 0, err
-	}
-	return n, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (p *RoundEnd) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	field, n, err := scale.DecodeString(dec)
-	if err != nil {
-		return 0, err
-	}
-	t, err := time.Parse(time.RFC3339Nano, field)
-	if err != nil {
-		return n, err
-	}
-	*p = (RoundEnd)(t)
-	return n, nil
-}
-
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
 	ID  string `scale:"max=32"`
-	End RoundEnd
-}
-
-// ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
-// from validation errors.
-type ProcessingError struct {
-	Err string `scale:"max=1024"` // TODO(mafa): make error code instead of string
-}
-
-// Error returns the processing error as a string. It implements the error interface.
-func (s ProcessingError) Error() string {
-	return s.Err
+	End time.Time
 }

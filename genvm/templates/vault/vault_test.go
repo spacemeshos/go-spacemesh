@@ -25,13 +25,13 @@ func TestAvailable(t *testing.T) {
 			total:   100,
 		},
 		{
-			desc:    "initial at the start",
+			desc:    "zero at the start",
 			start:   2,
 			end:     10,
 			lid:     2,
 			initial: 10,
 			total:   100,
-			expect:  10,
+			expect:  0,
 		},
 		{
 			desc:    "total at the end",
@@ -58,7 +58,7 @@ func TestAvailable(t *testing.T) {
 			lid:     3,
 			initial: 10,
 			total:   100,
-			expect:  10 + (100-10)/8,
+			expect:  100 / 8,
 		},
 		{
 			desc:    "increment part layers",
@@ -67,7 +67,7 @@ func TestAvailable(t *testing.T) {
 			lid:     5,
 			initial: 10,
 			total:   100,
-			expect:  10 + (100-10)*3/8,
+			expect:  100 * 3 / 8,
 		},
 		{
 			desc:    "increment almost all",
@@ -76,7 +76,16 @@ func TestAvailable(t *testing.T) {
 			lid:     9,
 			initial: 10,
 			total:   100,
-			expect:  10 + (100-10)*7/8,
+			expect:  100 * 7 / 8,
+		},
+		{
+			desc:    "one layer before actual end",
+			start:   constants.VestStart,
+			end:     constants.VestEnd,
+			lid:     constants.VestEnd - 1,
+			initial: 0.25 * constants.TotalVaulted,
+			total:   constants.TotalVaulted,
+			expect:  149999524353120243,
 		},
 		{
 			desc:   "max values don't overflow",
@@ -101,7 +110,7 @@ func TestAvailable(t *testing.T) {
 			lid:     2,
 			initial: math.MaxUint64,
 			total:   math.MaxUint64,
-			expect:  math.MaxUint64,
+			expect:  0,
 		},
 		{
 			desc:    "total max uint64",
