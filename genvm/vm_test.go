@@ -2565,14 +2565,30 @@ func TestVestingData(t *testing.T) {
 			t.Logf("vesting address: %v. parameters: %s", vestaddr.String(), vestArgs)
 			t.Logf("vault address: %v. parameters: %s", vaultaddr.String(), vaultArgs)
 
+			// add another spending account
+			t2 := newTester(t).addSingleSig(1)
+			spendAccount := t2.accounts[0]
+			spendAccountNonce := t2.nonces[0]
+			spendAmount := uint64(1_000_000)
+
 			vm := New(sql.InMemory(), WithLogger(logtest.New(t)))
 			require.NoError(t, vm.ApplyGenesis(
 				[]core.Account{
 					{
+						// give a bit to vesting account as it needs funds to send a few transactions
+						// before receiving from the spend address
 						Address: vestaddr,
-						Balance: 350_000,
-					}, // give a bit to vesting account as it needs to get funds for 2 spawns and 2 drain vault txs
-					{Address: vaultaddr, Balance: uint64(meta.Total)},
+						Balance: 200_000,
+					},
+					{
+						Address: vaultaddr,
+						Balance: uint64(meta.Total),
+					},
+					{
+						// add one more account to test sending coins, and add some extra for gas
+						Address: spendAccount.getAddress(),
+						Balance: spendAmount + 150_000,
+					},
 				},
 			))
 			vestaccount := &vestingAccount{
@@ -2601,7 +2617,58 @@ func TestVestingData(t *testing.T) {
 			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
 			nonce++
 
-			before, err := vm.GetBalance(vestaddr)
+			// send some coins to the vault and make sure they can be spent
+			before, err := vm.GetBalance(spendAccount.getAddress())
+			require.NoError(t, err)
+			ineffective, rst, err = vm.Apply(ApplyContext{Layer: genesis + 3},
+				notVerified(types.NewRawTx(spendAccount.selfSpawn(spendAccountNonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
+			after, err := vm.GetBalance(spendAccount.getAddress())
+			require.NoError(t, err)
+			require.Equal(t, before-rst[0].Fee, after)
+			spendAccountNonce++
+
+			before, err = vm.GetBalance(spendAccount.getAddress())
+			require.NoError(t, err)
+			ineffective, rst, err = vm.Apply(ApplyContext{Layer: genesis + 4},
+				notVerified(types.NewRawTx(spendAccount.spend(vaultaddr, spendAmount, spendAccountNonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
+			after, err = vm.GetBalance(spendAccount.getAddress())
+			require.NoError(t, err)
+			require.Equal(t, before-rst[0].Fee-spendAmount, after)
+
+			before, err = vm.GetBalance(vestaddr)
+			require.NoError(t, err)
+			vaultBefore, err := vm.GetBalance(vaultaddr)
+			require.NoError(t, err)
+			ineffective, rst, err = vm.Apply(ApplyContext{Layer: genesis + 5},
+				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, spendAmount, nonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
+			after, err = vm.GetBalance(vestaddr)
+			require.NoError(t, err)
+			vaultAfter, err := vm.GetBalance(vaultaddr)
+			require.NoError(t, err)
+
+			// vesting account receives coins and pays fee
+			require.Equal(t, before-rst[0].Fee+spendAmount, after)
+
+			// vault address declines by send amount
+			require.Equal(t, vaultBefore-spendAmount, vaultAfter)
+			nonce++
+
+			before, err = vm.GetBalance(vestaddr)
 			require.NoError(t, err)
 			ineffective, rst, err = vm.Apply(ApplyContext{Layer: constants.VestStart},
 				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(meta.Initial), nonce))),
@@ -2611,7 +2678,7 @@ func TestVestingData(t *testing.T) {
 			require.NoError(t, err)
 			// Expect this tx to fail as no balance has vested yet
 			require.Equal(t, types.TransactionFailure, rst[0].TransactionResult.Status)
-			after, err := vm.GetBalance(vestaddr)
+			after, err = vm.GetBalance(vestaddr)
 			require.NoError(t, err)
 			require.Equal(t, before-rst[0].Fee, after)
 			nonce++
