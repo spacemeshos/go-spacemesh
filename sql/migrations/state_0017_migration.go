@@ -22,12 +22,17 @@ type atxInfo struct {
 	prevATXID      *types.ATXID
 }
 
+type atxUpdate struct {
+	nonce     *types.VRFPostIndex
+	prevATXID *types.ATXID
+}
+
 type migration0017 struct {
 	logger         *zap.Logger
 	nodeMap        map[types.NodeID]atxInfo
 	atxMap         map[types.ATXID]types.VRFPostIndex
 	danglingMap    map[types.ATXID][]atxInfo
-	pendingUpdates map[types.ATXID]types.VRFPostIndex
+	pendingUpdates map[types.ATXID]atxUpdate
 }
 
 func New0017Migration(log *zap.Logger) *migration0017 {
@@ -36,7 +41,7 @@ func New0017Migration(log *zap.Logger) *migration0017 {
 		nodeMap:        make(map[types.NodeID]atxInfo),
 		atxMap:         make(map[types.ATXID]types.VRFPostIndex),
 		danglingMap:    make(map[types.ATXID][]atxInfo),
-		pendingUpdates: make(map[types.ATXID]types.VRFPostIndex),
+		pendingUpdates: make(map[types.ATXID]atxUpdate),
 	}
 }
 
@@ -134,6 +139,7 @@ func (m *migration0017) processEpoch(db sql.Executor, epoch types.EpochID) error
 }
 
 func (m *migration0017) processATX(db sql.Executor, a atxInfo) error {
+	upd := atxUpdate{prevATXID: a.prevATXID}
 	if a.nonce == nil {
 		var err error
 		a.nonce, err = m.findNonce(db, a)
@@ -151,7 +157,11 @@ func (m *migration0017) processATX(db sql.Executor, a atxInfo) error {
 			m.danglingMap[*a.prevATXID] = append(m.danglingMap[*a.prevATXID], a)
 			return nil
 		}
-		m.pendingUpdates[a.atxID] = *a.nonce
+		upd.nonce = a.nonce
+	}
+
+	if upd.nonce != nil || upd.prevATXID != nil {
+		m.pendingUpdates[a.atxID] = upd
 	}
 
 	if err := m.resolveDangling(db, a.atxID, *a.nonce, nil); err != nil {
@@ -191,9 +201,12 @@ func (m *migration0017) resolveDangling(
 		return errors.New("dangling ATX cycle detected")
 	}
 	for _, a := range m.danglingMap[atxID] {
-		m.pendingUpdates[a.atxID] = nonce
 		a.nonce = &nonce
 		m.updateMaps(a)
+		m.pendingUpdates[a.atxID] = atxUpdate{
+			nonce:     a.nonce,
+			prevATXID: a.prevATXID,
+		}
 		if err := m.resolveDangling(db, a.atxID, nonce, visited); err != nil {
 			return err
 		}
@@ -206,13 +219,13 @@ func (m *migration0017) findNonce(db sql.Executor, a atxInfo) (*types.VRFPostInd
 	var prevNonce *types.VRFPostIndex
 	if a.prevATXID != nil {
 		v, found := m.atxMap[*a.prevATXID]
-		if !found {
-			v, found = m.pendingUpdates[*a.prevATXID]
-		}
 		if found {
-			// found node via a previous equivocating ATX
-			// or a pending update
 			prevNonce = &v
+		} else {
+			upd, found := m.pendingUpdates[*a.prevATXID]
+			if found && upd.nonce != nil {
+				prevNonce = upd.nonce
+			}
 		}
 	} else {
 		return nil, errors.New("no prev ATX and no nonce")
@@ -250,7 +263,7 @@ func (m *migration0017) applyPendingUpdates(db sql.Executor) error {
 		if (n+1)%100000 == 1 || n == total-1 {
 			m.logger.Info("updating atxs", zap.Int("current", n+1), zap.Int("total", total))
 		}
-		if err := updateNonce(db, atxID, m.pendingUpdates[atxID]); err != nil {
+		if err := updateATX(db, atxID, m.pendingUpdates[atxID]); err != nil {
 			return err
 		}
 	}
@@ -258,13 +271,36 @@ func (m *migration0017) applyPendingUpdates(db sql.Executor) error {
 	return nil
 }
 
-func updateNonce(db sql.Executor, atxID types.ATXID, nonce types.VRFPostIndex) error {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(nonce))
-		stmt.BindBytes(2, atxID[:])
+func updateATX(db sql.Executor, atxID types.ATXID, upd atxUpdate) error {
+	var (
+		sqlCmd string
+		enc    sql.Encoder
+	)
+	switch {
+	case upd.nonce == nil && upd.prevATXID == nil:
+		panic("BUG: bad atxUpdate")
+	case upd.nonce != nil && upd.prevATXID != nil:
+		enc = func(stmt *sql.Statement) {
+			stmt.BindBytes(1, (*upd.prevATXID)[:])
+			stmt.BindInt64(2, int64(*upd.nonce))
+			stmt.BindBytes(3, atxID[:])
+		}
+		sqlCmd = "update atxs set prev_id = ?1, nonce = ?2 where id = ?3"
+	case upd.nonce != nil:
+		enc = func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(*upd.nonce))
+			stmt.BindBytes(2, atxID[:])
+		}
+		sqlCmd = "update atxs set nonce = ?1 where id = ?2"
+	default:
+		enc = func(stmt *sql.Statement) {
+			stmt.BindBytes(1, (*upd.prevATXID)[:])
+			stmt.BindBytes(2, atxID[:])
+		}
+		sqlCmd = "update atxs set prev_id = ?1 where id = ?2"
 	}
-	if _, err := db.Exec("update atxs set nonce = ?1 where id = ?2", enc, nil); err != nil {
-		return fmt.Errorf("error updating ATX nonce: %w", err)
+	if _, err := db.Exec(sqlCmd, enc, nil); err != nil {
+		return fmt.Errorf("error updating ATX: %w", err)
 	}
 	return nil
 }
