@@ -359,6 +359,7 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err e
 	})
 }
 
+// NonceByID retrieves VRFNonce corresponding to the specified ATX ID
 func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
@@ -429,12 +430,18 @@ func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostI
 		stmt.BindInt64(10, int64(atx.Sequence))
 		stmt.BindBytes(11, atx.Coinbase.Bytes())
 		stmt.BindInt64(12, int64(atx.Validity()))
+		if atx.PrevATXID != types.EmptyATXID {
+			stmt.BindBytes(13, atx.PrevATXID.Bytes())
+		} else {
+			stmt.BindNull(13)
+		}
 	}
 
 	_, err = db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
-			 pubkey, received, base_tick_height, tick_count, sequence, coinbase, validity)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`, enc, nil)
+			 pubkey, received, base_tick_height, tick_count, sequence, coinbase,
+			 validity, prev_id)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
@@ -532,7 +539,10 @@ type CheckpointAtx struct {
 
 // LatestN returns the latest N ATXs per smesher.
 func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
-	var rst []CheckpointAtx
+	var (
+		rst  []CheckpointAtx
+		ierr error
+	)
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(n))
 	}
@@ -546,20 +556,29 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 		stmt.ColumnBytes(5, catx.SmesherID[:])
 		catx.Sequence = uint64(stmt.ColumnInt64(6))
 		stmt.ColumnBytes(7, catx.Coinbase[:])
+		if sql.IsNull(stmt, 8) {
+			ierr = errors.New("missing nonce")
+			return false
+		} else {
+			catx.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(8))
+		}
 		rst = append(rst, catx)
 		return true
 	}
 
 	if rows, err := db.Exec(`
-		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase
+		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
 		from (
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
-			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase from atxs
+			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
+			from atxs
 		)
 		where RowNum <= ?1 order by pubkey;`, enc, dec); err != nil {
 		return nil, fmt.Errorf("latestN: %w", err)
 	} else if rows == 0 {
 		return nil, sql.ErrNotFound
+	} else if ierr != nil {
+		return nil, ierr
 	}
 	return rst, nil
 }
