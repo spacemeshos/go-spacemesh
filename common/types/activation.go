@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen -types ATXMetadata,EpochActiveSet
+//go:generate scalegen -types ATXMetadata,MerkleProof,EpochActiveSet
 
 // BytesToATXID is a helper to copy buffer into a ATXID.
 func BytesToATXID(buf []byte) (id ATXID) {

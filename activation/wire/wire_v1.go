@@ -124,19 +124,15 @@ func niPostToWireV1(n *types.NIPost) *NIPostV1 {
 	}
 
 	return &NIPostV1{
-		Membership: *MerkleProofToWireV1(n.Membership),
-		Post:       postToWireV1(n.Post),
+		Membership: MerkleProofV1{
+			Nodes:     n.Membership.Nodes,
+			LeafIndex: n.Membership.LeafIndex,
+		},
+		Post: postToWireV1(n.Post),
 		PostMetadata: &PostMetadataV1{
 			Challenge:     n.PostMetadata.Challenge,
 			LabelsPerUnit: n.PostMetadata.LabelsPerUnit,
 		},
-	}
-}
-
-func MerkleProofToWireV1(p types.MerkleProof) *MerkleProofV1 {
-	return &MerkleProofV1{
-		Nodes:     p.Nodes,
-		LeafIndex: p.LeafIndex,
 	}
 }
 
@@ -220,8 +216,11 @@ func niPostFromWireV1(nipost *NIPostV1) *types.NIPost {
 	}
 
 	return &types.NIPost{
-		Membership: *MerkleProofFromWireV1(nipost.Membership),
-		Post:       postFromWireV1(nipost.Post),
+		Membership: types.MerkleProof{
+			LeafIndex: nipost.Membership.LeafIndex,
+			Nodes:     nipost.Membership.Nodes,
+		},
+		Post: postFromWireV1(nipost.Post),
 		PostMetadata: &types.PostMetadata{
 			Challenge:     nipost.PostMetadata.Challenge,
 			LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
@@ -237,12 +236,5 @@ func postFromWireV1(post *PostV1) *types.Post {
 		Nonce:   post.Nonce,
 		Indices: post.Indices,
 		Pow:     post.Pow,
-	}
-}
-
-func MerkleProofFromWireV1(proofV1 MerkleProofV1) *types.MerkleProof {
-	return &types.MerkleProof{
-		LeafIndex: proofV1.LeafIndex,
-		Nodes:     proofV1.Nodes,
 	}
 }

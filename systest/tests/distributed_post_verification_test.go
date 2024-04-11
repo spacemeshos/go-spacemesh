@@ -287,8 +287,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.Equal(t, atx.NIPost.Post.Indices, invalidAtx.NIPost.Post.Indices)
 
 		meta := &shared.ProofMetadata{
-			NodeId:          invalidAtx.NodeID[:],
-			CommitmentAtxId: invalidAtx.CommitmentATX[:],
+			NodeId:          invalidAtx.NodeID.Bytes(),
+			CommitmentAtxId: invalidAtx.CommitmentATX.Bytes(),
 			NumUnits:        invalidAtx.NumUnits,
 			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
 			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,
