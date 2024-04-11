@@ -2,7 +2,6 @@ package activation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -95,8 +94,6 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 			msg.PoetServiceID[:5],
 		),
 	)
-	var pErr types.ProcessingError
-	r.False(errors.As(err, &pErr))
 }
 
 func TestPoetDbInvalidPoetStatement(t *testing.T) {
@@ -113,8 +110,6 @@ func TestPoetDbInvalidPoetStatement(t *testing.T) {
 			msg.PoetServiceID[:5],
 		),
 	)
-	var pErr types.ProcessingError
-	r.False(errors.As(err, &pErr))
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {

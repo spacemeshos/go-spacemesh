@@ -394,7 +394,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		ChallengeHash: types.Hash32(challenge),
 		Address:       client.Address(),
 		RoundID:       round.ID,
-		RoundEnd:      round.End.IntoTime(),
+		RoundEnd:      round.End,
 	})
 }
 
@@ -448,7 +448,7 @@ func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) poet
 }
 
 // membersContainChallenge verifies that the challenge is included in proof's members.
-func membersContainChallenge(members []types.Member, challenge types.Hash32) (uint64, error) {
+func membersContainChallenge(members []types.Hash32, challenge types.Hash32) (uint64, error) {
 	for id, member := range members {
 		if bytes.Equal(member[:], challenge.Bytes()) {
 			return uint64(id), nil
@@ -556,7 +556,7 @@ func (nb *NIPostBuilder) getBestProof(
 	return types.PoetProofRef{}, nil, ErrPoetProofNotReceived
 }
 
-func constructMerkleProof(challenge types.Hash32, members []types.Member) (*types.MerkleProof, error) {
+func constructMerkleProof(challenge types.Hash32, members []types.Hash32) (*types.MerkleProof, error) {
 	// We are interested only in proofs that we are members of
 	id, err := membersContainChallenge(members, challenge)
 	if err != nil {
