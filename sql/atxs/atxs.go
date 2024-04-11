@@ -389,16 +389,20 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 			return fmt.Errorf("error getting nonce: %w", err)
 		}
 		if err == nil {
-			atx.VRFNonce = &nonce
+			return add(db, atx, &nonce)
 		}
 	}
 
-	return AddMaybeNoNonce(db, atx)
+	return add(db, atx, atx.VRFNonce)
 }
 
 // AddMaybeNoNonce adds an ATX for a given ATX ID. It doesn't try
 // to set the nonce field if VRFNonce is not set in the ATX.
 func AddMaybeNoNonce(db sql.Executor, atx *types.VerifiedActivationTx) error {
+	return add(db, atx, atx.VRFNonce)
+}
+
+func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostIndex) error {
 	buf, err := codec.Encode(atx.ActivationTx)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
@@ -413,8 +417,8 @@ func AddMaybeNoNonce(db sql.Executor, atx *types.VerifiedActivationTx) error {
 		} else {
 			stmt.BindNull(4)
 		}
-		if atx.VRFNonce != nil {
-			stmt.BindInt64(5, int64(*atx.VRFNonce))
+		if nonce != nil {
+			stmt.BindInt64(5, int64(*nonce))
 		} else {
 			stmt.BindNull(5)
 		}
