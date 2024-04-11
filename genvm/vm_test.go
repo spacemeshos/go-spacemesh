@@ -84,11 +84,11 @@ func (a *singlesigAccount) getTemplate() core.Address {
 }
 
 func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
-	return sdkwallet.Spend(signing.PrivateKey(a.pk), to, amount, nonce, opts...)
+	return sdkwallet.Spend(a.pk, to, amount, nonce, opts...)
 }
 
 func (a *singlesigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
-	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk), nonce, opts...)
+	return sdkwallet.SelfSpawn(a.pk, nonce, opts...)
 }
 
 func (a *singlesigAccount) spawn(
@@ -97,12 +97,12 @@ func (a *singlesigAccount) spawn(
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) []byte {
-	return sdkwallet.Spawn(signing.PrivateKey(a.pk), template, args, nonce, opts...)
+	return sdkwallet.Spawn(a.pk, template, args, nonce, opts...)
 }
 
 func (a *singlesigAccount) spawnArgs() scale.Encodable {
 	args := wallet.SpawnArguments{}
-	copy(args.PublicKey[:], signing.Public(signing.PrivateKey(a.pk)))
+	copy(args.PublicKey[:], signing.Public(a.pk))
 	return &args
 }
 
@@ -888,7 +888,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
-			desc: "SendToIself",
+			desc: "SendToSelf",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -1002,7 +1002,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
-			desc: "BlockGasLimitIsNotConsumedByInefective",
+			desc: "BlockGasLimitIsNotConsumedByIneffective",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -1284,7 +1284,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
-			desc: "wrong id in spawn",
+			desc: "WrongIdInSpawn",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -1375,7 +1375,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
-			desc: "inefective zero gas price",
+			desc: "IneffectiveZeroGasPrice",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -1592,7 +1592,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			verified: true,
 		},
 		{
-			desc: "spawn genesis id mismatch",
+			desc: "SpawnGenesisIdMismatch",
 			tx:   tt.selfSpawn(1, sdk.WithGenesisID(types.Hash20{1})),
 		},
 		{
@@ -1610,7 +1610,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			verified: true,
 		},
 		{
-			desc: "spawn genesis id mismatch",
+			desc: "SpendGenesisIdMismatch",
 			tx:   tt.spend(0, 1, 100, sdk.WithGenesisID(types.Hash20{1})),
 		},
 		{
@@ -2545,12 +2545,13 @@ func TestVestingData(t *testing.T) {
 				pk, err := hex.DecodeString(string(data))
 				require.NoError(t, err)
 				pk = bytes.Trim(pk, "\n")
-				privates = append(privates, ed25519.PrivateKey(pk))
+				privates = append(privates, pk)
 				var public core.PublicKey
 				copy(public[:], signing.Public(pk))
 				vestArgs.PublicKeys = append(vestArgs.PublicKeys, public)
 			}
 			vestaddr := core.ComputePrincipal(vesting.TemplateAddress, vestArgs)
+
 			vaultArgs := &vault.SpawnArguments{
 				Owner: vestaddr,
 				// Note: InitialUnlockAmount is now ignored due to SMIP-0002
