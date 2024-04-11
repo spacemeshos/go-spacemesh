@@ -262,7 +262,7 @@ type RemoteContext struct {
 	template Template
 }
 
-// Balance returns the remote account balance
+// Balance returns the remote account balance.
 func (r *RemoteContext) Balance() uint64 {
 	return r.remote.Balance
 }
