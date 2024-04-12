@@ -54,7 +54,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestAll(t *testing.T) {
-	db := sql.InMemory(sql.WithConnections(10000))
+	db := sql.InMemory()
 
 	atxList := make([]*types.VerifiedActivationTx, 0)
 	for i := 0; i < 3; i++ {

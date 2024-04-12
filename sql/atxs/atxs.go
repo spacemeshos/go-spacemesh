@@ -704,7 +704,7 @@ func IterateAtxsData(
 			baseHeight := uint64(stmt.ColumnInt64(5))
 			ticks := uint64(stmt.ColumnInt64(6))
 			var vrfNonce *types.VRFPostIndex
-			if stmt.ColumnType(7) != sqlite.SQLITE_NULL {
+			if !sql.IsNull(stmt, 7) {
 				nonce := types.VRFPostIndex(stmt.ColumnInt64(7))
 				vrfNonce = &nonce
 			}
