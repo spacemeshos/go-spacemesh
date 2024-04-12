@@ -16,7 +16,6 @@ import (
 	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -228,13 +227,13 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 
 	sig1Poet1 := nipost.PoETRegistration{
-		ChallengeHash: wire.NIPostChallengeToWireV1(sig1Ch).Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet1.spacemesh.io",
 		RoundID:       "1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	sig1Poet2 := nipost.PoETRegistration{
-		ChallengeHash: wire.NIPostChallengeToWireV1(sig1Ch).Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet2.spacemesh.io",
 		RoundID:       "10",
 		RoundEnd:      time.Now().Round(time.Second),
@@ -286,13 +285,13 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 
 	sig2Poet1 := nipost.PoETRegistration{
-		ChallengeHash: wire.NIPostChallengeToWireV1(sig2Ch).Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet1.spacemesh.io",
 		RoundID:       "1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	sig2Poet2 := nipost.PoETRegistration{
-		ChallengeHash: wire.NIPostChallengeToWireV1(sig2Ch).Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet2.spacemesh.io",
 		RoundID:       "10",
 		RoundEnd:      time.Now().Round(time.Second),
@@ -386,13 +385,13 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 	require.NoError(t, err)
 
 	sigPoet1 := nipost.PoETRegistration{
-		ChallengeHash: wire.NIPostChallengeToWireV1(sigCh).Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet1.spacemesh.io",
 		RoundID:       "1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	sigPoet2 := nipost.PoETRegistration{
-		ChallengeHash: wire.NIPostChallengeToWireV1(sigCh).Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet2.spacemesh.io",
 		RoundID:       "10",
 		RoundEnd:      time.Now().Round(time.Second),

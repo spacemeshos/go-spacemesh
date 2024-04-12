@@ -345,7 +345,7 @@ func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere
 // in a given ATX (eg. NodeID, NumUnits).
 type PostMetadata struct {
-	Challenge     []byte `scale:"max=32"`
+	Challenge     []byte
 	LabelsPerUnit uint64
 }
 

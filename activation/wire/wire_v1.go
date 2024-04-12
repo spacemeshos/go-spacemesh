@@ -14,7 +14,7 @@ type ActivationTxV1 struct {
 	InnerActivationTxV1
 
 	SmesherID types.NodeID
-	Signature [64]byte
+	Signature types.EdSignature
 }
 
 // InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
