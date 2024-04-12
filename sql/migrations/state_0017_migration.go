@@ -29,7 +29,6 @@ type atxUpdate struct {
 type migration0017 struct {
 	logger         *zap.Logger
 	nodeMap        map[types.NodeID]atxInfo
-	danglingMap    map[types.ATXID][]atxInfo
 	pendingUpdates map[types.ATXID]atxUpdate
 }
 
@@ -37,7 +36,6 @@ func New0017Migration(log *zap.Logger) *migration0017 {
 	return &migration0017{
 		logger:         log,
 		nodeMap:        make(map[types.NodeID]atxInfo),
-		danglingMap:    make(map[types.ATXID][]atxInfo),
 		pendingUpdates: make(map[types.ATXID]atxUpdate),
 	}
 }
@@ -64,9 +62,6 @@ func (m *migration0017) Apply(db sql.Executor) error {
 		if err := m.processEpoch(db, epoch); err != nil {
 			return fmt.Errorf("error processing epoch %d: %w", epoch, err)
 		}
-	}
-	if len(m.danglingMap) != 0 {
-		return errors.New("dangling entries remain")
 	}
 	return nil
 }
@@ -136,10 +131,6 @@ func (m *migration0017) processATX(db sql.Executor, a atxInfo) error {
 		if err != nil {
 			return err
 		}
-		if a.nonce == nil {
-			m.danglingMap[*a.prevATXID] = append(m.danglingMap[*a.prevATXID], a)
-			return nil
-		}
 		upd.nonce = a.nonce
 	}
 
@@ -147,58 +138,24 @@ func (m *migration0017) processATX(db sql.Executor, a atxInfo) error {
 		m.pendingUpdates[a.atxID] = upd
 	}
 
-	if err := m.resolveDangling(db, a.atxID, *a.nonce, nil); err != nil {
-		return err
-	}
-
 	m.nodeMap[a.nodeID] = a
 	return nil
 }
 
-func (m *migration0017) resolveDangling(
-	db sql.Executor,
-	atxID types.ATXID,
-	nonce types.VRFPostIndex,
-	visited map[types.ATXID]struct{},
-) error {
-	if visited == nil {
-		visited = make(map[types.ATXID]struct{})
-	}
-	if _, found := visited[atxID]; found {
-		return errors.New("dangling ATX cycle detected")
-	}
-	for _, a := range m.danglingMap[atxID] {
-		a.nonce = &nonce
-		m.nodeMap[a.nodeID] = a
-		m.pendingUpdates[a.atxID] = atxUpdate{
-			nonce:     a.nonce,
-			prevATXID: a.prevATXID,
-		}
-		if err := m.resolveDangling(db, a.atxID, nonce, visited); err != nil {
-			return err
-		}
-	}
-	delete(m.danglingMap, atxID)
-	return nil
-}
-
 func (m *migration0017) findNonce(db sql.Executor, a atxInfo) (*types.VRFPostIndex, error) {
-	var prevNonce *types.VRFPostIndex
 	if a.prevATXID != nil {
 		upd, found := m.pendingUpdates[*a.prevATXID]
 		if found && upd.nonce != nil {
-			prevNonce = upd.nonce
+			return upd.nonce, nil
 		}
 	} else {
 		return nil, errors.New("no prev ATX and no nonce")
 	}
 
 	switch a1, found := m.nodeMap[a.nodeID]; {
-	case !found:
-		return prevNonce, nil
-	case a.prevATXID == nil:
-		return nil, errors.New("no prev ATX but prev nonce found")
-	case a1.atxID != *a.prevATXID:
+	case found && a1.nonce == nil:
+		panic("BUG: no nonce in the nodeMap entry")
+	case !found || a1.atxID != *a.prevATXID:
 		// nodeMap didn't give the correct result, we have to resort to
 		// slow querying
 		v, err := m.slowGetNonceByATXID(db, *a.prevATXID)
@@ -206,10 +163,6 @@ func (m *migration0017) findNonce(db sql.Executor, a atxInfo) (*types.VRFPostInd
 			return nil, err
 		}
 		return &v, nil
-	case prevNonce != nil:
-		return nil, errors.New("equivocating nonce found via node ID map")
-	case a1.nonce == nil:
-		panic("BUG: no nonce in the nodeMap entry")
 	default:
 		return a1.nonce, nil
 	}
@@ -294,7 +247,7 @@ func updateATX(db sql.Executor, atxID types.ATXID, upd atxUpdate) error {
 		enc    sql.Encoder
 	)
 	switch {
-	case upd.nonce == nil && upd.prevATXID == nil:
+	case upd.prevATXID == nil:
 		panic("BUG: bad atxUpdate")
 	case upd.nonce != nil && upd.prevATXID != nil:
 		enc = func(stmt *sql.Statement) {
@@ -303,12 +256,6 @@ func updateATX(db sql.Executor, atxID types.ATXID, upd atxUpdate) error {
 			stmt.BindBytes(3, atxID[:])
 		}
 		sqlCmd = "update atxs set prev_id = ?1, nonce = ?2 where id = ?3"
-	case upd.nonce != nil:
-		enc = func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(*upd.nonce))
-			stmt.BindBytes(2, atxID[:])
-		}
-		sqlCmd = "update atxs set nonce = ?1 where id = ?2"
 	default:
 		enc = func(stmt *sql.Statement) {
 			stmt.BindBytes(1, (*upd.prevATXID)[:])
