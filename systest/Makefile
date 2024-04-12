@@ -15,7 +15,7 @@ test_job_name ?= systest-$(version_info)-$(date)
 keep ?= false
 clusters ?= 1
 size ?= 10
-poet_size ?= 3
+poet_size ?= 2
 level ?= debug
 bootstrap ?= 5m
 storage ?= standard=1Gi

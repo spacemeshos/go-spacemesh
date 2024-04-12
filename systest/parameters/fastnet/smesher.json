@@ -2,7 +2,7 @@
     "preset": "fastnet",
     "poet": {
         "phase-shift": "30s",
-        "cycle-gap": "30s",
+        "cycle-gap": "50s",
         "grace-period": "10s"
     },
     "api": {
