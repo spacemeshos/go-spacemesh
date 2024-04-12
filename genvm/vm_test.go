@@ -275,6 +275,7 @@ type tester struct {
 
 	accounts []testAccount
 	nonces   []core.Nonce
+	balances []uint64
 }
 
 func (t *tester) persistent() *tester {
@@ -291,16 +292,17 @@ func (t *tester) withGasLimit(limit uint64) *tester {
 	return t
 }
 
-func (t *tester) addAccount(account testAccount) {
+func (t *tester) addAccount(account testAccount, balance uint64) {
 	t.accounts = append(t.accounts, account)
 	t.nonces = append(t.nonces, 0)
+	t.balances = append(t.balances, balance)
 }
 
 func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		t.addAccount(&singlesigAccount{pk: pk, address: sdkwallet.Address(pub)})
+		t.addAccount(&singlesigAccount{pk: pk, address: sdkwallet.Address(pub)}, 1_000_000_000)
 	}
 	return t
 }
@@ -324,7 +326,7 @@ func (t *tester) createMultisig(k, n int, template core.Address) *multisigAccoun
 
 func (t *tester) addMultisig(total, k, n int) *tester {
 	for i := 0; i < total; i++ {
-		t.addAccount(t.createMultisig(k, n, multisig.TemplateAddress))
+		t.addAccount(t.createMultisig(k, n, multisig.TemplateAddress), 1_000_000_000)
 	}
 	return t
 }
@@ -332,7 +334,7 @@ func (t *tester) addMultisig(total, k, n int) *tester {
 func (t *tester) addVesting(total, k, n int) *tester {
 	for i := 0; i < total; i++ {
 		ms := t.createMultisig(k, n, vesting.TemplateAddress)
-		t.addAccount(&vestingAccount{*ms})
+		t.addAccount(&vestingAccount{*ms}, 1_000_000_000)
 	}
 	return t
 }
@@ -347,21 +349,21 @@ func (t *tester) addVault(owners int, totalAmount, initialUnlock uint64, start, 
 			vestingEnd:    end,
 		}
 		account.address = core.ComputePrincipal(account.getTemplate(), account.spawnArgs())
-		t.addAccount(account)
+		t.addAccount(account, totalAmount)
 	}
 	return t
 }
 
 func (t *tester) applyGenesis() *tester {
-	return t.applyGenesisWithBalance(1_000_000_000_000)
+	return t.applyGenesisWithBalance()
 }
 
-func (t *tester) applyGenesisWithBalance(amount uint64) *tester {
+func (t *tester) applyGenesisWithBalance() *tester {
 	accounts := make([]core.Account, len(t.accounts))
 	for i := range accounts {
 		accounts[i] = core.Account{
 			Address: t.accounts[i].getAddress(),
-			Balance: amount,
+			Balance: t.balances[i],
 		}
 	}
 	require.NoError(t, t.VM.ApplyGenesis(accounts))
@@ -1438,7 +1440,7 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 						require.Equal(t,
 							types.TransactionFailure.String(),
 							rst.Status.String(),
-							"layer=%s ith=%d",
+							"layer=%s txnum=%d",
 							lid,
 							i)
 						require.Equal(t, expected.Error(), rst.Message)
@@ -1468,9 +1470,8 @@ func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTes
 func TestWallets(t *testing.T) {
 	t.Parallel()
 	const (
-		funded  = 10  // number of funded accounts, included in genesis
-		total   = 100 // total number of accounts
-		balance = 1_000_000_000
+		funded = 10  // number of funded accounts, included in genesis
+		total  = 100 // total number of accounts
 
 		defaultGasPrice = 1
 	)
@@ -1478,7 +1479,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, wallet.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(funded).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addSingleSig(total - funded)
 		})
 	})
@@ -1487,7 +1488,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 1, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addMultisig(total-funded, 1, n)
 		})
 	})
@@ -1496,7 +1497,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 2, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addMultisig(total-funded, 2, n)
 		})
 	})
@@ -1505,7 +1506,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 3, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addMultisig(total-funded, 3, n)
 		})
 	})
@@ -1514,7 +1515,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addVesting(funded, 1, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addVesting(total-funded, 1, n)
 		})
 	})
@@ -1523,7 +1524,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addVesting(funded, 2, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addVesting(total-funded, 2, n)
 		})
 	})
@@ -1532,7 +1533,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addVesting(funded, 3, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addVesting(total-funded, 3, n)
 		})
 	})
