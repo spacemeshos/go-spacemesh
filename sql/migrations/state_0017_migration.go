@@ -15,11 +15,10 @@ import (
 )
 
 type atxInfo struct {
-	atxID          types.ATXID
-	nodeID         types.NodeID
-	isEquivocating bool
-	nonce          *types.VRFPostIndex
-	prevATXID      *types.ATXID
+	atxID     types.ATXID
+	nodeID    types.NodeID
+	nonce     *types.VRFPostIndex
+	prevATXID *types.ATXID
 }
 
 type atxUpdate struct {
@@ -30,7 +29,6 @@ type atxUpdate struct {
 type migration0017 struct {
 	logger         *zap.Logger
 	nodeMap        map[types.NodeID]atxInfo
-	atxMap         map[types.ATXID]types.VRFPostIndex
 	danglingMap    map[types.ATXID][]atxInfo
 	pendingUpdates map[types.ATXID]atxUpdate
 }
@@ -39,7 +37,6 @@ func New0017Migration(log *zap.Logger) *migration0017 {
 	return &migration0017{
 		logger:         log,
 		nodeMap:        make(map[types.NodeID]atxInfo),
-		atxMap:         make(map[types.ATXID]types.VRFPostIndex),
 		danglingMap:    make(map[types.ATXID][]atxInfo),
 		pendingUpdates: make(map[types.ATXID]atxUpdate),
 	}
@@ -93,10 +90,9 @@ func (m *migration0017) processEpoch(db sql.Executor, epoch types.EpochID) error
 			v := types.VRFPostIndex(stmt.ColumnInt64(2))
 			nonce = &v
 		}
-		isEquivocating := stmt.ColumnInt(3) != 0
-		if l := stmt.ColumnLen(4); l != 0 {
+		if l := stmt.ColumnLen(3); l != 0 {
 			var atx types.ActivationTx
-			if n, err := codec.DecodeFrom(stmt.ColumnReader(4), &atx); err != nil {
+			if n, err := codec.DecodeFrom(stmt.ColumnReader(3), &atx); err != nil {
 				ierr = fmt.Errorf("error decoding ATX %s: %w", atxID, err)
 				return false
 			} else if n != l {
@@ -108,11 +104,10 @@ func (m *migration0017) processEpoch(db sql.Executor, epoch types.EpochID) error
 			}
 		}
 		if err := m.processATX(db, atxInfo{
-			atxID:          atxID,
-			nodeID:         nodeID,
-			isEquivocating: isEquivocating,
-			nonce:          nonce,
-			prevATXID:      prevATXID,
+			atxID:     atxID,
+			nodeID:    nodeID,
+			nonce:     nonce,
+			prevATXID: prevATXID,
 		}); err != nil {
 			ierr = fmt.Errorf("error processing ATX %s: %w", atxID, err)
 			return false
@@ -120,14 +115,9 @@ func (m *migration0017) processEpoch(db sql.Executor, epoch types.EpochID) error
 		return true
 	}
 	if _, err := db.Exec(`
-		select a.id, a.pubkey, a.nonce,
-		  iif(eq.pubkey is null, 0, 1) as is_equivocating,
-		  iif(a.nonce is null, b.atx, null) as atx
+		select a.id, a.pubkey, a.nonce, b.atx
 		from atxs a
                 inner join atx_blobs b on a.id = b.id
-		left join (
-		  select pubkey from atxs where epoch = ?1 group by pubkey having count(id) > 1
-		) eq on a.pubkey = eq.pubkey
 		where epoch = ?1`, enc, dec); err != nil {
 		return fmt.Errorf("error processing epoch %d: %w", epoch, err)
 	}
@@ -147,13 +137,6 @@ func (m *migration0017) processATX(db sql.Executor, a atxInfo) error {
 			return err
 		}
 		if a.nonce == nil {
-			if !a.isEquivocating {
-				// This ATX is non-equivocating and has no nonce, so its
-				// previous ATX must have been encountered when processing
-				// a previous epoch
-				return fmt.Errorf("non-equivocating ATX with dangling prev ATX ID %s",
-					*a.prevATXID)
-			}
 			m.danglingMap[*a.prevATXID] = append(m.danglingMap[*a.prevATXID], a)
 			return nil
 		}
@@ -168,24 +151,8 @@ func (m *migration0017) processATX(db sql.Executor, a atxInfo) error {
 		return err
 	}
 
-	m.updateMaps(a)
+	m.nodeMap[a.nodeID] = a
 	return nil
-}
-
-func (m *migration0017) updateMaps(
-	a atxInfo,
-) {
-	if a.isEquivocating {
-		// No reliable way to map node ID to a nonce in the next epoch,
-		// but let's also keep previous ATX ID in the map
-		if a1, found := m.nodeMap[a.nodeID]; found {
-			m.atxMap[a1.atxID] = *a1.nonce
-			delete(m.nodeMap, a.nodeID)
-		}
-		m.atxMap[a.atxID] = *a.nonce
-	} else {
-		m.nodeMap[a.nodeID] = a
-	}
 }
 
 func (m *migration0017) resolveDangling(
@@ -202,7 +169,7 @@ func (m *migration0017) resolveDangling(
 	}
 	for _, a := range m.danglingMap[atxID] {
 		a.nonce = &nonce
-		m.updateMaps(a)
+		m.nodeMap[a.nodeID] = a
 		m.pendingUpdates[a.atxID] = atxUpdate{
 			nonce:     a.nonce,
 			prevATXID: a.prevATXID,
@@ -218,14 +185,9 @@ func (m *migration0017) resolveDangling(
 func (m *migration0017) findNonce(db sql.Executor, a atxInfo) (*types.VRFPostIndex, error) {
 	var prevNonce *types.VRFPostIndex
 	if a.prevATXID != nil {
-		v, found := m.atxMap[*a.prevATXID]
-		if found {
-			prevNonce = &v
-		} else {
-			upd, found := m.pendingUpdates[*a.prevATXID]
-			if found && upd.nonce != nil {
-				prevNonce = upd.nonce
-			}
+		upd, found := m.pendingUpdates[*a.prevATXID]
+		if found && upd.nonce != nil {
+			prevNonce = upd.nonce
 		}
 	} else {
 		return nil, errors.New("no prev ATX and no nonce")
@@ -239,7 +201,7 @@ func (m *migration0017) findNonce(db sql.Executor, a atxInfo) (*types.VRFPostInd
 	case a1.atxID != *a.prevATXID:
 		// nodeMap didn't give the correct result, we have to resort to
 		// slow querying
-		v, err := getNonce(db, *a.prevATXID)
+		v, err := m.slowGetNonceByATXID(db, *a.prevATXID)
 		if err != nil {
 			return nil, err
 		}
@@ -251,6 +213,61 @@ func (m *migration0017) findNonce(db sql.Executor, a atxInfo) (*types.VRFPostInd
 	default:
 		return a1.nonce, nil
 	}
+}
+
+func (m *migration0017) slowGetNonceByATXID(
+	db sql.Executor,
+	atxID types.ATXID,
+) (types.VRFPostIndex, error) {
+	upd, found := m.pendingUpdates[atxID]
+	if found && upd.nonce != nil {
+		return *upd.nonce, nil
+	}
+
+	var nonce *types.VRFPostIndex
+	var blob []byte
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, atxID[:])
+	}
+	dec := func(stmt *sql.Statement) bool {
+		if !sql.IsNull(stmt, 0) {
+			v := types.VRFPostIndex(stmt.ColumnInt64(0))
+			nonce = &v
+		}
+		if stmt.ColumnLen(1) != 0 {
+			blob = make([]byte, stmt.ColumnLen(1))
+			stmt.ColumnBytes(1, blob)
+		}
+		return true
+	}
+	if rows, err := db.Exec(`
+		select a.nonce, b.atx
+		  from atxs a
+		  inner join atx_blobs b on a.id = b.id
+		  where a.id = ?1`, enc, dec); err != nil {
+		return 0, fmt.Errorf("error getting nonce: %w", err)
+	} else if rows == 0 {
+		return 0, sql.ErrNotFound
+	}
+
+	if nonce != nil {
+		return *nonce, nil
+	}
+
+	if len(blob) == 0 {
+		return 0, errors.New("missing ATX blob")
+	}
+
+	var atx types.ActivationTx
+	if err := codec.Decode(blob, &atx); err != nil {
+		return 0, fmt.Errorf("error decoding ATX blob: %w", err)
+	}
+
+	if atx.PrevATXID == types.EmptyATXID {
+		return 0, errors.New("no prev ATX ID and no nonce")
+	}
+
+	return m.slowGetNonceByATXID(db, atx.PrevATXID)
 }
 
 func (m *migration0017) applyPendingUpdates(db sql.Executor) error {
@@ -316,51 +333,4 @@ func getMaxEpoch(db sql.Executor) (epoch types.EpochID, err error) {
 		return 1, nil
 	}
 	return epoch, nil
-}
-
-func getNonce(db sql.Executor, atxID types.ATXID) (types.VRFPostIndex, error) {
-	var nonce *types.VRFPostIndex
-	var blob []byte
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, atxID[:])
-	}
-	dec := func(stmt *sql.Statement) bool {
-		if !sql.IsNull(stmt, 0) {
-			v := types.VRFPostIndex(stmt.ColumnInt64(0))
-			nonce = &v
-		}
-		if stmt.ColumnLen(1) != 0 {
-			blob = make([]byte, stmt.ColumnLen(1))
-			stmt.ColumnBytes(1, blob)
-		}
-		return true
-	}
-	if rows, err := db.Exec(`
-		select a.nonce, b.atx
-		  from atxs a
-		  inner join atx_blobs b on a.id = b.id
-		  where a.id = ?1`, enc, dec); err != nil {
-		return 0, fmt.Errorf("error getting nonce: %w", err)
-	} else if rows == 0 {
-		return 0, sql.ErrNotFound
-	}
-
-	if nonce != nil {
-		return *nonce, nil
-	}
-
-	if len(blob) == 0 {
-		return 0, errors.New("missing ATX blob")
-	}
-
-	var atx types.ActivationTx
-	if err := codec.Decode(blob, &atx); err != nil {
-		return 0, fmt.Errorf("error decoding ATX blob: %w", err)
-	}
-
-	if atx.PrevATXID == types.EmptyATXID {
-		return 0, errors.New("no prev ATX ID and no nonce")
-	}
-
-	return getNonce(db, atx.PrevATXID)
 }
