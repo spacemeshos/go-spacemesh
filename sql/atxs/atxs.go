@@ -414,6 +414,7 @@ func AddGettingNonce(db sql.Executor, atx *types.VerifiedActivationTx) (*types.V
 
 // AddMaybeNoNonce adds an ATX for a given ATX ID. It doesn't try
 // to set the nonce field if VRFNonce is not set in the ATX.
+// This function is only to be used for testing.
 func AddMaybeNoNonce(db sql.Executor, atx *types.VerifiedActivationTx) error {
 	return add(db, atx, atx.VRFNonce)
 }
