@@ -2579,7 +2579,7 @@ func TestVestingData(t *testing.T) {
 						// give a bit to vesting account as it needs funds to send a few transactions
 						// before receiving from the spend address
 						Address: vestaddr,
-						Balance: 200_000,
+						Balance: 300_000,
 					},
 					{
 						Address: vaultaddr,
