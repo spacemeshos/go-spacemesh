@@ -326,14 +326,60 @@ func TestSpend(t *testing.T) {
 			total: 1000,
 			spend: 1,
 		},
+		// due to the way the logic is written in Vested(), this isn't actually a problem. no spending will be allowed
+		// until after Start, even if Start comes after End, at which point the full amount becomes available. it
+		// doesn't make sense to configure a Vault this way but we don't explicitly forbid it.
 		{
 			desc:   "vest start after end",
-			start:  3,
+			start:  10,
 			end:    2,
 			lid:    1,
 			total:  1000,
 			spend:  1,
-			expect: ErrMisconfigured,
+			expect: ErrAmountNotAvailable,
+		},
+		{
+			desc:   "vest start after end 2",
+			start:  10,
+			end:    2,
+			lid:    2,
+			total:  1000,
+			spend:  1,
+			expect: ErrAmountNotAvailable,
+		},
+		{
+			desc:   "vest start after end 3",
+			start:  10,
+			end:    2,
+			lid:    5,
+			total:  1000,
+			spend:  1,
+			expect: ErrAmountNotAvailable,
+		},
+		{
+			desc:  "vest start after end 4",
+			start: 10,
+			end:   2,
+			lid:   10,
+			total: 1000,
+			spend: 1000,
+		},
+		{
+			desc:  "vest start after end 5",
+			start: 10,
+			end:   2,
+			lid:   11,
+			total: 1000,
+			spend: 1000,
+		},
+		{
+			desc:     "vest start after end can still spend received",
+			start:    10,
+			end:      2,
+			lid:      5,
+			total:    1000,
+			received: 100,
+			spend:    100,
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -354,7 +400,7 @@ func TestSpend(t *testing.T) {
 				},
 			}
 			if tc.expect != nil {
-				require.ErrorIs(t, tc.expect, vault.Spend(&ctx, core.Address{1}, tc.spend))
+				require.ErrorIs(t, vault.Spend(&ctx, core.Address{1}, tc.spend), tc.expect)
 			} else {
 				require.NoError(t, vault.Spend(&ctx, core.Address{1}, tc.spend))
 			}

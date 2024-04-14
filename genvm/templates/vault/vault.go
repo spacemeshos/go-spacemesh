@@ -57,9 +57,6 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 	if !v.isOwner(host.Principal()) {
 		return ErrNotOwner
 	}
-	if v.VestingEnd < v.VestingStart {
-		return ErrMisconfigured
-	}
 	vested := v.Vested(host.Layer())
 
 	// sanity checks
