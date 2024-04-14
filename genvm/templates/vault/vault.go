@@ -12,8 +12,10 @@ import (
 var (
 	// ErrNotOwner is raised if Spend is not executed by a principal that matches owner.
 	ErrNotOwner = errors.New("vault: not an owner")
-	// ErrAmountNotAvailable if Spend overlows available amount (see method with the same name).
+	// ErrAmountNotAvailable is raised if Spend overlows available amount (see method with the same name).
 	ErrAmountNotAvailable = errors.New("vault: amount not available")
+	// ErrMisconfigured is raised if a Vault account is misconfigured.
+	ErrMisconfigured = errors.New("vault: account is misconfigured")
 )
 
 const (
@@ -55,6 +57,9 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 	if !v.isOwner(host.Principal()) {
 		return ErrNotOwner
 	}
+	if v.VestingEnd < v.VestingStart {
+		return ErrMisconfigured
+	}
 	vested := v.Vested(host.Layer())
 
 	// sanity checks
@@ -66,7 +71,7 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 
 	// account must contain at least unvested portion of initial endowment
 	if host.Balance() < v.TotalAmount-vested {
-		panic("wrong math")
+		return ErrMisconfigured
 	}
 
 	// consider only current balance (including coins received) and vested portion of initial endowment

@@ -146,6 +146,7 @@ func TestSpend(t *testing.T) {
 		{
 			desc:   "zero vested before start",
 			start:  2,
+			end:    10,
 			lid:    1,
 			total:  100,
 			spend:  1,
@@ -154,6 +155,7 @@ func TestSpend(t *testing.T) {
 		{
 			desc:     "allow spend of received before start",
 			start:    2,
+			end:      10,
 			lid:      1,
 			total:    100,
 			received: 10,
@@ -162,6 +164,7 @@ func TestSpend(t *testing.T) {
 		{
 			desc:     "don't allow spend of more than received before start",
 			start:    2,
+			end:      10,
 			lid:      1,
 			total:    100,
 			received: 10,
@@ -298,6 +301,40 @@ func TestSpend(t *testing.T) {
 			spend:    math.MaxUint64,
 			expect:   ErrAmountNotAvailable,
 		},
+		{
+			desc:   "vest start equals end",
+			start:  2,
+			end:    2,
+			lid:    1,
+			total:  1000,
+			spend:  1,
+			expect: ErrAmountNotAvailable,
+		},
+		{
+			desc:  "vest start equals end 2",
+			start: 2,
+			end:   2,
+			lid:   2,
+			total: 1000,
+			spend: 1,
+		},
+		{
+			desc:  "vest start equals end 3",
+			start: 2,
+			end:   2,
+			lid:   3,
+			total: 1000,
+			spend: 1,
+		},
+		{
+			desc:   "vest start after end",
+			start:  3,
+			end:    2,
+			lid:    1,
+			total:  1000,
+			spend:  1,
+			expect: ErrMisconfigured,
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			owner := core.Address{'o'}
@@ -323,6 +360,28 @@ func TestSpend(t *testing.T) {
 			}
 		})
 	}
+
+	// test error case where TotalAmount > balance
+	// requires a separate test to update PrincipalAccount.Balance, not supported above
+	t.Run("balance too low", func(t *testing.T) {
+		owner := core.Address{'o'}
+		vault := Vault{
+			Owner:        owner,
+			TotalAmount:  1000,
+			VestingStart: types.LayerID(2),
+			VestingEnd:   types.LayerID(3),
+		}
+		ctx := core.Context{
+			LayerID: types.LayerID(2),
+			Loader:  core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()}),
+			Header:  types.TxHeader{MaxSpend: math.MaxUint64},
+			PrincipalAccount: types.Account{
+				Address: owner,
+				Balance: 100,
+			},
+		}
+		require.ErrorIs(t, ErrMisconfigured, vault.Spend(&ctx, core.Address{1}, 1))
+	})
 }
 
 func TestOwnership(t *testing.T) {
