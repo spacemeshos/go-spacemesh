@@ -29,12 +29,21 @@ type scaler interface {
 	scale(int)
 }
 
+type nipostChallenge interface {
+	Hash() types.Hash32
+	Publish() types.EpochID
+	PrevATX() types.ATXID
+	PositioningATX() types.ATXID
+	CommitmentATX() *types.ATXID
+	MaybeSequence() *uint64
+}
+
 // validatorOption is a functional option type for the validator.
 type validatorOption func(*validatorOptions)
 
 type nipostValidator interface {
-	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
-	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
+	InitialNIPostChallenge(challenge nipostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
+	NIPostChallenge(challenge nipostChallenge, atxs atxProvider, nodeID types.NodeID) error
 	NIPost(
 		ctx context.Context,
 		nodeId types.NodeID,
@@ -53,18 +62,16 @@ type nipostValidator interface {
 		ctx context.Context,
 		nodeId types.NodeID,
 		commitmentAtxId types.ATXID,
-		Post *types.Post,
-		PostMetadata *types.PostMetadata,
+		post *types.Post,
+		challenge []byte,
 		numUnits uint32,
 		opts ...validatorOption,
 	) error
-	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
 	VRFNonce(
 		nodeId types.NodeID,
 		commitmentAtxId types.ATXID,
-		vrfNonce *types.VRFPostIndex,
-		PostMetadata *types.PostMetadata,
+		vrfNonce uint64,
 		numUnits uint32,
 	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error

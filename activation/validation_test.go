@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -27,10 +28,6 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 	postCfg.LabelsPerUnit = 128
-	meta := &types.PostMetadata{
-		LabelsPerUnit: postCfg.LabelsPerUnit,
-	}
-
 	initOpts := DefaultPostSetupOpts()
 	initOpts.DataDir = t.TempDir()
 	initOpts.ProviderID.SetUint32(initialization.CPUProviderID())
@@ -48,7 +45,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	r.NoError(init.Initialize(context.Background()))
 	r.NotNil(init.Nonce())
 
-	nonce := (*types.VRFPostIndex)(init.Nonce())
+	nonce := *init.Nonce()
 
 	v := NewValidator(nil, poetDbAPI, postCfg, initOpts.Scrypt, nil)
 
@@ -56,27 +53,26 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	t.Run("valid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, initOpts.NumUnits))
 	})
 
 	t.Run("invalid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
-		nonce := types.VRFPostIndex(1)
-		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, &nonce, meta, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, 1, initOpts.NumUnits))
 	})
 
 	t.Run("wrong commitmentAtxId", func(t *testing.T) {
 		t.Parallel()
 
 		commitmentAtxId := types.ATXID{1, 2, 3}
-		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, initOpts.NumUnits))
 	})
 
 	t.Run("numUnits can be smaller", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, meta, initOpts.NumUnits-1))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, initOpts.NumUnits-1))
 	})
 }
 
@@ -100,14 +96,14 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
 
-		challenge := types.NIPostChallenge{
-			Sequence:       0,
-			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   2,
-			PositioningATX: posAtxId,
-			CommitmentATX:  &commitmentAtxId,
+		challenge := wire.NIPostChallengeV1{
+			Sequence:         0,
+			PrevATXID:        types.EmptyATXID,
+			PublishEpoch:     2,
+			PositioningATXID: posAtxId,
+			CommitmentATXID:  &commitmentAtxId,
+			InitialPost:      &wire.PostV1{},
 		}
-		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 1}, nil)
@@ -119,16 +115,14 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 	t.Run("valid initial nipost challenge in epoch 1 passes", func(t *testing.T) {
 		t.Parallel()
 
-		posAtxId := types.ATXID{1, 2, 3}
-
-		challenge := types.NIPostChallenge{
-			Sequence:       0,
-			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   0,
-			PositioningATX: posAtxId,
-			CommitmentATX:  &goldenATXID,
+		challenge := wire.NIPostChallengeV1{
+			Sequence:         0,
+			PrevATXID:        types.EmptyATXID,
+			PublishEpoch:     0,
+			PositioningATXID: types.RandomATXID(),
+			CommitmentATXID:  &goldenATXID,
+			InitialPost:      &wire.PostV1{},
 		}
-		challenge.InitialPost = &types.Post{}
 
 		atxProvider := NewMockatxProvider(ctrl)
 
@@ -139,18 +133,15 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 	t.Run("commitment atx from wrong pub layer", func(t *testing.T) {
 		t.Parallel()
 
-		posAtxId := types.ATXID{1, 2, 3}
 		commitmentAtxId := types.ATXID{5, 6, 7}
-
-		challenge := types.NIPostChallenge{
-			Sequence:       0,
-			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   1,
-			PositioningATX: posAtxId,
-			CommitmentATX:  &commitmentAtxId,
+		challenge := wire.NIPostChallengeV1{
+			Sequence:         0,
+			PrevATXID:        types.EmptyATXID,
+			PublishEpoch:     1,
+			PositioningATXID: types.ATXID{1, 2, 3},
+			CommitmentATXID:  &commitmentAtxId,
+			InitialPost:      &wire.PostV1{},
 		}
-		challenge.InitialPost = &types.Post{}
-
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 2}, nil)
 
@@ -180,12 +171,11 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := types.NIPostChallenge{
-			Sequence:       10,
-			PrevATXID:      prevAtxId,
-			PublishEpoch:   2,
-			PositioningATX: posAtxId,
-			CommitmentATX:  nil,
+		challenge := wire.NIPostChallengeV1{
+			Sequence:         10,
+			PrevATXID:        prevAtxId,
+			PublishEpoch:     2,
+			PositioningATXID: posAtxId,
 		}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -207,12 +197,11 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := types.NIPostChallenge{
-			Sequence:       10,
-			PrevATXID:      prevAtxId,
-			PublishEpoch:   101,
-			PositioningATX: posAtxId,
-			CommitmentATX:  nil,
+		challenge := wire.NIPostChallengeV1{
+			Sequence:         10,
+			PrevATXID:        prevAtxId,
+			PublishEpoch:     101,
+			PositioningATXID: posAtxId,
 		}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -232,12 +221,11 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := types.NIPostChallenge{
-			Sequence:       10,
-			PrevATXID:      prevAtxId,
-			PublishEpoch:   101,
-			PositioningATX: posAtxId,
-			CommitmentATX:  nil,
+		challenge := wire.NIPostChallengeV1{
+			Sequence:         10,
+			PrevATXID:        prevAtxId,
+			PublishEpoch:     101,
+			PositioningATXID: posAtxId,
 		}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -259,12 +247,11 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := types.NIPostChallenge{
-			Sequence:       10,
-			PrevATXID:      prevAtxId,
-			PublishEpoch:   2,
-			PositioningATX: posAtxId,
-			CommitmentATX:  nil,
+		challenge := wire.NIPostChallengeV1{
+			Sequence:         10,
+			PrevATXID:        prevAtxId,
+			PublishEpoch:     2,
+			PositioningATXID: posAtxId,
 		}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -286,12 +273,11 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		prevAtxId := types.ATXID{3, 2, 1}
 		posAtxId := types.ATXID{1, 2, 3}
 
-		challenge := types.NIPostChallenge{
-			Sequence:       10,
-			PrevATXID:      prevAtxId,
-			PublishEpoch:   2,
-			PositioningATX: posAtxId,
-			CommitmentATX:  nil,
+		challenge := wire.NIPostChallengeV1{
+			Sequence:         10,
+			PrevATXID:        prevAtxId,
+			PublishEpoch:     2,
+			PositioningATXID: posAtxId,
 		}
 
 		atxProvider := NewMockatxProvider(ctrl)
@@ -320,15 +306,16 @@ func Test_Validation_Post(t *testing.T) {
 	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, postVerifier)
 
 	post := types.Post{}
-	meta := types.PostMetadata{}
 
 	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).Return(nil)
-	require.NoError(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
+	err := v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, shared.ZeroChallenge, 1)
+	require.NoError(t, err)
 
 	postVerifier.EXPECT().
 		Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).
 		Return(errors.New("invalid"))
-	require.Error(t, v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1))
+	err = v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, shared.ZeroChallenge, 1)
+	require.Error(t, err)
 }
 
 func Test_Validation_PositioningAtx(t *testing.T) {
@@ -486,22 +473,14 @@ func Test_Validate_PostMetadata(t *testing.T) {
 	t.Run("valid post metadata", func(t *testing.T) {
 		t.Parallel()
 
-		meta := &types.PostMetadata{
-			LabelsPerUnit: postCfg.LabelsPerUnit,
-		}
-
-		err := v.PostMetadata(&postCfg, meta)
+		err := v.LabelsPerUnit(&postCfg, postCfg.LabelsPerUnit)
 		require.NoError(t, err)
 	})
 
 	t.Run("wrong labels per unit", func(t *testing.T) {
 		t.Parallel()
 
-		meta := &types.PostMetadata{
-			LabelsPerUnit: postCfg.LabelsPerUnit - 1,
-		}
-
-		err := v.PostMetadata(&postCfg, meta)
+		err := v.LabelsPerUnit(&postCfg, postCfg.LabelsPerUnit-1)
 		require.EqualError(
 			t,
 			err,

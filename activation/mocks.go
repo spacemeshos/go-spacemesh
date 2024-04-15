@@ -244,6 +244,257 @@ func (c *MockscalerscaleCall) DoAndReturn(f func(int)) *MockscalerscaleCall {
 	return c
 }
 
+// MocknipostChallenge is a mock of nipostChallenge interface.
+type MocknipostChallenge struct {
+	ctrl     *gomock.Controller
+	recorder *MocknipostChallengeMockRecorder
+}
+
+// MocknipostChallengeMockRecorder is the mock recorder for MocknipostChallenge.
+type MocknipostChallengeMockRecorder struct {
+	mock *MocknipostChallenge
+}
+
+// NewMocknipostChallenge creates a new mock instance.
+func NewMocknipostChallenge(ctrl *gomock.Controller) *MocknipostChallenge {
+	mock := &MocknipostChallenge{ctrl: ctrl}
+	mock.recorder = &MocknipostChallengeMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocknipostChallenge) EXPECT() *MocknipostChallengeMockRecorder {
+	return m.recorder
+}
+
+// CommitmentATX mocks base method.
+func (m *MocknipostChallenge) CommitmentATX() *types.ATXID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CommitmentATX")
+	ret0, _ := ret[0].(*types.ATXID)
+	return ret0
+}
+
+// CommitmentATX indicates an expected call of CommitmentATX.
+func (mr *MocknipostChallengeMockRecorder) CommitmentATX() *MocknipostChallengeCommitmentATXCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommitmentATX", reflect.TypeOf((*MocknipostChallenge)(nil).CommitmentATX))
+	return &MocknipostChallengeCommitmentATXCall{Call: call}
+}
+
+// MocknipostChallengeCommitmentATXCall wrap *gomock.Call
+type MocknipostChallengeCommitmentATXCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostChallengeCommitmentATXCall) Return(arg0 *types.ATXID) *MocknipostChallengeCommitmentATXCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostChallengeCommitmentATXCall) Do(f func() *types.ATXID) *MocknipostChallengeCommitmentATXCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostChallengeCommitmentATXCall) DoAndReturn(f func() *types.ATXID) *MocknipostChallengeCommitmentATXCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Hash mocks base method.
+func (m *MocknipostChallenge) Hash() types.Hash32 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Hash")
+	ret0, _ := ret[0].(types.Hash32)
+	return ret0
+}
+
+// Hash indicates an expected call of Hash.
+func (mr *MocknipostChallengeMockRecorder) Hash() *MocknipostChallengeHashCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Hash", reflect.TypeOf((*MocknipostChallenge)(nil).Hash))
+	return &MocknipostChallengeHashCall{Call: call}
+}
+
+// MocknipostChallengeHashCall wrap *gomock.Call
+type MocknipostChallengeHashCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostChallengeHashCall) Return(arg0 types.Hash32) *MocknipostChallengeHashCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostChallengeHashCall) Do(f func() types.Hash32) *MocknipostChallengeHashCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostChallengeHashCall) DoAndReturn(f func() types.Hash32) *MocknipostChallengeHashCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MaybeSequence mocks base method.
+func (m *MocknipostChallenge) MaybeSequence() *uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MaybeSequence")
+	ret0, _ := ret[0].(*uint64)
+	return ret0
+}
+
+// MaybeSequence indicates an expected call of MaybeSequence.
+func (mr *MocknipostChallengeMockRecorder) MaybeSequence() *MocknipostChallengeMaybeSequenceCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaybeSequence", reflect.TypeOf((*MocknipostChallenge)(nil).MaybeSequence))
+	return &MocknipostChallengeMaybeSequenceCall{Call: call}
+}
+
+// MocknipostChallengeMaybeSequenceCall wrap *gomock.Call
+type MocknipostChallengeMaybeSequenceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostChallengeMaybeSequenceCall) Return(arg0 *uint64) *MocknipostChallengeMaybeSequenceCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostChallengeMaybeSequenceCall) Do(f func() *uint64) *MocknipostChallengeMaybeSequenceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostChallengeMaybeSequenceCall) DoAndReturn(f func() *uint64) *MocknipostChallengeMaybeSequenceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// PositioningATX mocks base method.
+func (m *MocknipostChallenge) PositioningATX() types.ATXID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PositioningATX")
+	ret0, _ := ret[0].(types.ATXID)
+	return ret0
+}
+
+// PositioningATX indicates an expected call of PositioningATX.
+func (mr *MocknipostChallengeMockRecorder) PositioningATX() *MocknipostChallengePositioningATXCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositioningATX", reflect.TypeOf((*MocknipostChallenge)(nil).PositioningATX))
+	return &MocknipostChallengePositioningATXCall{Call: call}
+}
+
+// MocknipostChallengePositioningATXCall wrap *gomock.Call
+type MocknipostChallengePositioningATXCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostChallengePositioningATXCall) Return(arg0 types.ATXID) *MocknipostChallengePositioningATXCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostChallengePositioningATXCall) Do(f func() types.ATXID) *MocknipostChallengePositioningATXCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostChallengePositioningATXCall) DoAndReturn(f func() types.ATXID) *MocknipostChallengePositioningATXCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// PrevATX mocks base method.
+func (m *MocknipostChallenge) PrevATX() types.ATXID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PrevATX")
+	ret0, _ := ret[0].(types.ATXID)
+	return ret0
+}
+
+// PrevATX indicates an expected call of PrevATX.
+func (mr *MocknipostChallengeMockRecorder) PrevATX() *MocknipostChallengePrevATXCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrevATX", reflect.TypeOf((*MocknipostChallenge)(nil).PrevATX))
+	return &MocknipostChallengePrevATXCall{Call: call}
+}
+
+// MocknipostChallengePrevATXCall wrap *gomock.Call
+type MocknipostChallengePrevATXCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostChallengePrevATXCall) Return(arg0 types.ATXID) *MocknipostChallengePrevATXCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostChallengePrevATXCall) Do(f func() types.ATXID) *MocknipostChallengePrevATXCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostChallengePrevATXCall) DoAndReturn(f func() types.ATXID) *MocknipostChallengePrevATXCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Publish mocks base method.
+func (m *MocknipostChallenge) Publish() types.EpochID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Publish")
+	ret0, _ := ret[0].(types.EpochID)
+	return ret0
+}
+
+// Publish indicates an expected call of Publish.
+func (mr *MocknipostChallengeMockRecorder) Publish() *MocknipostChallengePublishCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MocknipostChallenge)(nil).Publish))
+	return &MocknipostChallengePublishCall{Call: call}
+}
+
+// MocknipostChallengePublishCall wrap *gomock.Call
+type MocknipostChallengePublishCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostChallengePublishCall) Return(arg0 types.EpochID) *MocknipostChallengePublishCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostChallengePublishCall) Do(f func() types.EpochID) *MocknipostChallengePublishCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostChallengePublishCall) DoAndReturn(f func() types.EpochID) *MocknipostChallengePublishCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MocknipostValidator is a mock of nipostValidator interface.
 type MocknipostValidator struct {
 	ctrl     *gomock.Controller
@@ -268,7 +519,7 @@ func (m *MocknipostValidator) EXPECT() *MocknipostValidatorMockRecorder {
 }
 
 // InitialNIPostChallenge mocks base method.
-func (m *MocknipostValidator) InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error {
+func (m *MocknipostValidator) InitialNIPostChallenge(challenge nipostChallenge, atxs atxProvider, goldenATXID types.ATXID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "InitialNIPostChallenge", challenge, atxs, goldenATXID)
 	ret0, _ := ret[0].(error)
@@ -294,13 +545,13 @@ func (c *MocknipostValidatorInitialNIPostChallengeCall) Return(arg0 error) *Mock
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorInitialNIPostChallengeCall) Do(f func(*types.NIPostChallenge, atxProvider, types.ATXID) error) *MocknipostValidatorInitialNIPostChallengeCall {
+func (c *MocknipostValidatorInitialNIPostChallengeCall) Do(f func(nipostChallenge, atxProvider, types.ATXID) error) *MocknipostValidatorInitialNIPostChallengeCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorInitialNIPostChallengeCall) DoAndReturn(f func(*types.NIPostChallenge, atxProvider, types.ATXID) error) *MocknipostValidatorInitialNIPostChallengeCall {
+func (c *MocknipostValidatorInitialNIPostChallengeCall) DoAndReturn(f func(nipostChallenge, atxProvider, types.ATXID) error) *MocknipostValidatorInitialNIPostChallengeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -388,7 +639,7 @@ func (c *MocknipostValidatorNIPostCall) DoAndReturn(f func(context.Context, type
 }
 
 // NIPostChallenge mocks base method.
-func (m *MocknipostValidator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error {
+func (m *MocknipostValidator) NIPostChallenge(challenge nipostChallenge, atxs atxProvider, nodeID types.NodeID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NIPostChallenge", challenge, atxs, nodeID)
 	ret0, _ := ret[0].(error)
@@ -414,13 +665,13 @@ func (c *MocknipostValidatorNIPostChallengeCall) Return(arg0 error) *MocknipostV
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorNIPostChallengeCall) Do(f func(*types.NIPostChallenge, atxProvider, types.NodeID) error) *MocknipostValidatorNIPostChallengeCall {
+func (c *MocknipostValidatorNIPostChallengeCall) Do(f func(nipostChallenge, atxProvider, types.NodeID) error) *MocknipostValidatorNIPostChallengeCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorNIPostChallengeCall) DoAndReturn(f func(*types.NIPostChallenge, atxProvider, types.NodeID) error) *MocknipostValidatorNIPostChallengeCall {
+func (c *MocknipostValidatorNIPostChallengeCall) DoAndReturn(f func(nipostChallenge, atxProvider, types.NodeID) error) *MocknipostValidatorNIPostChallengeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -502,9 +753,9 @@ func (c *MocknipostValidatorPositioningAtxCall) DoAndReturn(f func(types.ATXID, 
 }
 
 // Post mocks base method.
-func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint32, opts ...validatorOption) error {
+func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, commitmentAtxId types.ATXID, post *types.Post, challenge []byte, numUnits uint32, opts ...validatorOption) error {
 	m.ctrl.T.Helper()
-	varargs := []any{ctx, nodeId, commitmentAtxId, Post, PostMetadata, numUnits}
+	varargs := []any{ctx, nodeId, commitmentAtxId, post, challenge, numUnits}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
@@ -514,9 +765,9 @@ func (m *MocknipostValidator) Post(ctx context.Context, nodeId types.NodeID, com
 }
 
 // Post indicates an expected call of Post.
-func (mr *MocknipostValidatorMockRecorder) Post(ctx, nodeId, commitmentAtxId, Post, PostMetadata, numUnits any, opts ...any) *MocknipostValidatorPostCall {
+func (mr *MocknipostValidatorMockRecorder) Post(ctx, nodeId, commitmentAtxId, post, challenge, numUnits any, opts ...any) *MocknipostValidatorPostCall {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, nodeId, commitmentAtxId, Post, PostMetadata, numUnits}, opts...)
+	varargs := append([]any{ctx, nodeId, commitmentAtxId, post, challenge, numUnits}, opts...)
 	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Post", reflect.TypeOf((*MocknipostValidator)(nil).Post), varargs...)
 	return &MocknipostValidatorPostCall{Call: call}
 }
@@ -533,67 +784,29 @@ func (c *MocknipostValidatorPostCall) Return(arg0 error) *MocknipostValidatorPos
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...validatorOption) error) *MocknipostValidatorPostCall {
+func (c *MocknipostValidatorPostCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, ...validatorOption) error) *MocknipostValidatorPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, *types.PostMetadata, uint32, ...validatorOption) error) *MocknipostValidatorPostCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// PostMetadata mocks base method.
-func (m *MocknipostValidator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PostMetadata", cfg, metadata)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// PostMetadata indicates an expected call of PostMetadata.
-func (mr *MocknipostValidatorMockRecorder) PostMetadata(cfg, metadata any) *MocknipostValidatorPostMetadataCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostMetadata", reflect.TypeOf((*MocknipostValidator)(nil).PostMetadata), cfg, metadata)
-	return &MocknipostValidatorPostMetadataCall{Call: call}
-}
-
-// MocknipostValidatorPostMetadataCall wrap *gomock.Call
-type MocknipostValidatorPostMetadataCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MocknipostValidatorPostMetadataCall) Return(arg0 error) *MocknipostValidatorPostMetadataCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorPostMetadataCall) Do(f func(*PostConfig, *types.PostMetadata) error) *MocknipostValidatorPostMetadataCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorPostMetadataCall) DoAndReturn(f func(*PostConfig, *types.PostMetadata) error) *MocknipostValidatorPostMetadataCall {
+func (c *MocknipostValidatorPostCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, ...validatorOption) error) *MocknipostValidatorPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // VRFNonce mocks base method.
-func (m *MocknipostValidator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce *types.VRFPostIndex, PostMetadata *types.PostMetadata, numUnits uint32) error {
+func (m *MocknipostValidator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce uint64, numUnits uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VRFNonce", nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
+	ret := m.ctrl.Call(m, "VRFNonce", nodeId, commitmentAtxId, vrfNonce, numUnits)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // VRFNonce indicates an expected call of VRFNonce.
-func (mr *MocknipostValidatorMockRecorder) VRFNonce(nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits any) *MocknipostValidatorVRFNonceCall {
+func (mr *MocknipostValidatorMockRecorder) VRFNonce(nodeId, commitmentAtxId, vrfNonce, numUnits any) *MocknipostValidatorVRFNonceCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknipostValidator)(nil).VRFNonce), nodeId, commitmentAtxId, vrfNonce, PostMetadata, numUnits)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonce", reflect.TypeOf((*MocknipostValidator)(nil).VRFNonce), nodeId, commitmentAtxId, vrfNonce, numUnits)
 	return &MocknipostValidatorVRFNonceCall{Call: call}
 }
 
@@ -609,13 +822,13 @@ func (c *MocknipostValidatorVRFNonceCall) Return(arg0 error) *MocknipostValidato
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorVRFNonceCall) Do(f func(types.NodeID, types.ATXID, *types.VRFPostIndex, *types.PostMetadata, uint32) error) *MocknipostValidatorVRFNonceCall {
+func (c *MocknipostValidatorVRFNonceCall) Do(f func(types.NodeID, types.ATXID, uint64, uint32) error) *MocknipostValidatorVRFNonceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorVRFNonceCall) DoAndReturn(f func(types.NodeID, types.ATXID, *types.VRFPostIndex, *types.PostMetadata, uint32) error) *MocknipostValidatorVRFNonceCall {
+func (c *MocknipostValidatorVRFNonceCall) DoAndReturn(f func(types.NodeID, types.ATXID, uint64, uint32) error) *MocknipostValidatorVRFNonceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -388,7 +388,7 @@ func validateInvalidPostIndex(ctx context.Context,
 	if !edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return types.EmptyNodeID, errors.New("invalid signature")
 	}
-	commitmentAtx := atx.CommitmentATX
+	commitmentAtx := atx.CommitmentATXID
 	if commitmentAtx == nil {
 		atx, err := atxs.CommitmentATX(db, atx.SmesherID)
 		if err != nil {

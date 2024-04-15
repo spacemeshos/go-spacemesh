@@ -263,7 +263,7 @@ func validateAndPreserveData(
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), vatx.GetPoetProofRef())
 		if vatx.InitialPost != nil {
 			mvalidator.EXPECT().
-				InitialNIPostChallenge(&vatx.ActivationTx.NIPostChallenge, gomock.Any(), goldenAtx).
+				InitialNIPostChallenge(gomock.Any(), gomock.Any(), goldenAtx).
 				AnyTimes()
 			mvalidator.EXPECT().Post(
 				gomock.Any(),
@@ -275,9 +275,9 @@ func validateAndPreserveData(
 				gomock.Any(),
 			)
 			mvalidator.EXPECT().
-				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
+				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, (uint64)(*vatx.VRFNonce), vatx.NumUnits)
 		} else {
-			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
+			mvalidator.EXPECT().NIPostChallenge(gomock.Any(), cdb, vatx.SmesherID)
 		}
 
 		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
@@ -306,11 +306,11 @@ func newChainedAtx(
 	watx := &wire.ActivationTxV1{
 		InnerActivationTxV1: wire.InnerActivationTxV1{
 			NIPostChallengeV1: wire.NIPostChallengeV1{
-				Publish:        types.EpochID(epoch),
-				Sequence:       seq,
-				PrevATXID:      prev,
-				PositioningATX: pos,
-				CommitmentATX:  commitAtx,
+				PublishEpoch:     types.EpochID(epoch),
+				Sequence:         seq,
+				PrevATXID:        prev,
+				PositioningATXID: pos,
+				CommitmentATXID:  commitAtx,
 			},
 			NIPost: &wire.NIPostV1{
 				PostMetadata: &wire.PostMetadataV1{

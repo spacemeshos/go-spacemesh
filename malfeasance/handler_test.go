@@ -1076,7 +1076,7 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 	atx := awire.ActivationTxV1{
 		InnerActivationTxV1: awire.InnerActivationTxV1{
 			NIPostChallengeV1: awire.NIPostChallengeV1{
-				CommitmentATX: &types.ATXID{1, 2, 3},
+				CommitmentATXID: &types.ATXID{1, 2, 3},
 			},
 			NIPost: &awire.NIPostV1{
 				Post:         &awire.PostV1{},

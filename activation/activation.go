@@ -340,10 +340,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 		CommitmentATX: postInfo.CommitmentATX,
 		VRFNonce:      *postInfo.Nonce,
 	}
-	err = b.validator.Post(ctx, nodeID, postInfo.CommitmentATX, post, &types.PostMetadata{
-		Challenge:     shared.ZeroChallenge,
-		LabelsPerUnit: postInfo.LabelsPerUnit,
-	}, postInfo.NumUnits)
+	err = b.validator.Post(ctx, nodeID, postInfo.CommitmentATX, post, shared.ZeroChallenge, postInfo.NumUnits)
 	if err != nil {
 		b.log.Error("initial POST is invalid", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
 		if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
@@ -515,10 +512,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			Indices: post.Indices,
 			Pow:     post.Pow,
 		}
-		err = b.validator.Post(ctx, nodeID, post.CommitmentATX, initialPost, &types.PostMetadata{
-			Challenge:     shared.ZeroChallenge,
-			LabelsPerUnit: b.conf.LabelsPerUnit,
-		}, post.NumUnits)
+		err = b.validator.Post(ctx, nodeID, post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
 		if err != nil {
 			logger.Error("initial POST is invalid", zap.Error(err))
 			if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
