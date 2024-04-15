@@ -29,8 +29,9 @@ CREATE TABLE atxs
     sequence            UNSIGNED LONG INT,
     pubkey              CHAR(32),
     coinbase            CHAR(24),
-    received            INT NOT NULL
-, validity INTEGER DEFAULT false);
+    received            INT NOT NULL,
+    validity INTEGER DEFAULT false
+);
 
 INSERT INTO atxs (id, epoch, effective_num_units, commitment_atx, nonce, base_tick_height, tick_count, sequence, pubkey, coinbase, received, validity)
   SELECT id, epoch, effective_num_units, commitment_atx, nonce, base_tick_height, tick_count, sequence, pubkey, coinbase, received, validity
