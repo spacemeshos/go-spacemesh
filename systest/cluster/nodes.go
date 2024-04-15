@@ -60,7 +60,7 @@ var (
 				apiv1.ResourceMemory: resource.MustParse("400Mi"),
 			},
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("2"),
+				apiv1.ResourceCPU:    resource.MustParse("4"),
 				apiv1.ResourceMemory: resource.MustParse("1Gi"),
 			},
 		},
