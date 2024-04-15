@@ -676,7 +676,7 @@ func (b *Builder) createAtx(
 		*atxNodeID = sig.NodeID()
 		nonce = &nipostState.VRFNonce
 	default:
-		oldNonce, err := atxs.VRFNonce(b.db, sig.NodeID(), challenge.PublishEpoch)
+		oldNonce, err := atxs.NonceByID(b.db, challenge.PrevATXID)
 		if err != nil {
 			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
 			break

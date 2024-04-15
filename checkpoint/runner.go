@@ -71,12 +71,7 @@ func checkpointDB(
 		if err != nil {
 			return nil, fmt.Errorf("atxs snapshot commitment: %w", err)
 		}
-		vrfNonce, err := atxs.VRFNonce(tx, catx.SmesherID, catx.Epoch+1)
-		if err != nil {
-			return nil, fmt.Errorf("atxs snapshot nonce: %w", err)
-		}
 		copy(atxSnapshot[i].CommitmentATX[:], commitmentAtx[:])
-		atxSnapshot[i].VRFNonce = vrfNonce
 	}
 	for _, catx := range atxSnapshot {
 		if mal, ok := malicious[catx.SmesherID]; ok && mal {

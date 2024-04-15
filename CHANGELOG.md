@@ -9,6 +9,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
   Updating to this version requires going through v1.4 first.
 
+* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
+  This also fixes ambiguity of nonces for equivocating identities.
+
 ### Highlights
 
 ### Features
