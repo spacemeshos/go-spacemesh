@@ -1480,7 +1480,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Layer:
-		service := v2alpha1.NewLayerService(app.db)
+		service := v2alpha1.NewLayerService(app.db, app.mesh)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.LayerStream:

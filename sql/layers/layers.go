@@ -2,10 +2,13 @@ package layers
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+const fullQuery = `select id, weak_coin, processed, applied_block, state_hash, aggregated_hash from layers`
 
 // SetWeakCoin for the layer.
 func SetWeakCoin(db sql.Executor, lid types.LayerID, weakcoin bool) error {
@@ -305,4 +308,53 @@ func GetAggHashes(db sql.Executor, from, to types.LayerID, by uint32) (hashes []
 		panic("BUG: bad aggregate hash count")
 	}
 	return hashes, nil
+}
+
+type Layer struct {
+	Id             types.LayerID
+	WeakCoin       bool
+	Processed      bool
+	AppliedBlock   types.BlockID
+	StateHash      types.Hash32
+	AggregatedHash types.Hash32
+}
+
+type decoderCallback = func(*Layer, error) bool
+
+func decoder(fn decoderCallback) sql.Decoder {
+	return func(stmt *sql.Statement) bool {
+		l := &Layer{
+			Id: types.LayerID(stmt.ColumnInt(0)),
+		}
+
+		l.WeakCoin = stmt.ColumnInt(1) == 0
+		l.Processed = stmt.ColumnInt(2) == 1
+		stmt.ColumnBytes(3, l.AppliedBlock[:])
+		stmt.ColumnBytes(4, l.StateHash[:])
+		stmt.ColumnBytes(5, l.AggregatedHash[:])
+
+		return fn(l, nil)
+	}
+}
+
+func IterateLayersOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(layer *Layer) bool,
+) error {
+	var derr error
+	_, err := db.Exec(
+		fullQuery+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		decoder(func(layer *Layer, err error) bool {
+			if layer != nil {
+				return fn(layer)
+			}
+			derr = err
+			return derr == nil
+		}))
+	if err != nil {
+		return err
+	}
+	return derr
 }
