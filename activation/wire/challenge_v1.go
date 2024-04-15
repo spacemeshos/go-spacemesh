@@ -1,6 +1,8 @@
 package wire
 
 import (
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -29,4 +31,19 @@ type NIPostChallengeV1 struct {
 func (c *NIPostChallengeV1) Hash() types.Hash32 {
 	ncBytes := codec.MustEncode(c)
 	return hash.Sum([]byte{0x00}, ncBytes)
+}
+
+func (c *NIPostChallengeV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if c == nil {
+		return nil
+	}
+	encoder.AddUint32("PublishEpoch", c.PublishEpoch.Uint32())
+	encoder.AddUint64("Sequence", c.Sequence)
+	encoder.AddString("PrevATXID", c.PrevATXID.String())
+	encoder.AddString("PositioningATX", c.PositioningATXID.String())
+	if c.CommitmentATXID != nil {
+		encoder.AddString("CommitmentATX", c.CommitmentATXID.String())
+	}
+	encoder.AddObject("InitialPost", c.InitialPost)
+	return nil
 }
