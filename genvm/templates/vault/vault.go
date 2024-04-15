@@ -31,8 +31,6 @@ type Vault struct {
 	InitialUnlockAmount uint64
 	VestingStart        core.LayerID
 	VestingEnd          core.LayerID
-
-	DrainedSoFar uint64
 }
 
 func (v *Vault) isOwner(address core.Address) bool {
@@ -71,14 +69,14 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 		return ErrMisconfigured
 	}
 
-	// consider only current balance (including coins received) and vested portion of initial endowment
+	// current account balance minus unvested portion of initial endowment equals unspent, vested coins
+	// plus coins received
 	if amount > host.Balance()-v.TotalAmount+vested {
 		return ErrAmountNotAvailable
 	}
 	if err := host.Transfer(to, amount); err != nil {
 		return err
 	}
-	v.DrainedSoFar += amount
 	return nil
 }
 
