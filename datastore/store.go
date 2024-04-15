@@ -242,18 +242,6 @@ func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTxHeader
 	return atxHeader, nil
 }
 
-// GetEpochWeight returns the total weight of ATXs targeting the given epochID.
-func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, error) {
-	var weight uint64
-	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
-		weight += header.GetWeight()
-		return nil
-	}); err != nil {
-		return 0, err
-	}
-	return weight, nil
-}
-
 // IterateEpochATXHeaders iterates over ActivationTxs that target an epoch.
 func (db *CachedDB) IterateEpochATXHeaders(
 	epoch types.EpochID,
