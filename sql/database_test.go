@@ -67,11 +67,9 @@ func Test_Migration_Rollback(t *testing.T) {
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 
-	// migration1 should be rolled back when migration2 fails if both are applied in the same transaction
 	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
 	migration2.EXPECT().Apply(gomock.Any()).Return(errors.New("migration 2 failed"))
 
-	migration1.EXPECT().Rollback().Return(nil)
 	migration2.EXPECT().Rollback().Return(nil)
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")

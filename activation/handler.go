@@ -311,7 +311,9 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 			log.Stringer("smesher", atx.SmesherID),
 		)
 
-		current, err := h.cdb.VRFNonce(atx.SmesherID, atx.TargetEpoch())
+		// This is not expected to happen very often, so we query the database
+		// directly here without using the cache.
+		current, err := atxs.NonceByID(h.cdb, prevAtx.ID)
 		if err != nil {
 			return fmt.Errorf("failed to get current nonce: %w", err)
 		}
@@ -388,13 +390,8 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) *atxsdata.ATX {
+func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader, nonce types.VRFPostIndex) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
-		nonce, err := h.cdb.VRFNonce(atx.NodeID, atx.TargetEpoch())
-		if err != nil {
-			h.log.With().Error("failed vrf nonce read", log.Err(err), log.Context(ctx))
-			return nil
-		}
 		malicious, err := h.cdb.IsMalicious(atx.NodeID)
 		if err != nil {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
@@ -407,6 +404,7 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) *
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
 func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*mwire.MalfeasanceProof, error) {
+	var nonce *types.VRFPostIndex
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("checking if node is malicious: %w", err)
@@ -468,12 +466,16 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			)
 		}
 
-		if err := atxs.Add(tx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		nonce, err = atxs.AddGettingNonce(tx, atx)
+		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
+	}
+	if nonce == nil {
+		return nil, errors.New("no nonce")
 	}
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
@@ -481,7 +483,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
 	header := atx.ToHeader()
-	added := h.cacheAtx(ctx, header)
+	added := h.cacheAtx(ctx, header, *nonce)
 	h.beacon.OnAtx(header)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
