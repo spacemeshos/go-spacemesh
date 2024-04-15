@@ -49,7 +49,6 @@ type Handler struct {
 	beacon          AtxReceiver
 	tortoise        system.Tortoise
 	log             log.Log
-	mu              sync.Mutex
 	fetcher         system.Fetcher
 
 	signerMtx sync.Mutex
@@ -109,46 +108,7 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 	h.signers[sig.NodeID()] = sig
 }
 
-// processVerifiedATX validates the active set size declared in the ATX, and contextually
-// validates the ATX according to ATX validation rules. It then stores the ATX with flag
-// set to validity of the ATX.
-//
-// ATXs received as input must be already syntactically valid. Only contextual validation
-// is performed.
-func (h *Handler) processVerifiedATX(
-	ctx context.Context,
-	atx *types.VerifiedActivationTx,
-) (*mwire.MalfeasanceProof, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	existingATX, _ := h.cdb.GetAtxHeader(atx.ID())
-	if existingATX != nil { // Already processed
-		return nil, nil
-	}
-	h.log.WithContext(ctx).With().Debug("processing atx",
-		atx.ID(),
-		atx.PublishEpoch,
-		log.Stringer("smesher", atx.SmesherID),
-	)
-	if err := h.ContextuallyValidateAtx(atx); err != nil {
-		h.log.WithContext(ctx).With().Warning("atx failed contextual validation",
-			atx.ID(),
-			log.Stringer("smesher", atx.SmesherID),
-			log.Err(err),
-		)
-	} else {
-		h.log.WithContext(ctx).With().Debug("atx is valid", atx.ID())
-	}
-
-	proof, err := h.storeAtx(ctx, atx)
-	if err != nil {
-		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
-	}
-	return proof, err
-}
-
-func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *wire.ActivationTxV1) error {
+func (h *Handler) syntacticallyValidate(ctx context.Context, atx *wire.ActivationTxV1) error {
 	if atx.NIPost == nil {
 		return fmt.Errorf("nil nipost for atx %s", atx.ID())
 	}
@@ -206,7 +166,7 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *wire.Activatio
 	return nil
 }
 
-func (h *Handler) SyntacticallyValidateDeps(
+func (h *Handler) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV1,
 ) (leaves uint64, effectiveNumUnits uint32, proof *mwire.MalfeasanceProof, err error) {
@@ -315,9 +275,9 @@ func (h *Handler) validateNonInitialAtx(
 	return min(prevAtx.NumUnits, atx.NumUnits), nil
 }
 
-// ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
+// contextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
-func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error {
+func (h *Handler) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 	lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.SmesherID)
 	if err == nil && atx.PrevATXID == lastAtx {
 		// last atx referenced equals last ATX seen from node
@@ -571,7 +531,10 @@ func (h *Handler) processATX(
 		return nil, fmt.Errorf("%w atx %s", errKnownAtx, watx.ID())
 	}
 
-	if err := h.SyntacticallyValidate(ctx, &watx); err != nil {
+	h.log.WithContext(ctx).With().
+		Debug("processing atx", watx.ID(), watx.PublishEpoch, log.Stringer("smesherID", watx.SmesherID))
+
+	if err := h.syntacticallyValidate(ctx, &watx); err != nil {
 		return nil, fmt.Errorf("atx %s syntactically invalid: %w", watx.ID(), err)
 	}
 
@@ -581,13 +544,20 @@ func (h *Handler) processATX(
 		return nil, fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
 	}
 
-	leaves, effectiveNumUnits, proof, err := h.SyntacticallyValidateDeps(ctx, &watx)
+	leaves, effectiveNumUnits, proof, err := h.syntacticallyValidateDeps(ctx, &watx)
 	if err != nil {
 		return nil, fmt.Errorf("atx %s syntactically invalid based on deps: %w", watx.ID(), err)
 	}
 
 	if proof != nil {
 		return proof, err
+	}
+
+	if err := h.contextuallyValidateAtx(&watx); err != nil {
+		h.log.WithContext(ctx).With().
+			Warning("atx is contextually invalid ", watx.ID(), log.Stringer("smesherID", watx.SmesherID), log.Err(err))
+	} else {
+		h.log.WithContext(ctx).With().Debug("atx is valid", watx.ID())
 	}
 
 	var baseTickHeight uint64
@@ -607,10 +577,11 @@ func (h *Handler) processATX(
 		return nil, fmt.Errorf("failed to verify atx %x: %w", watx.ID(), err)
 	}
 
-	proof, err = h.processVerifiedATX(ctx, vAtx)
+	proof, err = h.storeAtx(ctx, vAtx)
 	if err != nil {
-		return nil, fmt.Errorf("cannot process atx %x: %w", watx.ID(), err)
+		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
+
 	events.ReportNewActivation(vAtx)
 	h.log.WithContext(ctx).With().Info(
 		"new atx", log.Inline(vAtx),

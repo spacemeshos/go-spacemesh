@@ -195,17 +195,6 @@ func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
 	return result
 }
 
-func NIPostChallengeFromWireV1(ch NIPostChallengeV1) *types.NIPostChallenge {
-	return &types.NIPostChallenge{
-		PublishEpoch:   ch.PublishEpoch,
-		Sequence:       ch.Sequence,
-		PrevATXID:      ch.PrevATXID,
-		PositioningATX: ch.PositioningATXID,
-		CommitmentATX:  ch.CommitmentATXID,
-		InitialPost:    PostFromWireV1(ch.InitialPost),
-	}
-}
-
 func NiPostFromWireV1(nipost *NIPostV1) *types.NIPost {
 	if nipost == nil {
 		return nil

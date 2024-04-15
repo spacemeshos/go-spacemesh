@@ -21,7 +21,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -61,52 +60,6 @@ func newAtx(
 	atx.SetReceived(time.Now())
 	atx.SetValidity(types.Valid)
 	return atx
-}
-
-type atxOption func(*types.ActivationTx)
-
-func withVrfNonce(nonce types.VRFPostIndex) atxOption {
-	return func(atx *types.ActivationTx) {
-		atx.VRFNonce = &nonce
-	}
-}
-
-func newActivationTx(
-	tb testing.TB,
-	sig *signing.EdSigner,
-	sequence uint64,
-	prevATX types.ATXID,
-	positioningATX types.ATXID,
-	cATX *types.ATXID,
-	publishEpoch types.EpochID,
-	startTick, numTicks uint64,
-	coinbase types.Address,
-	numUnits uint32,
-	nipost *types.NIPost,
-	opts ...atxOption,
-) *types.VerifiedActivationTx {
-	challenge := types.NIPostChallenge{
-		Sequence:       sequence,
-		PrevATXID:      prevATX,
-		PublishEpoch:   publishEpoch,
-		PositioningATX: positioningATX,
-		CommitmentATX:  cATX,
-	}
-	atx := newAtx(challenge, nipost, numUnits, coinbase)
-	if sequence == 0 {
-		nodeID := sig.NodeID()
-		atx.NodeID = &nodeID
-	}
-
-	atx.SetEffectiveNumUnits(numUnits)
-	atx.SetReceived(time.Now())
-	for _, opt := range opts {
-		opt(atx)
-	}
-	require.NoError(tb, SignAndFinalizeAtx(sig, atx))
-	vAtx, err := atx.Verify(startTick, numTicks)
-	require.NoError(tb, err)
-	return vAtx
 }
 
 type testAtxBuilder struct {
@@ -1180,53 +1133,6 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	challenge, err := nipost.Challenge(tab.localDB, sig.NodeID())
 	require.NoError(t, err)
 	require.NotNil(t, challenge)
-}
-
-func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	nipost := newNIPostWithPoet(t, []byte("66666"))
-	coinbase := types.Address{4, 5, 6}
-	atx := newActivationTx(
-		t,
-		sig,
-		1,
-		types.ATXID{1, 2, 3},
-		types.ATXID{1, 2, 3},
-		nil,
-		types.EpochID(5),
-		1,
-		100,
-		coinbase,
-		100,
-		nipost.NIPost,
-	)
-
-	act := newActivationTx(t,
-		sig,
-		2,
-		atx.ID(),
-		atx.ID(),
-		nil,
-		atx.PublishEpoch.Add(10),
-		0,
-		100,
-		coinbase,
-		100,
-		nipost.NIPost,
-	)
-
-	bt, err := codec.Encode(wire.ActivationTxToWireV1(act.ActivationTx))
-	require.NoError(t, err)
-
-	a, err := wire.ActivationTxFromBytes(bt)
-	require.NoError(t, err)
-
-	bt2, err := codec.Encode(wire.ActivationTxToWireV1(a))
-	require.NoError(t, err)
-
-	require.Equal(t, bt, bt2)
 }
 
 func TestBuilder_SignAtx(t *testing.T) {
