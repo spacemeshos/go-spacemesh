@@ -467,8 +467,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), atx))
 
 		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), atx.SmesherID)
-		_, _, _, err = atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
-		require.ErrorContains(t, err, "failed to get current nonce")
+		_, _, _, err1 := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
+		require.ErrorContains(t, err1, "failed to get current nonce")
 	})
 	t.Run("missing NodeID in initial atx", func(t *testing.T) {
 		t.Parallel()
@@ -517,7 +517,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "no prev atx declared, but initial post is not included")
 	})
 	t.Run("prevAtx not declared but commitment ATX is not included", func(t *testing.T) {
@@ -529,7 +529,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "no prev atx declared, but commitment atx is missing")
 	})
 	t.Run("prevAtx not declared but commitment ATX is empty", func(t *testing.T) {
@@ -541,7 +541,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "empty commitment atx")
 	})
 	t.Run("prevAtx not declared but sequence not zero", func(t *testing.T) {
@@ -553,7 +553,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "no prev atx declared, but sequence number not zero")
 	})
 	t.Run("prevAtx not declared but validation of initial post fails", func(t *testing.T) {
@@ -580,7 +580,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
+		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "empty positioning atx")
 	})
 	t.Run("prevAtx declared but initial Post is included", func(t *testing.T) {
