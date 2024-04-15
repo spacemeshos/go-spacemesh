@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/post/verifying"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -241,7 +242,7 @@ func (h *Handler) SyntacticallyValidateDeps(
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	expectedChallengeHash := atx.NIPostChallenge.Hash()
+	expectedChallengeHash := wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash()
 	h.log.WithContext(ctx).
 		With().
 		Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
@@ -263,7 +264,7 @@ func (h *Handler) SyntacticallyValidateDeps(
 			Proof: mwire.Proof{
 				Type: mwire.InvalidPostIndex,
 				Data: &mwire.InvalidPostIndexProof{
-					Atx:        *atx,
+					Atx:        *wire.ActivationTxToWireV1(atx),
 					InvalidIdx: uint32(invalidIdx.Index),
 				},
 			},
@@ -438,7 +439,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				atxProof.Messages[i] = mwire.AtxProofMsg{
 					InnerMsg: types.ATXMetadata{
 						PublishEpoch: a.PublishEpoch,
-						MsgHash:      types.BytesToHash(a.HashInnerBytes()),
+						MsgHash:      wire.ActivationTxToWireV1(a.ActivationTx).HashInnerBytes(),
 					},
 					SmesherID: a.SmesherID,
 					Signature: a.Signature,
@@ -545,14 +546,15 @@ func (h *Handler) handleAtx(
 	msg []byte,
 ) (*mwire.MalfeasanceProof, error) {
 	receivedTime := time.Now()
-	var atx types.ActivationTx
-	if err := codec.Decode(msg, &atx); err != nil {
+
+	var atxOnWire wire.ActivationTxV1
+	if err := codec.Decode(msg, &atxOnWire); err != nil {
 		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
 	}
+
+	atx := wire.ActivationTxFromWireV1(&atxOnWire)
+
 	atx.SetReceived(receivedTime.Local())
-	if err := atx.Initialize(); err != nil {
-		return nil, fmt.Errorf("failed to derive ID from atx: %w", err)
-	}
 
 	// Check if processing is already in progress
 	h.inProgressMu.Lock()
@@ -574,7 +576,7 @@ func (h *Handler) handleAtx(
 	h.inProgressMu.Unlock()
 	h.log.WithContext(ctx).With().Info("handling incoming atx", atx.ID(), log.Int("size", len(msg)))
 
-	proof, err := h.processATX(ctx, expHash, peer, atx)
+	proof, err := h.processATX(ctx, expHash, peer, *atx)
 	h.inProgressMu.Lock()
 	defer h.inProgressMu.Unlock()
 	for _, ch := range h.inProgress[atx.ID()] {
@@ -591,7 +593,7 @@ func (h *Handler) processATX(
 	peer p2p.Peer,
 	atx types.ActivationTx,
 ) (*mwire.MalfeasanceProof, error) {
-	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, wire.ActivationTxToWireV1(&atx).SignedBytes(), atx.Signature) {
 		return nil, fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
 	}
 

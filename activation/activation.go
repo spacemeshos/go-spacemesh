@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -638,8 +639,10 @@ func (b *Builder) createAtx(
 	challenge *types.NIPostChallenge,
 ) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
+	// TODO: in future, encode the right NiPoST challenge version depending on the pubEpoch.
+	challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
 
-	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge.PublishEpoch, challenge.Hash())
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge.PublishEpoch, challengeHash)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
@@ -699,7 +702,8 @@ func (b *Builder) createAtx(
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
 	b.log.Info("broadcasting", log.ZShortStringer("atx_id", atx.ID()), log.ZShortStringer("smesherID", atx.SmesherID))
-	buf, err := codec.Encode(atx)
+	// TODO: in future, encode the right ATX version depending on the epoch.
+	buf, err := codec.Encode(wire.ActivationTxToWireV1(atx))
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %w", err)
 	}
@@ -758,9 +762,12 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
-	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
+	// FIXME - there is no need to sign types.ActivationTX (only ActivationTxVx)
+	wireAtx := wire.ActivationTxToWireV1(atx)
+	atx.Signature = signer.Sign(signing.ATX, wireAtx.SignedBytes())
 	atx.SmesherID = signer.NodeID()
-	return atx.Initialize()
+	atx.SetID(types.ATXID(wireAtx.HashInnerBytes()))
+	return nil
 }
 
 func buildNipostChallengeStartDeadline(roundStart time.Time, gracePeriod time.Duration) time.Time {

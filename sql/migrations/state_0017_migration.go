@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -86,7 +87,7 @@ func (m *migration0017) processEpoch(db sql.Executor, epoch types.EpochID) error
 			nonce = &v
 		}
 		if l := stmt.ColumnLen(3); l != 0 {
-			var atx types.ActivationTx
+			var atx wire.ActivationTxV1
 			if n, err := codec.DecodeFrom(stmt.ColumnReader(3), &atx); err != nil {
 				ierr = fmt.Errorf("error decoding ATX %s: %w", atxID, err)
 				return false
@@ -211,7 +212,7 @@ func (m *migration0017) slowGetNonceByATXID(
 		return 0, errors.New("missing ATX blob")
 	}
 
-	var atx types.ActivationTx
+	var atx wire.ActivationTxV1
 	if err := codec.Decode(blob, &atx); err != nil {
 		return 0, fmt.Errorf("error decoding ATX blob: %w", err)
 	}

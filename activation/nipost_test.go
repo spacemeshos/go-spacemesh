@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -466,6 +467,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		PublishEpoch: postGenesisEpoch + 2,
 	}
 	require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
+	challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
 
 	ctrl := gomock.NewController(t)
 	poetProver := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
@@ -473,7 +475,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		&types.PoetProofMessage{
 			PoetProof: types.PoetProof{},
 		}, []types.Hash32{
-			challenge.Hash(),
+			challengeHash,
 			types.RandomHash(),
 			types.RandomHash(),
 		}, nil,
@@ -506,7 +508,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
+	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challengeHash)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 
@@ -529,7 +531,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(nil, nil, errors.New("error"))
 
 	// check that proof ref is not called again
-	nipost, err = nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
+	nipost, err = nb.BuildNIPost(context.Background(), sig, 7, challengeHash)
 	require.Nil(t, nipost)
 	require.Error(t, err)
 
@@ -554,7 +556,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	)
 
 	// check that proof ref is not called again
-	nipost, err = nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
+	nipost, err = nb.BuildNIPost(context.Background(), sig, 7, challengeHash)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -916,7 +918,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		challenge := &types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch() - 1}
-		challengeHash := challenge.Hash()
+		challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
 		err = nipost.AddChallenge(db, sig.NodeID(), challenge)
 		require.NoError(t, err)
 
@@ -960,7 +962,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		challenge := &types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch() - 1}
-		challengeHash := challenge.Hash()
+		challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
 		err = nipost.AddChallenge(db, sig.NodeID(), challenge)
 		require.NoError(t, err)
 
@@ -1192,7 +1194,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
+			nipost, err := nb.BuildNIPost(context.Background(), sig, tc.epoch, challenge)
 			require.NoError(t, err)
 			require.NotNil(t, nipost)
 		})

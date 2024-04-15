@@ -398,8 +398,8 @@ func validateInvalidPostIndex(ctx context.Context,
 	}
 	post := (*shared.Proof)(atx.NIPost.Post)
 	meta := &shared.ProofMetadata{
-		NodeId:          atx.SmesherID.Bytes(),
-		CommitmentAtxId: commitmentAtx.Bytes(),
+		NodeId:          atx.SmesherID[:],
+		CommitmentAtxId: commitmentAtx[:],
 		NumUnits:        atx.NumUnits,
 		Challenge:       atx.NIPost.PostMetadata.Challenge,
 		LabelsPerUnit:   atx.NIPost.PostMetadata.LabelsPerUnit,

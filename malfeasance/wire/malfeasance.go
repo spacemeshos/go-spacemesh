@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -70,8 +71,8 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddString("type", "invalid post index")
 		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
 		if ok {
-			p.Atx.Initialize()
-			encoder.AddString("atx_id", p.Atx.ID().String())
+			atx := wire.ActivationTxFromWireV1(&p.Atx)
+			encoder.AddString("atx_id", atx.ID().String())
 			encoder.AddString("smesher", p.Atx.SmesherID.String())
 			encoder.AddUint32("invalid index", p.InvalidIdx)
 		}
@@ -228,7 +229,7 @@ func (m *AtxProofMsg) SignedBytes() []byte {
 }
 
 type InvalidPostIndexProof struct {
-	Atx types.ActivationTx
+	Atx wire.ActivationTxV1
 
 	// Which index in POST is invalid
 	InvalidIdx uint32
@@ -358,13 +359,13 @@ func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 	case InvalidPostIndex:
 		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
 		if ok {
-			p.Atx.Initialize()
+			atx := wire.ActivationTxFromWireV1(&p.Atx)
 			b.WriteString(
 				fmt.Sprintf(
 					"cause: smesher published ATX %s with invalid post index %d in epoch %d\n",
-					p.Atx.ID().ShortString(),
+					atx.ID().ShortString(),
 					p.InvalidIdx,
-					p.Atx.PublishEpoch,
+					p.Atx.Publish,
 				))
 		}
 	}

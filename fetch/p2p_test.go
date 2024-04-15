@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -353,7 +354,7 @@ func TestP2PGetATXs(t *testing.T) {
 						context.Background(), []types.ATXID{atx.ID()})
 				},
 				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
-				codec.MustEncode(atx))
+				codec.MustEncode(wire.ActivationTxToWireV1(atx.ActivationTx)))
 		})
 }
 

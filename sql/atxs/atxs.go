@@ -8,6 +8,7 @@ import (
 
 	sqlite "github.com/go-llsqlite/crawshaw"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -39,9 +40,11 @@ func decoder(fn decoderCallback) sql.Decoder {
 		stmt.ColumnBytes(0, id[:])
 		checkpointed := stmt.ColumnLen(1) == 0
 		if !checkpointed {
-			if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &a); err != nil {
+			var atxV1 wire.ActivationTxV1
+			if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &atxV1); err != nil {
 				return fn(nil, fmt.Errorf("decode %w", err))
 			}
+			a = *wire.ActivationTxFromWireV1(&atxV1)
 		}
 		a.SetID(id)
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
@@ -420,7 +423,7 @@ func AddMaybeNoNonce(db sql.Executor, atx *types.VerifiedActivationTx) error {
 }
 
 func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostIndex) error {
-	buf, err := codec.Encode(atx.ActivationTx)
+	buf, err := codec.Encode(wire.ActivationTxToWireV1(atx.ActivationTx))
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
