@@ -277,14 +277,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		invalidAtx := invalidPostProof.Atx
 		require.Equal(t, atx.PublishEpoch, invalidAtx.Publish)
 		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)
-		require.Equal(t, atx.NodeID, invalidAtx.NodeID)
-		require.Equal(t, atx.PositioningATX, invalidAtx.PositioningATX)
-		require.Equal(t, atx.PrevATXID, invalidAtx.PrevATXID)
-		require.Equal(t, atx.Signature, invalidAtx.Signature)
-		require.Equal(t, atx.Coinbase, invalidAtx.Coinbase)
-		require.Equal(t, *atx.CommitmentATX, *invalidAtx.CommitmentATX)
-		require.Equal(t, atx.NIPostChallenge, invalidAtx.NIPostChallengeV1)
-		require.Equal(t, atx.NIPost.Post.Indices, invalidAtx.NIPost.Post.Indices)
+		require.Equal(t, atx.ID().Hash32(), invalidAtx.HashInnerBytes())
 
 		meta := &shared.ProofMetadata{
 			NodeId:          invalidAtx.NodeID.Bytes(),
