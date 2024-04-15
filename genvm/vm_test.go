@@ -941,7 +941,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
 						&selfSpawnTx{11},
 					},
-					failed: map[int]error{2: core.ErrNoBalance},
+					failed: map[int]error{2: core.ErrOutOfGas},
 					expected: map[int]change{
 						// incresed by two because previous was ineffective
 						// but internal nonce in tester was incremented
@@ -972,7 +972,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						// send enough funds to cover spawn, but no spend
 						&spendTx{11, 12, 1},
 					},
-					failed: map[int]error{1: core.ErrNoBalance},
+					failed: map[int]error{1: core.ErrOutOfGas},
 					expected: map[int]change{
 						12: same{},
 					},
@@ -1014,7 +1014,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
 						ref.estimateSpendGas(0, 10, 80_000, 1) +
 						ref.estimateSpawnGas(10, 10)),
-					failed:      map[int]error{2: core.ErrNoBalance},
+					failed:      map[int]error{2: core.ErrOutOfGas},
 					ineffective: []int{3},
 					expected: map[int]change{
 						0: spent{amount: 80_000 +
@@ -1190,7 +1190,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
 						&selfSpawnTx{11},
 					},
-					failed: map[int]error{2: core.ErrNoBalance},
+					failed: map[int]error{2: core.ErrOutOfGas},
 					expected: map[int]change{
 						0: spent{amount: ref.estimateSpawnGas(11, 11) - 1 +
 							ref.estimateSpawnGas(0, 0) +
@@ -1246,7 +1246,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
 						ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
 						ref.estimateSpawnGas(11, 11)),
-					failed:  map[int]error{2: core.ErrNoBalance},
+					failed:  map[int]error{2: core.ErrOutOfGas},
 					rewards: []reward{{address: 20, share: 1}},
 					expected: map[int]change{
 						0: spent{amount: ref.estimateSpawnGas(0, 0) +
@@ -1346,7 +1346,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						12: same{},
 					},
 					failed: map[int]error{
-						3: core.ErrNoBalance,
+						3: core.ErrOutOfGas,
 					},
 				},
 				{

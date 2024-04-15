@@ -101,15 +101,6 @@ func createP2PFetch(
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, clientHost.Stop()) })
 
-	// TODO: connect after both NewFetch calls
-	err = clientHost.Connect(ctx, peer.AddrInfo{
-		ID:    serverHost.ID(),
-		Addrs: serverHost.Addrs(),
-	})
-	require.NoError(t, err)
-
-	require.Len(t, clientHost.GetPeers(), 1)
-
 	var sqlOpts []sql.Opt
 	if sqlCache {
 		sqlOpts = []sql.Opt{sql.WithQueryCache(true)}
@@ -160,6 +151,14 @@ func createP2PFetch(
 	)
 	require.NoError(t, tpf.clientFetch.Start())
 	t.Cleanup(tpf.clientFetch.Stop)
+
+	err = clientHost.Connect(ctx, peer.AddrInfo{
+		ID:    serverHost.ID(),
+		Addrs: serverHost.Addrs(),
+	})
+	require.NoError(t, err)
+
+	require.Len(t, clientHost.GetPeers(), 1)
 
 	return tpf, ctx
 }

@@ -508,17 +508,6 @@ func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, pee
 	return err
 }
 
-func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
-	hashes := map[types.Hash32]struct{}{}
-	for _, id := range []types.ATXID{atx.PositioningATX, atx.PrevATXID} {
-		if id != types.EmptyATXID && id != h.goldenATXID {
-			hashes[id.Hash32()] = struct{}{}
-		}
-	}
-	hashes[atx.GetPoetProofRef()] = struct{}{}
-	h.fetcher.RegisterPeerHashes(peer, maps.Keys(hashes))
-}
-
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	proof, err := h.handleAtx(ctx, types.Hash32{}, peer, msg)
@@ -615,9 +604,10 @@ func (h *Handler) processATX(
 		return nil, fmt.Errorf("atx %v syntactically invalid: %w", atx.ShortString(), err)
 	}
 
-	h.registerHashes(&atx, peer)
-	if err := h.FetchReferences(ctx, &atx); err != nil {
-		return nil, err
+	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, &atx)
+	h.registerHashes(peer, poetRef, atxIDs)
+	if err := h.fetchReferences(ctx, poetRef, atxIDs); err != nil {
+		return nil, fmt.Errorf("fetching references for atx %x: %w", atx.ID(), err)
 	}
 
 	vAtx, proof, err := h.SyntacticallyValidateDeps(ctx, &atx)
@@ -649,38 +639,49 @@ func (h *Handler) processATX(
 	return proof, err
 }
 
-// FetchReferences fetches referenced ATXs from peers if they are not found in db.
-func (h *Handler) FetchReferences(ctx context.Context, atx *types.ActivationTx) error {
-	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("atx (%s) missing poet proof (%s): %w",
-			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
-		)
+// registerHashes registers that the given peer should be asked for
+// the hashes of the poet proof and ATXs.
+func (h *Handler) registerHashes(peer p2p.Peer, poetRef types.Hash32, atxIDs []types.ATXID) {
+	hashes := make([]types.Hash32, 0, len(atxIDs)+1)
+	for _, id := range atxIDs {
+		hashes = append(hashes, id.Hash32())
 	}
+	hashes = append(hashes, types.Hash32(poetRef))
+	h.fetcher.RegisterPeerHashes(peer, hashes)
+}
 
-	atxIDs := make(map[types.ATXID]struct{}, 3)
-	if atx.PositioningATX != types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
-		atxIDs[atx.PositioningATX] = struct{}{}
-	}
-
-	if atx.PrevATXID != types.EmptyATXID {
-		atxIDs[atx.PrevATXID] = struct{}{}
-	}
-	if atx.CommitmentATX != nil && *atx.CommitmentATX != h.goldenATXID {
-		atxIDs[*atx.CommitmentATX] = struct{}{}
+// fetchReferences makes sure that the referenced poet proof and ATXs are available.
+func (h *Handler) fetchReferences(ctx context.Context, poetRef types.Hash32, atxIDs []types.ATXID) error {
+	if err := h.fetcher.GetPoetProof(ctx, poetRef); err != nil {
+		return fmt.Errorf("missing poet proof (%s): %w", poetRef.ShortString(), err)
 	}
 
 	if len(atxIDs) == 0 {
 		return nil
 	}
 
-	if err := h.fetcher.GetAtxs(ctx, maps.Keys(atxIDs), system.WithoutLimiting()); err != nil {
-		dbg := fmt.Sprintf("prev %v pos %v commit %v", atx.PrevATXID, atx.PositioningATX, atx.CommitmentATX)
-		return fmt.Errorf("fetch referenced atxs (%s): %w", dbg, err)
+	if err := h.fetcher.GetAtxs(ctx, atxIDs, system.WithoutLimiting()); err != nil {
+		return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
 	}
 
-	h.log.WithContext(ctx).With().Debug("done fetching references for atx",
-		atx.ID(),
-		log.Int("num fetched", len(atxIDs)),
-	)
+	h.log.WithContext(ctx).With().Debug("done fetching references", log.Int("fetched", len(atxIDs)))
 	return nil
+}
+
+// Collect unique dependencies of an ATX.
+// Filters out EmptyATXID and the golden ATX.
+func collectAtxDeps(goldenAtxId types.ATXID, atx *types.ActivationTx) (types.Hash32, []types.ATXID) {
+	ids := []types.ATXID{atx.PrevATXID, atx.PositioningATX}
+	if atx.CommitmentATX != nil {
+		ids = append(ids, *atx.CommitmentATX)
+	}
+
+	filtered := make(map[types.ATXID]struct{})
+	for _, id := range ids {
+		if id != types.EmptyATXID && id != goldenAtxId {
+			filtered[id] = struct{}{}
+		}
+	}
+
+	return atx.GetPoetProofRef(), maps.Keys(filtered)
 }
