@@ -232,7 +232,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(posAtx)))
 		return atxHdlr, prevAtx, posAtx
 	}
-
 	t.Run("valid atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -255,7 +254,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.Equal(t, atx.NumUnits, units)
 		require.Nil(t, proof)
 	})
-
 	t.Run("valid atx with new VRF nonce", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -280,7 +278,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.Equal(t, atx.NumUnits, units)
 		require.Nil(t, proof)
 	})
-
 	t.Run("valid atx with decreasing num units", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -302,7 +299,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.Equal(t, atx.NumUnits, units)
 		require.Nil(t, proof)
 	})
-
 	t.Run("atx with increasing num units, no new VRF, old valid", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -325,7 +321,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.Equal(t, prevAtx.NumUnits, units)
 		require.Nil(t, proof)
 	})
-
 	t.Run("atx with increasing num units, no new VRF, old invalid for new size", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -345,7 +340,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.ErrorContains(t, err, "invalid VRF")
 		require.Nil(t, proof)
 	})
-
 	t.Run("valid initial atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, posAtx := setup(t)
@@ -372,7 +366,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.Equal(t, atx.NumUnits, units)
 		require.Nil(t, proof)
 	})
-
 	t.Run("atx targeting wrong publish epoch", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -384,7 +377,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "atx publish epoch is too far in the future")
 	})
-
 	t.Run("failing nipost challenge validation", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -402,7 +394,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.EqualError(t, err, "nipost error")
 		require.Nil(t, proof)
 	})
-
 	t.Run("failing positioning atx validation", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -421,14 +412,12 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.EqualError(t, err, "bad positioning atx")
 		require.Nil(t, proof)
 	})
-
 	t.Run("bad initial nipost challenge", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, posAtx := setup(t)
 
 		cATX := posAtx.ID()
-		atx := newActivationTxV1(t, goldenATXID)
-		atx.CommitmentATXID = &cATX
+		atx := newActivationTxV1(t, cATX)
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
@@ -444,7 +433,43 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		require.EqualError(t, err, "bad initial nipost")
 		require.Nil(t, proof)
 	})
+	t.Run("bad NIPoST", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr, prevATX, postAtx := setup(t)
 
+		atx := newChainedActivationTxV1(t, goldenATXID, prevATX, postAtx.ID())
+		atx.Sign(sig)
+
+		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), atx))
+
+		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), atx.SmesherID)
+		atxHdlr.mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, gomock.Any(), goldenATXID, atx.PublishEpoch)
+		atxHdlr.mValidator.EXPECT().
+			NIPost(gomock.Any(), atx.SmesherID, goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
+			Return(0, errors.New("bad nipost"))
+		_, _, _, err := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
+		require.EqualError(t, err, "invalid nipost: bad nipost")
+	})
+	t.Run("can't find VRF nonce", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr, prevATX, postAtx := setup(t)
+
+		atx := newChainedActivationTxV1(t, goldenATXID, prevATX, postAtx.ID())
+		atx.NumUnits += 100
+		atx.Sign(sig)
+
+		enc := func(stmt *sql.Statement) { stmt.BindBytes(1, atx.SmesherID.Bytes()) }
+		_, err := atxHdlr.cdb.Exec(`UPDATE atxs SET nonce = NULL WHERE pubkey = ?1;`, enc, nil)
+		require.NoError(t, err)
+
+		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), atx))
+
+		atxHdlr.mValidator.EXPECT().NIPostChallenge(gomock.Any(), gomock.Any(), atx.SmesherID)
+		_, _, _, err = atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
+		require.ErrorContains(t, err, "failed to get current nonce")
+	})
 	t.Run("missing NodeID in initial atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
@@ -457,7 +482,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "node id is missing")
 	})
-
 	t.Run("missing VRF nonce in initial atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
@@ -470,7 +494,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "vrf nonce is missing")
 	})
-
 	t.Run("invalid VRF nonce in initial atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
@@ -485,7 +508,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid VRF nonce")
 	})
-
 	t.Run("prevAtx not declared but initial Post not included", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -498,7 +520,42 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "no prev atx declared, but initial post is not included")
 	})
+	t.Run("prevAtx not declared but commitment ATX is not included", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr, _, _ := setup(t)
 
+		atx := newActivationTxV1(t, goldenATXID)
+		atx.CommitmentATXID = nil
+		atx.Sign(sig)
+
+		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
+		require.EqualError(t, err, "no prev atx declared, but commitment atx is missing")
+	})
+	t.Run("prevAtx not declared but commitment ATX is empty", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr, _, _ := setup(t)
+
+		atx := newActivationTxV1(t, goldenATXID)
+		atx.CommitmentATXID = &types.EmptyATXID
+		atx.Sign(sig)
+
+		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
+		require.EqualError(t, err, "empty commitment atx")
+	})
+	t.Run("prevAtx not declared but sequence not zero", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr, _, _ := setup(t)
+
+		atx := newActivationTxV1(t, goldenATXID)
+		atx.Sequence = 1
+		atx.Sign(sig)
+
+		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
+		require.EqualError(t, err, "no prev atx declared, but sequence number not zero")
+	})
 	t.Run("prevAtx not declared but validation of initial post fails", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
@@ -514,7 +571,18 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "failed post validation")
 	})
+	t.Run("empty positioning ATX", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr, _, _ := setup(t)
 
+		atx := newActivationTxV1(t, goldenATXID)
+		atx.PositioningATXID = types.EmptyATXID
+		atx.Sign(sig)
+
+		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+		err = atxHdlr.syntacticallyValidate(context.Background(), atx)
+		require.EqualError(t, err, "empty positioning atx")
+	})
 	t.Run("prevAtx declared but initial Post is included", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, _ := setup(t)
@@ -527,7 +595,6 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "prev atx declared, but initial post is included")
 	})
-
 	t.Run("prevAtx declared but NodeID is included", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
@@ -539,6 +606,18 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.EqualError(t, err, "prev atx declared, but node id is included")
+	})
+	t.Run("prevAtx declared but commitmentATX is included", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr, prevAtx, posAtx := setup(t)
+
+		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx.CommitmentATXID = &types.EmptyATXID
+		atx.Sign(sig)
+
+		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
+		require.EqualError(t, err, "prev atx declared, but commitment atx is included")
 	})
 }
 
