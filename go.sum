@@ -489,8 +489,8 @@ github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:
 github.com/prometheus/client_model v0.6.1 h1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E=
 github.com/prometheus/client_model v0.6.1/go.mod h1:OrxVMOVHjw3lKMa8+x6HeMGkHMQyHDk9E3jmP2AmGiY=
 github.com/prometheus/common v0.0.0-20180801064454-c7de2306084e/go.mod h1:daVV7qP5qjZbuso7PdcryaAu0sAZbrN9i7WWcTMWvro=
-github.com/prometheus/common v0.52.2 h1:LW8Vk7BccEdONfrJBDffQGRtpSzi5CQaRZGtboOO2ck=
-github.com/prometheus/common v0.52.2/go.mod h1:lrWtQx+iDfn2mbH5GUzlH9TSHyfZpHkSiG1W7y3sF2Q=
+github.com/prometheus/common v0.52.3 h1:5f8uj6ZwHSscOGNdIQg6OiZv/ybiK2CO2q2drVZAQSA=
+github.com/prometheus/common v0.52.3/go.mod h1:BrxBKv3FWBIGXw89Mg1AeBq7FSyRzXWI3l3e7W3RN5U=
 github.com/prometheus/procfs v0.0.0-20180725123919-05ee40e3a273/go.mod h1:c3At6R/oaqEKCNdg8wHV1ftS6bRYblBhIjjI8uT2IGk=
 github.com/prometheus/procfs v0.12.0 h1:jluTpSng7V9hY0O2R9DzzJHYb2xULk9VTR1V1R/k6Bo=
 github.com/prometheus/procfs v0.12.0/go.mod h1:pcuDEFsWDnvcgNzo4EEweacyhjeA9Zk3cnaOZAZEfOo=
@@ -558,8 +558,8 @@ github.com/sourcegraph/conc v0.3.0/go.mod h1:Sdozi7LEKbFPqYX2/J+iBAM6HpqSLTASQIK
 github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
 github.com/spacemeshos/api/release/go v1.36.0 h1:FzK+v5ZbgY8goWC6XDqVgb2hjNGzZQkMApPycynLg6E=
 github.com/spacemeshos/api/release/go v1.36.0/go.mod h1:3vIzTSkbLZBwgiaOzl/kVa0Jd++X6n67FlN9RdCJXZI=
-github.com/spacemeshos/economics v0.1.2 h1:kw8cE5SMa/7svHOGorCd2w8ef1y8iP0p47/2VDOK8Ns=
-github.com/spacemeshos/economics v0.1.2/go.mod h1:ngeWn5E/jy9dJP1MHyuk3ehF8NBMTYhchqVDhAHUUNk=
+github.com/spacemeshos/economics v0.1.3 h1:ACkq3mTebIky4Zwbs9SeSSRZrUCjU/Zk0wq9Z0BTh2A=
+github.com/spacemeshos/economics v0.1.3/go.mod h1:FH7u0FzTIm6Kpk+X5HOZDvpkgNYBKclmH86rVwYaDAo=
 github.com/spacemeshos/fixed v0.1.1 h1:N1y4SUpq1EV+IdJrWJwUCt1oBFzeru/VKVcBsvPc2Fk=
 github.com/spacemeshos/fixed v0.1.1/go.mod h1:B/moObha9wGnwljZP+w/dYAwzv097aL9VV8Oyv2cM/E=
 github.com/spacemeshos/go-scale v1.2.0 h1:ZlA2L1ILym2gmyJUwUdLTiyP1ZIG0U4xE9nFVFLi83M=

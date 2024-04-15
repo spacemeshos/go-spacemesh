@@ -18,6 +18,15 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
+* [#5807](https://github.com/spacemeshos/go-spacemesh/pull/5807) Implement SMIP-0002: remove vesting vault cliff.
+
+## Release v1.4.6
+
+### Improvements
+
+* [#5839](https://github.com/spacemeshos/go-spacemesh/pull/5839) Fix a bug where nodes would stop agreeing on the order
+  of TX within a block.
+
 ## Release v1.4.5
 
 ### Improvements
