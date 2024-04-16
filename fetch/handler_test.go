@@ -263,6 +263,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 
 func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	t.Helper()
+	nonce := types.VRFPostIndex(123)
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -270,6 +271,7 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 				PrevATXID:    types.RandomATXID(),
 			},
 			NumUnits: 2,
+			VRFNonce: &nonce,
 		},
 	}
 
@@ -362,7 +364,7 @@ func testHandleEpochInfoReqWithQueryCache(
 	}
 
 	qc := th.cdb.Executor.(interface{ QueryCount() int })
-	require.Equal(t, 10, qc.QueryCount())
+	require.Equal(t, 20, qc.QueryCount())
 	epochBytes, err := codec.Encode(epoch)
 	require.NoError(t, err)
 
@@ -370,7 +372,7 @@ func testHandleEpochInfoReqWithQueryCache(
 	for i := 0; i < 3; i++ {
 		getInfo(th, epochBytes, &got)
 		require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
-		require.Equal(t, 11, qc.QueryCount())
+		require.Equal(t, 21, qc.QueryCount())
 	}
 
 	// Add another ATX which should be appended to the cached slice
@@ -378,14 +380,14 @@ func testHandleEpochInfoReqWithQueryCache(
 	require.NoError(t, atxs.Add(th.cdb, vatx))
 	atxs.AtxAdded(th.cdb, vatx)
 	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
-	require.Equal(t, 12, qc.QueryCount())
+	require.Equal(t, 23, qc.QueryCount())
 
 	getInfo(th, epochBytes, &got)
 	require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
 	// The query count is not incremented as the slice is still
 	// cached and the new atx is just appended to it, even though
 	// the response is re-serialized.
-	require.Equal(t, 12, qc.QueryCount())
+	require.Equal(t, 23, qc.QueryCount())
 }
 
 func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {

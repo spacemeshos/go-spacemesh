@@ -54,7 +54,7 @@ func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
 // MarshalLogObject implements logging interface.
 func (vatx *VerifiedActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", vatx.id.String())
-	encoder.AddString("challenge", vatx.NIPostChallenge.Hash().String())
+	// encoder.AddString("challenge", vatx.NIPostChallenge.Hash().String())
 	encoder.AddString("smesher", vatx.SmesherID.String())
 	encoder.AddString("prev_atx_id", vatx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", vatx.PositioningATX.String())

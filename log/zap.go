@@ -85,6 +85,11 @@ func String(name, val string) Field {
 	return Field(zap.String(name, val))
 }
 
+// Strings returns a strings Field.
+func Strings(name string, val []string) Field {
+	return Field(zap.Strings(name, val))
+}
+
 // Stringer returns an fmt.Sringer Field.
 func Stringer(name string, val fmt.Stringer) Field {
 	return Field(zap.Stringer(name, val))

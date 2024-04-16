@@ -12,6 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	awire "github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -1071,21 +1072,20 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nodeIdH32 := types.Hash32(sig.NodeID())
-
-	atx := *types.NewActivationTx(
-		types.NIPostChallenge{
-			PublishEpoch:  types.EpochID(1),
-			CommitmentATX: &types.ATXID{1, 2, 3},
+	id := sig.NodeID()
+	atx := awire.ActivationTxV1{
+		InnerActivationTxV1: awire.InnerActivationTxV1{
+			NIPostChallengeV1: awire.NIPostChallengeV1{
+				CommitmentATX: &types.ATXID{1, 2, 3},
+			},
+			NIPost: &awire.NIPostV1{
+				Post:         &awire.PostV1{},
+				PostMetadata: &awire.PostMetadataV1{},
+			},
 		},
-		types.Address{},
-		&types.NIPost{
-			Post:         &types.Post{},
-			PostMetadata: &types.PostMetadata{},
-		},
-		1,
-		nil,
-	)
-	require.NoError(t, activation.SignAndFinalizeAtx(sig, &atx))
+		SmesherID: id,
+	}
+	atx.Signature = sig.Sign(signing.ATX, atx.SignedBytes())
 
 	t.Run("valid malfeasance proof", func(t *testing.T) {
 		db := sql.InMemory()

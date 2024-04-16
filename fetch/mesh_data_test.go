@@ -450,7 +450,7 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{},
 			types.Address{1, 2, 3},
-			&types.NIPost{},
+			nil,
 			i,
 			nil,
 		)

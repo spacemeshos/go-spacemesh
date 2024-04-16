@@ -216,10 +216,6 @@ func (s *Server) Run(ctx context.Context) error {
 	s.h.SetStreamHandler(protocol.ID(s.protocol), func(stream network.Stream) {
 		select {
 		case queue <- request{stream: stream, received: time.Now()}:
-			if s.metrics != nil {
-				s.metrics.queue.Set(float64(len(queue)))
-				s.metrics.accepted.Inc()
-			}
 		default:
 			if s.metrics != nil {
 				s.metrics.dropped.Inc()
@@ -236,6 +232,10 @@ func (s *Server) Run(ctx context.Context) error {
 			eg.Wait()
 			return nil
 		case req := <-queue:
+			if s.metrics != nil {
+				s.metrics.queue.Set(float64(len(queue)))
+				s.metrics.accepted.Inc()
+			}
 			if s.metrics != nil {
 				s.metrics.inQueueLatency.Observe(time.Since(req.received).Seconds())
 			}

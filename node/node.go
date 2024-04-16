@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -78,6 +79,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
+	sqlmigrations "github.com/spacemeshos/go-spacemesh/sql/migrations"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -321,7 +323,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		viper.DecodeHook(hook),
 		WithZeroFields(),
 		WithIgnoreUntagged(),
-		withErrorUnused(),
+		WithErrorUnused(),
 	}
 
 	// load config if it was loaded to the viper
@@ -343,7 +345,7 @@ func WithIgnoreUntagged() viper.DecoderConfigOption {
 	}
 }
 
-func withErrorUnused() viper.DecoderConfigOption {
+func WithErrorUnused() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.ErrorUnused = true
 	}
@@ -986,6 +988,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithNetworkDelay(app.Config.ATXGradeDelay),
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
+		miner.WithActivesetPreparation(app.Config.ActiveSet),
 	)
 	for _, sig := range app.signers {
 		proposalBuilder.Register(sig)
@@ -1845,6 +1848,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	dbopts := []sql.Opt{
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
+		sql.WithMigration(sqlmigrations.New0017Migration(dbLog.Zap())),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
@@ -1960,7 +1964,12 @@ func (app *App) verifyDB(ctx context.Context) {
 			}
 
 			// verify atx signature
-			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+			// TODO: use atx handler to verify signature
+			if !app.edVerifier.Verify(
+				signing.ATX,
+				atx.SmesherID, wire.ActivationTxToWireV1(atx.ActivationTx).SignedBytes(),
+				atx.Signature,
+			) {
 				app.log.With().Error("ATX signature verification failed",
 					log.Stringer("atx_id", atx.ID()),
 					log.Stringer("smesher", atx.SmesherID),
@@ -2146,7 +2155,7 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 		)
 	}
 	for _, vatx := range app.preserve.Deps {
-		encoded, err := codec.Encode(vatx)
+		encoded, err := codec.Encode(wire.ActivationTxToWireV1(vatx.ActivationTx))
 		if err != nil {
 			app.log.With().Error("failed to encode atx after checkpoint",
 				log.Inline(vatx),
