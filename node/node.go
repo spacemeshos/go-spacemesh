@@ -2020,7 +2020,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	app.errCh = make(chan error, 100)
 	if app.Config.PprofHTTPServer {
 		logger.Info("starting pprof server")
-		app.pprofService = &http.Server{Addr: ":6060"}
+		app.pprofService = &http.Server{Addr: "127.0.0.1:6060"}
 		app.eg.Go(func() error {
 			if err := app.pprofService.ListenAndServe(); err != nil {
 				app.errCh <- fmt.Errorf("cannot start pprof http server: %w", err)
