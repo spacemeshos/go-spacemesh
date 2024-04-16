@@ -46,6 +46,9 @@ func (v *Vault) Vested(lid core.LayerID) uint64 {
 	}
 	vested := new(big.Int).SetUint64(v.TotalAmount)
 	vested.Mul(vested, new(big.Int).SetUint64(uint64(lid.Difference(v.VestingStart))))
+	// Note: VestingStart may equal VestingEnd but division by zero is not possible here since in this case
+	// one of the first two conditionals above would have been triggered and the method would already have
+	// returned.
 	vested.Div(vested, new(big.Int).SetUint64(uint64(v.VestingEnd.Difference(v.VestingStart))))
 	return vested.Uint64()
 }
@@ -70,7 +73,10 @@ func (v *Vault) Spend(host core.Host, to core.Address, amount uint64) error {
 	}
 
 	// current account balance minus unvested portion of initial endowment equals unspent, vested coins
-	// plus coins received
+	// plus coins received. in simpler pseudocode:
+	//   unvested_portion = v.TotalAmount - vested
+	//   spendable_portion = host.balance() - unvested_portion
+	//   if amount > spendable_portion { ... }
 	if amount > host.Balance()-v.TotalAmount+vested {
 		return ErrAmountNotAvailable
 	}
