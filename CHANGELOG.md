@@ -21,7 +21,6 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   This also fixes ambiguity of nonces for equivocating identities.
 
 * [#5856](https://github.com/spacemeshos/go-spacemesh/pull/5856) Bump github.com/spacemeshos/api/release/go to v1.37.0.
-  Updated v2alpha1.ActivationTx type used in v2alpha1.Activation(Stream)Service.
 
 ## Release v1.4.6
 
