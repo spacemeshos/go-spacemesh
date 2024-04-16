@@ -1116,11 +1116,9 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		buf := codec.MustEncode(atx)
 
 		atxHdlr := newTestHandler(t, goldenATXID)
-		require.ErrorContains(
-			t,
-			atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf),
-			"failed to verify atx signature",
-		)
+		err := atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf)
+		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorContains(t, err, "invalid atx signature")
 	})
 }
 
