@@ -483,8 +483,6 @@ func (h *Handler) handleAtx(
 		return nil, fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), id.ShortString())
 	}
 
-	// atx.SetReceived(receivedTime.Local())
-
 	// Check if processing is already in progress
 	h.inProgressMu.Lock()
 	if sub, ok := h.inProgress[id]; ok {
@@ -523,7 +521,7 @@ func (h *Handler) processATX(
 	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
 	if !h.edVerifier.Verify(signing.ATX, watx.SmesherID, watx.SignedBytes(), watx.Signature) {
-		return nil, fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
+		return nil, fmt.Errorf("invalid atx signature: %w", errMalformedData)
 	}
 
 	existing, _ := h.cdb.GetAtxHeader(watx.ID())
@@ -562,7 +560,10 @@ func (h *Handler) processATX(
 
 	var baseTickHeight uint64
 	if watx.PositioningATXID != h.goldenATXID {
-		posAtx, _ := h.cdb.GetAtxHeader(watx.PositioningATXID) // cannot fail as pos atx is already verified
+		posAtx, err := h.cdb.GetAtxHeader(watx.PositioningATXID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
+		}
 		baseTickHeight = posAtx.TickHeight()
 	}
 
@@ -583,9 +584,7 @@ func (h *Handler) processATX(
 	}
 
 	events.ReportNewActivation(vAtx)
-	h.log.WithContext(ctx).With().Info(
-		"new atx", log.Inline(vAtx),
-		log.Bool("malicious", proof != nil))
+	h.log.WithContext(ctx).With().Info("new atx", log.Inline(vAtx), log.Bool("malicious", proof != nil))
 	return proof, err
 }
 
