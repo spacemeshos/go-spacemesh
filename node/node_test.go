@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,7 +50,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -961,81 +959,6 @@ func TestFlock(t *testing.T) {
 
 		require.NoError(t, app.Lock())
 		t.Cleanup(app.Unlock)
-	})
-}
-
-func TestMigrateLocalDB(t *testing.T) {
-	t.Run("no DB exists", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		lg := zaptest.NewLogger(t)
-		ctrl := gomock.NewController(t)
-		client := localsql.NewMockPoetClient(ctrl)
-		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
-
-		// no-op
-		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-	})
-
-	t.Run("new DB exists", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), localDbFile))
-		require.NoError(t, err)
-		require.NoError(t, db.Close())
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-
-		lg := zaptest.NewLogger(t)
-		ctrl := gomock.NewController(t)
-		client := localsql.NewMockPoetClient(ctrl)
-		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
-
-		// no-op
-		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-	})
-
-	t.Run("old DB exists", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.NoError(t, err)
-		require.NoError(t, db.Close())
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-
-		lg := zaptest.NewLogger(t)
-		ctrl := gomock.NewController(t)
-		client := localsql.NewMockPoetClient(ctrl)
-		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
-
-		// migrates existing file
-		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-	})
-
-	t.Run("both DBs exist", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.NoError(t, err)
-		require.NoError(t, db.Close())
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-
-		db, err = localsql.Open(filepath.Join(app.Config.DataDir(), localDbFile))
-		require.NoError(t, err)
-		require.NoError(t, db.Close())
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-
-		lg := zaptest.NewLogger(t)
-		ctrl := gomock.NewController(t)
-		client := localsql.NewMockPoetClient(ctrl)
-		err = app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client})
-		require.ErrorIs(t, err, fs.ErrExist)
 	})
 }
 

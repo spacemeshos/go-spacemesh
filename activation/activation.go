@@ -15,9 +15,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
@@ -70,7 +70,7 @@ type Builder struct {
 	accountLock       sync.RWMutex
 	coinbaseAccount   types.Address
 	conf              Config
-	cdb               *datastore.CachedDB
+	db                sql.Executor
 	localDB           *localsql.Database
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
@@ -140,7 +140,7 @@ func WithPostStates(ps PostStates) BuilderOption {
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(
 	conf Config,
-	cdb *datastore.CachedDB,
+	db sql.Executor,
 	localDB *localsql.Database,
 	publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder,
@@ -153,7 +153,7 @@ func NewBuilder(
 		parentCtx:         context.Background(),
 		signers:           make(map[types.NodeID]*signing.EdSigner),
 		conf:              conf,
-		cdb:               cdb,
+		db:                db,
 		localDB:           localDB,
 		publisher:         publisher,
 		nipostBuilder:     nipostBuilder,
@@ -304,7 +304,7 @@ func (b *Builder) SmesherIDs() []types.NodeID {
 
 func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) error {
 	// Generate the initial POST if we don't have an ATX...
-	if _, err := b.cdb.GetLastAtx(nodeID); err == nil {
+	if _, err := atxs.GetLastIDByNodeID(b.db, nodeID); err == nil {
 		return nil
 	}
 	// ...and if we haven't stored an initial post yet.
@@ -444,7 +444,6 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			"existing NiPoST challenge is stale, resetting state",
 			zap.Uint32("current_epoch", current.Uint32()),
 			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
-			zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
 		)
 		// Reset the state to idle because we won't be building POST until we get a new PoET proof
 		// (typically more than epoch time from now).
@@ -460,15 +459,14 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		logger.Info("loaded NiPoST challenge from local state",
 			zap.Uint32("current_epoch", current.Uint32()),
 			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
-			zap.Uint32("target_epoch", challenge.TargetEpoch().Uint32()),
 		)
 		return challenge, nil
 	}
 
-	prev, err := b.cdb.GetLastAtx(nodeID)
+	prevAtx, err := b.GetPrevAtx(nodeID)
 	switch {
 	case err == nil:
-		current = max(current, prev.PublishEpoch)
+		current = max(current, prevAtx.PublishEpoch)
 	case errors.Is(err, sql.ErrNotFound):
 		// no previous ATX
 	case err != nil:
@@ -503,7 +501,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	}
 	logger.Info("selected positioning atx", log.ZShortStringer("atx_id", posAtx))
 
-	prevAtx, err := b.cdb.GetLastAtx(nodeID)
+	prevAtx, err = b.GetPrevAtx(nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		logger.Info("no previous ATX found, creating an initial nipost challenge")
@@ -547,7 +545,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		challenge = &types.NIPostChallenge{
 			PublishEpoch:   current + 1,
 			Sequence:       prevAtx.Sequence + 1,
-			PrevATXID:      prevAtx.ID,
+			PrevATXID:      prevAtx.ID(),
 			PositioningATX: posAtx,
 		}
 	}
@@ -556,6 +554,14 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		return nil, fmt.Errorf("add nipost challenge: %w", err)
 	}
 	return challenge, nil
+}
+
+func (b *Builder) GetPrevAtx(nodeID types.NodeID) (*types.VerifiedActivationTx, error) {
+	id, err := atxs.GetLastIDByNodeID(b.db, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("getting last ATXID: %w", err)
+	}
+	return atxs.Get(b.db, id)
 }
 
 // SetCoinbase sets the address rewardAddress to be the coinbase account written into the activation transaction
@@ -585,7 +591,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
 		zap.Object("challenge", challenge),
 	)
-	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime((challenge.TargetEpoch()).FirstLayer()))
+	targetEpoch := challenge.PublishEpoch.Add(1)
+	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime(targetEpoch.FirstLayer()))
 	defer cancel()
 	atx, err := b.createAtx(ctx, sig, challenge)
 	if err != nil {
@@ -632,8 +639,10 @@ func (b *Builder) createAtx(
 	challenge *types.NIPostChallenge,
 ) (*types.ActivationTx, error) {
 	pubEpoch := challenge.PublishEpoch
+	// TODO: in future, encode the right NiPoST challenge version depending on the pubEpoch.
+	challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
 
-	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge)
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge.PublishEpoch, challengeHash)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}
@@ -652,8 +661,8 @@ func (b *Builder) createAtx(
 	b.log.Debug("publication epoch has arrived!", log.ZShortStringer("smesherID", sig.NodeID()))
 
 	if challenge.PublishEpoch < b.layerClock.CurrentLayer().GetEpoch() {
-		if challenge.InitialPost != nil {
-			// initial post is not discarded; don't return ErrATXChallengeExpired
+		if challenge.PrevATXID == types.EmptyATXID {
+			// initial NIPoST challenge is not discarded; don't return ErrATXChallengeExpired
 			return nil, errors.New("atx publish epoch has passed during nipost construction")
 		}
 		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
@@ -667,7 +676,7 @@ func (b *Builder) createAtx(
 		*atxNodeID = sig.NodeID()
 		nonce = &nipostState.VRFNonce
 	default:
-		oldNonce, err := atxs.VRFNonce(b.cdb, sig.NodeID(), challenge.PublishEpoch)
+		oldNonce, err := atxs.NonceByID(b.db, challenge.PrevATXID)
 		if err != nil {
 			b.log.Warn("failed to get VRF nonce for ATX", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
 			break
@@ -693,7 +702,8 @@ func (b *Builder) createAtx(
 
 func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, error) {
 	b.log.Info("broadcasting", log.ZShortStringer("atx_id", atx.ID()), log.ZShortStringer("smesherID", atx.SmesherID))
-	buf, err := codec.Encode(atx)
+	// TODO: in future, encode the right ATX version depending on the epoch.
+	buf, err := codec.Encode(wire.ActivationTxToWireV1(atx))
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %w", err)
 	}
@@ -709,7 +719,7 @@ func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (t
 	logger.Info("searching for positioning atx")
 	id, err := findFullyValidHighTickAtx(
 		ctx,
-		b.cdb,
+		b.db,
 		nodeID,
 		b.conf.GoldenATXID,
 		b.validator,
@@ -730,14 +740,14 @@ func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (t
 
 func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	epoch := b.layerClock.CurrentLayer().GetEpoch()
-	atx, err := atxs.GetIDByEpochAndNodeID(b.cdb, epoch, nodeID)
+	atx, err := atxs.GetIDByEpochAndNodeID(b.db, epoch, nodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		return nil
 	} else if err != nil {
 		return err
 	}
 	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, b.cdb, atx.Bytes(), &blob); err != nil {
+	if err := atxs.LoadBlob(ctx, b.db, atx.Bytes(), &blob); err != nil {
 		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
 	}
 	if len(blob.Bytes) == 0 {
@@ -752,9 +762,12 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
-	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
+	// FIXME - there is no need to sign types.ActivationTX (only ActivationTxVx)
+	wireAtx := wire.ActivationTxToWireV1(atx)
+	atx.Signature = signer.Sign(signing.ATX, wireAtx.SignedBytes())
 	atx.SmesherID = signer.NodeID()
-	return atx.Initialize()
+	atx.SetID(types.ATXID(wireAtx.HashInnerBytes()))
+	return nil
 }
 
 func buildNipostChallengeStartDeadline(roundStart time.Time, gracePeriod time.Duration) time.Time {

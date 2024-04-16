@@ -44,8 +44,9 @@ func (h *handler) New(args any) (core.Template, error) {
 			spawn.VestingEnd, spawn.VestingStart)
 	}
 	return &Vault{
-		Owner:               spawn.Owner,
-		TotalAmount:         spawn.TotalAmount,
+		Owner:       spawn.Owner,
+		TotalAmount: spawn.TotalAmount,
+		// InitialUnlockAmount is no longer used per SMIP-0002
 		InitialUnlockAmount: spawn.InitialUnlockAmount,
 		VestingStart:        spawn.VestingStart,
 		VestingEnd:          spawn.VestingEnd,

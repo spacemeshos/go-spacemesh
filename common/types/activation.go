@@ -3,19 +3,16 @@ package types
 import (
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/post/shared"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen
+//go:generate scalegen -types ATXMetadata,MerkleProof,EpochActiveSet
 
 // BytesToATXID is a helper to copy buffer into a ATXID.
 func BytesToATXID(buf []byte) (id ATXID) {
@@ -126,37 +123,12 @@ func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// Hash serializes the NIPostChallenge and returns its hash.
-// The serialized challenge is first prepended with a byte 0x00, and then hashed
-// for second preimage resistance of poet membership merkle tree.
-func (challenge *NIPostChallenge) Hash() Hash32 {
-	ncBytes, err := codec.Encode(challenge)
-	if err != nil {
-		log.With().Fatal("failed to encode NIPostChallenge", log.Err(err))
-	}
-	return hash.Sum([]byte{0x00}, ncBytes)
-}
-
-// String returns a string representation of the NIPostChallenge, for logging purposes.
-// It implements the Stringer interface.
-func (challenge *NIPostChallenge) String() string {
-	return fmt.Sprintf("<seq: %v, prevATX: %v, publish epoch: %v, posATX: %s>",
-		challenge.Sequence,
-		challenge.PrevATXID.ShortString(),
-		challenge.PublishEpoch,
-		challenge.PositioningATX.ShortString(),
-	)
-}
-
 // TargetEpoch returns the target epoch of the NIPostChallenge. This is the epoch in which the miner is eligible
 // to participate thanks to the ATX.
 func (challenge *NIPostChallenge) TargetEpoch() EpochID {
 	return challenge.PublishEpoch + 1
 }
 
-// InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
-// structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
-// for validation: the NIPost and the initial Post.
 type InnerActivationTx struct {
 	NIPostChallenge
 	Coinbase Address
@@ -218,6 +190,12 @@ func NewActivationTx(
 	return atx
 }
 
+// TargetEpoch returns the target epoch of the ATX. This is the epoch in which the miner is eligible
+// to participate thanks to the ATX.
+func (atx *ActivationTx) TargetEpoch() EpochID {
+	return atx.PublishEpoch + 1
+}
+
 // Golden returns true if atx is from a checkpoint snapshot.
 // a golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
 func (atx *ActivationTx) Golden() bool {
@@ -229,32 +207,10 @@ func (atx *ActivationTx) SetGolden() {
 	atx.golden = true
 }
 
-// SignedBytes returns a signed data of the ActivationTx.
-func (atx *ActivationTx) SignedBytes() []byte {
-	data, err := codec.Encode(&ATXMetadata{
-		PublishEpoch: atx.PublishEpoch,
-		MsgHash:      BytesToHash(atx.HashInnerBytes()),
-	})
-	if err != nil {
-		log.With().Fatal("failed to serialize ATXMetadata", log.Err(err))
-	}
-	return data
-}
-
-// HashInnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
-func (atx *ActivationTx) HashInnerBytes() []byte {
-	h := hash.New()
-	_, err := codec.EncodeTo(h, &atx.InnerActivationTx)
-	if err != nil {
-		log.Fatal("failed to encode InnerActivationTx for hashing")
-	}
-	return h.Sum(nil)
-}
-
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
-	encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
+	// encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
 	encoder.AddString("smesher", atx.SmesherID.String())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
@@ -271,16 +227,6 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddUint64("effective_num_units", uint64(atx.effectiveNumUnits))
 	}
 	encoder.AddUint64("sequence_number", atx.Sequence)
-	return nil
-}
-
-// Initialize calculates and sets the cached ID field. This field must be set before calling the ID() method.
-func (atx *ActivationTx) Initialize() error {
-	if atx.ID() != EmptyATXID {
-		return errors.New("ATX already initialized")
-	}
-
-	atx.id = ATXID(BytesToHash(atx.HashInnerBytes()))
 	return nil
 }
 
@@ -333,11 +279,6 @@ func (atx *ActivationTx) SetValidity(validity Validity) {
 
 // Verify an ATX for a given base TickHeight and TickCount.
 func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
-	if atx.id == EmptyATXID {
-		if err := atx.Initialize(); err != nil {
-			return nil, err
-		}
-	}
 	if atx.effectiveNumUnits == 0 {
 		return nil, errors.New("effective num units not set")
 	}
@@ -389,86 +330,8 @@ type VRFPostIndex uint64
 // Field returns a log field. Implements the LoggableField interface.
 func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
 
-func (v *VRFPostIndex) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(*v))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (v *VRFPostIndex) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		value, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		*v = VRFPostIndex(value)
-	}
-	return total, nil
-}
-
 // Post is an alias to postShared.Proof.
 type Post shared.Proof
-
-// EncodeScale implements scale codec interface.
-func (p *Post) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(p.Nonce))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, p.Indices, 8000) // needs to hold K2*8 bytes at most
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, p.Pow)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-// DecodeScale implements scale codec interface.
-func (p *Post) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Nonce = field
-	}
-	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 8000) // needs to hold K2*8 bytes at most
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Indices = field
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		p.Pow = field
-	}
-	return total, nil
-}
 
 func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if p == nil {
@@ -479,16 +342,10 @@ func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// String returns a string representation of the PostProof, for logging purposes.
-// It implements the Stringer interface.
-func (p *Post) String() string {
-	return fmt.Sprintf("nonce: %v, indices: %s", p.Nonce, hex.EncodeToString(p.Indices))
-}
-
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere
 // in a given ATX (eg. NodeID, NumUnits).
 type PostMetadata struct {
-	Challenge     []byte `scale:"max=32"`
+	Challenge     []byte
 	LabelsPerUnit uint64
 }
 

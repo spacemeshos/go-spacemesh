@@ -2,9 +2,32 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## UNRELEASED (v1.5.0)
+
+### Upgrade information
+
+* [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
+  Updating to this version requires going through v1.4 first.
+
+* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
+  This also fixes ambiguity of nonces for equivocating identities.
 
 ### Highlights
+
+### Features
+
+### Improvements
+
+* [#5807](https://github.com/spacemeshos/go-spacemesh/pull/5807) Implement SMIP-0002: remove vesting vault cliff.
+
+## Release v1.4.6
+
+### Improvements
+
+* [#5839](https://github.com/spacemeshos/go-spacemesh/pull/5839) Fix a bug where nodes would stop agreeing on the order
+  of TX within a block.
+
+## Release v1.4.5
 
 ### Improvements
 
@@ -14,7 +37,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5802](https://github.com/spacemeshos/go-spacemesh/pull/5802) Increase the number of supported ATX per epoch to 3.5 Mio.
 
-### Features
+* [#5803](https://github.com/spacemeshos/go-spacemesh/pull/5803) Fixed PoST verifiers autoscaling for 1:N setups.
+
+* [#5815](https://github.com/spacemeshos/go-spacemesh/pull/5815) Add spread to the discovery advertisement interval.
+
+* [#5819](https://github.com/spacemeshos/go-spacemesh/pull/5819) The node will now refuse connections from post services
+  if no coinbase account is set.
 
 ## Release v1.4.4
 

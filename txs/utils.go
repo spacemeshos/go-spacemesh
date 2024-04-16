@@ -1,7 +1,7 @@
 package txs
 
 import (
-	"math/rand/v2"
+	"math/rand"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"

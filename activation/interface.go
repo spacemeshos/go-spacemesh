@@ -83,7 +83,8 @@ type nipostBuilder interface {
 	BuildNIPost(
 		ctx context.Context,
 		sig *signing.EdSigner,
-		challenge *types.NIPostChallenge,
+		publish types.EpochID,
+		challenge types.Hash32,
 	) (*nipost.NIPostState, error)
 	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
 	ResetState(types.NodeID) error
@@ -135,7 +136,7 @@ type poetClient interface {
 	) (*types.PoetRound, error)
 
 	// Proof returns the proof for the given round ID.
-	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
+	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error)
 }
 
 type poetDbAPI interface {

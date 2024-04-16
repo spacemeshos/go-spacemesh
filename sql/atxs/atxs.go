@@ -2,9 +2,13 @@ package atxs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	sqlite "github.com/go-llsqlite/crawshaw"
+
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -16,8 +20,14 @@ const (
 	CacheKindATXBlob   sql.QueryCacheKind = "atx-blob"
 )
 
-const fullQuery = `select id, atx, base_tick_height, tick_count, pubkey,
-	effective_num_units, received, epoch, sequence, coinbase, validity from atxs`
+// Query to retrieve ATXs.
+// Can't use inner join for the ATX blob here b/c this will break
+// filters that refer to the id column.
+const fullQuery = `select id,
+        (select atx from atx_blobs b where a.id = b.id) as atx,
+        base_tick_height, tick_count, pubkey,
+	effective_num_units, received, epoch, sequence, coinbase, validity
+	from atxs a`
 
 type decoderCallback func(*types.VerifiedActivationTx, error) bool
 
@@ -30,9 +40,11 @@ func decoder(fn decoderCallback) sql.Decoder {
 		stmt.ColumnBytes(0, id[:])
 		checkpointed := stmt.ColumnLen(1) == 0
 		if !checkpointed {
-			if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &a); err != nil {
+			var atxV1 wire.ActivationTxV1
+			if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &atxV1); err != nil {
 				return fn(nil, fmt.Errorf("decode %w", err))
 			}
+			a = *wire.ActivationTxFromWireV1(&atxV1)
 		}
 		a.SetID(id)
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
@@ -313,7 +325,7 @@ func VRFNonce(db sql.Executor, id types.NodeID, epoch types.EpochID) (nonce type
 // GetBlobSizes returns the sizes of the blobs corresponding to ATXs with specified
 // ids. For non-existent ATXs, the corresponding items are set to -1.
 func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
-	return sql.GetBlobSizes(db, "select id, length(atx) from atxs where id in", ids)
+	return sql.GetBlobSizes(db, "select id, length(atx) from atx_blobs where id in", ids)
 }
 
 // LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
@@ -326,13 +338,13 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) e
 		blob.Bytes = b
 		return nil
 	}
-	return sql.LoadBlob(db, "select atx from atxs where id = ?1", id, blob)
+	return sql.LoadBlob(db, "select atx from atx_blobs where id = ?1", id, blob)
 }
 
 func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
 	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
-		if rows, err := db.Exec("select atx from atxs where id = ?1",
+		if rows, err := db.Exec("select atx from atx_blobs where id = ?1",
 			func(stmt *sql.Statement) {
 				stmt.BindBytes(1, id)
 			}, func(stmt *sql.Statement) bool {
@@ -350,9 +362,68 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err e
 	})
 }
 
+// NonceByID retrieves VRFNonce corresponding to the specified ATX ID.
+func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}
+	gotNonce := false
+	dec := func(stmt *sql.Statement) bool {
+		if stmt.ColumnType(0) != sqlite.SQLITE_NULL {
+			nonce = types.VRFPostIndex(stmt.ColumnInt64(0))
+			gotNonce = true
+		}
+		return true
+	}
+
+	if rows, err := db.Exec("select nonce from atxs where id = ?1", enc, dec); err != nil {
+		return types.VRFPostIndex(0), fmt.Errorf("get nonce for ATX id %v: %w", id, err)
+	} else if rows == 0 || !gotNonce {
+		return types.VRFPostIndex(0), sql.ErrNotFound
+	}
+
+	return nonce, err
+}
+
 // Add adds an ATX for a given ATX ID.
 func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
-	buf, err := codec.Encode(atx.ActivationTx)
+	_, err := AddGettingNonce(db, atx)
+	return err
+}
+
+// AddGettingNonce adds an ATX for a given ATX ID and returns the nonce for the newly added ATX.
+func AddGettingNonce(db sql.Executor, atx *types.VerifiedActivationTx) (*types.VRFPostIndex, error) {
+	if atx.ActivationTx.VRFNonce == nil && atx.PrevATXID != types.EmptyATXID {
+		nonce, err := NonceByID(db, atx.PrevATXID)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return nil, fmt.Errorf("error getting nonce: %w", err)
+		}
+		if err == nil {
+			err = add(db, atx, &nonce)
+			if err != nil {
+				return nil, err
+			} else {
+				return &nonce, nil
+			}
+		}
+	}
+
+	if err := add(db, atx, atx.VRFNonce); err != nil {
+		return nil, err
+	}
+
+	return atx.VRFNonce, nil
+}
+
+// AddMaybeNoNonce adds an ATX for a given ATX ID. It doesn't try
+// to set the nonce field if VRFNonce is not set in the ATX.
+// This function is only to be used for testing.
+func AddMaybeNoNonce(db sql.Executor, atx *types.VerifiedActivationTx) error {
+	return add(db, atx, atx.VRFNonce)
+}
+
+func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostIndex) error {
+	buf, err := codec.Encode(wire.ActivationTxToWireV1(atx.ActivationTx))
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
@@ -366,28 +437,43 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 		} else {
 			stmt.BindNull(4)
 		}
-		if atx.VRFNonce != nil {
-			stmt.BindInt64(5, int64(*atx.VRFNonce))
+		if nonce != nil {
+			stmt.BindInt64(5, int64(*nonce))
 		} else {
 			stmt.BindNull(5)
 		}
 		stmt.BindBytes(6, atx.SmesherID.Bytes())
-		stmt.BindBytes(7, buf)
-		stmt.BindInt64(8, atx.Received().UnixNano())
-		stmt.BindInt64(9, int64(atx.BaseTickHeight()))
-		stmt.BindInt64(10, int64(atx.TickCount()))
-		stmt.BindInt64(11, int64(atx.Sequence))
-		stmt.BindBytes(12, atx.Coinbase.Bytes())
-		stmt.BindInt64(13, int64(atx.Validity()))
+		stmt.BindInt64(7, atx.Received().UnixNano())
+		stmt.BindInt64(8, int64(atx.BaseTickHeight()))
+		stmt.BindInt64(9, int64(atx.TickCount()))
+		stmt.BindInt64(10, int64(atx.Sequence))
+		stmt.BindBytes(11, atx.Coinbase.Bytes())
+		stmt.BindInt64(12, int64(atx.Validity()))
+		if atx.PrevATXID != types.EmptyATXID {
+			stmt.BindBytes(13, atx.PrevATXID.Bytes())
+		} else {
+			stmt.BindNull(13)
+		}
 	}
 
 	_, err = db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
-			 pubkey, atx, received, base_tick_height, tick_count, sequence, coinbase, validity)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);`, enc, nil)
+			 pubkey, received, base_tick_height, tick_count, sequence, coinbase,
+			 validity, prev_id)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
+
+	enc = func(stmt *sql.Statement) {
+		stmt.BindBytes(1, atx.ID().Bytes())
+		stmt.BindBytes(2, buf)
+	}
+	_, err = db.Exec("insert into atx_blobs (id, atx) values (?1, ?2)", enc, nil)
+	if err != nil {
+		return fmt.Errorf("insert ATX blob %v: %w", atx.ID(), err)
+	}
+
 	return nil
 }
 
@@ -472,7 +558,10 @@ type CheckpointAtx struct {
 
 // LatestN returns the latest N ATXs per smesher.
 func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
-	var rst []CheckpointAtx
+	var (
+		rst  []CheckpointAtx
+		ierr error
+	)
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(n))
 	}
@@ -486,20 +575,29 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 		stmt.ColumnBytes(5, catx.SmesherID[:])
 		catx.Sequence = uint64(stmt.ColumnInt64(6))
 		stmt.ColumnBytes(7, catx.Coinbase[:])
+		if sql.IsNull(stmt, 8) {
+			ierr = errors.New("missing nonce")
+			return false
+		} else {
+			catx.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(8))
+		}
 		rst = append(rst, catx)
 		return true
 	}
 
 	if rows, err := db.Exec(`
-		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase
+		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
 		from (
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
-			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase from atxs
+			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
+			from atxs
 		)
 		where RowNum <= ?1 order by pubkey;`, enc, dec); err != nil {
 		return nil, fmt.Errorf("latestN: %w", err)
 	} else if rows == 0 {
 		return nil, sql.ErrNotFound
+	} else if ierr != nil {
+		return nil, ierr
 	}
 	return rst, nil
 }
@@ -521,9 +619,16 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
 			base_tick_height, tick_count, sequence, pubkey, coinbase, received)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0);`, enc, nil)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert checkpoint ATX %v: %w", catx.ID, err)
+	}
+	enc = func(stmt *sql.Statement) {
+		stmt.BindBytes(1, catx.ID.Bytes())
+	}
+	_, err = db.Exec("insert into atx_blobs (id) values (?1)", enc, nil)
+	if err != nil {
+		return fmt.Errorf("insert checkpoint ATX blob %v: %w", catx.ID, err)
 	}
 	return nil
 }
@@ -569,27 +674,46 @@ func IterateAtxsData(
 		weight uint64,
 		base uint64,
 		height uint64,
+		nonce *types.VRFPostIndex,
+		isMalicious bool,
 	) bool,
 ) error {
 	_, err := db.Exec(
-		`select id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count
-		from atxs where epoch between ?1 and ?2;`,
-		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(from.Uint32()))
-			stmt.BindInt64(2, int64(to.Uint32()))
-		},
+		`select
+                   a.id, a.pubkey, a.epoch, a.coinbase, a.effective_num_units,
+                   a.base_tick_height, a.tick_count, a.nonce,
+                   iif(idn.proof is null, 0, 1) as is_malicious
+		from atxs a left join identities idn on a.pubkey = idn.pubkey`,
+		// SQLite happens to process the query much faster if we don't
+		// filter it by epoch
+		// where a.epoch between ? and ?`,
+		// func(stmt *sql.Statement) {
+		// 	stmt.BindInt64(1, int64(from.Uint32()))
+		// 	stmt.BindInt64(2, int64(to.Uint32()))
+		// },
+		nil,
 		func(stmt *sql.Statement) bool {
+			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
+			if epoch < from || epoch > to {
+				return true
+			}
 			var id types.ATXID
 			stmt.ColumnBytes(0, id[:])
 			var node types.NodeID
 			stmt.ColumnBytes(1, node[:])
-			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
 			var coinbase types.Address
 			stmt.ColumnBytes(3, coinbase[:])
 			effectiveUnits := uint64(stmt.ColumnInt64(4))
 			baseHeight := uint64(stmt.ColumnInt64(5))
 			ticks := uint64(stmt.ColumnInt64(6))
-			return fn(id, node, epoch, coinbase, effectiveUnits*ticks, baseHeight, baseHeight+ticks)
+			var vrfNonce *types.VRFPostIndex
+			if !sql.IsNull(stmt, 7) {
+				nonce := types.VRFPostIndex(stmt.ColumnInt64(7))
+				vrfNonce = &nonce
+			}
+			isMalicious := stmt.ColumnInt(8) != 0
+			return fn(id, node, epoch, coinbase, effectiveUnits*ticks,
+				baseHeight, baseHeight+ticks, vrfNonce, isMalicious)
 		},
 	)
 	if err != nil {

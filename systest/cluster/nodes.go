@@ -666,7 +666,7 @@ func deployRemoteNodes(ctx *testcontext.Context, from, to int,
 			labels["nodeId"] = nodeId
 			err := deployPostService(ctx, postId, labels, nodeId,
 				hex.EncodeToString(cfg.keys[i-from].Public().(ed25519.PublicKey)),
-				goldenAtxId.Hash32().Hex()[2:],
+				goldenAtxId.Hash32().String(),
 			)
 			return err
 		})
