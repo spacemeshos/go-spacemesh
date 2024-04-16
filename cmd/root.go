@@ -58,7 +58,7 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
 	flagSet.StringVar(&cfg.PprofHTTPServerListener, "pprof-listener", cfg.PprofHTTPServerListener,
-		"Socket for pprof server, not safe to expose publicly")
+		"Listen address for pprof server, not safe to expose publicly")
 	flagSet.Uint64Var(&cfg.TickSize, "tick-size", cfg.TickSize, "number of poet leaves in a single tick")
 	flagSet.StringVar(&cfg.ProfilerURL, "profiler-url", cfg.ProfilerURL,
 		"send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
