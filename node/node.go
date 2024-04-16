@@ -986,7 +986,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithNetworkDelay(app.Config.ATXGradeDelay),
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
-		miner.WithActiveSetPrepation(app.Config.ActiveSet),
+		miner.WithActivesetPreparation(app.Config.ActiveSet),
 	)
 	for _, sig := range app.signers {
 		proposalBuilder.Register(sig)
