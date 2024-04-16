@@ -1087,7 +1087,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		atxHdlr.expectAtxV1(atx, sig.NodeID())
 
 		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
-		require.Error(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
+		require.ErrorIs(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf), errKnownAtx)
 		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf))
 	})
 
