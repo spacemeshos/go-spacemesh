@@ -84,11 +84,11 @@ func (a *singlesigAccount) getTemplate() core.Address {
 }
 
 func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
-	return sdkwallet.Spend(signing.PrivateKey(a.pk), to, amount, nonce, opts...)
+	return sdkwallet.Spend(a.pk, to, amount, nonce, opts...)
 }
 
 func (a *singlesigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
-	return sdkwallet.SelfSpawn(signing.PrivateKey(a.pk), nonce, opts...)
+	return sdkwallet.SelfSpawn(a.pk, nonce, opts...)
 }
 
 func (a *singlesigAccount) spawn(
@@ -97,12 +97,12 @@ func (a *singlesigAccount) spawn(
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) []byte {
-	return sdkwallet.Spawn(signing.PrivateKey(a.pk), template, args, nonce, opts...)
+	return sdkwallet.Spawn(a.pk, template, args, nonce, opts...)
 }
 
 func (a *singlesigAccount) spawnArgs() scale.Encodable {
 	args := wallet.SpawnArguments{}
-	copy(args.PublicKey[:], signing.Public(signing.PrivateKey(a.pk)))
+	copy(args.PublicKey[:], signing.Public(a.pk))
 	return &args
 }
 
@@ -275,6 +275,7 @@ type tester struct {
 
 	accounts []testAccount
 	nonces   []core.Nonce
+	balances []uint64
 }
 
 func (t *tester) persistent() *tester {
@@ -291,16 +292,17 @@ func (t *tester) withGasLimit(limit uint64) *tester {
 	return t
 }
 
-func (t *tester) addAccount(account testAccount) {
+func (t *tester) addAccount(account testAccount, balance uint64) {
 	t.accounts = append(t.accounts, account)
 	t.nonces = append(t.nonces, 0)
+	t.balances = append(t.balances, balance)
 }
 
 func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		t.addAccount(&singlesigAccount{pk: pk, address: sdkwallet.Address(pub)})
+		t.addAccount(&singlesigAccount{pk: pk, address: sdkwallet.Address(pub)}, 1_000_000_000)
 	}
 	return t
 }
@@ -324,7 +326,7 @@ func (t *tester) createMultisig(k, n int, template core.Address) *multisigAccoun
 
 func (t *tester) addMultisig(total, k, n int) *tester {
 	for i := 0; i < total; i++ {
-		t.addAccount(t.createMultisig(k, n, multisig.TemplateAddress))
+		t.addAccount(t.createMultisig(k, n, multisig.TemplateAddress), 1_000_000_000)
 	}
 	return t
 }
@@ -332,7 +334,7 @@ func (t *tester) addMultisig(total, k, n int) *tester {
 func (t *tester) addVesting(total, k, n int) *tester {
 	for i := 0; i < total; i++ {
 		ms := t.createMultisig(k, n, vesting.TemplateAddress)
-		t.addAccount(&vestingAccount{*ms})
+		t.addAccount(&vestingAccount{*ms}, 1_000_000_000)
 	}
 	return t
 }
@@ -347,21 +349,21 @@ func (t *tester) addVault(owners int, totalAmount, initialUnlock uint64, start, 
 			vestingEnd:    end,
 		}
 		account.address = core.ComputePrincipal(account.getTemplate(), account.spawnArgs())
-		t.addAccount(account)
+		t.addAccount(account, totalAmount)
 	}
 	return t
 }
 
 func (t *tester) applyGenesis() *tester {
-	return t.applyGenesisWithBalance(1_000_000_000_000)
+	return t.applyGenesisWithBalance()
 }
 
-func (t *tester) applyGenesisWithBalance(amount uint64) *tester {
+func (t *tester) applyGenesisWithBalance() *tester {
 	accounts := make([]core.Account, len(t.accounts))
 	for i := range accounts {
 		accounts[i] = core.Account{
 			Address: t.accounts[i].getAddress(),
-			Balance: amount,
+			Balance: t.balances[i],
 		}
 	}
 	require.NoError(t, t.VM.ApplyGenesis(accounts))
@@ -888,7 +890,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
-			desc: "SendToIself",
+			desc: "SendToSelf",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -1002,7 +1004,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
-			desc: "BlockGasLimitIsNotConsumedByInefective",
+			desc: "BlockGasLimitIsNotConsumedByIneffective",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -1284,7 +1286,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
-			desc: "wrong id in spawn",
+			desc: "WrongIdInSpawn",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -1375,7 +1377,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			},
 		},
 		{
-			desc: "inefective zero gas price",
+			desc: "IneffectiveZeroGasPrice",
 			layers: []layertc{
 				{
 					txs: []testTx{
@@ -1438,7 +1440,7 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 						require.Equal(t,
 							types.TransactionFailure.String(),
 							rst.Status.String(),
-							"layer=%s ith=%d",
+							"layer=%s txnum=%d",
 							lid,
 							i)
 						require.Equal(t, expected.Error(), rst.Message)
@@ -1468,9 +1470,8 @@ func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTes
 func TestWallets(t *testing.T) {
 	t.Parallel()
 	const (
-		funded  = 10  // number of funded accounts, included in genesis
-		total   = 100 // total number of accounts
-		balance = 1_000_000_000
+		funded = 10  // number of funded accounts, included in genesis
+		total  = 100 // total number of accounts
 
 		defaultGasPrice = 1
 	)
@@ -1478,7 +1479,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, wallet.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(funded).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addSingleSig(total - funded)
 		})
 	})
@@ -1487,7 +1488,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 1, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addMultisig(total-funded, 1, n)
 		})
 	})
@@ -1496,7 +1497,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 2, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addMultisig(total-funded, 2, n)
 		})
 	})
@@ -1505,7 +1506,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 3, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addMultisig(total-funded, 3, n)
 		})
 	})
@@ -1514,7 +1515,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addVesting(funded, 1, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addVesting(total-funded, 1, n)
 		})
 	})
@@ -1523,7 +1524,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addVesting(funded, 2, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addVesting(total-funded, 2, n)
 		})
 	})
@@ -1532,7 +1533,7 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addVesting(funded, 3, n).
-				applyGenesisWithBalance(balance).
+				applyGenesisWithBalance().
 				addVesting(total-funded, 3, n)
 		})
 	})
@@ -1592,7 +1593,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			verified: true,
 		},
 		{
-			desc: "spawn genesis id mismatch",
+			desc: "SpawnGenesisIdMismatch",
 			tx:   tt.selfSpawn(1, sdk.WithGenesisID(types.Hash20{1})),
 		},
 		{
@@ -1610,7 +1611,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			verified: true,
 		},
 		{
-			desc: "spawn genesis id mismatch",
+			desc: "SpendGenesisIdMismatch",
 			tx:   tt.spend(0, 1, 100, sdk.WithGenesisID(types.Hash20{1})),
 		},
 		{
@@ -2545,12 +2546,13 @@ func TestVestingData(t *testing.T) {
 				pk, err := hex.DecodeString(string(data))
 				require.NoError(t, err)
 				pk = bytes.Trim(pk, "\n")
-				privates = append(privates, ed25519.PrivateKey(pk))
+				privates = append(privates, pk)
 				var public core.PublicKey
 				copy(public[:], signing.Public(pk))
 				vestArgs.PublicKeys = append(vestArgs.PublicKeys, public)
 			}
 			vestaddr := core.ComputePrincipal(vesting.TemplateAddress, vestArgs)
+
 			vaultArgs := &vault.SpawnArguments{
 				Owner: vestaddr,
 				// Note: InitialUnlockAmount is now ignored due to SMIP-0002
@@ -2564,14 +2566,30 @@ func TestVestingData(t *testing.T) {
 			t.Logf("vesting address: %v. parameters: %s", vestaddr.String(), vestArgs)
 			t.Logf("vault address: %v. parameters: %s", vaultaddr.String(), vaultArgs)
 
+			// add another spending account
+			t2 := newTester(t).addSingleSig(1)
+			spendAccount := t2.accounts[0]
+			spendAccountNonce := t2.nonces[0]
+			spendAmount := uint64(1_000_000)
+
 			vm := New(sql.InMemory(), WithLogger(logtest.New(t)))
 			require.NoError(t, vm.ApplyGenesis(
 				[]core.Account{
 					{
+						// give a bit to vesting account as it needs funds to send a few transactions
+						// before receiving from the spend address
 						Address: vestaddr,
-						Balance: 350_000,
-					}, // give a bit to vesting account as it needs to get funds for 2 spawns and 2 drain vault txs
-					{Address: vaultaddr, Balance: uint64(meta.Total)},
+						Balance: 300_000,
+					},
+					{
+						Address: vaultaddr,
+						Balance: uint64(meta.Total),
+					},
+					{
+						// add one more account to test sending coins, and add some extra for gas
+						Address: spendAccount.getAddress(),
+						Balance: spendAmount + 150_000,
+					},
 				},
 			))
 			vestaccount := &vestingAccount{
@@ -2600,7 +2618,58 @@ func TestVestingData(t *testing.T) {
 			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
 			nonce++
 
-			before, err := vm.GetBalance(vestaddr)
+			// send some coins to the vault and make sure they can be spent
+			before, err := vm.GetBalance(spendAccount.getAddress())
+			require.NoError(t, err)
+			ineffective, rst, err = vm.Apply(ApplyContext{Layer: genesis + 3},
+				notVerified(types.NewRawTx(spendAccount.selfSpawn(spendAccountNonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
+			after, err := vm.GetBalance(spendAccount.getAddress())
+			require.NoError(t, err)
+			require.Equal(t, before-rst[0].Fee, after)
+			spendAccountNonce++
+
+			before, err = vm.GetBalance(spendAccount.getAddress())
+			require.NoError(t, err)
+			ineffective, rst, err = vm.Apply(ApplyContext{Layer: genesis + 4},
+				notVerified(types.NewRawTx(spendAccount.spend(vaultaddr, spendAmount, spendAccountNonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
+			after, err = vm.GetBalance(spendAccount.getAddress())
+			require.NoError(t, err)
+			require.Equal(t, before-rst[0].Fee-spendAmount, after)
+
+			before, err = vm.GetBalance(vestaddr)
+			require.NoError(t, err)
+			vaultBefore, err := vm.GetBalance(vaultaddr)
+			require.NoError(t, err)
+			ineffective, rst, err = vm.Apply(ApplyContext{Layer: genesis + 5},
+				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, spendAmount, nonce))),
+				nil,
+			)
+			require.Empty(t, ineffective)
+			require.NoError(t, err)
+			require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
+			after, err = vm.GetBalance(vestaddr)
+			require.NoError(t, err)
+			vaultAfter, err := vm.GetBalance(vaultaddr)
+			require.NoError(t, err)
+
+			// vesting account receives coins and pays fee
+			require.Equal(t, before-rst[0].Fee+spendAmount, after)
+
+			// vault address declines by send amount
+			require.Equal(t, vaultBefore-spendAmount, vaultAfter)
+			nonce++
+
+			before, err = vm.GetBalance(vestaddr)
 			require.NoError(t, err)
 			ineffective, rst, err = vm.Apply(ApplyContext{Layer: constants.VestStart},
 				notVerified(types.NewRawTx(vestaccount.drainVault(vaultaddr, vestaddr, uint64(meta.Initial), nonce))),
@@ -2610,7 +2679,7 @@ func TestVestingData(t *testing.T) {
 			require.NoError(t, err)
 			// Expect this tx to fail as no balance has vested yet
 			require.Equal(t, types.TransactionFailure, rst[0].TransactionResult.Status)
-			after, err := vm.GetBalance(vestaddr)
+			after, err = vm.GetBalance(vestaddr)
 			require.NoError(t, err)
 			require.Equal(t, before-rst[0].Fee, after)
 			nonce++
