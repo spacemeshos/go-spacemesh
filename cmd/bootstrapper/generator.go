@@ -192,7 +192,8 @@ func queryBitcoin(ctx context.Context, client *http.Client, targetUrl string) (*
 }
 
 func getActiveSet(ctx context.Context, endpoint string, epoch types.EpochID) ([]types.ATXID, error) {
-	conn, err := grpc.DialContext(ctx, endpoint,
+	conn, err := grpc.NewClient(
+		endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {

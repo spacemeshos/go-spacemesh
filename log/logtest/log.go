@@ -31,7 +31,7 @@ func New(tb testing.TB, override ...zapcore.Level) log.Log {
 			panic(err)
 		}
 	}
-	return log.NewFromLog(zaptest.NewLogger(tb, zaptest.Level(level)))
+	return log.NewFromLog(zaptest.NewLogger(tb, zaptest.Level(level))).Named(tb.Name())
 }
 
 // SetupGlobal updates AppLog to the instance of test-specific logger.

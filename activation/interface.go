@@ -85,7 +85,8 @@ type nipostBuilder interface {
 	BuildNIPost(
 		ctx context.Context,
 		sig *signing.EdSigner,
-		challenge *types.NIPostChallenge,
+		publish types.EpochID,
+		challenge types.Hash32,
 		certifier certifierService,
 	) (*nipost.NIPostState, error)
 	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
@@ -147,7 +148,7 @@ type PoetClient interface {
 	CertifierInfo(context.Context) (*url.URL, []byte, error)
 
 	// Proof returns the proof for the given round ID.
-	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
+	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error)
 }
 
 // A certifier client that the certifierService uses to obtain certificates

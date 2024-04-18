@@ -2,10 +2,12 @@ package blocks
 
 import (
 	"context"
-	"math/rand"
+	"fmt"
+	"math/rand/v2"
 	"os"
 	"testing"
 
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -41,7 +43,7 @@ func Test_getBlockTXs(t *testing.T) {
 	mtxs := make([]*types.MeshTransaction, 0, maxNumTxs*len(accounts))
 	byTid := make(map[types.TransactionID]*types.MeshTransaction)
 	for i := 0; i < numAccounts; i++ {
-		numTxs := rand.Intn(maxNumTxs)
+		numTxs := rand.IntN(maxNumTxs)
 		if numTxs == 0 {
 			numTxs = i + 1
 		}
@@ -96,6 +98,62 @@ func Test_getBlockTXs(t *testing.T) {
 	got, err = getBlockTXs(logtest.New(t), nil, blockSeed, 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
+}
+
+func Test_getBlockTXs_expected_order(t *testing.T) {
+	numAccounts := uint64(10)
+	accounts := make([]types.Address, 0, numAccounts)
+	mtxs := make([]*types.MeshTransaction, 0, len(accounts))
+
+	txIds := []string{ // the TXs in the order they are generated
+		"9e8963dbd7566c06e007f0dab910168aab24d1ae9789cb896d2fb24778fc6002",
+		"9a96ccb0ca208ac91e0a0a92f7c6208f83a13a649582b695a56f9c981e39b619",
+		"98f095630e631fd0057304443ebd24798d58d95fa5394f9eecbf75d9a4fa6e29",
+		"8ec40d3c67bb73595f61912348a48d038a60aeead84ecb1d5e5d2476071a8b73",
+		"83f3bb7d51c874fbf2541f69e52e09b810364cf329e55b0f328d072ca465efa9",
+		"c3c9b8af8a3d0966dfeeef69d15202e17898d9c2f26e6783c948e59428231252",
+		"08ea037ab3400a575f7d7911a8c7cdc2175c008ea7a98ee24f14611ee5e5339f",
+		"8058885d69129db2757b3d5b3fb214d9aaf5640474486ae71cb8a79752474d7b",
+		"db6d9aad9dafcb11d1da1c9156caeb5329f6430f6df2b0287b0afb08e0f7c4c4",
+		"1c8e203412e9eb00173870dc62f25b9c142ea0c64d7831ac236aab8c94a76865",
+	}
+	expectedOrder := []string{ // the TXs as they are expected ot be ordered in a block
+		"08ea037ab3400a575f7d7911a8c7cdc2175c008ea7a98ee24f14611ee5e5339f",
+		"8058885d69129db2757b3d5b3fb214d9aaf5640474486ae71cb8a79752474d7b",
+		"c3c9b8af8a3d0966dfeeef69d15202e17898d9c2f26e6783c948e59428231252",
+		"1c8e203412e9eb00173870dc62f25b9c142ea0c64d7831ac236aab8c94a76865",
+		"98f095630e631fd0057304443ebd24798d58d95fa5394f9eecbf75d9a4fa6e29",
+		"9a96ccb0ca208ac91e0a0a92f7c6208f83a13a649582b695a56f9c981e39b619",
+		"9e8963dbd7566c06e007f0dab910168aab24d1ae9789cb896d2fb24778fc6002",
+		"8ec40d3c67bb73595f61912348a48d038a60aeead84ecb1d5e5d2476071a8b73",
+		"83f3bb7d51c874fbf2541f69e52e09b810364cf329e55b0f328d072ca465efa9",
+		"db6d9aad9dafcb11d1da1c9156caeb5329f6430f6df2b0287b0afb08e0f7c4c4",
+	}
+
+	for i := uint64(0); i < numAccounts; i++ {
+		seed := fmt.Sprintf("private key %20d", i)
+		key := ed25519.NewKeyFromSeed([]byte(seed))
+		signer, err := signing.NewEdSigner(signing.WithPrivateKey(key))
+		require.NoError(t, err)
+
+		principal := types.GenerateAddress(signer.PublicKey().Bytes())
+		accounts = append(accounts, principal)
+
+		tx := genTx(t, signer, types.Address{1, 2, 3, 4}, 1000, i, 10)
+		require.Equal(t, txIds[i], tx.ID.String(), "unexpected tx id: %d", i)
+		mtx := &types.MeshTransaction{Transaction: tx}
+		mtxs = append(mtxs, mtx)
+	}
+
+	blockSeed := fmt.Sprintf("block seed %21d", 101)
+	got, err := getBlockTXs(logtest.New(t), mtxs, []byte(blockSeed), 0)
+	require.NoError(t, err)
+
+	require.Len(t, got, len(mtxs))
+
+	for i := range got {
+		require.Equal(t, expectedOrder[i], got[i].String(), "unexpected tx order: %d", i)
+	}
 }
 
 func Test_getProposalMetadata(t *testing.T) {

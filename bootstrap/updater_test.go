@@ -177,7 +177,6 @@ func TestLoad(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
@@ -356,7 +355,6 @@ func TestDoIt(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
@@ -471,7 +469,6 @@ func TestGetInvalidUpdate(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
@@ -624,7 +621,6 @@ func TestRequiredEpochs(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			var queried []string

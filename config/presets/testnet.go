@@ -26,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
+	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -121,7 +122,7 @@ func testnet() config.Config {
 			LabelsPerUnit: 1024,
 			K1:            26,
 			K2:            37,
-			K3:            37,
+			K3:            1,
 			PowDifficulty: activation.DefaultPostConfig().PowDifficulty,
 		},
 		POSTService: activation.DefaultPostServiceConfig(),
@@ -144,6 +145,7 @@ func testnet() config.Config {
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 10,
 			AtxSync:                  atxsync.DefaultConfig(),
+			MalSync:                  malsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

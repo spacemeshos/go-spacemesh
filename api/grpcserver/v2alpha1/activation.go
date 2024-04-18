@@ -3,7 +3,6 @@ package v2alpha1
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -153,69 +152,16 @@ func (s *ActivationStreamService) Stream(
 }
 
 func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2alpha1.ActivationV1 {
-	v1 := &spacemeshv2alpha1.ActivationV1{
+	return &spacemeshv2alpha1.ActivationV1{
 		Id:             atx.ID().Bytes(),
-		NodeId:         atx.SmesherID.Bytes(),
 		Signature:      atx.Signature.Bytes(),
 		PublishEpoch:   atx.PublishEpoch.Uint32(),
-		Sequence:       atx.Sequence,
 		PreviousAtx:    atx.PrevATXID[:],
 		PositioningAtx: atx.PositioningATX[:],
 		Coinbase:       atx.Coinbase.String(),
-		Units:          atx.NumUnits,
-		BaseHeight:     uint32(atx.BaseTickHeight()),
-		Ticks:          uint32(atx.TickCount()),
+		Weight:         atx.GetWeight(),
+		Height:         atx.TickHeight(),
 	}
-	if atx.CommitmentATX != nil {
-		v1.CommittmentAtx = atx.CommitmentATX.Bytes()
-	}
-	if atx.VRFNonce != nil {
-		v1.VrfPostIndex = &spacemeshv2alpha1.VRFPostIndex{
-			Nonce: uint64(*atx.VRFNonce),
-		}
-	}
-	if atx.InitialPost != nil {
-		v1.InitialPost = &spacemeshv2alpha1.Post{
-			Nonce:   atx.InitialPost.Nonce,
-			Indices: atx.InitialPost.Indices,
-			Pow:     atx.InitialPost.Pow,
-		}
-	}
-
-	if atx.NIPost == nil {
-		panic(fmt.Sprintf("nil nipost for atx %s", atx.ShortString()))
-	}
-
-	if atx.NIPost.Post == nil {
-		panic(fmt.Sprintf("nil nipost post for atx %s", atx.ShortString()))
-	}
-
-	if atx.NIPost.PostMetadata == nil {
-		panic(fmt.Sprintf("nil nipost post metadata for atx %s", atx.ShortString()))
-	}
-
-	nipost := atx.NIPost
-	v1.Post = &spacemeshv2alpha1.Post{
-		Nonce:   nipost.Post.Nonce,
-		Indices: nipost.Post.Indices,
-		Pow:     nipost.Post.Pow,
-	}
-
-	v1.PostMeta = &spacemeshv2alpha1.PostMeta{
-		Challenge:     nipost.PostMetadata.Challenge,
-		LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
-	}
-
-	v1.Membership = &spacemeshv2alpha1.PoetMembershipProof{
-		ProofNodes: make([][]byte, len(nipost.Membership.Nodes)),
-		Leaf:       nipost.Membership.LeafIndex,
-	}
-
-	for i, node := range nipost.Membership.Nodes {
-		v1.Membership.ProofNodes[i] = node.Bytes()
-	}
-
-	return v1
 }
 
 func NewActivationService(db sql.Executor) *ActivationService {

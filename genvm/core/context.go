@@ -58,6 +58,9 @@ func (c *Context) GetGenesisID() Hash20 {
 	return c.GenesisID
 }
 
+// Balance returns the account balance.
+func (c *Context) Balance() uint64 { return c.PrincipalAccount.Balance }
+
 // Template of the principal account.
 func (c *Context) Template() Template {
 	return c.PrincipalTemplate
@@ -177,7 +180,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 	amount := gas * c.Header.GasPrice
 	if amount > c.PrincipalAccount.Balance {
 		amount = c.PrincipalAccount.Balance
-		err = ErrNoBalance
+		err = ErrOutOfGas
 	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed
 		amount = gas * c.Header.GasPrice
@@ -257,6 +260,11 @@ type RemoteContext struct {
 	remote   *Account
 	handler  Handler
 	template Template
+}
+
+// Balance returns the remote account balance.
+func (r *RemoteContext) Balance() uint64 {
+	return r.remote.Balance
 }
 
 // Template ...

@@ -60,6 +60,7 @@ func TestCertification(t *testing.T) {
 	initPost(t, mgr, opts, sig.NodeID())
 
 	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))

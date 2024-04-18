@@ -2,7 +2,7 @@ package activation
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -12,7 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -66,7 +66,7 @@ func Test_Builder_Multi_RestartSmeshing(t *testing.T) {
 
 	t.Run("Single threaded", func(t *testing.T) {
 		builder := getBuilder(t)
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			require.NoError(t, builder.StartSmeshing(types.Address{}))
 			require.True(t, builder.Smeshing())
 			require.NoError(t, builder.StopSmeshing(false))
@@ -82,7 +82,7 @@ func Test_Builder_Multi_RestartSmeshing(t *testing.T) {
 		var eg errgroup.Group
 		for worker := 0; worker < 10; worker += 1 {
 			eg.Go(func() error {
-				for i := 0; i < 50; i++ {
+				for range 50 {
 					builder.StartSmeshing(types.Address{})
 					builder.StopSmeshing(false)
 				}
@@ -187,8 +187,8 @@ func TestRegossip(t *testing.T) {
 		for _, sig := range tab.signers {
 			atx := newActivationTx(t,
 				sig, 0, types.EmptyATXID, types.EmptyATXID, nil,
-				layer.GetEpoch(), 0, 1, types.Address{}, 1, &types.NIPost{})
-			require.NoError(t, atxs.Add(tab.cdb, atx))
+				layer.GetEpoch(), 0, 1, types.Address{}, 1, nil)
+			require.NoError(t, atxs.Add(tab.db, atx))
 
 			if refAtx == nil {
 				refAtx = atx
@@ -196,7 +196,7 @@ func TestRegossip(t *testing.T) {
 		}
 
 		var blob sql.Blob
-		require.NoError(t, atxs.LoadBlob(context.Background(), tab.cdb, refAtx.ID().Bytes(), &blob))
+		require.NoError(t, atxs.LoadBlob(context.Background(), tab.db, refAtx.ID().Bytes(), &blob))
 
 		// atx will be regossiped once (by the smesher)
 		tab.mclock.EXPECT().CurrentLayer().Return(layer)
@@ -213,7 +213,7 @@ func TestRegossip(t *testing.T) {
 				Epoch:     layer.GetEpoch(),
 				SmesherID: sig.NodeID(),
 			}
-			require.NoError(t, atxs.AddCheckpointed(tab.cdb, &atx))
+			require.NoError(t, atxs.AddCheckpointed(tab.db, &atx))
 			tab.mclock.EXPECT().CurrentLayer().Return(layer)
 			require.NoError(t, tab.Regossip(context.Background(), sig.NodeID()))
 		}
@@ -225,7 +225,6 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 
 	var eg errgroup.Group
 	for _, sig := range tab.signers {
-		sig := sig
 		eg.Go(func() error {
 			numUnits := uint32(12)
 
@@ -376,13 +375,13 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			},
 		)
 
-		post := &types.Post{
+		post := &wire.PostV1{
 			Indices: initialPost[sig.NodeID()].Indices,
 			Nonce:   initialPost[sig.NodeID()].Nonce,
 			Pow:     initialPost[sig.NodeID()].Pow,
 		}
-		ref := &types.NIPostChallenge{
-			PublishEpoch:   postGenesisEpoch + 1,
+		ref := &wire.NIPostChallengeV1{
+			Publish:        postGenesisEpoch + 1,
 			CommitmentATX:  &initialPost[sig.NodeID()].CommitmentATX,
 			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
@@ -407,7 +406,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			VRFNonce: types.VRFPostIndex(rand.Uint64()),
 		}
 		nipostState[sig.NodeID()] = state
-		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref, gomock.Any()).Return(state, nil)
+		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref.Publish, ref.Hash(), gomock.Any()).Return(state, nil)
 
 		// awaiting atx publication epoch log
 		tab.mclock.EXPECT().CurrentLayer().DoAndReturn(
@@ -442,9 +441,9 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			func(ctx context.Context, _ string, got []byte) error {
 				atxMtx.Lock()
 				defer atxMtx.Unlock()
-				var gotAtx types.ActivationTx
-				require.NoError(t, codec.Decode(got, &gotAtx))
-				atxs[gotAtx.SmesherID] = gotAtx
+				atx, err := wire.ActivationTxFromBytes(got)
+				require.NoError(t, err)
+				atxs[atx.SmesherID] = *atx
 				return nil
 			},
 		)

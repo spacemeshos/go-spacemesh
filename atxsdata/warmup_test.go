@@ -77,7 +77,7 @@ func TestWarmup(t *testing.T) {
 	t.Run("missing nonce", func(t *testing.T) {
 		db := sql.InMemory()
 		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nil)
-		require.NoError(t, atxs.Add(db, &data))
+		require.NoError(t, atxs.AddMaybeNoNonce(db, &data))
 		c, err := Warm(db, 1)
 		require.Error(t, err)
 		require.Nil(t, c)
@@ -103,7 +103,7 @@ func TestWarmup(t *testing.T) {
 				return tx.Exec(q, enc, dec)
 			}).
 			AnyTimes()
-		for i := 0; i < 5; i++ {
+		for range 3 {
 			c := New()
 			require.Error(t, Warmup(exec, c, 1))
 			fail++

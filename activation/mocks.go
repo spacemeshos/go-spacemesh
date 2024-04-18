@@ -826,18 +826,18 @@ func (m *MocknipostBuilder) EXPECT() *MocknipostBuilderMockRecorder {
 }
 
 // BuildNIPost mocks base method.
-func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, sig *signing.EdSigner, challenge *types.NIPostChallenge, certifier certifierService) (*nipost.NIPostState, error) {
+func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, sig *signing.EdSigner, publish types.EpochID, challenge types.Hash32, certifier certifierService) (*nipost.NIPostState, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildNIPost", ctx, sig, challenge, certifier)
+	ret := m.ctrl.Call(m, "BuildNIPost", ctx, sig, publish, challenge, certifier)
 	ret0, _ := ret[0].(*nipost.NIPostState)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BuildNIPost indicates an expected call of BuildNIPost.
-func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, sig, challenge, certifier any) *MocknipostBuilderBuildNIPostCall {
+func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, sig, publish, challenge, certifier any) *MocknipostBuilderBuildNIPostCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, sig, challenge, certifier)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, sig, publish, challenge, certifier)
 	return &MocknipostBuilderBuildNIPostCall{Call: call}
 }
 
@@ -853,13 +853,13 @@ func (c *MocknipostBuilderBuildNIPostCall) Return(arg0 *nipost.NIPostState, arg1
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostBuilderBuildNIPostCall) Do(f func(context.Context, *signing.EdSigner, *types.NIPostChallenge, certifierService) (*nipost.NIPostState, error)) *MocknipostBuilderBuildNIPostCall {
+func (c *MocknipostBuilderBuildNIPostCall) Do(f func(context.Context, *signing.EdSigner, types.EpochID, types.Hash32, certifierService) (*nipost.NIPostState, error)) *MocknipostBuilderBuildNIPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *signing.EdSigner, *types.NIPostChallenge, certifierService) (*nipost.NIPostState, error)) *MocknipostBuilderBuildNIPostCall {
+func (c *MocknipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *signing.EdSigner, types.EpochID, types.Hash32, certifierService) (*nipost.NIPostState, error)) *MocknipostBuilderBuildNIPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1630,11 +1630,11 @@ func (c *MockPoetClientPowParamsCall) DoAndReturn(f func(context.Context) (*Poet
 }
 
 // Proof mocks base method.
-func (m *MockPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error) {
+func (m *MockPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Proof", ctx, roundID)
 	ret0, _ := ret[0].(*types.PoetProofMessage)
-	ret1, _ := ret[1].([]types.Member)
+	ret1, _ := ret[1].([]types.Hash32)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
@@ -1652,19 +1652,19 @@ type MockPoetClientProofCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockPoetClientProofCall) Return(arg0 *types.PoetProofMessage, arg1 []types.Member, arg2 error) *MockPoetClientProofCall {
+func (c *MockPoetClientProofCall) Return(arg0 *types.PoetProofMessage, arg1 []types.Hash32, arg2 error) *MockPoetClientProofCall {
 	c.Call = c.Call.Return(arg0, arg1, arg2)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockPoetClientProofCall) Do(f func(context.Context, string) (*types.PoetProofMessage, []types.Member, error)) *MockPoetClientProofCall {
+func (c *MockPoetClientProofCall) Do(f func(context.Context, string) (*types.PoetProofMessage, []types.Hash32, error)) *MockPoetClientProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPoetClientProofCall) DoAndReturn(f func(context.Context, string) (*types.PoetProofMessage, []types.Member, error)) *MockPoetClientProofCall {
+func (c *MockPoetClientProofCall) DoAndReturn(f func(context.Context, string) (*types.PoetProofMessage, []types.Hash32, error)) *MockPoetClientProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

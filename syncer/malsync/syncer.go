@@ -303,7 +303,6 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 
 		var eg errgroup.Group
 		for _, peer := range peers {
-			peer := peer
 			eg.Go(func() error {
 				malIDs, err := s.fetcher.GetMaliciousIDs(ctx, peer)
 				if err != nil {

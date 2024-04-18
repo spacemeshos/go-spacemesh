@@ -77,14 +77,14 @@ type InnerBlock struct {
 	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
 	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
 	//
-	// If we expect 2.2 Mio ATXs that would be a total of 2.2 Mio + 50 * 4032 = 2,401,600 slots.
+	// If we expect 3.5 Mio ATXs that would be a total of 3.5 Mio + 50 * 4032 = 3 701 600 slots.
 	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 2,401,600 / 4032 = 595.7 rewards in a block with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(2,401,600 * 1/4032 * 4031/4032) = 24.4
+	// 3 701 600 / 4032 = 918.1 rewards in a block with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(3 701 600 * 1/4032 * 4031/4032) = 30.3
 	//
-	// This means that we can expect a maximum of 595.7 + 6*24.4 = 743 rewards per block with
+	// This means that we can expect a maximum of 918.1 + 6*30.3 = 1100.0 rewards per block with
 	// > 99.9997% probability.
-	Rewards []AnyReward     `scale:"max=800"`
+	Rewards []AnyReward     `scale:"max=1100"`
 	TxIDs   []TransactionID `scale:"max=100000"`
 }
 
@@ -128,7 +128,7 @@ type CoinbaseReward struct {
 
 // Initialize calculates and sets the Block's cached blockID.
 func (b *Block) Initialize() {
-	b.blockID = BlockID(CalcHash32(b.Bytes()).ToHash20())
+	b.blockID = BlockID(CalcHash20(b.Bytes()))
 }
 
 // Bytes returns the serialization of the InnerBlock.

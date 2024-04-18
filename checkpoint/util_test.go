@@ -65,7 +65,6 @@ func TestValidateSchema(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
@@ -98,7 +97,6 @@ func TestRecoveryFile(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 

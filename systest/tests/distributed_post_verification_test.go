@@ -22,11 +22,13 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -147,6 +149,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Cleanup(clock.Close)
 
 	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
+	grpcPostService.AllowConnections(true)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Named("grpc"))
 	grpcPrivateServer, err := grpcserver.NewWithServices(
 		cfg.API.PostListener,
@@ -200,13 +203,13 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		}
 		break
 	}
-
 	// 2.2 Certify initial POST
 	certClient := activation.NewCertifierClient(logger.Named("certifier"), post, postInfo, shared.ZeroChallenge)
 	certifier := activation.NewCertifier(localsql.InMemory(), logger, certClient)
 	certifier.CertifyAll(context.Background(), []activation.PoetClient{poetClient})
 
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge, certifier)
+	challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challengeHash, certifier)
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST
@@ -256,7 +259,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	eg.Go(func() error {
 		for {
 			logger.Sugar().Infow("publishing ATX", "atx", atx)
-			buf, err := codec.Encode(atx)
+			buf, err := codec.Encode(wire.ActivationTxToWireV1(atx))
 			require.NoError(t, err)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
 			require.NoError(t, err)
@@ -277,22 +280,15 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.Equal(t, malfeasance.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
 		require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_POST_INDEX, malfeasance.GetProof().GetKind())
 
-		var proof types.MalfeasanceProof
+		var proof mwire.MalfeasanceProof
 		require.NoError(t, codec.Decode(malfeasance.Proof.Proof, &proof))
-		require.Equal(t, types.InvalidPostIndex, proof.Proof.Type)
-		invalidPostProof := proof.Proof.Data.(*types.InvalidPostIndexProof)
+		require.Equal(t, mwire.InvalidPostIndex, proof.Proof.Type)
+		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
 		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
 		invalidAtx := invalidPostProof.Atx
-		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
+		require.Equal(t, atx.PublishEpoch, invalidAtx.Publish)
 		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)
-		require.Equal(t, atx.NodeID, invalidAtx.NodeID)
-		require.Equal(t, atx.PositioningATX, invalidAtx.PositioningATX)
-		require.Equal(t, atx.PrevATXID, invalidAtx.PrevATXID)
-		require.Equal(t, atx.Signature, invalidAtx.Signature)
-		require.Equal(t, atx.Coinbase, invalidAtx.Coinbase)
-		require.Equal(t, *atx.CommitmentATX, *invalidAtx.CommitmentATX)
-		require.Equal(t, atx.NIPostChallenge, invalidAtx.NIPostChallenge)
-		require.Equal(t, atx.NIPost.Post.Indices, invalidAtx.NIPost.Post.Indices)
+		require.Equal(t, atx.ID().Hash32(), invalidAtx.HashInnerBytes())
 
 		meta := &shared.ProofMetadata{
 			NodeId:          invalidAtx.NodeID.Bytes(),

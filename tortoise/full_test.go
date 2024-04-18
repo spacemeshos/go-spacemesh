@@ -56,7 +56,6 @@ func TestFullBallotFilter(t *testing.T) {
 			expect:   false,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			state := newState(atxsdata.New())
 			state.last = tc.last
@@ -321,7 +320,6 @@ func TestFullCountVotes(t *testing.T) {
 			expect: fixed.From(4),
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.Zap(t)
 			tortoise := defaultAlgorithm(t)

@@ -60,17 +60,18 @@ type Ballot struct {
 	// the proofs are vrf signatures and need not be included in the ballot's signature.
 	//
 	// The number of eligibility proofs depends on the smeshers weight and the total weight of the network.
-	// For epoch 16 the largest smesher had 888 SUs and the total weight of the network was ~20.2 Mio SUs.
-	// This means that the largest smesher received 888 / 20,200,000 = 0.0044% of all eligibility slots for the epoch.
+	// For epoch 16 the largest smesher had 1 337 SUs and the total weight of the network was ~20.2 Mio SUs.
+	// This means that the largest smesher received 1 337 / 26 481 043 SU = 0.005% of all eligibility slots for the
+	// epoch.
 	// There are 4032 layers in an epoch and 50 eligibility slots per layer, so the largest smesher received
-	// 0.0044% * 4032 * 50 = ~9 eligibility slots.
+	// 0.005% * 4032 * 50 = ~10 eligibility slots.
 	//
 	// Assuming the largest smesher won't control more than 10% of space in the network, we can assume that the
 	// highest number of eligibilities in a single ballot will be below 25000. (10% of 4032 * 50 = 20160)
 	EligibilityProofs []VotingEligibility `scale:"max=25000"`
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	// only present in smesher's first ballot of the epoch
-	ActiveSet []ATXID `scale:"max=2200000"`
+	ActiveSet []ATXID `scale:"max=3500000"`
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID

@@ -11,12 +11,14 @@ import (
 	"github.com/spacemeshos/post/verifying"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -116,7 +118,7 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 func (h *Handler) processVerifiedATX(
 	ctx context.Context,
 	atx *types.VerifiedActivationTx,
-) (*types.MalfeasanceProof, error) {
+) (*mwire.MalfeasanceProof, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -210,7 +212,7 @@ func (h *Handler) SyntacticallyValidate(ctx context.Context, atx *types.Activati
 func (h *Handler) SyntacticallyValidateDeps(
 	ctx context.Context,
 	atx *types.ActivationTx,
-) (*types.VerifiedActivationTx, *types.MalfeasanceProof, error) {
+) (*types.VerifiedActivationTx, *mwire.MalfeasanceProof, error) {
 	var (
 		commitmentATX *types.ATXID
 		err           error
@@ -240,7 +242,7 @@ func (h *Handler) SyntacticallyValidateDeps(
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	expectedChallengeHash := atx.NIPostChallenge.Hash()
+	expectedChallengeHash := wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash()
 	h.log.WithContext(ctx).
 		With().
 		Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
@@ -257,12 +259,12 @@ func (h *Handler) SyntacticallyValidateDeps(
 	var invalidIdx *verifying.ErrInvalidIndex
 	if errors.As(err, &invalidIdx) {
 		h.log.WithContext(ctx).With().Info("ATX with invalid post index", atx.ID(), log.Int("index", invalidIdx.Index))
-		proof := &types.MalfeasanceProof{
+		proof := &mwire.MalfeasanceProof{
 			Layer: atx.PublishEpoch.FirstLayer(),
-			Proof: types.Proof{
-				Type: types.InvalidPostIndex,
-				Data: &types.InvalidPostIndexProof{
-					Atx:        *atx,
+			Proof: mwire.Proof{
+				Type: mwire.InvalidPostIndex,
+				Data: &mwire.InvalidPostIndexProof{
+					Atx:        *wire.ActivationTxToWireV1(atx),
 					InvalidIdx: uint32(invalidIdx.Index),
 				},
 			},
@@ -310,7 +312,9 @@ func (h *Handler) validateNonInitialAtx(ctx context.Context, atx *types.Activati
 			log.Stringer("smesher", atx.SmesherID),
 		)
 
-		current, err := h.cdb.VRFNonce(atx.SmesherID, atx.TargetEpoch())
+		// This is not expected to happen very often, so we query the database
+		// directly here without using the cache.
+		current, err := atxs.NonceByID(h.cdb, prevAtx.ID)
 		if err != nil {
 			return fmt.Errorf("failed to get current nonce: %w", err)
 		}
@@ -387,13 +391,8 @@ func (h *Handler) ContextuallyValidateAtx(atx *types.VerifiedActivationTx) error
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) *atxsdata.ATX {
+func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader, nonce types.VRFPostIndex) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
-		nonce, err := h.cdb.VRFNonce(atx.NodeID, atx.TargetEpoch())
-		if err != nil {
-			h.log.With().Error("failed vrf nonce read", log.Err(err), log.Context(ctx))
-			return nil
-		}
 		malicious, err := h.cdb.IsMalicious(atx.NodeID)
 		if err != nil {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
@@ -405,12 +404,13 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader) *
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*types.MalfeasanceProof, error) {
+func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*mwire.MalfeasanceProof, error) {
+	var nonce *types.VRFPostIndex
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("checking if node is malicious: %w", err)
 	}
-	var proof *types.MalfeasanceProof
+	var proof *mwire.MalfeasanceProof
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		if malicious {
 			if err := atxs.Add(tx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
@@ -434,21 +434,21 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 				)
 			}
 
-			var atxProof types.AtxProof
+			var atxProof mwire.AtxProof
 			for i, a := range []*types.VerifiedActivationTx{prev, atx} {
-				atxProof.Messages[i] = types.AtxProofMsg{
+				atxProof.Messages[i] = mwire.AtxProofMsg{
 					InnerMsg: types.ATXMetadata{
 						PublishEpoch: a.PublishEpoch,
-						MsgHash:      types.BytesToHash(a.HashInnerBytes()),
+						MsgHash:      wire.ActivationTxToWireV1(a.ActivationTx).HashInnerBytes(),
 					},
 					SmesherID: a.SmesherID,
 					Signature: a.Signature,
 				}
 			}
-			proof = &types.MalfeasanceProof{
+			proof = &mwire.MalfeasanceProof{
 				Layer: atx.PublishEpoch.FirstLayer(),
-				Proof: types.Proof{
-					Type: types.MultipleATXs,
+				Proof: mwire.Proof{
+					Type: mwire.MultipleATXs,
 					Data: &atxProof,
 				},
 			}
@@ -467,12 +467,16 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			)
 		}
 
-		if err := atxs.Add(tx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		nonce, err = atxs.AddGettingNonce(tx, atx)
+		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
+	}
+	if nonce == nil {
+		return nil, errors.New("no nonce")
 	}
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
@@ -480,7 +484,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
 	header := atx.ToHeader()
-	added := h.cacheAtx(ctx, header)
+	added := h.cacheAtx(ctx, header, *nonce)
 	h.beacon.OnAtx(header)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
@@ -489,15 +493,6 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
 
 	return proof, nil
-}
-
-// GetEpochAtxs returns all valid ATXs received in the epoch epochID.
-func (h *Handler) GetEpochAtxs(ctx context.Context, epochID types.EpochID) (ids []types.ATXID, err error) {
-	ids, err = atxs.GetIDsByEpoch(ctx, h.cdb, epochID)
-	h.log.With().Debug("returned epoch atxs", epochID,
-		log.Int("count", len(ids)),
-		log.String("atxs", fmt.Sprint(ids)))
-	return
 }
 
 // HandleSyncedAtx handles atxs received by sync.
@@ -513,17 +508,6 @@ func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, pee
 		return nil
 	}
 	return err
-}
-
-func (h *Handler) registerHashes(atx *types.ActivationTx, peer p2p.Peer) {
-	hashes := map[types.Hash32]struct{}{}
-	for _, id := range []types.ATXID{atx.PositioningATX, atx.PrevATXID} {
-		if id != types.EmptyATXID && id != h.goldenATXID {
-			hashes[id.Hash32()] = struct{}{}
-		}
-	}
-	hashes[atx.GetPoetProofRef()] = struct{}{}
-	h.fetcher.RegisterPeerHashes(peer, maps.Keys(hashes))
 }
 
 // HandleGossipAtx handles the atx gossip data channel.
@@ -542,7 +526,7 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	// broadcast malfeasance proof last as the verification of the proof will take place
 	// in the same goroutine
 	if proof != nil {
-		gossip := types.MalfeasanceGossip{
+		gossip := mwire.MalfeasanceGossip{
 			MalfeasanceProof: *proof,
 		}
 		encodedProof := codec.MustEncode(&gossip)
@@ -560,16 +544,17 @@ func (h *Handler) handleAtx(
 	expHash types.Hash32,
 	peer p2p.Peer,
 	msg []byte,
-) (*types.MalfeasanceProof, error) {
+) (*mwire.MalfeasanceProof, error) {
 	receivedTime := time.Now()
-	var atx types.ActivationTx
-	if err := codec.Decode(msg, &atx); err != nil {
+
+	var atxOnWire wire.ActivationTxV1
+	if err := codec.Decode(msg, &atxOnWire); err != nil {
 		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
 	}
+
+	atx := wire.ActivationTxFromWireV1(&atxOnWire)
+
 	atx.SetReceived(receivedTime.Local())
-	if err := atx.Initialize(); err != nil {
-		return nil, fmt.Errorf("failed to derive ID from atx: %w", err)
-	}
 
 	// Check if processing is already in progress
 	h.inProgressMu.Lock()
@@ -591,7 +576,7 @@ func (h *Handler) handleAtx(
 	h.inProgressMu.Unlock()
 	h.log.WithContext(ctx).With().Info("handling incoming atx", atx.ID(), log.Int("size", len(msg)))
 
-	proof, err := h.processATX(ctx, expHash, peer, atx)
+	proof, err := h.processATX(ctx, expHash, peer, *atx)
 	h.inProgressMu.Lock()
 	defer h.inProgressMu.Unlock()
 	for _, ch := range h.inProgress[atx.ID()] {
@@ -607,8 +592,8 @@ func (h *Handler) processATX(
 	expHash types.Hash32,
 	peer p2p.Peer,
 	atx types.ActivationTx,
-) (*types.MalfeasanceProof, error) {
-	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+) (*mwire.MalfeasanceProof, error) {
+	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, wire.ActivationTxToWireV1(&atx).SignedBytes(), atx.Signature) {
 		return nil, fmt.Errorf("failed to verify atx signature: %w", errMalformedData)
 	}
 
@@ -621,9 +606,10 @@ func (h *Handler) processATX(
 		return nil, fmt.Errorf("atx %v syntactically invalid: %w", atx.ShortString(), err)
 	}
 
-	h.registerHashes(&atx, peer)
-	if err := h.FetchReferences(ctx, &atx); err != nil {
-		return nil, err
+	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, &atx)
+	h.registerHashes(peer, poetRef, atxIDs)
+	if err := h.fetchReferences(ctx, poetRef, atxIDs); err != nil {
+		return nil, fmt.Errorf("fetching references for atx %x: %w", atx.ID(), err)
 	}
 
 	vAtx, proof, err := h.SyntacticallyValidateDeps(ctx, &atx)
@@ -655,38 +641,49 @@ func (h *Handler) processATX(
 	return proof, err
 }
 
-// FetchReferences fetches referenced ATXs from peers if they are not found in db.
-func (h *Handler) FetchReferences(ctx context.Context, atx *types.ActivationTx) error {
-	if err := h.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
-		return fmt.Errorf("atx (%s) missing poet proof (%s): %w",
-			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err,
-		)
+// registerHashes registers that the given peer should be asked for
+// the hashes of the poet proof and ATXs.
+func (h *Handler) registerHashes(peer p2p.Peer, poetRef types.Hash32, atxIDs []types.ATXID) {
+	hashes := make([]types.Hash32, 0, len(atxIDs)+1)
+	for _, id := range atxIDs {
+		hashes = append(hashes, id.Hash32())
 	}
+	hashes = append(hashes, types.Hash32(poetRef))
+	h.fetcher.RegisterPeerHashes(peer, hashes)
+}
 
-	atxIDs := make(map[types.ATXID]struct{}, 3)
-	if atx.PositioningATX != types.EmptyATXID && atx.PositioningATX != h.goldenATXID {
-		atxIDs[atx.PositioningATX] = struct{}{}
-	}
-
-	if atx.PrevATXID != types.EmptyATXID {
-		atxIDs[atx.PrevATXID] = struct{}{}
-	}
-	if atx.CommitmentATX != nil && *atx.CommitmentATX != h.goldenATXID {
-		atxIDs[*atx.CommitmentATX] = struct{}{}
+// fetchReferences makes sure that the referenced poet proof and ATXs are available.
+func (h *Handler) fetchReferences(ctx context.Context, poetRef types.Hash32, atxIDs []types.ATXID) error {
+	if err := h.fetcher.GetPoetProof(ctx, poetRef); err != nil {
+		return fmt.Errorf("missing poet proof (%s): %w", poetRef.ShortString(), err)
 	}
 
 	if len(atxIDs) == 0 {
 		return nil
 	}
 
-	if err := h.fetcher.GetAtxs(ctx, maps.Keys(atxIDs), system.WithoutLimiting()); err != nil {
-		dbg := fmt.Sprintf("prev %v pos %v commit %v", atx.PrevATXID, atx.PositioningATX, atx.CommitmentATX)
-		return fmt.Errorf("fetch referenced atxs (%s): %w", dbg, err)
+	if err := h.fetcher.GetAtxs(ctx, atxIDs, system.WithoutLimiting()); err != nil {
+		return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
 	}
 
-	h.log.WithContext(ctx).With().Debug("done fetching references for atx",
-		atx.ID(),
-		log.Int("num fetched", len(atxIDs)),
-	)
+	h.log.WithContext(ctx).With().Debug("done fetching references", log.Int("fetched", len(atxIDs)))
 	return nil
+}
+
+// Collect unique dependencies of an ATX.
+// Filters out EmptyATXID and the golden ATX.
+func collectAtxDeps(goldenAtxId types.ATXID, atx *types.ActivationTx) (types.Hash32, []types.ATXID) {
+	ids := []types.ATXID{atx.PrevATXID, atx.PositioningATX}
+	if atx.CommitmentATX != nil {
+		ids = append(ids, *atx.CommitmentATX)
+	}
+
+	filtered := make(map[types.ATXID]struct{})
+	for _, id := range ids {
+		if id != types.EmptyATXID && id != goldenAtxId {
+			filtered[id] = struct{}{}
+		}
+	}
+
+	return atx.GetPoetProofRef(), maps.Keys(filtered)
 }

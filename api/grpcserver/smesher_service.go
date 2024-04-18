@@ -27,6 +27,7 @@ import (
 type SmesherService struct {
 	smeshingProvider activation.SmeshingProvider
 	postSupervisor   postSupervisor
+	grpcPostService  grpcPostService
 
 	streamInterval time.Duration
 	cmdCfg         *activation.PostSupervisorConfig
@@ -52,6 +53,7 @@ func (s SmesherService) String() string {
 func NewSmesherService(
 	smeshing activation.SmeshingProvider,
 	postSupervisor postSupervisor,
+	grpcPostService grpcPostService,
 	streamInterval time.Duration,
 	postOpts activation.PostSetupOpts,
 	sig *signing.EdSigner,
@@ -59,6 +61,7 @@ func NewSmesherService(
 	return &SmesherService{
 		smeshingProvider: smeshing,
 		postSupervisor:   postSupervisor,
+		grpcPostService:  grpcPostService,
 		streamInterval:   streamInterval,
 		postOpts:         postOpts,
 		sig:              sig,
@@ -101,6 +104,7 @@ func (s SmesherService) StartSmeshing(
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse in.Coinbase.Address `%s`: %w", in.Coinbase.Address, err)
 	}
+	s.grpcPostService.AllowConnections(true)
 
 	if err := s.postSupervisor.Start(*s.cmdCfg, opts, s.sig); err != nil {
 		ctxzap.Error(ctx, "failed to start post supervisor", zap.Error(err))

@@ -178,7 +178,6 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 	certifierInfos := make([]*certInfo, len(poetsToCertify))
 	var eg errgroup.Group
 	for i, poet := range poetsToCertify {
-		i, poet := i, poet
 		eg.Go(func() error {
 			url, pubkey, err := poet.CertifierInfo(ctx)
 			if err != nil {

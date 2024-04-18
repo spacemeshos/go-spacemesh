@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"go.uber.org/zap"
@@ -80,7 +81,10 @@ func (s *JSONHTTPServer) StartService(
 	}
 	s.BoundAddress = lis.Addr().String()
 	s.server = &http.Server{
-		Handler: mux,
+		MaxHeaderBytes: 1 << 21,
+		ReadTimeout:    15 * time.Second,
+		WriteTimeout:   15 * time.Second,
+		Handler:        mux,
 	}
 	s.eg.Go(func() error {
 		if err := s.server.Serve(lis); err != nil {

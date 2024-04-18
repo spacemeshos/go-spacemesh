@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -121,7 +122,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	atx2, err := newAtx(sig1, withPublishEpoch(2))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(signing.ATX, atx2.SignedBytes())
+	atx2.Signature = sig1.Sign(signing.ATX, wire.ActivationTxToWireV1(atx2.ActivationTx).SignedBytes())
 
 	atx3, err := newAtx(sig2, withPublishEpoch(3))
 	require.NoError(t, err)
@@ -129,7 +130,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 	atx4, err := newAtx(sig2, withPublishEpoch(4))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(signing.ATX, atx4.SignedBytes())
+	atx4.Signature = sig2.Sign(signing.ATX, wire.ActivationTxToWireV1(atx4.ActivationTx).SignedBytes())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
@@ -301,7 +302,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx2, err := newAtx(sig1, withPublishEpoch(2))
 	require.NoError(t, err)
 	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(signing.ATX, atx2.SignedBytes())
+	atx2.Signature = sig1.Sign(signing.ATX, wire.ActivationTxToWireV1(atx2.ActivationTx).SignedBytes())
 
 	atx3, err := newAtx(sig2, withPublishEpoch(3))
 	require.NoError(t, err)
@@ -309,7 +310,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx4, err := newAtx(sig2, withPublishEpoch(4))
 	require.NoError(t, err)
 	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(signing.ATX, atx4.SignedBytes())
+	atx4.Signature = sig2.Sign(signing.ATX, wire.ActivationTxToWireV1(atx4.ActivationTx).SignedBytes())
 
 	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
@@ -448,13 +449,14 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		atxs.AtxAdded(db, atx)
 	}
 
-	require.Equal(t, 4, db.QueryCount())
+	// insert atx + insert blob for each ATX
+	require.Equal(t, 8, db.QueryCount())
 
 	for i := 0; i < 3; i++ {
 		ids1, err := atxs.GetIDsByEpoch(ctx, db, e1)
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids1)
-		require.Equal(t, 5, db.QueryCount())
+		require.Equal(t, 9, db.QueryCount())
 	}
 
 	for i := 0; i < 3; i++ {
@@ -462,14 +464,14 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, ids2, atx2.ID())
 		require.Contains(t, ids2, atx3.ID())
-		require.Equal(t, 6, db.QueryCount())
+		require.Equal(t, 10, db.QueryCount())
 	}
 
 	for i := 0; i < 3; i++ {
 		ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
-		require.Equal(t, 7, db.QueryCount())
+		require.Equal(t, 11, db.QueryCount())
 	}
 
 	require.NoError(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
@@ -477,12 +479,12 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		return nil
 	}))
 	atxs.AtxAdded(db, atx5)
-	require.Equal(t, 8, db.QueryCount())
+	require.Equal(t, 13, db.QueryCount())
 
 	ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
-	require.Equal(t, 8, db.QueryCount()) // not incremented after Add
+	require.Equal(t, 13, db.QueryCount()) // not incremented after Add
 
 	require.Error(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
 		atxs.Add(tx, atx6)
@@ -493,7 +495,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	ids4, err := atxs.GetIDsByEpoch(ctx, db, e3)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids4)
-	require.Equal(t, 10, db.QueryCount()) // not incremented after Add
+	require.Equal(t, 16, db.QueryCount()) // not incremented after Add
 }
 
 func TestForIDsByEpochEarlyStop(t *testing.T) {
@@ -533,19 +535,19 @@ func TestVRFNonce(t *testing.T) {
 	require.NoError(t, err)
 
 	nonce1 := types.VRFPostIndex(333)
-	atx1, err := newAtx(sig, withPublishEpoch(types.EpochID(20)))
+	atx1, err := newAtx(sig, withPublishEpoch(types.EpochID(20)), withNonce(nonce1))
 	require.NoError(t, err)
-	atx1.VRFNonce = &nonce1
 	require.NoError(t, atxs.Add(db, atx1))
 
-	atx2, err := newAtx(sig, withPublishEpoch(types.EpochID(30)))
+	atx2, err := newAtx(sig, withPublishEpoch(types.EpochID(30)), withNoNonce(),
+		withPrevATXID(atx1.ID()))
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, atx2))
 
 	nonce3 := types.VRFPostIndex(777)
-	atx3, err := newAtx(sig, withPublishEpoch(types.EpochID(50)))
+	atx3, err := newAtx(sig, withPublishEpoch(types.EpochID(50)), withNonce(nonce3),
+		withPrevATXID(atx2.ID()))
 	require.NoError(t, err)
-	atx3.VRFNonce = &nonce3
 	require.NoError(t, atxs.Add(db, atx3))
 
 	// Act & Assert
@@ -587,7 +589,7 @@ func TestLoadBlob(t *testing.T) {
 
 	var blob1 sql.Blob
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1))
-	encoded := codec.MustEncode(atx1.ActivationTx)
+	encoded := codec.MustEncode(wire.ActivationTxToWireV1(atx1.ActivationTx))
 	require.Equal(t, encoded, blob1.Bytes)
 
 	blobSizes, err := atxs.GetBlobSizes(db, [][]byte{atx1.ID().Bytes()})
@@ -601,7 +603,7 @@ func TestLoadBlob(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, atx2))
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))
-	encoded = codec.MustEncode(atx2.ActivationTx)
+	encoded = codec.MustEncode(wire.ActivationTxToWireV1(atx2.ActivationTx))
 	require.Equal(t, encoded, blob2.Bytes)
 	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
 		atx1.ID().Bytes(),
@@ -632,15 +634,15 @@ func TestGetBlobCached(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, atxs.Add(db, atx))
-	encoded, err := codec.Encode(atx.ActivationTx)
+	encoded, err := codec.Encode(wire.ActivationTxToWireV1(atx.ActivationTx))
 	require.NoError(t, err)
-	require.Equal(t, 1, db.QueryCount())
+	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
 
 	for i := 0; i < 3; i++ {
 		var b sql.Blob
 		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
 		require.Equal(t, encoded, b.Bytes)
-		require.Equal(t, 2, db.QueryCount())
+		require.Equal(t, 3, db.QueryCount())
 	}
 }
 
@@ -662,26 +664,27 @@ func TestCachedBlobEviction(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(db, atx))
 		addedATXs[n] = atx
-		encoded, err := codec.Encode(atx.ActivationTx)
+		encoded, err := codec.Encode(wire.ActivationTxToWireV1(atx.ActivationTx))
 		require.NoError(t, err)
 		blobs[n] = encoded
 		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
 		require.Equal(t, encoded, b.Bytes)
 	}
 
-	require.Equal(t, 22, db.QueryCount())
+	// insert atx + insert blob + load blob each time
+	require.Equal(t, 33, db.QueryCount())
 
 	// The ATXs except the first one stay in place
 	for n, atx := range addedATXs[1:] {
 		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
 		require.Equal(t, blobs[n+1], b.Bytes)
-		require.Equal(t, 22, db.QueryCount())
+		require.Equal(t, 33, db.QueryCount())
 	}
 
 	// The first ATX is evicted. We check it after the loop to avoid additional evictions.
 	require.NoError(t, atxs.LoadBlob(ctx, db, addedATXs[0].ID().Bytes(), &b))
 	require.Equal(t, blobs[0], b.Bytes)
-	require.Equal(t, 23, db.QueryCount())
+	require.Equal(t, 34, db.QueryCount())
 }
 
 func TestCheckpointATX(t *testing.T) {
@@ -765,7 +768,26 @@ func withSequence(seq uint64) createAtxOpt {
 	}
 }
 
+func withNonce(nonce types.VRFPostIndex) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.VRFNonce = &nonce
+	}
+}
+
+func withNoNonce() createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.VRFNonce = nil
+	}
+}
+
+func withPrevATXID(id types.ATXID) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.PrevATXID = id
+	}
+}
+
 func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActivationTx, error) {
+	nonce := types.VRFPostIndex(42)
 	atx := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -773,6 +795,7 @@ func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActi
 			},
 			Coinbase: types.Address{1, 2, 3},
 			NumUnits: 2,
+			VRFNonce: &nonce,
 		},
 	}
 	for _, opt := range opts {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -12,7 +13,7 @@ import (
 
 type meshProvider interface {
 	ProcessedLayer() types.LayerID
-	AddBallot(context.Context, *types.Ballot) (*types.MalfeasanceProof, error)
+	AddBallot(context.Context, *types.Ballot) (*wire.MalfeasanceProof, error)
 	AddTXsFromProposal(context.Context, types.LayerID, types.ProposalID, []types.TransactionID) error
 }
 

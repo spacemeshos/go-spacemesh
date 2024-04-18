@@ -15,7 +15,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
@@ -127,15 +126,11 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 		return fmt.Errorf("validating merkle proof: %w", err)
 	}
 	if !ok {
-		hexNodes := make([]string, 0, len(proof.Nodes))
-		for _, n := range proof.Nodes {
-			hexNodes = append(hexNodes, n.Hex())
-		}
 		return fmt.Errorf(
-			"invalid merkle proof, calculated root does not match proof root, leaf: %v, nodes: %v, expected root: %v",
-			util.Encode(leaf),
-			hexNodes,
-			util.Encode(expectedRoot),
+			"invalid merkle proof, calculated root does not match proof root, leaf: %x, nodes: %x, expected root: %x",
+			leaf,
+			proof.Nodes,
+			expectedRoot,
 		)
 	}
 	return nil
@@ -276,7 +271,8 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 	}
 
 	if prevATX.Sequence+1 != challenge.Sequence {
-		return errors.New("sequence number is not one more than prev sequence number")
+		return fmt.Errorf(
+			"sequence number (%d) is not one more than the prev one (%d)", challenge.Sequence, prevATX.Sequence)
 	}
 	return nil
 }

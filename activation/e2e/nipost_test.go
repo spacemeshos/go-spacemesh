@@ -182,6 +182,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
 	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -220,10 +221,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
+	challenge := types.RandomHash()
+	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge, certifier)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
@@ -232,7 +231,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		sig.NodeID(),
 		goldenATX,
 		nipost.NIPost,
-		challenge.Hash(),
+		challenge,
 		nipost.NumUnits,
 	)
 	require.NoError(t, err)
@@ -242,7 +241,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	signers := make(map[types.NodeID]*signing.EdSigner, 3)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
@@ -263,6 +262,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	})
 
 	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -273,7 +273,6 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	validator := activation.NewMocknipostValidator(ctrl)
 	var eg errgroup.Group
 	for _, sig := range signers {
-		sig := sig
 		opts := opts
 		eg.Go(func() error {
 			mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
@@ -343,11 +342,8 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
+	challenge := types.RandomHash()
 	for _, sig := range signers {
-		sig := sig
 		eg.Go(func() error {
 			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge)
 			require.NoError(t, err)
@@ -355,7 +351,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 			certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
 			certifier.CertifyAll(context.Background(), []activation.PoetClient{client})
 
-			nipost, err := nb.BuildNIPost(context.Background(), sig, &challenge, certifier)
+			nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge, certifier)
 			require.NoError(t, err)
 
 			v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
@@ -364,7 +360,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 				sig.NodeID(),
 				goldenATX,
 				nipost.NIPost,
-				challenge.Hash(),
+				challenge,
 				nipost.NumUnits,
 			)
 			require.NoError(t, err)

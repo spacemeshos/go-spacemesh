@@ -111,6 +111,7 @@ type Host interface {
 	Template() Template
 	Layer() LayerID
 	GetGenesisID() Hash20
+	Balance() uint64
 }
 
 //go:generate scalegen -types Payload

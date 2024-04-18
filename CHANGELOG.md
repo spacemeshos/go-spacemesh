@@ -2,9 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## UNRELEASED (v1.5.0)
 
 ### Upgrade information
+
+* [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
+  Updating to this version requires going through v1.4 first.
 
 ### Highlights
 
@@ -12,8 +15,62 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
-* [#5753](ttps://github.com/spacemeshos/go-spacemesh/pull/5753) Fix for a possible segmentation fault in setups with
+* [#5807](https://github.com/spacemeshos/go-spacemesh/pull/5807) Implement SMIP-0002: remove vesting vault cliff.
+ 
+* [#5840](https://github.com/spacemeshos/go-spacemesh/pull/5840) Allow vaults to spend received (as well as vested)
+coins. Fixes an oversight in the genesis VM implementation.
+
+* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
+  This also fixes ambiguity of nonces for equivocating identities.
+
+* [#5856](https://github.com/spacemeshos/go-spacemesh/pull/5856) Bump github.com/spacemeshos/api/release/go to v1.37.0.
+
+## Release v1.4.6
+
+### Improvements
+
+* [#5839](https://github.com/spacemeshos/go-spacemesh/pull/5839) Fix a bug where nodes would stop agreeing on the order
+  of TX within a block.
+
+## Release v1.4.5
+
+### Improvements
+
+* [#5796](https://github.com/spacemeshos/go-spacemesh/pull/5796) Reject p2p messages containing invalid malfeasance proofs.
+
+* [#5797](https://github.com/spacemeshos/go-spacemesh/pull/5797) Improve logging around ATX building process.
+
+* [#5802](https://github.com/spacemeshos/go-spacemesh/pull/5802) Increase the number of supported ATX per epoch to 3.5 Mio.
+
+* [#5803](https://github.com/spacemeshos/go-spacemesh/pull/5803) Fixed PoST verifiers autoscaling for 1:N setups.
+
+* [#5815](https://github.com/spacemeshos/go-spacemesh/pull/5815) Add spread to the discovery advertisement interval.
+
+* [#5819](https://github.com/spacemeshos/go-spacemesh/pull/5819) The node will now refuse connections from post services
+  if no coinbase account is set.
+
+## Release v1.4.4
+
+### Improvements
+
+* [#5777](https://github.com/spacemeshos/go-spacemesh/pull/5777) Adjusted GRPC keepalive parameters on node to allow
+  pings every 60 seconds and send keepalive pings every 10 minutes if no activity from the client is observed.
+
+## Release v1.4.3
+
+### Improvements
+
+* [#5753](https://github.com/spacemeshos/go-spacemesh/pull/5753) Fix for a possible segmentation fault in setups with
   remote post services when an identity does their initial proof.
+
+* [#5755](https://github.com/spacemeshos/go-spacemesh/pull/5755) improve efficiency of downloading and applying blocks
+  after ballots were counted.
+
+* [#5761](https://github.com/spacemeshos/go-spacemesh/pull/5761) don't interrupt sync if ballots in a layer were
+  ignored or rejected.
+
+* [#5762](https://github.com/spacemeshos/go-spacemesh/pull/5762) Fix a bug where the node could get stuck in a loop
+  when trying to fetch a block that is not in the mesh.
 
 ## Release v1.4.2
 

@@ -97,7 +97,6 @@ func TestSettingPostRandomXMode(t *testing.T) {
 	t.Parallel()
 
 	for _, mode := range []PostRandomXMode{PostRandomXModeFast, PostRandomXModeLight} {
-		mode := mode
 		t.Run(fmt.Sprintf("valid value %s", mode.String()), func(t *testing.T) {
 			t.Parallel()
 			m := new(PostRandomXMode)

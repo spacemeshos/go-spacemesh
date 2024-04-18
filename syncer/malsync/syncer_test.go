@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -97,10 +98,10 @@ func TestSyncState(t *testing.T) {
 	require.Equal(t, 2, sst.numSyncedPeers())
 }
 
-func mproof(nodeID types.NodeID) *types.MalfeasanceProof {
-	var ballotProof types.BallotProof
+func mproof(nodeID types.NodeID) *wire.MalfeasanceProof {
+	var ballotProof wire.BallotProof
 	for i := 0; i < 2; i++ {
-		ballotProof.Messages[i] = types.BallotProofMsg{
+		ballotProof.Messages[i] = wire.BallotProofMsg{
 			InnerMsg: types.BallotMetadata{
 				Layer:   types.LayerID(9),
 				MsgHash: types.RandomHash(),
@@ -110,10 +111,10 @@ func mproof(nodeID types.NodeID) *types.MalfeasanceProof {
 		}
 	}
 
-	return &types.MalfeasanceProof{
+	return &wire.MalfeasanceProof{
 		Layer: types.LayerID(11),
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
+		Proof: wire.Proof{
+			Type: wire.MultipleBallots,
 			Data: &ballotProof,
 		},
 	}

@@ -19,6 +19,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
@@ -146,7 +147,6 @@ func TestRecover(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -256,7 +256,7 @@ func validateAndPreserveData(
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for i, vatx := range deps {
-		encoded, err := codec.Encode(vatx)
+		encoded, err := codec.Encode(wire.ActivationTxToWireV1(vatx.ActivationTx))
 		require.NoError(tb, err)
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
@@ -279,6 +279,7 @@ func validateAndPreserveData(
 		} else {
 			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
 		}
+
 		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
 		mvalidator.EXPECT().
 			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits, gomock.Any()).
@@ -302,36 +303,39 @@ func newChainedAtx(
 	seq, vrfNonce uint64,
 	sig *signing.EdSigner,
 ) *types.VerifiedActivationTx {
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:   types.EpochID(epoch),
+	watx := &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
+				Publish:        types.EpochID(epoch),
 				Sequence:       seq,
 				PrevATXID:      prev,
 				PositioningATX: pos,
 				CommitmentATX:  commitAtx,
 			},
-			NIPost: &types.NIPost{
-				PostMetadata: &types.PostMetadata{
+			NIPost: &wire.NIPostV1{
+				PostMetadata: &wire.PostMetadataV1{
 					Challenge: types.RandomBytes(5),
 				},
 			},
 			NumUnits: 2,
 			Coinbase: types.Address{1, 2, 3},
 		},
+		SmesherID: sig.NodeID(),
 	}
 	if prev == types.EmptyATXID {
-		atx.InitialPost = &types.Post{}
+		watx.InitialPost = &wire.PostV1{}
 		nodeID := sig.NodeID()
-		atx.NodeID = &nodeID
+		watx.NodeID = &nodeID
 	}
 	if vrfNonce != 0 {
-		atx.VRFNonce = (*types.VRFPostIndex)(&vrfNonce)
+		watx.VRFNonce = (*uint64)(&vrfNonce)
 	}
-	atx.SmesherID = sig.NodeID()
+	watx.Signature = sig.Sign(signing.ATX, watx.SignedBytes())
+
+	atx := wire.ActivationTxFromWireV1(watx)
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
-	atx.Signature = sig.Sign(signing.ATX, atx.SignedBytes())
+
 	return newvAtx(tb, atx)
 }
 
@@ -906,7 +910,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	nid := types.BytesToNodeID(data)
 	data, err = hex.DecodeString("98e47278c1f58acfd2b670a730f28898f74eb140482a07b91ff81f9ff0b7d9f4")
 	require.NoError(t, err)
-	atx := newAtx(types.ATXID(types.BytesToHash(data)), nil, 3, 1, 0, nid)
+	atx := newAtx(types.ATXID(types.BytesToHash(data)), types.EmptyATXID, nil, 3, 1, 0, nid)
 
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,

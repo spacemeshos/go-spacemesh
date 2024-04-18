@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -54,7 +55,7 @@ type txValidator interface {
 type atxProvider interface {
 	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
 	MaxHeightAtx() (types.ATXID, error)
-	GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error)
+	GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error)
 }
 
 type postState interface {
@@ -70,6 +71,10 @@ type postSupervisor interface {
 	Status() *activation.PostSetupStatus
 	Providers() ([]activation.PostSetupProvider, error)
 	Benchmark(p activation.PostSetupProvider) (int, error)
+}
+
+type grpcPostService interface {
+	AllowConnections(allow bool)
 }
 
 // peerCounter is an api to get amount of connected peers.

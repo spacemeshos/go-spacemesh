@@ -89,10 +89,10 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			return
 		}
 		if c.refBallot == nil {
-			total, _, err := c.cdb.GetEpochWeight(ev.LayerID.GetEpoch())
-			if err != nil {
-				panic(err)
-			}
+			total := uint64(0)
+			c.atxdata.IterateInEpoch(ev.LayerID.GetEpoch(), func(_ types.ATXID, atx *atxsdata.ATX) {
+				total += atx.Weight
+			})
 			c.eligibilities = max(uint32(c.weight*layerSize/total), 1)
 		}
 		votes, err := c.tortoise.EncodeVotes(context.TODO())

@@ -47,7 +47,7 @@ func standalone() config.Config {
 
 	conf.POST.K1 = 12
 	conf.POST.K2 = 4
-	conf.POST.K3 = 4
+	conf.POST.K3 = 1
 	conf.POST.LabelsPerUnit = 64
 	conf.POST.MaxNumUnits = 2
 	conf.POST.MinNumUnits = 1

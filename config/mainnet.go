@@ -72,7 +72,7 @@ func MainnetConfig() Config {
 			MetricsPort:           1010,
 			DatabaseConnections:   16,
 			DatabasePruneInterval: 30 * time.Minute,
-			DatabaseVacuumState:   9,
+			DatabaseVacuumState:   15,
 			PruneActivesetsFrom:   12, // starting from epoch 13 activesets below 12 will be pruned
 			NetworkHRP:            "sm",
 
@@ -167,7 +167,7 @@ func MainnetConfig() Config {
 			LabelsPerUnit: 4294967296,
 			K1:            26,
 			K2:            37,
-			K3:            37,
+			K3:            1,
 			PowDifficulty: postPowDifficulty,
 		},
 		Bootstrap: bootstrap.Config{
