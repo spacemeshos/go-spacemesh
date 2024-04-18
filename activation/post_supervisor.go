@@ -143,6 +143,11 @@ func (ps *PostSupervisor) Start(cmdCfg PostSupervisorConfig, opts PostSetupOpts,
 
 	// TODO(mafa): verify that opts don't delete existing files
 
+	// safety check if opts.DataDir is a valid directory
+	if _, err := os.Stat(opts.DataDir); err != nil {
+		return fmt.Errorf("stat data dir %s: %w", opts.DataDir, err)
+	}
+
 	ps.eg = errgroup.Group{} // reset errgroup to allow restarts.
 	ctx, stop := context.WithCancel(context.Background())
 	ps.stop = stop
@@ -226,7 +231,7 @@ func (ps *PostSupervisor) runCmd(
 	smesherId types.NodeID,
 ) error {
 	args := []string{
-		"--address", cmdCfg.NodeAddress,
+		"--address", cmdCfg.NodeAddress, // safe: cmdCfg is not configurable by the user.
 
 		"--min-num-units", strconv.FormatUint(uint64(postCfg.MinNumUnits), 10),
 		"--max-num-units", strconv.FormatUint(uint64(postCfg.MaxNumUnits), 10),
@@ -234,7 +239,7 @@ func (ps *PostSupervisor) runCmd(
 		"--k2", strconv.FormatUint(uint64(postCfg.K2), 10),
 		"--pow-difficulty", postCfg.PowDifficulty.String(),
 
-		"--dir", postOpts.DataDir,
+		"--dir", postOpts.DataDir, // safe: is checked to be a valid directory in Start().
 		"-n", strconv.FormatUint(uint64(postOpts.Scrypt.N), 10),
 		"-r", strconv.FormatUint(uint64(postOpts.Scrypt.R), 10),
 		"-p", strconv.FormatUint(uint64(postOpts.Scrypt.P), 10),
@@ -246,22 +251,23 @@ func (ps *PostSupervisor) runCmd(
 		"--watch-pid", strconv.Itoa(os.Getpid()),
 	}
 	if cmdCfg.MaxRetries > 0 {
+		// safe: cmdCfg is not configurable by the user.
 		args = append(args, "--max-retries", strconv.Itoa(cmdCfg.MaxRetries))
 	}
 	if cmdCfg.CACert != "" {
-		args = append(args, "--ca-cert", cmdCfg.CACert)
+		args = append(args, "--ca-cert", cmdCfg.CACert) // safe: cmdCfg is not configurable by the user.
 	}
 	if cmdCfg.Cert != "" {
-		args = append(args, "--cert", cmdCfg.Cert)
+		args = append(args, "--cert", cmdCfg.Cert) // safe: cmdCfg is not configurable by the user.
 	}
 	if cmdCfg.Key != "" {
-		args = append(args, "--key", cmdCfg.Key)
+		args = append(args, "--key", cmdCfg.Key) // safe: cmdCfg is not configurable by the user.
 	}
 
 	cmd := exec.CommandContext(
 		ctx,
 		cmdCfg.PostServiceCmd,
-		args...,
+		args..., // arguments are shell escaped by exec.Command
 	)
 	pipe, err := cmd.StderrPipe()
 	if err != nil {
