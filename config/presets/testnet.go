@@ -122,7 +122,7 @@ func testnet() config.Config {
 			LabelsPerUnit: 1024,
 			K1:            26,
 			K2:            37,
-			K3:            37,
+			K3:            1,
 			PowDifficulty: activation.DefaultPostConfig().PowDifficulty,
 		},
 		POSTService: activation.DefaultPostServiceConfig(),

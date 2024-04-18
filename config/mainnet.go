@@ -167,7 +167,7 @@ func MainnetConfig() Config {
 			LabelsPerUnit: 4294967296,
 			K1:            26,
 			K2:            37,
-			K3:            37,
+			K3:            1,
 			PowDifficulty: postPowDifficulty,
 		},
 		Bootstrap: bootstrap.Config{

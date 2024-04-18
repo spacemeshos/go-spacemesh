@@ -251,8 +251,8 @@ func WithSigners(signers ...*signing.EdSigner) Opt {
 	}
 }
 
-// WithActiveSetPrepation overwrites configuration for activeset preparation.
-func WithActiveSetPrepation(prep ActiveSetPreparation) Opt {
+// WithActivesetPreparation overwrites configuration for activeset preparation.
+func WithActivesetPreparation(prep ActiveSetPreparation) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.activeSet = prep
 	}

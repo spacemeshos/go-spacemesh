@@ -9,9 +9,6 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
   Updating to this version requires going through v1.4 first.
 
-* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
-  This also fixes ambiguity of nonces for equivocating identities.
-
 ### Highlights
 
 ### Features
@@ -19,6 +16,14 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 ### Improvements
 
 * [#5807](https://github.com/spacemeshos/go-spacemesh/pull/5807) Implement SMIP-0002: remove vesting vault cliff.
+ 
+* [#5840](https://github.com/spacemeshos/go-spacemesh/pull/5840) Allow vaults to spend received (as well as vested)
+coins. Fixes an oversight in the genesis VM implementation.
+
+* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
+  This also fixes ambiguity of nonces for equivocating identities.
+
+* [#5856](https://github.com/spacemeshos/go-spacemesh/pull/5856) Bump github.com/spacemeshos/api/release/go to v1.37.0.
 
 ## Release v1.4.6
 
