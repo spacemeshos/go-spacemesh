@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 const (
@@ -40,6 +41,18 @@ func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	res := m.Run()
 	os.Exit(res)
+}
+
+func fullPost(post *types.Post, info *types.PostInfo, challenge []byte) *nipost.Post {
+	return &nipost.Post{
+		Nonce:         post.Nonce,
+		Indices:       post.Indices,
+		Pow:           post.Pow,
+		Challenge:     challenge,
+		NumUnits:      info.NumUnits,
+		CommitmentATX: info.CommitmentATX,
+		VRFNonce:      *info.Nonce,
+	}
 }
 
 func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
@@ -197,6 +210,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
 	require.NoError(t, err)
+	initialPost := fullPost(post, info, shared.ZeroChallenge)
 
 	client, err := activation.NewHTTPPoetClient(
 		types.PoetServer{Address: poetProver.RestURL().String()},
@@ -205,7 +219,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
+	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), initialPost)
 	certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
 	certifier.CertifyAll(context.Background(), []activation.PoetClient{client})
 
@@ -347,7 +361,8 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		eg.Go(func() error {
 			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge)
 			require.NoError(t, err)
-			certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
+			initialPost := fullPost(post, info, shared.ZeroChallenge)
+			certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), initialPost)
 			certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
 			certifier.CertifyAll(context.Background(), []activation.PoetClient{client})
 

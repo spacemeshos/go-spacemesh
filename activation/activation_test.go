@@ -1518,7 +1518,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	require.Equal(t, types.BytesToHash(poetByte), atx.GetPoetProofRef())
 
 	// postClient.Proof() should not be called again
-	_, _, _, err = tab.obtainPost(context.Background(), sig.NodeID())
+	_, err = tab.obtainPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 }
 
@@ -1536,7 +1536,7 @@ func TestBuilder_obtainPost(t *testing.T) {
 			Return(&post, &postInfo, nil)
 		tab.mValidator.EXPECT().
 			Post(gomock.Any(), sig.NodeID(), postInfo.CommitmentATX, &post, gomock.Any(), gomock.Any())
-		_, _, _, err := tab.obtainPost(context.Background(), sig.NodeID())
+		_, err := tab.obtainPost(context.Background(), sig.NodeID())
 		require.NoError(t, err)
 	})
 	t.Run("initial POST available", func(t *testing.T) {
@@ -1556,9 +1556,9 @@ func TestBuilder_obtainPost(t *testing.T) {
 		_, _, err := tab.buildInitialPost(context.Background(), sig.NodeID())
 		require.NoError(t, err)
 
-		_, _, ch, err := tab.obtainPost(context.Background(), sig.NodeID())
+		gotPost, err := tab.obtainPost(context.Background(), sig.NodeID())
 		require.NoError(t, err)
-		require.EqualValues(t, shared.ZeroChallenge, ch)
+		require.EqualValues(t, shared.ZeroChallenge, gotPost.Challenge)
 	})
 	t.Run("initial POST unavailable but ATX exists", func(t *testing.T) {
 		tab := newTestBuilder(t, 1)
@@ -1592,14 +1592,14 @@ func TestBuilder_obtainPost(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, atxs.Add(tab.db, vAtx))
 
-		post, meta, ch, err := tab.obtainPost(context.Background(), sig.NodeID())
+		post, err := tab.obtainPost(context.Background(), sig.NodeID())
 		require.NoError(t, err)
-		require.Equal(t, commitmentAtxId, meta.CommitmentATX)
-		require.Equal(t, uint32(2), meta.NumUnits)
-		require.Equal(t, sig.NodeID(), meta.NodeID)
-		require.Equal(t, uint64(777), meta.LabelsPerUnit)
-		require.Equal(t, nipost.PostMetadata.Challenge, ch)
-		require.Equal(t, nipost.Post, post)
+		require.Equal(t, commitmentAtxId, post.CommitmentATX)
+		require.Equal(t, uint32(2), post.NumUnits)
+		require.Equal(t, nipost.PostMetadata.Challenge, post.Challenge)
+		require.Equal(t, nipost.Post.Indices, post.Indices)
+		require.Equal(t, nipost.Post.Pow, post.Pow)
+		require.Equal(t, nipost.Post.Nonce, post.Nonce)
 	})
 }
 
@@ -1633,11 +1633,11 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	)
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, meta, numUnits).
 		Return(nil)
-	_, _, _, err := tab.obtainPost(context.Background(), sig.NodeID())
+	_, err := tab.obtainPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 
 	// postClient.Proof() should not be called again
-	_, _, _, err = tab.obtainPost(context.Background(), sig.NodeID())
+	_, err = tab.obtainPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 }
 

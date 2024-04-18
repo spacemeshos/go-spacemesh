@@ -365,112 +365,96 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) (*t
 // We want to certify immediately after the startup or creating the initial POST
 // to avoid all nodes spamming the certifier at the same time when
 // submitting to the poets.
-func (b *Builder) certifyPost(ctx context.Context, post *types.Post, meta *types.PostInfo, ch []byte) {
-	client := NewCertifierClient(b.log, post, meta, ch, WithCertifierClientConfig(b.certifierConfig.Client))
+func (b *Builder) certifyPost(ctx context.Context, nodeID types.NodeID, post *nipost.Post) {
+	client := NewCertifierClient(b.log, nodeID, post, WithCertifierClientConfig(b.certifierConfig.Client))
 	certifier := NewCertifier(b.localDB, b.log, client)
 	certifier.CertifyAll(ctx, b.poets)
 
 	b.smeshingMutex.Lock()
-	b.certifiers[meta.NodeID] = certifier
+	b.certifiers[nodeID] = certifier
 	b.smeshingMutex.Unlock()
 }
 
-func (b *Builder) obtainPostFromLastAtx(
-	ctx context.Context,
-	nodeId types.NodeID,
-) (*types.Post, *types.PostInfo, []byte, error) {
+func (b *Builder) obtainPostFromLastAtx(ctx context.Context, nodeId types.NodeID) (*nipost.Post, error) {
 	atxid, err := atxs.GetLastIDByNodeID(b.db, nodeId)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("no existing ATX found: %w", err)
+		return nil, fmt.Errorf("no existing ATX found: %w", err)
 	}
 	atx, err := atxs.Get(b.db, atxid)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to retrieve ATX: %w", err)
+		return nil, fmt.Errorf("failed to retrieve ATX: %w", err)
 	}
 	if atx.NIPost == nil {
-		return nil, nil, nil, errors.New("no NIPoST found in last ATX")
+		return nil, errors.New("no NIPoST found in last ATX")
 	}
 	if atx.CommitmentATX == nil {
 		if commitmentAtx, err := atxs.CommitmentATX(b.db, nodeId); err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to retrieve commitment ATX: %w", err)
+			return nil, fmt.Errorf("failed to retrieve commitment ATX: %w", err)
 		} else {
 			atx.CommitmentATX = &commitmentAtx
 		}
 	}
 	if atx.VRFNonce == nil {
 		if nonce, err := atxs.VRFNonce(b.db, nodeId, b.layerClock.CurrentLayer().GetEpoch()); err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to retrieve VRF nonce: %w", err)
+			return nil, fmt.Errorf("failed to retrieve VRF nonce: %w", err)
 		} else {
 			atx.VRFNonce = &nonce
 		}
 	}
 
 	b.log.Info("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
-	meta := &types.PostInfo{
-		NodeID:        nodeId,
-		CommitmentATX: *atx.CommitmentATX,
-		Nonce:         atx.VRFNonce,
+	return &nipost.Post{
+		Nonce:         atx.NIPost.Post.Nonce,
+		Indices:       atx.NIPost.Post.Indices,
+		Pow:           atx.NIPost.Post.Pow,
+		Challenge:     atx.NIPost.PostMetadata.Challenge,
 		NumUnits:      atx.NumUnits,
-		LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
-	}
-
-	return atx.NIPost.Post, meta, atx.NIPost.PostMetadata.Challenge, nil
+		CommitmentATX: *atx.CommitmentATX,
+		VRFNonce:      *atx.VRFNonce,
+	}, nil
 }
 
-func (b *Builder) obtainPost(ctx context.Context, nodeID types.NodeID) (*types.Post, *types.PostInfo, []byte, error) {
+func (b *Builder) obtainPost(ctx context.Context, nodeID types.NodeID) (*nipost.Post, error) {
 	b.log.Info("looking for POST for poet certification")
 	post, err := nipost.GetPost(b.localDB, nodeID)
 	switch {
 	case err == nil:
-		meta := &types.PostInfo{
-			NodeID:        nodeID,
-			CommitmentATX: post.CommitmentATX,
-			Nonce:         &post.VRFNonce,
-			NumUnits:      post.NumUnits,
-		}
-		challenge := post.Challenge
-		post := &types.Post{
-			Nonce:   post.Nonce,
-			Indices: post.Indices,
-			Pow:     post.Pow,
-		}
 		b.log.Info("found POST in local DB")
-		return post, meta, challenge, nil
+		return post, nil
 	case errors.Is(err, sql.ErrNotFound):
 		// no post found
 	default:
-		return nil, nil, nil, fmt.Errorf("loading initial post from db: %w", err)
+		return nil, fmt.Errorf("loading initial post from db: %w", err)
 	}
 
 	b.log.Info("POST not found in local DB. Trying to obtain POST from an existing ATX")
-	if post, postInfo, ch, err := b.obtainPostFromLastAtx(ctx, nodeID); err == nil {
+	if post, err := b.obtainPostFromLastAtx(ctx, nodeID); err == nil {
 		b.log.Info("found POST in an existing ATX")
-		postToPersist := nipost.Post{
-			Nonce:         post.Nonce,
-			Indices:       post.Indices,
-			Pow:           post.Pow,
-			Challenge:     ch,
-			NumUnits:      postInfo.NumUnits,
-			CommitmentATX: postInfo.CommitmentATX,
-			VRFNonce:      *postInfo.Nonce,
-		}
-		if err := nipost.AddPost(b.localDB, nodeID, postToPersist); err != nil {
+		if err := nipost.AddPost(b.localDB, nodeID, *post); err != nil {
 			b.log.Error("failed to save post", zap.Error(err))
 		}
-		return post, postInfo, ch, nil
+		return post, nil
 	}
 
 	b.log.Info("POST not found in existing ATXs. Generating the initial POST")
 	for {
 		post, postInfo, err := b.buildInitialPost(ctx, nodeID)
 		if err == nil {
-			return post, postInfo, shared.ZeroChallenge, nil
+			return &nipost.Post{
+				Nonce:         post.Nonce,
+				Indices:       post.Indices,
+				Pow:           post.Pow,
+				Challenge:     shared.ZeroChallenge,
+				NumUnits:      postInfo.NumUnits,
+				CommitmentATX: postInfo.CommitmentATX,
+				VRFNonce:      *postInfo.Nonce,
+			}, nil
 		}
 		b.log.Error("failed to generate initial proof:", zap.Error(err))
 		currentLayer := b.layerClock.CurrentLayer()
 		select {
 		case <-ctx.Done():
-			return nil, nil, nil, ctx.Err()
+			return nil, ctx.Err()
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 		}
 	}
@@ -479,12 +463,12 @@ func (b *Builder) obtainPost(ctx context.Context, nodeID types.NodeID) (*types.P
 func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	defer b.log.Info("atx builder stopped")
 
-	post, meta, ch, err := b.obtainPost(ctx, sig.NodeID())
+	post, err := b.obtainPost(ctx, sig.NodeID())
 	if err != nil {
 		b.log.Error("failed to obtain post for certification", zap.Error(err))
 		return
 	}
-	b.certifyPost(ctx, post, meta, ch)
+	b.certifyPost(ctx, sig.NodeID(), post)
 
 	for {
 		err := b.PublishActivationTx(ctx, sig)

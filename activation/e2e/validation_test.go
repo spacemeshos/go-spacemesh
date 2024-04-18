@@ -101,6 +101,7 @@ func TestValidator_Validate(t *testing.T) {
 	require.NoError(t, err)
 	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
 	require.NoError(t, err)
+	initialPost := fullPost(post, info, shared.ZeroChallenge)
 
 	challenge := types.RandomHash()
 	nb, err := activation.NewNIPostBuilder(
@@ -114,7 +115,7 @@ func TestValidator_Validate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
+	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), initialPost)
 	certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
 	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge, certifier)
 	require.NoError(t, err)

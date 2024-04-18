@@ -211,6 +211,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 // - supporting PoW only
 // - supporting certificates
 // TODO: When PoW support is removed, convert this test to verify only the cert path.
+// https://github.com/spacemeshos/go-spacemesh/issues/5212
 func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
 	t.Parallel()
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))

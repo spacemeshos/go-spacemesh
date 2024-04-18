@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 type CertifierClientConfig struct {
@@ -245,11 +246,10 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 }
 
 type CertifierClient struct {
-	client   *retryablehttp.Client
-	post     *types.Post
-	postInfo *types.PostInfo
-	postCh   []byte
-	logger   *zap.Logger
+	client *retryablehttp.Client
+	post   *nipost.Post
+	nodeID types.NodeID
+	logger *zap.Logger
 }
 
 type certifierClientOpts func(*CertifierClient)
@@ -264,17 +264,15 @@ func WithCertifierClientConfig(cfg CertifierClientConfig) certifierClientOpts {
 
 func NewCertifierClient(
 	logger *zap.Logger,
-	post *types.Post,
-	postInfo *types.PostInfo,
-	postCh []byte,
+	nodeID types.NodeID,
+	post *nipost.Post,
 	opts ...certifierClientOpts,
 ) *CertifierClient {
 	c := &CertifierClient{
-		client:   retryablehttp.NewClient(),
-		logger:   logger.With(log.ZShortStringer("smesherID", postInfo.NodeID)),
-		post:     post,
-		postInfo: postInfo,
-		postCh:   postCh,
+		client: retryablehttp.NewClient(),
+		logger: logger.With(log.ZShortStringer("smesherID", nodeID)),
+		post:   post,
+		nodeID: nodeID,
 	}
 	config := DefaultCertifierClientConfig()
 	c.client.RetryMax = config.MaxRetries
@@ -293,7 +291,7 @@ func NewCertifierClient(
 }
 
 func (c *CertifierClient) Id() types.NodeID {
-	return c.postInfo.NodeID
+	return c.nodeID
 }
 
 func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []byte) (*certifier.PoetCert, error) {
@@ -304,10 +302,10 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 			Indices: c.post.Indices,
 		},
 		Metadata: ProofToCertifyMetadata{
-			NodeId:          c.postInfo.NodeID[:],
-			CommitmentAtxId: c.postInfo.CommitmentATX[:],
-			NumUnits:        c.postInfo.NumUnits,
-			Challenge:       c.postCh,
+			NodeId:          c.nodeID[:],
+			CommitmentAtxId: c.post.CommitmentATX[:],
+			NumUnits:        c.post.NumUnits,
+			Challenge:       c.post.Challenge,
 		},
 	}
 
@@ -336,17 +334,17 @@ func (c *CertifierClient) Certify(ctx context.Context, url *url.URL, pubkey []by
 		return nil, fmt.Errorf("request failed with code %d (message: %s)", resp.StatusCode, body)
 	}
 
-	certRespose := CertifyResponse{}
-	if err := json.NewDecoder(resp.Body).Decode(&certRespose); err != nil {
+	certResponse := CertifyResponse{}
+	if err := json.NewDecoder(resp.Body).Decode(&certResponse); err != nil {
 		return nil, fmt.Errorf("decoding JSON response: %w", err)
 	}
-	if !bytes.Equal(certRespose.PubKey, pubkey) {
+	if !bytes.Equal(certResponse.PubKey, pubkey) {
 		return nil, errors.New("pubkey is invalid")
 	}
 
 	opaqueCert := &shared.OpaqueCert{
-		Data:      certRespose.Certificate,
-		Signature: certRespose.Signature,
+		Data:      certResponse.Certificate,
+		Signature: certResponse.Signature,
 	}
 
 	cert, err := shared.VerifyCertificate(opaqueCert, pubkey, c.Id().Bytes())

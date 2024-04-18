@@ -29,6 +29,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 func TestCertification(t *testing.T) {
@@ -74,6 +75,16 @@ func TestCertification(t *testing.T) {
 	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
 	require.NoError(t, err)
 
+	fullPost := &nipost.Post{
+		Nonce:         post.Nonce,
+		Indices:       post.Indices,
+		Pow:           post.Pow,
+		Challenge:     shared.ZeroChallenge,
+		NumUnits:      info.NumUnits,
+		CommitmentATX: info.CommitmentATX,
+		VRFNonce:      *info.Nonce,
+	}
+
 	t.Run("certify all poets", func(t *testing.T) {
 		poets := []activation.PoetClient{}
 		// Spawn certifier and 2 poets using it
@@ -112,7 +123,7 @@ func TestCertification(t *testing.T) {
 		require.NoError(t, err)
 		poets = append(poets, client)
 
-		certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
+		certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), fullPost)
 		certifier := activation.NewCertifier(localsql.InMemory(), zaptest.NewLogger(t), certifierClient)
 		certs := certifier.CertifyAll(context.Background(), poets)
 		require.Len(t, certs, 3)
@@ -123,7 +134,7 @@ func TestCertification(t *testing.T) {
 	t.Run("certify accepts valid cert", func(t *testing.T) {
 		pubKey, addr := spawnTestCertifier(t, cfg, nil, verifying.WithLabelScryptParams(opts.Scrypt))
 
-		client := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
+		client := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), fullPost)
 		_, err := client.Certify(context.Background(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.NoError(t, err)
 	})
@@ -137,7 +148,7 @@ func TestCertification(t *testing.T) {
 		}
 		pubKey, addr := spawnTestCertifier(t, cfg, makeCert, verifying.WithLabelScryptParams(opts.Scrypt))
 
-		client := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
+		client := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), fullPost)
 		cert, err := client.Certify(context.Background(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)
@@ -148,7 +159,7 @@ func TestCertification(t *testing.T) {
 		}
 		pubKey, addr := spawnTestCertifier(t, cfg, makeCert, verifying.WithLabelScryptParams(opts.Scrypt))
 
-		client := activation.NewCertifierClient(zaptest.NewLogger(t), post, info, shared.ZeroChallenge)
+		client := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), fullPost)
 		cert, err := client.Certify(context.Background(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)

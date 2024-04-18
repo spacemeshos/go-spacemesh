@@ -35,6 +35,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -179,9 +180,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	// 2.1. Create initial POST
 	var (
-		challenge *types.NIPostChallenge
-		post      *types.Post
-		postInfo  *types.PostInfo
+		initialPost *nipost.Post
+		challenge   *types.NIPostChallenge
 	)
 	for {
 		client, err := grpcPostService.Client(signer.NodeID())
@@ -191,7 +191,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			continue
 		}
 		ctx.Log.Info("poet service to connected")
-		post, postInfo, err = client.Proof(ctx, shared.ZeroChallenge)
+		post, postInfo, err := client.Proof(ctx, shared.ZeroChallenge)
 		require.NoError(t, err)
 
 		challenge = &types.NIPostChallenge{
@@ -204,7 +204,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		break
 	}
 	// 2.2 Certify initial POST
-	certClient := activation.NewCertifierClient(logger.Named("certifier"), post, postInfo, shared.ZeroChallenge)
+	certClient := activation.NewCertifierClient(logger.Named("certifier"), signer.NodeID(), initialPost)
 	certifier := activation.NewCertifier(localsql.InMemory(), logger, certClient)
 	certifier.CertifyAll(context.Background(), []activation.PoetClient{poetClient})
 
