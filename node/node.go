@@ -2141,10 +2141,7 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 		}
 		ref, err := poetProof.Ref()
 		if err != nil {
-			app.log.With().Error("failed to get poet proof ref after checkpoint",
-				log.Object("poet proof", poetProof),
-				log.Err(err),
-			)
+			app.log.With().Error("failed to get poet proof ref after checkpoint", log.Inline(poetProof), log.Err(err))
 			continue
 		}
 		hash := types.Hash32(ref)
@@ -2163,13 +2160,10 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 	}
 	for _, atx := range app.preserve.Deps {
 		if err := app.atxHandler.HandleSyncedAtx(ctx, atx.ID().Hash32(), p2p.NoPeer, atx.Blob); err != nil {
-			app.log.With().Error("failed to preserve atx after checkpoint",
-				log.Stringer("atx_id", atx.ID()),
-				log.Err(err),
-			)
+			app.log.With().Error("failed to preserve atx after checkpoint", log.Inline(atx), log.Err(err))
 			continue
 		}
-		app.log.With().Info("preserved atx after checkpoint", log.Stringer("atx_id", atx.ID()))
+		app.log.With().Info("preserved atx after checkpoint", log.Inline(atx))
 	}
 }
 
