@@ -2134,45 +2134,40 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 		encoded, err := codec.Encode(poetProof)
 		if err != nil {
 			app.log.With().Error("failed to encode poet proof after checkpoint",
-				log.Stringer("atx id", app.preserve.Deps[i].ID()),
 				log.Object("poet proof", poetProof),
 				log.Err(err),
 			)
 			continue
 		}
-		hash := app.preserve.Deps[i].GetPoetProofRef()
+		ref, err := poetProof.Ref()
+		if err != nil {
+			app.log.With().Error("failed to get poet proof ref after checkpoint", log.Inline(poetProof), log.Err(err))
+			continue
+		}
+		hash := types.Hash32(ref)
 		if err := app.poetDb.ValidateAndStoreMsg(ctx, hash, p2p.NoPeer, encoded); err != nil {
 			app.log.With().Error("failed to preserve poet proof after checkpoint",
-				log.Stringer("atx id", app.preserve.Deps[i].ID()),
+				log.Stringer("atx id", app.preserve.Deps[i].ID),
 				log.String("poet proof ref", hash.ShortString()),
 				log.Err(err),
 			)
 			continue
 		}
 		app.log.With().Info("preserved poet proof after checkpoint",
-			log.Stringer("atx id", app.preserve.Deps[i].ID()),
+			log.Stringer("atx id", app.preserve.Deps[i].ID),
 			log.String("poet proof ref", hash.ShortString()),
 		)
 	}
-	for _, vatx := range app.preserve.Deps {
-		encoded, err := codec.Encode(wire.ActivationTxToWireV1(vatx.ActivationTx))
-		if err != nil {
-			app.log.With().Error("failed to encode atx after checkpoint",
-				log.Inline(vatx),
+	for _, atx := range app.preserve.Deps {
+		if err := app.atxHandler.HandleSyncedAtx(ctx, atx.ID.Hash32(), p2p.NoPeer, atx.Blob); err != nil {
+			app.log.With().Error(
+				"failed to preserve atx after checkpoint",
+				log.ShortStringer("id", atx.ID),
 				log.Err(err),
 			)
 			continue
 		}
-		if err := app.atxHandler.HandleSyncedAtx(ctx, vatx.ID().Hash32(), p2p.NoPeer, encoded); err != nil {
-			app.log.With().Error("failed to preserve atx after checkpoint",
-				log.Inline(vatx),
-				log.Err(err),
-			)
-			continue
-		}
-		app.log.With().Info("preserved atx after checkpoint",
-			log.Inline(vatx),
-		)
+		app.log.With().Info("preserved atx after checkpoint", log.ShortStringer("id", atx.ID))
 	}
 }
 
