@@ -18,11 +18,12 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
 var (
 	ErrInvalidRequest = errors.New("invalid request")
-	ErrUnathorized    = errors.New("unauthorized")
+	ErrUnauthorized   = errors.New("unauthorized")
 )
 
 type PoetPowParams struct {
@@ -33,6 +34,11 @@ type PoetPowParams struct {
 type PoetPoW struct {
 	Nonce  uint64
 	Params PoetPowParams
+}
+
+type PoetAuth struct {
+	*PoetPoW
+	*certifier.PoetCert
 }
 
 // HTTPPoetClient implements PoetProvingServiceClient interface.
@@ -288,7 +294,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	case http.StatusBadRequest:
 		return fmt.Errorf("%w: response status code: %s, body: %s", ErrInvalidRequest, res.Status, string(data))
 	case http.StatusUnauthorized:
-		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnathorized, res.Status, string(data))
+		return fmt.Errorf("%w: response status code: %s, body: %s", ErrUnauthorized, res.Status, string(data))
 	default:
 		return fmt.Errorf("unrecognized error: status code: %s, body: %s", res.Status, string(data))
 	}

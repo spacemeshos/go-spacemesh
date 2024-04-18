@@ -1444,6 +1444,10 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "timed out waiting for activation event")
 	}
+
+	// state is cleaned up
+	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {

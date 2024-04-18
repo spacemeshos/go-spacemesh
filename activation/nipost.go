@@ -348,7 +348,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	// FIXME: remove support for deprecated poet PoW
 	auth := PoetAuth{
-		PoetCert: certifier.GetCertificate(client.Address()),
+		PoetCert: certifier.Certificate(client.Address()),
 	}
 	if auth.PoetCert == nil {
 		logger.Info("missing poet cert - falling back to PoW")
@@ -388,21 +388,23 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		err   error
 	)
 
-	for try := 0; try < 2; try++ {
+	round, err = client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, auth)
+	switch {
+	case errors.Is(err, ErrUnauthorized):
+		logger.Warn("failed to submit challenge as unathorized - recertifying", zap.Error(err))
+		auth.PoetCert, err = certifier.Recertify(ctx, client)
+		if err != nil {
+			return &PoetSvcUnstableError{msg: "failed to regenerate poet certificate", source: err}
+		}
 		round, err = client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, auth)
-		if err == nil {
-			break
+		if err != nil {
+			return &PoetSvcUnstableError{msg: "failed to regenerate poet certificate", source: err}
 		}
-		if errors.Is(err, ErrUnathorized) && try == 0 {
-			logger.Warn("failed to submit challenge as unathorized - recertifying", zap.Error(err))
-			auth.PoetCert, err = certifier.Recertify(ctx, client)
-			if err != nil {
-				return &PoetSvcUnstableError{msg: "failed to regenerate poet certificate", source: err}
-			}
-		} else {
-			return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
-		}
+	case err != nil:
+		return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
+	default: // err == nil
 	}
+
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
 	return nipost.AddPoetRegistration(nb.localDB, nodeID, nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),

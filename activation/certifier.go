@@ -3,7 +3,6 @@ package activation
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,33 +31,6 @@ type CertifierClientConfig struct {
 	MaxRetryDelay time.Duration `mapstructure:"max-retry-delay"`
 	// Maximum number of retries
 	MaxRetries int `mapstructure:"max-retries"`
-}
-
-type Base64Enc struct {
-	Inner []byte
-}
-
-func (e Base64Enc) String() string {
-	return base64.RawStdEncoding.EncodeToString(e.Inner)
-}
-
-// Set implements pflag.Value.Set.
-func (e *Base64Enc) Set(value string) error {
-	return e.UnmarshalText([]byte(value))
-}
-
-// Type implements pflag.Value.Type.
-func (Base64Enc) Type() string {
-	return "Base64Enc"
-}
-
-func (e *Base64Enc) UnmarshalText(text []byte) error {
-	b, err := base64.StdEncoding.DecodeString(string(text))
-	if err != nil {
-		return err
-	}
-	e.Inner = b
-	return nil
 }
 
 type CertifierConfig struct {
@@ -124,7 +96,7 @@ func NewCertifier(
 	return c
 }
 
-func (c *Certifier) GetCertificate(poet string) *certifier.PoetCert {
+func (c *Certifier) Certificate(poet string) *certifier.PoetCert {
 	cert, err := certifier.Certificate(c.db, c.client.Id(), poet)
 	switch {
 	case err == nil:
@@ -160,7 +132,7 @@ func (c *Certifier) CertifyAll(ctx context.Context, poets []PoetClient) map[stri
 	certs := make(map[string]*certifier.PoetCert)
 	poetsToCertify := []PoetClient{}
 	for _, poet := range poets {
-		if cert := c.GetCertificate(poet.Address()); cert != nil {
+		if cert := c.Certificate(poet.Address()); cert != nil {
 			certs[poet.Address()] = cert
 		} else {
 			poetsToCertify = append(poetsToCertify, poet)

@@ -33,19 +33,19 @@ func TestPersistsCerts(t *testing.T) {
 			Certify(gomock.Any(), &url.URL{Scheme: "http", Host: "certifier.org"}, []byte("pubkey")).
 			Return(cert, nil)
 
-		require.Nil(t, c.GetCertificate("http://poet"))
+		require.Nil(t, c.Certificate("http://poet"))
 		got, err := c.Recertify(context.Background(), poetMock)
 		require.NoError(t, err)
 		require.Equal(t, cert, got)
 
-		got = c.GetCertificate("http://poet")
+		got = c.Certificate("http://poet")
 		require.Equal(t, cert, got)
-		require.Nil(t, c.GetCertificate("http://other-poet"))
+		require.Nil(t, c.Certificate("http://other-poet"))
 	}
 	{
 		// Create new certifier and check that it loads the certs back.
 		c := activation.NewCertifier(db, zaptest.NewLogger(t), client)
-		got := c.GetCertificate("http://poet")
+		got := c.Certificate("http://poet")
 		require.Equal(t, cert, got)
 	}
 }
