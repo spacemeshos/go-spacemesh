@@ -143,11 +143,6 @@ func (ps *PostSupervisor) Start(cmdCfg PostSupervisorConfig, opts PostSetupOpts,
 
 	// TODO(mafa): verify that opts don't delete existing files
 
-	// safety check if opts.DataDir is a valid directory
-	if _, err := os.Stat(opts.DataDir); err != nil {
-		return fmt.Errorf("stat data dir %s: %w", opts.DataDir, err)
-	}
-
 	ps.eg = errgroup.Group{} // reset errgroup to allow restarts.
 	ctx, stop := context.WithCancel(context.Background())
 	ps.stop = stop
