@@ -2,13 +2,12 @@ package layers
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
-
-const fullQuery = `select id, weak_coin, processed, applied_block, state_hash, aggregated_hash from layers`
 
 // SetWeakCoin for the layer.
 func SetWeakCoin(db sql.Executor, lid types.LayerID, weakcoin bool) error {
@@ -317,6 +316,7 @@ type Layer struct {
 	AppliedBlock   types.BlockID
 	StateHash      types.Hash32
 	AggregatedHash types.Hash32
+	Block          *types.Block
 }
 
 type decoderCallback = func(*Layer, error) bool
@@ -333,18 +333,32 @@ func decoder(fn decoderCallback) sql.Decoder {
 		stmt.ColumnBytes(4, l.StateHash[:])
 		stmt.ColumnBytes(5, l.AggregatedHash[:])
 
+		inner := types.InnerBlock{}
+		_, err := codec.DecodeFrom(stmt.ColumnReader(7), &inner)
+		if err != nil {
+			fn(l, fmt.Errorf("failed to decode block %s: %w", l.AppliedBlock, err))
+		}
+
+		l.Block, err = types.NewExistingBlock(l.AppliedBlock, inner), nil
+		if err != nil {
+			fn(l, err)
+		}
+
 		return fn(l, nil)
 	}
 }
 
-func IterateLayersOps(
+func IterateLayersWithBlockOps(
 	db sql.Executor,
 	operations builder.Operations,
 	fn func(layer *Layer) bool,
 ) error {
 	var derr error
 	_, err := db.Exec(
-		fullQuery+builder.FilterFrom(operations),
+		`SELECT l.id, l.weak_coin, l.processed, l.applied_block, l.state_hash, l.aggregated_hash,
+       		b.validity, b.block FROM layers l
+       		    LEFT JOIN blocks b ON l.id = b.layer`+
+			builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
 		decoder(func(layer *Layer, err error) bool {
 			if layer != nil {

@@ -38,8 +38,10 @@ const (
 )
 
 type Op struct {
-	Field field
-	Token token
+	// Prefix will be added before field name
+	Prefix string
+	Field  field
+	Token  token
 	// Value will be type casted to one the expected types.
 	// Operation will panic if it doesn't match any of expected.
 	Value any
@@ -66,7 +68,8 @@ func FilterFrom(operations Operations) string {
 		} else {
 			queryBuilder.WriteString(" and")
 		}
-		queryBuilder.WriteString(" " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1))
+		queryBuilder.WriteString(" " + string(op.Prefix) + string(op.Field) + " " + string(op.Token) +
+			" ?" + strconv.Itoa(i+1))
 	}
 
 	for _, m := range operations.Modifiers {

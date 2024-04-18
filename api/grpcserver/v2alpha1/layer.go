@@ -3,16 +3,18 @@ package v2alpha1
 import (
 	"bytes"
 	"context"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"errors"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"io"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -22,20 +24,12 @@ const (
 	LayerStream = "layer_stream_v2alpha1"
 )
 
-// layerMeshAPI is an api for getting mesh status.
-type layerMeshAPI interface {
-	LatestLayerInState() types.LayerID
-	ProcessedLayer() types.LayerID
-	GetLayerVerified(types.LayerID) (*types.Block, error)
-}
-
 func NewLayerStreamService(db sql.Executor) *LayerStreamService {
 	return &LayerStreamService{db: db}
 }
 
 type LayerStreamService struct {
-	db   sql.Executor
-	mesh layerMeshAPI
+	db sql.Executor
 }
 
 func (s *LayerStreamService) RegisterService(server *grpc.Server) {
@@ -50,24 +44,172 @@ func (s *LayerStreamService) Stream(
 	request *spacemeshv2alpha1.LayerStreamRequest,
 	stream spacemeshv2alpha1.LayerStreamService_StreamServer,
 ) error {
+	ctx := stream.Context()
+	var sub *events.BufferedSubscription[events.LayerUpdate]
+	if request.Watch {
+		matcher := layersMatcher{request, ctx}
+		var err error
+		sub, err = events.SubscribeMatched(matcher.match)
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		defer sub.Close()
+		if err := stream.SendHeader(metadata.MD{}); err != nil {
+			return status.Errorf(codes.Unavailable, "can't send header")
+		}
+	}
 
-	return nil
+	dbChan := make(chan *spacemeshv2alpha1.Layer, 100)
+	errChan := make(chan error, 1)
+
+	ops, err := toLayerOperations(toLayerRequest(request))
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	// send db data to chan to avoid buffer overflow
+	go func() {
+		defer close(dbChan)
+		if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
+			select {
+			case dbChan <- &spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
+				V1: toLayer(layer),
+			}}:
+				return true
+			case <-ctx.Done():
+				// exit if the stream context is canceled
+				return false
+			}
+		}); err != nil {
+			errChan <- status.Error(codes.Internal, err.Error())
+			return
+		}
+	}()
+
+	var eventsOut <-chan events.LayerUpdate
+	var eventsFull <-chan struct{}
+	if sub != nil {
+		eventsOut = sub.Out()
+		eventsFull = sub.Full()
+	}
+
+	for {
+		select {
+		case rst := <-eventsOut:
+			var derr error
+			ops := builder.Operations{}
+			ops.Filter = append(ops.Filter, builder.Op{
+				Prefix: "l.",
+				Field:  builder.Id,
+				Token:  builder.Eq,
+				Value:  int64(rst.LayerID.Uint32()),
+			})
+			if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
+				l := toLayer(layer)
+
+				l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
+				if rst.Status == events.LayerStatusTypeApproved {
+					l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED
+				}
+				if rst.Status == events.LayerStatusTypeConfirmed || rst.Status == events.LayerStatusTypeApplied {
+					l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
+				}
+
+				derr = stream.Send(&spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
+					V1: l,
+				}})
+				return true
+			}); err != nil {
+				return status.Error(codes.Internal, derr.Error())
+			}
+
+			switch {
+			case errors.Is(derr, io.EOF):
+				return nil
+			case derr != nil:
+				return status.Error(codes.Internal, derr.Error())
+			}
+		default:
+			select {
+			case rst := <-eventsOut:
+				var derr error
+				ops := builder.Operations{}
+				ops.Filter = append(ops.Filter, builder.Op{
+					Prefix: "l.",
+					Field:  builder.Id,
+					Token:  builder.Eq,
+					Value:  int64(rst.LayerID.Uint32()),
+				})
+				if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
+					l := toLayer(layer)
+
+					l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
+					if rst.Status == events.LayerStatusTypeApproved {
+						l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED
+					}
+					if rst.Status == events.LayerStatusTypeConfirmed || rst.Status == events.LayerStatusTypeApplied {
+						l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
+					}
+
+					derr = stream.Send(&spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
+						V1: l,
+					}})
+					return true
+				}); err != nil {
+					return status.Error(codes.Internal, derr.Error())
+				}
+
+				switch {
+				case errors.Is(derr, io.EOF):
+					return nil
+				case derr != nil:
+					return status.Error(codes.Internal, derr.Error())
+				}
+			case <-eventsFull:
+				return status.Error(codes.Canceled, "buffer overflow")
+			case rst, ok := <-dbChan:
+				if !ok {
+					dbChan = nil
+					if sub == nil {
+						return nil
+					}
+					continue
+				}
+				err := stream.Send(rst)
+				switch {
+				case errors.Is(err, io.EOF):
+					return nil
+				case err != nil:
+					return status.Error(codes.Internal, err.Error())
+				}
+			case err := <-errChan:
+				return err
+			case <-ctx.Done():
+				return nil
+			}
+		}
+	}
+}
+
+func toLayerRequest(filter *spacemeshv2alpha1.LayerStreamRequest) *spacemeshv2alpha1.LayerRequest {
+	req := &spacemeshv2alpha1.LayerRequest{
+		StartLayer: filter.StartLayer,
+		EndLayer:   filter.EndLayer,
+	}
+	return req
 }
 
 func (s *LayerStreamService) String() string {
 	return "LayerStreamService"
 }
 
-func NewLayerService(db sql.Executor, msh layerMeshAPI) *LayerService {
+func NewLayerService(db sql.Executor) *LayerService {
 	return &LayerService{
-		db:   db,
-		mesh: msh,
+		db: db,
 	}
 }
 
 type LayerService struct {
-	db   sql.Executor
-	mesh layerMeshAPI
+	db sql.Executor
 }
 
 func (s *LayerService) RegisterService(server *grpc.Server) {
@@ -99,30 +241,12 @@ func (s *LayerService) List(
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 1000")
 	}
 
-	lastLayerPassedHare := s.mesh.LatestLayerInState()
-	lastLayerPassedTortoise := s.mesh.ProcessedLayer()
 	rst := make([]*spacemeshv2alpha1.Layer, 0, request.Limit)
 	var derr error
-	if err := layers.IterateLayersOps(s.db, ops, func(layer *layers.Layer) bool {
-		layerStatus := spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
-		if !layer.Id.After(lastLayerPassedHare) {
-			layerStatus = spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED
-		}
-		if !layer.Id.After(lastLayerPassedTortoise) {
-			layerStatus = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
-		}
-
-		block, err := s.mesh.GetLayerVerified(layer.Id)
-		if err != nil {
-			ctxzap.Error(ctx, "could not read layer from database", layer.Id.Field().Zap(), zap.Error(err))
-			derr = status.Errorf(codes.Internal, "error reading layer data: %v", err)
-			return false
-		}
-
+	if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
 		rst = append(rst, &spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
-			V1: toLayer(layer, layerStatus, block),
+			V1: toLayer(layer),
 		}})
-
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -142,23 +266,25 @@ func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operatio
 
 	if filter.StartLayer != 0 {
 		ops.Filter = append(ops.Filter, builder.Op{
-			Field: builder.Id,
-			Token: builder.Gte,
-			Value: int64(filter.StartLayer),
+			Prefix: "l.",
+			Field:  builder.Id,
+			Token:  builder.Gte,
+			Value:  int64(filter.StartLayer),
 		})
 	}
 
 	if filter.EndLayer != 0 {
 		ops.Filter = append(ops.Filter, builder.Op{
-			Field: builder.Id,
-			Token: builder.Lte,
-			Value: int64(filter.EndLayer),
+			Prefix: "l.",
+			Field:  builder.Id,
+			Token:  builder.Lte,
+			Value:  int64(filter.EndLayer),
 		})
 	}
 
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
-		Value: "id asc",
+		Value: "l.id asc",
 	})
 
 	if filter.Limit != 0 {
@@ -177,10 +303,17 @@ func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operatio
 	return ops, nil
 }
 
-func toLayer(layer *layers.Layer, layerStatus spacemeshv2alpha1.LayerV1_LayerStatus, block *types.Block) *spacemeshv2alpha1.LayerV1 {
+func toLayer(layer *layers.Layer) *spacemeshv2alpha1.LayerV1 {
 	v1 := &spacemeshv2alpha1.LayerV1{
 		Number: layer.Id.Uint32(),
-		Status: layerStatus,
+	}
+
+	v1.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
+	if !layer.AppliedBlock.IsEmpty() {
+		v1.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED
+	}
+	if layer.Processed {
+		v1.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
 	}
 
 	if bytes.Compare(layer.AggregatedHash.Bytes(), types.Hash32{}.Bytes()) != 0 {
@@ -192,15 +325,36 @@ func toLayer(layer *layers.Layer, layerStatus spacemeshv2alpha1.LayerV1_LayerSta
 		v1.StateHash = layer.StateHash.Bytes()
 	}
 
-	if block != nil {
+	if layer.Block != nil {
 		v1.Blocks = &spacemeshv2alpha1.Block{
 			Versioned: &spacemeshv2alpha1.Block_V1{
 				V1: &spacemeshv2alpha1.BlockV1{
-					Id: types.Hash20(block.ID()).Bytes(),
+					Id: types.Hash20(layer.Block.ID()).Bytes(),
 				},
 			},
 		}
 	}
 
 	return v1
+}
+
+type layersMatcher struct {
+	*spacemeshv2alpha1.LayerStreamRequest
+	ctx context.Context
+}
+
+func (m *layersMatcher) match(l *events.LayerUpdate) bool {
+	if m.StartLayer != 0 {
+		if l.LayerID.Uint32() < m.StartLayer {
+			return false
+		}
+	}
+
+	if m.EndLayer != 0 {
+		if l.LayerID.Uint32() > m.EndLayer {
+			return false
+		}
+	}
+
+	return true
 }
