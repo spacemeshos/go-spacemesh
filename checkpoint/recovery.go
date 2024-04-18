@@ -226,7 +226,7 @@ func recoverFromLocalFile(
 	allDeps := maps.Values(deps)
 	// sort ATXs them by publishEpoch and then by ID
 	slices.SortFunc(allDeps, func(i, j *AtxDep) int {
-		return bytes.Compare(i.ID.Bytes(), i.ID.Bytes())
+		return bytes.Compare(i.ID.Bytes(), j.ID.Bytes())
 	})
 	slices.SortStableFunc(allDeps, func(i, j *AtxDep) int {
 		return int(i.PublishEpoch) - int(j.PublishEpoch)

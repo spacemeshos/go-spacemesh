@@ -2147,23 +2147,27 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 		hash := types.Hash32(ref)
 		if err := app.poetDb.ValidateAndStoreMsg(ctx, hash, p2p.NoPeer, encoded); err != nil {
 			app.log.With().Error("failed to preserve poet proof after checkpoint",
-				log.Stringer("atx id", app.preserve.Deps[i].ID()),
+				log.Stringer("atx id", app.preserve.Deps[i].ID),
 				log.String("poet proof ref", hash.ShortString()),
 				log.Err(err),
 			)
 			continue
 		}
 		app.log.With().Info("preserved poet proof after checkpoint",
-			log.Stringer("atx id", app.preserve.Deps[i].ID()),
+			log.Stringer("atx id", app.preserve.Deps[i].ID),
 			log.String("poet proof ref", hash.ShortString()),
 		)
 	}
 	for _, atx := range app.preserve.Deps {
-		if err := app.atxHandler.HandleSyncedAtx(ctx, atx.ID().Hash32(), p2p.NoPeer, atx.Blob); err != nil {
-			app.log.With().Error("failed to preserve atx after checkpoint", log.Inline(atx), log.Err(err))
+		if err := app.atxHandler.HandleSyncedAtx(ctx, atx.ID.Hash32(), p2p.NoPeer, atx.Blob); err != nil {
+			app.log.With().Error(
+				"failed to preserve atx after checkpoint",
+				log.ShortStringer("id", atx.ID),
+				log.Err(err),
+			)
 			continue
 		}
-		app.log.With().Info("preserved atx after checkpoint", log.Inline(atx))
+		app.log.With().Info("preserved atx after checkpoint", log.ShortStringer("id", atx.ID))
 	}
 }
 
