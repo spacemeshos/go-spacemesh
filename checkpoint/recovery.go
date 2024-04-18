@@ -97,8 +97,9 @@ func copyToLocalFile(
 }
 
 type AtxDep struct {
-	types.VerifiedActivationTx
-	Blob []byte
+	ID           types.ATXID
+	PublishEpoch types.EpochID
+	Blob         []byte
 }
 
 type PreservedData struct {
@@ -225,20 +226,20 @@ func recoverFromLocalFile(
 	allDeps := maps.Values(deps)
 	// sort ATXs them by publishEpoch and then by ID
 	slices.SortFunc(allDeps, func(i, j *AtxDep) int {
-		return bytes.Compare(i.ID().Bytes(), j.ID().Bytes())
+		return bytes.Compare(i.ID.Bytes(), i.ID.Bytes())
 	})
 	slices.SortStableFunc(allDeps, func(i, j *AtxDep) int {
 		return int(i.PublishEpoch) - int(j.PublishEpoch)
 	})
 	allProofs := make([]*types.PoetProofMessage, 0, len(proofs))
 	for _, dep := range allDeps {
-		poetProofRef, err := atxs.PoetProofRef(context.Background(), db, dep.ID())
+		poetProofRef, err := atxs.PoetProofRef(context.Background(), db, dep.ID)
 		if err != nil {
-			return nil, fmt.Errorf("get poet proof ref (%v): %w", dep.ID(), err)
+			return nil, fmt.Errorf("get poet proof ref (%v): %w", dep.ID, err)
 		}
 		proof, ok := proofs[poetProofRef]
 		if !ok {
-			return nil, fmt.Errorf("missing poet proof for atx %v", dep.ID())
+			return nil, fmt.Errorf("missing poet proof for atx %v", dep.ID)
 		}
 		allProofs = append(allProofs, proof)
 	}
@@ -488,8 +489,9 @@ func collect(
 	}
 
 	deps[ref] = &AtxDep{
-		VerifiedActivationTx: *atx,
-		Blob:                 blob.Bytes,
+		ID:           ref,
+		PublishEpoch: atx.PublishEpoch,
+		Blob:         blob.Bytes,
 	}
 	all[ref] = struct{}{}
 	return nil

@@ -253,13 +253,16 @@ func validateAndPreserveData(
 		lg,
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	for _, vatx := range deps {
+	for _, dep := range deps {
+		var atx wire.ActivationTxV1
+		require.NoError(tb, codec.Decode(dep.Blob, &atx))
+		vatx := wire.ActivationTxFromWireV1(&atx)
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
 		if vatx.InitialPost != nil {
 			mvalidator.EXPECT().
-				InitialNIPostChallenge(&vatx.ActivationTx.NIPostChallenge, gomock.Any(), goldenAtx).
+				InitialNIPostChallenge(&vatx.NIPostChallenge, gomock.Any(), goldenAtx).
 				AnyTimes()
 			mvalidator.EXPECT().Post(
 				gomock.Any(),
@@ -273,7 +276,7 @@ func validateAndPreserveData(
 			mvalidator.EXPECT().
 				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
 		} else {
-			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
+			mvalidator.EXPECT().NIPostChallenge(&vatx.NIPostChallenge, cdb, vatx.SmesherID)
 		}
 
 		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
@@ -283,7 +286,7 @@ func validateAndPreserveData(
 		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", vatx.Blob))
+		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", dep.Blob))
 	}
 }
 
@@ -330,8 +333,9 @@ func newChainedAtx(
 	atx.SetReceived(time.Now().Local())
 
 	return &checkpoint.AtxDep{
-		VerifiedActivationTx: *newvAtx(tb, atx),
-		Blob:                 codec.MustEncode(watx),
+		ID:           atx.ID(),
+		PublishEpoch: atx.PublishEpoch,
+		Blob:         codec.MustEncode(watx),
 	}
 }
 
@@ -368,22 +372,22 @@ func createInterlinkedAtxChain(
 	// epoch 2
 	sig1Atx1 := newChainedAtx(tb, types.EmptyATXID, goldenAtx, &goldenAtx, poetRef(), 2, 0, 113, sig1)
 	// epoch 3
-	sig1Atx2 := newChainedAtx(tb, sig1Atx1.ID(), sig1Atx1.ID(), nil, poetRef(), 3, 1, 0, sig1)
+	sig1Atx2 := newChainedAtx(tb, sig1Atx1.ID, sig1Atx1.ID, nil, poetRef(), 3, 1, 0, sig1)
 	// epoch 4
-	sig1Atx3 := newChainedAtx(tb, sig1Atx2.ID(), sig1Atx2.ID(), nil, poetRef(), 4, 2, 0, sig1)
-	commitAtxID := sig1Atx2.ID()
-	sig2Atx1 := newChainedAtx(tb, types.EmptyATXID, sig1Atx2.ID(), &commitAtxID, poetRef(), 4, 0, 513, sig2)
+	sig1Atx3 := newChainedAtx(tb, sig1Atx2.ID, sig1Atx2.ID, nil, poetRef(), 4, 2, 0, sig1)
+	commitAtxID := sig1Atx2.ID
+	sig2Atx1 := newChainedAtx(tb, types.EmptyATXID, sig1Atx2.ID, &commitAtxID, poetRef(), 4, 0, 513, sig2)
 	// epoch 5
-	sig1Atx4 := newChainedAtx(tb, sig1Atx3.ID(), sig2Atx1.ID(), nil, poetRef(), 5, 3, 0, sig1)
+	sig1Atx4 := newChainedAtx(tb, sig1Atx3.ID, sig2Atx1.ID, nil, poetRef(), 5, 3, 0, sig1)
 	// epoch 6
-	sig1Atx5 := newChainedAtx(tb, sig1Atx4.ID(), sig1Atx4.ID(), nil, poetRef(), 6, 4, 0, sig1)
-	sig2Atx2 := newChainedAtx(tb, sig2Atx1.ID(), sig1Atx4.ID(), nil, poetRef(), 6, 1, 0, sig2)
+	sig1Atx5 := newChainedAtx(tb, sig1Atx4.ID, sig1Atx4.ID, nil, poetRef(), 6, 4, 0, sig1)
+	sig2Atx2 := newChainedAtx(tb, sig2Atx1.ID, sig1Atx4.ID, nil, poetRef(), 6, 1, 0, sig2)
 	// epoch 7
-	sig1Atx6 := newChainedAtx(tb, sig1Atx5.ID(), sig2Atx2.ID(), nil, poetRef(), 7, 5, 0, sig1)
+	sig1Atx6 := newChainedAtx(tb, sig1Atx5.ID, sig2Atx2.ID, nil, poetRef(), 7, 5, 0, sig1)
 	// epoch 8
-	sig2Atx3 := newChainedAtx(tb, sig2Atx2.ID(), sig1Atx6.ID(), nil, poetRef(), 8, 2, 0, sig2)
+	sig2Atx3 := newChainedAtx(tb, sig2Atx2.ID, sig1Atx6.ID, nil, poetRef(), 8, 2, 0, sig2)
 	// epoch 9
-	sig1Atx7 := newChainedAtx(tb, sig1Atx6.ID(), sig2Atx3.ID(), nil, poetRef(), 9, 6, 0, sig1)
+	sig1Atx7 := newChainedAtx(tb, sig1Atx6.ID, sig2Atx3.ID, nil, poetRef(), 9, 6, 0, sig1)
 
 	vAtxs := []*checkpoint.AtxDep{
 		sig1Atx1,
@@ -421,9 +425,9 @@ func createAtxChainDepsOnly(tb testing.TB) ([]*checkpoint.AtxDep, []*types.PoetP
 	// epoch 2
 	othAtx1 := newChainedAtx(tb, types.EmptyATXID, goldenAtx, &goldenAtx, poetRef(), 2, 0, 113, other)
 	// epoch 3
-	othAtx2 := newChainedAtx(tb, othAtx1.ID(), othAtx1.ID(), nil, poetRef(), 3, 1, 0, other)
+	othAtx2 := newChainedAtx(tb, othAtx1.ID, othAtx1.ID, nil, poetRef(), 3, 1, 0, other)
 	// epoch 4
-	othAtx3 := newChainedAtx(tb, othAtx2.ID(), othAtx2.ID(), nil, poetRef(), 4, 2, 0, other)
+	othAtx3 := newChainedAtx(tb, othAtx2.ID, othAtx2.ID, nil, poetRef(), 4, 2, 0, other)
 	atxDeps := []*checkpoint.AtxDep{othAtx1, othAtx2, othAtx3}
 
 	return atxDeps, proofs
@@ -432,7 +436,7 @@ func createAtxChainDepsOnly(tb testing.TB) ([]*checkpoint.AtxDep, []*types.PoetP
 func atxIDs(atxs []*checkpoint.AtxDep) []types.ATXID {
 	ids := make([]types.ATXID, 0, len(atxs))
 	for _, atx := range atxs {
-		ids = append(ids, atx.ID())
+		ids = append(ids, atx.ID)
 	}
 	return ids
 }
@@ -597,11 +601,16 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NoError(t, oldDB.Close())
 
 	// write pending nipost challenge to simulate a pending atx still waiting for poet proof.
-	prevAtx1 := vAtxs1[len(vAtxs1)-2]
-	posAtx1 := vAtxs1[len(vAtxs1)-1]
+	var atx wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-2].Blob, &atx))
+	prevAtx1 := wire.ActivationTxFromWireV1(&atx)
+	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-1].Blob, &atx))
+	posAtx1 := wire.ActivationTxFromWireV1(&atx)
 
-	prevAtx2 := vAtxs2[len(vAtxs2)-2]
-	posAtx2 := vAtxs2[len(vAtxs2)-1]
+	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-2].Blob, &atx))
+	prevAtx2 := wire.ActivationTxFromWireV1(&atx)
+	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-1].Blob, &atx))
+	posAtx2 := wire.ActivationTxFromWireV1(&atx)
 
 	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
 	require.NoError(t, err)
@@ -779,18 +788,18 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	require.NotNil(t, oldDB)
 	vAtxs, proofs := createAtxChain(t, sig)
 	// make the first one from the previous snapshot
-	golden := vAtxs[0]
+	var atx wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs[0].Blob, &atx))
+	golden := wire.ActivationTxFromWireV1(&atx)
 	require.NoError(t, atxs.AddCheckpointed(oldDB, &atxs.CheckpointAtx{
-		ID:             golden.ID(),
-		Epoch:          golden.PublishEpoch,
-		CommitmentATX:  *golden.CommitmentATX,
-		VRFNonce:       *golden.VRFNonce,
-		NumUnits:       golden.NumUnits,
-		BaseTickHeight: golden.BaseTickHeight(),
-		TickCount:      golden.TickCount(),
-		SmesherID:      golden.SmesherID,
-		Sequence:       golden.Sequence,
-		Coinbase:       golden.Coinbase,
+		ID:            golden.ID(),
+		Epoch:         golden.PublishEpoch,
+		CommitmentATX: *golden.CommitmentATX,
+		VRFNonce:      *golden.VRFNonce,
+		NumUnits:      golden.NumUnits,
+		SmesherID:     golden.SmesherID,
+		Sequence:      golden.Sequence,
+		Coinbase:      golden.Coinbase,
 	}))
 	validateAndPreserveData(t, oldDB, vAtxs[1:])
 	// the proofs are not valid, but save them anyway for the purpose of testing
