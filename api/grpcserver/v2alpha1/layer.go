@@ -326,7 +326,7 @@ func toLayer(layer *layers.Layer) *spacemeshv2alpha1.LayerV1 {
 	}
 
 	if layer.Block != nil {
-		v1.Blocks = &spacemeshv2alpha1.Block{
+		v1.Block = &spacemeshv2alpha1.Block{
 			Versioned: &spacemeshv2alpha1.Block_V1{
 				V1: &spacemeshv2alpha1.BlockV1{
 					Id: types.Hash20(layer.Block.ID()).Bytes(),
