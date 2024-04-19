@@ -217,7 +217,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 	setup := func(t *testing.T) (hdlr *testHandler, prev, pos *wire.ActivationTxV1) {
 		atxHdlr := newTestHandler(t, goldenATXID)
 
-		prevAtx := newActivationTxV1(t, goldenATXID)
+		prevAtx := newInitialATXv1(t, goldenATXID)
 		prevAtx.NumUnits = 100
 		prevAtx.Sign(sig)
 		atxHdlr.expectAtxV1(prevAtx, sig.NodeID())
@@ -226,7 +226,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		posAtx := newActivationTxV1(t, goldenATXID)
+		posAtx := newInitialATXv1(t, goldenATXID)
 		posAtx.Sign(otherSig)
 		atxHdlr.expectAtxV1(posAtx, otherSig.NodeID())
 		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(posAtx)))
@@ -345,7 +345,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr, _, posAtx := setup(t)
 
 		ctxID := posAtx.ID()
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.CommitmentATXID = &ctxID
 		atx.Sign(sig)
 
@@ -417,7 +417,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr, _, posAtx := setup(t)
 
 		cATX := posAtx.ID()
-		atx := newActivationTxV1(t, cATX)
+		atx := newInitialATXv1(t, cATX)
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
@@ -474,7 +474,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Signature = sig.Sign(signing.ATX, atx.SignedBytes())
 		atx.SmesherID = sig.NodeID()
 
@@ -486,7 +486,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.VRFNonce = nil
 		atx.Sign(sig)
 
@@ -498,7 +498,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
@@ -524,7 +524,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.CommitmentATXID = nil
 		atx.Sign(sig)
 
@@ -536,7 +536,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.CommitmentATXID = &types.EmptyATXID
 		atx.Sign(sig)
 
@@ -548,7 +548,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sequence = 1
 		atx.Sign(sig)
 
@@ -560,7 +560,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
@@ -575,7 +575,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.PositioningATXID = types.EmptyATXID
 		atx.Sign(sig)
 
@@ -587,7 +587,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, _ := setup(t)
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.PrevATXID = prevAtx.ID()
 		atx.Sign(sig)
 
@@ -630,7 +630,7 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 	t.Run("valid initial atx", func(t *testing.T) {
 		t.Parallel()
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
 		atxHdlr := newTestHandler(t, goldenATXID)
@@ -642,7 +642,7 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 
 		atxHdlr := newTestHandler(t, goldenATXID)
 
-		prevAtx := newActivationTxV1(t, goldenATXID)
+		prevAtx := newInitialATXv1(t, goldenATXID)
 		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, goldenATXID)
 
 		err = atxHdlr.contextuallyValidateAtx(atx)
@@ -654,7 +654,7 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 
 		atxHdlr := newTestHandler(t, goldenATXID)
 
-		atx0 := newActivationTxV1(t, goldenATXID)
+		atx0 := newInitialATXv1(t, goldenATXID)
 		atx0.Sign(sig)
 		atxHdlr.expectAtxV1(atx0, sig.NodeID())
 		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx0)))
@@ -679,12 +679,12 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 
 		atxHdlr := newTestHandler(t, goldenATXID)
 
-		atx0 := newActivationTxV1(t, goldenATXID)
+		atx0 := newInitialATXv1(t, goldenATXID)
 		atx0.Sign(otherSig)
 		atxHdlr.expectAtxV1(atx0, otherSig.NodeID())
 		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx0)))
 
-		atx1 := newActivationTxV1(t, goldenATXID)
+		atx1 := newInitialATXv1(t, goldenATXID)
 		atx1.Sign(sig)
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
 		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx1)))
@@ -705,7 +705,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 	t.Run("stores ATX in DB", func(t *testing.T) {
 		atxHdlr := newTestHandler(t, goldenATXID)
 
-		watx := newActivationTxV1(t, goldenATXID)
+		watx := newInitialATXv1(t, goldenATXID)
 		watx.Sign(sig)
 		vAtx := toVerifiedAtx(t, watx)
 		require.NoError(t, err)
@@ -725,7 +725,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 	t.Run("storing an already known ATX returns no error", func(t *testing.T) {
 		atxHdlr := newTestHandler(t, goldenATXID)
 
-		watx := newActivationTxV1(t, goldenATXID)
+		watx := newInitialATXv1(t, goldenATXID)
 		watx.Sign(sig)
 		vAtx := toVerifiedAtx(t, watx)
 
@@ -745,7 +745,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 	t.Run("another atx for the same epoch is considered malicious", func(t *testing.T) {
 		atxHdlr := newTestHandler(t, goldenATXID)
 
-		watx0 := newActivationTxV1(t, goldenATXID)
+		watx0 := newInitialATXv1(t, goldenATXID)
 		watx0.Sign(sig)
 		vAtx0 := toVerifiedAtx(t, watx0)
 
@@ -756,7 +756,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
-		watx1 := newActivationTxV1(t, goldenATXID)
+		watx1 := newInitialATXv1(t, goldenATXID)
 		watx1.Coinbase = types.GenerateAddress([]byte("aaaa"))
 		watx1.Sign(sig)
 		vAtx1 := toVerifiedAtx(t, watx1)
@@ -791,7 +791,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 		atxHdlr := newTestHandler(t, goldenATXID)
 		atxHdlr.Register(sig)
 
-		watx0 := newActivationTxV1(t, goldenATXID)
+		watx0 := newInitialATXv1(t, goldenATXID)
 		watx0.Sign(sig)
 		vAtx0 := toVerifiedAtx(t, watx0)
 
@@ -802,7 +802,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
-		watx1 := newActivationTxV1(t, goldenATXID)
+		watx1 := newInitialATXv1(t, goldenATXID)
 		watx1.Coinbase = types.GenerateAddress([]byte("aaaa"))
 		watx1.Sign(sig)
 		vAtx1 := toVerifiedAtx(t, watx1)
@@ -831,7 +831,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	_, err = identities.GetMalfeasanceProof(atxHdlr.cdb, nodeID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	atx := newActivationTxV1(t, goldenATXID)
+	atx := newInitialATXv1(t, goldenATXID)
 	atx.Sign(sig)
 
 	var got mwire.MalfeasanceGossip
@@ -904,7 +904,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	atx1 := newActivationTxV1(t, goldenATXID)
+	atx1 := newInitialATXv1(t, goldenATXID)
 	atx1.Sign(sig)
 	atxHdlr.expectAtxV1(atx1, sig.NodeID())
 	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx1)))
@@ -932,7 +932,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	first := newActivationTxV1(t, goldenATXID)
+	first := newInitialATXv1(t, goldenATXID)
 	first.Sign(sig)
 
 	second := newChainedActivationTxV1(t, goldenATXID, first, first.ID())
@@ -979,7 +979,7 @@ func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	atx1 := newActivationTxV1(t, goldenATXID)
+	atx1 := newInitialATXv1(t, goldenATXID)
 	atx1.Sign(sig)
 	atxHdlr.expectAtxV1(
 		atx1,
@@ -1004,12 +1004,12 @@ func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 	require.NoError(t, err)
 	hdlr := newTestHandler(t, goldenATXID)
 
-	atx1 := newActivationTxV1(t, goldenATXID)
+	atx1 := newInitialATXv1(t, goldenATXID)
 	atx1.Sign(sig)
 	hdlr.expectAtxV1(atx1, sig.NodeID())
 	require.NoError(t, hdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx1)))
 
-	atx2 := newActivationTxV1(t, goldenATXID, func(a *wire.ActivationTxV1) { a.NumUnits = atx1.NumUnits + 1 })
+	atx2 := newInitialATXv1(t, goldenATXID, func(a *wire.ActivationTxV1) { a.NumUnits = atx1.NumUnits + 1 })
 	atx2.Sign(sig)
 	hdlr.expectAtxV1(atx2, sig.NodeID())
 	hdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
@@ -1064,7 +1064,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 	t.Run("missing nipost", func(t *testing.T) {
 		t.Parallel()
 
-		atx := newActivationTxV1(t, goldenATXID, func(a *wire.ActivationTxV1) { a.NIPost = nil })
+		atx := newInitialATXv1(t, goldenATXID, func(a *wire.ActivationTxV1) { a.NIPost = nil })
 		atx.Sign(sig)
 		buf := codec.MustEncode(atx)
 
@@ -1079,7 +1079,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 	t.Run("known atx is ignored by HandleSyncedAtx", func(t *testing.T) {
 		t.Parallel()
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 		buf := codec.MustEncode(atx)
 
@@ -1094,7 +1094,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 	t.Run("known atx from local id is allowed", func(t *testing.T) {
 		t.Parallel()
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 		buf := codec.MustEncode(atx)
 
@@ -1110,7 +1110,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 	t.Run("atx with invalid signature", func(t *testing.T) {
 		t.Parallel()
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 		atx.Signature = types.RandomEdSignature()
 		buf := codec.MustEncode(atx)
@@ -1289,7 +1289,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	atx1 := newActivationTxV1(t, goldenATXID)
+	atx1 := newInitialATXv1(t, goldenATXID)
 	atx1.NumUnits = units
 	atx1.Sign(sig)
 	buf := codec.MustEncode(atx1)
@@ -1327,7 +1327,7 @@ func TestHandler_WrongHash(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	atx := newActivationTxV1(t, goldenATXID)
+	atx := newInitialATXv1(t, goldenATXID)
 	atx.Sign(sig)
 
 	err = atxHdlr.HandleSyncedAtx(context.Background(), types.RandomHash(), "", codec.MustEncode(atx))
@@ -1344,7 +1344,7 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 	t.Run("post verified fully", func(t *testing.T) {
 		t.Parallel()
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
 		atxHdlr := newTestHandler(t, goldenATXID)
@@ -1358,7 +1358,7 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 	t.Run("post not verified fully (distributed post)", func(t *testing.T) {
 		t.Parallel()
 
-		atx := newActivationTxV1(t, goldenATXID)
+		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
 		atxHdlr := newTestHandler(t, goldenATXID)
@@ -1372,7 +1372,7 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func newActivationTxV1(
+func newInitialATXv1(
 	t testing.TB,
 	goldenATXID types.ATXID,
 	opts ...func(*wire.ActivationTxV1),

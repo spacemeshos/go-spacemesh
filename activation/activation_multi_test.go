@@ -186,7 +186,7 @@ func TestRegossip(t *testing.T) {
 		var refAtx *types.VerifiedActivationTx
 
 		for _, sig := range tab.signers {
-			atx := newActivationTxV1(t, goldenATXID)
+			atx := newInitialATXv1(t, goldenATXID)
 			atx.PublishEpoch = layer.GetEpoch()
 			atx.Sign(sig)
 			vAtx := toVerifiedAtx(t, atx)
