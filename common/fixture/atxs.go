@@ -67,7 +67,6 @@ func (g *AtxsGenerator) Next() *types.VerifiedActivationTx {
 				},
 				Coinbase: wallet.Address(signer.PublicKey().Bytes()),
 				NumUnits: g.rng.Uint32(),
-				NodeID:   &nodeId,
 			},
 			SmesherID: nodeId,
 		},

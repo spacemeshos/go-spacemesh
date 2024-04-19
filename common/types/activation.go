@@ -134,7 +134,6 @@ type InnerActivationTx struct {
 	Coinbase Address
 	NumUnits uint32
 
-	NodeID   *NodeID
 	VRFNonce *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
