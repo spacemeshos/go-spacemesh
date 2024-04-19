@@ -1487,7 +1487,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, meta, post.NumUnits).
 		Return(nil)
 
-	_, _, err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	_, err := tab.obtainPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 
 	posEpoch := postGenesisEpoch + 1
