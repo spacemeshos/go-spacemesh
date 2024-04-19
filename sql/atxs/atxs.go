@@ -401,7 +401,7 @@ func AddGettingNonce(db sql.Executor, atx *types.VerifiedActivationTx) (*types.V
 		if err == nil {
 			err = add(db, atx, &nonce)
 			if err != nil {
-				return nil, err
+				return &nonce, err
 			} else {
 				return &nonce, nil
 			}
@@ -409,7 +409,7 @@ func AddGettingNonce(db sql.Executor, atx *types.VerifiedActivationTx) (*types.V
 	}
 
 	if err := add(db, atx, atx.VRFNonce); err != nil {
-		return nil, err
+		return atx.VRFNonce, err
 	}
 
 	return atx.VRFNonce, nil

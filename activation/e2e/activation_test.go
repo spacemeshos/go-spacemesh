@@ -201,11 +201,12 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		)
 		require.NoError(t, err)
 
+		require.NotNil(t, atx.VRFNonce)
 		err := v.VRFNonce(
 			sig.NodeID(),
 			*atx.CommitmentATX,
-			atx.VRFNonce,
-			atx.NIPost.PostMetadata,
+			uint64(*atx.VRFNonce),
+			atx.NIPost.PostMetadata.LabelsPerUnit,
 			atx.NumUnits,
 		)
 		require.NoError(t, err)

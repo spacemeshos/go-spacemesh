@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
-	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/libp2p/go-libp2p/core/peer"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/shared"
@@ -39,12 +37,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
-
-var grpclog grpc_logsettable.SettableLoggerV2
-
-func init() {
-	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
-}
 
 func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
@@ -153,7 +145,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
 	grpcPostService.AllowConnections(true)
-	grpczap.SetGrpcLoggerV2(grpclog, logger.Named("grpc"))
+
 	grpcPrivateServer, err := grpcserver.NewWithServices(
 		cfg.API.PostListener,
 		logger.Named("grpc-server"),
@@ -275,13 +267,13 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
 		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
 		invalidAtx := invalidPostProof.Atx
-		require.Equal(t, atx.PublishEpoch, invalidAtx.Publish)
+		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
 		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)
-		require.Equal(t, atx.ID().Hash32(), invalidAtx.HashInnerBytes())
+		require.Equal(t, atx.ID(), invalidAtx.ID())
 
 		meta := &shared.ProofMetadata{
 			NodeId:          invalidAtx.NodeID.Bytes(),
-			CommitmentAtxId: invalidAtx.CommitmentATX.Bytes(),
+			CommitmentAtxId: invalidAtx.CommitmentATXID.Bytes(),
 			NumUnits:        invalidAtx.NumUnits,
 			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
 			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,
