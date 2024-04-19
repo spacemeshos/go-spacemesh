@@ -1,11 +1,13 @@
 package wire
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -79,6 +81,10 @@ func (atx *ActivationTxV1) ID() types.ATXID {
 	return atx.id
 }
 
+func (atx *ActivationTxV1) Smesher() types.NodeID {
+	return atx.SmesherID
+}
+
 func (atx *ActivationTxV1) Sign(signer *signing.EdSigner) {
 	if atx.PrevATXID == types.EmptyATXID {
 		nodeID := signer.NodeID()
@@ -114,7 +120,7 @@ func postToWireV1(p *types.Post) *PostV1 {
 	}
 }
 
-func niPostToWireV1(n *types.NIPost) *NIPostV1 {
+func NiPostToWireV1(n *types.NIPost) *NIPostV1 {
 	if n == nil {
 		return nil
 	}
@@ -149,7 +155,7 @@ func ActivationTxToWireV1(a *types.ActivationTx) *ActivationTxV1 {
 			NIPostChallengeV1: *NIPostChallengeToWireV1(&a.NIPostChallenge),
 			Coinbase:          a.Coinbase,
 			NumUnits:          a.NumUnits,
-			NIPost:            niPostToWireV1(a.NIPost),
+			NIPost:            NiPostToWireV1(a.NIPost),
 			NodeID:            a.NodeID,
 			VRFNonce:          (*uint64)(a.VRFNonce),
 		},
@@ -222,4 +228,39 @@ func PostFromWireV1(post *PostV1) *types.Post {
 		Indices: post.Indices,
 		Pow:     post.Pow,
 	}
+}
+
+func (p *PostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if p == nil {
+		return nil
+	}
+	encoder.AddUint32("nonce", p.Nonce)
+	encoder.AddUint64("k2pow", p.Pow)
+	encoder.AddString("indices", hex.EncodeToString(p.Indices))
+	return nil
+}
+
+func (nipost *NIPostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if nipost == nil {
+		return nil
+	}
+	encoder.AddObject("post", nipost.Post)
+	encoder.AddBinary("challenge", nipost.PostMetadata.Challenge)
+	return nil
+}
+
+func (atx *ActivationTxV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if atx == nil {
+		return nil
+	}
+	encoder.AddString("atx_id", atx.ID().String())
+	encoder.AddString("smesher", atx.SmesherID.String())
+	encoder.AddString("coinbase", atx.Coinbase.String())
+	encoder.AddUint64("num_units", uint64(atx.NumUnits))
+	if atx.VRFNonce != nil {
+		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
+	}
+	encoder.AddObject("challenge", &atx.NIPostChallengeV1)
+	encoder.AddObject("nipost", atx.NIPost)
+	return nil
 }
