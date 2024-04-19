@@ -108,7 +108,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 1}, nil)
 
-		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID)
+		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
 		require.NoError(t, err)
 	})
 
@@ -126,7 +126,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID)
+		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
 		require.NoError(t, err)
 	})
 
@@ -145,7 +145,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 2}, nil)
 
-		err := v.InitialNIPostChallenge(&challenge, atxProvider, goldenATXID)
+		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
 		require.EqualError(t, err, "challenge pubepoch (1) must be after commitment atx pubepoch (2)")
 	})
 }
@@ -185,7 +185,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 			NodeID:       nodeId,
 		}, nil)
 
-		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
+		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
 		require.NoError(t, err)
 	})
 
@@ -207,7 +207,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(nil, errors.New("not found"))
 
-		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
+		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
 		require.ErrorIs(t, err, &ErrAtxNotFound{Id: prevAtxId})
 		require.ErrorContains(t, err, "not found")
 	})
@@ -235,7 +235,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 			NodeID:       otherNodeId,
 		}, nil)
 
-		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
+		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
 		require.ErrorContains(t, err, "previous atx belongs to different miner")
 	})
 
@@ -261,7 +261,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 			NodeID:       nodeId,
 		}, nil)
 
-		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
+		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
 		require.EqualError(t, err, "prevAtx epoch (3) isn't older than current atx epoch (2)")
 	})
 
@@ -287,7 +287,7 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 			NodeID:       nodeId,
 		}, nil)
 
-		err := v.NIPostChallenge(&challenge, atxProvider, nodeId)
+		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
 		require.EqualError(t, err, "sequence number (10) is not one more than the prev one (10)")
 	})
 }

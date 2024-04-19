@@ -262,7 +262,7 @@ func validateAndPreserveData(
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
 		if vatx.InitialPost != nil {
 			mvalidator.EXPECT().
-				InitialNIPostChallenge(gomock.Any(), gomock.Any(), goldenAtx).
+				InitialNIPostChallengeV1(&atx.NIPostChallengeV1, gomock.Any(), goldenAtx).
 				AnyTimes()
 			mvalidator.EXPECT().Post(
 				gomock.Any(),
@@ -276,7 +276,7 @@ func validateAndPreserveData(
 			mvalidator.EXPECT().
 				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, (uint64)(*vatx.VRFNonce), vatx.NumUnits)
 		} else {
-			mvalidator.EXPECT().NIPostChallenge(gomock.Any(), cdb, vatx.SmesherID)
+			mvalidator.EXPECT().NIPostChallengeV1(&atx.NIPostChallengeV1, cdb, vatx.SmesherID)
 		}
 
 		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)

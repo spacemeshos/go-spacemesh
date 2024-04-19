@@ -173,7 +173,7 @@ func (h *Handler) syntacticallyValidateDeps(
 	var commitmentATX types.ATXID
 
 	if atx.PrevATXID == types.EmptyATXID {
-		if err := h.nipostValidator.InitialNIPostChallenge(&atx.NIPostChallengeV1, h.cdb, h.goldenATXID); err != nil {
+		if err := h.nipostValidator.InitialNIPostChallengeV1(&atx.NIPostChallengeV1, h.cdb, h.goldenATXID); err != nil {
 			return 0, 0, nil, err
 		}
 		effectiveNumUnits = atx.NumUnits
@@ -189,7 +189,8 @@ func (h *Handler) syntacticallyValidateDeps(
 		}
 	}
 
-	if err := h.nipostValidator.PositioningAtx(atx.PositioningATXID, h.cdb, h.goldenATXID, atx.Publish()); err != nil {
+	err = h.nipostValidator.PositioningAtx(atx.PositioningATXID, h.cdb, h.goldenATXID, atx.PublishEpoch)
+	if err != nil {
 		return 0, 0, nil, err
 	}
 
@@ -240,7 +241,7 @@ func (h *Handler) validateNonInitialAtx(
 	atx *wire.ActivationTxV1,
 	commitmentATX types.ATXID,
 ) (uint32, error) {
-	if err := h.nipostValidator.NIPostChallenge(&atx.NIPostChallengeV1, h.cdb, atx.SmesherID); err != nil {
+	if err := h.nipostValidator.NIPostChallengeV1(&atx.NIPostChallengeV1, h.cdb, atx.SmesherID); err != nil {
 		return 0, err
 	}
 

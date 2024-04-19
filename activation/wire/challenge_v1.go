@@ -30,23 +30,3 @@ func (c *NIPostChallengeV1) Hash() types.Hash32 {
 	ncBytes := codec.MustEncode(c)
 	return hash.Sum([]byte{0x00}, ncBytes)
 }
-
-func (c *NIPostChallengeV1) Publish() types.EpochID {
-	return c.PublishEpoch
-}
-
-func (c *NIPostChallengeV1) PrevATX() types.ATXID {
-	return c.PrevATXID
-}
-
-func (c *NIPostChallengeV1) PositioningATX() types.ATXID {
-	return c.PositioningATXID
-}
-
-func (c *NIPostChallengeV1) CommitmentATX() *types.ATXID {
-	return c.CommitmentATXID
-}
-
-func (c *NIPostChallengeV1) MaybeSequence() *uint64 {
-	return &c.Sequence
-}

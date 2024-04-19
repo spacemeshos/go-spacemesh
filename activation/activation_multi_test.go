@@ -394,7 +394,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			VRFNonce: types.VRFPostIndex(rand.Uint64()),
 		}
 		nipostState[sig.NodeID()] = state
-		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref.Publish(), ref.Hash()).Return(state, nil)
+		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash()).Return(state, nil)
 
 		// awaiting atx publication epoch log
 		tab.mclock.EXPECT().CurrentLayer().DoAndReturn(

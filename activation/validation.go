@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -221,24 +222,24 @@ func (v *Validator) VRFNonce(
 	return nil
 }
 
-func (v *Validator) InitialNIPostChallenge(
-	challenge nipostChallenge,
+func (v *Validator) InitialNIPostChallengeV1(
+	challenge *wire.NIPostChallengeV1,
 	atxs atxProvider,
 	goldenATXID types.ATXID,
 ) error {
-	if challenge.CommitmentATX() == nil {
+	if challenge.CommitmentATXID == nil {
 		return errors.New("nil commitment atx in initial post challenge")
 	}
-	commitmentATXId := *challenge.CommitmentATX()
+	commitmentATXId := *challenge.CommitmentATXID
 	if commitmentATXId != goldenATXID {
 		commitmentAtx, err := atxs.GetAtxHeader(commitmentATXId)
 		if err != nil {
 			return &ErrAtxNotFound{Id: commitmentATXId, source: err}
 		}
-		if challenge.Publish() <= commitmentAtx.PublishEpoch {
+		if challenge.PublishEpoch <= commitmentAtx.PublishEpoch {
 			return fmt.Errorf(
 				"challenge pubepoch (%v) must be after commitment atx pubepoch (%v)",
-				challenge.Publish(),
+				challenge.PublishEpoch,
 				commitmentAtx.PublishEpoch,
 			)
 		}
@@ -246,10 +247,10 @@ func (v *Validator) InitialNIPostChallenge(
 	return nil
 }
 
-func (*Validator) NIPostChallenge(challenge nipostChallenge, atxs atxProvider, nodeID types.NodeID) error {
-	prevATX, err := atxs.GetAtxHeader(challenge.PrevATX())
+func (*Validator) NIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, nodeID types.NodeID) error {
+	prevATX, err := atxs.GetAtxHeader(challenge.PrevATXID)
 	if err != nil {
-		return &ErrAtxNotFound{Id: challenge.PrevATX(), source: err}
+		return &ErrAtxNotFound{Id: challenge.PrevATXID, source: err}
 	}
 
 	if prevATX.NodeID != nodeID {
@@ -259,16 +260,16 @@ func (*Validator) NIPostChallenge(challenge nipostChallenge, atxs atxProvider, n
 		)
 	}
 
-	if prevATX.PublishEpoch >= challenge.Publish() {
+	if prevATX.PublishEpoch >= challenge.PublishEpoch {
 		return fmt.Errorf(
 			"prevAtx epoch (%d) isn't older than current atx epoch (%d)",
-			prevATX.PublishEpoch, challenge.Publish(),
+			prevATX.PublishEpoch, challenge.PublishEpoch,
 		)
 	}
 
-	if seq := challenge.MaybeSequence(); seq != nil && prevATX.Sequence+1 != *seq {
+	if prevATX.Sequence+1 != challenge.Sequence {
 		return fmt.Errorf(
-			"sequence number (%d) is not one more than the prev one (%d)", *seq, prevATX.Sequence)
+			"sequence number (%d) is not one more than the prev one (%d)", challenge.Sequence, prevATX.Sequence)
 	}
 	return nil
 }
