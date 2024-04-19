@@ -479,7 +479,7 @@ func (h *Handler) handleAtx(
 	if err := codec.Decode(msg, &atx); err != nil {
 		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
 	}
-	id := types.ATXID(atx.HashInnerBytes())
+	id := atx.ID()
 	if (expHash != types.Hash32{}) && id.Hash32() != expHash {
 		return nil, fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), id.ShortString())
 	}
@@ -507,11 +507,11 @@ func (h *Handler) handleAtx(
 	proof, err := h.processATX(ctx, peer, atx, receivedTime)
 	h.inProgressMu.Lock()
 	defer h.inProgressMu.Unlock()
-	for _, ch := range h.inProgress[atx.ID()] {
+	for _, ch := range h.inProgress[id] {
 		ch <- err
 		close(ch)
 	}
-	delete(h.inProgress, atx.ID())
+	delete(h.inProgress, id)
 	return proof, err
 }
 
