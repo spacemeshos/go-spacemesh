@@ -597,9 +597,11 @@ func TestLoadBlob(t *testing.T) {
 	require.Equal(t, []int{len(blob1.Bytes)}, blobSizes)
 
 	var blob2 sql.Blob
-	atx2, err := newAtx(sig, withPublishEpoch(1))
-	nodeID := types.RandomNodeID()
-	atx2.NodeID = &nodeID // ensure ATXs differ in size
+	atx2, err := newAtx(sig, func(atx *types.ActivationTx) {
+		nodeID := types.RandomNodeID()
+		atx.NodeID = &nodeID // ensure ATXs differ in size
+	})
+
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(db, atx2))
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -40,11 +41,16 @@ func decoder(fn decoderCallback) sql.Decoder {
 		stmt.ColumnBytes(0, id[:])
 		checkpointed := stmt.ColumnLen(1) == 0
 		if !checkpointed {
+			// in future, decide ATX version base on atx_blobs.version column
 			var atxV1 wire.ActivationTxV1
-			if _, err := codec.DecodeFrom(stmt.ColumnReader(1), &atxV1); err != nil {
+			blob, err := io.ReadAll(stmt.ColumnReader(1))
+			if err != nil {
+				return fn(nil, fmt.Errorf("read blob %w", err))
+			}
+			if err := codec.Decode(blob, &atxV1); err != nil {
 				return fn(nil, fmt.Errorf("decode %w", err))
 			}
-			a = *wire.ActivationTxFromWireV1(&atxV1)
+			a = *wire.ActivationTxFromWireV1(&atxV1, blob...)
 		}
 		a.SetID(id)
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
@@ -423,11 +429,6 @@ func AddMaybeNoNonce(db sql.Executor, atx *types.VerifiedActivationTx) error {
 }
 
 func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostIndex) error {
-	buf, err := codec.Encode(wire.ActivationTxToWireV1(atx.ActivationTx))
-	if err != nil {
-		return fmt.Errorf("encode: %w", err)
-	}
-
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PublishEpoch))
@@ -456,7 +457,7 @@ func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostI
 		}
 	}
 
-	_, err = db.Exec(`
+	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
 			 pubkey, received, base_tick_height, tick_count, sequence, coinbase,
 			 validity, prev_id)
@@ -467,9 +468,10 @@ func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostI
 
 	enc = func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
-		stmt.BindBytes(2, buf)
+		stmt.BindBytes(2, atx.Blob)
+		stmt.BindInt64(3, int64(atx.Version))
 	}
-	_, err = db.Exec("insert into atx_blobs (id, atx) values (?1, ?2)", enc, nil)
+	_, err = db.Exec("insert into atx_blobs (id, atx, version) values (?1, ?2, ?3)", enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX blob %v: %w", atx.ID(), err)
 	}

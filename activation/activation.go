@@ -763,8 +763,14 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
 	// FIXME - there is no need to sign types.ActivationTX (only ActivationTxVx)
 	wireAtx := wire.ActivationTxToWireV1(atx)
-	atx.Signature = signer.Sign(signing.ATX, wireAtx.SignedBytes())
-	atx.SmesherID = signer.NodeID()
+	wireAtx.Signature = signer.Sign(signing.ATX, wireAtx.SignedBytes())
+	wireAtx.SmesherID = signer.NodeID()
+	atx.AtxBlob = types.AtxBlob{
+		Version: types.AtxV1,
+		Blob:    codec.MustEncode(wireAtx),
+	}
+	atx.Signature = wireAtx.Signature
+	atx.SmesherID = wireAtx.SmesherID
 	atx.SetID(types.ATXID(wireAtx.HashInnerBytes()))
 	return nil
 }

@@ -256,7 +256,7 @@ func validateAndPreserveData(
 	for _, dep := range deps {
 		var atx wire.ActivationTxV1
 		require.NoError(tb, codec.Decode(dep.Blob, &atx))
-		vatx := wire.ActivationTxFromWireV1(&atx)
+		vatx := wire.ActivationTxFromWireV1(&atx, dep.Blob...)
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
@@ -795,7 +795,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	// make the first one from the previous snapshot
 	var atx wire.ActivationTxV1
 	require.NoError(t, codec.Decode(vAtxs[0].Blob, &atx))
-	golden := wire.ActivationTxFromWireV1(&atx)
+	golden := wire.ActivationTxFromWireV1(&atx, vAtxs[0].Blob...)
 	require.NoError(t, atxs.AddCheckpointed(oldDB, &atxs.CheckpointAtx{
 		ID:            golden.ID(),
 		Epoch:         golden.PublishEpoch,

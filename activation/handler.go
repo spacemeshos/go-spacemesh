@@ -511,7 +511,7 @@ func (h *Handler) handleAtx(
 	h.inProgressMu.Unlock()
 	h.log.WithContext(ctx).With().Info("handling incoming atx", id, log.Int("size", len(msg)))
 
-	proof, err := h.processATX(ctx, peer, atx, receivedTime)
+	proof, err := h.processATX(ctx, peer, atx, msg, receivedTime)
 	h.inProgressMu.Lock()
 	defer h.inProgressMu.Unlock()
 	for _, ch := range h.inProgress[id] {
@@ -526,6 +526,7 @@ func (h *Handler) processATX(
 	ctx context.Context,
 	peer p2p.Peer,
 	watx wire.ActivationTxV1,
+	blob []byte,
 	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
 	if !h.edVerifier.Verify(signing.ATX, watx.SmesherID, watx.SignedBytes(), watx.Signature) {
@@ -575,7 +576,7 @@ func (h *Handler) processATX(
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	atx := wire.ActivationTxFromWireV1(&watx)
+	atx := wire.ActivationTxFromWireV1(&watx, blob...)
 	if h.nipostValidator.IsVerifyingFullPost() {
 		atx.SetValidity(types.Valid)
 	}
