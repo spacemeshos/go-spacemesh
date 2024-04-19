@@ -1349,7 +1349,8 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 
 		atxHdlr := newTestHandler(t, goldenATXID)
 		atxHdlr.expectAtxV1(atx, sig.NodeID(), func(o *atxHandleOpts) { o.distributedPost = false })
-		err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx))
+		err := atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx))
+		require.NoError(t, err)
 
 		vatx, err := atxs.Get(atxHdlr.cdb, atx.ID())
 		require.NoError(t, err)
@@ -1363,7 +1364,8 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 
 		atxHdlr := newTestHandler(t, goldenATXID)
 		atxHdlr.expectAtxV1(atx, sig.NodeID(), func(o *atxHandleOpts) { o.distributedPost = true })
-		err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx))
+		err := atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx))
+		require.NoError(t, err)
 
 		vatx, err := atxs.Get(atxHdlr.cdb, atx.ID())
 		require.NoError(t, err)
