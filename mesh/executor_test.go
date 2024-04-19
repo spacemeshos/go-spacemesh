@@ -74,7 +74,6 @@ func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.A
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: epoch},
 		cb,
-		nil,
 		11,
 		&nonce,
 	)

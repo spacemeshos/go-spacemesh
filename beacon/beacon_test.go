@@ -119,7 +119,6 @@ func createATX(
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
 		types.Address{},
-		nil,
 		numUnits,
 		&nonce,
 	)

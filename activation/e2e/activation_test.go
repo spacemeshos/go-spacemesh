@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -136,16 +137,17 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	}
 
 	var atxMtx sync.Mutex
-	atxs := make(map[types.NodeID]types.ActivationTx)
+	atxs := make(map[types.NodeID]wire.ActivationTxV1)
 	endChan := make(chan struct{})
 	mpub := mocks.NewMockPublisher(ctrl)
 	mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(ctx context.Context, topic string, got []byte) error {
 			atxMtx.Lock()
 			defer atxMtx.Unlock()
-			gotAtx, err := wire.ActivationTxFromBytes(got)
-			require.NoError(t, err)
-			atxs[gotAtx.SmesherID] = *gotAtx
+
+			var gotAtx wire.ActivationTxV1
+			codec.MustDecode(got, &gotAtx)
+			atxs[gotAtx.SmesherID] = gotAtx
 			if len(atxs) == numSigners {
 				close(endChan)
 			}
@@ -194,9 +196,9 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		_, err = v.NIPost(
 			context.Background(),
 			sig.NodeID(),
-			*atx.CommitmentATX,
-			atx.NIPost,
-			wire.NIPostChallengeToWireV1(&atx.NIPostChallenge).Hash(),
+			*atx.CommitmentATXID,
+			wire.NiPostFromWireV1(atx.NIPost),
+			atx.NIPostChallengeV1.Hash(),
 			atx.NumUnits,
 		)
 		require.NoError(t, err)
@@ -204,17 +206,17 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		require.NotNil(t, atx.VRFNonce)
 		err := v.VRFNonce(
 			sig.NodeID(),
-			*atx.CommitmentATX,
+			*atx.CommitmentATXID,
 			uint64(*atx.VRFNonce),
 			atx.NIPost.PostMetadata.LabelsPerUnit,
 			atx.NumUnits,
 		)
 		require.NoError(t, err)
 
-		require.Equal(t, postGenesisEpoch, atx.TargetEpoch())
-		require.Equal(t, types.EmptyATXID, atx.NIPostChallenge.PrevATXID)
-		require.Equal(t, goldenATX, atx.NIPostChallenge.PositioningATX)
-		require.Equal(t, uint64(0), atx.NIPostChallenge.Sequence)
+		require.Equal(t, postGenesisEpoch, atx.PublishEpoch+1)
+		require.Equal(t, types.EmptyATXID, atx.PrevATXID)
+		require.Equal(t, goldenATX, atx.PositioningATXID)
+		require.Equal(t, uint64(0), atx.Sequence)
 
 		require.Equal(t, types.Address{}, atx.Coinbase)
 		require.Equal(t, sig.NodeID(), *atx.NodeID)

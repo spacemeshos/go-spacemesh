@@ -18,8 +18,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	ma "github.com/multiformats/go-multiaddr"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/merkle-tree"
-	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -88,9 +86,6 @@ var (
 	addr2           types.Address
 	rewardSmesherID = types.RandomNodeID()
 	prevAtxID       = types.ATXID(types.HexToHash32("44444"))
-	chlng           = types.HexToHash32("55555")
-	poetRef         = []byte("66666")
-	nipost          = newNIPostWithChallenge(&chlng, poetRef)
 	challenge       = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
 	globalAtx       *types.VerifiedActivationTx
 	globalAtx2      *types.VerifiedActivationTx
@@ -168,7 +163,7 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil)
+	atx := types.NewActivationTx(challenge, addr1, numUnits, nil)
 	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
@@ -181,7 +176,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil)
+	atx2 := types.NewActivationTx(challenge, addr2, numUnits, nil)
 	atx2.SetEffectiveNumUnits(numUnits)
 	atx2.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
@@ -213,37 +208,6 @@ func TestMain(m *testing.M) {
 
 	res := m.Run()
 	os.Exit(res)
-}
-
-func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
-	tree, err := merkle.NewTreeBuilder().
-		WithHashFunc(shared.HashMembershipTreeNode).
-		WithLeavesToProve(map[uint64]bool{0: true}).
-		Build()
-	if err != nil {
-		panic("failed to add leaf to tree")
-	}
-	if err := tree.AddLeaf(challenge[:]); err != nil {
-		panic("failed to add leaf to tree")
-	}
-	nodes := tree.Proof()
-	nodesH32 := make([]types.Hash32, 0, len(nodes))
-	for _, n := range nodes {
-		nodesH32 = append(nodesH32, types.BytesToHash(n))
-	}
-	return &types.NIPost{
-		Membership: types.MerkleProof{
-			Nodes: nodesH32,
-		},
-		Post: &types.Post{
-			Nonce:   0,
-			Indices: []byte(nil),
-		},
-		PostMetadata: &types.PostMetadata{
-			Challenge:     poetRef,
-			LabelsPerUnit: labelsPerUnit,
-		},
-	}
 }
 
 type MeshAPIMock struct{}

@@ -4,9 +4,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/spacemeshos/merkle-tree"
-	"github.com/spacemeshos/poet/shared"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -43,39 +40,6 @@ func (g *AtxsGenerator) WithEpochs(start, n int) *AtxsGenerator {
 	return g
 }
 
-func (g *AtxsGenerator) newNIPost() *types.NIPost {
-	challenge := types.HexToHash32("55555")
-	poetRef := []byte("66666")
-	tree, err := merkle.NewTreeBuilder().
-		WithHashFunc(shared.HashMembershipTreeNode).
-		WithLeavesToProve(map[uint64]bool{0: true}).
-		Build()
-	if err != nil {
-		panic("failed to add leaf to tree")
-	}
-	if err := tree.AddLeaf(challenge[:]); err != nil {
-		panic("failed to add leaf to tree")
-	}
-	nodes := tree.Proof()
-	nodesH32 := make([]types.Hash32, 0, len(nodes))
-	for _, n := range nodes {
-		nodesH32 = append(nodesH32, types.BytesToHash(n))
-	}
-	return &types.NIPost{
-		Membership: types.MerkleProof{
-			Nodes: nodesH32,
-		},
-		Post: &types.Post{
-			Nonce:   0,
-			Indices: []byte(nil),
-		},
-		PostMetadata: &types.PostMetadata{
-			Challenge:     poetRef,
-			LabelsPerUnit: 2048,
-		},
-	}
-}
-
 // Next generates VerifiedActivationTx.
 func (g *AtxsGenerator) Next() *types.VerifiedActivationTx {
 	var atx types.VerifiedActivationTx
@@ -104,7 +68,6 @@ func (g *AtxsGenerator) Next() *types.VerifiedActivationTx {
 				Coinbase: wallet.Address(signer.PublicKey().Bytes()),
 				NumUnits: g.rng.Uint32(),
 				NodeID:   &nodeId,
-				NIPost:   g.newNIPost(),
 			},
 			SmesherID: nodeId,
 		},

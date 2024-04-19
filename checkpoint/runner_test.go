@@ -208,11 +208,6 @@ func newAtx(
 				CommitmentATX: commitAtx,
 				PrevATXID:     prevID,
 			},
-			NIPost: &types.NIPost{
-				PostMetadata: &types.PostMetadata{
-					Challenge: types.RandomBytes(5),
-				},
-			},
 			NumUnits: 2,
 			Coinbase: types.Address{1, 2, 3},
 		},
