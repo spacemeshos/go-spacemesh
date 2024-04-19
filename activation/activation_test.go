@@ -756,8 +756,11 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 		Indices: post.Indices,
 		Pow:     post.Pow,
 	}
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
+	metadata := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, metadata, post.NumUnits)
 
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
@@ -808,8 +811,12 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 		Indices: refPost.Indices,
 		Pow:     refPost.Pow,
 	}
+	metadata := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
 	tab.mValidator.EXPECT().
-		Post(gomock.Any(), sig.NodeID(), refPost.CommitmentATX, initialPost, shared.ZeroChallenge, refPost.NumUnits)
+		Post(gomock.Any(), sig.NodeID(), refPost.CommitmentATX, initialPost, metadata, refPost.NumUnits)
 
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
@@ -1085,8 +1092,11 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		Indices: post.Indices,
 		Pow:     post.Pow,
 	}
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
+	metadata := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, metadata, post.NumUnits)
 
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 
@@ -1317,6 +1327,10 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 		Indices: post.Indices,
 		Pow:     post.Pow,
 	}
+	metadata := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
 		initialPost,
 		&types.PostInfo{
@@ -1329,8 +1343,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 		},
 		nil,
 	)
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, metadata, post.NumUnits)
 	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 
 	posEpoch := postGenesisEpoch + 1
@@ -1392,8 +1405,11 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 		},
 		nil,
 	)
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits)
+	metadata := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, metadata, numUnits)
 	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 
 	// postClient.Proof() should not be called again
@@ -1422,8 +1438,11 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		},
 		nil,
 	)
-	tab.mValidator.EXPECT().
-		Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits)
+	metadata := &types.PostMetadata{
+		Challenge:     shared.ZeroChallenge,
+		LabelsPerUnit: tab.conf.LabelsPerUnit,
+	}
+	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, metadata, numUnits)
 	require.ErrorContains(t, tab.buildInitialPost(context.Background(), sig.NodeID()), "nil VRF nonce")
 
 	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
@@ -1506,8 +1525,12 @@ func TestWaitPositioningAtx(t *testing.T) {
 				Indices: post.Indices,
 				Pow:     post.Pow,
 			}
+			metadata := &types.PostMetadata{
+				Challenge:     shared.ZeroChallenge,
+				LabelsPerUnit: tab.conf.LabelsPerUnit,
+			}
 			tab.mValidator.EXPECT().
-				Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
+				Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, metadata, post.NumUnits)
 
 			require.NoError(t, tab.PublishActivationTx(context.Background(), sig))
 		})

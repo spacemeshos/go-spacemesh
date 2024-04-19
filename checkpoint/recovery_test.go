@@ -273,8 +273,13 @@ func validateAndPreserveData(
 				vatx.NumUnits,
 				gomock.Any(),
 			)
-			mvalidator.EXPECT().
-				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, (uint64)(*vatx.VRFNonce), vatx.NumUnits)
+			mvalidator.EXPECT().VRFNonce(
+				vatx.SmesherID,
+				*vatx.CommitmentATX,
+				(uint64)(*vatx.VRFNonce),
+				atx.NIPost.PostMetadata.LabelsPerUnit,
+				vatx.NumUnits,
+			)
 		} else {
 			mvalidator.EXPECT().NIPostChallengeV1(&atx.NIPostChallengeV1, cdb, vatx.SmesherID)
 		}

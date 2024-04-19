@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -142,17 +141,18 @@ func (h *testHandler) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID,
 	h.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 
 	if atx.VRFNonce != nil {
-		h.mValidator.EXPECT().VRFNonce(nodeId, h.goldenATXID, *atx.VRFNonce, atx.NumUnits)
+		h.mValidator.EXPECT().
+			VRFNonce(nodeId, h.goldenATXID, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
 	}
 	h.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	h.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.BytesToHash(atx.NIPost.PostMetadata.Challenge))
 	if atx.PrevATXID == types.EmptyATXID {
 		h.mValidator.EXPECT().InitialNIPostChallengeV1(gomock.Any(), gomock.Any(), h.goldenATXID)
 		h.mValidator.EXPECT().
-			Post(gomock.Any(), nodeId, h.goldenATXID, gomock.Any(), shared.ZeroChallenge, atx.NumUnits, gomock.Any()).
+			Post(gomock.Any(), nodeId, h.goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			DoAndReturn(func(
 				_ context.Context, _ types.NodeID, _ types.ATXID, _ *types.Post,
-				_ []byte, _ uint32, _ ...validatorOption,
+				_ *types.PostMetadata, _ uint32, _ ...validatorOption,
 			) error {
 				time.Sleep(settings.postVerificationDuration)
 				return nil
@@ -271,7 +271,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 			Return(1234, nil)
 		atxHdlr.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), gomock.Any())
 		atxHdlr.mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, gomock.Any(), goldenATXID, atx.PublishEpoch)
-		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), goldenATXID, newNonce, atx.NumUnits)
+		atxHdlr.mValidator.EXPECT().
+			VRFNonce(gomock.Any(), goldenATXID, newNonce, gomock.Any(), atx.NumUnits)
 		leaves, units, proof, err := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
 		require.Equal(t, uint64(1234), leaves)
@@ -314,7 +315,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 			Return(uint64(1234), nil)
 		atxHdlr.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), gomock.Any())
 		atxHdlr.mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, gomock.Any(), gomock.Any(), gomock.Any())
-		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), goldenATXID, *prevAtx.VRFNonce, atx.NumUnits)
+		atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), goldenATXID, *prevAtx.VRFNonce, gomock.Any(), atx.NumUnits)
 		leaves, units, proof, err := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
 		require.NoError(t, err)
 		require.Equal(t, uint64(1234), leaves)
@@ -334,7 +335,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		atxHdlr.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), gomock.Any())
 		atxHdlr.mValidator.EXPECT().
-			VRFNonce(gomock.Any(), goldenATXID, *prevAtx.VRFNonce, atx.NumUnits).
+			VRFNonce(gomock.Any(), goldenATXID, *prevAtx.VRFNonce, gomock.Any(), atx.NumUnits).
 			Return(errors.New("invalid VRF"))
 		_, _, proof, err := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid VRF")
@@ -352,7 +353,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 		atxHdlr.mValidator.EXPECT().
 			Post(gomock.Any(), gomock.Any(), ctxID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any())
-		atxHdlr.mValidator.EXPECT().VRFNonce(sig.NodeID(), ctxID, *atx.VRFNonce, atx.NumUnits)
+		atxHdlr.mValidator.EXPECT().VRFNonce(sig.NodeID(), ctxID, *atx.VRFNonce, gomock.Any(), atx.NumUnits)
 		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), atx))
 
 		atxHdlr.mValidator.EXPECT().InitialNIPostChallengeV1(gomock.Any(), gomock.Any(), goldenATXID)
@@ -423,7 +424,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 		atxHdlr.mValidator.EXPECT().
 			Post(gomock.Any(), sig.NodeID(), cATX, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any())
-		atxHdlr.mValidator.EXPECT().VRFNonce(sig.NodeID(), cATX, *atx.VRFNonce, atx.NumUnits)
+		atxHdlr.mValidator.EXPECT().VRFNonce(sig.NodeID(), cATX, *atx.VRFNonce, gomock.Any(), atx.NumUnits)
 		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), atx))
 
 		atxHdlr.mValidator.EXPECT().
@@ -503,7 +504,7 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 		atxHdlr.mValidator.EXPECT().
-			VRFNonce(atx.SmesherID, *atx.CommitmentATXID, *atx.VRFNonce, atx.NumUnits).
+			VRFNonce(atx.SmesherID, *atx.CommitmentATXID, *atx.VRFNonce, gomock.Any(), atx.NumUnits).
 			Return(errors.New("invalid VRF nonce"))
 		err := atxHdlr.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid VRF nonce")
@@ -564,7 +565,8 @@ func TestHandler_SyntacticallyValidateAtx(t *testing.T) {
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-		atxHdlr.mValidator.EXPECT().VRFNonce(atx.SmesherID, *atx.CommitmentATXID, *atx.VRFNonce, atx.NumUnits)
+		atxHdlr.mValidator.EXPECT().
+			VRFNonce(atx.SmesherID, *atx.CommitmentATXID, *atx.VRFNonce, gomock.Any(), atx.NumUnits)
 		atxHdlr.mValidator.EXPECT().
 			Post(gomock.Any(), atx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			Return(errors.New("failed post validation"))
@@ -836,7 +838,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 
 	var got mwire.MalfeasanceGossip
 	atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-	atxHdlr.mValidator.EXPECT().VRFNonce(atx.SmesherID, goldenATXID, *atx.VRFNonce, atx.NumUnits)
+	atxHdlr.mValidator.EXPECT().VRFNonce(atx.SmesherID, goldenATXID, *atx.VRFNonce, gomock.Any(), atx.NumUnits)
 	atxHdlr.mValidator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), *atx.CommitmentATXID, gomock.Any(), gomock.Any(), atx.NumUnits)
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())

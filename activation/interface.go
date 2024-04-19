@@ -55,7 +55,7 @@ type nipostValidator interface {
 		nodeId types.NodeID,
 		commitmentAtxId types.ATXID,
 		post *types.Post,
-		challenge []byte,
+		metadata *types.PostMetadata,
 		numUnits uint32,
 		opts ...validatorOption,
 	) error
@@ -63,7 +63,7 @@ type nipostValidator interface {
 	VRFNonce(
 		nodeId types.NodeID,
 		commitmentAtxId types.ATXID,
-		vrfNonce uint64,
+		vrfNonce, labelsPerUnit uint64,
 		numUnits uint32,
 	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error

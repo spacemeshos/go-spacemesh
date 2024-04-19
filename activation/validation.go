@@ -93,7 +93,7 @@ func (v *Validator) NIPost(
 		return 0, err
 	}
 
-	err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata.Challenge, numUnits, opts...)
+	err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...)
 	if err != nil {
 		return 0, fmt.Errorf("invalid Post: %w", err)
 	}
@@ -149,7 +149,7 @@ func (v *Validator) Post(
 	nodeId types.NodeID,
 	commitmentAtxId types.ATXID,
 	post *types.Post,
-	challenge []byte,
+	metadata *types.PostMetadata,
 	numUnits uint32,
 	opts ...validatorOption,
 ) error {
@@ -159,8 +159,8 @@ func (v *Validator) Post(
 		NodeId:          nodeId.Bytes(),
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
-		Challenge:       challenge,
-		LabelsPerUnit:   v.cfg.LabelsPerUnit,
+		Challenge:       metadata.Challenge,
+		LabelsPerUnit:   metadata.LabelsPerUnit,
 	}
 
 	options := &validatorOptions{}
@@ -205,14 +205,17 @@ func (*Validator) LabelsPerUnit(cfg *PostConfig, labelsPerUnit uint64) error {
 func (v *Validator) VRFNonce(
 	nodeId types.NodeID,
 	commitmentAtxId types.ATXID,
-	vrfNonce uint64,
+	vrfNonce, labelsPerUnit uint64,
 	numUnits uint32,
 ) error {
+	if err := v.LabelsPerUnit(&v.cfg, labelsPerUnit); err != nil {
+		return err
+	}
 	meta := &shared.VRFNonceMetadata{
 		NodeId:          nodeId.Bytes(),
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
-		LabelsPerUnit:   v.cfg.LabelsPerUnit,
+		LabelsPerUnit:   labelsPerUnit,
 	}
 
 	err := verifying.VerifyVRFNonce(&vrfNonce, meta, verifying.WithLabelScryptParams(v.scrypt))
@@ -407,7 +410,7 @@ func (v *Validator) verifyChainWithOpts(
 		atx.SmesherID,
 		*commitmentAtxId,
 		atx.NIPost.Post,
-		atx.NIPost.PostMetadata.Challenge,
+		atx.NIPost.PostMetadata,
 		atx.NumUnits,
 	); err != nil {
 		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {

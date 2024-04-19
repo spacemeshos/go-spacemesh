@@ -53,26 +53,32 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	t.Run("valid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, initOpts.NumUnits))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, postCfg.LabelsPerUnit, initOpts.NumUnits))
 	})
 
 	t.Run("invalid vrf nonce", func(t *testing.T) {
 		t.Parallel()
 
-		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, 1, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, 1, postCfg.LabelsPerUnit, initOpts.NumUnits))
 	})
 
 	t.Run("wrong commitmentAtxId", func(t *testing.T) {
 		t.Parallel()
 
 		commitmentAtxId := types.ATXID{1, 2, 3}
-		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, initOpts.NumUnits))
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, postCfg.LabelsPerUnit, initOpts.NumUnits))
 	})
 
 	t.Run("numUnits can be smaller", func(t *testing.T) {
 		t.Parallel()
 
-		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, initOpts.NumUnits-1))
+		require.NoError(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, postCfg.LabelsPerUnit, initOpts.NumUnits-1))
+	})
+
+	t.Run("invalid labels per unit", func(t *testing.T) {
+		t.Parallel()
+
+		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, postCfg.LabelsPerUnit/2, initOpts.NumUnits))
 	})
 }
 
@@ -306,15 +312,16 @@ func Test_Validation_Post(t *testing.T) {
 	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, postVerifier)
 
 	post := types.Post{}
+	meta := types.PostMetadata{LabelsPerUnit: postCfg.LabelsPerUnit}
 
 	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).Return(nil)
-	err := v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, shared.ZeroChallenge, 1)
+	err := v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1)
 	require.NoError(t, err)
 
 	postVerifier.EXPECT().
 		Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).
 		Return(errors.New("invalid"))
-	err = v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, shared.ZeroChallenge, 1)
+	err = v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1)
 	require.Error(t, err)
 }
 

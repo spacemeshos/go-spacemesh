@@ -206,6 +206,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			sig.NodeID(),
 			*atx.CommitmentATX,
 			uint64(*atx.VRFNonce),
+			atx.NIPost.PostMetadata.LabelsPerUnit,
 			atx.NumUnits,
 		)
 		require.NoError(t, err)

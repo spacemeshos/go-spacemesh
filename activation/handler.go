@@ -141,14 +141,20 @@ func (h *Handler) syntacticallyValidate(ctx context.Context, atx *wire.Activatio
 			return errors.New("no prev atx declared, but sequence number not zero")
 		}
 
+		// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
+		// as expected from the initial Post.
+		initialPostMetadata := types.PostMetadata{
+			Challenge:     shared.ZeroChallenge,
+			LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
+		}
 		if err := h.nipostValidator.VRFNonce(
-			atx.SmesherID, *atx.CommitmentATXID, *atx.VRFNonce, atx.NumUnits,
+			atx.SmesherID, *atx.CommitmentATXID, *atx.VRFNonce, initialPostMetadata.LabelsPerUnit, atx.NumUnits,
 		); err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
 		post := wire.PostFromWireV1(atx.InitialPost)
 		if err := h.nipostValidator.Post(
-			ctx, atx.SmesherID, *atx.CommitmentATXID, post, shared.ZeroChallenge, atx.NumUnits,
+			ctx, atx.SmesherID, *atx.CommitmentATXID, post, &initialPostMetadata, atx.NumUnits,
 		); err != nil {
 			return fmt.Errorf("invalid initial post: %w", err)
 		}
@@ -267,7 +273,8 @@ func (h *Handler) validateNonInitialAtx(
 	}
 
 	if nonce != nil {
-		err = h.nipostValidator.VRFNonce(atx.SmesherID, commitmentATX, *nonce, atx.NumUnits)
+		err = h.nipostValidator.
+			VRFNonce(atx.SmesherID, commitmentATX, *nonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
 		if err != nil {
 			return 0, fmt.Errorf("invalid vrf nonce: %w", err)
 		}
