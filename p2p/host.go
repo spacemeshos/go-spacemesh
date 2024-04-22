@@ -86,6 +86,7 @@ func DefaultConfig() Config {
 		GossipQueueSize:             50000,
 		GossipValidationThrottle:    50000,
 		GossipAtxValidationThrottle: 50000,
+		GossipEvictionStrategy:      timecache.Strategy_LastSeen,
 		PingInterval:                time.Second,
 		EnableTCPTransport:          true,
 		EnableQUICTransport:         false,
