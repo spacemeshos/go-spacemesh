@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -409,7 +410,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 	atxChan := make(chan struct{})
 	atxStep := make(map[types.NodeID]chan struct{})
 	var atxMtx sync.Mutex
-	atxs := make(map[types.NodeID]types.ActivationTx)
+	atxs := make(map[types.NodeID]wire.ActivationTxV1)
 	endChan := make(chan struct{})
 	for _, sig := range tab.signers {
 		ch := make(chan struct{})
@@ -429,9 +430,9 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			func(ctx context.Context, _ string, got []byte) error {
 				atxMtx.Lock()
 				defer atxMtx.Unlock()
-				atx, err := wire.ActivationTxFromBytes(got)
-				require.NoError(t, err)
-				atxs[atx.SmesherID] = *atx
+				var atx wire.ActivationTxV1
+				codec.MustDecode(got, &atx)
+				atxs[atx.SmesherID] = atx
 				return nil
 			},
 		)
@@ -488,21 +489,21 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 
 	for _, sig := range tab.signers {
 		atx := atxs[sig.NodeID()]
-		require.Equal(t, initialPost[sig.NodeID()].Nonce, atx.NIPostChallenge.InitialPost.Nonce)
-		require.Equal(t, initialPost[sig.NodeID()].Pow, atx.NIPostChallenge.InitialPost.Pow)
-		require.Equal(t, initialPost[sig.NodeID()].Indices, atx.NIPostChallenge.InitialPost.Indices)
+		require.Equal(t, initialPost[sig.NodeID()].Nonce, atx.InitialPost.Nonce)
+		require.Equal(t, initialPost[sig.NodeID()].Pow, atx.InitialPost.Pow)
+		require.Equal(t, initialPost[sig.NodeID()].Indices, atx.InitialPost.Indices)
 
-		require.Equal(t, initialPost[sig.NodeID()].CommitmentATX, *atx.NIPostChallenge.CommitmentATX)
-		require.Equal(t, postGenesisEpoch+1, atx.NIPostChallenge.PublishEpoch)
-		require.Equal(t, types.EmptyATXID, atx.NIPostChallenge.PrevATXID)
-		require.Equal(t, tab.goldenATXID, atx.NIPostChallenge.PositioningATX)
-		require.Equal(t, uint64(0), atx.NIPostChallenge.Sequence)
+		require.Equal(t, initialPost[sig.NodeID()].CommitmentATX, *atx.CommitmentATXID)
+		require.Equal(t, postGenesisEpoch+1, atx.PublishEpoch)
+		require.Equal(t, types.EmptyATXID, atx.PrevATXID)
+		require.Equal(t, tab.goldenATXID, atx.PositioningATXID)
+		require.Equal(t, uint64(0), atx.Sequence)
 
 		require.Equal(t, types.Address{}, atx.Coinbase)
 		require.Equal(t, nipostState[sig.NodeID()].NumUnits, atx.NumUnits)
-		require.Equal(t, nipostState[sig.NodeID()].NIPost, atx.NIPost)
+		require.Equal(t, nipostState[sig.NodeID()].NIPost, wire.NiPostFromWireV1(atx.NIPost))
 		require.Equal(t, sig.NodeID(), *atx.NodeID)
-		require.Equal(t, nipostState[sig.NodeID()].VRFNonce, *atx.VRFNonce)
+		require.Equal(t, uint64(nipostState[sig.NodeID()].VRFNonce), *atx.VRFNonce)
 	}
 
 	// stop smeshing

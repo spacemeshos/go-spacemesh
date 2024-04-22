@@ -541,40 +541,21 @@ func TestVerifyChainDeps(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	ch := types.NIPostChallenge{
-		Sequence:       1,
-		PrevATXID:      types.EmptyATXID,
-		PublishEpoch:   postGenesisEpoch,
-		PositioningATX: goldenATXID,
-		CommitmentATX:  &goldenATXID,
-	}
-	nipostData := newNIPostWithPoet(t, []byte("00"))
-	invalidAtx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
-	require.NoError(t, SignAndFinalizeAtx(signer, invalidAtx))
-	vInvalidAtx, err := invalidAtx.Verify(0, 1)
-	require.NoError(t, err)
+	invalidAtx := newInitialATXv1(t, goldenATXID)
+	invalidAtx.Sign(signer)
+	vInvalidAtx := toVerifiedAtx(t, invalidAtx)
 	vInvalidAtx.SetValidity(types.Invalid)
 	require.NoError(t, atxs.Add(db, vInvalidAtx))
 
 	t.Run("invalid prev ATX", func(t *testing.T) {
-		ch := types.NIPostChallenge{
-			Sequence:       1,
-			PrevATXID:      vInvalidAtx.ID(),
-			PublishEpoch:   postGenesisEpoch,
-			PositioningATX: goldenATXID,
-			CommitmentATX:  nil,
-		}
-		nipostData = newNIPostWithPoet(t, []byte("01"))
-		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
-		require.NoError(t, SignAndFinalizeAtx(signer, atx))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		atx := newChainedActivationTxV1(t, goldenATXID, invalidAtx, goldenATXID)
+		atx.Sign(signer)
+		vAtx := toVerifiedAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
-		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
+		v.EXPECT().Verify(ctx, gomock.Any(), gomock.Any(), gomock.Any())
 
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
@@ -582,19 +563,9 @@ func TestVerifyChainDeps(t *testing.T) {
 	})
 
 	t.Run("invalid pos ATX", func(t *testing.T) {
-		ch := types.NIPostChallenge{
-			Sequence:       1,
-			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   postGenesisEpoch,
-			PositioningATX: vInvalidAtx.ID(),
-			CommitmentATX:  nil,
-		}
-		nipostData = newNIPostWithPoet(t, []byte("02"))
-		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
-		require.NoError(t, SignAndFinalizeAtx(signer, atx))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		atx := newInitialATXv1(t, invalidAtx.ID())
+		atx.Sign(signer)
+		vAtx := toVerifiedAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -608,19 +579,10 @@ func TestVerifyChainDeps(t *testing.T) {
 
 	t.Run("invalid commitment ATX", func(t *testing.T) {
 		commitmentAtxID := vInvalidAtx.ID()
-		ch := types.NIPostChallenge{
-			Sequence:       1,
-			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   postGenesisEpoch,
-			PositioningATX: goldenATXID,
-			CommitmentATX:  &commitmentAtxID,
-		}
-		nipostData = newNIPostWithPoet(t, []byte("03"))
-		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
-		require.NoError(t, SignAndFinalizeAtx(signer, atx))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		atx := newInitialATXv1(t, goldenATXID)
+		atx.Sign(signer)
+		atx.CommitmentATXID = &commitmentAtxID
+		vAtx := toVerifiedAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -632,19 +594,9 @@ func TestVerifyChainDeps(t *testing.T) {
 	})
 
 	t.Run("with trusted node ID", func(t *testing.T) {
-		ch := types.NIPostChallenge{
-			Sequence:       1,
-			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   postGenesisEpoch,
-			PositioningATX: vInvalidAtx.ID(),
-			CommitmentATX:  nil,
-		}
-		nipostData = newNIPostWithPoet(t, []byte("04"))
-		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
-		require.NoError(t, SignAndFinalizeAtx(signer, atx))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		atx := newInitialATXv1(t, invalidAtx.ID())
+		atx.Sign(signer)
+		vAtx := toVerifiedAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -655,19 +607,9 @@ func TestVerifyChainDeps(t *testing.T) {
 	})
 
 	t.Run("assume valid if older than X", func(t *testing.T) {
-		ch := types.NIPostChallenge{
-			Sequence:       1,
-			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   postGenesisEpoch,
-			PositioningATX: vInvalidAtx.ID(),
-			CommitmentATX:  nil,
-		}
-		nipostData = newNIPostWithPoet(t, []byte("05"))
-		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
-		require.NoError(t, SignAndFinalizeAtx(signer, atx))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		atx := newInitialATXv1(t, invalidAtx.ID())
+		atx.Sign(signer)
+		vAtx := toVerifiedAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -679,19 +621,9 @@ func TestVerifyChainDeps(t *testing.T) {
 	})
 
 	t.Run("invalid top-level", func(t *testing.T) {
-		ch := types.NIPostChallenge{
-			Sequence:       1,
-			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   postGenesisEpoch,
-			PositioningATX: vInvalidAtx.ID(),
-			CommitmentATX:  nil,
-		}
-		nipostData = newNIPostWithPoet(t, []byte("06"))
-		atx := newAtx(ch, nipostData.NIPost, 2, types.Address{})
-		require.NoError(t, SignAndFinalizeAtx(signer, atx))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		vAtx.SetValidity(types.Unknown)
+		atx := newInitialATXv1(t, goldenATXID)
+		atx.Sign(signer)
+		vAtx := toVerifiedAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
