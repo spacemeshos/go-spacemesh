@@ -1550,7 +1550,8 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	invalidAtx := newInitialATXv1(t, tab.goldenATXID)
 	invalidAtx.Sign(sigInvalid)
 	vInvalidAtx := toVerifiedAtx(t, invalidAtx)
-	vInvalidAtx.Verify(0, 100)
+	vInvalidAtx, err = vInvalidAtx.Verify(0, 100)
+	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.db, vInvalidAtx))
 
 	// Valid chain with lower height
