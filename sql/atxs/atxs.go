@@ -41,7 +41,7 @@ func decoder(fn decoderCallback) sql.Decoder {
 		stmt.ColumnBytes(0, id[:])
 		checkpointed := stmt.ColumnLen(1) == 0
 		if !checkpointed {
-			// in future, decide ATX version base on atx_blobs.version column
+			// FIXME: remove decoding blob once ActivationTx struct is trimmed from unncecessary fields.
 			var atxV1 wire.ActivationTxV1
 			blob, err := io.ReadAll(stmt.ColumnReader(1))
 			if err != nil {
@@ -803,7 +803,7 @@ func PoetProofRef(ctx context.Context, db sql.Executor, id types.ATXID) (types.P
 		return types.PoetProofRef{}, fmt.Errorf("getting blob for %s: %w", id, err)
 	}
 
-	// TODO: decide about version based on publish epoch
+	// TODO: decide about version based the `version` column in `atx_blobs`
 	var atx wire.ActivationTxV1
 	if err := codec.Decode(blob.Bytes, &atx); err != nil {
 		return types.PoetProofRef{}, fmt.Errorf("decoding ATX blob: %w", err)
