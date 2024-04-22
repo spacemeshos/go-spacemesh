@@ -71,8 +71,7 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddString("type", "invalid post index")
 		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
 		if ok {
-			atx := wire.ActivationTxFromWireV1(&p.Atx)
-			encoder.AddString("atx_id", atx.ID().String())
+			encoder.AddString("atx_id", p.Atx.ID().String())
 			encoder.AddString("smesher", p.Atx.SmesherID.String())
 			encoder.AddUint32("invalid index", p.InvalidIdx)
 		}
@@ -359,11 +358,10 @@ func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 	case InvalidPostIndex:
 		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
 		if ok {
-			atx := wire.ActivationTxFromWireV1(&p.Atx)
 			b.WriteString(
 				fmt.Sprintf(
 					"cause: smesher published ATX %s with invalid post index %d in epoch %d\n",
-					atx.ID().ShortString(),
+					p.Atx.ID().ShortString(),
 					p.InvalidIdx,
 					p.Atx.PublishEpoch,
 				))

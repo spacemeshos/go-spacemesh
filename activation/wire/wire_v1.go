@@ -173,10 +173,10 @@ func ActivationTxFromBytes(data []byte) (*types.ActivationTx, error) {
 		return nil, fmt.Errorf("decoding ATX: %w", err)
 	}
 
-	return ActivationTxFromWireV1(&wireAtx), nil
+	return ActivationTxFromWireV1(&wireAtx, data...), nil
 }
 
-func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
+func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.ActivationTx {
 	result := &types.ActivationTx{
 		InnerActivationTx: types.InnerActivationTx{
 			NIPostChallenge: types.NIPostChallenge{
@@ -195,6 +195,13 @@ func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
 		},
 		SmesherID: atx.SmesherID,
 		Signature: atx.Signature,
+		AtxBlob: types.AtxBlob{
+			Version: types.AtxV1,
+			Blob:    blob,
+		},
+	}
+	if len(blob) == 0 {
+		result.AtxBlob.Blob = codec.MustEncode(atx)
 	}
 
 	result.SetID(types.ATXID(atx.HashInnerBytes()))

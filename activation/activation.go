@@ -760,11 +760,18 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 }
 
 // SignAndFinalizeAtx signs the atx with specified signer and calculates the ID of the ATX.
+// DO NOT USE for new code. This function is deprecated and will be removed.
+// The proper way to create an ATX in tests is to use the specific wire type and sign it.
 func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error {
-	// FIXME - there is no need to sign types.ActivationTX (only ActivationTxVx)
 	wireAtx := wire.ActivationTxToWireV1(atx)
-	atx.Signature = signer.Sign(signing.ATX, wireAtx.SignedBytes())
-	atx.SmesherID = signer.NodeID()
+	wireAtx.Signature = signer.Sign(signing.ATX, wireAtx.SignedBytes())
+	wireAtx.SmesherID = signer.NodeID()
+	atx.AtxBlob = types.AtxBlob{
+		Version: types.AtxV1,
+		Blob:    codec.MustEncode(wireAtx),
+	}
+	atx.Signature = wireAtx.Signature
+	atx.SmesherID = wireAtx.SmesherID
 	atx.SetID(types.ATXID(wireAtx.HashInnerBytes()))
 	return nil
 }

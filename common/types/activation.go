@@ -158,6 +158,15 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
+type AtxVersion uint
+
+const AtxV1 AtxVersion = 1
+
+type AtxBlob struct {
+	Blob    []byte
+	Version AtxVersion
+}
+
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
@@ -166,6 +175,7 @@ type ActivationTx struct {
 	SmesherID NodeID
 	Signature EdSignature
 
+	AtxBlob
 	golden bool
 }
 
