@@ -118,7 +118,7 @@ func createATX(
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
-		types.Address{},
+		types.GenerateAddress(types.RandomBytes(types.AddressLength)),
 		numUnits,
 		&nonce,
 	)
