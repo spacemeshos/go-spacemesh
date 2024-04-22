@@ -152,6 +152,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 			QueueSize:             cfg.GossipQueueSize,
 			PeerOutboundQueueSize: cfg.GossipPeerOutboundQueueSize,
 			Throttle:              cfg.GossipValidationThrottle,
+			EvictionStrategy:      cfg.GossipEvictionStrategy,
 		}); err != nil {
 			return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 		}
