@@ -51,18 +51,6 @@ func TestMain(m *testing.M) {
 
 // ========== Helper functions ==========
 
-func newAtx(
-	challenge types.NIPostChallenge,
-	numUnits uint32,
-	coinbase types.Address,
-) *types.ActivationTx {
-	atx := types.NewActivationTx(challenge, coinbase, numUnits, nil)
-	atx.SetEffectiveNumUnits(numUnits)
-	atx.SetReceived(time.Now())
-	atx.SetValidity(types.Valid)
-	return atx
-}
-
 type testAtxBuilder struct {
 	*Builder
 	db          sql.Executor
