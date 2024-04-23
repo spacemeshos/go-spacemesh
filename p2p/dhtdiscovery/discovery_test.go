@@ -41,11 +41,6 @@ func TestSanity(t *testing.T) {
 	}
 	require.NoError(t, err)
 	discs := make([]*Discovery, len(mock.Hosts()))
-	t.Cleanup(func() {
-		for _, disc := range discs {
-			disc.Stop()
-		}
-	})
 	// Let the bootnode have suspended peer discovery.
 	// It knows all the nodes anyway. Also, do not advertise
 	// it for routing discovery as all the nodes know about
@@ -62,7 +57,7 @@ func TestSanity(t *testing.T) {
 	)
 	require.NoError(t, err)
 	bootdisc.Start()
-	defer bootdisc.Stop()
+	t.Cleanup(bootdisc.Stop)
 	discs[0] = bootdisc
 	require.NoError(t, err)
 	relayChans := make([]chan peer.AddrInfo, len(mock.Hosts()))
@@ -125,7 +120,7 @@ func TestSanity(t *testing.T) {
 		disc, err := New(makeDiscHost(h, true, nodeOpts[i].relayService), opts...)
 		require.NoError(t, err)
 		disc.Start()
-		defer disc.Stop()
+		t.Cleanup(disc.Stop)
 		discs[1+i] = disc
 	}
 	require.Eventually(t, func() bool {
