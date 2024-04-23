@@ -261,14 +261,14 @@ func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
 	metricsEndpoint := cluster.MakePoetMetricsEndpoint(tctx.Namespace, 0)
 	powRegs, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_pow_total", valid)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, float64(cl.Smeshers()*epoch), powRegs)
+	require.GreaterOrEqual(t, powRegs, float64(cl.Smeshers()*epoch))
 	powRegsInvalid, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_pow_total", invalid)
 	require.ErrorIs(t, err, errMetricNotFound, "metric for invalid PoW registrations value: %v", powRegsInvalid)
 
 	metricsEndpoint = cluster.MakePoetMetricsEndpoint(tctx.Namespace, 1)
 	certRegs, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_cert_total", valid)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, float64(cl.Smeshers()*epoch), certRegs)
+	require.GreaterOrEqual(t, certRegs, float64(cl.Smeshers()*epoch))
 
 	certRegsInvalid, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_cert_total", invalid)
 	require.ErrorIs(t, err, errMetricNotFound, "metric for invalid cert registrations value: %v", certRegsInvalid)
