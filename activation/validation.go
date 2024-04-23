@@ -15,7 +15,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -365,20 +364,6 @@ func (v *Validator) VerifyChain(ctx context.Context, id, goldenATXID types.ATXID
 	return v.verifyChainWithOpts(ctx, id, goldenATXID, options)
 }
 
-func (v *Validator) getNipost(ctx context.Context, id types.ATXID) (*types.NIPost, error) {
-	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, v.db, id.Bytes(), &blob); err != nil {
-		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
-	}
-
-	// TODO: decide about version based on publish epoch
-	var atx wire.ActivationTxV1
-	if err := codec.Decode(blob.Bytes, &atx); err != nil {
-		return nil, fmt.Errorf("decoding ATX blob: %w", err)
-	}
-	return wire.NiPostFromWireV1(atx.NIPost), nil
-}
-
 func (v *Validator) verifyChainWithOpts(
 	ctx context.Context,
 	id, goldenATXID types.ATXID,
@@ -420,7 +405,7 @@ func (v *Validator) verifyChainWithOpts(
 			commitmentAtxId = &atxId
 		}
 	}
-	nipost, err := v.getNipost(ctx, id)
+	nipost, err := atxs.Nipost(ctx, v.db, id)
 	if err != nil {
 		return fmt.Errorf("getting NIPost for ATX %s: %w", id, err)
 	}

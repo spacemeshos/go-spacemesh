@@ -385,7 +385,8 @@ func (b *Builder) obtainPostFromLastAtx(ctx context.Context, nodeId types.NodeID
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve ATX: %w", err)
 	}
-	if atx.NIPost == nil {
+	atxNipost, err := atxs.Nipost(ctx, b.db, atxid)
+	if err != nil {
 		return nil, errors.New("no NIPoST found in last ATX")
 	}
 	if atx.CommitmentATX == nil {
@@ -405,10 +406,10 @@ func (b *Builder) obtainPostFromLastAtx(ctx context.Context, nodeId types.NodeID
 
 	b.log.Info("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
 	return &nipost.Post{
-		Nonce:         atx.NIPost.Post.Nonce,
-		Indices:       atx.NIPost.Post.Indices,
-		Pow:           atx.NIPost.Post.Pow,
-		Challenge:     atx.NIPost.PostMetadata.Challenge,
+		Nonce:         atxNipost.Post.Nonce,
+		Indices:       atxNipost.Post.Indices,
+		Pow:           atxNipost.Post.Pow,
+		Challenge:     atxNipost.PostMetadata.Challenge,
 		NumUnits:      atx.NumUnits,
 		CommitmentATX: *atx.CommitmentATX,
 		VRFNonce:      *atx.VRFNonce,
@@ -748,7 +749,6 @@ func (b *Builder) createAtx(
 	sig *signing.EdSigner,
 	challenge *wire.NIPostChallengeV1,
 ) (*wire.ActivationTxV1, error) {
-
 	b.smeshingMutex.Lock()
 	certifier := b.certifiers[sig.NodeID()]
 	b.smeshingMutex.Unlock()

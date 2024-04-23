@@ -16,6 +16,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
@@ -80,7 +81,11 @@ type testAtxBuilder struct {
 
 func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
 	observer, observedLogs := observer.New(zapcore.DebugLevel)
-	logger := zap.New(observer)
+	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(
+		zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		}),
+	))
 
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
@@ -394,18 +399,9 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 
 	// current layer is too late to be able to build a nipost on time
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
-	ch := types.NIPostChallenge{
-		Sequence:       1,
-		PrevATXID:      types.EmptyATXID,
-		PublishEpoch:   postGenesisEpoch,
-		PositioningATX: tab.goldenATXID,
-		CommitmentATX:  &tab.goldenATXID,
-	}
-	prevAtx := newAtx(ch, 2, types.Address{})
-	require.NoError(t, SignAndFinalizeAtx(sig, prevAtx))
-	vPrevAtx, err := prevAtx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(tab.db, vPrevAtx))
+	prevAtx := newInitialATXv1(t, tab.goldenATXID)
+	prevAtx.Sign(sig)
+	require.NoError(t, atxs.Add(tab.db, toVerifiedAtx(t, prevAtx)))
 
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
@@ -441,7 +437,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// state is cleaned up
-	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
+	_, err := nipost.Challenge(tab.localDB, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -1200,23 +1196,11 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		WithPoetRetryInterval(retryInterval),
 	)
 	sig := maps.Values(tab.signers)[0]
-	posEpoch := types.EpochID(0)
-	challenge := types.NIPostChallenge{
-		Sequence:       1,
-		PrevATXID:      types.ATXID{1, 2, 3},
-		PublishEpoch:   posEpoch,
-		PositioningATX: types.ATXID{1, 2, 3},
-		CommitmentATX:  &types.ATXID{'c', 'a', 't', 'x'},
-	}
-	poetBytes := []byte("66666")
-	prevAtx := newAtx(challenge, 2, types.Address{})
-	require.NoError(t, SignAndFinalizeAtx(sig, prevAtx))
-	vPrevAtx, err := prevAtx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(tab.db, vPrevAtx))
+	prevAtx := newInitialATXv1(t, tab.goldenATXID)
+	prevAtx.Sign(sig)
+	require.NoError(t, atxs.Add(tab.db, toVerifiedAtx(t, prevAtx)))
 
-	publishEpoch := posEpoch + 1
-	currLayer := posEpoch.FirstLayer()
+	currLayer := prevAtx.PublishEpoch.FirstLayer()
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 		func(got types.LayerID) time.Time {
@@ -1226,7 +1210,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		}).AnyTimes()
 	done := make(chan struct{})
 	close(done)
-	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
+	tab.mclock.EXPECT().AwaitLayer(prevAtx.PublishEpoch.Add(1).FirstLayer()).DoAndReturn(
 		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
@@ -1257,7 +1241,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 					return nil, ErrPoetServiceUnstable
 				}
 				close(builderConfirmation)
-				return newNIPostWithPoet(t, poetBytes), nil
+				return newNIPostWithPoet(t, []byte("poet")), nil
 			},
 		)
 
@@ -1431,43 +1415,18 @@ func TestBuilder_obtainPost(t *testing.T) {
 	t.Run("initial POST unavailable but ATX exists", func(t *testing.T) {
 		tab := newTestBuilder(t, 1)
 		sig := maps.Values(tab.signers)[0]
-		commitmentAtxId := types.RandomATXID()
-		challenge := types.NIPostChallenge{
-			PublishEpoch:   2,
-			Sequence:       0,
-			PrevATXID:      types.EmptyATXID,
-			PositioningATX: types.RandomATXID(),
-			CommitmentATX:  &commitmentAtxId,
-			InitialPost:    &types.Post{},
-		}
-		nipost := &types.NIPost{
-			Post: &types.Post{
-				Nonce:   5,
-				Indices: []byte{1, 2, 3, 4},
-				Pow:     7,
-			},
-			PostMetadata: &types.PostMetadata{
-				Challenge:     []byte("66666"),
-				LabelsPerUnit: 777,
-			},
-		}
-		vrf := types.VRFPostIndex(1234)
-		atx := types.NewActivationTx(challenge, types.Address{}, nipost, 2, &vrf)
-		atx.SetEffectiveNumUnits(2)
-		atx.SetReceived(time.Now())
-		require.NoError(t, SignAndFinalizeAtx(sig, atx))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		require.NoError(t, atxs.Add(tab.db, vAtx))
+		atx := newInitialATXv1(t, tab.goldenATXID)
+		atx.Sign(sig)
+		require.NoError(t, atxs.Add(tab.db, toVerifiedAtx(t, atx)))
 
 		post, err := tab.obtainPost(context.Background(), sig.NodeID())
 		require.NoError(t, err)
-		require.Equal(t, commitmentAtxId, post.CommitmentATX)
-		require.Equal(t, uint32(2), post.NumUnits)
-		require.Equal(t, nipost.PostMetadata.Challenge, post.Challenge)
-		require.Equal(t, nipost.Post.Indices, post.Indices)
-		require.Equal(t, nipost.Post.Pow, post.Pow)
-		require.Equal(t, nipost.Post.Nonce, post.Nonce)
+		require.Equal(t, atx.CommitmentATXID, &post.CommitmentATX)
+		require.Equal(t, atx.NumUnits, post.NumUnits)
+		require.Equal(t, atx.NIPost.PostMetadata.Challenge, post.Challenge)
+		require.Equal(t, atx.NIPost.Post.Indices, post.Indices)
+		require.Equal(t, atx.NIPost.Post.Pow, post.Pow)
+		require.Equal(t, atx.NIPost.Post.Nonce, post.Nonce)
 	})
 }
 
