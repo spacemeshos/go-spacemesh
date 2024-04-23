@@ -134,8 +134,6 @@ type InnerActivationTx struct {
 	Coinbase Address
 	NumUnits uint32
 
-	NIPost   *NIPost
-	NodeID   *NodeID
 	VRFNonce *VRFPostIndex
 
 	// the following fields are kept private and from being serialized
@@ -158,6 +156,15 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
+type AtxVersion uint
+
+const AtxV1 AtxVersion = 1
+
+type AtxBlob struct {
+	Blob    []byte
+	Version AtxVersion
+}
+
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
@@ -166,6 +173,7 @@ type ActivationTx struct {
 	SmesherID NodeID
 	Signature EdSignature
 
+	AtxBlob
 	golden bool
 }
 
@@ -173,7 +181,6 @@ type ActivationTx struct {
 func NewActivationTx(
 	challenge NIPostChallenge,
 	coinbase Address,
-	nipost *NIPost,
 	numUnits uint32,
 	nonce *VRFPostIndex,
 ) *ActivationTx {
@@ -182,9 +189,7 @@ func NewActivationTx(
 			NIPostChallenge: challenge,
 			Coinbase:        coinbase,
 			NumUnits:        numUnits,
-
-			NIPost:   nipost,
-			VRFNonce: nonce,
+			VRFNonce:        nonce,
 		},
 	}
 	return atx
@@ -228,11 +233,6 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	}
 	encoder.AddUint64("sequence_number", atx.Sequence)
 	return nil
-}
-
-// GetPoetProofRef returns the reference to the PoET proof.
-func (atx *ActivationTx) GetPoetProofRef() Hash32 {
-	return BytesToHash(atx.NIPost.PostMetadata.Challenge)
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.

@@ -584,33 +584,35 @@ func TestLoadBlob(t *testing.T) {
 	require.NoError(t, err)
 	atx1, err := newAtx(sig, withPublishEpoch(1))
 	require.NoError(t, err)
+	atx1.AtxBlob.Blob = []byte("blob1")
 
 	require.NoError(t, atxs.Add(db, atx1))
 
 	var blob1 sql.Blob
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1))
-	encoded := codec.MustEncode(wire.ActivationTxToWireV1(atx1.ActivationTx))
-	require.Equal(t, encoded, blob1.Bytes)
+
+	require.Equal(t, atx1.AtxBlob.Blob, blob1.Bytes)
 
 	blobSizes, err := atxs.GetBlobSizes(db, [][]byte{atx1.ID().Bytes()})
 	require.NoError(t, err)
 	require.Equal(t, []int{len(blob1.Bytes)}, blobSizes)
 
 	var blob2 sql.Blob
-	atx2, err := newAtx(sig, withPublishEpoch(1))
-	nodeID := types.RandomNodeID()
-	atx2.NodeID = &nodeID // ensure ATXs differ in size
+	atx2, err := newAtx(sig)
 	require.NoError(t, err)
+	atx2.AtxBlob.Blob = []byte("blob2 of different size")
+
 	require.NoError(t, atxs.Add(db, atx2))
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))
-	encoded = codec.MustEncode(wire.ActivationTxToWireV1(atx2.ActivationTx))
-	require.Equal(t, encoded, blob2.Bytes)
+	require.Equal(t, atx2.AtxBlob.Blob, blob2.Bytes)
+
 	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
 		atx1.ID().Bytes(),
 		atx2.ID().Bytes(),
 	})
 	require.NoError(t, err)
 	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes)}, blobSizes)
+	require.NotEqual(t, len(blob1.Bytes), len(blob2.Bytes))
 
 	noSuchID := types.RandomATXID()
 	require.ErrorIs(t, atxs.LoadBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
