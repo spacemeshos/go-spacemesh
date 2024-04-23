@@ -16,6 +16,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
@@ -80,7 +81,11 @@ type testAtxBuilder struct {
 
 func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
 	observer, observedLogs := observer.New(zapcore.DebugLevel)
-	logger := zap.New(observer)
+	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
 
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
