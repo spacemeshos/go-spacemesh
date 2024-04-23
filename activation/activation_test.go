@@ -338,7 +338,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).Times(4)
-	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), sig.NodeID(), tab.goldenATXID, gomock.Any())
+	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), prevAtx.ID(), tab.goldenATXID, gomock.Any())
 	atx1, err := publishAtx(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx1)
@@ -346,7 +346,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	// create and publish another ATX
 	currLayer = (posEpoch + 1).FirstLayer()
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).Times(4)
-	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), sig.NodeID(), tab.goldenATXID, gomock.Any())
+	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), prevAtx.ID(), tab.goldenATXID, gomock.Any())
 	atx2, err := publishAtx(t, tab, sig.NodeID(), atx1.PublishEpoch, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx2)
@@ -627,7 +627,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	require.NoError(t, atxs.Add(tab.db, toVerifiedAtx(t, posAtx)))
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), sig.NodeID(), tab.goldenATXID, gomock.Any())
+	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), posAtx.ID(), tab.goldenATXID, gomock.Any())
 	built2, err := publishAtx(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, built2)
