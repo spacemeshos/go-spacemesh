@@ -201,16 +201,12 @@ func newAtx(
 	nodeID types.NodeID,
 ) *types.ActivationTx {
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:  types.EpochID(epoch),
-				Sequence:      seq,
-				CommitmentATX: commitAtx,
-				PrevATXID:     prevID,
-			},
-			NumUnits: 2,
-			Coinbase: types.Address{1, 2, 3},
-		},
+		PublishEpoch:  types.EpochID(epoch),
+		Sequence:      seq,
+		CommitmentATX: commitAtx,
+		PrevATXID:     prevID,
+		NumUnits:      2,
+		Coinbase:      types.Address{1, 2, 3},
 	}
 	atx.SetID(id)
 	if vrfnonce != 0 {

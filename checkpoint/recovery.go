@@ -479,7 +479,12 @@ func collect(
 	if err = collect(db, atx.PrevATXID, all, deps); err != nil {
 		return err
 	}
-	if err = collect(db, atx.PositioningATX, all, deps); err != nil {
+
+	posAtx, err := atxs.PositioningATX(context.Background(), db, ref)
+	if err != nil {
+		return fmt.Errorf("get positioning atx for atx %v: %w", ref, err)
+	}
+	if err = collect(db, posAtx, all, deps); err != nil {
 		return err
 	}
 	var blob sql.Blob

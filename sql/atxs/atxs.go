@@ -811,3 +811,17 @@ func PoetProofRef(ctx context.Context, db sql.Executor, id types.ATXID) (types.P
 
 	return types.PoetProofRef(atx.NIPost.PostMetadata.Challenge), nil
 }
+
+func PositioningATX(ctx context.Context, db sql.Executor, id types.ATXID) (types.ATXID, error) {
+	var blob sql.Blob
+	if err := LoadBlob(ctx, db, id.Bytes(), &blob); err != nil {
+		return types.EmptyATXID, fmt.Errorf("get blob %s: %w", id, err)
+	}
+	// TODO: decide how to decode based on the `version` column
+	var atx wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &atx); err != nil {
+		return types.EmptyATXID, fmt.Errorf("decode %s: %w", id, err)
+	}
+
+	return atx.PositioningATXID, nil
+}

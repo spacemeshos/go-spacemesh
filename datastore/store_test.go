@@ -147,13 +147,9 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	ctx := context.Background()
 
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(22),
-				Sequence:     11,
-			},
-			NumUnits: 11,
-		},
+		PublishEpoch: types.EpochID(22),
+		Sequence:     11,
+		NumUnits:     11,
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)

@@ -473,12 +473,10 @@ func TestComputeExpectedWeight(t *testing.T) {
 			)
 			for i, weight := range tc.totals {
 				eid := first + types.EpochID(i)
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-					NIPostChallenge: types.NIPostChallenge{
-						PublishEpoch: eid - 1,
-					},
-					NumUnits: uint32(weight),
-				}}
+				atx := &types.ActivationTx{
+					PublishEpoch: eid - 1,
+					NumUnits:     uint32(weight),
+				}
 				id := types.RandomATXID()
 				atx.SetID(id)
 				atx.SetEffectiveNumUnits(atx.NumUnits)

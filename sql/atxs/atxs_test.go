@@ -791,14 +791,10 @@ func withPrevATXID(id types.ATXID) createAtxOpt {
 func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActivationTx, error) {
 	nonce := types.VRFPostIndex(42)
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PrevATXID: types.RandomATXID(),
-			},
-			Coinbase: types.Address{1, 2, 3},
-			NumUnits: 2,
-			VRFNonce: &nonce,
-		},
+		PrevATXID: types.RandomATXID(),
+		Coinbase:  types.Address{1, 2, 3},
+		NumUnits:  2,
+		VRFNonce:  &nonce,
 	}
 	for _, opt := range opts {
 		opt(atx)
@@ -819,13 +815,9 @@ type header struct {
 
 func createAtx(tb testing.TB, db *sql.Database, hdr header) (types.ATXID, *signing.EdSigner) {
 	full := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: hdr.epoch,
-			},
-			Coinbase: hdr.coinbase,
-			NumUnits: 2,
-		},
+		PublishEpoch: hdr.epoch,
+		Coinbase:     hdr.coinbase,
+		NumUnits:     2,
 	}
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -980,11 +972,7 @@ func TestLatest(t *testing.T) {
 			db := sql.InMemory()
 			for i, epoch := range tc.epochs {
 				full := &types.ActivationTx{
-					InnerActivationTx: types.InnerActivationTx{
-						NIPostChallenge: types.NIPostChallenge{
-							PublishEpoch: types.EpochID(epoch),
-						},
-					},
+					PublishEpoch: types.EpochID(epoch),
 				}
 				full.SetEffectiveNumUnits(1)
 				full.SetReceived(time.Now())

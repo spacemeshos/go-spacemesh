@@ -260,7 +260,7 @@ func validateAndPreserveData(
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
-		if vatx.InitialPost != nil {
+		if vatx.PrevATXID == types.EmptyATXID {
 			mvalidator.EXPECT().
 				InitialNIPostChallengeV1(&atx.NIPostChallengeV1, gomock.Any(), goldenAtx).
 				AnyTimes()
@@ -268,7 +268,7 @@ func validateAndPreserveData(
 				gomock.Any(),
 				vatx.SmesherID,
 				*vatx.CommitmentATX,
-				vatx.InitialPost,
+				wire.PostFromWireV1(atx.InitialPost),
 				gomock.Any(),
 				vatx.NumUnits,
 				gomock.Any(),
@@ -284,7 +284,7 @@ func validateAndPreserveData(
 			mvalidator.EXPECT().NIPostChallengeV1(&atx.NIPostChallengeV1, cdb, vatx.SmesherID)
 		}
 
-		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
+		mvalidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, vatx.PublishEpoch)
 		mvalidator.EXPECT().
 			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), vatx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)

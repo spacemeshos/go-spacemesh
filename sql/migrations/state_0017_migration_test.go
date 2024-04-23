@@ -38,15 +38,11 @@ func addAtx(
 	opts ...addAtxOpt,
 ) types.ATXID {
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: epoch,
-				Sequence:     sequence,
-				PrevATXID:    types.EmptyATXID,
-			},
-			Coinbase: types.Address{1, 2, 3},
-			NumUnits: 2,
-		},
+		PublishEpoch: epoch,
+		Sequence:     sequence,
+		PrevATXID:    types.EmptyATXID,
+		Coinbase:     types.Address{1, 2, 3},
+		NumUnits:     2,
 	}
 	for _, opt := range opts {
 		opt(atx)
