@@ -53,6 +53,7 @@ type NIPostBuilder struct {
 	poetCfg     PoetConfig
 	layerClock  layerClock
 	postStates  PostStates
+	certifier   certifierService
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
@@ -69,6 +70,12 @@ func WithPoetClients(clients ...PoetClient) NIPostBuilderOption {
 func NipostbuilderWithPostStates(ps PostStates) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
 		nb.postStates = ps
+	}
+}
+
+func WithCertifier(certifier certifierService) NIPostBuilderOption {
+	return func(nb *NIPostBuilder) {
+		nb.certifier = certifier
 	}
 }
 
@@ -91,6 +98,7 @@ func NewNIPostBuilder(
 		poetCfg:     poetCfg,
 		layerClock:  layerClock,
 		postStates:  NewPostStates(lg),
+		certifier:   &disabledCertifier{},
 	}
 
 	for _, opt := range opts {
@@ -168,7 +176,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 	signer *signing.EdSigner,
 	publishEpoch types.EpochID,
 	challenge types.Hash32,
-	certifier certifierService,
 ) (*nipost.NIPostState, error) {
 	logger := nb.log.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
 	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
@@ -223,7 +230,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
-		err := nb.submitPoetChallenges(submitCtx, signer, poetProofDeadline, challenge.Bytes(), certifier)
+		err := nb.submitPoetChallenges(submitCtx, signer, poetProofDeadline, challenge.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("submitting to poets: %w", err)
 		}
@@ -338,7 +345,6 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	client PoetClient,
 	prefix, challenge []byte,
 	signature types.EdSignature,
-	certifier certifierService,
 ) error {
 	logger := nb.log.With(
 		log.ZContext(ctx),
@@ -348,7 +354,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	// FIXME: remove support for deprecated poet PoW
 	auth := PoetAuth{
-		PoetCert: certifier.Certificate(client.Address()),
+		PoetCert: nb.certifier.Certificate(nodeID, client.Address()),
 	}
 	if auth.PoetCert == nil {
 		logger.Info("missing poet cert - falling back to PoW")
@@ -392,7 +398,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	switch {
 	case errors.Is(err, ErrUnauthorized):
 		logger.Warn("failed to submit challenge as unathorized - recertifying", zap.Error(err))
-		auth.PoetCert, err = certifier.Recertify(ctx, client)
+		auth.PoetCert, err = nb.certifier.Recertify(ctx, nodeID, client)
 		if err != nil {
 			return &PoetSvcUnstableError{msg: "failed to regenerate poet certificate", source: err}
 		}
@@ -420,7 +426,6 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	signer *signing.EdSigner,
 	deadline time.Time,
 	challenge []byte,
-	certifier certifierService,
 ) error {
 	signature := signer.Sign(signing.POET, challenge)
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
@@ -429,7 +434,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	errChan := make(chan error, len(nb.poetProvers))
 	for _, client := range nb.poetProvers {
 		g.Go(func() error {
-			errChan <- nb.submitPoetChallenge(ctx, nodeID, deadline, client, prefix, challenge, signature, certifier)
+			errChan <- nb.submitPoetChallenge(ctx, nodeID, deadline, client, prefix, challenge, signature)
 			return nil
 		})
 	}

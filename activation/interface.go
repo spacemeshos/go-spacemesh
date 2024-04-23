@@ -86,7 +86,6 @@ type nipostBuilder interface {
 		sig *signing.EdSigner,
 		publish types.EpochID,
 		challenge types.Hash32,
-		certifier certifierService,
 	) (*nipost.NIPostState, error)
 	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
 	ResetState(types.NodeID) error
@@ -149,25 +148,23 @@ type PoetClient interface {
 // The implementation can use any method to obtain the certificate,
 // for example, POST verification.
 type certifierClient interface {
-	// The ID for which this client certifies.
-	Id() types.NodeID
 	// Certify the ID in the given certifier.
-	Certify(ctx context.Context, url *url.URL, pubkey []byte) (*certifier.PoetCert, error)
+	Certify(ctx context.Context, id types.NodeID, url *url.URL, pubkey []byte) (*certifier.PoetCert, error)
 }
 
 // certifierService is used to certify nodeID for registering in the poet.
 // It holds the certificates and can recertify if needed.
 type certifierService interface {
 	// Acquire a certificate for the given poet.
-	Certificate(poet string) *certifier.PoetCert
-	// Recertify the nodeID and return a certificate confirming that
+	Certificate(id types.NodeID, poet string) *certifier.PoetCert
+	// Recertify the ID and return a certificate confirming that
 	// it is verified. The certificate can be later used to submit in poet.
-	Recertify(ctx context.Context, poet PoetClient) (*certifier.PoetCert, error)
+	Recertify(ctx context.Context, id types.NodeID, poet PoetClient) (*certifier.PoetCert, error)
 
-	// Certify the nodeID for all given poets.
+	// Certify the ID for all given poets.
 	// It won't recertify poets that already have a certificate.
 	// It returns a map of a poet address to a certificate for it.
-	CertifyAll(ctx context.Context, poets []PoetClient) map[string]*certifier.PoetCert
+	CertifyAll(ctx context.Context, id types.NodeID, poets []PoetClient) map[string]*certifier.PoetCert
 }
 
 type poetDbAPI interface {

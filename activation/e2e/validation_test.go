@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/initialization"
-	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -97,12 +96,6 @@ func TestValidator_Validate(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
-	postClient, err := svc.Client(sig.NodeID())
-	require.NoError(t, err)
-	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
-	require.NoError(t, err)
-	initialPost := fullPost(post, info, shared.ZeroChallenge)
-
 	challenge := types.RandomHash()
 	nb, err := activation.NewNIPostBuilder(
 		localsql.InMemory(),
@@ -115,9 +108,7 @@ func TestValidator_Validate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), initialPost)
-	certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
-	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge, certifier)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(cdb, poetDb, cfg, opts.Scrypt, verifier)

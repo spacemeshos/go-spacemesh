@@ -136,6 +136,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
+	localDb := localsql.InMemory()
 
 	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
@@ -210,7 +211,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
 	require.NoError(t, err)
-	initialPost := fullPost(post, info, shared.ZeroChallenge)
+	err = nipost.AddPost(localDb, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
+	require.NoError(t, err)
 
 	client, err := activation.NewHTTPPoetClient(
 		types.PoetServer{Address: poetProver.RestURL().String()},
@@ -219,9 +221,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), initialPost)
-	certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
-	certifier.CertifyAll(context.Background(), []activation.PoetClient{client})
+	certifierClient := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
+	certifier := activation.NewCertifier(localDb, logger, certifierClient)
+	certifier.CertifyAll(context.Background(), sig.NodeID(), []activation.PoetClient{client})
 
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
@@ -236,7 +238,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	require.NoError(t, err)
 
 	challenge := types.RandomHash()
-	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge, certifier)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
@@ -361,12 +363,13 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		eg.Go(func() error {
 			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge)
 			require.NoError(t, err)
-			initialPost := fullPost(post, info, shared.ZeroChallenge)
-			certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), initialPost)
-			certifier := activation.NewCertifier(localsql.InMemory(), logger, certifierClient)
-			certifier.CertifyAll(context.Background(), []activation.PoetClient{client})
+			err = nipost.AddPost(localDB, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
+			require.NoError(t, err)
+			certifierClient := activation.NewCertifierClient(db, localDB, zaptest.NewLogger(t))
+			certifier := activation.NewCertifier(localDB, logger, certifierClient)
+			certifier.CertifyAll(context.Background(), sig.NodeID(), []activation.PoetClient{client})
 
-			nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge, certifier)
+			nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
 			require.NoError(t, err)
 
 			v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)

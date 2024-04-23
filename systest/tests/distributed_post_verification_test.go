@@ -159,22 +159,26 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	}, cfg.POET)
 	require.NoError(t, err)
 
+	db := sql.InMemory()
+	localDb := localsql.InMemory()
+
+	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
+	certifier := activation.NewCertifier(localDb, logger, certClient)
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
-		localsql.InMemory(),
-		activation.NewPoetDb(sql.InMemory(), log.NewNop()),
+		localDb,
+		activation.NewPoetDb(db, log.NewNop()),
 		grpcPostService,
 		logger.Named("nipostBuilder"),
 		cfg.POET,
 		clock,
 		activation.WithPoetClients(poetClient),
+		activation.WithCertifier(certifier),
 	)
 	require.NoError(t, err)
 
 	// 2.1. Create initial POST
-	var (
-		initialPost *nipost.Post
-		challenge   *wire.NIPostChallengeV1
-	)
+	var challenge *wire.NIPostChallengeV1
 	for {
 		client, err := grpcPostService.Client(signer.NodeID())
 		if err != nil {
@@ -184,6 +188,17 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		}
 		ctx.Log.Info("poet service to connected")
 		post, postInfo, err := client.Proof(ctx, shared.ZeroChallenge)
+		require.NoError(t, err)
+
+		err = nipost.AddPost(localDb, signer.NodeID(), nipost.Post{
+			Nonce:         post.Nonce,
+			Indices:       post.Indices,
+			Pow:           post.Pow,
+			Challenge:     shared.ZeroChallenge,
+			NumUnits:      postInfo.NumUnits,
+			CommitmentATX: postInfo.CommitmentATX,
+			VRFNonce:      *postInfo.Nonce,
+		})
 		require.NoError(t, err)
 
 		challenge = &wire.NIPostChallengeV1{
@@ -199,12 +214,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		}
 		break
 	}
-	// 2.2 Certify initial POST
-	certClient := activation.NewCertifierClient(logger.Named("certifier"), signer.NodeID(), initialPost)
-	certifier := activation.NewCertifier(localsql.InMemory(), logger, certClient)
-	certifier.CertifyAll(context.Background(), []activation.PoetClient{poetClient})
 
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challenge.Hash(), certifier)
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST

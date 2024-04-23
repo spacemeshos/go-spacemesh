@@ -250,11 +250,11 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 				},
 				nil,
 			)
-			_, err := tab.obtainPost(context.Background(), sig.NodeID())
+			err := tab.buildInitialPost(context.Background(), sig.NodeID())
 			require.NoError(t, err)
 
 			// postClient.Proof() should not be called again
-			_, err = tab.obtainPost(context.Background(), sig.NodeID())
+			err = tab.buildInitialPost(context.Background(), sig.NodeID())
 			require.NoError(t, err)
 			return nil
 		})
@@ -398,7 +398,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		}
 		nipostState[sig.NodeID()] = state
 		tab.mnipost.EXPECT().
-			BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash(), gomock.Any()).
+			BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash()).
 			Return(state, nil)
 
 		// awaiting atx publication epoch log

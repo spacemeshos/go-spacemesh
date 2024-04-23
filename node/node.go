@@ -1025,15 +1025,25 @@ func (app *App) initServices(ctx context.Context) error {
 		poetClients = append(poetClients, client)
 	}
 
+	nipostLogger := app.addLogger(NipostBuilderLogger, lg).Zap()
+	client := activation.NewCertifierClient(
+		app.db,
+		app.localDB,
+		nipostLogger,
+		activation.WithCertifierClientConfig(app.Config.Certifier.Client),
+	)
+	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.localDB,
 		poetDb,
 		grpcPostService.(*grpcserver.PostService),
-		app.addLogger(NipostBuilderLogger, lg).Zap(),
+		nipostLogger,
 		app.Config.POET,
 		app.clock,
 		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetClients(poetClients...),
+		activation.WithCertifier(certifier),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -1058,10 +1068,10 @@ func (app *App) initServices(ctx context.Context) error {
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
-		activation.WithPoets(poetClients...),
-		activation.WithCertifierConfig(app.Config.Certifier),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 		activation.WithPostStates(postStates),
+		activation.WithPoetCertifier(certifier),
+		activation.WithPoets(poetClients...),
 	)
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.

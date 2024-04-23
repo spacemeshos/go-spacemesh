@@ -39,6 +39,7 @@ func TestCertification(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	cfg := activation.DefaultPostConfig()
 	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
+	localDb := localsql.InMemory()
 
 	syncer := activation.NewMocksyncer(gomock.NewController(t))
 	synced := make(chan struct{})
@@ -75,7 +76,7 @@ func TestCertification(t *testing.T) {
 	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
 	require.NoError(t, err)
 
-	fullPost := &nipost.Post{
+	fullPost := nipost.Post{
 		Nonce:         post.Nonce,
 		Indices:       post.Indices,
 		Pow:           post.Pow,
@@ -84,6 +85,8 @@ func TestCertification(t *testing.T) {
 		CommitmentATX: info.CommitmentATX,
 		VRFNonce:      *info.Nonce,
 	}
+	err = nipost.AddPost(localDb, sig.NodeID(), fullPost)
+	require.NoError(t, err)
 
 	t.Run("certify all poets", func(t *testing.T) {
 		poets := []activation.PoetClient{}
@@ -123,9 +126,9 @@ func TestCertification(t *testing.T) {
 		require.NoError(t, err)
 		poets = append(poets, client)
 
-		certifierClient := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), fullPost)
-		certifier := activation.NewCertifier(localsql.InMemory(), zaptest.NewLogger(t), certifierClient)
-		certs := certifier.CertifyAll(context.Background(), poets)
+		certifierClient := activation.NewCertifierClient(cdb, localDb, zaptest.NewLogger(t))
+		certifier := activation.NewCertifier(localDb, zaptest.NewLogger(t), certifierClient)
+		certs := certifier.CertifyAll(context.Background(), sig.NodeID(), poets)
 		require.Len(t, certs, 3)
 		require.Contains(t, certs, poets[0].Address())
 		require.Contains(t, certs, poets[1].Address())
@@ -134,8 +137,9 @@ func TestCertification(t *testing.T) {
 	t.Run("certify accepts valid cert", func(t *testing.T) {
 		pubKey, addr := spawnTestCertifier(t, cfg, nil, verifying.WithLabelScryptParams(opts.Scrypt))
 
-		client := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), fullPost)
-		_, err := client.Certify(context.Background(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+		client := activation.NewCertifierClient(cdb, localDb, zaptest.NewLogger(t))
+		_, err := client.
+			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.NoError(t, err)
 	})
 	t.Run("certify rejects invalid cert (expired)", func(t *testing.T) {
@@ -148,8 +152,9 @@ func TestCertification(t *testing.T) {
 		}
 		pubKey, addr := spawnTestCertifier(t, cfg, makeCert, verifying.WithLabelScryptParams(opts.Scrypt))
 
-		client := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), fullPost)
-		cert, err := client.Certify(context.Background(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+		client := activation.NewCertifierClient(cdb, localDb, zaptest.NewLogger(t))
+		cert, err := client.
+			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)
 	})
@@ -159,8 +164,9 @@ func TestCertification(t *testing.T) {
 		}
 		pubKey, addr := spawnTestCertifier(t, cfg, makeCert, verifying.WithLabelScryptParams(opts.Scrypt))
 
-		client := activation.NewCertifierClient(zaptest.NewLogger(t), sig.NodeID(), fullPost)
-		cert, err := client.Certify(context.Background(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+		client := activation.NewCertifierClient(cdb, localDb, zaptest.NewLogger(t))
+		cert, err := client.
+			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)
 	})
