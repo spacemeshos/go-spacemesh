@@ -2,7 +2,6 @@ package wire
 
 import (
 	"encoding/hex"
-	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -165,18 +164,6 @@ func ActivationTxToWireV1(a *types.ActivationTx) *ActivationTxV1 {
 		SmesherID: a.SmesherID,
 		Signature: a.Signature,
 	}
-}
-
-// Decode ActivationTx from bytes.
-// In future it should decide which version of ActivationTx to decode based on the publish epoch.
-func ActivationTxFromBytes(data []byte) (*types.ActivationTx, error) {
-	var wireAtx ActivationTxV1
-	err := codec.Decode(data, &wireAtx)
-	if err != nil {
-		return nil, fmt.Errorf("decoding ATX: %w", err)
-	}
-
-	return ActivationTxFromWireV1(&wireAtx, data...), nil
 }
 
 func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.ActivationTx {

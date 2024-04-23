@@ -486,14 +486,11 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			}
 			return done
 		})
-	var built *types.ActivationTx
+	var published []byte
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// first publish fails
 		func(_ context.Context, _ string, got []byte) error {
-			gotAtx, err := wire.ActivationTxFromBytes(got)
-			require.NoError(t, err)
-			built = gotAtx
-			built.SetReceived(time.Now().Local())
+			published = got
 			return errors.New("something went wrong")
 		},
 	)
@@ -504,10 +501,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		// second publish succeeds
 		func(_ context.Context, _ string, got []byte) error {
-			atx, err := wire.ActivationTxFromBytes(got)
-			require.NoError(t, err)
-			atx.SetReceived(built.Received())
-			require.Equal(t, built, atx)
+			require.Equal(t, published, got)
 			return nil
 		},
 	)
@@ -1186,13 +1180,12 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
 
-	var atx types.ActivationTx
+	var publishedID types.ATXID
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(ctx context.Context, s string, b []byte) error {
-			decoded, err := wire.ActivationTxFromBytes(b)
-			require.NoError(t, err)
-			atx = *decoded
-			atx.SetReceived(time.Now().Local())
+			var atx wire.ActivationTxV1
+			codec.MustDecode(b, &atx)
+			publishedID = atx.ID()
 
 			// advance time to the next epoch
 			currLayer = currLayer.Add(layersPerEpoch)
@@ -1219,7 +1212,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	case ev := <-sub.Out():
 		cancel()
 		atxEvent := ev.Event.GetAtxPublished()
-		require.Equal(t, atx.ID(), types.BytesToATXID(atxEvent.GetId()))
+		require.Equal(t, publishedID, types.BytesToATXID(atxEvent.GetId()))
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "timed out waiting for activation event")
 	}
@@ -1395,9 +1388,9 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(2).FirstLayer()).Return(closed).AnyTimes()
 			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ string, got []byte) error {
-					gotAtx, err := wire.ActivationTxFromBytes(got)
-					require.NoError(t, err)
-					require.Equal(t, tc.targetEpoch, gotAtx.TargetEpoch())
+					var atx wire.ActivationTxV1
+					codec.MustDecode(got, &atx)
+					require.Equal(t, tc.targetEpoch, atx.PublishEpoch+1)
 					return nil
 				})
 
