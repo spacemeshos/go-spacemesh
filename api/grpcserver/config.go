@@ -6,20 +6,21 @@ import (
 )
 
 type Config struct {
-	PublicServices  []Service
-	PublicListener  string `mapstructure:"grpc-public-listener"`
-	PrivateServices []Service
-	PrivateListener string `mapstructure:"grpc-private-listener"`
-	PostServices    []Service
-	PostListener    string    `mapstructure:"grpc-post-listener"`
-	TLSServices     []Service `mapstructure:"grpc-tls-services"`
-	TLSListener     string    `mapstructure:"grpc-tls-listener"`
-	TLSCACert       string    `mapstructure:"grpc-tls-ca-cert"`
-	TLSCert         string    `mapstructure:"grpc-tls-cert"`
-	TLSKey          string    `mapstructure:"grpc-tls-key"`
-	GrpcSendMsgSize int       `mapstructure:"grpc-send-msg-size"`
-	GrpcRecvMsgSize int       `mapstructure:"grpc-recv-msg-size"`
-	JSONListener    string    `mapstructure:"grpc-json-listener"`
+	PublicServices         []Service
+	PublicListener         string `mapstructure:"grpc-public-listener"`
+	PrivateServices        []Service
+	PrivateListener        string `mapstructure:"grpc-private-listener"`
+	PostServices           []Service
+	PostListener           string    `mapstructure:"grpc-post-listener"`
+	TLSServices            []Service `mapstructure:"grpc-tls-services"`
+	TLSListener            string    `mapstructure:"grpc-tls-listener"`
+	TLSCACert              string    `mapstructure:"grpc-tls-ca-cert"`
+	TLSCert                string    `mapstructure:"grpc-tls-cert"`
+	TLSKey                 string    `mapstructure:"grpc-tls-key"`
+	GrpcSendMsgSize        int       `mapstructure:"grpc-send-msg-size"`
+	GrpcRecvMsgSize        int       `mapstructure:"grpc-recv-msg-size"`
+	JSONListener           string    `mapstructure:"grpc-json-listener"`
+	JSONCorsAllowedOrigins []string  `mapstructure:"grpc-cors-allowed-origins"`
 
 	SmesherStreamInterval time.Duration `mapstructure:"smesherstreaminterval"`
 }
@@ -57,15 +58,16 @@ func DefaultConfig() Config {
 			Admin, Smesher, Debug, ActivationStreamV2Alpha1,
 			RewardStreamV2Alpha1,
 		},
-		PrivateListener:       "127.0.0.1:9093",
-		PostServices:          []Service{Post, PostInfo},
-		PostListener:          "127.0.0.1:0",
-		TLSServices:           []Service{Post, PostInfo},
-		TLSListener:           "",
-		JSONListener:          "",
-		GrpcSendMsgSize:       1024 * 1024 * 10,
-		GrpcRecvMsgSize:       1024 * 1024 * 10,
-		SmesherStreamInterval: time.Second,
+		PrivateListener:        "127.0.0.1:9093",
+		PostServices:           []Service{Post, PostInfo},
+		PostListener:           "127.0.0.1:0",
+		TLSServices:            []Service{Post, PostInfo},
+		TLSListener:            "",
+		JSONListener:           "",
+		JSONCorsAllowedOrigins: []string{""},
+		GrpcSendMsgSize:        1024 * 1024 * 10,
+		GrpcRecvMsgSize:        1024 * 1024 * 10,
+		SmesherStreamInterval:  time.Second,
 	}
 }
 
