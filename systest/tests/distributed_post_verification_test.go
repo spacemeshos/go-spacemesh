@@ -221,6 +221,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			NIPostChallengeV1: *challenge,
 			Coinbase:          types.Address{1, 2, 3, 4},
 			NumUnits:          nipost.NumUnits,
+			NIPost:            wire.NiPostToWireV1(nipost.NIPost),
 			NodeID:            &nodeID,
 			VRFNonce:          (*uint64)(&nipost.VRFNonce),
 		},
