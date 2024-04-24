@@ -35,7 +35,7 @@ type validatorOption func(*validatorOptions)
 
 type nipostValidator interface {
 	InitialNIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, goldenATXID types.ATXID) error
-	NIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, nodeID types.NodeID) error
+	NIPostChallengeV1(challenge *wire.NIPostChallengeV1, previous *types.ActivationTx, nodeID types.NodeID) error
 	NIPost(
 		ctx context.Context,
 		nodeId types.NodeID,
