@@ -2,7 +2,17 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED (v1.5.0)
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+## (v1.5.0)
 
 ### Upgrade information
 
@@ -13,10 +23,6 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   to prevent other users on the same system to access the private keys.
 
 * [#5866](https://github.com/spacemeshos/go-spacemesh/pull/5866) Reduce logging levels of some messages to reduce noise.
-
-### Highlights
-
-### Features
 
 ### Improvements
 
