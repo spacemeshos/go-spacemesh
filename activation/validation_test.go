@@ -637,6 +637,44 @@ func TestVerifyChainDeps(t *testing.T) {
 	})
 }
 
+func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
+	db := sql.InMemory()
+	ctx := context.Background()
+	goldenATXID := types.ATXID{2, 3, 4}
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	// The previous and positioning ATXs of the verified ATX will be a checkpointed (golden) ATX.
+	checkpointedAtx := newInitialATXv1(t, goldenATXID)
+	checkpointedAtx.Sign(signer)
+	vCheckpointedAtx := toVerifiedAtx(t, checkpointedAtx)
+	require.NoError(t, atxs.AddCheckpointed(db, &atxs.CheckpointAtx{
+		ID:             vCheckpointedAtx.ID(),
+		Epoch:          vCheckpointedAtx.PublishEpoch,
+		CommitmentATX:  *vCheckpointedAtx.CommitmentATX,
+		VRFNonce:       *vCheckpointedAtx.VRFNonce,
+		NumUnits:       vCheckpointedAtx.NumUnits,
+		BaseTickHeight: vCheckpointedAtx.BaseTickHeight(),
+		TickCount:      vCheckpointedAtx.TickCount(),
+		SmesherID:      vCheckpointedAtx.SmesherID,
+		Sequence:       vCheckpointedAtx.Sequence,
+		Coinbase:       vCheckpointedAtx.Coinbase,
+	}))
+
+	atx := newChainedActivationTxV1(t, goldenATXID, checkpointedAtx, checkpointedAtx.ID())
+	atx.Sign(signer)
+	vAtx := toVerifiedAtx(t, atx)
+	require.NoError(t, atxs.Add(db, vAtx))
+
+	ctrl := gomock.NewController(t)
+	v := NewMockPostVerifier(ctrl)
+	v.EXPECT().Verify(ctx, gomock.Any(), gomock.Any(), gomock.Any())
+
+	validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+	err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
+	require.NoError(t, err)
+}
+
 func TestIsVerifyingFullPost(t *testing.T) {
 	t.Run("full", func(t *testing.T) {
 		t.Parallel()

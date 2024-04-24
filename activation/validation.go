@@ -389,6 +389,10 @@ func (v *Validator) verifyChainWithOpts(
 	if err != nil {
 		return fmt.Errorf("get atx: %w", err)
 	}
+	if atx.Golden() {
+		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "golden"))
+		return nil
+	}
 
 	switch {
 	case atx.Validity() == types.Valid:
