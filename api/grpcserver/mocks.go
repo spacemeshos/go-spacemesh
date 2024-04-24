@@ -15,11 +15,14 @@ import (
 	time "time"
 
 	network "github.com/libp2p/go-libp2p/core/network"
+	peer "github.com/libp2p/go-libp2p/core/peer"
+	protocol "github.com/libp2p/go-libp2p/core/protocol"
 	multiaddr "github.com/multiformats/go-multiaddr"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	peerinfo "github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	system "github.com/spacemeshos/go-spacemesh/system"
 	gomock "go.uber.org/mock/gomock"
@@ -82,6 +85,82 @@ func (c *MocknetworkInfoDHTServerEnabledCall) Do(f func() bool) *MocknetworkInfo
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MocknetworkInfoDHTServerEnabledCall) DoAndReturn(f func() bool) *MocknetworkInfoDHTServerEnabledCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// EnsurePeerInfo mocks base method.
+func (m *MocknetworkInfo) EnsurePeerInfo(p peer.ID) *peerinfo.Info {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsurePeerInfo", p)
+	ret0, _ := ret[0].(*peerinfo.Info)
+	return ret0
+}
+
+// EnsurePeerInfo indicates an expected call of EnsurePeerInfo.
+func (mr *MocknetworkInfoMockRecorder) EnsurePeerInfo(p any) *MocknetworkInfoEnsurePeerInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsurePeerInfo", reflect.TypeOf((*MocknetworkInfo)(nil).EnsurePeerInfo), p)
+	return &MocknetworkInfoEnsurePeerInfoCall{Call: call}
+}
+
+// MocknetworkInfoEnsurePeerInfoCall wrap *gomock.Call
+type MocknetworkInfoEnsurePeerInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknetworkInfoEnsurePeerInfoCall) Return(arg0 *peerinfo.Info) *MocknetworkInfoEnsurePeerInfoCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknetworkInfoEnsurePeerInfoCall) Do(f func(peer.ID) *peerinfo.Info) *MocknetworkInfoEnsurePeerInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknetworkInfoEnsurePeerInfoCall) DoAndReturn(f func(peer.ID) *peerinfo.Info) *MocknetworkInfoEnsurePeerInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// EnsureProtoStats mocks base method.
+func (m *MocknetworkInfo) EnsureProtoStats(proto protocol.ID) *peerinfo.DataStats {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureProtoStats", proto)
+	ret0, _ := ret[0].(*peerinfo.DataStats)
+	return ret0
+}
+
+// EnsureProtoStats indicates an expected call of EnsureProtoStats.
+func (mr *MocknetworkInfoMockRecorder) EnsureProtoStats(proto any) *MocknetworkInfoEnsureProtoStatsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureProtoStats", reflect.TypeOf((*MocknetworkInfo)(nil).EnsureProtoStats), proto)
+	return &MocknetworkInfoEnsureProtoStatsCall{Call: call}
+}
+
+// MocknetworkInfoEnsureProtoStatsCall wrap *gomock.Call
+type MocknetworkInfoEnsureProtoStatsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknetworkInfoEnsureProtoStatsCall) Return(arg0 *peerinfo.DataStats) *MocknetworkInfoEnsureProtoStatsCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknetworkInfoEnsureProtoStatsCall) Do(f func(protocol.ID) *peerinfo.DataStats) *MocknetworkInfoEnsureProtoStatsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknetworkInfoEnsureProtoStatsCall) DoAndReturn(f func(protocol.ID) *peerinfo.DataStats) *MocknetworkInfoEnsureProtoStatsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -239,6 +318,44 @@ func (c *MocknetworkInfoNATDeviceTypeCall) DoAndReturn(f func() (network.NATDevi
 	return c
 }
 
+// Protocols mocks base method.
+func (m *MocknetworkInfo) Protocols() []protocol.ID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Protocols")
+	ret0, _ := ret[0].([]protocol.ID)
+	return ret0
+}
+
+// Protocols indicates an expected call of Protocols.
+func (mr *MocknetworkInfoMockRecorder) Protocols() *MocknetworkInfoProtocolsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Protocols", reflect.TypeOf((*MocknetworkInfo)(nil).Protocols))
+	return &MocknetworkInfoProtocolsCall{Call: call}
+}
+
+// MocknetworkInfoProtocolsCall wrap *gomock.Call
+type MocknetworkInfoProtocolsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknetworkInfoProtocolsCall) Return(arg0 []protocol.ID) *MocknetworkInfoProtocolsCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknetworkInfoProtocolsCall) Do(f func() []protocol.ID) *MocknetworkInfoProtocolsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknetworkInfoProtocolsCall) DoAndReturn(f func() []protocol.ID) *MocknetworkInfoProtocolsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Reachability mocks base method.
 func (m *MocknetworkInfo) Reachability() network.Reachability {
 	m.ctrl.T.Helper()
@@ -273,6 +390,78 @@ func (c *MocknetworkInfoReachabilityCall) Do(f func() network.Reachability) *Moc
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MocknetworkInfoReachabilityCall) DoAndReturn(f func() network.Reachability) *MocknetworkInfoReachabilityCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// RecordReceived mocks base method.
+func (m *MocknetworkInfo) RecordReceived(n int64, proto protocol.ID, p peer.ID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RecordReceived", n, proto, p)
+}
+
+// RecordReceived indicates an expected call of RecordReceived.
+func (mr *MocknetworkInfoMockRecorder) RecordReceived(n, proto, p any) *MocknetworkInfoRecordReceivedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordReceived", reflect.TypeOf((*MocknetworkInfo)(nil).RecordReceived), n, proto, p)
+	return &MocknetworkInfoRecordReceivedCall{Call: call}
+}
+
+// MocknetworkInfoRecordReceivedCall wrap *gomock.Call
+type MocknetworkInfoRecordReceivedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknetworkInfoRecordReceivedCall) Return() *MocknetworkInfoRecordReceivedCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknetworkInfoRecordReceivedCall) Do(f func(int64, protocol.ID, peer.ID)) *MocknetworkInfoRecordReceivedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknetworkInfoRecordReceivedCall) DoAndReturn(f func(int64, protocol.ID, peer.ID)) *MocknetworkInfoRecordReceivedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// RecordSent mocks base method.
+func (m *MocknetworkInfo) RecordSent(n int64, proto protocol.ID, p peer.ID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RecordSent", n, proto, p)
+}
+
+// RecordSent indicates an expected call of RecordSent.
+func (mr *MocknetworkInfoMockRecorder) RecordSent(n, proto, p any) *MocknetworkInfoRecordSentCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordSent", reflect.TypeOf((*MocknetworkInfo)(nil).RecordSent), n, proto, p)
+	return &MocknetworkInfoRecordSentCall{Call: call}
+}
+
+// MocknetworkInfoRecordSentCall wrap *gomock.Call
+type MocknetworkInfoRecordSentCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknetworkInfoRecordSentCall) Return() *MocknetworkInfoRecordSentCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknetworkInfoRecordSentCall) Do(f func(int64, protocol.ID, peer.ID)) *MocknetworkInfoRecordSentCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknetworkInfoRecordSentCall) DoAndReturn(f func(int64, protocol.ID, peer.ID)) *MocknetworkInfoRecordSentCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

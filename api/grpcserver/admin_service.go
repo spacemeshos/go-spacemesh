@@ -23,7 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/conninfo"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -171,19 +171,35 @@ func (a AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_Pe
 			connections := make([]*pb.ConnectionInfo, len(info.Connections))
 			for j, c := range info.Connections {
 				connections[j] = &pb.ConnectionInfo{
-					Address:     c.Address.String(),
-					Uptime:      durationpb.New(c.Uptime),
-					Outbound:    c.Outbound,
-					Kind:        connKind(c.Kind),
-					ClientStats: connPeerStats(c.ClientConnStats),
-					ServerStats: connPeerStats(c.ServerConnStats),
+					Address:  c.Address.String(),
+					Uptime:   durationpb.New(c.Uptime),
+					Outbound: c.Outbound,
+					Kind:     connKind(c.Kind),
 				}
 			}
-			err := stream.Send(&pb.PeerInfo{
-				Id:          info.ID.String(),
-				Connections: connections,
-				Tags:        info.Tags,
-			})
+			ds := info.DataStats
+			msg := &pb.PeerInfo{
+				Id:            info.ID.String(),
+				Connections:   connections,
+				Tags:          info.Tags,
+				ClientStats:   peerStats(info.ClientStats),
+				ServerStats:   peerStats(info.ServerStats),
+				BytesSent:     uint64(ds.BytesSent),
+				BytesReceived: uint64(ds.BytesReceived),
+			}
+			if ds.SendRate[0] != 0 || ds.SendRate[1] != 0 {
+				msg.SendRate = []uint64{
+					uint64(ds.SendRate[0]),
+					uint64(ds.SendRate[1]),
+				}
+			}
+			if ds.RecvRate[0] != 0 || ds.RecvRate[1] != 0 {
+				msg.RecvRate = []uint64{
+					uint64(ds.RecvRate[0]),
+					uint64(ds.RecvRate[1]),
+				}
+			}
+			err := stream.Send(msg)
 			if err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
@@ -193,39 +209,36 @@ func (a AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_Pe
 	return nil
 }
 
-func connKind(kind conninfo.Kind) pb.ConnectionInfo_Kind {
+func connKind(kind peerinfo.Kind) pb.ConnectionInfo_Kind {
 	switch kind {
-	case conninfo.KindInbound:
+	case peerinfo.KindInbound:
 		return pb.ConnectionInfo_Inbound
-	case conninfo.KindOutbound:
+	case peerinfo.KindOutbound:
 		return pb.ConnectionInfo_Outbound
-	case conninfo.KindHolePunchInbound:
+	case peerinfo.KindHolePunchInbound:
 		return pb.ConnectionInfo_HPInbound
-	case conninfo.KindHolePunchOutbound:
+	case peerinfo.KindHolePunchOutbound:
 		return pb.ConnectionInfo_HPOutbound
-	case conninfo.KindRelayInbound:
+	case peerinfo.KindRelayInbound:
 		return pb.ConnectionInfo_RelayInbound
-	case conninfo.KindRelayOutbound:
+	case peerinfo.KindRelayOutbound:
 		return pb.ConnectionInfo_RelayOutbound
 	default:
 		return pb.ConnectionInfo_Uknown
 	}
 }
 
-func connPeerStats(stats p2p.PeerConnectionStats) *pb.PeerConnectionStats {
-	if stats.SuccessCount == 0 && stats.FailureCount == 0 &&
-		stats.BytesSent == 0 && stats.BytesReceived == 0 {
+func peerStats(stats p2p.PeerRequestStats) *pb.PeerRequestStats {
+	if stats.SuccessCount == 0 && stats.FailureCount == 0 {
 		return nil
 	}
 	var latency *durationpb.Duration
 	if stats.SuccessCount > 0 || stats.FailureCount > 0 {
 		latency = durationpb.New(stats.Latency)
 	}
-	return &pb.PeerConnectionStats{
-		SuccessCount:  uint64(stats.SuccessCount),
-		FailureCount:  uint64(stats.FailureCount),
-		Latency:       latency,
-		BytesSent:     uint64(stats.BytesSent),
-		BytesReceived: uint64(stats.BytesReceived),
+	return &pb.PeerRequestStats{
+		SuccessCount: uint64(stats.SuccessCount),
+		FailureCount: uint64(stats.FailureCount),
+		Latency:      latency,
 	}
 }

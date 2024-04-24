@@ -20,7 +20,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/conninfo"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
 type DecayingTagSpec struct {
@@ -162,7 +162,8 @@ type Server struct {
 
 	metrics *tracker // metrics can be nil
 
-	h Host
+	h        Host
+	peerInfo peerinfo.PeerInfo
 }
 
 // New server for the handler.
@@ -181,6 +182,10 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 	}
 	for _, opt := range opts {
 		opt(srv)
+	}
+
+	if peerInfo, ok := h.(peerinfo.PeerInfo); ok {
+		srv.peerInfo = peerInfo
 	}
 
 	if srv.decayingTagSpec != nil {
@@ -249,10 +254,12 @@ func (s *Server) Run(ctx context.Context) error {
 				if s.decayingTag != nil {
 					s.decayingTag.Bump(conn.RemotePeer(), s.decayingTagSpec.Inc)
 				}
-				info := s.h.EnsureConnInfo(conn)
 				ok := s.queueHandler(ctx, req.stream)
 				took := time.Since(req.received)
-				info.ServerConnStats.RequestDone(took, ok)
+				if s.peerInfo != nil {
+					info := s.peerInfo.EnsurePeerInfo(conn.RemotePeer())
+					info.ServerStats.RequestDone(took, ok)
+				}
 				if s.metrics != nil {
 					s.metrics.serverLatency.Observe(took.Seconds())
 					if ok {
@@ -373,7 +380,7 @@ func (s *Server) StreamRequest(
 	took := time.Since(start)
 	tookSecs := took.Seconds()
 	if info != nil {
-		info.ClientConnStats.RequestDone(took, err == nil)
+		info.ClientStats.RequestDone(took, err == nil)
 	}
 	switch {
 	case s.metrics == nil:
@@ -397,7 +404,7 @@ func (s *Server) streamRequest(
 	extraProtocols ...string,
 ) (
 	stm io.ReadWriteCloser,
-	info *conninfo.Info,
+	info *peerinfo.Info,
 	err error,
 ) {
 	protoIDs := make([]protocol.ID, len(extraProtocols)+1)
@@ -413,7 +420,9 @@ func (s *Server) streamRequest(
 	if err != nil {
 		return nil, nil, err
 	}
-	info = s.h.EnsureConnInfo(stream.Conn())
+	if s.peerInfo != nil {
+		info = s.peerInfo.EnsurePeerInfo(stream.Conn().RemotePeer())
+	}
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	defer func() {
 		if err != nil {

@@ -15,7 +15,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/conninfo"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -159,30 +159,35 @@ func TestAdminService_PeerInfo(t *testing.T) {
 				Address:  mustParseMultiaddr("/ip4/10.36.0.221/tcp/5000"),
 				Uptime:   100 * time.Second,
 				Outbound: true,
-				Kind:     conninfo.KindOutbound,
+				Kind:     peerinfo.KindOutbound,
 			},
 		},
 		Tags: []string{"t1", "t2"},
 	})
 	p.EXPECT().ConnectedPeerInfo(p2).Return(&p2p.PeerInfo{
 		ID: p2,
+		DataStats: p2p.DataStats{
+			BytesSent:     100,
+			BytesReceived: 300,
+			SendRate:      [2]int64{100, 10},
+			RecvRate:      [2]int64{300, 30},
+		},
+		ClientStats: p2p.PeerRequestStats{
+			SuccessCount: 1,
+			FailureCount: 0,
+			Latency:      100 * time.Millisecond,
+		},
+		ServerStats: p2p.PeerRequestStats{
+			SuccessCount: 10,
+			FailureCount: 2,
+			Latency:      50 * time.Millisecond,
+		},
 		Connections: []p2p.ConnectionInfo{
 			{
 				Address:  mustParseMultiaddr("/ip4/10.11.22.33/tcp/5111"),
 				Uptime:   30 * time.Second,
 				Outbound: true,
-				Kind:     conninfo.KindHolePunchOutbound,
-				ClientConnStats: p2p.PeerConnectionStats{
-					SuccessCount:  1,
-					FailureCount:  0,
-					Latency:       100 * time.Millisecond,
-					BytesSent:     100,
-					BytesReceived: 300,
-				},
-				ServerConnStats: p2p.PeerConnectionStats{
-					BytesSent:     600,
-					BytesReceived: 50,
-				},
+				Kind:     peerinfo.KindHolePunchOutbound,
 			},
 		},
 		Tags: []string{"t3"},
@@ -199,8 +204,8 @@ func TestAdminService_PeerInfo(t *testing.T) {
 	require.Equal(t, 100*time.Second, msg.Connections[0].Uptime.AsDuration())
 	require.True(t, msg.Connections[0].Outbound)
 	require.Equal(t, pb.ConnectionInfo_Outbound, msg.Connections[0].Kind)
-	require.Nil(t, msg.Connections[0].ClientStats)
-	require.Nil(t, msg.Connections[0].ServerStats)
+	require.Nil(t, msg.ClientStats)
+	require.Nil(t, msg.ServerStats)
 	require.Equal(t, []string{"t1", "t2"}, msg.Tags)
 
 	msg, err = stream.Recv()
@@ -211,18 +216,20 @@ func TestAdminService_PeerInfo(t *testing.T) {
 	require.Equal(t, 30*time.Second, msg.Connections[0].Uptime.AsDuration())
 	require.True(t, msg.Connections[0].Outbound)
 	require.Equal(t, pb.ConnectionInfo_HPOutbound, msg.Connections[0].Kind)
-	require.NotNil(t, msg.Connections[0].ClientStats)
-	require.Equal(t, uint64(1), msg.Connections[0].ClientStats.SuccessCount)
-	require.Equal(t, uint64(0), msg.Connections[0].ClientStats.FailureCount)
-	require.Equal(t, 100*time.Millisecond, msg.Connections[0].ClientStats.Latency.AsDuration())
-	require.Equal(t, uint64(100), msg.Connections[0].ClientStats.BytesSent)
-	require.Equal(t, uint64(300), msg.Connections[0].ClientStats.BytesReceived)
-	require.NotNil(t, msg.Connections[0].ServerStats)
-	require.Equal(t, uint64(0), msg.Connections[0].ServerStats.SuccessCount)
-	require.Equal(t, uint64(0), msg.Connections[0].ServerStats.FailureCount)
-	require.Nil(t, msg.Connections[0].ServerStats.Latency)
-	require.Equal(t, uint64(600), msg.Connections[0].ServerStats.BytesSent)
-	require.Equal(t, uint64(50), msg.Connections[0].ServerStats.BytesReceived)
+	require.Equal(t, uint64(100), msg.BytesSent)
+	require.Equal(t, uint64(300), msg.BytesReceived)
+	require.Equal(t, uint64(100), msg.SendRate[0])
+	require.Equal(t, uint64(300), msg.RecvRate[0])
+	require.Equal(t, uint64(10), msg.SendRate[1])
+	require.Equal(t, uint64(30), msg.RecvRate[1])
+	require.NotNil(t, msg.ClientStats)
+	require.Equal(t, uint64(1), msg.ClientStats.SuccessCount)
+	require.Equal(t, uint64(0), msg.ClientStats.FailureCount)
+	require.Equal(t, 100*time.Millisecond, msg.ClientStats.Latency.AsDuration())
+	require.NotNil(t, msg.ServerStats)
+	require.Equal(t, uint64(10), msg.ServerStats.SuccessCount)
+	require.Equal(t, uint64(2), msg.ServerStats.FailureCount)
+	require.Equal(t, 50*time.Millisecond, msg.ServerStats.Latency.AsDuration())
 	require.Equal(t, []string{"t3"}, msg.Tags)
 
 	_, err = stream.Recv()

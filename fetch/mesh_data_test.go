@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/conninfo"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -828,7 +827,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 	for _, withLimiting := range []bool{false, true} {
 		t.Run(fmt.Sprintf("with limiting: %v", withLimiting), func(t *testing.T) {
 			srv := server.New(
-				conninfo.NewHost(mesh.Hosts()[1]),
+				mesh.Hosts()[1],
 				hashProtocol,
 				server.WrapHandler(func(_ context.Context, data []byte) ([]byte, error) {
 					var requestBatch RequestBatch
@@ -870,7 +869,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			cfg.GetAtxsConcurrency = getAtxConcurrency
 
 			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-			client := server.New(conninfo.NewHost(mesh.Hosts()[0]), hashProtocol, nil)
+			client := server.New(mesh.Hosts()[0], hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
 			f := NewFetch(cdb, store.New(), host,
