@@ -12,17 +12,17 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
+* [#5863](https://github.com/spacemeshos/go-spacemesh/pull/5863) Identity files are now created with 0600 permissions,
+  to prevent other users on the same system to access the private keys.
+
+* [#5866](https://github.com/spacemeshos/go-spacemesh/pull/5866) Reduce logging levels of some messages to reduce noise.
+
 ## (v1.5.0)
 
 ### Upgrade information
 
 * [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
   Updating to this version requires going through v1.4 first.
-
-* [#5863](https://github.com/spacemeshos/go-spacemesh/pull/5863) Identity files are now created with 0600 permissions,
-  to prevent other users on the same system to access the private keys.
-
-* [#5866](https://github.com/spacemeshos/go-spacemesh/pull/5866) Reduce logging levels of some messages to reduce noise.
 
 ### Improvements
 
