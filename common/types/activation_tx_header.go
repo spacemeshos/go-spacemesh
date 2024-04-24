@@ -8,7 +8,6 @@ import (
 // well as the coinbase address and total weight.
 type ActivationTxHeader struct {
 	PublishEpoch EpochID
-	Sequence     uint64 // TODO(poszu): remove after after refactoring ATX handler to not use CDB.
 	Coinbase     Address
 
 	// NumUnits holds the count of space units that have been reserved by the node for the

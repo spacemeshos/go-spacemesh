@@ -37,7 +37,6 @@ func (vatx *VerifiedActivationTx) TickHeight() uint64 {
 func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
 	return &ActivationTxHeader{
 		PublishEpoch:      vatx.PublishEpoch,
-		Sequence:          vatx.Sequence,
 		Coinbase:          vatx.Coinbase,
 		NumUnits:          vatx.NumUnits,
 		EffectiveNumUnits: vatx.EffectiveNumUnits(),
