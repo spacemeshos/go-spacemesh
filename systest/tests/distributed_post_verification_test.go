@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
-	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/libp2p/go-libp2p/core/peer"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/shared"
@@ -39,12 +37,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
-
-var grpclog grpc_logsettable.SettableLoggerV2
-
-func init() {
-	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
-}
 
 func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
@@ -153,7 +145,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
 	grpcPostService.AllowConnections(true)
-	grpczap.SetGrpcLoggerV2(grpclog, logger.Named("grpc"))
+
 	grpcPrivateServer, err := grpcserver.NewWithServices(
 		cfg.API.PostListener,
 		logger.Named("grpc-server"),
@@ -176,7 +168,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2.1. Create initial POST
-	var challenge *types.NIPostChallenge
+	var challenge *wire.NIPostChallengeV1
 	for {
 		client, err := grpcPostService.Client(signer.NodeID())
 		if err != nil {
@@ -188,17 +180,20 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		post, postInfo, err := client.Proof(ctx, shared.ZeroChallenge)
 		require.NoError(t, err)
 
-		challenge = &types.NIPostChallenge{
-			PrevATXID:      types.EmptyATXID,
-			PublishEpoch:   2,
-			PositioningATX: goldenATXID,
-			CommitmentATX:  &postInfo.CommitmentATX,
-			InitialPost:    post,
+		challenge = &wire.NIPostChallengeV1{
+			PrevATXID:        types.EmptyATXID,
+			PublishEpoch:     2,
+			PositioningATXID: goldenATXID,
+			CommitmentATXID:  &postInfo.CommitmentATX,
+			InitialPost: &wire.PostV1{
+				Nonce:   post.Nonce,
+				Indices: post.Indices,
+				Pow:     post.Pow,
+			},
 		}
 		break
 	}
-	challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challengeHash)
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST
@@ -212,7 +207,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
 		NodeId:          signer.NodeID().Bytes(),
-		CommitmentAtxId: challenge.CommitmentATX.Bytes(),
+		CommitmentAtxId: challenge.CommitmentATXID.Bytes(),
 		NumUnits:        nipost.NumUnits,
 		Challenge:       nipost.PostMetadata.Challenge,
 		LabelsPerUnit:   nipost.PostMetadata.LabelsPerUnit,
@@ -220,16 +215,17 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	var invalidIdxError *verifying.ErrInvalidIndex
 	require.ErrorAs(t, err, &invalidIdxError)
 
-	atx := types.NewActivationTx(
-		*challenge,
-		types.Address{1, 2, 3, 4},
-		nipost.NIPost,
-		nipost.NumUnits,
-		&nipost.VRFNonce,
-	)
 	nodeID := signer.NodeID()
-	atx.InnerActivationTx.NodeID = &nodeID
-	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
+	atx := wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: *challenge,
+			Coinbase:          types.Address{1, 2, 3, 4},
+			NumUnits:          nipost.NumUnits,
+			NodeID:            &nodeID,
+			VRFNonce:          (*uint64)(&nipost.VRFNonce),
+		},
+	}
+	atx.Sign(signer)
 
 	// 3. Wait for publish epoch
 	epoch := atx.PublishEpoch
@@ -248,8 +244,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	eg.Go(func() error {
 		for {
 			logger.Sugar().Infow("publishing ATX", "atx", atx)
-			buf, err := codec.Encode(wire.ActivationTxToWireV1(atx))
-			require.NoError(t, err)
+			buf := codec.MustEncode(&atx)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
 			require.NoError(t, err)
 
@@ -275,13 +270,13 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
 		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
 		invalidAtx := invalidPostProof.Atx
-		require.Equal(t, atx.PublishEpoch, invalidAtx.Publish)
+		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
 		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)
-		require.Equal(t, atx.ID().Hash32(), invalidAtx.HashInnerBytes())
+		require.Equal(t, atx.ID(), invalidAtx.ID())
 
 		meta := &shared.ProofMetadata{
 			NodeId:          invalidAtx.NodeID.Bytes(),
-			CommitmentAtxId: invalidAtx.CommitmentATX.Bytes(),
+			CommitmentAtxId: invalidAtx.CommitmentATXID.Bytes(),
 			NumUnits:        invalidAtx.NumUnits,
 			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
 			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,

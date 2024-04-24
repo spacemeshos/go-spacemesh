@@ -103,7 +103,8 @@ type BaseConfig struct {
 	PoETServers DeprecatedPoETServers `mapstructure:"poet-server"`
 	PoetServers []types.PoetServer    `mapstructure:"poet-servers"`
 
-	PprofHTTPServer bool `mapstructure:"pprof-server"`
+	PprofHTTPServer         bool   `mapstructure:"pprof-server"`
+	PprofHTTPServerListener string `mapstructure:"pprof-listener"`
 
 	TxsPerProposal int    `mapstructure:"txs-per-proposal"`
 	BlockGasLimit  uint64 `mapstructure:"block-gas-limit"`
@@ -241,6 +242,8 @@ func defaultBaseConfig() BaseConfig {
 		NetworkHRP:     "sm",
 		ATXGradeDelay:  10 * time.Second,
 		PostValidDelay: 12 * time.Hour,
+
+		PprofHTTPServerListener: "localhost:6060",
 	}
 }
 
