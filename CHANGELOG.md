@@ -13,6 +13,9 @@ is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spaceme
 
 ### Features
 
+* [#5792](https://github.com/spacemeshos/go-spacemesh/pull/5792) Add hole punching info and data transfer stats
+   to the API.
+
 ### Improvements
 
 * [#5863](https://github.com/spacemeshos/go-spacemesh/pull/5863) Identity files are now created with 0600 permissions,
