@@ -318,7 +318,7 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 	}
 }
 
-// ProtocolDataStats returns per-protocol data stats
+// ProtocolDataStats returns per-protocol data stats.
 func (fh *Host) ProtocolDataStats() map[protocol.ID]*peerinfo.DataStats {
 	r := make(map[protocol.ID]*peerinfo.DataStats)
 	for _, proto := range fh.PeerInfo.Protocols() {

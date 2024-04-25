@@ -346,7 +346,7 @@ func (t *PeerInfoTracker) RecordSent(n int64, proto protocol.ID, p peer.ID) {
 
 func (t *PeerInfoTracker) Protocols() []protocol.ID {
 	t.Lock()
-	t.Unlock()
+	defer t.Unlock()
 	return maps.Keys(t.protoStats)
 }
 
