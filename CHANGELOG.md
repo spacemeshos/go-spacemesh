@@ -22,6 +22,9 @@ is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spaceme
 
 * [#5877](https://github.com/spacemeshos/go-spacemesh/pull/5877) Fix verifying ATX chain after checkpoint.
 
+* [#5882](https://github.com/spacemeshos/go-spacemesh/pull/5882) Use backoff during routing discovery.
+  This should reduce network load from the peer discovery mechanism when it's enabled.
+
 ## (v1.5.0)
 
 ### Upgrade information
