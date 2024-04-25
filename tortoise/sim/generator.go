@@ -114,7 +114,7 @@ type Generator struct {
 	layers    []*types.Layer
 	units     [2]int
 
-	activations []*types.VerifiedActivationTx
+	activations []*types.ActivationTx
 	ticksRange  [2]int
 	ticks       []uint64
 	prevHeight  []uint64
@@ -210,7 +210,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	g.nextLayer = last.Index().Add(1)
 
 	miners := intInRange(g.rng, conf.Miners)
-	g.activations = make([]*types.VerifiedActivationTx, miners)
+	g.activations = make([]*types.ActivationTx, miners)
 	g.prevHeight = make([]uint64, miners)
 
 	for i := uint32(0); i < miners; i++ {
@@ -245,15 +245,12 @@ func (g *Generator) generateAtxs() {
 			panic(err)
 		}
 		atx.SetReceived(time.Now())
-		vatx, err := atx.Verify(g.prevHeight[i], ticks)
-		if err != nil {
-			panic(err)
-		}
-
+		atx.BaseTickHeight = g.prevHeight[i]
+		atx.TickCount = ticks
 		g.prevHeight[i] += ticks
-		g.activations[i] = vatx
+		g.activations[i] = atx
 		for _, state := range g.states {
-			state.OnActivationTx(vatx)
+			state.OnActivationTx(atx)
 		}
 	}
 }

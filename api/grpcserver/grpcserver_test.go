@@ -87,8 +87,8 @@ var (
 	rewardSmesherID = types.RandomNodeID()
 	prevAtxID       = types.ATXID(types.HexToHash32("44444"))
 	challenge       = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
-	globalAtx       *types.VerifiedActivationTx
-	globalAtx2      *types.VerifiedActivationTx
+	globalAtx       *types.ActivationTx
+	globalAtx2      *types.ActivationTx
 	globalTx        *types.Transaction
 	globalTx2       *types.Transaction
 	ballot1         = genLayerBallot(types.LayerID(11))
@@ -163,29 +163,15 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, addr1, numUnits, nil)
-	atx.SetReceived(time.Now())
-	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
-		log.Println("failed to sign atx:", err)
-		os.Exit(1)
-	}
-	globalAtx, err = atx.Verify(0, 1)
-	if err != nil {
-		log.Println("failed to verify atx:", err)
-		os.Exit(1)
-	}
+	globalAtx = types.NewActivationTx(challenge, addr1, numUnits, nil)
+	globalAtx.SetReceived(time.Now())
+	globalAtx.SmesherID = signer.NodeID()
+	globalAtx.TickCount = 1
 
-	atx2 := types.NewActivationTx(challenge, addr2, numUnits, nil)
-	atx2.SetReceived(time.Now())
-	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
-		log.Println("failed to sign atx:", err)
-		os.Exit(1)
-	}
-	globalAtx2, err = atx2.Verify(0, 1)
-	if err != nil {
-		log.Println("failed to verify atx:", err)
-		os.Exit(1)
-	}
+	globalAtx2 = types.NewActivationTx(challenge, addr2, numUnits, nil)
+	globalAtx2.SetReceived(time.Now())
+	globalAtx2.SmesherID = signer.NodeID()
+	globalAtx2.TickCount = 1
 
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
@@ -272,8 +258,8 @@ func (m *MeshAPIMock) GetLayerVerified(tid types.LayerID) (*types.Block, error) 
 func (m *MeshAPIMock) GetATXs(
 	context.Context,
 	[]types.ATXID,
-) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
-	atxs := map[types.ATXID]*types.VerifiedActivationTx{
+) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+	atxs := map[types.ATXID]*types.ActivationTx{
 		globalAtx.ID():  globalAtx,
 		globalAtx2.ID(): globalAtx2,
 	}
@@ -2470,19 +2456,18 @@ func TestVMAccountUpdates(t *testing.T) {
 	require.Equal(t, len(accounts), i)
 }
 
-func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*types.VerifiedActivationTx {
-	all := make([]*types.VerifiedActivationTx, 0, len(atxids))
+func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*types.ActivationTx {
+	all := make([]*types.ActivationTx, 0, len(atxids))
 	for _, id := range atxids {
 		atx := &types.ActivationTx{
 			PublishEpoch: epoch,
 			NumUnits:     1,
+			TickCount:    1,
+			SmesherID:    types.RandomNodeID(),
 		}
 		atx.SetID(id)
 		atx.SetReceived(time.Now())
-		atx.SmesherID = types.RandomNodeID()
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(tb, err)
-		all = append(all, vAtx)
+		all = append(all, atx)
 	}
 	return all
 }

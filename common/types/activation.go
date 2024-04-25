@@ -2,7 +2,6 @@ package types
 
 import (
 	"encoding/hex"
-	"errors"
 	"time"
 
 	"github.com/spacemeshos/go-scale"
@@ -163,11 +162,12 @@ type ActivationTx struct {
 	PrevATXID ATXID
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
-	CommitmentATX *ATXID
-	Coinbase      Address
-	NumUnits      uint32 // the minimum number of space units in this and the previous ATX
-
-	VRFNonce *VRFPostIndex
+	CommitmentATX  *ATXID
+	Coinbase       Address
+	NumUnits       uint32 // the minimum number of space units in this and the previous ATX
+	BaseTickHeight uint64
+	TickCount      uint64
+	VRFNonce       *VRFPostIndex
 
 	SmesherID NodeID
 	Signature EdSignature
@@ -216,6 +216,36 @@ func (atx *ActivationTx) SetGolden() {
 	atx.golden = true
 }
 
+// Weight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is
+// sum(atx.NumUnits * atx.TickCount for each ATX in a given epoch).
+// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^6.
+// PoETs should produce ~10k ticks at genesis, but are expected due to technological advances
+// to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
+// for at least the first few years.
+func (atx *ActivationTx) GetWeight() uint64 {
+	return getWeight(uint64(atx.NumUnits), atx.TickCount)
+}
+
+// TickHeight returns a sum of base tick height and tick count.
+func (atx *ActivationTx) TickHeight() uint64 {
+	return atx.BaseTickHeight + atx.TickCount
+}
+
+func (atx *ActivationTx) ToHeader() *ActivationTxHeader {
+	return &ActivationTxHeader{
+		PublishEpoch:      atx.PublishEpoch,
+		Coinbase:          atx.Coinbase,
+		EffectiveNumUnits: atx.NumUnits,
+		Received:          atx.Received(),
+
+		ID:     atx.ID(),
+		NodeID: atx.SmesherID,
+
+		BaseTickHeight: atx.BaseTickHeight,
+		TickCount:      atx.TickCount,
+	}
+}
+
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
@@ -233,6 +263,10 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("epoch", atx.PublishEpoch.Uint32())
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
 	encoder.AddUint64("sequence_number", atx.Sequence)
+	encoder.AddUint64("base_tick_height", atx.BaseTickHeight)
+	encoder.AddUint64("tick_count", atx.TickCount)
+	encoder.AddUint64("weight", atx.GetWeight())
+	encoder.AddUint64("height", atx.TickHeight())
 	return nil
 }
 
@@ -265,20 +299,6 @@ func (atx *ActivationTx) Validity() Validity {
 
 func (atx *ActivationTx) SetValidity(validity Validity) {
 	atx.validity = validity
-}
-
-// Verify an ATX for a given base TickHeight and TickCount.
-func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
-	if !atx.Golden() && atx.received.IsZero() {
-		return nil, errors.New("received time not set")
-	}
-	vAtx := &VerifiedActivationTx{
-		ActivationTx: atx,
-
-		baseTickHeight: baseTickHeight,
-		tickCount:      tickCount,
-	}
-	return vAtx, nil
 }
 
 // Merkle proof proving that a given leaf is included in the root of merkle tree.

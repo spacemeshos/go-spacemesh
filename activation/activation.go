@@ -557,7 +557,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	return wire.NIPostChallengeToWireV1(challenge), nil
 }
 
-func (b *Builder) GetPrevAtx(nodeID types.NodeID) (*types.VerifiedActivationTx, error) {
+func (b *Builder) GetPrevAtx(nodeID types.NodeID) (*types.ActivationTx, error) {
 	id, err := atxs.GetLastIDByNodeID(b.db, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("getting last ATXID: %w", err)

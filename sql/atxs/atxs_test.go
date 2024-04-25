@@ -9,9 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -31,12 +30,11 @@ func TestMain(m *testing.M) {
 func TestGet(t *testing.T) {
 	db := sql.InMemory()
 
-	atxList := make([]*types.VerifiedActivationTx, 0)
+	atxList := make([]*types.ActivationTx, 0)
 	for i := 0; i < 3; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx, err := newAtx(sig, withPublishEpoch(types.EpochID(i)))
-		require.NoError(t, err)
+		atx := newAtx(t, sig, withPublishEpoch(types.EpochID(i)))
 		atxList = append(atxList, atx)
 	}
 
@@ -57,12 +55,11 @@ func TestGet(t *testing.T) {
 func TestAll(t *testing.T) {
 	db := sql.InMemory()
 
-	atxList := make([]*types.VerifiedActivationTx, 0)
+	atxList := make([]*types.ActivationTx, 0)
 	for i := 0; i < 3; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx, err := newAtx(sig, withPublishEpoch(types.EpochID(i)))
-		require.NoError(t, err)
+		atx := newAtx(t, sig, withPublishEpoch(types.EpochID(i)))
 		atxList = append(atxList, atx)
 	}
 
@@ -80,12 +77,11 @@ func TestAll(t *testing.T) {
 func TestHasID(t *testing.T) {
 	db := sql.InMemory()
 
-	atxList := make([]*types.VerifiedActivationTx, 0)
+	atxList := make([]*types.ActivationTx, 0)
 	for i := 0; i < 3; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx, err := newAtx(sig, withPublishEpoch(types.EpochID(i)))
-		require.NoError(t, err)
+		atx := newAtx(t, sig, withPublishEpoch(types.EpochID(i)))
 		atxList = append(atxList, atx)
 	}
 
@@ -116,23 +112,12 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 
 	// Arrange
 
-	atx1, err := newAtx(sig1, withPublishEpoch(1))
-	require.NoError(t, err)
+	atx1 := newAtx(t, sig1, withPublishEpoch(1))
+	atx2 := newAtx(t, sig1, withPublishEpoch(2), withSequence(atx1.Sequence+1))
+	atx3 := newAtx(t, sig2, withPublishEpoch(3))
+	atx4 := newAtx(t, sig2, withPublishEpoch(4), withSequence(atx3.Sequence+1))
 
-	atx2, err := newAtx(sig1, withPublishEpoch(2))
-	require.NoError(t, err)
-	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(signing.ATX, wire.ActivationTxToWireV1(atx2.ActivationTx).SignedBytes())
-
-	atx3, err := newAtx(sig2, withPublishEpoch(3))
-	require.NoError(t, err)
-
-	atx4, err := newAtx(sig2, withPublishEpoch(4))
-	require.NoError(t, err)
-	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(signing.ATX, wire.ActivationTxToWireV1(atx4.ActivationTx).SignedBytes())
-
-	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
@@ -160,20 +145,14 @@ func TestLatestN(t *testing.T) {
 	sig3, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	atx1, err := newAtx(sig1, withPublishEpoch(1), withSequence(0))
-	require.NoError(t, err)
-	atx2, err := newAtx(sig1, withPublishEpoch(2), withSequence(1))
-	require.NoError(t, err)
-	atx3, err := newAtx(sig2, withPublishEpoch(3), withSequence(1))
-	require.NoError(t, err)
-	atx4, err := newAtx(sig2, withPublishEpoch(4), withSequence(2))
-	require.NoError(t, err)
-	atx5, err := newAtx(sig2, withPublishEpoch(5), withSequence(3))
-	require.NoError(t, err)
-	atx6, err := newAtx(sig3, withPublishEpoch(1), withSequence(0))
-	require.NoError(t, err)
+	atx1 := newAtx(t, sig1, withPublishEpoch(1), withSequence(0))
+	atx2 := newAtx(t, sig1, withPublishEpoch(2), withSequence(1))
+	atx3 := newAtx(t, sig2, withPublishEpoch(3), withSequence(1))
+	atx4 := newAtx(t, sig2, withPublishEpoch(4), withSequence(2))
+	atx5 := newAtx(t, sig2, withPublishEpoch(5), withSequence(3))
+	atx6 := newAtx(t, sig3, withPublishEpoch(1), withSequence(0))
 
-	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4, atx5, atx6} {
+	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5, atx6} {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
@@ -255,13 +234,10 @@ func TestGetByEpochAndNodeID(t *testing.T) {
 	sig2, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	atx1, err := newAtx(sig1, withPublishEpoch(1))
-	require.NoError(t, err)
+	atx1 := newAtx(t, sig1, withPublishEpoch(1))
+	atx2 := newAtx(t, sig2, withPublishEpoch(2))
 
-	atx2, err := newAtx(sig2, withPublishEpoch(2))
-	require.NoError(t, err)
-
-	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2} {
+	for _, atx := range []*types.ActivationTx{atx1, atx2} {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
@@ -296,23 +272,12 @@ func TestGetLastIDByNodeID(t *testing.T) {
 
 	// Arrange
 
-	atx1, err := newAtx(sig1, withPublishEpoch(1))
-	require.NoError(t, err)
+	atx1 := newAtx(t, sig1, withPublishEpoch(1))
+	atx2 := newAtx(t, sig1, withPublishEpoch(2), withSequence(atx1.Sequence+1))
+	atx3 := newAtx(t, sig2, withPublishEpoch(3))
+	atx4 := newAtx(t, sig2, withPublishEpoch(4), withSequence(atx3.Sequence+1))
 
-	atx2, err := newAtx(sig1, withPublishEpoch(2))
-	require.NoError(t, err)
-	atx2.Sequence = atx1.Sequence + 1
-	atx2.Signature = sig1.Sign(signing.ATX, wire.ActivationTxToWireV1(atx2.ActivationTx).SignedBytes())
-
-	atx3, err := newAtx(sig2, withPublishEpoch(3))
-	require.NoError(t, err)
-
-	atx4, err := newAtx(sig2, withPublishEpoch(4))
-	require.NoError(t, err)
-	atx4.Sequence = atx3.Sequence + 1
-	atx4.Signature = sig2.Sign(signing.ATX, wire.ActivationTxToWireV1(atx4.ActivationTx).SignedBytes())
-
-	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
@@ -342,16 +307,12 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 	e2 := types.EpochID(2)
 	e3 := types.EpochID(3)
 
-	atx1, err := newAtx(sig1, withPublishEpoch(e1))
-	require.NoError(t, err)
-	atx2, err := newAtx(sig1, withPublishEpoch(e2))
-	require.NoError(t, err)
-	atx3, err := newAtx(sig2, withPublishEpoch(e2))
-	require.NoError(t, err)
-	atx4, err := newAtx(sig2, withPublishEpoch(e3))
-	require.NoError(t, err)
+	atx1 := newAtx(t, sig1, withPublishEpoch(e1))
+	atx2 := newAtx(t, sig1, withPublishEpoch(e2))
+	atx3 := newAtx(t, sig2, withPublishEpoch(e2))
+	atx4 := newAtx(t, sig2, withPublishEpoch(e3))
 
-	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
@@ -391,16 +352,12 @@ func TestGetIDsByEpoch(t *testing.T) {
 	e2 := types.EpochID(2)
 	e3 := types.EpochID(3)
 
-	atx1, err := newAtx(sig1, withPublishEpoch(e1))
-	require.NoError(t, err)
-	atx2, err := newAtx(sig1, withPublishEpoch(e2))
-	require.NoError(t, err)
-	atx3, err := newAtx(sig2, withPublishEpoch(e2))
-	require.NoError(t, err)
-	atx4, err := newAtx(sig2, withPublishEpoch(e3))
-	require.NoError(t, err)
+	atx1 := newAtx(t, sig1, withPublishEpoch(e1))
+	atx2 := newAtx(t, sig1, withPublishEpoch(e2))
+	atx3 := newAtx(t, sig2, withPublishEpoch(e2))
+	atx4 := newAtx(t, sig2, withPublishEpoch(e3))
 
-	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
 	}
 
@@ -431,20 +388,14 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	e2 := types.EpochID(2)
 	e3 := types.EpochID(3)
 
-	atx1, err := newAtx(sig1, withPublishEpoch(e1))
-	require.NoError(t, err)
-	atx2, err := newAtx(sig1, withPublishEpoch(e2))
-	require.NoError(t, err)
-	atx3, err := newAtx(sig2, withPublishEpoch(e2))
-	require.NoError(t, err)
-	atx4, err := newAtx(sig2, withPublishEpoch(e3))
-	require.NoError(t, err)
-	atx5, err := newAtx(sig2, withPublishEpoch(e3))
-	require.NoError(t, err)
-	atx6, err := newAtx(sig2, withPublishEpoch(e3))
-	require.NoError(t, err)
+	atx1 := newAtx(t, sig1, withPublishEpoch(e1))
+	atx2 := newAtx(t, sig1, withPublishEpoch(e2))
+	atx3 := newAtx(t, sig2, withPublishEpoch(e2))
+	atx4 := newAtx(t, sig2, withPublishEpoch(e3))
+	atx5 := newAtx(t, sig2, withPublishEpoch(e3))
+	atx6 := newAtx(t, sig2, withPublishEpoch(e3))
 
-	for _, atx := range []*types.VerifiedActivationTx{atx1, atx2, atx3, atx4} {
+	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, atxs.Add(db, atx))
 		atxs.AtxAdded(db, atx)
 	}
@@ -506,8 +457,7 @@ func TestForIDsByEpochEarlyStop(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx, err := newAtx(sig, withPublishEpoch(e1))
-		require.NoError(t, err)
+		atx := newAtx(t, sig, withPublishEpoch(e1))
 		require.NoError(t, atxs.Add(db, atx))
 		m[atx.ID()] = struct{}{}
 	}
@@ -535,19 +485,14 @@ func TestVRFNonce(t *testing.T) {
 	require.NoError(t, err)
 
 	nonce1 := types.VRFPostIndex(333)
-	atx1, err := newAtx(sig, withPublishEpoch(types.EpochID(20)), withNonce(nonce1))
-	require.NoError(t, err)
+	atx1 := newAtx(t, sig, withPublishEpoch(types.EpochID(20)), withNonce(nonce1))
 	require.NoError(t, atxs.Add(db, atx1))
 
-	atx2, err := newAtx(sig, withPublishEpoch(types.EpochID(30)), withNoNonce(),
-		withPrevATXID(atx1.ID()))
-	require.NoError(t, err)
+	atx2 := newAtx(t, sig, withPublishEpoch(types.EpochID(30)), withNoNonce(), withPrevATXID(atx1.ID()))
 	require.NoError(t, atxs.Add(db, atx2))
 
 	nonce3 := types.VRFPostIndex(777)
-	atx3, err := newAtx(sig, withPublishEpoch(types.EpochID(50)), withNonce(nonce3),
-		withPrevATXID(atx2.ID()))
-	require.NoError(t, err)
+	atx3 := newAtx(t, sig, withPublishEpoch(types.EpochID(50)), withNonce(nonce3), withPrevATXID(atx2.ID()))
 	require.NoError(t, atxs.Add(db, atx3))
 
 	// Act & Assert
@@ -582,8 +527,7 @@ func TestLoadBlob(t *testing.T) {
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx1, err := newAtx(sig, withPublishEpoch(1))
-	require.NoError(t, err)
+	atx1 := newAtx(t, sig, withPublishEpoch(1))
 	atx1.AtxBlob.Blob = []byte("blob1")
 
 	require.NoError(t, atxs.Add(db, atx1))
@@ -598,8 +542,7 @@ func TestLoadBlob(t *testing.T) {
 	require.Equal(t, []int{len(blob1.Bytes)}, blobSizes)
 
 	var blob2 sql.Blob
-	atx2, err := newAtx(sig)
-	require.NoError(t, err)
+	atx2 := newAtx(t, sig)
 	atx2.AtxBlob.Blob = []byte("blob2 of different size")
 
 	require.NoError(t, atxs.Add(db, atx2))
@@ -632,18 +575,15 @@ func TestGetBlobCached(t *testing.T) {
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx, err := newAtx(sig, withPublishEpoch(1))
-	require.NoError(t, err)
+	atx := newAtx(t, sig, withPublishEpoch(1))
 
 	require.NoError(t, atxs.Add(db, atx))
-	encoded, err := codec.Encode(wire.ActivationTxToWireV1(atx.ActivationTx))
-	require.NoError(t, err)
 	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
 
 	for i := 0; i < 3; i++ {
 		var b sql.Blob
 		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
-		require.Equal(t, encoded, b.Bytes)
+		require.Equal(t, atx.Blob, b.Bytes)
 		require.Equal(t, 3, db.QueryCount())
 	}
 }
@@ -658,19 +598,16 @@ func TestCachedBlobEviction(t *testing.T) {
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	addedATXs := make([]*types.VerifiedActivationTx, 11)
+	addedATXs := make([]*types.ActivationTx, 11)
 	blobs := make([][]byte, 11)
 	var b sql.Blob
 	for n := range addedATXs {
-		atx, err := newAtx(sig, withPublishEpoch(1))
-		require.NoError(t, err)
+		atx := newAtx(t, sig, withPublishEpoch(1))
 		require.NoError(t, atxs.Add(db, atx))
 		addedATXs[n] = atx
-		encoded, err := codec.Encode(wire.ActivationTxToWireV1(atx.ActivationTx))
-		require.NoError(t, err)
-		blobs[n] = encoded
+		blobs[n] = atx.Blob
 		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
-		require.Equal(t, encoded, b.Bytes)
+		require.Equal(t, atx.Blob, b.Bytes)
 	}
 
 	// insert atx + insert blob + load blob each time
@@ -695,8 +632,7 @@ func TestCheckpointATX(t *testing.T) {
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx, err := newAtx(sig, withPublishEpoch(3), withSequence(4))
-	require.NoError(t, err)
+	atx := newAtx(t, sig, withPublishEpoch(3), withSequence(4))
 	catx := &atxs.CheckpointAtx{
 		ID:             atx.ID(),
 		Epoch:          atx.PublishEpoch,
@@ -704,7 +640,7 @@ func TestCheckpointATX(t *testing.T) {
 		VRFNonce:       types.VRFPostIndex(119),
 		NumUnits:       atx.NumUnits,
 		BaseTickHeight: 1000,
-		TickCount:      atx.TickCount() + 1,
+		TickCount:      atx.TickCount + 1,
 		SmesherID:      sig.NodeID(),
 		Sequence:       atx.Sequence + 1,
 		Coinbase:       types.Address{3, 2, 1},
@@ -715,8 +651,8 @@ func TestCheckpointATX(t *testing.T) {
 	require.Equal(t, catx.ID, got.ID())
 	require.Equal(t, catx.Epoch, got.PublishEpoch)
 	require.Equal(t, catx.NumUnits, got.NumUnits)
-	require.Equal(t, catx.BaseTickHeight, got.BaseTickHeight())
-	require.Equal(t, catx.TickCount, got.TickCount())
+	require.Equal(t, catx.BaseTickHeight, got.BaseTickHeight)
+	require.Equal(t, catx.TickCount, got.TickCount)
 	require.Equal(t, catx.SmesherID, got.SmesherID)
 	require.Equal(t, catx.Sequence, got.Sequence)
 	require.Equal(t, catx.Coinbase, got.Coinbase)
@@ -745,8 +681,7 @@ func TestAdd(t *testing.T) {
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	atx, err := newAtx(sig, withPublishEpoch(1))
-	require.NoError(t, err)
+	atx := newAtx(t, sig, withPublishEpoch(1))
 
 	require.NoError(t, atxs.Add(db, atx))
 	require.ErrorIs(t, atxs.Add(db, atx), sql.ErrObjectExists)
@@ -788,20 +723,24 @@ func withPrevATXID(id types.ATXID) createAtxOpt {
 	}
 }
 
-func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActivationTx, error) {
-	nonce := types.VRFPostIndex(42)
-	atx := &types.ActivationTx{
-		PrevATXID: types.RandomATXID(),
-		Coinbase:  types.Address{1, 2, 3},
-		NumUnits:  2,
-		VRFNonce:  &nonce,
+func newAtx(t testing.TB, signer *signing.EdSigner, opts ...createAtxOpt) *types.ActivationTx {
+	nonce := uint64(123)
+	watx := &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
+				PrevATXID: types.RandomATXID(),
+			},
+			NumUnits: 2,
+			VRFNonce: &nonce,
+		},
 	}
+	watx.Sign(signer)
+
+	atx := fixture.ToAtx(t, watx)
 	for _, opt := range opts {
 		opt(atx)
 	}
-	activation.SignAndFinalizeAtx(signer, atx)
-	atx.SetReceived(time.Now().Local())
-	return atx.Verify(0, 1)
+	return atx
 }
 
 type header struct {
@@ -813,21 +752,21 @@ type header struct {
 }
 
 func createAtx(tb testing.TB, db *sql.Database, hdr header) (types.ATXID, *signing.EdSigner) {
-	full := &types.ActivationTx{
-		PublishEpoch: hdr.epoch,
-		Coinbase:     hdr.coinbase,
-		NumUnits:     2,
-	}
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 
-	require.NoError(tb, activation.SignAndFinalizeAtx(sig, full))
-
+	full := &types.ActivationTx{
+		PublishEpoch:   hdr.epoch,
+		Coinbase:       hdr.coinbase,
+		NumUnits:       2,
+		BaseTickHeight: hdr.base,
+		TickCount:      hdr.count,
+		SmesherID:      sig.NodeID(),
+	}
 	full.SetReceived(time.Now())
-	vAtx, err := full.Verify(hdr.base, hdr.count)
-	require.NoError(tb, err)
+	full.SetID(types.RandomATXID())
 
-	require.NoError(tb, atxs.Add(db, vAtx))
+	require.NoError(tb, atxs.Add(db, full))
 	if hdr.malicious {
 		require.NoError(tb, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
 	}
@@ -972,12 +911,11 @@ func TestLatest(t *testing.T) {
 				full := &types.ActivationTx{
 					PublishEpoch: types.EpochID(epoch),
 					NumUnits:     1,
+					TickCount:    1,
 				}
 				full.SetReceived(time.Now())
 				full.SetID(types.ATXID{byte(i)})
-				vAtx, err := full.Verify(0, 1)
-				require.NoError(t, err)
-				require.NoError(t, atxs.Add(db, vAtx))
+				require.NoError(t, atxs.Add(db, full))
 			}
 			latest, err := atxs.LatestEpoch(db)
 			require.NoError(t, err)

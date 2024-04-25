@@ -125,10 +125,9 @@ func createATX(
 
 	atx.SetReceived(received)
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(tb, err)
-	require.NoError(tb, atxs.Add(db, vAtx))
-	return vAtx.ID()
+	atx.TickCount = 1
+	require.NoError(tb, atxs.Add(db, atx))
+	return atx.ID()
 }
 
 func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {
