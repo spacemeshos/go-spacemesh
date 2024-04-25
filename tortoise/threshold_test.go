@@ -169,12 +169,10 @@ func TestReferenceHeight(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
 			for i, height := range tc.heights {
-				atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-					NIPostChallenge: types.NIPostChallenge{
-						PublishEpoch: types.EpochID(tc.epoch) - 1,
-					},
-					NumUnits: 2,
-				}}
+				atx := &types.ActivationTx{
+					PublishEpoch: types.EpochID(tc.epoch) - 1,
+					NumUnits:     2,
+				}
 				atx.SetID(types.ATXID{byte(i + 1)})
 				atx.SetEffectiveNumUnits(atx.NumUnits)
 				atx.SetReceived(time.Now())

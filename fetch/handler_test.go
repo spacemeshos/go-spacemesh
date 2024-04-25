@@ -265,14 +265,10 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	t.Helper()
 	nonce := types.VRFPostIndex(123)
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: published,
-				PrevATXID:    types.RandomATXID(),
-			},
-			NumUnits: 2,
-			VRFNonce: &nonce,
-		},
+		PublishEpoch: published,
+		PrevATXID:    types.RandomATXID(),
+		NumUnits:     2,
+		VRFNonce:     &nonce,
 	}
 
 	signer, err := signing.NewEdSigner()
