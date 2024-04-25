@@ -51,7 +51,7 @@ func TestPing(t *testing.T) {
 			cfg2.IP4Blocklist = nil
 			h2, err := New(context.Background(), logtest.New(t), cfg2, nc, nc)
 			require.NoError(t, err)
-			h2.discovery.Start()
+			require.NoError(t, h2.discovery.Start())
 			t.Cleanup(func() { h2.Stop() })
 
 			err = h2.Connect(context.Background(), peer.AddrInfo{

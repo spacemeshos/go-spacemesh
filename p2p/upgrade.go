@@ -384,9 +384,11 @@ func (fh *Host) Start() error {
 	}
 	if err := fh.Network().Listen(fh.cfg.Listen...); err != nil {
 		fh.Network().Close()
-		return err
+		return fmt.Errorf("p2p: can't listen: %w", err)
 	}
-	fh.discovery.Start()
+	if err := fh.discovery.Start(); err != nil {
+		return fmt.Errorf("error starting discovery: %w", err)
+	}
 	if fh.ping != nil {
 		fh.ping.Start()
 	}
