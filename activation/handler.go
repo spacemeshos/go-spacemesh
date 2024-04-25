@@ -172,6 +172,7 @@ func (h *Handler) syntacticallyValidate(ctx context.Context, atx *wire.Activatio
 	return nil
 }
 
+// Obtain the commitment ATX ID for the given ATX.
 func (h *Handler) commitment(ctx context.Context, atx *wire.ActivationTxV1) (types.ATXID, error) {
 	if atx.PrevATXID == types.EmptyATXID {
 		return *atx.CommitmentATXID, nil
@@ -179,26 +180,32 @@ func (h *Handler) commitment(ctx context.Context, atx *wire.ActivationTxV1) (typ
 	return atxs.CommitmentATX(h.cdb, atx.SmesherID)
 }
 
-func (h *Handler) previous(ctx context.Context, id types.ATXID) (*types.ActivationTx, error) {
+// Obtain the previous ATX for the given ATX.
+// We need to decode it from the blob because we are interested in the true NumUnits value
+// that was declared by the previous ATX and the `atxs` table only holds the effective NumUnits.
+// However, in case of a golden ATX, the blob is not available and we fallback to fetching the ATX from the DB
+// to use the effective num units.
+func (h *Handler) previous(ctx context.Context, atx *wire.ActivationTxV1) (*types.ActivationTx, error) {
 	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, h.cdb, id[:], &blob); err != nil {
+	if err := atxs.LoadBlob(ctx, h.cdb, atx.PrevATXID[:], &blob); err != nil {
 		return nil, err
 	}
 
 	if blob.Bytes == nil {
-		// if the blob is empty, it means the ATX is golden - fetch it from the DB
-		vatx, err := atxs.Get(h.cdb, id)
+		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
+		// Fallback to fetching it from the DB to get the effective NumUnits.
+		vatx, err := atxs.Get(h.cdb, atx.PrevATXID)
 		if err != nil {
 			return nil, fmt.Errorf("fetching golden previous atx: %w", err)
 		}
 		return vatx.ActivationTx, nil
 	}
 
-	var atx wire.ActivationTxV1
-	if err := codec.Decode(blob.Bytes, &atx); err != nil {
+	var prev wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &prev); err != nil {
 		return nil, fmt.Errorf("decoding previous atx: %w", err)
 	}
-	return wire.ActivationTxFromWireV1(&atx, blob.Bytes...), nil
+	return wire.ActivationTxFromWireV1(&prev, blob.Bytes...), nil
 }
 
 func (h *Handler) syntacticallyValidateDeps(
@@ -216,7 +223,7 @@ func (h *Handler) syntacticallyValidateDeps(
 		}
 		effectiveNumUnits = atx.NumUnits
 	} else {
-		previous, err := h.previous(ctx, atx.PrevATXID)
+		previous, err := h.previous(ctx, atx)
 		if err != nil {
 			return 0, 0, nil, fmt.Errorf("fetching previous atx %s: %w", atx.PrevATXID, err)
 		}
