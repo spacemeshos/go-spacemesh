@@ -235,10 +235,10 @@ func (s *LayerService) List(
 	}
 
 	switch {
-	case request.Limit > 1000:
-		return nil, status.Error(codes.InvalidArgument, "limit is capped at 1000")
+	case request.Limit > 100:
+		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
 	case request.Limit == 0:
-		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 1000")
+		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 
 	rst := make([]*spacemeshv2alpha1.Layer, 0, request.Limit)
