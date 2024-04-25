@@ -100,7 +100,7 @@ func (s *ActivationStreamService) Stream(
 	for {
 		select {
 		case rst := <-eventsOut:
-			err = stream.Send(&spacemeshv2alpha1.Activation{
+			err := stream.Send(&spacemeshv2alpha1.Activation{
 				Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
 			})
 			switch {
@@ -112,7 +112,7 @@ func (s *ActivationStreamService) Stream(
 		default:
 			select {
 			case rst := <-eventsOut:
-				err = stream.Send(&spacemeshv2alpha1.Activation{
+				err := stream.Send(&spacemeshv2alpha1.Activation{
 					Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
 				})
 				switch {
@@ -199,10 +199,9 @@ func (s *ActivationService) List(
 	case request.Limit == 0:
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
-
 	rst := make([]*spacemeshv2alpha1.Activation, 0, request.Limit)
-	if err := atxs.IterateAtxsOps(s.db, ops, func(vatx *types.VerifiedActivationTx) bool {
-		rst = append(rst, &spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(vatx)}})
+	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
+		rst = append(rst, &spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
