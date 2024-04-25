@@ -26,8 +26,9 @@ type InnerActivationTxV2 struct {
 	PositioningATX types.ATXID
 
 	// only present in initial ATX
-	Initial *InitialAtxPartsV2
-	NiPosts []NiPostsV2 `scale:"max=2"`
+	Initial      *InitialAtxPartsV2
+	PreviousATXs []types.ATXID `scale:"max=100"`
+	NiPosts      []NiPostsV2   `scale:"max=2"`
 	// The VRF nonce must be valid for the collected space of all included IDs.
 	// only present when:
 	// - the nonce changed (included more/heavier IDs)
@@ -60,10 +61,10 @@ type MerkleProofV2 struct {
 }
 
 type SubPostV2 struct {
-	ID        types.NodeID // Delegating ID that this PoST is for.
-	PrevATXID types.ATXID  // The previous ATX of this ID.
-	Post      PostV1
-	NumUnits  uint32
+	ID           types.NodeID // Delegating ID that this PoST is for.
+	PrevATXIndex uint         // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
+	Post         PostV1
+	NumUnits     uint32
 }
 
 type NiPostsV2 struct {
