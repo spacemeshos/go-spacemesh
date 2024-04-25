@@ -48,7 +48,6 @@ func addAtx(
 		opt(atx)
 	}
 	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)

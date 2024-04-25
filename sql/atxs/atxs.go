@@ -56,11 +56,9 @@ func decoder(fn decoderCallback) sql.Decoder {
 		baseTickHeight := uint64(stmt.ColumnInt64(2))
 		tickCount := uint64(stmt.ColumnInt64(3))
 		stmt.ColumnBytes(4, a.SmesherID[:])
-		effectiveNumUnits := uint32(stmt.ColumnInt32(5))
-		a.SetEffectiveNumUnits(effectiveNumUnits)
+		a.NumUnits = uint32(stmt.ColumnInt32(5))
 		if checkpointed {
 			a.SetGolden()
-			a.NumUnits = effectiveNumUnits
 			a.SetReceived(time.Time{})
 		} else {
 			a.SetReceived(time.Unix(0, stmt.ColumnInt64(6)).Local())
@@ -432,7 +430,7 @@ func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostI
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PublishEpoch))
-		stmt.BindInt64(3, int64(atx.EffectiveNumUnits()))
+		stmt.BindInt64(3, int64(atx.NumUnits))
 		if atx.CommitmentATX != nil {
 			stmt.BindBytes(4, atx.CommitmentATX.Bytes())
 		} else {

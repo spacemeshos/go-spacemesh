@@ -16,7 +16,7 @@ type VerifiedActivationTx struct {
 // to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
 // for at least the first few years.
 func (vatx *VerifiedActivationTx) GetWeight() uint64 {
-	return getWeight(uint64(vatx.EffectiveNumUnits()), vatx.tickCount)
+	return getWeight(uint64(vatx.NumUnits), vatx.tickCount)
 }
 
 // BaseTickHeight is a tick height of the positional atx.
@@ -38,8 +38,7 @@ func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
 	return &ActivationTxHeader{
 		PublishEpoch:      vatx.PublishEpoch,
 		Coinbase:          vatx.Coinbase,
-		NumUnits:          vatx.NumUnits,
-		EffectiveNumUnits: vatx.EffectiveNumUnits(),
+		EffectiveNumUnits: vatx.NumUnits,
 		Received:          vatx.Received(),
 
 		ID:     vatx.ID(),

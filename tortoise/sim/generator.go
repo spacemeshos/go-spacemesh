@@ -244,7 +244,6 @@ func (g *Generator) generateAtxs() {
 		if err := activation.SignAndFinalizeAtx(sig, atx); err != nil {
 			panic(err)
 		}
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		vatx, err := atx.Verify(g.prevHeight[i], ticks)
 		if err != nil {

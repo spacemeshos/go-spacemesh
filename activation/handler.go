@@ -615,7 +615,7 @@ func (h *Handler) processATX(
 		atx.SetValidity(types.Valid)
 	}
 	atx.SetReceived(received)
-	atx.SetEffectiveNumUnits(effectiveNumUnits)
+	atx.NumUnits = effectiveNumUnits
 	vAtx, err := atx.Verify(baseTickHeight, leaves/h.tickSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify atx %x: %w", watx.ID(), err)

@@ -477,9 +477,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 					PublishEpoch: eid - 1,
 					NumUnits:     uint32(weight),
 				}
-				id := types.RandomATXID()
-				atx.SetID(id)
-				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetID(types.RandomATXID())
 				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, 1)
 				require.NoError(t, err)

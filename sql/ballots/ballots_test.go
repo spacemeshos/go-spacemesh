@@ -174,7 +174,6 @@ func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedAct
 	nodeID := signer.NodeID()
 	atx.SetID(types.ATXID{1, 2, 3})
 	atx.SmesherID = nodeID
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx.Verify(0, 1)
 }

@@ -164,7 +164,6 @@ func TestMain(m *testing.M) {
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
 	atx := types.NewActivationTx(challenge, addr1, numUnits, nil)
-	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
 		log.Println("failed to sign atx:", err)
@@ -177,7 +176,6 @@ func TestMain(m *testing.M) {
 	}
 
 	atx2 := types.NewActivationTx(challenge, addr2, numUnits, nil)
-	atx2.SetEffectiveNumUnits(numUnits)
 	atx2.SetReceived(time.Now())
 	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
 		log.Println("failed to sign atx:", err)
@@ -2480,7 +2478,6 @@ func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*typ
 			NumUnits:     1,
 		}
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		atx.SmesherID = types.RandomNodeID()
 		vAtx, err := atx.Verify(0, 1)

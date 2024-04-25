@@ -165,7 +165,7 @@ type ActivationTx struct {
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
 	CommitmentATX *ATXID
 	Coinbase      Address
-	NumUnits      uint32
+	NumUnits      uint32 // the minimum number of space units in this and the previous ATX
 
 	VRFNonce *VRFPostIndex
 
@@ -174,11 +174,10 @@ type ActivationTx struct {
 
 	AtxBlob
 
-	golden            bool
-	id                ATXID     // non-exported cache of the ATXID
-	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
-	received          time.Time // time received by node, gossiped or synced
-	validity          Validity  // whether the chain is fully verified and OK
+	golden   bool
+	id       ATXID     // non-exported cache of the ATXID
+	received time.Time // time received by node, gossiped or synced
+	validity Validity  // whether the chain is fully verified and OK
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -233,9 +232,6 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("coinbase", atx.Coinbase.String())
 	encoder.AddUint32("epoch", atx.PublishEpoch.Uint32())
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
-	if atx.effectiveNumUnits != 0 {
-		encoder.AddUint64("effective_num_units", uint64(atx.effectiveNumUnits))
-	}
 	encoder.AddUint64("sequence_number", atx.Sequence)
 	return nil
 }
@@ -250,20 +246,9 @@ func (atx *ActivationTx) ID() ATXID {
 	return atx.id
 }
 
-func (atx *ActivationTx) EffectiveNumUnits() uint32 {
-	if atx.effectiveNumUnits == 0 {
-		panic("effectiveNumUnits field must be set")
-	}
-	return atx.effectiveNumUnits
-}
-
 // SetID sets the ATXID in this ATX's cache.
 func (atx *ActivationTx) SetID(id ATXID) {
 	atx.id = id
-}
-
-func (atx *ActivationTx) SetEffectiveNumUnits(numUnits uint32) {
-	atx.effectiveNumUnits = numUnits
 }
 
 func (atx *ActivationTx) SetReceived(received time.Time) {
@@ -284,9 +269,6 @@ func (atx *ActivationTx) SetValidity(validity Validity) {
 
 // Verify an ATX for a given base TickHeight and TickCount.
 func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
-	if atx.effectiveNumUnits == 0 {
-		return nil, errors.New("effective num units not set")
-	}
 	if !atx.Golden() && atx.received.IsZero() {
 		return nil, errors.New("received time not set")
 	}

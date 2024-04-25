@@ -109,7 +109,6 @@ func newNIPosV1tWithPoet(t testing.TB, poetRef []byte) *wire.NIPostV1 {
 func toVerifiedAtx(t testing.TB, watx *wire.ActivationTxV1) *types.VerifiedActivationTx {
 	t.Helper()
 	atx := wire.ActivationTxFromWireV1(watx)
-	atx.SetEffectiveNumUnits(watx.NumUnits)
 	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)

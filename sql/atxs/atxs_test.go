@@ -800,7 +800,6 @@ func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActi
 		opt(atx)
 	}
 	activation.SignAndFinalizeAtx(signer, atx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx.Verify(0, 1)
 }
@@ -824,7 +823,6 @@ func createAtx(tb testing.TB, db *sql.Database, hdr header) (types.ATXID, *signi
 
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, full))
 
-	full.SetEffectiveNumUnits(full.NumUnits)
 	full.SetReceived(time.Now())
 	vAtx, err := full.Verify(hdr.base, hdr.count)
 	require.NoError(tb, err)
@@ -973,8 +971,8 @@ func TestLatest(t *testing.T) {
 			for i, epoch := range tc.epochs {
 				full := &types.ActivationTx{
 					PublishEpoch: types.EpochID(epoch),
+					NumUnits:     1,
 				}
-				full.SetEffectiveNumUnits(1)
 				full.SetReceived(time.Now())
 				full.SetID(types.ATXID{byte(i)})
 				vAtx, err := full.Verify(0, 1)

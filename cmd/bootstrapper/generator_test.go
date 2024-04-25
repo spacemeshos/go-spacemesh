@@ -52,7 +52,6 @@ func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []ty
 			NumUnits:     1,
 		}
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		atx.SmesherID = types.RandomNodeID()
 		vAtx, err := atx.Verify(0, 1)

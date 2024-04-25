@@ -31,7 +31,6 @@ func newAtx(tb testing.TB, db *sql.Database) {
 	vrfNonce := types.VRFPostIndex(11)
 	atx.VRFNonce = &vrfNonce
 	atx.SmesherID = types.BytesToNodeID(types.RandomBytes(20))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	vatx, err := atx.Verify(1111, 12)
 	require.NoError(tb, err)
