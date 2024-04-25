@@ -31,6 +31,7 @@ const (
 	bpsInterval2 = 5 * time.Minute
 
 	totalProto = "__total__"
+	otherProto = "__other__"
 )
 
 type PeerRequestStats struct {
@@ -320,6 +321,9 @@ func (t *PeerInfoTracker) EnsurePeerInfo(p peer.ID) *Info {
 func (t *PeerInfoTracker) EnsureProtoStats(proto protocol.ID) *DataStats {
 	t.Lock()
 	defer t.Unlock()
+	if proto == "" {
+		proto = otherProto
+	}
 	ds, found := t.protoStats[proto]
 	if !found {
 		ds = &DataStats{}
