@@ -205,9 +205,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 				for _, rst := range expect {
 					received, err := stream.Recv()
 					require.NoError(t, err)
-					atx, err := toAtx(context.Background(), db, rst)
-					require.NoError(t, err)
-					require.Equal(t, atx.String(), received.GetV1().String())
+					require.Equal(t, toAtx(rst).String(), received.GetV1().String())
 				}
 			})
 		}
