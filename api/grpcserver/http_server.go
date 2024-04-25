@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/cors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -26,13 +27,21 @@ type JSONHTTPServer struct {
 	BoundAddress string
 	server       *http.Server
 	eg           errgroup.Group
+
+	// basic CORS support
+	origins []string
 }
 
 // NewJSONHTTPServer creates a new json http server.
-func NewJSONHTTPServer(listener string, lg *zap.Logger) *JSONHTTPServer {
+func NewJSONHTTPServer(
+	lg *zap.Logger,
+	listener string,
+	corsAllowedOrigins []string,
+) *JSONHTTPServer {
 	return &JSONHTTPServer{
 		logger:   lg,
 		listener: listener,
+		origins:  corsAllowedOrigins,
 	}
 }
 
@@ -68,11 +77,17 @@ func (s *JSONHTTPServer) StartService(
 
 	// register each individual, enabled service
 	mux := runtime.NewServeMux()
+
 	for _, svc := range services {
 		if err := svc.RegisterHandlerService(mux); err != nil {
 			return fmt.Errorf("registering service %s with grpc gateway failed: %w", svc, err)
 		}
 	}
+
+	// enable cors
+	c := cors.New(cors.Options{
+		AllowedOrigins: s.origins,
+	})
 
 	s.logger.Info("starting grpc gateway server", zap.String("address", s.listener))
 	lis, err := net.Listen("tcp", s.listener)
@@ -84,7 +99,7 @@ func (s *JSONHTTPServer) StartService(
 		MaxHeaderBytes: 1 << 21,
 		ReadTimeout:    15 * time.Second,
 		WriteTimeout:   15 * time.Second,
-		Handler:        mux,
+		Handler:        c.Handler(mux),
 	}
 	s.eg.Go(func() error {
 		if err := s.server.Serve(lis); err != nil {
