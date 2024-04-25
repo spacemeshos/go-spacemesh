@@ -251,16 +251,15 @@ func (v *Validator) InitialNIPostChallengeV1(
 	return nil
 }
 
-func (*Validator) NIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, nodeID types.NodeID) error {
-	prevATX, err := atxs.GetAtxHeader(challenge.PrevATXID)
-	if err != nil {
-		return &ErrAtxNotFound{Id: challenge.PrevATXID, source: err}
-	}
-
-	if prevATX.NodeID != nodeID {
+func (*Validator) NIPostChallengeV1(
+	challenge *wire.NIPostChallengeV1,
+	prevATX *types.ActivationTx,
+	nodeID types.NodeID,
+) error {
+	if prevATX.SmesherID != nodeID {
 		return fmt.Errorf(
 			"previous atx belongs to different miner. nodeID: %v, prevAtx.ID: %v, prevAtx.NodeID: %v",
-			nodeID, prevATX.ID.ShortString(), prevATX.NodeID,
+			nodeID, prevATX.ID().ShortString(), prevATX.SmesherID,
 		)
 	}
 
