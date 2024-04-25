@@ -6,6 +6,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+With this release the minimum supported version for Intel Macs is now macOS 13 (Ventura) and for Apple Silicon Macs it
+is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spacemesh/pull/5879)).
+
 ### Highlights
 
 ### Features

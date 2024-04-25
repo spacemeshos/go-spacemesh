@@ -128,7 +128,7 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          # - macos-12-large
+          - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-latest
     steps:
@@ -174,7 +174,7 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          # - macos-12-large
+          - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-latest
     steps:
@@ -218,7 +218,7 @@ jobs:
         os:
           - ubuntu-latest
           - [self-hosted, linux, arm64]
-          # - macos-12-large
+          - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-latest
     steps:
@@ -231,7 +231,7 @@ jobs:
           sudo ethtool -K eth0 rx off
 
       - name: disable TCP/UDP offload - MacOS
-        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
+        if: ${{ matrix.os == 'macos-13' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
         run: |
           sudo sysctl -w net.link.generic.system.hwcksum_tx=0
           sudo sysctl -w net.link.generic.system.hwcksum_rx=0
