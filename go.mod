@@ -63,8 +63,8 @@ require (
 	google.golang.org/protobuf v1.33.0
 	k8s.io/api v0.30.0
 	k8s.io/apimachinery v0.30.0
-	k8s.io/client-go v0.29.3
-	sigs.k8s.io/controller-runtime v0.17.3
+	k8s.io/client-go v0.30.0
+	sigs.k8s.io/controller-runtime v0.18.0
 )
 
 require (
@@ -91,7 +91,7 @@ require (
 	github.com/elastic/gosigar v0.14.2 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/ericlagergren/decimal v0.0.0-20221120152707-495c53812d05 // indirect
-	github.com/evanphx/json-patch/v5 v5.8.0 // indirect
+	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
@@ -172,7 +172,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
-	github.com/onsi/ginkgo/v2 v2.15.0 // indirect
+	github.com/onsi/ginkgo/v2 v2.17.1 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
@@ -223,8 +223,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.29.2 // indirect
-	k8s.io/component-base v0.29.2 // indirect
+	k8s.io/apiextensions-apiserver v0.30.0 // indirect
 	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
