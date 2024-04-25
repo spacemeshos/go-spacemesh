@@ -20,6 +20,8 @@ is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spaceme
 
 * [#5866](https://github.com/spacemeshos/go-spacemesh/pull/5866) Reduce logging levels of some messages to reduce noise.
 
+* [#5877](https://github.com/spacemeshos/go-spacemesh/pull/5877) Fix verifying ATX chain after checkpoint.
+
 ## (v1.5.0)
 
 ### Upgrade information
