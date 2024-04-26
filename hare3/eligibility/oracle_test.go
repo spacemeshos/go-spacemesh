@@ -148,7 +148,6 @@ func (t *testOracle) createActiveSet(
 		nonce := types.VRFPostIndex(0)
 		atx.VRFNonce = &nonce
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		vAtx, err := atx.Verify(0, 1)
@@ -380,7 +379,6 @@ func Test_VrfSignVerify(t *testing.T) {
 	nonce := types.VRFPostIndex(0)
 	atx1.VRFNonce = &nonce
 	atx1.SetID(activeSet[0])
-	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
 	atx1.SmesherID = signer.NodeID()
 	vAtx1, err := atx1.Verify(0, 1)
@@ -397,7 +395,6 @@ func Test_VrfSignVerify(t *testing.T) {
 	nonce = types.VRFPostIndex(0)
 	atx2.VRFNonce = &nonce
 	atx2.SetID(activeSet[1])
-	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
 	atx2.SmesherID = signer2.NodeID()
 	vAtx2, err := atx2.Verify(0, 1)
@@ -739,11 +736,12 @@ func TestActiveSetMatrix(t *testing.T) {
 		node types.NodeID,
 		option ...func(*types.VerifiedActivationTx),
 	) *types.VerifiedActivationTx {
-		atx := &types.ActivationTx{}
-		atx.PublishEpoch = target - 1
-		atx.SmesherID = node
+		atx := &types.ActivationTx{
+			PublishEpoch: target - 1,
+			SmesherID:    node,
+			NumUnits:     1,
+		}
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(1)
 		atx.SetReceived(time.Time{}.Add(1))
 		nonce := types.VRFPostIndex(0)
 		atx.VRFNonce = &nonce

@@ -27,7 +27,6 @@ func gatx(
 	atx.PublishEpoch = epoch
 	atx.SmesherID = smesher
 	atx.SetID(id)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Time{}.Add(1))
 	atx.VRFNonce = nonce
 	verified, err := atx.Verify(0, 100)

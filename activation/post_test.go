@@ -278,7 +278,6 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, 2, nil)
 	require.NoError(t, SignAndFinalizeAtx(signer, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
@@ -325,7 +324,6 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 1, nil)
 	atx.CommitmentATX = &commitmentAtx
 	require.NoError(t, SignAndFinalizeAtx(signer, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)

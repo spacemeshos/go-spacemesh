@@ -39,7 +39,6 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, 1, nil)
 	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)

@@ -174,7 +174,6 @@ func TestReferenceHeight(t *testing.T) {
 					NumUnits:     2,
 				}
 				atx.SetID(types.ATXID{byte(i + 1)})
-				atx.SetEffectiveNumUnits(atx.NumUnits)
 				atx.SetReceived(time.Now())
 				vAtx, err := atx.Verify(0, uint64(height))
 				require.NoError(t, err)

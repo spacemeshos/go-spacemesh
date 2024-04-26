@@ -10,10 +10,6 @@ type ActivationTxHeader struct {
 	PublishEpoch EpochID
 	Coinbase     Address
 
-	// NumUnits holds the count of space units that have been reserved by the node for the
-	// current epoch; a unit represents a configurable amount of data for PoST
-	NumUnits uint32
-
 	// EffectiveNumUnits is the minimum of this ATX's NumUnits and the previous ATX's NumUnits
 	// NumUnit decreases become effective immediately, while NumUnit increases become effective one epoch later
 	// This is because the increased PoST size only becomes effective after a PoET proof has

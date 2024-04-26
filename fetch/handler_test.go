@@ -274,7 +274,6 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	activation.SignAndFinalizeAtx(signer, atx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vatx, err := atx.Verify(0, 1)
 	require.NoError(t, err)

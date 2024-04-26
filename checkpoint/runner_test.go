@@ -213,7 +213,6 @@ func newAtx(
 		atx.VRFNonce = (*types.VRFPostIndex)(&vrfnonce)
 	}
 	atx.SmesherID = nodeID
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx
 }

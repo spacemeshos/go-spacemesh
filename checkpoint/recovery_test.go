@@ -338,7 +338,6 @@ func newChainedAtx(
 	watx.Signature = sig.Sign(signing.ATX, watx.SignedBytes())
 
 	atx := wire.ActivationTxFromWireV1(watx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 
 	return &checkpoint.AtxDep{
