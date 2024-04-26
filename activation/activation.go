@@ -770,7 +770,6 @@ func SignAndFinalizeAtx(signer *signing.EdSigner, atx *types.ActivationTx) error
 		Version: types.AtxV1,
 		Blob:    codec.MustEncode(wireAtx),
 	}
-	atx.Signature = wireAtx.Signature
 	atx.SmesherID = wireAtx.SmesherID
 	atx.SetID(types.ATXID(wireAtx.HashInnerBytes()))
 	return nil

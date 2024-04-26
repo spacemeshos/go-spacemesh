@@ -168,9 +168,7 @@ type ActivationTx struct {
 	BaseTickHeight uint64
 	TickCount      uint64
 	VRFNonce       *VRFPostIndex
-
-	SmesherID NodeID
-	Signature EdSignature
+	SmesherID      NodeID
 
 	AtxBlob
 
