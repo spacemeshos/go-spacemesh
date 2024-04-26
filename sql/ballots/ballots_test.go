@@ -166,19 +166,14 @@ func TestLayerBallotBySmesher(t *testing.T) {
 
 func newAtx(signer *signing.EdSigner, layerID types.LayerID) (*types.VerifiedActivationTx, error) {
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: layerID.GetEpoch(),
-				PrevATXID:    types.RandomATXID(),
-			},
-			NumUnits: 2,
-		},
+		PublishEpoch: layerID.GetEpoch(),
+		PrevATXID:    types.RandomATXID(),
+		NumUnits:     2,
 	}
 
 	nodeID := signer.NodeID()
 	atx.SetID(types.ATXID{1, 2, 3})
 	atx.SmesherID = nodeID
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx.Verify(0, 1)
 }

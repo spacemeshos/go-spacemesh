@@ -18,14 +18,11 @@ import (
 )
 
 func atx(id types.ATXID) *types.VerifiedActivationTx {
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-		NIPostChallenge: types.NIPostChallenge{
-			PublishEpoch: 1,
-		},
-		NumUnits: 1,
-	}}
+	atx := &types.ActivationTx{
+		PublishEpoch: 1,
+		NumUnits:     1,
+	}
 	atx.SetID(id)
-	atx.SetEffectiveNumUnits(1)
 	atx.SetReceived(time.Now())
 	copy(atx.SmesherID[:], id[:])
 	vatx, err := atx.Verify(0, 1)

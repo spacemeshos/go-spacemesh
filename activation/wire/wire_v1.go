@@ -1,11 +1,13 @@
 package wire
 
 import (
-	"fmt"
+	"encoding/hex"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate scalegen
@@ -15,6 +17,8 @@ type ActivationTxV1 struct {
 
 	SmesherID types.NodeID
 	Signature types.EdSignature
+
+	id types.ATXID
 }
 
 // InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
@@ -28,29 +32,6 @@ type InnerActivationTxV1 struct {
 	NIPost   *NIPostV1
 	NodeID   *types.NodeID // only present in initial ATX to make hash of the first InnerActivationTxV2 unique
 	VRFNonce *uint64       // only present when the nonce changed (or initial ATX)
-}
-
-type NIPostChallengeV1 struct {
-	Publish types.EpochID
-	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
-	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against
-	// that miner.
-	Sequence uint64
-	// the previous ATX's ID (for all but the first in the sequence)
-	PrevATXID      types.ATXID
-	PositioningATX types.ATXID
-
-	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
-	CommitmentATX *types.ATXID
-	InitialPost   *PostV1
-}
-
-// Hash serializes the NIPostChallenge and returns its hash.
-// The serialized challenge is first prepended with a byte 0x00, and then hashed
-// for second preimage resistance of poet membership merkle tree.
-func (challenge *NIPostChallengeV1) Hash() types.Hash32 {
-	ncBytes := codec.MustEncode(challenge)
-	return hash.Sum([]byte{0x00}, ncBytes)
 }
 
 type PostV1 struct {
@@ -92,9 +73,29 @@ type ATXMetadataV1 struct {
 	MsgHash types.Hash32
 }
 
+func (atx *ActivationTxV1) ID() types.ATXID {
+	if atx.id == types.EmptyATXID {
+		atx.id = types.ATXID(atx.HashInnerBytes())
+	}
+	return atx.id
+}
+
+func (atx *ActivationTxV1) Smesher() types.NodeID {
+	return atx.SmesherID
+}
+
+func (atx *ActivationTxV1) Sign(signer *signing.EdSigner) {
+	if atx.PrevATXID == types.EmptyATXID {
+		nodeID := signer.NodeID()
+		atx.NodeID = &nodeID
+	}
+	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
+	atx.SmesherID = signer.NodeID()
+}
+
 func (atx *ActivationTxV1) SignedBytes() []byte {
 	data := codec.MustEncode(&ATXMetadataV1{
-		Publish: atx.Publish,
+		Publish: atx.PublishEpoch,
 		MsgHash: atx.HashInnerBytes(),
 	})
 	return data
@@ -118,7 +119,7 @@ func postToWireV1(p *types.Post) *PostV1 {
 	}
 }
 
-func niPostToWireV1(n *types.NIPost) *NIPostV1 {
+func NiPostToWireV1(n *types.NIPost) *NIPostV1 {
 	if n == nil {
 		return nil
 	}
@@ -138,79 +139,58 @@ func niPostToWireV1(n *types.NIPost) *NIPostV1 {
 
 func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 	return &NIPostChallengeV1{
-		Publish:        c.PublishEpoch,
-		Sequence:       c.Sequence,
-		PrevATXID:      c.PrevATXID,
-		PositioningATX: c.PositioningATX,
-		CommitmentATX:  c.CommitmentATX,
-		InitialPost:    postToWireV1(c.InitialPost),
+		PublishEpoch:     c.PublishEpoch,
+		Sequence:         c.Sequence,
+		PrevATXID:        c.PrevATXID,
+		PositioningATXID: c.PositioningATX,
+		CommitmentATXID:  c.CommitmentATX,
+		InitialPost:      postToWireV1(c.InitialPost),
 	}
 }
 
 func ActivationTxToWireV1(a *types.ActivationTx) *ActivationTxV1 {
 	return &ActivationTxV1{
 		InnerActivationTxV1: InnerActivationTxV1{
-			NIPostChallengeV1: *NIPostChallengeToWireV1(&a.NIPostChallenge),
-			Coinbase:          a.Coinbase,
-			NumUnits:          a.NumUnits,
-			NIPost:            niPostToWireV1(a.NIPost),
-			NodeID:            a.NodeID,
-			VRFNonce:          (*uint64)(a.VRFNonce),
+			NIPostChallengeV1: NIPostChallengeV1{
+				PublishEpoch:    a.PublishEpoch,
+				Sequence:        a.Sequence,
+				PrevATXID:       a.PrevATXID,
+				CommitmentATXID: a.CommitmentATX,
+			},
+			Coinbase: a.Coinbase,
+			NumUnits: a.NumUnits,
+			VRFNonce: (*uint64)(a.VRFNonce),
 		},
 		SmesherID: a.SmesherID,
 		Signature: a.Signature,
 	}
 }
 
-// Decode ActivationTx from bytes.
-// In future it should decide which version of ActivationTx to decode based on the publish epoch.
-func ActivationTxFromBytes(data []byte) (*types.ActivationTx, error) {
-	var wireAtx ActivationTxV1
-	err := codec.Decode(data, &wireAtx)
-	if err != nil {
-		return nil, fmt.Errorf("decoding ATX: %w", err)
-	}
-
-	return ActivationTxFromWireV1(&wireAtx), nil
-}
-
-func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
+func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.ActivationTx {
 	result := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:   atx.Publish,
-				Sequence:       atx.Sequence,
-				PrevATXID:      atx.PrevATXID,
-				PositioningATX: atx.PositioningATX,
-				CommitmentATX:  atx.CommitmentATX,
-				InitialPost:    postFromWireV1(atx.InitialPost),
-			},
-			Coinbase: atx.Coinbase,
-			NumUnits: atx.NumUnits,
-			NIPost:   niPostFromWireV1(atx.NIPost),
-			NodeID:   atx.NodeID,
-			VRFNonce: (*types.VRFPostIndex)(atx.VRFNonce),
+		PublishEpoch:  atx.PublishEpoch,
+		Sequence:      atx.Sequence,
+		PrevATXID:     atx.PrevATXID,
+		CommitmentATX: atx.CommitmentATXID,
+		Coinbase:      atx.Coinbase,
+		NumUnits:      atx.NumUnits,
+		VRFNonce:      (*types.VRFPostIndex)(atx.VRFNonce),
+		SmesherID:     atx.SmesherID,
+		Signature:     atx.Signature,
+		AtxBlob: types.AtxBlob{
+			Version: types.AtxV1,
+			Blob:    blob,
 		},
-		SmesherID: atx.SmesherID,
-		Signature: atx.Signature,
+	}
+	if len(blob) == 0 {
+		result.AtxBlob.Blob = codec.MustEncode(atx)
 	}
 
 	result.SetID(types.ATXID(atx.HashInnerBytes()))
 	return result
 }
 
-func NIPostChallengeFromWireV1(ch NIPostChallengeV1) *types.NIPostChallenge {
-	return &types.NIPostChallenge{
-		PublishEpoch:   ch.Publish,
-		Sequence:       ch.Sequence,
-		PrevATXID:      ch.PrevATXID,
-		PositioningATX: ch.PositioningATX,
-		CommitmentATX:  ch.CommitmentATX,
-		InitialPost:    postFromWireV1(ch.InitialPost),
-	}
-}
-
-func niPostFromWireV1(nipost *NIPostV1) *types.NIPost {
+func NiPostFromWireV1(nipost *NIPostV1) *types.NIPost {
 	if nipost == nil {
 		return nil
 	}
@@ -220,7 +200,7 @@ func niPostFromWireV1(nipost *NIPostV1) *types.NIPost {
 			LeafIndex: nipost.Membership.LeafIndex,
 			Nodes:     nipost.Membership.Nodes,
 		},
-		Post: postFromWireV1(nipost.Post),
+		Post: PostFromWireV1(nipost.Post),
 		PostMetadata: &types.PostMetadata{
 			Challenge:     nipost.PostMetadata.Challenge,
 			LabelsPerUnit: nipost.PostMetadata.LabelsPerUnit,
@@ -228,7 +208,7 @@ func niPostFromWireV1(nipost *NIPostV1) *types.NIPost {
 	}
 }
 
-func postFromWireV1(post *PostV1) *types.Post {
+func PostFromWireV1(post *PostV1) *types.Post {
 	if post == nil {
 		return nil
 	}
@@ -237,4 +217,39 @@ func postFromWireV1(post *PostV1) *types.Post {
 		Indices: post.Indices,
 		Pow:     post.Pow,
 	}
+}
+
+func (p *PostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if p == nil {
+		return nil
+	}
+	encoder.AddUint32("nonce", p.Nonce)
+	encoder.AddUint64("k2pow", p.Pow)
+	encoder.AddString("indices", hex.EncodeToString(p.Indices))
+	return nil
+}
+
+func (nipost *NIPostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if nipost == nil {
+		return nil
+	}
+	encoder.AddObject("post", nipost.Post)
+	encoder.AddBinary("challenge", nipost.PostMetadata.Challenge)
+	return nil
+}
+
+func (atx *ActivationTxV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+	if atx == nil {
+		return nil
+	}
+	encoder.AddString("atx_id", atx.ID().String())
+	encoder.AddString("smesher", atx.SmesherID.String())
+	encoder.AddString("coinbase", atx.Coinbase.String())
+	encoder.AddUint64("num_units", uint64(atx.NumUnits))
+	if atx.VRFNonce != nil {
+		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
+	}
+	encoder.AddObject("challenge", &atx.NIPostChallengeV1)
+	encoder.AddObject("nipost", atx.NIPost)
+	return nil
 }

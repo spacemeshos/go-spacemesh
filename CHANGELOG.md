@@ -2,15 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED (v1.5.0)
+## UNRELEASED
 
 ### Upgrade information
 
-* [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
-  Updating to this version requires going through v1.4 first.
-
-* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
-  This also fixes ambiguity of nonces for equivocating identities.
+With this release the minimum supported version for Intel Macs is now macOS 13 (Ventura) and for Apple Silicon Macs it
+is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spacemesh/pull/5879)).
 
 ### Highlights
 
@@ -18,7 +15,31 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
+* [#5863](https://github.com/spacemeshos/go-spacemesh/pull/5863) Identity files are now created with 0600 permissions,
+  to prevent other users on the same system to access the private keys.
+
+* [#5866](https://github.com/spacemeshos/go-spacemesh/pull/5866) Reduce logging levels of some messages to reduce noise.
+
+* [#5877](https://github.com/spacemeshos/go-spacemesh/pull/5877) Fix verifying ATX chain after checkpoint.
+
+## (v1.5.0)
+
+### Upgrade information
+
+* [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
+  Updating to this version requires going through v1.4 first.
+
+### Improvements
+
 * [#5807](https://github.com/spacemeshos/go-spacemesh/pull/5807) Implement SMIP-0002: remove vesting vault cliff.
+
+* [#5840](https://github.com/spacemeshos/go-spacemesh/pull/5840) Allow vaults to spend received (as well as vested)
+coins. Fixes an oversight in the genesis VM implementation.
+
+* [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
+  This also fixes ambiguity of nonces for equivocating identities.
+
+* [#5856](https://github.com/spacemeshos/go-spacemesh/pull/5856) Bump github.com/spacemeshos/api/release/go to v1.37.0.
 
 ## Release v1.4.6
 

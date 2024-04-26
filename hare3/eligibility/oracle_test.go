@@ -141,16 +141,13 @@ func (t *testOracle) createActiveSet(
 	for i, id := range activeSet {
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		miners = append(miners, nodeID)
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: lid.GetEpoch(),
-			},
-			NumUnits: uint32(i + 1),
-		}}
+		atx := &types.ActivationTx{
+			PublishEpoch: lid.GetEpoch(),
+			NumUnits:     uint32(i + 1),
+		}
 		nonce := types.VRFPostIndex(0)
 		atx.VRFNonce = &nonce
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		vAtx, err := atx.Verify(0, 1)
@@ -375,16 +372,13 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	numMiners := 2
 	activeSet := types.RandomActiveSet(numMiners)
-	atx1 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-		NIPostChallenge: types.NIPostChallenge{
-			PublishEpoch: prevEpoch,
-		},
-		NumUnits: 1 * 1024,
-	}}
+	atx1 := &types.ActivationTx{
+		PublishEpoch: prevEpoch,
+		NumUnits:     1 * 1024,
+	}
 	nonce := types.VRFPostIndex(0)
 	atx1.VRFNonce = &nonce
 	atx1.SetID(activeSet[0])
-	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
 	atx1.SmesherID = signer.NodeID()
 	vAtx1, err := atx1.Verify(0, 1)
@@ -394,16 +388,13 @@ func Test_VrfSignVerify(t *testing.T) {
 	signer2, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
 
-	atx2 := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-		NIPostChallenge: types.NIPostChallenge{
-			PublishEpoch: prevEpoch,
-		},
-		NumUnits: 9 * 1024,
-	}}
+	atx2 := &types.ActivationTx{
+		PublishEpoch: prevEpoch,
+		NumUnits:     9 * 1024,
+	}
 	nonce = types.VRFPostIndex(0)
 	atx2.VRFNonce = &nonce
 	atx2.SetID(activeSet[1])
-	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
 	atx2.SmesherID = signer2.NodeID()
 	vAtx2, err := atx2.Verify(0, 1)
@@ -745,13 +736,12 @@ func TestActiveSetMatrix(t *testing.T) {
 		node types.NodeID,
 		option ...func(*types.VerifiedActivationTx),
 	) *types.VerifiedActivationTx {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{},
-		}}
-		atx.PublishEpoch = target - 1
-		atx.SmesherID = node
+		atx := &types.ActivationTx{
+			PublishEpoch: target - 1,
+			SmesherID:    node,
+			NumUnits:     1,
+		}
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(1)
 		atx.SetReceived(time.Time{}.Add(1))
 		nonce := types.VRFPostIndex(0)
 		atx.VRFNonce = &nonce

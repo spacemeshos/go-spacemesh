@@ -140,7 +140,7 @@ func LayerNoMalicious(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, 
 			id := types.BallotID{}
 			stmt.ColumnBytes(0, id[:])
 			var ballot types.Ballot
-			_, derr := codec.DecodeFrom(stmt.ColumnReader(1), &ballot)
+			_, derr = codec.DecodeFrom(stmt.ColumnReader(1), &ballot)
 			if derr != nil {
 				return false
 			}

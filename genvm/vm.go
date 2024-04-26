@@ -330,7 +330,7 @@ func (v *VM) execute(
 			continue
 		}
 		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
-			logger.With().Warning("ineffective transaction. intrinstic gas not covered",
+			logger.With().Warning("ineffective transaction. intrinsic gas not covered",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),
 				log.Uint64("intrinsic gas", intrinsic),

@@ -584,33 +584,35 @@ func TestLoadBlob(t *testing.T) {
 	require.NoError(t, err)
 	atx1, err := newAtx(sig, withPublishEpoch(1))
 	require.NoError(t, err)
+	atx1.AtxBlob.Blob = []byte("blob1")
 
 	require.NoError(t, atxs.Add(db, atx1))
 
 	var blob1 sql.Blob
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1))
-	encoded := codec.MustEncode(wire.ActivationTxToWireV1(atx1.ActivationTx))
-	require.Equal(t, encoded, blob1.Bytes)
+
+	require.Equal(t, atx1.AtxBlob.Blob, blob1.Bytes)
 
 	blobSizes, err := atxs.GetBlobSizes(db, [][]byte{atx1.ID().Bytes()})
 	require.NoError(t, err)
 	require.Equal(t, []int{len(blob1.Bytes)}, blobSizes)
 
 	var blob2 sql.Blob
-	atx2, err := newAtx(sig, withPublishEpoch(1))
-	nodeID := types.RandomNodeID()
-	atx2.NodeID = &nodeID // ensure ATXs differ in size
+	atx2, err := newAtx(sig)
 	require.NoError(t, err)
+	atx2.AtxBlob.Blob = []byte("blob2 of different size")
+
 	require.NoError(t, atxs.Add(db, atx2))
 	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))
-	encoded = codec.MustEncode(wire.ActivationTxToWireV1(atx2.ActivationTx))
-	require.Equal(t, encoded, blob2.Bytes)
+	require.Equal(t, atx2.AtxBlob.Blob, blob2.Bytes)
+
 	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
 		atx1.ID().Bytes(),
 		atx2.ID().Bytes(),
 	})
 	require.NoError(t, err)
 	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes)}, blobSizes)
+	require.NotEqual(t, len(blob1.Bytes), len(blob2.Bytes))
 
 	noSuchID := types.RandomATXID()
 	require.ErrorIs(t, atxs.LoadBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
@@ -789,20 +791,15 @@ func withPrevATXID(id types.ATXID) createAtxOpt {
 func newAtx(signer *signing.EdSigner, opts ...createAtxOpt) (*types.VerifiedActivationTx, error) {
 	nonce := types.VRFPostIndex(42)
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PrevATXID: types.RandomATXID(),
-			},
-			Coinbase: types.Address{1, 2, 3},
-			NumUnits: 2,
-			VRFNonce: &nonce,
-		},
+		PrevATXID: types.RandomATXID(),
+		Coinbase:  types.Address{1, 2, 3},
+		NumUnits:  2,
+		VRFNonce:  &nonce,
 	}
 	for _, opt := range opts {
 		opt(atx)
 	}
 	activation.SignAndFinalizeAtx(signer, atx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx.Verify(0, 1)
 }
@@ -817,20 +814,15 @@ type header struct {
 
 func createAtx(tb testing.TB, db *sql.Database, hdr header) (types.ATXID, *signing.EdSigner) {
 	full := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: hdr.epoch,
-			},
-			Coinbase: hdr.coinbase,
-			NumUnits: 2,
-		},
+		PublishEpoch: hdr.epoch,
+		Coinbase:     hdr.coinbase,
+		NumUnits:     2,
 	}
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, full))
 
-	full.SetEffectiveNumUnits(full.NumUnits)
 	full.SetReceived(time.Now())
 	vAtx, err := full.Verify(hdr.base, hdr.count)
 	require.NoError(tb, err)
@@ -978,13 +970,9 @@ func TestLatest(t *testing.T) {
 			db := sql.InMemory()
 			for i, epoch := range tc.epochs {
 				full := &types.ActivationTx{
-					InnerActivationTx: types.InnerActivationTx{
-						NIPostChallenge: types.NIPostChallenge{
-							PublishEpoch: types.EpochID(epoch),
-						},
-					},
+					PublishEpoch: types.EpochID(epoch),
+					NumUnits:     1,
 				}
-				full.SetEffectiveNumUnits(1)
 				full.SetReceived(time.Now())
 				full.SetID(types.ATXID{byte(i)})
 				vAtx, err := full.Verify(0, 1)

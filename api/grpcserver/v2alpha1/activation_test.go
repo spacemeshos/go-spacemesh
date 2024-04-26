@@ -28,8 +28,9 @@ func TestActivationService_List(t *testing.T) {
 	activations := make([]types.VerifiedActivationTx, 100)
 	for i := range activations {
 		atx := gen.Next()
-		require.NoError(t, atxs.Add(db, atx))
-		activations[i] = *atx
+		vAtx := fixture.ToVerifiedAtx(t, atx)
+		require.NoError(t, atxs.Add(db, vAtx))
+		activations[i] = *vAtx
 	}
 
 	svc := NewActivationService(db)
@@ -110,8 +111,9 @@ func TestActivationStreamService_Stream(t *testing.T) {
 	activations := make([]types.VerifiedActivationTx, 100)
 	for i := range activations {
 		atx := gen.Next()
-		require.NoError(t, atxs.Add(db, atx))
-		activations[i] = *atx
+		vAtx := fixture.ToVerifiedAtx(t, atx)
+		require.NoError(t, atxs.Add(db, vAtx))
+		activations[i] = *vAtx
 	}
 
 	svc := NewActivationStreamService(db)
@@ -151,7 +153,9 @@ func TestActivationStreamService_Stream(t *testing.T) {
 		gen = fixture.NewAtxsGenerator().WithEpochs(start, 10)
 		var streamed []*events.ActivationTx
 		for i := 0; i < n; i++ {
-			streamed = append(streamed, &events.ActivationTx{VerifiedActivationTx: gen.Next()})
+			vatx := fixture.ToVerifiedAtx(t, gen.Next())
+			require.NoError(t, atxs.Add(db, vatx))
+			streamed = append(streamed, &events.ActivationTx{VerifiedActivationTx: vatx})
 		}
 
 		for _, tc := range []struct {
@@ -169,7 +173,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 			{
 				desc: "NodeID",
 				request: &spacemeshv2alpha1.ActivationStreamRequest{
-					NodeId:     streamed[3].NodeID.Bytes(),
+					NodeId:     streamed[3].SmesherID.Bytes(),
 					StartEpoch: start,
 					Watch:      true,
 				},
@@ -216,8 +220,9 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	epoch3ATXs := make([]types.VerifiedActivationTx, 30)
 	for i := range epoch3ATXs {
 		atx := genEpoch3.Next()
-		require.NoError(t, atxs.Add(db, atx))
-		epoch3ATXs[i] = *atx
+		vatx := fixture.ToVerifiedAtx(t, atx)
+		require.NoError(t, atxs.Add(db, vatx))
+		epoch3ATXs[i] = *vatx
 	}
 
 	genEpoch5 := fixture.NewAtxsGenerator().WithSeed(time.Now().UnixNano()+1).
@@ -225,8 +230,9 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	epoch5ATXs := make([]types.VerifiedActivationTx, 10) // ensure the number here is different from above
 	for i := range epoch5ATXs {
 		atx := genEpoch5.Next()
-		require.NoError(t, atxs.Add(db, atx))
-		epoch5ATXs[i] = *atx
+		vatx := fixture.ToVerifiedAtx(t, atx)
+		require.NoError(t, atxs.Add(db, vatx))
+		epoch5ATXs[i] = *vatx
 	}
 
 	svc := NewActivationService(db)

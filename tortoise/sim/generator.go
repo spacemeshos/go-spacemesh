@@ -234,7 +234,7 @@ func (g *Generator) generateAtxs() {
 		nipost := types.NIPostChallenge{
 			PublishEpoch: g.nextLayer.Sub(1).GetEpoch(),
 		}
-		atx := types.NewActivationTx(nipost, address, nil, units, nil)
+		atx := types.NewActivationTx(nipost, address, units, nil)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]
@@ -244,7 +244,6 @@ func (g *Generator) generateAtxs() {
 		if err := activation.SignAndFinalizeAtx(sig, atx); err != nil {
 			panic(err)
 		}
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
 		vatx, err := atx.Verify(g.prevHeight[i], ticks)
 		if err != nil {

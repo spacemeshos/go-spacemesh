@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -181,17 +182,19 @@ func TestRegossip(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
+		goldenATXID := types.RandomATXID()
 		tab := newTestBuilder(t, 5)
 		var refAtx *types.VerifiedActivationTx
 
 		for _, sig := range tab.signers {
-			atx := newActivationTx(t,
-				sig, 0, types.EmptyATXID, types.EmptyATXID, nil,
-				layer.GetEpoch(), 0, 1, types.Address{}, 1, nil)
-			require.NoError(t, atxs.Add(tab.db, atx))
+			atx := newInitialATXv1(t, goldenATXID)
+			atx.PublishEpoch = layer.GetEpoch()
+			atx.Sign(sig)
+			vAtx := toVerifiedAtx(t, atx)
+			require.NoError(t, atxs.Add(tab.db, vAtx))
 
 			if refAtx == nil {
-				refAtx = atx
+				refAtx = vAtx
 			}
 		}
 
@@ -233,13 +236,9 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 				Nonce:   rand.Uint32(),
 				Pow:     rand.Uint64(),
 			}
-			meta := &types.PostMetadata{
-				Challenge:     shared.ZeroChallenge,
-				LabelsPerUnit: tab.conf.LabelsPerUnit,
-			}
-
 			commitmentATX := types.RandomATXID()
-			tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, post, meta, numUnits).Return(nil)
+			tab.mValidator.EXPECT().
+				Post(gomock.Any(), sig.NodeID(), commitmentATX, post, gomock.Any(), numUnits)
 			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
 				post,
 				&types.PostInfo{
@@ -290,12 +289,8 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			Nonce:   nipost.Nonce,
 			Pow:     nipost.Pow,
 		}
-		meta := &types.PostMetadata{
-			Challenge:     shared.ZeroChallenge,
-			LabelsPerUnit: tab.conf.LabelsPerUnit,
-		}
-		tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, meta, nipost.NumUnits).
-			Return(nil)
+		tab.mValidator.EXPECT().
+			Post(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, gomock.Any(), nipost.NumUnits)
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 				<-initialPostChan
@@ -349,12 +344,8 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			Nonce:   nipost.Nonce,
 			Pow:     nipost.Pow,
 		}
-		meta := &types.PostMetadata{
-			Challenge:     shared.ZeroChallenge,
-			LabelsPerUnit: tab.conf.LabelsPerUnit,
-		}
-		tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, meta, nipost.NumUnits).
-			Return(nil)
+		tab.mValidator.EXPECT().
+			Post(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, gomock.Any(), nipost.NumUnits)
 	}
 
 	// step 3: create ATX
@@ -379,12 +370,12 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			Pow:     initialPost[sig.NodeID()].Pow,
 		}
 		ref := &wire.NIPostChallengeV1{
-			Publish:        postGenesisEpoch + 1,
-			CommitmentATX:  &initialPost[sig.NodeID()].CommitmentATX,
-			Sequence:       0,
-			PrevATXID:      types.EmptyATXID,
-			PositioningATX: tab.goldenATXID,
-			InitialPost:    post,
+			PublishEpoch:     postGenesisEpoch + 1,
+			CommitmentATXID:  &initialPost[sig.NodeID()].CommitmentATX,
+			Sequence:         0,
+			PrevATXID:        types.EmptyATXID,
+			PositioningATXID: tab.goldenATXID,
+			InitialPost:      post,
 		}
 
 		state := &nipost.NIPostState{
@@ -404,7 +395,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			VRFNonce: types.VRFPostIndex(rand.Uint64()),
 		}
 		nipostState[sig.NodeID()] = state
-		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref.Publish, ref.Hash()).Return(state, nil)
+		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash()).Return(state, nil)
 
 		// awaiting atx publication epoch log
 		tab.mclock.EXPECT().CurrentLayer().DoAndReturn(
@@ -419,7 +410,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 	atxChan := make(chan struct{})
 	atxStep := make(map[types.NodeID]chan struct{})
 	var atxMtx sync.Mutex
-	atxs := make(map[types.NodeID]types.ActivationTx)
+	atxs := make(map[types.NodeID]wire.ActivationTxV1)
 	endChan := make(chan struct{})
 	for _, sig := range tab.signers {
 		ch := make(chan struct{})
@@ -439,9 +430,9 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			func(ctx context.Context, _ string, got []byte) error {
 				atxMtx.Lock()
 				defer atxMtx.Unlock()
-				atx, err := wire.ActivationTxFromBytes(got)
-				require.NoError(t, err)
-				atxs[atx.SmesherID] = *atx
+				var atx wire.ActivationTxV1
+				codec.MustDecode(got, &atx)
+				atxs[atx.SmesherID] = atx
 				return nil
 			},
 		)
@@ -498,21 +489,21 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 
 	for _, sig := range tab.signers {
 		atx := atxs[sig.NodeID()]
-		require.Equal(t, initialPost[sig.NodeID()].Nonce, atx.NIPostChallenge.InitialPost.Nonce)
-		require.Equal(t, initialPost[sig.NodeID()].Pow, atx.NIPostChallenge.InitialPost.Pow)
-		require.Equal(t, initialPost[sig.NodeID()].Indices, atx.NIPostChallenge.InitialPost.Indices)
+		require.Equal(t, initialPost[sig.NodeID()].Nonce, atx.InitialPost.Nonce)
+		require.Equal(t, initialPost[sig.NodeID()].Pow, atx.InitialPost.Pow)
+		require.Equal(t, initialPost[sig.NodeID()].Indices, atx.InitialPost.Indices)
 
-		require.Equal(t, initialPost[sig.NodeID()].CommitmentATX, *atx.NIPostChallenge.CommitmentATX)
-		require.Equal(t, postGenesisEpoch+1, atx.NIPostChallenge.PublishEpoch)
-		require.Equal(t, types.EmptyATXID, atx.NIPostChallenge.PrevATXID)
-		require.Equal(t, tab.goldenATXID, atx.NIPostChallenge.PositioningATX)
-		require.Equal(t, uint64(0), atx.NIPostChallenge.Sequence)
+		require.Equal(t, initialPost[sig.NodeID()].CommitmentATX, *atx.CommitmentATXID)
+		require.Equal(t, postGenesisEpoch+1, atx.PublishEpoch)
+		require.Equal(t, types.EmptyATXID, atx.PrevATXID)
+		require.Equal(t, tab.goldenATXID, atx.PositioningATXID)
+		require.Equal(t, uint64(0), atx.Sequence)
 
 		require.Equal(t, types.Address{}, atx.Coinbase)
 		require.Equal(t, nipostState[sig.NodeID()].NumUnits, atx.NumUnits)
-		require.Equal(t, nipostState[sig.NodeID()].NIPost, atx.NIPost)
+		require.Equal(t, nipostState[sig.NodeID()].NIPost, wire.NiPostFromWireV1(atx.NIPost))
 		require.Equal(t, sig.NodeID(), *atx.NodeID)
-		require.Equal(t, nipostState[sig.NodeID()].VRFNonce, *atx.VRFNonce)
+		require.Equal(t, uint64(nipostState[sig.NodeID()].VRFNonce), *atx.VRFNonce)
 	}
 
 	// stop smeshing

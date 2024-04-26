@@ -78,6 +78,8 @@ func testnet() config.Config {
 			TickSize:            666514,
 			RegossipAtxInterval: time.Hour,
 			ATXGradeDelay:       30 * time.Minute,
+
+			PprofHTTPServerListener: "localhost:6060",
 		},
 		Genesis: config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
@@ -122,7 +124,7 @@ func testnet() config.Config {
 			LabelsPerUnit: 1024,
 			K1:            26,
 			K2:            37,
-			K3:            37,
+			K3:            1,
 			PowDifficulty: activation.DefaultPostConfig().PowDifficulty,
 		},
 		POSTService: activation.DefaultPostServiceConfig(),

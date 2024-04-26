@@ -265,20 +265,15 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 	t.Helper()
 	nonce := types.VRFPostIndex(123)
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: published,
-				PrevATXID:    types.RandomATXID(),
-			},
-			NumUnits: 2,
-			VRFNonce: &nonce,
-		},
+		PublishEpoch: published,
+		PrevATXID:    types.RandomATXID(),
+		NumUnits:     2,
+		VRFNonce:     &nonce,
 	}
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	activation.SignAndFinalizeAtx(signer, atx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vatx, err := atx.Verify(0, 1)
 	require.NoError(t, err)

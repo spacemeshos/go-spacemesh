@@ -37,9 +37,8 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: types.EpochID(1),
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, 1, nil)
 	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(t, err)
@@ -1076,7 +1075,7 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 	atx := awire.ActivationTxV1{
 		InnerActivationTxV1: awire.InnerActivationTxV1{
 			NIPostChallengeV1: awire.NIPostChallengeV1{
-				CommitmentATX: &types.ATXID{1, 2, 3},
+				CommitmentATXID: &types.ATXID{1, 2, 3},
 			},
 			NIPost: &awire.NIPostV1{
 				Post:         &awire.PostV1{},

@@ -74,12 +74,10 @@ func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.A
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: epoch},
 		cb,
-		nil,
 		11,
 		&nonce,
 	)
 
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
 	require.NoError(t.tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)

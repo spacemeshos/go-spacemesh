@@ -201,28 +201,18 @@ func newAtx(
 	nodeID types.NodeID,
 ) *types.ActivationTx {
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:  types.EpochID(epoch),
-				Sequence:      seq,
-				CommitmentATX: commitAtx,
-				PrevATXID:     prevID,
-			},
-			NIPost: &types.NIPost{
-				PostMetadata: &types.PostMetadata{
-					Challenge: types.RandomBytes(5),
-				},
-			},
-			NumUnits: 2,
-			Coinbase: types.Address{1, 2, 3},
-		},
+		PublishEpoch:  types.EpochID(epoch),
+		Sequence:      seq,
+		CommitmentATX: commitAtx,
+		PrevATXID:     prevID,
+		NumUnits:      2,
+		Coinbase:      types.Address{1, 2, 3},
 	}
 	atx.SetID(id)
 	if vrfnonce != 0 {
 		atx.VRFNonce = (*types.VRFPostIndex)(&vrfnonce)
 	}
 	atx.SmesherID = nodeID
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	return atx
 }

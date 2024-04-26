@@ -118,16 +118,12 @@ func createATX(
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
-		types.Address{},
-		nil,
+		types.GenerateAddress(types.RandomBytes(types.AddressLength)),
 		numUnits,
 		&nonce,
 	)
 
-	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(received)
-	nodeID := sig.NodeID()
-	atx.NodeID = &nodeID
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 	vAtx, err := atx.Verify(0, 1)
 	require.NoError(tb, err)

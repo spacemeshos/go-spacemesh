@@ -108,9 +108,10 @@ func MainnetConfig() Config {
 					Pubkey:  types.MustBase64FromString("5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="),
 				},
 			},
-			RegossipAtxInterval: 2 * time.Hour,
-			ATXGradeDelay:       30 * time.Minute,
-			PostValidDelay:      time.Duration(math.MaxInt64),
+			RegossipAtxInterval:     2 * time.Hour,
+			ATXGradeDelay:           30 * time.Minute,
+			PostValidDelay:          time.Duration(math.MaxInt64),
+			PprofHTTPServerListener: "localhost:6060",
 		},
 		Genesis: GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",
@@ -167,7 +168,7 @@ func MainnetConfig() Config {
 			LabelsPerUnit: 4294967296,
 			K1:            26,
 			K2:            37,
-			K3:            37,
+			K3:            1,
 			PowDifficulty: postPowDifficulty,
 		},
 		Bootstrap: bootstrap.Config{

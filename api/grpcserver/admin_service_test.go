@@ -21,22 +21,16 @@ const snapshot uint32 = 15
 
 func newAtx(tb testing.TB, db *sql.Database) {
 	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:  types.EpochID(2),
-				Sequence:      0,
-				CommitmentATX: &types.ATXID{1},
-			},
-			NumUnits: 2,
-			Coinbase: types.Address{1, 2, 3},
-		},
+		PublishEpoch:  types.EpochID(2),
+		Sequence:      0,
+		CommitmentATX: &types.ATXID{1},
+		NumUnits:      2,
+		Coinbase:      types.Address{1, 2, 3},
 	}
 	atx.SetID(types.RandomATXID())
 	vrfNonce := types.VRFPostIndex(11)
 	atx.VRFNonce = &vrfNonce
 	atx.SmesherID = types.BytesToNodeID(types.RandomBytes(20))
-	atx.NodeID = &atx.SmesherID
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 	vatx, err := atx.Verify(1111, 12)
 	require.NoError(tb, err)
