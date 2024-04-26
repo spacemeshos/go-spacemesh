@@ -9,7 +9,7 @@ export GOARCH
 export GOARM
 export BIN_DIR
 
-CGO_TEST_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
+CGO_TEST_LDFLAGS := $(CGO_LDFLAGS) -Wl,-no_warn_duplicate_libraries,-rpath,$(BIN_DIR)
 
 ifeq ($(OS),Windows_NT)
 	HOST_OS := windows
