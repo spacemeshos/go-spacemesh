@@ -9,7 +9,7 @@ export GOARCH
 export GOARM
 export BIN_DIR
 
-CGO_TEST_LDFLAGS = $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
+CGO_TEST_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
 
 ifeq ($(OS),Windows_NT)
 	HOST_OS := windows
@@ -38,7 +38,7 @@ else
 		else
 				platform := macos
 		endif
-		CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$$ORIGIN
+		CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,@loader_path
 		ULIMIT := ulimit -n 9999;
 	else
 		ifeq ($(GOARCH),arm64)

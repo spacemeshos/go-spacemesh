@@ -96,6 +96,7 @@ clear-test-cache:
 .PHONY: clear-test-cache
 
 test: get-libs
+	echo $(CGO_TEST_LDFLAGS)
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 5m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
