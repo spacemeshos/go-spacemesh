@@ -47,12 +47,10 @@ var bitcoinResponse2 string
 
 func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []types.ATXID) {
 	for _, id := range atxids {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: epoch,
-			},
-			NumUnits: 1,
-		}}
+		atx := &types.ActivationTx{
+			PublishEpoch: epoch,
+			NumUnits:     1,
+		}
 		atx.SetID(id)
 		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
@@ -66,7 +64,7 @@ func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []ty
 func launchServer(tb testing.TB, cdb *datastore.CachedDB) (grpcserver.Config, func()) {
 	cfg := grpcserver.DefaultTestConfig()
 	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
-	jsonService := grpcserver.NewJSONHTTPServer("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc.JSON"))
+	jsonService := grpcserver.NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0", []string{})
 	s := grpcserver.NewMeshService(cdb, grpcserver.NewMockmeshAPI(gomock.NewController(tb)), nil, nil,
 		0, types.Hash20{}, 0, 0, 0)
 

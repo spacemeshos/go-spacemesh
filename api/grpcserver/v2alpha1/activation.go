@@ -153,14 +153,13 @@ func (s *ActivationStreamService) Stream(
 
 func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2alpha1.ActivationV1 {
 	return &spacemeshv2alpha1.ActivationV1{
-		Id:             atx.ID().Bytes(),
-		Signature:      atx.Signature.Bytes(),
-		PublishEpoch:   atx.PublishEpoch.Uint32(),
-		PreviousAtx:    atx.PrevATXID[:],
-		PositioningAtx: atx.PositioningATX[:],
-		Coinbase:       atx.Coinbase.String(),
-		Weight:         atx.GetWeight(),
-		Height:         atx.TickHeight(),
+		Id:           atx.ID().Bytes(),
+		Signature:    atx.Signature.Bytes(),
+		PublishEpoch: atx.PublishEpoch.Uint32(),
+		PreviousAtx:  atx.PrevATXID[:],
+		Coinbase:     atx.Coinbase.String(),
+		Weight:       atx.GetWeight(),
+		Height:       atx.TickHeight(),
 	}
 }
 

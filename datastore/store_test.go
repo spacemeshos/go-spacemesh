@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -146,9 +146,9 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
+	atx := &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
 				PublishEpoch: types.EpochID(22),
 				Sequence:     11,
 			},
@@ -157,11 +157,8 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
+	atx.Sign(signer)
+	vAtx := fixture.ToVerifiedAtx(t, atx)
 
 	has, err := bs.Has(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
@@ -178,11 +175,10 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	got, err := getBytes(ctx, bs, datastore.ATXDB, atx.ID())
 	require.NoError(t, err)
 
-	gotA, err := wire.ActivationTxFromBytes(got)
-	require.NoError(t, err)
-	gotA.SetEffectiveNumUnits(gotA.NumUnits)
-	gotA.SetReceived(atx.Received())
-	require.Equal(t, atx, gotA)
+	var gotA wire.ActivationTxV1
+	codec.MustDecode(got, &gotA)
+	require.Equal(t, atx.ID(), gotA.ID())
+	require.Equal(t, atx, &gotA)
 
 	_, err = getBytes(ctx, bs, datastore.BallotDB, atx.ID())
 	require.ErrorIs(t, err, datastore.ErrNotFound)

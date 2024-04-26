@@ -233,7 +233,7 @@ func recoverFromLocalFile(
 	})
 	allProofs := make([]*types.PoetProofMessage, 0, len(proofs))
 	for _, dep := range allDeps {
-		poetProofRef, err := atxs.PoetProofRef(context.Background(), db, dep.ID)
+		poetProofRef, err := poetProofRef(context.Background(), db, dep.ID)
 		if err != nil {
 			return nil, fmt.Errorf("get poet proof ref (%v): %w", dep.ID, err)
 		}
@@ -481,7 +481,12 @@ func collect(
 	if err = collect(db, atx.PrevATXID, all, deps); err != nil {
 		return err
 	}
-	if err = collect(db, atx.PositioningATX, all, deps); err != nil {
+
+	posAtx, err := positioningATX(context.Background(), db, ref)
+	if err != nil {
+		return fmt.Errorf("get positioning atx for atx %v: %w", ref, err)
+	}
+	if err = collect(db, posAtx, all, deps); err != nil {
 		return err
 	}
 	var blob sql.Blob
@@ -505,7 +510,7 @@ func poetProofs(
 ) (map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage, len(atxIds))
 	for atx := range atxIds {
-		ref, err := atxs.PoetProofRef(context.Background(), db, atx)
+		ref, err := poetProofRef(context.Background(), db, atx)
 		if err != nil {
 			return nil, fmt.Errorf("get poet proof ref: %w", err)
 		}

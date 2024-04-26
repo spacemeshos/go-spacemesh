@@ -129,20 +129,6 @@ func (challenge *NIPostChallenge) TargetEpoch() EpochID {
 	return challenge.PublishEpoch + 1
 }
 
-type InnerActivationTx struct {
-	NIPostChallenge
-	Coinbase Address
-	NumUnits uint32
-
-	VRFNonce *VRFPostIndex
-
-	// the following fields are kept private and from being serialized
-	id                ATXID     // non-exported cache of the ATXID
-	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
-	received          time.Time // time received by node, gossiped or synced
-	validity          Validity  // whether the chain is fully verified and OK
-}
-
 // ATXMetadata is the data of ActivationTx that is signed.
 // It is also used for Malfeasance proofs.
 type ATXMetadata struct {
@@ -168,13 +154,31 @@ type AtxBlob struct {
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
-	InnerActivationTx
+	PublishEpoch EpochID
+	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
+	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against
+	// that miner.
+	Sequence uint64
+	// the previous ATX's ID (for all but the first in the sequence)
+	PrevATXID ATXID
+
+	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
+	CommitmentATX *ATXID
+	Coinbase      Address
+	NumUnits      uint32
+
+	VRFNonce *VRFPostIndex
 
 	SmesherID NodeID
 	Signature EdSignature
 
 	AtxBlob
-	golden bool
+
+	golden            bool
+	id                ATXID     // non-exported cache of the ATXID
+	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
+	received          time.Time // time received by node, gossiped or synced
+	validity          Validity  // whether the chain is fully verified and OK
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -185,12 +189,13 @@ func NewActivationTx(
 	nonce *VRFPostIndex,
 ) *ActivationTx {
 	atx := &ActivationTx{
-		InnerActivationTx: InnerActivationTx{
-			NIPostChallenge: challenge,
-			Coinbase:        coinbase,
-			NumUnits:        numUnits,
-			VRFNonce:        nonce,
-		},
+		PublishEpoch:  challenge.PublishEpoch,
+		Sequence:      challenge.Sequence,
+		PrevATXID:     challenge.PrevATXID,
+		CommitmentATX: challenge.CommitmentATX,
+		Coinbase:      coinbase,
+		NumUnits:      numUnits,
+		VRFNonce:      nonce,
 	}
 	return atx
 }
@@ -215,10 +220,10 @@ func (atx *ActivationTx) SetGolden() {
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
-	// encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
 	encoder.AddString("smesher", atx.SmesherID.String())
+	encoder.AddUint32("publish_epoch", atx.PublishEpoch.Uint32())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
-	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
+
 	if atx.CommitmentATX != nil {
 		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
 	}

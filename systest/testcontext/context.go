@@ -17,7 +17,6 @@ import (
 	chaos "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -341,6 +340,8 @@ func New(t *testing.T, opts ...Opt) *Context {
 		ns = "test-" + rngName()
 	}
 	clSize := clusterSize.Get(p)
+	logger, err := zap.NewDevelopment(zap.IncreaseLevel(logLevel), zap.AddCaller())
+	require.NoError(t, err)
 	cctx := &Context{
 		Context:           ctx,
 		Parameters:        p,
@@ -362,7 +363,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		PostServiceImage:  postServiceImage.Get(p),
 		PostInitImage:     postInitImage.Get(p),
 		NodeSelector:      nodeSelector.Get(p),
-		Log:               zaptest.NewLogger(t, zaptest.Level(logLevel)).Sugar().Named(t.Name()),
+		Log:               logger.Sugar().Named(t.Name()),
 	}
 	cctx.Storage.Class = class
 	cctx.Storage.Size = size

@@ -37,7 +37,6 @@ func (vatx *VerifiedActivationTx) TickHeight() uint64 {
 func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
 	return &ActivationTxHeader{
 		PublishEpoch:      vatx.PublishEpoch,
-		Sequence:          vatx.Sequence,
 		Coinbase:          vatx.Coinbase,
 		NumUnits:          vatx.NumUnits,
 		EffectiveNumUnits: vatx.EffectiveNumUnits(),
@@ -53,24 +52,7 @@ func (vatx *VerifiedActivationTx) ToHeader() *ActivationTxHeader {
 
 // MarshalLogObject implements logging interface.
 func (vatx *VerifiedActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("atx_id", vatx.id.String())
-	// encoder.AddString("challenge", vatx.NIPostChallenge.Hash().String())
-	encoder.AddString("smesher", vatx.SmesherID.String())
-	encoder.AddString("prev_atx_id", vatx.PrevATXID.String())
-	encoder.AddString("pos_atx_id", vatx.PositioningATX.String())
-	if vatx.CommitmentATX != nil {
-		encoder.AddString("commitment_atx_id", vatx.CommitmentATX.String())
-	}
-	if vatx.VRFNonce != nil {
-		encoder.AddUint64("vrf_nonce", uint64(*vatx.VRFNonce))
-	}
-	encoder.AddString("coinbase", vatx.Coinbase.String())
-	encoder.AddUint32("epoch", vatx.PublishEpoch.Uint32())
-	encoder.AddUint64("num_units", uint64(vatx.NumUnits))
-	if vatx.effectiveNumUnits != 0 {
-		encoder.AddUint64("effective_num_units", uint64(vatx.effectiveNumUnits))
-	}
-	encoder.AddUint64("sequence_number", vatx.Sequence)
+	encoder.AddObject("atx", vatx.ActivationTx)
 	encoder.AddUint64("base_tick_height", vatx.baseTickHeight)
 	encoder.AddUint64("tick_count", vatx.tickCount)
 	encoder.AddUint64("weight", vatx.GetWeight())

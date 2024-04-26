@@ -106,7 +106,7 @@ func newNIPosV1tWithPoet(t testing.TB, poetRef []byte) *wire.NIPostV1 {
 	}
 }
 
-func toVerifiedAtx(t *testing.T, watx *wire.ActivationTxV1) *types.VerifiedActivationTx {
+func toVerifiedAtx(t testing.TB, watx *wire.ActivationTxV1) *types.VerifiedActivationTx {
 	t.Helper()
 	atx := wire.ActivationTxFromWireV1(watx)
 	atx.SetEffectiveNumUnits(watx.NumUnits)

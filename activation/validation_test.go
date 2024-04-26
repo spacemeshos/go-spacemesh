@@ -166,134 +166,83 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 	poetDbAPI := NewMockpoetDbAPI(ctrl)
 	postCfg := DefaultPostConfig()
 
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	goldenAtxID := types.RandomATXID()
+
 	v := NewValidator(nil, poetDbAPI, postCfg, config.ScryptParams{}, nil)
 
 	// Act & Assert
 	t.Run("valid nipost challenge passes", func(t *testing.T) {
 		t.Parallel()
 
-		nodeId := types.RandomNodeID()
-
-		prevAtxId := types.ATXID{3, 2, 1}
-		posAtxId := types.ATXID{1, 2, 3}
+		prevAtx := newInitialATXv1(t, goldenAtxID)
+		prevAtx.Sign(sig)
 
 		challenge := wire.NIPostChallengeV1{
-			Sequence:         10,
-			PrevATXID:        prevAtxId,
-			PublishEpoch:     2,
-			PositioningATXID: posAtxId,
+			Sequence:         prevAtx.Sequence + 1,
+			PrevATXID:        prevAtx.ID(),
+			PublishEpoch:     prevAtx.PublishEpoch + 1,
+			PositioningATXID: goldenAtxID,
 		}
 
-		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: 1,
-			Sequence:     9,
-			NodeID:       nodeId,
-		}, nil)
-
-		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
+		err := v.NIPostChallengeV1(&challenge, wire.ActivationTxFromWireV1(prevAtx), sig.NodeID())
 		require.NoError(t, err)
-	})
-
-	t.Run("prev atx missing", func(t *testing.T) {
-		t.Parallel()
-
-		nodeId := types.RandomNodeID()
-
-		prevAtxId := types.ATXID{3, 2, 1}
-		posAtxId := types.ATXID{1, 2, 3}
-
-		challenge := wire.NIPostChallengeV1{
-			Sequence:         10,
-			PrevATXID:        prevAtxId,
-			PublishEpoch:     101,
-			PositioningATXID: posAtxId,
-		}
-
-		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(nil, errors.New("not found"))
-
-		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
-		require.ErrorIs(t, err, &ErrAtxNotFound{Id: prevAtxId})
-		require.ErrorContains(t, err, "not found")
 	})
 
 	t.Run("prev ATX from different miner", func(t *testing.T) {
 		t.Parallel()
 
-		nodeId := types.RandomNodeID()
-		otherNodeId := types.RandomNodeID()
-
-		prevAtxId := types.ATXID{3, 2, 1}
-		posAtxId := types.ATXID{1, 2, 3}
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		prevAtx := newInitialATXv1(t, goldenAtxID)
+		prevAtx.Sign(otherSig)
 
 		challenge := wire.NIPostChallengeV1{
-			Sequence:         10,
-			PrevATXID:        prevAtxId,
-			PublishEpoch:     101,
-			PositioningATXID: posAtxId,
+			Sequence:         prevAtx.Sequence + 1,
+			PrevATXID:        prevAtx.ID(),
+			PublishEpoch:     prevAtx.PublishEpoch + 1,
+			PositioningATXID: goldenAtxID,
 		}
 
-		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: types.EpochID(888),
-			Sequence:     9,
-			NodeID:       otherNodeId,
-		}, nil)
-
-		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
+		err = v.NIPostChallengeV1(&challenge, wire.ActivationTxFromWireV1(prevAtx), sig.NodeID())
 		require.ErrorContains(t, err, "previous atx belongs to different miner")
 	})
 
 	t.Run("prev atx from wrong publication epoch", func(t *testing.T) {
 		t.Parallel()
 
-		nodeId := types.RandomNodeID()
-
-		prevAtxId := types.ATXID{3, 2, 1}
-		posAtxId := types.ATXID{1, 2, 3}
+		prevAtx := newInitialATXv1(t, goldenAtxID)
+		prevAtx.Sign(sig)
 
 		challenge := wire.NIPostChallengeV1{
-			Sequence:         10,
-			PrevATXID:        prevAtxId,
-			PublishEpoch:     2,
-			PositioningATXID: posAtxId,
+			Sequence:         prevAtx.Sequence + 1,
+			PrevATXID:        prevAtx.ID(),
+			PublishEpoch:     prevAtx.PublishEpoch,
+			PositioningATXID: goldenAtxID,
 		}
 
-		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: 3,
-			Sequence:     9,
-			NodeID:       nodeId,
-		}, nil)
-
-		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
-		require.EqualError(t, err, "prevAtx epoch (3) isn't older than current atx epoch (2)")
+		err := v.NIPostChallengeV1(&challenge, wire.ActivationTxFromWireV1(prevAtx), sig.NodeID())
+		require.EqualError(t, err, "prevAtx epoch (2) isn't older than current atx epoch (2)")
 	})
 
 	t.Run("prev atx sequence not lower than current", func(t *testing.T) {
 		t.Parallel()
 
-		nodeId := types.RandomNodeID()
-
-		prevAtxId := types.ATXID{3, 2, 1}
-		posAtxId := types.ATXID{1, 2, 3}
+		prevAtx := newInitialATXv1(t, goldenAtxID, func(atx *wire.ActivationTxV1) {
+			atx.Sequence = 10
+		})
+		prevAtx.Sign(sig)
 
 		challenge := wire.NIPostChallengeV1{
-			Sequence:         10,
-			PrevATXID:        prevAtxId,
-			PublishEpoch:     2,
-			PositioningATXID: posAtxId,
+			Sequence:         prevAtx.Sequence,
+			PrevATXID:        prevAtx.ID(),
+			PublishEpoch:     prevAtx.PublishEpoch + 1,
+			PositioningATXID: goldenAtxID,
 		}
 
-		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(prevAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: 1,
-			Sequence:     10,
-			NodeID:       nodeId,
-		}, nil)
-
-		err := v.NIPostChallengeV1(&challenge, atxProvider, nodeId)
+		err := v.NIPostChallengeV1(&challenge, wire.ActivationTxFromWireV1(prevAtx), sig.NodeID())
 		require.EqualError(t, err, "sequence number (10) is not one more than the prev one (10)")
 	})
 }
@@ -347,7 +296,6 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
 			PublishEpoch: 1,
-			Sequence:     9,
 		}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 2)
@@ -399,7 +347,6 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider := NewMockatxProvider(ctrl)
 		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
 			PublishEpoch: 5,
-			Sequence:     9,
 		}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 3)
@@ -635,6 +582,44 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.ErrorIs(t, err, &InvalidChainError{ID: vAtx.ID()})
 		require.ErrorIs(t, err, expected)
 	})
+}
+
+func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
+	db := sql.InMemory()
+	ctx := context.Background()
+	goldenATXID := types.ATXID{2, 3, 4}
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	// The previous and positioning ATXs of the verified ATX will be a checkpointed (golden) ATX.
+	checkpointedAtx := newInitialATXv1(t, goldenATXID)
+	checkpointedAtx.Sign(signer)
+	vCheckpointedAtx := toVerifiedAtx(t, checkpointedAtx)
+	require.NoError(t, atxs.AddCheckpointed(db, &atxs.CheckpointAtx{
+		ID:             vCheckpointedAtx.ID(),
+		Epoch:          vCheckpointedAtx.PublishEpoch,
+		CommitmentATX:  *vCheckpointedAtx.CommitmentATX,
+		VRFNonce:       *vCheckpointedAtx.VRFNonce,
+		NumUnits:       vCheckpointedAtx.NumUnits,
+		BaseTickHeight: vCheckpointedAtx.BaseTickHeight(),
+		TickCount:      vCheckpointedAtx.TickCount(),
+		SmesherID:      vCheckpointedAtx.SmesherID,
+		Sequence:       vCheckpointedAtx.Sequence,
+		Coinbase:       vCheckpointedAtx.Coinbase,
+	}))
+
+	atx := newChainedActivationTxV1(t, goldenATXID, checkpointedAtx, checkpointedAtx.ID())
+	atx.Sign(signer)
+	vAtx := toVerifiedAtx(t, atx)
+	require.NoError(t, atxs.Add(db, vAtx))
+
+	ctrl := gomock.NewController(t)
+	v := NewMockPostVerifier(ctrl)
+	v.EXPECT().Verify(ctx, gomock.Any(), gomock.Any(), gomock.Any())
+
+	validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+	err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
+	require.NoError(t, err)
 }
 
 func TestIsVerifyingFullPost(t *testing.T) {
