@@ -236,7 +236,7 @@ func (v *Validator) InitialNIPostChallengeV1(
 	}
 	commitmentATXId := *challenge.CommitmentATXID
 	if commitmentATXId != goldenATXID {
-		commitmentAtx, err := atxs.GetAtxHeader(commitmentATXId)
+		commitmentAtx, err := atxs.GetAtx(commitmentATXId)
 		if err != nil {
 			return &ErrAtxNotFound{Id: commitmentATXId, source: err}
 		}
@@ -289,7 +289,7 @@ func (v *Validator) PositioningAtx(
 	if id == goldenATXID {
 		return nil
 	}
-	posAtx, err := atxs.GetAtxHeader(id)
+	posAtx, err := atxs.GetAtx(id)
 	if err != nil {
 		return &ErrAtxNotFound{Id: id, source: err}
 	}

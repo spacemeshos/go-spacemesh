@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -57,6 +58,14 @@ type Operations struct {
 	Modifiers []Modifier
 }
 
+func FilterEpochOnly(publish types.EpochID) Operations {
+	return Operations{
+		Filter: []Op{
+			{Field: Epoch, Token: Eq, Value: publish},
+		},
+	}
+}
+
 func FilterFrom(operations Operations) string {
 	var queryBuilder strings.Builder
 
@@ -84,6 +93,8 @@ func BindingsFrom(operations Operations) sql.Encoder {
 				stmt.BindInt64(i+1, value)
 			case []byte:
 				stmt.BindBytes(i+1, value)
+			case types.EpochID:
+				stmt.BindInt64(i+1, int64(value))
 			default:
 				panic(fmt.Sprintf("unexpected type %T", value))
 			}

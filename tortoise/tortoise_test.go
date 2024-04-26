@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -26,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
@@ -467,7 +467,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
-				cdb    = datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+				db     = sql.InMemory()
 				epochs = map[types.EpochID]*epochInfo{}
 				first  = tc.target.Add(1).GetEpoch()
 			)
@@ -480,10 +480,10 @@ func TestComputeExpectedWeight(t *testing.T) {
 				}
 				atx.SetID(types.RandomATXID())
 				atx.SetReceived(time.Now())
-				require.NoError(t, atxs.Add(cdb, atx))
+				require.NoError(t, atxs.Add(db, atx))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
-				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())
+				weight, _, err := extractAtxsData(db, lid.GetEpoch())
 				require.NoError(t, err)
 				epochs[lid.GetEpoch()] = &epochInfo{weight: fixed.New64(int64(weight))}
 			}
@@ -494,17 +494,17 @@ func TestComputeExpectedWeight(t *testing.T) {
 	}
 }
 
-func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (uint64, uint64, error) {
+func extractAtxsData(db sql.Executor, target types.EpochID) (uint64, uint64, error) {
 	var (
 		weight  uint64
 		heights []uint64
 	)
-	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTx) error {
-		weight += header.GetWeight()
-		heights = append(heights, header.TickHeight())
-		return nil
+	if err := atxs.IterateAtxsOps(db, builder.FilterEpochOnly(target-1), func(atx *types.ActivationTx) bool {
+		weight += atx.GetWeight()
+		heights = append(heights, atx.TickHeight())
+		return true
 	}); err != nil {
-		return 0, 0, fmt.Errorf("computing epoch data for %d: %w", epoch, err)
+		return 0, 0, fmt.Errorf("computing epoch data for %d: %w", target, err)
 	}
 	return weight, getMedian(heights), nil
 }
@@ -1087,16 +1087,16 @@ func ensureBaseAndExceptionsFromLayer(
 	tb testing.TB,
 	lid types.LayerID,
 	votes *types.Opinion,
-	cdb *datastore.CachedDB,
+	db sql.Executor,
 ) {
 	tb.Helper()
 
-	blts, err := ballots.Get(cdb, votes.Base)
+	blts, err := ballots.Get(db, votes.Base)
 	require.NoError(tb, err)
 	require.Equal(tb, lid, blts.Layer)
 
 	for _, vote := range votes.Support {
-		block, err := blocks.Get(cdb, vote.ID)
+		block, err := blocks.Get(db, vote.ID)
 		require.NoError(tb, err)
 		require.Equal(
 			tb,
@@ -1262,13 +1262,13 @@ func splitVoting(n int) sim.VotesGenerator {
 
 func ensureBallotLayerWithin(
 	tb testing.TB,
-	cdb *datastore.CachedDB,
+	db sql.Executor,
 	ballotID types.BallotID,
 	from, to types.LayerID,
 ) {
 	tb.Helper()
 
-	ballot, err := ballots.Get(cdb, ballotID)
+	ballot, err := ballots.Get(db, ballotID)
 	require.NoError(tb, err)
 	require.True(tb, !ballot.Layer.Before(from) && !ballot.Layer.After(to),
 		"%s not in [%s,%s]", ballot.Layer, from, to,
@@ -1277,13 +1277,13 @@ func ensureBallotLayerWithin(
 
 func ensureBlockLayerWithin(
 	tb testing.TB,
-	cdb *datastore.CachedDB,
+	db sql.Executor,
 	bid types.BlockID,
 	from, to types.LayerID,
 ) {
 	tb.Helper()
 
-	block, err := blocks.Get(cdb, bid)
+	block, err := blocks.Get(db, bid)
 	require.NoError(tb, err)
 	require.True(tb, !block.LayerIndex.Before(from) && !block.LayerIndex.After(to),
 		"%s not in [%s,%s]", block.LayerIndex, from, to,

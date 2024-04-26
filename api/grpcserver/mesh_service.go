@@ -529,27 +529,50 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 
 func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshService_EpochStreamServer) error {
 	epoch := types.EpochID(req.Epoch)
-	var total, mal int
-	if err := s.cdb.IterateEpochATXHeaders(epoch+1, func(header *types.ActivationTx) error {
-		total++
-		select {
-		case <-stream.Context().Done():
-			return nil
-		default:
-			malicious, err := s.cdb.IsMalicious(header.SmesherID)
-			if err != nil {
-				return err
+	var (
+		dberr      error
+		total, mal int
+	)
+	query := `SELECT
+		atxs.id,
+		atxs.pubkey,
+		iif(i.proof is null, 0, 1) as malicious
+		FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1 `
+
+	_, err := s.cdb.Exec(query,
+		func(s *sql.Statement) {
+			s.BindInt64(1, int64(epoch))
+		},
+		func(stmt *sql.Statement) bool {
+			var (
+				id     types.ATXID
+				pubkey types.NodeID
+			)
+			stmt.ColumnBytes(0, id[:])
+			stmt.ColumnBytes(1, pubkey[:])
+			malicious := stmt.ColumnInt(2) != 0
+
+			total++
+			select {
+			case <-stream.Context().Done():
+				return false
+			default:
+				if malicious {
+					mal++
+					return true
+				}
+				var res pb.EpochStreamResponse
+				res.Id = &pb.ActivationId{Id: id.Bytes()}
+				dberr = stream.Send(&res)
+				return dberr == nil
 			}
-			if malicious {
-				mal++
-				return nil
-			}
-			var res pb.EpochStreamResponse
-			res.Id = &pb.ActivationId{Id: header.ID().Bytes()}
-			return stream.Send(&res)
-		}
-	}); err != nil {
+		},
+	)
+	if err != nil {
 		return status.Error(codes.Internal, err.Error())
+	}
+	if dberr != nil {
+		return status.Error(codes.Internal, dberr.Error())
 	}
 	ctxzap.Info(stream.Context(), "epoch atxs streamed",
 		zap.Uint32("target epoch", (epoch+1).Uint32()),

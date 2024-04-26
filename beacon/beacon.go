@@ -346,7 +346,7 @@ func (pd *ProtocolDriver) minerAtxHdr(
 		)
 		return nil, false, errMinerNotActive
 	}
-	hdr, err := pd.cdb.GetAtxHeader(mi.atxid)
+	hdr, err := pd.cdb.GetAtx(mi.atxid)
 	if err != nil {
 		return nil, false, fmt.Errorf("get miner atx hdr %v: %w", mi.atxid.ShortString(), err)
 	}
@@ -562,11 +562,11 @@ func (pd *ProtocolDriver) isInProtocol() bool {
 	return atomic.LoadUint64(&pd.inProtocol) == 1
 }
 
-func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types.EpochID) (*state, error) {
+func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, target types.EpochID) (*state, error) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	if s, ok := pd.states[epoch]; ok {
+	if s, ok := pd.states[target]; ok {
 		return s, nil
 	}
 
@@ -577,41 +577,60 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		// w1 is the weight units at δ before the end of the previous epoch, used to calculate `thresholdStrict`
 		// w2 is the weight units at the end of the previous epoch, used to calculate `threshold`
 		w1, w2 int
-		ontime = pd.clock.LayerToTime(epoch.FirstLayer())
+		ontime = pd.clock.LayerToTime(target.FirstLayer())
 		early  = ontime.Add(-1 * pd.config.GracePeriodDuration)
 	)
-	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTx) error {
-		malicious, err := pd.cdb.IsMalicious(header.SmesherID)
-		if err != nil {
-			return err
-		}
-		if !malicious {
-			epochWeight += header.GetWeight()
-		} else {
-			logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", header.SmesherID))
-		}
-		if _, ok := miners[header.SmesherID]; !ok {
-			miners[header.SmesherID] = &minerInfo{
-				atxid:     header.ID(),
-				malicious: malicious,
-			}
-			if header.Received().Before(early) {
-				w1++
-			} else if header.Received().Before(ontime) {
-				w2++
-			}
-		} else {
-			logger.With().Warning("ignoring malicious atx from miner",
-				header.ID(),
-				log.Bool("malicious", malicious),
-				log.Stringer("smesher", header.SmesherID))
-		}
+	query := `SELECT
+		atxs.id,
+		atxs.pubkey,
+		atxs.effective_num_units,
+		atxs.tick_count,
+		iif(i.proof is null, 0, 1) as malicious
+		FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1 `
 
-		if s, ok := pd.signers[header.SmesherID]; ok {
-			potentiallyActive[header.SmesherID] = s
-		}
-		return nil
-	}); err != nil {
+	_, err := pd.cdb.Exec(query,
+		func(s *sql.Statement) { s.BindInt64(1, int64(target-1)) },
+		func(stmt *sql.Statement) bool {
+			var (
+				id  types.ATXID
+				atx types.ActivationTx
+			)
+			stmt.ColumnBytes(0, id[:])
+			stmt.ColumnBytes(1, atx.SmesherID[:])
+			atx.NumUnits = uint32(stmt.ColumnInt(2))
+			atx.TickCount = uint64(stmt.ColumnInt(3))
+			atx.SetID(id)
+			malicious := stmt.ColumnInt(4) != 0
+
+			if !malicious {
+				epochWeight += atx.GetWeight()
+			} else {
+				logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", atx.SmesherID))
+			}
+			if _, ok := miners[atx.SmesherID]; !ok {
+				miners[atx.SmesherID] = &minerInfo{
+					atxid:     atx.ID(),
+					malicious: malicious,
+				}
+				if atx.Received().Before(early) {
+					w1++
+				} else if atx.Received().Before(ontime) {
+					w2++
+				}
+			} else {
+				logger.With().Warning("ignoring malicious atx from miner",
+					atx.ID(),
+					log.Bool("malicious", malicious),
+					log.Stringer("smesher", atx.SmesherID))
+			}
+
+			if s, ok := pd.signers[atx.SmesherID]; ok {
+				potentiallyActive[atx.SmesherID] = s
+			}
+			return true
+		},
+	)
+	if err != nil {
 		return nil, err
 	}
 
@@ -621,7 +640,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 
 	active := map[types.NodeID]participant{}
 	for id, signer := range potentiallyActive {
-		if nonce, err := pd.nonceFetcher.VRFNonce(id, epoch); err != nil {
+		if nonce, err := pd.nonceFetcher.VRFNonce(id, target); err != nil {
 			logger.With().Error("getting own VRF nonce", id, log.Err(err))
 		} else {
 			active[id] = participant{
@@ -643,8 +662,8 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 	)
 
 	checker := createProposalChecker(logger, pd.config, w1, w1+w2)
-	pd.states[epoch] = newState(logger, pd.config, active, epochWeight, miners, checker)
-	return pd.states[epoch], nil
+	pd.states[target] = newState(logger, pd.config, active, epochWeight, miners, checker)
+	return pd.states[target], nil
 }
 
 func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {

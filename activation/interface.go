@@ -94,7 +94,7 @@ type syncer interface {
 }
 
 type atxProvider interface {
-	GetAtxHeader(id types.ATXID) (*types.ActivationTx, error)
+	GetAtx(id types.ATXID) (*types.ActivationTx, error)
 }
 
 // PostSetupProvider defines the functionality required for Post setup.

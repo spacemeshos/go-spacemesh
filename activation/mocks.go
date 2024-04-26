@@ -987,41 +987,41 @@ func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
 	return m.recorder
 }
 
-// GetAtxHeader mocks base method.
-func (m *MockatxProvider) GetAtxHeader(id types.ATXID) (*types.ActivationTx, error) {
+// GetAtx mocks base method.
+func (m *MockatxProvider) GetAtx(id types.ATXID) (*types.ActivationTx, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAtxHeader", id)
+	ret := m.ctrl.Call(m, "GetAtx", id)
 	ret0, _ := ret[0].(*types.ActivationTx)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetAtxHeader indicates an expected call of GetAtxHeader.
-func (mr *MockatxProviderMockRecorder) GetAtxHeader(id any) *MockatxProviderGetAtxHeaderCall {
+// GetAtx indicates an expected call of GetAtx.
+func (mr *MockatxProviderMockRecorder) GetAtx(id any) *MockatxProviderGetAtxCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxProvider)(nil).GetAtxHeader), id)
-	return &MockatxProviderGetAtxHeaderCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtx", reflect.TypeOf((*MockatxProvider)(nil).GetAtx), id)
+	return &MockatxProviderGetAtxCall{Call: call}
 }
 
-// MockatxProviderGetAtxHeaderCall wrap *gomock.Call
-type MockatxProviderGetAtxHeaderCall struct {
+// MockatxProviderGetAtxCall wrap *gomock.Call
+type MockatxProviderGetAtxCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxProviderGetAtxHeaderCall) Return(arg0 *types.ActivationTx, arg1 error) *MockatxProviderGetAtxHeaderCall {
+func (c *MockatxProviderGetAtxCall) Return(arg0 *types.ActivationTx, arg1 error) *MockatxProviderGetAtxCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderGetAtxHeaderCall) Do(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxHeaderCall {
+func (c *MockatxProviderGetAtxCall) Do(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderGetAtxHeaderCall) DoAndReturn(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxHeaderCall {
+func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
