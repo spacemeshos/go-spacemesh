@@ -38,7 +38,7 @@ else
 		else
 				platform := macos
 		endif
-		CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,@loader_path
+		CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$$ORIGIN
 		ULIMIT := ulimit -n 9999;
 	else
 		ifeq ($(GOARCH),arm64)
