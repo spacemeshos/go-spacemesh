@@ -16,6 +16,8 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -275,7 +277,7 @@ func (c *CertifierClient) obtainPostFromLastAtx(ctx context.Context, nodeId type
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve ATX: %w", err)
 	}
-	atxNipost, err := atxs.Nipost(ctx, c.db, atxid)
+	atxNipost, err := loadNipost(ctx, c.db, atxid)
 	if err != nil {
 		return nil, errors.New("no NIPoST found in last ATX")
 	}
@@ -417,4 +419,19 @@ func (d *disabledCertifier) Recertify(context.Context, types.NodeID, PoetClient)
 
 func (d *disabledCertifier) CertifyAll(context.Context, types.NodeID, []PoetClient) map[string]*certifier.PoetCert {
 	return nil
+}
+
+// load NIPoST for the given ATX from the database.
+func loadNipost(ctx context.Context, db sql.Executor, id types.ATXID) (*types.NIPost, error) {
+	var blob sql.Blob
+	if err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob); err != nil {
+		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
+	}
+
+	// TODO: decide about version based on the `version` column
+	var atx wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &atx); err != nil {
+		return nil, fmt.Errorf("decoding ATX blob: %w", err)
+	}
+	return wire.NiPostFromWireV1(atx.NIPost), nil
 }
