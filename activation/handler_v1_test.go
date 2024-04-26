@@ -565,7 +565,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		vAtx := toAtx(t, watx)
 		require.NoError(t, err)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx.ToHeader())
+		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx)
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx.ID(), gomock.Any())
 		proof, err := atxHdlr.storeAtx(context.Background(), vAtx, watx.Signature)
 		require.NoError(t, err)
@@ -585,13 +585,13 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx.Sign(sig)
 		vAtx := toAtx(t, watx)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx.ToHeader())
+		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx)
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx.ID(), gomock.Any())
 		proof, err := atxHdlr.storeAtx(context.Background(), vAtx, watx.Signature)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx.ToHeader())
+		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx)
 		// Note: tortoise is not informed about the same ATX again
 		proof, err = atxHdlr.storeAtx(context.Background(), vAtx, watx.Signature)
 		require.NoError(t, err)
@@ -605,7 +605,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx0.Sign(sig)
 		vAtx0 := toAtx(t, watx0)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0.ToHeader())
+		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0)
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx0.ID(), gomock.Any())
 
 		proof, err := atxHdlr.storeAtx(context.Background(), vAtx0, watx0.Signature)
@@ -617,7 +617,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx1.Sign(sig)
 		vAtx1 := toAtx(t, watx1)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx1.ToHeader())
+		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx1)
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx1.ID(), gomock.Any())
 		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
 
@@ -651,7 +651,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx0.Sign(sig)
 		vAtx0 := toAtx(t, watx0)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0.ToHeader())
+		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0)
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx0.ID(), gomock.Any())
 
 		proof, err := atxHdlr.storeAtx(context.Background(), vAtx0, watx0.Signature)

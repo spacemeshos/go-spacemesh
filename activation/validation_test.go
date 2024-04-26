@@ -112,7 +112,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 1}, nil)
+		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
 
 		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
 		require.NoError(t, err)
@@ -149,7 +149,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			InitialPost:      &wire.PostV1{},
 		}
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 2}, nil)
+		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTx{PublishEpoch: 2}, nil)
 
 		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
 		require.EqualError(t, err, "challenge pubepoch (1) must be after commitment atx pubepoch (2)")
@@ -294,9 +294,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: 1,
-		}, nil)
+		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 2)
 		require.NoError(t, err)
@@ -345,9 +343,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: 5,
-		}, nil)
+		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTx{PublishEpoch: 5}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 3)
 		require.EqualError(t, err, "positioning atx epoch (5) must be before 3")
@@ -360,9 +356,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: 1,
-		}, nil)
+		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 10)
 		require.NoError(t, err)

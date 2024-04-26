@@ -499,7 +499,7 @@ func extractAtxsData(cdb *datastore.CachedDB, epoch types.EpochID) (uint64, uint
 		weight  uint64
 		heights []uint64
 	)
-	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
+	if err := cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTx) error {
 		weight += header.GetWeight()
 		heights = append(heights, header.TickHeight())
 		return nil

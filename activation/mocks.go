@@ -47,7 +47,7 @@ func (m *MockAtxReceiver) EXPECT() *MockAtxReceiverMockRecorder {
 }
 
 // OnAtx mocks base method.
-func (m *MockAtxReceiver) OnAtx(arg0 *types.ActivationTxHeader) {
+func (m *MockAtxReceiver) OnAtx(arg0 *types.ActivationTx) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnAtx", arg0)
 }
@@ -71,13 +71,13 @@ func (c *MockAtxReceiverOnAtxCall) Return() *MockAtxReceiverOnAtxCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockAtxReceiverOnAtxCall) Do(f func(*types.ActivationTxHeader)) *MockAtxReceiverOnAtxCall {
+func (c *MockAtxReceiverOnAtxCall) Do(f func(*types.ActivationTx)) *MockAtxReceiverOnAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockAtxReceiverOnAtxCall) DoAndReturn(f func(*types.ActivationTxHeader)) *MockAtxReceiverOnAtxCall {
+func (c *MockAtxReceiverOnAtxCall) DoAndReturn(f func(*types.ActivationTx)) *MockAtxReceiverOnAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -988,10 +988,10 @@ func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
 }
 
 // GetAtxHeader mocks base method.
-func (m *MockatxProvider) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+func (m *MockatxProvider) GetAtxHeader(id types.ATXID) (*types.ActivationTx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAtxHeader", id)
-	ret0, _ := ret[0].(*types.ActivationTxHeader)
+	ret0, _ := ret[0].(*types.ActivationTx)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1009,19 +1009,19 @@ type MockatxProviderGetAtxHeaderCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxProviderGetAtxHeaderCall) Return(arg0 *types.ActivationTxHeader, arg1 error) *MockatxProviderGetAtxHeaderCall {
+func (c *MockatxProviderGetAtxHeaderCall) Return(arg0 *types.ActivationTx, arg1 error) *MockatxProviderGetAtxHeaderCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderGetAtxHeaderCall) Do(f func(types.ATXID) (*types.ActivationTxHeader, error)) *MockatxProviderGetAtxHeaderCall {
+func (c *MockatxProviderGetAtxHeaderCall) Do(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxHeaderCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderGetAtxHeaderCall) DoAndReturn(f func(types.ATXID) (*types.ActivationTxHeader, error)) *MockatxProviderGetAtxHeaderCall {
+func (c *MockatxProviderGetAtxHeaderCall) DoAndReturn(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxHeaderCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -47,7 +47,7 @@ type CachedDB struct {
 	// cache is optional
 	atxsdata *atxsdata.Data
 
-	atxHdrCache   *lru.Cache[types.ATXID, *types.ActivationTxHeader]
+	atxHdrCache   *lru.Cache[types.ATXID, *types.ActivationTx]
 	vrfNonceCache *lru.Cache[VrfNonceKey, *types.VRFPostIndex]
 
 	// used to coordinate db update and cache
@@ -90,7 +90,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 	}
 	lg.With().Info("initialized datastore", log.Any("config", o.cfg))
 
-	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTxHeader](o.cfg.ATXSize)
+	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTx](o.cfg.ATXSize)
 	if err != nil {
 		lg.Fatal("failed to create atx cache", err)
 	}
@@ -199,7 +199,7 @@ func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPos
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
 // is not found in the ATX DB.
-func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTx, error) {
 	if id == types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
@@ -223,29 +223,19 @@ func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	db.atxHdrCache.Add(id, atx.ToHeader())
+	db.atxHdrCache.Add(id, atx)
 	return atx, nil
 }
 
 // getAndCacheHeader fetches the full atx struct from the database, caches it and returns the cached header.
-func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
-	_, err := db.GetFullAtx(id)
-	if err != nil {
-		return nil, err
-	}
-
-	atxHeader, gotIt := db.atxHdrCache.Get(id)
-	if !gotIt {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
-	}
-
-	return atxHeader, nil
+func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTx, error) {
+	return db.GetFullAtx(id)
 }
 
 // IterateEpochATXHeaders iterates over ActivationTxs that target an epoch.
 func (db *CachedDB) IterateEpochATXHeaders(
 	epoch types.EpochID,
-	iter func(*types.ActivationTxHeader) error,
+	iter func(*types.ActivationTx) error,
 ) error {
 	ids, err := atxs.GetIDsByEpoch(context.Background(), db, epoch-1)
 	if err != nil {

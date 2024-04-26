@@ -418,7 +418,7 @@ func (h *HandlerV1) storeAtx(
 	}
 
 	added := h.cacheAtx(ctx, atx, *nonce)
-	h.beacon.OnAtx(atx.ToHeader())
+	h.beacon.OnAtx(atx)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}

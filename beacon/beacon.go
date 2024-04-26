@@ -305,7 +305,7 @@ func (pd *ProtocolDriver) isClosed() bool {
 	}
 }
 
-func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
+func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTx) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
@@ -313,23 +313,23 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	if !ok {
 		return
 	}
-	if mi, ok := s.minerAtxs[atx.NodeID]; ok && mi.atxid != atx.ID {
+	if mi, ok := s.minerAtxs[atx.SmesherID]; ok && mi.atxid != atx.ID() {
 		pd.logger.With().Warning("ignoring malicious atx",
-			log.Stringer("smesher", atx.NodeID),
+			log.Stringer("smesher", atx.SmesherID),
 			log.Stringer("previous_atx", mi.atxid),
-			log.Stringer("new_atx", atx.ID),
+			log.Stringer("new_atx", atx.ID()),
 		)
 		return
 	}
-	s.minerAtxs[atx.NodeID] = &minerInfo{
-		atxid: atx.ID,
+	s.minerAtxs[atx.SmesherID] = &minerInfo{
+		atxid: atx.ID(),
 	}
 }
 
 func (pd *ProtocolDriver) minerAtxHdr(
 	epoch types.EpochID,
 	nodeID types.NodeID,
-) (*types.ActivationTxHeader, bool, error) {
+) (*types.ActivationTx, bool, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -358,7 +358,7 @@ func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, nodeID types.NodeI
 	if err != nil || malicious {
 		return 0
 	}
-	return atx.EffectiveNumUnits
+	return atx.NumUnits
 }
 
 // ReportBeaconFromBallot reports the beacon value in a ballot along with the smesher's weight unit.
@@ -580,35 +580,35 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		ontime = pd.clock.LayerToTime(epoch.FirstLayer())
 		early  = ontime.Add(-1 * pd.config.GracePeriodDuration)
 	)
-	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
-		malicious, err := pd.cdb.IsMalicious(header.NodeID)
+	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTx) error {
+		malicious, err := pd.cdb.IsMalicious(header.SmesherID)
 		if err != nil {
 			return err
 		}
 		if !malicious {
 			epochWeight += header.GetWeight()
 		} else {
-			logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", header.NodeID))
+			logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", header.SmesherID))
 		}
-		if _, ok := miners[header.NodeID]; !ok {
-			miners[header.NodeID] = &minerInfo{
-				atxid:     header.ID,
+		if _, ok := miners[header.SmesherID]; !ok {
+			miners[header.SmesherID] = &minerInfo{
+				atxid:     header.ID(),
 				malicious: malicious,
 			}
-			if header.Received.Before(early) {
+			if header.Received().Before(early) {
 				w1++
-			} else if header.Received.Before(ontime) {
+			} else if header.Received().Before(ontime) {
 				w2++
 			}
 		} else {
 			logger.With().Warning("ignoring malicious atx from miner",
-				header.ID,
+				header.ID(),
 				log.Bool("malicious", malicious),
-				log.Stringer("smesher", header.NodeID))
+				log.Stringer("smesher", header.SmesherID))
 		}
 
-		if s, ok := pd.signers[header.NodeID]; ok {
-			potentiallyActive[header.NodeID] = s
+		if s, ok := pd.signers[header.SmesherID]; ok {
+			potentiallyActive[header.SmesherID] = s
 		}
 		return nil
 	}); err != nil {
@@ -873,7 +873,7 @@ func (pd *ProtocolDriver) sendProposal(
 		VRFSignature: vrfSig,
 	}
 
-	if invalid == pd.classifyProposal(logger, m, atx.Received, time.Now(), checker) {
+	if invalid == pd.classifyProposal(logger, m, atx.Received(), time.Now(), checker) {
 		logger.With().Debug("own proposal doesn't pass threshold", log.Inline(proposal), s.Id())
 		return
 	}
