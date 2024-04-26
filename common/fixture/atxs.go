@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
@@ -72,11 +70,10 @@ func (g *AtxsGenerator) Next() *wire.ActivationTxV1 {
 	return atx
 }
 
-func ToVerifiedAtx(t testing.TB, watx *wire.ActivationTxV1) *types.VerifiedActivationTx {
+func ToAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 	t.Helper()
 	atx := wire.ActivationTxFromWireV1(watx)
-	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	return vAtx
+	atx.SetReceived(time.Now().Local())
+	atx.TickCount = 1
+	return atx
 }

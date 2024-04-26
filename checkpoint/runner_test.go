@@ -160,7 +160,7 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *type
 		for i := 0; i < n; i++ {
 			atxData = append(
 				atxData,
-				toShortAtx(newvAtx(t, atxs[i]), atxs[len(atxs)-1].CommitmentATX, atxs[len(atxs)-1].VRFNonce),
+				toShortAtx(atxs[i], atxs[len(atxs)-1].CommitmentATX, atxs[len(atxs)-1].VRFNonce),
 			)
 		}
 	}
@@ -207,31 +207,26 @@ func newAtx(
 		PrevATXID:     prevID,
 		NumUnits:      2,
 		Coinbase:      types.Address{1, 2, 3},
+		TickCount:     1,
+		SmesherID:     nodeID,
 	}
 	atx.SetID(id)
 	if vrfnonce != 0 {
 		atx.VRFNonce = (*types.VRFPostIndex)(&vrfnonce)
 	}
-	atx.SmesherID = nodeID
 	atx.SetReceived(time.Now().Local())
 	return atx
 }
 
-func newvAtx(tb testing.TB, atx *types.ActivationTx) *types.VerifiedActivationTx {
-	vatx, err := atx.Verify(1111, 12)
-	require.NoError(tb, err)
-	return vatx
-}
-
-func toShortAtx(v *types.VerifiedActivationTx, cmt *types.ATXID, nonce *types.VRFPostIndex) types.AtxSnapshot {
+func toShortAtx(v *types.ActivationTx, cmt *types.ATXID, nonce *types.VRFPostIndex) types.AtxSnapshot {
 	return types.AtxSnapshot{
 		ID:             v.ID().Bytes(),
 		Epoch:          v.PublishEpoch.Uint32(),
 		CommitmentAtx:  cmt.Bytes(),
 		VrfNonce:       uint64(*nonce),
 		NumUnits:       v.NumUnits,
-		BaseTickHeight: v.BaseTickHeight(),
-		TickCount:      v.TickCount(),
+		BaseTickHeight: v.BaseTickHeight,
+		TickCount:      v.TickCount,
 		PublicKey:      v.SmesherID.Bytes(),
 		Sequence:       v.Sequence,
 		Coinbase:       v.Coinbase.Bytes(),
@@ -246,7 +241,7 @@ func createMesh(t *testing.T, db *sql.Database, miners map[types.NodeID][]*types
 		// populating the nonce field when creating newer ones
 		slices.Reverse(vatxs)
 		for _, atx := range vatxs {
-			require.NoError(t, atxs.Add(db, newvAtx(t, atx)))
+			require.NoError(t, atxs.Add(db, atx))
 		}
 	}
 
@@ -256,10 +251,8 @@ func createMesh(t *testing.T, db *sql.Database, miners map[types.NodeID][]*types
 
 	// smesher 5 is malicious and equivocated in epoch 7
 	bad := types.BytesToNodeID([]byte("smesher5"))
-	require.NoError(t, atxs.Add(db, newvAtx(t,
-		newAtx(types.ATXID{83}, types.EmptyATXID, &types.ATXID{27}, 7, 0, 113, bad))))
-	require.NoError(t, atxs.Add(db, newvAtx(t,
-		newAtx(types.ATXID{97}, types.EmptyATXID, &types.ATXID{16}, 7, 0, 113, bad))))
+	require.NoError(t, atxs.Add(db, newAtx(types.ATXID{83}, types.EmptyATXID, &types.ATXID{27}, 7, 0, 113, bad)))
+	require.NoError(t, atxs.Add(db, newAtx(types.ATXID{97}, types.EmptyATXID, &types.ATXID{16}, 7, 0, 113, bad)))
 	require.NoError(t, identities.SetMalicious(db, bad, []byte("bad"), time.Now()))
 }
 

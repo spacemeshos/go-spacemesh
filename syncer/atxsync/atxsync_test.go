@@ -17,19 +17,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
-func atx(id types.ATXID) *types.VerifiedActivationTx {
+func atx(id types.ATXID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		PublishEpoch: 1,
 		NumUnits:     1,
+		TickCount:    1,
+		SmesherID:    types.BytesToNodeID(id[:]),
 	}
 	atx.SetID(id)
 	atx.SetReceived(time.Now())
-	copy(atx.SmesherID[:], id[:])
-	vatx, err := atx.Verify(0, 1)
-	if err != nil {
-		panic(err)
-	}
-	return vatx
+	return atx
 }
 
 func id(id ...byte) types.ATXID {
@@ -38,7 +35,7 @@ func id(id ...byte) types.ATXID {
 
 type fetchRequest struct {
 	request []types.ATXID
-	result  []*types.VerifiedActivationTx
+	result  []*types.ActivationTx
 	error   error
 }
 
@@ -49,7 +46,7 @@ func TestDownload(t *testing.T) {
 		desc     string
 		ctx      context.Context
 		retry    time.Duration
-		existing []*types.VerifiedActivationTx
+		existing []*types.ActivationTx
 		set      []types.ATXID
 		fetched  []fetchRequest
 		rst      error
@@ -57,21 +54,21 @@ func TestDownload(t *testing.T) {
 		{
 			desc:     "all existing",
 			ctx:      context.Background(),
-			existing: []*types.VerifiedActivationTx{atx(id(1)), atx(id(2)), atx(id(3))},
+			existing: []*types.ActivationTx{atx(id(1)), atx(id(2)), atx(id(3))},
 			set:      []types.ATXID{id(1), id(2), id(3)},
 		},
 		{
 			desc:     "with multiple requests",
 			ctx:      context.Background(),
-			existing: []*types.VerifiedActivationTx{atx(id(1))},
+			existing: []*types.ActivationTx{atx(id(1))},
 			retry:    1,
 			fetched: []fetchRequest{
 				{
 					request: []types.ATXID{id(2), id(3)},
 					error:   errors.New("test"),
-					result:  []*types.VerifiedActivationTx{atx(id(2))},
+					result:  []*types.ActivationTx{atx(id(2))},
 				},
-				{request: []types.ATXID{id(3)}, result: []*types.VerifiedActivationTx{atx(id(3))}},
+				{request: []types.ATXID{id(3)}, result: []*types.ActivationTx{atx(id(3))}},
 			},
 			set: []types.ATXID{id(1), id(2), id(3)},
 		},
@@ -79,10 +76,10 @@ func TestDownload(t *testing.T) {
 			desc:     "continue on error",
 			ctx:      context.Background(),
 			retry:    1,
-			existing: []*types.VerifiedActivationTx{atx(id(1))},
+			existing: []*types.ActivationTx{atx(id(1))},
 			fetched: []fetchRequest{
 				{request: []types.ATXID{id(2)}, error: errors.New("test")},
-				{request: []types.ATXID{id(2)}, result: []*types.VerifiedActivationTx{atx(id(2))}},
+				{request: []types.ATXID{id(2)}, result: []*types.ActivationTx{atx(id(2))}},
 			},
 			set: []types.ATXID{id(1), id(2)},
 		},
@@ -90,7 +87,7 @@ func TestDownload(t *testing.T) {
 			desc:     "exit on context",
 			ctx:      canceled,
 			retry:    time.Minute,
-			existing: []*types.VerifiedActivationTx{atx(id(1))},
+			existing: []*types.ActivationTx{atx(id(1))},
 			fetched: []fetchRequest{
 				{request: []types.ATXID{id(2)}, error: errors.New("test")},
 			},

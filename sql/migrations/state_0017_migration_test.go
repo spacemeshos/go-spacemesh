@@ -3,28 +3,28 @@ package migrations
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
-type addAtxOpt func(atx *types.ActivationTx)
+type addAtxOpt func(atx *wire.ActivationTxV1)
 
-func withNonce(nonce types.VRFPostIndex) addAtxOpt {
-	return func(atx *types.ActivationTx) {
+func withNonce(nonce uint64) addAtxOpt {
+	return func(atx *wire.ActivationTxV1) {
 		atx.VRFNonce = &nonce
 	}
 }
 
 func withPrevATXID(atxID types.ATXID) addAtxOpt {
-	return func(atx *types.ActivationTx) {
+	return func(atx *wire.ActivationTxV1) {
 		atx.PrevATXID = atxID
 	}
 }
@@ -37,22 +37,24 @@ func addAtx(
 	sequence uint64,
 	opts ...addAtxOpt,
 ) types.ATXID {
-	atx := &types.ActivationTx{
-		PublishEpoch: epoch,
-		Sequence:     sequence,
-		PrevATXID:    types.EmptyATXID,
-		Coinbase:     types.Address{1, 2, 3},
-		NumUnits:     2,
+	watx := &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
+				PublishEpoch: epoch,
+				Sequence:     sequence,
+			},
+			Coinbase: types.Address{1, 2, 3},
+			NumUnits: 2,
+		},
 	}
 	for _, opt := range opts {
-		opt(atx)
+		opt(watx)
 	}
-	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
-	atx.SetReceived(time.Now().Local())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.AddMaybeNoNonce(db, vAtx))
-	return vAtx.ID()
+	watx.Sign(signer)
+
+	atx := fixture.ToAtx(t, watx)
+	require.NoError(t, atxs.AddMaybeNoNonce(db, atx))
+	return atx.ID()
 }
 
 func Test0017Migration(t *testing.T) {
@@ -79,7 +81,8 @@ func Test0017Migration(t *testing.T) {
 			id33 := addAtx(t, tx, sigs[2], 3, 4, withPrevATXID(id25))
 			m := New0017Migration(zaptest.NewLogger(t))
 			require.Equal(t, 17, m.Order())
-			require.NoError(t, m.Apply(tx))
+			err := m.Apply(tx)
+			require.NoError(t, err)
 			for n, v := range []struct {
 				id    types.ATXID
 				nonce types.VRFPostIndex

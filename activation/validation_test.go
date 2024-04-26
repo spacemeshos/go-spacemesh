@@ -490,14 +490,14 @@ func TestVerifyChainDeps(t *testing.T) {
 
 	invalidAtx := newInitialATXv1(t, goldenATXID)
 	invalidAtx.Sign(signer)
-	vInvalidAtx := toVerifiedAtx(t, invalidAtx)
+	vInvalidAtx := toAtx(t, invalidAtx)
 	vInvalidAtx.SetValidity(types.Invalid)
 	require.NoError(t, atxs.Add(db, vInvalidAtx))
 
 	t.Run("invalid prev ATX", func(t *testing.T) {
 		atx := newChainedActivationTxV1(t, goldenATXID, invalidAtx, goldenATXID)
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -512,7 +512,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("invalid pos ATX", func(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -529,7 +529,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(signer)
 		atx.CommitmentATXID = &commitmentAtxID
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -543,7 +543,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("with trusted node ID", func(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -556,7 +556,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("assume valid if older than X", func(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -570,7 +570,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("invalid top-level", func(t *testing.T) {
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -594,15 +594,15 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 	// The previous and positioning ATXs of the verified ATX will be a checkpointed (golden) ATX.
 	checkpointedAtx := newInitialATXv1(t, goldenATXID)
 	checkpointedAtx.Sign(signer)
-	vCheckpointedAtx := toVerifiedAtx(t, checkpointedAtx)
+	vCheckpointedAtx := toAtx(t, checkpointedAtx)
 	require.NoError(t, atxs.AddCheckpointed(db, &atxs.CheckpointAtx{
 		ID:             vCheckpointedAtx.ID(),
 		Epoch:          vCheckpointedAtx.PublishEpoch,
 		CommitmentATX:  *vCheckpointedAtx.CommitmentATX,
 		VRFNonce:       *vCheckpointedAtx.VRFNonce,
 		NumUnits:       vCheckpointedAtx.NumUnits,
-		BaseTickHeight: vCheckpointedAtx.BaseTickHeight(),
-		TickCount:      vCheckpointedAtx.TickCount(),
+		BaseTickHeight: vCheckpointedAtx.BaseTickHeight,
+		TickCount:      vCheckpointedAtx.TickCount,
 		SmesherID:      vCheckpointedAtx.SmesherID,
 		Sequence:       vCheckpointedAtx.Sequence,
 		Coinbase:       vCheckpointedAtx.Coinbase,
@@ -610,7 +610,7 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 
 	atx := newChainedActivationTxV1(t, goldenATXID, checkpointedAtx, checkpointedAtx.ID())
 	atx.Sign(signer)
-	vAtx := toVerifiedAtx(t, atx)
+	vAtx := toAtx(t, atx)
 	require.NoError(t, atxs.Add(db, vAtx))
 
 	ctrl := gomock.NewController(t)

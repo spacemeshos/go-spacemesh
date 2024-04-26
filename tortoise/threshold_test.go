@@ -134,7 +134,7 @@ func TestReferenceHeight(t *testing.T) {
 	for _, tc := range []struct {
 		desc     string
 		epoch    int
-		heights  []int
+		heights  []uint64
 		expected int
 	}{
 		{
@@ -144,25 +144,25 @@ func TestReferenceHeight(t *testing.T) {
 		{
 			desc:     "one",
 			epoch:    1,
-			heights:  []int{10},
+			heights:  []uint64{10},
 			expected: 10,
 		},
 		{
 			desc:     "two",
 			epoch:    2,
-			heights:  []int{10, 20},
+			heights:  []uint64{10, 20},
 			expected: 15,
 		},
 		{
 			desc:     "median odd",
 			epoch:    3,
-			heights:  []int{30, 10, 20},
+			heights:  []uint64{30, 10, 20},
 			expected: 20,
 		},
 		{
 			desc:     "median even",
 			epoch:    4,
-			heights:  []int{30, 20, 10, 40},
+			heights:  []uint64{30, 20, 10, 40},
 			expected: 25,
 		},
 	} {
@@ -172,12 +172,11 @@ func TestReferenceHeight(t *testing.T) {
 				atx := &types.ActivationTx{
 					PublishEpoch: types.EpochID(tc.epoch) - 1,
 					NumUnits:     2,
+					TickCount:    height,
 				}
 				atx.SetID(types.ATXID{byte(i + 1)})
 				atx.SetReceived(time.Now())
-				vAtx, err := atx.Verify(0, uint64(height))
-				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx))
+				require.NoError(t, atxs.Add(cdb, atx))
 			}
 			_, height, err := extractAtxsData(cdb, types.EpochID(tc.epoch))
 			require.NoError(t, err)

@@ -50,13 +50,12 @@ func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []ty
 		atx := &types.ActivationTx{
 			PublishEpoch: epoch,
 			NumUnits:     1,
+			TickCount:    1,
+			SmesherID:    types.RandomNodeID(),
 		}
 		atx.SetID(id)
 		atx.SetReceived(time.Now())
-		atx.SmesherID = types.RandomNodeID()
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(tb, err)
-		require.NoError(tb, atxs.Add(db, vAtx))
+		require.NoError(tb, atxs.Add(db, atx))
 	}
 }
 

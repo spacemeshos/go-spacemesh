@@ -194,11 +194,11 @@ func (h *Handler) previous(ctx context.Context, atx *wire.ActivationTxV1) (*type
 	if blob.Bytes == nil {
 		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
 		// Fallback to fetching it from the DB to get the effective NumUnits.
-		vatx, err := atxs.Get(h.cdb, atx.PrevATXID)
+		atx, err := atxs.Get(h.cdb, atx.PrevATXID)
 		if err != nil {
 			return nil, fmt.Errorf("fetching golden previous atx: %w", err)
 		}
-		return vatx.ActivationTx, nil
+		return atx, nil
 	}
 
 	var prev wire.ActivationTxV1
@@ -360,20 +360,20 @@ func (h *Handler) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader, nonce types.VRFPostIndex) *atxsdata.ATX {
+func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTx, nonce types.VRFPostIndex) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
-		malicious, err := h.cdb.IsMalicious(atx.NodeID)
+		malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 		if err != nil {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
 			return nil
 		}
-		return h.atxsdata.AddFromHeader(atx, nonce, malicious)
+		return h.atxsdata.AddFromAtx(atx, nonce, malicious)
 	}
 	return nil
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*mwire.MalfeasanceProof, error) {
+func (h *Handler) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwire.MalfeasanceProof, error) {
 	var nonce *types.VRFPostIndex
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
@@ -404,11 +404,11 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			}
 
 			var atxProof mwire.AtxProof
-			for i, a := range []*types.VerifiedActivationTx{prev, atx} {
+			for i, a := range []*types.ActivationTx{prev, atx} {
 				atxProof.Messages[i] = mwire.AtxProofMsg{
 					InnerMsg: types.ATXMetadata{
 						PublishEpoch: a.PublishEpoch,
-						MsgHash:      a.ActivationTx.ID().Hash32(),
+						MsgHash:      a.ID().Hash32(),
 					},
 					SmesherID: a.SmesherID,
 					Signature: a.Signature,
@@ -452,9 +452,9 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
-	header := atx.ToHeader()
-	added := h.cacheAtx(ctx, header, *nonce)
-	h.beacon.OnAtx(header)
+
+	added := h.cacheAtx(ctx, atx, *nonce)
+	h.beacon.OnAtx(atx.ToHeader())
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
@@ -616,18 +616,16 @@ func (h *Handler) processATX(
 	}
 	atx.SetReceived(received)
 	atx.NumUnits = effectiveNumUnits
-	vAtx, err := atx.Verify(baseTickHeight, leaves/h.tickSize)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify atx %x: %w", watx.ID(), err)
-	}
+	atx.BaseTickHeight = baseTickHeight
+	atx.TickCount = leaves / h.tickSize
 
-	proof, err = h.storeAtx(ctx, vAtx)
+	proof, err = h.storeAtx(ctx, atx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
-	events.ReportNewActivation(vAtx)
-	h.log.WithContext(ctx).With().Info("new atx", log.Inline(vAtx), log.Bool("malicious", proof != nil))
+	events.ReportNewActivation(atx)
+	h.log.WithContext(ctx).With().Info("new atx", log.Inline(atx), log.Bool("malicious", proof != nil))
 	return proof, err
 }
 

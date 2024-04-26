@@ -239,13 +239,12 @@ func createAtx(t *testing.T, db *sql.Database, epoch types.EpochID, atxID types.
 	atx := &types.ActivationTx{
 		PublishEpoch: epoch,
 		NumUnits:     1,
+		TickCount:    1,
+		SmesherID:    nodeID,
 	}
 	atx.SetID(atxID)
 	atx.SetReceived(time.Now())
-	atx.SmesherID = nodeID
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, vAtx))
+	require.NoError(t, atxs.Add(db, atx))
 }
 
 func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {

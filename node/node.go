@@ -1957,7 +1957,7 @@ func (app *App) verifyDB(ctx context.Context) {
 		count := 0
 
 		// check ATX signatures
-		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.VerifiedActivationTx) bool {
+		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.ActivationTx) bool {
 			select {
 			case <-ctx.Done():
 				// stop on context cancellation
@@ -1969,7 +1969,7 @@ func (app *App) verifyDB(ctx context.Context) {
 			// TODO: use atx handler to verify signature
 			if !app.edVerifier.Verify(
 				signing.ATX,
-				atx.SmesherID, wire.ActivationTxToWireV1(atx.ActivationTx).SignedBytes(),
+				atx.SmesherID, wire.ActivationTxToWireV1(atx).SignedBytes(),
 				atx.Signature,
 			) {
 				app.log.With().Error("ATX signature verification failed",

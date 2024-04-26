@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -135,11 +134,10 @@ func createIdentity(t *testing.T, db sql.Executor, sig *signing.EdSigner) {
 		PublishEpoch: types.EpochID(1),
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, 1, nil)
-	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
+	atx.SmesherID = sig.NodeID()
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, vAtx))
+	atx.TickCount = 1
+	require.NoError(t, atxs.Add(db, atx))
 }
 
 func createLayerBlocks(
