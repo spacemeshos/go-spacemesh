@@ -17,7 +17,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -124,7 +123,8 @@ func createATX(
 	)
 
 	atx.SetReceived(received)
-	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
+	atx.SmesherID = sig.NodeID()
+	atx.SetID(types.RandomATXID())
 	atx.TickCount = 1
 	require.NoError(tb, atxs.Add(db, atx))
 	return atx.ID()

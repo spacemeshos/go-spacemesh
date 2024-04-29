@@ -36,17 +36,20 @@ func decoder(fn decoderCallback) sql.Decoder {
 			id types.ATXID
 		)
 		stmt.ColumnBytes(0, id[:])
-
 		a.SetID(id)
+		if checkpointed := stmt.ColumnInt(1) != 0; checkpointed {
+			a.SetGolden()
+		}
 		a.BaseTickHeight = uint64(stmt.ColumnInt64(2))
 		a.TickCount = uint64(stmt.ColumnInt64(3))
 		stmt.ColumnBytes(4, a.SmesherID[:])
 		a.NumUnits = uint32(stmt.ColumnInt32(5))
-		if checkpointed := stmt.ColumnInt(1) != 0; checkpointed {
-			a.SetGolden()
-			a.SetReceived(time.Time{})
-		} else {
-			a.SetReceived(time.Unix(0, stmt.ColumnInt64(6)).Local())
+		// Note: received is assigned `0` for checkpointed ATXs.
+		// We treat `0` as 'zero time'.
+		// We could use `NULL` instead, but the column has "NOT NULL" constraint.
+		// In future, consider changing the schema to allow `NULL` for received.
+		if received := stmt.ColumnInt64(6); received != 0 {
+			a.SetReceived(time.Unix(0, received).Local())
 		}
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
 		a.Sequence = uint64(stmt.ColumnInt64(8))
