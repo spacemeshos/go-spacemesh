@@ -319,35 +319,6 @@ type Layer struct {
 	Block          *types.Block
 }
 
-type decoderCallback = func(*Layer, error) bool
-
-func decoder(fn decoderCallback) sql.Decoder {
-	return func(stmt *sql.Statement) bool {
-		l := &Layer{
-			Id: types.LayerID(stmt.ColumnInt(0)),
-		}
-
-		l.WeakCoin = stmt.ColumnInt(1) == 0
-		l.Processed = stmt.ColumnInt(2) == 1
-		stmt.ColumnBytes(3, l.AppliedBlock[:])
-		stmt.ColumnBytes(4, l.StateHash[:])
-		stmt.ColumnBytes(5, l.AggregatedHash[:])
-
-		inner := types.InnerBlock{}
-		_, err := codec.DecodeFrom(stmt.ColumnReader(7), &inner)
-		if err != nil {
-			fn(l, fmt.Errorf("failed to decode block %s: %w", l.AppliedBlock, err))
-		}
-
-		l.Block, err = types.NewExistingBlock(l.AppliedBlock, inner), nil
-		if err != nil {
-			fn(l, err)
-		}
-
-		return fn(l, nil)
-	}
-}
-
 func IterateLayersWithBlockOps(
 	db sql.Executor,
 	operations builder.Operations,
@@ -360,13 +331,32 @@ func IterateLayersWithBlockOps(
        		    LEFT JOIN blocks b ON l.id = b.layer`+
 			builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
-		decoder(func(layer *Layer, err error) bool {
-			if layer != nil {
-				return fn(layer)
+		func(stmt *sql.Statement) bool {
+			l := &Layer{
+				Id: types.LayerID(stmt.ColumnInt(0)),
 			}
-			derr = err
-			return derr == nil
-		}))
+
+			l.WeakCoin = stmt.ColumnInt(1) == 0
+			l.Processed = stmt.ColumnInt(2) == 1
+			stmt.ColumnBytes(3, l.AppliedBlock[:])
+			stmt.ColumnBytes(4, l.StateHash[:])
+			stmt.ColumnBytes(5, l.AggregatedHash[:])
+
+			inner := types.InnerBlock{}
+			_, err := codec.DecodeFrom(stmt.ColumnReader(7), &inner)
+			if err != nil {
+				derr = fmt.Errorf("failed to decode block %s: %w", l.AppliedBlock, err)
+				return false
+			}
+
+			l.Block, err = types.NewExistingBlock(l.AppliedBlock, inner), nil
+			if err != nil {
+				derr = err
+				return false
+			}
+
+			return fn(l)
+		})
 	if err != nil {
 		return err
 	}
