@@ -54,6 +54,12 @@ jobs:
 
   systest:
     runs-on: ubuntu-latest
+    strategy:
+      # fail-fast: true
+      matrix:
+        protocol:
+          - tcp
+          - quic
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
@@ -127,6 +133,7 @@ jobs:
           level: ${{ inputs.log_level }}
           clusters: 4
           norbac: 1
+          quic: ${{ matrix.protocol == 'tcp' && 'false' || 'true' }}
         run: make -C systest run test_name=${{ inputs.test_name }}
 
       - name: Delete pod

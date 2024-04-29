@@ -129,11 +129,16 @@ const (
 type Node struct {
 	Name                     string
 	P2P, GRPC_PUB, GRPC_PRIV uint16
+	QUIC                     bool
 }
 
 // P2PEndpoint returns full p2p endpoint, including identity.
 func p2pEndpoint(n Node, ip, id string) string {
-	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ip, n.P2P, id)
+	if n.QUIC {
+		return fmt.Sprintf("/ip4/%s/udp/%d/quic-v1/p2p/%s", ip, n.P2P, id)
+	} else {
+		return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ip, n.P2P, id)
+	}
 }
 
 // NodeClient is a Node with attached grpc connection.
@@ -368,14 +373,21 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 
 func deployBootnodeSvc(ctx *testcontext.Context, id string) error {
 	labels := nodeLabels(bootnodeApp, id)
+	p2pProto := apiv1.ProtocolTCP
+	if ctx.QUIC {
+		p2pProto = apiv1.ProtocolUDP
+	}
 	svc := corev1.Service(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
 			WithSelector(labels).
 			WithPorts(
-				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).WithProtocol("TCP"),
-				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).WithProtocol("TCP"),
-				corev1.ServicePort().WithName("p2p").WithPort(7513).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).
+					WithProtocol(apiv1.ProtocolTCP),
+				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).
+					WithProtocol(apiv1.ProtocolTCP),
+				corev1.ServicePort().WithName("p2p").WithPort(7513).
+					WithProtocol(p2pProto),
 			).
 			WithClusterIP("None"),
 		)
@@ -388,15 +400,23 @@ func deployBootnodeSvc(ctx *testcontext.Context, id string) error {
 
 func deployNodeSvc(ctx *testcontext.Context, id string) error {
 	labels := nodeLabels(smesherApp, id)
+	p2pProto := apiv1.ProtocolTCP
+	if ctx.QUIC {
+		p2pProto = apiv1.ProtocolUDP
+	}
 	svc := corev1.Service(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(corev1.ServiceSpec().
 			WithSelector(labels).
 			WithPorts(
-				corev1.ServicePort().WithName("p2p").WithPort(7513).WithProtocol("TCP"),
-				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).WithProtocol("TCP"),
-				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).WithProtocol("TCP"),
-				corev1.ServicePort().WithName("grpc-post").WithPort(9094).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("p2p").WithPort(7513).
+					WithProtocol(p2pProto),
+				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).
+					WithProtocol(apiv1.ProtocolTCP),
+				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).
+					WithProtocol(apiv1.ProtocolTCP),
+				corev1.ServicePort().WithName("grpc-post").WithPort(9094).
+					WithProtocol(apiv1.ProtocolTCP),
 			).
 			WithClusterIP("None"),
 		)
@@ -581,6 +601,7 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 					P2P:       7513,
 					GRPC_PUB:  9092,
 					GRPC_PRIV: 9093,
+					QUIC:      ctx.QUIC,
 				},
 			}
 			return nil
@@ -654,6 +675,7 @@ func deployRemoteNodes(ctx *testcontext.Context, from, to int,
 					P2P:       7513,
 					GRPC_PUB:  9092,
 					GRPC_PRIV: 9093,
+					QUIC:      ctx.QUIC,
 				},
 			}
 			return nil
@@ -726,6 +748,15 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
+	p2pProto := apiv1.ProtocolTCP
+	if ctx.QUIC {
+		p2pProto = apiv1.ProtocolUDP
+		cmd = append(cmd,
+			"--listen", "/ip4/0.0.0.0/udp/7513/quic-v1",
+			"--enable-tcp-transport=false",
+			"--enable-quic-transport=true",
+		)
+	}
 	deployment := appsv1.Deployment(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(appsv1.DeploymentSpec().
@@ -757,7 +788,7 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 						WithImage(ctx.Image).
 						WithImagePullPolicy(apiv1.PullIfNotPresent).
 						WithPorts(
-							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
+							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p").WithProtocol(p2pProto),
 							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc-pub"),
 							corev1.ContainerPort().WithContainerPort(9093).WithName("grpc-priv"),
 							corev1.ContainerPort().WithContainerPort(9094).WithName("grpc-post"),
