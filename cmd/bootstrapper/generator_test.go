@@ -47,19 +47,15 @@ var bitcoinResponse2 string
 
 func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []types.ATXID) {
 	for _, id := range atxids {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: epoch,
-			},
-			NumUnits: 1,
-		}}
+		atx := &types.ActivationTx{
+			PublishEpoch: epoch,
+			NumUnits:     1,
+			TickCount:    1,
+			SmesherID:    types.RandomNodeID(),
+		}
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		atx.SmesherID = types.RandomNodeID()
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(tb, err)
-		require.NoError(tb, atxs.Add(db, vAtx))
+		require.NoError(tb, atxs.Add(db, atx))
 	}
 }
 

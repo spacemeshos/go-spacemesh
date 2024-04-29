@@ -8,8 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -261,12 +262,14 @@ func TestHandleMeshHashReq(t *testing.T) {
 	}
 }
 
-func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
+func newAtx(t *testing.T, published types.EpochID) *types.ActivationTx {
 	t.Helper()
-	nonce := types.VRFPostIndex(123)
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
+	nonce := uint64(123)
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx := &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
 				PublishEpoch: published,
 				PrevATXID:    types.RandomATXID(),
 			},
@@ -274,15 +277,8 @@ func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
 			VRFNonce: &nonce,
 		},
 	}
-
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	activation.SignAndFinalizeAtx(signer, atx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now())
-	vatx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	return vatx
+	atx.Sign(signer)
+	return fixture.ToAtx(t, atx)
 }
 
 func TestHandleEpochInfoReq(t *testing.T) {

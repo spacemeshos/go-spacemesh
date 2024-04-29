@@ -37,7 +37,7 @@ type RequestMessage struct {
 type ResponseMessage struct {
 	Hash types.Hash32
 	// keep in line with limit of Response.Data in `p2p/server/server.go`
-	Data []byte `scale:"max=125829120"` // 120 MiB > 3.5 mio ATX * 32 bytes per ID
+	Data []byte `scale:"max=157286400"` // 150 MiB > 4.5 mio ATX * 32 bytes per ID
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
@@ -116,7 +116,7 @@ type MeshHashes struct {
 }
 
 type MaliciousIDs struct {
-	NodeIDs []types.NodeID `scale:"max=3500000"` // to be in line with `EpochData.AtxIDs` below
+	NodeIDs []types.NodeID `scale:"max=4500000"` // to be in line with `EpochData.AtxIDs` below
 }
 
 type EpochData struct {
@@ -124,11 +124,11 @@ type EpochData struct {
 	// - the size of `ResponseMessage` above
 	// - the size of `NodeIDs` in `MaliciousIDs` above
 	// - the size of `Set` in `EpochActiveSet` in common/types/activation.go
-	// - the fields `EligibilityProofs` and `ActiveSet` in the type `Ballot` in common/types/ballot.go
+	// - the size of `EligibilityProofs` in the type `Ballot` in common/types/ballot.go
 	// - the size of `Rewards` in the type `InnerBlock` in common/types/block.go
 	// - the size of `Ballots` in the type `LayerData` below
 	// - the size of `Proposals` in the type `Value` in hare3/types.go
-	AtxIDs []types.ATXID `scale:"max=3500000"`
+	AtxIDs []types.ATXID `scale:"max=4500000"`
 }
 
 // LayerData is the data response for a given layer ID.
@@ -139,14 +139,14 @@ type LayerData struct {
 	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
 	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
 	//
-	// If we expect 2.7 Mio ATXs that would be a total of 2.7 Mio + 50 * 4032 = 3 701 600 slots.
+	// If we expect 4.5 Mio ATXs that would be a total of 4.5 Mio + 50 * 4032 = 4 701 600 slots.
 	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 3 701 600 / 4032 = 918.1 ballots in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(3 701 600 * 1/4032 * 4031/4032) = 30.3
+	// 4 701 600 / 4032 = 1166.1 ballots in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(3 701 600 * 1/4032 * 4031/4032) = 34.1
 	//
-	// This means that we can expect a maximum of 918.1 + 6*30.3 = 1100.0 ballots per layer with
+	// This means that we can expect a maximum of 1166.1 + 6*34.1 = 1370.9 ballots per layer with
 	// > 99.9997% probability.
-	Ballots []types.BallotID `scale:"max=1100"`
+	Ballots []types.BallotID `scale:"max=1370"`
 }
 
 type OpinionRequest struct {

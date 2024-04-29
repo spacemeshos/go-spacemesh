@@ -2,7 +2,6 @@ package wire
 
 import (
 	"encoding/hex"
-	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -152,45 +151,32 @@ func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 func ActivationTxToWireV1(a *types.ActivationTx) *ActivationTxV1 {
 	return &ActivationTxV1{
 		InnerActivationTxV1: InnerActivationTxV1{
-			NIPostChallengeV1: *NIPostChallengeToWireV1(&a.NIPostChallenge),
-			Coinbase:          a.Coinbase,
-			NumUnits:          a.NumUnits,
-			VRFNonce:          (*uint64)(a.VRFNonce),
+			NIPostChallengeV1: NIPostChallengeV1{
+				PublishEpoch:    a.PublishEpoch,
+				Sequence:        a.Sequence,
+				PrevATXID:       a.PrevATXID,
+				CommitmentATXID: a.CommitmentATX,
+			},
+			Coinbase: a.Coinbase,
+			NumUnits: a.NumUnits,
+			VRFNonce: (*uint64)(a.VRFNonce),
 		},
 		SmesherID: a.SmesherID,
 		Signature: a.Signature,
 	}
 }
 
-// Decode ActivationTx from bytes.
-// In future it should decide which version of ActivationTx to decode based on the publish epoch.
-func ActivationTxFromBytes(data []byte) (*types.ActivationTx, error) {
-	var wireAtx ActivationTxV1
-	err := codec.Decode(data, &wireAtx)
-	if err != nil {
-		return nil, fmt.Errorf("decoding ATX: %w", err)
-	}
-
-	return ActivationTxFromWireV1(&wireAtx, data...), nil
-}
-
 func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.ActivationTx {
 	result := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:   atx.PublishEpoch,
-				Sequence:       atx.Sequence,
-				PrevATXID:      atx.PrevATXID,
-				PositioningATX: atx.PositioningATXID,
-				CommitmentATX:  atx.CommitmentATXID,
-				InitialPost:    PostFromWireV1(atx.InitialPost),
-			},
-			Coinbase: atx.Coinbase,
-			NumUnits: atx.NumUnits,
-			VRFNonce: (*types.VRFPostIndex)(atx.VRFNonce),
-		},
-		SmesherID: atx.SmesherID,
-		Signature: atx.Signature,
+		PublishEpoch:  atx.PublishEpoch,
+		Sequence:      atx.Sequence,
+		PrevATXID:     atx.PrevATXID,
+		CommitmentATX: atx.CommitmentATXID,
+		Coinbase:      atx.Coinbase,
+		NumUnits:      atx.NumUnits,
+		VRFNonce:      (*types.VRFPostIndex)(atx.VRFNonce),
+		SmesherID:     atx.SmesherID,
+		Signature:     atx.Signature,
 		AtxBlob: types.AtxBlob{
 			Version: types.AtxV1,
 			Blob:    blob,

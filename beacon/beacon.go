@@ -358,7 +358,7 @@ func (pd *ProtocolDriver) MinerAllowance(epoch types.EpochID, nodeID types.NodeI
 	if err != nil || malicious {
 		return 0
 	}
-	return atx.NumUnits
+	return atx.EffectiveNumUnits
 }
 
 // ReportBeaconFromBallot reports the beacon value in a ballot along with the smesher's weight unit.

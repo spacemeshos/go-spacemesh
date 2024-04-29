@@ -106,14 +106,12 @@ func newNIPosV1tWithPoet(t testing.TB, poetRef []byte) *wire.NIPostV1 {
 	}
 }
 
-func toVerifiedAtx(t *testing.T, watx *wire.ActivationTxV1) *types.VerifiedActivationTx {
+func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 	t.Helper()
 	atx := wire.ActivationTxFromWireV1(watx)
-	atx.SetEffectiveNumUnits(watx.NumUnits)
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	return vAtx
+	atx.TickCount = 1
+	return atx
 }
 
 type testHandler struct {
@@ -709,7 +707,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 
 		watx := newInitialATXv1(t, goldenATXID)
 		watx.Sign(sig)
-		vAtx := toVerifiedAtx(t, watx)
+		vAtx := toAtx(t, watx)
 		require.NoError(t, err)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx.ToHeader())
@@ -729,7 +727,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 
 		watx := newInitialATXv1(t, goldenATXID)
 		watx.Sign(sig)
-		vAtx := toVerifiedAtx(t, watx)
+		vAtx := toAtx(t, watx)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx.ToHeader())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx.ID(), gomock.Any())
@@ -749,7 +747,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 
 		watx0 := newInitialATXv1(t, goldenATXID)
 		watx0.Sign(sig)
-		vAtx0 := toVerifiedAtx(t, watx0)
+		vAtx0 := toAtx(t, watx0)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0.ToHeader())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx0.ID(), gomock.Any())
@@ -761,7 +759,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 		watx1 := newInitialATXv1(t, goldenATXID)
 		watx1.Coinbase = types.GenerateAddress([]byte("aaaa"))
 		watx1.Sign(sig)
-		vAtx1 := toVerifiedAtx(t, watx1)
+		vAtx1 := toAtx(t, watx1)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx1.ToHeader())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx1.ID(), gomock.Any())
@@ -795,7 +793,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 
 		watx0 := newInitialATXv1(t, goldenATXID)
 		watx0.Sign(sig)
-		vAtx0 := toVerifiedAtx(t, watx0)
+		vAtx0 := toAtx(t, watx0)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0.ToHeader())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx0.ID(), gomock.Any())
@@ -807,7 +805,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 		watx1 := newInitialATXv1(t, goldenATXID)
 		watx1.Coinbase = types.GenerateAddress([]byte("aaaa"))
 		watx1.Sign(sig)
-		vAtx1 := toVerifiedAtx(t, watx1)
+		vAtx1 := toAtx(t, watx1)
 
 		proof, err = atxHdlr.storeAtx(context.Background(), vAtx1)
 		require.ErrorContains(t,

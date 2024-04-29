@@ -236,19 +236,15 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 }
 
 func createAtx(t *testing.T, db *sql.Database, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-		NIPostChallenge: types.NIPostChallenge{
-			PublishEpoch: epoch,
-		},
-		NumUnits: 1,
-	}}
+	atx := &types.ActivationTx{
+		PublishEpoch: epoch,
+		NumUnits:     1,
+		TickCount:    1,
+		SmesherID:    nodeID,
+	}
 	atx.SetID(atxID)
-	atx.SetEffectiveNumUnits(1)
 	atx.SetReceived(time.Now())
-	atx.SmesherID = nodeID
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, vAtx))
+	require.NoError(t, atxs.Add(db, atx))
 }
 
 func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {

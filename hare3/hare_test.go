@@ -112,7 +112,7 @@ type node struct {
 	signer     *signing.EdSigner
 	registered []*signing.EdSigner
 	vrfsigner  *signing.VRFSigner
-	atx        *types.VerifiedActivationTx
+	atx        *types.ActivationTx
 	oracle     *eligibility.Oracle
 	db         *sql.Database
 	atxsdata   *atxsdata.Data
@@ -153,24 +153,24 @@ func (n *node) withDb() *node {
 }
 
 func (n *node) withAtx(min, max int) *node {
-	atx := &types.ActivationTx{}
+	atx := &types.ActivationTx{
+		PublishEpoch: n.t.genesis.GetEpoch(),
+		TickCount:    1,
+		SmesherID:    n.signer.NodeID(),
+	}
 	if max-min > 0 {
 		atx.NumUnits = uint32(n.t.rng.Intn(max-min) + min)
 	} else {
 		atx.NumUnits = uint32(min)
 	}
-	atx.PublishEpoch = n.t.genesis.GetEpoch()
-	atx.SmesherID = n.signer.NodeID()
 	id := types.ATXID{}
 	n.t.rng.Read(id[:])
 	atx.SetID(id)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(n.t.start)
 	nonce := types.VRFPostIndex(n.t.rng.Uint64())
 	atx.VRFNonce = &nonce
-	verified, err := atx.Verify(0, 100)
-	require.NoError(n.t, err)
-	n.atx = verified
+
+	n.atx = atx
 	return n
 }
 
@@ -248,11 +248,11 @@ func (n *node) register(signer *signing.EdSigner) {
 	n.registered = append(n.registered, signer)
 }
 
-func (n *node) storeAtx(atx *types.VerifiedActivationTx) error {
+func (n *node) storeAtx(atx *types.ActivationTx) error {
 	if err := atxs.Add(n.db, atx); err != nil {
 		return err
 	}
-	n.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
+	n.atxsdata.AddFromAtx(atx, *atx.VRFNonce, false)
 	return nil
 }
 
@@ -760,21 +760,19 @@ func TestHandler(t *testing.T) {
 	})
 }
 
-func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, base, height uint64) types.VerifiedActivationTx {
-	atx := &types.ActivationTx{}
-	atx.NumUnits = 10
-	atx.PublishEpoch = epoch
-	atx.SmesherID = smesher
-	atx.SetID(id)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Time{}.Add(1))
+func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, base, height uint64) types.ActivationTx {
 	nonce := types.VRFPostIndex(1)
-	atx.VRFNonce = &nonce
-	verified, err := atx.Verify(base, height-base)
-	if err != nil {
-		panic(err)
+	atx := &types.ActivationTx{
+		NumUnits:       10,
+		PublishEpoch:   epoch,
+		VRFNonce:       &nonce,
+		BaseTickHeight: base,
+		TickCount:      height - base,
+		SmesherID:      smesher,
 	}
-	return *verified
+	atx.SetID(id)
+	atx.SetReceived(time.Time{}.Add(1))
+	return *atx
 }
 
 func gproposal(
@@ -816,7 +814,7 @@ func TestProposals(t *testing.T) {
 	require.NoError(t, err)
 	for _, tc := range []struct {
 		desc      string
-		atxs      []types.VerifiedActivationTx
+		atxs      []types.ActivationTx
 		proposals []*types.Proposal
 		malicious []types.NodeID
 		layer     types.LayerID
@@ -827,7 +825,7 @@ func TestProposals(t *testing.T) {
 			desc:   "sanity",
 			layer:  layer,
 			beacon: goodBeacon,
-			atxs: []types.VerifiedActivationTx{
+			atxs: []types.ActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
 				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
@@ -842,7 +840,7 @@ func TestProposals(t *testing.T) {
 			desc:   "mismatched beacon",
 			layer:  layer,
 			beacon: goodBeacon,
-			atxs: []types.VerifiedActivationTx{
+			atxs: []types.ActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
 				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
@@ -857,7 +855,7 @@ func TestProposals(t *testing.T) {
 			desc:   "multiproposals",
 			layer:  layer,
 			beacon: goodBeacon,
-			atxs: []types.VerifiedActivationTx{
+			atxs: []types.ActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
 				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
@@ -873,7 +871,7 @@ func TestProposals(t *testing.T) {
 			desc:   "future proposal",
 			layer:  layer,
 			beacon: goodBeacon,
-			atxs: []types.VerifiedActivationTx{
+			atxs: []types.ActivationTx{
 				gatx(atxids[0], publish, ids[0], 101, 1000),
 				gatx(atxids[1], publish, signer.NodeID(), 10, 100),
 			},
@@ -887,7 +885,7 @@ func TestProposals(t *testing.T) {
 			desc:   "malicious",
 			layer:  layer,
 			beacon: goodBeacon,
-			atxs: []types.VerifiedActivationTx{
+			atxs: []types.ActivationTx{
 				gatx(atxids[0], publish, ids[0], 10, 100),
 				gatx(atxids[1], publish, ids[1], 10, 100),
 				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
@@ -918,7 +916,7 @@ func TestProposals(t *testing.T) {
 			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
-				atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
+				atxsdata.AddFromAtx(&atx, *atx.VRFNonce, false)
 			}
 			for _, proposal := range tc.proposals {
 				proposals.Add(proposal)

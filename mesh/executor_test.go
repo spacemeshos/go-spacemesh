@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -78,14 +77,13 @@ func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.A
 		&nonce,
 	)
 
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	require.NoError(t.tb, activation.SignAndFinalizeAtx(sig, atx))
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t.tb, err)
-	require.NoError(t.tb, atxs.Add(t.db, vAtx))
-	t.atxsdata.AddFromHeader(vAtx.ToHeader(), 0, false)
-	return vAtx.ID(), sig.NodeID()
+	atx.SmesherID = sig.NodeID()
+	atx.SetID(types.RandomATXID())
+	atx.TickCount = 1
+	require.NoError(t.tb, atxs.Add(t.db, atx))
+	t.atxsdata.AddFromAtx(atx, 0, false)
+	return atx.ID(), sig.NodeID()
 }
 
 func TestExecutor_Execute(t *testing.T) {
