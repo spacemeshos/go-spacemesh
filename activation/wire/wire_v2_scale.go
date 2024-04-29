@@ -138,6 +138,13 @@ func (t *InnerActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err er
 		total += n
 	}
 	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PreviousATXs, 100)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPosts, 2)
 		if err != nil {
 			return total, err
@@ -191,6 +198,14 @@ func (t *InnerActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err er
 		}
 		total += n
 		t.Initial = field
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.ATXID](dec, 100)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.PreviousATXs = field
 	}
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[NiPostsV2](dec, 2)
@@ -302,7 +317,7 @@ func (t *SubPostV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.PrevATXID[:])
+		n, err := scale.EncodeCompact32(enc, uint32(t.PrevATXIndex))
 		if err != nil {
 			return total, err
 		}
@@ -334,11 +349,12 @@ func (t *SubPostV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.PrevATXID[:])
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.PrevATXIndex = uint32(field)
 	}
 	{
 		n, err := t.Post.DecodeScale(dec)

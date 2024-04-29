@@ -62,7 +62,7 @@ type MerkleProofV2 struct {
 
 type SubPostV2 struct {
 	ID           types.NodeID // Delegating ID that this PoST is for.
-	PrevATXIndex uint         // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
+	PrevATXIndex uint32       // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
 	Post         PostV1
 	NumUnits     uint32
 }
