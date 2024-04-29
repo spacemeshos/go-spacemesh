@@ -155,18 +155,14 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
 			c.logger.With().Fatal("failed to sign atx", log.Err(err))
 		}
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(1, 2)
-		if err != nil {
-			c.logger.With().Fatal("failed to verify atx", log.Err(err))
-		}
-
+		atx.BaseTickHeight = 1
+		atx.TickCount = 2
 		c.refBallot = nil
-		c.atx = vAtx.ID()
-		c.weight = vAtx.GetWeight()
+		c.atx = atx.ID()
+		c.weight = atx.GetWeight()
 
-		m.Send(MessageAtx{Atx: vAtx.ActivationTx})
+		m.Send(MessageAtx{Atx: atx})
 	case MessageBlock:
 		ids, err := blocks.IDsInLayer(c.cdb, ev.Block.LayerIndex)
 		if errors.Is(err, sql.ErrNotFound) || len(ids) == 0 {
@@ -176,16 +172,14 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageBallot:
 		ballots.Add(c.cdb, ev.Ballot)
 	case MessageAtx:
-		vAtx, err := ev.Atx.Verify(1, 2)
-		if err != nil {
-			panic(err)
-		}
-		atxs.Add(c.cdb, vAtx)
-		malicious, err := c.cdb.IsMalicious(vAtx.SmesherID)
+		ev.Atx.BaseTickHeight = 1
+		ev.Atx.TickCount = 2
+		atxs.Add(c.cdb, ev.Atx)
+		malicious, err := c.cdb.IsMalicious(ev.Atx.SmesherID)
 		if err != nil {
 			c.logger.With().Fatal("failed is malicious lookup", log.Err(err))
 		}
-		c.atxdata.AddFromHeader(vAtx.ToHeader(), 0, malicious)
+		c.atxdata.AddFromAtx(ev.Atx, 0, malicious)
 	case MessageBeacon:
 		beacons.Add(c.cdb, ev.EpochID+1, ev.Beacon)
 	case MessageCoinflip:

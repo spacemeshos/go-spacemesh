@@ -835,10 +835,10 @@ func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
 }
 
 // GetFullAtx mocks base method.
-func (m *MockatxProvider) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error) {
+func (m *MockatxProvider) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetFullAtx", id)
-	ret0, _ := ret[0].(*types.VerifiedActivationTx)
+	ret0, _ := ret[0].(*types.ActivationTx)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -856,19 +856,19 @@ type MockatxProviderGetFullAtxCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxProviderGetFullAtxCall) Return(arg0 *types.VerifiedActivationTx, arg1 error) *MockatxProviderGetFullAtxCall {
+func (c *MockatxProviderGetFullAtxCall) Return(arg0 *types.ActivationTx, arg1 error) *MockatxProviderGetFullAtxCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderGetFullAtxCall) Do(f func(types.ATXID) (*types.VerifiedActivationTx, error)) *MockatxProviderGetFullAtxCall {
+func (c *MockatxProviderGetFullAtxCall) Do(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetFullAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderGetFullAtxCall) DoAndReturn(f func(types.ATXID) (*types.VerifiedActivationTx, error)) *MockatxProviderGetFullAtxCall {
+func (c *MockatxProviderGetFullAtxCall) DoAndReturn(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetFullAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -251,16 +251,15 @@ func (v *Validator) InitialNIPostChallengeV1(
 	return nil
 }
 
-func (*Validator) NIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, nodeID types.NodeID) error {
-	prevATX, err := atxs.GetAtxHeader(challenge.PrevATXID)
-	if err != nil {
-		return &ErrAtxNotFound{Id: challenge.PrevATXID, source: err}
-	}
-
-	if prevATX.NodeID != nodeID {
+func (*Validator) NIPostChallengeV1(
+	challenge *wire.NIPostChallengeV1,
+	prevATX *types.ActivationTx,
+	nodeID types.NodeID,
+) error {
+	if prevATX.SmesherID != nodeID {
 		return fmt.Errorf(
 			"previous atx belongs to different miner. nodeID: %v, prevAtx.ID: %v, prevAtx.NodeID: %v",
-			nodeID, prevATX.ID.ShortString(), prevATX.NodeID,
+			nodeID, prevATX.ID().ShortString(), prevATX.SmesherID,
 		)
 	}
 
@@ -365,18 +364,43 @@ func (v *Validator) VerifyChain(ctx context.Context, id, goldenATXID types.ATXID
 	return v.verifyChainWithOpts(ctx, id, goldenATXID, options)
 }
 
-func (v *Validator) getNipost(ctx context.Context, id types.ATXID) (*types.NIPost, error) {
+type atxDeps struct {
+	nipost      types.NIPost
+	positioning types.ATXID
+	previous    types.ATXID
+	commitment  types.ATXID
+}
+
+func (v *Validator) getAtxDeps(ctx context.Context, db sql.Executor, id types.ATXID) (*atxDeps, error) {
 	var blob sql.Blob
 	if err := atxs.LoadBlob(ctx, v.db, id.Bytes(), &blob); err != nil {
 		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
 	}
 
-	// TODO: decide about version based on publish epoch
+	// TODO: decide about version based on `version` column
 	var atx wire.ActivationTxV1
 	if err := codec.Decode(blob.Bytes, &atx); err != nil {
 		return nil, fmt.Errorf("decoding ATX blob: %w", err)
 	}
-	return wire.NiPostFromWireV1(atx.NIPost), nil
+	var commitment types.ATXID
+	if atx.CommitmentATXID != nil {
+		commitment = *atx.CommitmentATXID
+	} else {
+		catx, err := atxs.CommitmentATX(v.db, atx.SmesherID)
+		if err != nil {
+			return nil, fmt.Errorf("getting commitment ATX: %w", err)
+		}
+		commitment = catx
+	}
+
+	deps := &atxDeps{
+		nipost:      *wire.NiPostFromWireV1(atx.NIPost),
+		positioning: atx.PositioningATXID,
+		previous:    atx.PrevATXID,
+		commitment:  commitment,
+	}
+
+	return deps, nil
 }
 
 func (v *Validator) verifyChainWithOpts(
@@ -388,6 +412,10 @@ func (v *Validator) verifyChainWithOpts(
 	atx, err := atxs.Get(v.db, id)
 	if err != nil {
 		return fmt.Errorf("get atx: %w", err)
+	}
+	if atx.Golden() {
+		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "golden"))
+		return nil
 	}
 
 	switch {
@@ -412,24 +440,16 @@ func (v *Validator) verifyChainWithOpts(
 	}
 
 	// validate POST fully
-	commitmentAtxId := atx.CommitmentATX
-	if commitmentAtxId == nil {
-		if atxId, err := atxs.CommitmentATX(v.db, atx.SmesherID); err != nil {
-			return fmt.Errorf("getting commitment atx: %w", err)
-		} else {
-			commitmentAtxId = &atxId
-		}
-	}
-	nipost, err := v.getNipost(ctx, id)
+	deps, err := v.getAtxDeps(ctx, v.db, id)
 	if err != nil {
-		return fmt.Errorf("getting NIPost for ATX %s: %w", id, err)
+		return fmt.Errorf("getting ATX dependencies: %w", err)
 	}
 	if err := v.Post(
 		ctx,
 		atx.SmesherID,
-		*commitmentAtxId,
-		nipost.Post,
-		nipost.PostMetadata,
+		deps.commitment,
+		deps.nipost.Post,
+		deps.nipost.PostMetadata,
 		atx.NumUnits,
 	); err != nil {
 		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {
@@ -438,7 +458,7 @@ func (v *Validator) verifyChainWithOpts(
 		return &InvalidChainError{ID: id, src: err}
 	}
 
-	err = v.verifyChainDeps(ctx, atx.ActivationTx, goldenATXID, opts)
+	err = v.verifyChainDeps(ctx, deps, goldenATXID, opts)
 	invalidChain := &InvalidChainError{}
 	switch {
 	case err == nil:
@@ -455,23 +475,25 @@ func (v *Validator) verifyChainWithOpts(
 
 func (v *Validator) verifyChainDeps(
 	ctx context.Context,
-	atx *types.ActivationTx,
+	deps *atxDeps,
 	goldenATXID types.ATXID,
 	opts verifyChainOpts,
 ) error {
-	if atx.PrevATXID != types.EmptyATXID {
-		if err := v.verifyChainWithOpts(ctx, atx.PrevATXID, goldenATXID, opts); err != nil {
-			return fmt.Errorf("validating previous ATX %s chain: %w", atx.PrevATXID.ShortString(), err)
+	if deps.previous != types.EmptyATXID {
+		if err := v.verifyChainWithOpts(ctx, deps.previous, goldenATXID, opts); err != nil {
+			return fmt.Errorf("validating previous ATX %s chain: %w", deps.previous.ShortString(), err)
 		}
 	}
-	if atx.PositioningATX != goldenATXID {
-		if err := v.verifyChainWithOpts(ctx, atx.PositioningATX, goldenATXID, opts); err != nil {
-			return fmt.Errorf("validating positioning ATX %s chain: %w", atx.PositioningATX.ShortString(), err)
+	if deps.positioning != goldenATXID {
+		if err := v.verifyChainWithOpts(ctx, deps.positioning, goldenATXID, opts); err != nil {
+			return fmt.Errorf("validating positioning ATX %s chain: %w", deps.positioning.ShortString(), err)
 		}
 	}
-	if atx.CommitmentATX != nil && *atx.CommitmentATX != goldenATXID {
-		if err := v.verifyChainWithOpts(ctx, *atx.CommitmentATX, goldenATXID, opts); err != nil {
-			return fmt.Errorf("validating commitment ATX %s chain: %w", atx.CommitmentATX.ShortString(), err)
+	// verify commitment only if arrived at the first ATX in the chain
+	// to avoid verifying the same commitment ATX multiple times.
+	if deps.previous == types.EmptyATXID && deps.commitment != goldenATXID {
+		if err := v.verifyChainWithOpts(ctx, deps.commitment, goldenATXID, opts); err != nil {
+			return fmt.Errorf("validating commitment ATX %s chain: %w", deps.commitment.ShortString(), err)
 		}
 	}
 	return nil

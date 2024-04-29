@@ -15,6 +15,12 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/spf13/afero"
+
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 var (
@@ -158,4 +164,33 @@ func backupOldDb(fs afero.Fs, srcDir, dbFile string) (string, error) {
 		}
 	}
 	return backupDir, nil
+}
+
+func positioningATX(ctx context.Context, db sql.Executor, id types.ATXID) (types.ATXID, error) {
+	var blob sql.Blob
+	if err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob); err != nil {
+		return types.EmptyATXID, fmt.Errorf("get blob %s: %w", id, err)
+	}
+	// TODO: decide how to decode based on the `version` column
+	var atx wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &atx); err != nil {
+		return types.EmptyATXID, fmt.Errorf("decode %s: %w", id, err)
+	}
+
+	return atx.PositioningATXID, nil
+}
+
+func poetProofRef(ctx context.Context, db sql.Executor, id types.ATXID) (types.PoetProofRef, error) {
+	var blob sql.Blob
+	if err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob); err != nil {
+		return types.PoetProofRef{}, fmt.Errorf("getting blob for %s: %w", id, err)
+	}
+
+	// TODO: decide about version based the `version` column in `atx_blobs`
+	var atx wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &atx); err != nil {
+		return types.PoetProofRef{}, fmt.Errorf("decoding ATX blob: %w", err)
+	}
+
+	return types.PoetProofRef(atx.NIPost.PostMetadata.Challenge), nil
 }

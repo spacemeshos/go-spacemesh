@@ -67,14 +67,14 @@ func (d *Data) EvictEpoch(evict types.EpochID) {
 	}
 }
 
-// AddFromVerified extracts relevant fields from verified atx and adds them together with nonce and malicious flag.
+// AddFromHeader extracts relevant fields from an ActivationTx and adds them together with nonce and malicious flag.
 // Returns the ATX that was added to the store (if any) or `nil` if it wasn't.
-func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) *ATX {
+func (d *Data) AddFromAtx(atx *types.ActivationTx, nonce types.VRFPostIndex, malicious bool) *ATX {
 	return d.Add(
 		atx.TargetEpoch(),
-		atx.NodeID,
+		atx.SmesherID,
 		atx.Coinbase,
-		atx.ID,
+		atx.ID(),
 		atx.GetWeight(),
 		atx.BaseTickHeight,
 		atx.TickHeight(),

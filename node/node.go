@@ -1701,9 +1701,11 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return errors.New("start json server without public services")
 		}
 		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
-			app.Config.API.JSONListener,
 			logger.Zap().Named("JSON"),
+			app.Config.API.JSONListener,
+			app.Config.API.JSONCorsAllowedOrigins,
 		)
+
 		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
@@ -1955,7 +1957,7 @@ func (app *App) verifyDB(ctx context.Context) {
 		count := 0
 
 		// check ATX signatures
-		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.VerifiedActivationTx) bool {
+		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.ActivationTx) bool {
 			select {
 			case <-ctx.Done():
 				// stop on context cancellation
@@ -1967,7 +1969,7 @@ func (app *App) verifyDB(ctx context.Context) {
 			// TODO: use atx handler to verify signature
 			if !app.edVerifier.Verify(
 				signing.ATX,
-				atx.SmesherID, wire.ActivationTxToWireV1(atx.ActivationTx).SignedBytes(),
+				atx.SmesherID, wire.ActivationTxToWireV1(atx).SignedBytes(),
 				atx.Signature,
 			) {
 				app.log.With().Error("ATX signature verification failed",
