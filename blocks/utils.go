@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"math/rand/v2"
+	"math/rand"
 	"sort"
 
 	"github.com/seehuhn/mt19937"

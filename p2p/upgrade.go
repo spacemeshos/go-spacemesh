@@ -152,6 +152,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 			QueueSize:             cfg.GossipQueueSize,
 			PeerOutboundQueueSize: cfg.GossipPeerOutboundQueueSize,
 			Throttle:              cfg.GossipValidationThrottle,
+			EvictionStrategy:      cfg.GossipEvictionStrategy,
 		}); err != nil {
 			return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 		}
@@ -164,6 +165,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		discovery.WithLogger(fh.logger.Zap()),
 		discovery.WithAdvertiseDelay(fh.cfg.DiscoveryTimings.AdvertiseDelay),
 		discovery.WithAdvertiseInterval(fh.cfg.DiscoveryTimings.AdvertiseInterval),
+		discovery.WithAdvertiseIntervalSpread(fh.cfg.DiscoveryTimings.AdvertiseIntervalSpread),
 		discovery.WithAdvertiseRetryDelay(fh.cfg.DiscoveryTimings.AdvertiseInterval),
 		discovery.WithFindPeersRetryDelay(fh.cfg.DiscoveryTimings.FindPeersRetryDelay),
 	}

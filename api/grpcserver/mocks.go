@@ -18,6 +18,7 @@ import (
 	multiaddr "github.com/multiformats/go-multiaddr"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	system "github.com/spacemeshos/go-spacemesh/system"
@@ -834,10 +835,10 @@ func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
 }
 
 // GetFullAtx mocks base method.
-func (m *MockatxProvider) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error) {
+func (m *MockatxProvider) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetFullAtx", id)
-	ret0, _ := ret[0].(*types.VerifiedActivationTx)
+	ret0, _ := ret[0].(*types.ActivationTx)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -855,28 +856,28 @@ type MockatxProviderGetFullAtxCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxProviderGetFullAtxCall) Return(arg0 *types.VerifiedActivationTx, arg1 error) *MockatxProviderGetFullAtxCall {
+func (c *MockatxProviderGetFullAtxCall) Return(arg0 *types.ActivationTx, arg1 error) *MockatxProviderGetFullAtxCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderGetFullAtxCall) Do(f func(types.ATXID) (*types.VerifiedActivationTx, error)) *MockatxProviderGetFullAtxCall {
+func (c *MockatxProviderGetFullAtxCall) Do(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetFullAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderGetFullAtxCall) DoAndReturn(f func(types.ATXID) (*types.VerifiedActivationTx, error)) *MockatxProviderGetFullAtxCall {
+func (c *MockatxProviderGetFullAtxCall) DoAndReturn(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetFullAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetMalfeasanceProof mocks base method.
-func (m *MockatxProvider) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error) {
+func (m *MockatxProvider) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMalfeasanceProof", id)
-	ret0, _ := ret[0].(*types.MalfeasanceProof)
+	ret0, _ := ret[0].(*wire.MalfeasanceProof)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -894,19 +895,19 @@ type MockatxProviderGetMalfeasanceProofCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxProviderGetMalfeasanceProofCall) Return(arg0 *types.MalfeasanceProof, arg1 error) *MockatxProviderGetMalfeasanceProofCall {
+func (c *MockatxProviderGetMalfeasanceProofCall) Return(arg0 *wire.MalfeasanceProof, arg1 error) *MockatxProviderGetMalfeasanceProofCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderGetMalfeasanceProofCall) Do(f func(types.NodeID) (*types.MalfeasanceProof, error)) *MockatxProviderGetMalfeasanceProofCall {
+func (c *MockatxProviderGetMalfeasanceProofCall) Do(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderGetMalfeasanceProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderGetMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) (*types.MalfeasanceProof, error)) *MockatxProviderGetMalfeasanceProofCall {
+func (c *MockatxProviderGetMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderGetMalfeasanceProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1260,6 +1261,65 @@ func (c *MockpostSupervisorStopCall) Do(f func(bool) error) *MockpostSupervisorS
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockpostSupervisorStopCall) DoAndReturn(f func(bool) error) *MockpostSupervisorStopCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockgrpcPostService is a mock of grpcPostService interface.
+type MockgrpcPostService struct {
+	ctrl     *gomock.Controller
+	recorder *MockgrpcPostServiceMockRecorder
+}
+
+// MockgrpcPostServiceMockRecorder is the mock recorder for MockgrpcPostService.
+type MockgrpcPostServiceMockRecorder struct {
+	mock *MockgrpcPostService
+}
+
+// NewMockgrpcPostService creates a new mock instance.
+func NewMockgrpcPostService(ctrl *gomock.Controller) *MockgrpcPostService {
+	mock := &MockgrpcPostService{ctrl: ctrl}
+	mock.recorder = &MockgrpcPostServiceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockgrpcPostService) EXPECT() *MockgrpcPostServiceMockRecorder {
+	return m.recorder
+}
+
+// AllowConnections mocks base method.
+func (m *MockgrpcPostService) AllowConnections(allow bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AllowConnections", allow)
+}
+
+// AllowConnections indicates an expected call of AllowConnections.
+func (mr *MockgrpcPostServiceMockRecorder) AllowConnections(allow any) *MockgrpcPostServiceAllowConnectionsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllowConnections", reflect.TypeOf((*MockgrpcPostService)(nil).AllowConnections), allow)
+	return &MockgrpcPostServiceAllowConnectionsCall{Call: call}
+}
+
+// MockgrpcPostServiceAllowConnectionsCall wrap *gomock.Call
+type MockgrpcPostServiceAllowConnectionsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockgrpcPostServiceAllowConnectionsCall) Return() *MockgrpcPostServiceAllowConnectionsCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockgrpcPostServiceAllowConnectionsCall) Do(f func(bool)) *MockgrpcPostServiceAllowConnectionsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockgrpcPostServiceAllowConnectionsCall) DoAndReturn(f func(bool)) *MockgrpcPostServiceAllowConnectionsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

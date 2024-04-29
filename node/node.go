@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"syscall"
 	"time"
@@ -23,7 +24,6 @@ import (
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/mitchellh/mapstructure"
-	"github.com/natefinch/atomic"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -78,6 +79,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
+	sqlmigrations "github.com/spacemeshos/go-spacemesh/sql/migrations"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -321,7 +323,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		viper.DecodeHook(hook),
 		WithZeroFields(),
 		WithIgnoreUntagged(),
-		withErrorUnused(),
+		WithErrorUnused(),
 	}
 
 	// load config if it was loaded to the viper
@@ -343,7 +345,7 @@ func WithIgnoreUntagged() viper.DecoderConfigOption {
 	}
 }
 
-func withErrorUnused() viper.DecoderConfigOption {
+func WithErrorUnused() viper.DecoderConfigOption {
 	return func(cfg *mapstructure.DecoderConfig) {
 		cfg.ErrorUnused = true
 	}
@@ -986,6 +988,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithNetworkDelay(app.Config.ATXGradeDelay),
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
 		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
+		miner.WithActivesetPreparation(app.Config.ActiveSet),
 	)
 	for _, sig := range app.signers {
 		proposalBuilder.Register(sig)
@@ -1420,9 +1423,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			// StartSmeshing is only supported in a supervised setup (single signer)
 			sig = app.signers[0]
 		}
+		postService, err := app.grpcService(grpcserver.Post, lg)
+		if err != nil {
+			return nil, err
+		}
 		service := grpcserver.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
+			postService.(*grpcserver.PostService),
 			app.Config.API.SmesherStreamInterval,
 			app.Config.SMESHING.Opts,
 			sig,
@@ -1431,6 +1439,11 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case grpcserver.Post:
 		service := grpcserver.NewPostService(app.addLogger(PostServiceLogger, lg).Zap())
+		isCoinbaseSet := app.Config.SMESHING.CoinbaseAccount != ""
+		if !isCoinbaseSet {
+			lg.Warning("coinbase account is not set, connections from remote post services will be rejected")
+		}
+		service.AllowConnections(isCoinbaseSet)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.PostInfo:
@@ -1533,7 +1546,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		logger.Info("registering local service %s", svc)
+		logger.Info("registering post service %s", svc)
 		postSvcs[svc] = gsvc
 	}
 	for _, svc := range app.Config.API.TLSServices {
@@ -1571,6 +1584,17 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcPublicServer.Start(); err != nil {
 			return err
 		}
+		logger.With().Info("public grpc service started",
+			log.String("address", app.Config.API.PublicListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(publicSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
 	}
 	if len(privateSvcs) > 0 {
 		var err error
@@ -1586,6 +1610,17 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcPrivateServer.Start(); err != nil {
 			return err
 		}
+		logger.With().Info("private grpc service started",
+			log.String("address", app.Config.API.PrivateListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(privateSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
 	}
 	if len(postSvcs) > 0 && app.Config.API.PostListener != "" {
 		var err error
@@ -1601,6 +1636,18 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcPostServer.Start(); err != nil {
 			return err
 		}
+		logger.With().Info("post grpc service started",
+			log.String("address", app.Config.API.PostListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(postSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
+
 		host, port, err := net.SplitHostPort(app.grpcPostServer.BoundAddress)
 		if err != nil {
 			return fmt.Errorf("parse grpc-post-listener: %w", err)
@@ -1644,6 +1691,17 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if err := app.grpcTLSServer.Start(); err != nil {
 			return err
 		}
+		logger.With().Info("authenticated grpc service started",
+			log.String("address", app.Config.API.TLSListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(authenticatedSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
 	}
 
 	if len(app.Config.API.JSONListener) > 0 {
@@ -1651,12 +1709,25 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return errors.New("start json server without public services")
 		}
 		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
-			app.Config.API.JSONListener,
 			logger.Zap().Named("JSON"),
+			app.Config.API.JSONListener,
+			app.Config.API.JSONCorsAllowedOrigins,
 		)
+
 		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
+		logger.With().Info("json listener started",
+			log.String("address", app.Config.API.JSONListener),
+			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+				services := maps.Keys(publicSvcs)
+				slices.Sort(services)
+				for _, svc := range services {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
 	}
 	return nil
 }
@@ -1787,6 +1858,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	dbopts := []sql.Opt{
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
+		sql.WithMigration(sqlmigrations.New0017Migration(dbLog.Zap())),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
@@ -1830,20 +1902,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
-		datastore.WithConsensusCache(data),
 	)
-	clients := make([]localsql.PoetClient, len(app.Config.PoetServers))
-	for i, server := range app.Config.PoetServers {
-		clients[i], err = activation.NewHTTPPoetClient(server, app.Config.POET)
-		if err != nil {
-			return fmt.Errorf("failed to create poet client: %w", err)
-		}
-	}
-
-	// Migrate `node_state.sql` to `local.sql`
-	if err := app.MigrateLocalDB(dbLog.Zap(), dbPath, clients); err != nil {
-		return err
-	}
 
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
@@ -1852,9 +1911,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
-		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0003Migration(dbLog.Zap(), app.Config.SMESHING.Opts.DataDir, clients)),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
@@ -1864,69 +1920,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	return nil
 }
 
-// MigrateLocalDB migrates the old node_state.sql to the new local.sql
-//
-// This function is idempotent and can be called multiple times without side effects.
-// It will only migrate the old db to the new db if the old db exists and the new db does not.
-//
-// TODO(mafa): this can be removed in the future when we are sure that all nodes have migrated to the new db.
-func (app *App) MigrateLocalDB(lg *zap.Logger, dbPath string, clients []localsql.PoetClient) error {
-	oldDBFile := filepath.Join(dbPath, oldLocalDbFile)
-	dbFile := filepath.Join(dbPath, localDbFile)
-	_, err := os.Stat(oldDBFile)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return nil // no old db to migrate
-	case err != nil:
-		return fmt.Errorf("stat %s: %w", oldDBFile, err)
-	}
-
-	_, err = os.Stat(dbFile)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		// no new db, migrate old to new
-	case err == nil:
-		// both exist, error
-		return fmt.Errorf("%w: both %s and %s exist", fs.ErrExist, oldDBFile, dbFile)
-	case err != nil:
-		return fmt.Errorf("stat %s: %w", dbFile, err)
-	}
-
-	lg.Info("migrating local DB",
-		zap.String("old db", oldDBFile),
-		zap.String("new db", dbFile),
-	)
-	migrations, err := sql.LocalMigrations()
-	if err != nil {
-		return fmt.Errorf("load local migrations: %w", err)
-	}
-	oldDB, err := localsql.Open("file:"+oldDBFile,
-		sql.WithLogger(lg),
-		sql.WithMigrations(migrations),
-		sql.WithMigration(localsql.New0001Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0002Migration(app.Config.SMESHING.Opts.DataDir)),
-		sql.WithMigration(localsql.New0003Migration(lg, app.Config.SMESHING.Opts.DataDir, clients)),
-		sql.WithConnections(app.Config.DatabaseConnections),
-	)
-	if err != nil {
-		return fmt.Errorf("open sqlite db %w", err)
-	}
-	defer oldDB.Close()
-
-	if _, err := oldDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", dbFile), nil, nil); err != nil {
-		return fmt.Errorf("vacuum %s to %s: %w", oldDBFile, dbFile, err)
-	}
-	if err := oldDB.Close(); err != nil {
-		return fmt.Errorf("close %s: %w", oldDBFile, err)
-	}
-	if err := atomic.ReplaceFile(oldDBFile, fmt.Sprintf("%s.bak", oldDBFile)); err != nil {
-		return fmt.Errorf("renaming %s to %s: %w", oldDBFile, fmt.Sprintf("%s.bak", oldDBFile), err)
-	}
-	return nil
-}
-
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
+	if err := app.verifyVersionUpgrades(); err != nil {
+		return fmt.Errorf("version upgrade verification failed: %w", err)
+	}
+
 	err := app.startSynchronous(ctx)
 	if err != nil {
 		app.log.With().Error("failed to start App", log.Err(err))
@@ -1966,7 +1965,7 @@ func (app *App) verifyDB(ctx context.Context) {
 		count := 0
 
 		// check ATX signatures
-		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.VerifiedActivationTx) bool {
+		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.ActivationTx) bool {
 			select {
 			case <-ctx.Done():
 				// stop on context cancellation
@@ -1975,7 +1974,12 @@ func (app *App) verifyDB(ctx context.Context) {
 			}
 
 			// verify atx signature
-			if !app.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+			// TODO: use atx handler to verify signature
+			if !app.edVerifier.Verify(
+				signing.ATX,
+				atx.SmesherID, wire.ActivationTxToWireV1(atx).SignedBytes(),
+				atx.Signature,
+			) {
 				app.log.With().Error("ATX signature verification failed",
 					log.Stringer("atx_id", atx.ID()),
 					log.Stringer("smesher", atx.SmesherID),
@@ -2025,8 +2029,8 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	/* Setup monitoring */
 	app.errCh = make(chan error, 100)
 	if app.Config.PprofHTTPServer {
-		logger.Info("starting pprof server")
-		app.pprofService = &http.Server{Addr: ":6060"}
+		logger.With().Info("starting pprof server", log.String("address", app.Config.PprofHTTPServerListener))
+		app.pprofService = &http.Server{Addr: app.Config.PprofHTTPServerListener}
 		app.eg.Go(func() error {
 			if err := app.pprofService.ListenAndServe(); err != nil {
 				app.errCh <- fmt.Errorf("cannot start pprof http server: %w", err)
@@ -2140,45 +2144,40 @@ func (app *App) preserveAfterRecovery(ctx context.Context) {
 		encoded, err := codec.Encode(poetProof)
 		if err != nil {
 			app.log.With().Error("failed to encode poet proof after checkpoint",
-				log.Stringer("atx id", app.preserve.Deps[i].ID()),
 				log.Object("poet proof", poetProof),
 				log.Err(err),
 			)
 			continue
 		}
-		hash := app.preserve.Deps[i].GetPoetProofRef()
+		ref, err := poetProof.Ref()
+		if err != nil {
+			app.log.With().Error("failed to get poet proof ref after checkpoint", log.Inline(poetProof), log.Err(err))
+			continue
+		}
+		hash := types.Hash32(ref)
 		if err := app.poetDb.ValidateAndStoreMsg(ctx, hash, p2p.NoPeer, encoded); err != nil {
 			app.log.With().Error("failed to preserve poet proof after checkpoint",
-				log.Stringer("atx id", app.preserve.Deps[i].ID()),
+				log.Stringer("atx id", app.preserve.Deps[i].ID),
 				log.String("poet proof ref", hash.ShortString()),
 				log.Err(err),
 			)
 			continue
 		}
 		app.log.With().Info("preserved poet proof after checkpoint",
-			log.Stringer("atx id", app.preserve.Deps[i].ID()),
+			log.Stringer("atx id", app.preserve.Deps[i].ID),
 			log.String("poet proof ref", hash.ShortString()),
 		)
 	}
-	for _, vatx := range app.preserve.Deps {
-		encoded, err := codec.Encode(vatx)
-		if err != nil {
-			app.log.With().Error("failed to encode atx after checkpoint",
-				log.Inline(vatx),
+	for _, atx := range app.preserve.Deps {
+		if err := app.atxHandler.HandleSyncedAtx(ctx, atx.ID.Hash32(), p2p.NoPeer, atx.Blob); err != nil {
+			app.log.With().Error(
+				"failed to preserve atx after checkpoint",
+				log.ShortStringer("id", atx.ID),
 				log.Err(err),
 			)
 			continue
 		}
-		if err := app.atxHandler.HandleSyncedAtx(ctx, vatx.ID().Hash32(), p2p.NoPeer, encoded); err != nil {
-			app.log.With().Error("failed to preserve atx after checkpoint",
-				log.Inline(vatx),
-				log.Err(err),
-			)
-			continue
-		}
-		app.log.With().Info("preserved atx after checkpoint",
-			log.Inline(vatx),
-		)
+		app.log.With().Info("preserved atx after checkpoint", log.ShortStringer("id", atx.ID))
 	}
 }
 

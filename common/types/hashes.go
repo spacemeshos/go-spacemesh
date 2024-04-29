@@ -3,7 +3,6 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"reflect"
 
 	"github.com/spacemeshos/go-scale"
@@ -14,37 +13,28 @@ import (
 )
 
 const (
-	// Hash32Length is 32, the expected length of the hash.
 	Hash32Length = 32
-	hash20Length = 20
-	hash12Length = 12
+	Hash20Length = 20
 )
 
-// Hash12 represents the first 12 bytes of blake3 hash, mostly used for internal caches.
-type Hash12 [hash12Length]byte
+var (
+	hash20T = reflect.TypeOf(Hash20{})
+	hash32T = reflect.TypeOf(Hash32{})
+)
 
 // Hash32 represents the 32-byte blake3 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
 
 // Hash20 represents the 20-byte blake3 hash of arbitrary data.
-type Hash20 [hash20Length]byte
-
-// Field returns a log field. Implements the LoggableField interface.
-func (h Hash12) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
+type Hash20 [Hash20Length]byte
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
 
-// Big converts a hash to a big integer.
-func (h Hash20) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
-
-// Hex converts a hash to a hex string.
-func (h Hash20) Hex() string { return util.Encode(h[:]) }
-
 // String implements the stringer interface and is used also by the logger when
 // doing full logging into a file.
 func (h Hash20) String() string {
-	return h.Hex()
+	return hex.EncodeToString(h[:])
 }
 
 // ShortString returns a the first 5 hex-encoded bytes of the hash, for logging purposes.
@@ -68,7 +58,7 @@ func (h *Hash20) UnmarshalText(input []byte) error {
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash20) UnmarshalJSON(input []byte) error {
-	if err := util.UnmarshalFixedJSON(hashT, input, h[:]); err != nil {
+	if err := util.UnmarshalFixedJSON(hash20T, input, h[:]); err != nil {
 		return fmt.Errorf("unmarshal JSON: %w", err)
 	}
 
@@ -84,25 +74,15 @@ func (h Hash20) MarshalText() ([]byte, error) {
 // If b is larger than len(h), b will be cropped from the left.
 func (h *Hash20) SetBytes(b []byte) {
 	if len(b) > len(h) {
-		b = b[len(b)-32:]
+		b = b[len(b)-20:]
 	}
 
-	copy(h[32-len(b):], b)
+	copy(h[20-len(b):], b)
 }
 
 // ToHash32 returns a Hash32 whose first 20 bytes are the bytes of this Hash20, it is right-padded with zeros.
 func (h Hash20) ToHash32() (h32 Hash32) {
 	copy(h32[:], h[:])
-	return
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (h Hash20) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
-
-// CalcHash12 returns the 12-byte prefix of the blake3 sum of the given byte slice.
-func CalcHash12(data []byte) (h Hash12) {
-	h32 := hash.Sum(data)
-	copy(h[:], h32[:])
 	return
 }
 
@@ -141,12 +121,10 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 	return res
 }
 
-// CalcMessageHash12 returns the 12-byte blake3 sum of the given msg suffixed with protocol.
-func CalcMessageHash12(msg []byte, protocol string) Hash12 {
-	return CalcHash12(append(msg, protocol...))
+// CalcHash20 returns the 20-byte blake3 sum of the given data.
+func CalcHash20(data []byte) Hash20 {
+	return hash.Sum20(data)
 }
-
-var hashT = reflect.TypeOf(Hash32{})
 
 // CalcHash32 returns the 32-byte blake3 sum of the given data.
 func CalcHash32(data []byte) Hash32 {
@@ -168,13 +146,10 @@ func HexToHash32(s string) Hash32 { return BytesToHash(util.FromHex(s)) }
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash32) Bytes() []byte { return h[:] }
 
-// Hex converts a hash to a hex string.
-func (h Hash32) Hex() string { return util.Encode(h[:]) }
-
 // String implements the stringer interface and is used also by the logger when
 // doing full logging into a file.
 func (h Hash32) String() string {
-	return h.ShortString()
+	return hex.EncodeToString(h[:])
 }
 
 // ShortString returns the first 5 hex-encoded bytes of the hash, for logging purposes.
@@ -199,7 +174,7 @@ func (h *Hash32) UnmarshalText(input []byte) error {
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash32) UnmarshalJSON(input []byte) error {
-	if err := util.UnmarshalFixedJSON(hashT, input, h[:]); err != nil {
+	if err := util.UnmarshalFixedJSON(hash32T, input, h[:]); err != nil {
 		return fmt.Errorf("unmarshal JSON: %w", err)
 	}
 
@@ -228,7 +203,14 @@ func (h Hash32) ToHash20() (h20 Hash20) {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (h Hash32) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
+func (h Hash20) Field() log.Field {
+	return log.Stringer("hash", h)
+}
+
+// Field returns a log field. Implements the LoggableField interface.
+func (h Hash32) Field() log.Field {
+	return log.Stringer("hash", h)
+}
 
 // EncodeScale implements scale codec interface.
 func (h *Hash32) EncodeScale(e *scale.Encoder) (int, error) {

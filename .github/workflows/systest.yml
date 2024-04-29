@@ -60,6 +60,8 @@ jobs:
     timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
 
       - name: Setup kubectl
         id: install

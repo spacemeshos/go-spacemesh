@@ -276,17 +276,16 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: 1,
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 2, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, 2, nil)
 	require.NoError(t, SignAndFinalizeAtx(signer, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
+	atx.TickCount = 1
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(mgr.db, vAtx))
+	require.NoError(t, atxs.Add(mgr.db, atx))
 
 	commitmentAtx, err := mgr.findCommitmentAtx(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, vAtx.ID(), commitmentAtx)
+	require.Equal(t, atx.ID(), commitmentAtx)
 }
 
 func TestPostSetupManager_findCommitmentAtx_DefaultsToGoldenAtx(t *testing.T) {
@@ -322,14 +321,12 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 
 	// add an atx by the same node
 	commitmentAtx := types.RandomATXID()
-	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 1, nil)
+	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 1, nil)
 	atx.CommitmentATX = &commitmentAtx
 	require.NoError(t, SignAndFinalizeAtx(signer, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(mgr.cdb, vAtx))
+	atx.TickCount = 1
+	require.NoError(t, atxs.Add(mgr.cdb, atx))
 
 	atxid, err := mgr.commitmentAtx(context.Background(), mgr.opts.DataDir, signer.NodeID())
 	require.NoError(t, err)

@@ -317,7 +317,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 					)
 					return nil
 				}
-				s.logger.Info("downloaded malfeasant node IDs",
+				s.logger.Debug("downloaded malfeasant node IDs",
 					log.ZContext(ctx),
 					zap.String("peer", peer.String()),
 					zap.Int("ids", len(malIDs)),

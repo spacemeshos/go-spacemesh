@@ -51,7 +51,7 @@ func IdentityInfoFromDir(dir string) (string, error) {
 // EnsureIdentity generates an identity key file in given directory.
 func EnsureIdentity(dir string) (crypto.PrivKey, error) {
 	// TODO add crc check
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("ensure that directory %s exist: %w", dir, err)
 	}
 	info, err := identityInfoFromDir(dir)
@@ -76,7 +76,7 @@ func EnsureIdentity(dir string) (crypto.PrivKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := os.WriteFile(filepath.Join(dir, keyFilename), data, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, keyFilename), data, 0o600); err != nil {
 			return nil, fmt.Errorf("write identity data: %w", err)
 		}
 		return key, nil

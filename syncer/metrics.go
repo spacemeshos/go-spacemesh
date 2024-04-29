@@ -83,7 +83,6 @@ var (
 		namespace,
 		"total number of errors by peers",
 		[]string{"kind"})
-	atxPeerError   = peerError.WithLabelValues("atx")
 	layerPeerError = peerError.WithLabelValues("layer")
 	opnsPeerError  = peerError.WithLabelValues("opns")
 	certPeerError  = peerError.WithLabelValues("cert")

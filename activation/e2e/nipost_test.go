@@ -171,6 +171,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
 	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -193,10 +194,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
+	challenge := types.RandomHash()
+	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
@@ -205,7 +204,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		sig.NodeID(),
 		goldenATX,
 		nipost.NIPost,
-		challenge.Hash(),
+		challenge,
 		nipost.NumUnits,
 	)
 	require.NoError(t, err)
@@ -232,6 +231,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	)
 
 	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
 
 	db := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
@@ -245,12 +245,10 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
+	challenge := types.RandomHash()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	nipost, err := nb.BuildNIPost(ctx, sig, challenge.PublishEpoch, challenge.Hash())
+	nipost, err := nb.BuildNIPost(ctx, sig, 7, challenge)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, nipost)
 }
@@ -307,6 +305,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
 	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -333,10 +332,8 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
-	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
+	challenge := types.RandomHash()
+	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 
@@ -350,7 +347,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		sig.NodeID(),
 		goldenATX,
 		nipost.NIPost,
-		challenge.Hash(),
+		challenge,
 		nipost.NumUnits,
 	)
 	require.NoError(t, err)
@@ -381,6 +378,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	})
 
 	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -453,12 +451,10 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	challenge := types.NIPostChallenge{
-		PublishEpoch: postGenesisEpoch + 2,
-	}
+	challenge := types.RandomHash()
 	for _, sig := range signers {
 		eg.Go(func() error {
-			nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
+			nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
 			require.NoError(t, err)
 
 			v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
@@ -467,7 +463,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 				sig.NodeID(),
 				goldenATX,
 				nipost.NIPost,
-				challenge.Hash(),
+				challenge,
 				nipost.NumUnits,
 			)
 			require.NoError(t, err)

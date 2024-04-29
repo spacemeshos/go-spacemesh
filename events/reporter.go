@@ -75,11 +75,11 @@ func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bo
 }
 
 // ReportNewActivation reports a new activation.
-func ReportNewActivation(activation *types.VerifiedActivationTx) {
+func ReportNewActivation(activation *types.ActivationTx) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	activationTxEvent := ActivationTx{VerifiedActivationTx: activation}
+	activationTxEvent := ActivationTx{activation}
 	if reporter != nil {
 		if err := reporter.activationEmitter.Emit(activationTxEvent); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
@@ -388,9 +388,9 @@ type Transaction struct {
 	Valid       bool
 }
 
-// ActivationTx wraps *types.VerifiedActivationTx.
+// ActivationTx wraps *types.ActivationTx.
 type ActivationTx struct {
-	*types.VerifiedActivationTx
+	*types.ActivationTx
 }
 
 // Status indicates status change event.

@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
 type UserEvent struct {
@@ -255,7 +256,7 @@ func EmitProposal(nodeID types.NodeID, layer types.LayerID, proposal types.Propo
 	)
 }
 
-func EmitOwnMalfeasanceProof(nodeID types.NodeID, mp *types.MalfeasanceProof) {
+func EmitOwnMalfeasanceProof(nodeID types.NodeID, mp *wire.MalfeasanceProof) {
 	const help = "Node committed malicious behavior. Identity will be canceled."
 	emitUserEvent(
 		help,
@@ -283,26 +284,26 @@ func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 	}
 }
 
-func ToMalfeasancePB(nodeID types.NodeID, mp *types.MalfeasanceProof, includeProof bool) *pb.MalfeasanceProof {
+func ToMalfeasancePB(nodeID types.NodeID, mp *wire.MalfeasanceProof, includeProof bool) *pb.MalfeasanceProof {
 	if mp == nil {
 		return &pb.MalfeasanceProof{}
 	}
 	kind := pb.MalfeasanceProof_MALFEASANCE_UNSPECIFIED
 	switch mp.Proof.Type {
-	case types.MultipleATXs:
+	case wire.MultipleATXs:
 		kind = pb.MalfeasanceProof_MALFEASANCE_ATX
-	case types.MultipleBallots:
+	case wire.MultipleBallots:
 		kind = pb.MalfeasanceProof_MALFEASANCE_BALLOT
-	case types.HareEquivocation:
+	case wire.HareEquivocation:
 		kind = pb.MalfeasanceProof_MALFEASANCE_HARE
-	case types.InvalidPostIndex:
+	case wire.InvalidPostIndex:
 		kind = pb.MalfeasanceProof_MALFEASANCE_POST_INDEX
 	}
 	result := &pb.MalfeasanceProof{
 		SmesherId: &pb.SmesherId{Id: nodeID.Bytes()},
 		Layer:     &pb.LayerNumber{Number: mp.Layer.Uint32()},
 		Kind:      kind,
-		DebugInfo: types.MalfeasanceInfo(nodeID, mp),
+		DebugInfo: wire.MalfeasanceInfo(nodeID, mp),
 	}
 	if includeProof {
 		data, _ := codec.Encode(mp)

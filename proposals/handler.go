@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -386,7 +387,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	// broadcast malfeasance proof last as the verification of the proof will take place
 	// in the same goroutine
 	if proof != nil {
-		gossip := types.MalfeasanceGossip{
+		gossip := wire.MalfeasanceGossip{
 			MalfeasanceProof: *proof,
 		}
 		encodedProof, err := codec.Encode(&gossip)
@@ -427,7 +428,7 @@ func (h *Handler) setProposalBeacon(p *types.Proposal) error {
 	return nil
 }
 
-func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ballot) (*types.MalfeasanceProof, error) {
+func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ballot) (*wire.MalfeasanceProof, error) {
 	if data := h.tortoise.GetBallot(b.ID()); data != nil {
 		known.Inc()
 		return nil, fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())

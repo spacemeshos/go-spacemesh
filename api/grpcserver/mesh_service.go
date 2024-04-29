@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -250,7 +251,7 @@ func castTransaction(t *types.Transaction) *pb.Transaction {
 	return tx
 }
 
-func convertActivation(a *types.VerifiedActivationTx) *pb.Activation {
+func convertActivation(a *types.ActivationTx) *pb.Activation {
 	return &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PublishEpoch.Uint32()},
@@ -435,7 +436,7 @@ func (s MeshService) AccountMeshDataStream(
 			ctxzap.Info(stream.Context(), "activations buffer is full, shutting down")
 			return status.Error(codes.Canceled, errActivationsBufferFull)
 		case activationEvent := <-activationsCh:
-			activation := activationEvent.VerifiedActivationTx
+			activation := activationEvent.ActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
 				resp := &pb.AccountMeshDataStreamResponse{
@@ -594,7 +595,7 @@ func (s MeshService) MalfeasanceStream(
 	}
 
 	// first serve those already existed locally.
-	if err := s.cdb.IterateMalfeasanceProofs(func(id types.NodeID, mp *types.MalfeasanceProof) error {
+	if err := s.cdb.IterateMalfeasanceProofs(func(id types.NodeID, mp *wire.MalfeasanceProof) error {
 		select {
 		case <-stream.Context().Done():
 			return nil
