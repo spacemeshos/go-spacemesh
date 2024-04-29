@@ -165,7 +165,7 @@ type ActiveSetPreparation struct {
 	Tries int `mapstructure:"tries"`
 }
 
-func DefaultActiveSetPrepartion() ActiveSetPreparation {
+func DefaultActiveSetPreparation() ActiveSetPreparation {
 	return ActiveSetPreparation{
 		Window:        1 * time.Second,
 		RetryInterval: 1 * time.Second,
@@ -273,7 +273,7 @@ func New(
 	pb := &ProposalBuilder{
 		cfg: config{
 			workersLimit: runtime.NumCPU(),
-			activeSet:    DefaultActiveSetPrepartion(),
+			activeSet:    DefaultActiveSetPreparation(),
 		},
 		logger:    log.NewNop(),
 		clock:     clock,
