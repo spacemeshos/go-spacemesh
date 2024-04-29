@@ -200,7 +200,7 @@ func DefaultConfig() Config {
 		Sync:            syncer.DefaultConfig(),
 		Recovery:        checkpoint.DefaultConfig(),
 		Cache:           datastore.DefaultConfig(),
-		ActiveSet:       miner.DefaultActiveSetPrepartion(),
+		ActiveSet:       miner.DefaultActiveSetPreparation(),
 	}
 }
 
