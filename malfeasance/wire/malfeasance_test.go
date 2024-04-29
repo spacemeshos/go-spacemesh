@@ -28,15 +28,13 @@ func TestCodec_MultipleATXs(t *testing.T) {
 
 	var atxProof wire.AtxProof
 	for i, a := range []*types.ActivationTx{a1, a2} {
-		a.Signature = types.RandomEdSignature()
-		a.SmesherID = types.RandomNodeID()
 		atxProof.Messages[i] = wire.AtxProofMsg{
 			InnerMsg: types.ATXMetadata{
 				PublishEpoch: a.PublishEpoch,
-				// MsgHash:      types.Hash32(a.ToWireV1().HashInnerBytes()),
+				MsgHash:      types.RandomHash(),
 			},
-			SmesherID: a.SmesherID,
-			Signature: a.Signature,
+			SmesherID: types.RandomNodeID(),
+			Signature: types.RandomEdSignature(),
 		}
 	}
 	proof := &wire.MalfeasanceProof{

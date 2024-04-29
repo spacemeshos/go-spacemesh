@@ -712,13 +712,14 @@ func TestHandler_StoreAtx(t *testing.T) {
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx.ToHeader())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx.ID(), gomock.Any())
-		proof, err := atxHdlr.storeAtx(context.Background(), vAtx)
+		proof, err := atxHdlr.storeAtx(context.Background(), vAtx, watx.Signature)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
 		atxFromDb, err := atxs.Get(atxHdlr.cdb, vAtx.ID())
 		require.NoError(t, err)
 		vAtx.SetReceived(time.Unix(0, vAtx.Received().UnixNano()))
+		vAtx.AtxBlob = types.AtxBlob{}
 		require.Equal(t, vAtx, atxFromDb)
 	})
 
@@ -731,13 +732,13 @@ func TestHandler_StoreAtx(t *testing.T) {
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx.ToHeader())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx.ID(), gomock.Any())
-		proof, err := atxHdlr.storeAtx(context.Background(), vAtx)
+		proof, err := atxHdlr.storeAtx(context.Background(), vAtx, watx.Signature)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx.ToHeader())
 		// Note: tortoise is not informed about the same ATX again
-		proof, err = atxHdlr.storeAtx(context.Background(), vAtx)
+		proof, err = atxHdlr.storeAtx(context.Background(), vAtx, watx.Signature)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 	})
@@ -752,7 +753,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0.ToHeader())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx0.ID(), gomock.Any())
 
-		proof, err := atxHdlr.storeAtx(context.Background(), vAtx0)
+		proof, err := atxHdlr.storeAtx(context.Background(), vAtx0, watx0.Signature)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
@@ -765,7 +766,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx1.ID(), gomock.Any())
 		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
 
-		proof, err = atxHdlr.storeAtx(context.Background(), vAtx1)
+		proof, err = atxHdlr.storeAtx(context.Background(), vAtx1, watx1.Signature)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
 		require.Equal(t, mwire.MultipleATXs, proof.Proof.Type)
@@ -798,7 +799,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0.ToHeader())
 		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx0.ID(), gomock.Any())
 
-		proof, err := atxHdlr.storeAtx(context.Background(), vAtx0)
+		proof, err := atxHdlr.storeAtx(context.Background(), vAtx0, watx0.Signature)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
@@ -807,7 +808,7 @@ func TestHandler_StoreAtx(t *testing.T) {
 		watx1.Sign(sig)
 		vAtx1 := toAtx(t, watx1)
 
-		proof, err = atxHdlr.storeAtx(context.Background(), vAtx1)
+		proof, err = atxHdlr.storeAtx(context.Background(), vAtx1, watx1.Signature)
 		require.ErrorContains(t,
 			err,
 			fmt.Sprintf("%s already published an ATX", sig.NodeID().ShortString()),

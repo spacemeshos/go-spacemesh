@@ -162,7 +162,6 @@ func ActivationTxToWireV1(a *types.ActivationTx) *ActivationTxV1 {
 			VRFNonce: (*uint64)(a.VRFNonce),
 		},
 		SmesherID: a.SmesherID,
-		Signature: a.Signature,
 	}
 }
 
@@ -176,7 +175,6 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 		NumUnits:      atx.NumUnits,
 		VRFNonce:      (*types.VRFPostIndex)(atx.VRFNonce),
 		SmesherID:     atx.SmesherID,
-		Signature:     atx.Signature,
 		AtxBlob: types.AtxBlob{
 			Version: types.AtxV1,
 			Blob:    blob,

@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -163,7 +162,8 @@ func createModifiedATXs(
 			nil,
 		)
 		atx.SetReceived(time.Now())
-		require.NoError(tb, activation.SignAndFinalizeAtx(signer, atx))
+		atx.SmesherID = signer.NodeID()
+		atx.SetID(types.RandomATXID())
 		onAtx(atx)
 		data.AddFromAtx(atx, 0, false)
 		atxes = append(atxes, atx)

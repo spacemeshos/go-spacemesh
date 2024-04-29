@@ -373,7 +373,11 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTx, nonce t
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *Handler) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwire.MalfeasanceProof, error) {
+func (h *Handler) storeAtx(
+	ctx context.Context,
+	atx *types.ActivationTx,
+	signature types.EdSignature,
+) (*mwire.MalfeasanceProof, error) {
 	var nonce *types.VRFPostIndex
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
@@ -394,7 +398,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwire
 		}
 
 		// do ID check to be absolutely sure.
-		if prev != nil && prev.ID() != atx.ID() {
+		if err == nil && prev != atx.ID() {
 			if _, ok := h.signers[atx.SmesherID]; ok {
 				// if we land here we tried to publish 2 ATXs in the same epoch
 				// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
@@ -402,17 +406,27 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwire
 					atx.PublishEpoch,
 				)
 			}
+			prevSignature, err := atxSignature(ctx, tx, prev)
+			if err != nil {
+				return fmt.Errorf("extracting signature for malfeasance proof: %w", err)
+			}
 
-			var atxProof mwire.AtxProof
-			for i, a := range []*types.ActivationTx{prev, atx} {
-				atxProof.Messages[i] = mwire.AtxProofMsg{
+			atxProof := mwire.AtxProof{
+				Messages: [2]mwire.AtxProofMsg{{
 					InnerMsg: types.ATXMetadata{
-						PublishEpoch: a.PublishEpoch,
-						MsgHash:      a.ID().Hash32(),
+						PublishEpoch: atx.PublishEpoch,
+						MsgHash:      prev.Hash32(),
 					},
-					SmesherID: a.SmesherID,
-					Signature: a.Signature,
-				}
+					SmesherID: atx.SmesherID,
+					Signature: prevSignature,
+				}, {
+					InnerMsg: types.ATXMetadata{
+						PublishEpoch: atx.PublishEpoch,
+						MsgHash:      atx.ID().Hash32(),
+					},
+					SmesherID: atx.SmesherID,
+					Signature: signature,
+				}},
 			}
 			proof = &mwire.MalfeasanceProof{
 				Layer: atx.PublishEpoch.FirstLayer(),
@@ -431,8 +445,8 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwire
 
 			h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 				log.Stringer("smesher", atx.SmesherID),
-				log.Object("prev", prev),
-				log.Object("curr", atx),
+				log.Stringer("previous", prev),
+				log.Object("current", atx),
 			)
 		}
 
@@ -619,7 +633,7 @@ func (h *Handler) processATX(
 	atx.BaseTickHeight = baseTickHeight
 	atx.TickCount = leaves / h.tickSize
 
-	proof, err = h.storeAtx(ctx, atx)
+	proof, err = h.storeAtx(ctx, atx, watx.Signature)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
@@ -674,4 +688,24 @@ func collectAtxDeps(goldenAtxId types.ATXID, atx *wire.ActivationTxV1) (types.Ha
 	}
 
 	return types.BytesToHash(atx.NIPost.PostMetadata.Challenge), maps.Keys(filtered)
+}
+
+// Obtain the atxSignature of the given ATX.
+func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.EdSignature, error) {
+	var blob sql.Blob
+	if err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob); err != nil {
+		return types.EmptyEdSignature, err
+	}
+
+	if blob.Bytes == nil {
+		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
+		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
+	}
+
+	// TODO: decide how to decode based on the `version` column.
+	var prev wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &prev); err != nil {
+		return types.EmptyEdSignature, fmt.Errorf("decoding previous atx: %w", err)
+	}
+	return prev.Signature, nil
 }

@@ -45,6 +45,7 @@ func TestGet(t *testing.T) {
 	for _, want := range atxList {
 		got, err := atxs.Get(db, want.ID())
 		require.NoError(t, err)
+		want.AtxBlob = types.AtxBlob{}
 		require.Equal(t, want, got)
 	}
 
@@ -245,19 +246,17 @@ func TestGetByEpochAndNodeID(t *testing.T) {
 
 	got, err := atxs.GetByEpochAndNodeID(db, types.EpochID(1), sig1.NodeID())
 	require.NoError(t, err)
-	require.Equal(t, atx1, got)
+	require.Equal(t, atx1.ID(), got)
 
-	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig1.NodeID())
+	_, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig1.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, got)
 
-	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(1), sig2.NodeID())
+	_, err = atxs.GetByEpochAndNodeID(db, types.EpochID(1), sig2.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, got)
 
 	got, err = atxs.GetByEpochAndNodeID(db, types.EpochID(2), sig2.NodeID())
 	require.NoError(t, err)
-	require.Equal(t, atx2, got)
+	require.Equal(t, atx2.ID(), got)
 }
 
 func TestGetLastIDByNodeID(t *testing.T) {
@@ -688,6 +687,7 @@ func TestAdd(t *testing.T) {
 
 	got, err := atxs.Get(db, atx.ID())
 	require.NoError(t, err)
+	atx.AtxBlob = types.AtxBlob{}
 	require.Equal(t, atx, got)
 }
 
