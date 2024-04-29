@@ -172,27 +172,65 @@ func (h *Handler) syntacticallyValidate(ctx context.Context, atx *wire.Activatio
 	return nil
 }
 
+// Obtain the commitment ATX ID for the given ATX.
+func (h *Handler) commitment(ctx context.Context, atx *wire.ActivationTxV1) (types.ATXID, error) {
+	if atx.PrevATXID == types.EmptyATXID {
+		return *atx.CommitmentATXID, nil
+	}
+	return atxs.CommitmentATX(h.cdb, atx.SmesherID)
+}
+
+// Obtain the previous ATX for the given ATX.
+// We need to decode it from the blob because we are interested in the true NumUnits value
+// that was declared by the previous ATX and the `atxs` table only holds the effective NumUnits.
+// However, in case of a golden ATX, the blob is not available and we fallback to fetching the ATX from the DB
+// to use the effective num units.
+func (h *Handler) previous(ctx context.Context, atx *wire.ActivationTxV1) (*types.ActivationTx, error) {
+	var blob sql.Blob
+	if err := atxs.LoadBlob(ctx, h.cdb, atx.PrevATXID[:], &blob); err != nil {
+		return nil, err
+	}
+
+	if blob.Bytes == nil {
+		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
+		// Fallback to fetching it from the DB to get the effective NumUnits.
+		atx, err := atxs.Get(h.cdb, atx.PrevATXID)
+		if err != nil {
+			return nil, fmt.Errorf("fetching golden previous atx: %w", err)
+		}
+		return atx, nil
+	}
+
+	var prev wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &prev); err != nil {
+		return nil, fmt.Errorf("decoding previous atx: %w", err)
+	}
+	return wire.ActivationTxFromWireV1(&prev, blob.Bytes...), nil
+}
+
 func (h *Handler) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV1,
 ) (leaves uint64, effectiveNumUnits uint32, proof *mwire.MalfeasanceProof, err error) {
-	var commitmentATX types.ATXID
+	commitmentATX, err := h.commitment(ctx, atx)
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
+	}
 
 	if atx.PrevATXID == types.EmptyATXID {
 		if err := h.nipostValidator.InitialNIPostChallengeV1(&atx.NIPostChallengeV1, h.cdb, h.goldenATXID); err != nil {
 			return 0, 0, nil, err
 		}
 		effectiveNumUnits = atx.NumUnits
-		commitmentATX = *atx.CommitmentATXID
 	} else {
-		commitmentATX, err = atxs.CommitmentATX(h.cdb, atx.SmesherID)
+		previous, err := h.previous(ctx, atx)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
+			return 0, 0, nil, fmt.Errorf("fetching previous atx %s: %w", atx.PrevATXID, err)
 		}
-		effectiveNumUnits, err = h.validateNonInitialAtx(ctx, atx, commitmentATX)
-		if err != nil {
+		if err := h.validateNonInitialAtx(ctx, atx, previous, commitmentATX); err != nil {
 			return 0, 0, nil, err
 		}
+		effectiveNumUnits = min(previous.NumUnits, atx.NumUnits)
 	}
 
 	err = h.nipostValidator.PositioningAtx(atx.PositioningATXID, h.cdb, h.goldenATXID, atx.PublishEpoch)
@@ -245,19 +283,15 @@ func (h *Handler) syntacticallyValidateDeps(
 func (h *Handler) validateNonInitialAtx(
 	ctx context.Context,
 	atx *wire.ActivationTxV1,
-	commitmentATX types.ATXID,
-) (uint32, error) {
-	if err := h.nipostValidator.NIPostChallengeV1(&atx.NIPostChallengeV1, h.cdb, atx.SmesherID); err != nil {
-		return 0, err
-	}
-
-	prevAtx, err := h.cdb.GetAtxHeader(atx.PrevATXID)
-	if err != nil {
-		return 0, err
+	previous *types.ActivationTx,
+	commitment types.ATXID,
+) error {
+	if err := h.nipostValidator.NIPostChallengeV1(&atx.NIPostChallengeV1, previous, atx.SmesherID); err != nil {
+		return err
 	}
 
 	nonce := atx.VRFNonce
-	if atx.NumUnits > prevAtx.NumUnits && nonce == nil {
+	if atx.NumUnits > previous.NumUnits && nonce == nil {
 		h.log.WithContext(ctx).With().Info("post size increased without new vrf Nonce, re-validating current nonce",
 			atx.ID(),
 			log.Stringer("smesher", atx.SmesherID),
@@ -265,22 +299,22 @@ func (h *Handler) validateNonInitialAtx(
 
 		// This is not expected to happen very often, so we query the database
 		// directly here without using the cache.
-		current, err := atxs.NonceByID(h.cdb, prevAtx.ID)
+		current, err := atxs.NonceByID(h.cdb, previous.ID())
 		if err != nil {
-			return 0, fmt.Errorf("failed to get current nonce: %w", err)
+			return fmt.Errorf("failed to get current nonce: %w", err)
 		}
 		nonce = (*uint64)(&current)
 	}
 
 	if nonce != nil {
-		err = h.nipostValidator.
-			VRFNonce(atx.SmesherID, commitmentATX, *nonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
+		err := h.nipostValidator.
+			VRFNonce(atx.SmesherID, commitment, *nonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
 		if err != nil {
-			return 0, fmt.Errorf("invalid vrf nonce: %w", err)
+			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
 	}
 
-	return min(prevAtx.NumUnits, atx.NumUnits), nil
+	return nil
 }
 
 // contextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
@@ -326,20 +360,20 @@ func (h *Handler) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader, nonce types.VRFPostIndex) *atxsdata.ATX {
+func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTx, nonce types.VRFPostIndex) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
-		malicious, err := h.cdb.IsMalicious(atx.NodeID)
+		malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 		if err != nil {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
 			return nil
 		}
-		return h.atxsdata.AddFromHeader(atx, nonce, malicious)
+		return h.atxsdata.AddFromAtx(atx, nonce, malicious)
 	}
 	return nil
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*mwire.MalfeasanceProof, error) {
+func (h *Handler) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwire.MalfeasanceProof, error) {
 	var nonce *types.VRFPostIndex
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
@@ -370,11 +404,11 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 			}
 
 			var atxProof mwire.AtxProof
-			for i, a := range []*types.VerifiedActivationTx{prev, atx} {
+			for i, a := range []*types.ActivationTx{prev, atx} {
 				atxProof.Messages[i] = mwire.AtxProofMsg{
 					InnerMsg: types.ATXMetadata{
 						PublishEpoch: a.PublishEpoch,
-						MsgHash:      a.ActivationTx.ID().Hash32(),
+						MsgHash:      a.ID().Hash32(),
 					},
 					SmesherID: a.SmesherID,
 					Signature: a.Signature,
@@ -418,9 +452,9 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
-	header := atx.ToHeader()
-	added := h.cacheAtx(ctx, header, *nonce)
-	h.beacon.OnAtx(header)
+
+	added := h.cacheAtx(ctx, atx, *nonce)
+	h.beacon.OnAtx(atx.ToHeader())
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
@@ -581,19 +615,17 @@ func (h *Handler) processATX(
 		atx.SetValidity(types.Valid)
 	}
 	atx.SetReceived(received)
-	atx.SetEffectiveNumUnits(effectiveNumUnits)
-	vAtx, err := atx.Verify(baseTickHeight, leaves/h.tickSize)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify atx %x: %w", watx.ID(), err)
-	}
+	atx.NumUnits = effectiveNumUnits
+	atx.BaseTickHeight = baseTickHeight
+	atx.TickCount = leaves / h.tickSize
 
-	proof, err = h.storeAtx(ctx, vAtx)
+	proof, err = h.storeAtx(ctx, atx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
-	events.ReportNewActivation(vAtx)
-	h.log.WithContext(ctx).With().Info("new atx", log.Inline(vAtx), log.Bool("malicious", proof != nil))
+	events.ReportNewActivation(atx)
+	h.log.WithContext(ctx).With().Info("new atx", log.Inline(atx), log.Bool("malicious", proof != nil))
 	return proof, err
 }
 

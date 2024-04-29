@@ -25,10 +25,10 @@ func TestActivationService_List(t *testing.T) {
 	ctx := context.Background()
 
 	gen := fixture.NewAtxsGenerator()
-	activations := make([]types.VerifiedActivationTx, 100)
+	activations := make([]types.ActivationTx, 100)
 	for i := range activations {
 		atx := gen.Next()
-		vAtx := fixture.ToVerifiedAtx(t, atx)
+		vAtx := fixture.ToAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 		activations[i] = *vAtx
 	}
@@ -108,10 +108,10 @@ func TestActivationStreamService_Stream(t *testing.T) {
 	ctx := context.Background()
 
 	gen := fixture.NewAtxsGenerator()
-	activations := make([]types.VerifiedActivationTx, 100)
+	activations := make([]types.ActivationTx, 100)
 	for i := range activations {
 		atx := gen.Next()
-		vAtx := fixture.ToVerifiedAtx(t, atx)
+		vAtx := fixture.ToAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 		activations[i] = *vAtx
 	}
@@ -153,9 +153,9 @@ func TestActivationStreamService_Stream(t *testing.T) {
 		gen = fixture.NewAtxsGenerator().WithEpochs(start, 10)
 		var streamed []*events.ActivationTx
 		for i := 0; i < n; i++ {
-			vatx := fixture.ToVerifiedAtx(t, gen.Next())
-			require.NoError(t, atxs.Add(db, vatx))
-			streamed = append(streamed, &events.ActivationTx{VerifiedActivationTx: vatx})
+			atx := fixture.ToAtx(t, gen.Next())
+			require.NoError(t, atxs.Add(db, atx))
+			streamed = append(streamed, &events.ActivationTx{ActivationTx: atx})
 		}
 
 		for _, tc := range []struct {
@@ -193,12 +193,12 @@ func TestActivationStreamService_Stream(t *testing.T) {
 				_, err = stream.Header()
 				require.NoError(t, err)
 
-				var expect []*types.VerifiedActivationTx
+				var expect []*types.ActivationTx
 				for _, rst := range streamed {
-					events.ReportNewActivation(rst.VerifiedActivationTx)
+					events.ReportNewActivation(rst.ActivationTx)
 					matcher := atxsMatcher{tc.request, ctx}
 					if matcher.match(rst) {
-						expect = append(expect, rst.VerifiedActivationTx)
+						expect = append(expect, rst.ActivationTx)
 					}
 				}
 
@@ -217,20 +217,20 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	ctx := context.Background()
 
 	genEpoch3 := fixture.NewAtxsGenerator().WithEpochs(3, 1)
-	epoch3ATXs := make([]types.VerifiedActivationTx, 30)
+	epoch3ATXs := make([]types.ActivationTx, 30)
 	for i := range epoch3ATXs {
 		atx := genEpoch3.Next()
-		vatx := fixture.ToVerifiedAtx(t, atx)
+		vatx := fixture.ToAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vatx))
 		epoch3ATXs[i] = *vatx
 	}
 
 	genEpoch5 := fixture.NewAtxsGenerator().WithSeed(time.Now().UnixNano()+1).
 		WithEpochs(5, 1)
-	epoch5ATXs := make([]types.VerifiedActivationTx, 10) // ensure the number here is different from above
+	epoch5ATXs := make([]types.ActivationTx, 10) // ensure the number here is different from above
 	for i := range epoch5ATXs {
 		atx := genEpoch5.Next()
-		vatx := fixture.ToVerifiedAtx(t, atx)
+		vatx := fixture.ToAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vatx))
 		epoch5ATXs[i] = *vatx
 	}

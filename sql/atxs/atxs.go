@@ -27,10 +27,10 @@ const (
 const fullQuery = `select id,
         (select atx from atx_blobs b where a.id = b.id) as atx,
         base_tick_height, tick_count, pubkey,
-	effective_num_units, received, epoch, sequence, coinbase, validity
+	effective_num_units, received, epoch, sequence, coinbase, validity, prev_id, nonce
 	from atxs a`
 
-type decoderCallback func(*types.VerifiedActivationTx, error) bool
+type decoderCallback func(*types.ActivationTx, error) bool
 
 func decoder(fn decoderCallback) sql.Decoder {
 	return func(stmt *sql.Statement) bool {
@@ -53,14 +53,12 @@ func decoder(fn decoderCallback) sql.Decoder {
 			a = *wire.ActivationTxFromWireV1(&atxV1, blob...)
 		}
 		a.SetID(id)
-		baseTickHeight := uint64(stmt.ColumnInt64(2))
-		tickCount := uint64(stmt.ColumnInt64(3))
+		a.BaseTickHeight = uint64(stmt.ColumnInt64(2))
+		a.TickCount = uint64(stmt.ColumnInt64(3))
 		stmt.ColumnBytes(4, a.SmesherID[:])
-		effectiveNumUnits := uint32(stmt.ColumnInt32(5))
-		a.SetEffectiveNumUnits(effectiveNumUnits)
+		a.NumUnits = uint32(stmt.ColumnInt32(5))
 		if checkpointed {
 			a.SetGolden()
-			a.NumUnits = effectiveNumUnits
 			a.SetReceived(time.Time{})
 		} else {
 			a.SetReceived(time.Unix(0, stmt.ColumnInt64(6)).Local())
@@ -69,20 +67,22 @@ func decoder(fn decoderCallback) sql.Decoder {
 		a.Sequence = uint64(stmt.ColumnInt64(8))
 		stmt.ColumnBytes(9, a.Coinbase[:])
 		a.SetValidity(types.Validity(stmt.ColumnInt(10)))
-		v, err := a.Verify(baseTickHeight, tickCount)
-		if err != nil {
-			return fn(nil, err)
+		if stmt.ColumnType(11) != sqlite.SQLITE_NULL {
+			stmt.ColumnBytes(11, a.PrevATXID[:])
 		}
-		return fn(v, nil)
+		nonce := types.VRFPostIndex(stmt.ColumnInt64(12))
+		a.VRFNonce = &nonce
+
+		return fn(&a, nil)
 	}
 }
 
-func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActivationTx, error) {
+func load(db sql.Executor, query string, enc sql.Encoder) (*types.ActivationTx, error) {
 	var (
-		v    *types.VerifiedActivationTx
+		v    *types.ActivationTx
 		derr error
 	)
-	_, err := db.Exec(query, enc, decoder(func(atx *types.VerifiedActivationTx, err error) bool {
+	_, err := db.Exec(query, enc, decoder(func(atx *types.ActivationTx, err error) bool {
 		v = atx
 		derr = err
 		return derr == nil
@@ -94,7 +94,7 @@ func load(db sql.Executor, query string, enc sql.Encoder) (*types.VerifiedActiva
 }
 
 // Get gets an ATX by a given ATX ID.
-func Get(db sql.Executor, id types.ATXID) (*types.VerifiedActivationTx, error) {
+func Get(db sql.Executor, id types.ATXID) (*types.ActivationTx, error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
@@ -114,7 +114,7 @@ func GetByEpochAndNodeID(
 	db sql.Executor,
 	epoch types.EpochID,
 	nodeID types.NodeID,
-) (*types.VerifiedActivationTx, error) {
+) (*types.ActivationTx, error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))
 		stmt.BindBytes(2, nodeID.Bytes())
@@ -392,14 +392,14 @@ func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err e
 }
 
 // Add adds an ATX for a given ATX ID.
-func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
+func Add(db sql.Executor, atx *types.ActivationTx) error {
 	_, err := AddGettingNonce(db, atx)
 	return err
 }
 
 // AddGettingNonce adds an ATX for a given ATX ID and returns the nonce for the newly added ATX.
-func AddGettingNonce(db sql.Executor, atx *types.VerifiedActivationTx) (*types.VRFPostIndex, error) {
-	if atx.ActivationTx.VRFNonce == nil && atx.PrevATXID != types.EmptyATXID {
+func AddGettingNonce(db sql.Executor, atx *types.ActivationTx) (*types.VRFPostIndex, error) {
+	if atx.VRFNonce == nil && atx.PrevATXID != types.EmptyATXID {
 		nonce, err := NonceByID(db, atx.PrevATXID)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return nil, fmt.Errorf("error getting nonce: %w", err)
@@ -424,15 +424,15 @@ func AddGettingNonce(db sql.Executor, atx *types.VerifiedActivationTx) (*types.V
 // AddMaybeNoNonce adds an ATX for a given ATX ID. It doesn't try
 // to set the nonce field if VRFNonce is not set in the ATX.
 // This function is only to be used for testing.
-func AddMaybeNoNonce(db sql.Executor, atx *types.VerifiedActivationTx) error {
+func AddMaybeNoNonce(db sql.Executor, atx *types.ActivationTx) error {
 	return add(db, atx, atx.VRFNonce)
 }
 
-func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostIndex) error {
+func add(db sql.Executor, atx *types.ActivationTx, nonce *types.VRFPostIndex) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PublishEpoch))
-		stmt.BindInt64(3, int64(atx.EffectiveNumUnits()))
+		stmt.BindInt64(3, int64(atx.NumUnits))
 		if atx.CommitmentATX != nil {
 			stmt.BindBytes(4, atx.CommitmentATX.Bytes())
 		} else {
@@ -445,8 +445,8 @@ func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostI
 		}
 		stmt.BindBytes(6, atx.SmesherID.Bytes())
 		stmt.BindInt64(7, atx.Received().UnixNano())
-		stmt.BindInt64(8, int64(atx.BaseTickHeight()))
-		stmt.BindInt64(9, int64(atx.TickCount()))
+		stmt.BindInt64(8, int64(atx.BaseTickHeight))
+		stmt.BindInt64(9, int64(atx.TickCount))
 		stmt.BindInt64(10, int64(atx.Sequence))
 		stmt.BindBytes(11, atx.Coinbase.Bytes())
 		stmt.BindInt64(12, int64(atx.Validity()))
@@ -480,7 +480,7 @@ func add(db sql.Executor, atx *types.VerifiedActivationTx, nonce *types.VRFPostI
 }
 
 // AtxAdded updates epoch query cache with new ATX, if the query cache is enabled.
-func AtxAdded(db sql.Executor, atx *types.VerifiedActivationTx) {
+func AtxAdded(db sql.Executor, atx *types.ActivationTx) {
 	epochCacheKey := sql.QueryCacheKey(CacheKindEpochATXs, atx.PublishEpoch.String())
 	sql.AppendToCachedSlice(db, epochCacheKey, atx.ID())
 }
@@ -740,13 +740,13 @@ func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error
 func IterateAtxsOps(
 	db sql.Executor,
 	operations builder.Operations,
-	fn func(*types.VerifiedActivationTx) bool,
+	fn func(*types.ActivationTx) bool,
 ) error {
 	var derr error
 	_, err := db.Exec(
 		fullQuery+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
-		decoder(func(atx *types.VerifiedActivationTx, err error) bool {
+		decoder(func(atx *types.ActivationTx, err error) bool {
 			if atx != nil {
 				return fn(atx)
 			}

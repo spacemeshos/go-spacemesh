@@ -158,7 +158,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	atx.Sign(signer)
-	vAtx := fixture.ToVerifiedAtx(t, atx)
+	vAtx := fixture.ToAtx(t, atx)
 
 	has, err := bs.Has(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)

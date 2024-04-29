@@ -53,7 +53,7 @@ type txValidator interface {
 
 // atxProvider is used by ActivationService to get ATXes.
 type atxProvider interface {
-	GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error)
+	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
 	MaxHeightAtx() (types.ATXID, error)
 	GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error)
 }

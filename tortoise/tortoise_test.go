@@ -476,14 +476,11 @@ func TestComputeExpectedWeight(t *testing.T) {
 				atx := &types.ActivationTx{
 					PublishEpoch: eid - 1,
 					NumUnits:     uint32(weight),
+					TickCount:    1,
 				}
-				id := types.RandomATXID()
-				atx.SetID(id)
-				atx.SetEffectiveNumUnits(atx.NumUnits)
+				atx.SetID(types.RandomATXID())
 				atx.SetReceived(time.Now())
-				vAtx, err := atx.Verify(0, 1)
-				require.NoError(t, err)
-				require.NoError(t, atxs.Add(cdb, vAtx))
+				require.NoError(t, atxs.Add(cdb, atx))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(cdb, lid.GetEpoch())

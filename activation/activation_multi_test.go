@@ -184,13 +184,13 @@ func TestRegossip(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		goldenATXID := types.RandomATXID()
 		tab := newTestBuilder(t, 5)
-		var refAtx *types.VerifiedActivationTx
+		var refAtx *types.ActivationTx
 
 		for _, sig := range tab.signers {
 			atx := newInitialATXv1(t, goldenATXID)
 			atx.PublishEpoch = layer.GetEpoch()
 			atx.Sign(sig)
-			vAtx := toVerifiedAtx(t, atx)
+			vAtx := toAtx(t, atx)
 			require.NoError(t, atxs.Add(tab.db, vAtx))
 
 			if refAtx == nil {
