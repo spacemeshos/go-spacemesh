@@ -567,6 +567,7 @@ func (d *Discovery) findPeers(
 		case <-ctx.Done():
 			return false, nil
 		case <-tickerCh:
+			// Note: ticker is not started if active is nil.
 			if !active() {
 				return true, nil
 			}
