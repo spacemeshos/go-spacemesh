@@ -22,9 +22,8 @@ const (
 // Can't use inner join for the ATX blob here b/c this will break
 // filters that refer to the id column.
 const fullQuery = `select id,
-	(select iif(atx is null, 1, 0) from atx_blobs b where a.id = b.id) as is_golden,
-    base_tick_height, tick_count, pubkey, effective_num_units,
-	received, epoch, sequence, coinbase, validity, prev_id, nonce, commitment_atx
+	nonce, base_tick_height, tick_count, pubkey, effective_num_units,
+	received, epoch, sequence, coinbase, validity, prev_id,  commitment_atx
 	from atxs a`
 
 type decoderCallback func(*types.ActivationTx, error) bool
@@ -37,9 +36,8 @@ func decoder(fn decoderCallback) sql.Decoder {
 		)
 		stmt.ColumnBytes(0, id[:])
 		a.SetID(id)
-		if checkpointed := stmt.ColumnInt(1) != 0; checkpointed {
-			a.SetGolden()
-		}
+		nonce := types.VRFPostIndex(stmt.ColumnInt64(1))
+		a.VRFNonce = &nonce
 		a.BaseTickHeight = uint64(stmt.ColumnInt64(2))
 		a.TickCount = uint64(stmt.ColumnInt64(3))
 		stmt.ColumnBytes(4, a.SmesherID[:])
@@ -48,7 +46,9 @@ func decoder(fn decoderCallback) sql.Decoder {
 		// We treat `0` as 'zero time'.
 		// We could use `NULL` instead, but the column has "NOT NULL" constraint.
 		// In future, consider changing the schema to allow `NULL` for received.
-		if received := stmt.ColumnInt64(6); received != 0 {
+		if received := stmt.ColumnInt64(6); received == 0 {
+			a.SetGolden()
+		} else {
 			a.SetReceived(time.Unix(0, received).Local())
 		}
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
@@ -58,11 +58,9 @@ func decoder(fn decoderCallback) sql.Decoder {
 		if stmt.ColumnType(11) != sqlite.SQLITE_NULL {
 			stmt.ColumnBytes(11, a.PrevATXID[:])
 		}
-		nonce := types.VRFPostIndex(stmt.ColumnInt64(12))
-		a.VRFNonce = &nonce
-		if stmt.ColumnType(13) != sqlite.SQLITE_NULL {
+		if stmt.ColumnType(12) != sqlite.SQLITE_NULL {
 			a.CommitmentATX = new(types.ATXID)
-			stmt.ColumnBytes(13, a.CommitmentATX[:])
+			stmt.ColumnBytes(12, a.CommitmentATX[:])
 		}
 
 		return fn(&a, nil)
