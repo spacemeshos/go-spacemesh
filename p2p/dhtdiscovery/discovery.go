@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	randv2 "math/rand/v2"
 	"sync"
 	"time"
@@ -206,12 +205,11 @@ func New(h DiscoveryHost, opts ...Opt) (*Discovery, error) {
 	if len(d.bootnodes) == 0 {
 		d.logger.Warn("no bootnodes in the config")
 	}
-	rngSrc := rand.NewSource(rand.Int63())
 	cacheSize := 100
 	var err error
 	d.connBackoff, err = backoff.NewBackoffConnector(h, cacheSize, d.dialTimeout,
 		backoff.NewExponentialBackoff(d.minConnBackoff, d.maxConnBackoff, backoff.FullJitter,
-			time.Second, 5.0, 0, rand.New(rngSrc)))
+			time.Second, 5.0, 0, rngSource{}))
 	if err != nil {
 		return nil, fmt.Errorf("error creating backoff connector: %w", err)
 	}
@@ -289,10 +287,9 @@ func (d *Discovery) Start() error {
 		var err error
 		d.disc = p2pdiscr.NewRoutingDiscovery(d.dht)
 		if d.discBackoff {
-			rng := rand.New(rand.NewSource(rand.Int63()))
 			d.disc, err = backoff.NewBackoffDiscovery(
 				d.disc,
-				backoff.NewExponentialBackoff(d.minBackoff, d.maxBackoff, backoff.FullJitter, time.Second, 5.0, 0, rng),
+				backoff.NewExponentialBackoff(d.minBackoff, d.maxBackoff, backoff.FullJitter, time.Second, 5.0, 0, rngSource{}),
 			)
 			if err != nil {
 				d.Stop()
@@ -595,3 +592,11 @@ func (d *Discovery) findPeers(
 		}
 	}
 }
+
+type rngSource struct{}
+
+func (r rngSource) Int63() int64 {
+	return randv2.Int64()
+}
+
+func (r rngSource) Seed(seed int64) {}
