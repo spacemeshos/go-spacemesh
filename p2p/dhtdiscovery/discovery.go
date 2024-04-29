@@ -331,11 +331,19 @@ func (d *Discovery) Stop() {
 	d.cancel = nil
 	d.eg.Wait()
 	if !d.disableDht {
-		if err := d.dht.Close(); err != nil {
-			d.logger.Error("error closing dht", zap.Error(err))
+		d.dhtLock.Lock()
+		dht := d.dht
+		ds := d.datastore
+		d.dhtLock.Unlock()
+		if dht != nil {
+			if err := dht.Close(); err != nil {
+				d.logger.Error("error closing dht", zap.Error(err))
+			}
 		}
-		if err := d.datastore.Close(); err != nil {
-			d.logger.Error("error closing level datastore", zap.Error(err))
+		if ds != nil {
+			if err := ds.Close(); err != nil {
+				d.logger.Error("error closing level datastore", zap.Error(err))
+			}
 		}
 	}
 }

@@ -25,6 +25,8 @@ is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spaceme
 * [#5882](https://github.com/spacemeshos/go-spacemesh/pull/5882) Use backoff during routing discovery.
   This should reduce network load from the peer discovery mechanism when it's enabled.
 
+* [#5888](https://github.com/spacemeshos/go-spacemesh/pull/5888) Handle DHT discovery startup errors properly
+
 * [#5896](https://github.com/spacemeshos/go-spacemesh/pull/5896) Increase supported number of ATXs to 4.5 Mio.
 
 ## (v1.5.0)
