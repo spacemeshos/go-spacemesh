@@ -4,19 +4,20 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/sql/builder"
-	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"io"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 const (
@@ -316,12 +317,12 @@ func toLayer(layer *layers.Layer) *spacemeshv2alpha1.LayerV1 {
 		v1.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
 	}
 
-	if bytes.Compare(layer.AggregatedHash.Bytes(), types.Hash32{}.Bytes()) != 0 {
+	if !bytes.Equal(layer.AggregatedHash.Bytes(), types.Hash32{}.Bytes()) {
 		v1.ConsensusHash = layer.AggregatedHash.ShortString()
 		v1.CumulativeStateHash = layer.AggregatedHash.Bytes()
 	}
 
-	if bytes.Compare(layer.StateHash.Bytes(), types.Hash32{}.Bytes()) != 0 {
+	if !bytes.Equal(layer.StateHash.Bytes(), types.Hash32{}.Bytes()) {
 		v1.StateHash = layer.StateHash.Bytes()
 	}
 
