@@ -17,6 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -177,4 +179,24 @@ func (h *Handler) handleAtx(
 	}
 	delete(h.inProgress, id)
 	return proof, err
+}
+
+// Obtain the atxSignature of the given ATX.
+func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.EdSignature, error) {
+	var blob sql.Blob
+	if err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob); err != nil {
+		return types.EmptyEdSignature, err
+	}
+
+	if blob.Bytes == nil {
+		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
+		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
+	}
+
+	// TODO: decide how to decode based on the `version` column.
+	var prev wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &prev); err != nil {
+		return types.EmptyEdSignature, fmt.Errorf("decoding previous atx: %w", err)
+	}
+	return prev.Signature, nil
 }

@@ -323,7 +323,11 @@ func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx, nonce
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwire.MalfeasanceProof, error) {
+func (h *HandlerV1) storeAtx(
+	ctx context.Context,
+	atx *types.ActivationTx,
+	signature types.EdSignature,
+) (*mwire.MalfeasanceProof, error) {
 	var nonce *types.VRFPostIndex
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
@@ -344,7 +348,7 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwi
 		}
 
 		// do ID check to be absolutely sure.
-		if prev != nil && prev.ID() != atx.ID() {
+		if err == nil && prev != atx.ID() {
 			if _, ok := h.signers[atx.SmesherID]; ok {
 				// if we land here we tried to publish 2 ATXs in the same epoch
 				// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
@@ -352,17 +356,27 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwi
 					atx.PublishEpoch,
 				)
 			}
+			prevSignature, err := atxSignature(ctx, tx, prev)
+			if err != nil {
+				return fmt.Errorf("extracting signature for malfeasance proof: %w", err)
+			}
 
-			var atxProof mwire.AtxProof
-			for i, a := range []*types.ActivationTx{prev, atx} {
-				atxProof.Messages[i] = mwire.AtxProofMsg{
+			atxProof := mwire.AtxProof{
+				Messages: [2]mwire.AtxProofMsg{{
 					InnerMsg: types.ATXMetadata{
-						PublishEpoch: a.PublishEpoch,
-						MsgHash:      a.ID().Hash32(),
+						PublishEpoch: atx.PublishEpoch,
+						MsgHash:      prev.Hash32(),
 					},
-					SmesherID: a.SmesherID,
-					Signature: a.Signature,
-				}
+					SmesherID: atx.SmesherID,
+					Signature: prevSignature,
+				}, {
+					InnerMsg: types.ATXMetadata{
+						PublishEpoch: atx.PublishEpoch,
+						MsgHash:      atx.ID().Hash32(),
+					},
+					SmesherID: atx.SmesherID,
+					Signature: signature,
+				}},
 			}
 			proof = &mwire.MalfeasanceProof{
 				Layer: atx.PublishEpoch.FirstLayer(),
@@ -381,8 +395,8 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx) (*mwi
 
 			h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
 				log.Stringer("smesher", atx.SmesherID),
-				log.Object("prev", prev),
-				log.Object("curr", atx),
+				log.Stringer("previous", prev),
+				log.Object("current", atx),
 			)
 		}
 
@@ -477,7 +491,7 @@ func (h *HandlerV1) processATX(
 	atx.BaseTickHeight = baseTickHeight
 	atx.TickCount = leaves / h.tickSize
 
-	proof, err = h.storeAtx(ctx, atx)
+	proof, err = h.storeAtx(ctx, atx, watx.Signature)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}

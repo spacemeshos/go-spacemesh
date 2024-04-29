@@ -277,7 +277,8 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 		PublishEpoch: 1,
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, 2, nil)
-	require.NoError(t, SignAndFinalizeAtx(signer, atx))
+	atx.SmesherID = signer.NodeID()
+	atx.SetID(types.RandomATXID())
 	atx.SetReceived(time.Now())
 	atx.TickCount = 1
 	require.NoError(t, err)
@@ -323,7 +324,8 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 	commitmentAtx := types.RandomATXID()
 	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 1, nil)
 	atx.CommitmentATX = &commitmentAtx
-	require.NoError(t, SignAndFinalizeAtx(signer, atx))
+	atx.SmesherID = signer.NodeID()
+	atx.SetID(types.RandomATXID())
 	atx.SetReceived(time.Now())
 	atx.TickCount = 1
 	require.NoError(t, atxs.Add(mgr.cdb, atx))

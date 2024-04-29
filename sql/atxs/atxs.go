@@ -4,13 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
@@ -25,9 +22,8 @@ const (
 // Can't use inner join for the ATX blob here b/c this will break
 // filters that refer to the id column.
 const fullQuery = `select id,
-        (select atx from atx_blobs b where a.id = b.id) as atx,
-        base_tick_height, tick_count, pubkey,
-	effective_num_units, received, epoch, sequence, coinbase, validity, prev_id, nonce
+	nonce, base_tick_height, tick_count, pubkey, effective_num_units,
+	received, epoch, sequence, coinbase, validity, prev_id,  commitment_atx
 	from atxs a`
 
 type decoderCallback func(*types.ActivationTx, error) bool
@@ -39,29 +35,21 @@ func decoder(fn decoderCallback) sql.Decoder {
 			id types.ATXID
 		)
 		stmt.ColumnBytes(0, id[:])
-		checkpointed := stmt.ColumnLen(1) == 0
-		if !checkpointed {
-			// FIXME: remove decoding blob once ActivationTx struct is trimmed from unncecessary fields.
-			var atxV1 wire.ActivationTxV1
-			blob, err := io.ReadAll(stmt.ColumnReader(1))
-			if err != nil {
-				return fn(nil, fmt.Errorf("read blob %w", err))
-			}
-			if err := codec.Decode(blob, &atxV1); err != nil {
-				return fn(nil, fmt.Errorf("decode %w", err))
-			}
-			a = *wire.ActivationTxFromWireV1(&atxV1, blob...)
-		}
 		a.SetID(id)
+		nonce := types.VRFPostIndex(stmt.ColumnInt64(1))
+		a.VRFNonce = &nonce
 		a.BaseTickHeight = uint64(stmt.ColumnInt64(2))
 		a.TickCount = uint64(stmt.ColumnInt64(3))
 		stmt.ColumnBytes(4, a.SmesherID[:])
 		a.NumUnits = uint32(stmt.ColumnInt32(5))
-		if checkpointed {
+		// Note: received is assigned `0` for checkpointed ATXs.
+		// We treat `0` as 'zero time'.
+		// We could use `NULL` instead, but the column has "NOT NULL" constraint.
+		// In future, consider changing the schema to allow `NULL` for received.
+		if received := stmt.ColumnInt64(6); received == 0 {
 			a.SetGolden()
-			a.SetReceived(time.Time{})
 		} else {
-			a.SetReceived(time.Unix(0, stmt.ColumnInt64(6)).Local())
+			a.SetReceived(time.Unix(0, received).Local())
 		}
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
 		a.Sequence = uint64(stmt.ColumnInt64(8))
@@ -70,8 +58,10 @@ func decoder(fn decoderCallback) sql.Decoder {
 		if stmt.ColumnType(11) != sqlite.SQLITE_NULL {
 			stmt.ColumnBytes(11, a.PrevATXID[:])
 		}
-		nonce := types.VRFPostIndex(stmt.ColumnInt64(12))
-		a.VRFNonce = &nonce
+		if stmt.ColumnType(12) != sqlite.SQLITE_NULL {
+			a.CommitmentATX = new(types.ATXID)
+			stmt.ColumnBytes(12, a.CommitmentATX[:])
+		}
 
 		return fn(&a, nil)
 	}
@@ -114,20 +104,25 @@ func GetByEpochAndNodeID(
 	db sql.Executor,
 	epoch types.EpochID,
 	nodeID types.NodeID,
-) (*types.ActivationTx, error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(epoch))
-		stmt.BindBytes(2, nodeID.Bytes())
-	}
-	q := fmt.Sprintf("%v where epoch = ?1 and pubkey = ?2 limit 1;", fullQuery)
-	v, err := load(db, q, enc)
+) (types.ATXID, error) {
+	var id types.ATXID
+	rows, err := db.Exec("select id from atxs where epoch = ?1 and pubkey = ?2 limit 1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(epoch))
+			stmt.BindBytes(2, nodeID.Bytes())
+		},
+		func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, id[:])
+			return false
+		},
+	)
 	if err != nil {
-		return nil, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), err)
+		return types.EmptyATXID, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), err)
 	}
-	if v == nil {
-		return nil, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), sql.ErrNotFound)
+	if rows == 0 {
+		return types.EmptyATXID, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), sql.ErrNotFound)
 	}
-	return v, nil
+	return id, nil
 }
 
 // Has checks if an ATX exists by a given ATX ID.
