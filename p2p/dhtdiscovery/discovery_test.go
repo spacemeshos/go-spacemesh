@@ -57,7 +57,7 @@ func TestSanity(t *testing.T) {
 	)
 	require.NoError(t, err)
 	bootdisc.Start()
-	t.Cleanup(bootdisc.Stop)
+	defer bootdisc.Stop()
 	discs[0] = bootdisc
 	require.NoError(t, err)
 	relayChans := make([]chan peer.AddrInfo, len(mock.Hosts()))
@@ -120,7 +120,7 @@ func TestSanity(t *testing.T) {
 		disc, err := New(makeDiscHost(h, true, nodeOpts[i].relayService), opts...)
 		require.NoError(t, err)
 		disc.Start()
-		t.Cleanup(disc.Stop)
+		defer disc.Stop()
 		discs[1+i] = disc
 	}
 	require.Eventually(t, func() bool {

@@ -289,7 +289,9 @@ func (d *Discovery) Start() error {
 		if d.discBackoff {
 			d.disc, err = backoff.NewBackoffDiscovery(
 				d.disc,
-				backoff.NewExponentialBackoff(d.minBackoff, d.maxBackoff, backoff.FullJitter, time.Second, 5.0, 0, rngSource{}),
+				backoff.NewExponentialBackoff(
+					d.minBackoff, d.maxBackoff, backoff.FullJitter,
+					time.Second, 5.0, 0, rngSource{}),
 			)
 			if err != nil {
 				d.Stop()
