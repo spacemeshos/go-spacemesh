@@ -408,7 +408,7 @@ func (h *Handler) storeAtx(
 			}
 			prevSignature, err := atxSignature(ctx, tx, prev)
 			if err != nil {
-				return err
+				return fmt.Errorf("extracting signature for malfeasance proof: %w", err)
 			}
 
 			atxProof := mwire.AtxProof{
