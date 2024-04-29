@@ -541,7 +541,7 @@ func (d *Discovery) findPeers(
 	out chan<- peer.AddrInfo,
 ) (cont bool, err error) {
 	if ctx.Err() != nil {
-		return false, err
+		return false, ctx.Err()
 	}
 	if active != nil && !active() {
 		d.logger.Debug("discovery not active", zap.String("ns", ns))
