@@ -387,7 +387,7 @@ func (fh *Host) Start() error {
 		return fmt.Errorf("p2p: can't listen: %w", err)
 	}
 	if err := fh.discovery.Start(); err != nil {
-		return fmt.Errorf("error starting discovery: %w", err)
+		return fmt.Errorf("starting discovery: %w", err)
 	}
 	if fh.ping != nil {
 		fh.ping.Start()
