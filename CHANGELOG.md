@@ -2,21 +2,23 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED (v1.5.0)
+## Release v1.5.1
+
+### Improvements
+
+* [#5896](https://github.com/spacemeshos/go-spacemesh/pull/5896) Increase supported number of ATXs to 4.5 Mio.
+
+## Release v1.5.0
 
 ### Upgrade information
 
 * [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
   Updating to this version requires going through v1.4 first.
 
-### Highlights
-
-### Features
-
 ### Improvements
 
 * [#5807](https://github.com/spacemeshos/go-spacemesh/pull/5807) Implement SMIP-0002: remove vesting vault cliff.
- 
+
 * [#5840](https://github.com/spacemeshos/go-spacemesh/pull/5840) Allow vaults to spend received (as well as vested)
 coins. Fixes an oversight in the genesis VM implementation.
 
