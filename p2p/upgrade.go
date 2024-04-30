@@ -168,6 +168,16 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		discovery.WithAdvertiseIntervalSpread(fh.cfg.DiscoveryTimings.AdvertiseIntervalSpread),
 		discovery.WithAdvertiseRetryDelay(fh.cfg.DiscoveryTimings.AdvertiseInterval),
 		discovery.WithFindPeersRetryDelay(fh.cfg.DiscoveryTimings.FindPeersRetryDelay),
+		discovery.WithDiscoveryBackoff(true),
+		discovery.WithDiscoveryBackoffTimings(
+			fh.cfg.DiscoveryTimings.MinBackoff,
+			fh.cfg.DiscoveryTimings.MaxBackoff,
+		),
+		discovery.WithConnBackoffTimings(
+			fh.cfg.DiscoveryTimings.MinConnBackoff,
+			fh.cfg.DiscoveryTimings.MaxConnBackoff,
+			fh.cfg.DiscoveryTimings.DialTimeout,
+		),
 	}
 	if cfg.PrivateNetwork {
 		dopts = append(dopts, discovery.Private())

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand/v2"
+	randv2 "math/rand/v2"
 	"sync"
 	"time"
 
@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	backoff "github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	p2pdiscr "github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	ldbopts "github.com/syndtr/goleveldb/leveldb/opt"
 	"go.uber.org/zap"
@@ -22,14 +23,12 @@ import (
 )
 
 const (
-	discoveryNS             = "spacemesh-disc"
-	relayNS                 = "spacemesh-disc-relay"
-	discoveryTag            = "spacemesh-disc"
-	discoveryTagValue       = 10 // 5 is used for kbucket (DHT)
-	discoveryHighPeersDelay = 10 * time.Second
-	protocolPrefix          = "/spacekad"
-	ProtocolID              = protocolPrefix + "/kad/1.0.0"
-	recheckInterval         = time.Minute
+	discoveryNS         = "spacemesh-disc"
+	relayNS             = "spacemesh-disc-relay"
+	protocolPrefix      = "/spacekad"
+	ProtocolID          = protocolPrefix + "/kad/1.0.0"
+	advRecheckInterval  = time.Minute
+	discRecheckInterval = 10 * time.Second
 )
 
 type Opt func(*Discovery)
@@ -154,6 +153,27 @@ func WithFindPeersRetryDelay(value time.Duration) Opt {
 	}
 }
 
+func WithDiscoveryBackoff(backoff bool) Opt {
+	return func(d *Discovery) {
+		d.discBackoff = backoff
+	}
+}
+
+func WithDiscoveryBackoffTimings(minBackoff, maxBackoff time.Duration) Opt {
+	return func(d *Discovery) {
+		d.minBackoff = minBackoff
+		d.maxBackoff = maxBackoff
+	}
+}
+
+func WithConnBackoffTimings(minBackoff, maxBackoff, dialTimeout time.Duration) Opt {
+	return func(d *Discovery) {
+		d.minConnBackoff = minBackoff
+		d.maxConnBackoff = maxBackoff
+		d.dialTimeout = dialTimeout
+	}
+}
+
 type DiscoveryHost interface {
 	host.Host
 	NeedPeerDiscovery() bool
@@ -173,12 +193,25 @@ func New(h DiscoveryHost, opts ...Opt) (*Discovery, error) {
 		advertiseInterval:   time.Minute,
 		advertiseRetryDelay: time.Minute,
 		findPeersRetryDelay: time.Minute,
+		minBackoff:          60 * time.Second,
+		maxBackoff:          time.Hour,
+		minConnBackoff:      10 * time.Second,
+		maxConnBackoff:      time.Hour,
+		dialTimeout:         2 * time.Minute,
 	}
 	for _, opt := range opts {
 		opt(&d)
 	}
 	if len(d.bootnodes) == 0 {
 		d.logger.Warn("no bootnodes in the config")
+	}
+	cacheSize := 100
+	var err error
+	d.connBackoff, err = backoff.NewBackoffConnector(h, cacheSize, d.dialTimeout,
+		backoff.NewExponentialBackoff(d.minConnBackoff, d.maxConnBackoff, backoff.FullJitter,
+			time.Second, 5.0, 0, rngSource{}))
+	if err != nil {
+		return nil, fmt.Errorf("error creating backoff connector: %w", err)
 	}
 	return &d, nil
 }
@@ -200,7 +233,7 @@ type Discovery struct {
 	dhtLock   sync.Mutex
 	dht       *dht.IpfsDHT
 	datastore *levelds.Datastore
-	disc      *p2pdiscr.RoutingDiscovery
+	disc      p2pdisc.Discovery
 
 	// how often to check if we have enough peers
 	period time.Duration
@@ -214,6 +247,13 @@ type Discovery struct {
 	advertiseIntervalSpread time.Duration
 	advertiseRetryDelay     time.Duration
 	findPeersRetryDelay     time.Duration
+	minBackoff              time.Duration
+	maxBackoff              time.Duration
+	minConnBackoff          time.Duration
+	maxConnBackoff          time.Duration
+	dialTimeout             time.Duration
+	discBackoff             bool
+	connBackoff             *backoff.BackoffConnector
 }
 
 func (d *Discovery) FindPeer(ctx context.Context, p peer.ID) (peer.AddrInfo, error) {
@@ -244,7 +284,20 @@ func (d *Discovery) Start() error {
 	})
 
 	if !d.disableDht {
+		var err error
 		d.disc = p2pdiscr.NewRoutingDiscovery(d.dht)
+		if d.discBackoff {
+			d.disc, err = backoff.NewBackoffDiscovery(
+				d.disc,
+				backoff.NewExponentialBackoff(
+					d.minBackoff, d.maxBackoff, backoff.FullJitter,
+					time.Second, 5.0, 0, rngSource{}),
+			)
+			if err != nil {
+				d.Stop()
+				return fmt.Errorf("error setting up BackoffDiscovery: %w", err)
+			}
+		}
 		if d.advertise {
 			d.eg.Go(func() error {
 				return d.advertiseNS(startCtx, discoveryNS, nil)
@@ -252,7 +305,8 @@ func (d *Discovery) Start() error {
 		}
 		if d.enableRoutingDiscovery {
 			d.eg.Go(func() error {
-				return d.discoverPeers(startCtx)
+				d.discoverPeers(startCtx)
+				return nil
 			})
 			if d.relayCh != nil {
 				d.eg.Go(func() error {
@@ -403,21 +457,12 @@ func (d *Discovery) ensureAtLeastMinPeers(ctx context.Context) error {
 	}
 }
 
-func (d *Discovery) peerHasTag(p peer.ID) bool {
-	ti := d.h.ConnManager().GetTagInfo(p)
-	if ti == nil {
-		return false
-	}
-	_, found := ti.Tags[discoveryTag]
-	return found
-}
-
 func (d *Discovery) advInterval() time.Duration {
 	if d.advertiseIntervalSpread == 0 {
 		return d.advertiseInterval
 	}
 
-	return d.advertiseInterval - d.advertiseIntervalSpread + rand.N(2*d.advertiseIntervalSpread)
+	return d.advertiseInterval - d.advertiseIntervalSpread + randv2.N(2*d.advertiseIntervalSpread)
 }
 
 func (d *Discovery) advertiseNS(ctx context.Context, ns string, active func() bool) error {
@@ -442,7 +487,7 @@ func (d *Discovery) advertiseNS(ctx context.Context, ns string, active func() bo
 			// At this moment, advertisement is not needed.
 			// There was previous delay already, just need to recheck if we need
 			// to start advertising again
-			ttl = recheckInterval
+			ttl = advRecheckInterval
 		}
 		select {
 		case <-ctx.Done():
@@ -452,100 +497,117 @@ func (d *Discovery) advertiseNS(ctx context.Context, ns string, active func() bo
 	}
 }
 
-func (d *Discovery) discoverPeers(ctx context.Context) error {
-	for p := range d.findPeersContinuously(ctx, discoveryNS) {
-		wasSuspended := false //nolint:copyloopvar
-		for !d.h.NeedPeerDiscovery() {
-			wasSuspended = true
-			d.logger.Info("suspending routing discovery",
-				zap.Duration("delay", discoveryHighPeersDelay))
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(discoveryHighPeersDelay):
-			}
-		}
-		if wasSuspended {
-			d.logger.Info("resuming routing discovery")
-		}
-
-		if p.ID == d.h.ID() {
-			continue
-		}
-		freshlyConnected := !d.peerHasTag(p.ID)
-		// trim open conns to free up some space
-		d.h.ConnManager().TrimOpenConns(ctx)
-		// tag peer to prioritize it over the peers found by other means
-		d.h.ConnManager().TagPeer(p.ID, discoveryTag, discoveryTagValue)
-		if d.h.Network().Connectedness(p.ID) != network.Connected {
-			if _, err := d.h.Network().DialPeer(ctx, p.ID); err != nil {
-				d.logger.Debug("error dialing peer", zap.Any("peer", p),
-					zap.Error(err))
-				continue
-			}
-			freshlyConnected = true
-		}
-		if freshlyConnected {
-			d.logger.Info("found peer via rendezvous", zap.Any("peer", p))
-		}
-	}
-
-	return nil
+func (d *Discovery) discoverPeers(ctx context.Context) {
+	peerCh := d.findPeersContinuously(ctx, discoveryNS, d.h.NeedPeerDiscovery)
+	d.connBackoff.Connect(ctx, peerCh)
 }
 
 func (d *Discovery) discoverRelays(ctx context.Context) {
-	for p := range d.findPeersContinuously(ctx, relayNS) {
+	for p := range d.findPeersContinuously(ctx, relayNS, nil) {
 		if len(p.Addrs) != 0 {
 			d.logger.Debug("found relay candidate", zap.Any("p", p))
 			select {
-			case d.relayCh <- p:
 			case <-ctx.Done():
 				return
+			case d.relayCh <- p:
 			}
 		}
 	}
 }
 
-func (d *Discovery) findPeersContinuously(ctx context.Context, ns string) <-chan peer.AddrInfo {
-	r := make(chan peer.AddrInfo)
+func (d *Discovery) findPeersContinuously(
+	ctx context.Context,
+	ns string,
+	active func() bool,
+) <-chan peer.AddrInfo {
+	peerCh := make(chan peer.AddrInfo)
 	d.eg.Go(func() error {
-		defer close(r)
-		var peerCh <-chan peer.AddrInfo
+		defer close(peerCh)
 		for {
-			if peerCh == nil {
-				var err error
-				peerCh, err = d.disc.FindPeers(ctx, ns)
-				if err != nil {
-					d.logger.Error("error finding relay peers", zap.Error(err))
-					select {
-					case <-ctx.Done():
-						return nil
-					case <-time.After(d.findPeersRetryDelay):
-					}
-					peerCh = nil
-					continue
-				}
+			cont, err := d.findPeers(ctx, ns, active, discRecheckInterval, peerCh)
+			if err != nil {
+				d.logger.Error("error finding relay peers", zap.String("ns", ns), zap.Error(err))
+			}
+			if !cont {
+				return nil
+			}
+			d.logger.Debug("pausing discovery", zap.String("ns", ns),
+				zap.Duration("duration", d.findPeersRetryDelay))
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(d.findPeersRetryDelay):
+			}
+		}
+	})
+	return peerCh
+}
+
+func (d *Discovery) findPeers(
+	ctx context.Context,
+	ns string,
+	active func() bool,
+	checkInterval time.Duration,
+	out chan<- peer.AddrInfo,
+) (cont bool, err error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	if active != nil && !active() {
+		d.logger.Debug("discovery not active", zap.String("ns", ns))
+		return true, nil
+	}
+	d.logger.Debug("started finding peers", zap.String("ns", ns))
+	defer d.logger.Debug("done finding peers", zap.String("ns", ns))
+	childCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	peerCh, err := d.disc.FindPeers(childCtx, ns)
+	if err != nil {
+		return !errors.Is(err, context.Canceled), err
+	}
+	var tickerCh <-chan time.Time
+	if active != nil {
+		ticker := time.NewTicker(checkInterval)
+		tickerCh = ticker.C
+		defer ticker.Stop()
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return false, nil
+		case <-tickerCh:
+			// Note: ticker is not started if active is nil.
+			if !active() {
+				return true, nil
+			}
+		case p, ok := <-peerCh:
+			if !ok {
+				return true, nil
+			}
+
+			if p.ID == d.h.ID() {
+				continue // skip self
 			}
 
 			select {
 			case <-ctx.Done():
-				return nil
-			case p, ok := <-peerCh:
-				if !ok {
-					peerCh = nil
-					select {
-					case <-ctx.Done():
-						return nil
-					case <-time.After(d.findPeersRetryDelay):
-					}
-					continue
+				return false, nil
+			case <-tickerCh:
+				if !active() {
+					return true, nil
 				}
-				select {
-				case r <- p:
-				case <-ctx.Done():
-				}
+			case out <- p:
+				d.logger.Debug("discovered peer", zap.String("ns", ns), zap.Stringer("peer", p))
 			}
 		}
-	})
-	return r
+	}
 }
+
+type rngSource struct{}
+
+func (r rngSource) Int63() int64 {
+	return randv2.Int64()
+}
+
+func (r rngSource) Seed(seed int64) {}

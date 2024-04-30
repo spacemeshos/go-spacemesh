@@ -41,11 +41,6 @@ func TestSanity(t *testing.T) {
 	}
 	require.NoError(t, err)
 	discs := make([]*Discovery, len(mock.Hosts()))
-	t.Cleanup(func() {
-		for _, disc := range discs {
-			disc.Stop()
-		}
-	})
 	// Let the bootnode have suspended peer discovery.
 	// It knows all the nodes anyway. Also, do not advertise
 	// it for routing discovery as all the nodes know about
