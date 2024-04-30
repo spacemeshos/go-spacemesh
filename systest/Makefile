@@ -10,8 +10,14 @@ post_service_image ?= $(org)/post-service:v0.7.6
 post_init_image ?= $(org)/postcli:v0.12.5
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
+quic ?= false
+ifeq ($(quic),true)
+test_id ?= systest-$(version_info)-quic
+test_job_name ?= systest-$(version_info)-$(date)-quic
+else
 test_id ?= systest-$(version_info)
 test_job_name ?= systest-$(version_info)-$(date)
+endif
 keep ?= false
 clusters ?= 1
 size ?= 10
@@ -23,7 +29,6 @@ node_selector ?=
 namespace ?=
 label ?=
 count ?= 1
-quic ?= false
 
 configname ?= $(test_job_name)
 smesher_config ?= parameters/fastnet/smesher.json
