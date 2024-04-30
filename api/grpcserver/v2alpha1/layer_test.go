@@ -192,7 +192,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 	})
 }
 
-func generateLayer(db *sql.Database, id types.LayerID, processed bool, withBlock bool) (*layers.Layer, error) {
+func generateLayer(db *sql.Database, id types.LayerID, processed, withBlock bool) (*layers.Layer, error) {
 	var block *types.Block = nil
 
 	if withBlock {

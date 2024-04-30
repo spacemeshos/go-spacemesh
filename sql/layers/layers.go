@@ -342,18 +342,16 @@ func IterateLayersWithBlockOps(
 			stmt.ColumnBytes(4, l.StateHash[:])
 			stmt.ColumnBytes(5, l.AggregatedHash[:])
 
-			inner := &types.InnerBlock{}
-			_, err := codec.DecodeFrom(stmt.ColumnReader(7), inner)
+			inner := types.InnerBlock{}
+			_, err := codec.DecodeFrom(stmt.ColumnReader(7), &inner)
 			if err != nil {
 				return fn(l)
 			}
 
-			if inner != nil {
-				l.Block, err = types.NewExistingBlock(l.AppliedBlock, *inner), nil
-				if err != nil {
-					derr = err
-					return false
-				}
+			l.Block, err = types.NewExistingBlock(l.AppliedBlock, inner), nil
+			if err != nil {
+				derr = err
+				return false
 			}
 
 			return fn(l)
