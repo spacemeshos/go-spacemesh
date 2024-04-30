@@ -18,7 +18,7 @@ import (
 //go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
 
 type AtxReceiver interface {
-	OnAtx(*types.ActivationTxHeader)
+	OnAtx(*types.ActivationTx)
 }
 
 type PostVerifier interface {
@@ -94,7 +94,7 @@ type syncer interface {
 }
 
 type atxProvider interface {
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
+	GetAtx(id types.ATXID) (*types.ActivationTx, error)
 }
 
 // PostSetupProvider defines the functionality required for Post setup.

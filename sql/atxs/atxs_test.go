@@ -448,32 +448,64 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	require.Equal(t, 16, db.QueryCount()) // not incremented after Add
 }
 
-func TestForIDsByEpochEarlyStop(t *testing.T) {
+func Test_IterateAtxsWithMalfeasance(t *testing.T) {
 	db := sql.InMemory()
 
 	e1 := types.EpochID(1)
-	m := make(map[types.ATXID]struct{})
-	for i := 0; i < 4; i++ {
+	m := make(map[types.ATXID]bool)
+	for i := uint32(0); i < 20; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx := newAtx(t, sig, withPublishEpoch(e1))
+		atx := newAtx(t, sig, withPublishEpoch(types.EpochID(i/4)))
 		require.NoError(t, atxs.Add(db, atx))
-		m[atx.ID()] = struct{}{}
+		malicious := (i % 2) == 0
+		m[atx.ID()] = malicious
+		if malicious {
+			require.NoError(t, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
+		}
 	}
 
 	n := 0
-	err := atxs.IterateIDsByEpoch(db, e1, func(total int, id types.ATXID) error {
-		require.Equal(t, 4, total)
+	err := atxs.IterateAtxsWithMalfeasance(db, e1, func(atx *types.ActivationTx, malicious bool) bool {
+		require.Contains(t, m, atx.ID())
+		require.Equal(t, m[atx.ID()], malicious)
+		delete(m, atx.ID())
+		n++
+		return n < 2
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, n)
+	require.Len(t, m, 20-2)
+}
+
+func Test_IterateAtxIdsWithMalfeasance(t *testing.T) {
+	db := sql.InMemory()
+
+	e1 := types.EpochID(1)
+	m := make(map[types.ATXID]bool)
+	for i := uint32(0); i < 20; i++ {
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		atx := newAtx(t, sig, withPublishEpoch(types.EpochID(i/4)))
+		require.NoError(t, atxs.Add(db, atx))
+		malicious := (i % 2) == 0
+		m[atx.ID()] = malicious
+		if malicious {
+			require.NoError(t, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
+		}
+	}
+
+	n := 0
+	err := atxs.IterateAtxIdsWithMalfeasance(db, e1, func(id types.ATXID, malicious bool) bool {
+		require.Contains(t, m, id)
+		require.Equal(t, m[id], malicious)
 		delete(m, id)
 		n++
-		if n >= 2 {
-			return errors.New("test error")
-		}
-		return nil
+		return n < 2
 	})
-	require.ErrorContains(t, err, "test error")
+	require.NoError(t, err)
 	require.Equal(t, 2, n)
-	require.Len(t, m, 2)
+	require.Len(t, m, 20-2)
 }
 
 func TestVRFNonce(t *testing.T) {

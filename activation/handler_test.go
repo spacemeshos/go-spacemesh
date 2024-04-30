@@ -640,7 +640,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.expectAtxV1(atx1, sig.NodeID(), func(o *atxHandleOpts) { o.poetLeaves = leaves })
 	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx1.ID().Hash32(), peer, buf))
 
-	stored1, err := atxHdlr.cdb.GetAtxHeader(atx1.ID())
+	stored1, err := atxHdlr.cdb.GetAtx(atx1.ID())
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), stored1.BaseTickHeight)
 	require.Equal(t, leaves/tickSize, stored1.TickCount)
@@ -655,7 +655,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx1.ID()}, gomock.Any())
 	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx2.ID().Hash32(), peer, buf))
 
-	stored2, err := atxHdlr.cdb.GetAtxHeader(atx2.ID())
+	stored2, err := atxHdlr.cdb.GetAtx(atx2.ID())
 	require.NoError(t, err)
 	require.Equal(t, stored1.TickHeight(), stored2.BaseTickHeight)
 	require.Equal(t, leaves/tickSize, stored2.TickCount)

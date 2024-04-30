@@ -229,21 +229,6 @@ func (atx *ActivationTx) TickHeight() uint64 {
 	return atx.BaseTickHeight + atx.TickCount
 }
 
-func (atx *ActivationTx) ToHeader() *ActivationTxHeader {
-	return &ActivationTxHeader{
-		PublishEpoch:      atx.PublishEpoch,
-		Coinbase:          atx.Coinbase,
-		EffectiveNumUnits: atx.NumUnits,
-		Received:          atx.Received(),
-
-		ID:     atx.ID(),
-		NodeID: atx.SmesherID,
-
-		BaseTickHeight: atx.BaseTickHeight,
-		TickCount:      atx.TickCount,
-	}
-}
-
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
@@ -387,3 +372,15 @@ type EpochActiveSet struct {
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")
+
+func getWeight(numUnits, tickCount uint64) uint64 {
+	return safeMul(numUnits, tickCount)
+}
+
+func safeMul(a, b uint64) uint64 {
+	c := a * b
+	if a > 1 && b > 1 && c/b != a {
+		panic("uint64 overflow")
+	}
+	return c
+}

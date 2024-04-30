@@ -21,12 +21,13 @@ const (
 // Query to retrieve ATXs.
 // Can't use inner join for the ATX blob here b/c this will break
 // filters that refer to the id column.
-const fullQuery = `select id,
-	nonce, base_tick_height, tick_count, pubkey, effective_num_units,
-	received, epoch, sequence, coinbase, validity, prev_id,  commitment_atx
-	from atxs a`
+const fieldsQuery = `select
+atxs.id, atxs.nonce, atxs.base_tick_height, atxs.tick_count, atxs.pubkey, atxs.effective_num_units,
+atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.prev_id, atxs.commitment_atx`
 
-type decoderCallback func(*types.ActivationTx, error) bool
+const fullQuery = fieldsQuery + ` from atxs`
+
+type decoderCallback func(*types.ActivationTx) bool
 
 func decoder(fn decoderCallback) sql.Decoder {
 	return func(stmt *sql.Statement) bool {
@@ -63,23 +64,16 @@ func decoder(fn decoderCallback) sql.Decoder {
 			stmt.ColumnBytes(12, a.CommitmentATX[:])
 		}
 
-		return fn(&a, nil)
+		return fn(&a)
 	}
 }
 
 func load(db sql.Executor, query string, enc sql.Encoder) (*types.ActivationTx, error) {
-	var (
-		v    *types.ActivationTx
-		derr error
-	)
-	_, err := db.Exec(query, enc, decoder(func(atx *types.ActivationTx, err error) bool {
+	var v *types.ActivationTx
+	_, err := db.Exec(query, enc, decoder(func(atx *types.ActivationTx) bool {
 		v = atx
-		derr = err
-		return derr == nil
+		return true
 	}))
-	if err == nil && derr != nil {
-		err = derr
-	}
 	return v, err
 }
 
@@ -737,21 +731,11 @@ func IterateAtxsOps(
 	operations builder.Operations,
 	fn func(*types.ActivationTx) bool,
 ) error {
-	var derr error
 	_, err := db.Exec(
 		fullQuery+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
-		decoder(func(atx *types.ActivationTx, err error) bool {
-			if atx != nil {
-				return fn(atx)
-			}
-			derr = err
-			return derr == nil
-		}))
-	if err != nil {
-		return err
-	}
-	return derr
+		decoder(fn))
+	return err
 }
 
 func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint32, err error) {
@@ -790,4 +774,44 @@ func IterateForGrading(
 		return fmt.Errorf("iterate for grading: %w", err)
 	}
 	return nil
+}
+
+func IterateAtxsWithMalfeasance(
+	db sql.Executor,
+	publish types.EpochID,
+	fn func(atx *types.ActivationTx, malicious bool) bool,
+) error {
+	query := fieldsQuery + `, iif(i.proof is null, 0, 1) as malicious
+	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
+
+	_, err := db.Exec(
+		query,
+		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
+		func(s *sql.Statement) bool {
+			return decoder(func(atx *types.ActivationTx) bool {
+				return fn(atx, s.ColumnInt(13) != 0)
+			})(s)
+		},
+	)
+	return err
+}
+
+func IterateAtxIdsWithMalfeasance(
+	db sql.Executor,
+	publish types.EpochID,
+	fn func(id types.ATXID, malicious bool) bool,
+) error {
+	query := `select id, iif(i.proof is null, 0, 1) as malicious
+	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
+
+	_, err := db.Exec(
+		query,
+		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
+		func(s *sql.Statement) bool {
+			var id types.ATXID
+			s.ColumnBytes(0, id[:])
+			return fn(id, s.ColumnInt(1) != 0)
+		},
+	)
+	return err
 }

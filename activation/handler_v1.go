@@ -418,7 +418,7 @@ func (h *HandlerV1) storeAtx(
 	}
 
 	added := h.cacheAtx(ctx, atx, *nonce)
-	h.beacon.OnAtx(atx.ToHeader())
+	h.beacon.OnAtx(atx)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
@@ -439,7 +439,7 @@ func (h *HandlerV1) processATX(
 		return nil, fmt.Errorf("invalid atx signature: %w", errMalformedData)
 	}
 
-	existing, _ := h.cdb.GetAtxHeader(watx.ID())
+	existing, _ := h.cdb.GetAtx(watx.ID())
 	if existing != nil {
 		return nil, fmt.Errorf("%w atx %s", errKnownAtx, watx.ID())
 	}
@@ -475,7 +475,7 @@ func (h *HandlerV1) processATX(
 
 	var baseTickHeight uint64
 	if watx.PositioningATXID != h.goldenATXID {
-		posAtx, err := h.cdb.GetAtxHeader(watx.PositioningATXID)
+		posAtx, err := h.cdb.GetAtx(watx.PositioningATXID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
 		}

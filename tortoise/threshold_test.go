@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
@@ -167,7 +165,7 @@ func TestReferenceHeight(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+			db := sql.InMemory()
 			for i, height := range tc.heights {
 				atx := &types.ActivationTx{
 					PublishEpoch: types.EpochID(tc.epoch) - 1,
@@ -176,9 +174,9 @@ func TestReferenceHeight(t *testing.T) {
 				}
 				atx.SetID(types.ATXID{byte(i + 1)})
 				atx.SetReceived(time.Now())
-				require.NoError(t, atxs.Add(cdb, atx))
+				require.NoError(t, atxs.Add(db, atx))
 			}
-			_, height, err := extractAtxsData(cdb, types.EpochID(tc.epoch))
+			_, height, err := extractAtxsData(db, types.EpochID(tc.epoch))
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, int(height))
 		})
