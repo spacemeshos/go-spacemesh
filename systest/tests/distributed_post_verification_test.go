@@ -81,6 +81,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	cfg.P2P.PrivateNetwork = true
 	cfg.Bootstrap.URL = cluster.BootstrapperGlobalEndpoint(ctx.Namespace, 0)
 	cfg.P2P.MinPeers = 2
+	cfg.P2P.EnableQUICTransport = ctx.QUIC
 	ctx.Log.Debugw("Prepared config", "cfg", cfg)
 
 	goldenATXID := cl.GoldenATX()
