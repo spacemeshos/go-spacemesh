@@ -734,9 +734,7 @@ func IterateAtxsOps(
 	_, err := db.Exec(
 		fullQuery+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
-		decoder(func(atx *types.ActivationTx) bool {
-			return fn(atx)
-		}))
+		decoder(fn))
 	return err
 }
 
