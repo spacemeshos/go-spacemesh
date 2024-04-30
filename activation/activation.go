@@ -84,6 +84,8 @@ type Builder struct {
 	// delay before PoST in ATX is considered valid (counting from the time it was received)
 	postValidityDelay time.Duration
 
+	posAtxFinder positioningAtxFinder
+
 	// states of each known identity
 	postStates PostStates
 
@@ -93,6 +95,14 @@ type Builder struct {
 	signers       map[types.NodeID]*signing.EdSigner
 	eg            errgroup.Group
 	stop          context.CancelFunc
+}
+
+type positioningAtxFinder struct {
+	finding sync.Mutex
+	found   *struct {
+		id         types.ATXID
+		forPublish types.EpochID
+	}
 }
 
 type BuilderOption func(*Builder)
@@ -479,6 +489,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		current++
 		until = time.Until(b.poetRoundStart(current))
 	}
+	publish := current + 1
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
 	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
@@ -487,7 +498,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			zap.Uint32("current epoch", current.Uint32()),
 			zap.Time("waiting until", wait),
 		)
-		events.EmitPoetWaitRound(nodeID, current, current+1, wait)
+		events.EmitPoetWaitRound(nodeID, current, publish, wait)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -495,7 +506,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		}
 	}
 
-	posAtx, err := b.getPositioningAtx(ctx, nodeID)
+	posAtx, err := b.getPositioningAtx(ctx, nodeID, publish)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 	}
@@ -527,7 +538,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			return nil, fmt.Errorf("initial POST is invalid: %w", err)
 		}
 		challenge = &types.NIPostChallenge{
-			PublishEpoch:   current + 1,
+			PublishEpoch:   publish,
 			Sequence:       0,
 			PrevATXID:      types.EmptyATXID,
 			PositioningATX: posAtx,
@@ -543,7 +554,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	default:
 		// regular ATX challenge
 		challenge = &types.NIPostChallenge{
-			PublishEpoch:   current + 1,
+			PublishEpoch:   publish,
 			Sequence:       prevAtx.Sequence + 1,
 			PrevATXID:      prevAtx.ID(),
 			PositioningATX: posAtx,
@@ -714,8 +725,20 @@ func (b *Builder) broadcast(ctx context.Context, atx *types.ActivationTx) (int, 
 }
 
 // getPositioningAtx returns atx id with the highest tick height.
-func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (types.ATXID, error) {
-	logger := b.log.With(log.ZShortStringer("smesherID", nodeID))
+// publish epoch is used for caching the positioning atx.
+func (b *Builder) getPositioningAtx(
+	ctx context.Context,
+	nodeID types.NodeID,
+	publish types.EpochID,
+) (types.ATXID, error) {
+	logger := b.log.With(log.ZShortStringer("smesherID", nodeID), zap.Uint32("publish epoch", publish.Uint32()))
+	b.posAtxFinder.finding.Lock()
+	defer b.posAtxFinder.finding.Unlock()
+	if found := b.posAtxFinder.found; found != nil && found.forPublish == publish {
+		logger.Debug("using cached positioning atx", log.ZShortStringer("atx_id", found.id))
+		return found.id, nil
+	}
+
 	logger.Info("searching for positioning atx")
 	id, err := findFullyValidHighTickAtx(
 		ctx,
@@ -730,9 +753,17 @@ func (b *Builder) getPositioningAtx(ctx context.Context, nodeID types.NodeID) (t
 	)
 	switch {
 	case err == nil:
+		b.posAtxFinder.found = &struct {
+			id         types.ATXID
+			forPublish types.EpochID
+		}{id, publish}
 		return id, nil
 	case errors.Is(err, sql.ErrNotFound):
 		logger.Info("using golden atx as positioning atx")
+		b.posAtxFinder.found = &struct {
+			id         types.ATXID
+			forPublish types.EpochID
+		}{b.conf.GoldenATXID, publish}
 		return b.conf.GoldenATXID, nil
 	}
 	return id, err

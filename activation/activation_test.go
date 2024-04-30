@@ -1710,7 +1710,23 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	tab.mValidator.EXPECT().
 		VerifyChain(gomock.Any(), validAtx.ID(), tab.goldenATXID, gomock.Any())
 
-	posAtxID, err := tab.getPositioningAtx(context.Background(), sig.NodeID())
+	posAtxID, err := tab.getPositioningAtx(context.Background(), sig.NodeID(), 77)
+	require.NoError(t, err)
+	require.Equal(t, posAtxID, vValidAtx.ID())
+
+	// should use the cached positioning ATX when asked for the same publish epoch
+	posAtxID, err = tab.getPositioningAtx(context.Background(), sig.NodeID(), 77)
+	require.NoError(t, err)
+	require.Equal(t, posAtxID, vValidAtx.ID())
+
+	// should lookup again when asked for a different publish epoch
+	tab.mValidator.EXPECT().
+		VerifyChain(gomock.Any(), invalidAtx.ID(), tab.goldenATXID, gomock.Any()).
+		Return(errors.New(""))
+	tab.mValidator.EXPECT().
+		VerifyChain(gomock.Any(), validAtx.ID(), tab.goldenATXID, gomock.Any())
+
+	posAtxID, err = tab.getPositioningAtx(context.Background(), sig.NodeID(), 99)
 	require.NoError(t, err)
 	require.Equal(t, posAtxID, vValidAtx.ID())
 }
@@ -1724,7 +1740,7 @@ func TestGetPositioningAtxDbFailed(t *testing.T) {
 	expected := errors.New("db error")
 	db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)
 
-	none, err := tab.getPositioningAtx(context.Background(), sig.NodeID())
+	none, err := tab.getPositioningAtx(context.Background(), sig.NodeID(), 99)
 	require.ErrorIs(t, err, expected)
 	require.Equal(t, types.ATXID{}, none)
 }
