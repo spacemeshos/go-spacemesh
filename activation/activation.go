@@ -734,7 +734,7 @@ func (b *Builder) getPositioningAtx(
 	b.posAtxFinder.finding.Lock()
 	defer b.posAtxFinder.finding.Unlock()
 	if found := b.posAtxFinder.found; found != nil && found.forPublish == publish {
-		logger.Info("using cached positioning atx", log.ZShortStringer("atx_id", found.id))
+		logger.Debug("using cached positioning atx", log.ZShortStringer("atx_id", found.id))
 		return found.id, nil
 	}
 
