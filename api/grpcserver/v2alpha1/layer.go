@@ -97,14 +97,7 @@ func (s *LayerStreamService) Stream(
 		select {
 		case rst := <-eventsOut:
 			var derr error
-			ops := builder.Operations{}
-			ops.Filter = append(ops.Filter, builder.Op{
-				Prefix: "l.",
-				Field:  builder.Id,
-				Token:  builder.Eq,
-				Value:  int64(rst.LayerID.Uint32()),
-			})
-			if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
+			if err := layers.Get(s.db, rst.LayerID, func(layer *layers.Layer) bool {
 				l := toLayer(layer)
 
 				l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
@@ -133,14 +126,7 @@ func (s *LayerStreamService) Stream(
 			select {
 			case rst := <-eventsOut:
 				var derr error
-				ops := builder.Operations{}
-				ops.Filter = append(ops.Filter, builder.Op{
-					Prefix: "l.",
-					Field:  builder.Id,
-					Token:  builder.Eq,
-					Value:  int64(rst.LayerID.Uint32()),
-				})
-				if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
+				if err := layers.Get(s.db, rst.LayerID, func(layer *layers.Layer) bool {
 					l := toLayer(layer)
 
 					l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED

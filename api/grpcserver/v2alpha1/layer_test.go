@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math/rand"
 	"testing"
+	"time"
 
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/stretchr/testify/assert"
@@ -24,8 +26,12 @@ func TestLayerService_List(t *testing.T) {
 	ctx := context.Background()
 
 	lrs := make([]layers.Layer, 100)
+	r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r2 := rand.New(rand.NewSource(time.Now().UnixNano() + 1))
 	for i := range lrs {
-		l, err := generateLayer(db, types.LayerID(i), true)
+		processed := r1.Intn(2) == 0
+		withBlock := r2.Intn(2) == 0
+		l, err := generateLayer(db, types.LayerID(i), processed, withBlock)
 		require.NoError(t, err)
 		lrs[i] = *l
 	}
@@ -82,8 +88,12 @@ func TestLayerStreamService_Stream(t *testing.T) {
 	ctx := context.Background()
 
 	lrs := make([]layers.Layer, 100)
+	r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r2 := rand.New(rand.NewSource(time.Now().UnixNano() + 1))
 	for i := range lrs {
-		l, err := generateLayer(db, types.LayerID(i), true)
+		processed := r1.Intn(2) == 0
+		withBlock := r2.Intn(2) == 0
+		l, err := generateLayer(db, types.LayerID(i), processed, withBlock)
 		require.NoError(t, err)
 		lrs[i] = *l
 	}
@@ -104,10 +114,11 @@ func TestLayerStreamService_Stream(t *testing.T) {
 
 		var i int
 		for {
-			_, err := stream.Recv()
+			l, err := stream.Recv()
 			if errors.Is(err, io.EOF) {
 				break
 			}
+			assert.Equal(t, toLayer(&lrs[i]), l.GetV1())
 			i++
 		}
 		require.Len(t, lrs, i)
@@ -124,7 +135,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 
 		var streamed []layers.Layer
 		for i := start + 0; i < start+n; i++ {
-			layer, err := generateLayer(db, types.LayerID(i), true)
+			layer, err := generateLayer(db, types.LayerID(i), true, true)
 			require.NoError(t, err)
 			streamed = append(streamed, *layer)
 		}
@@ -150,14 +161,21 @@ func TestLayerStreamService_Stream(t *testing.T) {
 
 				var expect []*layers.Layer
 				for _, rst := range streamed {
+					s := events.LayerStatusTypeUnknown
+					if !rst.AppliedBlock.IsEmpty() {
+						s = events.LayerStatusTypeApproved
+					}
+
+					if rst.Processed {
+						s = events.LayerStatusTypeConfirmed
+					}
+
 					lu := events.LayerUpdate{
 						LayerID: rst.Id,
-						Status:  events.LayerStatusTypeApplied,
+						Status:  s,
 					}
-					events.ReportLayerUpdate(events.LayerUpdate{
-						LayerID: rst.Id,
-						Status:  events.LayerStatusTypeApplied,
-					})
+
+					events.ReportLayerUpdate(lu)
 					matcher := layersMatcher{tc.request, ctx}
 					if matcher.match(&lu) {
 						expect = append(expect, &rst)
@@ -174,34 +192,38 @@ func TestLayerStreamService_Stream(t *testing.T) {
 	})
 }
 
-func generateLayer(db *sql.Database, id types.LayerID, processed bool) (*layers.Layer, error) {
-	block := &types.Block{
-		InnerBlock: types.InnerBlock{
-			LayerIndex: id,
-			TxIDs:      nil,
-		},
-	}
-	block.Initialize()
+func generateLayer(db *sql.Database, id types.LayerID, processed bool, withBlock bool) (*layers.Layer, error) {
+	var block *types.Block = nil
 
-	err := blocks.Add(db, block)
-	if err != nil {
-		return nil, err
-	}
+	if withBlock {
+		block = &types.Block{
+			InnerBlock: types.InnerBlock{
+				LayerIndex: id,
+				TxIDs:      nil,
+			},
+		}
+		block.Initialize()
 
-	err = layers.SetApplied(db, id, block.ID())
-	if err != nil {
-		return nil, err
+		err := blocks.Add(db, block)
+		if err != nil {
+			return nil, err
+		}
+
+		err = layers.SetApplied(db, id, block.ID())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if processed {
-		err = layers.SetProcessed(db, id)
+		err := layers.SetProcessed(db, id)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	meshHash := types.RandomHash()
-	err = layers.SetMeshHash(db, id, meshHash)
+	err := layers.SetMeshHash(db, id, meshHash)
 	if err != nil {
 		return nil, err
 	}
@@ -215,10 +237,13 @@ func generateLayer(db *sql.Database, id types.LayerID, processed bool) (*layers.
 	l := &layers.Layer{
 		Id:             id,
 		Processed:      processed,
-		AppliedBlock:   block.ID(),
 		StateHash:      stateHash,
 		AggregatedHash: meshHash,
-		Block:          block,
+	}
+
+	if block != nil {
+		l.AppliedBlock = block.ID()
+		l.Block = block
 	}
 
 	return l, nil

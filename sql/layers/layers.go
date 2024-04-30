@@ -342,6 +342,52 @@ func IterateLayersWithBlockOps(
 			stmt.ColumnBytes(4, l.StateHash[:])
 			stmt.ColumnBytes(5, l.AggregatedHash[:])
 
+			inner := &types.InnerBlock{}
+			_, err := codec.DecodeFrom(stmt.ColumnReader(7), inner)
+			if err != nil {
+				return fn(l)
+			}
+
+			if inner != nil {
+				l.Block, err = types.NewExistingBlock(l.AppliedBlock, *inner), nil
+				if err != nil {
+					derr = err
+					return false
+				}
+			}
+
+			return fn(l)
+		})
+	if err != nil {
+		return err
+	}
+	return derr
+}
+
+func Get(
+	db sql.Executor,
+	lid types.LayerID,
+	fn func(layer *Layer) bool,
+) error {
+	var derr error
+	_, err := db.Exec(
+		`SELECT l.id, l.weak_coin, l.processed, l.applied_block, l.state_hash, l.aggregated_hash,
+       		b.validity, b.block FROM layers l
+       		    LEFT JOIN blocks b ON l.id = b.layer WHERE l.id = ?1`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Uint32()))
+		},
+		func(stmt *sql.Statement) bool {
+			l := &Layer{
+				Id: types.LayerID(stmt.ColumnInt(0)),
+			}
+
+			l.WeakCoin = stmt.ColumnInt(1) == 0
+			l.Processed = stmt.ColumnInt(2) == 1
+			stmt.ColumnBytes(3, l.AppliedBlock[:])
+			stmt.ColumnBytes(4, l.StateHash[:])
+			stmt.ColumnBytes(5, l.AggregatedHash[:])
+
 			inner := types.InnerBlock{}
 			_, err := codec.DecodeFrom(stmt.ColumnReader(7), &inner)
 			if err != nil {
