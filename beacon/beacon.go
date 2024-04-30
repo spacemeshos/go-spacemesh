@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -580,56 +581,34 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, target type
 		ontime = pd.clock.LayerToTime(target.FirstLayer())
 		early  = ontime.Add(-1 * pd.config.GracePeriodDuration)
 	)
-	query := `SELECT
-		atxs.id,
-		atxs.pubkey,
-		atxs.effective_num_units,
-		atxs.tick_count,
-		iif(i.proof is null, 0, 1) as malicious
-		FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1 `
-
-	_, err := pd.cdb.Exec(query,
-		func(s *sql.Statement) { s.BindInt64(1, int64(target-1)) },
-		func(stmt *sql.Statement) bool {
-			var (
-				id  types.ATXID
-				atx types.ActivationTx
-			)
-			stmt.ColumnBytes(0, id[:])
-			stmt.ColumnBytes(1, atx.SmesherID[:])
-			atx.NumUnits = uint32(stmt.ColumnInt(2))
-			atx.TickCount = uint64(stmt.ColumnInt(3))
-			atx.SetID(id)
-			malicious := stmt.ColumnInt(4) != 0
-
-			if !malicious {
-				epochWeight += atx.GetWeight()
-			} else {
-				logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", atx.SmesherID))
+	err := atxs.IterateAtxsWithMalfeasance(pd.cdb, target-1, func(atx *types.ActivationTx, malicious bool) bool {
+		if !malicious {
+			epochWeight += atx.GetWeight()
+		} else {
+			logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", atx.SmesherID))
+		}
+		if _, ok := miners[atx.SmesherID]; !ok {
+			miners[atx.SmesherID] = &minerInfo{
+				atxid:     atx.ID(),
+				malicious: malicious,
 			}
-			if _, ok := miners[atx.SmesherID]; !ok {
-				miners[atx.SmesherID] = &minerInfo{
-					atxid:     atx.ID(),
-					malicious: malicious,
-				}
-				if atx.Received().Before(early) {
-					w1++
-				} else if atx.Received().Before(ontime) {
-					w2++
-				}
-			} else {
-				logger.With().Warning("ignoring malicious atx from miner",
-					atx.ID(),
-					log.Bool("malicious", malicious),
-					log.Stringer("smesher", atx.SmesherID))
+			if atx.Received().Before(early) {
+				w1++
+			} else if atx.Received().Before(ontime) {
+				w2++
 			}
+		} else {
+			logger.With().Warning("ignoring malicious atx from miner",
+				atx.ID(),
+				log.Bool("malicious", malicious),
+				log.Stringer("smesher", atx.SmesherID))
+		}
 
-			if s, ok := pd.signers[atx.SmesherID]; ok {
-				potentiallyActive[atx.SmesherID] = s
-			}
-			return true
-		},
-	)
+		if s, ok := pd.signers[atx.SmesherID]; ok {
+			potentiallyActive[atx.SmesherID] = s
+		}
+		return true
+	})
 	if err != nil {
 		return nil, err
 	}
