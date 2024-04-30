@@ -26,6 +26,8 @@ is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spaceme
 
 * [#5896](https://github.com/spacemeshos/go-spacemesh/pull/5896) Increase supported number of ATXs to 4.5 Mio.
 
+* [#5904](https://github.com/spacemeshos/go-spacemesh/pull/5904) Avoid repeated searching for positioning ATX in 1:N
+
 ## (v1.5.0)
 
 ### Upgrade information
