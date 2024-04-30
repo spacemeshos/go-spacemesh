@@ -27,7 +27,7 @@ atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.pre
 
 const fullQuery = fieldsQuery + ` from atxs`
 
-type decoderCallback func(*types.ActivationTx, error) bool
+type decoderCallback func(*types.ActivationTx) bool
 
 func decoder(fn decoderCallback) sql.Decoder {
 	return func(stmt *sql.Statement) bool {
@@ -64,23 +64,16 @@ func decoder(fn decoderCallback) sql.Decoder {
 			stmt.ColumnBytes(12, a.CommitmentATX[:])
 		}
 
-		return fn(&a, nil)
+		return fn(&a)
 	}
 }
 
 func load(db sql.Executor, query string, enc sql.Encoder) (*types.ActivationTx, error) {
-	var (
-		v    *types.ActivationTx
-		derr error
-	)
-	_, err := db.Exec(query, enc, decoder(func(atx *types.ActivationTx, err error) bool {
+	var v *types.ActivationTx
+	_, err := db.Exec(query, enc, decoder(func(atx *types.ActivationTx) bool {
 		v = atx
-		derr = err
-		return derr == nil
+		return true
 	}))
-	if err == nil && derr != nil {
-		err = derr
-	}
 	return v, err
 }
 
@@ -738,21 +731,13 @@ func IterateAtxsOps(
 	operations builder.Operations,
 	fn func(*types.ActivationTx) bool,
 ) error {
-	var derr error
 	_, err := db.Exec(
 		fullQuery+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
-		decoder(func(atx *types.ActivationTx, err error) bool {
-			if atx != nil {
-				return fn(atx)
-			}
-			derr = err
-			return derr == nil
+		decoder(func(atx *types.ActivationTx) bool {
+			return fn(atx)
 		}))
-	if err != nil {
-		return err
-	}
-	return derr
+	return err
 }
 
 func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint32, err error) {
@@ -805,11 +790,8 @@ func IterateAtxsWithMalfeasance(
 		query,
 		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
 		func(s *sql.Statement) bool {
-			return decoder(func(atx *types.ActivationTx, err error) bool {
-				if err == nil {
-					return fn(atx, s.ColumnInt(13) != 0)
-				}
-				return false
+			return decoder(func(atx *types.ActivationTx) bool {
+				return fn(atx, s.ColumnInt(13) != 0)
 			})(s)
 		},
 	)
