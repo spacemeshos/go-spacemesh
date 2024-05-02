@@ -55,7 +55,7 @@ jobs:
   systest:
     runs-on: ubuntu-latest
     strategy:
-      # fail-fast: true
+      fail-fast: true
       matrix:
         protocol:
           - tcp
