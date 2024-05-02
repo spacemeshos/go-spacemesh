@@ -172,27 +172,15 @@ func GetCommand() *cobra.Command {
 				return fmt.Errorf("initializing app: %w", err)
 			}
 
-			// Migrate legacy identity to new location
-			if err := app.MigrateExistingIdentity(); err != nil {
-				return fmt.Errorf("migrating existing identity: %w", err)
-			}
-
-			var err error
-			if app.signers, err = app.TestIdentity(); err != nil {
-				return fmt.Errorf("testing identity: %w", err)
-			}
-
-			if app.signers == nil {
-				err := app.LoadIdentities()
-				switch {
-				case errors.Is(err, fs.ErrNotExist):
-					app.log.Info("Identity file not found. Creating new identity...")
-					if err := app.NewIdentity(); err != nil {
-						return fmt.Errorf("creating new identity: %w", err)
-					}
-				case err != nil:
-					return fmt.Errorf("loading identities: %w", err)
+			err := app.LoadIdentities()
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+				app.log.Info("Identity file not found. Creating new identity...")
+				if err := app.NewIdentity(); err != nil {
+					return fmt.Errorf("creating new identity: %w", err)
 				}
+			case err != nil:
+				return fmt.Errorf("loading identities: %w", err)
 			}
 
 			// Don't print usage on error from this point forward
