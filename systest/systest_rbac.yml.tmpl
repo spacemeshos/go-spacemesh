@@ -14,7 +14,7 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["services","namespaces","configmaps","pods"]
-  verbs: ["get","create","patch","update","list","watch"]
+  verbs: ["get","create","patch","update","list","watch","delete"]
 - apiGroups: ["apps"]
   resources: ["deployments"]
   verbs: ["get","create","patch","update","list","watch"]
@@ -26,7 +26,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: {{ .Env.job_name }}
-  namespace: testnet-10x
+  namespace: {{ .Env.ns }}
 roleRef:
   kind: ClusterRole
   name: {{ .Env.job_name }}
