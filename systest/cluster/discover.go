@@ -26,6 +26,7 @@ func discoverNodes(ctx *testcontext.Context, kind string) ([]*NodeClient, error)
 				P2P:       7513,
 				GRPC_PUB:  9092,
 				GRPC_PRIV: 9093,
+				QUIC:      ctx.QUIC,
 			},
 		})
 	}

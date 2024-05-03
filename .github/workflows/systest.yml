@@ -54,6 +54,12 @@ jobs:
 
   systest:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        protocol:
+          - tcp
+          - quic
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
@@ -118,7 +124,7 @@ jobs:
       - name: Run tests
         timeout-minutes: 60
         env:
-          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          test_id: systest-${{ steps.vars.outputs.sha_short }}${{ matrix.protocol == 'quic' && '-quic' || '' }}
           label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=gha
@@ -127,12 +133,14 @@ jobs:
           level: ${{ inputs.log_level }}
           clusters: 4
           norbac: 1
+          quic: ${{ matrix.protocol == 'tcp' && 'false' || 'true' }}
         run: make -C systest run test_name=${{ inputs.test_name }}
 
       - name: Delete pod
         if: always()
         env:
-          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          test_id: systest-${{ steps.vars.outputs.sha_short }}${{ matrix.protocol == 'quic' && '-quic' || '' }}
+          quic: ${{ matrix.protocol == 'tcp' && 'false' || 'true' }}
         run: make -C systest clean
 
   systest-status:

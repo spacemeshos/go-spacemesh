@@ -132,6 +132,9 @@ var (
 	LayersPerEpoch = parameters.Int(
 		ParamLayersPerEpoch, "number of layers in an epoch", 4,
 	)
+	quic = parameters.Bool(
+		"quic", "if true, QUIC is used for the tests instead of TCP",
+	)
 )
 
 const nsfile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
@@ -175,6 +178,7 @@ type Context struct {
 		Class string
 	}
 	NodeSelector map[string]string
+	QUIC         bool
 	Log          *zap.SugaredLogger
 }
 
@@ -356,6 +360,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		PostServiceImage:  postServiceImage.Get(p),
 		PostInitImage:     postInitImage.Get(p),
 		NodeSelector:      nodeSelector.Get(p),
+		QUIC:              quic.Get(p),
 		Log:               logger.Sugar().Named(t.Name()),
 	}
 	cctx.Storage.Class = class
