@@ -1,6 +1,10 @@
 package hashsync
 
 import (
+	"cmp"
+	"fmt"
+
+	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -101,29 +105,103 @@ type ItemBatchMessage struct {
 
 func (m *ItemBatchMessage) Type() MessageType { return MessageTypeItemBatch }
 
-// QueryMessage requests bounded range fingerprint and count from the peer
-type QueryMessage struct {
-	RangeX, RangeY *types.Hash32
+// ProbeMessage requests bounded range fingerprint and count from the peer,
+// along with a minhash sample if fingerprints differ
+type ProbeMessage struct {
+	RangeX, RangeY   *types.Hash32
+	RangeFingerprint types.Hash12
+	SampleSize       uint32
 }
 
-var _ SyncMessage = &QueryMessage{}
+var _ SyncMessage = &ProbeMessage{}
 
-func (m *QueryMessage) Type() MessageType { return MessageTypeQuery }
-func (m *QueryMessage) X() Ordered {
+func (m *ProbeMessage) Type() MessageType { return MessageTypeProbe }
+func (m *ProbeMessage) X() Ordered {
 	if m.RangeX == nil {
 		return nil
 	}
 	return *m.RangeX
 }
-func (m *QueryMessage) Y() Ordered {
+
+func (m *ProbeMessage) Y() Ordered {
 	if m.RangeY == nil {
 		return nil
 	}
 	return *m.RangeY
 }
-func (m *QueryMessage) Fingerprint() any { return nil }
-func (m *QueryMessage) Count() int       { return 0 }
-func (m *QueryMessage) Keys() []Ordered  { return nil }
-func (m *QueryMessage) Values() []any    { return nil }
+func (m *ProbeMessage) Fingerprint() any { return m.RangeFingerprint }
+func (m *ProbeMessage) Count() int       { return int(m.SampleSize) }
+func (m *ProbeMessage) Keys() []Ordered  { return nil }
+func (m *ProbeMessage) Values() []any    { return nil }
+
+// MinhashSampleItem represents an item of minhash sample subset
+type MinhashSampleItem uint32
+
+var _ Ordered = MinhashSampleItem(0)
+
+func (m MinhashSampleItem) String() string {
+	return fmt.Sprintf("0x%08x", uint32(m))
+}
+
+// Compare implements Ordered
+func (m MinhashSampleItem) Compare(other any) int {
+	return cmp.Compare(m, other.(MinhashSampleItem))
+}
+
+// EncodeScale implements scale.Encodable.
+func (m MinhashSampleItem) EncodeScale(e *scale.Encoder) (int, error) {
+	// QQQQQ: FIXME: there's EncodeUint32 (non-compact which is better for hashes)
+	// but no DecodeUint32
+	return scale.EncodeCompact32(e, uint32(m))
+}
+
+// DecodeScale implements scale.Decodable.
+func (m *MinhashSampleItem) DecodeScale(d *scale.Decoder) (int, error) {
+	v, total, err := scale.DecodeCompact32(d)
+	*m = MinhashSampleItem(v)
+	return total, err
+}
+
+// MinhashSampleItemFromHash32 uses lower 32 bits of a Hash32 as a MinhashSampleItem
+func MinhashSampleItemFromHash32(h types.Hash32) MinhashSampleItem {
+	return MinhashSampleItem(uint32(h[28])<<24 + uint32(h[29])<<16 + uint32(h[30])<<8 + uint32(h[31]))
+}
+
+// ProbeResponseMessage is a response to ProbeMessage
+type ProbeResponseMessage struct {
+	RangeX, RangeY   *types.Hash32
+	RangeFingerprint types.Hash12
+	NumItems         uint32
+	// NOTE: max must be in sync with maxSampleSize in hashsync/rangesync.go
+	Sample []MinhashSampleItem `scale:"max=1000"`
+}
+
+var _ SyncMessage = &ProbeResponseMessage{}
+
+func (m *ProbeResponseMessage) Type() MessageType { return MessageTypeProbeResponse }
+func (m *ProbeResponseMessage) X() Ordered {
+	if m.RangeX == nil {
+		return nil
+	}
+	return *m.RangeX
+}
+
+func (m *ProbeResponseMessage) Y() Ordered {
+	if m.RangeY == nil {
+		return nil
+	}
+	return *m.RangeY
+}
+func (m *ProbeResponseMessage) Fingerprint() any { return m.RangeFingerprint }
+func (m *ProbeResponseMessage) Count() int       { return int(m.NumItems) }
+func (m *ProbeResponseMessage) Values() []any    { return nil }
+
+func (m *ProbeResponseMessage) Keys() []Ordered {
+	r := make([]Ordered, len(m.Sample))
+	for n, item := range m.Sample {
+		r[n] = item
+	}
+	return r
+}
 
 // TODO: don't do scalegen for empty types

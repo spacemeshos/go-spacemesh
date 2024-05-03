@@ -64,14 +64,7 @@ func (fc *fakeConduit) NextMessage() (SyncMessage, error) {
 	return nil, nil
 }
 
-func (fc *fakeConduit) sendMsg(mtype MessageType, x, y Ordered, fingerprint any, count int) {
-	msg := rangeMessage{
-		mtype: mtype,
-		x:     x,
-		y:     y,
-		fp:    fingerprint,
-		count: count,
-	}
+func (fc *fakeConduit) sendMsg(msg rangeMessage) {
 	fc.resp = append(fc.resp, msg)
 }
 
@@ -80,26 +73,41 @@ func (fc *fakeConduit) SendFingerprint(x, y Ordered, fingerprint any, count int)
 	require.NotNil(fc.t, y)
 	require.NotZero(fc.t, count)
 	require.NotNil(fc.t, fingerprint)
-	fc.sendMsg(MessageTypeFingerprint, x, y, fingerprint, count)
+	fc.sendMsg(rangeMessage{
+		mtype: MessageTypeFingerprint,
+		x:     x,
+		y:     y,
+		fp:    fingerprint,
+		count: count,
+	})
 	return nil
 }
 
 func (fc *fakeConduit) SendEmptySet() error {
-	fc.sendMsg(MessageTypeEmptySet, nil, nil, nil, 0)
+	fc.sendMsg(rangeMessage{mtype: MessageTypeEmptySet})
 	return nil
 }
 
 func (fc *fakeConduit) SendEmptyRange(x, y Ordered) error {
 	require.NotNil(fc.t, x)
 	require.NotNil(fc.t, y)
-	fc.sendMsg(MessageTypeEmptyRange, x, y, nil, 0)
+	fc.sendMsg(rangeMessage{
+		mtype: MessageTypeEmptyRange,
+		x:     x,
+		y:     y,
+	})
 	return nil
 }
 
 func (fc *fakeConduit) SendRangeContents(x, y Ordered, count int) error {
 	require.NotNil(fc.t, x)
 	require.NotNil(fc.t, y)
-	fc.sendMsg(MessageTypeRangeContents, x, y, nil, count)
+	fc.sendMsg(rangeMessage{
+		mtype: MessageTypeRangeContents,
+		x:     x,
+		y:     y,
+		count: count,
+	})
 	return nil
 }
 
@@ -119,24 +127,52 @@ func (fc *fakeConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 			it.Next()
 			n--
 		}
-		fc.resp = append(fc.resp, msg)
+		fc.sendMsg(msg)
 	}
 	return nil
 }
 
 func (fc *fakeConduit) SendEndRound() error {
-	fc.sendMsg(MessageTypeEndRound, nil, nil, nil, 0)
+	fc.sendMsg(rangeMessage{mtype: MessageTypeEndRound})
 	return nil
 }
 
 func (fc *fakeConduit) SendDone() error {
-	fc.sendMsg(MessageTypeDone, nil, nil, nil, 0)
+	fc.sendMsg(rangeMessage{mtype: MessageTypeDone})
 	return nil
 }
 
-func (fc *fakeConduit) SendQuery(x, y Ordered) error {
-	fc.sendMsg(MessageTypeQuery, x, y, nil, 0)
+func (fc *fakeConduit) SendProbe(x, y Ordered, fingerprint any, sampleSize int) error {
+	fc.sendMsg(rangeMessage{
+		mtype: MessageTypeProbe,
+		x:     x,
+		y:     y,
+		fp:    fingerprint,
+		count: sampleSize,
+	})
 	return nil
+}
+
+func (fc *fakeConduit) SendProbeResponse(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error {
+	msg := rangeMessage{
+		mtype: MessageTypeProbeResponse,
+		x:     x,
+		y:     y,
+		fp:    fingerprint,
+		count: count,
+		keys:  make([]Ordered, sampleSize),
+	}
+	for n := 0; n < sampleSize; n++ {
+		require.NotNil(fc.t, it.Key())
+		msg.keys[n] = it.Key()
+		it.Next()
+	}
+	fc.sendMsg(msg)
+	return nil
+}
+
+func (fc *fakeConduit) ShortenKey(k Ordered) Ordered {
+	return k
 }
 
 type dumbStoreIterator struct {
@@ -226,6 +262,19 @@ func (ds *dumbStore) iterFor(s sampleID) Iterator {
 }
 
 func (ds *dumbStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) RangeInfo {
+	if x == nil && y == nil {
+		it := ds.Min()
+		if it == nil {
+			return RangeInfo{
+				Fingerprint: "",
+			}
+		} else {
+			x = it.Key()
+			y = x
+		}
+	} else if x == nil || y == nil {
+		panic("BUG: bad X or Y")
+	}
 	all := storeItemStr(ds)
 	vx := x.(sampleID)
 	vy := y.(sampleID)
@@ -557,44 +606,44 @@ func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int)
 	return i + 1, nMsg, nItems
 }
 
-func runProbe(t *testing.T, from, to *RangeSetReconciler) (fp any, count int) {
+func runProbe(t *testing.T, from, to *RangeSetReconciler) ProbeResult {
 	fc := &fakeConduit{t: t}
-	require.NoError(t, from.InitiateProbe(fc))
-	return doRunProbe(fc, from, to)
+	info, err := from.InitiateProbe(fc)
+	require.NoError(t, err)
+	return doRunProbe(fc, from, to, info)
 }
 
-func runBoundedProbe(t *testing.T, from, to *RangeSetReconciler, x, y Ordered) (fp any, count int) {
+func runBoundedProbe(t *testing.T, from, to *RangeSetReconciler, x, y Ordered) ProbeResult {
 	fc := &fakeConduit{t: t}
-	require.NoError(t, from.InitiateBoundedProbe(fc, x, y))
-	return doRunProbe(fc, from, to)
+	info, err := from.InitiateBoundedProbe(fc, x, y)
+	require.NoError(t, err)
+	return doRunProbe(fc, from, to, info)
 }
 
-func doRunProbe(fc *fakeConduit, from, to *RangeSetReconciler) (fp any, count int) {
+func doRunProbe(fc *fakeConduit, from, to *RangeSetReconciler, info RangeInfo) ProbeResult {
 	require.NotEmpty(fc.t, fc.resp, "empty initial round")
 	fc.gotoResponse()
 	done, err := to.Process(fc)
 	require.True(fc.t, done)
 	require.NoError(fc.t, err)
 	fc.gotoResponse()
-	fp, count, err = from.HandleProbeResponse(fc)
+	pr, err := from.HandleProbeResponse(fc, info)
 	require.NoError(fc.t, err)
 	require.Nil(fc.t, fc.resp, "got messages from Probe in response to done msg")
-	return fp, count
+	return pr
 }
 
 func TestRangeSync(t *testing.T) {
 	forTestStores(t, func(t *testing.T, storeFactory storeFactory) {
 		for _, tc := range []struct {
-			name      string
-			a, b      string
-			finalA    string
-			finalB    string
-			x, y      string
-			countA    int
-			countB    int
-			fpA       any
-			fpB       any
-			maxRounds [4]int
+			name           string
+			a, b           string
+			finalA, finalB string
+			x, y           string
+			countA, countB int
+			fpA, fpB       string
+			maxRounds      [4]int
+			sim            float64
 		}{
 			{
 				name:      "empty sets",
@@ -604,9 +653,10 @@ func TestRangeSync(t *testing.T) {
 				finalB:    "",
 				countA:    0,
 				countB:    0,
-				fpA:       nil,
-				fpB:       nil,
+				fpA:       "",
+				fpB:       "",
 				maxRounds: [4]int{1, 1, 1, 1},
+				sim:       1,
 			},
 			{
 				name:      "empty to non-empty",
@@ -616,9 +666,10 @@ func TestRangeSync(t *testing.T) {
 				finalB:    "abcd",
 				countA:    0,
 				countB:    4,
-				fpA:       nil,
+				fpA:       "",
 				fpB:       "abcd",
 				maxRounds: [4]int{2, 2, 2, 2},
+				sim:       0,
 			},
 			{
 				name:      "non-empty to empty",
@@ -629,8 +680,9 @@ func TestRangeSync(t *testing.T) {
 				countA:    4,
 				countB:    0,
 				fpA:       "abcd",
-				fpB:       nil,
+				fpB:       "",
 				maxRounds: [4]int{2, 2, 2, 2},
+				sim:       0,
 			},
 			{
 				name:      "non-intersecting sets",
@@ -643,6 +695,7 @@ func TestRangeSync(t *testing.T) {
 				fpA:       "ab",
 				fpB:       "cd",
 				maxRounds: [4]int{3, 2, 2, 2},
+				sim:       0,
 			},
 			{
 				name:      "intersecting sets",
@@ -655,6 +708,7 @@ func TestRangeSync(t *testing.T) {
 				fpA:       "acdefghijklmn",
 				fpB:       "bcdopqr",
 				maxRounds: [4]int{4, 4, 3, 3},
+				sim:       0.153,
 			},
 			{
 				name:      "bounded reconciliation",
@@ -669,6 +723,7 @@ func TestRangeSync(t *testing.T) {
 				fpA:       "acdefg",
 				fpB:       "bcd",
 				maxRounds: [4]int{3, 3, 2, 2},
+				sim:       0.333,
 			},
 			{
 				name:      "bounded reconciliation with rollover",
@@ -683,6 +738,7 @@ func TestRangeSync(t *testing.T) {
 				fpA:       "hijklmn",
 				fpB:       "opqr",
 				maxRounds: [4]int{4, 3, 3, 2},
+				sim:       0,
 			},
 			{
 				name:      "sync against 1-element set",
@@ -695,6 +751,7 @@ func TestRangeSync(t *testing.T) {
 				fpA:       "bcd",
 				fpB:       "a",
 				maxRounds: [4]int{2, 2, 2, 2},
+				sim:       0,
 			},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
@@ -712,28 +769,30 @@ func TestRangeSync(t *testing.T) {
 						WithItemChunkSize(3))
 
 					var (
-						countA, countB, nRounds int
-						fpA, fpB                any
+						nRounds    int
+						prBA, prAB ProbeResult
 					)
 					if tc.x == "" {
-						fpA, countA = runProbe(t, syncB, syncA)
-						fpB, countB = runProbe(t, syncA, syncB)
+						prBA = runProbe(t, syncB, syncA)
+						prAB = runProbe(t, syncA, syncB)
 						nRounds, _, _ = runSync(t, syncA, syncB, tc.maxRounds[n])
 					} else {
 						x := sampleID(tc.x)
 						y := sampleID(tc.y)
-						fpA, countA = runBoundedProbe(t, syncB, syncA, x, y)
-						fpB, countB = runBoundedProbe(t, syncA, syncB, x, y)
+						prBA = runBoundedProbe(t, syncB, syncA, x, y)
+						prAB = runBoundedProbe(t, syncA, syncB, x, y)
 						nRounds, _, _ = runBoundedSync(t, syncA, syncB, x, y, tc.maxRounds[n])
 					}
 					t.Logf("%s: maxSendRange %d: %d rounds", tc.name, maxSendRange, nRounds)
 
-					require.Equal(t, tc.countA, countA, "countA")
-					require.Equal(t, tc.countB, countB, "countB")
-					require.Equal(t, tc.fpA, fpA, "fpA")
-					require.Equal(t, tc.fpB, fpB, "fpB")
+					require.Equal(t, tc.countA, prBA.Count, "countA")
+					require.Equal(t, tc.countB, prAB.Count, "countB")
+					require.Equal(t, tc.fpA, prBA.FP, "fpA")
+					require.Equal(t, tc.fpB, prAB.FP, "fpB")
 					require.Equal(t, tc.finalA, storeItemStr(storeA), "finalA")
 					require.Equal(t, tc.finalB, storeItemStr(storeB), "finalB")
+					require.InDelta(t, tc.sim, prAB.Sim, 0.01, "prAB.Sim")
+					require.InDelta(t, tc.sim, prBA.Sim, 0.01, "prBA.Sim")
 				}
 			})
 		}

@@ -50,6 +50,7 @@ type SyncTreeStore struct {
 	st       SyncTree
 	vh       ValueHandler
 	newValue NewValueFunc
+	identity any
 }
 
 var _ ItemStore = &SyncTreeStore{}
@@ -62,6 +63,7 @@ func NewSyncTreeStore(m Monoid, vh ValueHandler, newValue NewValueFunc) ItemStor
 		st:       NewSyncTree(CombineMonoids(m, CountingMonoid{})),
 		vh:       vh,
 		newValue: newValue,
+		identity: m.Identity(),
 	}
 }
 
@@ -83,7 +85,20 @@ func (sts *SyncTreeStore) iter(ptr SyncTreePointer) Iterator {
 }
 
 // GetRangeInfo implements ItemStore.
-func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x Ordered, y Ordered, count int) RangeInfo {
+func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) RangeInfo {
+	if x == nil && y == nil {
+		it := sts.Min()
+		if it == nil {
+			return RangeInfo{
+				Fingerprint: sts.identity,
+			}
+		} else {
+			x = it.Key()
+			y = x
+		}
+	} else if x == nil || y == nil {
+		panic("BUG: bad X or Y")
+	}
 	var stop FingerprintPredicate
 	var node SyncTreePointer
 	if preceding != nil {

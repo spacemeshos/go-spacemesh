@@ -134,8 +134,14 @@ func (c *wireConduit) NextMessage() (SyncMessage, error) {
 			return nil, err
 		}
 		return &m, nil
-	case MessageTypeQuery:
-		var m QueryMessage
+	case MessageTypeProbe:
+		var m ProbeMessage
+		if _, err := codec.DecodeFrom(c.stream, &m); err != nil {
+			return nil, err
+		}
+		return &m, nil
+	case MessageTypeProbeResponse:
+		var m ProbeResponseMessage
 		if _, err := codec.DecodeFrom(c.stream, &m); err != nil {
 			return nil, err
 		}
@@ -146,6 +152,7 @@ func (c *wireConduit) NextMessage() (SyncMessage, error) {
 }
 
 func (c *wireConduit) send(m sendable) error {
+	// fmt.Fprintf(os.Stderr, "QQQQQ: send: %s: %#v\n", m.Type(), m)
 	var stream io.Writer
 	if c.initReqBuf != nil {
 		stream = c.initReqBuf
@@ -219,15 +226,46 @@ func (c *wireConduit) SendDone() error {
 	return c.send(&DoneMessage{})
 }
 
-func (c *wireConduit) SendQuery(x, y Ordered) error {
+func (c *wireConduit) SendProbe(x, y Ordered, fingerprint any, sampleSize int) error {
+	m := &ProbeMessage{
+		RangeFingerprint: fingerprint.(types.Hash12),
+		SampleSize:       uint32(sampleSize),
+	}
 	if x == nil && y == nil {
-		return c.send(&QueryMessage{})
+		return c.send(m)
 	} else if x == nil || y == nil {
-		panic("BUG: SendQuery: bad range: just one of the bounds is nil")
+		panic("BUG: SendProbe: bad range: just one of the bounds is nil")
 	}
 	xh := x.(types.Hash32)
 	yh := y.(types.Hash32)
-	return c.send(&QueryMessage{RangeX: &xh, RangeY: &yh})
+	m.RangeX = &xh
+	m.RangeY = &yh
+	return c.send(m)
+}
+
+func (c *wireConduit) SendProbeResponse(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error {
+	m := &ProbeResponseMessage{
+		RangeFingerprint: fingerprint.(types.Hash12),
+		NumItems:         uint32(count),
+		Sample:           make([]MinhashSampleItem, sampleSize),
+	}
+	// fmt.Fprintf(os.Stderr, "QQQQQ: begin sending items\n")
+	for n := 0; n < sampleSize; n++ {
+		m.Sample[n] = MinhashSampleItemFromHash32(it.Key().(types.Hash32))
+		// fmt.Fprintf(os.Stderr, "QQQQQ: m.Sample[%d] = %s\n", n, m.Sample[n])
+		it.Next()
+	}
+	// fmt.Fprintf(os.Stderr, "QQQQQ: end sending items\n")
+	if x == nil && y == nil {
+		return c.send(m)
+	} else if x == nil || y == nil {
+		panic("BUG: SendProbe: bad range: just one of the bounds is nil")
+	}
+	xh := x.(types.Hash32)
+	yh := y.(types.Hash32)
+	m.RangeX = &xh
+	m.RangeY = &yh
+	return c.send(m)
 }
 
 func (c *wireConduit) withInitialRequest(toCall func(Conduit) error) ([]byte, error) {
@@ -250,6 +288,11 @@ func (c *wireConduit) handleStream(stream io.ReadWriter, rsr *RangeSetReconciler
 			return nil
 		}
 	}
+}
+
+// ShortenKey implements Conduit.
+func (c *wireConduit) ShortenKey(k Ordered) Ordered {
+	return MinhashSampleItemFromHash32(k.(types.Hash32))
 }
 
 func MakeServerHandler(is ItemStore, opts ...Option) server.StreamHandler {
@@ -299,43 +342,63 @@ func syncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x,
 	})
 }
 
-func Probe(ctx context.Context, r requester, peer p2p.Peer, opts ...Option) (fp any, count int, err error) {
-	return boundedProbe(ctx, r, peer, nil, nil, opts)
+func Probe(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, opts ...Option) (ProbeResult, error) {
+	return boundedProbe(ctx, r, peer, is, nil, nil, opts)
 }
 
-func BoundedProbe(ctx context.Context, r requester, peer p2p.Peer, x, y types.Hash32, opts ...Option) (fp any, count int, err error) {
-	return boundedProbe(ctx, r, peer, &x, &y, opts)
+func BoundedProbe(
+	ctx context.Context,
+	r requester,
+	peer p2p.Peer,
+	is ItemStore,
+	x, y types.Hash32,
+	opts ...Option,
+) (ProbeResult, error) {
+	return boundedProbe(ctx, r, peer, is, &x, &y, opts)
 }
 
-func boundedProbe(ctx context.Context, r requester, peer p2p.Peer, x, y *types.Hash32, opts []Option) (fp any, count int, err error) {
+func boundedProbe(
+	ctx context.Context,
+	r requester,
+	peer p2p.Peer,
+	is ItemStore,
+	x, y *types.Hash32,
+	opts []Option,
+) (ProbeResult, error) {
+	var (
+		err     error
+		initReq []byte
+		info    RangeInfo
+		pr      ProbeResult
+	)
 	c := wireConduit{
 		newValue: func() any { return nil }, // not used
 	}
-	rsr := NewRangeSetReconciler(nil, opts...)
-	// c.rmmePrint = true
-	var initReq []byte
+	rsr := NewRangeSetReconciler(is, opts...)
 	if x == nil {
 		initReq, err = c.withInitialRequest(func(c Conduit) error {
-			return rsr.InitiateProbe(c)
+			info, err = rsr.InitiateProbe(c)
+			return err
 		})
 	} else {
 		initReq, err = c.withInitialRequest(func(c Conduit) error {
-			return rsr.InitiateBoundedProbe(c, *x, *y)
+			info, err = rsr.InitiateBoundedProbe(c, *x, *y)
+			return err
 		})
 	}
 	if err != nil {
-		return nil, 0, err
+		return ProbeResult{}, err
 	}
 	err = r.StreamRequest(ctx, peer, initReq, func(ctx context.Context, stream io.ReadWriter) error {
 		c.stream = stream
 		var err error
-		fp, count, err = rsr.HandleProbeResponse(&c)
+		pr, err = rsr.HandleProbeResponse(&c, info)
 		return err
 	})
 	if err != nil {
-		return nil, 0, err
+		return ProbeResult{}, err
 	}
-	return fp, count, nil
+	return pr, nil
 }
 
 // TODO: request duration

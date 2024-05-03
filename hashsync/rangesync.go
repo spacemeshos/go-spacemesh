@@ -4,12 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 )
 
 const (
 	defaultMaxSendRange  = 16
 	defaultItemChunkSize = 16
+	defaultSampleSize    = 200
+	maxSampleSize        = 1000
 )
 
 type MessageType byte
@@ -22,7 +25,8 @@ const (
 	MessageTypeFingerprint
 	MessageTypeRangeContents
 	MessageTypeItemBatch
-	MessageTypeQuery
+	MessageTypeProbe
+	MessageTypeProbeResponse
 )
 
 var messageTypes = []string{
@@ -33,6 +37,8 @@ var messageTypes = []string{
 	"fingerprint",
 	"rangeContents",
 	"itemBatch",
+	"probe",
+	"probeResponse",
 }
 
 func (mtype MessageType) String() string {
@@ -79,6 +85,8 @@ func SyncMessageToString(m SyncMessage) string {
 type NewValueFunc func() any
 
 // Conduit handles receiving and sending peer messages
+// TODO: replace multiple Send* methods with a single one
+// (after de-generalizing messages)
 type Conduit interface {
 	// NextMessage returns the next SyncMessage, or nil if there are no more
 	// SyncMessages for this session. NextMessage is only called after a NextItem call
@@ -104,10 +112,17 @@ type Conduit interface {
 	SendEndRound() error
 	// SendDone sends a message that notifies the peer that sync is finished
 	SendDone() error
-	// SendQuery sends a message requesting fingerprint and count of the
-	// whole range or part of the range. The response will never contain any
-	// actual data items
-	SendQuery(x, y Ordered) error
+	// SendProbe sends a message requesting fingerprint and count of the
+	// whole range or part of the range. If fingerprint is provided and
+	// it doesn't match the fingerprint on the probe handler side,
+	// the handler must send a sample subset of its items for MinHash
+	// calculation.
+	SendProbe(x, y Ordered, fingerprint any, sampleSize int) error
+	// SendProbeResponse sends probe response. If 'it' is not nil,
+	// the corresponding items are included in the sample
+	SendProbeResponse(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error
+	// ShortenKey shortens the key for minhash calculation
+	ShortenKey(k Ordered) Ordered
 }
 
 type Option func(r *RangeSetReconciler)
@@ -121,6 +136,12 @@ func WithMaxSendRange(n int) Option {
 func WithItemChunkSize(n int) Option {
 	return func(r *RangeSetReconciler) {
 		r.itemChunkSize = n
+	}
+}
+
+func WithSampleSize(s int) Option {
+	return func(r *RangeSetReconciler) {
+		r.sampleSize = s
 	}
 }
 
@@ -149,7 +170,9 @@ type ItemStore interface {
 	Add(k Ordered, v any)
 	// GetRangeInfo returns RangeInfo for the item range in the tree.
 	// If count >= 0, at most count items are returned, and RangeInfo
-	// is returned for the corresponding subrange of the requested range
+	// is returned for the corresponding subrange of the requested range.
+	// If both x and y is nil, the whole set of items is used.
+	// If only x or only y is nil, GetRangeInfo panics
 	GetRangeInfo(preceding Iterator, x, y Ordered, count int) RangeInfo
 	// Min returns the iterator pointing at the minimum element
 	// in the store. If the store is empty, it returns nil
@@ -161,10 +184,17 @@ type ItemStore interface {
 	New() any
 }
 
+type ProbeResult struct {
+	FP    any
+	Count int
+	Sim   float64
+}
+
 type RangeSetReconciler struct {
 	is            ItemStore
 	maxSendRange  int
 	itemChunkSize int
+	sampleSize    int
 }
 
 func NewRangeSetReconciler(is ItemStore, opts ...Option) *RangeSetReconciler {
@@ -172,6 +202,7 @@ func NewRangeSetReconciler(is ItemStore, opts ...Option) *RangeSetReconciler {
 		is:            is,
 		maxSendRange:  defaultMaxSendRange,
 		itemChunkSize: defaultItemChunkSize,
+		sampleSize:    defaultSampleSize,
 	}
 	for _, opt := range opts {
 		opt(rsr)
@@ -237,12 +268,18 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 	x := msg.X()
 	y := msg.Y()
 	done = true
-	if msg.Type() == MessageTypeEmptySet || (msg.Type() == MessageTypeQuery && x == nil && y == nil) {
+	if msg.Type() == MessageTypeEmptySet || (msg.Type() == MessageTypeProbe && x == nil && y == nil) {
 		// The peer has no items at all so didn't
 		// even send X & Y (SendEmptySet)
 		it := rsr.is.Min()
 		if it == nil {
 			// We don't have any items at all, too
+			if msg.Type() == MessageTypeProbe {
+				info := rsr.is.GetRangeInfo(preceding, nil, nil, -1)
+				if err := c.SendProbeResponse(x, y, info.Fingerprint, info.Count, 0, it); err != nil {
+					return nil, false, err
+				}
+			}
 			return nil, true, nil
 		}
 		x = it.Key()
@@ -251,7 +288,7 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 		return nil, false, errors.New("bad X or Y")
 	}
 	info := rsr.is.GetRangeInfo(preceding, x, y, -1)
-	// fmt.Fprintf(os.Stderr, "msg %s fp %v start %#v end %#v count %d\n", msg, info.Fingerprint, info.Start, info.End, info.Count)
+	// fmt.Fprintf(os.Stderr, "QQQQQ msg %s %#v fp %v start %#v end %#v count %d\n", msg.Type(), msg, info.Fingerprint, info.Start, info.End, info.Count)
 	switch {
 	case msg.Type() == MessageTypeEmptyRange ||
 		msg.Type() == MessageTypeRangeContents ||
@@ -267,8 +304,23 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 				return nil, false, err
 			}
 		}
-	case msg.Type() == MessageTypeQuery:
-		if err := c.SendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
+	case msg.Type() == MessageTypeProbe:
+		sampleSize := msg.Count()
+		if sampleSize > maxSampleSize {
+			return nil, false, fmt.Errorf("bad minhash sample size %d (max %d)",
+				msg.Count(), maxSampleSize)
+		} else if sampleSize > info.Count {
+			sampleSize = info.Count
+		}
+		it := info.Start
+		if fingerprintEqual(msg.Fingerprint(), info.Fingerprint) {
+			// no need to send MinHash items if fingerprints match
+			it = nil
+			sampleSize = 0
+			// fmt.Fprintf(os.Stderr, "QQQQQ: fingerprint eq %#v %#v\n",
+			// 	msg.Fingerprint(), info.Fingerprint)
+		}
+		if err := c.SendProbeResponse(x, y, info.Fingerprint, info.Count, sampleSize, it); err != nil {
 			return nil, false, err
 		}
 		return nil, true, nil
@@ -381,47 +433,108 @@ func (rsr *RangeSetReconciler) getMessages(c Conduit) (msgs []SyncMessage, done 
 	}
 }
 
-func (rsr *RangeSetReconciler) InitiateProbe(c Conduit) error {
+func (rsr *RangeSetReconciler) InitiateProbe(c Conduit) (RangeInfo, error) {
 	return rsr.InitiateBoundedProbe(c, nil, nil)
 }
 
-func (rsr *RangeSetReconciler) InitiateBoundedProbe(c Conduit, x, y Ordered) error {
-	if err := c.SendQuery(x, y); err != nil {
-		return err
+func (rsr *RangeSetReconciler) InitiateBoundedProbe(c Conduit, x, y Ordered) (RangeInfo, error) {
+	info := rsr.is.GetRangeInfo(nil, x, y, -1)
+	// fmt.Fprintf(os.Stderr, "QQQQQ: x %#v y %#v count %d\n", x, y, info.Count)
+	if err := c.SendProbe(x, y, info.Fingerprint, rsr.sampleSize); err != nil {
+		return RangeInfo{}, err
 	}
 	if err := c.SendEndRound(); err != nil {
-		return err
+		return RangeInfo{}, err
 	}
-	return nil
+	return info, nil
 }
 
-func (rsr *RangeSetReconciler) HandleProbeResponse(c Conduit) (fp any, count int, err error) {
+func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample []Ordered, fp any) float64 {
+	if fingerprintEqual(info.Fingerprint, fp) {
+		return 1
+	}
+	if info.Start == nil {
+		return 0
+	}
+	sampleSize := min(info.Count, rsr.sampleSize)
+	localSample := make([]Ordered, sampleSize)
+	it := info.Start
+	for n := 0; n < sampleSize; n++ {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: n %d sampleSize %d info.Count %d rsr.sampleSize %d %#v\n",
+		// 	n, sampleSize, info.Count, rsr.sampleSize, it.Key())
+		if it.Key() == nil {
+			panic("BUG: no key")
+		}
+		localSample[n] = c.ShortenKey(it.Key())
+		it.Next()
+	}
+	slices.SortFunc(remoteSample, func(a, b Ordered) int { return a.Compare(b) })
+	slices.SortFunc(localSample, func(a, b Ordered) int { return a.Compare(b) })
+
+	numEq := 0
+	for m, n := 0, 0; m < len(localSample) && n < len(remoteSample); {
+		d := localSample[m].Compare(remoteSample[n])
+		switch {
+		case d < 0:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: less: %v < %s\n", c.ShortenKey(it.Key()), remoteSample[n])
+			m++
+		case d == 0:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: eq: %v\n", remoteSample[n])
+			numEq++
+			m++
+			n++
+		default:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: gt: %v > %s\n", c.ShortenKey(it.Key()), remoteSample[n])
+			n++
+		}
+	}
+	maxSampleSize := max(sampleSize, len(remoteSample))
+	// fmt.Fprintf(os.Stderr, "QQQQQ: numEq %d maxSampleSize %d\n", numEq, maxSampleSize)
+	return float64(numEq) / float64(maxSampleSize)
+}
+
+func (rsr *RangeSetReconciler) HandleProbeResponse(c Conduit, info RangeInfo) (pr ProbeResult, err error) {
+	// fmt.Fprintf(os.Stderr, "QQQQQ: HandleProbeResponse\n")
+	// defer fmt.Fprintf(os.Stderr, "QQQQQ: HandleProbeResponse done\n")
 	gotRange := false
 	for {
 		msg, err := c.NextMessage()
 		switch {
 		case err != nil:
-			return nil, 0, err
+			return ProbeResult{}, err
 		case msg == nil:
-			return nil, 0, errors.New("no end round marker")
+			// fmt.Fprintf(os.Stderr, "QQQQQ: HandleProbeResponse: %s %#v\n", msg.Type(), msg)
+			return ProbeResult{}, errors.New("no end round marker")
 		default:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: HandleProbeResponse: %s %#v\n", msg.Type(), msg)
 			switch mt := msg.Type(); mt {
 			case MessageTypeEndRound:
-				return nil, 0, errors.New("non-final round in response to a probe")
+				return ProbeResult{}, errors.New("non-final round in response to a probe")
 			case MessageTypeDone:
 				// the peer is not expecting any new messages
-				return fp, count, nil
-			case MessageTypeFingerprint:
-				fp = msg.Fingerprint()
-				count = msg.Count()
-				fallthrough
+				if !gotRange {
+					return ProbeResult{}, errors.New("no range info received during probe")
+				}
+				return pr, nil
+			case MessageTypeProbeResponse:
+				if gotRange {
+					return ProbeResult{}, errors.New("single range message expected")
+				}
+				pr.FP = msg.Fingerprint()
+				pr.Count = msg.Count()
+				pr.Sim = rsr.calcSim(c, info, msg.Keys(), msg.Fingerprint())
+				gotRange = true
 			case MessageTypeEmptySet, MessageTypeEmptyRange:
 				if gotRange {
-					return nil, 0, errors.New("single range message expected")
+					return ProbeResult{}, errors.New("single range message expected")
+				}
+				if info.Count == 0 {
+					pr.Sim = 1
 				}
 				gotRange = true
 			default:
-				return nil, 0, fmt.Errorf("unexpected message type: %v", msg.Type())
+				return ProbeResult{}, fmt.Errorf(
+					"probe response: unexpected message type: %v", msg.Type())
 			}
 		}
 	}

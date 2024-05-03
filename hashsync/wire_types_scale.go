@@ -272,7 +272,7 @@ func (t *ItemBatchMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 	return total, nil
 }
 
-func (t *QueryMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *ProbeMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeOption(enc, t.RangeX)
 		if err != nil {
@@ -287,10 +287,24 @@ func (t *QueryMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.RangeFingerprint[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.SampleSize))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
-func (t *QueryMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *ProbeMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		field, n, err := scale.DecodeOption[types.Hash32](dec)
 		if err != nil {
@@ -306,6 +320,103 @@ func (t *QueryMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.RangeY = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.RangeFingerprint[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.SampleSize = uint32(field)
+	}
+	return total, nil
+}
+
+func (t *ProbeResponseMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeOption(enc, t.RangeX)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.RangeY)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.RangeFingerprint[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.NumItems))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Sample, 1000)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *ProbeResponseMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeOption[types.Hash32](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.RangeX = field
+	}
+	{
+		field, n, err := scale.DecodeOption[types.Hash32](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.RangeY = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.RangeFingerprint[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NumItems = uint32(field)
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[MinhashSampleItem](dec, 1000)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Sample = field
 	}
 	return total, nil
 }
