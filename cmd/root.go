@@ -333,11 +333,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.Bootstrap.Version, "the update version of the bootstrap data")
 
 	/**======================== testing related flags ========================== **/
-	flagSet.StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
-		"", "import private smesher key for testing",
-	)
 	flagSet.VarP(flags.NewStringToUint64Value(&cfg.Genesis.Accounts), "accounts", "a",
-		"List of pre-funded accounts (use in tests only")
+		"List of pre-funded accounts (use in tests only)",
+	)
 
 	/**========================  Deprecated flags ========================== **/
 	flagSet.Var(flags.NewDeprecatedFlag(

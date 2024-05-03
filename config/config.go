@@ -78,17 +78,12 @@ func (cfg *Config) DataDir() string {
 	return filepath.Clean(cfg.DataDirParent)
 }
 
-type TestConfig struct {
-	SmesherKey string `mapstructure:"testing-smesher-key"`
-}
-
 // BaseConfig defines the default configuration options for spacemesh app.
 type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
 	FileLock      string `mapstructure:"filelock"`
 
-	TestConfig TestConfig `mapstructure:"testing"`
-	Standalone bool       `mapstructure:"standalone"`
+	Standalone bool `mapstructure:"standalone"`
 
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
