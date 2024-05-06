@@ -97,7 +97,7 @@ func (s *LayerStreamService) Stream(
 		select {
 		case rst := <-eventsOut:
 			var derr error
-			if err := layers.Get(s.db, rst.LayerID, func(layer *layers.Layer) bool {
+			if layer, err := layers.Get(s.db, rst.LayerID); err == nil {
 				l := toLayer(layer)
 
 				l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
@@ -111,8 +111,7 @@ func (s *LayerStreamService) Stream(
 				derr = stream.Send(&spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
 					V1: l,
 				}})
-				return true
-			}); err != nil {
+			} else {
 				return status.Error(codes.Internal, derr.Error())
 			}
 
@@ -126,7 +125,7 @@ func (s *LayerStreamService) Stream(
 			select {
 			case rst := <-eventsOut:
 				var derr error
-				if err := layers.Get(s.db, rst.LayerID, func(layer *layers.Layer) bool {
+				if layer, err := layers.Get(s.db, rst.LayerID); err == nil {
 					l := toLayer(layer)
 
 					l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
@@ -140,8 +139,7 @@ func (s *LayerStreamService) Stream(
 					derr = stream.Send(&spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
 						V1: l,
 					}})
-					return true
-				}); err != nil {
+				} else {
 					return status.Error(codes.Internal, derr.Error())
 				}
 

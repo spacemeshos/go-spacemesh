@@ -365,8 +365,8 @@ func IterateLayersWithBlockOps(
 func Get(
 	db sql.Executor,
 	lid types.LayerID,
-	fn func(layer *Layer) bool,
-) error {
+) (*Layer, error) {
+	var layer *Layer
 	var derr error
 	_, err := db.Exec(
 		`SELECT l.id, l.weak_coin, l.processed, l.applied_block, l.state_hash, l.aggregated_hash,
@@ -376,33 +376,33 @@ func Get(
 			stmt.BindInt64(1, int64(lid.Uint32()))
 		},
 		func(stmt *sql.Statement) bool {
-			l := &Layer{
+			layer = &Layer{
 				Id: types.LayerID(stmt.ColumnInt(0)),
 			}
 
-			l.WeakCoin = stmt.ColumnInt(1) == 0
-			l.Processed = stmt.ColumnInt(2) == 1
-			stmt.ColumnBytes(3, l.AppliedBlock[:])
-			stmt.ColumnBytes(4, l.StateHash[:])
-			stmt.ColumnBytes(5, l.AggregatedHash[:])
+			layer.WeakCoin = stmt.ColumnInt(1) == 0
+			layer.Processed = stmt.ColumnInt(2) == 1
+			stmt.ColumnBytes(3, layer.AppliedBlock[:])
+			stmt.ColumnBytes(4, layer.StateHash[:])
+			stmt.ColumnBytes(5, layer.AggregatedHash[:])
 
 			inner := types.InnerBlock{}
 			_, err := codec.DecodeFrom(stmt.ColumnReader(7), &inner)
 			if err != nil {
-				derr = fmt.Errorf("failed to decode block %s: %w", l.AppliedBlock, err)
+				derr = fmt.Errorf("failed to decode block %s: %w", layer.AppliedBlock, err)
 				return false
 			}
 
-			l.Block, err = types.NewExistingBlock(l.AppliedBlock, inner), nil
+			layer.Block, err = types.NewExistingBlock(layer.AppliedBlock, inner), nil
 			if err != nil {
 				derr = err
 				return false
 			}
 
-			return fn(l)
+			return true
 		})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return derr
+	return layer, derr
 }

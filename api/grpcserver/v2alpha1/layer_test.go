@@ -31,7 +31,7 @@ func TestLayerService_List(t *testing.T) {
 	for i := range lrs {
 		processed := r1.Intn(2) == 0
 		withBlock := r2.Intn(2) == 0
-		l, err := generateLayer(db, types.LayerID(i), processed, withBlock)
+		l, err := generateLayer(db, types.LayerID(i), layerGenProcessed(processed), layerGenWithBlock(withBlock))
 		require.NoError(t, err)
 		lrs[i] = *l
 	}
@@ -93,7 +93,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 	for i := range lrs {
 		processed := r1.Intn(2) == 0
 		withBlock := r2.Intn(2) == 0
-		l, err := generateLayer(db, types.LayerID(i), processed, withBlock)
+		l, err := generateLayer(db, types.LayerID(i), layerGenProcessed(processed), layerGenWithBlock(withBlock))
 		require.NoError(t, err)
 		lrs[i] = *l
 	}
@@ -135,7 +135,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 
 		var streamed []layers.Layer
 		for i := start + 0; i < start+n; i++ {
-			layer, err := generateLayer(db, types.LayerID(i), true, true)
+			layer, err := generateLayer(db, types.LayerID(i), layerGenProcessed(true), layerGenWithBlock(true))
 			require.NoError(t, err)
 			streamed = append(streamed, *layer)
 		}
@@ -192,10 +192,34 @@ func TestLayerStreamService_Stream(t *testing.T) {
 	})
 }
 
-func generateLayer(db *sql.Database, id types.LayerID, processed, withBlock bool) (*layers.Layer, error) {
+type layerGenOpt = func(o *layerGenOpts)
+
+type layerGenOpts struct {
+	processed bool
+	withBlock bool
+}
+
+func layerGenProcessed(processed bool) layerGenOpt {
+	return func(g *layerGenOpts) {
+		g.processed = processed
+	}
+}
+
+func layerGenWithBlock(withBlock bool) layerGenOpt {
+	return func(g *layerGenOpts) {
+		g.withBlock = withBlock
+	}
+}
+
+func generateLayer(db *sql.Database, id types.LayerID, opts ...layerGenOpt) (*layers.Layer, error) {
+	g := &layerGenOpts{}
+	for _, opt := range opts {
+		opt(g)
+	}
+
 	var block *types.Block = nil
 
-	if withBlock {
+	if g.withBlock {
 		block = &types.Block{
 			InnerBlock: types.InnerBlock{
 				LayerIndex: id,
@@ -215,7 +239,7 @@ func generateLayer(db *sql.Database, id types.LayerID, processed, withBlock bool
 		}
 	}
 
-	if processed {
+	if g.processed {
 		err := layers.SetProcessed(db, id)
 		if err != nil {
 			return nil, err
@@ -236,7 +260,7 @@ func generateLayer(db *sql.Database, id types.LayerID, processed, withBlock bool
 
 	l := &layers.Layer{
 		Id:             id,
-		Processed:      processed,
+		Processed:      g.processed,
 		StateHash:      stateHash,
 		AggregatedHash: meshHash,
 	}
