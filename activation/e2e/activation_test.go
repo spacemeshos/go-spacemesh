@@ -122,7 +122,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		localDB,
 		poetDb,
 		svc,
-		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
+		[]types.PoetServer{{Pubkey: types.NewBase64Enc([]byte("foobar")), Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,

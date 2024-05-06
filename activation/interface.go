@@ -123,8 +123,6 @@ type SmeshingProvider interface {
 type poetClient interface {
 	Address() string
 
-	PowParams(ctx context.Context) (*PoetPowParams, error)
-
 	// Submit registers a challenge in the proving service current open round.
 	Submit(
 		ctx context.Context,
@@ -132,15 +130,15 @@ type poetClient interface {
 		prefix, challenge []byte,
 		signature types.EdSignature,
 		nodeID types.NodeID,
-		pow PoetPoW,
 	) (*types.PoetRound, error)
 
 	// Proof returns the proof for the given round ID.
-	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error)
+	Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error)
 }
 
 type poetDbAPI interface {
-	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	Proof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 

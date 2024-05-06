@@ -98,7 +98,7 @@ func (v *Validator) NIPost(
 
 	var ref types.PoetProofRef
 	copy(ref[:], nipost.PostMetadata.Challenge)
-	proof, statement, err := v.poetDb.GetProof(ref)
+	proof, statement, err := v.poetDb.Proof(ref)
 	if err != nil {
 		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
 	}

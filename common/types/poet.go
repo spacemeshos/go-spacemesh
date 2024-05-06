@@ -78,12 +78,11 @@ func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// Ref returns the reference to the PoET proof message. It's the blake3 sum of the entire proof message.
-func (p *PoetProofMessage) Ref() (PoetProofRef, error) {
-	poetProofBytes, err := codec.Encode(&p.PoetProof)
+// Ref returns the reference to the PoET proof message. It's the blake3 sum of the entire proof.
+func (p *PoetProof) Ref() (PoetProofRef, error) {
+	poetProofBytes, err := codec.Encode(p)
 	if err != nil {
-		return PoetProofRef{}, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %w",
-			p.PoetServiceID, p.RoundID, err)
+		return PoetProofRef{}, fmt.Errorf("encoding poet proof: %w", err)
 	}
 	h := CalcHash32(poetProofBytes)
 	return (PoetProofRef)(h), nil

@@ -2,6 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Unreleased
+
+### Improvements
+
+* [#5911](https://github.com/spacemeshos/go-spacemesh/pull/5911) Avoid pulling poet proof multiple times in 1:N setups
+
 ## Release v1.5.1
 
 ### Improvements

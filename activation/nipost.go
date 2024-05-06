@@ -47,7 +47,6 @@ type NIPostBuilder struct {
 	localDB *localsql.Database
 
 	poetProvers map[string]poetClient
-	poetDB      poetDbAPI
 	postService postService
 	log         *zap.Logger
 	poetCfg     PoetConfig
@@ -86,7 +85,7 @@ func NewNIPostBuilder(
 ) (*NIPostBuilder, error) {
 	poetClients := make(map[string]poetClient, len(poetServers))
 	for _, server := range poetServers {
-		client, err := NewHTTPPoetClient(server, poetCfg, WithLogger(lg.Named("poet")))
+		client, err := newPoetClient(poetDB, server, poetCfg, lg.Named("poet"))
 		if err != nil {
 			return nil, fmt.Errorf("cannot create poet client: %w", err)
 		}
@@ -97,7 +96,6 @@ func NewNIPostBuilder(
 		localDB: db,
 
 		poetProvers: poetClients,
-		poetDB:      poetDB,
 		postService: postService,
 		log:         lg,
 		poetCfg:     poetCfg,
@@ -355,36 +353,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		log.ZShortStringer("smesherID", nodeID),
 	)
 
-	logger.Debug("querying for poet pow parameters")
-	powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-	defer cancel()
-	powParams, err := client.PowParams(powCtx)
-	if err != nil {
-		return &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
-	}
-
-	logger.Debug("doing pow with params", zap.Any("pow_params", powParams))
-	startTime := time.Now()
-	nonce, err := shared.FindSubmitPowNonce(
-		ctx,
-		powParams.Challenge,
-		challenge,
-		nodeID.Bytes(),
-		powParams.Difficulty,
-	)
-	metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
-	if err != nil {
-		return fmt.Errorf("running poet PoW: %w", err)
-	}
-
-	logger.Debug("submitting challenge to poet proving service")
-
-	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-	defer cancel()
-	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, PoetPoW{
-		Nonce:  nonce,
-		Params: *powParams,
-	})
+	round, err := client.Submit(ctx, deadline, prefix, challenge, signature, nodeID)
 	if err != nil {
 		return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
@@ -464,7 +433,7 @@ func (nb *NIPostBuilder) getBestProof(
 	publishEpoch types.EpochID,
 ) (types.PoetProofRef, *types.MerkleProof, error) {
 	type poetProof struct {
-		poet       *types.PoetProofMessage
+		poet       *types.PoetProof
 		membership *types.MerkleProof
 	}
 	registrations, err := nipost.PoetRegistrations(nb.localDB, nodeID)
@@ -496,16 +465,9 @@ func (nb *NIPostBuilder) getBestProof(
 			case <-time.After(time.Until(waitDeadline)):
 			}
 
-			getProofsCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-			defer cancel()
-			proof, members, err := client.Proof(getProofsCtx, round)
+			proof, members, err := client.Proof(ctx, round)
 			if err != nil {
 				logger.Warn("failed to get proof from poet", zap.Error(err))
-				return nil
-			}
-
-			if err := nb.poetDB.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
-				logger.Warn("failed to validate and store proof", zap.Error(err), zap.Object("proof", proof))
 				return nil
 			}
 
