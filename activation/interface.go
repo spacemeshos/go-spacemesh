@@ -136,8 +136,8 @@ type poetClient interface {
 }
 
 type poetDbAPI interface {
-	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
-	GetProofForRound(poetID []byte, roundID string) (*types.PoetProof, error)
+	Proof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 

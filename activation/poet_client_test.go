@@ -145,7 +145,7 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 func TestPoetClient_CachesProof(t *testing.T) {
 	t.Parallel()
 
-	proofsCalled := atomic.Uint64{}
+	var proofsCalled atomic.Uint64
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proofsCalled.Add(1)
 		require.Equal(t, http.MethodGet, r.Method)
@@ -164,9 +164,10 @@ func TestPoetClient_CachesProof(t *testing.T) {
 		Address: ts.URL,
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
+	ctx := context.Background()
 	db := NewMockpoetDbAPI(gomock.NewController(t))
-	db.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any())
-	db.EXPECT().GetProofForRound(server.Pubkey.Bytes(), "1").Times(19)
+	db.EXPECT().ValidateAndStore(ctx, gomock.Any())
+	db.EXPECT().ProofForRound(server.Pubkey.Bytes(), "1").Times(19)
 
 	poet, err := newPoetClient(db, server, DefaultPoetConfig(), zaptest.NewLogger(t))
 	require.NoError(t, err)
@@ -175,15 +176,15 @@ func TestPoetClient_CachesProof(t *testing.T) {
 	eg := errgroup.Group{}
 	for range 20 {
 		eg.Go(func() error {
-			_, _, err := poet.Proof(context.Background(), "1")
+			_, _, err := poet.Proof(ctx, "1")
 			return err
 		})
 	}
 	require.NoError(t, eg.Wait())
 	require.Equal(t, uint64(1), proofsCalled.Load())
 
-	db.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any())
-	_, _, err = poet.Proof(context.Background(), "2")
+	db.EXPECT().ValidateAndStore(ctx, gomock.Any())
+	_, _, err = poet.Proof(ctx, "2")
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), proofsCalled.Load())
 }

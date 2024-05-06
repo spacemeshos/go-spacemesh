@@ -355,7 +355,7 @@ func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProo
 	defer c.gettingProof.Unlock()
 
 	if members, ok := c.proofMembers[roundID]; ok {
-		if proof, err := c.db.GetProofForRound(c.id, roundID); err == nil {
+		if proof, err := c.db.ProofForRound(c.id, roundID); err == nil {
 			c.logger.Debug("returning cached proof", zap.String("round_id", roundID))
 			return proof, members, nil
 		}
@@ -363,12 +363,12 @@ func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProo
 
 	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
-	proof, members, err := c.client.Proof(ctx, roundID)
+	proof, members, err := c.client.Proof(getProofsCtx, roundID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 
-	if err := c.db.ValidateAndStore(getProofsCtx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
+	if err := c.db.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
 		c.logger.Warn("failed to validate and store proof", zap.Error(err), zap.Object("proof", proof))
 		return nil, nil, fmt.Errorf("validating and storing proof: %w", err)
 	}
