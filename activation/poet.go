@@ -271,17 +271,19 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 // PoetClient is a higher-level interface to communicate with a PoET service.
 // It wraps the HTTP client, adding additional functionality.
 type PoetClient struct {
+	db             poetDbAPI
 	logger         *zap.Logger
 	client         HTTPPoetClient
 	requestTimeout time.Duration
 }
 
-func newPoetClient(server types.PoetServer, cfg PoetConfig, logger *zap.Logger) (*PoetClient, error) {
+func newPoetClient(db poetDbAPI, server types.PoetServer, cfg PoetConfig, logger *zap.Logger) (*PoetClient, error) {
 	client, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP poet client: %w", err)
 	}
 	poetClient := &PoetClient{
+		db:             db,
 		logger:         logger,
 		client:         *client,
 		requestTimeout: cfg.RequestTimeout,
@@ -340,5 +342,17 @@ func (c *PoetClient) Submit(
 }
 
 func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
-	return c.client.Proof(ctx, roundID)
+	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
+	defer cancel()
+	proof, members, err := c.client.Proof(ctx, roundID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("getting proof: %w", err)
+	}
+
+	if err := c.db.ValidateAndStore(getProofsCtx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
+		c.logger.Warn("failed to validate and store proof", zap.Error(err), zap.Object("proof", proof))
+		return nil, nil, fmt.Errorf("validating and storing proof: %w", err)
+	}
+
+	return proof, members, nil
 }

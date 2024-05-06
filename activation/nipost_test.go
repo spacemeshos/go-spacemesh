@@ -384,7 +384,6 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	}, []types.Hash32{challenge}, nil)
 
 	poetDb := NewMockpoetDbAPI(ctrl)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	mclock := defaultLayerClockMock(ctrl)
 
 	sig, err := signing.NewEdSigner()
@@ -427,7 +426,6 @@ func TestPostSetup(t *testing.T) {
 	}, []types.Hash32{challenge}, nil)
 
 	poetDb := NewMockpoetDbAPI(ctrl)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	mclock := defaultLayerClockMock(ctrl)
 
 	postClient := NewMockPostClient(ctrl)
@@ -481,7 +479,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	)
 
 	poetDb := NewMockpoetDbAPI(ctrl)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	mclock := defaultLayerClockMock(ctrl)
 
 	postClient := NewMockPostClient(ctrl)
@@ -582,7 +579,6 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 
 	ctrl := gomock.NewController(t)
 	poetDb := NewMockpoetDbAPI(ctrl)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	mclock := defaultLayerClockMock(ctrl)
 
 	poets := make([]poetClient, 0, 2)
@@ -669,7 +665,6 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	poetDb := NewMockpoetDbAPI(ctrl)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Times(2).Return(nil)
 	mclock := defaultLayerClockMock(ctrl)
 
 	poets := make([]poetClient, 0, 2)
@@ -818,7 +813,6 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
 		poetDb := NewMockpoetDbAPI(ctrl)
-		poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 		mclock := defaultLayerClockMock(ctrl)
 		poetProver := defaultPoetServiceMock(ctrl, []byte("poet"), "http://localhost:9999")
 		poetProver.EXPECT().
@@ -994,7 +988,6 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	poetDb := NewMockpoetDbAPI(ctrl)
-	poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil)
 	mclock := defaultLayerClockMock(ctrl)
 
 	buildCtx, cancel := context.WithCancel(context.Background())
@@ -1151,7 +1144,6 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			}
 
 			poetDb := NewMockpoetDbAPI(ctrl)
-			poetDb.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any()).Return(nil).Times(2)
 			mclock := NewMocklayerClock(ctrl)
 			genesis := time.Now().Add(-time.Duration(1) * layerDuration)
 			mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
