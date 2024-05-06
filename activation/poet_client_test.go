@@ -137,27 +137,3 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 	_, _, err = client.Proof(context.Background(), "1")
 	require.NoError(t, err)
 }
-
-func Test_HTTPPoetClient_PoetServiceID(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-
-		w.WriteHeader(http.StatusOK)
-		resp, err := protojson.Marshal(&rpcapi.InfoResponse{})
-		require.NoError(t, err)
-		w.Write(resp)
-
-		require.Equal(t, "/v1/info", r.URL.Path)
-	}))
-	defer ts.Close()
-
-	cfg := server.DefaultRoundConfig()
-	key := types.MustBase64FromString("Zm9vYmFy")
-	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL, Pubkey: key}, PoetConfig{
-		PhaseShift: cfg.PhaseShift,
-		CycleGap:   cfg.CycleGap,
-	}, withCustomHttpClient(ts.Client()))
-	require.NoError(t, err)
-
-	require.Equal(t, key.Bytes(), client.PoetServiceID(context.Background()))
-}
