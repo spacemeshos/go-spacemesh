@@ -156,6 +156,16 @@ func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *type
 	return &proofMessage.PoetProof, &proofMessage.Statement, nil
 }
 
+func (db *PoetDb) GetProofForRound(poetID []byte, roundID string) (*types.PoetProof, error) {
+	proofRef, err := db.GetProofRef(poetID, roundID)
+	if err != nil {
+		return nil, err
+	}
+
+	proof, _, err := db.GetProof(proofRef)
+	return proof, err
+}
+
 func calcRoot(leaves []types.Hash32) ([]byte, error) {
 	tree, err := merkle.NewTreeBuilder().WithHashFunc(shared.HashMembershipTreeNode).Build()
 	if err != nil {

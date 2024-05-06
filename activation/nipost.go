@@ -433,7 +433,7 @@ func (nb *NIPostBuilder) getBestProof(
 	publishEpoch types.EpochID,
 ) (types.PoetProofRef, *types.MerkleProof, error) {
 	type poetProof struct {
-		poet       *types.PoetProofMessage
+		poet       *types.PoetProof
 		membership *types.MerkleProof
 	}
 	registrations, err := nipost.PoetRegistrations(nb.localDB, nodeID)

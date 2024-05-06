@@ -132,11 +132,12 @@ type poetClient interface {
 	) (*types.PoetRound, error)
 
 	// Proof returns the proof for the given round ID.
-	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error)
+	Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error)
 }
 
 type poetDbAPI interface {
 	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	GetProofForRound(poetID []byte, roundID string) (*types.PoetProof, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 

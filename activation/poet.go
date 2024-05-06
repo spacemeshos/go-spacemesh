@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -272,9 +273,15 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 // It wraps the HTTP client, adding additional functionality.
 type PoetClient struct {
 	db             poetDbAPI
+	id             []byte
 	logger         *zap.Logger
 	client         HTTPPoetClient
 	requestTimeout time.Duration
+
+	// Used to avoid concurrent requests for proof.
+	gettingProof sync.Mutex
+	// cached members of the last queried proof
+	proofMembers map[string][]types.Hash32
 }
 
 func newPoetClient(db poetDbAPI, server types.PoetServer, cfg PoetConfig, logger *zap.Logger) (*PoetClient, error) {
@@ -284,9 +291,11 @@ func newPoetClient(db poetDbAPI, server types.PoetServer, cfg PoetConfig, logger
 	}
 	poetClient := &PoetClient{
 		db:             db,
+		id:             server.Pubkey.Bytes(),
 		logger:         logger,
 		client:         *client,
 		requestTimeout: cfg.RequestTimeout,
+		proofMembers:   make(map[string][]types.Hash32, 1),
 	}
 
 	return poetClient, nil
@@ -341,7 +350,17 @@ func (c *PoetClient) Submit(
 	})
 }
 
-func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
+func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
+	c.gettingProof.Lock()
+	defer c.gettingProof.Unlock()
+
+	if members, ok := c.proofMembers[roundID]; ok {
+		if proof, err := c.db.GetProofForRound(c.id, roundID); err == nil {
+			c.logger.Debug("returning cached proof", zap.String("round_id", roundID))
+			return proof, members, nil
+		}
+	}
+
 	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
 	proof, members, err := c.client.Proof(ctx, roundID)
@@ -353,6 +372,8 @@ func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProo
 		c.logger.Warn("failed to validate and store proof", zap.Error(err), zap.Object("proof", proof))
 		return nil, nil, fmt.Errorf("validating and storing proof: %w", err)
 	}
+	clear(c.proofMembers)
+	c.proofMembers[roundID] = members
 
-	return proof, members, nil
+	return &proof.PoetProof, members, nil
 }

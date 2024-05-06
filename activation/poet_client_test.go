@@ -4,12 +4,16 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/spacemeshos/poet/server"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -136,4 +140,50 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 
 	_, _, err = client.Proof(context.Background(), "1")
 	require.NoError(t, err)
+}
+
+func TestPoetClient_CachesProof(t *testing.T) {
+	t.Parallel()
+
+	proofsCalled := atomic.Uint64{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proofsCalled.Add(1)
+		require.Equal(t, http.MethodGet, r.Method)
+		require.Contains(t, r.URL.Path, "/v1/proofs/")
+
+		resp, err := protojson.Marshal(&rpcapi.ProofResponse{
+			Proof: &rpcapi.PoetProof{},
+		})
+		require.NoError(t, err)
+		w.WriteHeader(http.StatusOK)
+		w.Write(resp)
+	}))
+	defer ts.Close()
+
+	server := types.PoetServer{
+		Address: ts.URL,
+		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
+	}
+	db := NewMockpoetDbAPI(gomock.NewController(t))
+	db.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any())
+	db.EXPECT().GetProofForRound(server.Pubkey.Bytes(), "1").Times(19)
+
+	poet, err := newPoetClient(db, server, DefaultPoetConfig(), zaptest.NewLogger(t))
+	require.NoError(t, err)
+	poet.client.client.HTTPClient = ts.Client()
+
+	eg := errgroup.Group{}
+	for range 20 {
+		eg.Go(func() error {
+			_, _, err := poet.Proof(context.Background(), "1")
+			return err
+		})
+	}
+	require.NoError(t, eg.Wait())
+	require.Equal(t, uint64(1), proofsCalled.Load())
+
+	db.EXPECT().ValidateAndStore(gomock.Any(), gomock.Any())
+	_, _, err = poet.Proof(context.Background(), "2")
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), proofsCalled.Load())
 }
