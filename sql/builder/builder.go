@@ -2,7 +2,6 @@ package builder
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
