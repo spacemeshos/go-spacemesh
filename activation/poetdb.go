@@ -143,8 +143,8 @@ func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
 	return proof, nil
 }
 
-// GetProof returns full proof.
-func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
+// Proof returns full proof.
+func (db *PoetDb) Proof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
@@ -154,6 +154,16 @@ func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *type
 		return nil, nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
 	}
 	return &proofMessage.PoetProof, &proofMessage.Statement, nil
+}
+
+func (db *PoetDb) ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error) {
+	proofRef, err := db.GetProofRef(poetID, roundID)
+	if err != nil {
+		return nil, err
+	}
+
+	proof, _, err := db.Proof(proofRef)
+	return proof, err
 }
 
 func calcRoot(leaves []types.Hash32) ([]byte, error) {
