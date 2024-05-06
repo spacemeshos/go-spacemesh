@@ -68,8 +68,7 @@ func FilterFrom(operations Operations) string {
 		} else {
 			queryBuilder.WriteString(" and")
 		}
-		queryBuilder.WriteString(" " + string(op.Prefix) + string(op.Field) + " " + string(op.Token) +
-			" ?" + strconv.Itoa(i+1))
+		fmt.Fprintf(&queryBuilder, " %s%s %s ?%d", op.Prefix, op.Field, op.Token, i+1)
 	}
 
 	for _, m := range operations.Modifiers {
