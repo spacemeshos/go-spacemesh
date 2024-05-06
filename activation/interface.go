@@ -122,8 +122,6 @@ type SmeshingProvider interface {
 type poetClient interface {
 	Address() string
 
-	PowParams(ctx context.Context) (*PoetPowParams, error)
-
 	// Submit registers a challenge in the proving service current open round.
 	Submit(
 		ctx context.Context,
@@ -131,7 +129,6 @@ type poetClient interface {
 		prefix, challenge []byte,
 		signature types.EdSignature,
 		nodeID types.NodeID,
-		pow PoetPoW,
 	) (*types.PoetRound, error)
 
 	// Proof returns the proof for the given round ID.

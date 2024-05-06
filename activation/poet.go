@@ -17,7 +17,9 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 var (
@@ -264,4 +266,79 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 
 	return nil
+}
+
+// PoetClient is a higher-level interface to communicate with a PoET service.
+// It wraps the HTTP client, adding additional functionality.
+type PoetClient struct {
+	logger         *zap.Logger
+	client         HTTPPoetClient
+	requestTimeout time.Duration
+}
+
+func newPoetClient(server types.PoetServer, cfg PoetConfig, logger *zap.Logger) (*PoetClient, error) {
+	client, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
+	if err != nil {
+		return nil, fmt.Errorf("creating HTTP poet client: %w", err)
+	}
+	poetClient := &PoetClient{
+		logger:         logger,
+		client:         *client,
+		requestTimeout: cfg.RequestTimeout,
+	}
+
+	return poetClient, nil
+}
+
+func (c *PoetClient) Address() string {
+	return c.client.Address()
+}
+
+func (c *PoetClient) Submit(
+	ctx context.Context,
+	deadline time.Time,
+	prefix, challenge []byte,
+	signature types.EdSignature,
+	nodeID types.NodeID,
+) (*types.PoetRound, error) {
+	logger := c.logger.With(
+		log.ZContext(ctx),
+		zap.String("poet", c.Address()),
+		log.ZShortStringer("smesherID", nodeID),
+	)
+
+	logger.Debug("querying for poet pow parameters")
+	powCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
+	defer cancel()
+	powParams, err := c.client.PowParams(powCtx)
+	if err != nil {
+		return nil, &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
+	}
+
+	logger.Debug("doing pow with params", zap.Any("pow_params", powParams))
+	startTime := time.Now()
+	nonce, err := shared.FindSubmitPowNonce(
+		ctx,
+		powParams.Challenge,
+		challenge,
+		nodeID.Bytes(),
+		powParams.Difficulty,
+	)
+	metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
+	if err != nil {
+		return nil, fmt.Errorf("running poet PoW: %w", err)
+	}
+
+	logger.Debug("submitting challenge to poet proving service")
+
+	submitCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
+	defer cancel()
+	return c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, PoetPoW{
+		Nonce:  nonce,
+		Params: *powParams,
+	})
+}
+
+func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
+	return c.client.Proof(ctx, roundID)
 }

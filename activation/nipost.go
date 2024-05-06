@@ -86,7 +86,7 @@ func NewNIPostBuilder(
 ) (*NIPostBuilder, error) {
 	poetClients := make(map[string]poetClient, len(poetServers))
 	for _, server := range poetServers {
-		client, err := NewHTTPPoetClient(server, poetCfg, WithLogger(lg.Named("poet")))
+		client, err := newPoetClient(server, poetCfg, lg.Named("poet"))
 		if err != nil {
 			return nil, fmt.Errorf("cannot create poet client: %w", err)
 		}
@@ -355,36 +355,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		log.ZShortStringer("smesherID", nodeID),
 	)
 
-	logger.Debug("querying for poet pow parameters")
-	powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-	defer cancel()
-	powParams, err := client.PowParams(powCtx)
-	if err != nil {
-		return &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
-	}
-
-	logger.Debug("doing pow with params", zap.Any("pow_params", powParams))
-	startTime := time.Now()
-	nonce, err := shared.FindSubmitPowNonce(
-		ctx,
-		powParams.Challenge,
-		challenge,
-		nodeID.Bytes(),
-		powParams.Difficulty,
-	)
-	metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
-	if err != nil {
-		return fmt.Errorf("running poet PoW: %w", err)
-	}
-
-	logger.Debug("submitting challenge to poet proving service")
-
-	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-	defer cancel()
-	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, PoetPoW{
-		Nonce:  nonce,
-		Params: *powParams,
-	})
+	round, err := client.Submit(ctx, deadline, prefix, challenge, signature, nodeID)
 	if err != nil {
 		return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
