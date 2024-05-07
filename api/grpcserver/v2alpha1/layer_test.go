@@ -83,6 +83,20 @@ func TestLayerService_List(t *testing.T) {
 	})
 }
 
+func TestLayerConvertEventStatus(t *testing.T) {
+	s := convertEventStatus(events.LayerStatusTypeApproved)
+	require.Equal(t, spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED, s)
+
+	s = convertEventStatus(events.LayerStatusTypeConfirmed)
+	require.Equal(t, spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED, s)
+
+	s = convertEventStatus(events.LayerStatusTypeApplied)
+	require.Equal(t, spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED, s)
+
+	s = convertEventStatus(events.LayerStatusTypeUnknown)
+	require.Equal(t, spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED, s)
+}
+
 func TestLayerStreamService_Stream(t *testing.T) {
 	db := sql.InMemory()
 	ctx := context.Background()

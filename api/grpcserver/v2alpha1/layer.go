@@ -99,14 +99,7 @@ func (s *LayerStreamService) Stream(
 			var derr error
 			if layer, err := layers.Get(s.db, rst.LayerID); err == nil {
 				l := toLayer(layer)
-
-				l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
-				if rst.Status == events.LayerStatusTypeApproved {
-					l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED
-				}
-				if rst.Status == events.LayerStatusTypeConfirmed || rst.Status == events.LayerStatusTypeApplied {
-					l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
-				}
+				l.Status = convertEventStatus(rst.Status)
 
 				derr = stream.Send(&spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
 					V1: l,
@@ -127,14 +120,7 @@ func (s *LayerStreamService) Stream(
 				var derr error
 				if layer, err := layers.Get(s.db, rst.LayerID); err == nil {
 					l := toLayer(layer)
-
-					l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
-					if rst.Status == events.LayerStatusTypeApproved {
-						l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED
-					}
-					if rst.Status == events.LayerStatusTypeConfirmed || rst.Status == events.LayerStatusTypeApplied {
-						l.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
-					}
+					l.Status = convertEventStatus(rst.Status)
 
 					derr = stream.Send(&spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
 						V1: l,
@@ -342,4 +328,15 @@ func (m *layersMatcher) match(l *events.LayerUpdate) bool {
 	}
 
 	return true
+}
+
+func convertEventStatus(eventStatus int) (status spacemeshv2alpha1.LayerV1_LayerStatus) {
+	status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
+	if eventStatus == events.LayerStatusTypeApproved {
+		status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED
+	}
+	if eventStatus == events.LayerStatusTypeConfirmed || eventStatus == events.LayerStatusTypeApplied {
+		status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
+	}
+	return
 }
