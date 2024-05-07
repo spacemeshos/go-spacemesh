@@ -15,6 +15,8 @@ type ActivationTxV1 struct {
 
 	SmesherID types.NodeID
 	Signature types.EdSignature
+
+	id types.ATXID
 }
 
 // InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
@@ -90,6 +92,18 @@ type PostMetadataV1 struct {
 type ATXMetadataV1 struct {
 	Publish types.EpochID
 	MsgHash types.Hash32
+}
+
+func (atx *ActivationTxV1) ID() types.ATXID {
+	if atx.id == types.EmptyATXID {
+		atx.id = types.ATXID(atx.HashInnerBytes())
+	}
+	return atx.id
+}
+
+// TODO(mafa): this can be inlined.
+func (atx *ActivationTxV1) Smesher() types.NodeID {
+	return atx.SmesherID
 }
 
 func (atx *ActivationTxV1) SignedBytes() []byte {

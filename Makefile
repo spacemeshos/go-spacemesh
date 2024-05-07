@@ -154,9 +154,11 @@ list-versions:
 
 dockerbuild-go:
 	DOCKER_BUILDKIT=1 docker build \
+		--secret id=mynetrc,src=$(HOME)/.netrc \
 		--build-arg VERSION=${VERSION} \
 		-t go-spacemesh:$(SHA) \
-		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) \
+		.
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only
@@ -171,7 +173,12 @@ endif
 .PHONY: dockerpush-only
 
 dockerbuild-bs:
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh-bs:$(SHA) -t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) -f ./bootstrap.Dockerfile .
+	DOCKER_BUILDKIT=1 docker build \
+		--secret id=mynetrc,src=$(HOME)/.netrc \
+		-t go-spacemesh-bs:$(SHA) \
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) \
+		-f ./bootstrap.Dockerfile \
+		.
 .PHONY: dockerbuild-bs
 
 dockerpush-bs: dockerbuild-bs dockerpush-bs-only

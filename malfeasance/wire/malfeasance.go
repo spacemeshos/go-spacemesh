@@ -15,13 +15,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata,InvalidPostIndexProof
+//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata,InvalidPostIndexProof,InvalidPrevATXProof
 
 const (
 	MultipleATXs byte = iota + 1
 	MultipleBallots
 	HareEquivocation
 	InvalidPostIndex
+	InvalidPrevATX
 )
 
 type MalfeasanceProof struct {
@@ -71,10 +72,18 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddString("type", "invalid post index")
 		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
 		if ok {
-			atx := wire.ActivationTxFromWireV1(&p.Atx)
-			encoder.AddString("atx_id", atx.ID().String())
+			encoder.AddString("atx_id", p.Atx.ID().String())
 			encoder.AddString("smesher", p.Atx.SmesherID.String())
 			encoder.AddUint32("invalid index", p.InvalidIdx)
+		}
+	case InvalidPrevATX:
+		encoder.AddString("type", "invalid prev atx")
+		p, ok := mp.Proof.Data.(*InvalidPrevATXProof)
+		if ok {
+			encoder.AddString("atx1_id", p.Atx2.ID().String())
+			encoder.AddString("atx2_id", p.Atx2.ID().String())
+			encoder.AddString("smesher", p.Atx1.SmesherID.String())
+			encoder.AddString("prev_atx", p.Atx1.PrevATXID.String())
 		}
 	default:
 		encoder.AddString("type", "unknown")
@@ -147,6 +156,14 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 		total += n
 	case InvalidPostIndex:
 		var proof InvalidPostIndexProof
+		n, err := proof.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		e.Data = &proof
+		total += n
+	case InvalidPrevATX:
+		var proof InvalidPrevATXProof
 		n, err := proof.DecodeScale(dec)
 		if err != nil {
 			return total, err
@@ -292,6 +309,13 @@ func (m *HareProofMsg) SignedBytes() []byte {
 	return m.InnerMsg.ToBytes()
 }
 
+// InvalidPrevAtxProof is a proof that a smesher published an ATX with an old previous ATX ID.
+// The proof contains two ATXs that reference the same previous ATX.
+type InvalidPrevATXProof struct {
+	Atx1 wire.ActivationTxV1
+	Atx2 wire.ActivationTxV1
+}
+
 func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("generate layer: %v\n", mp.Layer))
@@ -359,13 +383,23 @@ func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 	case InvalidPostIndex:
 		p, ok := mp.Proof.Data.(*InvalidPostIndexProof)
 		if ok {
-			atx := wire.ActivationTxFromWireV1(&p.Atx)
 			b.WriteString(
 				fmt.Sprintf(
 					"cause: smesher published ATX %s with invalid post index %d in epoch %d\n",
-					atx.ID().ShortString(),
+					p.Atx.ID().ShortString(),
 					p.InvalidIdx,
 					p.Atx.Publish,
+				))
+		}
+	case InvalidPrevATX:
+		p, ok := mp.Proof.Data.(*InvalidPrevATXProof)
+		if ok {
+			b.WriteString(
+				fmt.Sprintf(
+					"cause: smesher published ATX %s with invalid previous ATX %s in epoch %d\n",
+					p.Atx1.ID().ShortString(),
+					p.Atx2.ID().ShortString(),
+					p.Atx1.Publish,
 				))
 		}
 	}

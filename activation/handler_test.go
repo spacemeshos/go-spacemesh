@@ -931,7 +931,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 		types.EmptyATXID,
 		types.EmptyATXID,
 		nil,
-		types.LayerID(layersPerEpoch).GetEpoch(),
+		types.EpochID(2),
 		0,
 		100,
 		coinbase,
@@ -949,6 +949,73 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx1)
 	require.NoError(t, err)
 	require.Nil(t, proof)
+}
+
+func TestHandler_ProcessAtx_maliciousIdentity(t *testing.T) {
+	// Arrange
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	require.NoError(t, identities.SetMalicious(atxHdlr.cdb, sig.NodeID(), types.RandomBytes(10), time.Now()))
+
+	coinbase := types.GenerateAddress([]byte("aaaa"))
+
+	// Act & Assert
+	atx1 := newActivationTx(
+		t,
+		sig,
+		0,
+		types.EmptyATXID,
+		types.EmptyATXID,
+		nil,
+		types.EpochID(2),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{PostMetadata: &types.PostMetadata{}},
+		withVrfNonce(7),
+	)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+	proof, err := atxHdlr.processVerifiedATX(context.Background(), atx1)
+	require.NoError(t, err)
+	require.Nil(t, proof)
+}
+
+func TestHandler_ProcessAtx_SamePubEpoch(t *testing.T) {
+	// Arrange
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	coinbase := types.GenerateAddress([]byte("aaaa"))
+
+	// Act & Assert
+	atx1 := newActivationTx(
+		t,
+		sig,
+		0,
+		types.EmptyATXID,
+		types.EmptyATXID,
+		nil,
+		types.EpochID(2),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{PostMetadata: &types.PostMetadata{}},
+		withVrfNonce(7),
+	)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+	proof, err := atxHdlr.processVerifiedATX(context.Background(), atx1)
+	require.NoError(t, err)
+	require.Nil(t, proof)
 
 	// another atx for the same epoch is considered malicious
 	atx2 := newActivationTx(
@@ -958,7 +1025,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 		atx1.ID(),
 		atx1.ID(),
 		nil,
-		types.LayerID(layersPerEpoch+1).GetEpoch(),
+		types.EpochID(2),
 		0,
 		100,
 		coinbase,
@@ -986,7 +1053,7 @@ func TestHandler_ProcessAtx(t *testing.T) {
 	require.Equal(t, sig.NodeID(), nodeID)
 }
 
-func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
+func TestHandler_ProcessAtx_SamePubEpoch_NoSelfIncrimination(t *testing.T) {
 	// Arrange
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
@@ -1005,7 +1072,7 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 		types.EmptyATXID,
 		types.EmptyATXID,
 		nil,
-		types.LayerID(layersPerEpoch).GetEpoch(),
+		types.EpochID(2),
 		0,
 		100,
 		coinbase,
@@ -1032,7 +1099,7 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 		atx1.ID(),
 		atx1.ID(),
 		nil,
-		types.LayerID(layersPerEpoch+1).GetEpoch(),
+		types.EpochID(2),
 		0,
 		100,
 		coinbase,
@@ -1044,7 +1111,173 @@ func TestHandler_ProcessAtx_OwnNotMalicious(t *testing.T) {
 		err,
 		fmt.Sprintf("%s already published an ATX", sig.NodeID().ShortString()),
 	)
+	require.Nil(t, proof) // no proof against oneself
+}
+
+func TestHandler_ProcessAtx_SamePrevATX(t *testing.T) {
+	// Arrange
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	coinbase := types.GenerateAddress([]byte("aaaa"))
+
+	// Act & Assert
+	prevATX := newActivationTx(
+		t,
+		sig,
+		0,
+		types.EmptyATXID,
+		types.EmptyATXID,
+		nil,
+		types.EpochID(2),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{PostMetadata: &types.PostMetadata{}},
+		withVrfNonce(7),
+	)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+	proof, err := atxHdlr.processVerifiedATX(context.Background(), prevATX)
+	require.NoError(t, err)
 	require.Nil(t, proof)
+
+	// valid first non-initial ATX
+	atx1 := newActivationTx(
+		t,
+		sig,
+		1,
+		prevATX.ID(),
+		prevATX.ID(),
+		nil,
+		types.EpochID(3),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{PostMetadata: &types.PostMetadata{}},
+	)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx1)
+	require.NoError(t, err)
+	require.Nil(t, proof)
+
+	// second non-initial ATX references prevATX as prevATX
+	atx2 := newActivationTx(
+		t,
+		sig,
+		2,
+		prevATX.ID(),
+		atx1.ID(),
+		nil,
+		types.EpochID(4),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{PostMetadata: &types.PostMetadata{}},
+	)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
+	atxHdlr.mclock.EXPECT().CurrentLayer().Return(types.EpochID(4).FirstLayer())
+	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx2)
+	require.NoError(t, err)
+	proof.SetReceived(time.Time{})
+	nodeID, err := malfeasance.Validate(
+		context.Background(),
+		atxHdlr.log,
+		atxHdlr.cdb,
+		atxHdlr.edVerifier,
+		nil,
+		&mwire.MalfeasanceGossip{
+			MalfeasanceProof: *proof,
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, sig.NodeID(), nodeID)
+}
+
+func TestHandler_ProcessAtx_SamePrevATX_NoSelfIncrimination(t *testing.T) {
+	// Arrange
+	goldenATXID := types.ATXID{2, 3, 4}
+	atxHdlr := newTestHandler(t, goldenATXID)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atxHdlr.Register(sig)
+
+	coinbase := types.GenerateAddress([]byte("aaaa"))
+
+	// Act & Assert
+	prevATX := newActivationTx(
+		t,
+		sig,
+		0,
+		types.EmptyATXID,
+		types.EmptyATXID,
+		nil,
+		types.EpochID(2),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{PostMetadata: &types.PostMetadata{}},
+		withVrfNonce(7),
+	)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+	proof, err := atxHdlr.processVerifiedATX(context.Background(), prevATX)
+	require.NoError(t, err)
+	require.Nil(t, proof)
+
+	// valid first non-initial ATX
+	atx1 := newActivationTx(
+		t,
+		sig,
+		1,
+		prevATX.ID(),
+		prevATX.ID(),
+		nil,
+		types.EpochID(3),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{PostMetadata: &types.PostMetadata{}},
+	)
+	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
+	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx1)
+	require.NoError(t, err)
+	require.Nil(t, proof)
+
+	// second non-initial ATX references prevATX as prevATX
+	atx2 := newActivationTx(
+		t,
+		sig,
+		2,
+		prevATX.ID(),
+		atx1.ID(),
+		nil,
+		types.EpochID(4),
+		0,
+		100,
+		coinbase,
+		100,
+		&types.NIPost{PostMetadata: &types.PostMetadata{}},
+	)
+	proof, err = atxHdlr.processVerifiedATX(context.Background(), atx2)
+	require.ErrorContains(t,
+		err,
+		fmt.Sprintf("%s referenced incorrect previous ATX", sig.NodeID().ShortString()),
+	)
+	require.Nil(t, proof) // no proof against oneself
 }
 
 func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
@@ -1165,7 +1398,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 		types.EmptyATXID,
 		types.EmptyATXID,
 		nil,
-		types.LayerID(layersPerEpoch).GetEpoch(),
+		types.EpochID(2),
 		0,
 		100,
 		coinbase,
@@ -1192,7 +1425,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 		atx1.ID(),
 		atx1.ID(),
 		nil,
-		types.LayerID(2*layersPerEpoch).GetEpoch(),
+		types.EpochID(3),
 		0,
 		100,
 		coinbase,

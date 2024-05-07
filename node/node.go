@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -75,7 +74,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
@@ -1894,6 +1892,15 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 	)
 
+	if app.Config.ScanMalfeasantATXs {
+		app.log.With().Info("checking DB for malicious ATXs")
+		start = time.Now()
+		if err := activation.CheckPrevATXs(ctx, app.log.Zap(), app.db); err != nil {
+			return fmt.Errorf("malicious ATX check: %w", err)
+		}
+		app.log.With().Info("malicious ATX check completed", log.Duration("duration", time.Since(start)))
+	}
+
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
 		return fmt.Errorf("load local migrations: %w", err)
@@ -1933,9 +1940,6 @@ func (app *App) Start(ctx context.Context) error {
 		})
 	}
 
-	// uncomment to verify ATXs signatures
-	// app.verifyDB(ctx)
-
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
@@ -1944,48 +1948,6 @@ func (app *App) Start(ctx context.Context) error {
 	case err = <-app.errCh:
 		return err
 	}
-}
-
-// verifyDB performs a verification of ATX signatures in the database.
-//
-//lint:ignore U1000 This function is currently unused but is left here for future use.
-func (app *App) verifyDB(ctx context.Context) {
-	app.eg.Go(func() error {
-		app.log.Info("checking ATX signatures")
-		count := 0
-
-		// check ATX signatures
-		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.VerifiedActivationTx) bool {
-			select {
-			case <-ctx.Done():
-				// stop on context cancellation
-				return false
-			default:
-			}
-
-			// verify atx signature
-			// TODO: use atx handler to verify signature
-			if !app.edVerifier.Verify(
-				signing.ATX,
-				atx.SmesherID, wire.ActivationTxToWireV1(atx.ActivationTx).SignedBytes(),
-				atx.Signature,
-			) {
-				app.log.With().Error("ATX signature verification failed",
-					log.Stringer("atx_id", atx.ID()),
-					log.Stringer("smesher", atx.SmesherID),
-				)
-			}
-
-			count++
-			if count%1000 == 0 {
-				app.log.With().Info("verifying ATX signatures", log.Int("count", count))
-			}
-			return true
-		})
-
-		app.log.With().Info("ATX signatures verified", log.Int("count", count))
-		return nil
-	})
 }
 
 func (app *App) startSynchronous(ctx context.Context) (err error) {

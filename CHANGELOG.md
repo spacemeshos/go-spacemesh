@@ -2,6 +2,16 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.5.2-hotfix1
+
+This release includes our first CVE fix. A vulnerability was found in the way a node handles incoming ATXs. We urge all
+node operators to update to this version as soon as possible.
+
+### Improvements
+
+* Fixed a vulnerability in the way a node handles incoming ATXs. This vulnerability allows an attacker to claim rewards
+  for a full tick amount although they should not be eligible for them.
+
 ## Release v1.5.2
 
 ### Improvements

@@ -262,15 +262,19 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	})
 
 	// 5. Wait for POST malfeasance proof
-	logger.Info("waiting for malfeasance proof")
-	err = malfeasanceStream(ctx, cl.Client(0), logger, func(malfeasance *pb.MalfeasanceStreamResponse) (bool, error) {
+	receivedProof := false
+	timeout := time.Minute * 2
+	logger.Info("waiting for malfeasance proof", zap.Duration("timeout", timeout))
+	awaitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	err = malfeasanceStream(awaitCtx, cl.Client(0), logger, func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
 		stopPublishing()
 		logger.Info("malfeasance proof received")
-		require.Equal(t, malfeasance.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
-		require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_POST_INDEX, malfeasance.GetProof().GetKind())
+		require.Equal(t, malf.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
+		require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_POST_INDEX, malf.GetProof().GetKind())
 
 		var proof mwire.MalfeasanceProof
-		require.NoError(t, codec.Decode(malfeasance.Proof.Proof, &proof))
+		require.NoError(t, codec.Decode(malf.Proof.Proof, &proof))
 		require.Equal(t, mwire.InvalidPostIndex, proof.Proof.Type)
 		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
 		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
@@ -286,10 +290,12 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
 			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,
 		}
-		err = verifier.Verify(ctx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
+		err = verifier.Verify(awaitCtx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
 		var invalidIdxError *verifying.ErrInvalidIndex
 		require.ErrorAs(t, err, &invalidIdxError)
+		receivedProof = true
 		return false, nil
 	})
 	require.NoError(t, err)
+	require.True(t, receivedProof, "malfeasance proof not received")
 }

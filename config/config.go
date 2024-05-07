@@ -124,6 +124,9 @@ type BaseConfig struct {
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
+	// ScanMalfeasantATXs is a flag to enable scanning for malfeasant ATXs.
+	ScanMalfeasantATXs bool `mapstructure:"scan-malfeasant-atxs"`
+
 	NetworkHRP string `mapstructure:"network-hrp"`
 
 	// MinerGoodAtxsPercent is a threshold to decide if tortoise activeset should be

@@ -86,7 +86,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 	nodeID, err := h.validateAndSave(ctx, &wire.MalfeasanceGossip{MalfeasanceProof: p})
 	if err == nil && types.Hash32(nodeID) != expHash {
 		return fmt.Errorf(
-			"%w: malfesance proof want %s, got %s",
+			"%w: malfeasance proof want %s, got %s",
 			errWrongHash,
 			expHash.ShortString(),
 			nodeID.ShortString(),
@@ -187,6 +187,9 @@ func Validate(
 	case wire.InvalidPostIndex:
 		proof := p.MalfeasanceProof.Proof.Data.(*wire.InvalidPostIndexProof) // guaranteed to work by scale func
 		nodeID, err = validateInvalidPostIndex(ctx, logger, cdb, edVerifier, postVerifier, proof)
+	case wire.InvalidPrevATX:
+		proof := p.MalfeasanceProof.Proof.Data.(*wire.InvalidPrevATXProof) // guaranteed to work by scale func
+		nodeID, err = validateInvalidPrevATX(ctx, cdb, edVerifier, proof)
 	default:
 		return nodeID, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
 	}
@@ -211,6 +214,8 @@ func updateMetrics(tp wire.Proof) {
 		numProofsBallot.Inc()
 	case wire.InvalidPostIndex:
 		numProofsPostIndex.Inc()
+	case wire.InvalidPrevATX:
+		numProofsPrevATX.Inc()
 	}
 }
 
@@ -377,7 +382,8 @@ func validateMultipleBallots(
 	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
 }
 
-func validateInvalidPostIndex(ctx context.Context,
+func validateInvalidPostIndex(
+	ctx context.Context,
 	logger log.Log,
 	db sql.Executor,
 	edVerifier SigVerifier,
@@ -414,4 +420,31 @@ func validateInvalidPostIndex(ctx context.Context,
 	}
 	numInvalidProofsPostIndex.Inc()
 	return types.EmptyNodeID, errors.New("invalid post index malfeasance proof - POST is valid")
+}
+
+func validateInvalidPrevATX(
+	ctx context.Context,
+	db sql.Executor,
+	edVerifier SigVerifier,
+	proof *wire.InvalidPrevATXProof,
+) (types.NodeID, error) {
+	atx1 := proof.Atx1
+	if !edVerifier.Verify(signing.ATX, atx1.SmesherID, atx1.SignedBytes(), atx1.Signature) {
+		return types.EmptyNodeID, errors.New("atx1: invalid signature")
+	}
+
+	atx2 := proof.Atx2
+	if !edVerifier.Verify(signing.ATX, atx2.SmesherID, atx2.SignedBytes(), atx2.Signature) {
+		return types.EmptyNodeID, errors.New("atx2: invalid signature")
+	}
+
+	if atx1.ID() == atx2.ID() {
+		numInvalidProofsPrevATX.Inc()
+		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: ATX IDs are the same")
+	}
+	if atx1.PrevATXID != atx2.PrevATXID {
+		numInvalidProofsPrevATX.Inc()
+		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: prev ATX IDs are different")
+	}
+	return atx1.SmesherID, nil
 }

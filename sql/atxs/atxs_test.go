@@ -498,35 +498,6 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	require.Equal(t, 16, db.QueryCount()) // not incremented after Add
 }
 
-func TestForIDsByEpochEarlyStop(t *testing.T) {
-	db := sql.InMemory()
-
-	e1 := types.EpochID(1)
-	m := make(map[types.ATXID]struct{})
-	for i := 0; i < 4; i++ {
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		atx, err := newAtx(sig, withPublishEpoch(e1))
-		require.NoError(t, err)
-		require.NoError(t, atxs.Add(db, atx))
-		m[atx.ID()] = struct{}{}
-	}
-
-	n := 0
-	err := atxs.IterateIDsByEpoch(db, e1, func(total int, id types.ATXID) error {
-		require.Equal(t, 4, total)
-		delete(m, id)
-		n++
-		if n >= 2 {
-			return errors.New("test error")
-		}
-		return nil
-	})
-	require.ErrorContains(t, err, "test error")
-	require.Equal(t, 2, n)
-	require.Len(t, m, 2)
-}
-
 func TestVRFNonce(t *testing.T) {
 	// Arrange
 	db := sql.InMemory()
@@ -996,4 +967,58 @@ func TestLatest(t *testing.T) {
 			require.EqualValues(t, tc.expect, latest)
 		})
 	}
+}
+
+func Test_PrevATXCollisions(t *testing.T) {
+	db := sql.InMemory()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	// create two ATXs with the same PrevATXID
+	prevATXID := types.RandomATXID()
+
+	atx1, err := newAtx(sig, withPublishEpoch(1), withPrevATXID(prevATXID))
+	require.NoError(t, err)
+	atx2, err := newAtx(sig, withPublishEpoch(2), withPrevATXID(prevATXID))
+	require.NoError(t, err)
+
+	require.NoError(t, atxs.Add(db, atx1))
+	require.NoError(t, atxs.Add(db, atx2))
+
+	// verify that the ATXs were added
+	got1, err := atxs.Get(db, atx1.ID())
+	require.NoError(t, err)
+	require.Equal(t, atx1, got1)
+
+	got2, err := atxs.Get(db, atx2.ID())
+	require.NoError(t, err)
+	require.Equal(t, atx2, got2)
+
+	// add 10 valid ATXs by 10 other smeshers
+	atxMap := make(map[types.NodeID][]*types.VerifiedActivationTx)
+	for i := 2; i < 12; i++ {
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		if len(atxMap[otherSig.NodeID()]) == 0 {
+			atx, err := newAtx(otherSig, withPublishEpoch(types.EpochID(i)))
+			require.NoError(t, err)
+			require.NoError(t, atxs.Add(db, atx))
+		} else {
+			atx, err := newAtx(otherSig, withPublishEpoch(types.EpochID(i)),
+				withPrevATXID(atxMap[otherSig.NodeID()][len(atxMap[otherSig.NodeID()])-1].ID()),
+			)
+			require.NoError(t, err)
+			require.NoError(t, atxs.Add(db, atx))
+		}
+	}
+
+	// get the collisions
+	got, err := atxs.PrevATXCollisions(db)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+
+	require.Equal(t, sig.NodeID(), got[0].NodeID1)
+	require.Equal(t, sig.NodeID(), got[0].NodeID2)
+	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, []types.ATXID{got[0].ATX1, got[0].ATX2})
 }

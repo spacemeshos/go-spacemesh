@@ -92,6 +92,13 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
+
       - name: Push go-spacemesh build to docker hub
         run: make dockerpush
 
@@ -102,6 +109,13 @@ jobs:
         id: vars
         shell: bash
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
 
       - name: Build tests docker image
         run: make -C systest docker

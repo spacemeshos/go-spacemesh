@@ -2,6 +2,8 @@ package migrations
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -58,6 +60,40 @@ func addAtx(
 	require.NoError(t, err)
 	require.NoError(t, atxs.AddMaybeNoNonce(db, vAtx))
 	return vAtx.ID()
+}
+
+func Test_0017Migration_CompatibleSQL(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "test1.db")
+	db, err := sql.Open("file:"+file,
+		sql.WithMigration(New0017Migration(zaptest.NewLogger(t))),
+	)
+	require.NoError(t, err)
+
+	var sqls1 []string
+	_, err = db.Exec("SELECT sql FROM sqlite_schema;", nil, func(stmt *sql.Statement) bool {
+		sql := stmt.ColumnText(0)
+		sql = strings.Join(strings.Fields(sql), " ") // remove whitespace
+		sqls1 = append(sqls1, sql)
+		return true
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	file = filepath.Join(t.TempDir(), "test2.db")
+	db, err = sql.Open("file:" + file)
+	require.NoError(t, err)
+
+	var sqls2 []string
+	_, err = db.Exec("SELECT sql FROM sqlite_schema;", nil, func(stmt *sql.Statement) bool {
+		sql := stmt.ColumnText(0)
+		sql = strings.Join(strings.Fields(sql), " ") // remove whitespace
+		sqls2 = append(sqls2, sql)
+		return true
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	require.Equal(t, sqls1, sqls2)
 }
 
 func Test0017Migration(t *testing.T) {

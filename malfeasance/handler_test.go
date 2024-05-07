@@ -1068,7 +1068,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 	require.True(t, malicious)
 }
 
-func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
+func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	nodeIdH32 := types.Hash32(sig.NodeID())
@@ -1090,8 +1090,9 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 	t.Run("valid malfeasance proof", func(t *testing.T) {
 		db := sql.InMemory()
 		lg := logtest.New(t)
-		trt := malfeasance.NewMocktortoise(gomock.NewController(t))
-		postVerifier := malfeasance.NewMockpostVerifier(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		trt := malfeasance.NewMocktortoise(ctrl)
+		postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 		h := malfeasance.NewHandler(
 			datastore.NewCachedDB(db, lg),
@@ -1128,8 +1129,9 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 	t.Run("invalid malfeasance proof (POST valid)", func(t *testing.T) {
 		db := sql.InMemory()
 		lg := logtest.New(t)
-		trt := malfeasance.NewMocktortoise(gomock.NewController(t))
-		postVerifier := malfeasance.NewMockpostVerifier(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		trt := malfeasance.NewMocktortoise(ctrl)
+		postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 		h := malfeasance.NewHandler(
 			datastore.NewCachedDB(db, lg),
@@ -1164,8 +1166,9 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 	t.Run("invalid malfeasance proof (ATX signature invalid)", func(t *testing.T) {
 		db := sql.InMemory()
 		lg := logtest.New(t)
-		trt := malfeasance.NewMocktortoise(gomock.NewController(t))
-		postVerifier := malfeasance.NewMockpostVerifier(gomock.NewController(t))
+		ctrl := gomock.NewController(t)
+		trt := malfeasance.NewMocktortoise(ctrl)
+		postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 		h := malfeasance.NewHandler(
 			datastore.NewCachedDB(db, lg),
@@ -1193,6 +1196,218 @@ func TestHandler_HandleMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 
 		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+		require.ErrorContains(t, err, "invalid signature")
+
+		malicious, err := identities.IsMalicious(db, sig.NodeID())
+		require.NoError(t, err)
+		require.False(t, malicious)
+	})
+}
+
+func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	nodeIdH32 := types.Hash32(sig.NodeID())
+
+	prevATX := *types.NewActivationTx(
+		types.NIPostChallenge{
+			PublishEpoch:  types.EpochID(1),
+			CommitmentATX: &types.ATXID{1, 2, 3},
+		},
+		types.Address{},
+		nil,
+		1,
+		nil,
+	)
+	require.NoError(t, activation.SignAndFinalizeAtx(sig, &prevATX))
+
+	atx1 := *types.NewActivationTx(
+		types.NIPostChallenge{
+			PublishEpoch: types.EpochID(2),
+			PrevATXID:    prevATX.ID(),
+		},
+		types.Address{},
+		nil,
+		1,
+		nil,
+	)
+	require.NoError(t, activation.SignAndFinalizeAtx(sig, &atx1))
+
+	atx2 := *types.NewActivationTx(
+		types.NIPostChallenge{
+			PublishEpoch: types.EpochID(3),
+			PrevATXID:    prevATX.ID(),
+		},
+		types.Address{},
+		nil,
+		1,
+		nil,
+	)
+	require.NoError(t, activation.SignAndFinalizeAtx(sig, &atx2))
+
+	t.Run("valid malfeasance proof", func(t *testing.T) {
+		db := sql.InMemory()
+		lg := logtest.New(t)
+		ctrl := gomock.NewController(t)
+		trt := malfeasance.NewMocktortoise(ctrl)
+		postVerifier := malfeasance.NewMockpostVerifier(ctrl)
+
+		h := malfeasance.NewHandler(
+			datastore.NewCachedDB(db, lg),
+			lg,
+			"self",
+			[]types.NodeID{types.RandomNodeID()},
+			signing.NewEdVerifier(),
+			trt,
+			postVerifier,
+		)
+
+		proof := wire.MalfeasanceProof{
+			Layer: types.LayerID(11),
+			Proof: wire.Proof{
+				Type: wire.InvalidPrevATX,
+				Data: &wire.InvalidPrevATXProof{
+					Atx1: *awire.ActivationTxToWireV1(&atx1),
+					Atx2: *awire.ActivationTxToWireV1(&atx2),
+				},
+			},
+		}
+
+		trt.EXPECT().OnMalfeasance(sig.NodeID())
+		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
+		require.NoError(t, err)
+
+		malicious, err := identities.IsMalicious(db, sig.NodeID())
+		require.NoError(t, err)
+		require.True(t, malicious)
+	})
+
+	t.Run("invalid malfeasance proof (same ATX)", func(t *testing.T) {
+		db := sql.InMemory()
+		lg := logtest.New(t)
+		ctrl := gomock.NewController(t)
+		trt := malfeasance.NewMocktortoise(ctrl)
+		postVerifier := malfeasance.NewMockpostVerifier(ctrl)
+
+		h := malfeasance.NewHandler(
+			datastore.NewCachedDB(db, lg),
+			lg,
+			"self",
+			[]types.NodeID{types.RandomNodeID()},
+			signing.NewEdVerifier(),
+			trt,
+			postVerifier,
+		)
+
+		proof := wire.MalfeasanceProof{
+			Layer: types.LayerID(11),
+			Proof: wire.Proof{
+				Type: wire.InvalidPrevATX,
+				Data: &wire.InvalidPrevATXProof{
+					Atx1: *awire.ActivationTxToWireV1(&atx1),
+					Atx2: *awire.ActivationTxToWireV1(&atx1),
+				},
+			},
+		}
+
+		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
+		require.ErrorContains(t, err, "ATX IDs are the same")
+
+		malicious, err := identities.IsMalicious(db, sig.NodeID())
+		require.NoError(t, err)
+		require.False(t, malicious)
+	})
+
+	t.Run("invalid malfeasance proof (prev ATXs differ)", func(t *testing.T) {
+		db := sql.InMemory()
+		lg := logtest.New(t)
+		ctrl := gomock.NewController(t)
+		trt := malfeasance.NewMocktortoise(ctrl)
+		postVerifier := malfeasance.NewMockpostVerifier(ctrl)
+
+		h := malfeasance.NewHandler(
+			datastore.NewCachedDB(db, lg),
+			lg,
+			"self",
+			[]types.NodeID{types.RandomNodeID()},
+			signing.NewEdVerifier(),
+			trt,
+			postVerifier,
+		)
+
+		atx3 := *types.NewActivationTx(
+			types.NIPostChallenge{
+				PublishEpoch: types.EpochID(3),
+				PrevATXID:    atx1.ID(),
+			},
+			types.Address{},
+			nil,
+			1,
+			nil,
+		)
+		require.NoError(t, activation.SignAndFinalizeAtx(sig, &atx3))
+
+		proof := wire.MalfeasanceProof{
+			Layer: types.LayerID(11),
+			Proof: wire.Proof{
+				Type: wire.InvalidPrevATX,
+				Data: &wire.InvalidPrevATXProof{
+					Atx1: *awire.ActivationTxToWireV1(&atx1),
+					Atx2: *awire.ActivationTxToWireV1(&atx3),
+				},
+			},
+		}
+
+		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
+		require.ErrorContains(t, err, "prev ATX IDs are different")
+
+		malicious, err := identities.IsMalicious(db, sig.NodeID())
+		require.NoError(t, err)
+		require.False(t, malicious)
+	})
+
+	t.Run("invalid malfeasance proof (ATX signature invalid)", func(t *testing.T) {
+		db := sql.InMemory()
+		lg := logtest.New(t)
+		ctrl := gomock.NewController(t)
+		trt := malfeasance.NewMocktortoise(ctrl)
+		postVerifier := malfeasance.NewMockpostVerifier(ctrl)
+
+		h := malfeasance.NewHandler(
+			datastore.NewCachedDB(db, lg),
+			lg,
+			"self",
+			[]types.NodeID{types.RandomNodeID()},
+			signing.NewEdVerifier(),
+			trt,
+			postVerifier,
+		)
+
+		atx3 := *types.NewActivationTx(
+			types.NIPostChallenge{
+				PublishEpoch: types.EpochID(3),
+				PrevATXID:    atx1.ID(),
+			},
+			types.Address{},
+			nil,
+			1,
+			nil,
+		)
+		require.NoError(t, activation.SignAndFinalizeAtx(sig, &atx3))
+		atx3.PrevATXID = prevATX.ID() // invalidate signature by changing content
+
+		proof := wire.MalfeasanceProof{
+			Layer: types.LayerID(11),
+			Proof: wire.Proof{
+				Type: wire.InvalidPrevATX,
+				Data: &wire.InvalidPrevATXProof{
+					Atx1: *awire.ActivationTxToWireV1(&atx1),
+					Atx2: *awire.ActivationTxToWireV1(&atx3),
+				},
+			},
+		}
+
+		err := h.HandleSyncedMalfeasanceProof(context.Background(), nodeIdH32, "peer", codec.MustEncode(&proof))
 		require.ErrorContains(t, err, "invalid signature")
 
 		malicious, err := identities.IsMalicious(db, sig.NodeID())

@@ -213,16 +213,14 @@ func (h *Handler) SyntacticallyValidateDeps(
 	ctx context.Context,
 	atx *types.ActivationTx,
 ) (*types.VerifiedActivationTx, *mwire.MalfeasanceProof, error) {
-	var (
-		commitmentATX *types.ATXID
-		err           error
-	)
+	var commitmentATX *types.ATXID
 	if atx.PrevATXID == types.EmptyATXID {
 		if err := h.validateInitialAtx(ctx, atx); err != nil {
 			return nil, nil, err
 		}
-		commitmentATX = atx.CommitmentATX
+		commitmentATX = atx.CommitmentATX // checked to be non-nil in syntactic validation
 	} else {
+		var err error
 		commitmentATX, err = h.getCommitmentAtx(atx)
 		if err != nil {
 			return nil, nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
@@ -403,76 +401,182 @@ func (h *Handler) cacheAtx(ctx context.Context, atx *types.ActivationTxHeader, n
 	return nil
 }
 
-// storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*mwire.MalfeasanceProof, error) {
-	var nonce *types.VRFPostIndex
-	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
+// checkDoublePublish verifies if a node has already published an ATX in the same epoch.
+func (h *Handler) checkDoublePublish(
+	ctx context.Context,
+	tx sql.Executor,
+	atx *types.VerifiedActivationTx,
+) (*mwire.MalfeasanceProof, error) {
+	prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch, atx.SmesherID)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, err
+	}
+
+	// do ID check to be absolutely sure.
+	if prev == nil || prev.ID() == atx.ID() {
+		return nil, nil
+	}
+	if _, ok := h.signers[atx.SmesherID]; ok {
+		// if we land here we tried to publish 2 ATXs in the same epoch
+		// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
+		return nil, fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(), atx.PublishEpoch)
+	}
+
+	var atxProof mwire.AtxProof
+	for i, a := range []*types.VerifiedActivationTx{prev, atx} {
+		atxProof.Messages[i] = mwire.AtxProofMsg{
+			InnerMsg: types.ATXMetadata{
+				PublishEpoch: a.PublishEpoch,
+				MsgHash:      wire.ActivationTxToWireV1(a.ActivationTx).HashInnerBytes(),
+			},
+			SmesherID: a.SmesherID,
+			Signature: a.Signature,
+		}
+	}
+	proof := &mwire.MalfeasanceProof{
+		Layer: atx.PublishEpoch.FirstLayer(),
+		Proof: mwire.Proof{
+			Type: mwire.MultipleATXs,
+			Data: &atxProof,
+		},
+	}
+	encoded, err := codec.Encode(proof)
+	if err != nil {
+		h.log.With().Panic("failed to encode malfeasance proof", log.Err(err))
+	}
+	if err := identities.SetMalicious(tx, atx.SmesherID, encoded, time.Now()); err != nil {
+		return nil, fmt.Errorf("add malfeasance proof: %w", err)
+	}
+
+	h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
+		log.Stringer("smesher", atx.SmesherID),
+		log.Object("prev", prev),
+		log.Object("curr", atx),
+	)
+
+	return proof, nil
+}
+
+// checkWrongPrevAtx verifies if the previous ATX referenced in the ATX is correct.
+func (h *Handler) checkWrongPrevAtx(
+	ctx context.Context,
+	tx sql.Executor,
+	atx *types.VerifiedActivationTx,
+) (*mwire.MalfeasanceProof, error) {
+	prevID, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, atx.PublishEpoch)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, fmt.Errorf("get last atx by node id: %w", err)
+	}
+	if prevID == atx.PrevATXID {
+		return nil, nil
+	}
+
+	if _, ok := h.signers[atx.SmesherID]; ok {
+		// if we land here we tried to publish an ATX with a wrong prevATX
+		h.log.WithContext(ctx).With().Warning(
+			"Node produced an ATX with a wrong prevATX. This can happened when the node wasn't synced when "+
+				"registering at PoET",
+			log.Stringer("smesher", atx.SmesherID),
+			log.ShortStringer("expected", prevID),
+			log.ShortStringer("actual", atx.PrevATXID),
+		)
+		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
+	}
+
+	// check if atx.PrevATXID is actually the last published ATX by the same node
+	prev, err := atxs.Get(tx, prevID)
+	if err != nil {
+		return nil, fmt.Errorf("get prev atx: %w", err)
+	}
+
+	// if atx references a previous ATX that is not the last ATX by the same node, there must be at least one
+	// atx published between prevATX and the current epoch
+	var atx2 *types.VerifiedActivationTx
+	pubEpoch := h.clock.CurrentLayer().GetEpoch()
+	for pubEpoch > prev.PublishEpoch {
+		id, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, pubEpoch)
+		if err != nil {
+			return nil, fmt.Errorf("get prev atx id by node id: %w", err)
+		}
+
+		atx2, err = atxs.Get(tx, id)
+		if err != nil {
+			return nil, fmt.Errorf("get prev atx: %w", err)
+		}
+
+		if atx.ID() != atx2.ID() && atx.PrevATXID == atx2.PrevATXID {
+			// found an ATX that points to the same previous ATX
+			break
+		}
+		pubEpoch = atx2.PublishEpoch
+	}
+
+	if atx2 == nil || atx2.PrevATXID != atx.PrevATXID {
+		// something went wrong, we couldn't find an ATX that points to the same previous ATX
+		// this should never happen since we are checking in other places that all ATXs from the same node
+		// form a chain
+		return nil, errors.New("failed double previous check: could not find an ATX with same previous ATX")
+	}
+
+	proof := &mwire.MalfeasanceProof{
+		Layer: atx.PublishEpoch.FirstLayer(),
+		Proof: mwire.Proof{
+			Type: mwire.InvalidPrevATX,
+			Data: &mwire.InvalidPrevATXProof{
+				Atx1: *wire.ActivationTxToWireV1(atx.ActivationTx),
+				Atx2: *wire.ActivationTxToWireV1(atx2.ActivationTx),
+			},
+		},
+	}
+
+	if err := identities.SetMalicious(tx, atx.SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
+		return nil, fmt.Errorf("add malfeasance proof: %w", err)
+	}
+
+	h.log.WithContext(ctx).With().Warning("smesher referenced the wrong previous in published ATX",
+		log.Stringer("smesher", atx.SmesherID),
+		log.ShortStringer("expected", prevID),
+		log.ShortStringer("actual", atx.PrevATXID),
+	)
+	return proof, nil
+}
+
+func (h *Handler) checkMalicious(
+	ctx context.Context,
+	tx *sql.Tx,
+	atx *types.VerifiedActivationTx,
+) (*mwire.MalfeasanceProof, error) {
+	malicious, err := identities.IsMalicious(tx, atx.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("checking if node is malicious: %w", err)
 	}
+	if malicious {
+		return nil, nil
+	}
+	proof, err := h.checkDoublePublish(ctx, tx, atx)
+	if proof != nil || err != nil {
+		return proof, err
+	}
+	return h.checkWrongPrevAtx(ctx, tx, atx)
+}
+
+// storeAtx stores an ATX and notifies subscribers of the ATXID.
+func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx) (*mwire.MalfeasanceProof, error) {
+	var nonce *types.VRFPostIndex
 	var proof *mwire.MalfeasanceProof
-	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
-		if malicious {
-			if err := atxs.Add(tx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-				return fmt.Errorf("add atx to db: %w", err)
-			}
-			return nil
+	err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		proof, err = h.checkMalicious(ctx, tx, atx)
+		if err != nil {
+			return fmt.Errorf("check malicious: %w", err)
 		}
-
-		prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch, atx.SmesherID)
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			return err
-		}
-
-		// do ID check to be absolutely sure.
-		if prev != nil && prev.ID() != atx.ID() {
-			if _, ok := h.signers[atx.SmesherID]; ok {
-				// if we land here we tried to publish 2 ATXs in the same epoch
-				// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
-				return fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(),
-					atx.PublishEpoch,
-				)
-			}
-
-			var atxProof mwire.AtxProof
-			for i, a := range []*types.VerifiedActivationTx{prev, atx} {
-				atxProof.Messages[i] = mwire.AtxProofMsg{
-					InnerMsg: types.ATXMetadata{
-						PublishEpoch: a.PublishEpoch,
-						MsgHash:      wire.ActivationTxToWireV1(a.ActivationTx).HashInnerBytes(),
-					},
-					SmesherID: a.SmesherID,
-					Signature: a.Signature,
-				}
-			}
-			proof = &mwire.MalfeasanceProof{
-				Layer: atx.PublishEpoch.FirstLayer(),
-				Proof: mwire.Proof{
-					Type: mwire.MultipleATXs,
-					Data: &atxProof,
-				},
-			}
-			encoded, err := codec.Encode(proof)
-			if err != nil {
-				h.log.With().Panic("failed to encode malfeasance proof", log.Err(err))
-			}
-			if err := identities.SetMalicious(tx, atx.SmesherID, encoded, time.Now()); err != nil {
-				return fmt.Errorf("add malfeasance proof: %w", err)
-			}
-
-			h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
-				log.Stringer("smesher", atx.SmesherID),
-				log.Object("prev", prev),
-				log.Object("curr", atx),
-			)
-		}
-
 		nonce, err = atxs.AddGettingNonce(tx, atx)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
 	}
 	if nonce == nil {
@@ -512,7 +616,7 @@ func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, pee
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	proof, err := h.handleAtx(ctx, types.Hash32{}, peer, msg)
+	proof, err := h.handleAtx(ctx, types.EmptyHash32, peer, msg)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
 		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
 			log.Stringer("sender", peer),
@@ -621,7 +725,7 @@ func (h *Handler) processATX(
 		return proof, err
 	}
 
-	if expHash != (types.Hash32{}) && vAtx.ID().Hash32() != expHash {
+	if expHash != types.EmptyHash32 && vAtx.ID().Hash32() != expHash {
 		return nil, fmt.Errorf(
 			"%w: atx want %s, got %s",
 			errWrongHash,
@@ -637,7 +741,8 @@ func (h *Handler) processATX(
 	events.ReportNewActivation(vAtx)
 	h.log.WithContext(ctx).With().Info(
 		"new atx", log.Inline(vAtx),
-		log.Bool("malicious", proof != nil))
+		log.Bool("malicious", proof != nil),
+	)
 	return proof, err
 }
 

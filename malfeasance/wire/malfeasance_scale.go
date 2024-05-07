@@ -386,3 +386,39 @@ func (t *InvalidPostIndexProof) DecodeScale(dec *scale.Decoder) (total int, err 
 	}
 	return total, nil
 }
+
+func (t *InvalidPrevATXProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := t.Atx1.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.Atx2.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *InvalidPrevATXProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := t.Atx1.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.Atx2.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
