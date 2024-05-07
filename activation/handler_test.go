@@ -838,3 +838,26 @@ func TestHandler_ConfiguringAtxVersions(t *testing.T) {
 		require.EqualValues(t, 10, versions[1].publish)
 	})
 }
+
+func TestHandler_DecodeATX(t *testing.T) {
+	t.Parallel()
+
+	t.Run("v1", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, types.RandomATXID())
+
+		atx := newInitialATXv1(t, atxHdlr.goldenATXID)
+		atx.PublishEpoch = 2
+
+		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		require.NoError(t, err)
+		require.Equal(t, atx, decoded)
+	})
+	t.Run("v2 not supported", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersion(10, types.AtxV2))
+
+		_, err := atxHdlr.decodeATX(codec.MustEncode(types.EpochID(20)))
+		require.ErrorContains(t, err, "unsupported ATX version")
+	})
+}
