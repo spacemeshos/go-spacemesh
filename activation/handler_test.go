@@ -176,10 +176,6 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	h.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 }
 
-type testHandlerOptions struct {
-	tickSize uint64
-}
-
 func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	ctrl := gomock.NewController(tb)
 	return handlerMocks{
@@ -193,19 +189,13 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	}
 }
 
-func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...func(*testHandlerOptions)) *testHandler {
+func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	edVerifier := signing.NewEdVerifier()
 
-	options := testHandlerOptions{
-		tickSize: 1,
-	}
-	for _, opt := range opts {
-		opt(&options)
-	}
 	mocks := newTestHandlerMocks(tb, goldenATXID)
-	atxHdlr := NewHandler(
+	atxHdlr, err := NewHandler(
 		"localID",
 		cdb,
 		atxsdata.New(),
@@ -213,13 +203,14 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...func(*testHa
 		mocks.mclock,
 		mocks.mpub,
 		mocks.mockFetch,
-		options.tickSize,
 		goldenATXID,
 		mocks.mValidator,
 		mocks.mbeacon,
 		mocks.mtortoise,
 		lg,
+		opts...,
 	)
+	require.NoError(tb, err)
 	return &testHandler{
 		Handler:    atxHdlr,
 		cdb:        cdb,
@@ -627,7 +618,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	)
 
 	goldenATXID := types.ATXID{2, 3, 4}
-	atxHdlr := newTestHandler(t, goldenATXID, func(o *testHandlerOptions) { o.tickSize = tickSize })
+	atxHdlr := newTestHandler(t, goldenATXID, WithTickSize(tickSize))
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -766,4 +757,84 @@ func newChainedActivationTxV1(
 			NumUnits: prev.NumUnits,
 		},
 	}
+}
+
+func TestHandler_DeterminesAtxVersion(t *testing.T) {
+	t.Parallel()
+
+	goldenATXID := types.RandomATXID()
+
+	t.Run("v1", func(t *testing.T) {
+		t.Parallel()
+
+		atxHdlr := newTestHandler(t, goldenATXID)
+
+		atx := newInitialATXv1(t, goldenATXID)
+		atx.PublishEpoch = 2
+
+		version, err := atxHdlr.determineVersion(codec.MustEncode(atx))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV1, *version)
+
+		atx.PublishEpoch = 10
+		version, err = atxHdlr.determineVersion(codec.MustEncode(atx))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV1, *version)
+	})
+	t.Run("v2", func(t *testing.T) {
+		t.Parallel()
+
+		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersion(10, types.AtxV2))
+
+		version, err := atxHdlr.determineVersion(codec.MustEncode(types.EpochID(2)))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV1, *version)
+
+		version, err = atxHdlr.determineVersion(codec.MustEncode(types.EpochID(10)))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV2, *version)
+
+		version, err = atxHdlr.determineVersion(codec.MustEncode(types.EpochID(11)))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV2, *version)
+	})
+	t.Run("v2 since epoch 0", func(t *testing.T) {
+		t.Parallel()
+
+		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersion(0, types.AtxV2))
+		version, err := atxHdlr.determineVersion(codec.MustEncode(types.EpochID(0)))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV2, *version)
+	})
+}
+
+func TestHandler_ConfiguringAtxVersions(t *testing.T) {
+	t.Parallel()
+	t.Run("no versions", func(t *testing.T) {
+		t.Parallel()
+		require.Error(t, verifyAtxVersions(nil))
+	})
+	t.Run("valid 1", func(t *testing.T) {
+		t.Parallel()
+		require.NoError(t, verifyAtxVersions([]atxVersion{{publish: 0, AtxVersion: types.AtxV1}}))
+	})
+	t.Run("valid 2", func(t *testing.T) {
+		t.Parallel()
+		versions := []atxVersion{{publish: 0, AtxVersion: types.AtxV1}, {publish: 1, AtxVersion: types.AtxV2}}
+		require.NoError(t, verifyAtxVersions(versions))
+	})
+	t.Run("cannot decrease version", func(t *testing.T) {
+		t.Parallel()
+		versions := []atxVersion{{publish: 10, AtxVersion: types.AtxV1}, {publish: 9, AtxVersion: types.AtxV2}}
+		require.Error(t, verifyAtxVersions(versions))
+	})
+	t.Run("sorts by publish epoch", func(t *testing.T) {
+		t.Parallel()
+		versions := []atxVersion{{publish: 10, AtxVersion: types.AtxV2}, {publish: 9, AtxVersion: types.AtxV1}}
+		require.NoError(t, verifyAtxVersions(versions))
+		require.Equal(t, types.AtxV1, versions[0].AtxVersion)
+		require.EqualValues(t, 9, versions[0].publish)
+		require.Equal(t, types.AtxV2, versions[1].AtxVersion)
+		require.EqualValues(t, 10, versions[1].publish)
+	})
 }

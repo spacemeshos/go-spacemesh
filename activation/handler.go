@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
+
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -29,11 +32,18 @@ var (
 	errMaliciousATX  = errors.New("malicious atx")
 )
 
+type atxVersion struct {
+	// epoch since this version is valid
+	publish types.EpochID
+	types.AtxVersion
+}
+
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
 	local     p2p.Peer
 	publisher pubsub.Publisher
 	log       log.Log
+	versions  []atxVersion
 
 	// inProgress map gathers ATXs that are currently being processed.
 	// It's used to avoid processing the same ATX twice.
@@ -41,6 +51,21 @@ type Handler struct {
 	inProgressMu sync.Mutex
 
 	v1 *HandlerV1
+}
+
+// HandlerOption is a functional option for the handler.
+type HandlerOption func(*Handler)
+
+func WithAtxVersion(publish types.EpochID, version types.AtxVersion) HandlerOption {
+	return func(h *Handler) {
+		h.versions = append(h.versions, atxVersion{publish, version})
+	}
+}
+
+func WithTickSize(tickSize uint64) HandlerOption {
+	return func(h *Handler) {
+		h.v1.tickSize = tickSize
+	}
 }
 
 // NewHandler returns a data handler for ATX.
@@ -52,27 +77,29 @@ func NewHandler(
 	c layerClock,
 	pub pubsub.Publisher,
 	fetcher system.Fetcher,
-	tickSize uint64,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
 	beacon AtxReceiver,
 	tortoise system.Tortoise,
-	log log.Log,
-) *Handler {
+	lg log.Log,
+	opts ...HandlerOption,
+) (*Handler, error) {
 	h := &Handler{
 		local:     local,
 		publisher: pub,
-		log:       log,
+		log:       lg,
+		versions:  []atxVersion{{0, types.AtxV1}},
+
 		v1: &HandlerV1{
 			local:           local,
 			cdb:             cdb,
 			atxsdata:        atxsdata,
 			edVerifier:      edVerifier,
 			clock:           c,
-			tickSize:        tickSize,
+			tickSize:        1,
 			goldenATXID:     goldenATXID,
 			nipostValidator: nipostValidator,
-			log:             log,
+			log:             lg,
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
@@ -82,7 +109,48 @@ func NewHandler(
 		inProgress: make(map[types.ATXID][]chan error),
 	}
 
-	return h
+	for _, opt := range opts {
+		opt(h)
+	}
+	if err := verifyAtxVersions(h.versions); err != nil {
+		return nil, fmt.Errorf("invalid ATX versions configured (%v): %w", h.versions, err)
+	}
+
+	h.log.With().Info("atx handler created",
+		log.Array("supported ATX versions", log.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+			for _, v := range h.versions {
+				enc.AppendString(fmt.Sprintf("v%v from epoch %d", v.AtxVersion, v.publish))
+			}
+			return nil
+		})))
+
+	return h, nil
+}
+
+func verifyAtxVersions(versions []atxVersion) error {
+	if len(versions) == 0 {
+		return errors.New("no ATX versions configured")
+	}
+	slices.SortFunc(versions, func(a, b atxVersion) int {
+		switch {
+		case a.publish < b.publish:
+			return -1
+		case a.publish > b.publish:
+			return 1
+		}
+		return 0
+	})
+	lastVersion := types.AtxV1
+	for _, v := range versions {
+		if v.AtxVersion < types.AtxV1 || v.AtxVersion > types.AtxVMAX {
+			return fmt.Errorf("ATX version: %v not in range [%v:%v]", v, types.AtxV1, types.AtxVMAX)
+		}
+		if v.AtxVersion < lastVersion {
+			return fmt.Errorf("cannot decrease ATX version from %v to %v", lastVersion, v.AtxVersion)
+		}
+		lastVersion = v.AtxVersion
+	}
+	return nil
 }
 
 func (h *Handler) Register(sig *signing.EdSigner) {
@@ -133,6 +201,45 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 	return err
 }
 
+func (h *Handler) determineVersion(msg []byte) (*types.AtxVersion, error) {
+	// The first field of all ATXs is the publish epoch, which
+	// we use to determine the version of the ATX.
+	var publish types.EpochID
+	if err := codec.Decode(msg, &publish); err != nil && !errors.Is(err, codec.ErrShortRead) {
+		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
+	}
+
+	version := types.AtxV1
+	for _, v := range h.versions {
+		if publish >= v.publish {
+			version = v.AtxVersion
+		}
+	}
+	return &version, nil
+}
+
+type opaqueAtx interface {
+	ID() types.ATXID
+}
+
+func (h *Handler) decodeATX(msg []byte) (opaqueAtx, error) {
+	version, err := h.determineVersion(msg)
+	if err != nil {
+		return nil, fmt.Errorf("determining ATX version: %w", err)
+	}
+
+	switch *version {
+	case types.AtxV1:
+		var atx wire.ActivationTxV1
+		if err := codec.Decode(msg, &atx); err != nil {
+			return nil, fmt.Errorf("%w: %w", errMalformedData, err)
+		}
+		return &atx, nil
+	}
+
+	return nil, fmt.Errorf("unsupported ATX version: %v", *version)
+}
+
 func (h *Handler) handleAtx(
 	ctx context.Context,
 	expHash types.Hash32,
@@ -141,11 +248,12 @@ func (h *Handler) handleAtx(
 ) (*mwire.MalfeasanceProof, error) {
 	receivedTime := time.Now()
 
-	var atx wire.ActivationTxV1
-	if err := codec.Decode(msg, &atx); err != nil {
-		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
+	opaqueAtx, err := h.decodeATX(msg)
+	if err != nil {
+		return nil, fmt.Errorf("decoding ATX: %w", err)
 	}
-	id := atx.ID()
+	id := opaqueAtx.ID()
+
 	if (expHash != types.Hash32{}) && id.Hash32() != expHash {
 		return nil, fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), id.ShortString())
 	}
@@ -170,7 +278,15 @@ func (h *Handler) handleAtx(
 	h.inProgressMu.Unlock()
 	h.log.WithContext(ctx).With().Info("handling incoming atx", id, log.Int("size", len(msg)))
 
-	proof, err := h.v1.processATX(ctx, peer, atx, msg, receivedTime)
+	var proof *mwire.MalfeasanceProof
+
+	switch atx := opaqueAtx.(type) {
+	case *wire.ActivationTxV1:
+		proof, err = h.v1.processATX(ctx, peer, atx, msg, receivedTime)
+	default:
+		panic("unreachable")
+	}
+
 	h.inProgressMu.Lock()
 	defer h.inProgressMu.Unlock()
 	for _, ch := range h.inProgress[id] {

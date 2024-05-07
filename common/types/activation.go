@@ -143,7 +143,11 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 type AtxVersion uint
 
-const AtxV1 AtxVersion = 1
+const (
+	AtxV1   AtxVersion = 1
+	AtxV2   AtxVersion = 2
+	AtxVMAX AtxVersion = AtxV2
+)
 
 type AtxBlob struct {
 	Blob    []byte

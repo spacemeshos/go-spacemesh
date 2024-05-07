@@ -237,7 +237,7 @@ func validateAndPreserveData(
 	mreceiver := activation.NewMockAtxReceiver(ctrl)
 	mtrtl := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
-	atxHandler := activation.NewHandler(
+	atxHandler, err := activation.NewHandler(
 		"",
 		cdb,
 		atxsdata.New(),
@@ -245,13 +245,13 @@ func validateAndPreserveData(
 		mclock,
 		nil,
 		mfetch,
-		10,
 		goldenAtx,
 		mvalidator,
 		mreceiver,
 		mtrtl,
 		lg,
 	)
+	require.NoError(tb, err)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for _, dep := range deps {
 		var atx wire.ActivationTxV1
