@@ -9,6 +9,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 With this release the minimum supported version for Intel Macs is now macOS 13 (Ventura) and for Apple Silicon Macs it
 is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spacemesh/pull/5879)).
 
+This update removes migration code for legacy keys in the post data directory. Upgrading to this version requires going
+through v1.5.x first ([#5907](https://github.com/spacemeshos/go-spacemesh/pull/5907)).
+
 ### Highlights
 
 ### Features
@@ -21,6 +24,17 @@ is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spaceme
 * [#5866](https://github.com/spacemeshos/go-spacemesh/pull/5866) Reduce logging levels of some messages to reduce noise.
 
 * [#5877](https://github.com/spacemeshos/go-spacemesh/pull/5877) Fix verifying ATX chain after checkpoint.
+
+* [#5882](https://github.com/spacemeshos/go-spacemesh/pull/5882) Use backoff during routing discovery.
+  This should reduce network load from the peer discovery mechanism when it's enabled.
+
+* [#5888](https://github.com/spacemeshos/go-spacemesh/pull/5888) Handle DHT discovery startup errors properly
+
+* [#5896](https://github.com/spacemeshos/go-spacemesh/pull/5896) Increase supported number of ATXs to 4.5 Mio.
+
+* [#5904](https://github.com/spacemeshos/go-spacemesh/pull/5904) Avoid repeated searching for positioning ATX in 1:N
+
+* [#5911](https://github.com/spacemeshos/go-spacemesh/pull/5911) Avoid pulling poet proof multiple times in 1:N setups
 
 ## (v1.5.0)
 

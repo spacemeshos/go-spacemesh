@@ -168,9 +168,7 @@ type ActivationTx struct {
 	BaseTickHeight uint64
 	TickCount      uint64
 	VRFNonce       *VRFPostIndex
-
-	SmesherID NodeID
-	Signature EdSignature
+	SmesherID      NodeID
 
 	AtxBlob
 
@@ -229,21 +227,6 @@ func (atx *ActivationTx) GetWeight() uint64 {
 // TickHeight returns a sum of base tick height and tick count.
 func (atx *ActivationTx) TickHeight() uint64 {
 	return atx.BaseTickHeight + atx.TickCount
-}
-
-func (atx *ActivationTx) ToHeader() *ActivationTxHeader {
-	return &ActivationTxHeader{
-		PublishEpoch:      atx.PublishEpoch,
-		Coinbase:          atx.Coinbase,
-		EffectiveNumUnits: atx.NumUnits,
-		Received:          atx.Received(),
-
-		ID:     atx.ID(),
-		NodeID: atx.SmesherID,
-
-		BaseTickHeight: atx.BaseTickHeight,
-		TickCount:      atx.TickCount,
-	}
 }
 
 // MarshalLogObject implements logging interface.
@@ -385,7 +368,19 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=3500000"` // to be in line with `EpochData` in fetch/wire_types.go
+	Set   []ATXID `scale:"max=4500000"` // to be in line with `EpochData` in fetch/wire_types.go
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")
+
+func getWeight(numUnits, tickCount uint64) uint64 {
+	return safeMul(numUnits, tickCount)
+}
+
+func safeMul(a, b uint64) uint64 {
+	c := a * b
+	if a > 1 && b > 1 && c/b != a {
+		panic("uint64 overflow")
+	}
+	return c
+}

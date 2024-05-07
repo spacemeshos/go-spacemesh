@@ -4,13 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
@@ -24,13 +21,13 @@ const (
 // Query to retrieve ATXs.
 // Can't use inner join for the ATX blob here b/c this will break
 // filters that refer to the id column.
-const fullQuery = `select id,
-        (select atx from atx_blobs b where a.id = b.id) as atx,
-        base_tick_height, tick_count, pubkey,
-	effective_num_units, received, epoch, sequence, coinbase, validity, prev_id, nonce
-	from atxs a`
+const fieldsQuery = `select
+atxs.id, atxs.nonce, atxs.base_tick_height, atxs.tick_count, atxs.pubkey, atxs.effective_num_units,
+atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.prev_id, atxs.commitment_atx`
 
-type decoderCallback func(*types.ActivationTx, error) bool
+const fullQuery = fieldsQuery + ` from atxs`
+
+type decoderCallback func(*types.ActivationTx) bool
 
 func decoder(fn decoderCallback) sql.Decoder {
 	return func(stmt *sql.Statement) bool {
@@ -39,29 +36,21 @@ func decoder(fn decoderCallback) sql.Decoder {
 			id types.ATXID
 		)
 		stmt.ColumnBytes(0, id[:])
-		checkpointed := stmt.ColumnLen(1) == 0
-		if !checkpointed {
-			// FIXME: remove decoding blob once ActivationTx struct is trimmed from unncecessary fields.
-			var atxV1 wire.ActivationTxV1
-			blob, err := io.ReadAll(stmt.ColumnReader(1))
-			if err != nil {
-				return fn(nil, fmt.Errorf("read blob %w", err))
-			}
-			if err := codec.Decode(blob, &atxV1); err != nil {
-				return fn(nil, fmt.Errorf("decode %w", err))
-			}
-			a = *wire.ActivationTxFromWireV1(&atxV1, blob...)
-		}
 		a.SetID(id)
+		nonce := types.VRFPostIndex(stmt.ColumnInt64(1))
+		a.VRFNonce = &nonce
 		a.BaseTickHeight = uint64(stmt.ColumnInt64(2))
 		a.TickCount = uint64(stmt.ColumnInt64(3))
 		stmt.ColumnBytes(4, a.SmesherID[:])
 		a.NumUnits = uint32(stmt.ColumnInt32(5))
-		if checkpointed {
+		// Note: received is assigned `0` for checkpointed ATXs.
+		// We treat `0` as 'zero time'.
+		// We could use `NULL` instead, but the column has "NOT NULL" constraint.
+		// In future, consider changing the schema to allow `NULL` for received.
+		if received := stmt.ColumnInt64(6); received == 0 {
 			a.SetGolden()
-			a.SetReceived(time.Time{})
 		} else {
-			a.SetReceived(time.Unix(0, stmt.ColumnInt64(6)).Local())
+			a.SetReceived(time.Unix(0, received).Local())
 		}
 		a.PublishEpoch = types.EpochID(uint32(stmt.ColumnInt(7)))
 		a.Sequence = uint64(stmt.ColumnInt64(8))
@@ -70,26 +59,21 @@ func decoder(fn decoderCallback) sql.Decoder {
 		if stmt.ColumnType(11) != sqlite.SQLITE_NULL {
 			stmt.ColumnBytes(11, a.PrevATXID[:])
 		}
-		nonce := types.VRFPostIndex(stmt.ColumnInt64(12))
-		a.VRFNonce = &nonce
+		if stmt.ColumnType(12) != sqlite.SQLITE_NULL {
+			a.CommitmentATX = new(types.ATXID)
+			stmt.ColumnBytes(12, a.CommitmentATX[:])
+		}
 
-		return fn(&a, nil)
+		return fn(&a)
 	}
 }
 
 func load(db sql.Executor, query string, enc sql.Encoder) (*types.ActivationTx, error) {
-	var (
-		v    *types.ActivationTx
-		derr error
-	)
-	_, err := db.Exec(query, enc, decoder(func(atx *types.ActivationTx, err error) bool {
+	var v *types.ActivationTx
+	_, err := db.Exec(query, enc, decoder(func(atx *types.ActivationTx) bool {
 		v = atx
-		derr = err
-		return derr == nil
+		return true
 	}))
-	if err == nil && derr != nil {
-		err = derr
-	}
 	return v, err
 }
 
@@ -114,20 +98,25 @@ func GetByEpochAndNodeID(
 	db sql.Executor,
 	epoch types.EpochID,
 	nodeID types.NodeID,
-) (*types.ActivationTx, error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(epoch))
-		stmt.BindBytes(2, nodeID.Bytes())
-	}
-	q := fmt.Sprintf("%v where epoch = ?1 and pubkey = ?2 limit 1;", fullQuery)
-	v, err := load(db, q, enc)
+) (types.ATXID, error) {
+	var id types.ATXID
+	rows, err := db.Exec("select id from atxs where epoch = ?1 and pubkey = ?2 limit 1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(epoch))
+			stmt.BindBytes(2, nodeID.Bytes())
+		},
+		func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, id[:])
+			return false
+		},
+	)
 	if err != nil {
-		return nil, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), err)
+		return types.EmptyATXID, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), err)
 	}
-	if v == nil {
-		return nil, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), sql.ErrNotFound)
+	if rows == 0 {
+		return types.EmptyATXID, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), sql.ErrNotFound)
 	}
-	return v, nil
+	return id, nil
 }
 
 // Has checks if an ATX exists by a given ATX ID.
@@ -742,21 +731,11 @@ func IterateAtxsOps(
 	operations builder.Operations,
 	fn func(*types.ActivationTx) bool,
 ) error {
-	var derr error
 	_, err := db.Exec(
 		fullQuery+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
-		decoder(func(atx *types.ActivationTx, err error) bool {
-			if atx != nil {
-				return fn(atx)
-			}
-			derr = err
-			return derr == nil
-		}))
-	if err != nil {
-		return err
-	}
-	return derr
+		decoder(fn))
+	return err
 }
 
 func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint32, err error) {
@@ -795,4 +774,44 @@ func IterateForGrading(
 		return fmt.Errorf("iterate for grading: %w", err)
 	}
 	return nil
+}
+
+func IterateAtxsWithMalfeasance(
+	db sql.Executor,
+	publish types.EpochID,
+	fn func(atx *types.ActivationTx, malicious bool) bool,
+) error {
+	query := fieldsQuery + `, iif(i.proof is null, 0, 1) as malicious
+	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
+
+	_, err := db.Exec(
+		query,
+		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
+		func(s *sql.Statement) bool {
+			return decoder(func(atx *types.ActivationTx) bool {
+				return fn(atx, s.ColumnInt(13) != 0)
+			})(s)
+		},
+	)
+	return err
+}
+
+func IterateAtxIdsWithMalfeasance(
+	db sql.Executor,
+	publish types.EpochID,
+	fn func(id types.ATXID, malicious bool) bool,
+) error {
+	query := `select id, iif(i.proof is null, 0, 1) as malicious
+	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
+
+	_, err := db.Exec(
+		query,
+		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
+		func(s *sql.Statement) bool {
+			var id types.ATXID
+			s.ColumnBytes(0, id[:])
+			return fn(id, s.ColumnInt(1) != 0)
+		},
+	)
+	return err
 }

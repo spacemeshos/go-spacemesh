@@ -154,7 +154,6 @@ func (s *ActivationStreamService) Stream(
 func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.ActivationV1 {
 	return &spacemeshv2alpha1.ActivationV1{
 		Id:           atx.ID().Bytes(),
-		Signature:    atx.Signature.Bytes(),
 		PublishEpoch: atx.PublishEpoch.Uint32(),
 		PreviousAtx:  atx.PrevATXID[:],
 		Coinbase:     atx.Coinbase.String(),

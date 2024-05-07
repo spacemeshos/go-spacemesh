@@ -165,3 +165,34 @@ func TestGenerator_Generate(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerator_CheckAPI(t *testing.T) {
+	targetEpoch := types.EpochID(3)
+	db := sql.InMemory()
+	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
+	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, logtest.New(t)))
+	t.Cleanup(cleanup)
+
+	fs := afero.NewMemMapFs()
+	g := NewGenerator(
+		"https://api.blockcypher.com/v1/btc/main",
+		cfg.PublicListener,
+		WithLogger(logtest.New(t)),
+		WithFilesystem(fs),
+		WithHttpClient(http.DefaultClient),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	persisted, err := g.Generate(ctx, targetEpoch, true, false)
+	require.NoError(t, err)
+
+	got, err := afero.ReadFile(fs, persisted)
+	require.NoError(t, err)
+	require.NotEmpty(t, got)
+
+	require.NoError(t, bootstrap.ValidateSchema(got))
+
+	var update bootstrap.Update
+	require.NoError(t, json.Unmarshal(got, &update))
+	require.NotEqual(t, "00000000", update.Data.Epoch.Beacon)
+}

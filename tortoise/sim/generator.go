@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -241,9 +240,8 @@ func (g *Generator) generateAtxs() {
 		} else {
 			ticks = uint64(intInRange(g.rng, g.ticksRange))
 		}
-		if err := activation.SignAndFinalizeAtx(sig, atx); err != nil {
-			panic(err)
-		}
+		atx.SmesherID = sig.NodeID()
+		atx.SetID(types.RandomATXID())
 		atx.SetReceived(time.Now())
 		atx.BaseTickHeight = g.prevHeight[i]
 		atx.TickCount = ticks

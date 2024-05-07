@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -152,9 +151,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
 		atx := types.NewActivationTx(nipost, addr, c.units, nil)
-		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
-			c.logger.With().Fatal("failed to sign atx", log.Err(err))
-		}
+		atx.SmesherID = c.signer.NodeID()
+		atx.SetID(types.RandomATXID())
 		atx.SetReceived(time.Now())
 		atx.BaseTickHeight = 1
 		atx.TickCount = 2
