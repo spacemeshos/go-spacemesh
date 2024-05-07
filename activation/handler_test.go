@@ -828,6 +828,11 @@ func TestHandler_ConfiguringAtxVersions(t *testing.T) {
 		versions := []atxVersion{{publish: 10, AtxVersion: types.AtxV1}, {publish: 9, AtxVersion: types.AtxV2}}
 		require.Error(t, verifyAtxVersions(versions))
 	})
+	t.Run("out of range", func(t *testing.T) {
+		t.Parallel()
+		require.Error(t, verifyAtxVersions([]atxVersion{{AtxVersion: types.AtxVMAX + 1}}))
+		require.Error(t, verifyAtxVersions([]atxVersion{{AtxVersion: 0}}))
+	})
 	t.Run("sorts by publish epoch", func(t *testing.T) {
 		t.Parallel()
 		versions := []atxVersion{{publish: 10, AtxVersion: types.AtxV2}, {publish: 9, AtxVersion: types.AtxV1}}
@@ -837,11 +842,30 @@ func TestHandler_ConfiguringAtxVersions(t *testing.T) {
 		require.Equal(t, types.AtxV2, versions[1].AtxVersion)
 		require.EqualValues(t, 10, versions[1].publish)
 	})
+	t.Run("cannot create handler with invalid versions", func(t *testing.T) {
+		t.Parallel()
+		_, err := NewHandler("", nil, nil, nil, nil, nil, nil, types.RandomATXID(), nil, nil, nil, logtest.New(t),
+			WithAtxVersion(0, types.AtxVMAX+1),
+		)
+		require.ErrorContains(t, err, "invalid ATX versions")
+	})
 }
 
 func TestHandler_DecodeATX(t *testing.T) {
 	t.Parallel()
 
+	t.Run("malformed publish epoch", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, types.RandomATXID())
+		_, err := atxHdlr.decodeATX(nil)
+		require.ErrorIs(t, err, errMalformedData)
+	})
+	t.Run("malformed atx", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, types.RandomATXID())
+		_, err := atxHdlr.decodeATX([]byte("malformed"))
+		require.ErrorIs(t, err, errMalformedData)
+	})
 	t.Run("v1", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr := newTestHandler(t, types.RandomATXID())
