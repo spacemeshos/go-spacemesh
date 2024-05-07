@@ -5,27 +5,9 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 //go:generate scalegen
 
 type ActivationTxV2 struct {
-	InnerActivationTxV2
-
-	Signature types.EdSignature
-}
-
-// The first PoST is always for the ATX owner.
-func (atx *ActivationTxV2) SmesherID() types.NodeID {
-	return atx.NiPosts[0].Posts[0].ID
-}
-
-type InitialAtxPartsV2 struct {
-	CommitmentATX types.Hash32
-	InitialPost   PostV1
-	// needed make hash of the first InnerActivationTxV2 unique
-	// if the InitialPost happens to be the same for different IDs.
-	NodeID types.NodeID
-}
-
-type InnerActivationTxV2 struct {
 	PublishEpoch   uint32
 	PositioningATX types.ATXID
+
 	// Must be present in the initial ATX.
 	// Nil in subsequent ATXs unless smesher wants to change it.
 	// If Nil, the value is inferred from the previous ATX of this smesher.
@@ -37,6 +19,7 @@ type InnerActivationTxV2 struct {
 	Initial      *InitialAtxPartsV2
 	PreviousATXs []types.ATXID `scale:"max=100"`
 	NiPosts      []NiPostsV2   `scale:"max=2"`
+
 	// The VRF nonce must be valid for the collected space of all included IDs.
 	// only present when:
 	// - the nonce changed (included more/heavier IDs)
@@ -52,6 +35,21 @@ type InnerActivationTxV2 struct {
 	// The ID of the ATX containing marriage for the included IDs.
 	// Only required when the ATX includes married IDs.
 	MarriageATX *types.ATXID
+
+	Signature types.EdSignature
+}
+
+// The first PoST is always for the ATX owner.
+func (atx *ActivationTxV2) SmesherID() types.NodeID {
+	return atx.NiPosts[0].Posts[0].ID
+}
+
+type InitialAtxPartsV2 struct {
+	CommitmentATX types.Hash32
+	InitialPost   PostV1
+	// needed make hash of the first InnerActivationTxV2 unique
+	// if the InitialPost happens to be the same for different IDs.
+	NodeID types.NodeID
 }
 
 // MarriageCertificate proves the will of ID to be married with the ID that includes this certificate.

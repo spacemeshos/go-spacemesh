@@ -10,92 +10,6 @@ import (
 
 func (t *ActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.InnerActivationTxV2.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := t.InnerActivationTxV2.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *InitialAtxPartsV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteArray(enc, t.CommitmentATX[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := t.InitialPost.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *InitialAtxPartsV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.CommitmentATX[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := t.InitialPost.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *InnerActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
 		n, err := scale.EncodeCompact32(enc, uint32(t.PublishEpoch))
 		if err != nil {
 			return total, err
@@ -158,10 +72,17 @@ func (t *InnerActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err er
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
-func (t *InnerActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
@@ -232,6 +153,63 @@ func (t *InnerActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err er
 		}
 		total += n
 		t.MarriageATX = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *InitialAtxPartsV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteArray(enc, t.CommitmentATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.InitialPost.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *InitialAtxPartsV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeByteArray(dec, t.CommitmentATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.InitialPost.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	return total, nil
 }
