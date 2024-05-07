@@ -2,7 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## Unreleased
+## Release v1.5.2
 
 ### Improvements
 
