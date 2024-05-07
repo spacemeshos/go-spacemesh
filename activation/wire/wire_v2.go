@@ -25,8 +25,13 @@ type InitialAtxPartsV2 struct {
 
 type InnerActivationTxV2 struct {
 	PublishEpoch   uint32
-	Coinbase       types.Address
 	PositioningATX types.ATXID
+	// Must be present in the initial ATX.
+	// Nil in subsequent ATXs unless smesher wants to change it.
+	// If Nil, the value is inferred from the previous ATX of this smesher.
+	// It's not allowed to pass the same coinbase as already used by the previous ATX
+	// to avoid spamming the network with redundant information.
+	Coinbase *types.Address
 
 	// only present in initial ATX
 	Initial      *InitialAtxPartsV2

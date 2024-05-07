@@ -103,14 +103,14 @@ func (t *InnerActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err er
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.Coinbase[:])
+		n, err := scale.EncodeByteArray(enc, t.PositioningATX[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.PositioningATX[:])
+		n, err := scale.EncodeOption(enc, t.Coinbase)
 		if err != nil {
 			return total, err
 		}
@@ -171,18 +171,19 @@ func (t *InnerActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err er
 		t.PublishEpoch = uint32(field)
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.Coinbase[:])
+		n, err := scale.DecodeByteArray(dec, t.PositioningATX[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.PositioningATX[:])
+		field, n, err := scale.DecodeOption[types.Address](dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.Coinbase = field
 	}
 	{
 		field, n, err := scale.DecodeOption[InitialAtxPartsV2](dec)
