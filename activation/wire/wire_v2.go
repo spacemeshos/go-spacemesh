@@ -7,9 +7,12 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 type ActivationTxV2 struct {
 	InnerActivationTxV2
 
-	SmesherID types.NodeID
-	// Signature over InnerActivationTxV2
 	Signature types.EdSignature
+}
+
+// The first PoST is always for the ATX owner.
+func (atx *ActivationTxV2) SmesherID() types.NodeID {
+	return atx.NiPosts[0].Posts[0].ID
 }
 
 type InitialAtxPartsV2 struct {
