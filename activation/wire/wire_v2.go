@@ -40,6 +40,10 @@ type InnerActivationTxV2 struct {
 	// All new IDs that are married to this ID are added to the equivocation set
 	// that this ID belongs to.
 	Marriages []MarriageCertificate `scale:"max=100"`
+
+	// The ID of the ATX containing marriage for the included IDs.
+	// Only required when the ATX includes married IDs.
+	MarriageATX *types.ATXID
 }
 
 // MarriageCertificate proves the will of ID to be married with the ID that includes this certificate.
@@ -61,7 +65,7 @@ type MerkleProofV2 struct {
 }
 
 type SubPostV2 struct {
-	ID           types.NodeID // Delegating ID that this PoST is for.
+	ID           types.NodeID // The ID that this PoST is for.
 	PrevATXIndex uint32       // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
 	Post         PostV1
 	NumUnits     uint32

@@ -1,10 +1,11 @@
 package wire
 
 import (
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"go.uber.org/zap/zapcore"
 )
 
 //go:generate scalegen

@@ -165,6 +165,13 @@ func (t *InnerActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err er
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeOption(enc, t.MarriageATX)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -230,6 +237,14 @@ func (t *InnerActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err er
 		}
 		total += n
 		t.Marriages = field
+	}
+	{
+		field, n, err := scale.DecodeOption[types.ATXID](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.MarriageATX = field
 	}
 	return total, nil
 }
