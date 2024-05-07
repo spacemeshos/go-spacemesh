@@ -2,7 +2,6 @@ package builder
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -39,8 +38,10 @@ const (
 )
 
 type Op struct {
-	Field field
-	Token token
+	// Prefix will be added before field name
+	Prefix string
+	Field  field
+	Token  token
 	// Value will be type casted to one the expected types.
 	// Operation will panic if it doesn't match any of expected.
 	Value any
@@ -75,7 +76,7 @@ func FilterFrom(operations Operations) string {
 		} else {
 			queryBuilder.WriteString(" and")
 		}
-		queryBuilder.WriteString(" " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1))
+		fmt.Fprintf(&queryBuilder, " %s%s %s ?%d", op.Prefix, op.Field, op.Token, i+1)
 	}
 
 	for _, m := range operations.Modifiers {
