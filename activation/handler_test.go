@@ -197,7 +197,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)
-	atxHdlr, err := NewHandler(
+	atxHdlr := NewHandler(
 		"localID",
 		cdb,
 		atxsdata.New(),
@@ -212,7 +212,6 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 		lg,
 		opts...,
 	)
-	require.NoError(tb, err)
 	return &testHandler{
 		Handler:    atxHdlr,
 		cdb:        cdb,

@@ -749,7 +749,7 @@ func (app *App) initServices(ctx context.Context) error {
 
 	fetcherWrapped := &layerFetcher{}
 
-	atxHandler, err := activation.NewHandler(
+	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
 		app.atxsdata,
@@ -765,9 +765,6 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithTickSize(app.Config.TickSize),
 		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
-	if err != nil {
-		return fmt.Errorf("creating atx handler: %w", err)
-	}
 	for _, sig := range app.signers {
 		atxHandler.Register(sig)
 	}

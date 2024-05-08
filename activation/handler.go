@@ -109,7 +109,7 @@ func NewHandler(
 	tortoise system.Tortoise,
 	lg log.Log,
 	opts ...HandlerOption,
-) (*Handler, error) {
+) *Handler {
 	h := &Handler{
 		local:     local,
 		publisher: pub,
@@ -147,7 +147,7 @@ func NewHandler(
 			return nil
 		})))
 
-	return h, nil
+	return h
 }
 
 func (h *Handler) Register(sig *signing.EdSigner) {
