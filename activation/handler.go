@@ -38,6 +38,32 @@ type atxVersion struct {
 	types.AtxVersion
 }
 
+type AtxVersions map[types.EpochID]types.AtxVersion
+
+func (v AtxVersions) asSlice() []atxVersion {
+	var versions []atxVersion
+	for epoch, version := range v {
+		versions = append(versions, atxVersion{epoch, version})
+	}
+	slices.SortFunc(versions, func(a, b atxVersion) int { return int(int64(a.publish) - int64(b.publish)) })
+	return versions
+}
+
+func (v AtxVersions) Validate() error {
+	versions := v.asSlice()
+	lastVersion := types.AtxV1
+	for _, v := range versions {
+		if v.AtxVersion < types.AtxV1 || v.AtxVersion > types.AtxVMAX {
+			return fmt.Errorf("ATX version: %v not in range [%v:%v]", v, types.AtxV1, types.AtxVMAX)
+		}
+		if v.AtxVersion < lastVersion {
+			return fmt.Errorf("cannot decrease ATX version from %v to %v", lastVersion, v.AtxVersion)
+		}
+		lastVersion = v.AtxVersion
+	}
+	return nil
+}
+
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
 	local     p2p.Peer
@@ -56,9 +82,9 @@ type Handler struct {
 // HandlerOption is a functional option for the handler.
 type HandlerOption func(*Handler)
 
-func WithAtxVersion(publish types.EpochID, version types.AtxVersion) HandlerOption {
+func WithAtxVersions(v AtxVersions) HandlerOption {
 	return func(h *Handler) {
-		h.versions = append(h.versions, atxVersion{publish, version})
+		h.versions = append(h.versions, v.asSlice()...)
 	}
 }
 
@@ -112,9 +138,6 @@ func NewHandler(
 	for _, opt := range opts {
 		opt(h)
 	}
-	if err := verifyAtxVersions(h.versions); err != nil {
-		return nil, fmt.Errorf("invalid ATX versions configured (%v): %w", h.versions, err)
-	}
 
 	h.log.With().Info("atx handler created",
 		log.Array("supported ATX versions", log.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
@@ -125,32 +148,6 @@ func NewHandler(
 		})))
 
 	return h, nil
-}
-
-func verifyAtxVersions(versions []atxVersion) error {
-	if len(versions) == 0 {
-		return errors.New("no ATX versions configured")
-	}
-	slices.SortFunc(versions, func(a, b atxVersion) int {
-		switch {
-		case a.publish < b.publish:
-			return -1
-		case a.publish > b.publish:
-			return 1
-		}
-		return 0
-	})
-	lastVersion := types.AtxV1
-	for _, v := range versions {
-		if v.AtxVersion < types.AtxV1 || v.AtxVersion > types.AtxVMAX {
-			return fmt.Errorf("ATX version: %v not in range [%v:%v]", v, types.AtxV1, types.AtxVMAX)
-		}
-		if v.AtxVersion < lastVersion {
-			return fmt.Errorf("cannot decrease ATX version from %v to %v", lastVersion, v.AtxVersion)
-		}
-		lastVersion = v.AtxVersion
-	}
-	return nil
 }
 
 func (h *Handler) Register(sig *signing.EdSigner) {

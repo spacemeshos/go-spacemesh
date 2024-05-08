@@ -144,7 +144,7 @@ type BaseConfig struct {
 	// Each entry states on which publish epoch given ATX version becomes valid.
 	// Note: There is always one valid version at any given time.
 	// ATX V1 starts with epoch 0 unless configured otherwise.
-	AtxVersions map[types.EpochID]types.AtxVersion `mapstructure:"atx-versions"`
+	AtxVersions activation.AtxVersions `mapstructure:"atx-versions"`
 }
 
 type DatabaseQueryCacheSizes struct {

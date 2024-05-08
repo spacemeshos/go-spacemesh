@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"testing"
+	"testing/quick"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -784,7 +786,7 @@ func TestHandler_DeterminesAtxVersion(t *testing.T) {
 	t.Run("v2", func(t *testing.T) {
 		t.Parallel()
 
-		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersion(10, types.AtxV2))
+		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersions(map[types.EpochID]types.AtxVersion{10: types.AtxV2}))
 
 		version, err := atxHdlr.determineVersion(codec.MustEncode(types.EpochID(2)))
 		require.NoError(t, err)
@@ -801,54 +803,47 @@ func TestHandler_DeterminesAtxVersion(t *testing.T) {
 	t.Run("v2 since epoch 0", func(t *testing.T) {
 		t.Parallel()
 
-		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersion(0, types.AtxV2))
+		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersions(map[types.EpochID]types.AtxVersion{0: types.AtxV2}))
 		version, err := atxHdlr.determineVersion(codec.MustEncode(types.EpochID(0)))
 		require.NoError(t, err)
 		require.Equal(t, types.AtxV2, *version)
 	})
 }
 
-func TestHandler_ConfiguringAtxVersions(t *testing.T) {
+func Test_ValidateAtxVersions(t *testing.T) {
 	t.Parallel()
-	t.Run("no versions", func(t *testing.T) {
-		t.Parallel()
-		require.Error(t, verifyAtxVersions(nil))
-	})
 	t.Run("valid 1", func(t *testing.T) {
 		t.Parallel()
-		require.NoError(t, verifyAtxVersions([]atxVersion{{publish: 0, AtxVersion: types.AtxV1}}))
+		versions := AtxVersions(map[types.EpochID]types.AtxVersion{0: types.AtxV1})
+		require.NoError(t, versions.Validate())
 	})
 	t.Run("valid 2", func(t *testing.T) {
 		t.Parallel()
-		versions := []atxVersion{{publish: 0, AtxVersion: types.AtxV1}, {publish: 1, AtxVersion: types.AtxV2}}
-		require.NoError(t, verifyAtxVersions(versions))
+		versions := AtxVersions(map[types.EpochID]types.AtxVersion{0: types.AtxV1, 1: types.AtxV2})
+		require.NoError(t, versions.Validate())
 	})
 	t.Run("cannot decrease version", func(t *testing.T) {
 		t.Parallel()
-		versions := []atxVersion{{publish: 10, AtxVersion: types.AtxV1}, {publish: 9, AtxVersion: types.AtxV2}}
-		require.Error(t, verifyAtxVersions(versions))
+		versions := AtxVersions(map[types.EpochID]types.AtxVersion{10: types.AtxV1, 9: types.AtxV2})
+		require.Error(t, versions.Validate())
 	})
 	t.Run("out of range", func(t *testing.T) {
 		t.Parallel()
-		require.Error(t, verifyAtxVersions([]atxVersion{{AtxVersion: types.AtxVMAX + 1}}))
-		require.Error(t, verifyAtxVersions([]atxVersion{{AtxVersion: 0}}))
+
+		require.Error(t, AtxVersions(map[types.EpochID]types.AtxVersion{0: types.AtxVMAX + 1}).Validate())
+		require.Error(t, AtxVersions(map[types.EpochID]types.AtxVersion{0: 0}).Validate())
 	})
-	t.Run("sorts by publish epoch", func(t *testing.T) {
-		t.Parallel()
-		versions := []atxVersion{{publish: 10, AtxVersion: types.AtxV2}, {publish: 9, AtxVersion: types.AtxV1}}
-		require.NoError(t, verifyAtxVersions(versions))
-		require.Equal(t, types.AtxV1, versions[0].AtxVersion)
-		require.EqualValues(t, 9, versions[0].publish)
-		require.Equal(t, types.AtxV2, versions[1].AtxVersion)
-		require.EqualValues(t, 10, versions[1].publish)
-	})
-	t.Run("cannot create handler with invalid versions", func(t *testing.T) {
-		t.Parallel()
-		_, err := NewHandler("", nil, nil, nil, nil, nil, nil, types.RandomATXID(), nil, nil, nil, logtest.New(t),
-			WithAtxVersion(0, types.AtxVMAX+1),
-		)
-		require.ErrorContains(t, err, "invalid ATX versions")
-	})
+}
+
+func TestAtxVersions_SortsVersions(t *testing.T) {
+	t.Parallel()
+
+	err := quick.Check(func(v AtxVersions) bool {
+		return sort.SliceIsSorted(v.asSlice(), func(i, j int) bool {
+			return v.asSlice()[i].publish < v.asSlice()[j].publish
+		})
+	}, nil)
+	require.NoError(t, err)
 }
 
 func TestHandler_DecodeATX(t *testing.T) {
@@ -871,15 +866,15 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 
 		atx := newInitialATXv1(t, atxHdlr.goldenATXID)
-		atx.PublishEpoch = 2
-
 		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
 		require.NoError(t, err)
 		require.Equal(t, atx, decoded)
 	})
 	t.Run("v2 not supported", func(t *testing.T) {
+		// TODO: change this test when v2 is supported
 		t.Parallel()
-		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersion(10, types.AtxV2))
+		versions := map[types.EpochID]types.AtxVersion{10: types.AtxV2}
+		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersions(versions))
 
 		_, err := atxHdlr.decodeATX(codec.MustEncode(types.EpochID(20)))
 		require.ErrorContains(t, err, "unsupported ATX version")

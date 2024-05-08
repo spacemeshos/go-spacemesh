@@ -302,6 +302,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
 		mapstructureutil.DeprecatedHook(),
+		mapstructureutil.AtxVersionsDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
@@ -748,13 +749,6 @@ func (app *App) initServices(ctx context.Context) error {
 
 	fetcherWrapped := &layerFetcher{}
 
-	handlerOpts := []activation.HandlerOption{
-		activation.WithTickSize(app.Config.TickSize),
-	}
-	for publish, version := range app.Config.AtxVersions {
-		handlerOpts = append(handlerOpts, activation.WithAtxVersion(publish, version))
-	}
-
 	atxHandler, err := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
@@ -768,7 +762,8 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
-		handlerOpts...,
+		activation.WithTickSize(app.Config.TickSize),
+		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
 	if err != nil {
 		return fmt.Errorf("creating atx handler: %w", err)
