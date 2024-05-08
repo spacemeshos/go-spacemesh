@@ -245,7 +245,6 @@ func validateAndPreserveData(
 		mclock,
 		nil,
 		mfetch,
-		10,
 		goldenAtx,
 		mvalidator,
 		mreceiver,

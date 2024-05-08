@@ -431,7 +431,7 @@ func (h *HandlerV1) storeAtx(
 func (h *HandlerV1) processATX(
 	ctx context.Context,
 	peer p2p.Peer,
-	watx wire.ActivationTxV1,
+	watx *wire.ActivationTxV1,
 	blob []byte,
 	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
@@ -447,17 +447,17 @@ func (h *HandlerV1) processATX(
 	h.log.WithContext(ctx).With().
 		Debug("processing atx", watx.ID(), watx.PublishEpoch, log.Stringer("smesherID", watx.SmesherID))
 
-	if err := h.syntacticallyValidate(ctx, &watx); err != nil {
+	if err := h.syntacticallyValidate(ctx, watx); err != nil {
 		return nil, fmt.Errorf("atx %s syntactically invalid: %w", watx.ID(), err)
 	}
 
-	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, &watx)
+	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, watx)
 	h.registerHashes(peer, poetRef, atxIDs)
 	if err := h.fetchReferences(ctx, poetRef, atxIDs); err != nil {
 		return nil, fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
 	}
 
-	leaves, effectiveNumUnits, proof, err := h.syntacticallyValidateDeps(ctx, &watx)
+	leaves, effectiveNumUnits, proof, err := h.syntacticallyValidateDeps(ctx, watx)
 	if err != nil {
 		return nil, fmt.Errorf("atx %s syntactically invalid based on deps: %w", watx.ID(), err)
 	}
@@ -466,7 +466,7 @@ func (h *HandlerV1) processATX(
 		return proof, err
 	}
 
-	if err := h.contextuallyValidateAtx(&watx); err != nil {
+	if err := h.contextuallyValidateAtx(watx); err != nil {
 		h.log.WithContext(ctx).With().
 			Warning("atx is contextually invalid ", watx.ID(), log.Stringer("smesherID", watx.SmesherID), log.Err(err))
 	} else {
@@ -482,7 +482,7 @@ func (h *HandlerV1) processATX(
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	atx := wire.ActivationTxFromWireV1(&watx, blob...)
+	atx := wire.ActivationTxFromWireV1(watx, blob...)
 	if h.nipostValidator.IsVerifyingFullPost() {
 		atx.SetValidity(types.Valid)
 	}

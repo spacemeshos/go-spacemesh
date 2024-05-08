@@ -302,6 +302,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
 		mapstructureutil.DeprecatedHook(),
+		mapstructureutil.AtxVersionsDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
@@ -747,6 +748,7 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	fetcherWrapped := &layerFetcher{}
+
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
@@ -755,12 +757,13 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.host,
 		fetcherWrapped,
-		app.Config.TickSize,
 		goldenATXID,
 		validator,
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
+		activation.WithTickSize(app.Config.TickSize),
+		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
 	for _, sig := range app.signers {
 		atxHandler.Register(sig)

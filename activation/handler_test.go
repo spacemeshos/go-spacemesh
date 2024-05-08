@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"testing"
+	"testing/quick"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -176,10 +178,6 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	h.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 }
 
-type testHandlerOptions struct {
-	tickSize uint64
-}
-
 func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	ctrl := gomock.NewController(tb)
 	return handlerMocks{
@@ -193,17 +191,11 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	}
 }
 
-func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...func(*testHandlerOptions)) *testHandler {
+func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := logtest.New(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	edVerifier := signing.NewEdVerifier()
 
-	options := testHandlerOptions{
-		tickSize: 1,
-	}
-	for _, opt := range opts {
-		opt(&options)
-	}
 	mocks := newTestHandlerMocks(tb, goldenATXID)
 	atxHdlr := NewHandler(
 		"localID",
@@ -213,12 +205,12 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...func(*testHa
 		mocks.mclock,
 		mocks.mpub,
 		mocks.mockFetch,
-		options.tickSize,
 		goldenATXID,
 		mocks.mValidator,
 		mocks.mbeacon,
 		mocks.mtortoise,
 		lg,
+		opts...,
 	)
 	return &testHandler{
 		Handler:    atxHdlr,
@@ -627,7 +619,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	)
 
 	goldenATXID := types.ATXID{2, 3, 4}
-	atxHdlr := newTestHandler(t, goldenATXID, func(o *testHandlerOptions) { o.tickSize = tickSize })
+	atxHdlr := newTestHandler(t, goldenATXID, WithTickSize(tickSize))
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -766,4 +758,124 @@ func newChainedActivationTxV1(
 			NumUnits: prev.NumUnits,
 		},
 	}
+}
+
+func TestHandler_DeterminesAtxVersion(t *testing.T) {
+	t.Parallel()
+
+	goldenATXID := types.RandomATXID()
+
+	t.Run("v1", func(t *testing.T) {
+		t.Parallel()
+
+		atxHdlr := newTestHandler(t, goldenATXID)
+
+		atx := newInitialATXv1(t, goldenATXID)
+		atx.PublishEpoch = 2
+
+		version, err := atxHdlr.determineVersion(codec.MustEncode(atx))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV1, *version)
+
+		atx.PublishEpoch = 10
+		version, err = atxHdlr.determineVersion(codec.MustEncode(atx))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV1, *version)
+	})
+	t.Run("v2", func(t *testing.T) {
+		t.Parallel()
+
+		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersions(map[types.EpochID]types.AtxVersion{10: types.AtxV2}))
+
+		version, err := atxHdlr.determineVersion(codec.MustEncode(types.EpochID(2)))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV1, *version)
+
+		version, err = atxHdlr.determineVersion(codec.MustEncode(types.EpochID(10)))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV2, *version)
+
+		version, err = atxHdlr.determineVersion(codec.MustEncode(types.EpochID(11)))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV2, *version)
+	})
+	t.Run("v2 since epoch 0", func(t *testing.T) {
+		t.Parallel()
+
+		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersions(map[types.EpochID]types.AtxVersion{0: types.AtxV2}))
+		version, err := atxHdlr.determineVersion(codec.MustEncode(types.EpochID(0)))
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV2, *version)
+	})
+}
+
+func Test_ValidateAtxVersions(t *testing.T) {
+	t.Parallel()
+	t.Run("valid 1", func(t *testing.T) {
+		t.Parallel()
+		versions := AtxVersions(map[types.EpochID]types.AtxVersion{0: types.AtxV1})
+		require.NoError(t, versions.Validate())
+	})
+	t.Run("valid 2", func(t *testing.T) {
+		t.Parallel()
+		versions := AtxVersions(map[types.EpochID]types.AtxVersion{0: types.AtxV1, 1: types.AtxV2})
+		require.NoError(t, versions.Validate())
+	})
+	t.Run("cannot decrease version", func(t *testing.T) {
+		t.Parallel()
+		versions := AtxVersions(map[types.EpochID]types.AtxVersion{10: types.AtxV1, 9: types.AtxV2})
+		require.Error(t, versions.Validate())
+	})
+	t.Run("out of range", func(t *testing.T) {
+		t.Parallel()
+
+		require.Error(t, AtxVersions(map[types.EpochID]types.AtxVersion{0: types.AtxVMAX + 1}).Validate())
+		require.Error(t, AtxVersions(map[types.EpochID]types.AtxVersion{0: 0}).Validate())
+	})
+}
+
+func TestAtxVersions_SortsVersions(t *testing.T) {
+	t.Parallel()
+
+	err := quick.Check(func(v AtxVersions) bool {
+		return sort.SliceIsSorted(v.asSlice(), func(i, j int) bool {
+			return v.asSlice()[i].publish < v.asSlice()[j].publish
+		})
+	}, nil)
+	require.NoError(t, err)
+}
+
+func TestHandler_DecodeATX(t *testing.T) {
+	t.Parallel()
+
+	t.Run("malformed publish epoch", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, types.RandomATXID())
+		_, err := atxHdlr.decodeATX(nil)
+		require.ErrorIs(t, err, errMalformedData)
+	})
+	t.Run("malformed atx", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, types.RandomATXID())
+		_, err := atxHdlr.decodeATX([]byte("malformed"))
+		require.ErrorIs(t, err, errMalformedData)
+	})
+	t.Run("v1", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newTestHandler(t, types.RandomATXID())
+
+		atx := newInitialATXv1(t, atxHdlr.goldenATXID)
+		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		require.NoError(t, err)
+		require.Equal(t, atx, decoded)
+	})
+	t.Run("v2 not supported", func(t *testing.T) {
+		// TODO: change this test when v2 is supported
+		t.Parallel()
+		versions := map[types.EpochID]types.AtxVersion{10: types.AtxV2}
+		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersions(versions))
+
+		_, err := atxHdlr.decodeATX(codec.MustEncode(types.EpochID(20)))
+		require.ErrorContains(t, err, "unsupported ATX version")
+	})
 }
