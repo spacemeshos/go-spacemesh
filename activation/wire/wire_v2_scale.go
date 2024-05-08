@@ -38,7 +38,7 @@ func (t *ActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.PreviousATXs, 100)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PreviousATXs, 256)
 		if err != nil {
 			return total, err
 		}
@@ -59,7 +59,7 @@ func (t *ActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Marriages, 100)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Marriages, 256)
 		if err != nil {
 			return total, err
 		}
@@ -89,7 +89,7 @@ func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) 
 			return total, err
 		}
 		total += n
-		t.PublishEpoch = uint32(field)
+		t.PublishEpoch = types.EpochID(field)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.PositioningATX[:])
@@ -115,7 +115,7 @@ func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		t.Initial = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.ATXID](dec, 100)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.ATXID](dec, 256)
 		if err != nil {
 			return total, err
 		}
@@ -139,7 +139,7 @@ func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		t.VRFNonce = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[MarriageCertificate](dec, 100)
+		field, n, err := scale.DecodeStructSliceWithLimit[MarriageCertificate](dec, 256)
 		if err != nil {
 			return total, err
 		}
@@ -259,7 +259,7 @@ func (t *MerkleProofV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeUint64SliceWithLimit(enc, t.LeafIndices, 100)
+		n, err := scale.EncodeUint64SliceWithLimit(enc, t.LeafIndices, 256)
 		if err != nil {
 			return total, err
 		}
@@ -278,7 +278,7 @@ func (t *MerkleProofV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Nodes = field
 	}
 	{
-		field, n, err := scale.DecodeUint64SliceWithLimit(dec, 100)
+		field, n, err := scale.DecodeUint64SliceWithLimit(dec, 256)
 		if err != nil {
 			return total, err
 		}
@@ -370,7 +370,7 @@ func (t *NiPostsV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Posts, 100)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Posts, 256)
 		if err != nil {
 			return total, err
 		}
@@ -395,7 +395,7 @@ func (t *NiPostsV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[SubPostV2](dec, 100)
+		field, n, err := scale.DecodeStructSliceWithLimit[SubPostV2](dec, 256)
 		if err != nil {
 			return total, err
 		}

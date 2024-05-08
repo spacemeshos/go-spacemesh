@@ -5,7 +5,7 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 //go:generate scalegen
 
 type ActivationTxV2 struct {
-	PublishEpoch   uint32
+	PublishEpoch   types.EpochID
 	PositioningATX types.ATXID
 
 	// Must be present in the initial ATX.
@@ -17,7 +17,7 @@ type ActivationTxV2 struct {
 
 	// only present in initial ATX
 	Initial      *InitialAtxPartsV2
-	PreviousATXs []types.ATXID `scale:"max=100"`
+	PreviousATXs []types.ATXID `scale:"max=256"`
 	NiPosts      []NiPostsV2   `scale:"max=2"`
 
 	// The VRF nonce must be valid for the collected space of all included IDs.
@@ -30,7 +30,7 @@ type ActivationTxV2 struct {
 	// A marriage is permanent and cannot be revoked or repeated.
 	// All new IDs that are married to this ID are added to the equivocation set
 	// that this ID belongs to.
-	Marriages []MarriageCertificate `scale:"max=100"`
+	Marriages []MarriageCertificate `scale:"max=256"`
 
 	// The ID of the ATX containing marriage for the included IDs.
 	// Only required when the ATX includes married IDs.
@@ -67,7 +67,7 @@ type MarriageCertificate struct {
 type MerkleProofV2 struct {
 	// Nodes on path from leaf to root (not including leaf)
 	Nodes       []types.Hash32 `scale:"max=32"`
-	LeafIndices []uint64       `scale:"max=100"` // support merging up to 100 IDs
+	LeafIndices []uint64       `scale:"max=256"` // support merging up to 256 IDs
 }
 
 type SubPostV2 struct {
@@ -83,5 +83,5 @@ type NiPostsV2 struct {
 	Membership MerkleProofV2
 	// The root of the PoET proof, that serves as the challenge for PoSTs.
 	Challenge types.Hash32
-	Posts     []SubPostV2 `scale:"max=100"` // support merging up to 100 IDs
+	Posts     []SubPostV2 `scale:"max=256"` // support merging up to 256 IDs
 }
