@@ -373,34 +373,39 @@ type atxDeps struct {
 
 func (v *Validator) getAtxDeps(ctx context.Context, db sql.Executor, id types.ATXID) (*atxDeps, error) {
 	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, v.db, id.Bytes(), &blob); err != nil {
+	version, err := atxs.LoadBlob(ctx, v.db, id.Bytes(), &blob)
+	if err != nil {
 		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
 	}
 
-	// TODO: decide about version based on `version` column
-	var atx wire.ActivationTxV1
-	if err := codec.Decode(blob.Bytes, &atx); err != nil {
-		return nil, fmt.Errorf("decoding ATX blob: %w", err)
-	}
-	var commitment types.ATXID
-	if atx.CommitmentATXID != nil {
-		commitment = *atx.CommitmentATXID
-	} else {
-		catx, err := atxs.CommitmentATX(v.db, atx.SmesherID)
-		if err != nil {
-			return nil, fmt.Errorf("getting commitment ATX: %w", err)
+	// TODO: implement ATX V2
+	switch version {
+	case types.AtxV1:
+		var commitment types.ATXID
+		var atx wire.ActivationTxV1
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return nil, fmt.Errorf("decoding ATX blob: %w", err)
 		}
-		commitment = catx
+		if atx.CommitmentATXID != nil {
+			commitment = *atx.CommitmentATXID
+		} else {
+			catx, err := atxs.CommitmentATX(v.db, atx.SmesherID)
+			if err != nil {
+				return nil, fmt.Errorf("getting commitment ATX: %w", err)
+			}
+			commitment = catx
+		}
+
+		deps := &atxDeps{
+			nipost:      *wire.NiPostFromWireV1(atx.NIPost),
+			positioning: atx.PositioningATXID,
+			previous:    atx.PrevATXID,
+			commitment:  commitment,
+		}
+		return deps, nil
 	}
 
-	deps := &atxDeps{
-		nipost:      *wire.NiPostFromWireV1(atx.NIPost),
-		positioning: atx.PositioningATXID,
-		previous:    atx.PrevATXID,
-		commitment:  commitment,
-	}
-
-	return deps, nil
+	return nil, fmt.Errorf("unsupported ATX version: %v", version)
 }
 
 func (v *Validator) verifyChainWithOpts(

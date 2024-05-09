@@ -488,7 +488,7 @@ func collect(
 		return err
 	}
 	var blob sql.Blob
-	err = atxs.LoadBlob(context.Background(), db, ref.Bytes(), &blob)
+	_, err = atxs.LoadBlob(context.Background(), db, ref.Bytes(), &blob)
 	if err != nil {
 		return fmt.Errorf("load atx blob %v: %w", ref, err)
 	}
