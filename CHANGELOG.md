@@ -36,6 +36,9 @@ through v1.5.x first ([#5907](https://github.com/spacemeshos/go-spacemesh/pull/5
 
 * [#5911](https://github.com/spacemeshos/go-spacemesh/pull/5911) Avoid pulling poet proof multiple times in 1:N setups
 
+* [#5923](https://github.com/spacemeshos/go-spacemesh/pull/5923) Fix high memory consumption and performance issues
+  in the proposal handler
+
 ## (v1.5.0)
 
 ### Upgrade information
