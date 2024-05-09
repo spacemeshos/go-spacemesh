@@ -46,7 +46,7 @@ func (atx *ActivationTxV2) SmesherID() types.NodeID {
 
 type InitialAtxPartsV2 struct {
 	CommitmentATX types.ATXID
-	InitialPost   PostV1
+	Post          PostV1
 	// needed make hash of the first InnerActivationTxV2 unique
 	// if the InitialPost happens to be the same for different IDs.
 	NodeID types.NodeID

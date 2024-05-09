@@ -173,7 +173,7 @@ func (t *InitialAtxPartsV2) EncodeScale(enc *scale.Encoder) (total int, err erro
 		total += n
 	}
 	{
-		n, err := t.InitialPost.EncodeScale(enc)
+		n, err := t.Post.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -198,7 +198,7 @@ func (t *InitialAtxPartsV2) DecodeScale(dec *scale.Decoder) (total int, err erro
 		total += n
 	}
 	{
-		n, err := t.InitialPost.DecodeScale(dec)
+		n, err := t.Post.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
