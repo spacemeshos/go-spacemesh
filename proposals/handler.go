@@ -557,11 +557,11 @@ func (h *Handler) getActiveSetWeight(ctx context.Context, id types.Hash32) (uint
 			}
 			return totalWeight, nil
 		}
-	} else {
-		// mark calculation as running
-		h.pendingWeightCalc[id] = nil
-		h.weightCalcLock.Unlock()
 	}
+
+	// mark calculation as running
+	h.pendingWeightCalc[id] = nil
+	h.weightCalcLock.Unlock()
 
 	success := false
 	defer func() {
