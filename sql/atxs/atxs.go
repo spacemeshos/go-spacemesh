@@ -361,10 +361,7 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (t
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id)
 		}, func(stmt *sql.Statement) bool {
-			n := stmt.ColumnLen(0)
-			blob.Bytes = slices.Grow(blob.Bytes[0:], n)[:n]
-			stmt.ColumnReader(0).Read(blob.Bytes)
-
+			blob.FromColumn(stmt, 0)
 			version = types.AtxVersion(stmt.ColumnInt(1))
 			return true
 		},

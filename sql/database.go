@@ -512,7 +512,7 @@ func (b *Blob) resize(n int) {
 	b.Bytes = b.Bytes[:n]
 }
 
-func (b *Blob) fromColumn(stmt *Statement, col int) {
+func (b *Blob) FromColumn(stmt *Statement, col int) {
 	if l := stmt.ColumnLen(col); l != 0 {
 		b.resize(l)
 		stmt.ColumnBytes(col, b.Bytes)
@@ -565,7 +565,7 @@ func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
 		func(stmt *Statement) {
 			stmt.BindBytes(1, id)
 		}, func(stmt *Statement) bool {
-			blob.fromColumn(stmt, 0)
+			blob.FromColumn(stmt, 0)
 			return true
 		}); err != nil {
 		return fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
