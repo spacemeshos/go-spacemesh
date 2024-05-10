@@ -1297,7 +1297,11 @@ func (app *App) listenToUpdates(ctx context.Context) {
 						Epoch: epoch,
 						Set:   set,
 					}
-					activesets.Add(app.db, id, activeSet)
+					err := activesets.Add(app.db, id, activeSet)
+					if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+						app.errCh <- fmt.Errorf("error storing ActiveSet: %w", err)
+						return nil
+					}
 
 					app.hOracle.UpdateActiveSet(epoch, set)
 					app.proposalBuilder.UpdateActiveSet(epoch, set)
