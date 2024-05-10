@@ -540,13 +540,8 @@ func (h *Handler) getActiveSetWeight(ctx context.Context, id types.Hash32) (uint
 		// we don't have to wait on it in case the context is canceled
 		ch = make(chan uint64, 1)
 		h.pendingWeightCalc[id] = append(chs, ch)
-	} else {
-		// mark calculation as running
-		h.pendingWeightCalc[id] = nil
-	}
-	h.weightCalcLock.Unlock()
+		h.weightCalcLock.Unlock()
 
-	if exists {
 		// need to wait for the calculation which is already running to finish
 		select {
 		case <-ctx.Done():
@@ -562,6 +557,10 @@ func (h *Handler) getActiveSetWeight(ctx context.Context, id types.Hash32) (uint
 			}
 			return totalWeight, nil
 		}
+	} else {
+		// mark calculation as running
+		h.pendingWeightCalc[id] = nil
+		h.weightCalcLock.Unlock()
 	}
 
 	success := false
