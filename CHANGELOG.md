@@ -12,6 +12,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5930](https://github.com/spacemeshos/go-spacemesh/pull/5930) Check if identity for a given malfeasance proof
   exists when validating it.
 
+* [#5923](https://github.com/spacemeshos/go-spacemesh/pull/5923) Fix high memory consumption and performance issues
+  in the proposal handler
+
 ## Release v1.5.2-hotfix1
 
 This release includes our first CVE fix. A vulnerability was found in the way a node handles incoming ATXs. We urge all
