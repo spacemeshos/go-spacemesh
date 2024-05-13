@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -405,4 +406,17 @@ func TestBlobStore_GetActiveSet(t *testing.T) {
 	got, err := getBytes(ctx, bs, datastore.ActiveSet, hash)
 	require.NoError(t, err)
 	require.Equal(t, codec.MustEncode(as), got)
+}
+
+func Test_MarkingMalicious(t *testing.T) {
+	db := sql.InMemory()
+	store := atxsdata.New()
+	id := types.RandomNodeID()
+	cdb := datastore.NewCachedDB(db, logtest.New(t), datastore.WithConsensusCache(store))
+
+	cdb.CacheMalfeasanceProof(id, &mwire.MalfeasanceProof{})
+	m, err := cdb.IsMalicious(id)
+	require.NoError(t, err)
+	require.True(t, m)
+	require.True(t, store.IsMalicious(id))
 }
