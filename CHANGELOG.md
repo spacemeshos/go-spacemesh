@@ -15,6 +15,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5863](https://github.com/spacemeshos/go-spacemesh/pull/5863) Identity files are now created with 0600 permissions,
   to prevent other users on the same system to access the private keys.
 
+* [#5866](https://github.com/spacemeshos/go-spacemesh/pull/5866) Reduce logging levels of some messages to reduce noise.
+
 ## Release v1.5.3
 
 ### Improvements
