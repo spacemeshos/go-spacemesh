@@ -450,6 +450,11 @@ func validateInvalidPrevATX(
 		return types.EmptyNodeID, errors.New("atx2: invalid signature")
 	}
 
+	if atx1.SmesherID != atx2.SmesherID {
+		numInvalidProofsPrevATX.Inc()
+		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: smesher IDs are different")
+	}
+
 	if atx1.ID() == atx2.ID() {
 		numInvalidProofsPrevATX.Inc()
 		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: ATX IDs are the same")

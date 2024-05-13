@@ -38,6 +38,8 @@ func createIdentity(tb testing.TB, db *sql.Database, sig *signing.EdSigner) {
 		PublishEpoch: types.EpochID(1),
 	}
 	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
+	atx.NodeID = new(types.NodeID)
+	*atx.NodeID = sig.NodeID()
 	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
 	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
@@ -1529,8 +1531,12 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
 		require.False(t, malicious)
 	})
 
-	t.Run("invalid malfeasance proof (ATX signature invalid)", func(t *testing.T) {
+	t.Run("invalid malfeasance proof (ATXs by different identities)", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
+
+		sig2, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		createIdentity(t, h.db, sig2)
 
 		prevATX := *types.NewActivationTx(
 			types.NIPostChallenge{
@@ -1559,15 +1565,14 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
 		atx2 := *types.NewActivationTx(
 			types.NIPostChallenge{
 				PublishEpoch: types.EpochID(3),
-				PrevATXID:    atx1.ID(),
+				PrevATXID:    prevATX.ID(),
 			},
 			types.Address{},
 			nil,
 			1,
 			nil,
 		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &atx2))
-		atx2.PrevATXID = prevATX.ID() // invalidate signature by changing content
+		require.NoError(t, activation.SignAndFinalizeAtx(sig2, &atx2))
 
 		proof := wire.MalfeasanceProof{
 			Layer: types.LayerID(11),
@@ -1580,13 +1585,64 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
 			},
 		}
 
+		err = h.HandleSyncedMalfeasanceProof(
+			context.Background(),
+			types.Hash32(h.sig.NodeID()),
+			"peer",
+			codec.MustEncode(&proof),
+		)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		malicious, err := identities.IsMalicious(h.db, h.sig.NodeID())
+		require.NoError(t, err)
+		require.False(t, malicious)
+	})
+
+	t.Run("invalid malfeasance proof (same ATX)", func(t *testing.T) {
+		h := newTestMalfeasanceHandler(t)
+
+		prevATX := *types.NewActivationTx(
+			types.NIPostChallenge{
+				PublishEpoch:  types.EpochID(1),
+				CommitmentATX: &types.ATXID{1, 2, 3},
+			},
+			types.Address{},
+			nil,
+			1,
+			nil,
+		)
+		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &prevATX))
+
+		atx := *types.NewActivationTx(
+			types.NIPostChallenge{
+				PublishEpoch: types.EpochID(2),
+				PrevATXID:    prevATX.ID(),
+			},
+			types.Address{},
+			nil,
+			1,
+			nil,
+		)
+		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &atx))
+
+		proof := wire.MalfeasanceProof{
+			Layer: types.LayerID(11),
+			Proof: wire.Proof{
+				Type: wire.InvalidPrevATX,
+				Data: &wire.InvalidPrevATXProof{
+					Atx1: *awire.ActivationTxToWireV1(&atx),
+					Atx2: *awire.ActivationTxToWireV1(&atx),
+				},
+			},
+		}
+
 		err := h.HandleSyncedMalfeasanceProof(
 			context.Background(),
 			types.Hash32(h.sig.NodeID()),
 			"peer",
 			codec.MustEncode(&proof),
 		)
-		require.ErrorContains(t, err, "invalid signature")
+		require.ErrorContains(t, err, "ATX IDs are the same")
 
 		malicious, err := identities.IsMalicious(h.db, h.sig.NodeID())
 		require.NoError(t, err)
