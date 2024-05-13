@@ -2,6 +2,7 @@ package v2alpha1
 
 import (
 	"context"
+	"errors"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -9,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,6 +20,10 @@ const (
 	Transaction       = "transaction_v2alpha1"
 	TransactionStream = "transaction_stream_v2alpha1"
 )
+
+type transactionConState interface {
+	Validation(raw types.RawTx) system.ValidationRequest
+}
 
 func NewTransactionStreamService(db sql.Executor) *TransactionStreamService {
 	return &TransactionStreamService{db: db}
@@ -46,12 +52,16 @@ func (s *TransactionStreamService) String() string {
 	return "TransactionStreamService"
 }
 
-func NewTransactionService(db sql.Executor) *TransactionService {
-	return &TransactionService{db: db}
+func NewTransactionService(db sql.Executor, conState transactionConState) *TransactionService {
+	return &TransactionService{
+		db:       db,
+		conState: conState,
+	}
 }
 
 type TransactionService struct {
-	db sql.Executor
+	db       sql.Executor
+	conState transactionConState
 }
 
 func (s *TransactionService) RegisterService(server *grpc.Server) {
@@ -98,7 +108,45 @@ func (s *TransactionService) ParseTransaction(
 	ctx context.Context,
 	request *spacemeshv2alpha1.ParseTransactionRequest,
 ) (*spacemeshv2alpha1.ParseTransactionResponse, error) {
-	return &spacemeshv2alpha1.ParseTransactionResponse{}, nil
+	if len(request.Transaction) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "transaction is empty")
+	}
+	raw := types.NewRawTx(request.Transaction)
+	req := s.conState.Validation(raw)
+	header, err := req.Parse()
+	if errors.Is(err, core.ErrNotSpawned) {
+		return nil, status.Error(codes.NotFound, "account is not spawned")
+	} else if errors.Is(err, core.ErrMalformed) {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	} else if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if request.Verify && !req.Verify() {
+		return nil, status.Error(codes.InvalidArgument, "signature is invalid")
+	}
+
+	t := &spacemeshv2alpha1.TransactionV1{
+		Raw: raw.Raw,
+	}
+
+	if header != nil {
+		t.Principal = header.Principal.String()
+		t.Template = header.TemplateAddress.String()
+		t.Method = uint32(header.Method)
+		t.Nonce = &spacemeshv2alpha1.Nonce{Counter: header.Nonce}
+		t.MaxGas = header.MaxGas
+		t.GasPrice = header.GasPrice
+		t.MaxSpend = header.MaxSpend
+		t.Contents = &spacemeshv2alpha1.TransactionContents{}
+	}
+
+	return &spacemeshv2alpha1.ParseTransactionResponse{
+		Tx: &spacemeshv2alpha1.Transaction{
+			Versioned: &spacemeshv2alpha1.Transaction_V1{
+				V1: t,
+			},
+		},
+	}, nil
 }
 
 func (s *TransactionService) SubmitTransaction(
