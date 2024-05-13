@@ -80,7 +80,7 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddString("type", "invalid prev atx")
 		p, ok := mp.Proof.Data.(*InvalidPrevATXProof)
 		if ok {
-			encoder.AddString("atx1_id", p.Atx2.ID().String())
+			encoder.AddString("atx1_id", p.Atx1.ID().String())
 			encoder.AddString("atx2_id", p.Atx2.ID().String())
 			encoder.AddString("smesher", p.Atx1.SmesherID.String())
 			encoder.AddString("prev_atx", p.Atx1.PrevATXID.String())
