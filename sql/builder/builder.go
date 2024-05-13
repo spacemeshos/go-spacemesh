@@ -27,6 +27,7 @@ const (
 	Coinbase field = "coinbase"
 	Id       field = "id"
 	Layer    field = "layer"
+	Address  field = "address"
 )
 
 type modifier string

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -409,4 +410,36 @@ func TransactionInBlock(
 		return bid, rst, fmt.Errorf("%w no block after %s with tx %s", sql.ErrNotFound, after, id)
 	}
 	return bid, rst, nil
+}
+
+func IterateTransactionsOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(tx *types.MeshTransaction, result *types.TransactionResult) bool,
+) error {
+	var derr error
+	_, err := db.Exec(`select distinct tx, header, layer, block, timestamp, id, result 
+		from transactions
+		left join transactions_results_addresses on id=tid
+		where result is not null`+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			var txId types.TransactionID
+			stmt.ColumnBytes(5, txId[:])
+			tx, derr := decodeTransaction(txId, stmt)
+			if derr != nil {
+				return false
+			}
+			var txResult types.TransactionResult
+			_, derr = codec.DecodeFrom(stmt.ColumnReader(6), &txResult)
+			if derr != nil {
+				return false
+			}
+
+			return fn(tx, &txResult)
+		})
+	if err == nil {
+		return err
+	}
+	return derr
 }
