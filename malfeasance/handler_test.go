@@ -12,6 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	awire "github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -51,8 +52,9 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	trt := malfeasance.NewMocktortoise(ctrl)
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
+	store := atxsdata.New()
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg, datastore.WithConsensusCache(store)),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -103,6 +105,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, malProof)
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	createIdentity(t, db, sig)
@@ -130,6 +133,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, malProof)
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("different epoch", func(t *testing.T) {
@@ -153,6 +157,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, malProof)
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("different signer", func(t *testing.T) {
@@ -177,6 +182,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, malProof)
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("invalid hare eligibility", func(t *testing.T) {
@@ -198,6 +204,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("valid", func(t *testing.T) {
@@ -225,6 +232,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		require.NotNil(t, malProof.Received())
 		malProof.SetReceived(time.Time{})
 		require.Equal(t, gossip.MalfeasanceProof, *malProof)
+		require.True(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("proof equivalence", func(t *testing.T) {

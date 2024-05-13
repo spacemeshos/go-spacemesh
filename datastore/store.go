@@ -44,7 +44,8 @@ type CachedDB struct {
 	sql.QueryCache
 	logger log.Log
 
-	// cache is optional
+	// cache is optional in tests. It MUST be set for the 'App'
+	// for properly checking malfeasance.
 	atxsdata *atxsdata.Data
 
 	atxCache      *lru.Cache[types.ATXID, *types.ActivationTx]
@@ -71,7 +72,8 @@ func DefaultConfig() Config {
 }
 
 type cacheOpts struct {
-	cfg Config
+	cfg      Config
+	atxsdata *atxsdata.Data
 }
 
 type Opt func(*cacheOpts)
@@ -79,6 +81,12 @@ type Opt func(*cacheOpts)
 func WithConfig(cfg Config) Opt {
 	return func(o *cacheOpts) {
 		o.cfg = cfg
+	}
+}
+
+func WithConsensusCache(c *atxsdata.Data) Opt {
+	return func(o *cacheOpts) {
+		o.atxsdata = c
 	}
 }
 
@@ -109,6 +117,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 		Executor:         db,
 		QueryCache:       db.QueryCache(),
 		logger:           lg,
+		atxsdata:         o.atxsdata,
 		atxCache:         atxHdrCache,
 		malfeasanceCache: malfeasanceCache,
 		vrfNonceCache:    vrfNonceCache,

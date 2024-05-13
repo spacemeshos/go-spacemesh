@@ -39,6 +39,8 @@ through v1.5.x first ([#5907](https://github.com/spacemeshos/go-spacemesh/pull/5
 * [#5923](https://github.com/spacemeshos/go-spacemesh/pull/5923) Fix high memory consumption and performance issues
   in the proposal handler
 
+* [#5932](https://github.com/spacemeshos/go-spacemesh/pull/5932) Fix caching malfeasance when processing new proofs
+
 ## (v1.5.0)
 
 ### Upgrade information
