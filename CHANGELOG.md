@@ -13,7 +13,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   exists when validating it.
 
 * [#5923](https://github.com/spacemeshos/go-spacemesh/pull/5923) Fix high memory consumption and performance issues
-  in the proposal handler
+  in the proposal handler.
 
 ## Release v1.5.2-hotfix1
 
