@@ -1406,17 +1406,18 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 		CommitmentATX:  &goldenATXID,
 		InitialPost:    &types.Post{},
 	}
-	initialNiPost := newNIPostWithPoet(t, []byte{0x76, 0x45})
+	initialNipost := newNIPostWithPoet(t, []byte{0x76, 0x45})
 
-	initialAtx := newAtx(initialCh, initialNiPost.NIPost, 100, types.GenerateAddress([]byte("aaaa")))
+	initialAtx := newAtx(initialCh, initialNipost.NIPost, 100, types.GenerateAddress([]byte("aaaa")))
 	initialAtx.NodeID = &nodeID
 	vrfNonce := types.VRFPostIndex(0)
 	initialAtx.VRFNonce = &vrfNonce
 	initialAtx.SetEffectiveNumUnits(100)
 	initialAtx.SetReceived(time.Now())
 	require.NoError(t, SignAndFinalizeAtx(sig, initialAtx))
-	_, err = initialAtx.Verify(0, 100)
+	vAtx, err := initialAtx.Verify(0, 100)
 	require.NoError(t, err)
+	require.NoError(t, atxs.Add(atxHdlr.cdb, vAtx))
 
 	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, nodeID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -1439,13 +1440,11 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 
 	var got mwire.MalfeasanceGossip
 	atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-	atxHdlr.mValidator.EXPECT().
-		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
 	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(&atx.NIPostChallenge, gomock.Any(), goldenATXID)
-	atxHdlr.mValidator.EXPECT().PositioningAtx(goldenATXID, gomock.Any(), goldenATXID, atx.PublishEpoch)
+	atxHdlr.mValidator.EXPECT().NIPostChallenge(&atx.NIPostChallenge, gomock.Any(), sig.NodeID())
+	atxHdlr.mValidator.EXPECT().PositioningAtx(initialAtx.ID(), gomock.Any(), goldenATXID, atx.PublishEpoch)
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), gomock.Any(), goldenATXID, atx.NIPost, gomock.Any(), atx.NumUnits, gomock.Any()).
 		Return(0, &verifying.ErrInvalidIndex{Index: 2})
