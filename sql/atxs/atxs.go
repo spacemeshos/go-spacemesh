@@ -372,7 +372,7 @@ func Add(db sql.Executor, atx *types.VerifiedActivationTx) error {
 
 // AddGettingNonce adds an ATX for a given ATX ID and returns the nonce for the newly added ATX.
 func AddGettingNonce(db sql.Executor, atx *types.VerifiedActivationTx) (*types.VRFPostIndex, error) {
-	if atx.ActivationTx.VRFNonce == nil && atx.PrevATXID != types.EmptyATXID {
+	if atx.VRFNonce == nil && atx.PrevATXID != types.EmptyATXID {
 		nonce, err := NonceByID(db, atx.PrevATXID)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return nil, fmt.Errorf("error getting nonce: %w", err)

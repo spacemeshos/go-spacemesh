@@ -483,32 +483,45 @@ func (h *Handler) checkWrongPrevAtx(
 		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
 	}
 
-	// check if atx.PrevATXID is actually the last published ATX by the same node
-	prev, err := atxs.Get(tx, prevID)
-	if err != nil {
-		return nil, fmt.Errorf("get prev atx: %w", err)
-	}
-
-	// if atx references a previous ATX that is not the last ATX by the same node, there must be at least one
-	// atx published between prevATX and the current epoch
 	var atx2 *types.VerifiedActivationTx
-	pubEpoch := h.clock.CurrentLayer().GetEpoch()
-	for pubEpoch > prev.PublishEpoch {
-		id, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, pubEpoch)
+	if atx.PrevATXID == types.EmptyATXID {
+		// if the ATX references an empty previous ATX, we can just take the initial ATX and create a proof
+		// that the node referenced the wrong previous ATX
+		id, err := atxs.GetFirstIDByNodeID(tx, atx.SmesherID)
 		if err != nil {
-			return nil, fmt.Errorf("get prev atx id by node id: %w", err)
+			return nil, fmt.Errorf("get initial atx: %w", err)
 		}
 
 		atx2, err = atxs.Get(tx, id)
 		if err != nil {
+			return nil, fmt.Errorf("get initial atx: %w", err)
+		}
+	} else {
+		prev, err := atxs.Get(tx, atx.PrevATXID)
+		if err != nil {
 			return nil, fmt.Errorf("get prev atx: %w", err)
 		}
 
-		if atx.ID() != atx2.ID() && atx.PrevATXID == atx2.PrevATXID {
-			// found an ATX that points to the same previous ATX
-			break
+		// if atx references a previous ATX that is not the last ATX by the same node, there must be at least one
+		// atx published between prevATX and the current epoch
+		pubEpoch := h.clock.CurrentLayer().GetEpoch()
+		for pubEpoch > prev.PublishEpoch {
+			id, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, pubEpoch)
+			if err != nil {
+				return nil, fmt.Errorf("get prev atx id by node id: %w", err)
+			}
+
+			atx2, err = atxs.Get(tx, id)
+			if err != nil {
+				return nil, fmt.Errorf("get prev atx: %w", err)
+			}
+
+			if atx.ID() != atx2.ID() && atx.PrevATXID == atx2.PrevATXID {
+				// found an ATX that points to the same previous ATX
+				break
+			}
+			pubEpoch = atx2.PublishEpoch
 		}
-		pubEpoch = atx2.PublishEpoch
 	}
 
 	if atx2 == nil || atx2.PrevATXID != atx.PrevATXID {
@@ -533,7 +546,7 @@ func (h *Handler) checkWrongPrevAtx(
 		return nil, fmt.Errorf("add malfeasance proof: %w", err)
 	}
 
-	h.log.WithContext(ctx).With().Warning("smesher referenced the wrong previous in published ATX",
+	h.log.WithContext(ctx).With().Warning("smesher referenced the wrong previous ATX in published ATX",
 		log.Stringer("smesher", atx.SmesherID),
 		log.ShortStringer("expected", prevID),
 		log.ShortStringer("actual", atx.PrevATXID),
@@ -580,7 +593,15 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		return nil, fmt.Errorf("store atx: %w", err)
 	}
 	if nonce == nil {
-		return nil, errors.New("no nonce")
+		if proof == nil {
+			return nil, errors.New("no nonce")
+		}
+		// special handling for a fake initial ATX (not first, but referencing empty as previous) not containing a nonce
+		vrf, err := atxs.VRFNonce(h.cdb, atx.SmesherID, atx.PublishEpoch)
+		if err != nil {
+			return nil, fmt.Errorf("get vrf nonce: %w", err)
+		}
+		nonce = &vrf
 	}
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
@@ -713,7 +734,7 @@ func (h *Handler) processATX(
 	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, &atx)
 	h.registerHashes(peer, poetRef, atxIDs)
 	if err := h.fetchReferences(ctx, poetRef, atxIDs); err != nil {
-		return nil, fmt.Errorf("fetching references for atx %x: %w", atx.ID(), err)
+		return nil, fmt.Errorf("fetching references for atx %v: %w", atx.ID(), err)
 	}
 
 	vAtx, proof, err := h.SyntacticallyValidateDeps(ctx, &atx)
@@ -768,7 +789,7 @@ func (h *Handler) fetchReferences(ctx context.Context, poetRef types.Hash32, atx
 	}
 
 	if err := h.fetcher.GetAtxs(ctx, atxIDs, system.WithoutLimiting()); err != nil {
-		return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
+		return fmt.Errorf("missing atxs %v: %w", atxIDs, err)
 	}
 
 	h.log.WithContext(ctx).With().Debug("done fetching references", log.Int("fetched", len(atxIDs)))
