@@ -273,7 +273,10 @@ type (
 )
 
 var loadBlobDispatch = map[Hint]loadBlobFunc{
-	ATXDB:       atxs.LoadBlob,
+	ATXDB: func(ctx context.Context, db sql.Executor, key []byte, blob *sql.Blob) error {
+		_, err := atxs.LoadBlob(ctx, db, key, blob)
+		return err
+	},
 	BallotDB:    ballots.LoadBlob,
 	BlockDB:     blocks.LoadBlob,
 	TXDB:        transactions.LoadBlob,

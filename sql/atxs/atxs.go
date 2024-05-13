@@ -324,37 +324,57 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
-func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) error {
+//
+// SAFETY: The contents of the returned blob MUST NOT be modified.
+// They might point to the inner sql cache and modifying them would
+// corrupt the cache.
+func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (types.AtxVersion, error) {
 	if sql.IsCached(db) {
-		b, err := getBlob(ctx, db, id)
-		if err != nil {
-			return err
+		type cachedBlob struct {
+			version types.AtxVersion
+			buf     []byte
 		}
-		blob.Bytes = b
-		return nil
+		cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
+		cached, err := sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) (*cachedBlob, error) {
+			// We don't use the provided blob in this case to avoid
+			// caching references to the underlying slice (subsequent calls would modify it).
+			var blob sql.Blob
+			v, err := getBlob(ctx, db, id, &blob)
+			if err != nil {
+				return nil, err
+			}
+			return &cachedBlob{version: v, buf: blob.Bytes}, nil
+		})
+		if err != nil {
+			return 0, err
+		}
+		// Here we return the cached slice, hence the safety warning.
+		blob.Bytes = cached.buf
+		return cached.version, nil
 	}
-	return sql.LoadBlob(db, "select atx from atx_blobs where id = ?1", id, blob)
+
+	return getBlob(ctx, db, id, blob)
 }
 
-func getBlob(ctx context.Context, db sql.Executor, id []byte) (buf []byte, err error) {
-	cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
-	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) ([]byte, error) {
-		if rows, err := db.Exec("select atx from atx_blobs where id = ?1",
-			func(stmt *sql.Statement) {
-				stmt.BindBytes(1, id)
-			}, func(stmt *sql.Statement) bool {
-				if stmt.ColumnLen(0) > 0 {
-					buf = make([]byte, stmt.ColumnLen(0))
-					stmt.ColumnBytes(0, buf)
-				}
-				return true
-			}); err != nil {
-			return nil, fmt.Errorf("get %s: %w", types.BytesToHash(id), err)
-		} else if rows == 0 {
-			return nil, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToHash(id))
-		}
-		return buf, nil
-	})
+func getBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (types.AtxVersion, error) {
+	var version types.AtxVersion
+	rows, err := db.Exec("select atx, version from atx_blobs where id = ?1",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id)
+		}, func(stmt *sql.Statement) bool {
+			blob.FromColumn(stmt, 0)
+			version = types.AtxVersion(stmt.ColumnInt(1))
+			return true
+		},
+	)
+	if err != nil {
+		return 0, fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
+	}
+	if rows == 0 {
+		return 0, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToHash(id))
+	}
+
+	return version, nil
 }
 
 // NonceByID retrieves VRFNonce corresponding to the specified ATX ID.

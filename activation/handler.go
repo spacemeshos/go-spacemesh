@@ -297,7 +297,8 @@ func (h *Handler) handleAtx(
 // Obtain the atxSignature of the given ATX.
 func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.EdSignature, error) {
 	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob); err != nil {
+	v, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
+	if err != nil {
 		return types.EmptyEdSignature, err
 	}
 
@@ -306,10 +307,14 @@ func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.E
 		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
 	}
 
-	// TODO: decide how to decode based on the `version` column.
-	var prev wire.ActivationTxV1
-	if err := codec.Decode(blob.Bytes, &prev); err != nil {
-		return types.EmptyEdSignature, fmt.Errorf("decoding previous atx: %w", err)
+	// TODO: implement for ATX V2
+	switch v {
+	case types.AtxV1:
+		var atx wire.ActivationTxV1
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return types.EmptyEdSignature, fmt.Errorf("decoding atx v1: %w", err)
+		}
+		return atx.Signature, nil
 	}
-	return prev.Signature, nil
+	return types.EmptyEdSignature, fmt.Errorf("unsupported ATX version: %v", v)
 }

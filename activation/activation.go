@@ -777,7 +777,7 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 		return err
 	}
 	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, b.db, atx.Bytes(), &blob); err != nil {
+	if _, err := atxs.LoadBlob(ctx, b.db, atx.Bytes(), &blob); err != nil {
 		return fmt.Errorf("get blob %s: %w", atx.ShortString(), err)
 	}
 	if len(blob.Bytes) == 0 {

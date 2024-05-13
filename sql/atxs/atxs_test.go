@@ -560,11 +560,14 @@ func TestLoadBlob(t *testing.T) {
 	require.NoError(t, err)
 	atx1 := newAtx(t, sig, withPublishEpoch(1))
 	atx1.AtxBlob.Blob = []byte("blob1")
+	atx1.AtxBlob.Version = types.AtxV1
 
 	require.NoError(t, atxs.Add(db, atx1))
 
 	var blob1 sql.Blob
-	require.NoError(t, atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1))
+	version, err := atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1)
+	require.NoError(t, err)
+	require.Equal(t, types.AtxV1, version)
 
 	require.Equal(t, atx1.AtxBlob.Blob, blob1.Bytes)
 
@@ -575,9 +578,12 @@ func TestLoadBlob(t *testing.T) {
 	var blob2 sql.Blob
 	atx2 := newAtx(t, sig)
 	atx2.AtxBlob.Blob = []byte("blob2 of different size")
+	atx2.AtxBlob.Version = types.AtxV2
 
 	require.NoError(t, atxs.Add(db, atx2))
-	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))
+	version, err = atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2)
+	require.NoError(t, err)
+	require.Equal(t, types.AtxV2, version)
 	require.Equal(t, atx2.AtxBlob.Blob, blob2.Bytes)
 
 	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
@@ -589,7 +595,8 @@ func TestLoadBlob(t *testing.T) {
 	require.NotEqual(t, len(blob1.Bytes), len(blob2.Bytes))
 
 	noSuchID := types.RandomATXID()
-	require.ErrorIs(t, atxs.LoadBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
+	_, err = atxs.LoadBlob(ctx, db, noSuchID[:], &sql.Blob{})
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
 		atx1.ID().Bytes(),
@@ -613,10 +620,41 @@ func TestGetBlobCached(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		var b sql.Blob
-		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
+		_, err := atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b)
+		require.NoError(t, err)
 		require.Equal(t, atx.Blob, b.Bytes)
 		require.Equal(t, 3, db.QueryCount())
 	}
+}
+
+// Test that we don't put in the cache a reference to the blob that was passed to LoadBlob.
+// Each cache entry must use a unique slice for the blob.
+func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+
+	atx := types.ActivationTx{AtxBlob: types.AtxBlob{Blob: []byte("original blob")}}
+	atx.SetID(types.RandomATXID())
+	require.NoError(t, atxs.Add(db, &atx))
+	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
+
+	blob := &sql.Blob{}
+	_, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), blob)
+	require.NoError(t, err)
+	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
+
+	atx2 := types.ActivationTx{AtxBlob: types.AtxBlob{Blob: []byte("other blob")}}
+	atx2.SetID(types.RandomATXID())
+	require.Less(t, len(atx2.AtxBlob.Blob), len(atx.AtxBlob.Blob))
+	require.NoError(t, atxs.Add(db, &atx2))
+
+	// Loading atx2 doesn't overwrite the cached blob for atx1
+	_, err = atxs.LoadBlob(context.Background(), db, atx2.ID().Bytes(), blob)
+	require.NoError(t, err)
+	require.Equal(t, atx2.AtxBlob.Blob, blob.Bytes)
+
+	_, err = atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), blob)
+	require.NoError(t, err)
+	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
 }
 
 func TestCachedBlobEviction(t *testing.T) {
@@ -637,7 +675,8 @@ func TestCachedBlobEviction(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx))
 		addedATXs[n] = atx
 		blobs[n] = atx.Blob
-		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
+		_, err := atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b)
+		require.NoError(t, err)
 		require.Equal(t, atx.Blob, b.Bytes)
 	}
 
@@ -646,13 +685,15 @@ func TestCachedBlobEviction(t *testing.T) {
 
 	// The ATXs except the first one stay in place
 	for n, atx := range addedATXs[1:] {
-		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
+		_, err := atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b)
+		require.NoError(t, err)
 		require.Equal(t, blobs[n+1], b.Bytes)
 		require.Equal(t, 33, db.QueryCount())
 	}
 
 	// The first ATX is evicted. We check it after the loop to avoid additional evictions.
-	require.NoError(t, atxs.LoadBlob(ctx, db, addedATXs[0].ID().Bytes(), &b))
+	_, err = atxs.LoadBlob(ctx, db, addedATXs[0].ID().Bytes(), &b)
+	require.NoError(t, err)
 	require.Equal(t, blobs[0], b.Bytes)
 	require.Equal(t, 34, db.QueryCount())
 }
@@ -699,7 +740,8 @@ func TestCheckpointATX(t *testing.T) {
 
 	// checkpoint atx does not have actual atx data
 	var blob sql.Blob
-	require.NoError(t, atxs.LoadBlob(ctx, db, catx.ID.Bytes(), &blob))
+	_, err = atxs.LoadBlob(ctx, db, catx.ID.Bytes(), &blob)
+	require.NoError(t, err)
 	require.Empty(t, blob.Bytes)
 }
 

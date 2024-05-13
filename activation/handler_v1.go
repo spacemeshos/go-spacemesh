@@ -137,7 +137,8 @@ func (h *HandlerV1) commitment(ctx context.Context, atx *wire.ActivationTxV1) (t
 // to use the effective num units.
 func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*types.ActivationTx, error) {
 	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, h.cdb, atx.PrevATXID[:], &blob); err != nil {
+	v, err := atxs.LoadBlob(ctx, h.cdb, atx.PrevATXID[:], &blob)
+	if err != nil {
 		return nil, err
 	}
 
@@ -149,6 +150,9 @@ func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*ty
 			return nil, fmt.Errorf("fetching golden previous atx: %w", err)
 		}
 		return atx, nil
+	}
+	if v != types.AtxV1 {
+		return nil, fmt.Errorf("previous atx %s is not of version 1", atx.PrevATXID)
 	}
 
 	var prev wire.ActivationTxV1
