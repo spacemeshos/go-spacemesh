@@ -391,6 +391,10 @@ func validateInvalidPostIndex(
 	proof *wire.InvalidPostIndexProof,
 ) (types.NodeID, error) {
 	atx := &proof.Atx
+	if err := checkIdentityExists(db, atx.SmesherID); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("check identity %v in invalid post index: %w", atx.SmesherID, err)
+	}
+
 	if !edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return types.EmptyNodeID, errors.New("invalid signature")
 	}
@@ -429,11 +433,19 @@ func validateInvalidPrevATX(
 	proof *wire.InvalidPrevATXProof,
 ) (types.NodeID, error) {
 	atx1 := proof.Atx1
+	if err := checkIdentityExists(db, atx1.SmesherID); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("check identity %v in invalid previous ATX: %w", atx1.SmesherID, err)
+	}
+
 	if !edVerifier.Verify(signing.ATX, atx1.SmesherID, atx1.SignedBytes(), atx1.Signature) {
 		return types.EmptyNodeID, errors.New("atx1: invalid signature")
 	}
 
 	atx2 := proof.Atx2
+	if err := checkIdentityExists(db, atx2.SmesherID); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("check identity %v in invalid previous ATX: %w", atx2.SmesherID, err)
+	}
+
 	if !edVerifier.Verify(signing.ATX, atx2.SmesherID, atx2.SignedBytes(), atx2.Signature) {
 		return types.EmptyNodeID, errors.New("atx2: invalid signature")
 	}
