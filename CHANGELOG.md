@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.5.3
+
+### Improvements
+
+* [#5929](https://github.com/spacemeshos/go-spacemesh/pull/5929) Fix "no nonce" error when persisting malicious
+  (initial) ATXs.
+
 ## Release v1.5.2-hotfix1
 
 This release includes our first CVE fix. A vulnerability was found in the way a node handles incoming ATXs. We urge all
