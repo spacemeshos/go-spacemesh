@@ -627,26 +627,34 @@ func TestGetBlobCached(t *testing.T) {
 	}
 }
 
-// Test that the cached blob is not shared with the caller
-// but copied into the provided blob.
-func TestGetBlobCached_OverwriteSafety(t *testing.T) {
+// Test that we don't put in the cache a reference to the blob that was passed to LoadBlob.
+// Each cache entry must use a unique slice for the blob.
+func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
 	db := sql.InMemory(sql.WithQueryCache(true))
 
-	atx := types.ActivationTx{}
+	atx := types.ActivationTx{AtxBlob: types.AtxBlob{Blob: []byte("original blob")}}
 	atx.SetID(types.RandomATXID())
-	atx.AtxBlob.Blob = []byte("original blob")
 	require.NoError(t, atxs.Add(db, &atx))
 	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
 
-	var b sql.Blob // we will reuse the blob between queries
-	_, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &b)
+	blob := &sql.Blob{}
+	_, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), blob)
 	require.NoError(t, err)
-	require.Equal(t, atx.AtxBlob.Blob, b.Bytes)
+	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
 
-	b.Bytes[0] = 'X' // modify the blob
-	_, err = atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &b)
+	atx2 := types.ActivationTx{AtxBlob: types.AtxBlob{Blob: []byte("other blob")}}
+	atx2.SetID(types.RandomATXID())
+	require.Less(t, len(atx2.AtxBlob.Blob), len(atx.AtxBlob.Blob))
+	require.NoError(t, atxs.Add(db, &atx2))
+
+	// Loading atx2 doesn't overwrite the cached blob for atx1
+	_, err = atxs.LoadBlob(context.Background(), db, atx2.ID().Bytes(), blob)
 	require.NoError(t, err)
-	require.Equal(t, atx.AtxBlob.Blob, b.Bytes)
+	require.Equal(t, atx2.AtxBlob.Blob, blob.Bytes)
+
+	_, err = atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), blob)
+	require.NoError(t, err)
+	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
 }
 
 func TestCachedBlobEviction(t *testing.T) {

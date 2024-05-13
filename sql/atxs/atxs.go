@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -325,6 +324,10 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
+//
+// SAFETY: The contents of the returned blob MUST NOT be modified.
+// They might point to the inner sql cache and modifying them would
+// corrupt the cache.
 func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (types.AtxVersion, error) {
 	if sql.IsCached(db) {
 		type cachedBlob struct {
@@ -334,7 +337,7 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (
 		cacheKey := sql.QueryCacheKey(CacheKindATXBlob, string(id))
 		cached, err := sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) (*cachedBlob, error) {
 			// We don't use the provided blob in this case to avoid
-			// storing references to the underlying slice (subsequent calls would modify it).
+			// caching references to the underlying slice (subsequent calls would modify it).
 			var blob sql.Blob
 			v, err := getBlob(ctx, db, id, &blob)
 			if err != nil {
@@ -345,10 +348,8 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (
 		if err != nil {
 			return 0, err
 		}
-
-		n := len(cached.buf)
-		blob.Bytes = slices.Grow(blob.Bytes[:0], n)[:n]
-		copy(blob.Bytes, cached.buf)
+		// Here we return the cached slice, hence the safety warning.
+		blob.Bytes = cached.buf
 		return cached.version, nil
 	}
 

@@ -505,9 +505,12 @@ type Blob struct {
 	Bytes []byte
 }
 
+// resize the underlying byte slice to the specified size.
+// The returned slice has length equal n, but it might have a larger capacity.
+// Warning: it is not guaranteed to keep the old data.
 func (b *Blob) resize(n int) {
 	if cap(b.Bytes) < n {
-		b.Bytes = slices.Grow(b.Bytes, n)
+		b.Bytes = make([]byte, n)
 	}
 	b.Bytes = b.Bytes[:n]
 }
