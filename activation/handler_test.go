@@ -1398,11 +1398,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	require.NoError(t, err)
 	nodeID := sig.NodeID()
 
-	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, nodeID)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, proof)
-
-	ch := types.NIPostChallenge{
+	initialCh := types.NIPostChallenge{
 		Sequence:       0,
 		PrevATXID:      types.EmptyATXID,
 		PublishEpoch:   1,
@@ -1410,12 +1406,31 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 		CommitmentATX:  &goldenATXID,
 		InitialPost:    &types.Post{},
 	}
+	initialNiPost := newNIPostWithPoet(t, []byte{0x76, 0x45})
+
+	initialAtx := newAtx(initialCh, initialNiPost.NIPost, 100, types.GenerateAddress([]byte("aaaa")))
+	initialAtx.NodeID = &nodeID
+	vrfNonce := types.VRFPostIndex(0)
+	initialAtx.VRFNonce = &vrfNonce
+	initialAtx.SetEffectiveNumUnits(100)
+	initialAtx.SetReceived(time.Now())
+	require.NoError(t, SignAndFinalizeAtx(sig, initialAtx))
+	_, err = initialAtx.Verify(0, 100)
+	require.NoError(t, err)
+
+	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, nodeID)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.Nil(t, proof)
+
+	ch := types.NIPostChallenge{
+		Sequence:       1,
+		PrevATXID:      initialAtx.ID(),
+		PublishEpoch:   3,
+		PositioningATX: initialAtx.ID(),
+	}
 	nipost := newNIPostWithPoet(t, []byte{0x76, 0x45})
 
 	atx := newAtx(ch, nipost.NIPost, 100, types.GenerateAddress([]byte("aaaa")))
-	atx.NodeID = &nodeID
-	vrfNonce := types.VRFPostIndex(0)
-	atx.VRFNonce = &vrfNonce
 	atx.SetEffectiveNumUnits(100)
 	atx.SetReceived(time.Now())
 	require.NoError(t, SignAndFinalizeAtx(sig, atx))
@@ -1424,11 +1439,11 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 
 	var got mwire.MalfeasanceGossip
 	atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-	atxHdlr.mValidator.EXPECT().VRFNonce(gomock.Any(), goldenATXID, gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mValidator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.GetPoetProofRef())
+	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	atxHdlr.mValidator.EXPECT().InitialNIPostChallenge(&atx.NIPostChallenge, gomock.Any(), goldenATXID)
 	atxHdlr.mValidator.EXPECT().PositioningAtx(goldenATXID, gomock.Any(), goldenATXID, atx.PublishEpoch)
 	atxHdlr.mValidator.EXPECT().
