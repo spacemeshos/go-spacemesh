@@ -219,7 +219,7 @@ func updateMetrics(tp wire.Proof) {
 	}
 }
 
-func checkIdentityExists(db sql.Executor, nodeID types.NodeID) error {
+func hasPublishedAtxs(db sql.Executor, nodeID types.NodeID) error {
 	_, err := atxs.GetLastIDByNodeID(db, nodeID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNotFound) {
@@ -257,7 +257,7 @@ func validateHareEquivocation(
 			return types.EmptyNodeID, errors.New("invalid signature")
 		}
 		if firstNid == types.EmptyNodeID {
-			if err := checkIdentityExists(db, msg.SmesherID); err != nil {
+			if err := hasPublishedAtxs(db, msg.SmesherID); err != nil {
 				return types.EmptyNodeID, fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
 			}
 			firstNid = msg.SmesherID
@@ -308,7 +308,7 @@ func validateMultipleATXs(
 			return types.EmptyNodeID, errors.New("invalid signature")
 		}
 		if firstNid == types.EmptyNodeID {
-			if err := checkIdentityExists(db, msg.SmesherID); err != nil {
+			if err := hasPublishedAtxs(db, msg.SmesherID); err != nil {
 				return types.EmptyNodeID, fmt.Errorf("check identity in atx malfeasance %v: %w", msg.SmesherID, err)
 			}
 			firstNid = msg.SmesherID
@@ -359,7 +359,7 @@ func validateMultipleBallots(
 			return types.EmptyNodeID, errors.New("invalid signature")
 		}
 		if firstNid == types.EmptyNodeID {
-			if err = checkIdentityExists(db, msg.SmesherID); err != nil {
+			if err = hasPublishedAtxs(db, msg.SmesherID); err != nil {
 				return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
 			}
 			firstNid = msg.SmesherID
@@ -391,7 +391,7 @@ func validateInvalidPostIndex(
 	proof *wire.InvalidPostIndexProof,
 ) (types.NodeID, error) {
 	atx := &proof.Atx
-	if err := checkIdentityExists(db, atx.SmesherID); err != nil {
+	if err := hasPublishedAtxs(db, atx.SmesherID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("check identity %v in invalid post index: %w", atx.SmesherID, err)
 	}
 
@@ -433,7 +433,7 @@ func validateInvalidPrevATX(
 	proof *wire.InvalidPrevATXProof,
 ) (types.NodeID, error) {
 	atx1 := proof.Atx1
-	if err := checkIdentityExists(db, atx1.SmesherID); err != nil {
+	if err := hasPublishedAtxs(db, atx1.SmesherID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("check identity %v in invalid previous ATX: %w", atx1.SmesherID, err)
 	}
 
@@ -442,17 +442,13 @@ func validateInvalidPrevATX(
 	}
 
 	atx2 := proof.Atx2
-	if err := checkIdentityExists(db, atx2.SmesherID); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("check identity %v in invalid previous ATX: %w", atx2.SmesherID, err)
+	if atx1.SmesherID != atx2.SmesherID {
+		numInvalidProofsPrevATX.Inc()
+		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: smesher IDs are different")
 	}
 
 	if !edVerifier.Verify(signing.ATX, atx2.SmesherID, atx2.SignedBytes(), atx2.Signature) {
 		return types.EmptyNodeID, errors.New("atx2: invalid signature")
-	}
-
-	if atx1.SmesherID != atx2.SmesherID {
-		numInvalidProofsPrevATX.Inc()
-		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: smesher IDs are different")
 	}
 
 	if atx1.ID() == atx2.ID() {
