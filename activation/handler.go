@@ -489,7 +489,7 @@ func (h *Handler) checkWrongPrevAtx(
 		// that the node referenced the wrong previous ATX
 		id, err := atxs.GetFirstIDByNodeID(tx, atx.SmesherID)
 		if err != nil {
-			return nil, fmt.Errorf("get initial atx: %w", err)
+			return nil, fmt.Errorf("get initial atx id: %w", err)
 		}
 
 		atx2, err = atxs.Get(tx, id)
@@ -593,15 +593,7 @@ func (h *Handler) storeAtx(ctx context.Context, atx *types.VerifiedActivationTx)
 		return nil, fmt.Errorf("store atx: %w", err)
 	}
 	if nonce == nil {
-		if proof == nil {
-			return nil, errors.New("no nonce")
-		}
-		// special handling for a fake initial ATX (not first, but referencing empty as previous) not containing a nonce
-		vrf, err := atxs.VRFNonce(h.cdb, atx.SmesherID, atx.PublishEpoch)
-		if err != nil {
-			return nil, fmt.Errorf("get vrf nonce: %w", err)
-		}
-		nonce = &vrf
+		return nil, errors.New("no nonce")
 	}
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {

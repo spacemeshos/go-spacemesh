@@ -387,11 +387,7 @@ func AddGettingNonce(db sql.Executor, atx *types.VerifiedActivationTx) (*types.V
 		}
 	}
 
-	if err := add(db, atx, atx.VRFNonce); err != nil {
-		return nil, err
-	}
-
-	return atx.VRFNonce, nil
+	return atx.VRFNonce, add(db, atx, atx.VRFNonce)
 }
 
 // AddMaybeNoNonce adds an ATX for a given ATX ID. It doesn't try
