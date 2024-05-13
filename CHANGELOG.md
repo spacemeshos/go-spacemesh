@@ -9,6 +9,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#5929](https://github.com/spacemeshos/go-spacemesh/pull/5929) Fix "no nonce" error when persisting malicious
   (initial) ATXs.
 
+* [#5930](https://github.com/spacemeshos/go-spacemesh/pull/5930) Check if identity for a given malfeasance proof
+  exists when validating it.
+
 ## Release v1.5.2-hotfix1
 
 This release includes our first CVE fix. A vulnerability was found in the way a node handles incoming ATXs. We urge all
