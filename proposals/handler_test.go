@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -1392,9 +1393,9 @@ func TestHandleActiveSet(t *testing.T) {
 	}
 }
 
-func gproposal(signer *signing.EdSigner, atxid types.ATXID,
+func gproposal(t *testing.T, signer *signing.EdSigner, atxid types.ATXID,
 	layer types.LayerID, edata *types.EpochData,
-) types.Proposal {
+) *types.Proposal {
 	p := types.Proposal{}
 	p.Layer = layer
 	p.AtxID = atxid
@@ -1406,39 +1407,50 @@ func gproposal(signer *signing.EdSigner, atxid types.ATXID,
 	if edata != nil {
 		p.SetBeacon(edata.Beacon)
 	}
-	return p
+	require.NoError(t, p.Initialize())
+	return &p
 }
 
-func TestHandleSyncedProposalActiveSet(t *testing.T) {
+type asTestHandler struct {
+	*testing.T
+	*testHandler
+	lid     types.LayerID
+	set     types.ATXIDList
+	p       []*types.Proposal
+	pid     p2p.Peer
+	startCh chan struct{}
+	contCh  chan error
+}
+
+func createASTestHandler(t *testing.T) *asTestHandler {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	set := types.ATXIDList{{1}, {2}}
-	lid := types.LayerID(20)
-	good := gproposal(signer, types.ATXID{1}, lid, &types.EpochData{
-		ActiveSetHash: set.Hash(),
-		Beacon:        types.Beacon{1},
-	})
-	require.NoError(t, good.Initialize())
-	th := createTestHandler(t)
-	pid := p2p.Peer("any")
+	th := &asTestHandler{
+		T:           t,
+		testHandler: createTestHandler(t),
+		lid:         types.LayerID(20),
+		set:         types.ATXIDList{{1}, {2}, {3}},
+		pid:         p2p.Peer("any"),
+		startCh:     make(chan struct{}),
+		contCh:      make(chan error),
+	}
+	th.p = []*types.Proposal{
+		gproposal(t, signer, types.ATXID{1}, th.lid, &types.EpochData{
+			ActiveSetHash: th.set.Hash(),
+			Beacon:        types.Beacon{1},
+		}),
+		gproposal(t, signer, types.ATXID{2}, th.lid, &types.EpochData{
+			ActiveSetHash: th.set.Hash(),
+			Beacon:        types.Beacon{1},
+		}),
+	}
 
-	th.mclock.EXPECT().CurrentLayer().Return(lid).AnyTimes()
-	th.mm.EXPECT().ProcessedLayer().Return(lid - 2).AnyTimes()
-	th.mclock.EXPECT().LayerToTime(gomock.Any())
-	th.mf.EXPECT().RegisterPeerHashes(pid, gomock.Any()).AnyTimes()
-	th.mf.EXPECT().GetActiveSet(gomock.Any(), set.Hash()).DoAndReturn(
-		func(_ context.Context, got types.Hash32) error {
-			require.NoError(t, activesets.Add(th.db, got, &types.EpochActiveSet{
-				Epoch: lid.GetEpoch(),
-				Set:   set,
-			}))
-			for _, id := range set {
-				th.atxsdata.AddAtx(lid.GetEpoch(), id, &atxsdata.ATX{Node: types.NodeID{1}})
-			}
-			return nil
-		},
-	)
+	th.mclock.EXPECT().CurrentLayer().Return(th.lid).AnyTimes()
+	th.mm.EXPECT().ProcessedLayer().Return(th.lid - 2).AnyTimes()
+	th.mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes()
+	th.mf.EXPECT().RegisterPeerHashes(th.pid, gomock.Any()).AnyTimes()
+
 	th.mf.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).AnyTimes()
 	th.mf.EXPECT().GetBallots(gomock.Any(), gomock.Any()).AnyTimes()
 	th.mockSet.decodeAnyBallots()
@@ -1446,10 +1458,152 @@ func TestHandleSyncedProposalActiveSet(t *testing.T) {
 	th.mm.EXPECT().AddBallot(gomock.Any(), gomock.Any()).AnyTimes()
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	th.mconsumer.EXPECT().IsKnown(good.Layer, good.ID())
-	th.mconsumer.EXPECT().OnProposal(gomock.Eq(&good))
-	err = th.HandleSyncedProposal(context.Background(), good.ID().AsHash32(), pid, codec.MustEncode(&good))
-	require.NoError(t, err)
+	return th
+}
+
+func (th *asTestHandler) expectIsKnown(n int) {
+	th.mconsumer.EXPECT().IsKnown(th.p[n].Layer, th.p[n].ID())
+}
+
+func (th *asTestHandler) expectProposal(n int) {
+	th.expectIsKnown(n)
+	th.mconsumer.EXPECT().OnProposal(gomock.Eq(th.p[n]))
+}
+
+func (th *asTestHandler) blockOnGetActiveSet(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case th.startCh <- struct{}{}:
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-th.contCh:
+		return err
+	}
+}
+
+func (th *asTestHandler) waitForFetchToStart() {
+	<-th.startCh
+}
+
+func (th *asTestHandler) continueFetching(err error) {
+	th.contCh <- err
+}
+
+func (th *asTestHandler) expectGetActiveSet(block bool) {
+	th.mf.EXPECT().GetActiveSet(gomock.Any(), th.set.Hash()).DoAndReturn(
+		func(ctx context.Context, got types.Hash32) error {
+			if block {
+				if err := th.blockOnGetActiveSet(ctx); err != nil {
+					return err
+				}
+			}
+			require.NoError(th, activesets.Add(th.db, got, &types.EpochActiveSet{
+				Epoch: th.lid.GetEpoch(),
+				Set:   th.set,
+			}))
+			for _, id := range th.set {
+				th.atxsdata.AddAtx(th.lid.GetEpoch(), id, &atxsdata.ATX{Node: types.NodeID{1}})
+			}
+			return nil
+		},
+	)
+}
+
+func (th *asTestHandler) handleSyncedProposal(ctx context.Context, n int) error {
+	return th.HandleSyncedProposal(
+		ctx, th.p[n].ID().AsHash32(), th.pid, codec.MustEncode(th.p[n]))
+}
+
+func (th *asTestHandler) waitForSubscription() {
+	require.Eventually(th, func() bool {
+		th.weightCalcLock.Lock()
+		defer th.weightCalcLock.Unlock()
+		return len(th.pendingWeightCalc[th.set.Hash()]) != 0
+	}, 10*time.Second, 10*time.Millisecond)
+}
+
+func TestHandleSyncedProposalActiveSet(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("non-concurrent fetch", func(t *testing.T) {
+		th := createASTestHandler(t)
+		th.expectProposal(0)
+		th.expectGetActiveSet(false)
+		require.NoError(t, th.handleSyncedProposal(ctx, 0))
+
+		th.expectProposal(1)
+		// ActiveSet not fetched again here
+		require.NoError(t, th.handleSyncedProposal(ctx, 1))
+	})
+
+	t.Run("concurrent fetch", func(t *testing.T) {
+		th := createASTestHandler(t)
+		th.expectProposal(0)
+		th.expectGetActiveSet(true)
+		var eg errgroup.Group
+		eg.Go(func() error { return th.handleSyncedProposal(ctx, 0) })
+		th.waitForFetchToStart()
+		th.expectProposal(1)
+		eg.Go(func() error { return th.handleSyncedProposal(ctx, 1) })
+		th.waitForSubscription()
+		th.continueFetching(nil)
+		require.NoError(t, eg.Wait())
+	})
+
+	t.Run("fetch failure and refetch", func(t *testing.T) {
+		th := createASTestHandler(t)
+		th.expectIsKnown(0)
+		th.expectGetActiveSet(true)
+		var eg errgroup.Group
+		eg.Go(func() error {
+			require.Error(t, th.handleSyncedProposal(ctx, 0))
+			return nil
+		})
+		th.waitForFetchToStart()
+		th.expectIsKnown(1)
+		eg.Go(func() error {
+			require.Error(t, th.handleSyncedProposal(ctx, 1))
+			return nil
+		})
+		th.waitForSubscription()
+		th.continueFetching(errors.New("fail"))
+		require.NoError(t, eg.Wait())
+
+		// refetch
+		th.expectProposal(0)
+		th.expectGetActiveSet(false)
+		require.NoError(t, th.handleSyncedProposal(ctx, 0))
+	})
+
+	t.Run("cancel fetch and refetch", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(ctx)
+		th := createASTestHandler(t)
+		th.expectIsKnown(0)
+		th.expectGetActiveSet(true)
+		var eg errgroup.Group
+		eg.Go(func() error {
+			require.ErrorIs(t, th.handleSyncedProposal(ctx, 0), context.Canceled)
+			return nil
+		})
+		th.waitForFetchToStart()
+		th.expectIsKnown(1)
+		eg.Go(func() error {
+			require.ErrorIs(t, th.handleSyncedProposal(ctx, 1), context.Canceled)
+			return nil
+		})
+		th.waitForSubscription()
+		cancel()
+		require.NoError(t, eg.Wait())
+
+		// refetch
+		th.expectProposal(0)
+		th.expectGetActiveSet(false)
+		require.NoError(t, th.handleSyncedProposal(ctx, 0))
+	})
 }
 
 func TestHandler_SettingBallotBeacon(t *testing.T) {
