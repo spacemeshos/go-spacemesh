@@ -1291,6 +1291,7 @@ func TestHandler_ProcessAtx_SamePrevATX_NewInitial(t *testing.T) {
 		coinbase,
 		100,
 		&types.NIPost{PostMetadata: &types.PostMetadata{}},
+		withVrfNonce(7),
 	)
 	atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Any())
 	atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
