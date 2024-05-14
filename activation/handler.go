@@ -232,6 +232,12 @@ func (h *Handler) decodeATX(msg []byte) (opaqueAtx, error) {
 			return nil, fmt.Errorf("%w: %w", errMalformedData, err)
 		}
 		return &atx, nil
+	case types.AtxV2:
+		var atx wire.ActivationTxV2
+		if err := codec.Decode(msg, &atx); err != nil {
+			return nil, fmt.Errorf("%w: %w", errMalformedData, err)
+		}
+		return &atx, nil
 	}
 
 	return nil, fmt.Errorf("unsupported ATX version: %v", *version)
@@ -280,6 +286,9 @@ func (h *Handler) handleAtx(
 	switch atx := opaqueAtx.(type) {
 	case *wire.ActivationTxV1:
 		proof, err = h.v1.processATX(ctx, peer, atx, msg, receivedTime)
+	case *wire.ActivationTxV2:
+		// proof, err = h.v2.processATX(ctx, peer, atx, msg, receivedTime)
+		return nil, errors.New("ATX V2 is not supported yet")
 	default:
 		panic("unreachable")
 	}

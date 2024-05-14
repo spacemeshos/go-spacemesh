@@ -119,12 +119,13 @@ func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 type handlerMocks struct {
 	goldenATXID types.ATXID
 
-	mclock     *MocklayerClock
-	mpub       *pubsubmocks.MockPublisher
-	mockFetch  *mocks.MockFetcher
-	mValidator *MocknipostValidator
-	mbeacon    *MockAtxReceiver
-	mtortoise  *mocks.MockTortoise
+	mclock       *MocklayerClock
+	mpub         *pubsubmocks.MockPublisher
+	mockFetch    *mocks.MockFetcher
+	mValidator   *MocknipostValidator
+	mValidatorV2 *MocknipostValidatorV2
+	mbeacon      *MockAtxReceiver
+	mtortoise    *mocks.MockTortoise
 }
 
 type testHandler struct {
@@ -181,13 +182,14 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	ctrl := gomock.NewController(tb)
 	return handlerMocks{
-		goldenATXID: golden,
-		mclock:      NewMocklayerClock(ctrl),
-		mpub:        pubsubmocks.NewMockPublisher(ctrl),
-		mockFetch:   mocks.NewMockFetcher(ctrl),
-		mValidator:  NewMocknipostValidator(ctrl),
-		mbeacon:     NewMockAtxReceiver(ctrl),
-		mtortoise:   mocks.NewMockTortoise(ctrl),
+		goldenATXID:  golden,
+		mclock:       NewMocklayerClock(ctrl),
+		mpub:         pubsubmocks.NewMockPublisher(ctrl),
+		mockFetch:    mocks.NewMockFetcher(ctrl),
+		mValidator:   NewMocknipostValidator(ctrl),
+		mValidatorV2: NewMocknipostValidatorV2(ctrl),
+		mbeacon:      NewMockAtxReceiver(ctrl),
+		mtortoise:    mocks.NewMockTortoise(ctrl),
 	}
 }
 
@@ -520,6 +522,18 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		err := atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf)
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorContains(t, err, "invalid atx signature")
+	})
+	t.Run("initial atx V2", func(t *testing.T) {
+		t.Skip("atx V2 is not supported yet")
+		t.Parallel()
+
+		atx := newInitialATXv2(t, sig.NodeID(), goldenATXID)
+		atx.Sign(sig)
+
+		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersions(AtxVersions{0: types.AtxV2}))
+		atxHdlr.expectInitialAtxV2(atx)
+		err := atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, codec.MustEncode(atx))
+		require.NoError(t, err)
 	})
 }
 
@@ -869,13 +883,25 @@ func TestHandler_DecodeATX(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, atx, decoded)
 	})
-	t.Run("v2 not supported", func(t *testing.T) {
-		// TODO: change this test when v2 is supported
+	t.Run("v2", func(t *testing.T) {
 		t.Parallel()
 		versions := map[types.EpochID]types.AtxVersion{10: types.AtxV2}
 		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersions(versions))
 
-		_, err := atxHdlr.decodeATX(codec.MustEncode(types.EpochID(20)))
-		require.ErrorContains(t, err, "unsupported ATX version")
+		atx := newInitialATXv2(t, types.RandomNodeID(), atxHdlr.goldenATXID)
+		atx.PublishEpoch = 10
+		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		require.NoError(t, err)
+		require.Equal(t, atx, decoded)
+	})
+	t.Run("rejects v2 in epoch when it's not supported", func(t *testing.T) {
+		t.Parallel()
+		versions := map[types.EpochID]types.AtxVersion{10: types.AtxV2}
+		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersions(versions))
+
+		atx := newInitialATXv2(t, types.RandomNodeID(), atxHdlr.goldenATXID)
+		atx.PublishEpoch = 9
+		_, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		require.ErrorIs(t, err, errMalformedData)
 	})
 }
