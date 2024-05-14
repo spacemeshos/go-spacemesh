@@ -77,13 +77,15 @@ func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	t.Parallel()
 	golden := types.RandomATXID()
-	atxHandler := newV2TestHandler(t, golden)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	t.Run("rejects invalid signature", func(t *testing.T) {
 		t.Parallel()
 		atx := newInitialATXv2(t, types.RandomNodeID(), golden)
-		require.ErrorContains(t, atxHandler.syntacticallyValidate(context.Background(), atx), "signature")
+
+		atxHandler := newV2TestHandler(t, golden)
+		err := atxHandler.syntacticallyValidate(context.Background(), atx)
+		require.ErrorContains(t, err, "signature")
 	})
 	t.Run("rejects from future", func(t *testing.T) {
 		t.Parallel()
@@ -91,8 +93,9 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 		atx.PublishEpoch = 100
 		atx.Sign(sig)
 
+		atxHandler := newV2TestHandler(t, golden)
 		atxHandler.mclock.EXPECT().CurrentLayer().Return(0)
-		err = atxHandler.syntacticallyValidate(context.Background(), atx)
+		err := atxHandler.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "atx publish epoch is too far in the future")
 	})
 	t.Run("rejects empty positioning ATX", func(t *testing.T) {
@@ -101,7 +104,8 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 		atx.PositioningATX = types.EmptyATXID
 		atx.Sign(sig)
 
-		err = atxHandler.syntacticallyValidate(context.Background(), atx)
+		atxHandler := newV2TestHandler(t, golden)
+		err := atxHandler.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "empty positioning atx")
 	})
 	t.Run("marriages are not supported (yet)", func(t *testing.T) {
@@ -110,7 +114,8 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 		atx.Marriages = []wire.MarriageCertificate{{}}
 		atx.Sign(sig)
 
-		err = atxHandler.syntacticallyValidate(context.Background(), atx)
+		atxHandler := newV2TestHandler(t, golden)
+		err := atxHandler.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "marriages are not supported")
 	})
 	t.Run("reject golden previous ATX", func(t *testing.T) {
@@ -118,6 +123,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 		atx := newSoloATXv2(t, 0, sig.NodeID(), golden, golden)
 		atx.Sign(sig)
 
+		atxHandler := newV2TestHandler(t, golden)
 		atxHandler.mclock.EXPECT().CurrentLayer()
 		err := atxHandler.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "previous atx[0] is the golden ATX")
@@ -128,6 +134,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 		atx.PreviousATXs = append(atx.PreviousATXs, types.EmptyATXID)
 		atx.Sign(sig)
 
+		atxHandler := newV2TestHandler(t, golden)
 		atxHandler.mclock.EXPECT().CurrentLayer()
 		err := atxHandler.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "previous atx[0] is empty")
