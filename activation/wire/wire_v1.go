@@ -184,7 +184,7 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 		result.AtxBlob.Blob = codec.MustEncode(atx)
 	}
 
-	result.SetID(types.ATXID(atx.HashInnerBytes()))
+	result.SetID(atx.ID())
 	return result
 }
 

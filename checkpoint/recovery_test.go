@@ -611,11 +611,14 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	var atx wire.ActivationTxV1
 	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-2].Blob, &atx))
 	prevAtx1 := wire.ActivationTxFromWireV1(&atx)
+	atx = wire.ActivationTxV1{}
 	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-1].Blob, &atx))
 	posAtx1 := wire.ActivationTxFromWireV1(&atx)
 
+	atx = wire.ActivationTxV1{}
 	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-2].Blob, &atx))
 	prevAtx2 := wire.ActivationTxFromWireV1(&atx)
+	atx = wire.ActivationTxV1{}
 	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-1].Blob, &atx))
 	posAtx2 := wire.ActivationTxFromWireV1(&atx)
 
