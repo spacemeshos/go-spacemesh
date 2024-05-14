@@ -3,14 +3,18 @@ package v2alpha1
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"google.golang.org/genproto/googleapis/rpc/code"
+	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -21,8 +25,19 @@ const (
 	TransactionStream = "transaction_stream_v2alpha1"
 )
 
+// transactionConState is an API to validate transaction.
 type transactionConState interface {
 	Validation(raw types.RawTx) system.ValidationRequest
+}
+
+// transactionSyncer is an API to get sync status.
+type transactionSyncer interface {
+	IsSynced(context.Context) bool
+}
+
+// transactionValidator is the API to validate and cache transactions.
+type transactionValidator interface {
+	VerifyAndCacheTx(context.Context, []byte) error
 }
 
 func NewTransactionStreamService(db sql.Executor) *TransactionStreamService {
@@ -52,16 +67,24 @@ func (s *TransactionStreamService) String() string {
 	return "TransactionStreamService"
 }
 
-func NewTransactionService(db sql.Executor, conState transactionConState) *TransactionService {
+func NewTransactionService(db sql.Executor, conState transactionConState,
+	syncer transactionSyncer, validator transactionValidator,
+	publisher pubsub.Publisher) *TransactionService {
 	return &TransactionService{
-		db:       db,
-		conState: conState,
+		db:        db,
+		conState:  conState,
+		syncer:    syncer,
+		validator: validator,
+		publisher: publisher,
 	}
 }
 
 type TransactionService struct {
-	db       sql.Executor
-	conState transactionConState
+	db        sql.Executor
+	conState  transactionConState
+	syncer    transactionSyncer
+	validator transactionValidator
+	publisher pubsub.Publisher // P2P Swarm
 }
 
 func (s *TransactionService) RegisterService(server *grpc.Server) {
@@ -153,14 +176,54 @@ func (s *TransactionService) SubmitTransaction(
 	ctx context.Context,
 	request *spacemeshv2alpha1.SubmitTransactionRequest,
 ) (*spacemeshv2alpha1.SubmitTransactionResponse, error) {
-	return &spacemeshv2alpha1.SubmitTransactionResponse{}, nil
+	if len(request.Transaction) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "transaction is empty")
+	}
+
+	if !s.syncer.IsSynced(ctx) {
+		return nil, status.Error(
+			codes.FailedPrecondition,
+			"Cannot submit transaction, node is not in sync yet, try again later",
+		)
+	}
+
+	if err := s.validator.VerifyAndCacheTx(ctx, request.Transaction); err != nil {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Failed to verify transaction: %s", err.Error()))
+	}
+
+	if err := s.publisher.Publish(ctx, pubsub.TxProtocol, request.Transaction); err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("Failed to publish transaction: %s", err.Error()))
+	}
+
+	raw := types.NewRawTx(request.Transaction)
+	return &spacemeshv2alpha1.SubmitTransactionResponse{
+		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
+		TxId:   raw.ID[:],
+	}, nil
 }
 
 func (s *TransactionService) EstimateGas(
 	ctx context.Context,
 	request *spacemeshv2alpha1.EstimateGasRequest,
 ) (*spacemeshv2alpha1.EstimateGasResponse, error) {
-	return &spacemeshv2alpha1.EstimateGasResponse{}, nil
+	if len(request.Transaction) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "transaction is empty")
+	}
+	raw := types.NewRawTx(request.Transaction)
+	req := s.conState.Validation(raw)
+	header, err := req.Parse()
+	if errors.Is(err, core.ErrNotSpawned) {
+		return nil, status.Error(codes.NotFound, "account is not spawned")
+	} else if errors.Is(err, core.ErrMalformed) {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	} else if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &spacemeshv2alpha1.EstimateGasResponse{
+		Status:            nil,
+		RecommendedMaxGas: header.MaxGas,
+	}, nil
 }
 
 func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (builder.Operations, error) {
@@ -256,13 +319,12 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult, includeRes
 
 	if includeResult {
 		rst.TxResult = &spacemeshv2alpha1.TransactionResult{
-			Status:           convertTxResult(result),
-			Message:          result.Message,
-			GasConsumed:      result.Gas,
-			Fee:              result.Fee,
-			Block:            result.Block[:],
-			Layer:            result.Layer.Uint32(),
-			TouchedAddresses: nil,
+			Status:      convertTxResult(result),
+			Message:     result.Message,
+			GasConsumed: result.Gas,
+			Fee:         result.Fee,
+			Block:       result.Block[:],
+			Layer:       result.Layer.Uint32(),
 		}
 		if len(result.Addresses) > 0 {
 			rst.TxResult.TouchedAddresses = make([]string, len(result.Addresses))

@@ -1487,7 +1487,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Transaction:
-		service := v2alpha1.NewTransactionService(app.db, app.conState)
+		service := v2alpha1.NewTransactionService(app.db, app.conState, app.syncer, app.txHandler, app.host)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.TransactionStream:
