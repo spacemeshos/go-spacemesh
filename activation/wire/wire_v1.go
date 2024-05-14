@@ -169,7 +169,7 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 	if len(blob) == 0 {
 		result.AtxBlob.Blob = codec.MustEncode(atx)
 	}
-	result.SetID(types.ATXID(atx.HashInnerBytes()))
+	result.SetID(atx.ID())
 
 	if atx.VRFNonce != nil {
 		result.VRFNonce = types.VRFPostIndex(*atx.VRFNonce)
