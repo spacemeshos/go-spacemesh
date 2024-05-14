@@ -8,6 +8,8 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -79,8 +81,13 @@ func (h *HandlerV2) processATX(
 		return nil, fmt.Errorf("atx %s syntactically invalid: %w", watx.ID(), err)
 	}
 
+	poetRef, atxIDs := h.collectAtxDeps(watx)
+	h.registerHashes(peer, poetRef, atxIDs)
+	if err := h.fetchReferences(ctx, poetRef, atxIDs); err != nil {
+		return nil, fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
+	}
+
 	// TODO:
-	// 1. fetch dependencies
 	// 2. syntactically validate dependencies
 	// 3. contextually validate ATX
 	// 4. store ATX
@@ -174,4 +181,70 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	}
 
 	return nil
+}
+
+// registerHashes registers that the given peer should be asked for
+// the hashes of the poet proofs and ATXs.
+func (h *HandlerV2) registerHashes(peer p2p.Peer, poetRefs []types.Hash32, atxIDs []types.ATXID) {
+	hashes := make([]types.Hash32, 0, len(atxIDs)+1)
+	for _, id := range atxIDs {
+		hashes = append(hashes, id.Hash32())
+	}
+	for _, poetRef := range poetRefs {
+		hashes = append(hashes, types.Hash32(poetRef))
+	}
+
+	h.fetcher.RegisterPeerHashes(peer, hashes)
+}
+
+// fetchReferences makes sure that the referenced poet proof and ATXs are available.
+func (h *HandlerV2) fetchReferences(ctx context.Context, poetRefs []types.Hash32, atxIDs []types.ATXID) error {
+	eg, ctx := errgroup.WithContext(ctx)
+
+	for _, poetRef := range poetRefs {
+		eg.Go(func() error {
+			if err := h.fetcher.GetPoetProof(ctx, poetRef); err != nil {
+				return fmt.Errorf("fetching poet proof (%s): %w", poetRef.ShortString(), err)
+			}
+			return nil
+		})
+	}
+
+	if len(atxIDs) != 0 {
+		eg.Go(func() error {
+			if err := h.fetcher.GetAtxs(ctx, atxIDs, system.WithoutLimiting()); err != nil {
+				return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
+// Collect unique dependencies of an ATX.
+// Filters out EmptyATXID and the golden ATX.
+func (h *HandlerV2) collectAtxDeps(atx *wire.ActivationTxV2) ([]types.Hash32, []types.ATXID) {
+	ids := []types.ATXID{atx.PositioningATX}
+	ids = append(ids, atx.PreviousATXs...)
+
+	if atx.Initial != nil {
+		ids = append(ids, types.ATXID(atx.Initial.CommitmentATX))
+	}
+	if atx.MarriageATX != nil {
+		ids = append(ids, *atx.MarriageATX)
+	}
+
+	filtered := make(map[types.ATXID]struct{})
+	for _, id := range ids {
+		if id != types.EmptyATXID && id != h.goldenATXID {
+			filtered[id] = struct{}{}
+		}
+	}
+
+	poetRefs := make(map[types.Hash32]struct{})
+	for _, nipost := range atx.NiPosts {
+		poetRefs[nipost.Challenge] = struct{}{}
+	}
+
+	return maps.Keys(poetRefs), maps.Keys(filtered)
 }
