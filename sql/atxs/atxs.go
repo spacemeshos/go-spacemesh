@@ -399,13 +399,6 @@ func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err e
 	return nonce, err
 }
 
-// AddMaybeNoNonce adds an ATX for a given ATX ID. It doesn't try
-// to set the nonce field if VRFNonce is not set in the ATX.
-// This function is only to be used for testing.
-func AddMaybeNoNonce(db sql.Executor, atx *types.ActivationTx) error {
-	return Add(db, atx)
-}
-
 func Add(db sql.Executor, atx *types.ActivationTx) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
