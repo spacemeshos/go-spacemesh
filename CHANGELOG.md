@@ -9,10 +9,10 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 With this release the minimum supported version for Intel Macs is now macOS 13 (Ventura) and for Apple Silicon Macs it
 is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spacemesh/pull/5879)).
 
-This update removes migration code Upgrading to this version requires going
-through v1.5.x first. Removed migrations for:
+This update removes migration code for go-spacemesh databases created with versions before v1.5.0.
+Upgrading to this version requires going through v1.5.x first. Removed migrations for:
  * legacy keys in the post data directory ([#5907](https://github.com/spacemeshos/go-spacemesh/pull/5907)).
- * ATX blob separation and always populating nonce column in atxs (TODO: add URL)
+ * ATX blob separation and always populating nonce column in atxs ([#5942](https://github.com/spacemeshos/go-spacemesh/pull/5942))
 
 ### Highlights
 
