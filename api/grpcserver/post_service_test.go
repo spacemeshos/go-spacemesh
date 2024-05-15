@@ -351,7 +351,6 @@ func Test_PostService_Connection_NotAllowed(t *testing.T) {
 	conn, err := grpc.NewClient(
 		cfg.PublicListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 
