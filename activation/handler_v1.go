@@ -247,6 +247,7 @@ func (h *HandlerV1) validateNonInitialAtx(
 
 	needRecheck := atx.VRFNonce != nil || atx.NumUnits > previous.NumUnits
 	if atx.VRFNonce == nil {
+		atx.VRFNonce = new(uint64)
 		// We load the previous ATX from blob and hence it might not contain a VRF nonce.
 		// In this case, we need to fetch the current nonce from the DB.
 		// The value 0 means that most likely it is not set and we need to query the DB.
@@ -255,9 +256,9 @@ func (h *HandlerV1) validateNonInitialAtx(
 			if err != nil {
 				return fmt.Errorf("failed to get current nonce from previous %s: %w", previous.ID(), err)
 			}
-			atx.VRFNonce = (*uint64)(&current)
+			*atx.VRFNonce = uint64(current)
 		} else {
-			atx.VRFNonce = (*uint64)(&previous.VRFNonce)
+			*atx.VRFNonce = uint64(previous.VRFNonce)
 		}
 	}
 
