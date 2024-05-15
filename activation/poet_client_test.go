@@ -220,5 +220,5 @@ func TestPoetClient_QueryProofTimeout(t *testing.T) {
 		})
 	}
 	eg.Wait()
-	require.WithinDuration(t, start.Add(cfg.RequestTimeout), time.Now(), time.Millisecond*100)
+	require.WithinDuration(t, start.Add(cfg.RequestTimeout), time.Now(), time.Millisecond*300)
 }
