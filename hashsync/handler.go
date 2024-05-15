@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -75,6 +76,35 @@ func decodeItemBatchMessage(m *ItemBatchMessage, newValue NewValueFunc) (*decode
 			len(d.ContentKeys), len(d.ContentValues))
 	}
 	return d, nil
+}
+
+// QQQQQ: rmme
+var (
+	numRead    int
+	numWritten int
+	smtx       sync.Mutex
+)
+
+type rmmeCountingStream struct {
+	io.ReadWriter
+}
+
+// Read implements io.ReadWriter.
+func (r *rmmeCountingStream) Read(p []byte) (n int, err error) {
+	smtx.Lock()
+	defer smtx.Unlock()
+	n, err = r.ReadWriter.Read(p)
+	numRead += n
+	return n, err
+}
+
+// Write implements io.ReadWriter.
+func (r *rmmeCountingStream) Write(p []byte) (n int, err error) {
+	smtx.Lock()
+	defer smtx.Unlock()
+	n, err = r.ReadWriter.Write(p)
+	numWritten += n
+	return n, err
 }
 
 type conduitState int
@@ -277,11 +307,11 @@ func (c *wireConduit) withInitialRequest(toCall func(Conduit) error) ([]byte, er
 	return c.initReqBuf.Bytes(), nil
 }
 
-func (c *wireConduit) handleStream(stream io.ReadWriter, rsr *RangeSetReconciler) error {
+func (c *wireConduit) handleStream(ctx context.Context, stream io.ReadWriter, rsr *RangeSetReconciler) error {
 	c.stream = stream
 	for {
 		// Process() will receive all items and messages from the peer
-		syncDone, err := rsr.Process(c)
+		syncDone, err := rsr.Process(ctx, c)
 		if err != nil {
 			return err
 		} else if syncDone {
@@ -307,19 +337,11 @@ func MakeServerHandler(is ItemStore, opts ...Option) server.StreamHandler {
 			Reader: io.MultiReader(bytes.NewBuffer(req), stream),
 			Writer: stream,
 		}
-		return c.handleStream(s, rsr)
+		return c.handleStream(ctx, s, rsr)
 	}
 }
 
-func BoundedSyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x, y types.Hash32, opts ...Option) error {
-	return syncStore(ctx, r, peer, is, &x, &y, opts)
-}
-
-func SyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, opts ...Option) error {
-	return syncStore(ctx, r, peer, is, nil, nil, opts)
-}
-
-func syncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x, y *types.Hash32, opts []Option) error {
+func SyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x, y *types.Hash32, opts ...Option) error {
 	c := wireConduit{newValue: is.New}
 	rsr := NewRangeSetReconciler(is, opts...)
 	// c.rmmePrint = true
@@ -338,32 +360,18 @@ func syncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x,
 		return err
 	}
 	return r.StreamRequest(ctx, peer, initReq, func(ctx context.Context, stream io.ReadWriter) error {
-		return c.handleStream(stream, rsr)
+		s := &rmmeCountingStream{ReadWriter: stream}
+		return c.handleStream(ctx, s, rsr)
 	})
 }
 
-func Probe(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, opts ...Option) (ProbeResult, error) {
-	return boundedProbe(ctx, r, peer, is, nil, nil, opts)
-}
-
-func BoundedProbe(
-	ctx context.Context,
-	r requester,
-	peer p2p.Peer,
-	is ItemStore,
-	x, y types.Hash32,
-	opts ...Option,
-) (ProbeResult, error) {
-	return boundedProbe(ctx, r, peer, is, &x, &y, opts)
-}
-
-func boundedProbe(
+func Probe(
 	ctx context.Context,
 	r requester,
 	peer p2p.Peer,
 	is ItemStore,
 	x, y *types.Hash32,
-	opts []Option,
+	opts ...Option,
 ) (ProbeResult, error) {
 	var (
 		err     error

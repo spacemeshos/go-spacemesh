@@ -1,6 +1,8 @@
 package hashsync
 
 import (
+	"context"
+	"fmt"
 	"math/rand"
 	"slices"
 	"testing"
@@ -214,7 +216,7 @@ type dumbStore struct {
 
 var _ ItemStore = &dumbStore{}
 
-func (ds *dumbStore) Add(k Ordered, v any) {
+func (ds *dumbStore) Add(ctx context.Context, k Ordered, v any) error {
 	if ds.m == nil {
 		ds.m = make(map[sampleID]any)
 	}
@@ -222,7 +224,7 @@ func (ds *dumbStore) Add(k Ordered, v any) {
 	if len(ds.keys) == 0 {
 		ds.keys = []sampleID{id}
 		ds.m[id] = v
-		return
+		return nil
 	}
 	p := slices.IndexFunc(ds.keys, func(other sampleID) bool {
 		return other >= id
@@ -237,6 +239,8 @@ func (ds *dumbStore) Add(k Ordered, v any) {
 		ds.keys = slices.Insert(ds.keys, p, id)
 		ds.m[id] = v
 	}
+
+	return nil
 }
 
 func (ds *dumbStore) iter(n int) Iterator {
@@ -320,6 +324,19 @@ func (it *dumbStore) New() any {
 	panic("not implemented")
 }
 
+func (ds *dumbStore) Copy() ItemStore {
+	panic("not implemented")
+}
+
+func (ds *dumbStore) Has(k Ordered) bool {
+	for _, cur := range ds.keys {
+		if k.Compare(cur) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 type verifiedStoreIterator struct {
 	t         *testing.T
 	knownGood Iterator
@@ -375,7 +392,7 @@ func disableReAdd(s ItemStore) {
 	}
 }
 
-func (vs *verifiedStore) Add(k Ordered, v any) {
+func (vs *verifiedStore) Add(ctx context.Context, k Ordered, v any) error {
 	if vs.disableReAdd {
 		_, found := vs.added[k.(sampleID)]
 		require.False(vs.t, found, "hash sent twice: %v", k)
@@ -384,8 +401,13 @@ func (vs *verifiedStore) Add(k Ordered, v any) {
 		}
 		vs.added[k.(sampleID)] = struct{}{}
 	}
-	vs.knownGood.Add(k, v)
-	vs.store.Add(k, v)
+	if err := vs.knownGood.Add(ctx, k, v); err != nil {
+		return fmt.Errorf("add to knownGood: %w", err)
+	}
+	if err := vs.store.Add(ctx, k, v); err != nil {
+		return fmt.Errorf("add to store: %w", err)
+	}
+	return nil
 }
 
 func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) RangeInfo {
@@ -476,6 +498,22 @@ func (vs *verifiedStore) New() any {
 	return v2
 }
 
+func (vs *verifiedStore) Copy() ItemStore {
+	return &verifiedStore{
+		t:            vs.t,
+		knownGood:    vs.knownGood.Copy(),
+		store:        vs.store.Copy(),
+		disableReAdd: vs.disableReAdd,
+	}
+}
+
+func (vs *verifiedStore) Has(k Ordered) bool {
+	h1 := vs.knownGood.Has(k)
+	h2 := vs.store.Has(k)
+	require.Equal(vs.t, h1, h2)
+	return h2
+}
+
 type storeFactory func(t *testing.T) ItemStore
 
 func makeDumbStore(t *testing.T) ItemStore {
@@ -500,7 +538,7 @@ func makeVerifiedSyncTreeStore(t *testing.T) ItemStore {
 func makeStore(t *testing.T, f storeFactory, items string) ItemStore {
 	s := f(t)
 	for _, c := range items {
-		s.Add(sampleID(c), "<c>")
+		require.NoError(t, s.Add(context.Background(), sampleID(c), "<c>"))
 	}
 	return s
 }
@@ -580,7 +618,7 @@ func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int)
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
 		var err error
-		bDone, err = syncB.Process(fc)
+		bDone, err = syncB.Process(context.Background(), fc)
 		require.NoError(fc.t, err)
 		// a party should never send anything in response to the "done" message
 		require.False(fc.t, aDone && !bDone, "A is done but B after that is not")
@@ -593,7 +631,7 @@ func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int)
 		fc.gotoResponse()
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
-		aDone, err = syncA.Process(fc)
+		aDone, err = syncA.Process(context.Background(), fc)
 		require.NoError(fc.t, err)
 		// dumpRangeMessages(fc.t, fc.msgs, "A %q --> B %q:", storeItemStr(syncB.is), storeItemStr(syncA.is))
 		// dumpRangeMessages(fc.t, fc.resp.msgs, "A -> B:")
@@ -623,7 +661,7 @@ func runBoundedProbe(t *testing.T, from, to *RangeSetReconciler, x, y Ordered) P
 func doRunProbe(fc *fakeConduit, from, to *RangeSetReconciler, info RangeInfo) ProbeResult {
 	require.NotEmpty(fc.t, fc.resp, "empty initial round")
 	fc.gotoResponse()
-	done, err := to.Process(fc)
+	done, err := to.Process(context.Background(), fc)
 	require.True(fc.t, done)
 	require.NoError(fc.t, err)
 	fc.gotoResponse()

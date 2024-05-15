@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -23,14 +24,15 @@ type syncResult struct {
 type splitSync struct {
 	logger       *zap.Logger
 	syncBase     syncBase
-	peerSet      peerSet
-	peers        []p2p.Peer
+	peers        *peers.Peers
+	syncPeers    []p2p.Peer
 	gracePeriod  time.Duration
 	clock        clockwork.Clock
 	sq           syncQueue
 	resCh        chan syncResult
 	slowRangeCh  chan *syncRange
 	syncMap      map[p2p.Peer]*syncRange
+	failedPeers  map[p2p.Peer]struct{}
 	numRunning   int
 	numRemaining int
 	numPeers     int
@@ -41,35 +43,36 @@ type splitSync struct {
 func newSplitSync(
 	logger *zap.Logger,
 	syncBase syncBase,
-	peerSet peerSet,
-	peers []p2p.Peer,
+	peers *peers.Peers,
+	syncPeers []p2p.Peer,
 	gracePeriod time.Duration,
 	clock clockwork.Clock,
 ) *splitSync {
-	if len(peers) == 0 {
+	if len(syncPeers) == 0 {
 		panic("BUG: no peers passed to splitSync")
 	}
 	return &splitSync{
 		logger:       logger,
 		syncBase:     syncBase,
-		peerSet:      peerSet,
 		peers:        peers,
+		syncPeers:    syncPeers,
 		gracePeriod:  gracePeriod,
 		clock:        clock,
-		sq:           newSyncQueue(len(peers)),
+		sq:           newSyncQueue(len(syncPeers)),
 		resCh:        make(chan syncResult),
 		syncMap:      make(map[p2p.Peer]*syncRange),
-		numRemaining: len(peers),
-		numPeers:     len(peers),
+		failedPeers:  make(map[p2p.Peer]struct{}),
+		numRemaining: len(syncPeers),
+		numPeers:     len(syncPeers),
 	}
 }
 
 func (s *splitSync) nextPeer() p2p.Peer {
-	if len(s.peers) == 0 {
+	if len(s.syncPeers) == 0 {
 		panic("BUG: no peers")
 	}
-	p := s.peers[0]
-	s.peers = s.peers[1:]
+	p := s.syncPeers[0]
+	s.syncPeers = s.syncPeers[1:]
 	return p
 }
 
@@ -113,13 +116,13 @@ func (s *splitSync) handleSyncResult(r syncResult) error {
 	sr.numSyncers--
 	if r.err != nil {
 		s.numPeers--
-		s.peerSet.removePeer(r.s.peer())
+		s.failedPeers[r.s.peer()] = struct{}{}
 		s.logger.Debug("remove failed peer",
 			zap.Stringer("peer", r.s.peer()),
 			zap.Int("numPeers", s.numPeers),
 			zap.Int("numRemaining", s.numRemaining),
 			zap.Int("numRunning", s.numRunning),
-			zap.Int("availPeers", len(s.peers)))
+			zap.Int("availPeers", len(s.syncPeers)))
 		if s.numPeers == 0 && s.numRemaining != 0 {
 			return errors.New("all peers dropped before full sync has completed")
 		}
@@ -131,22 +134,26 @@ func (s *splitSync) handleSyncResult(r syncResult) error {
 		}
 	} else {
 		sr.done = true
-		s.peers = append(s.peers, r.s.peer())
+		s.syncPeers = append(s.syncPeers, r.s.peer())
 		s.numRemaining--
 		s.logger.Debug("peer synced successfully",
 			zap.Stringer("peer", r.s.peer()),
 			zap.Int("numPeers", s.numPeers),
 			zap.Int("numRemaining", s.numRemaining),
 			zap.Int("numRunning", s.numRunning),
-			zap.Int("availPeers", len(s.peers)))
+			zap.Int("availPeers", len(s.syncPeers)))
 	}
 
 	return nil
 }
 
 func (s *splitSync) clearDeadPeers() {
-	s.peers = slices.DeleteFunc(s.peers, func(p p2p.Peer) bool {
-		return !s.peerSet.havePeer(p)
+	s.syncPeers = slices.DeleteFunc(s.syncPeers, func(p p2p.Peer) bool {
+		if !s.peers.Contains(p) {
+			return true
+		}
+		_, failed := s.failedPeers[p]
+		return failed
 	})
 }
 
@@ -171,9 +178,9 @@ func (s *splitSync) sync(ctx context.Context) error {
 			break
 		}
 		s.clearDeadPeers()
-		for s.numRemaining > 0 && (s.sq.empty() || len(s.peers) == 0) {
+		for s.numRemaining > 0 && (s.sq.empty() || len(s.syncPeers) == 0) {
 			s.logger.Debug("QQQQQ: loop")
-			if s.numRunning == 0 && len(s.peers) == 0 {
+			if s.numRunning == 0 && len(s.syncPeers) == 0 {
 				return errors.New("all peers dropped before full sync has completed")
 			}
 			select {

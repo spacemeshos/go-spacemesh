@@ -1,5 +1,7 @@
 package hashsync
 
+import "context"
+
 type ValueHandler interface {
 	Load(k Ordered, treeValue any) (v any)
 	Store(k Ordered, v any) (treeValue any)
@@ -68,9 +70,10 @@ func NewSyncTreeStore(m Monoid, vh ValueHandler, newValue NewValueFunc) ItemStor
 }
 
 // Add implements ItemStore.
-func (sts *SyncTreeStore) Add(k Ordered, v any) {
+func (sts *SyncTreeStore) Add(ctx context.Context, k Ordered, v any) error {
 	treeValue := sts.vh.Store(k, v)
 	sts.st.Set(k, treeValue)
+	return nil
 }
 
 func (sts *SyncTreeStore) iter(ptr SyncTreePointer) Iterator {
@@ -136,4 +139,20 @@ func (sts *SyncTreeStore) Max() Iterator {
 // New implements ItemStore.
 func (sts *SyncTreeStore) New() any {
 	return sts.newValue()
+}
+
+// Copy implements ItemStore.
+func (sts *SyncTreeStore) Copy() ItemStore {
+	return &SyncTreeStore{
+		st:       sts.st.Copy(),
+		vh:       sts.vh,
+		newValue: sts.newValue,
+		identity: sts.identity,
+	}
+}
+
+// Has implements ItemStore.
+func (sts *SyncTreeStore) Has(k Ordered) bool {
+	_, found := sts.st.Lookup(k)
+	return found
 }

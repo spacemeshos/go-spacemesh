@@ -418,6 +418,13 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 
 func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 	cfg := xorSyncTestConfig{
+		// large test:
+		// maxSendRange:    1,
+		// numTestHashes:   5000000,
+		// minNumSpecificA: 15000,
+		// maxNumSpecificA: 20000,
+		// minNumSpecificB: 15000,
+		// maxNumSpecificB: 20000,
 		maxSendRange:    1,
 		numTestHashes:   100000,
 		minNumSpecificA: 4,
@@ -430,13 +437,16 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 		withClientServer(
 			storeA, getRequester, opts,
 			func(ctx context.Context, client requester, srvPeerID p2p.Peer) {
-				err := SyncStore(ctx, client, srvPeerID, storeB, opts...)
+				err := SyncStore(ctx, client, srvPeerID, storeB, nil, nil, opts...)
 				require.NoError(t, err)
 
 				if fr, ok := client.(*fakeRequester); ok {
 					t.Logf("numSpecific: %d, bytesSent %d, bytesReceived %d",
 						numSpecific, fr.bytesSent, fr.bytesReceived)
 				}
+				smtx.Lock()
+				t.Logf("bytes read: %d, bytes written: %d", numRead, numWritten)
+				smtx.Unlock()
 			})
 		return true
 	})
@@ -444,9 +454,9 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 }
 
 func TestWireSync(t *testing.T) {
-	t.Run("fake requester", func(t *testing.T) {
-		testWireSync(t, fakeRequesterGetter())
-	})
+	// t.Run("fake requester", func(t *testing.T) {
+	// 	testWireSync(t, fakeRequesterGetter())
+	// })
 	t.Run("p2p", func(t *testing.T) {
 		testWireSync(t, p2pRequesterGetter(t))
 	})
@@ -468,7 +478,7 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) requester {
 			func(ctx context.Context, client requester, srvPeerID p2p.Peer) {
 				minA := storeA.Min().Key()
 				infoA := storeA.GetRangeInfo(nil, minA, minA, -1)
-				prA, err := Probe(ctx, client, srvPeerID, storeB, opts...)
+				prA, err := Probe(ctx, client, srvPeerID, storeB, nil, nil, opts...)
 				require.NoError(t, err)
 				require.Equal(t, infoA.Fingerprint, prA.FP)
 				require.Equal(t, infoA.Count, prA.Count)
@@ -479,7 +489,7 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) requester {
 				x := partInfoA.Start.Key().(types.Hash32)
 				y := partInfoA.End.Key().(types.Hash32)
 				// partInfoA = storeA.GetRangeInfo(nil, x, y, -1)
-				prA, err = BoundedProbe(ctx, client, srvPeerID, storeB, x, y, opts...)
+				prA, err = Probe(ctx, client, srvPeerID, storeB, &x, &y, opts...)
 				require.NoError(t, err)
 				require.Equal(t, partInfoA.Fingerprint, prA.FP)
 				require.Equal(t, partInfoA.Count, prA.Count)
@@ -495,9 +505,9 @@ func TestWireProbe(t *testing.T) {
 	t.Run("fake requester", func(t *testing.T) {
 		testWireProbe(t, fakeRequesterGetter())
 	})
-	// t.Run("p2p", func(t *testing.T) {
-	// 	testWireProbe(t, p2pRequesterGetter(t))
-	// })
+	t.Run("p2p", func(t *testing.T) {
+		testWireProbe(t, p2pRequesterGetter(t))
+	})
 }
 
 // TODO: test bounded sync

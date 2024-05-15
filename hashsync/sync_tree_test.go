@@ -36,7 +36,7 @@ func makeStringConcatTree(chars string) SyncTree {
 	for n, c := range chars {
 		ids[n] = sampleID(c)
 	}
-	return SyncTreeFromSlice[sampleID](sampleCountMonoid(), ids)
+	return SyncTreeFromSlice(sampleCountMonoid(), ids)
 }
 
 // dumbAdd inserts the node into the tree without trying to maintain the
@@ -67,7 +67,7 @@ func makeRBTree(chars string) SyncTree {
 	return st
 }
 
-func gtePos(all string, item string) int {
+func gtePos(all, item string) int {
 	n := slices.IndexFunc([]byte(all), func(v byte) bool {
 		return v >= item[0]
 	})
@@ -411,7 +411,7 @@ func testRandomOrderAndRanges(t *testing.T, mktree makeTestTreeFunc) {
 		rand.Shuffle(len(shuffled), func(i, j int) {
 			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 		})
-		tree := makeDumbTree(string(shuffled))
+		tree := mktree(string(shuffled))
 		x := sampleID(shuffled[rand.Intn(len(shuffled))])
 		y := sampleID(shuffled[rand.Intn(len(shuffled))])
 		stopCount := rand.Intn(len(shuffled)+2) - 1

@@ -1,6 +1,7 @@
 package hashsync
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -167,7 +168,7 @@ type RangeInfo struct {
 
 type ItemStore interface {
 	// Add adds a key-value pair to the store
-	Add(k Ordered, v any)
+	Add(ctx context.Context, k Ordered, v any) error
 	// GetRangeInfo returns RangeInfo for the item range in the tree.
 	// If count >= 0, at most count items are returned, and RangeInfo
 	// is returned for the corresponding subrange of the requested range.
@@ -182,6 +183,10 @@ type ItemStore interface {
 	Max() Iterator
 	// New returns an empty payload value
 	New() any
+	// Copy makes a shallow copy of the ItemStore
+	Copy() ItemStore
+	// Has returns true if the specified key is present in ItemStore
+	Has(k Ordered) bool
 }
 
 type ProbeResult struct {
@@ -223,7 +228,7 @@ func NewRangeSetReconciler(is ItemStore, opts ...Option) *RangeSetReconciler {
 // 	return fmt.Sprintf("%s", it.Key())
 // }
 
-func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding, start, end Iterator, x, y Ordered) (Iterator, error) {
+func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding Iterator, x, y Ordered) (Iterator, error) {
 	if preceding != nil && preceding.Key().Compare(x) > 0 {
 		preceding = nil
 	}
@@ -358,12 +363,12 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 			panic("BUG: can't split range with count > 1")
 		}
 		middle := part.End.Key()
-		next, err := rsr.processSubrange(c, info.Start, part.Start, part.End, x, middle)
+		next, err := rsr.processSubrange(c, info.Start, x, middle)
 		if err != nil {
 			return nil, false, err
 		}
 		// fmt.Fprintf(os.Stderr, "QQQQQ: next=%q\n", qqqqRmmeK(next))
-		_, err = rsr.processSubrange(c, next, part.End, info.End, middle, y)
+		_, err = rsr.processSubrange(c, next, middle, y)
 		if err != nil {
 			return nil, false, err
 		}
@@ -540,7 +545,7 @@ func (rsr *RangeSetReconciler) HandleProbeResponse(c Conduit, info RangeInfo) (p
 	}
 }
 
-func (rsr *RangeSetReconciler) Process(c Conduit) (done bool, err error) {
+func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done bool, err error) {
 	var msgs []SyncMessage
 	// All of the messages need to be received before processing
 	// them, as processing the messages involves sending more
@@ -558,7 +563,9 @@ func (rsr *RangeSetReconciler) Process(c Conduit) (done bool, err error) {
 		if msg.Type() == MessageTypeItemBatch {
 			vals := msg.Values()
 			for n, k := range msg.Keys() {
-				rsr.is.Add(k, vals[n])
+				if err := rsr.is.Add(ctx, k, vals[n]); err != nil {
+					return false, fmt.Errorf("error adding an item to the store: %w", err)
+				}
 			}
 			continue
 		}

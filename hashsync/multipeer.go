@@ -3,77 +3,69 @@ package hashsync
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
 )
 
-// type DataHandler func(context.Context, types.Hash32, p2p.Peer, any) error
-
-// type dataItem struct {
-// 	key   types.Hash32
-// 	value any
-// }
-
-// type dataItemHandler func(di dataItem)
-
-// type derivedStore struct {
-// 	ItemStore
-// 	handler dataItemHandler
-// 	// itemCh chan dataItem
-// 	// // TODO: don't embed context in the struct
-// 	// ctx context.Context
-// }
-
-// func (s *derivedStore) Add(k Ordered, v any) {
-// 	s.ItemStore.Add(k, v)
-// 	s.handler(dataItem{key: k.(types.Hash32), value: v})
-// 	// select {
-// 	// case <-s.ctx.Done():
-// 	// case s.itemCh <- dataItem{key: k.(types.Hash32), value: v}:
-// 	// }
-// }
-
-type probeResult struct {
-	probed   map[p2p.Peer]int
-	minCount int
-	maxCount int
+type syncability struct {
+	// peers that were probed successfully
+	syncable []p2p.Peer
+	// peers that have enough items for split sync
+	splitSyncable []p2p.Peer
+	// Number of peers that are similar enough to this one for full sync
+	nearFullCount int
 }
-
-// type peerReconciler struct {
-// 	st SyncTree
-// }
 
 type MultiPeerReconcilerOpt func(mpr *MultiPeerReconciler)
 
+func WithSyncPeerCount(count int) MultiPeerReconcilerOpt {
+	return func(mpr *MultiPeerReconciler) {
+		mpr.syncPeerCount = count
+	}
+}
+
 func WithMinFullSyncCount(count int) MultiPeerReconcilerOpt {
 	return func(mpr *MultiPeerReconciler) {
-		mpr.minPartSyncCount = count
+		mpr.minSplitSyncCount = count
 	}
 }
 
-func WithMinFullFraction(frac float64) MultiPeerReconcilerOpt {
+func WithMaxFullDiff(diff int) MultiPeerReconcilerOpt {
 	return func(mpr *MultiPeerReconciler) {
-		mpr.minFullFraction = frac
+		mpr.maxFullDiff = diff
 	}
 }
 
-// func WithMinPartSyncPeers(n int) MultiPeerReconcilerOpt {
-// 	return func(mpr *MultiPeerReconciler) {
-// 		mpr.minPartSyncPeers = n
-// 	}
-// }
+func WithSyncInterval(d time.Duration) MultiPeerReconcilerOpt {
+	return func(mpr *MultiPeerReconciler) {
+		mpr.syncInterval = d
+	}
+}
 
-// func WithPeerSyncTimeout(t time.Duration) MultiPeerReconcilerOpt {
-// 	return func(mpr *MultiPeerReconciler) {
-// 		mpr.peerSyncTimeout = t
-// 	}
-// }
+func WithNoPeersRecheckInterval(d time.Duration) MultiPeerReconcilerOpt {
+	return func(mpr *MultiPeerReconciler) {
+		mpr.noPeersRecheckInterval = d
+	}
+}
+
+func WithMinSplitSyncPeers(n int) MultiPeerReconcilerOpt {
+	return func(mpr *MultiPeerReconciler) {
+		mpr.minSplitSyncPeers = n
+	}
+}
+
+func WithMinCompleteFraction(f float64) MultiPeerReconcilerOpt {
+	return func(mpr *MultiPeerReconciler) {
+		mpr.minCompleteFraction = f
+	}
+}
 
 func WithSplitSyncGracePeriod(t time.Duration) MultiPeerReconcilerOpt {
 	return func(mpr *MultiPeerReconciler) {
@@ -87,245 +79,222 @@ func withClock(clock clockwork.Clock) MultiPeerReconcilerOpt {
 	}
 }
 
-type MultiPeerReconciler struct {
-	logger zap.Logger
-	// minPartSyncPeers    int
-	minPartSyncCount     int
-	minFullFraction      float64
-	splitSyncGracePeriod time.Duration
-	// peerSyncTimeout  time.Duration
-	syncBase syncBase
-	peerLock sync.Mutex
-	peers    map[p2p.Peer]struct{}
-	clock    clockwork.Clock
-}
-
-func NewMultiPeerReconciler(logger zap.Logger, syncBase syncBase, opts ...MultiPeerReconcilerOpt) *MultiPeerReconciler {
-	return &MultiPeerReconciler{
-		// minPartSyncPeers:    2,
-		minPartSyncCount:     1000,
-		minFullFraction:      0.95,
-		splitSyncGracePeriod: time.Minute,
-		syncBase:             syncBase,
-		clock:                clockwork.NewRealClock(),
+func withSyncRunner(runner syncRunner) MultiPeerReconcilerOpt {
+	return func(mpr *MultiPeerReconciler) {
+		mpr.runner = runner
 	}
 }
 
-func (mpr *MultiPeerReconciler) addPeer(p p2p.Peer) {
-	mpr.peerLock.Lock()
-	defer mpr.peerLock.Unlock()
-	mpr.peers[p] = struct{}{}
+type runner struct {
+	mpr *MultiPeerReconciler
 }
 
-func (mpr *MultiPeerReconciler) removePeer(p p2p.Peer) {
-	mpr.peerLock.Lock()
-	defer mpr.peerLock.Unlock()
-	delete(mpr.peers, p)
+var _ syncRunner = &runner{}
+
+func (r *runner) splitSync(ctx context.Context, syncPeers []p2p.Peer) error {
+	s := newSplitSync(
+		r.mpr.logger, r.mpr.syncBase, r.mpr.peers, syncPeers,
+		r.mpr.splitSyncGracePeriod, r.mpr.clock)
+	return s.sync(ctx)
 }
 
-func (mpr *MultiPeerReconciler) numPeers() int {
-	mpr.peerLock.Lock()
-	defer mpr.peerLock.Unlock()
-	return len(mpr.peers)
+func (r *runner) fullSync(ctx context.Context, syncPeers []p2p.Peer) error {
+	return r.mpr.fullSync(ctx, syncPeers)
 }
 
-func (mpr *MultiPeerReconciler) listPeers() []p2p.Peer {
-	mpr.peerLock.Lock()
-	defer mpr.peerLock.Unlock()
-	return maps.Keys(mpr.peers)
+type MultiPeerReconciler struct {
+	logger                 *zap.Logger
+	syncBase               syncBase
+	peers                  *peers.Peers
+	syncPeerCount          int
+	minSplitSyncPeers      int
+	minSplitSyncCount      int
+	maxFullDiff            int
+	minCompleteFraction    float64
+	splitSyncGracePeriod   time.Duration
+	syncInterval           time.Duration
+	noPeersRecheckInterval time.Duration
+	clock                  clockwork.Clock
+	runner                 syncRunner
 }
 
-func (mpr *MultiPeerReconciler) havePeer(p p2p.Peer) bool {
-	mpr.peerLock.Lock()
-	defer mpr.peerLock.Unlock()
-	_, found := mpr.peers[p]
-	return found
+func NewMultiPeerReconciler(
+	logger *zap.Logger,
+	syncBase syncBase,
+	peers *peers.Peers,
+	opts ...MultiPeerReconcilerOpt,
+) *MultiPeerReconciler {
+	mpr := &MultiPeerReconciler{
+		logger:                 logger,
+		syncBase:               syncBase,
+		peers:                  peers,
+		syncPeerCount:          20,
+		minSplitSyncPeers:      2,
+		minSplitSyncCount:      1000,
+		maxFullDiff:            10000,
+		syncInterval:           5 * time.Minute,
+		minCompleteFraction:    0.5,
+		splitSyncGracePeriod:   time.Minute,
+		noPeersRecheckInterval: 30 * time.Second,
+		clock:                  clockwork.NewRealClock(),
+	}
+	for _, opt := range opts {
+		opt(mpr)
+	}
+	if mpr.runner == nil {
+		mpr.runner = &runner{mpr: mpr}
+	}
+	return mpr
 }
 
-func (mpr *MultiPeerReconciler) probePeers(ctx context.Context) (*probeResult, error) {
-	var pr probeResult
-	for _, p := range mpr.listPeers() {
-		count, err := mpr.syncBase.probe(ctx, p)
+func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.Peer) (syncability, error) {
+	var s syncability
+	for _, p := range syncPeers {
+		pr, err := mpr.syncBase.probe(ctx, p)
 		if err != nil {
 			log.Warning("error probing the peer", zap.Any("peer", p), zap.Error(err))
 			if errors.Is(err, context.Canceled) {
-				return nil, err
+				return s, err
 			}
 			continue
 		}
-		if pr.probed == nil {
-			pr.probed = map[p2p.Peer]int{
-				p: count,
-			}
-			pr.minCount = count
-			pr.maxCount = count
-		} else {
-			pr.probed[p] = count
-			if count < pr.minCount {
-				pr.minCount = count
-			}
-			if count > pr.maxCount {
-				pr.maxCount = count
-			}
+		s.syncable = append(s.syncable, p)
+		if pr.Count > mpr.minSplitSyncCount {
+			s.splitSyncable = append(s.splitSyncable, p)
+		}
+		if (1-pr.Sim)*float64(mpr.syncBase.count()) < float64(mpr.maxFullDiff) {
+			s.nearFullCount++
 		}
 	}
-	return &pr, nil
+	return s, nil
 }
 
-// func (mpr *MultiPeerReconciler) splitSync(ctx context.Context, peers []p2p.Peer) error {
-// 	// Use priority queue. Higher priority = more time since started syncing
-// 	// Highest priority = not started syncing yet
-// 	// Mark syncRange as synced when it's done, next time it's popped from the queue,
-// 	// it will be dropped
-// 	// When picking up an entry which is already being synced, start with
-// 	// SyncTree of the entry
-// 	// TODO: when all of the ranges are synced at least once, just return.
-// 	// The remaining syncs will be canceled
-// 	// TODO: when no available peers remain, return failure
-// 	if len(peers) == 0 {
-// 		panic("BUG: no peers passed to splitSync")
-// 	}
-// 	syncCtx, cancel := context.WithCancel(ctx)
-// 	defer cancel()
-// 	delim := getDelimiters(len(peers))
-// 	sq := make(syncQueue, len(peers))
-// 	var y types.Hash32
-// 	for n := range sq {
-// 		x := y
-// 		if n == len(peers)-1 {
-// 			y = types.Hash32{}
-// 		} else {
-// 			y = delim[n]
-// 		}
-// 		sq[n] = &syncRange{
-// 			x: x,
-// 			y: y,
-// 		}
-// 	}
-// 	heap.Init(&sq)
-// 	peers = slices.Clone(peers)
-// 	resCh := make(chan syncResult)
-// 	syncMap := make(map[p2p.Peer]*syncRange)
-// 	numRunning := 0
-// 	numRemaining := len(peers)
-// 	numPeers := len(peers)
-// 	needGracePeriod := true
-// 	for numRemaining > 0 {
-// 		p := peers[0]
-// 		peers = peers[1:]
-// 		var sr *syncRange
-// 		for len(sq) != 0 {
-// 			sr = heap.Pop(&sq).(*syncRange)
-// 			if !sr.done {
-// 				break
-// 			}
-// 			sr = nil
-// 		}
-// 		if sr == nil {
-// 			panic("BUG: bad syncRange accounting in splitSync")
-// 		}
-// 		syncMap[p] = sr
-// 		var s syncer
-// 		if len(sr.syncers) != 0 {
-// 			// derive from an existing syncer to get sync against
-// 			// more up-to-date data
-// 			s = sr.syncers[len(sr.syncers)-1].derive(p)
-// 		} else {
-// 			s = mpr.syncBase.derive(p)
-// 		}
-// 		sr.syncers = append(sr.syncers, s)
-// 		numRunning++
-// 		// push this syncRange to the back of the queue as a fresh sync
-// 		// is just starting
-// 		sq.update(sr, mpr.clock.Now())
-// 		go func() {
-// 			err := s.sync(syncCtx, &sr.x, &sr.y)
-// 			select {
-// 			case <-syncCtx.Done():
-// 			case resCh <- syncResult{s: s, err: err}:
-// 			}
-// 		}()
+func (mpr *MultiPeerReconciler) needSplitSync(s syncability) bool {
+	if float64(s.nearFullCount) >= float64(mpr.syncBase.count())*mpr.minCompleteFraction {
+		// enough peers are close to this one according to minhash score, can do
+		// full sync
+		return false
+	}
 
-// 		peers := slices.DeleteFunc(peers, func(p p2p.Peer) bool {
-// 			return !mpr.havePeer(p)
-// 		})
+	if len(s.splitSyncable) < mpr.minSplitSyncPeers {
+		// would be nice to do split sync, but not enough peers for that
+		return false
+	}
 
-// 		// Grace period: after at least one syncer finishes, wait a bit
-// 		// before assigning it another range to avoid unneeded traffic.
-// 		// The grace period ends if any of the syncers fail
-// 		var gpTimer <-chan time.Time
-// 		if needGracePeriod {
-// 			gpTimer = mpr.clock.After(mpr.splitSyncGracePeriod)
-// 		}
-// 		for needGracePeriod && len(peers) == 0 {
-// 			if numRunning == 0 {
-// 				return errors.New("all peers dropped before full sync has completed")
-// 			}
+	return true
+}
 
-// 			var r syncResult
-// 			select {
-// 			case <-syncCtx.Done():
-// 				return syncCtx.Err()
-// 			case r = <-resCh:
-// 			case <-gpTimer:
-// 				needGracePeriod = false
-// 			}
+func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Peer) error {
+	var eg errgroup.Group
+	for _, p := range syncPeers {
+		syncer := mpr.syncBase.derive(p)
+		eg.Go(func() error {
+			err := syncer.sync(ctx, nil, nil)
+			switch {
+			case err == nil:
+			case errors.Is(err, context.Canceled):
+				return err
+			default:
+				mpr.logger.Error("error syncing peer", zap.Stringer("peer", p), zap.Error(err))
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
 
-// 			sr, found := syncMap[s.peer()]
-// 			if !found {
-// 				panic("BUG: error in split sync syncMap handling")
-// 			}
-// 			numRunning--
-// 			delete(syncMap, s.peer())
-// 			n := slices.Index(sr.syncers, s)
-// 			if n < 0 {
-// 				panic("BUG: bad syncers in syncRange")
-// 			}
-// 			sr.syncers = slices.Delete(sr.syncers, n, n+1)
-// 			if r.err != nil {
-// 				numPeers--
-// 				mpr.RemovePeer(s.peer())
-// 				if numPeers == 0 && numRemaining != 0 {
-// 					return errors.New("all peers dropped before full sync has completed")
-// 				}
-// 				if len(sr.syncers) == 0 {
-// 					// prioritize the syncRange for resync after failed
-// 					// sync with no active syncs remaining
-// 					sq.update(sr, time.Time{})
-// 				}
-// 				needGracePeriod = false
-// 			} else {
-// 				sr.done = true
-// 				peers = append(peers, s.peer())
-// 				numRemaining--
-// 			}
-// 		}
-// 	}
+func (mpr *MultiPeerReconciler) Run(ctx context.Context) error {
+	// The point of using split sync, which syncs different key ranges against
+	// different peers, vs full sync which syncs the full key range against different
+	// peers, is:
+	// 1. Avoid getting too many range splits and thus network transfer overhead
+	// 2. Avoid fetching same keys from multiple peers
 
-// 	return nil
-// }
-
-func (mpr *MultiPeerReconciler) run(ctx context.Context) error {
 	// States:
-	// A. No peers -> do nothing.
-	//    Got any peers => B
-	// B. Low on peers. Wait for more to appear
-	//    Lost all peers => A
-	//    Got enough peers => C
-	//    Timeout => C
-	// C. Probe the peers. Use successfully probed ones in states D/E
-	//    All probes failed => A
-	//    All are low on count (minPartSyncCount) => E
-	//    Some have substantially higher count (minFullFraction) => D
-	//    Otherwise => E
-	// D. Bounded sync. Subdivide the range by peers and start syncs.
-	//      Use peers with > minPartSyncCount
-	//      Wait for all the syncs to complete/fail
-	//    All syncs succeeded => A
-	//    Any syncs failed => A
-	// E. Full sync. Run full syncs against each peer
-	//    All syncs completed (success / fail) => F
-	// F. Wait. Pause for sync interval
+	// A. Wait. Pause for sync interval
 	//    Timeout => A
-	panic("TBD")
+	// B. No peers -> do nothing.
+	//    Got any peers => C
+	// C. Low on peers. Wait for more to appear
+	//    Lost all peers => B
+	//    Got enough peers => D
+	//    Timeout => D
+	// D. Probe the peers. Use successfully probed ones in states E/F
+	//      Drop failed peers from the peer set while polling.
+	//    All probes failed => B
+	//    N of peers < minSplitSyncPeers => E
+	//    All are low on count (minSplitSyncCount) => F
+	//    Enough peers (minCompleteFraction) with diffSize <= maxFullDiff => E
+	//      diffSize = (1-sim)*localItemCount
+	//    Otherwise => F
+	// E. Full sync. Run full syncs against each peer
+	//    All syncs completed (success / fail) => A
+	// F. Bounded sync. Subdivide the range by peers and start syncs.
+	//      Use peers with > minSplitSyncCount
+	//      Wait for all the syncs to complete/fail
+	//    All syncs completed (success / fail) => A
+	ctx, cancel := context.WithCancel(ctx)
+	var eg errgroup.Group
+	eg.Go(func() error {
+		err := mpr.syncBase.run(ctx)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			cancel()
+			mpr.logger.Error("error processing synced items", zap.Error(err))
+			return err
+		}
+		return nil
+	})
+	defer func() {
+		cancel()
+		eg.Wait()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			cancel()
+			// if the key handlers have caused an error, return that error
+			return eg.Wait()
+		case <-mpr.clock.After(mpr.syncInterval):
+		}
+
+		var (
+			s   syncability
+			err error
+		)
+		for {
+			syncPeers := mpr.peers.SelectBest(mpr.syncPeerCount)
+			if len(syncPeers) != 0 {
+				// probePeers doesn't return transient errors, sync must stop if it failed
+				s, err = mpr.probePeers(ctx, syncPeers)
+				if err != nil {
+					return err
+				}
+				if len(s.syncable) != 0 {
+					break
+				}
+			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-mpr.clock.After(mpr.noPeersRecheckInterval):
+			}
+		}
+
+		if mpr.needSplitSync(s) {
+			err = mpr.runner.splitSync(ctx, s.splitSyncable)
+		} else {
+			err = mpr.runner.fullSync(ctx, s.splitSyncable)
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+}
+
+type HashSyncBase struct {
+	r  requester
+	is ItemStore
 }

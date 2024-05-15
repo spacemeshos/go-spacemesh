@@ -8,12 +8,14 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 func hexDelimiters(n int) (r []string) {
@@ -70,14 +72,14 @@ func TestGetDelimiters(t *testing.T) {
 type splitSyncTester struct {
 	testing.TB
 
-	peers         []p2p.Peer
+	syncPeers     []p2p.Peer
 	clock         clockwork.Clock
 	mtx           sync.Mutex
 	fail          map[hexRange]bool
 	expPeerRanges map[hexRange]int
 	peerRanges    map[hexRange][]p2p.Peer
 	syncBase      *MocksyncBase
-	peerSet       *MockpeerSet
+	peers         *peers.Peers
 	splitSync     *splitSync
 }
 
@@ -103,9 +105,9 @@ var tstRanges = []hexRange{
 func newTestSplitSync(t testing.TB) *splitSyncTester {
 	ctrl := gomock.NewController(t)
 	tst := &splitSyncTester{
-		peers: make([]p2p.Peer, 4),
-		clock: clockwork.NewFakeClock(),
-		fail:  make(map[hexRange]bool),
+		syncPeers: make([]p2p.Peer, 4),
+		clock:     clockwork.NewFakeClock(),
+		fail:      make(map[hexRange]bool),
 		expPeerRanges: map[hexRange]int{
 			tstRanges[0]: 0,
 			tstRanges[1]: 0,
@@ -114,12 +116,12 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 		},
 		peerRanges: make(map[hexRange][]p2p.Peer),
 		syncBase:   NewMocksyncBase(ctrl),
-		peerSet:    NewMockpeerSet(ctrl),
+		peers:      peers.New(),
 	}
-	for n := range tst.peers {
-		tst.peers[n] = p2p.Peer(types.RandomBytes(20))
+	for n := range tst.syncPeers {
+		tst.syncPeers[n] = p2p.Peer(types.RandomBytes(20))
 	}
-	for index, p := range tst.peers {
+	for index, p := range tst.syncPeers {
 		index := index
 		p := p
 		tst.syncBase.EXPECT().
@@ -153,18 +155,14 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 			}).
 			AnyTimes()
 	}
-	tst.peerSet.EXPECT().
-		havePeer(gomock.Any()).
-		DoAndReturn(func(p p2p.Peer) bool {
-			require.Contains(t, tst.peers, p)
-			return true
-		}).
-		AnyTimes()
+	for _, p := range tst.syncPeers {
+		tst.peers.Add(p)
+	}
 	tst.splitSync = newSplitSync(
 		zaptest.NewLogger(t),
 		tst.syncBase,
-		tst.peerSet,
 		tst.peers,
+		tst.syncPeers,
 		time.Minute,
 		tst.clock,
 	)
@@ -187,11 +185,6 @@ func TestSplitSyncRetry(t *testing.T) {
 	tst := newTestSplitSync(t)
 	tst.fail[tstRanges[1]] = true
 	tst.fail[tstRanges[2]] = true
-	removedPeers := make(map[p2p.Peer]bool)
-	tst.peerSet.EXPECT().removePeer(gomock.Any()).DoAndReturn(func(peer p2p.Peer) {
-		require.NotContains(t, removedPeers, peer)
-		removedPeers[peer] = true
-	}).Times(2)
 	var eg errgroup.Group
 	eg.Go(func() error {
 		return tst.splitSync.sync(context.Background())
@@ -200,15 +193,6 @@ func TestSplitSyncRetry(t *testing.T) {
 	for pr, count := range tst.expPeerRanges {
 		require.False(t, tst.fail[pr], "fail cleared for x %s y %s", pr[0], pr[1])
 		require.Equal(t, 1, count, "peer range not synced: x %s y %s", pr[0], pr[1])
-	}
-	for _, r := range []hexRange{tstRanges[1], tstRanges[2]} {
-		haveFailedPeers := false
-		for _, peer := range tst.peerRanges[r] {
-			if removedPeers[peer] {
-				haveFailedPeers = true
-			}
-		}
-		require.True(t, haveFailedPeers)
 	}
 }
 

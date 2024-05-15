@@ -1,6 +1,7 @@
 package hashsync
 
 import (
+	"context"
 	"math/rand"
 	"slices"
 	"testing"
@@ -59,15 +60,18 @@ type catchTransferTwice struct {
 	added map[types.Hash32]bool
 }
 
-func (s *catchTransferTwice) Add(k Ordered, v any) {
+func (s *catchTransferTwice) Add(ctx context.Context, k Ordered, v any) error {
 	h := k.(types.Hash32)
 	_, found := s.added[h]
 	assert.False(s.t, found, "hash sent twice")
-	s.ItemStore.Add(k, v)
+	if err := s.ItemStore.Add(ctx, k, v); err != nil {
+		return err
+	}
 	if s.added == nil {
 		s.added = make(map[types.Hash32]bool)
 	}
 	s.added[h] = true
+	return nil
 }
 
 type xorSyncTestConfig struct {
@@ -83,8 +87,10 @@ type fakeValue struct {
 	v string
 }
 
-var _ scale.Decodable = &fakeValue{}
-var _ scale.Encodable = &fakeValue{}
+var (
+	_ scale.Decodable = &fakeValue{}
+	_ scale.Encodable = &fakeValue{}
+)
 
 func mkFakeValue(h types.Hash32) *fakeValue {
 	return &fakeValue{v: h.String()}
@@ -114,7 +120,7 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB
 	sliceA := src[:cfg.numTestHashes-numSpecificB]
 	storeA := NewSyncTreeStore(Hash32To12Xor{}, nil, func() any { return new(fakeValue) })
 	for _, h := range sliceA {
-		storeA.Add(h, mkFakeValue(h))
+		require.NoError(t, storeA.Add(context.Background(), h, mkFakeValue(h)))
 	}
 	storeA = &catchTransferTwice{t: t, ItemStore: storeA}
 
@@ -122,7 +128,7 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB
 	sliceB = append(sliceB, src[cfg.numTestHashes-numSpecificB:]...)
 	storeB := NewSyncTreeStore(Hash32To12Xor{}, nil, func() any { return new(fakeValue) })
 	for _, h := range sliceB {
-		storeB.Add(h, mkFakeValue(h))
+		require.NoError(t, storeB.Add(context.Background(), h, mkFakeValue(h)))
 	}
 	storeB = &catchTransferTwice{t: t, ItemStore: storeB}
 

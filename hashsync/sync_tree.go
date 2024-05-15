@@ -33,14 +33,12 @@ func (fpred FingerprintPredicate) Match(y any) bool {
 }
 
 type SyncTree interface {
-	// Make a copy of the tree. The copy shares the structure with
-	// this tree but all its nodes are copy-on-write, so any
-	// changes in the copied tree do not affect this one and are
-	// safe to perform in another goroutine. The copy operation is
-	// O(n) where n is the number of nodes added to this tree
-	// since its creation via either NewSyncTree function or this
-	// Copy method, or the last call of this Copy method for this
-	// tree, whichever occurs last. The call to Copy is thread-safe.
+	// Make a copy of the tree. The copy shares the structure with this tree but all
+	// its nodes are copy-on-write, so any changes in the copied tree do not affect
+	// this one and are safe to perform in another goroutine. The copy operation is
+	// O(n) where n is the number of nodes added to this tree since its creation via
+	// either NewSyncTree function or this Copy method, or the last call of this Copy
+	// method for this tree, whichever occurs last. The call to Copy is thread-safe.
 	Copy() SyncTree
 	Fingerprint() any
 	Add(k Ordered)
@@ -58,7 +56,7 @@ func SyncTreeFromSortedSlice[T Ordered](m Monoid, items []T) SyncTree {
 		s[n] = item
 	}
 	st := NewSyncTree(m).(*syncTree)
-	st.root = st.buildFromSortedSlice(nil, s)
+	st.root = st.buildFromSortedSlice(s)
 	return st
 }
 
@@ -421,7 +419,7 @@ func (st *syncTree) Fingerprint() any {
 	return st.root.fingerprint
 }
 
-func (st *syncTree) newNode(parent *syncTreeNode, k Ordered, v any) *syncTreeNode {
+func (st *syncTree) newNode(k Ordered, v any) *syncTreeNode {
 	return &syncTreeNode{
 		key:         k,
 		value:       v,
@@ -430,17 +428,17 @@ func (st *syncTree) newNode(parent *syncTreeNode, k Ordered, v any) *syncTreeNod
 	}
 }
 
-func (st *syncTree) buildFromSortedSlice(parent *syncTreeNode, s []Ordered) *syncTreeNode {
+func (st *syncTree) buildFromSortedSlice(s []Ordered) *syncTreeNode {
 	switch len(s) {
 	case 0:
 		return nil
 	case 1:
-		return st.newNode(nil, s[0], nil)
+		return st.newNode(s[0], nil)
 	}
 	middle := len(s) / 2
-	node := st.newNode(parent, s[middle], nil)
-	node.left = st.buildFromSortedSlice(node, s[:middle])
-	node.right = st.buildFromSortedSlice(node, s[middle+1:])
+	node := st.newNode(s[middle], nil)
+	node.left = st.buildFromSortedSlice(s[:middle])
+	node.right = st.buildFromSortedSlice(s[middle+1:])
 	if node.left != nil {
 		node.fingerprint = st.m.Op(node.left.fingerprint, node.fingerprint)
 	}
@@ -526,7 +524,7 @@ func (st *syncTree) insert(sn *syncTreeNode, k Ordered, v any, rb, set bool) *sy
 	// simplified insert implementation idea from
 	// https://zarif98sjs.github.io/blog/blog/redblacktree/
 	if sn == nil {
-		sn = st.newNode(nil, k, v)
+		sn = st.newNode(k, v)
 		// the new node is not really "cloned", but at this point it's
 		// only present in this tree so we can safely modify it
 		// without allocating new nodes

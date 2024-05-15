@@ -15,20 +15,19 @@ type requester interface {
 	StreamRequest(context.Context, p2p.Peer, []byte, server.StreamRequestCallback, ...string) error
 }
 
-type peerSet interface {
-	addPeer(p p2p.Peer)
-	removePeer(p p2p.Peer)
-	numPeers() int
-	listPeers() []p2p.Peer
-	havePeer(p p2p.Peer) bool
-}
-
 type syncBase interface {
+	count() int
 	derive(p p2p.Peer) syncer
-	probe(ctx context.Context, p p2p.Peer) (int, error)
+	probe(ctx context.Context, p p2p.Peer) (ProbeResult, error)
+	run(ctx context.Context) error
 }
 
 type syncer interface {
 	peer() p2p.Peer
 	sync(ctx context.Context, x, y *types.Hash32) error
+}
+
+type syncRunner interface {
+	splitSync(ctx context.Context, syncPeers []p2p.Peer) error
+	fullSync(ctx context.Context, syncPeers []p2p.Peer) error
 }
