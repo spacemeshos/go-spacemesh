@@ -33,12 +33,12 @@ func TestMain(m *testing.M) {
 var allAtxs = map[types.NodeID][]*types.ActivationTx{
 	// smesher 1 has 7 ATXs, one in each epoch from 1 to 7
 	types.BytesToNodeID([]byte("smesher1")): {
-		newAtx(types.ATXID{17}, types.ATXID{16}, nil, 7, 6, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newAtx(types.ATXID{16}, types.ATXID{15}, nil, 6, 5, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newAtx(types.ATXID{15}, types.ATXID{14}, nil, 5, 4, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newAtx(types.ATXID{14}, types.ATXID{13}, nil, 4, 3, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newAtx(types.ATXID{13}, types.ATXID{12}, nil, 3, 2, 0, types.BytesToNodeID([]byte("smesher1"))),
-		newAtx(types.ATXID{12}, types.ATXID{11}, nil, 2, 1, 0, types.BytesToNodeID([]byte("smesher1"))),
+		newAtx(types.ATXID{17}, types.ATXID{16}, nil, 7, 6, 123, types.BytesToNodeID([]byte("smesher1"))),
+		newAtx(types.ATXID{16}, types.ATXID{15}, nil, 6, 5, 123, types.BytesToNodeID([]byte("smesher1"))),
+		newAtx(types.ATXID{15}, types.ATXID{14}, nil, 5, 4, 123, types.BytesToNodeID([]byte("smesher1"))),
+		newAtx(types.ATXID{14}, types.ATXID{13}, nil, 4, 3, 123, types.BytesToNodeID([]byte("smesher1"))),
+		newAtx(types.ATXID{13}, types.ATXID{12}, nil, 3, 2, 123, types.BytesToNodeID([]byte("smesher1"))),
+		newAtx(types.ATXID{12}, types.ATXID{11}, nil, 2, 1, 123, types.BytesToNodeID([]byte("smesher1"))),
 		newAtx(types.ATXID{11}, types.EmptyATXID,
 			&types.ATXID{1}, 1, 0, 123, types.BytesToNodeID([]byte("smesher1"))),
 	},
@@ -57,7 +57,7 @@ var allAtxs = map[types.NodeID][]*types.ActivationTx{
 
 	// smesher 4 has 1 ATX in epoch 3 and one in epoch 7
 	types.BytesToNodeID([]byte("smesher4")): {
-		newAtx(types.ATXID{47}, types.ATXID{43}, nil, 7, 1, 0, types.BytesToNodeID([]byte("smesher4"))),
+		newAtx(types.ATXID{47}, types.ATXID{43}, nil, 7, 1, 420, types.BytesToNodeID([]byte("smesher4"))),
 		newAtx(types.ATXID{43}, types.EmptyATXID, &types.ATXID{4}, 4, 0, 420,
 			types.BytesToNodeID([]byte("smesher4"))),
 	},
@@ -160,7 +160,7 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *type
 		for i := 0; i < n; i++ {
 			atxData = append(
 				atxData,
-				toShortAtx(atxs[i], atxs[len(atxs)-1].CommitmentATX, atxs[len(atxs)-1].VRFNonce),
+				toShortAtx(atxs[i], atxs[len(atxs)-1].CommitmentATX),
 			)
 		}
 	}
@@ -209,21 +209,19 @@ func newAtx(
 		Coinbase:      types.Address{1, 2, 3},
 		TickCount:     1,
 		SmesherID:     nodeID,
+		VRFNonce:      types.VRFPostIndex(vrfnonce),
 	}
 	atx.SetID(id)
-	if vrfnonce != 0 {
-		atx.VRFNonce = (*types.VRFPostIndex)(&vrfnonce)
-	}
 	atx.SetReceived(time.Now().Local())
 	return atx
 }
 
-func toShortAtx(v *types.ActivationTx, cmt *types.ATXID, nonce *types.VRFPostIndex) types.AtxSnapshot {
+func toShortAtx(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
 	return types.AtxSnapshot{
 		ID:             v.ID().Bytes(),
 		Epoch:          v.PublishEpoch.Uint32(),
 		CommitmentAtx:  cmt.Bytes(),
-		VrfNonce:       uint64(*nonce),
+		VrfNonce:       uint64(v.VRFNonce),
 		NumUnits:       v.NumUnits,
 		BaseTickHeight: v.BaseTickHeight,
 		TickCount:      v.TickCount,
@@ -336,13 +334,8 @@ func TestRunner_Generate_Error(t *testing.T) {
 
 	tcs := []struct {
 		desc              string
-		missingVrf        bool
 		missingCommitment bool
 	}{
-		{
-			desc:       "no vrf nonce",
-			missingVrf: true,
-		},
 		{
 			desc:              "no commitment atx",
 			missingCommitment: true,
@@ -356,9 +349,6 @@ func TestRunner_Generate_Error(t *testing.T) {
 			if tc.missingCommitment {
 				atx = newAtx(types.ATXID{13}, types.EmptyATXID,
 					nil, 2, 1, 11, types.BytesToNodeID([]byte("smesher1")))
-			} else if tc.missingVrf {
-				atx = newAtx(types.ATXID{13}, types.EmptyATXID,
-					&types.ATXID{11}, 2, 1, 0, types.BytesToNodeID([]byte("smesher1")))
 			}
 			createMesh(t, db, map[types.NodeID][]*types.ActivationTx{
 				types.BytesToNodeID([]byte("smesher1")): {atx},
@@ -372,8 +362,6 @@ func TestRunner_Generate_Error(t *testing.T) {
 			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, numEpochs)
 			if tc.missingCommitment {
 				require.ErrorContains(t, err, "atxs snapshot commitment")
-			} else if tc.missingVrf {
-				require.ErrorContains(t, err, "atxs snapshot: missing nonce")
 			}
 		})
 	}

@@ -171,7 +171,7 @@ type ActivationTx struct {
 	NumUnits       uint32 // the minimum number of space units in this and the previous ATX
 	BaseTickHeight uint64
 	TickCount      uint64
-	VRFNonce       *VRFPostIndex
+	VRFNonce       VRFPostIndex
 	SmesherID      NodeID
 
 	AtxBlob
@@ -187,7 +187,6 @@ func NewActivationTx(
 	challenge NIPostChallenge,
 	coinbase Address,
 	numUnits uint32,
-	nonce *VRFPostIndex,
 ) *ActivationTx {
 	atx := &ActivationTx{
 		PublishEpoch:  challenge.PublishEpoch,
@@ -196,7 +195,6 @@ func NewActivationTx(
 		CommitmentATX: challenge.CommitmentATX,
 		Coinbase:      coinbase,
 		NumUnits:      numUnits,
-		VRFNonce:      nonce,
 	}
 	return atx
 }
@@ -243,9 +241,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.CommitmentATX != nil {
 		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
 	}
-	if atx.VRFNonce != nil {
-		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
-	}
+	encoder.AddUint64("vrf_nonce", uint64(atx.VRFNonce))
 	encoder.AddString("coinbase", atx.Coinbase.String())
 	encoder.AddUint32("epoch", atx.PublishEpoch.Uint32())
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))

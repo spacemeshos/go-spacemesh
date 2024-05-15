@@ -37,7 +37,7 @@ func createIdentity(t *testing.T, db *sql.Database, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: types.EpochID(1),
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, 1, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, 1)
 	atx.SmesherID = sig.NodeID()
 	atx.SetReceived(time.Now())
 	atx.TickCount = 1

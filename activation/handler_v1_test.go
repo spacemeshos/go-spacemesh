@@ -303,14 +303,24 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 	})
 	t.Run("can't find VRF nonce", func(t *testing.T) {
 		t.Parallel()
-		atxHdlr, prevATX, postAtx := setup(t)
+		atxHdlr, prevPrevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevATX, postAtx.ID())
+		// The prevAtx has no VRF nonce in the blob
+		prevAtx := newChainedActivationTxV1(t, goldenATXID, prevPrevAtx, posAtx.ID())
+		prevAtx.Sign(sig)
+		atxHdlr.expectAtxV1(prevAtx, sig.NodeID())
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
+		_, err := atxHdlr.processATX(context.Background(), "", prevAtx, codec.MustEncode(prevAtx), time.Now())
+		require.NoError(t, err)
+
+		// ATX increases the number of units - it will need to reverify the existing VRF nonce...
+		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, prevAtx.ID())
 		atx.NumUnits += 100
 		atx.Sign(sig)
 
+		// .. which is not found in the DB or the previous ATX blob
 		enc := func(stmt *sql.Statement) { stmt.BindBytes(1, atx.SmesherID.Bytes()) }
-		_, err := atxHdlr.cdb.Exec(`UPDATE atxs SET nonce = NULL WHERE pubkey = ?1;`, enc, nil)
+		_, err = atxHdlr.cdb.Exec(`UPDATE atxs SET nonce = NULL WHERE pubkey = ?1;`, enc, nil)
 		require.NoError(t, err)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())

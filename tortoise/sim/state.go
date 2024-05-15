@@ -41,8 +41,8 @@ func (s *State) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 
 // OnActivationTx callback to store activation transaction.
 func (s *State) OnActivationTx(atx *types.ActivationTx) {
-	// TODO: consider using actual values for nonce and malicious if needed
-	s.Atxdata.AddFromAtx(atx, 0, false)
+	// TODO: consider using actual values for malicious if needed
+	s.Atxdata.AddFromAtx(atx, false)
 	if err := atxs.Add(s.DB, atx); err != nil {
 		s.logger.With().Panic("failed to add atx", log.Err(err))
 	}

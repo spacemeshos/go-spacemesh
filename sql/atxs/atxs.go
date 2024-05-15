@@ -37,8 +37,7 @@ func decoder(fn decoderCallback) sql.Decoder {
 		)
 		stmt.ColumnBytes(0, id[:])
 		a.SetID(id)
-		nonce := types.VRFPostIndex(stmt.ColumnInt64(1))
-		a.VRFNonce = &nonce
+		a.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(1))
 		a.BaseTickHeight = uint64(stmt.ColumnInt64(2))
 		a.TickCount = uint64(stmt.ColumnInt64(3))
 		stmt.ColumnBytes(4, a.SmesherID[:])
@@ -371,7 +370,7 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (t
 		return 0, fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
 	}
 	if rows == 0 {
-		return 0, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToHash(id))
+		return 0, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToATXID(id))
 	}
 
 	return version, nil
@@ -400,44 +399,14 @@ func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err e
 	return nonce, err
 }
 
-// Add adds an ATX for a given ATX ID.
-func Add(db sql.Executor, atx *types.ActivationTx) error {
-	_, err := AddGettingNonce(db, atx)
-	return err
-}
-
-// AddGettingNonce adds an ATX for a given ATX ID and returns the nonce for the newly added ATX.
-func AddGettingNonce(db sql.Executor, atx *types.ActivationTx) (*types.VRFPostIndex, error) {
-	if atx.VRFNonce == nil && atx.PrevATXID != types.EmptyATXID {
-		nonce, err := NonceByID(db, atx.PrevATXID)
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			return nil, fmt.Errorf("error getting nonce: %w", err)
-		}
-		if err == nil {
-			err = add(db, atx, &nonce)
-			if err != nil {
-				return &nonce, err
-			} else {
-				return &nonce, nil
-			}
-		}
-	}
-
-	if err := add(db, atx, atx.VRFNonce); err != nil {
-		return atx.VRFNonce, err
-	}
-
-	return atx.VRFNonce, nil
-}
-
 // AddMaybeNoNonce adds an ATX for a given ATX ID. It doesn't try
 // to set the nonce field if VRFNonce is not set in the ATX.
 // This function is only to be used for testing.
 func AddMaybeNoNonce(db sql.Executor, atx *types.ActivationTx) error {
-	return add(db, atx, atx.VRFNonce)
+	return Add(db, atx)
 }
 
-func add(db sql.Executor, atx *types.ActivationTx, nonce *types.VRFPostIndex) error {
+func Add(db sql.Executor, atx *types.ActivationTx) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PublishEpoch))
@@ -447,11 +416,7 @@ func add(db sql.Executor, atx *types.ActivationTx, nonce *types.VRFPostIndex) er
 		} else {
 			stmt.BindNull(4)
 		}
-		if nonce != nil {
-			stmt.BindInt64(5, int64(*nonce))
-		} else {
-			stmt.BindNull(5)
-		}
+		stmt.BindInt64(5, int64(atx.VRFNonce))
 		stmt.BindBytes(6, atx.SmesherID.Bytes())
 		stmt.BindInt64(7, atx.Received().UnixNano())
 		stmt.BindInt64(8, int64(atx.BaseTickHeight))
