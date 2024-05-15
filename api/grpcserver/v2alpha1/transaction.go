@@ -8,6 +8,7 @@ import (
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -305,11 +306,26 @@ func (s *TransactionService) toTx(tx *types.MeshTransaction, result *types.Trans
 
 		switch tx.Method {
 		case core.MethodSpawn:
-			args := req.Args().(*wallet.SpawnArguments)
-			t.Contents.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
-				SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
-					Pubkey: args.PublicKey.String(),
-				},
+			switch tx.TxHeader.TemplateAddress {
+			case wallet.TemplateAddress:
+				args := req.Args().(*wallet.SpawnArguments)
+				t.Contents.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
+					SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
+						Pubkey: args.PublicKey.String(),
+					},
+				}
+			case multisig.TemplateAddress:
+				args := req.Args().(*multisig.SpawnArguments)
+				contents := &spacemeshv2alpha1.TransactionContents_MultiSigSpawn{
+					MultiSigSpawn: &spacemeshv2alpha1.ContentsMultiSigSpawn{
+						Required: uint32(args.Required),
+					},
+				}
+				contents.MultiSigSpawn.Pubkey = make([]string, len(args.PublicKeys))
+				for i := range args.PublicKeys {
+					contents.MultiSigSpawn.Pubkey[i] = args.PublicKeys[i].String()
+				}
+				t.Contents.Contents = contents
 			}
 		case core.MethodSpend:
 			args := req.Args().(*wallet.SpendArguments)
