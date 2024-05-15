@@ -465,6 +465,14 @@ func (r *Request) Verify() bool {
 	return rst
 }
 
+// Args returns tx args. Will panic if called without Parse completing successfully.
+func (r *Request) Args() scale.Encodable {
+	if r.ctx == nil {
+		panic("Args should be called after successful Parse")
+	}
+	return r.args
+}
+
 func parse(
 	logger log.Log,
 	lid types.LayerID,

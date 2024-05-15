@@ -1,6 +1,9 @@
 package system
 
-import "github.com/spacemeshos/go-spacemesh/common/types"
+import (
+	"github.com/spacemeshos/go-scale"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/vm.go -source=./vm.go
 
@@ -8,4 +11,5 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 type ValidationRequest interface {
 	Parse() (*types.TxHeader, error)
 	Verify() bool
+	Args() scale.Encodable
 }

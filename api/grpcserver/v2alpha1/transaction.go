@@ -8,6 +8,7 @@ import (
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
@@ -118,7 +119,7 @@ func (s *TransactionService) List(
 
 	rst := make([]*spacemeshv2alpha1.TransactionResponse, 0, request.Limit)
 	if err := transactions.IterateTransactionsOps(s.db, ops, func(tx *types.MeshTransaction, result *types.TransactionResult) bool {
-		rst = append(rst, toTx(tx, result, request.IncludeResult, request.IncludeState))
+		rst = append(rst, s.toTx(tx, result, request.IncludeResult, request.IncludeState))
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -211,6 +212,7 @@ func (s *TransactionService) EstimateGas(
 	}
 	raw := types.NewRawTx(request.Transaction)
 	req := s.conState.Validation(raw)
+	// TODO: Fill signature if it's not present
 	header, err := req.Parse()
 	if errors.Is(err, core.ErrNotSpawned) {
 		return nil, status.Error(codes.NotFound, "account is not spawned")
@@ -219,7 +221,6 @@ func (s *TransactionService) EstimateGas(
 	} else if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-
 	return &spacemeshv2alpha1.EstimateGasResponse{
 		Status:            nil,
 		RecommendedMaxGas: header.MaxGas,
@@ -281,7 +282,7 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 	return ops, nil
 }
 
-func toTx(tx *types.MeshTransaction, result *types.TransactionResult, includeResult bool, includeState bool) *spacemeshv2alpha1.TransactionResponse {
+func (s *TransactionService) toTx(tx *types.MeshTransaction, result *types.TransactionResult, includeResult bool, includeState bool) *spacemeshv2alpha1.TransactionResponse {
 	rst := &spacemeshv2alpha1.TransactionResponse{}
 
 	t := &spacemeshv2alpha1.TransactionV1{
@@ -299,19 +300,23 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult, includeRes
 		t.MaxSpend = tx.MaxSpend
 		t.Contents = &spacemeshv2alpha1.TransactionContents{}
 
-		// TODO: decode tx raw
+		req := s.conState.Validation(tx.GetRaw())
+		_, _ = req.Parse()
+
 		switch tx.Method {
 		case core.MethodSpawn:
+			args := req.Args().(*wallet.SpawnArguments)
 			t.Contents.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
 				SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
-					Pubkey: "",
+					Pubkey: args.PublicKey.String(),
 				},
 			}
 		case core.MethodSpend:
+			args := req.Args().(*wallet.SpendArguments)
 			t.Contents.Contents = &spacemeshv2alpha1.TransactionContents_Send{
 				Send: &spacemeshv2alpha1.ContentsSend{
-					Destination: "",
-					Amount:      0,
+					Destination: args.Destination.String(),
+					Amount:      args.Amount,
 				},
 			}
 		}
