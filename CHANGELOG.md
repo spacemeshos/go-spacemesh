@@ -41,6 +41,10 @@ through v1.5.x first ([#5907](https://github.com/spacemeshos/go-spacemesh/pull/5
 
 * [#5932](https://github.com/spacemeshos/go-spacemesh/pull/5932) Fix caching malfeasance when processing new proofs
 
+* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of a broken Poet.
+
+  Previously, every identitiy waited for the full timeout time (~20 minutes) before giving up.
+
 ## (v1.5.0)
 
 ### Upgrade information
