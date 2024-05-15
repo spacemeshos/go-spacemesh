@@ -56,7 +56,6 @@ type SyncMessage interface {
 	Fingerprint() any
 	Count() int
 	Keys() []Ordered
-	Values() []any
 }
 
 func SyncMessageToString(m SyncMessage) string {
@@ -75,15 +74,12 @@ func SyncMessageToString(m SyncMessage) string {
 	if fp := m.Fingerprint(); fp != nil {
 		sb.WriteString(" FP=" + fp.(fmt.Stringer).String())
 	}
-	vals := m.Values()
-	for n, k := range m.Keys() {
-		fmt.Fprintf(&sb, " item=[%s:%#v]", k.(fmt.Stringer).String(), vals[n])
+	for _, k := range m.Keys() {
+		fmt.Fprintf(&sb, " item=%s", k.(fmt.Stringer).String())
 	}
 	sb.WriteString(">")
 	return sb.String()
 }
-
-type NewValueFunc func() any
 
 // Conduit handles receiving and sending peer messages
 // TODO: replace multiple Send* methods with a single one
@@ -103,9 +99,9 @@ type Conduit interface {
 	// SendEmptyRange notifies the peer that the specified range
 	// is empty on our side. The corresponding SyncMessage has Count() == 0
 	SendEmptyRange(x, y Ordered) error
-	// SendItems notifies the peer that the corresponding range items will
+	// SendRangeContents notifies the peer that the corresponding range items will
 	// be included in this sync round. The items themselves are sent via
-	// SendItemsOnly
+	// SendItems
 	SendRangeContents(x, y Ordered, count int) error
 	// SendItems sends just items without any message
 	SendItems(count, chunkSize int, it Iterator) error
@@ -153,9 +149,6 @@ type Iterator interface {
 	// Key returns the key corresponding to iterator position. It returns
 	// nil if the ItemStore is empty
 	Key() Ordered
-	// Value returns the value corresponding to the iterator. It returns nil
-	// if the ItemStore is empty
-	Value() any
 	// Next advances the iterator
 	Next()
 }
@@ -167,8 +160,8 @@ type RangeInfo struct {
 }
 
 type ItemStore interface {
-	// Add adds a key-value pair to the store
-	Add(ctx context.Context, k Ordered, v any) error
+	// Add adds a key to the store
+	Add(ctx context.Context, k Ordered) error
 	// GetRangeInfo returns RangeInfo for the item range in the tree.
 	// If count >= 0, at most count items are returned, and RangeInfo
 	// is returned for the corresponding subrange of the requested range.
@@ -181,8 +174,6 @@ type ItemStore interface {
 	// Max returns the iterator pointing at the maximum element
 	// in the store. If the store is empty, it returns nil
 	Max() Iterator
-	// New returns an empty payload value
-	New() any
 	// Copy makes a shallow copy of the ItemStore
 	Copy() ItemStore
 	// Has returns true if the specified key is present in ItemStore
@@ -561,9 +552,8 @@ func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done boo
 	done = true
 	for _, msg := range msgs {
 		if msg.Type() == MessageTypeItemBatch {
-			vals := msg.Values()
-			for n, k := range msg.Keys() {
-				if err := rsr.is.Add(ctx, k, vals[n]); err != nil {
+			for _, k := range msg.Keys() {
+				if err := rsr.is.Add(ctx, k); err != nil {
 					return false, fmt.Errorf("error adding an item to the store: %w", err)
 				}
 			}

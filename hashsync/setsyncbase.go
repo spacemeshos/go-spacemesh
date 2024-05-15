@@ -111,11 +111,11 @@ func (ss *setSyncer) sync(ctx context.Context, x, y *types.Hash32) error {
 }
 
 // Add implements ItemStore.
-func (ss *setSyncer) Add(ctx context.Context, k Ordered, v any) error {
+func (ss *setSyncer) Add(ctx context.Context, k Ordered) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case ss.keyCh <- k:
 	}
-	return ss.ItemStore.Add(ctx, k, v)
+	return ss.ItemStore.Add(ctx, k)
 }

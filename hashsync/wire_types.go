@@ -17,7 +17,6 @@ func (*Marker) Y() Ordered       { return nil }
 func (*Marker) Fingerprint() any { return nil }
 func (*Marker) Count() int       { return 0 }
 func (*Marker) Keys() []Ordered  { return nil }
-func (*Marker) Values() []any    { return nil }
 
 // DoneMessage is a SyncMessage that denotes the end of the synchronization.
 // The peer should stop any further processing after receiving this message.
@@ -56,7 +55,6 @@ func (m *EmptyRangeMessage) Y() Ordered        { return m.RangeY }
 func (m *EmptyRangeMessage) Fingerprint() any  { return nil }
 func (m *EmptyRangeMessage) Count() int        { return 0 }
 func (m *EmptyRangeMessage) Keys() []Ordered   { return nil }
-func (m *EmptyRangeMessage) Values() []any     { return nil }
 
 // FingerprintMessage contains range fingerprint for comparison against the
 // peer's fingerprint of the range with the same bounds [RangeX, RangeY)
@@ -74,7 +72,6 @@ func (m *FingerprintMessage) Y() Ordered        { return m.RangeY }
 func (m *FingerprintMessage) Fingerprint() any  { return m.RangeFingerprint }
 func (m *FingerprintMessage) Count() int        { return int(m.NumItems) }
 func (m *FingerprintMessage) Keys() []Ordered   { return nil }
-func (m *FingerprintMessage) Values() []any     { return nil }
 
 // RangeContentsMessage denotes a range for which the set of items has been sent.
 // The peer needs to send back any items it has in the same range bounded
@@ -92,18 +89,24 @@ func (m *RangeContentsMessage) Y() Ordered        { return m.RangeY }
 func (m *RangeContentsMessage) Fingerprint() any  { return nil }
 func (m *RangeContentsMessage) Count() int        { return int(m.NumItems) }
 func (m *RangeContentsMessage) Keys() []Ordered   { return nil }
-func (m *RangeContentsMessage) Values() []any     { return nil }
 
 // ItemBatchMessage denotes a batch of items to be added to the peer's set.
-// ItemBatchMessage doesn't implement SyncMessage interface by itself
-// and needs to be wrapped in TypedItemBatchMessage[T] that implements
-// SyncMessage by providing the proper Values() method
 type ItemBatchMessage struct {
-	ContentKeys   []types.Hash32 `scale:"max=1024"`
-	ContentValues []byte         `scale:"max=1024"`
+	ContentKeys []types.Hash32 `scale:"max=1024"`
 }
 
 func (m *ItemBatchMessage) Type() MessageType { return MessageTypeItemBatch }
+func (m *ItemBatchMessage) X() Ordered        { return nil }
+func (m *ItemBatchMessage) Y() Ordered        { return nil }
+func (m *ItemBatchMessage) Fingerprint() any  { return nil }
+func (m *ItemBatchMessage) Count() int        { return 0 }
+func (m *ItemBatchMessage) Keys() []Ordered {
+	var r []Ordered
+	for _, k := range m.ContentKeys {
+		r = append(r, k)
+	}
+	return r
+}
 
 // ProbeMessage requests bounded range fingerprint and count from the peer,
 // along with a minhash sample if fingerprints differ
@@ -132,7 +135,6 @@ func (m *ProbeMessage) Y() Ordered {
 func (m *ProbeMessage) Fingerprint() any { return m.RangeFingerprint }
 func (m *ProbeMessage) Count() int       { return int(m.SampleSize) }
 func (m *ProbeMessage) Keys() []Ordered  { return nil }
-func (m *ProbeMessage) Values() []any    { return nil }
 
 // MinhashSampleItem represents an item of minhash sample subset
 type MinhashSampleItem uint32
@@ -194,7 +196,6 @@ func (m *ProbeResponseMessage) Y() Ordered {
 }
 func (m *ProbeResponseMessage) Fingerprint() any { return m.RangeFingerprint }
 func (m *ProbeResponseMessage) Count() int       { return int(m.NumItems) }
-func (m *ProbeResponseMessage) Values() []any    { return nil }
 
 func (m *ProbeResponseMessage) Keys() []Ordered {
 	r := make([]Ordered, len(m.Sample))

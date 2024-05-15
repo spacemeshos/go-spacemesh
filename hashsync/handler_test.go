@@ -125,14 +125,6 @@ func (it *sliceIterator) Key() Ordered {
 	return nil
 }
 
-func (it *sliceIterator) Value() any {
-	k := it.Key()
-	if k == nil {
-		return nil
-	}
-	return mkFakeValue(k.(types.Hash32))
-}
-
 func (it *sliceIterator) Next() {
 	if len(it.s) != 0 {
 		it.s = it.s[1:]
@@ -204,8 +196,8 @@ func (r *fakeRound) handleConversation(t *testing.T, c *wireConduit) error {
 	return nil
 }
 
-func makeTestStreamHandler(t *testing.T, c *wireConduit, newValue NewValueFunc, rounds []fakeRound) server.StreamHandler {
-	cbk := makeTestRequestCallback(t, c, newValue, rounds)
+func makeTestStreamHandler(t *testing.T, c *wireConduit, rounds []fakeRound) server.StreamHandler {
+	cbk := makeTestRequestCallback(t, c, rounds)
 	return func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
 		t.Logf("init request bytes: %d", len(initialRequest))
 		s := struct {
@@ -220,10 +212,10 @@ func makeTestStreamHandler(t *testing.T, c *wireConduit, newValue NewValueFunc, 
 	}
 }
 
-func makeTestRequestCallback(t *testing.T, c *wireConduit, newValue NewValueFunc, rounds []fakeRound) server.StreamRequestCallback {
+func makeTestRequestCallback(t *testing.T, c *wireConduit, rounds []fakeRound) server.StreamRequestCallback {
 	return func(ctx context.Context, stream io.ReadWriter) error {
 		if c == nil {
-			c = &wireConduit{stream: stream, newValue: newValue}
+			c = &wireConduit{stream: stream}
 		} else {
 			c.stream = stream
 		}
@@ -242,7 +234,7 @@ func TestWireConduit(t *testing.T) {
 		hs[n] = types.RandomHash()
 	}
 	fp := types.Hash12(hs[2][:12])
-	srvHandler := makeTestStreamHandler(t, nil, func() any { return new(fakeValue) }, []fakeRound{
+	srvHandler := makeTestStreamHandler(t, nil, []fakeRound{
 		{
 			name: "server got 1st request",
 			expectMsgs: []SyncMessage{
@@ -276,13 +268,11 @@ func TestWireConduit(t *testing.T) {
 		{
 			name: "server got 2nd request",
 			expectMsgs: []SyncMessage{
-				&decodedItemBatchMessage{
-					ContentKeys:   []types.Hash32{hs[9], hs[10]},
-					ContentValues: []any{mkFakeValue(hs[9]), mkFakeValue(hs[10])},
+				&ItemBatchMessage{
+					ContentKeys: []types.Hash32{hs[9], hs[10]},
 				},
-				&decodedItemBatchMessage{
-					ContentKeys:   []types.Hash32{hs[11]},
-					ContentValues: []any{mkFakeValue(hs[11])},
+				&ItemBatchMessage{
+					ContentKeys: []types.Hash32{hs[11]},
 				},
 				&EndRoundMessage{},
 			},
@@ -307,7 +297,6 @@ func TestWireConduit(t *testing.T) {
 
 	client := newFakeRequester("client", nil, srv)
 	var c wireConduit
-	c.newValue = func() any { return new(fakeValue) }
 	initReq, err := c.withInitialRequest(func(c Conduit) error {
 		if err := c.SendFingerprint(hs[0], hs[1], fp, 4); err != nil {
 			return err
@@ -315,7 +304,7 @@ func TestWireConduit(t *testing.T) {
 		return c.SendEndRound()
 	})
 	require.NoError(t, err)
-	clientCbk := makeTestRequestCallback(t, &c, c.newValue, []fakeRound{
+	clientCbk := makeTestRequestCallback(t, &c, []fakeRound{
 		{
 			name: "client got 1st response",
 			expectMsgs: []SyncMessage{
@@ -329,13 +318,11 @@ func TestWireConduit(t *testing.T) {
 					RangeY:   hs[6],
 					NumItems: 2,
 				},
-				&decodedItemBatchMessage{
-					ContentKeys:   []types.Hash32{hs[4], hs[5]},
-					ContentValues: []any{mkFakeValue(hs[4]), mkFakeValue(hs[5])},
+				&ItemBatchMessage{
+					ContentKeys: []types.Hash32{hs[4], hs[5]},
 				},
-				&decodedItemBatchMessage{
-					ContentKeys:   []types.Hash32{hs[7], hs[8]},
-					ContentValues: []any{mkFakeValue(hs[7]), mkFakeValue(hs[8])},
+				&ItemBatchMessage{
+					ContentKeys: []types.Hash32{hs[7], hs[8]},
 				},
 				&EndRoundMessage{},
 			},
@@ -423,8 +410,8 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 		// numTestHashes:   5000000,
 		// minNumSpecificA: 15000,
 		// maxNumSpecificA: 20000,
-		// minNumSpecificB: 15000,
-		// maxNumSpecificB: 20000,
+		// minNumSpecificB: 15,
+		// maxNumSpecificB: 20,
 		maxSendRange:    1,
 		numTestHashes:   100000,
 		minNumSpecificA: 4,
@@ -454,9 +441,9 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 }
 
 func TestWireSync(t *testing.T) {
-	// t.Run("fake requester", func(t *testing.T) {
-	// 	testWireSync(t, fakeRequesterGetter())
-	// })
+	t.Run("fake requester", func(t *testing.T) {
+		testWireSync(t, fakeRequesterGetter())
+	})
 	t.Run("p2p", func(t *testing.T) {
 		testWireSync(t, p2pRequesterGetter(t))
 	})

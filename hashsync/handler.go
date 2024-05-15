@@ -19,65 +19,6 @@ type sendable interface {
 	Type() MessageType
 }
 
-type decodedItemBatchMessage struct {
-	ContentKeys   []types.Hash32
-	ContentValues []any
-}
-
-var _ SyncMessage = &decodedItemBatchMessage{}
-
-func (m *decodedItemBatchMessage) Type() MessageType { return MessageTypeItemBatch }
-func (m *decodedItemBatchMessage) X() Ordered        { return nil }
-func (m *decodedItemBatchMessage) Y() Ordered        { return nil }
-func (m *decodedItemBatchMessage) Fingerprint() any  { return nil }
-func (m *decodedItemBatchMessage) Count() int        { return 0 }
-func (m *decodedItemBatchMessage) Keys() []Ordered {
-	r := make([]Ordered, len(m.ContentKeys))
-	for n, k := range m.ContentKeys {
-		r[n] = k
-	}
-	return r
-}
-
-func (m *decodedItemBatchMessage) Values() []any {
-	r := make([]any, len(m.ContentValues))
-	for n, v := range m.ContentValues {
-		r[n] = v
-	}
-	return r
-}
-
-func (m *decodedItemBatchMessage) encode() (*ItemBatchMessage, error) {
-	var b bytes.Buffer
-	for _, v := range m.ContentValues {
-		_, err := codec.EncodeTo(&b, v.(codec.Encodable))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &ItemBatchMessage{
-		ContentKeys:   m.ContentKeys,
-		ContentValues: b.Bytes(),
-	}, nil
-}
-
-func decodeItemBatchMessage(m *ItemBatchMessage, newValue NewValueFunc) (*decodedItemBatchMessage, error) {
-	d := &decodedItemBatchMessage{ContentKeys: m.ContentKeys}
-	b := bytes.NewBuffer(m.ContentValues)
-	for b.Len() != 0 {
-		v := newValue().(codec.Decodable)
-		if _, err := codec.DecodeFrom(b, v); err != nil {
-			return nil, err
-		}
-		d.ContentValues = append(d.ContentValues, v)
-	}
-	if len(d.ContentValues) != len(d.ContentKeys) {
-		return nil, fmt.Errorf("mismatched key / value counts: %d / %d",
-			len(d.ContentKeys), len(d.ContentValues))
-	}
-	return d, nil
-}
-
 // QQQQQ: rmme
 var (
 	numRead    int
@@ -112,7 +53,6 @@ type conduitState int
 type wireConduit struct {
 	stream     io.ReadWriter
 	initReqBuf *bytes.Buffer
-	newValue   NewValueFunc
 	// rmmePrint   bool
 }
 
@@ -139,11 +79,7 @@ func (c *wireConduit) NextMessage() (SyncMessage, error) {
 		if _, err := codec.DecodeFrom(c.stream, &m); err != nil {
 			return nil, err
 		}
-		dm, err := decodeItemBatchMessage(&m, c.newValue)
-		if err != nil {
-			return nil, err
-		}
-		return dm, nil
+		return &m, nil
 	case MessageTypeEmptySet:
 		return &EmptySetMessage{}, nil
 	case MessageTypeEmptyRange:
@@ -226,22 +162,18 @@ func (c *wireConduit) SendRangeContents(x, y Ordered, count int) error {
 
 func (c *wireConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 	for i := 0; i < count; i += itemChunkSize {
-		var msg decodedItemBatchMessage
+		// TBD: do not use chunks, just stream the contentkeys
+		var msg ItemBatchMessage
 		n := min(itemChunkSize, count-i)
 		for n > 0 {
 			if it.Key() == nil {
 				panic("fakeConduit.SendItems: went got to the end of the tree")
 			}
 			msg.ContentKeys = append(msg.ContentKeys, it.Key().(types.Hash32))
-			msg.ContentValues = append(msg.ContentValues, it.Value())
 			it.Next()
 			n--
 		}
-		encoded, err := msg.encode()
-		if err != nil {
-			return err
-		}
-		if err := c.send(encoded); err != nil {
+		if err := c.send(&msg); err != nil {
 			return err
 		}
 	}
@@ -327,7 +259,7 @@ func (c *wireConduit) ShortenKey(k Ordered) Ordered {
 
 func MakeServerHandler(is ItemStore, opts ...Option) server.StreamHandler {
 	return func(ctx context.Context, req []byte, stream io.ReadWriter) error {
-		c := wireConduit{newValue: is.New}
+		var c wireConduit
 		rsr := NewRangeSetReconciler(is, opts...)
 		s := struct {
 			io.Reader
@@ -342,7 +274,7 @@ func MakeServerHandler(is ItemStore, opts ...Option) server.StreamHandler {
 }
 
 func SyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x, y *types.Hash32, opts ...Option) error {
-	c := wireConduit{newValue: is.New}
+	var c wireConduit
 	rsr := NewRangeSetReconciler(is, opts...)
 	// c.rmmePrint = true
 	var (
@@ -379,9 +311,7 @@ func Probe(
 		info    RangeInfo
 		pr      ProbeResult
 	)
-	c := wireConduit{
-		newValue: func() any { return nil }, // not used
-	}
+	var c wireConduit
 	rsr := NewRangeSetReconciler(is, opts...)
 	if x == nil {
 		initReq, err = c.withInitialRequest(func(c Conduit) error {

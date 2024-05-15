@@ -6,7 +6,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,22 +30,14 @@ func TestHash32To12Xor(t *testing.T) {
 	require.Equal(t, m.Op(m.Op(fp1, fp2), fp3), m.Op(fp1, m.Op(fp2, fp3)))
 }
 
-type pair[K any, V any] struct {
-	k K
-	v V
-}
-
-func collectStoreItems[K Ordered, V any](is ItemStore) (r []pair[K, V]) {
+func collectStoreItems[K Ordered](is ItemStore) (r []K) {
 	it := is.Min()
 	if it == nil {
 		return nil
 	}
 	endAt := is.Min()
 	for {
-		r = append(r, pair[K, V]{
-			k: it.Key().(K),
-			v: it.Value().(V),
-		})
+		r = append(r, it.Key().(K))
 		it.Next()
 		if it.Equal(endAt) {
 			return r
@@ -60,11 +51,11 @@ type catchTransferTwice struct {
 	added map[types.Hash32]bool
 }
 
-func (s *catchTransferTwice) Add(ctx context.Context, k Ordered, v any) error {
+func (s *catchTransferTwice) Add(ctx context.Context, k Ordered) error {
 	h := k.(types.Hash32)
 	_, found := s.added[h]
 	assert.False(s.t, found, "hash sent twice")
-	if err := s.ItemStore.Add(ctx, k, v); err != nil {
+	if err := s.ItemStore.Add(ctx, k); err != nil {
 		return err
 	}
 	if s.added == nil {
@@ -83,29 +74,6 @@ type xorSyncTestConfig struct {
 	maxNumSpecificB int
 }
 
-type fakeValue struct {
-	v string
-}
-
-var (
-	_ scale.Decodable = &fakeValue{}
-	_ scale.Encodable = &fakeValue{}
-)
-
-func mkFakeValue(h types.Hash32) *fakeValue {
-	return &fakeValue{v: h.String()}
-}
-
-func (fv *fakeValue) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	s, total, err := scale.DecodeString(dec)
-	fv.v = s
-	return total, err
-}
-
-func (fv *fakeValue) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	return scale.EncodeString(enc, fv.v)
-}
-
 func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB ItemStore, numSpecific int, opts []Option) bool) {
 	opts := []Option{
 		WithMaxSendRange(cfg.maxSendRange),
@@ -118,17 +86,17 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB
 	}
 
 	sliceA := src[:cfg.numTestHashes-numSpecificB]
-	storeA := NewSyncTreeStore(Hash32To12Xor{}, nil, func() any { return new(fakeValue) })
+	storeA := NewSyncTreeStore(Hash32To12Xor{})
 	for _, h := range sliceA {
-		require.NoError(t, storeA.Add(context.Background(), h, mkFakeValue(h)))
+		require.NoError(t, storeA.Add(context.Background(), h))
 	}
 	storeA = &catchTransferTwice{t: t, ItemStore: storeA}
 
 	sliceB := append([]types.Hash32(nil), src[:cfg.numTestHashes-numSpecificB-numSpecificA]...)
 	sliceB = append(sliceB, src[cfg.numTestHashes-numSpecificB:]...)
-	storeB := NewSyncTreeStore(Hash32To12Xor{}, nil, func() any { return new(fakeValue) })
+	storeB := NewSyncTreeStore(Hash32To12Xor{})
 	for _, h := range sliceB {
-		require.NoError(t, storeB.Add(context.Background(), h, mkFakeValue(h)))
+		require.NoError(t, storeB.Add(context.Background(), h))
 	}
 	storeB = &catchTransferTwice{t: t, ItemStore: storeB}
 
@@ -137,17 +105,14 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB
 	})
 
 	if sync(storeA, storeB, numSpecificA+numSpecificB, opts) {
-		itemsA := collectStoreItems[types.Hash32, *fakeValue](storeA)
-		itemsB := collectStoreItems[types.Hash32, *fakeValue](storeB)
+		itemsA := collectStoreItems[types.Hash32](storeA)
+		itemsB := collectStoreItems[types.Hash32](storeB)
 		require.Equal(t, itemsA, itemsB)
-		srcPairs := make([]pair[types.Hash32, *fakeValue], len(src))
+		srcKeys := make([]types.Hash32, len(src))
 		for n, h := range src {
-			srcPairs[n] = pair[types.Hash32, *fakeValue]{
-				k: h,
-				v: mkFakeValue(h),
-			}
+			srcKeys[n] = h
 		}
-		require.Equal(t, srcPairs, itemsA)
+		require.Equal(t, srcKeys, itemsA)
 	}
 }
 

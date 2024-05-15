@@ -242,13 +242,6 @@ func (t *ItemBatchMessage) EncodeScale(enc *scale.Encoder) (total int, err error
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeByteSliceWithLimit(enc, t.ContentValues, 1024)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	return total, nil
 }
 
@@ -260,14 +253,6 @@ func (t *ItemBatchMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 		}
 		total += n
 		t.ContentKeys = field
-	}
-	{
-		field, n, err := scale.DecodeByteSliceWithLimit(dec, 1024)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.ContentValues = field
 	}
 	return total, nil
 }

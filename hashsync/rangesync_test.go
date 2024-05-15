@@ -13,12 +13,11 @@ import (
 )
 
 type rangeMessage struct {
-	mtype  MessageType
-	x, y   Ordered
-	fp     any
-	count  int
-	keys   []Ordered
-	values []any
+	mtype MessageType
+	x, y  Ordered
+	fp    any
+	count int
+	keys  []Ordered
 }
 
 var _ SyncMessage = rangeMessage{}
@@ -29,7 +28,6 @@ func (m rangeMessage) Y() Ordered        { return m.y }
 func (m rangeMessage) Fingerprint() any  { return m.fp }
 func (m rangeMessage) Count() int        { return m.count }
 func (m rangeMessage) Keys() []Ordered   { return m.keys }
-func (m rangeMessage) Values() []any     { return m.values }
 
 func (m rangeMessage) String() string {
 	return SyncMessageToString(m)
@@ -125,7 +123,6 @@ func (fc *fakeConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 				panic("fakeConduit.SendItems: went got to the end of the tree")
 			}
 			msg.keys = append(msg.keys, it.Key())
-			msg.values = append(msg.values, it.Value())
 			it.Next()
 			n--
 		}
@@ -196,13 +193,6 @@ func (it *dumbStoreIterator) Key() Ordered {
 	return it.ds.keys[it.n]
 }
 
-func (it *dumbStoreIterator) Value() any {
-	if len(it.ds.keys) == 0 {
-		return nil
-	}
-	return it.ds.m[it.Key().(sampleID)]
-}
-
 func (it *dumbStoreIterator) Next() {
 	if len(it.ds.keys) != 0 {
 		it.n = (it.n + 1) % len(it.ds.keys)
@@ -211,19 +201,14 @@ func (it *dumbStoreIterator) Next() {
 
 type dumbStore struct {
 	keys []sampleID
-	m    map[sampleID]any
 }
 
 var _ ItemStore = &dumbStore{}
 
-func (ds *dumbStore) Add(ctx context.Context, k Ordered, v any) error {
-	if ds.m == nil {
-		ds.m = make(map[sampleID]any)
-	}
+func (ds *dumbStore) Add(ctx context.Context, k Ordered) error {
 	id := k.(sampleID)
 	if len(ds.keys) == 0 {
 		ds.keys = []sampleID{id}
-		ds.m[id] = v
 		return nil
 	}
 	p := slices.IndexFunc(ds.keys, func(other sampleID) bool {
@@ -232,12 +217,10 @@ func (ds *dumbStore) Add(ctx context.Context, k Ordered, v any) error {
 	switch {
 	case p < 0:
 		ds.keys = append(ds.keys, id)
-		ds.m[id] = v
 	case id == ds.keys[p]:
 		// already present
 	default:
 		ds.keys = slices.Insert(ds.keys, p, id)
-		ds.m[id] = v
 	}
 
 	return nil
@@ -320,10 +303,6 @@ func (ds *dumbStore) Max() Iterator {
 	}
 }
 
-func (it *dumbStore) New() any {
-	panic("not implemented")
-}
-
 func (ds *dumbStore) Copy() ItemStore {
 	panic("not implemented")
 }
@@ -363,13 +342,6 @@ func (it verifiedStoreIterator) Key() Ordered {
 	return k2
 }
 
-func (it verifiedStoreIterator) Value() any {
-	v1 := it.knownGood.Value()
-	v2 := it.it.Value()
-	assert.Equal(it.t, v1, v2, "values")
-	return v2
-}
-
 func (it verifiedStoreIterator) Next() {
 	it.knownGood.Next()
 	it.it.Next()
@@ -392,7 +364,7 @@ func disableReAdd(s ItemStore) {
 	}
 }
 
-func (vs *verifiedStore) Add(ctx context.Context, k Ordered, v any) error {
+func (vs *verifiedStore) Add(ctx context.Context, k Ordered) error {
 	if vs.disableReAdd {
 		_, found := vs.added[k.(sampleID)]
 		require.False(vs.t, found, "hash sent twice: %v", k)
@@ -401,10 +373,10 @@ func (vs *verifiedStore) Add(ctx context.Context, k Ordered, v any) error {
 		}
 		vs.added[k.(sampleID)] = struct{}{}
 	}
-	if err := vs.knownGood.Add(ctx, k, v); err != nil {
+	if err := vs.knownGood.Add(ctx, k); err != nil {
 		return fmt.Errorf("add to knownGood: %w", err)
 	}
-	if err := vs.store.Add(ctx, k, v); err != nil {
+	if err := vs.store.Add(ctx, k); err != nil {
 		return fmt.Errorf("add to store: %w", err)
 	}
 	return nil
@@ -491,13 +463,6 @@ func (vs *verifiedStore) Max() Iterator {
 	}
 }
 
-func (vs *verifiedStore) New() any {
-	v1 := vs.knownGood.New()
-	v2 := vs.store.New()
-	require.Equal(vs.t, v1, v2, "New")
-	return v2
-}
-
 func (vs *verifiedStore) Copy() ItemStore {
 	return &verifiedStore{
 		t:            vs.t,
@@ -521,10 +486,7 @@ func makeDumbStore(t *testing.T) ItemStore {
 }
 
 func makeSyncTreeStore(t *testing.T) ItemStore {
-	return NewSyncTreeStore(sampleMonoid{}, nil, func() any {
-		// newValue func is only called by wireConduit
-		panic("not implemented")
-	})
+	return NewSyncTreeStore(sampleMonoid{})
 }
 
 func makeVerifiedSyncTreeStore(t *testing.T) ItemStore {
@@ -538,7 +500,7 @@ func makeVerifiedSyncTreeStore(t *testing.T) ItemStore {
 func makeStore(t *testing.T, f storeFactory, items string) ItemStore {
 	s := f(t)
 	for _, c := range items {
-		require.NoError(t, s.Add(context.Background(), sampleID(c), "<c>"))
+		require.NoError(t, s.Add(context.Background(), sampleID(c)))
 	}
 	return s
 }
