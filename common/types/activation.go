@@ -183,6 +183,8 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
+// NOTE: this function is deprecated and used in a few tests only.
+// Create a new ActivationTx with ActivationTx{...}, setting the fields manually.
 func NewActivationTx(
 	challenge NIPostChallenge,
 	coinbase Address,

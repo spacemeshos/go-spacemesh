@@ -160,7 +160,7 @@ func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int) *type
 		for i := 0; i < n; i++ {
 			atxData = append(
 				atxData,
-				toShortAtx(atxs[i], atxs[len(atxs)-1].CommitmentATX),
+				asAtxSnapshot(atxs[i], atxs[len(atxs)-1].CommitmentATX),
 			)
 		}
 	}
@@ -216,7 +216,7 @@ func newAtx(
 	return atx
 }
 
-func toShortAtx(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
+func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
 	return types.AtxSnapshot{
 		ID:             v.ID().Bytes(),
 		Epoch:          v.PublishEpoch.Uint32(),
