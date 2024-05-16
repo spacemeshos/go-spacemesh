@@ -41,7 +41,6 @@ func dialGrpc(ctx context.Context, tb testing.TB, cfg grpcserver.Config) *grpc.C
 	conn, err := grpc.NewClient(
 		cfg.PublicListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(tb, err)
 	tb.Cleanup(func() { require.NoError(tb, conn.Close()) })

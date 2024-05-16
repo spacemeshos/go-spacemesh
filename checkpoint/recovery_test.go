@@ -275,7 +275,7 @@ func validateAndPreserveData(
 			mvalidator.EXPECT().VRFNonce(
 				vatx.SmesherID,
 				*vatx.CommitmentATX,
-				(uint64)(*vatx.VRFNonce),
+				(uint64)(vatx.VRFNonce),
 				atx.NIPost.PostMetadata.LabelsPerUnit,
 				vatx.NumUnits,
 			)
@@ -805,7 +805,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 		ID:            golden.ID(),
 		Epoch:         golden.PublishEpoch,
 		CommitmentATX: *golden.CommitmentATX,
-		VRFNonce:      *golden.VRFNonce,
+		VRFNonce:      golden.VRFNonce,
 		NumUnits:      golden.NumUnits,
 		SmesherID:     golden.SmesherID,
 		Sequence:      golden.Sequence,

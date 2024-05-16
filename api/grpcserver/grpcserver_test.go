@@ -133,7 +133,6 @@ func dialGrpc(ctx context.Context, tb testing.TB, cfg Config) *grpc.ClientConn {
 	conn, err := grpc.NewClient(
 		cfg.PublicListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(tb, err)
 	tb.Cleanup(func() { require.NoError(tb, conn.Close()) })
@@ -163,12 +162,12 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	globalAtx = types.NewActivationTx(challenge, addr1, numUnits, nil)
+	globalAtx = types.NewActivationTx(challenge, addr1, numUnits)
 	globalAtx.SetReceived(time.Now())
 	globalAtx.SmesherID = signer.NodeID()
 	globalAtx.TickCount = 1
 
-	globalAtx2 = types.NewActivationTx(challenge, addr2, numUnits, nil)
+	globalAtx2 = types.NewActivationTx(challenge, addr2, numUnits)
 	globalAtx2.SetReceived(time.Now())
 	globalAtx2.SmesherID = signer.NodeID()
 	globalAtx2.TickCount = 1

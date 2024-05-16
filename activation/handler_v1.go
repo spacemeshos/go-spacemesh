@@ -159,6 +159,15 @@ func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*ty
 	if err := codec.Decode(blob.Bytes, &prev); err != nil {
 		return nil, fmt.Errorf("decoding previous atx: %w", err)
 	}
+	prev.SetID(atx.PrevATXID)
+	if prev.VRFNonce == nil {
+		nonce, err := atxs.NonceByID(h.cdb, prev.ID())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get nonce of previous ATX %s: %w", prev.ID(), err)
+		}
+		prev.VRFNonce = (*uint64)(&nonce)
+	}
+
 	return wire.ActivationTxFromWireV1(&prev, blob.Bytes...), nil
 }
 
@@ -244,25 +253,20 @@ func (h *HandlerV1) validateNonInitialAtx(
 		return err
 	}
 
-	nonce := atx.VRFNonce
-	if atx.NumUnits > previous.NumUnits && nonce == nil {
-		h.log.WithContext(ctx).With().Info("post size increased without new vrf Nonce, re-validating current nonce",
-			atx.ID(),
-			log.Stringer("smesher", atx.SmesherID),
-		)
-
-		// This is not expected to happen very often, so we query the database
-		// directly here without using the cache.
-		current, err := atxs.NonceByID(h.cdb, previous.ID())
-		if err != nil {
-			return fmt.Errorf("failed to get current nonce: %w", err)
-		}
-		nonce = (*uint64)(&current)
+	needRecheck := atx.VRFNonce != nil || atx.NumUnits > previous.NumUnits
+	if atx.VRFNonce == nil {
+		atx.VRFNonce = new(uint64)
+		*atx.VRFNonce = uint64(previous.VRFNonce)
 	}
 
-	if nonce != nil {
+	if needRecheck {
+		h.log.WithContext(ctx).With().Info("validating VRF nonce",
+			atx.ID(),
+			log.Bool("post increaced", atx.NumUnits > previous.NumUnits),
+			log.Stringer("smesher", atx.SmesherID),
+		)
 		err := h.nipostValidator.
-			VRFNonce(atx.SmesherID, commitment, *nonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
+			VRFNonce(atx.SmesherID, commitment, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
 		if err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
@@ -314,14 +318,14 @@ func (h *HandlerV1) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx, nonce types.VRFPostIndex) *atxsdata.ATX {
+func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 		if err != nil {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
 			return nil
 		}
-		return h.atxsdata.AddFromAtx(atx, nonce, malicious)
+		return h.atxsdata.AddFromAtx(atx, malicious)
 	}
 	return nil
 }
@@ -332,7 +336,6 @@ func (h *HandlerV1) storeAtx(
 	atx *types.ActivationTx,
 	signature types.EdSignature,
 ) (*mwire.MalfeasanceProof, error) {
-	var nonce *types.VRFPostIndex
 	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("checking if node is malicious: %w", err)
@@ -404,7 +407,7 @@ func (h *HandlerV1) storeAtx(
 			)
 		}
 
-		nonce, err = atxs.AddGettingNonce(tx, atx)
+		err = atxs.Add(tx, atx)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
@@ -412,16 +415,14 @@ func (h *HandlerV1) storeAtx(
 	}); err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
 	}
-	if nonce == nil {
-		return nil, errors.New("no nonce")
-	}
+
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
 
-	added := h.cacheAtx(ctx, atx, *nonce)
+	added := h.cacheAtx(ctx, atx)
 	h.beacon.OnAtx(atx)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)

@@ -450,7 +450,6 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 			types.NIPostChallenge{},
 			types.Address{1, 2, 3},
 			i,
-			nil,
 		)
 		atx.SmesherID = sig.NodeID()
 		atx.SetID(types.RandomATXID())

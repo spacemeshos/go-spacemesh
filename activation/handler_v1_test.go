@@ -301,25 +301,6 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		_, _, _, err := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
 		require.EqualError(t, err, "invalid nipost: bad nipost")
 	})
-	t.Run("can't find VRF nonce", func(t *testing.T) {
-		t.Parallel()
-		atxHdlr, prevATX, postAtx := setup(t)
-
-		atx := newChainedActivationTxV1(t, goldenATXID, prevATX, postAtx.ID())
-		atx.NumUnits += 100
-		atx.Sign(sig)
-
-		enc := func(stmt *sql.Statement) { stmt.BindBytes(1, atx.SmesherID.Bytes()) }
-		_, err := atxHdlr.cdb.Exec(`UPDATE atxs SET nonce = NULL WHERE pubkey = ?1;`, enc, nil)
-		require.NoError(t, err)
-
-		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), atx))
-
-		atxHdlr.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), atx.SmesherID)
-		_, _, _, err1 := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
-		require.ErrorContains(t, err1, "failed to get current nonce")
-	})
 	t.Run("missing NodeID in initial atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, _, _ := setup(t)

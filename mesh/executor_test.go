@@ -69,20 +69,18 @@ func makeResults(lid types.LayerID, txs ...types.Transaction) []types.Transactio
 func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.ATXID, types.NodeID) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t.tb, err)
-	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: epoch},
 		cb,
 		11,
-		&nonce,
 	)
-
+	atx.VRFNonce = 1
 	atx.SetReceived(time.Now())
 	atx.SmesherID = sig.NodeID()
 	atx.SetID(types.RandomATXID())
 	atx.TickCount = 1
 	require.NoError(t.tb, atxs.Add(t.db, atx))
-	t.atxsdata.AddFromAtx(atx, 0, false)
+	t.atxsdata.AddFromAtx(atx, false)
 	return atx.ID(), sig.NodeID()
 }
 

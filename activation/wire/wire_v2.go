@@ -69,9 +69,6 @@ func (atx *ActivationTxV2) Smesher() types.NodeID {
 type InitialAtxPartsV2 struct {
 	CommitmentATX types.ATXID
 	Post          PostV1
-	// needed make hash of the first InnerActivationTxV2 unique
-	// if the InitialPost happens to be the same for different IDs.
-	NodeID types.NodeID
 }
 
 // MarriageCertificate proves the will of ID to be married with the ID that includes this certificate.

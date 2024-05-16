@@ -179,13 +179,6 @@ func (t *InitialAtxPartsV2) EncodeScale(enc *scale.Encoder) (total int, err erro
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	return total, nil
 }
 
@@ -199,13 +192,6 @@ func (t *InitialAtxPartsV2) DecodeScale(dec *scale.Decoder) (total int, err erro
 	}
 	{
 		n, err := t.Post.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}

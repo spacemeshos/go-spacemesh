@@ -119,9 +119,8 @@ func createATX(
 		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
 		types.GenerateAddress(types.RandomBytes(types.AddressLength)),
 		numUnits,
-		&nonce,
 	)
-
+	atx.VRFNonce = nonce
 	atx.SetReceived(received)
 	atx.SmesherID = sig.NodeID()
 	atx.SetID(types.RandomATXID())
