@@ -79,6 +79,45 @@ func (c *MocknipostValidatorV2IsVerifyingFullPostCall) DoAndReturn(f func() bool
 	return c
 }
 
+// PoetMembership mocks base method.
+func (m *MocknipostValidatorV2) PoetMembership(ctx context.Context, membership *types.MultiMerkleProof, postChallenge types.Hash32, poetChallenges [][]byte) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PoetMembership", ctx, membership, postChallenge, poetChallenges)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PoetMembership indicates an expected call of PoetMembership.
+func (mr *MocknipostValidatorV2MockRecorder) PoetMembership(ctx, membership, postChallenge, poetChallenges any) *MocknipostValidatorV2PoetMembershipCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PoetMembership", reflect.TypeOf((*MocknipostValidatorV2)(nil).PoetMembership), ctx, membership, postChallenge, poetChallenges)
+	return &MocknipostValidatorV2PoetMembershipCall{Call: call}
+}
+
+// MocknipostValidatorV2PoetMembershipCall wrap *gomock.Call
+type MocknipostValidatorV2PoetMembershipCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostValidatorV2PoetMembershipCall) Return(arg0 uint64, arg1 error) *MocknipostValidatorV2PoetMembershipCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostValidatorV2PoetMembershipCall) Do(f func(context.Context, *types.MultiMerkleProof, types.Hash32, [][]byte) (uint64, error)) *MocknipostValidatorV2PoetMembershipCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostValidatorV2PoetMembershipCall) DoAndReturn(f func(context.Context, *types.MultiMerkleProof, types.Hash32, [][]byte) (uint64, error)) *MocknipostValidatorV2PoetMembershipCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // PostV2 mocks base method.
 func (m *MocknipostValidatorV2) PostV2(ctx context.Context, smesherID types.NodeID, commitment types.ATXID, post *wire.PostV1, challenge []byte, numUnits uint32, opts ...validatorOption) error {
 	m.ctrl.T.Helper()
