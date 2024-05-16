@@ -4,8 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+	"google.golang.org/genproto/googleapis/rpc/code"
+	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
@@ -15,11 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"google.golang.org/genproto/googleapis/rpc/code"
-	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -71,7 +73,8 @@ func (s *TransactionStreamService) String() string {
 
 func NewTransactionService(db sql.Executor, conState transactionConState,
 	syncer transactionSyncer, validator transactionValidator,
-	publisher pubsub.Publisher) *TransactionService {
+	publisher pubsub.Publisher,
+) *TransactionService {
 	return &TransactionService{
 		db:        db,
 		conState:  conState,
@@ -119,7 +122,9 @@ func (s *TransactionService) List(
 	}
 
 	rst := make([]*spacemeshv2alpha1.TransactionResponse, 0, request.Limit)
-	if err := transactions.IterateTransactionsOps(s.db, ops, func(tx *types.MeshTransaction, result *types.TransactionResult) bool {
+	if err := transactions.IterateTransactionsOps(s.db, ops, func(tx *types.MeshTransaction,
+		result *types.TransactionResult,
+	) bool {
 		rst = append(rst, s.toTx(tx, result, request.IncludeResult, request.IncludeState))
 		return true
 	}); err != nil {
@@ -283,7 +288,9 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 	return ops, nil
 }
 
-func (s *TransactionService) toTx(tx *types.MeshTransaction, result *types.TransactionResult, includeResult bool, includeState bool) *spacemeshv2alpha1.TransactionResponse {
+func (s *TransactionService) toTx(tx *types.MeshTransaction, result *types.TransactionResult,
+	includeResult, includeState bool,
+) *spacemeshv2alpha1.TransactionResponse {
 	rst := &spacemeshv2alpha1.TransactionResponse{}
 
 	t := &spacemeshv2alpha1.TransactionV1{
@@ -375,7 +382,7 @@ func convertTxResult(result *types.TransactionResult) spacemeshv2alpha1.Transact
 	}
 }
 
-// TODO: REJECTED, INSUFFICIENT_FUNDS, CONFLICTING, MESH
+// TODO: REJECTED, INSUFFICIENT_FUNDS, CONFLICTING, MESH.
 func convertTxState(tx *types.MeshTransaction) spacemeshv2alpha1.TransactionState {
 	switch tx.State {
 	case types.MEMPOOL:

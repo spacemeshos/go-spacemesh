@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/sql/builder"
-	"time"
-
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
+	"time"
 )
 
 // Add transaction to the database or update the header if it wasn't set originally.

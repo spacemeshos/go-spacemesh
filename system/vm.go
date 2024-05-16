@@ -2,6 +2,7 @@ package system
 
 import (
 	"github.com/spacemeshos/go-scale"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
