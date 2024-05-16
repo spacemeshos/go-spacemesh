@@ -387,10 +387,3 @@ func (h *HolePunchTracer) HolePunchFinished(
 	c := directConn.(network.Conn)
 	h.pi.EnsurePeerInfo(c.RemotePeer()).SetKind(c, kind)
 }
-
-// QQQQQ: use arrays for rates
-// QQQQQ: TBD: start peerinfotracker
-// QQQQQ: TBD: upd metrics/bandwidth.go or reuse the approach
-// QQQQQ: TBD: upd server
-// QQQQQ: TBD: upd grpc
-// QQQQQ: TBD: stop peerinfotracker! (if the host is stopped)
