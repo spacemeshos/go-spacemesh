@@ -275,7 +275,7 @@ func validateAndPreserveData(
 			mvalidator.EXPECT().VRFNonce(
 				vatx.SmesherID,
 				*vatx.CommitmentATX,
-				(uint64)(*vatx.VRFNonce),
+				(uint64)(vatx.VRFNonce),
 				atx.NIPost.PostMetadata.LabelsPerUnit,
 				vatx.NumUnits,
 			)
@@ -611,11 +611,14 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	var atx wire.ActivationTxV1
 	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-2].Blob, &atx))
 	prevAtx1 := wire.ActivationTxFromWireV1(&atx)
+	atx = wire.ActivationTxV1{}
 	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-1].Blob, &atx))
 	posAtx1 := wire.ActivationTxFromWireV1(&atx)
 
+	atx = wire.ActivationTxV1{}
 	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-2].Blob, &atx))
 	prevAtx2 := wire.ActivationTxFromWireV1(&atx)
+	atx = wire.ActivationTxV1{}
 	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-1].Blob, &atx))
 	posAtx2 := wire.ActivationTxFromWireV1(&atx)
 
@@ -802,7 +805,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 		ID:            golden.ID(),
 		Epoch:         golden.PublishEpoch,
 		CommitmentATX: *golden.CommitmentATX,
-		VRFNonce:      *golden.VRFNonce,
+		VRFNonce:      golden.VRFNonce,
 		NumUnits:      golden.NumUnits,
 		SmesherID:     golden.SmesherID,
 		Sequence:      golden.Sequence,

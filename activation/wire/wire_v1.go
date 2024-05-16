@@ -80,6 +80,10 @@ func (atx *ActivationTxV1) ID() types.ATXID {
 	return atx.id
 }
 
+func (atx *ActivationTxV1) SetID(id types.ATXID) {
+	atx.id = id
+}
+
 func (atx *ActivationTxV1) Smesher() types.NodeID {
 	return atx.SmesherID
 }
@@ -148,23 +152,6 @@ func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 	}
 }
 
-func ActivationTxToWireV1(a *types.ActivationTx) *ActivationTxV1 {
-	return &ActivationTxV1{
-		InnerActivationTxV1: InnerActivationTxV1{
-			NIPostChallengeV1: NIPostChallengeV1{
-				PublishEpoch:    a.PublishEpoch,
-				Sequence:        a.Sequence,
-				PrevATXID:       a.PrevATXID,
-				CommitmentATXID: a.CommitmentATX,
-			},
-			Coinbase: a.Coinbase,
-			NumUnits: a.NumUnits,
-			VRFNonce: (*uint64)(a.VRFNonce),
-		},
-		SmesherID: a.SmesherID,
-	}
-}
-
 func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.ActivationTx {
 	result := &types.ActivationTx{
 		PublishEpoch:  atx.PublishEpoch,
@@ -173,7 +160,6 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 		CommitmentATX: atx.CommitmentATXID,
 		Coinbase:      atx.Coinbase,
 		NumUnits:      atx.NumUnits,
-		VRFNonce:      (*types.VRFPostIndex)(atx.VRFNonce),
 		SmesherID:     atx.SmesherID,
 		AtxBlob: types.AtxBlob{
 			Version: types.AtxV1,
@@ -183,8 +169,12 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 	if len(blob) == 0 {
 		result.AtxBlob.Blob = codec.MustEncode(atx)
 	}
+	result.SetID(atx.ID())
 
-	result.SetID(types.ATXID(atx.HashInnerBytes()))
+	if atx.VRFNonce != nil {
+		result.VRFNonce = types.VRFPostIndex(*atx.VRFNonce)
+	}
+
 	return result
 }
 

@@ -28,10 +28,9 @@ func newAtx(tb testing.TB, db *sql.Database) {
 		Coinbase:       types.Address{1, 2, 3},
 		BaseTickHeight: 1111,
 		TickCount:      12,
+		VRFNonce:       types.VRFPostIndex(11),
 	}
 	atx.SetID(types.RandomATXID())
-	vrfNonce := types.VRFPostIndex(11)
-	atx.VRFNonce = &vrfNonce
 	atx.SmesherID = types.BytesToNodeID(types.RandomBytes(20))
 	atx.SetReceived(time.Now().Local())
 	require.NoError(tb, atxs.Add(db, atx))

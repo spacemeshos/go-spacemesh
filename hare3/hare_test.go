@@ -167,8 +167,7 @@ func (n *node) withAtx(min, max int) *node {
 	n.t.rng.Read(id[:])
 	atx.SetID(id)
 	atx.SetReceived(n.t.start)
-	nonce := types.VRFPostIndex(n.t.rng.Uint64())
-	atx.VRFNonce = &nonce
+	atx.VRFNonce = types.VRFPostIndex(n.t.rng.Uint64())
 
 	n.atx = atx
 	return n
@@ -252,7 +251,7 @@ func (n *node) storeAtx(atx *types.ActivationTx) error {
 	if err := atxs.Add(n.db, atx); err != nil {
 		return err
 	}
-	n.atxsdata.AddFromAtx(atx, *atx.VRFNonce, false)
+	n.atxsdata.AddFromAtx(atx, false)
 	return nil
 }
 
@@ -761,11 +760,10 @@ func TestHandler(t *testing.T) {
 }
 
 func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, base, height uint64) types.ActivationTx {
-	nonce := types.VRFPostIndex(1)
 	atx := &types.ActivationTx{
 		NumUnits:       10,
 		PublishEpoch:   epoch,
-		VRFNonce:       &nonce,
+		VRFNonce:       1,
 		BaseTickHeight: base,
 		TickCount:      height - base,
 		SmesherID:      smesher,
@@ -916,7 +914,7 @@ func TestProposals(t *testing.T) {
 			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
-				atxsdata.AddFromAtx(&atx, *atx.VRFNonce, false)
+				atxsdata.AddFromAtx(&atx, false)
 			}
 			for _, proposal := range tc.proposals {
 				proposals.Add(proposal)

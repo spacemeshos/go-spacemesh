@@ -253,7 +253,7 @@ func TestActiveSetGenerate(t *testing.T) {
 			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(tester.db, atx))
-				tester.atxsdata.AddFromAtx(atx, types.VRFPostIndex(0), false)
+				tester.atxsdata.AddFromAtx(atx, false)
 			}
 			for _, identity := range tc.malfeasent {
 				require.NoError(
@@ -343,7 +343,7 @@ func TestActiveSetEnsure(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	// computes from first try
-	tester.atxsdata.AddFromAtx(gatx(expected[0], 2, types.NodeID{1}, 1), types.VRFPostIndex(0), false)
+	tester.atxsdata.AddFromAtx(gatx(expected[0], 2, types.NodeID{1}, 1), false)
 	tester.clock.EXPECT().CurrentLayer().Return(0).Times(1)
 	tester.gen.ensure(ctx, target)
 	id, weight, set, err := activeset.Get(tester.localdb, activeset.Tortoise, target)

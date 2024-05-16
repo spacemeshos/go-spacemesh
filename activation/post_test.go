@@ -276,7 +276,7 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: 1,
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, 2, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, 2)
 	atx.SmesherID = signer.NodeID()
 	atx.SetID(types.RandomATXID())
 	atx.SetReceived(time.Now())
@@ -322,7 +322,7 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 
 	// add an atx by the same node
 	commitmentAtx := types.RandomATXID()
-	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 1, nil)
+	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 1)
 	atx.CommitmentATX = &commitmentAtx
 	atx.SmesherID = signer.NodeID()
 	atx.SetID(types.RandomATXID())

@@ -51,7 +51,7 @@ type genAtxOpt func(*types.ActivationTx)
 
 func genAtxWithNonce(nonce types.VRFPostIndex) genAtxOpt {
 	return func(atx *types.ActivationTx) {
-		atx.VRFNonce = &nonce
+		atx.VRFNonce = nonce
 	}
 }
 
@@ -70,11 +70,9 @@ func gatx(
 	units uint32,
 	opts ...genAtxOpt,
 ) *types.ActivationTx {
-	nonce := types.VRFPostIndex(0)
 	atx := &types.ActivationTx{
 		NumUnits:     units,
 		PublishEpoch: epoch,
-		VRFNonce:     &nonce,
 		TickCount:    ticks,
 		SmesherID:    smesher,
 	}
@@ -779,7 +777,7 @@ func TestBuild(t *testing.T) {
 					}
 					for _, atx := range step.atxs {
 						require.NoError(t, atxs.Add(db, atx))
-						atxsdata.AddFromAtx(atx, *atx.VRFNonce, false)
+						atxsdata.AddFromAtx(atx, false)
 					}
 					for _, ballot := range step.ballots {
 						require.NoError(t, ballots.Add(db, ballot))

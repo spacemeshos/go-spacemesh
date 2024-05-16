@@ -593,7 +593,7 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 		ID:             vCheckpointedAtx.ID(),
 		Epoch:          vCheckpointedAtx.PublishEpoch,
 		CommitmentATX:  *vCheckpointedAtx.CommitmentATX,
-		VRFNonce:       *vCheckpointedAtx.VRFNonce,
+		VRFNonce:       vCheckpointedAtx.VRFNonce,
 		NumUnits:       vCheckpointedAtx.NumUnits,
 		BaseTickHeight: vCheckpointedAtx.BaseTickHeight,
 		TickCount:      vCheckpointedAtx.TickCount,

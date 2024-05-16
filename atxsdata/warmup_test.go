@@ -20,7 +20,7 @@ func gatx(
 	id types.ATXID,
 	epoch types.EpochID,
 	smesher types.NodeID,
-	nonce *types.VRFPostIndex,
+	nonce types.VRFPostIndex,
 ) types.ActivationTx {
 	atx := &types.ActivationTx{
 		NumUnits:     1,
@@ -41,12 +41,12 @@ func TestWarmup(t *testing.T) {
 		applied := types.LayerID(10)
 		nonce := types.VRFPostIndex(1)
 		data := []types.ActivationTx{
-			gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, &nonce),
-			gatx(types.ATXID{1, 2}, 1, types.NodeID{2}, &nonce),
-			gatx(types.ATXID{2, 1}, 2, types.NodeID{1}, &nonce),
-			gatx(types.ATXID{2, 2}, 2, types.NodeID{2}, &nonce),
-			gatx(types.ATXID{3, 2}, 3, types.NodeID{2}, &nonce),
-			gatx(types.ATXID{3, 3}, 3, types.NodeID{3}, &nonce),
+			gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nonce),
+			gatx(types.ATXID{1, 2}, 1, types.NodeID{2}, nonce),
+			gatx(types.ATXID{2, 1}, 2, types.NodeID{1}, nonce),
+			gatx(types.ATXID{2, 2}, 2, types.NodeID{2}, nonce),
+			gatx(types.ATXID{3, 2}, 3, types.NodeID{2}, nonce),
+			gatx(types.ATXID{3, 3}, 3, types.NodeID{3}, nonce),
 		}
 		for i := range data {
 			require.NoError(t, atxs.Add(db, &data[i]))
@@ -71,18 +71,10 @@ func TestWarmup(t *testing.T) {
 		require.Error(t, err)
 		require.Nil(t, c)
 	})
-	t.Run("missing nonce", func(t *testing.T) {
-		db := sql.InMemory()
-		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nil)
-		require.NoError(t, atxs.AddMaybeNoNonce(db, &data))
-		c, err := Warm(db, 1)
-		require.Error(t, err)
-		require.Nil(t, c)
-	})
 	t.Run("db failures", func(t *testing.T) {
 		db := sql.InMemory()
 		nonce := types.VRFPostIndex(1)
-		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, &nonce)
+		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nonce)
 		require.NoError(t, atxs.Add(db, &data))
 
 		exec := mocks.NewMockExecutor(gomock.NewController(t))

@@ -233,7 +233,7 @@ func (g *Generator) generateAtxs() {
 		nipost := types.NIPostChallenge{
 			PublishEpoch: g.nextLayer.Sub(1).GetEpoch(),
 		}
-		atx := types.NewActivationTx(nipost, address, units, nil)
+		atx := types.NewActivationTx(nipost, address, units)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]
