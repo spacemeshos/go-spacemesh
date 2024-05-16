@@ -160,6 +160,14 @@ func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*ty
 		return nil, fmt.Errorf("decoding previous atx: %w", err)
 	}
 	prev.SetID(atx.PrevATXID)
+	if prev.VRFNonce == nil {
+		nonce, err := atxs.NonceByID(h.cdb, prev.ID())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get nonce of previous ATX %s: %w", prev.ID(), err)
+		}
+		prev.VRFNonce = (*uint64)(&nonce)
+	}
+
 	return wire.ActivationTxFromWireV1(&prev, blob.Bytes...), nil
 }
 
@@ -248,18 +256,7 @@ func (h *HandlerV1) validateNonInitialAtx(
 	needRecheck := atx.VRFNonce != nil || atx.NumUnits > previous.NumUnits
 	if atx.VRFNonce == nil {
 		atx.VRFNonce = new(uint64)
-		// We load the previous ATX from blob and hence it might not contain a VRF nonce.
-		// In this case, we need to fetch the current nonce from the DB.
-		// The value 0 means that most likely it is not set and we need to query the DB.
-		if previous.VRFNonce == 0 {
-			current, err := atxs.NonceByID(h.cdb, previous.ID())
-			if err != nil {
-				return fmt.Errorf("failed to get current nonce from previous %s: %w", previous.ID(), err)
-			}
-			*atx.VRFNonce = uint64(current)
-		} else {
-			*atx.VRFNonce = uint64(previous.VRFNonce)
-		}
+		*atx.VRFNonce = uint64(previous.VRFNonce)
 	}
 
 	if needRecheck {
