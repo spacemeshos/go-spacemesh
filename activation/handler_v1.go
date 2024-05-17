@@ -423,34 +423,45 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
 	}
 
-	// check if atx.PrevATXID is actually the last published ATX by the same node
-	prev, err := atxs.Get(tx, prevID)
-	if err != nil {
-		return nil, fmt.Errorf("get prev atx: %w", err)
-	}
-
-	// if atx references a previous ATX that is not the last ATX by the same node, there must be at least one
-	// atx published between prevATX and the current epoch
-	var atx2 types.ATXID
-	pubEpoch := h.clock.CurrentLayer().GetEpoch()
-	for pubEpoch > prev.PublishEpoch {
-		id, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, pubEpoch)
+	var atx2ID types.ATXID
+	if atx.PrevATXID == types.EmptyATXID {
+		// if the ATX references an empty previous ATX, we can just take the initial ATX and create a proof
+		// that the node referenced the wrong previous ATX
+		id, err := atxs.GetFirstIDByNodeID(tx, atx.SmesherID)
 		if err != nil {
-			return nil, fmt.Errorf("get prev atx id by node id: %w", err)
+			return nil, fmt.Errorf("get initial atx id: %w", err)
 		}
 
-		prev, err := atxs.Get(tx, id)
+		atx2ID = id
+	} else {
+		prev, err := atxs.Get(tx, atx.PrevATXID)
 		if err != nil {
 			return nil, fmt.Errorf("get prev atx: %w", err)
 		}
-		if atx.ID() != prev.ID() && atx.PrevATXID == prev.PrevATXID {
-			// found an ATX that points to the same previous ATX
-			break
+
+		// if atx references a previous ATX that is not the last ATX by the same node, there must be at least one
+		// atx published between prevATX and the current epoch
+		pubEpoch := h.clock.CurrentLayer().GetEpoch()
+		for pubEpoch > prev.PublishEpoch {
+			id, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, pubEpoch)
+			if err != nil {
+				return nil, fmt.Errorf("get prev atx id by node id: %w", err)
+			}
+
+			atx2, err := atxs.Get(tx, id)
+			if err != nil {
+				return nil, fmt.Errorf("get prev atx: %w", err)
+			}
+			if atx.ID() != atx2.ID() && atx.PrevATXID == atx2.PrevATXID {
+				// found an ATX that points to the same previous ATX
+				atx2ID = id
+				break
+			}
+			pubEpoch = atx2.PublishEpoch
 		}
-		pubEpoch = prev.PublishEpoch
 	}
 
-	if atx2 == types.EmptyATXID {
+	if atx2ID == types.EmptyATXID {
 		// something went wrong, we couldn't find an ATX that points to the same previous ATX
 		// this should never happen since we are checking in other places that all ATXs from the same node
 		// form a chain
@@ -458,7 +469,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 	}
 
 	var blob sql.Blob
-	v, err := atxs.LoadBlob(ctx, h.cdb, atx2.Bytes(), &blob)
+	v, err := atxs.LoadBlob(ctx, tx, atx2ID.Bytes(), &blob)
 	if err != nil {
 		return nil, err
 	}
@@ -466,8 +477,8 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, fmt.Errorf("previous atx %s is not of version 1", atx.PrevATXID)
 	}
 
-	var watx2 *wire.ActivationTxV1
-	if err := codec.Decode(blob.Bytes, watx2); err != nil {
+	var watx2 wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &watx2); err != nil {
 		return nil, fmt.Errorf("decoding previous atx: %w", err)
 	}
 
@@ -477,7 +488,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 			Type: mwire.InvalidPrevATX,
 			Data: &mwire.InvalidPrevATXProof{
 				Atx1: *atx,
-				Atx2: *watx2,
+				Atx2: watx2,
 			},
 		},
 	}
