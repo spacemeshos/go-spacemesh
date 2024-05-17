@@ -518,6 +518,7 @@ func (h *HandlerV1) storeAtx(
 	ctx context.Context,
 	watx *wire.ActivationTxV1,
 	blob []byte,
+	received time.Time,
 	leaves uint64,
 	effectiveNumUnits uint32,
 ) (*types.ActivationTx, *mwire.MalfeasanceProof, error) {
@@ -532,7 +533,7 @@ func (h *HandlerV1) storeAtx(
 
 		var baseTickHeight uint64
 		if watx.PositioningATXID != h.goldenATXID {
-			posAtx, err := h.cdb.GetAtx(watx.PositioningATXID)
+			posAtx, err := atxs.Get(tx, watx.PositioningATXID)
 			if err != nil {
 				return fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
 			}
@@ -543,7 +544,7 @@ func (h *HandlerV1) storeAtx(
 		if h.nipostValidator.IsVerifyingFullPost() {
 			atx.SetValidity(types.Valid)
 		}
-		atx.SetReceived(time.Now())
+		atx.SetReceived(received)
 		atx.NumUnits = effectiveNumUnits
 		atx.BaseTickHeight = baseTickHeight
 		atx.TickCount = leaves / h.tickSize
@@ -578,6 +579,7 @@ func (h *HandlerV1) processATX(
 	peer p2p.Peer,
 	watx *wire.ActivationTxV1,
 	blob []byte,
+	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
 	if !h.edVerifier.Verify(signing.ATX, watx.SmesherID, watx.SignedBytes(), watx.Signature) {
 		return nil, fmt.Errorf("invalid atx signature: %w", errMalformedData)
@@ -616,7 +618,7 @@ func (h *HandlerV1) processATX(
 		h.log.WithContext(ctx).With().Debug("atx is valid", watx.ID())
 	}
 
-	atx, proof, err := h.storeAtx(ctx, watx, blob, leaves, effectiveNumUnits)
+	atx, proof, err := h.storeAtx(ctx, watx, blob, received, leaves, effectiveNumUnits)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}

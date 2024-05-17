@@ -221,16 +221,31 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 	}
 }
 
+func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
+	tb.Helper()
+	atx := &types.ActivationTx{
+		PublishEpoch: types.EpochID(1),
+		Coinbase:     types.Address{},
+		NumUnits:     1,
+		SmesherID:    sig.NodeID(),
+	}
+	atx.SetReceived(time.Now())
+	atx.SetID(types.RandomATXID())
+	atx.TickCount = 1
+	require.NoError(tb, atxs.Add(db, atx))
+}
+
 func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	goldenATXID := types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	nodeID := sig.NodeID()
 
-	_, err = identities.GetMalfeasanceProof(atxHdlr.cdb, nodeID)
+	_, err = identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	createIdentity(t, atxHdlr.cdb, sig)
 
 	atx := newInitialATXv1(t, goldenATXID)
 	atx.Sign(sig)

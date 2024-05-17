@@ -33,7 +33,8 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-func createIdentity(tb testing.TB, db *sql.Database, sig *signing.EdSigner) {
+func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
+	tb.Helper()
 	atx := &types.ActivationTx{
 		PublishEpoch: types.EpochID(1),
 		Coinbase:     types.Address{},

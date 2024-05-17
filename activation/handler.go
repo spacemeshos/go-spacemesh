@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	"go.uber.org/zap/zapcore"
 
@@ -242,6 +243,8 @@ func (h *Handler) handleAtx(
 	peer p2p.Peer,
 	msg []byte,
 ) (*mwire.MalfeasanceProof, error) {
+	receivedTime := time.Now()
+
 	opaqueAtx, err := h.decodeATX(msg)
 	if err != nil {
 		return nil, fmt.Errorf("decoding ATX: %w", err)
@@ -276,7 +279,7 @@ func (h *Handler) handleAtx(
 
 	switch atx := opaqueAtx.(type) {
 	case *wire.ActivationTxV1:
-		proof, err = h.v1.processATX(ctx, peer, atx, msg)
+		proof, err = h.v1.processATX(ctx, peer, atx, msg, receivedTime)
 	default:
 		panic("unreachable")
 	}

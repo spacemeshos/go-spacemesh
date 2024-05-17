@@ -999,10 +999,12 @@ func Test_PrevATXCollisions(t *testing.T) {
 	// verify that the ATXs were added
 	got1, err := atxs.Get(db, atx1.ID())
 	require.NoError(t, err)
+	atx1.AtxBlob = types.AtxBlob{}
 	require.Equal(t, atx1, got1)
 
 	got2, err := atxs.Get(db, atx2.ID())
 	require.NoError(t, err)
+	atx2.AtxBlob = types.AtxBlob{}
 	require.Equal(t, atx2, got2)
 
 	// add 10 valid ATXs by 10 other smeshers
