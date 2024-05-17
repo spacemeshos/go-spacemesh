@@ -316,14 +316,14 @@ func TestLoadBlob(t *testing.T) {
 
 func TestLayerForMangledBlock(t *testing.T) {
 	db := sql.InMemory()
-	if _, err := db.Exec("insert into blocks (id, layer, block) values (?1, ?2, ?3);",
+	_, err := db.Exec("insert into blocks (id, layer, block) values (?1, ?2, ?3);",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, []byte(`mangled-block-id`))
 			stmt.BindInt64(2, 1010101)
 			stmt.BindBytes(3, []byte(`mangled-block`)) // this is actually should encode block
-		}, nil); err != nil {
-		require.NoError(t, err)
-	}
+		}, nil)
+	require.NoError(t, err)
+
 	rst, err := Layer(db, types.LayerID(1010101))
 	require.Empty(t, rst, 0)
 	require.Error(t, err)
