@@ -304,7 +304,7 @@ func (ds *dumbStore) Max() Iterator {
 }
 
 func (ds *dumbStore) Copy() ItemStore {
-	panic("not implemented")
+	return &dumbStore{keys: slices.Clone(ds.keys)}
 }
 
 func (ds *dumbStore) Has(k Ordered) bool {

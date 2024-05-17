@@ -195,12 +195,46 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 			case errors.Is(err, context.Canceled):
 				return err
 			default:
+				// failing to sync against a particular peer is not considered
+				// a fatal sync failure, so we just log the error
 				mpr.logger.Error("error syncing peer", zap.Stringer("peer", p), zap.Error(err))
 			}
 			return nil
 		})
 	}
 	return eg.Wait()
+}
+
+func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context) error {
+	var (
+		s   syncability
+		err error
+	)
+	for {
+		syncPeers := mpr.peers.SelectBest(mpr.syncPeerCount)
+		if len(syncPeers) != 0 {
+			// probePeers doesn't return transient errors, sync must stop if it failed
+			s, err = mpr.probePeers(ctx, syncPeers)
+			if err != nil {
+				return err
+			}
+			if len(s.syncable) != 0 {
+				break
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-mpr.clock.After(mpr.noPeersRecheckInterval):
+		}
+	}
+
+	if mpr.needSplitSync(s) {
+		return mpr.runner.splitSync(ctx, s.splitSyncable)
+	} else {
+		return mpr.runner.fullSync(ctx, s.splitSyncable)
+	}
 }
 
 func (mpr *MultiPeerReconciler) Run(ctx context.Context) error {
@@ -234,67 +268,20 @@ func (mpr *MultiPeerReconciler) Run(ctx context.Context) error {
 	//      Wait for all the syncs to complete/fail
 	//    All syncs completed (success / fail) => A
 	ctx, cancel := context.WithCancel(ctx)
-	var eg errgroup.Group
-	eg.Go(func() error {
-		err := mpr.syncBase.run(ctx)
-		if err != nil && !errors.Is(err, context.Canceled) {
-			cancel()
-			mpr.logger.Error("error processing synced items", zap.Error(err))
-			return err
-		}
-		return nil
-	})
-	defer func() {
-		cancel()
-		eg.Wait()
-	}()
-
+	var err error
+LOOP:
 	for {
 		select {
 		case <-ctx.Done():
-			cancel()
-			// if the key handlers have caused an error, return that error
-			return eg.Wait()
+			err = ctx.Err()
+			break LOOP
 		case <-mpr.clock.After(mpr.syncInterval):
 		}
 
-		var (
-			s   syncability
-			err error
-		)
-		for {
-			syncPeers := mpr.peers.SelectBest(mpr.syncPeerCount)
-			if len(syncPeers) != 0 {
-				// probePeers doesn't return transient errors, sync must stop if it failed
-				s, err = mpr.probePeers(ctx, syncPeers)
-				if err != nil {
-					return err
-				}
-				if len(s.syncable) != 0 {
-					break
-				}
-			}
-
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-mpr.clock.After(mpr.noPeersRecheckInterval):
-			}
-		}
-
-		if mpr.needSplitSync(s) {
-			err = mpr.runner.splitSync(ctx, s.splitSyncable)
-		} else {
-			err = mpr.runner.fullSync(ctx, s.splitSyncable)
-		}
-
-		if err != nil {
-			return err
+		if err = mpr.syncOnce(ctx); err != nil {
+			break
 		}
 	}
-}
-
-type HashSyncBase struct {
-	r  requester
-	is ItemStore
+	cancel()
+	return errors.Join(err, mpr.syncBase.wait())
 }

@@ -19,6 +19,392 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
+// MockIterator is a mock of Iterator interface.
+type MockIterator struct {
+	ctrl     *gomock.Controller
+	recorder *MockIteratorMockRecorder
+}
+
+// MockIteratorMockRecorder is the mock recorder for MockIterator.
+type MockIteratorMockRecorder struct {
+	mock *MockIterator
+}
+
+// NewMockIterator creates a new mock instance.
+func NewMockIterator(ctrl *gomock.Controller) *MockIterator {
+	mock := &MockIterator{ctrl: ctrl}
+	mock.recorder = &MockIteratorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockIterator) EXPECT() *MockIteratorMockRecorder {
+	return m.recorder
+}
+
+// Equal mocks base method.
+func (m *MockIterator) Equal(other Iterator) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Equal", other)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Equal indicates an expected call of Equal.
+func (mr *MockIteratorMockRecorder) Equal(other any) *MockIteratorEqualCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Equal", reflect.TypeOf((*MockIterator)(nil).Equal), other)
+	return &MockIteratorEqualCall{Call: call}
+}
+
+// MockIteratorEqualCall wrap *gomock.Call
+type MockIteratorEqualCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockIteratorEqualCall) Return(arg0 bool) *MockIteratorEqualCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockIteratorEqualCall) Do(f func(Iterator) bool) *MockIteratorEqualCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockIteratorEqualCall) DoAndReturn(f func(Iterator) bool) *MockIteratorEqualCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Key mocks base method.
+func (m *MockIterator) Key() Ordered {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Key")
+	ret0, _ := ret[0].(Ordered)
+	return ret0
+}
+
+// Key indicates an expected call of Key.
+func (mr *MockIteratorMockRecorder) Key() *MockIteratorKeyCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Key", reflect.TypeOf((*MockIterator)(nil).Key))
+	return &MockIteratorKeyCall{Call: call}
+}
+
+// MockIteratorKeyCall wrap *gomock.Call
+type MockIteratorKeyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockIteratorKeyCall) Return(arg0 Ordered) *MockIteratorKeyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockIteratorKeyCall) Do(f func() Ordered) *MockIteratorKeyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockIteratorKeyCall) DoAndReturn(f func() Ordered) *MockIteratorKeyCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Next mocks base method.
+func (m *MockIterator) Next() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Next")
+}
+
+// Next indicates an expected call of Next.
+func (mr *MockIteratorMockRecorder) Next() *MockIteratorNextCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockIterator)(nil).Next))
+	return &MockIteratorNextCall{Call: call}
+}
+
+// MockIteratorNextCall wrap *gomock.Call
+type MockIteratorNextCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockIteratorNextCall) Return() *MockIteratorNextCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockIteratorNextCall) Do(f func()) *MockIteratorNextCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockIteratorNextCall) DoAndReturn(f func()) *MockIteratorNextCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockItemStore is a mock of ItemStore interface.
+type MockItemStore struct {
+	ctrl     *gomock.Controller
+	recorder *MockItemStoreMockRecorder
+}
+
+// MockItemStoreMockRecorder is the mock recorder for MockItemStore.
+type MockItemStoreMockRecorder struct {
+	mock *MockItemStore
+}
+
+// NewMockItemStore creates a new mock instance.
+func NewMockItemStore(ctrl *gomock.Controller) *MockItemStore {
+	mock := &MockItemStore{ctrl: ctrl}
+	mock.recorder = &MockItemStoreMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockItemStore) EXPECT() *MockItemStoreMockRecorder {
+	return m.recorder
+}
+
+// Add mocks base method.
+func (m *MockItemStore) Add(ctx context.Context, k Ordered) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Add", ctx, k)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Add indicates an expected call of Add.
+func (mr *MockItemStoreMockRecorder) Add(ctx, k any) *MockItemStoreAddCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockItemStore)(nil).Add), ctx, k)
+	return &MockItemStoreAddCall{Call: call}
+}
+
+// MockItemStoreAddCall wrap *gomock.Call
+type MockItemStoreAddCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockItemStoreAddCall) Return(arg0 error) *MockItemStoreAddCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockItemStoreAddCall) Do(f func(context.Context, Ordered) error) *MockItemStoreAddCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockItemStoreAddCall) DoAndReturn(f func(context.Context, Ordered) error) *MockItemStoreAddCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Copy mocks base method.
+func (m *MockItemStore) Copy() ItemStore {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Copy")
+	ret0, _ := ret[0].(ItemStore)
+	return ret0
+}
+
+// Copy indicates an expected call of Copy.
+func (mr *MockItemStoreMockRecorder) Copy() *MockItemStoreCopyCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Copy", reflect.TypeOf((*MockItemStore)(nil).Copy))
+	return &MockItemStoreCopyCall{Call: call}
+}
+
+// MockItemStoreCopyCall wrap *gomock.Call
+type MockItemStoreCopyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockItemStoreCopyCall) Return(arg0 ItemStore) *MockItemStoreCopyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockItemStoreCopyCall) Do(f func() ItemStore) *MockItemStoreCopyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockItemStoreCopyCall) DoAndReturn(f func() ItemStore) *MockItemStoreCopyCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetRangeInfo mocks base method.
+func (m *MockItemStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) RangeInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRangeInfo", preceding, x, y, count)
+	ret0, _ := ret[0].(RangeInfo)
+	return ret0
+}
+
+// GetRangeInfo indicates an expected call of GetRangeInfo.
+func (mr *MockItemStoreMockRecorder) GetRangeInfo(preceding, x, y, count any) *MockItemStoreGetRangeInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRangeInfo", reflect.TypeOf((*MockItemStore)(nil).GetRangeInfo), preceding, x, y, count)
+	return &MockItemStoreGetRangeInfoCall{Call: call}
+}
+
+// MockItemStoreGetRangeInfoCall wrap *gomock.Call
+type MockItemStoreGetRangeInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockItemStoreGetRangeInfoCall) Return(arg0 RangeInfo) *MockItemStoreGetRangeInfoCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockItemStoreGetRangeInfoCall) Do(f func(Iterator, Ordered, Ordered, int) RangeInfo) *MockItemStoreGetRangeInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockItemStoreGetRangeInfoCall) DoAndReturn(f func(Iterator, Ordered, Ordered, int) RangeInfo) *MockItemStoreGetRangeInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Has mocks base method.
+func (m *MockItemStore) Has(k Ordered) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Has", k)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Has indicates an expected call of Has.
+func (mr *MockItemStoreMockRecorder) Has(k any) *MockItemStoreHasCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Has", reflect.TypeOf((*MockItemStore)(nil).Has), k)
+	return &MockItemStoreHasCall{Call: call}
+}
+
+// MockItemStoreHasCall wrap *gomock.Call
+type MockItemStoreHasCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockItemStoreHasCall) Return(arg0 bool) *MockItemStoreHasCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockItemStoreHasCall) Do(f func(Ordered) bool) *MockItemStoreHasCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockItemStoreHasCall) DoAndReturn(f func(Ordered) bool) *MockItemStoreHasCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Max mocks base method.
+func (m *MockItemStore) Max() Iterator {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Max")
+	ret0, _ := ret[0].(Iterator)
+	return ret0
+}
+
+// Max indicates an expected call of Max.
+func (mr *MockItemStoreMockRecorder) Max() *MockItemStoreMaxCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Max", reflect.TypeOf((*MockItemStore)(nil).Max))
+	return &MockItemStoreMaxCall{Call: call}
+}
+
+// MockItemStoreMaxCall wrap *gomock.Call
+type MockItemStoreMaxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockItemStoreMaxCall) Return(arg0 Iterator) *MockItemStoreMaxCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockItemStoreMaxCall) Do(f func() Iterator) *MockItemStoreMaxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockItemStoreMaxCall) DoAndReturn(f func() Iterator) *MockItemStoreMaxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Min mocks base method.
+func (m *MockItemStore) Min() Iterator {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Min")
+	ret0, _ := ret[0].(Iterator)
+	return ret0
+}
+
+// Min indicates an expected call of Min.
+func (mr *MockItemStoreMockRecorder) Min() *MockItemStoreMinCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Min", reflect.TypeOf((*MockItemStore)(nil).Min))
+	return &MockItemStoreMinCall{Call: call}
+}
+
+// MockItemStoreMinCall wrap *gomock.Call
+type MockItemStoreMinCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockItemStoreMinCall) Return(arg0 Iterator) *MockItemStoreMinCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockItemStoreMinCall) Do(f func() Iterator) *MockItemStoreMinCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockItemStoreMinCall) DoAndReturn(f func() Iterator) *MockItemStoreMinCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Mockrequester is a mock of requester interface.
 type Mockrequester struct {
 	ctrl     *gomock.Controller
@@ -261,40 +647,40 @@ func (c *MocksyncBaseprobeCall) DoAndReturn(f func(context.Context, p2p.Peer) (P
 	return c
 }
 
-// run mocks base method.
-func (m *MocksyncBase) run(ctx context.Context) error {
+// wait mocks base method.
+func (m *MocksyncBase) wait() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "run", ctx)
+	ret := m.ctrl.Call(m, "wait")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// run indicates an expected call of run.
-func (mr *MocksyncBaseMockRecorder) run(ctx any) *MocksyncBaserunCall {
+// wait indicates an expected call of wait.
+func (mr *MocksyncBaseMockRecorder) wait() *MocksyncBasewaitCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "run", reflect.TypeOf((*MocksyncBase)(nil).run), ctx)
-	return &MocksyncBaserunCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "wait", reflect.TypeOf((*MocksyncBase)(nil).wait))
+	return &MocksyncBasewaitCall{Call: call}
 }
 
-// MocksyncBaserunCall wrap *gomock.Call
-type MocksyncBaserunCall struct {
+// MocksyncBasewaitCall wrap *gomock.Call
+type MocksyncBasewaitCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MocksyncBaserunCall) Return(arg0 error) *MocksyncBaserunCall {
+func (c *MocksyncBasewaitCall) Return(arg0 error) *MocksyncBasewaitCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocksyncBaserunCall) Do(f func(context.Context) error) *MocksyncBaserunCall {
+func (c *MocksyncBasewaitCall) Do(f func() error) *MocksyncBasewaitCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocksyncBaserunCall) DoAndReturn(f func(context.Context) error) *MocksyncBaserunCall {
+func (c *MocksyncBasewaitCall) DoAndReturn(f func() error) *MocksyncBasewaitCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -493,6 +879,106 @@ func (c *MocksyncRunnersplitSyncCall) Do(f func(context.Context, []p2p.Peer) err
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MocksyncRunnersplitSyncCall) DoAndReturn(f func(context.Context, []p2p.Peer) error) *MocksyncRunnersplitSyncCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockpairwiseSyncer is a mock of pairwiseSyncer interface.
+type MockpairwiseSyncer struct {
+	ctrl     *gomock.Controller
+	recorder *MockpairwiseSyncerMockRecorder
+}
+
+// MockpairwiseSyncerMockRecorder is the mock recorder for MockpairwiseSyncer.
+type MockpairwiseSyncerMockRecorder struct {
+	mock *MockpairwiseSyncer
+}
+
+// NewMockpairwiseSyncer creates a new mock instance.
+func NewMockpairwiseSyncer(ctrl *gomock.Controller) *MockpairwiseSyncer {
+	mock := &MockpairwiseSyncer{ctrl: ctrl}
+	mock.recorder = &MockpairwiseSyncerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpairwiseSyncer) EXPECT() *MockpairwiseSyncerMockRecorder {
+	return m.recorder
+}
+
+// probe mocks base method.
+func (m *MockpairwiseSyncer) probe(ctx context.Context, peer p2p.Peer, is ItemStore, x, y *types.Hash32) (ProbeResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "probe", ctx, peer, is, x, y)
+	ret0, _ := ret[0].(ProbeResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// probe indicates an expected call of probe.
+func (mr *MockpairwiseSyncerMockRecorder) probe(ctx, peer, is, x, y any) *MockpairwiseSyncerprobeCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "probe", reflect.TypeOf((*MockpairwiseSyncer)(nil).probe), ctx, peer, is, x, y)
+	return &MockpairwiseSyncerprobeCall{Call: call}
+}
+
+// MockpairwiseSyncerprobeCall wrap *gomock.Call
+type MockpairwiseSyncerprobeCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockpairwiseSyncerprobeCall) Return(arg0 ProbeResult, arg1 error) *MockpairwiseSyncerprobeCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockpairwiseSyncerprobeCall) Do(f func(context.Context, p2p.Peer, ItemStore, *types.Hash32, *types.Hash32) (ProbeResult, error)) *MockpairwiseSyncerprobeCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockpairwiseSyncerprobeCall) DoAndReturn(f func(context.Context, p2p.Peer, ItemStore, *types.Hash32, *types.Hash32) (ProbeResult, error)) *MockpairwiseSyncerprobeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// syncStore mocks base method.
+func (m *MockpairwiseSyncer) syncStore(ctx context.Context, peer p2p.Peer, is ItemStore, x, y *types.Hash32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "syncStore", ctx, peer, is, x, y)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// syncStore indicates an expected call of syncStore.
+func (mr *MockpairwiseSyncerMockRecorder) syncStore(ctx, peer, is, x, y any) *MockpairwiseSyncersyncStoreCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "syncStore", reflect.TypeOf((*MockpairwiseSyncer)(nil).syncStore), ctx, peer, is, x, y)
+	return &MockpairwiseSyncersyncStoreCall{Call: call}
+}
+
+// MockpairwiseSyncersyncStoreCall wrap *gomock.Call
+type MockpairwiseSyncersyncStoreCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockpairwiseSyncersyncStoreCall) Return(arg0 error) *MockpairwiseSyncersyncStoreCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockpairwiseSyncersyncStoreCall) Do(f func(context.Context, p2p.Peer, ItemStore, *types.Hash32, *types.Hash32) error) *MockpairwiseSyncersyncStoreCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockpairwiseSyncersyncStoreCall) DoAndReturn(f func(context.Context, p2p.Peer, ItemStore, *types.Hash32, *types.Hash32) error) *MockpairwiseSyncersyncStoreCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

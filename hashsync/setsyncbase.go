@@ -2,31 +2,32 @@ package hashsync
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
-	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"golang.org/x/sync/singleflight"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"golang.org/x/sync/errgroup"
 )
 
 type syncKeyHandler func(ctx context.Context, k Ordered) error
 
 type setSyncBase struct {
-	r       requester
+	ps      pairwiseSyncer
 	is      ItemStore
 	handler syncKeyHandler
-	opts    []Option
-	keyCh   chan Ordered
+	waiting []<-chan singleflight.Result
+	g       singleflight.Group
 }
 
 var _ syncBase = &setSyncBase{}
 
-func newSetSyncBase(r requester, is ItemStore, handler syncKeyHandler, opts ...Option) *setSyncBase {
+func newSetSyncBase(ps pairwiseSyncer, is ItemStore, handler syncKeyHandler) *setSyncBase {
 	return &setSyncBase{
-		r:       r,
+		ps:      ps,
 		is:      is,
 		handler: handler,
-		opts:    opts,
-		keyCh:   make(chan Ordered),
 	}
 }
 
@@ -41,58 +42,44 @@ func (ssb *setSyncBase) count() int {
 }
 
 // derive implements syncBase.
-func (ssb *setSyncBase) derive(p peer.ID) syncer {
+func (ssb *setSyncBase) derive(p p2p.Peer) syncer {
 	return &setSyncer{
-		ItemStore: ssb.is.Copy(),
-		r:         ssb.r,
-		opts:      ssb.opts,
-		p:         p,
-		keyCh:     ssb.keyCh,
+		setSyncBase: ssb,
+		ItemStore:   ssb.is.Copy(),
+		p:           p,
 	}
 }
 
 // probe implements syncBase.
-func (ssb *setSyncBase) probe(ctx context.Context, p peer.ID) (ProbeResult, error) {
-	return Probe(ctx, ssb.r, p, ssb.is, nil, nil, ssb.opts...)
+func (ssb *setSyncBase) probe(ctx context.Context, p p2p.Peer) (ProbeResult, error) {
+	return ssb.ps.probe(ctx, p, ssb.is, nil, nil)
 }
 
-// run implements syncBase.
-func (ssb *setSyncBase) run(ctx context.Context) error {
-	eg, ctx := errgroup.WithContext(ctx)
-	doneCh := make(chan Ordered)
-	beingProcessed := make(map[Ordered]struct{})
-	for {
-		select {
-		case <-ctx.Done():
-			return eg.Wait()
-		case k := <-ssb.keyCh:
-			if ssb.is.Has(k) {
-				continue
-			}
-			if _, found := beingProcessed[k]; found {
-				continue
-			}
-			eg.Go(func() error {
-				defer func() {
-					select {
-					case <-ctx.Done():
-					case doneCh <- k:
-					}
-				}()
-				return ssb.handler(ctx, k)
-			})
-		case k := <-doneCh:
-			delete(beingProcessed, k)
-		}
+func (ssb *setSyncBase) acceptKey(ctx context.Context, k Ordered) {
+	key := k.(fmt.Stringer).String()
+	if !ssb.is.Has(k) {
+		ssb.waiting = append(ssb.waiting,
+			ssb.g.DoChan(key, func() (any, error) {
+				return key, ssb.handler(ctx, k)
+			}))
 	}
 }
 
+func (ssb *setSyncBase) wait() error {
+	var errs []error
+	for _, w := range ssb.waiting {
+		r := <-w
+		ssb.g.Forget(r.Val.(string))
+		errs = append(errs, r.Err)
+	}
+	ssb.waiting = nil
+	return errors.Join(errs...)
+}
+
 type setSyncer struct {
+	*setSyncBase
 	ItemStore
-	r     requester
-	opts  []Option
-	p     peer.ID
-	keyCh chan<- Ordered
+	p p2p.Peer
 }
 
 var (
@@ -101,21 +88,32 @@ var (
 )
 
 // peer implements syncer.
-func (ss *setSyncer) peer() peer.ID {
+func (ss *setSyncer) peer() p2p.Peer {
 	return ss.p
 }
 
 // sync implements syncer.
 func (ss *setSyncer) sync(ctx context.Context, x, y *types.Hash32) error {
-	return SyncStore(ctx, ss.r, ss.p, ss, x, y, ss.opts...)
+	return ss.ps.syncStore(ctx, ss.p, ss, x, y)
 }
 
 // Add implements ItemStore.
 func (ss *setSyncer) Add(ctx context.Context, k Ordered) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case ss.keyCh <- k:
-	}
+	ss.acceptKey(ctx, k)
 	return ss.ItemStore.Add(ctx, k)
+}
+
+type realPairwiseSyncer struct {
+	r    requester
+	opts []Option
+}
+
+var _ pairwiseSyncer = &realPairwiseSyncer{}
+
+func (ps *realPairwiseSyncer) probe(ctx context.Context, peer p2p.Peer, is ItemStore, x, y *types.Hash32) (ProbeResult, error) {
+	return Probe(ctx, ps.r, peer, is, x, y, ps.opts...)
+}
+
+func (ps *realPairwiseSyncer) syncStore(ctx context.Context, peer p2p.Peer, is ItemStore, x, y *types.Hash32) error {
+	return SyncStore(ctx, ps.r, peer, is, x, y, ps.opts...)
 }
