@@ -325,6 +325,6 @@ func TestLayerForMangledBlock(t *testing.T) {
 		require.NoError(t, err)
 	}
 	rst, err := Layer(db, types.LayerID(1010101))
-	require.Len(t, rst, 0)
+	require.Empty(t, rst, 0)
 	require.Error(t, err)
 }
