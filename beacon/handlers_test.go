@@ -855,7 +855,7 @@ func Test_handleProposal_MinerMissingATX(t *testing.T) {
 	checkProposals(t, tpd.ProtocolDriver, epoch, proposals{})
 
 	id := createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, epochStart.Add(tpd.config.GracePeriodDuration))
-	hdr, err := tpd.cdb.GetAtxHeader(id)
+	hdr, err := tpd.cdb.GetAtx(id)
 	require.NoError(t, err)
 	tpd.OnAtx(hdr)
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())

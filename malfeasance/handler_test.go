@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	awire "github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -34,18 +34,16 @@ func TestMain(m *testing.M) {
 }
 
 func createIdentity(tb testing.TB, db *sql.Database, sig *signing.EdSigner) {
-	challenge := types.NIPostChallenge{
+	atx := &types.ActivationTx{
 		PublishEpoch: types.EpochID(1),
+		Coinbase:     types.Address{},
+		NumUnits:     1,
+		SmesherID:    sig.NodeID(),
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
-	atx.NodeID = new(types.NodeID)
-	*atx.NodeID = sig.NodeID()
-	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(tb, err)
-	require.NoError(tb, atxs.Add(db, vAtx))
+	atx.SetID(types.RandomATXID())
+	atx.TickCount = 1
+	require.NoError(tb, atxs.Add(db, atx))
 }
 
 func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
@@ -56,8 +54,9 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	trt := malfeasance.NewMocktortoise(ctrl)
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
+	store := atxsdata.New()
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg, datastore.WithConsensusCache(store)),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -108,6 +107,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, malProof)
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	createIdentity(t, db, sig)
@@ -135,6 +135,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, malProof)
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("different epoch", func(t *testing.T) {
@@ -158,6 +159,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, malProof)
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("different signer", func(t *testing.T) {
@@ -182,6 +184,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, malProof)
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("invalid hare eligibility", func(t *testing.T) {
@@ -203,6 +206,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		data, err := codec.Encode(gossip)
 		require.NoError(t, err)
 		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
+		require.False(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("valid", func(t *testing.T) {
@@ -230,6 +234,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		require.NotNil(t, malProof.Received())
 		malProof.SetReceived(time.Time{})
 		require.Equal(t, gossip.MalfeasanceProof, *malProof)
+		require.True(t, store.IsMalicious(sig.NodeID()))
 	})
 
 	t.Run("proof equivalence", func(t *testing.T) {
@@ -1121,7 +1126,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 		atx := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					CommitmentATX: &types.ATXID{1, 2, 3},
+					CommitmentATXID: &types.ATXID{1, 2, 3},
 				},
 				NIPost: &awire.NIPostV1{
 					Post:         &awire.PostV1{},
@@ -1130,7 +1135,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 			},
 			SmesherID: h.sig.NodeID(),
 		}
-		atx.Signature = h.sig.Sign(signing.ATX, atx.SignedBytes())
+		atx.Sign(h.sig)
 		proof := wire.MalfeasanceProof{
 			Layer: types.LayerID(11),
 			Proof: wire.Proof{
@@ -1167,7 +1172,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 		atx := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					CommitmentATX: &types.ATXID{1, 2, 3},
+					CommitmentATXID: &types.ATXID{1, 2, 3},
 				},
 				NIPost: &awire.NIPostV1{
 					Post:         &awire.PostV1{},
@@ -1207,7 +1212,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 		atx := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					CommitmentATX: &types.ATXID{1, 2, 3},
+					CommitmentATXID: &types.ATXID{1, 2, 3},
 				},
 				NIPost: &awire.NIPostV1{
 					Post:         &awire.PostV1{},
@@ -1248,7 +1253,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 		atx := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					CommitmentATX: &types.ATXID{1, 2, 3},
+					CommitmentATXID: &types.ATXID{1, 2, 3},
 				},
 				NIPost: &awire.NIPostV1{
 					Post:         &awire.PostV1{},
@@ -1289,50 +1294,35 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
 	t.Run("valid malfeasance proof", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
+		prevATXID := types.RandomATXID()
 
-		prevATX := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch:  types.EpochID(1),
-				CommitmentATX: &types.ATXID{1, 2, 3},
+		atx1 := awire.ActivationTxV1{
+			InnerActivationTxV1: awire.InnerActivationTxV1{
+				NIPostChallengeV1: awire.NIPostChallengeV1{
+					PrevATXID:    prevATXID,
+					PublishEpoch: types.EpochID(2),
+				},
 			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &prevATX))
+		}
+		atx1.Sign(h.sig)
 
-		atx1 := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(2),
-				PrevATXID:    prevATX.ID(),
+		atx2 := awire.ActivationTxV1{
+			InnerActivationTxV1: awire.InnerActivationTxV1{
+				NIPostChallengeV1: awire.NIPostChallengeV1{
+					PrevATXID:    prevATXID,
+					PublishEpoch: types.EpochID(3),
+				},
 			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &atx1))
-
-		atx2 := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(3),
-				PrevATXID:    prevATX.ID(),
-			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &atx2))
+		}
+		atx2.Sign(h.sig)
 
 		proof := wire.MalfeasanceProof{
 			Layer: types.LayerID(11),
 			Proof: wire.Proof{
 				Type: wire.InvalidPrevATX,
 				Data: &wire.InvalidPrevATXProof{
-					Atx1: *awire.ActivationTxToWireV1(&atx1),
-					Atx2: *awire.ActivationTxToWireV1(&atx2),
+					Atx1: atx1,
+					Atx2: atx2,
 				},
 			},
 		}
@@ -1357,49 +1347,35 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		prevATX := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch:  types.EpochID(1),
-				CommitmentATX: &types.ATXID{1, 2, 3},
-			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(sig, &prevATX))
+		prevATXID := types.RandomATXID()
 
-		atx1 := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(2),
-				PrevATXID:    prevATX.ID(),
+		atx1 := awire.ActivationTxV1{
+			InnerActivationTxV1: awire.InnerActivationTxV1{
+				NIPostChallengeV1: awire.NIPostChallengeV1{
+					PrevATXID:    prevATXID,
+					PublishEpoch: types.EpochID(2),
+				},
 			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(sig, &atx1))
+		}
+		atx1.Sign(sig)
 
-		atx2 := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(3),
-				PrevATXID:    prevATX.ID(),
+		atx2 := awire.ActivationTxV1{
+			InnerActivationTxV1: awire.InnerActivationTxV1{
+				NIPostChallengeV1: awire.NIPostChallengeV1{
+					PrevATXID:    prevATXID,
+					PublishEpoch: types.EpochID(3),
+				},
 			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(sig, &atx2))
+		}
+		atx2.Sign(sig)
 
 		proof := wire.MalfeasanceProof{
 			Layer: types.LayerID(11),
 			Proof: wire.Proof{
 				Type: wire.InvalidPrevATX,
 				Data: &wire.InvalidPrevATXProof{
-					Atx1: *awire.ActivationTxToWireV1(&atx1),
-					Atx2: *awire.ActivationTxToWireV1(&atx2),
+					Atx1: atx1,
+					Atx2: atx2,
 				},
 			},
 		}
@@ -1420,37 +1396,23 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
 	t.Run("invalid malfeasance proof (same ATX)", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
 
-		prevATX := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch:  types.EpochID(1),
-				CommitmentATX: &types.ATXID{1, 2, 3},
+		atx := awire.ActivationTxV1{
+			InnerActivationTxV1: awire.InnerActivationTxV1{
+				NIPostChallengeV1: awire.NIPostChallengeV1{
+					PrevATXID:    types.RandomATXID(),
+					PublishEpoch: types.EpochID(2),
+				},
 			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &prevATX))
-
-		atx := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(2),
-				PrevATXID:    prevATX.ID(),
-			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &atx))
+		}
+		atx.Sign(h.sig)
 
 		proof := wire.MalfeasanceProof{
 			Layer: types.LayerID(11),
 			Proof: wire.Proof{
 				Type: wire.InvalidPrevATX,
 				Data: &wire.InvalidPrevATXProof{
-					Atx1: *awire.ActivationTxToWireV1(&atx),
-					Atx2: *awire.ActivationTxToWireV1(&atx),
+					Atx1: atx,
+					Atx2: atx,
 				},
 			},
 		}
@@ -1471,49 +1433,33 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
 	t.Run("invalid malfeasance proof (prev ATXs differ)", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
 
-		prevATX := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch:  types.EpochID(1),
-				CommitmentATX: &types.ATXID{1, 2, 3},
+		atx1 := awire.ActivationTxV1{
+			InnerActivationTxV1: awire.InnerActivationTxV1{
+				NIPostChallengeV1: awire.NIPostChallengeV1{
+					PrevATXID:    types.RandomATXID(),
+					PublishEpoch: types.EpochID(2),
+				},
 			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &prevATX))
+		}
+		atx1.Sign(h.sig)
 
-		atx1 := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(2),
-				PrevATXID:    prevATX.ID(),
+		atx2 := awire.ActivationTxV1{
+			InnerActivationTxV1: awire.InnerActivationTxV1{
+				NIPostChallengeV1: awire.NIPostChallengeV1{
+					PrevATXID:    atx1.ID(),
+					PublishEpoch: types.EpochID(3),
+				},
 			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &atx1))
-
-		atx2 := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(3),
-				PrevATXID:    atx1.ID(),
-			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &atx2))
+		}
+		atx2.Sign(h.sig)
 
 		proof := wire.MalfeasanceProof{
 			Layer: types.LayerID(11),
 			Proof: wire.Proof{
 				Type: wire.InvalidPrevATX,
 				Data: &wire.InvalidPrevATXProof{
-					Atx1: *awire.ActivationTxToWireV1(&atx1),
-					Atx2: *awire.ActivationTxToWireV1(&atx2),
+					Atx1: atx1,
+					Atx2: atx2,
 				},
 			},
 		}
@@ -1538,49 +1484,35 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
 		require.NoError(t, err)
 		createIdentity(t, h.db, sig2)
 
-		prevATX := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch:  types.EpochID(1),
-				CommitmentATX: &types.ATXID{1, 2, 3},
-			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &prevATX))
+		prevATXID := types.RandomATXID()
 
-		atx1 := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(2),
-				PrevATXID:    prevATX.ID(),
+		atx1 := awire.ActivationTxV1{
+			InnerActivationTxV1: awire.InnerActivationTxV1{
+				NIPostChallengeV1: awire.NIPostChallengeV1{
+					PrevATXID:    prevATXID,
+					PublishEpoch: types.EpochID(2),
+				},
 			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &atx1))
+		}
+		atx1.Sign(h.sig)
 
-		atx2 := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(3),
-				PrevATXID:    prevATX.ID(),
+		atx2 := awire.ActivationTxV1{
+			InnerActivationTxV1: awire.InnerActivationTxV1{
+				NIPostChallengeV1: awire.NIPostChallengeV1{
+					PrevATXID:    prevATXID,
+					PublishEpoch: types.EpochID(3),
+				},
 			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(sig2, &atx2))
+		}
+		atx2.Sign(sig2)
 
 		proof := wire.MalfeasanceProof{
 			Layer: types.LayerID(11),
 			Proof: wire.Proof{
 				Type: wire.InvalidPrevATX,
 				Data: &wire.InvalidPrevATXProof{
-					Atx1: *awire.ActivationTxToWireV1(&atx1),
-					Atx2: *awire.ActivationTxToWireV1(&atx2),
+					Atx1: atx1,
+					Atx2: atx2,
 				},
 			},
 		}
@@ -1592,57 +1524,6 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
 			codec.MustEncode(&proof),
 		)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
-
-		malicious, err := identities.IsMalicious(h.db, h.sig.NodeID())
-		require.NoError(t, err)
-		require.False(t, malicious)
-	})
-
-	t.Run("invalid malfeasance proof (same ATX)", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
-
-		prevATX := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch:  types.EpochID(1),
-				CommitmentATX: &types.ATXID{1, 2, 3},
-			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &prevATX))
-
-		atx := *types.NewActivationTx(
-			types.NIPostChallenge{
-				PublishEpoch: types.EpochID(2),
-				PrevATXID:    prevATX.ID(),
-			},
-			types.Address{},
-			nil,
-			1,
-			nil,
-		)
-		require.NoError(t, activation.SignAndFinalizeAtx(h.sig, &atx))
-
-		proof := wire.MalfeasanceProof{
-			Layer: types.LayerID(11),
-			Proof: wire.Proof{
-				Type: wire.InvalidPrevATX,
-				Data: &wire.InvalidPrevATXProof{
-					Atx1: *awire.ActivationTxToWireV1(&atx),
-					Atx2: *awire.ActivationTxToWireV1(&atx),
-				},
-			},
-		}
-
-		err := h.HandleSyncedMalfeasanceProof(
-			context.Background(),
-			types.Hash32(h.sig.NodeID()),
-			"peer",
-			codec.MustEncode(&proof),
-		)
-		require.ErrorContains(t, err, "ATX IDs are the same")
 
 		malicious, err := identities.IsMalicious(h.db, h.sig.NodeID())
 		require.NoError(t, err)

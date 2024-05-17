@@ -45,7 +45,7 @@ var goldenAtx = types.ATXID{1}
 func atxEqual(
 	tb testing.TB,
 	sAtx types.AtxSnapshot,
-	vAtx *types.VerifiedActivationTx,
+	vAtx *types.ActivationTx,
 	commitAtx types.ATXID,
 	vrfnonce types.VRFPostIndex,
 ) {
@@ -54,8 +54,8 @@ func atxEqual(
 	require.True(tb, bytes.Equal(sAtx.CommitmentAtx, commitAtx.Bytes()))
 	require.EqualValues(tb, sAtx.VrfNonce, vrfnonce)
 	require.Equal(tb, sAtx.NumUnits, vAtx.NumUnits)
-	require.Equal(tb, sAtx.BaseTickHeight, vAtx.BaseTickHeight())
-	require.Equal(tb, sAtx.TickCount, vAtx.TickCount())
+	require.Equal(tb, sAtx.BaseTickHeight, vAtx.BaseTickHeight)
+	require.Equal(tb, sAtx.TickCount, vAtx.TickCount)
 	require.True(tb, bytes.Equal(sAtx.PublicKey, vAtx.SmesherID.Bytes()))
 	require.Equal(tb, sAtx.Sequence, vAtx.Sequence)
 	require.True(tb, bytes.Equal(sAtx.Coinbase, vAtx.Coinbase.Bytes()))
@@ -90,7 +90,7 @@ func verifyDbContent(tb testing.TB, db *sql.Database) {
 	}
 	allIds, err := atxs.All(db)
 	require.NoError(tb, err)
-	var extra []*types.VerifiedActivationTx
+	var extra []*types.ActivationTx
 	for _, id := range allIds {
 		vatx, err := atxs.Get(db, id)
 		require.NoError(tb, err)
@@ -245,7 +245,6 @@ func validateAndPreserveData(
 		mclock,
 		nil,
 		mfetch,
-		10,
 		goldenAtx,
 		mvalidator,
 		mreceiver,
@@ -256,32 +255,41 @@ func validateAndPreserveData(
 	for _, dep := range deps {
 		var atx wire.ActivationTxV1
 		require.NoError(tb, codec.Decode(dep.Blob, &atx))
-		vatx := wire.ActivationTxFromWireV1(&atx)
+		vatx := wire.ActivationTxFromWireV1(&atx, dep.Blob...)
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
-		if vatx.InitialPost != nil {
+		if vatx.PrevATXID == types.EmptyATXID {
 			mvalidator.EXPECT().
-				InitialNIPostChallenge(&vatx.NIPostChallenge, gomock.Any(), goldenAtx).
+				InitialNIPostChallengeV1(&atx.NIPostChallengeV1, gomock.Any(), goldenAtx).
 				AnyTimes()
 			mvalidator.EXPECT().Post(
 				gomock.Any(),
 				vatx.SmesherID,
 				*vatx.CommitmentATX,
-				vatx.InitialPost,
+				wire.PostFromWireV1(atx.InitialPost),
 				gomock.Any(),
 				vatx.NumUnits,
 				gomock.Any(),
 			)
-			mvalidator.EXPECT().
-				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
+			mvalidator.EXPECT().VRFNonce(
+				vatx.SmesherID,
+				*vatx.CommitmentATX,
+				(uint64)(vatx.VRFNonce),
+				atx.NIPost.PostMetadata.LabelsPerUnit,
+				vatx.NumUnits,
+			)
 		} else {
-			mvalidator.EXPECT().NIPostChallenge(&vatx.NIPostChallenge, cdb, vatx.SmesherID)
+			mvalidator.EXPECT().NIPostChallengeV1(
+				&atx.NIPostChallengeV1,
+				gomock.Cond(func(prev any) bool { return prev.(*types.ActivationTx).ID() == atx.PrevATXID }),
+				vatx.SmesherID,
+			)
 		}
 
-		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
+		mvalidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, vatx.PublishEpoch)
 		mvalidator.EXPECT().
-			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits, gomock.Any()).
+			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), vatx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)
 		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
@@ -302,11 +310,11 @@ func newChainedAtx(
 	watx := &wire.ActivationTxV1{
 		InnerActivationTxV1: wire.InnerActivationTxV1{
 			NIPostChallengeV1: wire.NIPostChallengeV1{
-				Publish:        types.EpochID(epoch),
-				Sequence:       seq,
-				PrevATXID:      prev,
-				PositioningATX: pos,
-				CommitmentATX:  commitAtx,
+				PublishEpoch:     types.EpochID(epoch),
+				Sequence:         seq,
+				PrevATXID:        prev,
+				PositioningATXID: pos,
+				CommitmentATXID:  commitAtx,
 			},
 			NIPost: &wire.NIPostV1{
 				PostMetadata: &wire.PostMetadataV1{
@@ -329,7 +337,6 @@ func newChainedAtx(
 	watx.Signature = sig.Sign(signing.ATX, watx.SignedBytes())
 
 	atx := wire.ActivationTxFromWireV1(watx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Now().Local())
 
 	return &checkpoint.AtxDep{
@@ -604,11 +611,14 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	var atx wire.ActivationTxV1
 	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-2].Blob, &atx))
 	prevAtx1 := wire.ActivationTxFromWireV1(&atx)
+	atx = wire.ActivationTxV1{}
 	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-1].Blob, &atx))
 	posAtx1 := wire.ActivationTxFromWireV1(&atx)
 
+	atx = wire.ActivationTxV1{}
 	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-2].Blob, &atx))
 	prevAtx2 := wire.ActivationTxFromWireV1(&atx)
+	atx = wire.ActivationTxV1{}
 	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-1].Blob, &atx))
 	posAtx2 := wire.ActivationTxFromWireV1(&atx)
 
@@ -790,12 +800,12 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	// make the first one from the previous snapshot
 	var atx wire.ActivationTxV1
 	require.NoError(t, codec.Decode(vAtxs[0].Blob, &atx))
-	golden := wire.ActivationTxFromWireV1(&atx)
+	golden := wire.ActivationTxFromWireV1(&atx, vAtxs[0].Blob...)
 	require.NoError(t, atxs.AddCheckpointed(oldDB, &atxs.CheckpointAtx{
 		ID:            golden.ID(),
 		Epoch:         golden.PublishEpoch,
 		CommitmentATX: *golden.CommitmentATX,
-		VRFNonce:      *golden.VRFNonce,
+		VRFNonce:      golden.VRFNonce,
 		NumUnits:      golden.NumUnits,
 		SmesherID:     golden.SmesherID,
 		Sequence:      golden.Sequence,
@@ -938,7 +948,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
-	require.NoError(t, atxs.Add(oldDB, newvAtx(t, atx)))
+	require.NoError(t, atxs.Add(oldDB, atx))
 	require.NoError(t, oldDB.Close())
 
 	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)

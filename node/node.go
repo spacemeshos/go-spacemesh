@@ -77,7 +77,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
-	sqlmigrations "github.com/spacemeshos/go-spacemesh/sql/migrations"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -172,27 +171,15 @@ func GetCommand() *cobra.Command {
 				return fmt.Errorf("initializing app: %w", err)
 			}
 
-			// Migrate legacy identity to new location
-			if err := app.MigrateExistingIdentity(); err != nil {
-				return fmt.Errorf("migrating existing identity: %w", err)
-			}
-
-			var err error
-			if app.signers, err = app.TestIdentity(); err != nil {
-				return fmt.Errorf("testing identity: %w", err)
-			}
-
-			if app.signers == nil {
-				err := app.LoadIdentities()
-				switch {
-				case errors.Is(err, fs.ErrNotExist):
-					app.log.Info("Identity file not found. Creating new identity...")
-					if err := app.NewIdentity(); err != nil {
-						return fmt.Errorf("creating new identity: %w", err)
-					}
-				case err != nil:
-					return fmt.Errorf("loading identities: %w", err)
+			err := app.LoadIdentities()
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+				app.log.Info("Identity file not found. Creating new identity...")
+				if err := app.NewIdentity(); err != nil {
+					return fmt.Errorf("creating new identity: %w", err)
 				}
+			case err != nil:
+				return fmt.Errorf("loading identities: %w", err)
 			}
 
 			// Don't print usage on error from this point forward
@@ -314,6 +301,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
 		mapstructureutil.DeprecatedHook(),
+		mapstructureutil.AtxVersionsDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
@@ -759,6 +747,7 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	fetcherWrapped := &layerFetcher{}
+
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
@@ -767,12 +756,13 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.host,
 		fetcherWrapped,
-		app.Config.TickSize,
 		goldenATXID,
 		validator,
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
+		activation.WithTickSize(app.Config.TickSize),
+		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
 	for _, sig := range app.signers {
 		atxHandler.Register(sig)
@@ -1306,7 +1296,11 @@ func (app *App) listenToUpdates(ctx context.Context) {
 						Epoch: epoch,
 						Set:   set,
 					}
-					activesets.Add(app.db, id, activeSet)
+					err := activesets.Add(app.db, id, activeSet)
+					if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+						app.errCh <- fmt.Errorf("error storing ActiveSet: %w", err)
+						return nil
+					}
 
 					app.hOracle.UpdateActiveSet(epoch, set)
 					app.proposalBuilder.UpdateActiveSet(epoch, set)
@@ -1488,6 +1482,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case v2alpha1.Node:
 		service := v2alpha1.NewNodeService(app.host, app.mesh, app.clock, app.syncer)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.Layer:
+		service := v2alpha1.NewLayerService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.LayerStream:
+		service := v2alpha1.NewLayerStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
 	}
@@ -1699,9 +1701,11 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return errors.New("start json server without public services")
 		}
 		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
-			app.Config.API.JSONListener,
 			logger.Zap().Named("JSON"),
+			app.Config.API.JSONListener,
+			app.Config.API.JSONCorsAllowedOrigins,
 		)
+
 		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
@@ -1846,7 +1850,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	dbopts := []sql.Opt{
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
-		sql.WithMigration(sqlmigrations.New0017Migration(dbLog.Zap())),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
@@ -1890,6 +1893,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
+		datastore.WithConsensusCache(data),
 	)
 
 	if app.Config.ScanMalfeasantATXs {

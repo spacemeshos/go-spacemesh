@@ -8,6 +8,7 @@ import (
 
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-pubsub/timecache"
 	ccmgr "github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -101,6 +102,11 @@ func DefaultConfig() Config {
 			AdvertiseIntervalSpread: time.Hour,
 			AdvertiseRetryDelay:     time.Minute,
 			FindPeersRetryDelay:     time.Minute,
+			MinBackoff:              60 * time.Second,
+			MaxBackoff:              time.Hour,
+			MinConnBackoff:          10 * time.Second,
+			MaxConnBackoff:          time.Hour,
+			DialTimeout:             2 * time.Minute,
 		},
 	}
 }
@@ -118,47 +124,48 @@ type Config struct {
 	MaxMessageSize     int           `mapstructure:"maxmessagesize"`
 
 	// see https://lwn.net/Articles/542629/ for reuseport explanation
-	DisableReusePort            bool             `mapstructure:"disable-reuseport"`
-	DisableNatPort              bool             `mapstructure:"disable-natport"`
-	DisableConnectionManager    bool             `mapstructure:"disable-connection-manager"`
-	DisableResourceManager      bool             `mapstructure:"disable-resource-manager"`
-	DisableDHT                  bool             `mapstructure:"disable-dht"`
-	DisablePubSub               bool             `mapstructure:"disable-pubsub"`
-	Flood                       bool             `mapstructure:"flood"`
-	Listen                      AddressList      `mapstructure:"listen"`
-	Bootnodes                   []string         `mapstructure:"bootnodes"`
-	Direct                      []string         `mapstructure:"direct"`
-	MinPeers                    int              `mapstructure:"min-peers"`
-	LowPeers                    int              `mapstructure:"low-peers"`
-	HighPeers                   int              `mapstructure:"high-peers"`
-	InboundFraction             float64          `mapstructure:"inbound-fraction"`
-	OutboundFraction            float64          `mapstructure:"outbound-fraction"`
-	AutoscalePeers              bool             `mapstructure:"autoscale-peers"`
-	AdvertiseAddress            AddressList      `mapstructure:"advertise-address"`
-	AcceptQueue                 int              `mapstructure:"p2p-accept-queue"`
-	Metrics                     bool             `mapstructure:"p2p-metrics"`
-	Bootnode                    bool             `mapstructure:"p2p-bootnode"`
-	ForceReachability           string           `mapstructure:"p2p-reachability"`
-	ForceDHTServer              bool             `mapstructure:"force-dht-server"`
-	EnableHolepunching          bool             `mapstructure:"p2p-holepunching"`
-	PrivateNetwork              bool             `mapstructure:"p2p-private-network"`
-	RelayServer                 RelayServer      `mapstructure:"relay-server"`
-	IP4Blocklist                []string         `mapstructure:"ip4-blocklist"`
-	IP6Blocklist                []string         `mapstructure:"ip6-blocklist"`
-	GossipQueueSize             int              `mapstructure:"gossip-queue-size"`
-	GossipPeerOutboundQueueSize int              `mapstructure:"gossip-peer-outbound-queue-size"`
-	GossipValidationThrottle    int              `mapstructure:"gossip-validation-throttle"`
-	GossipAtxValidationThrottle int              `mapstructure:"gossip-atx-validation-throttle"`
-	PingPeers                   []string         `mapstructure:"ping-peers"`
-	PingInterval                time.Duration    `mapstructure:"ping-interval"`
-	Relay                       bool             `mapstructure:"relay"`
-	StaticRelays                []string         `mapstructure:"static-relays"`
-	EnableTCPTransport          bool             `mapstructure:"enable-tcp-transport"`
-	EnableQUICTransport         bool             `mapstructure:"enable-quic-transport"`
-	EnableRoutingDiscovery      bool             `mapstructure:"enable-routing-discovery"`
-	RoutingDiscoveryAdvertise   bool             `mapstructure:"routing-discovery-advertise"`
-	DiscoveryTimings            DiscoveryTimings `mapstructure:"discovery-timings"`
-	AutoNATServer               AutoNATServer    `mapstructure:"auto-nat-server"`
+	DisableReusePort            bool               `mapstructure:"disable-reuseport"`
+	DisableNatPort              bool               `mapstructure:"disable-natport"`
+	DisableConnectionManager    bool               `mapstructure:"disable-connection-manager"`
+	DisableResourceManager      bool               `mapstructure:"disable-resource-manager"`
+	DisableDHT                  bool               `mapstructure:"disable-dht"`
+	DisablePubSub               bool               `mapstructure:"disable-pubsub"`
+	Flood                       bool               `mapstructure:"flood"`
+	Listen                      AddressList        `mapstructure:"listen"`
+	Bootnodes                   []string           `mapstructure:"bootnodes"`
+	Direct                      []string           `mapstructure:"direct"`
+	MinPeers                    int                `mapstructure:"min-peers"`
+	LowPeers                    int                `mapstructure:"low-peers"`
+	HighPeers                   int                `mapstructure:"high-peers"`
+	InboundFraction             float64            `mapstructure:"inbound-fraction"`
+	OutboundFraction            float64            `mapstructure:"outbound-fraction"`
+	AutoscalePeers              bool               `mapstructure:"autoscale-peers"`
+	AdvertiseAddress            AddressList        `mapstructure:"advertise-address"`
+	AcceptQueue                 int                `mapstructure:"p2p-accept-queue"`
+	Metrics                     bool               `mapstructure:"p2p-metrics"`
+	Bootnode                    bool               `mapstructure:"p2p-bootnode"`
+	ForceReachability           string             `mapstructure:"p2p-reachability"`
+	ForceDHTServer              bool               `mapstructure:"force-dht-server"`
+	EnableHolepunching          bool               `mapstructure:"p2p-holepunching"`
+	PrivateNetwork              bool               `mapstructure:"p2p-private-network"`
+	RelayServer                 RelayServer        `mapstructure:"relay-server"`
+	IP4Blocklist                []string           `mapstructure:"ip4-blocklist"`
+	IP6Blocklist                []string           `mapstructure:"ip6-blocklist"`
+	GossipQueueSize             int                `mapstructure:"gossip-queue-size"`
+	GossipPeerOutboundQueueSize int                `mapstructure:"gossip-peer-outbound-queue-size"`
+	GossipValidationThrottle    int                `mapstructure:"gossip-validation-throttle"`
+	GossipAtxValidationThrottle int                `mapstructure:"gossip-atx-validation-throttle"`
+	GossipEvictionStrategy      timecache.Strategy `mapstructure:"gossip-eviction-strategy"`
+	PingPeers                   []string           `mapstructure:"ping-peers"`
+	PingInterval                time.Duration      `mapstructure:"ping-interval"`
+	Relay                       bool               `mapstructure:"relay"`
+	StaticRelays                []string           `mapstructure:"static-relays"`
+	EnableTCPTransport          bool               `mapstructure:"enable-tcp-transport"`
+	EnableQUICTransport         bool               `mapstructure:"enable-quic-transport"`
+	EnableRoutingDiscovery      bool               `mapstructure:"enable-routing-discovery"`
+	RoutingDiscoveryAdvertise   bool               `mapstructure:"routing-discovery-advertise"`
+	DiscoveryTimings            DiscoveryTimings   `mapstructure:"discovery-timings"`
+	AutoNATServer               AutoNATServer      `mapstructure:"auto-nat-server"`
 }
 
 type DiscoveryTimings struct {
@@ -167,6 +174,11 @@ type DiscoveryTimings struct {
 	AdvertiseIntervalSpread time.Duration `mapstructure:"advertise-interval-spread"`
 	AdvertiseRetryDelay     time.Duration `mapstructure:"advertise-retry-delay"`
 	FindPeersRetryDelay     time.Duration `mapstructure:"find-peers-retry-delay"`
+	MinBackoff              time.Duration `mapstructure:"min-backoff"`
+	MaxBackoff              time.Duration `mapstructure:"max-backoff"`
+	MinConnBackoff          time.Duration `mapstructure:"min-conn-backoff"`
+	MaxConnBackoff          time.Duration `mapstructure:"max-conn-backoff"`
+	DialTimeout             time.Duration `mapstructure:"dial-timeout"`
 }
 
 type AutoNATServer struct {

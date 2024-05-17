@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -305,7 +306,7 @@ func (pd *ProtocolDriver) isClosed() bool {
 	}
 }
 
-func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
+func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTx) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
@@ -313,23 +314,23 @@ func (pd *ProtocolDriver) OnAtx(atx *types.ActivationTxHeader) {
 	if !ok {
 		return
 	}
-	if mi, ok := s.minerAtxs[atx.NodeID]; ok && mi.atxid != atx.ID {
+	if mi, ok := s.minerAtxs[atx.SmesherID]; ok && mi.atxid != atx.ID() {
 		pd.logger.With().Warning("ignoring malicious atx",
-			log.Stringer("smesher", atx.NodeID),
+			log.Stringer("smesher", atx.SmesherID),
 			log.Stringer("previous_atx", mi.atxid),
-			log.Stringer("new_atx", atx.ID),
+			log.Stringer("new_atx", atx.ID()),
 		)
 		return
 	}
-	s.minerAtxs[atx.NodeID] = &minerInfo{
-		atxid: atx.ID,
+	s.minerAtxs[atx.SmesherID] = &minerInfo{
+		atxid: atx.ID(),
 	}
 }
 
 func (pd *ProtocolDriver) minerAtxHdr(
 	epoch types.EpochID,
 	nodeID types.NodeID,
-) (*types.ActivationTxHeader, bool, error) {
+) (*types.ActivationTx, bool, error) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -346,7 +347,7 @@ func (pd *ProtocolDriver) minerAtxHdr(
 		)
 		return nil, false, errMinerNotActive
 	}
-	hdr, err := pd.cdb.GetAtxHeader(mi.atxid)
+	hdr, err := pd.cdb.GetAtx(mi.atxid)
 	if err != nil {
 		return nil, false, fmt.Errorf("get miner atx hdr %v: %w", mi.atxid.ShortString(), err)
 	}
@@ -562,11 +563,11 @@ func (pd *ProtocolDriver) isInProtocol() bool {
 	return atomic.LoadUint64(&pd.inProtocol) == 1
 }
 
-func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types.EpochID) (*state, error) {
+func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, target types.EpochID) (*state, error) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	if s, ok := pd.states[epoch]; ok {
+	if s, ok := pd.states[target]; ok {
 		return s, nil
 	}
 
@@ -577,41 +578,38 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 		// w1 is the weight units at δ before the end of the previous epoch, used to calculate `thresholdStrict`
 		// w2 is the weight units at the end of the previous epoch, used to calculate `threshold`
 		w1, w2 int
-		ontime = pd.clock.LayerToTime(epoch.FirstLayer())
+		ontime = pd.clock.LayerToTime(target.FirstLayer())
 		early  = ontime.Add(-1 * pd.config.GracePeriodDuration)
 	)
-	if err := pd.cdb.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
-		malicious, err := pd.cdb.IsMalicious(header.NodeID)
-		if err != nil {
-			return err
-		}
+	err := atxs.IterateAtxsWithMalfeasance(pd.cdb, target-1, func(atx *types.ActivationTx, malicious bool) bool {
 		if !malicious {
-			epochWeight += header.GetWeight()
+			epochWeight += atx.GetWeight()
 		} else {
-			logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", header.NodeID))
+			logger.With().Debug("malicious miner get 0 weight", log.Stringer("smesher", atx.SmesherID))
 		}
-		if _, ok := miners[header.NodeID]; !ok {
-			miners[header.NodeID] = &minerInfo{
-				atxid:     header.ID,
+		if _, ok := miners[atx.SmesherID]; !ok {
+			miners[atx.SmesherID] = &minerInfo{
+				atxid:     atx.ID(),
 				malicious: malicious,
 			}
-			if header.Received.Before(early) {
+			if atx.Received().Before(early) {
 				w1++
-			} else if header.Received.Before(ontime) {
+			} else if atx.Received().Before(ontime) {
 				w2++
 			}
 		} else {
 			logger.With().Warning("ignoring malicious atx from miner",
-				header.ID,
+				atx.ID(),
 				log.Bool("malicious", malicious),
-				log.Stringer("smesher", header.NodeID))
+				log.Stringer("smesher", atx.SmesherID))
 		}
 
-		if s, ok := pd.signers[header.NodeID]; ok {
-			potentiallyActive[header.NodeID] = s
+		if s, ok := pd.signers[atx.SmesherID]; ok {
+			potentiallyActive[atx.SmesherID] = s
 		}
-		return nil
-	}); err != nil {
+		return true
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -621,7 +619,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 
 	active := map[types.NodeID]participant{}
 	for id, signer := range potentiallyActive {
-		if nonce, err := pd.nonceFetcher.VRFNonce(id, epoch); err != nil {
+		if nonce, err := pd.nonceFetcher.VRFNonce(id, target); err != nil {
 			logger.With().Error("getting own VRF nonce", id, log.Err(err))
 		} else {
 			active[id] = participant{
@@ -643,8 +641,8 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 	)
 
 	checker := createProposalChecker(logger, pd.config, w1, w1+w2)
-	pd.states[epoch] = newState(logger, pd.config, active, epochWeight, miners, checker)
-	return pd.states[epoch], nil
+	pd.states[target] = newState(logger, pd.config, active, epochWeight, miners, checker)
+	return pd.states[target], nil
 }
 
 func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {
@@ -873,7 +871,7 @@ func (pd *ProtocolDriver) sendProposal(
 		VRFSignature: vrfSig,
 	}
 
-	if invalid == pd.classifyProposal(logger, m, atx.Received, time.Now(), checker) {
+	if invalid == pd.classifyProposal(logger, m, atx.Received(), time.Now(), checker) {
 		logger.With().Debug("own proposal doesn't pass threshold", log.Inline(proposal), s.Id())
 		return
 	}

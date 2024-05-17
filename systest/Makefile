@@ -83,7 +83,9 @@ gomplate:
 .PHONY: run
 run: gomplate $(run_deps)
 	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
-	@if [ -z "${norbac}" ]; then \
+	@ns=$$(kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null); \
+	export ns="$${ns:-default}"; \
+	if [ -z "$${norbac}" ]; then \
 	  testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" rbac=1 \
 	    gomplate --file systest_job.yml.tmpl | kubectl apply -f -; \
 	  testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" \

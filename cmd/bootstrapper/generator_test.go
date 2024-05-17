@@ -47,26 +47,22 @@ var bitcoinResponse2 string
 
 func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []types.ATXID) {
 	for _, id := range atxids {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: epoch,
-			},
-			NumUnits: 1,
-		}}
+		atx := &types.ActivationTx{
+			PublishEpoch: epoch,
+			NumUnits:     1,
+			TickCount:    1,
+			SmesherID:    types.RandomNodeID(),
+		}
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		atx.SmesherID = types.RandomNodeID()
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(tb, err)
-		require.NoError(tb, atxs.Add(db, vAtx))
+		require.NoError(tb, atxs.Add(db, atx))
 	}
 }
 
 func launchServer(tb testing.TB, cdb *datastore.CachedDB) (grpcserver.Config, func()) {
 	cfg := grpcserver.DefaultTestConfig()
 	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
-	jsonService := grpcserver.NewJSONHTTPServer("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc.JSON"))
+	jsonService := grpcserver.NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0", []string{})
 	s := grpcserver.NewMeshService(cdb, grpcserver.NewMockmeshAPI(gomock.NewController(tb)), nil, nil,
 		0, types.Hash20{}, 0, 0, 0)
 
@@ -168,4 +164,35 @@ func TestGenerator_Generate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGenerator_CheckAPI(t *testing.T) {
+	targetEpoch := types.EpochID(3)
+	db := sql.InMemory()
+	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
+	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, logtest.New(t)))
+	t.Cleanup(cleanup)
+
+	fs := afero.NewMemMapFs()
+	g := NewGenerator(
+		"https://api.blockcypher.com/v1/btc/main",
+		cfg.PublicListener,
+		WithLogger(logtest.New(t)),
+		WithFilesystem(fs),
+		WithHttpClient(http.DefaultClient),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	persisted, err := g.Generate(ctx, targetEpoch, true, false)
+	require.NoError(t, err)
+
+	got, err := afero.ReadFile(fs, persisted)
+	require.NoError(t, err)
+	require.NotEmpty(t, got)
+
+	require.NoError(t, bootstrap.ValidateSchema(got))
+
+	var update bootstrap.Update
+	require.NoError(t, json.Unmarshal(got, &update))
+	require.NotEqual(t, "00000000", update.Data.Epoch.Beacon)
 }

@@ -41,11 +41,6 @@ func TestSanity(t *testing.T) {
 	}
 	require.NoError(t, err)
 	discs := make([]*Discovery, len(mock.Hosts()))
-	t.Cleanup(func() {
-		for _, disc := range discs {
-			disc.Stop()
-		}
-	})
 	// Let the bootnode have suspended peer discovery.
 	// It knows all the nodes anyway. Also, do not advertise
 	// it for routing discovery as all the nodes know about
@@ -61,7 +56,7 @@ func TestSanity(t *testing.T) {
 		WithFindPeersRetryDelay(1*time.Second),
 	)
 	require.NoError(t, err)
-	bootdisc.Start()
+	require.NoError(t, bootdisc.Start())
 	defer bootdisc.Stop()
 	discs[0] = bootdisc
 	require.NoError(t, err)
@@ -124,7 +119,7 @@ func TestSanity(t *testing.T) {
 		}
 		disc, err := New(makeDiscHost(h, true, nodeOpts[i].relayService), opts...)
 		require.NoError(t, err)
-		disc.Start()
+		require.NoError(t, disc.Start())
 		defer disc.Stop()
 		discs[1+i] = disc
 	}
@@ -156,4 +151,21 @@ func TestSanity(t *testing.T) {
 	}
 
 	require.NoError(t, eg.Wait())
+}
+
+func TestShutdownNoStart(t *testing.T) {
+	mock, err := mocknet.FullMeshLinked(2)
+	require.NoError(t, err)
+	logger := logtest.New(t).Zap()
+	boot := makeDiscHost(mock.Hosts()[0], false, false)
+	disc, err := New(boot,
+		WithPeriod(100*time.Microsecond),
+		EnableRoutingDiscovery(),
+		Private(),
+		WithLogger(logger),
+		WithMode(dht.ModeServer),
+		WithFindPeersRetryDelay(1*time.Second),
+	)
+	require.NoError(t, err)
+	disc.Stop()
 }

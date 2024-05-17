@@ -13,7 +13,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -450,11 +449,10 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{},
 			types.Address{1, 2, 3},
-			nil,
 			i,
-			nil,
 		)
-		require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
+		atx.SmesherID = sig.NodeID()
+		atx.SetID(types.RandomATXID())
 		atxs = append(atxs, atx)
 	}
 	return atxs

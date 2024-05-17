@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	awire "github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -26,20 +25,18 @@ func TestMain(m *testing.M) {
 func TestCodec_MultipleATXs(t *testing.T) {
 	epoch := types.EpochID(11)
 
-	a1 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{1, 2, 3}, nil, 10, nil)
-	a2 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{3, 2, 1}, nil, 11, nil)
+	a1 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{1, 2, 3}, 10)
+	a2 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{3, 2, 1}, 11)
 
 	var atxProof wire.AtxProof
 	for i, a := range []*types.ActivationTx{a1, a2} {
-		a.Signature = types.RandomEdSignature()
-		a.SmesherID = types.RandomNodeID()
 		atxProof.Messages[i] = wire.AtxProofMsg{
 			InnerMsg: types.ATXMetadata{
 				PublishEpoch: a.PublishEpoch,
-				// MsgHash:      types.Hash32(a.ToWireV1().HashInnerBytes()),
+				MsgHash:      types.RandomHash(),
 			},
-			SmesherID: a.SmesherID,
-			Signature: a.Signature,
+			SmesherID: types.RandomNodeID(),
+			Signature: types.RandomEdSignature(),
 		}
 	}
 	proof := &wire.MalfeasanceProof{
@@ -187,18 +184,23 @@ func Test_HareMetadata_Equivocation(t *testing.T) {
 
 func TestCodec_InvalidPostIndex(t *testing.T) {
 	lid := types.LayerID(11)
-	atx := types.NewActivationTx(
-		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
-		types.Address{1, 2, 3},
-		nil, 10, nil,
-	)
+
+	atx := awire.ActivationTxV1{
+		InnerActivationTxV1: awire.InnerActivationTxV1{
+			NIPostChallengeV1: awire.NIPostChallengeV1{
+				PublishEpoch: lid.GetEpoch(),
+			},
+			Coinbase: types.Address{1, 2, 3},
+			NumUnits: 10,
+		},
+	}
 
 	proof := &wire.MalfeasanceProof{
 		Layer: lid,
 		Proof: wire.Proof{
 			Type: wire.InvalidPostIndex,
 			Data: &wire.InvalidPostIndexProof{
-				Atx:        *awire.ActivationTxToWireV1(atx),
+				Atx:        atx,
 				InvalidIdx: 5,
 			},
 		},
@@ -217,42 +219,39 @@ func TestCodec_InvalidPrevATX(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	prev := types.NewActivationTx(
-		types.NIPostChallenge{
-			PublishEpoch: lid.GetEpoch() - 2,
-		},
-		types.Address{1, 2, 3},
-		nil, 10, nil,
-	)
-	require.NoError(t, activation.SignAndFinalizeAtx(sig, prev))
+	prevATXID := types.RandomATXID()
 
-	atx1 := types.NewActivationTx(
-		types.NIPostChallenge{
-			PublishEpoch: lid.GetEpoch() - 1,
-			PrevATXID:    prev.ID(),
+	atx1 := awire.ActivationTxV1{
+		InnerActivationTxV1: awire.InnerActivationTxV1{
+			NIPostChallengeV1: awire.NIPostChallengeV1{
+				PublishEpoch: lid.GetEpoch() - 1,
+				PrevATXID:    prevATXID,
+			},
+			Coinbase: types.Address{1, 2, 3},
+			NumUnits: 10,
 		},
-		types.Address{1, 2, 3},
-		nil, 10, nil,
-	)
-	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx1))
+	}
+	atx1.Sign(sig)
 
-	atx2 := types.NewActivationTx(
-		types.NIPostChallenge{
-			PublishEpoch: lid.GetEpoch(),
-			PrevATXID:    prev.ID(),
+	atx2 := awire.ActivationTxV1{
+		InnerActivationTxV1: awire.InnerActivationTxV1{
+			NIPostChallengeV1: awire.NIPostChallengeV1{
+				PublishEpoch: lid.GetEpoch(),
+				PrevATXID:    prevATXID,
+			},
+			Coinbase: types.Address{1, 2, 3},
+			NumUnits: 10,
 		},
-		types.Address{1, 2, 3},
-		nil, 10, nil,
-	)
-	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx2))
+	}
+	atx2.Sign(sig)
 
 	proof := &wire.MalfeasanceProof{
 		Layer: lid,
 		Proof: wire.Proof{
 			Type: wire.InvalidPrevATX,
 			Data: &wire.InvalidPrevATXProof{
-				Atx1: *awire.ActivationTxToWireV1(atx1),
-				Atx2: *awire.ActivationTxToWireV1(atx2),
+				Atx1: atx1,
+				Atx2: atx2,
 			},
 		},
 	}

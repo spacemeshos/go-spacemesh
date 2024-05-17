@@ -388,7 +388,7 @@ func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 					"cause: smesher published ATX %s with invalid post index %d in epoch %d\n",
 					p.Atx.ID().ShortString(),
 					p.InvalidIdx,
-					p.Atx.Publish,
+					p.Atx.PublishEpoch,
 				))
 		}
 	case InvalidPrevATX:
@@ -399,7 +399,7 @@ func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 					"cause: smesher published ATX %s with invalid previous ATX %s in epoch %d\n",
 					p.Atx1.ID().ShortString(),
 					p.Atx2.ID().ShortString(),
-					p.Atx1.Publish,
+					p.Atx1.PublishEpoch,
 				))
 		}
 	}

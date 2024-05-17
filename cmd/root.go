@@ -181,6 +181,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.StringVar(&cfg.API.JSONListener, "grpc-json-listener",
 		cfg.API.JSONListener, "(Optional) endpoint to expose public grpc services via HTTP/JSON.")
 
+	flagSet.StringSliceVar(&cfg.API.JSONCorsAllowedOrigins, "grpc-cors-allowed-origin",
+		cfg.API.JSONCorsAllowedOrigins, "(Optional) CORS Allowed Origin, can be specified multiple times")
+
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
 	flagSet.Uint32Var(&cfg.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
@@ -333,11 +336,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.Bootstrap.Version, "the update version of the bootstrap data")
 
 	/**======================== testing related flags ========================== **/
-	flagSet.StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
-		"", "import private smesher key for testing",
-	)
 	flagSet.VarP(flags.NewStringToUint64Value(&cfg.Genesis.Accounts), "accounts", "a",
-		"List of pre-funded accounts (use in tests only")
+		"List of pre-funded accounts (use in tests only)",
+	)
 
 	/**========================  Deprecated flags ========================== **/
 	flagSet.Var(flags.NewDeprecatedFlag(

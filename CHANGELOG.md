@@ -6,6 +6,15 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+With this release the minimum supported version for Intel Macs is now macOS 13 (Ventura) and for Apple Silicon Macs it
+is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spacemesh/pull/5879)).
+
+This update removes migration code for go-spacemesh databases created with versions before v1.5.0.
+Upgrading to this version requires going through v1.5.x first. Removed migrations for:
+
+* legacy keys in the post data directory ([#5907](https://github.com/spacemeshos/go-spacemesh/pull/5907)).
+* ATX blob separation and always populating nonce column in atxs ([#5942](https://github.com/spacemeshos/go-spacemesh/pull/5942))
+
 ### Highlights
 
 ### Features
@@ -16,6 +25,17 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
   to prevent other users on the same system to access the private keys.
 
 * [#5866](https://github.com/spacemeshos/go-spacemesh/pull/5866) Reduce logging levels of some messages to reduce noise.
+
+* [#5877](https://github.com/spacemeshos/go-spacemesh/pull/5877) Fix verifying ATX chain after checkpoint.
+
+* [#5882](https://github.com/spacemeshos/go-spacemesh/pull/5882) Use backoff during routing discovery.
+  This should reduce network load from the peer discovery mechanism when it's enabled.
+
+* [#5888](https://github.com/spacemeshos/go-spacemesh/pull/5888) Handle DHT discovery startup errors properly
+
+* [#5927](https://github.com/spacemeshos/go-spacemesh/pull/5927) Fixed vulnerability in the way a node handles incoming
+  ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
+  eligible for them.
 
 ## Release v1.5.3
 
@@ -52,6 +72,16 @@ node operators to update to this version as soon as possible.
 * [#5896](https://github.com/spacemeshos/go-spacemesh/pull/5896) Increase supported number of ATXs to 4.5 Mio.
 
 ## Release v1.5.0
+
+* [#5923](https://github.com/spacemeshos/go-spacemesh/pull/5923) Fix high memory consumption and performance issues
+  in the proposal handler
+
+* [#5932](https://github.com/spacemeshos/go-spacemesh/pull/5932) Fix caching malfeasance when processing new proofs
+
+* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of
+  a broken Poet.
+
+  Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
 
 ### Upgrade information
 

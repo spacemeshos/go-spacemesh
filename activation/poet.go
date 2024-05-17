@@ -351,6 +351,9 @@ func (c *PoetClient) Submit(
 }
 
 func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
+	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
+	defer cancel()
+
 	c.gettingProof.Lock()
 	defer c.gettingProof.Unlock()
 
@@ -361,8 +364,6 @@ func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProo
 		}
 	}
 
-	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
-	defer cancel()
 	proof, members, err := c.client.Proof(getProofsCtx, roundID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)

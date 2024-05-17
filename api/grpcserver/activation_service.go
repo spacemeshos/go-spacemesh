@@ -55,7 +55,7 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 	}
 
 	atxId := types.ATXID(types.BytesToHash(request.Id))
-	atx, err := s.atxProvider.GetFullAtx(atxId)
+	atx, err := s.atxProvider.GetAtx(atxId)
 	if err != nil || atx == nil {
 		ctxzap.Debug(ctx, "failed to get ATX",
 			zap.Stringer("id", atxId),
@@ -91,7 +91,7 @@ func (s *activationService) Highest(ctx context.Context, req *emptypb.Empty) (*p
 			},
 		}, nil
 	}
-	atx, err := s.atxProvider.GetFullAtx(highest)
+	atx, err := s.atxProvider.GetAtx(highest)
 	if err != nil || atx == nil {
 		return nil, status.Error(codes.NotFound, fmt.Sprintf("atx id %v not found: %v", highest, err.Error()))
 	}
