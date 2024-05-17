@@ -12,8 +12,8 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -180,7 +180,8 @@ type PostSetupManager struct {
 
 	cfg         PostConfig
 	logger      *zap.Logger
-	db          *datastore.CachedDB
+	db          sql.Executor
+	atxsdata    *atxsdata.Data
 	goldenATXID types.ATXID
 	validator   nipostValidator
 
@@ -207,7 +208,8 @@ func PostValidityDelay(delay time.Duration) PostSetupManagerOpt {
 func NewPostSetupManager(
 	cfg PostConfig,
 	logger *zap.Logger,
-	db *datastore.CachedDB,
+	db sql.Executor,
+	atxsdata *atxsdata.Data,
 	goldenATXID types.ATXID,
 	syncer syncer,
 	validator nipostValidator,
@@ -217,6 +219,7 @@ func NewPostSetupManager(
 		cfg:         cfg,
 		logger:      logger,
 		db:          db,
+		atxsdata:    atxsdata,
 		goldenATXID: goldenATXID,
 		state:       PostSetupStateNotStarted,
 		syncer:      syncer,
@@ -397,10 +400,15 @@ func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID
 		mgr.logger.Info("ATXs synced - selecting commitment ATX")
 	}
 
+	latest, err := atxs.LatestEpoch(mgr.db)
+	if err != nil {
+		return types.EmptyATXID, fmt.Errorf("get latest epoch: %w", err)
+	}
+
 	atx, err := findFullyValidHighTickAtx(
 		context.Background(),
-		mgr.db,
-		types.EmptyNodeID,
+		mgr.atxsdata,
+		latest,
 		mgr.goldenATXID,
 		mgr.validator,
 		mgr.logger,
@@ -408,7 +416,7 @@ func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID
 		VerifyChainOpts.WithLogger(mgr.logger),
 	)
 	switch {
-	case errors.Is(err, sql.ErrNotFound):
+	case errors.Is(err, ErrNotFound):
 		mgr.logger.Info("using golden atx as commitment atx")
 		return mgr.goldenATXID, nil
 	case err != nil:

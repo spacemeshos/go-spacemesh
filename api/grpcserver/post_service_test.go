@@ -20,9 +20,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -59,8 +58,9 @@ func launchPostSupervisor(
 		close(ch)
 		return ch
 	})
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
+	db := sql.InMemory()
+	logger := log.Named("post manager")
+	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	// start post supervisor
@@ -102,8 +102,9 @@ func launchPostSupervisorTLS(
 		close(ch)
 		return ch
 	})
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := activation.NewPostSetupManager(postCfg, log.Named("post manager"), cdb, goldenATXID, syncer, validator)
+	db := sql.InMemory()
+	logger := log.Named("post supervisor")
+	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	// start post supervisor

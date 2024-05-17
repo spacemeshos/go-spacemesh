@@ -16,9 +16,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -44,7 +44,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
 	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
@@ -71,7 +70,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		i += 1
 		eg.Go(func() error {
 			validator := activation.NewMocknipostValidator(ctrl)
-			mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
+			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			initPost(t, mgr, opts, sig.NodeID())
@@ -161,7 +160,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	tab := activation.NewBuilder(
 		conf,
-		cdb,
+		db,
+		atxsdata.New(),
 		localDB,
 		mpub,
 		nb,
