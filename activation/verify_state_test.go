@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -27,57 +28,34 @@ func Test_CheckPrevATXs(t *testing.T) {
 	prevATXID := types.RandomATXID()
 	goldenATXID := types.RandomATXID()
 
-	atx1 := newActivationTx(
-		t,
-		sig,
-		0,
-		prevATXID,
-		goldenATXID,
-		&goldenATXID,
-		types.EpochID(2),
-		0,
-		100,
-		types.GenerateAddress([]byte("aaaa")),
-		100,
-		nil,
-	)
-	require.NoError(t, atxs.Add(db, atx1))
+	atx1 := newInitialATXv1(t, goldenATXID, func(atx *wire.ActivationTxV1) {
+		atx.PrevATXID = prevATXID
+		atx.PublishEpoch = 2
+	})
+	atx1.Sign(sig)
+	vAtx1 := toAtx(t, atx1)
+	require.NoError(t, atxs.Add(db, vAtx1))
 
-	atx2 := newActivationTx(
-		t,
-		sig,
-		1,
-		prevATXID,
-		goldenATXID,
-		&goldenATXID,
-		types.EpochID(3),
-		0,
-		100,
-		types.GenerateAddress([]byte("aaaa")),
-		100,
-		nil,
-	)
-	require.NoError(t, atxs.Add(db, atx2))
+	atx2 := newInitialATXv1(t, goldenATXID, func(atx *wire.ActivationTxV1) {
+		atx.PrevATXID = prevATXID
+		atx.PublishEpoch = 3
+	})
+	atx2.Sign(sig)
+	vAtx2 := toAtx(t, atx2)
+	require.NoError(t, atxs.Add(db, vAtx2))
 
 	// create 100 random ATXs that are not malicious
 	for i := 0; i < 100; i++ {
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx := newActivationTx(
-			t,
-			otherSig,
-			rand.Uint64(),
-			types.RandomATXID(),
-			types.RandomATXID(),
-			nil,
-			rand.N[types.EpochID](100),
-			0,
-			100,
-			types.GenerateAddress([]byte("aaaa")),
-			rand.Uint32(),
-			nil,
-		)
-		require.NoError(t, atxs.Add(db, atx))
+		atx := newInitialATXv1(t, types.RandomATXID(), func(atx *wire.ActivationTxV1) {
+			atx.PrevATXID = types.RandomATXID()
+			atx.NumUnits = rand.Uint32()
+			atx.PublishEpoch = rand.N[types.EpochID](100)
+		})
+		atx.Sign(otherSig)
+		vAtx := toAtx(t, atx)
+		require.NoError(t, atxs.Add(db, vAtx))
 	}
 
 	// Act

@@ -54,19 +54,19 @@ func CheckPrevATXs(ctx context.Context, logger *zap.Logger, db sql.Executor) err
 
 		var blob sql.Blob
 		var atx1 awire.ActivationTxV1
-		if err := atxs.LoadBlob(ctx, db, collision.ATX1.Bytes(), &blob); err != nil {
+		if _, err := atxs.LoadBlob(ctx, db, collision.ATX1.Bytes(), &blob); err != nil {
 			return fmt.Errorf("get blob %s: %w", collision.ATX1.ShortString(), err)
 		}
 		codec.MustDecode(blob.Bytes, &atx1)
 
 		var atx2 awire.ActivationTxV1
-		if err := atxs.LoadBlob(ctx, db, collision.ATX2.Bytes(), &blob); err != nil {
+		if _, err := atxs.LoadBlob(ctx, db, collision.ATX2.Bytes(), &blob); err != nil {
 			return fmt.Errorf("get blob %s: %w", collision.ATX2.ShortString(), err)
 		}
 		codec.MustDecode(blob.Bytes, &atx2)
 
 		proof := &wire.MalfeasanceProof{
-			Layer: atx1.Publish.FirstLayer(),
+			Layer: atx1.PublishEpoch.FirstLayer(),
 			Proof: wire.Proof{
 				Type: wire.InvalidPrevATX,
 				Data: &wire.InvalidPrevATXProof{

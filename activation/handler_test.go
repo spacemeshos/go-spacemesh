@@ -314,7 +314,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.VRFPostIndex(*atx1.VRFNonce), got)
 
-	atx2 := newChainedActivationTxV1(t, goldenATXID, atx1, atx1.ID())
+	atx2 := newChainedActivationTxV1(t, atx1, atx1.ID())
 	nonce2 := types.VRFPostIndex(456)
 	atx2.VRFNonce = (*uint64)(&nonce2)
 	atx2.Sign(sig)
@@ -336,7 +336,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	first := newInitialATXv1(t, goldenATXID)
 	first.Sign(sig)
 
-	second := newChainedActivationTxV1(t, goldenATXID, first, first.ID())
+	second := newChainedActivationTxV1(t, first, first.ID())
 	second.Sign(sig)
 
 	// the poet is missing
@@ -639,7 +639,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, leaves/tickSize, stored1.TickHeight())
 	require.Equal(t, (leaves/tickSize)*units, stored1.GetWeight())
 
-	atx2 := newChainedActivationTxV1(t, goldenATXID, atx1, atx1.ID())
+	atx2 := newChainedActivationTxV1(t, atx1, atx1.ID())
 	atx2.Sign(sig)
 	buf = codec.MustEncode(atx2)
 
@@ -740,7 +740,6 @@ func newInitialATXv1(
 
 func newChainedActivationTxV1(
 	t testing.TB,
-	goldenATXID types.ATXID,
 	prev *wire.ActivationTxV1,
 	pos types.ATXID,
 ) *wire.ActivationTxV1 {
