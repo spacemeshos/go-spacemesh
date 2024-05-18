@@ -123,7 +123,7 @@ func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 }
 
 // Obtain the commitment ATX ID for the given ATX.
-func (h *HandlerV1) commitment(ctx context.Context, atx *wire.ActivationTxV1) (types.ATXID, error) {
+func (h *HandlerV1) commitment(atx *wire.ActivationTxV1) (types.ATXID, error) {
 	if atx.PrevATXID == types.EmptyATXID {
 		return *atx.CommitmentATXID, nil
 	}
@@ -175,7 +175,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV1,
 ) (leaves uint64, effectiveNumUnits uint32, proof *mwire.MalfeasanceProof, err error) {
-	commitmentATX, err := h.commitment(ctx, atx)
+	commitmentATX, err := h.commitment(atx)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
 	}
