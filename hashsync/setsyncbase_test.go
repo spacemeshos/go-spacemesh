@@ -14,7 +14,7 @@ import (
 )
 
 type setSyncBaseTester struct {
-	t       *testing.T
+	*testing.T
 	ctrl    *gomock.Controller
 	ps      *MockpairwiseSyncer
 	is      *MockItemStore
@@ -24,17 +24,20 @@ type setSyncBaseTester struct {
 	doneCh  chan Ordered
 }
 
-func newSetSyncBaseTester(t *testing.T) *setSyncBaseTester {
+func newSetSyncBaseTester(t *testing.T, is ItemStore) *setSyncBaseTester {
 	ctrl := gomock.NewController(t)
 	st := &setSyncBaseTester{
-		t:       t,
+		T:       t,
 		ctrl:    ctrl,
 		ps:      NewMockpairwiseSyncer(ctrl),
-		is:      NewMockItemStore(ctrl),
 		waitChs: make(map[Ordered]chan error),
 		doneCh:  make(chan Ordered),
 	}
-	st.ssb = newSetSyncBase(st.ps, st.is, func(ctx context.Context, k Ordered) error {
+	if is == nil {
+		st.is = NewMockItemStore(ctrl)
+		is = st.is
+	}
+	st.ssb = newSetSyncBase(st.ps, is, func(ctx context.Context, k Ordered) error {
 		err := <-st.getWaitCh(k)
 		st.doneCh <- k
 		return err
@@ -72,7 +75,7 @@ func (st *setSyncBaseTester) expectSyncStore(
 	st.ps.EXPECT().syncStore(ctx, p, ss, nil, nil).
 		DoAndReturn(func(ctx context.Context, p p2p.Peer, is ItemStore, x, y *types.Hash32) error {
 			for _, k := range addedKeys {
-				require.NoError(st.t, is.Add(ctx, k))
+				require.NoError(st, is.Add(ctx, k))
 			}
 			return nil
 		})
@@ -107,7 +110,7 @@ func (st *setSyncBaseTester) wait(count int) ([]types.Hash32, error) {
 func TestSetSyncBase(t *testing.T) {
 	t.Run("probe", func(t *testing.T) {
 		t.Parallel()
-		st := newSetSyncBaseTester(t)
+		st := newSetSyncBaseTester(t, nil)
 		ctx := context.Background()
 		expPr := ProbeResult{
 			FP:    types.RandomHash(),
@@ -122,7 +125,7 @@ func TestSetSyncBase(t *testing.T) {
 
 	t.Run("single key one-time sync", func(t *testing.T) {
 		t.Parallel()
-		st := newSetSyncBaseTester(t)
+		st := newSetSyncBaseTester(t, nil)
 		ctx := context.Background()
 
 		addedKey := types.RandomHash()
@@ -136,6 +139,7 @@ func TestSetSyncBase(t *testing.T) {
 		require.NoError(t, ss.sync(ctx, &x, &y))
 
 		st.is.EXPECT().Has(addedKey)
+		st.is.EXPECT().Add(ctx, addedKey)
 		st.expectSyncStore(ctx, p2p.Peer("p1"), ss, addedKey)
 		require.NoError(t, ss.sync(ctx, nil, nil))
 		close(st.getWaitCh(addedKey))
@@ -147,7 +151,7 @@ func TestSetSyncBase(t *testing.T) {
 
 	t.Run("single key synced multiple times", func(t *testing.T) {
 		t.Parallel()
-		st := newSetSyncBaseTester(t)
+		st := newSetSyncBaseTester(t, nil)
 		ctx := context.Background()
 
 		addedKey := types.RandomHash()
@@ -155,6 +159,8 @@ func TestSetSyncBase(t *testing.T) {
 		ss := st.ssb.derive(p2p.Peer("p1"))
 		require.Equal(t, p2p.Peer("p1"), ss.peer())
 
+		// added just once
+		st.is.EXPECT().Add(ctx, addedKey)
 		for i := 0; i < 3; i++ {
 			st.is.EXPECT().Has(addedKey)
 			st.expectSyncStore(ctx, p2p.Peer("p1"), ss, addedKey)
@@ -169,7 +175,7 @@ func TestSetSyncBase(t *testing.T) {
 
 	t.Run("multiple keys", func(t *testing.T) {
 		t.Parallel()
-		st := newSetSyncBaseTester(t)
+		st := newSetSyncBaseTester(t, nil)
 		ctx := context.Background()
 
 		k1 := types.RandomHash()
@@ -180,6 +186,8 @@ func TestSetSyncBase(t *testing.T) {
 
 		st.is.EXPECT().Has(k1)
 		st.is.EXPECT().Has(k2)
+		st.is.EXPECT().Add(ctx, k1)
+		st.is.EXPECT().Add(ctx, k2)
 		st.expectSyncStore(ctx, p2p.Peer("p1"), ss, k1, k2)
 		require.NoError(t, ss.sync(ctx, nil, nil))
 		close(st.getWaitCh(k1))
@@ -192,7 +200,7 @@ func TestSetSyncBase(t *testing.T) {
 
 	t.Run("handler failure", func(t *testing.T) {
 		t.Parallel()
-		st := newSetSyncBaseTester(t)
+		st := newSetSyncBaseTester(t, nil)
 		ctx := context.Background()
 
 		k1 := types.RandomHash()
@@ -203,6 +211,8 @@ func TestSetSyncBase(t *testing.T) {
 
 		st.is.EXPECT().Has(k1)
 		st.is.EXPECT().Has(k2)
+		// k1 is not propagated to syncBase due to the handler failure
+		st.is.EXPECT().Add(ctx, k2)
 		st.expectSyncStore(ctx, p2p.Peer("p1"), ss, k1, k2)
 		require.NoError(t, ss.sync(ctx, nil, nil))
 		handlerErr := errors.New("fail")
@@ -212,5 +222,32 @@ func TestSetSyncBase(t *testing.T) {
 		handledKeys, err := st.wait(2)
 		require.ErrorIs(t, err, handlerErr)
 		require.ElementsMatch(t, []types.Hash32{k1, k2}, handledKeys)
+	})
+
+	t.Run("synctree based item store", func(t *testing.T) {
+		t.Parallel()
+		hs := make([]types.Hash32, 4)
+		for n := range hs {
+			hs[n] = types.RandomHash()
+		}
+		is := NewSyncTreeStore(Hash32To12Xor{})
+		is.Add(context.Background(), hs[0])
+		is.Add(context.Background(), hs[1])
+		st := newSetSyncBaseTester(t, is)
+		ss := st.ssb.derive(p2p.Peer("p1"))
+		ss.(ItemStore).Add(context.Background(), hs[2])
+		ss.(ItemStore).Add(context.Background(), hs[3])
+		// syncer's cloned ItemStore has new key immediately
+		require.True(t, ss.(ItemStore).Has(hs[2]))
+		require.True(t, ss.(ItemStore).Has(hs[3]))
+		handlerErr := errors.New("fail")
+		st.getWaitCh(hs[2]) <- handlerErr
+		close(st.getWaitCh(hs[3]))
+		handledKeys, err := st.wait(2)
+		require.ErrorIs(t, err, handlerErr)
+		require.ElementsMatch(t, hs[2:], handledKeys)
+		// only successfully handled key propagate the syncBase
+		require.False(t, is.Has(hs[2]))
+		require.True(t, is.Has(hs[3]))
 	})
 }

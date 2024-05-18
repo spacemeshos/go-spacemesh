@@ -60,7 +60,11 @@ func (ssb *setSyncBase) acceptKey(ctx context.Context, k Ordered) {
 	if !ssb.is.Has(k) {
 		ssb.waiting = append(ssb.waiting,
 			ssb.g.DoChan(key, func() (any, error) {
-				return key, ssb.handler(ctx, k)
+				err := ssb.handler(ctx, k)
+				if err == nil {
+					err = ssb.is.Add(ctx, k)
+				}
+				return key, err
 			}))
 	}
 }
