@@ -73,6 +73,12 @@ func WithSplitSyncGracePeriod(t time.Duration) MultiPeerReconcilerOpt {
 	}
 }
 
+func WithLogger(logger *zap.Logger) MultiPeerReconcilerOpt {
+	return func(mpr *MultiPeerReconciler) {
+		mpr.logger = logger
+	}
+}
+
 func withClock(clock clockwork.Clock) MultiPeerReconcilerOpt {
 	return func(mpr *MultiPeerReconciler) {
 		mpr.clock = clock
@@ -119,13 +125,12 @@ type MultiPeerReconciler struct {
 }
 
 func NewMultiPeerReconciler(
-	logger *zap.Logger,
 	syncBase syncBase,
 	peers *peers.Peers,
 	opts ...MultiPeerReconcilerOpt,
 ) *MultiPeerReconciler {
 	mpr := &MultiPeerReconciler{
-		logger:                 logger,
+		logger:                 zap.NewNop(),
 		syncBase:               syncBase,
 		peers:                  peers,
 		syncPeerCount:          20,
@@ -149,7 +154,11 @@ func NewMultiPeerReconciler(
 
 func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.Peer) (syncability, error) {
 	var s syncability
+	s.syncable = nil
+	s.splitSyncable = nil
+	s.nearFullCount = 0
 	for _, p := range syncPeers {
+		mpr.logger.Debug("probe peer", zap.Stringer("peer", p))
 		pr, err := mpr.syncBase.probe(ctx, p)
 		if err != nil {
 			log.Warning("error probing the peer", zap.Any("peer", p), zap.Error(err))
@@ -160,17 +169,34 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 		}
 		s.syncable = append(s.syncable, p)
 		if pr.Count > mpr.minSplitSyncCount {
+			mpr.logger.Debug("splitSyncable peer",
+				zap.Stringer("peer", p),
+				zap.Int("count", pr.Count))
 			s.splitSyncable = append(s.splitSyncable, p)
+		} else {
+			mpr.logger.Debug("NOT splitSyncable peer",
+				zap.Stringer("peer", p),
+				zap.Int("count", pr.Count))
 		}
+
 		if (1-pr.Sim)*float64(mpr.syncBase.count()) < float64(mpr.maxFullDiff) {
+			mpr.logger.Debug("nearFull peer",
+				zap.Stringer("peer", p),
+				zap.Float64("sim", pr.Sim),
+				zap.Int("localCount", mpr.syncBase.count()))
 			s.nearFullCount++
+		} else {
+			mpr.logger.Debug("nearFull peer",
+				zap.Stringer("peer", p),
+				zap.Float64("sim", pr.Sim),
+				zap.Int("localCount", mpr.syncBase.count()))
 		}
 	}
 	return s, nil
 }
 
 func (mpr *MultiPeerReconciler) needSplitSync(s syncability) bool {
-	if float64(s.nearFullCount) >= float64(mpr.syncBase.count())*mpr.minCompleteFraction {
+	if float64(s.nearFullCount) >= float64(len(s.syncable))*mpr.minCompleteFraction {
 		// enough peers are close to this one according to minhash score, can do
 		// full sync
 		return false
@@ -212,8 +238,10 @@ func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context) error {
 	)
 	for {
 		syncPeers := mpr.peers.SelectBest(mpr.syncPeerCount)
+		mpr.logger.Debug("selected best peers for sync", zap.Int("numPeers", len(syncPeers)))
 		if len(syncPeers) != 0 {
 			// probePeers doesn't return transient errors, sync must stop if it failed
+			mpr.logger.Debug("probing peers", zap.Int("count", len(syncPeers)))
 			s, err = mpr.probePeers(ctx, syncPeers)
 			if err != nil {
 				return err
@@ -223,6 +251,7 @@ func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context) error {
 			}
 		}
 
+		mpr.logger.Debug("no peers found, waiting", zap.Duration("duration", mpr.noPeersRecheckInterval))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -231,10 +260,19 @@ func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context) error {
 	}
 
 	if mpr.needSplitSync(s) {
-		return mpr.runner.splitSync(ctx, s.splitSyncable)
+		mpr.logger.Debug("doing split sync", zap.Int("peerCount", len(s.splitSyncable)))
+		err = mpr.runner.splitSync(ctx, s.splitSyncable)
 	} else {
-		return mpr.runner.fullSync(ctx, s.splitSyncable)
+		mpr.logger.Debug("doing full sync", zap.Int("peerCount", len(s.syncable)))
+		err = mpr.runner.fullSync(ctx, s.syncable)
 	}
+
+	// handler errors are not fatal
+	if handlerErr := mpr.syncBase.wait(); handlerErr != nil {
+		mpr.logger.Error("error handling synced keys", zap.Error(handlerErr))
+	}
+
+	return errors.Join(err)
 }
 
 func (mpr *MultiPeerReconciler) Run(ctx context.Context) error {
