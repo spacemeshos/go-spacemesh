@@ -391,9 +391,6 @@ func validateInvalidPostIndex(
 	proof *wire.InvalidPostIndexProof,
 ) (types.NodeID, error) {
 	atx := &proof.Atx
-	if err := hasPublishedAtxs(db, atx.SmesherID); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("check identity %v in invalid post index: %w", atx.SmesherID, err)
-	}
 
 	if !edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return types.EmptyNodeID, errors.New("invalid signature")

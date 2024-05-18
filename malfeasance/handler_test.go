@@ -1124,49 +1124,6 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 	t.Run("valid malfeasance proof", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
 
-		atx := awire.ActivationTxV1{
-			InnerActivationTxV1: awire.InnerActivationTxV1{
-				NIPostChallengeV1: awire.NIPostChallengeV1{
-					CommitmentATXID: &types.ATXID{1, 2, 3},
-				},
-				NIPost: &awire.NIPostV1{
-					Post:         &awire.PostV1{},
-					PostMetadata: &awire.PostMetadataV1{},
-				},
-			},
-			SmesherID: h.sig.NodeID(),
-		}
-		atx.Sign(h.sig)
-		proof := wire.MalfeasanceProof{
-			Layer: types.LayerID(11),
-			Proof: wire.Proof{
-				Type: wire.InvalidPostIndex,
-				Data: &wire.InvalidPostIndexProof{
-					Atx:        atx,
-					InvalidIdx: 7,
-				},
-			},
-		}
-
-		h.mPostVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(errors.New("invalid"))
-		h.mTortoise.EXPECT().OnMalfeasance(h.sig.NodeID())
-		err := h.HandleSyncedMalfeasanceProof(
-			context.Background(),
-			types.Hash32(h.sig.NodeID()),
-			"peer",
-			codec.MustEncode(&proof),
-		)
-		require.NoError(t, err)
-
-		malicious, err := identities.IsMalicious(h.db, h.sig.NodeID())
-		require.NoError(t, err)
-		require.True(t, malicious)
-	})
-
-	t.Run("unknown identity", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
-
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
@@ -1194,6 +1151,9 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 			},
 		}
 
+		h.mPostVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errors.New("invalid"))
+		h.mTortoise.EXPECT().OnMalfeasance(sig.NodeID())
 		err = h.HandleSyncedMalfeasanceProof(
 			context.Background(),
 			types.Hash32(h.sig.NodeID()),
@@ -1202,9 +1162,9 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 		)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
-		malicious, err := identities.IsMalicious(h.db, h.sig.NodeID())
+		malicious, err := identities.IsMalicious(h.db, sig.NodeID())
 		require.NoError(t, err)
-		require.False(t, malicious)
+		require.True(t, malicious)
 	})
 
 	t.Run("invalid malfeasance proof (POST valid)", func(t *testing.T) {

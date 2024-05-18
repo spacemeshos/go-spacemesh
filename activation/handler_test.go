@@ -245,8 +245,6 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	_, err = identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	createIdentity(t, atxHdlr.cdb, sig)
-
 	atx := newInitialATXv1(t, goldenATXID)
 	atx.Sign(sig)
 
