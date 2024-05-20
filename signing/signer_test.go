@@ -50,7 +50,7 @@ func Test_NewEdSigner_WithPrivateKey(t *testing.T) {
 		_, err = NewEdSigner(WithPrivateKey(key), WithPrivateKey(key))
 		require.ErrorContains(t, err, "invalid option WithPrivateKey: private key already set")
 
-		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		keyFile := filepath.Join(t.TempDir(), "local.key")
 		dst := make([]byte, hex.EncodedLen(len(ed.PrivateKey())))
 		hex.Encode(dst, ed.PrivateKey())
 		err = os.WriteFile(keyFile, dst, 0o600)
@@ -69,17 +69,17 @@ func Test_NewEdSigner_FromFile(t *testing.T) {
 	})
 
 	t.Run("invalid key", func(t *testing.T) {
-		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		keyFile := filepath.Join(t.TempDir(), "local.key")
 		key := bytes.Repeat([]byte{0}, PrivateKeySize*2)
 		err := os.WriteFile(keyFile, key, 0o600)
 		require.NoError(t, err)
 
 		_, err = NewEdSigner(FromFile(keyFile))
-		require.ErrorContains(t, err, "decoding private key in identity.key")
+		require.ErrorContains(t, err, "decoding private key in local.key")
 	})
 
 	t.Run("invalid key size - too short", func(t *testing.T) {
-		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		keyFile := filepath.Join(t.TempDir(), "local.key")
 		key := bytes.Repeat([]byte{0}, 63)
 		dst := make([]byte, hex.EncodedLen(len(key)))
 		hex.Encode(dst, key)
@@ -87,11 +87,11 @@ func Test_NewEdSigner_FromFile(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = NewEdSigner(FromFile(keyFile))
-		require.ErrorContains(t, err, "invalid key size 63/64 for identity.key")
+		require.ErrorContains(t, err, "invalid key size 63/64 for local.key")
 	})
 
 	t.Run("invalid key size - too long", func(t *testing.T) {
-		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		keyFile := filepath.Join(t.TempDir(), "local.key")
 		key := bytes.Repeat([]byte{0}, 65)
 		dst := make([]byte, hex.EncodedLen(len(key)))
 		hex.Encode(dst, key)
@@ -99,14 +99,14 @@ func Test_NewEdSigner_FromFile(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = NewEdSigner(FromFile(keyFile))
-		require.ErrorContains(t, err, "invalid key size 65/64 for identity.key")
+		require.ErrorContains(t, err, "invalid key size 65/64 for local.key")
 	})
 
 	t.Run("valid key", func(t *testing.T) {
 		ed, err := NewEdSigner()
 		require.NoError(t, err)
 
-		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		keyFile := filepath.Join(t.TempDir(), "local.key")
 		dst := make([]byte, hex.EncodedLen(len(ed.PrivateKey())))
 		hex.Encode(dst, ed.PrivateKey())
 		err = os.WriteFile(keyFile, dst, 0o600)
@@ -116,14 +116,14 @@ func Test_NewEdSigner_FromFile(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, ed.priv, ed2.priv)
 		require.Equal(t, ed.PublicKey(), ed2.PublicKey())
-		require.Equal(t, "identity.key", ed2.Name())
+		require.Equal(t, "local.key", ed2.Name())
 	})
 
 	t.Run("fails if private key already set", func(t *testing.T) {
 		ed, err := NewEdSigner()
 		require.NoError(t, err)
 
-		keyFile := filepath.Join(t.TempDir(), "identity.key")
+		keyFile := filepath.Join(t.TempDir(), "local.key")
 		dst := make([]byte, hex.EncodedLen(len(ed.PrivateKey())))
 		hex.Encode(dst, ed.PrivateKey())
 		err = os.WriteFile(keyFile, dst, 0o600)
@@ -142,11 +142,11 @@ func TestEdSigner_ToFile(t *testing.T) {
 	})
 
 	t.Run("valid file", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "identity.key")
+		path := filepath.Join(t.TempDir(), "local.key")
 
 		ed, err := NewEdSigner(ToFile(path))
 		require.NoError(t, err)
-		require.Equal(t, "identity.key", ed.Name())
+		require.Equal(t, "local.key", ed.Name())
 
 		require.FileExists(t, path)
 		data, err := os.ReadFile(path)
@@ -160,7 +160,7 @@ func TestEdSigner_ToFile(t *testing.T) {
 	})
 
 	t.Run("fails if file already set", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "identity.key")
+		path := filepath.Join(t.TempDir(), "local.key")
 
 		_, err := NewEdSigner(ToFile(path), ToFile(path))
 		require.ErrorContains(t, err, "invalid option ToFile: file already set")
@@ -170,19 +170,19 @@ func TestEdSigner_ToFile(t *testing.T) {
 		ed, err := NewEdSigner()
 		require.NoError(t, err)
 
-		_, err = NewEdSigner(WithPrivateKey(ed.PrivateKey()), ToFile(filepath.Join(t.TempDir(), "identity.key")))
+		_, err = NewEdSigner(WithPrivateKey(ed.PrivateKey()), ToFile(filepath.Join(t.TempDir(), "local.key")))
 		require.NoError(t, err)
 	})
 
 	t.Run("fails if file already exists", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), "identity.key")
+		path := filepath.Join(t.TempDir(), "local.key")
 
 		_, err := NewEdSigner(ToFile(path))
 		require.NoError(t, err)
 
 		_, err = NewEdSigner(ToFile(path))
 		require.ErrorIs(t, err, fs.ErrExist)
-		require.ErrorContains(t, err, "save identity file identity.key")
+		require.ErrorContains(t, err, "save identity file local.key")
 
 		_, err = NewEdSigner(FromFile(path), ToFile(path))
 		require.ErrorContains(t, err, "invalid option ToFile: file already set")
