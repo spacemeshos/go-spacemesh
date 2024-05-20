@@ -31,13 +31,6 @@ func (t *NIPostChallengeV2) EncodeScale(enc *scale.Encoder) (total int, err erro
 		total += n
 	}
 	{
-		n, err := scale.EncodeOption(enc, t.CommitmentATXID)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeOption(enc, t.InitialPost)
 		if err != nil {
 			return total, err
@@ -69,14 +62,6 @@ func (t *NIPostChallengeV2) DecodeScale(dec *scale.Decoder) (total int, err erro
 			return total, err
 		}
 		total += n
-	}
-	{
-		field, n, err := scale.DecodeOption[types.ATXID](dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.CommitmentATXID = field
 	}
 	{
 		field, n, err := scale.DecodeOption[PostV1](dec)
