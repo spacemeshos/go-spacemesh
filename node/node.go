@@ -1658,8 +1658,13 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			if app.Config.SMESHING.CoinbaseAccount == "" {
 				return errors.New("smeshing enabled but no coinbase account provided")
 			}
-			if len(app.signers) > 1 {
-				return errors.New("supervised smeshing cannot be started in a multi-smeshing setup")
+			if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
+				app.log.Error("supervised smeshing cannot be started in a remote or multi-smeshing setup")
+				app.log.Error(
+					"if you run a supervised node ensure your key file is named %s and try again",
+					supervisedIDKeyFileName,
+				)
+				return errors.New("smeshing enabled in remote setup")
 			}
 			if err := app.postSupervisor.Start(
 				app.Config.POSTService,

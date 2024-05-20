@@ -40,6 +40,12 @@ Upgrading to this version requires going through v1.5.x first. Removed migration
 
   Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
 
+* [#5958](https://github.com/spacemeshos/go-spacemesh/pull/5958) Fix node incorrectly detecting a remote smeshing setup
+  as supervised.
+
+  Ensure that your key file in `data/identities` is named `local.key` if you run a supervised node or with the change
+  the node will not start.
+
 * [#5927](https://github.com/spacemeshos/go-spacemesh/pull/5927) Fixed vulnerability in the way a node handles incoming
   ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
   eligible for them.
