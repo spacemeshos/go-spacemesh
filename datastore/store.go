@@ -49,7 +49,7 @@ type CachedDB struct {
 	atxsdata *atxsdata.Data
 
 	atxCache      *lru.Cache[types.ATXID, *types.ActivationTx]
-	vrfNonceCache *lru.Cache[VrfNonceKey, *types.VRFPostIndex]
+	vrfNonceCache *lru.Cache[VrfNonceKey, types.VRFPostIndex]
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
@@ -108,7 +108,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 		lg.Fatal("failed to create malfeasance cache", err)
 	}
 
-	vrfNonceCache, err := lru.New[VrfNonceKey, *types.VRFPostIndex](o.cfg.ATXSize)
+	vrfNonceCache, err := lru.New[VrfNonceKey, types.VRFPostIndex](o.cfg.ATXSize)
 	if err != nil {
 		lg.Fatal("failed to create vrf nonce cache", err)
 	}
@@ -194,7 +194,7 @@ func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *wire.Malfeasan
 func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
 	key := VrfNonceKey{id, epoch}
 	if nonce, ok := db.vrfNonceCache.Get(key); ok {
-		return *nonce, nil
+		return nonce, nil
 	}
 
 	nonce, err := atxs.VRFNonce(db, id, epoch)
@@ -202,7 +202,7 @@ func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPos
 		return types.VRFPostIndex(0), err
 	}
 
-	db.vrfNonceCache.Add(key, &nonce)
+	db.vrfNonceCache.Add(key, nonce)
 	return nonce, nil
 }
 
