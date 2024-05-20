@@ -1,9 +1,14 @@
 package v2alpha1
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-scale"
+	"github.com/spacemeshos/go-spacemesh/genvm/registry"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
@@ -245,9 +250,17 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 			return builder.Operations{}, err
 		}
 		ops.Filter = append(ops.Filter, builder.Op{
-			Field: builder.Address,
+			Field: builder.Principal,
 			Token: builder.Eq,
 			Value: addr.Bytes(),
+		})
+	}
+
+	if len(filter.Txid) > 0 {
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: builder.Id,
+			Token: builder.In,
+			Value: filter.Txid,
 		})
 	}
 
@@ -267,6 +280,10 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 		})
 	}
 
+	if len(ops.Filter) > 0 {
+		ops.StartWith = "and"
+	}
+
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
 		Value: "layer asc, id",
@@ -284,7 +301,6 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 			Value: int64(filter.Offset),
 		})
 	}
-
 	return ops, nil
 }
 
@@ -307,22 +323,20 @@ func (s *TransactionService) toTx(tx *types.MeshTransaction, result *types.Trans
 		t.GasPrice = tx.GasPrice
 		t.MaxSpend = tx.MaxSpend
 		t.Contents = &spacemeshv2alpha1.TransactionContents{}
-
-		req := s.conState.Validation(tx.GetRaw())
-		_, _ = req.Parse()
+		txArgs, _ := decodeTxArgs(scale.NewDecoder(bytes.NewReader(tx.Raw)))
 
 		switch tx.Method {
 		case core.MethodSpawn:
 			switch tx.TxHeader.TemplateAddress {
 			case wallet.TemplateAddress:
-				args := req.Args().(*wallet.SpawnArguments)
+				args := txArgs.(*wallet.SpawnArguments)
 				t.Contents.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
 					SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
 						Pubkey: args.PublicKey.String(),
 					},
 				}
 			case multisig.TemplateAddress:
-				args := req.Args().(*multisig.SpawnArguments)
+				args := txArgs.(*multisig.SpawnArguments)
 				contents := &spacemeshv2alpha1.TransactionContents_MultiSigSpawn{
 					MultiSigSpawn: &spacemeshv2alpha1.ContentsMultiSigSpawn{
 						Required: uint32(args.Required),
@@ -335,7 +349,7 @@ func (s *TransactionService) toTx(tx *types.MeshTransaction, result *types.Trans
 				t.Contents.Contents = contents
 			}
 		case core.MethodSpend:
-			args := req.Args().(*wallet.SpendArguments)
+			args := txArgs.(*wallet.SpendArguments)
 			t.Contents.Contents = &spacemeshv2alpha1.TransactionContents_Send{
 				Send: &spacemeshv2alpha1.ContentsSend{
 					Destination: args.Destination.String(),
@@ -392,4 +406,53 @@ func convertTxState(tx *types.MeshTransaction) spacemeshv2alpha1.TransactionStat
 	default:
 		return spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_UNSPECIFIED
 	}
+}
+
+func decodeTxArgs(decoder *scale.Decoder) (scale.Encodable, error) {
+	reg := registry.New()
+	wallet.Register(reg)
+	multisig.Register(reg)
+	vesting.Register(reg)
+	vault.Register(reg)
+
+	_, _, err := scale.DecodeCompact8(decoder)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
+	}
+
+	var principal core.Address
+	if _, err := principal.DecodeScale(decoder); err != nil {
+		return nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
+	}
+
+	method, _, err := scale.DecodeCompact8(decoder)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
+	}
+
+	var handler core.Handler
+	templateAddress := &core.Address{}
+	if _, err := templateAddress.DecodeScale(decoder); err != nil {
+		return nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
+	}
+
+	handler = reg.Get(*templateAddress)
+	if handler == nil {
+		return nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
+	}
+
+	var p core.Payload
+	if _, err = p.DecodeScale(decoder); err != nil {
+		return nil, fmt.Errorf("%w: %w", core.ErrMalformed, err)
+	}
+
+	args := handler.Args(method)
+	if args == nil {
+		return nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
+	}
+	if _, err := args.DecodeScale(decoder); err != nil {
+		return nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
+	}
+
+	return args, nil
 }

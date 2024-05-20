@@ -2,8 +2,11 @@ package v2alpha1
 
 import (
 	"context"
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
@@ -19,6 +22,96 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
+
+func TestTransactionService_List(t *testing.T) {
+	types.SetLayersPerEpoch(5)
+	db := sql.InMemory()
+	ctx := context.Background()
+
+	gen := fixture.NewTransactionResultGenerator().WithAddresses(2)
+	txsList := make([]types.TransactionWithResult, 100)
+	require.NoError(t, db.WithTx(ctx, func(dtx *sql.Tx) error {
+		for i := range txsList {
+			tx := gen.Next()
+
+			require.NoError(t, transactions.Add(dtx, &tx.Transaction, time.Time{}))
+			require.NoError(t, transactions.AddResult(dtx, tx.ID, &tx.TransactionResult))
+			txsList[i] = *tx
+		}
+		return nil
+	}))
+
+	svc := NewTransactionService(db, nil, nil, nil, nil)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	conn := dialGrpc(ctx, t, cfg)
+	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
+
+	t.Run("limit set too high", func(t *testing.T) {
+		_, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{Limit: 200})
+		require.Error(t, err)
+
+		s, ok := status.FromError(err)
+		require.True(t, ok)
+		assert.Equal(t, codes.InvalidArgument, s.Code())
+		require.Equal(t, "limit is capped at 100", s.Message())
+	})
+
+	t.Run("no limit set", func(t *testing.T) {
+		_, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{})
+		require.Error(t, err)
+
+		s, ok := status.FromError(err)
+		require.True(t, ok)
+		assert.Equal(t, codes.InvalidArgument, s.Code())
+		require.Equal(t, "limit must be set to <= 100", s.Message())
+	})
+
+	t.Run("limit and offset", func(t *testing.T) {
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{Limit: 25, Offset: 50})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, 25)
+	})
+
+	t.Run("all", func(t *testing.T) {
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{Limit: 100})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, len(txsList))
+	})
+
+	t.Run("principal", func(t *testing.T) {
+		principal := txsList[0].TxHeader.Principal.String()
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
+			Principal: &principal,
+			Limit:     1,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, 1)
+		require.Equal(t, list.Transactions[0].Tx.GetV1().Principal, principal)
+	})
+
+	t.Run("tx id", func(t *testing.T) {
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
+			Txid:  [][]byte{txsList[0].ID[:]},
+			Limit: 100,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, 1)
+		require.Equal(t, list.Transactions[0].Tx.GetV1().Id, txsList[0].ID[:])
+	})
+
+	t.Run("multiple tx ids", func(t *testing.T) {
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
+			Txid:  [][]byte{txsList[0].ID[:], txsList[1].ID[:]},
+			Limit: 100,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, 2)
+		require.Equal(t, list.Transactions[0].Tx.GetV1().Id, txsList[0].ID[:])
+		require.Equal(t, list.Transactions[1].Tx.GetV1().Id, txsList[1].ID[:])
+	})
+}
 
 func TestTransactionService_EstimateGas(t *testing.T) {
 	types.SetLayersPerEpoch(5)

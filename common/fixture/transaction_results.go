@@ -2,6 +2,10 @@ package fixture
 
 import (
 	"encoding/binary"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	wallet2 "github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"math/rand"
 	"time"
 
@@ -66,10 +70,21 @@ func (g *TransactionResultGenerator) WithLayers(start, n int) *TransactionResult
 func (g *TransactionResultGenerator) Next() *types.TransactionWithResult {
 	var tx types.TransactionWithResult
 	g.rng.Read(tx.ID[:])
-	tx.Raw = make([]byte, 10)
-	g.rng.Read(tx.Raw)
+
+	_, priv, _ := ed25519.GenerateKey(g.rng)
+	spawnTx := wallet2.SelfSpawn(priv, types.Nonce(1))
+	rawTx := types.NewRawTx(spawnTx)
+	tx.RawTx = rawTx
+
 	tx.Block = g.Blocks[g.rng.Intn(len(g.Blocks))]
 	tx.Layer = g.Layers[g.rng.Intn(len(g.Layers))]
+	tx.TxHeader = &types.TxHeader{
+		TemplateAddress: wallet.TemplateAddress,
+		Method:          core.MethodSpawn,
+		Principal:       g.Addrs[g.rng.Intn(len(g.Addrs))],
+		Nonce:           types.Nonce(1),
+	}
+
 	if lth := g.rng.Intn(len(g.Addrs)); lth > 0 {
 		tx.Addresses = make([]types.Address, lth%10+1)
 
