@@ -64,6 +64,7 @@ func testnet() config.Config {
 			MetricsPort:                  1010,
 			DatabaseConnections:          16,
 			DatabaseSizeMeteringInterval: 10 * time.Minute,
+			DatabasePruneInterval:        30 * time.Minute,
 			NetworkHRP:                   "stest",
 
 			LayerDuration:  5 * time.Minute,
