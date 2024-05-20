@@ -1008,21 +1008,18 @@ func Test_PrevATXCollisions(t *testing.T) {
 	require.Equal(t, atx2, got2)
 
 	// add 10 valid ATXs by 10 other smeshers
-	atxMap := make(map[types.NodeID][]*types.ActivationTx)
-	for i := 2; i < 12; i++ {
+	for i := 2; i < 6; i++ {
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		if len(atxMap[otherSig.NodeID()]) == 0 {
-			atx := newAtx(t, otherSig, withPublishEpoch(types.EpochID(i)))
-			require.NoError(t, atxs.Add(db, atx))
-		} else {
-			atx := newAtx(t, otherSig,
-				withPublishEpoch(types.EpochID(i)),
-				withPrevATXID(atxMap[otherSig.NodeID()][len(atxMap[otherSig.NodeID()])-1].ID()),
-			)
-			require.NoError(t, atxs.Add(db, atx))
-		}
+		atx := newAtx(t, otherSig, withPublishEpoch(types.EpochID(i)))
+		require.NoError(t, atxs.Add(db, atx))
+
+		atx2 := newAtx(t, otherSig,
+			withPublishEpoch(types.EpochID(i+1)),
+			withPrevATXID(atx.ID()),
+		)
+		require.NoError(t, atxs.Add(db, atx2))
 	}
 
 	// get the collisions
