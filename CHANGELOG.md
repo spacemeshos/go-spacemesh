@@ -33,6 +33,13 @@ Upgrading to this version requires going through v1.5.x first. Removed migration
 
 * [#5888](https://github.com/spacemeshos/go-spacemesh/pull/5888) Handle DHT discovery startup errors properly
 
+* [#5932](https://github.com/spacemeshos/go-spacemesh/pull/5932) Fix caching malfeasance when processing new proofs
+
+* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of
+  a broken Poet.
+
+  Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
+
 * [#5927](https://github.com/spacemeshos/go-spacemesh/pull/5927) Fixed vulnerability in the way a node handles incoming
   ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
   eligible for them.
@@ -73,16 +80,6 @@ node operators to update to this version as soon as possible.
 
 ## Release v1.5.0
 
-* [#5923](https://github.com/spacemeshos/go-spacemesh/pull/5923) Fix high memory consumption and performance issues
-  in the proposal handler
-
-* [#5932](https://github.com/spacemeshos/go-spacemesh/pull/5932) Fix caching malfeasance when processing new proofs
-
-* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of
-  a broken Poet.
-
-  Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
-
 ### Upgrade information
 
 * [#5814](https://github.com/spacemeshos/go-spacemesh/pull/5814) Removed in-code local DB migrations.
@@ -98,7 +95,8 @@ coins. Fixes an oversight in the genesis VM implementation.
 * [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
   This also fixes ambiguity of nonces for equivocating identities.
 
-* [#5856](https://github.com/spacemeshos/go-spacemesh/pull/5856) Bump github.com/spacemeshos/api/release/go to v1.37.0.
+* [#5923](https://github.com/spacemeshos/go-spacemesh/pull/5923) Fix high memory consumption and performance issues
+  in the proposal handler
 
 ## Release v1.4.6
 
