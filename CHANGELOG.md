@@ -33,6 +33,13 @@ Upgrading to this version requires going through v1.5.x first. Removed migration
 
 * [#5888](https://github.com/spacemeshos/go-spacemesh/pull/5888) Handle DHT discovery startup errors properly
 
+* [#5932](https://github.com/spacemeshos/go-spacemesh/pull/5932) Fix caching malfeasance when processing new proofs
+
+* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of
+  a broken Poet.
+
+  Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
+
 * [#5958](https://github.com/spacemeshos/go-spacemesh/pull/5958) Fix node incorrectly detecting a remote smeshing setup
   as supervised.
 
@@ -92,13 +99,6 @@ coins. Fixes an oversight in the genesis VM implementation.
 
 * [#5923](https://github.com/spacemeshos/go-spacemesh/pull/5923) Fix high memory consumption and performance issues
   in the proposal handler
-
-* [#5932](https://github.com/spacemeshos/go-spacemesh/pull/5932) Fix caching malfeasance when processing new proofs
-
-* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of
-  a broken Poet.
-
-  Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
 
 ## Release v1.4.6
 
