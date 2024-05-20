@@ -776,7 +776,7 @@ func (b *Builder) searchPositioningAtx(
 
 // getPositioningAtx returns the positioning ATX.
 // The provided previous ATX is picked if it has a greater or equal
-// tick count as the on ATX selected in `searchPositioningAtx`.
+// tick count as the ATX selected in `searchPositioningAtx`.
 func (b *Builder) getPositioningAtx(
 	ctx context.Context,
 	nodeID types.NodeID,
