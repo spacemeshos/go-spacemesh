@@ -698,6 +698,12 @@ func (b *Builder) createAtx(
 			break
 		}
 		if nipostState.VRFNonce != oldNonce {
+			b.log.Info(
+				"attaching a new VRF nonce in ATX",
+				log.ZShortStringer("smesherID", sig.NodeID()),
+				zap.Uint64("new nonce", uint64(nipostState.VRFNonce)),
+				zap.Uint64("old nonce", uint64(oldNonce)),
+			)
 			nonce = &nipostState.VRFNonce
 		}
 	}

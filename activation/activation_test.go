@@ -346,6 +346,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	atx1, err := publishAtx(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx1)
+	require.Equal(t, prevAtx.ID(), atx1.PositioningATXID)
 
 	// create and publish another ATX
 	currLayer = (posEpoch + 1).FirstLayer()
@@ -356,6 +357,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	require.NotNil(t, atx2)
 	require.NotEqual(t, atx1, atx2)
 	require.Equal(t, atx1.PublishEpoch+1, atx2.PublishEpoch)
+	require.Equal(t, atx1.ID(), atx2.PositioningATXID)
 
 	// state is cleaned up
 	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
