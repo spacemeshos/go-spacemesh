@@ -205,11 +205,10 @@ func TestCodec_InvalidPostIndex(t *testing.T) {
 			},
 		},
 	}
-	encoded, err := codec.Encode(proof)
-	require.NoError(t, err)
+	encoded := codec.MustEncode(proof)
 
 	var decoded wire.MalfeasanceProof
-	require.NoError(t, codec.Decode(encoded, &decoded))
+	codec.MustDecode(encoded, &decoded)
 	require.Equal(t, *proof, decoded)
 }
 
