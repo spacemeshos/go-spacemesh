@@ -995,7 +995,8 @@ func (app *App) initServices(ctx context.Context) error {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		goldenATXID,
 		newSyncer,
 		app.validator,
@@ -1030,7 +1031,8 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		app.localDB,
 		app.host,
 		nipostBuilder,

@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -123,6 +124,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		cfg.POST,
 		logger.Named("post"),
 		datastore.NewCachedDB(sql.InMemory(), log.NewNop()),
+		atxsdata.New(),
 		cl.GoldenATX(),
 		syncer,
 		activation.NewMocknipostValidator(ctrl),
