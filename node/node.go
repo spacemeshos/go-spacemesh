@@ -1061,6 +1061,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 		activation.WithPostStates(postStates),
 		activation.WithPoets(poetClients...),
+		activation.BuilderAtxVersions(app.Config.AtxVersions),
 	)
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.

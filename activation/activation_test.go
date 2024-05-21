@@ -3,7 +3,6 @@ package activation
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -124,6 +123,25 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 	return tab
 }
 
+func publishAtxV1(
+	tb testing.TB,
+	tab *testAtxBuilder,
+	nodeID types.NodeID,
+	posEpoch types.EpochID,
+	currLayer *types.LayerID,
+	buildNIPostLayerDuration uint32,
+) *wire.ActivationTxV1 {
+	tb.Helper()
+	var watx wire.ActivationTxV1
+	publishAtx(tb, tab, nodeID, posEpoch, currLayer, buildNIPostLayerDuration,
+		func(_ context.Context, _ string, got []byte) error {
+			return codec.Decode(got, &watx)
+		})
+	require.NoError(tb, atxs.Add(tab.db, toAtx(tb, &watx)))
+	tab.atxsdata.AddFromAtx(toAtx(tb, &watx), false)
+	return &watx
+}
+
 func publishAtx(
 	tb testing.TB,
 	tab *testAtxBuilder,
@@ -131,12 +149,11 @@ func publishAtx(
 	posEpoch types.EpochID,
 	currLayer *types.LayerID, // pointer to keep current layer consistent across calls
 	buildNIPostLayerDuration uint32,
-) (*wire.ActivationTxV1, error) {
+	onPublish func(context.Context, string, []byte) error,
+) {
 	tb.Helper()
 
-	if _, ok := tab.signers[nodeID]; !ok {
-		return nil, fmt.Errorf("node %v not registered", nodeID)
-	}
+	require.Contains(tb, tab.signers, nodeID)
 
 	publishEpoch := posEpoch + 1
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
@@ -158,7 +175,7 @@ func publishAtx(
 	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
 			*currLayer = currLayer.Add(buildNIPostLayerDuration)
-			return newNIPostWithPoet(tb, []byte("66666")), nil
+			return newNIPostWithPoet(tb, types.RandomHash().Bytes()), nil
 		})
 	ch := make(chan struct{})
 	close(ch)
@@ -170,20 +187,12 @@ func publishAtx(
 			}
 			return ch
 		})
-	var built *wire.ActivationTxV1
-	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ string, got []byte) error {
-			built = new(wire.ActivationTxV1)
-			codec.MustDecode(got, built)
-			require.NoError(tb, atxs.Add(tab.db, toAtx(tb, built)))
-			tab.atxsdata.AddFromAtx(toAtx(tb, built), false)
-			return nil
-		})
 
+	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(onPublish)
 	tab.mnipost.EXPECT().ResetState(nodeID).Return(nil)
 	// create and publish ATX
 	err := tab.PublishActivationTx(context.Background(), tab.signers[nodeID])
-	return built, err
+	require.NoError(tb, err)
 }
 
 // ========== Tests ==========
@@ -343,8 +352,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).Times(4)
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), prevAtx.ID(), tab.goldenATXID, gomock.Any())
-	atx1, err := publishAtx(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
-	require.NoError(t, err)
+	atx1 := publishAtxV1(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
 	require.NotNil(t, atx1)
 	require.Equal(t, prevAtx.ID(), atx1.PositioningATXID)
 
@@ -352,15 +360,14 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	currLayer = (posEpoch + 1).FirstLayer()
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).Times(4)
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atx1.ID(), tab.goldenATXID, gomock.Any())
-	atx2, err := publishAtx(t, tab, sig.NodeID(), atx1.PublishEpoch, &currLayer, layersPerEpoch)
-	require.NoError(t, err)
+	atx2 := publishAtxV1(t, tab, sig.NodeID(), atx1.PublishEpoch, &currLayer, layersPerEpoch)
 	require.NotNil(t, atx2)
 	require.NotEqual(t, atx1, atx2)
 	require.Equal(t, atx1.PublishEpoch+1, atx2.PublishEpoch)
 	require.Equal(t, atx1.ID(), atx2.PositioningATXID)
 
 	// state is cleaned up
-	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
+	_, err := nipost.Challenge(tab.localDB, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -639,8 +646,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), posAtx.ID(), tab.goldenATXID, gomock.Any())
-	built2, err := publishAtx(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
-	require.NoError(t, err)
+	built2 := publishAtxV1(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
 	require.NotNil(t, built2)
 	require.NotEqual(t, built.NIPostChallengeV1, built2.NIPostChallengeV1)
 	require.Equal(t, posEpoch+1, built2.PublishEpoch)
@@ -682,12 +688,11 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
-	atx, err := publishAtx(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
-	require.NoError(t, err)
+	atx := publishAtxV1(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
 	require.NotNil(t, atx)
 
 	// state is cleaned up
-	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
+	_, err := nipost.Challenge(tab.localDB, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 

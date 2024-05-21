@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/hex"
+	"strconv"
 	"time"
 
 	"github.com/spacemeshos/go-scale"
@@ -148,6 +149,17 @@ const (
 	AtxV2   AtxVersion = 2
 	AtxVMAX AtxVersion = AtxV2
 )
+
+func (v AtxVersion) String() string {
+	switch v {
+	case AtxV1:
+		return "V1"
+	case AtxV2:
+		return "V2"
+	default:
+		return strconv.Itoa(int(v))
+	}
+}
 
 type AtxBlob struct {
 	Blob    []byte
