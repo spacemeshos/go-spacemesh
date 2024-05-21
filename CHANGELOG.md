@@ -8,6 +8,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5963](https://github.com/spacemeshos/go-spacemesh/pull/5963) Increase supported number of ATXs to 5.5 Mio.
 
+* [#5952](https://github.com/spacemeshos/go-spacemesh/pull/5952) Optimized searching for a positioning ATX.
+  Instead of a slow database query the ATX builder now uses the in-memory ATX store to pick a positioning ATX.
+
 ## Release v1.5.3
 
 ### Improvements
@@ -61,8 +64,6 @@ coins. Fixes an oversight in the genesis VM implementation.
 
 * [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
   This also fixes ambiguity of nonces for equivocating identities.
-
-* [#5856](https://github.com/spacemeshos/go-spacemesh/pull/5856) Bump github.com/spacemeshos/api/release/go to v1.37.0.
 
 ## Release v1.4.6
 
