@@ -1102,7 +1102,8 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 		mgr, err := activation.NewPostSetupManager(
 			cfg.POST,
 			logger.Zap(),
-			app.cachedDB,
+			app.db,
+			app.atxsdata,
 			types.ATXID(app.Config.Genesis.GoldenATX()),
 			app.syncer,
 			app.validator,
