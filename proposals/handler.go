@@ -444,7 +444,7 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	if err != nil {
 		return nil, err
 	}
-	b.ActiveSet = nil
+	b.ActiveSet = nil // the active set is not needed anymore
 
 	t1 := time.Now()
 	proof, err := h.mesh.AddBallot(ctx, b)

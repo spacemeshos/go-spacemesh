@@ -62,17 +62,6 @@ func Has(db sql.Executor, id types.BallotID) (bool, error) {
 	return rows > 0, nil
 }
 
-func UpdateBlob(db sql.Executor, bid types.BallotID, blob []byte) error {
-	if _, err := db.Exec(`update ballots set ballot = ?2 where id = ?1;`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, bid.Bytes())
-			stmt.BindBytes(2, blob[:])
-		}, nil); err != nil {
-		return fmt.Errorf("update blob %s: %w", bid.String(), err)
-	}
-	return nil
-}
-
 // GetBlobSizes returns the sizes of the blobs corresponding to ballots with specified
 // ids. For non-existent ballots, the corresponding items are set to -1.
 func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
