@@ -28,6 +28,43 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+//go:generate mockgen -typed -source=./handler_v1.go -destination=mocks_handler_v1.go -package=activation
+type nipostValidatorV1 interface {
+	InitialNIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, goldenATXID types.ATXID) error
+	NIPostChallengeV1(challenge *wire.NIPostChallengeV1, previous *types.ActivationTx, nodeID types.NodeID) error
+	NIPost(
+		ctx context.Context,
+		nodeId types.NodeID,
+		commitmentAtxId types.ATXID,
+		NIPost *types.NIPost,
+		expectedChallenge types.Hash32,
+		numUnits uint32,
+		opts ...validatorOption,
+	) (uint64, error)
+
+	NumUnits(cfg *PostConfig, numUnits uint32) error
+
+	IsVerifyingFullPost() bool
+
+	Post(
+		ctx context.Context,
+		nodeId types.NodeID,
+		commitmentAtxId types.ATXID,
+		post *types.Post,
+		metadata *types.PostMetadata,
+		numUnits uint32,
+		opts ...validatorOption,
+	) error
+
+	VRFNonce(
+		nodeId types.NodeID,
+		commitmentAtxId types.ATXID,
+		vrfNonce, labelsPerUnit uint64,
+		numUnits uint32,
+	) error
+	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+}
+
 // HandlerV1 processes ATXs version 1.
 type HandlerV1 struct {
 	local           p2p.Peer
@@ -37,7 +74,7 @@ type HandlerV1 struct {
 	clock           layerClock
 	tickSize        uint64
 	goldenATXID     types.ATXID
-	nipostValidator nipostValidator
+	nipostValidator nipostValidatorV1
 	beacon          AtxReceiver
 	tortoise        system.Tortoise
 	logger          *zap.Logger

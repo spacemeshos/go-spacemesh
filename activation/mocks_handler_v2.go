@@ -13,7 +13,6 @@ import (
 	context "context"
 	reflect "reflect"
 
-	wire "github.com/spacemeshos/go-spacemesh/activation/wire"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -119,7 +118,7 @@ func (c *MocknipostValidatorV2PoetMembershipCall) DoAndReturn(f func(context.Con
 }
 
 // PostV2 mocks base method.
-func (m *MocknipostValidatorV2) PostV2(ctx context.Context, smesherID types.NodeID, commitment types.ATXID, post *wire.PostV1, challenge []byte, numUnits uint32, opts ...validatorOption) error {
+func (m *MocknipostValidatorV2) PostV2(ctx context.Context, smesherID types.NodeID, commitment types.ATXID, post *types.Post, challenge []byte, numUnits uint32, opts ...validatorOption) error {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, smesherID, commitment, post, challenge, numUnits}
 	for _, a := range opts {
@@ -150,19 +149,19 @@ func (c *MocknipostValidatorV2PostV2Call) Return(arg0 error) *MocknipostValidato
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorV2PostV2Call) Do(f func(context.Context, types.NodeID, types.ATXID, *wire.PostV1, []byte, uint32, ...validatorOption) error) *MocknipostValidatorV2PostV2Call {
+func (c *MocknipostValidatorV2PostV2Call) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, ...validatorOption) error) *MocknipostValidatorV2PostV2Call {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorV2PostV2Call) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *wire.PostV1, []byte, uint32, ...validatorOption) error) *MocknipostValidatorV2PostV2Call {
+func (c *MocknipostValidatorV2PostV2Call) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, ...validatorOption) error) *MocknipostValidatorV2PostV2Call {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // VRFNonceV2 mocks base method.
-func (m *MocknipostValidatorV2) VRFNonceV2(smesherID types.NodeID, commitment types.ATXID, vrfNonce types.VRFPostIndex, numUnits uint32) error {
+func (m *MocknipostValidatorV2) VRFNonceV2(smesherID types.NodeID, commitment types.ATXID, vrfNonce uint64, numUnits uint32) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "VRFNonceV2", smesherID, commitment, vrfNonce, numUnits)
 	ret0, _ := ret[0].(error)
@@ -188,13 +187,13 @@ func (c *MocknipostValidatorV2VRFNonceV2Call) Return(arg0 error) *MocknipostVali
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostValidatorV2VRFNonceV2Call) Do(f func(types.NodeID, types.ATXID, types.VRFPostIndex, uint32) error) *MocknipostValidatorV2VRFNonceV2Call {
+func (c *MocknipostValidatorV2VRFNonceV2Call) Do(f func(types.NodeID, types.ATXID, uint64, uint32) error) *MocknipostValidatorV2VRFNonceV2Call {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostValidatorV2VRFNonceV2Call) DoAndReturn(f func(types.NodeID, types.ATXID, types.VRFPostIndex, uint32) error) *MocknipostValidatorV2VRFNonceV2Call {
+func (c *MocknipostValidatorV2VRFNonceV2Call) DoAndReturn(f func(types.NodeID, types.ATXID, uint64, uint32) error) *MocknipostValidatorV2VRFNonceV2Call {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -32,12 +32,12 @@ import (
 
 type nipostValidatorV2 interface {
 	IsVerifyingFullPost() bool
-	VRFNonceV2(smesherID types.NodeID, commitment types.ATXID, vrfNonce types.VRFPostIndex, numUnits uint32) error
+	VRFNonceV2(smesherID types.NodeID, commitment types.ATXID, vrfNonce uint64, numUnits uint32) error
 	PostV2(
 		ctx context.Context,
 		smesherID types.NodeID,
 		commitment types.ATXID,
-		post *wire.PostV1,
+		post *types.Post,
 		challenge []byte,
 		numUnits uint32,
 		opts ...validatorOption,
@@ -204,12 +204,13 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 
 		numUnits := atx.NiPosts[0].Posts[0].NumUnits
 		if err := h.nipostValidator.VRFNonceV2(
-			atx.SmesherID, atx.Initial.CommitmentATX, types.VRFPostIndex(*atx.VRFNonce), numUnits,
+			atx.SmesherID, atx.Initial.CommitmentATX, *atx.VRFNonce, numUnits,
 		); err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
+		post := wire.PostFromWireV1(&atx.Initial.Post)
 		if err := h.nipostValidator.PostV2(
-			ctx, atx.SmesherID, atx.Initial.CommitmentATX, &atx.Initial.Post, shared.ZeroChallenge, numUnits,
+			ctx, atx.SmesherID, atx.Initial.CommitmentATX, post, shared.ZeroChallenge, numUnits,
 		); err != nil {
 			return fmt.Errorf("invalid initial post: %w", err)
 		}
@@ -408,7 +409,7 @@ func (h *HandlerV2) validateVrfNonce(
 	}
 
 	if needRecheck {
-		return nonce, h.nipostValidator.VRFNonceV2(atx.SmesherID, commitment, nonce, numUnits)
+		return nonce, h.nipostValidator.VRFNonceV2(atx.SmesherID, commitment, uint64(nonce), numUnits)
 	}
 	return nonce, nil
 }
@@ -522,7 +523,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				ctx,
 				id,
 				commitment,
-				&post.Post,
+				wire.PostFromWireV1(&post.Post),
 				niposts.Challenge[:],
 				post.NumUnits,
 				PostSubset([]byte(h.local)),

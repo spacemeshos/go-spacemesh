@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
@@ -36,39 +35,8 @@ type scaler interface {
 type validatorOption func(*validatorOptions)
 
 type nipostValidator interface {
-	InitialNIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, goldenATXID types.ATXID) error
-	NIPostChallengeV1(challenge *wire.NIPostChallengeV1, previous *types.ActivationTx, nodeID types.NodeID) error
-	NIPost(
-		ctx context.Context,
-		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
-		NIPost *types.NIPost,
-		expectedChallenge types.Hash32,
-		numUnits uint32,
-		opts ...validatorOption,
-	) (uint64, error)
-
-	NumUnits(cfg *PostConfig, numUnits uint32) error
-
-	IsVerifyingFullPost() bool
-
-	Post(
-		ctx context.Context,
-		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
-		post *types.Post,
-		metadata *types.PostMetadata,
-		numUnits uint32,
-		opts ...validatorOption,
-	) error
-
-	VRFNonce(
-		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
-		vrfNonce, labelsPerUnit uint64,
-		numUnits uint32,
-	) error
-	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+	nipostValidatorV1
+	nipostValidatorV2
 
 	// VerifyChain fully verifies all dependencies of the given ATX and the ATX itself.
 	VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error
