@@ -21,14 +21,14 @@ jobs:
             outname_sufix: "mac-amd64"
           - os: [self-hosted, macOS, ARM64, go-spacemesh]
             outname_sufix: "mac-arm64"
-          - os: windows-2019
+          - os: windows-2022
             outname_sufix: "win-amd64"
     steps:
       - shell: bash
         run: echo "OUTNAME=go-spacemesh-${{ github.ref_name }}-${{ matrix.outname_sufix }}" >> $GITHUB_ENV
 
       - name: Install dependencies in windows
-        if: ${{ matrix.os == 'windows-2019' }}
+        if: ${{ matrix.os == 'windows-2022' }}
         run: choco install make wget zip
 
       - name: Add OpenCL support - Ubuntu
@@ -36,7 +36,7 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
 
       - name: disable Windows Defender - Windows
-        if: ${{ matrix.os == 'windows-2019' }}
+        if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
 
@@ -99,13 +99,13 @@ jobs:
         run: brew install coreutils
 
       - name: Calculate the hashsum of the zip file
-        if: ${{ matrix.os != 'windows-2019' }}
+        if: ${{ matrix.os != 'windows-2022' }}
         shell: bash
         run: |
           sha256sum ${{ env.OUTNAME }}.zip | awk '{ print $1 }' > sha256-${{ matrix.outname_sufix }}.txt
 
       - name: Calculate the hashsum of the zip file (Windows)
-        if: ${{ matrix.os == 'windows-2019' }}
+        if: ${{ matrix.os == 'windows-2022' }}
         run: |
           (Get-FileHash ${{ env.OUTNAME }}.zip -Algorithm SHA256).Hash > sha256-${{ matrix.outname_sufix }}.txt
 
