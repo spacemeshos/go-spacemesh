@@ -802,6 +802,8 @@ func PrevATXCollisions(db sql.Executor) ([]PrevATXCollision, error) {
 		})
 		return true
 	}
+	// we are joining the table with itself to find ATXs with the same prevATX
+	// the WHERE clause ensures that we only get the pairs once
 	if _, err := db.Exec(`
 		SELECT t1.pubkey, t2.pubkey, t1.id, t2.id
 		FROM atxs t1
