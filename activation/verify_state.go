@@ -52,6 +52,8 @@ func CheckPrevATXs(ctx context.Context, logger *zap.Logger, db sql.Executor) err
 			continue
 		}
 
+		// we are ignoring the ATX version, because as of now we only have V1
+		// by the time we have V2, this function is not needed anymore and can be deleted
 		var blob sql.Blob
 		var atx1 awire.ActivationTxV1
 		if _, err := atxs.LoadBlob(ctx, db, collision.ATX1.Bytes(), &blob); err != nil {
