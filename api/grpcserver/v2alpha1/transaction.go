@@ -5,13 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-scale"
-	"github.com/spacemeshos/go-spacemesh/genvm/registry"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+	"github.com/spacemeshos/go-scale"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
@@ -20,7 +17,10 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -69,7 +69,7 @@ func (s *TransactionStreamService) Stream(
 	request *spacemeshv2alpha1.TransactionStreamRequest,
 	stream spacemeshv2alpha1.TransactionStreamService_StreamServer,
 ) error {
-	return nil
+	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
 func (s *TransactionStreamService) String() string {
@@ -323,8 +323,8 @@ func (s *TransactionService) toTx(tx *types.MeshTransaction, result *types.Trans
 		t.GasPrice = tx.GasPrice
 		t.MaxSpend = tx.MaxSpend
 		t.Contents = &spacemeshv2alpha1.TransactionContents{}
-		txArgs, _ := decodeTxArgs(scale.NewDecoder(bytes.NewReader(tx.Raw)))
 
+		txArgs, _ := decodeTxArgs(scale.NewDecoder(bytes.NewReader(tx.Raw)))
 		switch tx.Method {
 		case core.MethodSpawn:
 			switch tx.TxHeader.TemplateAddress {
@@ -430,10 +430,15 @@ func decodeTxArgs(decoder *scale.Decoder) (scale.Encodable, error) {
 		return nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
 	}
 
+	var templateAddress *core.Address
 	var handler core.Handler
-	templateAddress := &core.Address{}
-	if _, err := templateAddress.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
+	if method == core.MethodSpawn {
+		templateAddress = &core.Address{}
+		if _, err := templateAddress.DecodeScale(decoder); err != nil {
+			return nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
+		}
+	} else {
+		templateAddress = &wallet.TemplateAddress
 	}
 
 	handler = reg.Get(*templateAddress)

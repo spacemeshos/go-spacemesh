@@ -1,8 +1,6 @@
 package system
 
 import (
-	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -12,5 +10,4 @@ import (
 type ValidationRequest interface {
 	Parse() (*types.TxHeader, error)
 	Verify() bool
-	Args() scale.Encodable
 }
