@@ -74,7 +74,7 @@ func UpdateBlob(db sql.Executor, bid types.BallotID, blob []byte) error {
 }
 
 // GetBlobSizes returns the sizes of the blobs corresponding to ballots with specified
-// ids. For non-existent balots, the corresponding items are set to -1.
+// ids. For non-existent ballots, the corresponding items are set to -1.
 func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 	return sql.GetBlobSizes(db, "select id, length(ballot) from ballots where id in", ids)
 }

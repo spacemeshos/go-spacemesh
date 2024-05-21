@@ -2,7 +2,6 @@ package atxs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -360,18 +359,14 @@ func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err e
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
-	gotNonce := false
 	dec := func(stmt *sql.Statement) bool {
-		if stmt.ColumnType(0) != sqlite.SQLITE_NULL {
-			nonce = types.VRFPostIndex(stmt.ColumnInt64(0))
-			gotNonce = true
-		}
-		return true
+		nonce = types.VRFPostIndex(stmt.ColumnInt64(0))
+		return false
 	}
 
 	if rows, err := db.Exec("select nonce from atxs where id = ?1", enc, dec); err != nil {
 		return types.VRFPostIndex(0), fmt.Errorf("get nonce for ATX id %v: %w", id, err)
-	} else if rows == 0 || !gotNonce {
+	} else if rows == 0 {
 		return types.VRFPostIndex(0), sql.ErrNotFound
 	}
 
@@ -523,12 +518,7 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 		stmt.ColumnBytes(5, catx.SmesherID[:])
 		catx.Sequence = uint64(stmt.ColumnInt64(6))
 		stmt.ColumnBytes(7, catx.Coinbase[:])
-		if sql.IsNull(stmt, 8) {
-			ierr = errors.New("missing nonce")
-			return false
-		} else {
-			catx.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(8))
-		}
+		catx.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(8))
 		rst = append(rst, catx)
 		return true
 	}
@@ -622,7 +612,7 @@ func IterateAtxsData(
 		weight uint64,
 		base uint64,
 		height uint64,
-		nonce *types.VRFPostIndex,
+		nonce types.VRFPostIndex,
 		isMalicious bool,
 	) bool,
 ) error {
@@ -654,14 +644,10 @@ func IterateAtxsData(
 			effectiveUnits := uint64(stmt.ColumnInt64(4))
 			baseHeight := uint64(stmt.ColumnInt64(5))
 			ticks := uint64(stmt.ColumnInt64(6))
-			var vrfNonce *types.VRFPostIndex
-			if !sql.IsNull(stmt, 7) {
-				nonce := types.VRFPostIndex(stmt.ColumnInt64(7))
-				vrfNonce = &nonce
-			}
+			nonce := types.VRFPostIndex(stmt.ColumnInt64(7))
 			isMalicious := stmt.ColumnInt(8) != 0
 			return fn(id, node, epoch, coinbase, effectiveUnits*ticks,
-				baseHeight, baseHeight+ticks, vrfNonce, isMalicious)
+				baseHeight, baseHeight+ticks, nonce, isMalicious)
 		},
 	)
 	if err != nil {

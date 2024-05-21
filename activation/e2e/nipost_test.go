@@ -19,6 +19,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -129,7 +130,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	})
 
 	validator := activation.NewMocknipostValidator(ctrl)
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata.New(), goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
@@ -263,7 +264,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
 	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
@@ -273,7 +273,7 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	})
 
 	validator := activation.NewMocknipostValidator(ctrl)
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	// ensure that genesis aligns with layer timings
@@ -368,7 +368,6 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
 	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
@@ -391,7 +390,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	for _, sig := range signers {
 		opts := opts
 		eg.Go(func() error {
-			mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
+			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			opts.DataDir = t.TempDir()

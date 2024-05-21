@@ -10,7 +10,7 @@ on:
 
 jobs:
   filter-changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
@@ -28,7 +28,7 @@ jobs:
               - '!**/*.md'
 
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     steps:
