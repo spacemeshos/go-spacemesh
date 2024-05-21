@@ -84,6 +84,26 @@ func TestAdd(t *testing.T) {
 	require.True(t, stored.IsMalicious())
 }
 
+func TestUpdateBlob(t *testing.T) {
+	db := sql.InMemory()
+	nodeID := types.RandomNodeID()
+	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
+	ballot.EpochData = &types.EpochData{
+		ActiveSetHash: types.RandomHash(),
+	}
+	ballot.ActiveSet = types.RandomActiveSet(199)
+	require.NoError(t, Add(db, &ballot))
+	got, err := Get(db, types.BallotID{1})
+	require.NoError(t, err)
+	require.Equal(t, ballot, *got)
+
+	ballot.ActiveSet = nil
+	require.NoError(t, UpdateBlob(db, types.BallotID{1}, codec.MustEncode(&ballot)))
+	got, err = Get(db, types.BallotID{1})
+	require.NoError(t, err)
+	require.Empty(t, got.ActiveSet)
+}
+
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
 	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, types.LayerID(0))

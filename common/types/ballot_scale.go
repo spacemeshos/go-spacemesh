@@ -44,7 +44,7 @@ func (t *Ballot) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.ActiveSet, 1)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.ActiveSet, 3500000)
 		if err != nil {
 			return total, err
 		}
