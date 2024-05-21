@@ -73,6 +73,13 @@ func (t *ActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeByteArray(enc, t.Signature[:])
 		if err != nil {
 			return total, err
@@ -153,6 +160,13 @@ func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		}
 		total += n
 		t.MarriageATX = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Signature[:])
@@ -276,7 +290,7 @@ func (t *MerkleProofV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *SubPostV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.ID[:])
+		n, err := scale.EncodeCompact32(enc, uint32(t.MarriageIndex))
 		if err != nil {
 			return total, err
 		}
@@ -308,11 +322,12 @@ func (t *SubPostV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *SubPostV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.ID[:])
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.MarriageIndex = uint32(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact32(dec)

@@ -36,12 +36,8 @@ type ActivationTxV2 struct {
 	// Only required when the ATX includes married IDs.
 	MarriageATX *types.ATXID
 
+	SmesherID types.NodeID
 	Signature types.EdSignature
-}
-
-// The first PoST is always for the ATX owner.
-func (atx *ActivationTxV2) SmesherID() types.NodeID {
-	return atx.NiPosts[0].Posts[0].ID
 }
 
 type InitialAtxPartsV2 struct {
@@ -68,10 +64,13 @@ type MerkleProofV2 struct {
 }
 
 type SubPostV2 struct {
-	ID           types.NodeID // The ID that this PoST is for.
-	PrevATXIndex uint32       // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
-	Post         PostV1
-	NumUnits     uint32
+	// Index of marriage certificate for this ID in the 'Marriages' slice. Only valid for merged ATXs.
+	// Can be used to extract the nodeID and verify if it is married with the smesher of the ATX.
+	// Must be 0 for non-merged ATXs.
+	MarriageIndex uint32
+	PrevATXIndex  uint32 // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
+	Post          PostV1
+	NumUnits      uint32
 }
 
 type NiPostsV2 struct {

@@ -16,7 +16,6 @@ type NIPostChallengeV2 struct {
 	PublishEpoch     types.EpochID
 	PrevATXID        types.ATXID
 	PositioningATXID types.ATXID
-	CommitmentATXID  *types.ATXID
 	InitialPost      *PostV1
 }
 
@@ -35,9 +34,6 @@ func (c *NIPostChallengeV2) MarshalLogObject(encoder zapcore.ObjectEncoder) erro
 	encoder.AddUint32("PublishEpoch", c.PublishEpoch.Uint32())
 	encoder.AddString("PrevATXID", c.PrevATXID.String())
 	encoder.AddString("PositioningATX", c.PositioningATXID.String())
-	if c.CommitmentATXID != nil {
-		encoder.AddString("CommitmentATX", c.CommitmentATXID.String())
-	}
 	encoder.AddObject("InitialPost", c.InitialPost)
 	return nil
 }

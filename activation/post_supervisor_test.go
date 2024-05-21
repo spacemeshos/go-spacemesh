@@ -21,9 +21,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -57,8 +56,9 @@ func newPostManager(t *testing.T, cfg PostConfig, opts PostSetupOpts) *PostSetup
 		close(ch)
 		return ch
 	})
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-	mgr, err := NewPostSetupManager(cfg, zaptest.NewLogger(t), cdb, types.RandomATXID(), syncer, validator)
+	db := sql.InMemory()
+	atxsdata := atxsdata.New()
+	mgr, err := NewPostSetupManager(cfg, zaptest.NewLogger(t), db, atxsdata, types.RandomATXID(), syncer, validator)
 	require.NoError(t, err)
 	return mgr
 }
