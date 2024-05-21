@@ -215,7 +215,7 @@ func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), f
 	}
 }
 
-func (d *Data) IterateHighTicksInEpoch(target types.EpochID, fn func(types.ATXID) bool, filters ...AtxFilter) {
+func (d *Data) IterateHighTicksInEpoch(target types.EpochID, fn func(types.ATXID) bool) {
 	type candidate struct {
 		id types.ATXID
 		*ATX

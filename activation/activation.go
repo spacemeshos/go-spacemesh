@@ -856,7 +856,7 @@ func findFullyValidHighTickAtx(
 		}
 		found = &id
 		return false
-	}, atxsdata.NotMalicious)
+	})
 
 	if found != nil {
 		return *found, nil
