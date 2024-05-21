@@ -2,6 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.5.4
+
+### Improvements
+
+* [#5963](https://github.com/spacemeshos/go-spacemesh/pull/5963) Increase supported number of ATXs to 5.5 Mio.
+
 ## Release v1.5.3
 
 ### Improvements
