@@ -509,32 +509,28 @@ func (h *HandlerV1) checkWrongPrevAtx(
 func (h *HandlerV1) checkMalicious(
 	ctx context.Context,
 	tx *sql.Tx,
-	atx *wire.ActivationTxV1,
+	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	malicious, err := identities.IsMalicious(tx, atx.SmesherID)
+	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	if malicious {
 		return nil, nil
 	}
-	proof, err := h.checkDoublePublish(ctx, tx, atx)
+	proof, err := h.checkDoublePublish(ctx, tx, watx)
 	if proof != nil || err != nil {
 		return proof, err
 	}
-	return h.checkWrongPrevAtx(ctx, tx, atx)
+	return h.checkWrongPrevAtx(ctx, tx, watx)
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
 func (h *HandlerV1) storeAtx(
 	ctx context.Context,
+	atx *types.ActivationTx,
 	watx *wire.ActivationTxV1,
-	blob []byte,
-	received time.Time,
-	leaves uint64,
-	effectiveNumUnits uint32,
-) (*types.ActivationTx, *mwire.MalfeasanceProof, error) {
-	var atx *types.ActivationTx
+) (*mwire.MalfeasanceProof, error) {
 	var proof *mwire.MalfeasanceProof
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
@@ -543,31 +539,13 @@ func (h *HandlerV1) storeAtx(
 			return fmt.Errorf("check malicious: %w", err)
 		}
 
-		var baseTickHeight uint64
-		if watx.PositioningATXID != h.goldenATXID {
-			posAtx, err := atxs.Get(tx, watx.PositioningATXID)
-			if err != nil {
-				return fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
-			}
-			baseTickHeight = posAtx.TickHeight()
-		}
-
-		atx = wire.ActivationTxFromWireV1(watx, blob...)
-		if h.nipostValidator.IsVerifyingFullPost() {
-			atx.SetValidity(types.Valid)
-		}
-		atx.SetReceived(received)
-		atx.NumUnits = effectiveNumUnits
-		atx.BaseTickHeight = baseTickHeight
-		atx.TickCount = leaves / h.tickSize
-
 		err = atxs.Add(tx, atx)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		return nil
 	}); err != nil {
-		return nil, nil, fmt.Errorf("store atx: %w", err)
+		return nil, fmt.Errorf("store atx: %w", err)
 	}
 
 	atxs.AtxAdded(h.cdb, atx)
@@ -583,7 +561,7 @@ func (h *HandlerV1) storeAtx(
 	}
 
 	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
-	return atx, proof, nil
+	return proof, nil
 }
 
 func (h *HandlerV1) processATX(
@@ -630,7 +608,25 @@ func (h *HandlerV1) processATX(
 		h.log.WithContext(ctx).With().Debug("atx is valid", watx.ID())
 	}
 
-	atx, proof, err := h.storeAtx(ctx, watx, blob, received, leaves, effectiveNumUnits)
+	var baseTickHeight uint64
+	if watx.PositioningATXID != h.goldenATXID {
+		posAtx, err := h.cdb.GetAtx(watx.PositioningATXID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
+		}
+		baseTickHeight = posAtx.TickHeight()
+	}
+
+	atx := wire.ActivationTxFromWireV1(watx, blob...)
+	if h.nipostValidator.IsVerifyingFullPost() {
+		atx.SetValidity(types.Valid)
+	}
+	atx.SetReceived(received)
+	atx.NumUnits = effectiveNumUnits
+	atx.BaseTickHeight = baseTickHeight
+	atx.TickCount = leaves / h.tickSize
+
+	proof, err = h.storeAtx(ctx, atx, watx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
