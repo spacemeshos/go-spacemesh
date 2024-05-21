@@ -46,6 +46,16 @@ Upgrading to this version requires going through v1.5.x first. Removed migration
   Ensure that your key file in `data/identities` is named `local.key` if you run a supervised node or with the change
   the node will not start.
 
+* [#5965](https://github.com/spacemeshos/go-spacemesh/pull/5965) Start considering ballots that still contain the
+  deprecated inlined activeset as invalid. go-spacemesh references the active set via hash since v1.3.0, and has been
+  pruning the data of old ballots since then as well.
+
+## Release v1.5.4
+
+### Improvements
+
+* [#5963](https://github.com/spacemeshos/go-spacemesh/pull/5963) Increase supported number of ATXs to 5.5 Mio.
+
 ## Release v1.5.3
 
 ### Improvements
