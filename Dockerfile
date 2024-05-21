@@ -1,5 +1,5 @@
 # go-spacemesh needs at least ubuntu 22.04. newer versions of ubuntu might work as well, but are untested
-FROM ubuntu:22.04 AS linux
+FROM ubuntu:24.04 AS linux
 ENV DEBIAN_FRONTEND noninteractive
 ENV SHELL /bin/bash
 ARG TZ=Etc/UTC
