@@ -91,12 +91,12 @@ func FilterFrom(operations Operations) string {
 			if !ok {
 				panic("value for 'In' token must be a slice of []byte")
 			}
-			placeholders := make([]string, len(values))
+			params := make([]string, len(values))
 			for j := range values {
-				placeholders[j] = fmt.Sprintf("?%d", bindIndex)
+				params[j] = fmt.Sprintf("?%d", bindIndex)
 				bindIndex++
 			}
-			fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", op.Prefix, op.Field, op.Token, strings.Join(placeholders, ", "))
+			fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", op.Prefix, op.Field, op.Token, strings.Join(params, ", "))
 		} else {
 			fmt.Fprintf(&queryBuilder, " %s%s %s ?%d", op.Prefix, op.Field, op.Token, bindIndex)
 			bindIndex++

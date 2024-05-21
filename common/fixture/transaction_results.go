@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	wallet2 "github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
