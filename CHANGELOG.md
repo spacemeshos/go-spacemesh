@@ -50,6 +50,10 @@ Upgrading to this version requires going through v1.5.x first. Removed migration
   deprecated inlined activeset as invalid. go-spacemesh references the active set via hash since v1.3.0, and has been
   pruning the data of old ballots since then as well.
 
+* [#5927](https://github.com/spacemeshos/go-spacemesh/pull/5927) Fixed vulnerability in the way a node handles incoming
+  ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
+  eligible for them.
+
 ## Release v1.5.4
 
 ### Improvements

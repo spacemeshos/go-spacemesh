@@ -295,5 +295,5 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		return false, nil
 	})
 	require.NoError(t, err)
-	require.True(t, receivedProof)
+	require.True(t, receivedProof, "malfeasance proof not received")
 }

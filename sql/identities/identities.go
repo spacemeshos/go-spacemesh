@@ -107,7 +107,7 @@ func IterateMalicious(
 	return callbackErr
 }
 
-// GetMalicious retrives malicious node IDs from the database.
+// GetMalicious retrieves malicious node IDs from the database.
 func GetMalicious(db sql.Executor) (nids []types.NodeID, err error) {
 	if err = IterateMalicious(db, func(total int, nid types.NodeID) error {
 		if nids == nil {

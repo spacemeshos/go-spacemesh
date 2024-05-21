@@ -40,7 +40,11 @@ command := tests -test.v -test.count=$(count) -test.timeout=0 -test.run=$(test_n
 
 .PHONY: docker
 docker:
-	@DOCKER_BUILDKIT=1 docker build ../ -f Dockerfile -t $(image_name)
+	@DOCKER_BUILDKIT=1 docker build \
+		--secret id=mynetrc,src=$(HOME)/.netrc \
+		-t $(image_name) \
+		-f Dockerfile \
+		../
 
 .PHONY: push
 push:

@@ -171,7 +171,7 @@ func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, pee
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	proof, err := h.handleAtx(ctx, types.Hash32{}, peer, msg)
+	proof, err := h.handleAtx(ctx, types.EmptyHash32, peer, msg)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
 		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
 			log.Stringer("sender", peer),
