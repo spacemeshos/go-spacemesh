@@ -1001,19 +1001,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post grpc service: %w", err)
 	}
 
-	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoetServers))
-	for _, poet := range app.Config.PoetServers {
-		client, err := activation.NewHTTPPoetClient(
-			poet,
-			app.Config.POET,
-			activation.WithLogger(lg.Zap().Named("poet")),
-		)
-		if err != nil {
-			app.log.Panic("failed to create poet client: %v", err)
-		}
-		poetClients = append(poetClients, client)
-	}
-
 	nipostLogger := app.addLogger(NipostBuilderLogger, lg).Zap()
 	client := activation.NewCertifierClient(
 		app.db,
@@ -1023,16 +1010,29 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
 
+	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoetServers))
+	for _, server := range app.Config.PoetServers {
+		client, err := activation.NewPoetClient(
+			poetDb,
+			server,
+			app.Config.POET,
+			lg.Zap().Named("poet"),
+			activation.WithCertifier(certifier),
+		)
+		if err != nil {
+			app.log.Panic("failed to create poet client: %v", err)
+		}
+		poetClients = append(poetClients, client)
+	}
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.localDB,
-		poetDb,
 		grpcPostService.(*grpcserver.PostService),
 		nipostLogger,
 		app.Config.POET,
 		app.clock,
 		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetClients(poetClients...),
-		activation.WithCertifier(certifier),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -1060,7 +1060,6 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 		activation.WithPostStates(postStates),
-		activation.WithPoetCertifier(certifier),
 		activation.WithPoets(poetClients...),
 	)
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {

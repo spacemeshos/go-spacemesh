@@ -215,21 +215,17 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	err = nipost.AddPost(localDb, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
 	require.NoError(t, err)
 
-	client, err := activation.NewHTTPPoetClient(
-		types.PoetServer{Address: poetProver.RestURL().String()},
+	client, err := activation.NewPoetClient(
+		poetDb,
+		poetProver.ServerCfg(),
 		poetCfg,
-		activation.WithLogger(logger),
+		logger,
 	)
 	require.NoError(t, err)
-
-	certifierClient := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
-	certifier := activation.NewCertifier(localDb, logger, certifierClient)
-	certifier.CertifyAll(context.Background(), sig.NodeID(), []activation.PoetClient{client})
 
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
-		poetDb,
 		svc,
 		logger.Named("nipostBuilder"),
 		poetCfg,
@@ -326,10 +322,12 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		WithCycleGap(poetCfg.CycleGap),
 	)
 
-	client, err := activation.NewHTTPPoetClient(
-		types.PoetServer{Address: poetProver.RestURL().String()},
+	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
+	client, err := activation.NewPoetClient(
+		poetDb,
+		poetProver.ServerCfg(),
 		poetCfg,
-		activation.WithLogger(logger),
+		logger,
 	)
 	require.NoError(t, err)
 
@@ -344,12 +342,9 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
-
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
-		poetDb,
 		svc,
 		logger.Named("nipostBuilder"),
 		poetCfg,
@@ -365,9 +360,6 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 			require.NoError(t, err)
 			err = nipost.AddPost(localDB, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
 			require.NoError(t, err)
-			certifierClient := activation.NewCertifierClient(db, localDB, zaptest.NewLogger(t))
-			certifier := activation.NewCertifier(localDB, logger, certifierClient)
-			certifier.CertifyAll(context.Background(), sig.NodeID(), []activation.PoetClient{client})
 
 			nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
 			require.NoError(t, err)

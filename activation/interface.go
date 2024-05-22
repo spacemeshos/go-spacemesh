@@ -122,9 +122,8 @@ type SmeshingProvider interface {
 // PoetClient servers as an interface to communicate with a PoET server.
 // It is used to submit challenges and fetch proofs.
 type PoetClient interface {
-	Address() string
+	Address() *url.URL
 
-	// FIXME: remove support for deprecated poet PoW
 	// Submit registers a challenge in the proving service current open round.
 	Submit(
 		ctx context.Context,
@@ -134,7 +133,7 @@ type PoetClient interface {
 		nodeID types.NodeID,
 	) (*types.PoetRound, error)
 
-	CertifierInfo(context.Context) (*url.URL, []byte, error)
+	Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error)
 
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error)
@@ -144,23 +143,27 @@ type PoetClient interface {
 // The implementation can use any method to obtain the certificate,
 // for example, POST verification.
 type certifierClient interface {
-	// Certify the ID in the given certifier.
-	Certify(ctx context.Context, id types.NodeID, url *url.URL, pubkey []byte) (*certifier.PoetCert, error)
+	// Acquire a certificate for the ID in the given certifier.
+	// The certificate confirms that the ID is verified and it can be later used to submit in poet.
+	Certificate(
+		ctx context.Context,
+		id types.NodeID,
+		certifierAddress *url.URL,
+		pubkey []byte,
+	) (*certifier.PoetCert, error)
 }
 
 // certifierService is used to certify nodeID for registering in the poet.
 // It holds the certificates and can recertify if needed.
 type certifierService interface {
-	// Acquire a certificate for the given poet.
-	Certificate(id types.NodeID, poet string) *certifier.PoetCert
-	// Recertify the ID and return a certificate confirming that
-	// it is verified. The certificate can be later used to submit in poet.
-	Recertify(ctx context.Context, id types.NodeID, poet PoetClient) (*certifier.PoetCert, error)
+	certifierClient
 
-	// Certify the ID for all given poets.
-	// It won't recertify poets that already have a certificate.
-	// It returns a map of a poet address to a certificate for it.
-	CertifyAll(ctx context.Context, id types.NodeID, poets []PoetClient) map[string]*certifier.PoetCert
+	Recertify(
+		ctx context.Context,
+		id types.NodeID,
+		certifierAddress *url.URL,
+		pubkey []byte,
+	) (*certifier.PoetCert, error)
 }
 
 type poetDbAPI interface {

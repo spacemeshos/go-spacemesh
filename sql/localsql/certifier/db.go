@@ -12,26 +12,26 @@ type PoetCert struct {
 	Signature []byte
 }
 
-func AddCertificate(db sql.Executor, nodeID types.NodeID, cert PoetCert, poetUrl string) error {
+func AddCertificate(db sql.Executor, nodeID types.NodeID, cert PoetCert, cerifierID []byte) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
-		stmt.BindBytes(2, []byte(poetUrl))
+		stmt.BindBytes(2, cerifierID)
 		stmt.BindBytes(3, cert.Data)
 		stmt.BindBytes(4, cert.Signature)
 	}
 	if _, err := db.Exec(`
-		REPLACE INTO poet_certificates (node_id, poet_url, certificate, signature)
+		REPLACE INTO poet_certificates (node_id, certifier_id, certificate, signature)
 		VALUES (?1, ?2, ?3, ?4);`, enc, nil,
 	); err != nil {
-		return fmt.Errorf("storing poet certificate for (%s; %s): %w", nodeID.ShortString(), poetUrl, err)
+		return fmt.Errorf("storing poet certificate for (%s; %x): %w", nodeID.ShortString(), cerifierID, err)
 	}
 	return nil
 }
 
-func Certificate(db sql.Executor, nodeID types.NodeID, poetUrl string) (*PoetCert, error) {
+func Certificate(db sql.Executor, nodeID types.NodeID, certifierID []byte) (*PoetCert, error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
-		stmt.BindBytes(2, []byte(poetUrl))
+		stmt.BindBytes(2, certifierID)
 	}
 	var cert PoetCert
 	dec := func(stmt *sql.Statement) bool {
@@ -43,11 +43,11 @@ func Certificate(db sql.Executor, nodeID types.NodeID, poetUrl string) (*PoetCer
 	}
 	rows, err := db.Exec(`
 		select certificate, signature
-		from poet_certificates where node_id = ?1 and poet_url = ?2 limit 1;`, enc, dec,
+		from poet_certificates where node_id = ?1 and certifier_id = ?2 limit 1;`, enc, dec,
 	)
 	switch {
 	case err != nil:
-		return nil, fmt.Errorf("getting poet certificate for (%s; %s): %w", nodeID.ShortString(), poetUrl, err)
+		return nil, fmt.Errorf("getting poet certificate for (%s; %s): %w", nodeID.ShortString(), certifierID, err)
 	case rows == 0:
 		return nil, sql.ErrNotFound
 	}

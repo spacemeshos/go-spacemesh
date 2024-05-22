@@ -110,25 +110,23 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
 	)
-	client, err := poetProver.Client(poetCfg)
+	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
+	client, err := poetProver.Client(poetDb, poetCfg, logger)
 	require.NoError(t, err)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
 		timesync.WithLayerDuration(layerDuration),
 		timesync.WithTickInterval(100*time.Millisecond),
-		timesync.WithLogger(logger),
+		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
-
-	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
 
 	postStates := activation.NewMockPostStates(ctrl)
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
-		poetDb,
 		svc,
 		logger.Named("nipostBuilder"),
 		poetCfg,

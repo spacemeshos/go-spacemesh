@@ -156,26 +156,27 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, grpcPrivateServer.Start())
 	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
 
-	poetClient, err := activation.NewHTTPPoetClient(types.PoetServer{
-		Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
-	}, cfg.POET)
-	require.NoError(t, err)
-
 	db := sql.InMemory()
 	localDb := localsql.InMemory()
-
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
+	poetClient, err := activation.NewPoetClient(
+		activation.NewPoetDb(db, log.NewNop()),
+		types.PoetServer{
+			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
+		}, cfg.POET,
+		logger,
+		activation.WithCertifier(certifier),
+	)
+	require.NoError(t, err)
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		localDb,
-		activation.NewPoetDb(db, log.NewNop()),
 		grpcPostService,
 		logger.Named("nipostBuilder"),
 		cfg.POET,
 		clock,
 		activation.WithPoetClients(poetClient),
-		activation.WithCertifier(certifier),
 	)
 	require.NoError(t, err)
 

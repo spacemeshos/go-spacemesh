@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/poet/registration"
 	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
@@ -23,9 +22,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -38,7 +36,7 @@ func TestCertification(t *testing.T) {
 
 	logger := zaptest.NewLogger(t)
 	cfg := activation.DefaultPostConfig()
-	cdb := datastore.NewCachedDB(sql.InMemory(), log.NewFromLog(logger))
+	db := sql.InMemory()
 	localDb := localsql.InMemory()
 
 	syncer := activation.NewMocksyncer(gomock.NewController(t))
@@ -52,7 +50,7 @@ func TestCertification(t *testing.T) {
 		AnyTimes()
 	validator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, types.ATXID{2, 3, 4}, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), types.ATXID{2, 3, 4}, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
@@ -88,58 +86,12 @@ func TestCertification(t *testing.T) {
 	err = nipost.AddPost(localDb, sig.NodeID(), fullPost)
 	require.NoError(t, err)
 
-	t.Run("certify all poets", func(t *testing.T) {
-		poets := []activation.PoetClient{}
-		// Spawn certifier and 2 poets using it
-		pubKey, addr := spawnTestCertifier(t, cfg, nil, verifying.WithLabelScryptParams(opts.Scrypt))
-		certifierCfg := &registration.CertifierConfig{
-			URL:    "http://" + addr.String(),
-			PubKey: registration.Base64Enc(pubKey),
-		}
-
-		for i := 0; i < 2; i++ {
-			poet := spawnPoet(t, WithCertifier(certifierCfg))
-			address := poet.RestURL().String()
-			cfg := activation.DefaultPoetConfig()
-			client, err := activation.NewHTTPPoetClient(types.PoetServer{Address: address}, cfg)
-			require.NoError(t, err)
-			poets = append(poets, client)
-		}
-
-		// Spawn another certifier and 1 poet using it
-		pubKey, addr = spawnTestCertifier(t, cfg, nil, verifying.WithLabelScryptParams(opts.Scrypt))
-		certifierCfg = &registration.CertifierConfig{
-			URL:    "http://" + addr.String(),
-			PubKey: registration.Base64Enc(pubKey),
-		}
-
-		poet := spawnPoet(t, WithCertifier(certifierCfg))
-		address := poet.RestURL().String()
-		client, err := activation.NewHTTPPoetClient(types.PoetServer{Address: address}, activation.DefaultPoetConfig())
-		require.NoError(t, err)
-		poets = append(poets, client)
-
-		// poet not using certifier
-		poet = spawnPoet(t)
-		address = poet.RestURL().String()
-		client, err = activation.NewHTTPPoetClient(types.PoetServer{Address: address}, activation.DefaultPoetConfig())
-		require.NoError(t, err)
-		poets = append(poets, client)
-
-		certifierClient := activation.NewCertifierClient(cdb, localDb, zaptest.NewLogger(t))
-		certifier := activation.NewCertifier(localDb, zaptest.NewLogger(t), certifierClient)
-		certs := certifier.CertifyAll(context.Background(), sig.NodeID(), poets)
-		require.Len(t, certs, 3)
-		require.Contains(t, certs, poets[0].Address())
-		require.Contains(t, certs, poets[1].Address())
-		require.Contains(t, certs, poets[2].Address())
-	})
 	t.Run("certify accepts valid cert", func(t *testing.T) {
 		pubKey, addr := spawnTestCertifier(t, cfg, nil, verifying.WithLabelScryptParams(opts.Scrypt))
 
-		client := activation.NewCertifierClient(cdb, localDb, zaptest.NewLogger(t))
+		client := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		_, err := client.
-			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+			Certificate(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.NoError(t, err)
 	})
 	t.Run("certify rejects invalid cert (expired)", func(t *testing.T) {
@@ -152,9 +104,9 @@ func TestCertification(t *testing.T) {
 		}
 		pubKey, addr := spawnTestCertifier(t, cfg, makeCert, verifying.WithLabelScryptParams(opts.Scrypt))
 
-		client := activation.NewCertifierClient(cdb, localDb, zaptest.NewLogger(t))
+		client := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		cert, err := client.
-			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+			Certificate(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)
 	})
@@ -164,9 +116,9 @@ func TestCertification(t *testing.T) {
 		}
 		pubKey, addr := spawnTestCertifier(t, cfg, makeCert, verifying.WithLabelScryptParams(opts.Scrypt))
 
-		client := activation.NewCertifierClient(cdb, localDb, zaptest.NewLogger(t))
+		client := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		cert, err := client.
-			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+			Certificate(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)
 	})

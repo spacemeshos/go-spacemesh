@@ -31,6 +31,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
+var ErrNotFound = errors.New("not found")
+
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
 	PhaseShift        time.Duration `mapstructure:"phase-shift"`
@@ -77,7 +79,6 @@ type Builder struct {
 	localDB           *localsql.Database
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
-	certifier         certifierService
 	validator         nipostValidator
 	layerClock        layerClock
 	syncer            syncer
@@ -158,12 +159,6 @@ func WithPostStates(ps PostStates) BuilderOption {
 	}
 }
 
-func WithPoetCertifier(c certifierService) BuilderOption {
-	return func(b *Builder) {
-		b.certifier = c
-	}
-}
-
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(
 	conf Config,
@@ -186,7 +181,6 @@ func NewBuilder(
 		localDB:           localDB,
 		publisher:         publisher,
 		nipostBuilder:     nipostBuilder,
-		certifier:         &disabledCertifier{},
 		layerClock:        layerClock,
 		syncer:            syncer,
 		log:               log,
@@ -406,7 +400,12 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 		}
 	}
-	b.certifier.CertifyAll(ctx, sig.NodeID(), b.poets)
+	for _, poet := range b.poets {
+		_, err := poet.Certify(ctx, sig.NodeID())
+		if err != nil {
+			b.log.Warn("failed to certify poet", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
+		}
+	}
 
 	for {
 		err := b.PublishActivationTx(ctx, sig)

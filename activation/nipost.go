@@ -52,7 +52,6 @@ type NIPostBuilder struct {
 	poetCfg     PoetConfig
 	layerClock  layerClock
 	postStates  PostStates
-	certifier   certifierService
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
@@ -61,7 +60,7 @@ func WithPoetClients(clients ...PoetClient) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
 		nb.poetProvers = make(map[string]PoetClient, len(clients))
 		for _, client := range clients {
-			nb.poetProvers[client.Address()] = client
+			nb.poetProvers[client.Address().String()] = client
 		}
 	}
 }
@@ -72,16 +71,9 @@ func NipostbuilderWithPostStates(ps PostStates) NIPostBuilderOption {
 	}
 }
 
-func WithCertifier(certifier certifierService) NIPostBuilderOption {
-	return func(nb *NIPostBuilder) {
-		nb.certifier = certifier
-	}
-}
-
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
 	db *localsql.Database,
-	poetDB poetDbAPI,
 	postService postService,
 	lg *zap.Logger,
 	poetCfg PoetConfig,
@@ -96,7 +88,6 @@ func NewNIPostBuilder(
 		poetCfg:     poetCfg,
 		layerClock:  layerClock,
 		postStates:  NewPostStates(lg),
-		certifier:   &disabledCertifier{},
 	}
 
 	for _, opt := range opts {
@@ -346,73 +337,23 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 ) error {
 	logger := nb.log.With(
 		log.ZContext(ctx),
-		zap.String("poet", client.Address()),
+		zap.String("poet", client.Address().String()),
 		log.ZShortStringer("smesherID", nodeID),
 	)
-
-	// FIXME: remove support for deprecated poet PoW
-	auth := PoetAuth{
-		PoetCert: nb.certifier.Certificate(nodeID, client.Address()),
-	}
-	if auth.PoetCert == nil {
-		logger.Info("missing poet cert - falling back to PoW")
-		powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-		defer cancel()
-		powParams, err := client.PowParams(powCtx)
-		if err != nil {
-			return &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
-		}
-		logger.Debug("doing pow with params", zap.Any("pow_params", powParams))
-		startTime := time.Now()
-		nonce, err := shared.FindSubmitPowNonce(
-			ctx,
-			powParams.Challenge,
-			challenge,
-			nodeID.Bytes(),
-			powParams.Difficulty,
-		)
-		metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
-		if err != nil {
-			return fmt.Errorf("running poet PoW: %w", err)
-		}
-		auth.PoetPoW = &PoetPoW{
-			Nonce:  nonce,
-			Params: *powParams,
-		}
-	} else {
-		logger.Info("registering with a certificate", zap.Binary("cert", auth.PoetCert.Data))
-	}
 
 	logger.Debug("submitting challenge to poet proving service")
 
 	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
-	var (
-		round *types.PoetRound
-		err   error
-	)
 
-	round, err = client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, auth)
-	switch {
-	case errors.Is(err, ErrUnauthorized):
-		logger.Warn("failed to submit challenge as unathorized - recertifying", zap.Error(err))
-		auth.PoetCert, err = nb.certifier.Recertify(ctx, nodeID, client)
-		if err != nil {
-			return &PoetSvcUnstableError{msg: "failed to regenerate poet certificate", source: err}
-		}
-		round, err = client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, auth)
-		if err != nil {
-			return &PoetSvcUnstableError{msg: "failed to regenerate poet certificate", source: err}
-		}
-	case err != nil:
+	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID)
+	if err != nil {
 		return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
-	default: // err == nil
 	}
-
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
 	return nipost.AddPoetRegistration(nb.localDB, nodeID, nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
-		Address:       client.Address(),
+		Address:       client.Address().String(),
 		RoundID:       round.ID,
 		RoundEnd:      round.End,
 	})
@@ -460,7 +401,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 
 func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) PoetClient {
 	for _, client := range nb.poetProvers {
-		if address == client.Address() {
+		if address == client.Address().String() {
 			return client
 		}
 	}

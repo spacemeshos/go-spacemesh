@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/spacemeshos/poet/shared"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -22,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
+	certifierdb "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
@@ -98,129 +97,38 @@ func NewCertifier(
 	return c
 }
 
-func (c *Certifier) Certificate(id types.NodeID, poet string) *certifier.PoetCert {
-	cert, err := certifier.Certificate(c.db, id, poet)
-	switch {
-	case err == nil:
-		return cert
-	case !errors.Is(err, sql.ErrNotFound):
-		c.logger.Warn("failed to get certificate", zap.Error(err))
-	}
-	return nil
-}
-
-func (c *Certifier) Recertify(ctx context.Context, id types.NodeID, poet PoetClient) (*certifier.PoetCert, error) {
-	url, pubkey, err := poet.CertifierInfo(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("querying certifier info: %w", err)
-	}
-	cert, err := c.client.Certify(ctx, id, url, pubkey)
-	if err != nil {
-		return nil, fmt.Errorf("certifying POST for %s at %v: %w", poet.Address(), url, err)
-	}
-
-	if err := certifier.AddCertificate(c.db, id, *cert, poet.Address()); err != nil {
-		c.logger.Warn("failed to persist poet cert", zap.Error(err))
-	}
-
-	return cert, nil
-}
-
-// CertifyAll certifies the nodeID for all poets that require a certificate.
-// It optimizes the number of certification requests by taking a unique set of
-// certifiers among the given poets and sending a single request to each of them.
-// It returns a map of a poet address to a certificate for it.
-func (c *Certifier) CertifyAll(
+func (c *Certifier) Certificate(
 	ctx context.Context,
 	id types.NodeID,
-	poets []PoetClient,
-) map[string]*certifier.PoetCert {
-	certs := make(map[string]*certifier.PoetCert)
-	poetsToCertify := []PoetClient{}
-	for _, poet := range poets {
-		if cert := c.Certificate(id, poet.Address()); cert != nil {
-			certs[poet.Address()] = cert
-		} else {
-			poetsToCertify = append(poetsToCertify, poet)
-		}
+	certifier *url.URL,
+	pubkey []byte,
+) (*certifierdb.PoetCert, error) {
+	// TODO: avoid parallel certifications for a (id, certifier) pair
+	cert, err := certifierdb.Certificate(c.db, id, pubkey)
+	switch {
+	case err == nil:
+		return cert, nil
+	case !errors.Is(err, sql.ErrNotFound):
+		return nil, fmt.Errorf("getting certificate from DB for: %w", err)
 	}
-	if len(poetsToCertify) == 0 {
-		return certs
+	return c.Recertify(ctx, id, certifier, pubkey)
+}
+
+func (c *Certifier) Recertify(
+	ctx context.Context,
+	id types.NodeID,
+	certifier *url.URL,
+	pubkey []byte,
+) (*certifierdb.PoetCert, error) {
+	cert, err := c.client.Certificate(ctx, id, certifier, pubkey)
+	if err != nil {
+		return nil, fmt.Errorf("certifying POST at %v: %w", certifier, err)
 	}
 
-	type certInfo struct {
-		url    *url.URL
-		pubkey []byte
-		poet   string
+	if err := certifierdb.AddCertificate(c.db, id, *cert, pubkey); err != nil {
+		c.logger.Warn("failed to persist poet cert", zap.Error(err))
 	}
-
-	certifierInfos := make([]*certInfo, len(poetsToCertify))
-	var eg errgroup.Group
-	for i, poet := range poetsToCertify {
-		eg.Go(func() error {
-			url, pubkey, err := poet.CertifierInfo(ctx)
-			if err != nil {
-				c.logger.Warn("failed to query for certifier info", zap.Error(err), zap.String("poet", poet.Address()))
-				return nil
-			}
-			certifierInfos[i] = &certInfo{
-				url:    url,
-				pubkey: pubkey,
-				poet:   poet.Address(),
-			}
-			return nil
-		})
-	}
-	eg.Wait()
-
-	type certService struct {
-		url    *url.URL
-		pubkey []byte
-		poets  []string
-	}
-	certSvcs := make(map[string]*certService)
-	for _, info := range certifierInfos {
-		if info == nil {
-			continue
-		}
-
-		if svc, ok := certSvcs[string(info.pubkey)]; !ok {
-			certSvcs[string(info.pubkey)] = &certService{
-				url:    info.url,
-				pubkey: info.pubkey,
-				poets:  []string{info.poet},
-			}
-		} else {
-			svc.poets = append(svc.poets, info.poet)
-		}
-	}
-
-	for _, svc := range certSvcs {
-		c.logger.Info(
-			"certifying for poets",
-			zap.Stringer("certifier", svc.url),
-			zap.Strings("poets", svc.poets),
-		)
-
-		cert, err := c.client.Certify(ctx, id, svc.url, svc.pubkey)
-		if err != nil {
-			c.logger.Warn("failed to certify", zap.Error(err), zap.Stringer("certifier", svc.url))
-			continue
-		}
-		c.logger.Info(
-			"successfully obtained certificate",
-			zap.Stringer("certifier", svc.url),
-			zap.Binary("cert data", cert.Data),
-			zap.Binary("cert signature", cert.Signature),
-		)
-		for _, poet := range svc.poets {
-			if err := certifier.AddCertificate(c.db, id, *cert, poet); err != nil {
-				c.logger.Warn("failed to persist poet cert", zap.Error(err))
-			}
-			certs[poet] = cert
-		}
-	}
-	return certs
+	return cert, nil
 }
 
 type CertifierClient struct {
@@ -326,12 +234,12 @@ func (c *CertifierClient) obtainPost(ctx context.Context, id types.NodeID) (*nip
 	return nil, errors.New("PoST not found")
 }
 
-func (c *CertifierClient) Certify(
+func (c *CertifierClient) Certificate(
 	ctx context.Context,
 	id types.NodeID,
 	url *url.URL,
 	pubkey []byte,
-) (*certifier.PoetCert, error) {
+) (*certifierdb.PoetCert, error) {
 	post, err := c.obtainPost(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("obtaining PoST: %w", err)
@@ -401,37 +309,29 @@ func (c *CertifierClient) Certify(
 		}
 	}
 
-	return &certifier.PoetCert{
+	return &certifierdb.PoetCert{
 		Data:      opaqueCert.Data,
 		Signature: opaqueCert.Signature,
 	}, nil
 }
 
-type disabledCertifier struct{}
-
-func (d *disabledCertifier) Certificate(types.NodeID, string) *certifier.PoetCert {
-	return nil
-}
-
-func (d *disabledCertifier) Recertify(context.Context, types.NodeID, PoetClient) (*certifier.PoetCert, error) {
-	return nil, errors.New("certifier disabled")
-}
-
-func (d *disabledCertifier) CertifyAll(context.Context, types.NodeID, []PoetClient) map[string]*certifier.PoetCert {
-	return nil
-}
-
 // load NIPoST for the given ATX from the database.
 func loadNipost(ctx context.Context, db sql.Executor, id types.ATXID) (*types.NIPost, error) {
 	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob); err != nil {
+	version, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
+	if err != nil {
 		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
 	}
 
-	// TODO: decide about version based on the `version` column
-	var atx wire.ActivationTxV1
-	if err := codec.Decode(blob.Bytes, &atx); err != nil {
-		return nil, fmt.Errorf("decoding ATX blob: %w", err)
+	switch version {
+	case types.AtxV1:
+		var atx wire.ActivationTxV1
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return nil, fmt.Errorf("decoding ATX blob: %w", err)
+		}
+		return wire.NiPostFromWireV1(atx.NIPost), nil
+	case types.AtxV2:
+		// TODO: support ATX V2
 	}
-	return wire.NiPostFromWireV1(atx.NIPost), nil
+	panic("unsupported ATX version")
 }

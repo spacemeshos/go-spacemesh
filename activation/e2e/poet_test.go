@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/poet/server"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
@@ -36,14 +37,21 @@ func (h *HTTPPoetTestHarness) RestURL() *url.URL {
 }
 
 func (h *HTTPPoetTestHarness) Client(
+	db *activation.PoetDb,
 	cfg activation.PoetConfig,
+	logger *zap.Logger,
 	opts ...activation.PoetClientOpts,
-) (*activation.HTTPPoetClient, error) {
-	return activation.NewHTTPPoetClient(
-		types.PoetServer{Address: h.RestURL().String()},
+) (activation.PoetClient, error) {
+	return activation.NewPoetClient(
+		db,
+		h.ServerCfg(),
 		cfg,
-		opts...,
+		logger,
 	)
+}
+
+func (h *HTTPPoetTestHarness) ServerCfg() types.PoetServer {
+	return types.PoetServer{Pubkey: types.NewBase64Enc(h.Service.PublicKey()), Address: h.RestURL().String()}
 }
 
 type HTTPPoetOpt func(*server.Config)
