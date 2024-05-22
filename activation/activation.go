@@ -400,12 +400,17 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 		}
 	}
+	var eg errgroup.Group
 	for _, poet := range b.poets {
-		_, err := poet.Certify(ctx, sig.NodeID())
-		if err != nil {
-			b.log.Warn("failed to certify poet", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
-		}
+		eg.Go(func() error {
+			_, err := poet.Certify(ctx, sig.NodeID())
+			if err != nil {
+				b.log.Warn("failed to certify poet", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
+			}
+			return nil
+		})
 	}
+	eg.Wait()
 
 	for {
 		err := b.PublishActivationTx(ctx, sig)
