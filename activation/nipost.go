@@ -47,7 +47,6 @@ type NIPostBuilder struct {
 	localDB *localsql.Database
 
 	poetProvers map[string]PoetClient
-	poetDB      poetDbAPI
 	postService postService
 	log         *zap.Logger
 	poetCfg     PoetConfig
@@ -92,7 +91,6 @@ func NewNIPostBuilder(
 	b := &NIPostBuilder{
 		localDB: db,
 
-		poetDB:      poetDB,
 		postService: postService,
 		log:         lg,
 		poetCfg:     poetCfg,
@@ -486,7 +484,7 @@ func (nb *NIPostBuilder) getBestProof(
 	publishEpoch types.EpochID,
 ) (types.PoetProofRef, *types.MerkleProof, error) {
 	type poetProof struct {
-		poet       *types.PoetProofMessage
+		poet       *types.PoetProof
 		membership *types.MerkleProof
 	}
 	registrations, err := nipost.PoetRegistrations(nb.localDB, nodeID)
@@ -518,16 +516,9 @@ func (nb *NIPostBuilder) getBestProof(
 			case <-time.After(time.Until(waitDeadline)):
 			}
 
-			getProofsCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-			defer cancel()
-			proof, members, err := client.Proof(getProofsCtx, round)
+			proof, members, err := client.Proof(ctx, round)
 			if err != nil {
 				logger.Warn("failed to get proof from poet", zap.Error(err))
-				return nil
-			}
-
-			if err := nb.poetDB.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
-				logger.Warn("failed to validate and store proof", zap.Error(err), zap.Object("proof", proof))
 				return nil
 			}
 

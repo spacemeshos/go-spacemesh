@@ -65,7 +65,6 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		conn, err := grpc.NewClient(
 			app.grpcPublicServer.BoundAddress,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		require.NoError(t, err)
 		t.Cleanup(func() { assert.NoError(t, conn.Close()) })

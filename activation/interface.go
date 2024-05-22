@@ -20,7 +20,7 @@ import (
 //go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
 
 type AtxReceiver interface {
-	OnAtx(*types.ActivationTxHeader)
+	OnAtx(*types.ActivationTx)
 }
 
 type PostVerifier interface {
@@ -96,7 +96,7 @@ type syncer interface {
 }
 
 type atxProvider interface {
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
+	GetAtx(id types.ATXID) (*types.ActivationTx, error)
 }
 
 // PostSetupProvider defines the functionality required for Post setup.
@@ -125,9 +125,6 @@ type PoetClient interface {
 	Address() string
 
 	// FIXME: remove support for deprecated poet PoW
-	PowParams(ctx context.Context) (*PoetPowParams, error)
-
-	// FIXME: remove support for deprecated poet PoW
 	// Submit registers a challenge in the proving service current open round.
 	Submit(
 		ctx context.Context,
@@ -135,13 +132,12 @@ type PoetClient interface {
 		prefix, challenge []byte,
 		signature types.EdSignature,
 		nodeID types.NodeID,
-		auth PoetAuth,
 	) (*types.PoetRound, error)
 
 	CertifierInfo(context.Context) (*url.URL, []byte, error)
 
 	// Proof returns the proof for the given round ID.
-	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error)
+	Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error)
 }
 
 // A certifier client that the certifierService uses to obtain certificates
@@ -168,7 +164,8 @@ type certifierService interface {
 }
 
 type poetDbAPI interface {
-	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	Proof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 

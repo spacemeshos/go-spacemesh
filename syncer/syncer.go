@@ -212,6 +212,9 @@ func NewSyncer(
 
 // Close stops the syncing process and the goroutines syncer spawns.
 func (s *Syncer) Close() {
+	if s.stop == nil {
+		return // not started yet
+	}
 	s.stop()
 	s.logger.With().Info("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()

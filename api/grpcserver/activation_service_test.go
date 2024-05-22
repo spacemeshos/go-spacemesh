@@ -43,19 +43,17 @@ func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 	goldenAtx := types.ATXID{2, 3, 4}
 	activationService := grpcserver.NewActivationService(atxProvider, goldenAtx)
 
-	atx := types.VerifiedActivationTx{
-		ActivationTx: &types.ActivationTx{
-			Sequence:     rand.Uint64(),
-			PrevATXID:    types.RandomATXID(),
-			PublishEpoch: 0,
-			Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
-			NumUnits:     rand.Uint32(),
-		},
+	atx := types.ActivationTx{
+		Sequence:     rand.Uint64(),
+		PrevATXID:    types.RandomATXID(),
+		PublishEpoch: 0,
+		Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
+		NumUnits:     rand.Uint32(),
 	}
 	id := types.RandomATXID()
 	atx.SetID(id)
 	atxProvider.EXPECT().MaxHeightAtx().Return(id, nil)
-	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
+	atxProvider.EXPECT().GetAtx(id).Return(&atx, nil)
 
 	response, err := activationService.Highest(context.Background(), &emptypb.Empty{})
 	require.NoError(t, err)
@@ -84,7 +82,7 @@ func TestGet_AtxNotPresent(t *testing.T) {
 	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
 	id := types.RandomATXID()
-	atxProvider.EXPECT().GetFullAtx(id).Return(nil, nil)
+	atxProvider.EXPECT().GetAtx(id).Return(nil, nil)
 
 	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.Error(t, err)
@@ -97,7 +95,7 @@ func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
 	id := types.RandomATXID()
-	atxProvider.EXPECT().GetFullAtx(id).Return(&types.VerifiedActivationTx{}, errors.New(""))
+	atxProvider.EXPECT().GetAtx(id).Return(&types.ActivationTx{}, errors.New(""))
 
 	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.Error(t, err)
@@ -110,17 +108,15 @@ func TestGet_HappyPath(t *testing.T) {
 	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
 	id := types.RandomATXID()
-	atx := types.VerifiedActivationTx{
-		ActivationTx: &types.ActivationTx{
-			Sequence:     rand.Uint64(),
-			PrevATXID:    types.RandomATXID(),
-			PublishEpoch: 0,
-			Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
-			NumUnits:     rand.Uint32(),
-		},
+	atx := types.ActivationTx{
+		Sequence:     rand.Uint64(),
+		PrevATXID:    types.RandomATXID(),
+		PublishEpoch: 0,
+		Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
+		NumUnits:     rand.Uint32(),
 	}
 	atx.SetID(id)
-	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
+	atxProvider.EXPECT().GetAtx(id).Return(&atx, nil)
 	atxProvider.EXPECT().GetMalfeasanceProof(gomock.Any()).Return(nil, sql.ErrNotFound)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
@@ -143,18 +139,16 @@ func TestGet_IdentityCanceled(t *testing.T) {
 
 	smesher, proof := grpcserver.BallotMalfeasance(t, sql.InMemory())
 	id := types.RandomATXID()
-	atx := types.VerifiedActivationTx{
-		ActivationTx: &types.ActivationTx{
-			Sequence:     rand.Uint64(),
-			PrevATXID:    types.RandomATXID(),
-			PublishEpoch: 0,
-			Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
-			NumUnits:     rand.Uint32(),
-			SmesherID:    smesher,
-		},
+	atx := types.ActivationTx{
+		Sequence:     rand.Uint64(),
+		PrevATXID:    types.RandomATXID(),
+		PublishEpoch: 0,
+		Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
+		NumUnits:     rand.Uint32(),
+		SmesherID:    smesher,
 	}
 	atx.SetID(id)
-	atxProvider.EXPECT().GetFullAtx(id).Return(&atx, nil)
+	atxProvider.EXPECT().GetAtx(id).Return(&atx, nil)
 	atxProvider.EXPECT().GetMalfeasanceProof(smesher).Return(proof, nil)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})

@@ -663,15 +663,16 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 		} else {
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
 		}
+		var key ed25519.PrivateKey
 		if len(cfg.keys) > 0 {
-			finalFlags = append(finalFlags, SmesherKey(cfg.keys[i-from]))
+			key = cfg.keys[i-from]
 		}
 
 		eg.Go(func() error {
 			id := fmt.Sprintf("%s-%d", kind, i)
 			labels := nodeLabels(kind, id)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, id, labels, finalFlags); err != nil {
+			if err := deployNode(ctx, id, key, labels, finalFlags); err != nil {
 				return err
 			}
 			clients <- &NodeClient{
@@ -700,7 +701,9 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 	return rst, nil
 }
 
-func deployRemoteNodes(ctx *testcontext.Context, from, to int,
+func deployRemoteNodes(
+	ctx *testcontext.Context,
+	from, to int,
 	goldenAtxId types.ATXID,
 	opts ...DeploymentOpt,
 ) ([]*NodeClient, error) {
@@ -737,13 +740,11 @@ func deployRemoteNodes(ctx *testcontext.Context, from, to int,
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
 		}
 
-		finalFlags = append(finalFlags, SmesherKey(cfg.keys[i-from]))
-
 		nodeId := fmt.Sprintf("%s-%d", smesherApp, i)
 		eg.Go(func() error {
 			labels := nodeLabels(smesherApp, nodeId)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, nodeId, labels, finalFlags); err != nil {
+			if err := deployNode(ctx, nodeId, cfg.keys[i-from], labels, finalFlags); err != nil {
 				return err
 			}
 			deployNodeSvc(ctx, nodeId)
@@ -811,7 +812,13 @@ func deleteNode(ctx *testcontext.Context, id string) error {
 	return nil
 }
 
-func deployNode(ctx *testcontext.Context, id string, labels map[string]string, flags []DeploymentFlag) error {
+func deployNode(
+	ctx *testcontext.Context,
+	id string,
+	key ed25519.PrivateKey,
+	labels map[string]string,
+	flags []DeploymentFlag,
+) error {
 	ctx.Log.Debugw("deploying node", "id", id)
 	cmd := []string{
 		"/bin/go-spacemesh",
@@ -826,6 +833,66 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
+
+	podSpec := corev1.PodSpec().
+		WithNodeSelector(ctx.NodeSelector).
+		WithVolumes(
+			corev1.Volume().WithName("config").
+				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
+			corev1.Volume().WithName("data").
+				WithEmptyDir(corev1.EmptyDirVolumeSource().
+					WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
+		).
+		WithDNSConfig(corev1.PodDNSConfig().WithOptions(
+			corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
+			corev1.PodDNSConfigOption().WithName("attempts").WithValue("5"),
+		)).
+		WithContainers(corev1.Container().
+			WithName("smesher").
+			WithImage(ctx.Image).
+			WithImagePullPolicy(apiv1.PullIfNotPresent).
+			WithPorts(
+				corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
+				corev1.ContainerPort().WithContainerPort(9092).WithName("grpc-pub"),
+				corev1.ContainerPort().WithContainerPort(9093).WithName("grpc-priv"),
+				corev1.ContainerPort().WithContainerPort(9094).WithName("grpc-post"),
+				corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
+				corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
+			).
+			WithVolumeMounts(
+				corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+				corev1.VolumeMount().WithName("config").WithMountPath(configDir),
+			).
+			WithResources(corev1.ResourceRequirements().
+				WithRequests(smesherResources.Get(ctx.Parameters).Requests).
+				WithLimits(smesherResources.Get(ctx.Parameters).Limits),
+			).
+			WithStartupProbe(
+				corev1.Probe().WithTCPSocket(
+					corev1.TCPSocketAction().WithPort(intstr.FromInt32(9092)),
+				).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
+			).
+			WithEnv(
+				corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
+			).
+			WithCommand(cmd...),
+		)
+
+	if key != nil {
+		podSpec = podSpec.
+			WithInitContainers(
+				corev1.Container().
+					WithName("file-creator").
+					WithImage("busybox").
+					WithCommand("sh", "-c",
+						fmt.Sprintf("mkdir -p /data/identities && echo '%x' > /data/identities/local.key", key),
+					).
+					WithVolumeMounts(
+						corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+					),
+			)
+	}
+
 	deployment := appsv1.Deployment(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(appsv1.DeploymentSpec().
@@ -839,50 +906,7 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 						"prometheus.io/scrape": "true",
 					},
 				).
-				WithSpec(corev1.PodSpec().
-					WithNodeSelector(ctx.NodeSelector).
-					WithVolumes(
-						corev1.Volume().WithName("config").
-							WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
-						corev1.Volume().WithName("data").
-							WithEmptyDir(corev1.EmptyDirVolumeSource().
-								WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
-					).
-					WithDNSConfig(corev1.PodDNSConfig().WithOptions(
-						corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
-						corev1.PodDNSConfigOption().WithName("attempts").WithValue("5"),
-					)).
-					WithContainers(corev1.Container().
-						WithName("smesher").
-						WithImage(ctx.Image).
-						WithImagePullPolicy(apiv1.PullIfNotPresent).
-						WithPorts(
-							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
-							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc-pub"),
-							corev1.ContainerPort().WithContainerPort(9093).WithName("grpc-priv"),
-							corev1.ContainerPort().WithContainerPort(9094).WithName("grpc-post"),
-							corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
-							corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
-						).
-						WithVolumeMounts(
-							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
-							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
-						).
-						WithResources(corev1.ResourceRequirements().
-							WithRequests(smesherResources.Get(ctx.Parameters).Requests).
-							WithLimits(smesherResources.Get(ctx.Parameters).Limits),
-						).
-						WithStartupProbe(
-							corev1.Probe().WithTCPSocket(
-								corev1.TCPSocketAction().WithPort(intstr.FromInt32(9092)),
-							).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
-						).
-						WithEnv(
-							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
-						).
-						WithCommand(cmd...),
-					),
-				),
+				WithSpec(podSpec),
 			),
 		)
 	_, err := ctx.Client.AppsV1().
@@ -1228,10 +1252,6 @@ func StartSmeshing(start bool) DeploymentFlag {
 
 func GenerateFallback() DeploymentFlag {
 	return DeploymentFlag{Name: "--fallback", Value: strconv.FormatBool(true)}
-}
-
-func SmesherKey(key ed25519.PrivateKey) DeploymentFlag {
-	return DeploymentFlag{Name: "--testing-smesher-key", Value: hex.EncodeToString(key)}
 }
 
 func Bootnode() DeploymentFlag {

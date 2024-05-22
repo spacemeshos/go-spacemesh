@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -75,11 +74,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
-	sqlmigrations "github.com/spacemeshos/go-spacemesh/sql/migrations"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -174,27 +171,15 @@ func GetCommand() *cobra.Command {
 				return fmt.Errorf("initializing app: %w", err)
 			}
 
-			// Migrate legacy identity to new location
-			if err := app.MigrateExistingIdentity(); err != nil {
-				return fmt.Errorf("migrating existing identity: %w", err)
-			}
-
-			var err error
-			if app.signers, err = app.TestIdentity(); err != nil {
-				return fmt.Errorf("testing identity: %w", err)
-			}
-
-			if app.signers == nil {
-				err := app.LoadIdentities()
-				switch {
-				case errors.Is(err, fs.ErrNotExist):
-					app.log.Info("Identity file not found. Creating new identity...")
-					if err := app.NewIdentity(); err != nil {
-						return fmt.Errorf("creating new identity: %w", err)
-					}
-				case err != nil:
-					return fmt.Errorf("loading identities: %w", err)
+			err := app.LoadIdentities()
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+				app.log.Info("Identity file not found. Creating new identity...")
+				if err := app.NewIdentity(); err != nil {
+					return fmt.Errorf("creating new identity: %w", err)
 				}
+			case err != nil:
+				return fmt.Errorf("loading identities: %w", err)
 			}
 
 			// Don't print usage on error from this point forward
@@ -316,6 +301,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
 		mapstructureutil.DeprecatedHook(),
+		mapstructureutil.AtxVersionsDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
@@ -761,6 +747,7 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	fetcherWrapped := &layerFetcher{}
+
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
@@ -769,12 +756,13 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.host,
 		fetcherWrapped,
-		app.Config.TickSize,
 		goldenATXID,
 		validator,
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
+		activation.WithTickSize(app.Config.TickSize),
+		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
 	for _, sig := range app.signers {
 		atxHandler.Register(sig)
@@ -997,7 +985,8 @@ func (app *App) initServices(ctx context.Context) error {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		goldenATXID,
 		newSyncer,
 		app.validator,
@@ -1056,7 +1045,8 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		app.localDB,
 		app.host,
 		nipostBuilder,
@@ -1334,7 +1324,11 @@ func (app *App) listenToUpdates(ctx context.Context) {
 						Epoch: epoch,
 						Set:   set,
 					}
-					activesets.Add(app.db, id, activeSet)
+					err := activesets.Add(app.db, id, activeSet)
+					if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+						app.errCh <- fmt.Errorf("error storing ActiveSet: %w", err)
+						return nil
+					}
 
 					app.hOracle.UpdateActiveSet(epoch, set)
 					app.proposalBuilder.UpdateActiveSet(epoch, set)
@@ -1518,6 +1512,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewNodeService(app.host, app.mesh, app.clock, app.syncer)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.Layer:
+		service := v2alpha1.NewLayerService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.LayerStream:
+		service := v2alpha1.NewLayerStreamService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -1684,8 +1686,13 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			if app.Config.SMESHING.CoinbaseAccount == "" {
 				return errors.New("smeshing enabled but no coinbase account provided")
 			}
-			if len(app.signers) > 1 {
-				return errors.New("supervised smeshing cannot be started in a multi-smeshing setup")
+			if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
+				app.log.Error("supervised smeshing cannot be started in a remote or multi-smeshing setup")
+				app.log.Error(
+					"if you run a supervised node ensure your key file is named %s and try again",
+					supervisedIDKeyFileName,
+				)
+				return errors.New("smeshing enabled in remote setup")
 			}
 			if err := app.postSupervisor.Start(
 				app.Config.POSTService,
@@ -1876,7 +1883,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	dbopts := []sql.Opt{
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
-		sql.WithMigration(sqlmigrations.New0017Migration(dbLog.Zap())),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
@@ -1920,7 +1926,17 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
+		datastore.WithConsensusCache(data),
 	)
+
+	if app.Config.ScanMalfeasantATXs {
+		app.log.With().Info("checking DB for malicious ATXs")
+		start = time.Now()
+		if err := activation.CheckPrevATXs(ctx, app.log.Zap(), app.db); err != nil {
+			return fmt.Errorf("malicious ATX check: %w", err)
+		}
+		app.log.With().Info("malicious ATX check completed", log.Duration("duration", time.Since(start)))
+	}
 
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
@@ -1961,9 +1977,6 @@ func (app *App) Start(ctx context.Context) error {
 		})
 	}
 
-	// uncomment to verify ATXs signatures
-	// app.verifyDB(ctx)
-
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	select {
@@ -1972,48 +1985,6 @@ func (app *App) Start(ctx context.Context) error {
 	case err = <-app.errCh:
 		return err
 	}
-}
-
-// verifyDB performs a verification of ATX signatures in the database.
-//
-//lint:ignore U1000 This function is currently unused but is left here for future use.
-func (app *App) verifyDB(ctx context.Context) {
-	app.eg.Go(func() error {
-		app.log.Info("checking ATX signatures")
-		count := 0
-
-		// check ATX signatures
-		atxs.IterateAtxsOps(app.cachedDB, builder.Operations{}, func(atx *types.VerifiedActivationTx) bool {
-			select {
-			case <-ctx.Done():
-				// stop on context cancellation
-				return false
-			default:
-			}
-
-			// verify atx signature
-			// TODO: use atx handler to verify signature
-			if !app.edVerifier.Verify(
-				signing.ATX,
-				atx.SmesherID, wire.ActivationTxToWireV1(atx.ActivationTx).SignedBytes(),
-				atx.Signature,
-			) {
-				app.log.With().Error("ATX signature verification failed",
-					log.Stringer("atx_id", atx.ID()),
-					log.Stringer("smesher", atx.SmesherID),
-				)
-			}
-
-			count++
-			if count%1000 == 0 {
-				app.log.With().Info("verifying ATX signatures", log.Int("count", count))
-			}
-			return true
-		})
-
-		app.log.With().Info("ATX signatures verified", log.Int("count", count))
-		return nil
-	})
 }
 
 func (app *App) startSynchronous(ctx context.Context) (err error) {

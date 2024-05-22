@@ -17,7 +17,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -120,16 +119,14 @@ func createATX(
 		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
 		types.GenerateAddress(types.RandomBytes(types.AddressLength)),
 		numUnits,
-		&nonce,
 	)
-
-	atx.SetEffectiveNumUnits(numUnits)
+	atx.VRFNonce = nonce
 	atx.SetReceived(received)
-	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(tb, err)
-	require.NoError(tb, atxs.Add(db, vAtx))
-	return vAtx.ID()
+	atx.SmesherID = sig.NodeID()
+	atx.SetID(types.RandomATXID())
+	atx.TickCount = 1
+	require.NoError(tb, atxs.Add(db, atx))
+	return atx.ID()
 }
 
 func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {

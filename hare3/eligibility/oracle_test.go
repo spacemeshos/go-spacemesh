@@ -144,24 +144,20 @@ func (t *testOracle) createActiveSet(
 		atx := &types.ActivationTx{
 			PublishEpoch: lid.GetEpoch(),
 			NumUnits:     uint32(i + 1),
+			TickCount:    1,
+			SmesherID:    nodeID,
 		}
-		nonce := types.VRFPostIndex(0)
-		atx.VRFNonce = &nonce
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		atx.SmesherID = types.BytesToNodeID([]byte(strconv.Itoa(i)))
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t.tb, err)
-		t.addAtx(vAtx)
+		t.addAtx(atx)
 	}
 	return miners
 }
 
-func (t *testOracle) addAtx(atx *types.VerifiedActivationTx) {
+func (t *testOracle) addAtx(atx *types.ActivationTx) {
 	t.tb.Helper()
 	require.NoError(t.tb, atxs.Add(t.db, atx))
-	t.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
+	t.atxsdata.AddFromAtx(atx, false)
 }
 
 // create n identities with weights and identifiers 1,2,3,...,n.
@@ -376,16 +372,12 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx1 := &types.ActivationTx{
 		PublishEpoch: prevEpoch,
 		NumUnits:     1 * 1024,
+		TickCount:    1,
+		SmesherID:    signer.NodeID(),
 	}
-	nonce := types.VRFPostIndex(0)
-	atx1.VRFNonce = &nonce
 	atx1.SetID(activeSet[0])
-	atx1.SetEffectiveNumUnits(atx1.NumUnits)
 	atx1.SetReceived(time.Now())
-	atx1.SmesherID = signer.NodeID()
-	vAtx1, err := atx1.Verify(0, 1)
-	require.NoError(t, err)
-	o.addAtx(vAtx1)
+	o.addAtx(atx1)
 
 	signer2, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
@@ -393,16 +385,12 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx2 := &types.ActivationTx{
 		PublishEpoch: prevEpoch,
 		NumUnits:     9 * 1024,
+		SmesherID:    signer2.NodeID(),
+		TickCount:    1,
 	}
-	nonce = types.VRFPostIndex(0)
-	atx2.VRFNonce = &nonce
 	atx2.SetID(activeSet[1])
-	atx2.SetEffectiveNumUnits(atx2.NumUnits)
 	atx2.SetReceived(time.Now())
-	atx2.SmesherID = signer2.NodeID()
-	vAtx2, err := atx2.Verify(0, 1)
-	require.NoError(t, err)
-	o.addAtx(vAtx2)
+	o.addAtx(atx2)
 	miners := []types.NodeID{atx1.SmesherID, atx2.SmesherID}
 	o.createBlock(o.createBallots(first, activeSet, miners))
 
@@ -737,29 +725,28 @@ func TestActiveSetMatrix(t *testing.T) {
 	agen := func(
 		id types.ATXID,
 		node types.NodeID,
-		option ...func(*types.VerifiedActivationTx),
-	) *types.VerifiedActivationTx {
-		atx := &types.ActivationTx{}
-		atx.PublishEpoch = target - 1
-		atx.SmesherID = node
-		atx.SetID(id)
-		atx.SetEffectiveNumUnits(1)
-		atx.SetReceived(time.Time{}.Add(1))
-		nonce := types.VRFPostIndex(0)
-		atx.VRFNonce = &nonce
-		verified, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		for _, opt := range option {
-			opt(verified)
+		option ...func(*types.ActivationTx),
+	) *types.ActivationTx {
+		atx := &types.ActivationTx{
+			PublishEpoch: target - 1,
+			SmesherID:    node,
+			NumUnits:     1,
+			TickCount:    1,
 		}
-		return verified
+		atx.SetID(id)
+		atx.SetReceived(time.Time{}.Add(1))
+
+		for _, opt := range option {
+			opt(atx)
+		}
+		return atx
 	}
 
 	for _, tc := range []struct {
 		desc    string
 		beacon  types.Beacon // local beacon
 		ballots []types.Ballot
-		atxs    []*types.VerifiedActivationTx
+		atxs    []*types.ActivationTx
 		actives []types.ATXIDList
 		expect  any
 	}{
@@ -782,7 +769,7 @@ func TestActiveSetMatrix(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			atxs: []*types.VerifiedActivationTx{
+			atxs: []*types.ActivationTx{
 				agen(types.ATXID{1}, types.NodeID{1}),
 				agen(types.ATXID{2}, types.NodeID{2}),
 				agen(types.ATXID{3}, types.NodeID{3}),
@@ -809,7 +796,7 @@ func TestActiveSetMatrix(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			atxs: []*types.VerifiedActivationTx{
+			atxs: []*types.ActivationTx{
 				agen(types.ATXID{1}, types.NodeID{1}),
 				agen(types.ATXID{2}, types.NodeID{2}),
 			},
@@ -835,7 +822,7 @@ func TestActiveSetMatrix(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			atxs:    []*types.VerifiedActivationTx{},
+			atxs:    []*types.ActivationTx{},
 			actives: []types.ATXIDList{{{1}, {2}}, {{2}, {3}}},
 			expect:  "not found",
 		},
@@ -858,7 +845,7 @@ func TestActiveSetMatrix(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			atxs:    []*types.VerifiedActivationTx{},
+			atxs:    []*types.ActivationTx{},
 			actives: []types.ATXIDList{{{1}, {2}}, {{2}, {3}}},
 			expect:  "missing atx in atxsdata",
 		},
@@ -884,7 +871,7 @@ func TestActiveSetMatrix(t *testing.T) {
 					[]types.ATXID{{2}, {3}},
 				),
 			},
-			atxs: []*types.VerifiedActivationTx{
+			atxs: []*types.ActivationTx{
 				agen(types.ATXID{2}, types.NodeID{2}),
 				agen(types.ATXID{3}, types.NodeID{3}),
 			},
@@ -903,8 +890,8 @@ func TestActiveSetMatrix(t *testing.T) {
 					[]types.ATXID{{2}},
 				),
 			},
-			atxs: []*types.VerifiedActivationTx{
-				agen(types.ATXID{2}, types.NodeID{1}, func(verified *types.VerifiedActivationTx) {
+			atxs: []*types.ActivationTx{
+				agen(types.ATXID{2}, types.NodeID{1}, func(verified *types.ActivationTx) {
 					verified.PublishEpoch = target
 				}),
 			},
@@ -923,7 +910,7 @@ func TestActiveSetMatrix(t *testing.T) {
 			}
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(oracle.db, atx))
-				oracle.atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
+				oracle.atxsdata.AddFromAtx(atx, false)
 			}
 			if tc.beacon != types.EmptyBeacon {
 				oracle.mBeacon.EXPECT().GetBeacon(target).Return(tc.beacon, nil)

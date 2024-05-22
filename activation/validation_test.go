@@ -112,7 +112,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 1}, nil)
+		atxProvider.EXPECT().GetAtx(commitmentAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
 
 		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
 		require.NoError(t, err)
@@ -149,7 +149,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 			InitialPost:      &wire.PostV1{},
 		}
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(commitmentAtxId).Return(&types.ActivationTxHeader{PublishEpoch: 2}, nil)
+		atxProvider.EXPECT().GetAtx(commitmentAtxId).Return(&types.ActivationTx{PublishEpoch: 2}, nil)
 
 		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
 		require.EqualError(t, err, "challenge pubepoch (1) must be after commitment atx pubepoch (2)")
@@ -294,9 +294,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: 1,
-		}, nil)
+		atxProvider.EXPECT().GetAtx(posAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 2)
 		require.NoError(t, err)
@@ -331,7 +329,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(nil, errors.New("db error"))
+		atxProvider.EXPECT().GetAtx(posAtxId).Return(nil, errors.New("db error"))
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch())
 		require.ErrorIs(t, err, &ErrAtxNotFound{Id: posAtxId})
@@ -345,9 +343,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: 5,
-		}, nil)
+		atxProvider.EXPECT().GetAtx(posAtxId).Return(&types.ActivationTx{PublishEpoch: 5}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 3)
 		require.EqualError(t, err, "positioning atx epoch (5) must be before 3")
@@ -360,9 +356,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtxHeader(posAtxId).Return(&types.ActivationTxHeader{
-			PublishEpoch: 1,
-		}, nil)
+		atxProvider.EXPECT().GetAtx(posAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 10)
 		require.NoError(t, err)
@@ -490,14 +484,14 @@ func TestVerifyChainDeps(t *testing.T) {
 
 	invalidAtx := newInitialATXv1(t, goldenATXID)
 	invalidAtx.Sign(signer)
-	vInvalidAtx := toVerifiedAtx(t, invalidAtx)
+	vInvalidAtx := toAtx(t, invalidAtx)
 	vInvalidAtx.SetValidity(types.Invalid)
 	require.NoError(t, atxs.Add(db, vInvalidAtx))
 
 	t.Run("invalid prev ATX", func(t *testing.T) {
-		atx := newChainedActivationTxV1(t, goldenATXID, invalidAtx, goldenATXID)
+		atx := newChainedActivationTxV1(t, invalidAtx, goldenATXID)
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -512,7 +506,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("invalid pos ATX", func(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -529,7 +523,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(signer)
 		atx.CommitmentATXID = &commitmentAtxID
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -543,7 +537,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("with trusted node ID", func(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -556,7 +550,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("assume valid if older than X", func(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -570,7 +564,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("invalid top-level", func(t *testing.T) {
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(signer)
-		vAtx := toVerifiedAtx(t, atx)
+		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
 		ctrl := gomock.NewController(t)
@@ -594,23 +588,23 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 	// The previous and positioning ATXs of the verified ATX will be a checkpointed (golden) ATX.
 	checkpointedAtx := newInitialATXv1(t, goldenATXID)
 	checkpointedAtx.Sign(signer)
-	vCheckpointedAtx := toVerifiedAtx(t, checkpointedAtx)
+	vCheckpointedAtx := toAtx(t, checkpointedAtx)
 	require.NoError(t, atxs.AddCheckpointed(db, &atxs.CheckpointAtx{
 		ID:             vCheckpointedAtx.ID(),
 		Epoch:          vCheckpointedAtx.PublishEpoch,
 		CommitmentATX:  *vCheckpointedAtx.CommitmentATX,
-		VRFNonce:       *vCheckpointedAtx.VRFNonce,
+		VRFNonce:       vCheckpointedAtx.VRFNonce,
 		NumUnits:       vCheckpointedAtx.NumUnits,
-		BaseTickHeight: vCheckpointedAtx.BaseTickHeight(),
-		TickCount:      vCheckpointedAtx.TickCount(),
+		BaseTickHeight: vCheckpointedAtx.BaseTickHeight,
+		TickCount:      vCheckpointedAtx.TickCount,
 		SmesherID:      vCheckpointedAtx.SmesherID,
 		Sequence:       vCheckpointedAtx.Sequence,
 		Coinbase:       vCheckpointedAtx.Coinbase,
 	}))
 
-	atx := newChainedActivationTxV1(t, goldenATXID, checkpointedAtx, checkpointedAtx.ID())
+	atx := newChainedActivationTxV1(t, checkpointedAtx, checkpointedAtx.ID())
 	atx.Sign(signer)
-	vAtx := toVerifiedAtx(t, atx)
+	vAtx := toAtx(t, atx)
 	require.NoError(t, atxs.Add(db, vAtx))
 
 	ctrl := gomock.NewController(t)

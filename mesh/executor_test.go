@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -70,22 +69,19 @@ func makeResults(lid types.LayerID, txs ...types.Transaction) []types.Transactio
 func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.ATXID, types.NodeID) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t.tb, err)
-	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: epoch},
 		cb,
 		11,
-		&nonce,
 	)
-
-	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx.VRFNonce = 1
 	atx.SetReceived(time.Now())
-	require.NoError(t.tb, activation.SignAndFinalizeAtx(sig, atx))
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t.tb, err)
-	require.NoError(t.tb, atxs.Add(t.db, vAtx))
-	t.atxsdata.AddFromHeader(vAtx.ToHeader(), 0, false)
-	return vAtx.ID(), sig.NodeID()
+	atx.SmesherID = sig.NodeID()
+	atx.SetID(types.RandomATXID())
+	atx.TickCount = 1
+	require.NoError(t.tb, atxs.Add(t.db, atx))
+	t.atxsdata.AddFromAtx(atx, false)
+	return atx.ID(), sig.NodeID()
 }
 
 func TestExecutor_Execute(t *testing.T) {
