@@ -2,6 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.5.5
+
+### Improvements
+
+* [#5969](https://github.com/spacemeshos/go-spacemesh/pull/5969) Increase ResponseMessage to 183500800
+
 ## Release v1.5.4
 
 ### Improvements
