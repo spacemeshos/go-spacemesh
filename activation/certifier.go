@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -81,6 +82,9 @@ type Certifier struct {
 	logger *zap.Logger
 	db     *localsql.Database
 	client certifierClient
+
+	certificationsLock sync.Mutex
+	certifications     map[string]chan struct{}
 }
 
 func NewCertifier(
@@ -89,9 +93,10 @@ func NewCertifier(
 	client certifierClient,
 ) *Certifier {
 	c := &Certifier{
-		client: client,
-		logger: logger,
-		db:     db,
+		client:         client,
+		logger:         logger,
+		db:             db,
+		certifications: make(map[string]chan struct{}),
 	}
 
 	return c
@@ -103,7 +108,25 @@ func (c *Certifier) Certificate(
 	certifier *url.URL,
 	pubkey []byte,
 ) (*certifierdb.PoetCert, error) {
-	// TODO: avoid parallel certifications for a (id, certifier) pair
+	// We index certs in DB by node ID and pubkey. To avoid redundant queries, we allow only 1
+	// request per (nodeID, pubkey) pair to be in flight at a time.
+	key := string(append(id.Bytes(), pubkey...))
+	c.certificationsLock.Lock()
+	if ch, ok := c.certifications[key]; ok {
+		c.certificationsLock.Unlock()
+		<-ch
+	} else {
+		ch := make(chan struct{})
+		c.certifications[key] = ch
+		c.certificationsLock.Unlock()
+		defer func() {
+			c.certificationsLock.Lock()
+			close(ch)
+			delete(c.certifications, key)
+			c.certificationsLock.Unlock()
+		}()
+	}
+
 	cert, err := certifierdb.Certificate(c.db, id, pubkey)
 	switch {
 	case err == nil:

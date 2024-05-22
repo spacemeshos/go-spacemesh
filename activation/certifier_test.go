@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -51,6 +52,35 @@ func TestPersistsCerts(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, cert, got)
 	}
+}
+
+func TestAvoidsRedundantQueries(t *testing.T) {
+	client := NewMockcertifierClient(gomock.NewController(t))
+	id := types.RandomNodeID()
+	db := localsql.InMemory()
+	cert := &certdb.PoetCert{Data: []byte("cert"), Signature: []byte("sig")}
+	certifierAddress := &url.URL{Scheme: "http", Host: "certifier.org"}
+	pubkey := []byte("pubkey")
+
+	c := NewCertifier(db, zaptest.NewLogger(t), client)
+	client.EXPECT().
+		Certificate(gomock.Any(), id, certifierAddress, pubkey).
+		Return(cert, nil)
+
+	var eg errgroup.Group
+	for i := 0; i < 100; i++ {
+		eg.Go(func() error {
+			got, err := c.Certificate(context.Background(), id, certifierAddress, pubkey)
+			require.NoError(t, err)
+			require.Equal(t, cert, got)
+			return nil
+		})
+	}
+	eg.Wait()
+
+	got, err := certdb.Certificate(db, id, pubkey)
+	require.NoError(t, err)
+	require.Equal(t, cert, got)
 }
 
 func TestObtainingPost(t *testing.T) {
