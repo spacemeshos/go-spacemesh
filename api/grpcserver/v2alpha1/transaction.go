@@ -114,11 +114,6 @@ func (s *TransactionService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.TransactionRequest,
 ) (*spacemeshv2alpha1.TransactionList, error) {
-	ops, err := toTransactionOperations(request)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
 	switch {
 	case request.Limit > 100:
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
@@ -126,11 +121,16 @@ func (s *TransactionService) List(
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 
+	ops, err := toTransactionOperations(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	rst := make([]*spacemeshv2alpha1.TransactionResponse, 0, request.Limit)
 	if err := transactions.IterateTransactionsOps(s.db, ops, func(tx *types.MeshTransaction,
 		result *types.TransactionResult,
 	) bool {
-		rst = append(rst, s.toTx(tx, result, request.IncludeResult, request.IncludeState))
+		rst = append(rst, toTx(tx, result, request.IncludeResult, request.IncludeState))
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -304,7 +304,7 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 	return ops, nil
 }
 
-func (s *TransactionService) toTx(tx *types.MeshTransaction, result *types.TransactionResult,
+func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 	includeResult, includeState bool,
 ) *spacemeshv2alpha1.TransactionResponse {
 	rst := &spacemeshv2alpha1.TransactionResponse{}

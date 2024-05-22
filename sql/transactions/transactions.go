@@ -426,7 +426,8 @@ func IterateTransactionsOps(
 		func(stmt *sql.Statement) bool {
 			var txId types.TransactionID
 			stmt.ColumnBytes(5, txId[:])
-			tx, derr := decodeTransaction(txId, stmt)
+			var meshTx *types.MeshTransaction
+			meshTx, derr = decodeTransaction(txId, stmt)
 			if derr != nil {
 				return false
 			}
@@ -436,7 +437,7 @@ func IterateTransactionsOps(
 				return false
 			}
 
-			return fn(tx, &txResult)
+			return fn(meshTx, &txResult)
 		})
 	if err == nil {
 		return err
