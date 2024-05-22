@@ -54,6 +54,12 @@ Upgrading to this version requires going through v1.5.x first. Removed migration
   ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
   eligible for them.
 
+## Release v1.5.5
+
+### Improvements
+
+* [#5969](https://github.com/spacemeshos/go-spacemesh/pull/5969) Increase ResponseMessage to 183500800
+
 ## Release v1.5.4
 
 ### Improvements
