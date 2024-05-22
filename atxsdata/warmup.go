@@ -2,7 +2,6 @@ package atxsdata
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -39,8 +38,7 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 	}
 	cache.EvictEpoch(evict)
 
-	var ierr error
-	if err := atxs.IterateAtxsData(db, cache.Evicted(), latest,
+	return atxs.IterateAtxsData(db, cache.Evicted(), latest,
 		func(
 			id types.ATXID,
 			node types.NodeID,
@@ -49,13 +47,9 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 			weight,
 			base,
 			height uint64,
-			nonce *types.VRFPostIndex,
+			nonce types.VRFPostIndex,
 			malicious bool,
 		) bool {
-			if nonce == nil {
-				ierr = errors.New("missing nonce")
-				return false
-			}
 			cache.Add(
 				epoch+1,
 				node,
@@ -64,12 +58,9 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 				weight,
 				base,
 				height,
-				*nonce,
+				nonce,
 				malicious,
 			)
 			return true
-		}); err != nil {
-		return err
-	}
-	return ierr
+		})
 }

@@ -123,7 +123,7 @@ func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 }
 
 // Obtain the commitment ATX ID for the given ATX.
-func (h *HandlerV1) commitment(ctx context.Context, atx *wire.ActivationTxV1) (types.ATXID, error) {
+func (h *HandlerV1) commitment(atx *wire.ActivationTxV1) (types.ATXID, error) {
 	if atx.PrevATXID == types.EmptyATXID {
 		return *atx.CommitmentATXID, nil
 	}
@@ -137,7 +137,8 @@ func (h *HandlerV1) commitment(ctx context.Context, atx *wire.ActivationTxV1) (t
 // to use the effective num units.
 func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*types.ActivationTx, error) {
 	var blob sql.Blob
-	if err := atxs.LoadBlob(ctx, h.cdb, atx.PrevATXID[:], &blob); err != nil {
+	v, err := atxs.LoadBlob(ctx, h.cdb, atx.PrevATXID[:], &blob)
+	if err != nil {
 		return nil, err
 	}
 
@@ -150,11 +151,23 @@ func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*ty
 		}
 		return atx, nil
 	}
+	if v != types.AtxV1 {
+		return nil, fmt.Errorf("previous atx %s is not of version 1", atx.PrevATXID)
+	}
 
 	var prev wire.ActivationTxV1
 	if err := codec.Decode(blob.Bytes, &prev); err != nil {
 		return nil, fmt.Errorf("decoding previous atx: %w", err)
 	}
+	prev.SetID(atx.PrevATXID)
+	if prev.VRFNonce == nil {
+		nonce, err := atxs.NonceByID(h.cdb, prev.ID())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get nonce of previous ATX %s: %w", prev.ID(), err)
+		}
+		prev.VRFNonce = (*uint64)(&nonce)
+	}
+
 	return wire.ActivationTxFromWireV1(&prev, blob.Bytes...), nil
 }
 
@@ -162,7 +175,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV1,
 ) (leaves uint64, effectiveNumUnits uint32, proof *mwire.MalfeasanceProof, err error) {
-	commitmentATX, err := h.commitment(ctx, atx)
+	commitmentATX, err := h.commitment(atx)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
 	}
@@ -240,25 +253,20 @@ func (h *HandlerV1) validateNonInitialAtx(
 		return err
 	}
 
-	nonce := atx.VRFNonce
-	if atx.NumUnits > previous.NumUnits && nonce == nil {
-		h.log.WithContext(ctx).With().Info("post size increased without new vrf Nonce, re-validating current nonce",
-			atx.ID(),
-			log.Stringer("smesher", atx.SmesherID),
-		)
-
-		// This is not expected to happen very often, so we query the database
-		// directly here without using the cache.
-		current, err := atxs.NonceByID(h.cdb, previous.ID())
-		if err != nil {
-			return fmt.Errorf("failed to get current nonce: %w", err)
-		}
-		nonce = (*uint64)(&current)
+	needRecheck := atx.VRFNonce != nil || atx.NumUnits > previous.NumUnits
+	if atx.VRFNonce == nil {
+		atx.VRFNonce = new(uint64)
+		*atx.VRFNonce = uint64(previous.VRFNonce)
 	}
 
-	if nonce != nil {
+	if needRecheck {
+		h.log.WithContext(ctx).With().Info("validating VRF nonce",
+			atx.ID(),
+			log.Bool("post increaced", atx.NumUnits > previous.NumUnits),
+			log.Stringer("smesher", atx.SmesherID),
+		)
 		err := h.nipostValidator.
-			VRFNonce(atx.SmesherID, commitment, *nonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
+			VRFNonce(atx.SmesherID, commitment, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
 		if err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
@@ -310,97 +318,228 @@ func (h *HandlerV1) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx, nonce types.VRFPostIndex) *atxsdata.ATX {
+func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 		if err != nil {
 			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
 			return nil
 		}
-		return h.atxsdata.AddFromAtx(atx, nonce, malicious)
+		return h.atxsdata.AddFromAtx(atx, malicious)
 	}
 	return nil
+}
+
+// checkDoublePublish verifies if a node has already published an ATX in the same epoch.
+func (h *HandlerV1) checkDoublePublish(
+	ctx context.Context,
+	tx sql.Executor,
+	atx *wire.ActivationTxV1,
+) (*mwire.MalfeasanceProof, error) {
+	prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch, atx.SmesherID)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, err
+	}
+	if prev == types.EmptyATXID || prev == atx.ID() {
+		// no ATX previously published for this epoch, or we are handling the same ATX again
+		return nil, nil
+	}
+
+	if _, ok := h.signers[atx.SmesherID]; ok {
+		// if we land here we tried to publish 2 ATXs in the same epoch
+		// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
+		return nil, fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(), atx.PublishEpoch)
+	}
+
+	prevSignature, err := atxSignature(ctx, tx, prev)
+	if err != nil {
+		return nil, fmt.Errorf("extracting signature for malfeasance proof: %w", err)
+	}
+
+	atxProof := mwire.AtxProof{
+		Messages: [2]mwire.AtxProofMsg{{
+			InnerMsg: types.ATXMetadata{
+				PublishEpoch: atx.PublishEpoch,
+				MsgHash:      prev.Hash32(),
+			},
+			SmesherID: atx.SmesherID,
+			Signature: prevSignature,
+		}, {
+			InnerMsg: types.ATXMetadata{
+				PublishEpoch: atx.PublishEpoch,
+				MsgHash:      atx.ID().Hash32(),
+			},
+			SmesherID: atx.SmesherID,
+			Signature: atx.Signature,
+		}},
+	}
+	proof := &mwire.MalfeasanceProof{
+		Layer: atx.PublishEpoch.FirstLayer(),
+		Proof: mwire.Proof{
+			Type: mwire.MultipleATXs,
+			Data: &atxProof,
+		},
+	}
+	encoded, err := codec.Encode(proof)
+	if err != nil {
+		h.log.With().Panic("failed to encode malfeasance proof", log.Err(err))
+	}
+	if err := identities.SetMalicious(tx, atx.SmesherID, encoded, time.Now()); err != nil {
+		return nil, fmt.Errorf("add malfeasance proof: %w", err)
+	}
+
+	h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
+		log.Stringer("smesher", atx.SmesherID),
+		log.Stringer("previous", prev),
+		log.Stringer("current", atx.ID()),
+	)
+
+	return proof, nil
+}
+
+// checkWrongPrevAtx verifies if the previous ATX referenced in the ATX is correct.
+func (h *HandlerV1) checkWrongPrevAtx(
+	ctx context.Context,
+	tx sql.Executor,
+	atx *wire.ActivationTxV1,
+) (*mwire.MalfeasanceProof, error) {
+	prevID, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, atx.PublishEpoch)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, fmt.Errorf("get last atx by node id: %w", err)
+	}
+	if prevID == atx.PrevATXID {
+		return nil, nil
+	}
+
+	if _, ok := h.signers[atx.SmesherID]; ok {
+		// if we land here we tried to publish an ATX with a wrong prevATX
+		h.log.WithContext(ctx).With().Warning(
+			"Node produced an ATX with a wrong prevATX. This can happened when the node wasn't synced when "+
+				"registering at PoET",
+			log.Stringer("smesher", atx.SmesherID),
+			log.ShortStringer("expected", prevID),
+			log.ShortStringer("actual", atx.PrevATXID),
+		)
+		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
+	}
+
+	var atx2ID types.ATXID
+	if atx.PrevATXID == types.EmptyATXID {
+		// if the ATX references an empty previous ATX, we can just take the initial ATX and create a proof
+		// that the node referenced the wrong previous ATX
+		id, err := atxs.GetFirstIDByNodeID(tx, atx.SmesherID)
+		if err != nil {
+			return nil, fmt.Errorf("get initial atx id: %w", err)
+		}
+
+		atx2ID = id
+	} else {
+		prev, err := atxs.Get(tx, atx.PrevATXID)
+		if err != nil {
+			return nil, fmt.Errorf("get prev atx: %w", err)
+		}
+
+		// if atx references a previous ATX that is not the last ATX by the same node, there must be at least one
+		// atx published between prevATX and the current epoch
+		pubEpoch := h.clock.CurrentLayer().GetEpoch()
+		for pubEpoch > prev.PublishEpoch {
+			id, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, pubEpoch)
+			if err != nil {
+				return nil, fmt.Errorf("get prev atx id by node id: %w", err)
+			}
+
+			atx2, err := atxs.Get(tx, id)
+			if err != nil {
+				return nil, fmt.Errorf("get prev atx: %w", err)
+			}
+			if atx.ID() != atx2.ID() && atx.PrevATXID == atx2.PrevATXID {
+				// found an ATX that points to the same previous ATX
+				atx2ID = id
+				break
+			}
+			pubEpoch = atx2.PublishEpoch
+		}
+	}
+
+	if atx2ID == types.EmptyATXID {
+		// something went wrong, we couldn't find an ATX that points to the same previous ATX
+		// this should never happen since we are checking in other places that all ATXs from the same node
+		// form a chain
+		return nil, errors.New("failed double previous check: could not find an ATX with same previous ATX")
+	}
+
+	var blob sql.Blob
+	v, err := atxs.LoadBlob(ctx, tx, atx2ID.Bytes(), &blob)
+	if err != nil {
+		return nil, err
+	}
+	if v != types.AtxV1 {
+		// TODO(mafa): update when V2 is introduced
+		return nil, fmt.Errorf("ATX %s with same prev ATX as %s is not version 1", atx2ID, atx.PrevATXID)
+	}
+
+	var watx2 wire.ActivationTxV1
+	if err := codec.Decode(blob.Bytes, &watx2); err != nil {
+		return nil, fmt.Errorf("decoding previous atx: %w", err)
+	}
+
+	proof := &mwire.MalfeasanceProof{
+		Layer: atx.PublishEpoch.FirstLayer(),
+		Proof: mwire.Proof{
+			Type: mwire.InvalidPrevATX,
+			Data: &mwire.InvalidPrevATXProof{
+				Atx1: *atx,
+				Atx2: watx2,
+			},
+		},
+	}
+
+	if err := identities.SetMalicious(tx, atx.SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
+		return nil, fmt.Errorf("add malfeasance proof: %w", err)
+	}
+
+	h.log.WithContext(ctx).With().Warning("smesher referenced the wrong previous in published ATX",
+		log.Stringer("smesher", atx.SmesherID),
+		log.ShortStringer("expected", prevID),
+		log.ShortStringer("actual", atx.PrevATXID),
+	)
+	return proof, nil
+}
+
+func (h *HandlerV1) checkMalicious(
+	ctx context.Context,
+	tx *sql.Tx,
+	watx *wire.ActivationTxV1,
+) (*mwire.MalfeasanceProof, error) {
+	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
+	if err != nil {
+		return nil, fmt.Errorf("checking if node is malicious: %w", err)
+	}
+	if malicious {
+		return nil, nil
+	}
+	proof, err := h.checkDoublePublish(ctx, tx, watx)
+	if proof != nil || err != nil {
+		return proof, err
+	}
+	return h.checkWrongPrevAtx(ctx, tx, watx)
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
 func (h *HandlerV1) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
-	signature types.EdSignature,
+	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	var nonce *types.VRFPostIndex
-	malicious, err := h.cdb.IsMalicious(atx.SmesherID)
-	if err != nil {
-		return nil, fmt.Errorf("checking if node is malicious: %w", err)
-	}
 	var proof *mwire.MalfeasanceProof
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
-		if malicious {
-			if err := atxs.Add(tx, atx); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-				return fmt.Errorf("add atx to db: %w", err)
-			}
-			return nil
+		var err error
+		proof, err = h.checkMalicious(ctx, tx, watx)
+		if err != nil {
+			return fmt.Errorf("check malicious: %w", err)
 		}
 
-		prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch, atx.SmesherID)
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			return err
-		}
-
-		// do ID check to be absolutely sure.
-		if err == nil && prev != atx.ID() {
-			if _, ok := h.signers[atx.SmesherID]; ok {
-				// if we land here we tried to publish 2 ATXs in the same epoch
-				// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
-				return fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(),
-					atx.PublishEpoch,
-				)
-			}
-			prevSignature, err := atxSignature(ctx, tx, prev)
-			if err != nil {
-				return fmt.Errorf("extracting signature for malfeasance proof: %w", err)
-			}
-
-			atxProof := mwire.AtxProof{
-				Messages: [2]mwire.AtxProofMsg{{
-					InnerMsg: types.ATXMetadata{
-						PublishEpoch: atx.PublishEpoch,
-						MsgHash:      prev.Hash32(),
-					},
-					SmesherID: atx.SmesherID,
-					Signature: prevSignature,
-				}, {
-					InnerMsg: types.ATXMetadata{
-						PublishEpoch: atx.PublishEpoch,
-						MsgHash:      atx.ID().Hash32(),
-					},
-					SmesherID: atx.SmesherID,
-					Signature: signature,
-				}},
-			}
-			proof = &mwire.MalfeasanceProof{
-				Layer: atx.PublishEpoch.FirstLayer(),
-				Proof: mwire.Proof{
-					Type: mwire.MultipleATXs,
-					Data: &atxProof,
-				},
-			}
-			encoded, err := codec.Encode(proof)
-			if err != nil {
-				h.log.With().Panic("failed to encode malfeasance proof", log.Err(err))
-			}
-			if err := identities.SetMalicious(tx, atx.SmesherID, encoded, time.Now()); err != nil {
-				return fmt.Errorf("add malfeasance proof: %w", err)
-			}
-
-			h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
-				log.Stringer("smesher", atx.SmesherID),
-				log.Stringer("previous", prev),
-				log.Object("current", atx),
-			)
-		}
-
-		nonce, err = atxs.AddGettingNonce(tx, atx)
+		err = atxs.Add(tx, atx)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
@@ -408,30 +547,27 @@ func (h *HandlerV1) storeAtx(
 	}); err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
 	}
-	if nonce == nil {
-		return nil, errors.New("no nonce")
-	}
+
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
 
-	added := h.cacheAtx(ctx, atx, *nonce)
+	added := h.cacheAtx(ctx, atx)
 	h.beacon.OnAtx(atx)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 
 	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
-
 	return proof, nil
 }
 
 func (h *HandlerV1) processATX(
 	ctx context.Context,
 	peer p2p.Peer,
-	watx wire.ActivationTxV1,
+	watx *wire.ActivationTxV1,
 	blob []byte,
 	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
@@ -447,26 +583,25 @@ func (h *HandlerV1) processATX(
 	h.log.WithContext(ctx).With().
 		Debug("processing atx", watx.ID(), watx.PublishEpoch, log.Stringer("smesherID", watx.SmesherID))
 
-	if err := h.syntacticallyValidate(ctx, &watx); err != nil {
+	if err := h.syntacticallyValidate(ctx, watx); err != nil {
 		return nil, fmt.Errorf("atx %s syntactically invalid: %w", watx.ID(), err)
 	}
 
-	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, &watx)
+	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, watx)
 	h.registerHashes(peer, poetRef, atxIDs)
 	if err := h.fetchReferences(ctx, poetRef, atxIDs); err != nil {
 		return nil, fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
 	}
 
-	leaves, effectiveNumUnits, proof, err := h.syntacticallyValidateDeps(ctx, &watx)
+	leaves, effectiveNumUnits, proof, err := h.syntacticallyValidateDeps(ctx, watx)
 	if err != nil {
 		return nil, fmt.Errorf("atx %s syntactically invalid based on deps: %w", watx.ID(), err)
 	}
-
 	if proof != nil {
-		return proof, err
+		return proof, nil
 	}
 
-	if err := h.contextuallyValidateAtx(&watx); err != nil {
+	if err := h.contextuallyValidateAtx(watx); err != nil {
 		h.log.WithContext(ctx).With().
 			Warning("atx is contextually invalid ", watx.ID(), log.Stringer("smesherID", watx.SmesherID), log.Err(err))
 	} else {
@@ -482,7 +617,7 @@ func (h *HandlerV1) processATX(
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	atx := wire.ActivationTxFromWireV1(&watx, blob...)
+	atx := wire.ActivationTxFromWireV1(watx, blob...)
 	if h.nipostValidator.IsVerifyingFullPost() {
 		atx.SetValidity(types.Valid)
 	}
@@ -491,7 +626,7 @@ func (h *HandlerV1) processATX(
 	atx.BaseTickHeight = baseTickHeight
 	atx.TickCount = leaves / h.tickSize
 
-	proof, err = h.storeAtx(ctx, atx, watx.Signature)
+	proof, err = h.storeAtx(ctx, atx, watx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}

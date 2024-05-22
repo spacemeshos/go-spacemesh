@@ -199,7 +199,9 @@ func TestRegossip(t *testing.T) {
 		}
 
 		var blob sql.Blob
-		require.NoError(t, atxs.LoadBlob(context.Background(), tab.db, refAtx.ID().Bytes(), &blob))
+		ver, err := atxs.LoadBlob(context.Background(), tab.db, refAtx.ID().Bytes(), &blob)
+		require.NoError(t, err)
+		require.Equal(t, types.AtxV1, ver)
 
 		// atx will be regossiped once (by the smesher)
 		tab.mclock.EXPECT().CurrentLayer().Return(layer)

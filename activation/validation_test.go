@@ -489,7 +489,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	require.NoError(t, atxs.Add(db, vInvalidAtx))
 
 	t.Run("invalid prev ATX", func(t *testing.T) {
-		atx := newChainedActivationTxV1(t, goldenATXID, invalidAtx, goldenATXID)
+		atx := newChainedActivationTxV1(t, invalidAtx, goldenATXID)
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
@@ -593,7 +593,7 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 		ID:             vCheckpointedAtx.ID(),
 		Epoch:          vCheckpointedAtx.PublishEpoch,
 		CommitmentATX:  *vCheckpointedAtx.CommitmentATX,
-		VRFNonce:       *vCheckpointedAtx.VRFNonce,
+		VRFNonce:       vCheckpointedAtx.VRFNonce,
 		NumUnits:       vCheckpointedAtx.NumUnits,
 		BaseTickHeight: vCheckpointedAtx.BaseTickHeight,
 		TickCount:      vCheckpointedAtx.TickCount,
@@ -602,7 +602,7 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 		Coinbase:       vCheckpointedAtx.Coinbase,
 	}))
 
-	atx := newChainedActivationTxV1(t, goldenATXID, checkpointedAtx, checkpointedAtx.ID())
+	atx := newChainedActivationTxV1(t, checkpointedAtx, checkpointedAtx.ID())
 	atx.Sign(signer)
 	vAtx := toAtx(t, atx)
 	require.NoError(t, atxs.Add(db, vAtx))

@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -276,13 +277,14 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: 1,
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, 2, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, 2)
 	atx.SmesherID = signer.NodeID()
 	atx.SetID(types.RandomATXID())
 	atx.SetReceived(time.Now())
 	atx.TickCount = 1
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(mgr.db, atx))
+	mgr.atxsdata.AddFromAtx(atx, false)
 
 	commitmentAtx, err := mgr.findCommitmentAtx(context.Background())
 	require.NoError(t, err)
@@ -322,7 +324,7 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 
 	// add an atx by the same node
 	commitmentAtx := types.RandomATXID()
-	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 1, nil)
+	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 1)
 	atx.CommitmentATX = &commitmentAtx
 	atx.SmesherID = signer.NodeID()
 	atx.SetID(types.RandomATXID())
@@ -364,7 +366,8 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
 
 	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := NewPostSetupManager(DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID, syncer, validator)
+	logger := zaptest.NewLogger(tb)
+	mgr, err := NewPostSetupManager(DefaultPostConfig(), logger, cdb, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	return &testPostManager{

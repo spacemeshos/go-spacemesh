@@ -159,13 +159,12 @@ func createModifiedATXs(
 			types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
 			address,
 			numUnit,
-			nil,
 		)
 		atx.SetReceived(time.Now())
 		atx.SmesherID = signer.NodeID()
 		atx.SetID(types.RandomATXID())
 		onAtx(atx)
-		data.AddFromAtx(atx, 0, false)
+		data.AddFromAtx(atx, false)
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes

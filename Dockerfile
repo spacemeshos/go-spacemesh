@@ -44,7 +44,7 @@ RUN make get-libs
 COPY go.mod .
 COPY go.sum .
 
-RUN go mod download
+RUN --mount=type=secret,id=mynetrc,dst=/root/.netrc go mod download
 
 # Here we copy the rest of the source code
 COPY . .

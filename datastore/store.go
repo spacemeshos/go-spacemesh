@@ -44,11 +44,12 @@ type CachedDB struct {
 	sql.QueryCache
 	logger log.Log
 
-	// cache is optional
+	// cache is optional in tests. It MUST be set for the 'App'
+	// for properly checking malfeasance.
 	atxsdata *atxsdata.Data
 
 	atxCache      *lru.Cache[types.ATXID, *types.ActivationTx]
-	vrfNonceCache *lru.Cache[VrfNonceKey, *types.VRFPostIndex]
+	vrfNonceCache *lru.Cache[VrfNonceKey, types.VRFPostIndex]
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
@@ -71,7 +72,8 @@ func DefaultConfig() Config {
 }
 
 type cacheOpts struct {
-	cfg Config
+	cfg      Config
+	atxsdata *atxsdata.Data
 }
 
 type Opt func(*cacheOpts)
@@ -79,6 +81,12 @@ type Opt func(*cacheOpts)
 func WithConfig(cfg Config) Opt {
 	return func(o *cacheOpts) {
 		o.cfg = cfg
+	}
+}
+
+func WithConsensusCache(c *atxsdata.Data) Opt {
+	return func(o *cacheOpts) {
+		o.atxsdata = c
 	}
 }
 
@@ -100,7 +108,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 		lg.Fatal("failed to create malfeasance cache", err)
 	}
 
-	vrfNonceCache, err := lru.New[VrfNonceKey, *types.VRFPostIndex](o.cfg.ATXSize)
+	vrfNonceCache, err := lru.New[VrfNonceKey, types.VRFPostIndex](o.cfg.ATXSize)
 	if err != nil {
 		lg.Fatal("failed to create vrf nonce cache", err)
 	}
@@ -109,6 +117,7 @@ func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
 		Executor:         db,
 		QueryCache:       db.QueryCache(),
 		logger:           lg,
+		atxsdata:         o.atxsdata,
 		atxCache:         atxHdrCache,
 		malfeasanceCache: malfeasanceCache,
 		vrfNonceCache:    vrfNonceCache,
@@ -185,7 +194,7 @@ func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *wire.Malfeasan
 func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
 	key := VrfNonceKey{id, epoch}
 	if nonce, ok := db.vrfNonceCache.Get(key); ok {
-		return *nonce, nil
+		return nonce, nil
 	}
 
 	nonce, err := atxs.VRFNonce(db, id, epoch)
@@ -193,7 +202,7 @@ func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPos
 		return types.VRFPostIndex(0), err
 	}
 
-	db.vrfNonceCache.Add(key, &nonce)
+	db.vrfNonceCache.Add(key, nonce)
 	return nonce, nil
 }
 
@@ -273,7 +282,10 @@ type (
 )
 
 var loadBlobDispatch = map[Hint]loadBlobFunc{
-	ATXDB:       atxs.LoadBlob,
+	ATXDB: func(ctx context.Context, db sql.Executor, key []byte, blob *sql.Blob) error {
+		_, err := atxs.LoadBlob(ctx, db, key, blob)
+		return err
+	},
 	BallotDB:    ballots.LoadBlob,
 	BlockDB:     blocks.LoadBlob,
 	TXDB:        transactions.LoadBlob,

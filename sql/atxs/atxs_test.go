@@ -515,37 +515,27 @@ func TestVRFNonce(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	nonce1 := types.VRFPostIndex(333)
-	atx1 := newAtx(t, sig, withPublishEpoch(types.EpochID(20)), withNonce(nonce1))
+	atx1 := newAtx(t, sig, withPublishEpoch(20), withNonce(333))
 	require.NoError(t, atxs.Add(db, atx1))
 
-	atx2 := newAtx(t, sig, withPublishEpoch(types.EpochID(30)), withNoNonce(), withPrevATXID(atx1.ID()))
+	atx2 := newAtx(t, sig, withPublishEpoch(50), withNonce(777), withPrevATXID(atx1.ID()))
 	require.NoError(t, atxs.Add(db, atx2))
-
-	nonce3 := types.VRFPostIndex(777)
-	atx3 := newAtx(t, sig, withPublishEpoch(types.EpochID(50)), withNonce(nonce3), withPrevATXID(atx2.ID()))
-	require.NoError(t, atxs.Add(db, atx3))
 
 	// Act & Assert
 
 	// same epoch returns same nonce
 	got, err := atxs.VRFNonce(db, sig.NodeID(), atx1.TargetEpoch())
 	require.NoError(t, err)
-	require.Equal(t, nonce1, got)
+	require.Equal(t, atx1.VRFNonce, got)
 
-	got, err = atxs.VRFNonce(db, sig.NodeID(), atx3.TargetEpoch())
-	require.NoError(t, err)
-	require.Equal(t, nonce3, got)
-
-	// between epochs returns previous nonce
 	got, err = atxs.VRFNonce(db, sig.NodeID(), atx2.TargetEpoch())
 	require.NoError(t, err)
-	require.Equal(t, nonce1, got)
+	require.Equal(t, atx2.VRFNonce, got)
 
 	// later epoch returns newer nonce
-	got, err = atxs.VRFNonce(db, sig.NodeID(), atx3.TargetEpoch()+10)
+	got, err = atxs.VRFNonce(db, sig.NodeID(), atx2.TargetEpoch()+10)
 	require.NoError(t, err)
-	require.Equal(t, nonce3, got)
+	require.Equal(t, atx2.VRFNonce, got)
 
 	// before first epoch returns error
 	_, err = atxs.VRFNonce(db, sig.NodeID(), atx1.TargetEpoch()-10)
@@ -560,11 +550,14 @@ func TestLoadBlob(t *testing.T) {
 	require.NoError(t, err)
 	atx1 := newAtx(t, sig, withPublishEpoch(1))
 	atx1.AtxBlob.Blob = []byte("blob1")
+	atx1.AtxBlob.Version = types.AtxV1
 
 	require.NoError(t, atxs.Add(db, atx1))
 
 	var blob1 sql.Blob
-	require.NoError(t, atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1))
+	version, err := atxs.LoadBlob(ctx, db, atx1.ID().Bytes(), &blob1)
+	require.NoError(t, err)
+	require.Equal(t, types.AtxV1, version)
 
 	require.Equal(t, atx1.AtxBlob.Blob, blob1.Bytes)
 
@@ -575,9 +568,12 @@ func TestLoadBlob(t *testing.T) {
 	var blob2 sql.Blob
 	atx2 := newAtx(t, sig)
 	atx2.AtxBlob.Blob = []byte("blob2 of different size")
+	atx2.AtxBlob.Version = types.AtxV2
 
 	require.NoError(t, atxs.Add(db, atx2))
-	require.NoError(t, atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2))
+	version, err = atxs.LoadBlob(ctx, db, atx2.ID().Bytes(), &blob2)
+	require.NoError(t, err)
+	require.Equal(t, types.AtxV2, version)
 	require.Equal(t, atx2.AtxBlob.Blob, blob2.Bytes)
 
 	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
@@ -589,7 +585,8 @@ func TestLoadBlob(t *testing.T) {
 	require.NotEqual(t, len(blob1.Bytes), len(blob2.Bytes))
 
 	noSuchID := types.RandomATXID()
-	require.ErrorIs(t, atxs.LoadBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
+	_, err = atxs.LoadBlob(ctx, db, noSuchID[:], &sql.Blob{})
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	blobSizes, err = atxs.GetBlobSizes(db, [][]byte{
 		atx1.ID().Bytes(),
@@ -613,10 +610,41 @@ func TestGetBlobCached(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		var b sql.Blob
-		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
+		_, err := atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b)
+		require.NoError(t, err)
 		require.Equal(t, atx.Blob, b.Bytes)
 		require.Equal(t, 3, db.QueryCount())
 	}
+}
+
+// Test that we don't put in the cache a reference to the blob that was passed to LoadBlob.
+// Each cache entry must use a unique slice for the blob.
+func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+
+	atx := types.ActivationTx{AtxBlob: types.AtxBlob{Blob: []byte("original blob")}}
+	atx.SetID(types.RandomATXID())
+	require.NoError(t, atxs.Add(db, &atx))
+	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
+
+	blob := &sql.Blob{}
+	_, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), blob)
+	require.NoError(t, err)
+	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
+
+	atx2 := types.ActivationTx{AtxBlob: types.AtxBlob{Blob: []byte("other blob")}}
+	atx2.SetID(types.RandomATXID())
+	require.Less(t, len(atx2.AtxBlob.Blob), len(atx.AtxBlob.Blob))
+	require.NoError(t, atxs.Add(db, &atx2))
+
+	// Loading atx2 doesn't overwrite the cached blob for atx1
+	_, err = atxs.LoadBlob(context.Background(), db, atx2.ID().Bytes(), blob)
+	require.NoError(t, err)
+	require.Equal(t, atx2.AtxBlob.Blob, blob.Bytes)
+
+	_, err = atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), blob)
+	require.NoError(t, err)
+	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
 }
 
 func TestCachedBlobEviction(t *testing.T) {
@@ -637,7 +665,8 @@ func TestCachedBlobEviction(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx))
 		addedATXs[n] = atx
 		blobs[n] = atx.Blob
-		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
+		_, err := atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b)
+		require.NoError(t, err)
 		require.Equal(t, atx.Blob, b.Bytes)
 	}
 
@@ -646,13 +675,15 @@ func TestCachedBlobEviction(t *testing.T) {
 
 	// The ATXs except the first one stay in place
 	for n, atx := range addedATXs[1:] {
-		require.NoError(t, atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b))
+		_, err := atxs.LoadBlob(ctx, db, atx.ID().Bytes(), &b)
+		require.NoError(t, err)
 		require.Equal(t, blobs[n+1], b.Bytes)
 		require.Equal(t, 33, db.QueryCount())
 	}
 
 	// The first ATX is evicted. We check it after the loop to avoid additional evictions.
-	require.NoError(t, atxs.LoadBlob(ctx, db, addedATXs[0].ID().Bytes(), &b))
+	_, err = atxs.LoadBlob(ctx, db, addedATXs[0].ID().Bytes(), &b)
+	require.NoError(t, err)
 	require.Equal(t, blobs[0], b.Bytes)
 	require.Equal(t, 34, db.QueryCount())
 }
@@ -699,7 +730,8 @@ func TestCheckpointATX(t *testing.T) {
 
 	// checkpoint atx does not have actual atx data
 	var blob sql.Blob
-	require.NoError(t, atxs.LoadBlob(ctx, db, catx.ID.Bytes(), &blob))
+	_, err = atxs.LoadBlob(ctx, db, catx.ID.Bytes(), &blob)
+	require.NoError(t, err)
 	require.Empty(t, blob.Bytes)
 }
 
@@ -739,13 +771,7 @@ func withSequence(seq uint64) createAtxOpt {
 
 func withNonce(nonce types.VRFPostIndex) createAtxOpt {
 	return func(atx *types.ActivationTx) {
-		atx.VRFNonce = &nonce
-	}
-}
-
-func withNoNonce() createAtxOpt {
-	return func(atx *types.ActivationTx) {
-		atx.VRFNonce = nil
+		atx.VRFNonce = nonce
 	}
 }
 
@@ -954,4 +980,54 @@ func TestLatest(t *testing.T) {
 			require.EqualValues(t, tc.expect, latest)
 		})
 	}
+}
+
+func Test_PrevATXCollisions(t *testing.T) {
+	db := sql.InMemory()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	// create two ATXs with the same PrevATXID
+	prevATXID := types.RandomATXID()
+
+	atx1 := newAtx(t, sig, withPublishEpoch(1), withPrevATXID(prevATXID))
+	atx2 := newAtx(t, sig, withPublishEpoch(2), withPrevATXID(prevATXID))
+
+	require.NoError(t, atxs.Add(db, atx1))
+	require.NoError(t, atxs.Add(db, atx2))
+
+	// verify that the ATXs were added
+	got1, err := atxs.Get(db, atx1.ID())
+	require.NoError(t, err)
+	atx1.AtxBlob = types.AtxBlob{}
+	require.Equal(t, atx1, got1)
+
+	got2, err := atxs.Get(db, atx2.ID())
+	require.NoError(t, err)
+	atx2.AtxBlob = types.AtxBlob{}
+	require.Equal(t, atx2, got2)
+
+	// add 10 valid ATXs by 10 other smeshers
+	for i := 2; i < 6; i++ {
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx := newAtx(t, otherSig, withPublishEpoch(types.EpochID(i)))
+		require.NoError(t, atxs.Add(db, atx))
+
+		atx2 := newAtx(t, otherSig,
+			withPublishEpoch(types.EpochID(i+1)),
+			withPrevATXID(atx.ID()),
+		)
+		require.NoError(t, atxs.Add(db, atx2))
+	}
+
+	// get the collisions
+	got, err := atxs.PrevATXCollisions(db)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+
+	require.Equal(t, sig.NodeID(), got[0].NodeID1)
+	require.Equal(t, sig.NodeID(), got[0].NodeID2)
+	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, []types.ATXID{got[0].ATX1, got[0].ATX2})
 }

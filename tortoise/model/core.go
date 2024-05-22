@@ -150,7 +150,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PublishEpoch: ev.LayerID.GetEpoch(),
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, addr, c.units, nil)
+		atx := types.NewActivationTx(nipost, addr, c.units)
 		atx.SmesherID = c.signer.NodeID()
 		atx.SetID(types.RandomATXID())
 		atx.SetReceived(time.Now())
@@ -177,7 +177,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if err != nil {
 			c.logger.With().Fatal("failed is malicious lookup", log.Err(err))
 		}
-		c.atxdata.AddFromAtx(ev.Atx, 0, malicious)
+		c.atxdata.AddFromAtx(ev.Atx, malicious)
 	case MessageBeacon:
 		beacons.Add(c.cdb, ev.EpochID+1, ev.Beacon)
 	case MessageCoinflip:

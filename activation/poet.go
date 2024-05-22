@@ -351,18 +351,21 @@ func (c *PoetClient) Submit(
 }
 
 func (c *PoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
+	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
+	defer cancel()
+
 	c.gettingProof.Lock()
 	defer c.gettingProof.Unlock()
 
 	if members, ok := c.proofMembers[roundID]; ok {
-		if proof, err := c.db.ProofForRound(c.id, roundID); err == nil {
+		proof, err := c.db.ProofForRound(c.id, roundID)
+		if err == nil {
 			c.logger.Debug("returning cached proof", zap.String("round_id", roundID))
 			return proof, members, nil
 		}
+		c.logger.Warn("cached members found but proof not found in db", zap.String("round_id", roundID), zap.Error(err))
 	}
 
-	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
-	defer cancel()
 	proof, members, err := c.client.Proof(getProofsCtx, roundID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)

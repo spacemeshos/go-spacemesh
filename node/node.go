@@ -77,7 +77,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
-	sqlmigrations "github.com/spacemeshos/go-spacemesh/sql/migrations"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -302,6 +301,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
 		mapstructureutil.DeprecatedHook(),
+		mapstructureutil.AtxVersionsDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
 
@@ -747,6 +747,7 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	fetcherWrapped := &layerFetcher{}
+
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
@@ -755,12 +756,13 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.host,
 		fetcherWrapped,
-		app.Config.TickSize,
 		goldenATXID,
 		validator,
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg),
+		activation.WithTickSize(app.Config.TickSize),
+		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
 	for _, sig := range app.signers {
 		atxHandler.Register(sig)
@@ -983,7 +985,8 @@ func (app *App) initServices(ctx context.Context) error {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		goldenATXID,
 		newSyncer,
 		app.validator,
@@ -1018,7 +1021,8 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		app.localDB,
 		app.host,
 		nipostBuilder,
@@ -1294,7 +1298,11 @@ func (app *App) listenToUpdates(ctx context.Context) {
 						Epoch: epoch,
 						Set:   set,
 					}
-					activesets.Add(app.db, id, activeSet)
+					err := activesets.Add(app.db, id, activeSet)
+					if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+						app.errCh <- fmt.Errorf("error storing ActiveSet: %w", err)
+						return nil
+					}
 
 					app.hOracle.UpdateActiveSet(epoch, set)
 					app.proposalBuilder.UpdateActiveSet(epoch, set)
@@ -1660,8 +1668,13 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			if app.Config.SMESHING.CoinbaseAccount == "" {
 				return errors.New("smeshing enabled but no coinbase account provided")
 			}
-			if len(app.signers) > 1 {
-				return errors.New("supervised smeshing cannot be started in a multi-smeshing setup")
+			if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
+				app.log.Error("supervised smeshing cannot be started in a remote or multi-smeshing setup")
+				app.log.Error(
+					"if you run a supervised node ensure your key file is named %s and try again",
+					supervisedIDKeyFileName,
+				)
+				return errors.New("smeshing enabled in remote setup")
 			}
 			if err := app.postSupervisor.Start(
 				app.Config.POSTService,
@@ -1852,7 +1865,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	dbopts := []sql.Opt{
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
-		sql.WithMigration(sqlmigrations.New0017Migration(dbLog.Zap())),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
@@ -1896,7 +1908,17 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
 		datastore.WithConfig(app.Config.Cache),
+		datastore.WithConsensusCache(data),
 	)
+
+	if app.Config.ScanMalfeasantATXs {
+		app.log.With().Info("checking DB for malicious ATXs")
+		start = time.Now()
+		if err := activation.CheckPrevATXs(ctx, app.log.Zap(), app.db); err != nil {
+			return fmt.Errorf("malicious ATX check: %w", err)
+		}
+		app.log.With().Info("malicious ATX check completed", log.Duration("duration", time.Since(start)))
+	}
 
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
@@ -1936,9 +1958,6 @@ func (app *App) Start(ctx context.Context) error {
 			return nil
 		})
 	}
-
-	// uncomment to verify ATXs signatures
-	// app.verifyDB(ctx)
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)

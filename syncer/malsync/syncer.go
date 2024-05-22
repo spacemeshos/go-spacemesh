@@ -361,13 +361,13 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 			sst.done()
 			if initial && sst.numSyncedPeers() >= s.cfg.MinSyncPeers {
 				if err := s.updateState(); err != nil {
-					return nil
+					return err
 				}
 				s.logger.Info("initial sync of malfeasance proofs completed", log.ZContext(ctx))
 				return nil
 			} else if !initial && gotUpdate {
 				if err := s.updateState(); err != nil {
-					return nil
+					return err
 				}
 			}
 			select {

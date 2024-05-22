@@ -119,6 +119,9 @@ type BaseConfig struct {
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
+	// ScanMalfeasantATXs is a flag to enable scanning for malfeasant ATXs.
+	ScanMalfeasantATXs bool `mapstructure:"scan-malfeasant-atxs"`
+
 	NetworkHRP string `mapstructure:"network-hrp"`
 
 	// MinerGoodAtxsPercent is a threshold to decide if tortoise activeset should be
@@ -139,6 +142,12 @@ type BaseConfig struct {
 
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
 	NoMainOverride bool `mapstructure:"no-main-override"`
+
+	// ATX version switches
+	// Each entry states on which publish epoch given ATX version becomes valid.
+	// Note: There is always one valid version at any given time.
+	// ATX V1 starts with epoch 0 unless configured otherwise.
+	AtxVersions activation.AtxVersions `mapstructure:"atx-versions"`
 }
 
 type DatabaseQueryCacheSizes struct {

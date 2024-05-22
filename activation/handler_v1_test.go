@@ -68,7 +68,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		prevAtx.NumUnits = 100
 		prevAtx.Sign(sig)
 		atxHdlr.expectAtxV1(prevAtx, sig.NodeID())
-		_, err := atxHdlr.processATX(context.Background(), "", *prevAtx, codec.MustEncode(prevAtx), time.Now())
+		_, err := atxHdlr.processATX(context.Background(), "", prevAtx, codec.MustEncode(prevAtx), time.Now())
 		require.NoError(t, err)
 
 		otherSig, err := signing.NewEdSigner()
@@ -77,7 +77,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		posAtx := newInitialATXv1(t, goldenATXID)
 		posAtx.Sign(otherSig)
 		atxHdlr.expectAtxV1(posAtx, otherSig.NodeID())
-		_, err = atxHdlr.processATX(context.Background(), "", *posAtx, codec.MustEncode(posAtx), time.Now())
+		_, err = atxHdlr.processATX(context.Background(), "", posAtx, codec.MustEncode(posAtx), time.Now())
 		require.NoError(t, err)
 		return atxHdlr, prevAtx, posAtx
 	}
@@ -85,7 +85,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.PositioningATXID = posAtx.ID()
 		atx.Sign(sig)
 
@@ -108,7 +108,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		atxHdlr, prevAtx, posAtx := setup(t)
 
 		newNonce := *prevAtx.VRFNonce + 100
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.VRFNonce = &newNonce
 		atx.Sign(sig)
 
@@ -132,7 +132,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.NumUnits = prevAtx.NumUnits - 10
 		atx.Sign(sig)
 
@@ -153,7 +153,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.NumUnits = prevAtx.NumUnits + 10
 		atx.Sign(sig)
 
@@ -175,7 +175,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.NumUnits = prevAtx.NumUnits + 10
 		atx.Sign(sig)
 
@@ -220,7 +220,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return((atx.PublishEpoch - 2).FirstLayer())
@@ -231,7 +231,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
@@ -248,7 +248,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
@@ -287,7 +287,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevATX, postAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevATX, postAtx.ID())
+		atx := newChainedActivationTxV1(t, prevATX, postAtx.ID())
 		atx.Sign(sig)
 
 		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
@@ -300,25 +300,6 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 			Return(0, errors.New("bad nipost"))
 		_, _, _, err := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
 		require.EqualError(t, err, "invalid nipost: bad nipost")
-	})
-	t.Run("can't find VRF nonce", func(t *testing.T) {
-		t.Parallel()
-		atxHdlr, prevATX, postAtx := setup(t)
-
-		atx := newChainedActivationTxV1(t, goldenATXID, prevATX, postAtx.ID())
-		atx.NumUnits += 100
-		atx.Sign(sig)
-
-		enc := func(stmt *sql.Statement) { stmt.BindBytes(1, atx.SmesherID.Bytes()) }
-		_, err := atxHdlr.cdb.Exec(`UPDATE atxs SET nonce = NULL WHERE pubkey = ?1;`, enc, nil)
-		require.NoError(t, err)
-
-		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), atx))
-
-		atxHdlr.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), atx.SmesherID)
-		_, _, _, err1 := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
-		require.ErrorContains(t, err1, "failed to get current nonce")
 	})
 	t.Run("missing NodeID in initial atx", func(t *testing.T) {
 		t.Parallel()
@@ -362,7 +343,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.PrevATXID = types.EmptyATXID
 		atx.Sign(sig)
 
@@ -450,7 +431,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.NodeID = &types.NodeID{1, 2, 3}
 		atx.Sign(sig)
 
@@ -462,7 +443,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevAtx, posAtx := setup(t)
 
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, posAtx.ID())
+		atx := newChainedActivationTxV1(t, prevAtx, posAtx.ID())
 		atx.CommitmentATXID = &types.EmptyATXID
 		atx.Sign(sig)
 
@@ -494,7 +475,7 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		atxHdlr := newV1TestHandler(t, goldenATXID)
 
 		prevAtx := newInitialATXv1(t, goldenATXID)
-		atx := newChainedActivationTxV1(t, goldenATXID, prevAtx, goldenATXID)
+		atx := newChainedActivationTxV1(t, prevAtx, goldenATXID)
 
 		err = atxHdlr.contextuallyValidateAtx(atx)
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -508,17 +489,17 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		atx0 := newInitialATXv1(t, goldenATXID)
 		atx0.Sign(sig)
 		atxHdlr.expectAtxV1(atx0, sig.NodeID())
-		_, err := atxHdlr.processATX(context.Background(), "", *atx0, codec.MustEncode(atx0), time.Now())
+		_, err := atxHdlr.processATX(context.Background(), "", atx0, codec.MustEncode(atx0), time.Now())
 		require.NoError(t, err)
 
-		atx1 := newChainedActivationTxV1(t, goldenATXID, atx0, goldenATXID)
+		atx1 := newChainedActivationTxV1(t, atx0, goldenATXID)
 		atx1.Sign(sig)
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
 		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
-		_, err = atxHdlr.processATX(context.Background(), "", *atx1, codec.MustEncode(atx1), time.Now())
+		_, err = atxHdlr.processATX(context.Background(), "", atx1, codec.MustEncode(atx1), time.Now())
 		require.NoError(t, err)
 
-		atxInvalidPrevious := newChainedActivationTxV1(t, goldenATXID, atx0, goldenATXID)
+		atxInvalidPrevious := newChainedActivationTxV1(t, atx0, goldenATXID)
 		atxInvalidPrevious.Sign(sig)
 		err = atxHdlr.contextuallyValidateAtx(atxInvalidPrevious)
 		require.EqualError(t, err, "last atx is not the one referenced")
@@ -535,16 +516,16 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		atx0 := newInitialATXv1(t, goldenATXID)
 		atx0.Sign(otherSig)
 		atxHdlr.expectAtxV1(atx0, otherSig.NodeID())
-		_, err = atxHdlr.processATX(context.Background(), "", *atx0, codec.MustEncode(atx0), time.Now())
+		_, err = atxHdlr.processATX(context.Background(), "", atx0, codec.MustEncode(atx0), time.Now())
 		require.NoError(t, err)
 
 		atx1 := newInitialATXv1(t, goldenATXID)
 		atx1.Sign(sig)
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
-		_, err = atxHdlr.processATX(context.Background(), "", *atx1, codec.MustEncode(atx1), time.Now())
+		_, err = atxHdlr.processATX(context.Background(), "", atx1, codec.MustEncode(atx1), time.Now())
 		require.NoError(t, err)
 
-		atxInvalidPrevious := newChainedActivationTxV1(t, goldenATXID, atx0, goldenATXID)
+		atxInvalidPrevious := newChainedActivationTxV1(t, atx0, goldenATXID)
 		atxInvalidPrevious.Sign(sig)
 		err = atxHdlr.contextuallyValidateAtx(atxInvalidPrevious)
 		require.EqualError(t, err, "last atx is not the one referenced")
@@ -562,20 +543,21 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 
 		watx := newInitialATXv1(t, goldenATXID)
 		watx.Sign(sig)
-		vAtx := toAtx(t, watx)
-		require.NoError(t, err)
+		atx := toAtx(t, watx)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx)
-		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx.ID(), gomock.Any())
-		proof, err := atxHdlr.storeAtx(context.Background(), vAtx, watx.Signature)
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx.PublishEpoch+1, watx.ID(), gomock.Any())
+		proof, err := atxHdlr.storeAtx(context.Background(), atx, watx)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
-		atxFromDb, err := atxs.Get(atxHdlr.cdb, vAtx.ID())
+		atxFromDb, err := atxs.Get(atxHdlr.cdb, atx.ID())
 		require.NoError(t, err)
-		vAtx.SetReceived(time.Unix(0, vAtx.Received().UnixNano()))
-		vAtx.AtxBlob = types.AtxBlob{}
-		require.Equal(t, vAtx, atxFromDb)
+		atx.SetReceived(time.Unix(0, atx.Received().UnixNano()))
+		atx.AtxBlob = types.AtxBlob{}
+		require.Equal(t, atx, atxFromDb)
 	})
 
 	t.Run("storing an already known ATX returns no error", func(t *testing.T) {
@@ -583,19 +565,49 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 
 		watx := newInitialATXv1(t, goldenATXID)
 		watx.Sign(sig)
-		vAtx := toAtx(t, watx)
+		atx := toAtx(t, watx)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx)
-		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx.ID(), gomock.Any())
-		proof, err := atxHdlr.storeAtx(context.Background(), vAtx, watx.Signature)
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx.PublishEpoch+1, watx.ID(), gomock.Any())
+		proof, err := atxHdlr.storeAtx(context.Background(), atx, watx)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx)
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx.ID()
+		}))
 		// Note: tortoise is not informed about the same ATX again
-		proof, err = atxHdlr.storeAtx(context.Background(), vAtx, watx.Signature)
+		proof, err = atxHdlr.storeAtx(context.Background(), atx, watx)
 		require.NoError(t, err)
 		require.Nil(t, proof)
+	})
+
+	t.Run("stores ATX of malicious identity", func(t *testing.T) {
+		atxHdlr := newV1TestHandler(t, goldenATXID)
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		require.NoError(t, identities.SetMalicious(atxHdlr.cdb, sig.NodeID(), types.RandomBytes(10), time.Now()))
+
+		watx := newInitialATXv1(t, goldenATXID)
+		watx.Sign(sig)
+		atx := toAtx(t, watx)
+
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx.PublishEpoch+1, watx.ID(), gomock.Any())
+		proof, err := atxHdlr.storeAtx(context.Background(), atx, watx)
+		require.NoError(t, err)
+		require.Nil(t, proof)
+
+		atxFromDb, err := atxs.Get(atxHdlr.cdb, atx.ID())
+		require.NoError(t, err)
+		atx.SetReceived(time.Unix(0, atx.Received().UnixNano()))
+		atx.AtxBlob = types.AtxBlob{}
+		require.Equal(t, atx, atxFromDb)
 	})
 
 	t.Run("another atx for the same epoch is considered malicious", func(t *testing.T) {
@@ -603,25 +615,27 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 
 		watx0 := newInitialATXv1(t, goldenATXID)
 		watx0.Sign(sig)
-		vAtx0 := toAtx(t, watx0)
+		atx0 := toAtx(t, watx0)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0)
-		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx0.ID(), gomock.Any())
-
-		proof, err := atxHdlr.storeAtx(context.Background(), vAtx0, watx0.Signature)
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx0.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx0.PublishEpoch+1, watx0.ID(), gomock.Any())
+		proof, err := atxHdlr.storeAtx(context.Background(), atx0, watx0)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
 		watx1 := newInitialATXv1(t, goldenATXID)
 		watx1.Coinbase = types.GenerateAddress([]byte("aaaa"))
 		watx1.Sign(sig)
-		vAtx1 := toAtx(t, watx1)
+		atx1 := toAtx(t, watx1)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx1)
-		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx1.ID(), gomock.Any())
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx1.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx1.PublishEpoch+1, watx1.ID(), gomock.Any())
 		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
-
-		proof, err = atxHdlr.storeAtx(context.Background(), vAtx1, watx1.Signature)
+		proof, err = atxHdlr.storeAtx(context.Background(), atx1, watx1)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
 		require.Equal(t, mwire.MultipleATXs, proof.Proof.Type)
@@ -649,24 +663,144 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 
 		watx0 := newInitialATXv1(t, goldenATXID)
 		watx0.Sign(sig)
-		vAtx0 := toAtx(t, watx0)
+		atx0 := toAtx(t, watx0)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(vAtx0)
-		atxHdlr.mtortoise.EXPECT().OnAtx(gomock.Any(), vAtx0.ID(), gomock.Any())
-
-		proof, err := atxHdlr.storeAtx(context.Background(), vAtx0, watx0.Signature)
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx0.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx0.PublishEpoch+1, watx0.ID(), gomock.Any())
+		proof, err := atxHdlr.storeAtx(context.Background(), atx0, watx0)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
 		watx1 := newInitialATXv1(t, goldenATXID)
 		watx1.Coinbase = types.GenerateAddress([]byte("aaaa"))
 		watx1.Sign(sig)
-		vAtx1 := toAtx(t, watx1)
+		atx1 := toAtx(t, watx1)
 
-		proof, err = atxHdlr.storeAtx(context.Background(), vAtx1, watx1.Signature)
+		proof, err = atxHdlr.storeAtx(context.Background(), atx1, watx1)
 		require.ErrorContains(t,
 			err,
 			fmt.Sprintf("%s already published an ATX", sig.NodeID().ShortString()),
+		)
+		require.Nil(t, proof)
+
+		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
+		require.NoError(t, err)
+		require.False(t, malicious)
+	})
+
+	t.Run("another atx with the same prevatx is considered malicious", func(t *testing.T) {
+		atxHdlr := newV1TestHandler(t, goldenATXID)
+
+		initialATX := newInitialATXv1(t, goldenATXID)
+		initialATX.Sign(sig)
+		wInitialATX := toAtx(t, initialATX)
+
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == initialATX.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(initialATX.PublishEpoch+1, initialATX.ID(), gomock.Any())
+		proof, err := atxHdlr.storeAtx(context.Background(), wInitialATX, initialATX)
+		require.NoError(t, err)
+		require.Nil(t, proof)
+
+		// valid first non-initial ATX
+		watx1 := newChainedActivationTxV1(t, initialATX, goldenATXID)
+		watx1.Sign(sig)
+		atx1 := toAtx(t, watx1)
+
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx1.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx1.PublishEpoch+1, watx1.ID(), gomock.Any())
+		proof, err = atxHdlr.storeAtx(context.Background(), atx1, watx1)
+		require.NoError(t, err)
+		require.Nil(t, proof)
+
+		watx2 := newChainedActivationTxV1(t, watx1, goldenATXID)
+		watx2.Sign(sig)
+		atx2 := toAtx(t, watx2)
+
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx2.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx2.PublishEpoch+1, watx2.ID(), gomock.Any())
+		proof, err = atxHdlr.storeAtx(context.Background(), atx2, watx2)
+		require.NoError(t, err)
+		require.Nil(t, proof)
+
+		// third non-initial ATX references initial ATX as prevATX
+		watx3 := newChainedActivationTxV1(t, initialATX, goldenATXID)
+		watx3.PublishEpoch = watx2.PublishEpoch + 1
+		watx3.Sign(sig)
+		atx3 := toAtx(t, watx3)
+
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx3.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx3.PublishEpoch+1, watx3.ID(), gomock.Any())
+		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
+		atxHdlr.mclock.EXPECT().CurrentLayer().Return(watx3.PublishEpoch.FirstLayer())
+		proof, err = atxHdlr.storeAtx(context.Background(), atx3, watx3)
+		require.NoError(t, err)
+		require.NotNil(t, proof)
+		require.Equal(t, mwire.InvalidPrevATX, proof.Proof.Type)
+		proof.SetReceived(time.Time{})
+		nodeID, err := malfeasance.Validate(
+			context.Background(),
+			atxHdlr.log,
+			atxHdlr.cdb,
+			atxHdlr.edVerifier,
+			nil,
+			&mwire.MalfeasanceGossip{
+				MalfeasanceProof: *proof,
+			},
+		)
+		require.NoError(t, err)
+		require.Equal(t, sig.NodeID(), nodeID)
+	})
+
+	t.Run("another atx with the same prevatx for registered ID doesn't create a malfeasance proof", func(t *testing.T) {
+		atxHdlr := newV1TestHandler(t, goldenATXID)
+		atxHdlr.Register(sig)
+
+		// Act & Assert
+		wInitialATX := newInitialATXv1(t, goldenATXID)
+		wInitialATX.Sign(sig)
+		initialAtx := toAtx(t, wInitialATX)
+
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == wInitialATX.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(wInitialATX.PublishEpoch+1, wInitialATX.ID(), gomock.Any())
+		proof, err := atxHdlr.storeAtx(context.Background(), initialAtx, wInitialATX)
+		require.NoError(t, err)
+		require.Nil(t, proof)
+
+		// valid first non-initial ATX
+		watx1 := newChainedActivationTxV1(t, wInitialATX, goldenATXID)
+		watx1.Sign(sig)
+		atx1 := toAtx(t, watx1)
+
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
+			return atx.(*types.ActivationTx).ID() == watx1.ID()
+		}))
+		atxHdlr.mtortoise.EXPECT().OnAtx(watx1.PublishEpoch+1, watx1.ID(), gomock.Any())
+		proof, err = atxHdlr.storeAtx(context.Background(), atx1, watx1)
+		require.NoError(t, err)
+		require.Nil(t, proof)
+
+		// second non-initial ATX references empty as prevATX
+		watx2 := newInitialATXv1(t, goldenATXID)
+		watx2.PublishEpoch = watx1.PublishEpoch + 1
+		watx2.Sign(sig)
+		atx2 := toAtx(t, watx2)
+
+		proof, err = atxHdlr.storeAtx(context.Background(), atx2, watx2)
+		require.ErrorContains(t,
+			err,
+			fmt.Sprintf("%s referenced incorrect previous ATX", sig.NodeID().ShortString()),
 		)
 		require.Nil(t, proof)
 
