@@ -40,13 +40,14 @@ func (h *HTTPPoetTestHarness) Client(
 	db *activation.PoetDb,
 	cfg activation.PoetConfig,
 	logger *zap.Logger,
-	opts ...activation.PoetClientOpts,
+	opts ...activation.PoetClientOpt,
 ) (activation.PoetClient, error) {
 	return activation.NewPoetClient(
 		db,
 		h.ServerCfg(),
 		cfg,
 		logger,
+		opts...,
 	)
 }
 
@@ -291,5 +292,5 @@ func TestNoCertifierInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	_, _, err = client.CertifierInfo(context.Background())
-	r.ErrorContains(err, "poet doesn't support certifier")
+	r.ErrorContains(err, "poet doesn't support certificates")
 }
