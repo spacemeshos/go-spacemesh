@@ -2,12 +2,16 @@ package activation_test
 
 import (
 	"context"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/poet/registration"
+	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -50,6 +54,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
+	localDB := localsql.InMemory()
 
 	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
@@ -103,39 +108,52 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		RequestRetryDelay: epoch / 50,
 		MaxRequestRetries: 10,
 	}
+
+	pubkey, address := spawnTestCertifier(
+		t,
+		cfg,
+		func(id []byte) *poetShared.Cert {
+			exp := time.Now().Add(epoch)
+			return &poetShared.Cert{Pubkey: id, Expiration: &exp}
+		},
+		verifying.WithLabelScryptParams(opts.Scrypt),
+	)
+
 	poetProver := spawnPoet(
 		t,
 		WithGenesis(genesis),
 		WithEpochDuration(epoch),
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
+		WithCertifier(&registration.CertifierConfig{
+			URL:    (&url.URL{Scheme: "http", Host: address.String()}).String(),
+			PubKey: registration.Base64Enc(pubkey),
+		}),
 	)
+	certClient := activation.NewCertifierClient(db, localDB, logger.Named("certifier"))
+	certifier := activation.NewCertifier(localDB, logger, certClient)
+	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
+	client, err := poetProver.Client(poetDb, poetCfg, logger, activation.WithCertifier(certifier))
+	require.NoError(t, err)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
 		timesync.WithLayerDuration(layerDuration),
 		timesync.WithTickInterval(100*time.Millisecond),
-		timesync.WithLogger(logger),
+		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
-
 	postStates := activation.NewMockPostStates(ctrl)
-	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
-		poetDb,
 		svc,
-		[]types.PoetServer{{
-			Pubkey:  types.NewBase64Enc(poetProver.Service.PublicKey()),
-			Address: poetProver.RestURL().String(),
-		}},
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
 		activation.NipostbuilderWithPostStates(postStates),
+		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)
 
@@ -191,6 +209,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(v),
 		activation.WithPostStates(postStates),
+		activation.WithPoets(client),
 	)
 	for _, sig := range signers {
 		gomock.InOrder(

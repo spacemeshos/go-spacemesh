@@ -68,6 +68,14 @@ func TestValidator_Validate(t *testing.T) {
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
 	)
+	poetDb := activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger).Named("poetDb"))
+	client, err := activation.NewPoetClient(
+		poetDb,
+		types.PoetServer{Address: poetProver.RestURL().String()},
+		poetCfg,
+		logger,
+	)
+	require.NoError(t, err)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
@@ -79,8 +87,6 @@ func TestValidator_Validate(t *testing.T) {
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-
-	poetDb := activation.NewPoetDb(sql.InMemory(), log.NewFromLog(logger).Named("poetDb"))
 
 	svc := grpcserver.NewPostService(logger)
 	svc.AllowConnections(true)
@@ -97,12 +103,11 @@ func TestValidator_Validate(t *testing.T) {
 	challenge := types.RandomHash()
 	nb, err := activation.NewNIPostBuilder(
 		localsql.InMemory(),
-		poetDb,
 		svc,
-		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		mclock,
+		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/url"
 	"time"
 
 	"github.com/spacemeshos/post/shared"
@@ -12,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
@@ -117,9 +119,9 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 }
 
-// poetClient servers as an interface to communicate with a PoET server.
+// PoetClient servers as an interface to communicate with a PoET server.
 // It is used to submit challenges and fetch proofs.
-type poetClient interface {
+type PoetClient interface {
 	Address() string
 
 	// Submit registers a challenge in the proving service current open round.
@@ -131,8 +133,43 @@ type poetClient interface {
 		nodeID types.NodeID,
 	) (*types.PoetRound, error)
 
+	Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error)
+
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error)
+}
+
+// A certifier client that the certifierService uses to obtain certificates
+// The implementation can use any method to obtain the certificate,
+// for example, POST verification.
+type certifierClient interface {
+	// Certify obtains a certificate in a remote certifier service.
+	Certify(
+		ctx context.Context,
+		id types.NodeID,
+		certifierAddress *url.URL,
+		pubkey []byte,
+	) (*certifier.PoetCert, error)
+}
+
+// certifierService is used to certify nodeID for registering in the poet.
+// It holds the certificates and can recertify if needed.
+type certifierService interface {
+	// Acquire a certificate for the ID in the given certifier.
+	// The certificate confirms that the ID is verified and it can be later used to submit in poet.
+	Certificate(
+		ctx context.Context,
+		id types.NodeID,
+		certifierAddress *url.URL,
+		pubkey []byte,
+	) (*certifier.PoetCert, error)
+
+	Recertify(
+		ctx context.Context,
+		id types.NodeID,
+		certifierAddress *url.URL,
+		pubkey []byte,
+	) (*certifier.PoetCert, error)
 }
 
 type poetDbAPI interface {

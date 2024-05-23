@@ -34,6 +34,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -67,9 +68,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	cfg.POET.RequestTimeout = time.Minute
 	cfg.POET.MaxRequestRetries = 10
-	cfg.PoetServers = []types.PoetServer{
-		{Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0)},
-	}
 
 	var bootnodes []*cluster.NodeClient
 	for i := 0; i < cl.Bootnodes(); i++ {
@@ -158,14 +156,27 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, grpcPrivateServer.Start())
 	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
 
+	db := sql.InMemory()
+	localDb := localsql.InMemory()
+	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
+	certifier := activation.NewCertifier(localDb, logger, certClient)
+	poetClient, err := activation.NewPoetClient(
+		activation.NewPoetDb(db, log.NewNop()),
+		types.PoetServer{
+			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
+		}, cfg.POET,
+		logger,
+		activation.WithCertifier(certifier),
+	)
+	require.NoError(t, err)
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
-		localsql.InMemory(),
-		activation.NewPoetDb(sql.InMemory(), log.NewNop()),
+		localDb,
 		grpcPostService,
-		cfg.PoetServers,
 		logger.Named("nipostBuilder"),
 		cfg.POET,
 		clock,
+		activation.WithPoetClients(poetClient),
 	)
 	require.NoError(t, err)
 
@@ -182,6 +193,17 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		post, postInfo, err := client.Proof(ctx, shared.ZeroChallenge)
 		require.NoError(t, err)
 
+		err = nipost.AddPost(localDb, signer.NodeID(), nipost.Post{
+			Nonce:         post.Nonce,
+			Indices:       post.Indices,
+			Pow:           post.Pow,
+			Challenge:     shared.ZeroChallenge,
+			NumUnits:      postInfo.NumUnits,
+			CommitmentATX: postInfo.CommitmentATX,
+			VRFNonce:      *postInfo.Nonce,
+		})
+		require.NoError(t, err)
+
 		challenge = &wire.NIPostChallengeV1{
 			PrevATXID:        types.EmptyATXID,
 			PublishEpoch:     2,
@@ -195,6 +217,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		}
 		break
 	}
+
 	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challenge.Hash())
 	require.NoError(t, err)
 

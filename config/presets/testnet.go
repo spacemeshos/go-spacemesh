@@ -163,5 +163,6 @@ func testnet() config.Config {
 			RetryInterval: time.Minute,
 			Tries:         5,
 		},
+		Certifier: activation.DefaultCertifierConfig(),
 	}
 }

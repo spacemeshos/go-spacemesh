@@ -31,6 +31,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
+var ErrNotFound = errors.New("not found")
+
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
 	PhaseShift        time.Duration `mapstructure:"phase-shift"`
@@ -82,6 +84,7 @@ type Builder struct {
 	syncer            syncer
 	log               *zap.Logger
 	parentCtx         context.Context
+	poets             []PoetClient
 	poetCfg           PoetConfig
 	poetRetryInterval time.Duration
 	// delay before PoST in ATX is considered valid (counting from the time it was received)
@@ -135,6 +138,12 @@ func WithContext(ctx context.Context) BuilderOption {
 func WithPoetConfig(c PoetConfig) BuilderOption {
 	return func(b *Builder) {
 		b.poetCfg = c
+	}
+}
+
+func WithPoets(poets ...PoetClient) BuilderOption {
+	return func(b *Builder) {
+		b.poets = poets
 	}
 }
 
@@ -323,7 +332,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 		return nil
 	}
 	// ...and if we haven't stored an initial post yet.
-	_, err := nipost.InitialPost(b.localDB, nodeID)
+	_, err := nipost.GetPost(b.localDB, nodeID)
 	switch {
 	case err == nil:
 		b.log.Info("load initial post from db")
@@ -347,9 +356,10 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 		return errors.New("nil VRF nonce")
 	}
 	initialPost := nipost.Post{
-		Nonce:   post.Nonce,
-		Indices: post.Indices,
-		Pow:     post.Pow,
+		Nonce:     post.Nonce,
+		Indices:   post.Indices,
+		Pow:       post.Pow,
+		Challenge: shared.ZeroChallenge,
 
 		NumUnits:      postInfo.NumUnits,
 		CommitmentATX: postInfo.CommitmentATX,
@@ -361,7 +371,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	}, postInfo.NumUnits)
 	if err != nil {
 		b.log.Error("initial POST is invalid", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
-		if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
+		if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
 			b.log.Fatal("failed to remove initial post", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
 		}
 		return fmt.Errorf("initial POST is invalid: %w", err)
@@ -371,7 +381,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	public.PostSeconds.Set(float64(time.Since(startTime)))
 	b.log.Info("created the initial post")
 
-	return nipost.AddInitialPost(b.localDB, nodeID, initialPost)
+	return nipost.AddPost(b.localDB, nodeID, initialPost)
 }
 
 func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
@@ -390,6 +400,17 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 		}
 	}
+	var eg errgroup.Group
+	for _, poet := range b.poets {
+		eg.Go(func() error {
+			_, err := poet.Certify(ctx, sig.NodeID())
+			if err != nil {
+				b.log.Warn("failed to certify poet", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
+			}
+			return nil
+		})
+	}
+	eg.Wait()
 
 	for {
 		err := b.PublishActivationTx(ctx, sig)
@@ -515,7 +536,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		logger.Info("no previous ATX found, creating an initial nipost challenge")
-		post, err := nipost.InitialPost(b.localDB, nodeID)
+		post, err := nipost.GetPost(b.localDB, nodeID)
 		if err != nil {
 			return nil, fmt.Errorf("get initial post: %w", err)
 		}
@@ -531,7 +552,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		}, post.NumUnits)
 		if err != nil {
 			logger.Error("initial POST is invalid", zap.Error(err))
-			if err := nipost.RemoveInitialPost(b.localDB, nodeID); err != nil {
+			if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
 				logger.Fatal("failed to remove initial post", zap.Error(err))
 			}
 			return nil, fmt.Errorf("initial POST is invalid: %w", err)

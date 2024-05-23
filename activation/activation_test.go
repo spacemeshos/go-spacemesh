@@ -666,8 +666,9 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 		NumUnits:      uint32(12),
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		Challenge:     shared.ZeroChallenge,
 	}
-	require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), post))
+	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
 	initialPost := &types.Post{
 		Nonce:   post.Nonce,
 		Indices: post.Indices,
@@ -706,8 +707,9 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 		NumUnits:      uint32(12),
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		Challenge:     shared.ZeroChallenge,
 	}
-	require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), refPost))
+	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), refPost))
 	initialPost := &types.Post{
 		Nonce:   refPost.Nonce,
 		Indices: refPost.Indices,
@@ -728,12 +730,10 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
-
 	tab.mnipost.EXPECT().
 		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, ErrATXChallengeExpired)
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-
 	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(currLayer.Add(1)).Do(func(got types.LayerID) <-chan struct{} {
 		close(ch)
@@ -758,7 +758,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 	}
 
 	// initial post is preserved
-	post, err := nipost.InitialPost(tab.localDB, sig.NodeID())
+	post, err := nipost.GetPost(tab.localDB, sig.NodeID())
 	require.NoError(t, err)
 	require.NotNil(t, post)
 	require.Equal(t, refPost, *post)
@@ -824,11 +824,13 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
 
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
-			currentLayer = currentLayer.Add(5)
-			return newNIPostWithPoet(t, poetBytes), nil
-		})
+	tab.mnipost.EXPECT().
+		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(
+			func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
+				currentLayer = currentLayer.Add(5)
+				return newNIPostWithPoet(t, poetBytes), nil
+			})
 
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
@@ -938,8 +940,9 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		NumUnits:      uint32(12),
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		Challenge:     shared.ZeroChallenge,
 	}
-	require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), post))
+	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
 	initialPost := &types.Post{
 		Nonce:   post.Nonce,
 		Indices: post.Indices,
@@ -979,7 +982,9 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	nipostErr := errors.New("NIPost builder error")
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, gomock.Any(), gomock.Any()).Return(nil, nipostErr)
+	tab.mnipost.EXPECT().
+		BuildNIPost(gomock.Any(), sig, gomock.Any(), gomock.Any()).
+		Return(nil, nipostErr)
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	require.ErrorIs(t, tab.PublishActivationTx(context.Background(), sig), nipostErr)
 
@@ -1027,7 +1032,6 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
 	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
-	publishEpoch := prevAtx.PublishEpoch + 1
 	currLayer := prevAtx.PublishEpoch.FirstLayer()
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
@@ -1038,7 +1042,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		}).AnyTimes()
 	done := make(chan struct{})
 	close(done)
-	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
+	tab.mclock.EXPECT().AwaitLayer(prevAtx.PublishEpoch.Add(1).FirstLayer()).DoAndReturn(
 		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
@@ -1125,9 +1129,6 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	}
 
 	// state is cleaned up
-	_, err = nipost.InitialPost(tab.localDB, sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-
 	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -1169,7 +1170,8 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, metadata, post.NumUnits)
 	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 }
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
@@ -1201,10 +1203,12 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, metadata, numUnits)
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	err = tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 }
 
 func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
@@ -1234,7 +1238,8 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, metadata, numUnits)
-	require.ErrorContains(t, tab.buildInitialPost(context.Background(), sig.NodeID()), "nil VRF nonce")
+	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.ErrorContains(t, err, "nil VRF nonce")
 
 	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
 	require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
@@ -1256,7 +1261,8 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		},
 		nil,
 	)
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	err = tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 }
 
 func TestWaitPositioningAtx(t *testing.T) {
@@ -1287,7 +1293,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 			// everything else are stubs that are irrelevant for the test
 			tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{}, nil).AnyTimes()
 			tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-			tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			tab.mnipost.EXPECT().
+				BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&nipost.NIPostState{}, nil)
 			closed := make(chan struct{})
 			close(closed)
@@ -1309,8 +1316,9 @@ func TestWaitPositioningAtx(t *testing.T) {
 				NumUnits:      uint32(12),
 				CommitmentATX: types.RandomATXID(),
 				VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+				Challenge:     shared.ZeroChallenge,
 			}
-			require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), post))
+			require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
 			initialPost := &types.Post{
 				Nonce:   post.Nonce,
 				Indices: post.Indices,

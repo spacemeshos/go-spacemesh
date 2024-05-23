@@ -46,7 +46,7 @@ const (
 type NIPostBuilder struct {
 	localDB *localsql.Database
 
-	poetProvers map[string]poetClient
+	poetProvers map[string]PoetClient
 	postService postService
 	log         *zap.Logger
 	poetCfg     PoetConfig
@@ -56,10 +56,9 @@ type NIPostBuilder struct {
 
 type NIPostBuilderOption func(*NIPostBuilder)
 
-// withPoetClients allows to pass in clients directly (for testing purposes).
-func withPoetClients(clients []poetClient) NIPostBuilderOption {
+func WithPoetClients(clients ...PoetClient) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
-		nb.poetProvers = make(map[string]poetClient, len(clients))
+		nb.poetProvers = make(map[string]PoetClient, len(clients))
 		for _, client := range clients {
 			nb.poetProvers[client.Address()] = client
 		}
@@ -75,27 +74,15 @@ func NipostbuilderWithPostStates(ps PostStates) NIPostBuilderOption {
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
 	db *localsql.Database,
-	poetDB poetDbAPI,
 	postService postService,
-	poetServers []types.PoetServer,
 	lg *zap.Logger,
 	poetCfg PoetConfig,
 	layerClock layerClock,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
-	poetClients := make(map[string]poetClient, len(poetServers))
-	for _, server := range poetServers {
-		client, err := newPoetClient(poetDB, server, poetCfg, lg.Named("poet"))
-		if err != nil {
-			return nil, fmt.Errorf("cannot create poet client: %w", err)
-		}
-		poetClients[client.Address()] = client
-	}
-
 	b := &NIPostBuilder{
 		localDB: db,
 
-		poetProvers: poetClients,
 		postService: postService,
 		log:         lg,
 		poetCfg:     poetCfg,
@@ -232,7 +219,8 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
-		if err := nb.submitPoetChallenges(submitCtx, signer, poetProofDeadline, challenge.Bytes()); err != nil {
+		err := nb.submitPoetChallenges(submitCtx, signer, poetProofDeadline, challenge.Bytes())
+		if err != nil {
 			return nil, fmt.Errorf("submitting to poets: %w", err)
 		}
 		count, err := nipost.PoetRegistrationCount(nb.localDB, signer.NodeID())
@@ -343,7 +331,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	ctx context.Context,
 	nodeID types.NodeID,
 	deadline time.Time,
-	client poetClient,
+	client PoetClient,
 	prefix, challenge []byte,
 	signature types.EdSignature,
 ) error {
@@ -353,11 +341,15 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		log.ZShortStringer("smesherID", nodeID),
 	)
 
-	round, err := client.Submit(ctx, deadline, prefix, challenge, signature, nodeID)
+	logger.Debug("submitting challenge to poet proving service")
+
+	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
+	defer cancel()
+
+	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID)
 	if err != nil {
 		return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
-
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
 	return nipost.AddPoetRegistration(nb.localDB, nodeID, nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
@@ -407,7 +399,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	return nil
 }
 
-func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) poetClient {
+func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) PoetClient {
 	for _, client := range nb.poetProvers {
 		if address == client.Address() {
 			return client

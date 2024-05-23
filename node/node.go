@@ -1000,15 +1000,39 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
 	}
+
+	nipostLogger := app.addLogger(NipostBuilderLogger, lg).Zap()
+	client := activation.NewCertifierClient(
+		app.db,
+		app.localDB,
+		nipostLogger,
+		activation.WithCertifierClientConfig(app.Config.Certifier.Client),
+	)
+	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
+
+	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoetServers))
+	for _, server := range app.Config.PoetServers {
+		client, err := activation.NewPoetClient(
+			poetDb,
+			server,
+			app.Config.POET,
+			lg.Zap().Named("poet"),
+			activation.WithCertifier(certifier),
+		)
+		if err != nil {
+			app.log.Panic("failed to create poet client: %v", err)
+		}
+		poetClients = append(poetClients, client)
+	}
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.localDB,
-		poetDb,
 		grpcPostService.(*grpcserver.PostService),
-		app.Config.PoetServers,
-		app.addLogger(NipostBuilderLogger, lg).Zap(),
+		nipostLogger,
 		app.Config.POET,
 		app.clock,
 		activation.NipostbuilderWithPostStates(postStates),
+		activation.WithPoetClients(poetClients...),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -1036,6 +1060,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 		activation.WithPostStates(postStates),
+		activation.WithPoets(poetClients...),
 	)
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
@@ -2109,6 +2134,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 
 func (app *App) preserveAfterRecovery(ctx context.Context) {
 	if app.preserve == nil {
+		app.log.Info("no need to preserve data after recovery")
 		return
 	}
 	for i, poetProof := range app.preserve.Proofs {
