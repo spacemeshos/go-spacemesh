@@ -72,7 +72,7 @@ func (h *HandlerV2) processATX(
 		log.ZContext(ctx),
 		zap.Stringer("atx_id", watx.ID()),
 		zap.Uint32("publish", watx.PublishEpoch.Uint32()),
-		zap.Stringer("smesherID", watx.Smesher()),
+		zap.Stringer("smesherID", watx.SmesherID),
 	)
 
 	if err := h.syntacticallyValidate(ctx, watx); err != nil {
@@ -92,7 +92,7 @@ func (h *HandlerV2) processATX(
 // 1. support marriages
 // 2. support merged ATXs.
 func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.ActivationTxV2) error {
-	if !h.edVerifier.Verify(signing.ATX, atx.Smesher(), atx.SignedBytes(), atx.Signature) {
+	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return fmt.Errorf("invalid atx signature: %w", errMalformedData)
 	}
 	if atx.PositioningATX == types.EmptyATXID {
@@ -140,12 +140,12 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 
 		numUnits := atx.NiPosts[0].Posts[0].NumUnits
 		if err := h.nipostValidator.VRFNonceV2(
-			atx.Smesher(), atx.Initial.CommitmentATX, types.VRFPostIndex(*atx.VRFNonce), numUnits,
+			atx.SmesherID, atx.Initial.CommitmentATX, types.VRFPostIndex(*atx.VRFNonce), numUnits,
 		); err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
 		if err := h.nipostValidator.PostV2(
-			ctx, atx.Smesher(), atx.Initial.CommitmentATX, &atx.Initial.Post, shared.ZeroChallenge, numUnits,
+			ctx, atx.SmesherID, atx.Initial.CommitmentATX, &atx.Initial.Post, shared.ZeroChallenge, numUnits,
 		); err != nil {
 			return fmt.Errorf("invalid initial post: %w", err)
 		}

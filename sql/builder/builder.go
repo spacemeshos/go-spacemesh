@@ -17,16 +17,19 @@ const (
 	Gte   token = ">="
 	Lt    token = "<"
 	Lte   token = "<="
+	In    token = "in"
 )
 
 type field string
 
 const (
-	Epoch    field = "epoch"
-	Smesher  field = "pubkey"
-	Coinbase field = "coinbase"
-	Id       field = "id"
-	Layer    field = "layer"
+	Epoch     field = "epoch"
+	Smesher   field = "pubkey"
+	Coinbase  field = "coinbase"
+	Id        field = "id"
+	Layer     field = "layer"
+	Address   field = "address"
+	Principal field = "principal"
 )
 
 type modifier string
@@ -57,6 +60,7 @@ type Modifier struct {
 type Operations struct {
 	Filter    []Op
 	Modifiers []Modifier
+	StartWith string
 }
 
 func FilterEpochOnly(publish types.EpochID) Operations {
@@ -70,13 +74,33 @@ func FilterEpochOnly(publish types.EpochID) Operations {
 func FilterFrom(operations Operations) string {
 	var queryBuilder strings.Builder
 
+	bindIndex := 1
 	for i, op := range operations.Filter {
 		if i == 0 {
-			queryBuilder.WriteString(" where")
+			if operations.StartWith != "" {
+				queryBuilder.WriteString(" " + operations.StartWith)
+			} else {
+				queryBuilder.WriteString(" where")
+			}
 		} else {
 			queryBuilder.WriteString(" and")
 		}
-		fmt.Fprintf(&queryBuilder, " %s%s %s ?%d", op.Prefix, op.Field, op.Token, i+1)
+
+		if op.Token == In {
+			values, ok := op.Value.([][]byte)
+			if !ok {
+				panic("value for 'In' token must be a slice of []byte")
+			}
+			params := make([]string, len(values))
+			for j := range values {
+				params[j] = fmt.Sprintf("?%d", bindIndex)
+				bindIndex++
+			}
+			fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", op.Prefix, op.Field, op.Token, strings.Join(params, ", "))
+		} else {
+			fmt.Fprintf(&queryBuilder, " %s%s %s ?%d", op.Prefix, op.Field, op.Token, bindIndex)
+			bindIndex++
+		}
 	}
 
 	for _, m := range operations.Modifiers {
@@ -88,14 +112,23 @@ func FilterFrom(operations Operations) string {
 
 func BindingsFrom(operations Operations) sql.Encoder {
 	return func(stmt *sql.Statement) {
-		for i, op := range operations.Filter {
+		bindIndex := 1
+		for _, op := range operations.Filter {
 			switch value := op.Value.(type) {
 			case int64:
-				stmt.BindInt64(i+1, value)
+				stmt.BindInt64(bindIndex, value)
+				bindIndex++
 			case []byte:
-				stmt.BindBytes(i+1, value)
+				stmt.BindBytes(bindIndex, value)
+				bindIndex++
 			case types.EpochID:
-				stmt.BindInt64(i+1, int64(value))
+				stmt.BindInt64(bindIndex, int64(value))
+				bindIndex++
+			case [][]byte:
+				for _, v := range value {
+					stmt.BindBytes(bindIndex, v)
+					bindIndex++
+				}
 			default:
 				panic(fmt.Sprintf("unexpected type %T", value))
 			}

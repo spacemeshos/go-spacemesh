@@ -20,6 +20,9 @@ const (
 var (
 	hash20T = reflect.TypeOf(Hash20{})
 	hash32T = reflect.TypeOf(Hash32{})
+
+	// EmptyHash32 is the zero hash.
+	EmptyHash32 = Hash32{}
 )
 
 // Hash32 represents the 32-byte blake3 hash of arbitrary data.

@@ -388,6 +388,7 @@ func collectOwnAtxDeps(
 	nipostCh, _ := nipost.Challenge(localDB, nodeID)
 	if ref == types.EmptyATXID {
 		if nipostCh == nil {
+			logger.Debug("there is no own atx and none is being built")
 			return nil, nil, nil
 		}
 		if nipostCh.CommitmentATX != nil {
@@ -428,6 +429,7 @@ func collectOwnAtxDeps(
 		maps.Copy(deps, deps2)
 		maps.Copy(proofs, proofs2)
 	}
+	logger.With().Debug("collected atx deps", log.Any("deps", deps))
 	return deps, proofs, nil
 }
 

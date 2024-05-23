@@ -1,8 +1,11 @@
 package types_test
 
 import (
+	"bytes"
 	"testing"
 
+	fuzz "github.com/google/gofuzz"
+	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
@@ -101,5 +104,18 @@ func FuzzVotingEligibilityProofSafety(f *testing.F) {
 }
 
 func TestBallotEncoding(t *testing.T) {
-	types.CheckLayerFirstEncoding(t, func(object types.Ballot) types.LayerID { return object.Layer })
+	var ballot types.Ballot
+	f := fuzz.NewWithSeed(1001)
+	f.Fuzz(&ballot)
+	ballot.ActiveSet = nil
+
+	buf := bytes.NewBuffer(nil)
+	enc := scale.NewEncoder(buf)
+	_, err := ballot.EncodeScale(enc)
+	require.NoError(t, err)
+
+	var lid types.LayerID
+	_, err = lid.DecodeScale(scale.NewDecoder(buf))
+	require.NoError(t, err)
+	require.Equal(t, ballot.Layer, lid)
 }

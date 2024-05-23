@@ -82,14 +82,14 @@ type Value struct {
 	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
 	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
 	//
-	// If we expect 4.5 Mio ATXs that would be a total of 4.5 Mio + 50 * 4032 = 4 701 600 slots.
+	// If we expect 5.5 Mio ATXs that would be a total of 5.5 Mio + 50 * 4032 = 5 701 600 slots.
 	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 4 701 600 / 4032 = 1166.1 eligibilities in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(3 701 600 * 1/4032 * 4031/4032) = 34.1
+	// 5 701 600 / 4032 = 1414.1 eligibilities in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(3 701 600 * 1/4032 * 4031/4032) = 37.6
 	//
-	// This means that we can expect a maximum of 1166.1 + 6*34.1 = 1370.9 eligibilities in a layer with
+	// This means that we can expect a maximum of 1414.1 + 6*37.6 = 1639.7 eligibilities in a layer with
 	// > 99.9997% probability.
-	Proposals []types.ProposalID `scale:"max=1370"`
+	Proposals []types.ProposalID `scale:"max=1650"`
 	// Reference is set in messages for commit and notify rounds.
 	Reference *types.Hash32
 }

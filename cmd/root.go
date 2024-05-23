@@ -79,6 +79,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
 		cfg.DatabasePruneInterval, "configure interval for database pruning")
 
+	flagSet.BoolVar(&cfg.ScanMalfeasantATXs, "scan-malfeasant-atxs", cfg.ScanMalfeasantATXs,
+		"scan for malfeasant ATXs")
+
 	flagSet.BoolVar(&cfg.NoMainOverride, "no-main-override",
 		cfg.NoMainOverride, "force 'nomain' builds to run on the mainnet")
 

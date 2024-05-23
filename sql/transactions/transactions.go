@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 // Add transaction to the database or update the header if it wasn't set originally.
@@ -409,4 +410,37 @@ func TransactionInBlock(
 		return bid, rst, fmt.Errorf("%w no block after %s with tx %s", sql.ErrNotFound, after, id)
 	}
 	return bid, rst, nil
+}
+
+func IterateTransactionsOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(tx *types.MeshTransaction, result *types.TransactionResult) bool,
+) error {
+	var derr error
+	_, err := db.Exec(`select distinct tx, header, layer, block, timestamp, id, result 
+		from transactions
+		left join transactions_results_addresses on id=tid
+		where result is not null`+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			var txId types.TransactionID
+			stmt.ColumnBytes(5, txId[:])
+			var meshTx *types.MeshTransaction
+			meshTx, derr = decodeTransaction(txId, stmt)
+			if derr != nil {
+				return false
+			}
+			var txResult types.TransactionResult
+			_, derr = codec.DecodeFrom(stmt.ColumnReader(6), &txResult)
+			if derr != nil {
+				return false
+			}
+
+			return fn(meshTx, &txResult)
+		})
+	if err == nil {
+		return err
+	}
+	return derr
 }

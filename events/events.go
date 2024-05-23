@@ -298,6 +298,8 @@ func ToMalfeasancePB(nodeID types.NodeID, mp *wire.MalfeasanceProof, includeProo
 		kind = pb.MalfeasanceProof_MALFEASANCE_HARE
 	case wire.InvalidPostIndex:
 		kind = pb.MalfeasanceProof_MALFEASANCE_POST_INDEX
+	case wire.InvalidPrevATX:
+		kind = pb.MalfeasanceProof_MALFEASANCE_INCORRECT_PREV_ATX
 	}
 	result := &pb.MalfeasanceProof{
 		SmesherId: &pb.SmesherId{Id: nodeID.Bytes()},

@@ -53,14 +53,14 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 	h.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
 	h.mValidatorV2.EXPECT().VRFNonceV2(
-		atx.Smesher(),
+		atx.SmesherID,
 		atx.Initial.CommitmentATX,
 		types.VRFPostIndex(*atx.VRFNonce),
 		atx.NiPosts[0].Posts[0].NumUnits,
 	)
 	h.mValidatorV2.EXPECT().PostV2(
 		gomock.Any(),
-		atx.Smesher(),
+		atx.SmesherID,
 		atx.Initial.CommitmentATX,
 		&atx.Initial.Post,
 		shared.ZeroChallenge,
@@ -393,7 +393,6 @@ func newInitialATXv2(t testing.TB, id types.NodeID, golden types.ATXID) *wire.Ac
 				Challenge: types.RandomHash(),
 				Posts: []wire.SubPostV2{
 					{
-						ID:       id,
 						NumUnits: 4,
 					},
 				},
@@ -418,7 +417,6 @@ func newSoloATXv2(t testing.TB, publish types.EpochID, id types.NodeID, prev, po
 				Challenge: types.RandomHash(),
 				Posts: []wire.SubPostV2{
 					{
-						ID:       id,
 						NumUnits: 4,
 					},
 				},

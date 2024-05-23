@@ -49,9 +49,7 @@ func TestPostState_OnProof(t *testing.T) {
 	mPostClient := NewMockPostClient(ctrl)
 	nb, err := NewNIPostBuilder(
 		nil,
-		nil,
 		mPostService,
-		[]types.PoetServer{},
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		nil,

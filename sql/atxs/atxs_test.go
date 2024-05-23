@@ -981,3 +981,53 @@ func TestLatest(t *testing.T) {
 		})
 	}
 }
+
+func Test_PrevATXCollisions(t *testing.T) {
+	db := sql.InMemory()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	// create two ATXs with the same PrevATXID
+	prevATXID := types.RandomATXID()
+
+	atx1 := newAtx(t, sig, withPublishEpoch(1), withPrevATXID(prevATXID))
+	atx2 := newAtx(t, sig, withPublishEpoch(2), withPrevATXID(prevATXID))
+
+	require.NoError(t, atxs.Add(db, atx1))
+	require.NoError(t, atxs.Add(db, atx2))
+
+	// verify that the ATXs were added
+	got1, err := atxs.Get(db, atx1.ID())
+	require.NoError(t, err)
+	atx1.AtxBlob = types.AtxBlob{}
+	require.Equal(t, atx1, got1)
+
+	got2, err := atxs.Get(db, atx2.ID())
+	require.NoError(t, err)
+	atx2.AtxBlob = types.AtxBlob{}
+	require.Equal(t, atx2, got2)
+
+	// add 10 valid ATXs by 10 other smeshers
+	for i := 2; i < 6; i++ {
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx := newAtx(t, otherSig, withPublishEpoch(types.EpochID(i)))
+		require.NoError(t, atxs.Add(db, atx))
+
+		atx2 := newAtx(t, otherSig,
+			withPublishEpoch(types.EpochID(i+1)),
+			withPrevATXID(atx.ID()),
+		)
+		require.NoError(t, atxs.Add(db, atx2))
+	}
+
+	// get the collisions
+	got, err := atxs.PrevATXCollisions(db)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+
+	require.Equal(t, sig.NodeID(), got[0].NodeID1)
+	require.Equal(t, sig.NodeID(), got[0].NodeID2)
+	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, []types.ATXID{got[0].ATX1, got[0].ATX2})
+}

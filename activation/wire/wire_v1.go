@@ -84,10 +84,6 @@ func (atx *ActivationTxV1) SetID(id types.ATXID) {
 	atx.id = id
 }
 
-func (atx *ActivationTxV1) Smesher() types.NodeID {
-	return atx.SmesherID
-}
-
 func (atx *ActivationTxV1) Sign(signer *signing.EdSigner) {
 	if atx.PrevATXID == types.EmptyATXID {
 		nodeID := signer.NodeID()
