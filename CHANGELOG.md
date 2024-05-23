@@ -2,6 +2,14 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.5.6
+
+### Improvements
+
+* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of a broken Poet.
+
+  Previously, every identitiy waited for the full timeout time (~20 minutes) before giving up.
+
 ## Release v1.5.5
 
 ### Improvements
