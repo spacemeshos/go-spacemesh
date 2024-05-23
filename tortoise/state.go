@@ -6,10 +6,10 @@ import (
 	"sort"
 
 	"github.com/spacemeshos/fixed"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
 
@@ -416,7 +416,7 @@ type blockInfo struct {
 	data bool // set to true if block is available locally
 }
 
-func (b *blockInfo) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (b *blockInfo) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("block", b.id.String())
 	encoder.AddUint32("layer", b.layer.Uint32())
 	encoder.AddUint64("height", b.height)

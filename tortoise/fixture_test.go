@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
 
@@ -731,7 +731,7 @@ func (s *session) withDelay(val uint32) *session {
 
 func (s *session) tortoise() *Tortoise {
 	s.ensureConfig()
-	trt, err := New(atxsdata.New(), WithLogger(logtest.New(s.tb)), WithConfig(*s.config))
+	trt, err := New(atxsdata.New(), WithLogger(zaptest.NewLogger(s.tb)), WithConfig(*s.config))
 	require.NoError(s.tb, err)
 	return trt
 }

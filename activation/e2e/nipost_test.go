@@ -136,7 +136,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
+	cdb := datastore.NewCachedDB(db, logger)
 	localDb := localsql.InMemory()
 
 	syncer := activation.NewMocksyncer(ctrl)

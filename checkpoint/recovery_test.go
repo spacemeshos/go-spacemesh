@@ -236,7 +236,7 @@ func validateAndPreserveData(
 	mvalidator := activation.NewMocknipostValidator(ctrl)
 	mreceiver := activation.NewMockAtxReceiver(ctrl)
 	mtrtl := smocks.NewMockTortoise(ctrl)
-	cdb := datastore.NewCachedDB(db, lg)
+	cdb := datastore.NewCachedDB(db, lg.Zap())
 	atxHandler := activation.NewHandler(
 		"",
 		cdb,

@@ -57,7 +57,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 	store := atxsdata.New()
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg, datastore.WithConsensusCache(store)),
+		datastore.NewCachedDB(db, lg.Zap(), datastore.WithConsensusCache(store)),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -277,7 +277,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg.Zap()),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -498,7 +498,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg.Zap()),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -767,7 +767,7 @@ func TestHandler_CrossDomain(t *testing.T) {
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg.Zap()),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -831,7 +831,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg.Zap()),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -894,7 +894,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg.Zap()),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -956,7 +956,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg.Zap()),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -1021,7 +1021,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg.Zap()),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
@@ -1100,7 +1100,7 @@ func newTestMalfeasanceHandler(t testing.TB) *testMalfeasanceHandler {
 	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
+		datastore.NewCachedDB(db, lg.Zap()),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},

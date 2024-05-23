@@ -4,8 +4,9 @@ import (
 	"math/rand"
 	"testing"
 
+	"go.uber.org/zap/zaptest"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestBasicModel(t *testing.T) {
@@ -16,7 +17,7 @@ func TestBasicModel(t *testing.T) {
 	)
 
 	rng := rand.New(rand.NewSource(1001))
-	c := newCluster(logtest.New(t), rng)
+	c := newCluster(zaptest.NewLogger(t), rng)
 	for i := 0; i < numSmeshers; i++ {
 		c.addCore()
 	}

@@ -113,7 +113,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
-		datastore.NewCachedDB(sql.InMemory(), log.NewNop()),
+		datastore.NewCachedDB(sql.InMemory(), zap.NewNop()),
 		atxsdata.New(),
 		cl.GoldenATX(),
 		syncer,

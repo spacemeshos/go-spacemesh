@@ -110,11 +110,11 @@ func createP2PFetch(
 		t:            t,
 		clientDB:     clientDB,
 		clientPDB:    store.New(store.WithLogger(lg.Zap())),
-		clientCDB:    datastore.NewCachedDB(clientDB, lg),
+		clientCDB:    datastore.NewCachedDB(clientDB, lg.Zap()),
 		serverID:     serverHost.ID(),
 		serverDB:     serverDB,
 		serverPDB:    store.New(store.WithLogger(lg.Zap())),
-		serverCDB:    datastore.NewCachedDB(serverDB, lg),
+		serverCDB:    datastore.NewCachedDB(serverDB, lg.Zap()),
 		receivedData: make(map[blobKey][]byte),
 	}
 
