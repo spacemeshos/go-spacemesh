@@ -28,7 +28,7 @@ func TestPersistsCerts(t *testing.T) {
 	{
 		c := NewCertifier(db, zaptest.NewLogger(t), client)
 		client.EXPECT().
-			Certificate(gomock.Any(), id, certifierAddress, pubkey).
+			Certify(gomock.Any(), id, certifierAddress, pubkey).
 			Return(cert, nil)
 
 		_, err := certdb.Certificate(db, id, pubkey)
@@ -55,32 +55,58 @@ func TestPersistsCerts(t *testing.T) {
 }
 
 func TestAvoidsRedundantQueries(t *testing.T) {
-	client := NewMockcertifierClient(gomock.NewController(t))
-	id := types.RandomNodeID()
 	db := localsql.InMemory()
-	cert := &certdb.PoetCert{Data: []byte("cert"), Signature: []byte("sig")}
+	client := NewMockcertifierClient(gomock.NewController(t))
+	id1 := types.RandomNodeID()
+	id2 := types.RandomNodeID()
+	cert1 := &certdb.PoetCert{Data: []byte("1"), Signature: []byte("sig")}
+	cert2 := &certdb.PoetCert{Data: []byte("2"), Signature: []byte("sig")}
+	cert3 := &certdb.PoetCert{Data: []byte("3"), Signature: []byte("sig")}
 	certifierAddress := &url.URL{Scheme: "http", Host: "certifier.org"}
 	pubkey := []byte("pubkey")
+	pubkey2 := []byte("pubkey2")
 
 	c := NewCertifier(db, zaptest.NewLogger(t), client)
-	client.EXPECT().
-		Certificate(gomock.Any(), id, certifierAddress, pubkey).
-		Return(cert, nil)
+	// The key is (id, pubkey) so we should only have one request in flight at a time
+	// for a given pair.
+	client.EXPECT().Certify(gomock.Any(), id1, certifierAddress, pubkey).Return(cert1, nil)
+	client.EXPECT().Certify(gomock.Any(), id2, certifierAddress, pubkey).Return(cert2, nil)
+	client.EXPECT().Certify(gomock.Any(), id1, certifierAddress, pubkey2).Return(cert3, nil)
 
 	var eg errgroup.Group
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		eg.Go(func() error {
-			got, err := c.Certificate(context.Background(), id, certifierAddress, pubkey)
+			got, err := c.Certificate(context.Background(), id1, certifierAddress, pubkey)
 			require.NoError(t, err)
-			require.Equal(t, cert, got)
+			require.Equal(t, cert1, got)
+			return nil
+		})
+		eg.Go(func() error {
+			got, err := c.Certificate(context.Background(), id2, certifierAddress, pubkey)
+			require.NoError(t, err)
+			require.Equal(t, cert2, got)
+			return nil
+		})
+		eg.Go(func() error {
+			got, err := c.Certificate(context.Background(), id1, certifierAddress, pubkey2)
+			require.NoError(t, err)
+			require.Equal(t, cert3, got)
 			return nil
 		})
 	}
 	eg.Wait()
 
-	got, err := certdb.Certificate(db, id, pubkey)
+	got, err := certdb.Certificate(db, id1, pubkey)
 	require.NoError(t, err)
-	require.Equal(t, cert, got)
+	require.Equal(t, cert1, got)
+	// different id - different cert
+	got, err = certdb.Certificate(db, id2, pubkey)
+	require.NoError(t, err)
+	require.Equal(t, cert2, got)
+	// different pubkey - different cert
+	got, err = certdb.Certificate(db, id1, pubkey2)
+	require.NoError(t, err)
+	require.Equal(t, cert3, got)
 }
 
 func TestObtainingPost(t *testing.T) {

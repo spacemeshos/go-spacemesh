@@ -91,7 +91,7 @@ func TestCertification(t *testing.T) {
 
 		client := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		_, err := client.
-			Certificate(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.NoError(t, err)
 	})
 	t.Run("certify rejects invalid cert (expired)", func(t *testing.T) {
@@ -106,7 +106,7 @@ func TestCertification(t *testing.T) {
 
 		client := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		cert, err := client.
-			Certificate(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)
 	})
@@ -118,7 +118,7 @@ func TestCertification(t *testing.T) {
 
 		client := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		cert, err := client.
-			Certificate(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)
 	})

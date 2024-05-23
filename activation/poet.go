@@ -358,8 +358,8 @@ func NewPoetClient(
 	return poetClient, nil
 }
 
-func (c *poetClient) Address() *url.URL {
-	return c.client.Address()
+func (c *poetClient) Address() string {
+	return c.client.Address().String()
 }
 
 func (c *poetClient) authorize(
@@ -418,7 +418,7 @@ func (c *poetClient) Submit(
 ) (*types.PoetRound, error) {
 	logger := c.logger.With(
 		log.ZContext(ctx),
-		zap.String("poet", c.Address().String()),
+		zap.String("poet", c.Address()),
 		log.ZShortStringer("smesherID", nodeID),
 	)
 

@@ -9,12 +9,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/spacemeshos/poet/shared"
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -83,8 +83,7 @@ type Certifier struct {
 	db     *localsql.Database
 	client certifierClient
 
-	certificationsLock sync.Mutex
-	certifications     map[string]chan struct{}
+	certifications singleflight.Group
 }
 
 func NewCertifier(
@@ -93,10 +92,9 @@ func NewCertifier(
 	client certifierClient,
 ) *Certifier {
 	c := &Certifier{
-		client:         client,
-		logger:         logger,
-		db:             db,
-		certifications: make(map[string]chan struct{}),
+		client: client,
+		logger: logger,
+		db:     db,
 	}
 
 	return c
@@ -111,30 +109,21 @@ func (c *Certifier) Certificate(
 	// We index certs in DB by node ID and pubkey. To avoid redundant queries, we allow only 1
 	// request per (nodeID, pubkey) pair to be in flight at a time.
 	key := string(append(id.Bytes(), pubkey...))
-	c.certificationsLock.Lock()
-	if ch, ok := c.certifications[key]; ok {
-		c.certificationsLock.Unlock()
-		<-ch
-	} else {
-		ch := make(chan struct{})
-		c.certifications[key] = ch
-		c.certificationsLock.Unlock()
-		defer func() {
-			c.certificationsLock.Lock()
-			close(ch)
-			delete(c.certifications, key)
-			c.certificationsLock.Unlock()
-		}()
-	}
+	cert, err, _ := c.certifications.Do(key, func() (any, error) {
+		cert, err := certifierdb.Certificate(c.db, id, pubkey)
+		switch {
+		case err == nil:
+			return cert, nil
+		case !errors.Is(err, sql.ErrNotFound):
+			return nil, fmt.Errorf("getting certificate from DB for: %w", err)
+		}
+		return c.Recertify(ctx, id, certifier, pubkey)
+	})
 
-	cert, err := certifierdb.Certificate(c.db, id, pubkey)
-	switch {
-	case err == nil:
-		return cert, nil
-	case !errors.Is(err, sql.ErrNotFound):
-		return nil, fmt.Errorf("getting certificate from DB for: %w", err)
+	if err != nil {
+		return nil, err
 	}
-	return c.Recertify(ctx, id, certifier, pubkey)
+	return cert.(*certifierdb.PoetCert), nil
 }
 
 func (c *Certifier) Recertify(
@@ -143,7 +132,7 @@ func (c *Certifier) Recertify(
 	certifier *url.URL,
 	pubkey []byte,
 ) (*certifierdb.PoetCert, error) {
-	cert, err := c.client.Certificate(ctx, id, certifier, pubkey)
+	cert, err := c.client.Certify(ctx, id, certifier, pubkey)
 	if err != nil {
 		return nil, fmt.Errorf("certifying POST at %v: %w", certifier, err)
 	}
@@ -257,7 +246,7 @@ func (c *CertifierClient) obtainPost(ctx context.Context, id types.NodeID) (*nip
 	return nil, errors.New("PoST not found")
 }
 
-func (c *CertifierClient) Certificate(
+func (c *CertifierClient) Certify(
 	ctx context.Context,
 	id types.NodeID,
 	url *url.URL,

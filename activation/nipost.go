@@ -60,7 +60,7 @@ func WithPoetClients(clients ...PoetClient) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
 		nb.poetProvers = make(map[string]PoetClient, len(clients))
 		for _, client := range clients {
-			nb.poetProvers[client.Address().String()] = client
+			nb.poetProvers[client.Address()] = client
 		}
 	}
 }
@@ -337,7 +337,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 ) error {
 	logger := nb.log.With(
 		log.ZContext(ctx),
-		zap.String("poet", client.Address().String()),
+		zap.String("poet", client.Address()),
 		log.ZShortStringer("smesherID", nodeID),
 	)
 
@@ -353,7 +353,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
 	return nipost.AddPoetRegistration(nb.localDB, nodeID, nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
-		Address:       client.Address().String(),
+		Address:       client.Address(),
 		RoundID:       round.ID,
 		RoundEnd:      round.End,
 	})
@@ -401,7 +401,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 
 func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) PoetClient {
 	for _, client := range nb.poetProvers {
-		if address == client.Address().String() {
+		if address == client.Address() {
 			return client
 		}
 	}

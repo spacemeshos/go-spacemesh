@@ -97,7 +97,7 @@ func Test_HTTPPoetClient_Address(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	require.Equal(t, ts.URL, client.Address().String())
+	require.Equal(t, ts.URL, client.Address())
 }
 
 func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
@@ -117,7 +117,7 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 				CycleGap:   poetCfg.CycleGap,
 			})
 			require.NoError(t, err)
-			require.Equal(t, url, client.Address().String())
+			require.Equal(t, url, client.Address())
 		})
 	}
 }

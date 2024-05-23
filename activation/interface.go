@@ -122,7 +122,7 @@ type SmeshingProvider interface {
 // PoetClient servers as an interface to communicate with a PoET server.
 // It is used to submit challenges and fetch proofs.
 type PoetClient interface {
-	Address() *url.URL
+	Address() string
 
 	// Submit registers a challenge in the proving service current open round.
 	Submit(
@@ -143,9 +143,8 @@ type PoetClient interface {
 // The implementation can use any method to obtain the certificate,
 // for example, POST verification.
 type certifierClient interface {
-	// Acquire a certificate for the ID in the given certifier.
-	// The certificate confirms that the ID is verified and it can be later used to submit in poet.
-	Certificate(
+	// Certify obtains a certificate in a remote certifier service.
+	Certify(
 		ctx context.Context,
 		id types.NodeID,
 		certifierAddress *url.URL,
@@ -156,7 +155,14 @@ type certifierClient interface {
 // certifierService is used to certify nodeID for registering in the poet.
 // It holds the certificates and can recertify if needed.
 type certifierService interface {
-	certifierClient
+	// Acquire a certificate for the ID in the given certifier.
+	// The certificate confirms that the ID is verified and it can be later used to submit in poet.
+	Certificate(
+		ctx context.Context,
+		id types.NodeID,
+		certifierAddress *url.URL,
+		pubkey []byte,
+	) (*certifier.PoetCert, error)
 
 	Recertify(
 		ctx context.Context,

@@ -32,9 +32,7 @@ func defaultPoetServiceMock(t *testing.T, ctrl *gomock.Controller, address strin
 		Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes().
 		Return(&types.PoetRound{}, nil)
-	url, err := url.Parse(address)
-	require.NoError(t, err)
-	poetClient.EXPECT().Address().AnyTimes().Return(url).AnyTimes()
+	poetClient.EXPECT().Address().AnyTimes().Return(address).AnyTimes()
 	return poetClient
 }
 
@@ -558,7 +556,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 				<-ctx.Done()
 				return nil, ctx.Err()
 			})
-		poet.EXPECT().Address().AnyTimes().Return(&url.URL{Scheme: "http", Host: "localhost:9999"})
+		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		poets = append(poets, poet)
 	}
 	{
@@ -569,7 +567,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		poet.EXPECT().
 			Proof(gomock.Any(), gomock.Any()).
 			Return(proof, []types.Hash32{challenge}, nil)
-		poet.EXPECT().Address().AnyTimes().Return(&url.URL{Scheme: "http", Host: "localhost:9998"})
+		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9998")
 		poets = append(poets, poet)
 	}
 
@@ -797,7 +795,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mclock := NewMocklayerClock(ctrl)
 		poetProver := NewMockPoetClient(ctrl)
-		poetProver.EXPECT().Address().Return(&url.URL{Scheme: "http", Host: "localhost:9999"})
+		poetProver.EXPECT().Address().Return("http://localhost:9999")
 		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 			func(got types.LayerID) time.Time {
 				return genesis.Add(layerDuration * time.Duration(got))
@@ -824,7 +822,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mclock := NewMocklayerClock(ctrl)
 		poetProver := NewMockPoetClient(ctrl)
-		poetProver.EXPECT().Address().Return(&url.URL{Scheme: "http", Host: "localhost:9999"})
+		poetProver.EXPECT().Address().Return("http://localhost:9999")
 		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 			func(got types.LayerID) time.Time {
 				return genesis.Add(layerDuration * time.Duration(got))
@@ -865,7 +863,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mclock := NewMocklayerClock(ctrl)
 		poetProver := NewMockPoetClient(ctrl)
-		poetProver.EXPECT().Address().Return(&url.URL{Scheme: "http", Host: "localhost:9999"})
+		poetProver.EXPECT().Address().Return("http://localhost:9999")
 		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 			func(got types.LayerID) time.Time {
 				return genesis.Add(layerDuration * time.Duration(got))
@@ -1027,8 +1025,8 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 
 	tt := []struct {
 		name  string
-		from  *url.URL
-		to    *url.URL
+		from  string
+		to    string
 		epoch types.EpochID
 	}{
 		// no mitigation needed at the moment
