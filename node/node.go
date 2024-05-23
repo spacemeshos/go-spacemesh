@@ -1494,6 +1494,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewLayerStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.Transaction:
+		service := v2alpha1.NewTransactionService(app.db, app.conState, app.syncer, app.txHandler, app.host)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.TransactionStream:
+		service := v2alpha1.NewTransactionStreamService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
