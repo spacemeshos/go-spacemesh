@@ -2276,7 +2276,7 @@ func TestEventsReceived(t *testing.T) {
 
 	lg := logtest.New(t)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(lg))
-	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(lg.WithName("conState")))
+	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(lg.Zap().Named("conState")))
 	conState.AddToCache(context.Background(), globalTx, time.Now())
 
 	weight := new(big.Rat).SetFloat64(18.7)

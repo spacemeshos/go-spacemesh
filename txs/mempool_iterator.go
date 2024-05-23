@@ -3,8 +3,9 @@ package txs
 import (
 	"container/heap"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -72,14 +73,14 @@ func (pq *priorityQueue) update(it *item, ntx *NanoTX) {
 // mempoolIterator holds the best transaction from the conservative state mempool.
 // not thread-safe.
 type mempoolIterator struct {
-	logger       log.Log
+	logger       *zap.Logger
 	gasRemaining uint64
 	pq           priorityQueue
 	txs          map[types.Address][]*NanoTX
 }
 
 // newMempoolIterator builds and returns a mempoolIterator.
-func newMempoolIterator(logger log.Log, cs conStateCache, gasLimit uint64) *mempoolIterator {
+func newMempoolIterator(logger *zap.Logger, cs conStateCache, gasLimit uint64) *mempoolIterator {
 	txs := cs.GetMempool(logger)
 	mi := &mempoolIterator{
 		logger:       logger,
@@ -87,7 +88,7 @@ func newMempoolIterator(logger log.Log, cs conStateCache, gasLimit uint64) *memp
 		pq:           make(priorityQueue, 0, len(txs)),
 		txs:          txs,
 	}
-	logger.With().Info("received mempool txs", log.Int("num_accounts", len(txs)))
+	logger.Info("received mempool txs", zap.Int("num_accounts", len(txs)))
 	mi.buildPQ()
 	return mi
 }
@@ -102,12 +103,12 @@ func (mi *mempoolIterator) buildPQ() {
 		}
 		i++
 		mi.pq = append(mi.pq, it)
-		mi.logger.With().Debug("adding item to pq",
-			ntx.ID,
-			ntx.Principal,
-			log.Uint64("fee", ntx.Fee()),
-			log.Uint64("gas", ntx.MaxGas),
-			log.Time("received", ntx.Received))
+		mi.logger.Debug("adding item to pq",
+			zap.Stringer("tx_id", ntx.ID),
+			zap.Stringer("address", ntx.Principal),
+			zap.Uint64("fee", ntx.Fee()),
+			zap.Uint64("gas", ntx.MaxGas),
+			zap.Time("received", ntx.Received))
 
 		if len(ntxs) == 1 {
 			delete(mi.txs, addr)
@@ -143,13 +144,14 @@ func (mi *mempoolIterator) pop() *NanoTX {
 		if top.MaxGas <= mi.gasRemaining {
 			break
 		}
-		mi.logger.With().Debug("tx max gas too high, removing addr from mempool",
-			top.ID,
-			top.Principal,
-			log.Uint64("fee", top.Fee()),
-			log.Uint64("gas", top.MaxGas),
-			log.Uint64("gas_left", mi.gasRemaining),
-			log.Time("received", top.Received))
+		mi.logger.Debug("tx max gas too high, removing addr from mempool",
+			zap.Stringer("tx_id", top.ID),
+			zap.Stringer("address", top.Principal),
+			zap.Uint64("fee", top.Fee()),
+			zap.Uint64("gas", top.MaxGas),
+			zap.Uint64("gas_left", mi.gasRemaining),
+			zap.Time("received", top.Received),
+		)
 		_ = heap.Pop(&mi.pq)
 		// remove all txs for this principal since we cannot fulfill the lowest nonce for this principal
 		delete(mi.txs, top.Principal)
@@ -162,24 +164,24 @@ func (mi *mempoolIterator) pop() *NanoTX {
 
 	ntx := top.NanoTX
 	mi.gasRemaining -= ntx.MaxGas
-	mi.logger.With().Debug("popping tx",
-		ntx.ID,
-		ntx.Principal,
-		log.Uint64("fee", ntx.Fee()),
-		log.Uint64("gas_used", ntx.MaxGas),
-		log.Uint64("gas_left", mi.gasRemaining),
-		log.Time("received", ntx.Received))
+	mi.logger.Debug("popping tx",
+		zap.Stringer("tx_id", ntx.ID),
+		zap.Stringer("address", ntx.Principal),
+		zap.Uint64("fee", ntx.Fee()),
+		zap.Uint64("gas_used", ntx.MaxGas),
+		zap.Uint64("gas_left", mi.gasRemaining),
+		zap.Time("received", ntx.Received))
 	next := mi.getNext(ntx.Principal)
 	if next == nil {
-		mi.logger.With().Debug("addr txs exhausted", ntx.Principal)
+		mi.logger.Debug("addr txs exhausted", zap.Stringer("address", ntx.Principal))
 		_ = heap.Pop(&mi.pq)
 	} else {
-		mi.logger.With().Debug("added tx for addr",
-			next.ID,
-			next.Principal,
-			log.Uint64("fee", next.Fee()),
-			log.Uint64("gas", next.MaxGas),
-			log.Time("received", next.Received))
+		mi.logger.Debug("added tx for addr",
+			zap.Stringer("tx_id", next.ID),
+			zap.Stringer("address", next.Principal),
+			zap.Uint64("fee", next.Fee()),
+			zap.Uint64("gas", next.MaxGas),
+			zap.Time("received", next.Received))
 		// updating the item (for the same address) in the heap is less expensive than a pop followed by a push.
 		mi.pq.update(top, next)
 	}

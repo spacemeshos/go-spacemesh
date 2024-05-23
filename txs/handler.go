@@ -8,6 +8,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -26,12 +27,12 @@ var (
 // TxHandler handles the transactions received via gossip or sync.
 type TxHandler struct {
 	self   peer.ID
-	logger log.Log
+	logger *zap.Logger
 	state  conservativeState
 }
 
 // NewTxHandler returns a new TxHandler.
-func NewTxHandler(s conservativeState, id peer.ID, l log.Log) *TxHandler {
+func NewTxHandler(s conservativeState, id peer.ID, l *zap.Logger) *TxHandler {
 	return &TxHandler{
 		self:   id,
 		logger: l,
@@ -66,7 +67,7 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer,
 	updateMetrics(err, gossipTxCount)
 	if err != nil {
 		if !errors.Is(err, errDuplicateTX) {
-			th.logger.WithContext(ctx).With().Warning("failed to handle tx", log.Err(err))
+			th.logger.With(log.ZContext(ctx)).Warn("failed to handle tx", zap.Error(err))
 		}
 		return err
 	}
@@ -121,9 +122,9 @@ func (th *TxHandler) verifyAndCache(ctx context.Context, expHash types.Hash32, m
 		return fmt.Errorf("%w: %s", errVerify, raw.ID)
 	}
 	if err := th.state.AddToCache(ctx, tx, time.Now()); err != nil {
-		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
-			raw.ID,
-			log.Err(err),
+		th.logger.With(log.ZContext(ctx)).Warn("failed to add tx to conservative cache",
+			zap.Stringer("tx_id", raw.ID),
+			zap.Error(err),
 		)
 		return err
 	}
