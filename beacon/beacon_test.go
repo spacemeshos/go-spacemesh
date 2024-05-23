@@ -91,7 +91,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher, miners int, id
 
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 
-	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
+	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg.Zap())
 	tpd.ProtocolDriver = New(p, signing.NewEdVerifier(), tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -490,14 +490,15 @@ func TestBeaconWithMetrics(t *testing.T) {
 
 func TestBeacon_NoRaceOnClose(t *testing.T) {
 	mclock := NewMocklayerClock(gomock.NewController(t))
+	lg := logtest.New(t)
 	pd := &ProtocolDriver{
-		logger:           logtest.New(t).WithName("Beacon"),
+		logger:           lg.WithName("Beacon"),
 		beacons:          make(map[types.EpochID]types.Beacon),
-		cdb:              datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		cdb:              datastore.NewCachedDB(sql.InMemory(), lg.Zap()),
 		clock:            mclock,
 		closed:           make(chan struct{}),
 		results:          make(chan result.Beacon, 100),
-		metricsCollector: metrics.NewBeaconMetricsCollector(nil, logtest.New(t).WithName("metrics")),
+		metricsCollector: metrics.NewBeaconMetricsCollector(nil, lg.WithName("metrics")),
 	}
 	// check for a race between onResult and Close
 	var eg errgroup.Group
@@ -523,11 +524,12 @@ func TestBeacon_NoRaceOnClose(t *testing.T) {
 func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	t.Parallel()
 
+	lg := logtest.New(t)
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
-		logger:  logtest.New(t).WithName("Beacon"),
+		logger:  lg.WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		cdb:     datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		cdb:     datastore.NewCachedDB(sql.InMemory(), lg.Zap()),
 		clock:   mclock,
 	}
 	epoch3 := types.EpochID(3)
@@ -575,11 +577,12 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	t.Parallel()
 
+	lg := logtest.New(t)
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
-		logger:  logtest.New(t).WithName("Beacon"),
+		logger:  lg.WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		cdb:     datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		cdb:     datastore.NewCachedDB(sql.InMemory(), lg.Zap()),
 		clock:   mclock,
 	}
 	epoch := types.EpochID(3)
@@ -593,10 +596,11 @@ func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	t.Parallel()
 
+	lg := logtest.New(t)
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
-		logger:         logtest.New(t).WithName("Beacon"),
-		cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		logger:         lg.WithName("Beacon"),
+		cdb:            datastore.NewCachedDB(sql.InMemory(), lg.Zap()),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		clock:          mclock,
@@ -696,11 +700,12 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 				require.Greater(t, maxWeight.Float(), 0.0)
 			}
 
+			lg := logtest.New(t)
 			mclock := NewMocklayerClock(gomock.NewController(t))
 			pd := &ProtocolDriver{
-				logger:         logtest.New(t).WithName("Beacon"),
+				logger:         lg.WithName("Beacon"),
 				config:         UnitTestConfig(),
-				cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+				cdb:            datastore.NewCachedDB(sql.InMemory(), lg.Zap()),
 				beacons:        make(map[types.EpochID]types.Beacon),
 				ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 				clock:          mclock,
@@ -731,11 +736,12 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	t.Parallel()
 
+	lg := logtest.New(t)
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
-		logger:         logtest.New(t).WithName("Beacon"),
+		logger:         lg.WithName("Beacon"),
 		config:         UnitTestConfig(),
-		cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		cdb:            datastore.NewCachedDB(sql.InMemory(), lg.Zap()),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		clock:          mclock,

@@ -10,13 +10,13 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -28,7 +28,7 @@ type v2TestHandler struct {
 }
 
 func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
-	lg := logtest.New(tb)
+	lg := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	mocks := newTestHandlerMocks(tb, golden)
 	return &v2TestHandler{
@@ -41,7 +41,7 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 			tickSize:        1,
 			goldenATXID:     golden,
 			nipostValidator: mocks.mValidatorV2,
-			log:             lg.Zap(),
+			log:             lg,
 			fetcher:         mocks.mockFetch,
 			beacon:          mocks.mbeacon,
 			tortoise:        mocks.mtortoise,

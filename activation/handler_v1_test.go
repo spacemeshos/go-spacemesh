@@ -33,7 +33,7 @@ type v1TestHandler struct {
 
 func newV1TestHandler(tb testing.TB, goldenATXID types.ATXID) *v1TestHandler {
 	lg := logtest.New(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg.Zap())
 	mocks := newTestHandlerMocks(tb, goldenATXID)
 	return &v1TestHandler{
 		HandlerV1: &HandlerV1{

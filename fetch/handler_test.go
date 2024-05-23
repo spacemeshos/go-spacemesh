@@ -35,7 +35,7 @@ type testHandler struct {
 func createTestHandler(t testing.TB, opts ...sql.Opt) *testHandler {
 	lg := logtest.New(t)
 	db := sql.InMemory(opts...)
-	cdb := datastore.NewCachedDB(db, lg)
+	cdb := datastore.NewCachedDB(db, lg.Zap())
 	return &testHandler{
 		handler: newHandler(cdb, datastore.NewBlobStore(cdb, store.New()), lg),
 		db:      db,

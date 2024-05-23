@@ -5,21 +5,22 @@ import (
 	"reflect"
 	"strconv"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type model interface {
 	OnMessage(Messenger, Message)
 }
 
-func newCluster(logger log.Log, rng *rand.Rand) *cluster {
+func newCluster(logger *zap.Logger, rng *rand.Rand) *cluster {
 	return &cluster{logger: logger, rng: rng}
 }
 
 type cluster struct {
 	rng    *rand.Rand
-	logger log.Log
+	logger *zap.Logger
 	models []model
 }
 

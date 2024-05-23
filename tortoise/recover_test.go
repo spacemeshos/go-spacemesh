@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -43,10 +43,11 @@ func TestRecoverState(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
+	lg := zaptest.NewLogger(t)
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	simState := s.GetState(0)
-	tortoise := tortoiseFromSimState(t, simState, WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(t, simState, WithLogger(lg), WithConfig(cfg))
 	var last, verified types.LayerID
 	for i := 0; i < 50; i++ {
 		last = s.Next()
@@ -60,13 +61,13 @@ func TestRecoverState(t *testing.T) {
 		s.GetState(0).DB.Executor,
 		simState.Atxdata,
 		last,
-		WithLogger(logtest.New(t)),
+		WithLogger(lg),
 		WithConfig(cfg),
 	)
 	require.NoError(t, err)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
-	tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoiseFromSimState(t, s.GetState(0), WithLogger(lg), WithConfig(cfg))
 	tortoise2.TallyVotes(ctx, last)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
@@ -84,7 +85,7 @@ func TestRecoverEmpty(t *testing.T) {
 		s.GetState(0).DB.Executor,
 		atxsdata.New(),
 		100,
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 		WithConfig(cfg),
 	)
 	require.NoError(t, err)
@@ -96,10 +97,11 @@ func TestRecoverWithOpinion(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
+	lg := zaptest.NewLogger(t)
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 
-	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(lg))
 	for _, lid := range sim.GenLayers(s, sim.WithSequence(10)) {
 		trt.TallyVotes(context.Background(), lid)
 	}
@@ -120,7 +122,7 @@ func TestRecoverWithOpinion(t *testing.T) {
 		s.GetState(0).DB.Executor,
 		atxsdata.New(),
 		last.Layer,
-		WithLogger(logtest.New(t)),
+		WithLogger(lg),
 		WithConfig(cfg),
 	)
 	require.NoError(t, err)
@@ -135,10 +137,11 @@ func TestResetPending(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
+	lg := zaptest.NewLogger(t)
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 
-	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(lg))
 	const n = 10
 	var last types.LayerID
 	for _, lid := range sim.GenLayers(s, sim.WithSequence(n)) {
@@ -163,7 +166,7 @@ func TestResetPending(t *testing.T) {
 		s.GetState(0).DB.Executor,
 		atxsdata.New(),
 		last,
-		WithLogger(logtest.New(t)),
+		WithLogger(lg),
 		WithConfig(cfg),
 	)
 	require.NoError(t, err)
@@ -178,6 +181,7 @@ func TestWindowRecovery(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
+	lg := zaptest.NewLogger(t)
 	const epochSize = 4
 	require.EqualValues(t, epochSize, types.GetLayersPerEpoch())
 	cfg := defaultTestConfig()
@@ -185,7 +189,7 @@ func TestWindowRecovery(t *testing.T) {
 	cfg.WindowSize = epochSize*2 + epochSize/2 // to test that window extends to full 3rd epoch
 
 	const n = epochSize * 5
-	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(lg))
 	var last types.LayerID
 	for _, lid := range sim.GenLayers(s, sim.WithSequence(n)) {
 		last = lid
@@ -209,7 +213,7 @@ func TestWindowRecovery(t *testing.T) {
 		s.GetState(0).DB.Executor,
 		atxsdata.New(),
 		last,
-		WithLogger(logtest.New(t)),
+		WithLogger(lg),
 		WithConfig(cfg),
 	)
 	require.NoError(t, err)
@@ -236,7 +240,7 @@ func TestRecoverOnlyAtxs(t *testing.T) {
 	}
 	future := last + 1000
 	recovered, err := Recover(context.Background(), s.GetState(0).DB.Executor, s.GetState(0).Atxdata, future,
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 		WithConfig(cfg),
 	)
 	require.NoError(t, err)

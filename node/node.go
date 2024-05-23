@@ -696,7 +696,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	}
 	trtlopts := []tortoise.Opt{
-		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
+		tortoise.WithLogger(app.addLogger(TrtlLogger, lg).Zap()),
 		tortoise.WithConfig(trtlCfg),
 	}
 	if trtlCfg.EnableTracer {
@@ -1931,7 +1931,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	app.atxsdata = data
 	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
-	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg).Zap(),
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)

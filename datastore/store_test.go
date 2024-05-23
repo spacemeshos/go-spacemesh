@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -15,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -55,7 +55,7 @@ func getBytes(
 
 func TestMalfeasanceProof_Honest(t *testing.T) {
 	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, logtest.New(t))
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
 	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
 	nodeID1 := types.NodeID{1}
@@ -116,7 +116,7 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 
 func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, logtest.New(t))
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
 	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
 	// a bad guy
@@ -412,7 +412,7 @@ func Test_MarkingMalicious(t *testing.T) {
 	db := sql.InMemory()
 	store := atxsdata.New()
 	id := types.RandomNodeID()
-	cdb := datastore.NewCachedDB(db, logtest.New(t), datastore.WithConsensusCache(store))
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t), datastore.WithConsensusCache(store))
 
 	cdb.CacheMalfeasanceProof(id, &mwire.MalfeasanceProof{})
 	m, err := cdb.IsMalicious(id)

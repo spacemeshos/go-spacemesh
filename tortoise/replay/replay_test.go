@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -34,9 +34,7 @@ func TestReplayMainnet(t *testing.T) {
 	cfg := config.MainnetConfig()
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	log.JSONLog(true)
-	logger := log.NewWithLevel("replay", zap.NewAtomicLevelAt(*level))
-	zlog := logger.Zap()
+	logger := zaptest.NewLogger(t, zaptest.Level(*level)).Named("replay")
 	opts := []tortoise.Opt{
 		tortoise.WithLogger(logger),
 		tortoise.WithConfig(cfg.Tortoise),
@@ -48,7 +46,7 @@ func TestReplayMainnet(t *testing.T) {
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(genesis),
-		timesync.WithLogger(log.NewNop().Zap()),
+		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)
 
@@ -69,10 +67,10 @@ func TestReplayMainnet(t *testing.T) {
 	)
 	require.NoError(t, err)
 	updates := trtl.Updates()
-	zlog.Info(
+	logger.Info(
 		"initialized",
 		zap.Duration("duration", time.Since(start)),
-		zap.Array("updates", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		zap.Array("updates", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 			for _, rst := range updates {
 				encoder.AppendObject(&rst)
 			}

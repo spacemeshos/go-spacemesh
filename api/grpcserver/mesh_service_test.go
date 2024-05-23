@@ -10,6 +10,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -144,7 +144,7 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, logtest.New(t)),
+		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -197,7 +197,7 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, logtest.New(t)),
+		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -303,7 +303,7 @@ func TestReadLayer(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, logtest.New(t)),
+		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		&MeshAPIMockInstrumented{},
 		conStateAPI,
 		genTime,
@@ -325,7 +325,7 @@ func TestReadLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	srv = NewMeshService(
-		datastore.NewCachedDB(db, logtest.New(t)),
+		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -340,7 +340,7 @@ func TestReadLayer(t *testing.T) {
 
 	// now instrument conStateAPI to return errors
 	srv = NewMeshService(
-		datastore.NewCachedDB(db, logtest.New(t)),
+		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		meshAPIMock,
 		&ConStateAPIMockInstrumented{*conStateAPI},
 		genTime,
