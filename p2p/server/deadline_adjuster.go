@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -50,6 +51,8 @@ type deadlineAdjuster struct {
 	nextAdjustRead  int
 	nextAdjustWrite int
 	hardDeadline    time.Time
+	closeErr        error
+	close           sync.Once
 }
 
 var _ io.ReadWriteCloser = &deadlineAdjuster{}
@@ -82,10 +85,14 @@ func (dadj *deadlineAdjuster) augmentError(what string, err error) error {
 	}
 }
 
+// Close closes the stream. This method is safe to call multiple times.
 func (dadj *deadlineAdjuster) Close() error {
-	// FIXME: unsure if this is really needed (inherited from the older Server code)
-	_ = dadj.peerStream.SetDeadline(time.Time{})
-	return dadj.peerStream.Close()
+	dadj.close.Do(func() {
+		// FIXME: unsure if this is really needed (inherited from the older Server code)
+		_ = dadj.peerStream.SetDeadline(time.Time{})
+		dadj.closeErr = dadj.peerStream.Close()
+	})
+	return dadj.closeErr
 }
 
 func (dadj *deadlineAdjuster) adjust() error {
