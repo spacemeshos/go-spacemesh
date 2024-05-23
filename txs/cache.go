@@ -158,6 +158,7 @@ func (ac *accountCache) accept(logger *zap.Logger, ntx *NanoTX, blockSeed []byte
 
 	if replaced != nil {
 		logger.Debug("better transaction replaced for nonce",
+			zap.Stringer("address", ac.addr),
 			zap.Stringer("better", ntx.ID),
 			zap.Stringer("replaced", replaced.ID),
 			zap.Uint64("nonce", ntx.Nonce),
@@ -167,6 +168,7 @@ func (ac *accountCache) accept(logger *zap.Logger, ntx *NanoTX, blockSeed []byte
 		)
 	} else {
 		logger.Debug("new nonce added",
+			zap.Stringer("address", ac.addr),
 			zap.Stringer("tx_id", ntx.ID),
 			zap.Uint64("nonce", ntx.Nonce),
 			zap.Uint64("max_spending", ntx.MaxSpending()),
@@ -185,6 +187,7 @@ func (ac *accountCache) accept(logger *zap.Logger, ntx *NanoTX, blockSeed []byte
 			nextCand.postBalance = newBalance
 			next = next.Next()
 			logger.Debug("updated next balance",
+				zap.Stringer("address", ac.addr),
 				zap.Uint64("nonce", nextCand.nonce()),
 				zap.Uint64("post_balance", nextCand.postBalance),
 				zap.Uint64("avail_balance", ac.availBalance()),
@@ -197,6 +200,7 @@ func (ac *accountCache) accept(logger *zap.Logger, ntx *NanoTX, blockSeed []byte
 		removed := ac.txsByNonce.Remove(rm).(*candidate)
 		delete(ac.cachedTXs, removed.id())
 		logger.Debug("tx made infeasible by new/better transaction",
+			zap.Stringer("address", ac.addr),
 			zap.Stringer("tx_id", removed.id()),
 			zap.Uint64("nonce", removed.nonce()),
 			zap.Uint64("max_spending", ntx.MaxSpending()),
@@ -206,7 +210,10 @@ func (ac *accountCache) accept(logger *zap.Logger, ntx *NanoTX, blockSeed []byte
 }
 
 func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*NanoTX, blockSeed []byte) error {
-	logger.Debug("account has pending txs", zap.Int("num_pending", len(nonce2TXs)))
+	logger.Debug("account has pending txs",
+		zap.Stringer("address", ac.addr),
+		zap.Int("num_pending", len(nonce2TXs)),
+	)
 	var (
 		nextNonce   = ac.nextNonce()
 		balance     = ac.availBalance()
@@ -224,6 +231,7 @@ func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*Nan
 		best := findBest(nonce2TXs[nonce], balance, blockSeed)
 		if best == nil {
 			logger.Debug("no feasible transactions at nonce",
+				zap.Stringer("address", ac.addr),
 				zap.Uint64("nonce", nonce),
 				zap.Uint64("balance", balance),
 			)
@@ -231,6 +239,7 @@ func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*Nan
 		}
 
 		logger.Debug("found best in nonce txs",
+			zap.Stringer("address", ac.addr),
 			zap.Stringer("tx_id", best.ID),
 			zap.Uint64("nonce", nonce),
 			zap.Uint64("fee", best.Fee()),
@@ -249,6 +258,7 @@ func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*Nan
 	ac.moreInDB = len(sortedNonce) > len(added)
 	if len(added) > 0 {
 		logger.Debug("added batch to account pool",
+			zap.Stringer("address", ac.addr),
 			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				slices.Sort(added)
 				for _, nonce := range added {
@@ -259,6 +269,7 @@ func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*Nan
 		)
 	} else {
 		logger.Debug("no feasible txs from batch",
+			zap.Stringer("address", ac.addr),
 			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				nonces := maps.Keys(nonce2TXs)
 				slices.Sort(nonces)
@@ -327,7 +338,10 @@ func (ac *accountCache) addPendingFromNonce(
 ) error {
 	mtxs, err := transactions.GetAcctPendingFromNonce(db, ac.addr, nonce)
 	if err != nil {
-		logger.Error("failed to get more pending txs from db", zap.Error(err))
+		logger.Error("failed to get more pending txs from db",
+			zap.Stringer("address", ac.addr),
+			zap.Error(err),
+		)
 		return err
 	}
 
@@ -349,6 +363,7 @@ func (ac *accountCache) addPendingFromNonce(
 			mtx.BlockID = nextBlock
 			if nextLayer != 0 {
 				logger.Debug("next layer found",
+					zap.Stringer("address", ac.addr),
 					zap.Stringer("tx_id", mtx.ID),
 					zap.Uint32("layer_id", nextLayer.Uint32()),
 				)
@@ -358,7 +373,7 @@ func (ac *accountCache) addPendingFromNonce(
 
 	byPrincipal := groupTXsByPrincipal(logger, mtxs)
 	if _, ok := byPrincipal[ac.addr]; !ok {
-		logger.Panic("no txs for account after grouping")
+		logger.Panic("no txs for account after grouping", zap.Stringer("address", ac.addr))
 	}
 	return ac.addBatch(logger, byPrincipal[ac.addr], nil)
 }
@@ -412,8 +427,10 @@ func (ac *accountCache) resetAfterApply(
 	nextNonce, newBalance uint64,
 	applied types.LayerID,
 ) error {
-	logger = logger.With(zap.Stringer("address", ac.addr))
-	logger.Debug("resetting to nonce", zap.Uint64("nonce", nextNonce))
+	logger.Debug("resetting to nonce",
+		zap.Stringer("address", ac.addr),
+		zap.Uint64("nonce", nextNonce),
+	)
 	for e := ac.txsByNonce.Front(); e != nil; e = e.Next() {
 		delete(ac.cachedTXs, e.Value.(*candidate).id())
 	}
@@ -871,7 +888,8 @@ func checkApplyOrder(logger *zap.Logger, db *sql.Database, toApply types.LayerID
 	if toApply != lastApplied.Add(1) {
 		logger.Error("layer not applied in order",
 			zap.Stringer("expected", lastApplied.Add(1)),
-			zap.Stringer("to_apply", toApply))
+			zap.Stringer("to_apply", toApply),
+		)
 		return errLayerNotInOrder
 	}
 	return nil
