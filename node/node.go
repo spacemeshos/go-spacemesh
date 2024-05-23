@@ -648,7 +648,7 @@ func (app *App) initServices(ctx context.Context) error {
 			BlockGasLimit:     app.Config.BlockGasLimit,
 			NumTXsPerProposal: app.Config.TxsPerProposal,
 		}),
-		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
+		txs.WithLogger(app.addLogger(ConStateLogger, lg).Zap()))
 
 	genesisAccts := app.Config.Genesis.ToAccounts()
 	if len(genesisAccts) > 0 {
@@ -785,7 +785,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.txHandler = txs.NewTxHandler(
 		app.conState,
 		app.host.ID(),
-		app.addLogger(TxHandlerLogger, lg),
+		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
 
 	app.hOracle = eligibility.New(
