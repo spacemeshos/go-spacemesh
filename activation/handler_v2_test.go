@@ -81,7 +81,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	require.NoError(t, err)
 	t.Run("rejects invalid signature", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, types.RandomNodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 
 		atxHandler := newV2TestHandler(t, golden)
 		err := atxHandler.syntacticallyValidate(context.Background(), atx)
@@ -89,7 +89,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	})
 	t.Run("rejects from future", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.PublishEpoch = 100
 		atx.Sign(sig)
 
@@ -100,7 +100,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	})
 	t.Run("rejects empty positioning ATX", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.PositioningATX = types.EmptyATXID
 		atx.Sign(sig)
 
@@ -110,7 +110,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	})
 	t.Run("marriages are not supported (yet)", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.Marriages = []wire.MarriageCertificate{{}}
 		atx.Sign(sig)
 
@@ -120,7 +120,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	})
 	t.Run("reject golden previous ATX", func(t *testing.T) {
 		t.Parallel()
-		atx := newSoloATXv2(t, 0, sig.NodeID(), golden, golden)
+		atx := newSoloATXv2(t, 0, golden, golden)
 		atx.Sign(sig)
 
 		atxHandler := newV2TestHandler(t, golden)
@@ -130,7 +130,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	})
 	t.Run("reject empty previous ATX", func(t *testing.T) {
 		t.Parallel()
-		atx := newSoloATXv2(t, 0, sig.NodeID(), types.EmptyATXID, golden)
+		atx := newSoloATXv2(t, 0, types.EmptyATXID, golden)
 		atx.PreviousATXs = append(atx.PreviousATXs, types.EmptyATXID)
 		atx.Sign(sig)
 
@@ -149,7 +149,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
 		atxHandler := newV2TestHandler(t, golden)
@@ -172,7 +172,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	})
 	t.Run("rejects previous ATXs", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.PreviousATXs = []types.ATXID{types.RandomATXID()}
 		atx.Sign(sig)
 
@@ -190,7 +190,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	})
 	t.Run("rejects when VRF nonce is nil", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.VRFNonce = nil
 		atx.Sign(sig)
 
@@ -201,7 +201,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	})
 	t.Run("rejects when Coinbase is nil", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.Coinbase = nil
 		atx.Sign(sig)
 
@@ -212,7 +212,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	})
 	t.Run("rejects when marriage ATX ref is set", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.MarriageATX = &golden
 		atx.Sign(sig)
 
@@ -223,7 +223,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	})
 	t.Run("rejects when commitment ATX is missing", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.Initial.CommitmentATX = types.EmptyATXID
 		atx.Sign(sig)
 
@@ -234,7 +234,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	})
 	t.Run("invalid VRF nonce", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
 		atxHandler := newV2TestHandler(t, golden)
@@ -252,7 +252,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	})
 	t.Run("invalid initial PoST", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
 		atxHandler := newV2TestHandler(t, golden)
@@ -285,7 +285,7 @@ func TestHandlerV2_SyntacticallyValidate_SoloAtx(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid", func(t *testing.T) {
-		atx := newSoloATXv2(t, 0, sig.NodeID(), types.RandomATXID(), types.RandomATXID())
+		atx := newSoloATXv2(t, 0, types.RandomATXID(), types.RandomATXID())
 		atx.Sign(sig)
 
 		atxHandler.mclock.EXPECT().CurrentLayer()
@@ -293,7 +293,7 @@ func TestHandlerV2_SyntacticallyValidate_SoloAtx(t *testing.T) {
 		require.NoError(t, err)
 	})
 	t.Run("must have 1 previous ATX", func(t *testing.T) {
-		atx := newSoloATXv2(t, 0, sig.NodeID(), types.RandomATXID(), types.RandomATXID())
+		atx := newSoloATXv2(t, 0, types.RandomATXID(), types.RandomATXID())
 		atx.PreviousATXs = append(atx.PreviousATXs, types.RandomATXID())
 		atx.Sign(sig)
 
@@ -303,7 +303,7 @@ func TestHandlerV2_SyntacticallyValidate_SoloAtx(t *testing.T) {
 	})
 	t.Run("rejects when len(NIPoSTs) != 1", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.NiPosts = append(atx.NiPosts, wire.NiPostsV2{})
 		atx.Sign(sig)
 
@@ -313,7 +313,7 @@ func TestHandlerV2_SyntacticallyValidate_SoloAtx(t *testing.T) {
 	})
 	t.Run("rejects when contains more than 1 ID", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.NiPosts[0].Posts = append(atx.NiPosts[0].Posts, wire.SubPostV2{})
 		atx.Sign(sig)
 
@@ -323,7 +323,7 @@ func TestHandlerV2_SyntacticallyValidate_SoloAtx(t *testing.T) {
 	})
 	t.Run("rejects when PrevATXIndex != 0", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.NiPosts[0].Posts[0].PrevATXIndex = 1
 		atx.Sign(sig)
 
@@ -342,7 +342,7 @@ func TestHandlerV2_SyntacticallyValidate_MergedAtx(t *testing.T) {
 
 	t.Run("merged ATXs are not supported yet", func(t *testing.T) {
 		t.Parallel()
-		atx := newSoloATXv2(t, 0, sig.NodeID(), types.RandomATXID(), types.RandomATXID())
+		atx := newSoloATXv2(t, 0, types.RandomATXID(), types.RandomATXID())
 		atx.MarriageATX = &golden
 		atx.Sign(sig)
 
@@ -361,7 +361,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 
 	t.Run("initial ATX", func(t *testing.T) {
 		t.Parallel()
-		atx := newInitialATXv2(t, sig.NodeID(), golden)
+		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 		blob := codec.MustEncode(atx)
 
@@ -381,7 +381,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 	// TODO: more tests
 }
 
-func newInitialATXv2(t testing.TB, id types.NodeID, golden types.ATXID) *wire.ActivationTxV2 {
+func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
 	t.Helper()
 	nonce := uint64(999)
 	coinbase := types.GenerateAddress([]byte("aaaa"))
@@ -405,7 +405,7 @@ func newInitialATXv2(t testing.TB, id types.NodeID, golden types.ATXID) *wire.Ac
 	return atx
 }
 
-func newSoloATXv2(t testing.TB, publish types.EpochID, id types.NodeID, prev, pos types.ATXID) *wire.ActivationTxV2 {
+func newSoloATXv2(t testing.TB, publish types.EpochID, prev, pos types.ATXID) *wire.ActivationTxV2 {
 	t.Helper()
 
 	atx := &wire.ActivationTxV2{

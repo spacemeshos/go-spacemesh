@@ -59,6 +59,7 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 }
 
 func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
+	atx.SmesherID = signer.NodeID()
 	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
 }
 

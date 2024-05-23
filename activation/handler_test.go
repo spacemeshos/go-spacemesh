@@ -526,7 +526,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		t.Skip("atx V2 is not supported yet")
 		t.Parallel()
 
-		atx := newInitialATXv2(t, sig.NodeID(), goldenATXID)
+		atx := newInitialATXv2(t, goldenATXID)
 		atx.Sign(sig)
 
 		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersions(AtxVersions{0: types.AtxV2}))
@@ -886,7 +886,7 @@ func TestHandler_DecodeATX(t *testing.T) {
 		versions := map[types.EpochID]types.AtxVersion{10: types.AtxV2}
 		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersions(versions))
 
-		atx := newInitialATXv2(t, types.RandomNodeID(), atxHdlr.goldenATXID)
+		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
 		atx.PublishEpoch = 10
 		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
 		require.NoError(t, err)
@@ -897,7 +897,7 @@ func TestHandler_DecodeATX(t *testing.T) {
 		versions := map[types.EpochID]types.AtxVersion{10: types.AtxV2}
 		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersions(versions))
 
-		atx := newInitialATXv2(t, types.RandomNodeID(), atxHdlr.goldenATXID)
+		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
 		atx.PublishEpoch = 9
 		_, err := atxHdlr.decodeATX(codec.MustEncode(atx))
 		require.ErrorIs(t, err, errMalformedData)
