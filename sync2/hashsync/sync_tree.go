@@ -512,7 +512,7 @@ func (st *syncTree) Set(k Ordered, v any) {
 
 func (st *syncTree) add(k Ordered, v any, set bool) {
 	st.rootMtx.Lock()
-	st.rootMtx.Unlock()
+	defer st.rootMtx.Unlock()
 	st.root = st.insert(st.root, k, v, true, set)
 	if st.root.flags&flagBlack == 0 {
 		st.root = st.ensureCloned(st.root)
@@ -622,10 +622,12 @@ func (st *syncTree) findGTENode(ptr *syncTreePointer, x Ordered) bool {
 			// or equal to x, we can find them on the right
 			if ptr.node.right == nil {
 				// sn.Max lied to us
+				// TODO: QQQQQ: this bug is being hit
 				panic("BUG: SyncTreeNode: x > sn.Max but no right branch")
 			}
 			// Avoid endless recursion in case of a bug
 			if x.Compare(ptr.node.right.max) > 0 {
+				// TODO: QQQQQ: this bug is being hit
 				panic("BUG: SyncTreeNode: inconsistent Max on the right branch")
 			}
 			ptr.right()

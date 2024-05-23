@@ -11,10 +11,10 @@ import (
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
@@ -33,9 +33,9 @@ type fakeRequester struct {
 	bytesReceived uint32
 }
 
-var _ requester = &fakeRequester{}
+var _ Requester = &fakeRequester{}
 
-func newFakeRequester(id p2p.Peer, handler server.StreamHandler, peers ...requester) *fakeRequester {
+func newFakeRequester(id p2p.Peer, handler server.StreamHandler, peers ...Requester) *fakeRequester {
 	fr := &fakeRequester{
 		id:      id,
 		handler: handler,
@@ -346,15 +346,18 @@ func TestWireConduit(t *testing.T) {
 	require.NoError(t, err)
 }
 
-type getRequesterFunc func(name string, handler server.StreamHandler, peers ...requester) (requester, p2p.Peer)
+type getRequesterFunc func(name string, handler server.StreamHandler, peers ...Requester) (Requester, p2p.Peer)
 
 func withClientServer(
 	store ItemStore,
 	getRequester getRequesterFunc,
-	opts []Option,
-	toCall func(ctx context.Context, client requester, srvPeerID p2p.Peer),
+	opts []RangeSetReconcilerOption,
+	toCall func(ctx context.Context, client Requester, srvPeerID p2p.Peer),
 ) {
-	srvHandler := MakeServerHandler(store, opts...)
+	srvHandler := func(ctx context.Context, req []byte, stream io.ReadWriter) error {
+		pss := NewPairwiseStoreSyncer(nil, opts)
+		return pss.Serve(ctx, req, stream, store)
+	}
 	srv, srvPeerID := getRequester("srv", srvHandler)
 	var eg errgroup.Group
 	ctx, cancel := context.WithCancel(context.Background())
@@ -371,7 +374,7 @@ func withClientServer(
 }
 
 func fakeRequesterGetter() getRequesterFunc {
-	return func(name string, handler server.StreamHandler, peers ...requester) (requester, p2p.Peer) {
+	return func(name string, handler server.StreamHandler, peers ...Requester) (Requester, p2p.Peer) {
 		pid := p2p.Peer(name)
 		return newFakeRequester(pid, handler, peers...), pid
 	}
@@ -383,9 +386,9 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 	proto := "itest"
 	opts := []server.Opt{
 		server.WithTimeout(10 * time.Second),
-		server.WithLog(logtest.New(t)),
+		server.WithLog(zaptest.NewLogger(t)),
 	}
-	return func(name string, handler server.StreamHandler, peers ...requester) (requester, p2p.Peer) {
+	return func(name string, handler server.StreamHandler, peers ...Requester) (Requester, p2p.Peer) {
 		if len(peers) == 0 {
 			return server.New(mesh.Hosts()[0], proto, handler, opts...), mesh.Hosts()[0].ID()
 		}
@@ -403,7 +406,7 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 	}
 }
 
-func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
+func testWireSync(t *testing.T, getRequester getRequesterFunc) Requester {
 	cfg := xorSyncTestConfig{
 		// large test:
 		// maxSendRange:    1,
@@ -419,21 +422,20 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) requester {
 		minNumSpecificB: 4,
 		maxNumSpecificB: 100,
 	}
-	var client requester
-	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) bool {
+	var client Requester
+	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []RangeSetReconcilerOption) bool {
 		withClientServer(
 			storeA, getRequester, opts,
-			func(ctx context.Context, client requester, srvPeerID p2p.Peer) {
-				err := SyncStore(ctx, client, srvPeerID, storeB, nil, nil, opts...)
+			func(ctx context.Context, client Requester, srvPeerID p2p.Peer) {
+				pss := NewPairwiseStoreSyncer(client, opts)
+				err := pss.SyncStore(ctx, srvPeerID, storeB, nil, nil)
 				require.NoError(t, err)
 
 				if fr, ok := client.(*fakeRequester); ok {
 					t.Logf("numSpecific: %d, bytesSent %d, bytesReceived %d",
 						numSpecific, fr.bytesSent, fr.bytesReceived)
 				}
-				smtx.Lock()
-				t.Logf("bytes read: %d, bytes written: %d", numRead, numWritten)
-				smtx.Unlock()
+				t.Logf("bytes read: %d, bytes written: %d", numRead.Load(), numWritten.Load())
 			})
 		return true
 	})
@@ -449,7 +451,7 @@ func TestWireSync(t *testing.T) {
 	})
 }
 
-func testWireProbe(t *testing.T, getRequester getRequesterFunc) requester {
+func testWireProbe(t *testing.T, getRequester getRequesterFunc) Requester {
 	cfg := xorSyncTestConfig{
 		maxSendRange:    1,
 		numTestHashes:   10000,
@@ -458,14 +460,15 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) requester {
 		minNumSpecificB: 130,
 		maxNumSpecificB: 130,
 	}
-	var client requester
-	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) bool {
+	var client Requester
+	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []RangeSetReconcilerOption) bool {
 		withClientServer(
 			storeA, getRequester, opts,
-			func(ctx context.Context, client requester, srvPeerID p2p.Peer) {
+			func(ctx context.Context, client Requester, srvPeerID p2p.Peer) {
+				pss := NewPairwiseStoreSyncer(client, opts)
 				minA := storeA.Min().Key()
 				infoA := storeA.GetRangeInfo(nil, minA, minA, -1)
-				prA, err := Probe(ctx, client, srvPeerID, storeB, nil, nil, opts...)
+				prA, err := pss.Probe(ctx, srvPeerID, storeB, nil, nil)
 				require.NoError(t, err)
 				require.Equal(t, infoA.Fingerprint, prA.FP)
 				require.Equal(t, infoA.Count, prA.Count)
@@ -476,7 +479,7 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) requester {
 				x := partInfoA.Start.Key().(types.Hash32)
 				y := partInfoA.End.Key().(types.Hash32)
 				// partInfoA = storeA.GetRangeInfo(nil, x, y, -1)
-				prA, err = Probe(ctx, client, srvPeerID, storeB, &x, &y, opts...)
+				prA, err = pss.Probe(ctx, srvPeerID, storeB, &x, &y)
 				require.NoError(t, err)
 				require.Equal(t, partInfoA.Fingerprint, prA.FP)
 				require.Equal(t, partInfoA.Count, prA.Count)

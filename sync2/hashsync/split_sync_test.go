@@ -78,7 +78,7 @@ type splitSyncTester struct {
 	fail          map[hexRange]bool
 	expPeerRanges map[hexRange]int
 	peerRanges    map[hexRange][]p2p.Peer
-	syncBase      *MocksyncBase
+	syncBase      *MockSyncBase
 	peers         *peers.Peers
 	splitSync     *splitSync
 }
@@ -115,7 +115,7 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 			tstRanges[3]: 0,
 		},
 		peerRanges: make(map[hexRange][]p2p.Peer),
-		syncBase:   NewMocksyncBase(ctrl),
+		syncBase:   NewMockSyncBase(ctrl),
 		peers:      peers.New(),
 	}
 	for n := range tst.syncPeers {
@@ -125,12 +125,12 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 		index := index
 		p := p
 		tst.syncBase.EXPECT().
-			derive(p).
-			DoAndReturn(func(peer p2p.Peer) syncer {
-				s := NewMocksyncer(ctrl)
-				s.EXPECT().peer().Return(p).AnyTimes()
+			Derive(p).
+			DoAndReturn(func(peer p2p.Peer) Syncer {
+				s := NewMockSyncer(ctrl)
+				s.EXPECT().Peer().Return(p).AnyTimes()
 				s.EXPECT().
-					sync(gomock.Any(), gomock.Any(), gomock.Any()).
+					Sync(gomock.Any(), gomock.Any(), gomock.Any()).
 					DoAndReturn(func(ctx context.Context, x, y *types.Hash32) error {
 						tst.mtx.Lock()
 						defer tst.mtx.Unlock()

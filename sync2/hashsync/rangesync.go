@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	defaultMaxSendRange  = 16
-	defaultItemChunkSize = 16
-	defaultSampleSize    = 200
+	DefaultMaxSendRange  = 16
+	DefaultItemChunkSize = 16
+	DefaultSampleSize    = 200
 	maxSampleSize        = 1000
 )
 
@@ -122,21 +122,21 @@ type Conduit interface {
 	ShortenKey(k Ordered) Ordered
 }
 
-type Option func(r *RangeSetReconciler)
+type RangeSetReconcilerOption func(r *RangeSetReconciler)
 
-func WithMaxSendRange(n int) Option {
+func WithMaxSendRange(n int) RangeSetReconcilerOption {
 	return func(r *RangeSetReconciler) {
 		r.maxSendRange = n
 	}
 }
 
-func WithItemChunkSize(n int) Option {
+func WithItemChunkSize(n int) RangeSetReconcilerOption {
 	return func(r *RangeSetReconciler) {
 		r.itemChunkSize = n
 	}
 }
 
-func WithSampleSize(s int) Option {
+func WithSampleSize(s int) RangeSetReconcilerOption {
 	return func(r *RangeSetReconciler) {
 		r.sampleSize = s
 	}
@@ -155,12 +155,12 @@ type RangeSetReconciler struct {
 	sampleSize    int
 }
 
-func NewRangeSetReconciler(is ItemStore, opts ...Option) *RangeSetReconciler {
+func NewRangeSetReconciler(is ItemStore, opts ...RangeSetReconcilerOption) *RangeSetReconciler {
 	rsr := &RangeSetReconciler{
 		is:            is,
-		maxSendRange:  defaultMaxSendRange,
-		itemChunkSize: defaultItemChunkSize,
-		sampleSize:    defaultSampleSize,
+		maxSendRange:  DefaultMaxSendRange,
+		itemChunkSize: DefaultItemChunkSize,
+		sampleSize:    DefaultSampleSize,
 	}
 	for _, opt := range opts {
 		opt(rsr)

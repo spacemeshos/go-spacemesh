@@ -17,13 +17,13 @@ import (
 )
 
 type syncResult struct {
-	s   syncer
+	s   Syncer
 	err error
 }
 
 type splitSync struct {
 	logger       *zap.Logger
-	syncBase     syncBase
+	syncBase     SyncBase
 	peers        *peers.Peers
 	syncPeers    []p2p.Peer
 	gracePeriod  time.Duration
@@ -36,13 +36,13 @@ type splitSync struct {
 	numRunning   int
 	numRemaining int
 	numPeers     int
-	syncers      []syncer
+	syncers      []Syncer
 	eg           *errgroup.Group
 }
 
 func newSplitSync(
 	logger *zap.Logger,
-	syncBase syncBase,
+	syncBase SyncBase,
 	peers *peers.Peers,
 	syncPeers []p2p.Peer,
 	gracePeriod time.Duration,
@@ -77,13 +77,13 @@ func (s *splitSync) nextPeer() p2p.Peer {
 }
 
 func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange) {
-	syncer := s.syncBase.derive(p)
+	syncer := s.syncBase.Derive(p)
 	sr.numSyncers++
 	s.numRunning++
 	doneCh := make(chan struct{})
 	s.eg.Go(func() error {
 		defer close(doneCh)
-		err := syncer.sync(ctx, &sr.x, &sr.y)
+		err := syncer.Sync(ctx, &sr.x, &sr.y)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -107,18 +107,18 @@ func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange
 }
 
 func (s *splitSync) handleSyncResult(r syncResult) error {
-	sr, found := s.syncMap[r.s.peer()]
+	sr, found := s.syncMap[r.s.Peer()]
 	if !found {
 		panic("BUG: error in split sync syncMap handling")
 	}
 	s.numRunning--
-	delete(s.syncMap, r.s.peer())
+	delete(s.syncMap, r.s.Peer())
 	sr.numSyncers--
 	if r.err != nil {
 		s.numPeers--
-		s.failedPeers[r.s.peer()] = struct{}{}
+		s.failedPeers[r.s.Peer()] = struct{}{}
 		s.logger.Debug("remove failed peer",
-			zap.Stringer("peer", r.s.peer()),
+			zap.Stringer("peer", r.s.Peer()),
 			zap.Int("numPeers", s.numPeers),
 			zap.Int("numRemaining", s.numRemaining),
 			zap.Int("numRunning", s.numRunning),
@@ -134,10 +134,10 @@ func (s *splitSync) handleSyncResult(r syncResult) error {
 		}
 	} else {
 		sr.done = true
-		s.syncPeers = append(s.syncPeers, r.s.peer())
+		s.syncPeers = append(s.syncPeers, r.s.Peer())
 		s.numRemaining--
 		s.logger.Debug("peer synced successfully",
-			zap.Stringer("peer", r.s.peer()),
+			zap.Stringer("peer", r.s.Peer()),
 			zap.Int("numPeers", s.numPeers),
 			zap.Int("numRemaining", s.numRemaining),
 			zap.Int("numRunning", s.numRunning),

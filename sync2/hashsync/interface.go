@@ -2,6 +2,7 @@ package hashsync
 
 import (
 	"context"
+	"io"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -49,29 +50,31 @@ type ItemStore interface {
 	Has(k Ordered) bool
 }
 
-type requester interface {
+type Requester interface {
 	Run(context.Context) error
 	StreamRequest(context.Context, p2p.Peer, []byte, server.StreamRequestCallback, ...string) error
 }
 
-type syncBase interface {
-	count() int
-	derive(p p2p.Peer) syncer
-	probe(ctx context.Context, p p2p.Peer) (ProbeResult, error)
-	wait() error
+type SyncBase interface {
+	Count() int
+	Derive(p p2p.Peer) Syncer
+	Probe(ctx context.Context, p p2p.Peer) (ProbeResult, error)
+	Wait() error
 }
 
-type syncer interface {
-	peer() p2p.Peer
-	sync(ctx context.Context, x, y *types.Hash32) error
+type Syncer interface {
+	Peer() p2p.Peer
+	Sync(ctx context.Context, x, y *types.Hash32) error
+	Serve(ctx context.Context, req []byte, stream io.ReadWriter) error
+}
+
+type PairwiseSyncer interface {
+	Probe(ctx context.Context, peer p2p.Peer, is ItemStore, x, y *types.Hash32) (ProbeResult, error)
+	SyncStore(ctx context.Context, peer p2p.Peer, is ItemStore, x, y *types.Hash32) error
+	Serve(ctx context.Context, req []byte, stream io.ReadWriter, is ItemStore) error
 }
 
 type syncRunner interface {
 	splitSync(ctx context.Context, syncPeers []p2p.Peer) error
 	fullSync(ctx context.Context, syncPeers []p2p.Peer) error
-}
-
-type pairwiseSyncer interface {
-	probe(ctx context.Context, peer p2p.Peer, is ItemStore, x, y *types.Hash32) (ProbeResult, error)
-	syncStore(ctx context.Context, peer p2p.Peer, is ItemStore, x, y *types.Hash32) error
 }

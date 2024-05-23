@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"math/rand"
 	"slices"
+	"sync"
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -509,4 +511,58 @@ func TestTreeValues(t *testing.T) {
 	v, found = tree1.Lookup(sampleID("d"))
 	require.True(t, found)
 	require.Equal(t, 456, v)
+}
+
+func TestParallelAddition(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		const (
+			nInitial = 10000
+			nAdd     = 1000
+			nSets    = 100
+		)
+		srcTree := NewSyncTree(Hash32To12Xor{})
+		initialHashes := make([]types.Hash32, nInitial)
+		for n := range initialHashes {
+			h := types.RandomHash()
+			initialHashes[n] = h
+			srcTree.Add(h)
+		}
+		type set struct {
+			added []types.Hash32
+			tree  SyncTree
+		}
+		sets := make([]*set, nSets)
+		for n := range sets {
+			sets[n] = &set{}
+		}
+		sets[0].tree = srcTree
+		var wg sync.WaitGroup
+		for n, s := range sets {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if n > 0 {
+					s.tree = srcTree.Copy()
+				}
+				s.added = make([]types.Hash32, nAdd)
+				for n := range s.added {
+					h := types.RandomHash()
+					s.added[n] = h
+					s.tree.Add(h)
+				}
+			}()
+		}
+		wg.Wait()
+		for _, s := range sets {
+			items := make(map[types.Hash32]struct{}, nInitial+nAdd)
+			for ptr := s.tree.Min(); ptr.Key() != nil; ptr.Next() {
+				items[ptr.Key().(types.Hash32)] = struct{}{}
+			}
+			require.GreaterOrEqual(t, len(items), nInitial+nAdd)
+			for _, k := range s.added {
+				_, found := items[k] // faster than require.Contains
+				require.True(t, found)
+			}
+		}
+	}
 }

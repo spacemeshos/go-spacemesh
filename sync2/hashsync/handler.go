@@ -6,12 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
+	"sync/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
 type sendable interface {
@@ -21,9 +20,8 @@ type sendable interface {
 
 // QQQQQ: rmme
 var (
-	numRead    int
-	numWritten int
-	smtx       sync.Mutex
+	numRead    atomic.Int64
+	numWritten atomic.Int64
 )
 
 type rmmeCountingStream struct {
@@ -32,19 +30,15 @@ type rmmeCountingStream struct {
 
 // Read implements io.ReadWriter.
 func (r *rmmeCountingStream) Read(p []byte) (n int, err error) {
-	smtx.Lock()
-	defer smtx.Unlock()
 	n, err = r.ReadWriter.Read(p)
-	numRead += n
+	numRead.Add(int64(n))
 	return n, err
 }
 
 // Write implements io.ReadWriter.
 func (r *rmmeCountingStream) Write(p []byte) (n int, err error) {
-	smtx.Lock()
-	defer smtx.Unlock()
 	n, err = r.ReadWriter.Write(p)
-	numWritten += n
+	numWritten.Add(int64(n))
 	return n, err
 }
 
@@ -257,25 +251,65 @@ func (c *wireConduit) ShortenKey(k Ordered) Ordered {
 	return MinhashSampleItemFromHash32(k.(types.Hash32))
 }
 
-func MakeServerHandler(is ItemStore, opts ...Option) server.StreamHandler {
-	return func(ctx context.Context, req []byte, stream io.ReadWriter) error {
-		var c wireConduit
-		rsr := NewRangeSetReconciler(is, opts...)
-		s := struct {
-			io.Reader
-			io.Writer
-		}{
-			// prepend the received request to data being read
-			Reader: io.MultiReader(bytes.NewBuffer(req), stream),
-			Writer: stream,
-		}
-		return c.handleStream(ctx, s, rsr)
-	}
+type PairwiseStoreSyncer struct {
+	r    Requester
+	opts []RangeSetReconcilerOption
 }
 
-func SyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x, y *types.Hash32, opts ...Option) error {
+var _ PairwiseSyncer = &PairwiseStoreSyncer{}
+
+func NewPairwiseStoreSyncer(r Requester, opts []RangeSetReconcilerOption) *PairwiseStoreSyncer {
+	return &PairwiseStoreSyncer{r: r, opts: opts}
+}
+
+func (pss *PairwiseStoreSyncer) Probe(
+	ctx context.Context,
+	peer p2p.Peer,
+	is ItemStore,
+	x, y *types.Hash32,
+) (ProbeResult, error) {
+	var (
+		err     error
+		initReq []byte
+		info    RangeInfo
+		pr      ProbeResult
+	)
 	var c wireConduit
-	rsr := NewRangeSetReconciler(is, opts...)
+	rsr := NewRangeSetReconciler(is, pss.opts...)
+	if x == nil {
+		initReq, err = c.withInitialRequest(func(c Conduit) error {
+			info, err = rsr.InitiateProbe(c)
+			return err
+		})
+	} else {
+		initReq, err = c.withInitialRequest(func(c Conduit) error {
+			info, err = rsr.InitiateBoundedProbe(c, *x, *y)
+			return err
+		})
+	}
+	if err != nil {
+		return ProbeResult{}, err
+	}
+	err = pss.r.StreamRequest(ctx, peer, initReq, func(ctx context.Context, stream io.ReadWriter) error {
+		c.stream = stream
+		var err error
+		pr, err = rsr.HandleProbeResponse(&c, info)
+		return err
+	})
+	if err != nil {
+		return ProbeResult{}, err
+	}
+	return pr, nil
+}
+
+func (pss *PairwiseStoreSyncer) SyncStore(
+	ctx context.Context,
+	peer p2p.Peer,
+	is ItemStore,
+	x, y *types.Hash32,
+) error {
+	var c wireConduit
+	rsr := NewRangeSetReconciler(is, pss.opts...)
 	// c.rmmePrint = true
 	var (
 		initReq []byte
@@ -291,52 +325,29 @@ func SyncStore(ctx context.Context, r requester, peer p2p.Peer, is ItemStore, x,
 	if err != nil {
 		return err
 	}
-	return r.StreamRequest(ctx, peer, initReq, func(ctx context.Context, stream io.ReadWriter) error {
+	return pss.r.StreamRequest(ctx, peer, initReq, func(ctx context.Context, stream io.ReadWriter) error {
 		s := &rmmeCountingStream{ReadWriter: stream}
 		return c.handleStream(ctx, s, rsr)
 	})
 }
 
-func Probe(
+func (pss *PairwiseStoreSyncer) Serve(
 	ctx context.Context,
-	r requester,
-	peer p2p.Peer,
+	req []byte,
+	stream io.ReadWriter,
 	is ItemStore,
-	x, y *types.Hash32,
-	opts ...Option,
-) (ProbeResult, error) {
-	var (
-		err     error
-		initReq []byte
-		info    RangeInfo
-		pr      ProbeResult
-	)
+) error {
 	var c wireConduit
-	rsr := NewRangeSetReconciler(is, opts...)
-	if x == nil {
-		initReq, err = c.withInitialRequest(func(c Conduit) error {
-			info, err = rsr.InitiateProbe(c)
-			return err
-		})
-	} else {
-		initReq, err = c.withInitialRequest(func(c Conduit) error {
-			info, err = rsr.InitiateBoundedProbe(c, *x, *y)
-			return err
-		})
+	rsr := NewRangeSetReconciler(is, pss.opts...)
+	s := struct {
+		io.Reader
+		io.Writer
+	}{
+		// prepend the received request to data being read
+		Reader: io.MultiReader(bytes.NewBuffer(req), stream),
+		Writer: stream,
 	}
-	if err != nil {
-		return ProbeResult{}, err
-	}
-	err = r.StreamRequest(ctx, peer, initReq, func(ctx context.Context, stream io.ReadWriter) error {
-		c.stream = stream
-		var err error
-		pr, err = rsr.HandleProbeResponse(&c, info)
-		return err
-	})
-	if err != nil {
-		return ProbeResult{}, err
-	}
-	return pr, nil
+	return c.handleStream(ctx, s, rsr)
 }
 
 // TODO: request duration

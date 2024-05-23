@@ -74,8 +74,8 @@ type xorSyncTestConfig struct {
 	maxNumSpecificB int
 }
 
-func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB ItemStore, numSpecific int, opts []Option) bool) {
-	opts := []Option{
+func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB ItemStore, numSpecific int, opts []RangeSetReconcilerOption) bool) {
+	opts := []RangeSetReconcilerOption{
 		WithMaxSendRange(cfg.maxSendRange),
 	}
 	numSpecificA := rand.Intn(cfg.maxNumSpecificA+1-cfg.minNumSpecificA) + cfg.minNumSpecificA
@@ -125,7 +125,7 @@ func TestBigSyncHash32(t *testing.T) {
 		minNumSpecificB: 4,
 		maxNumSpecificB: 100,
 	}
-	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []Option) bool {
+	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []RangeSetReconcilerOption) bool {
 		syncA := NewRangeSetReconciler(storeA, opts...)
 		syncB := NewRangeSetReconciler(storeB, opts...)
 		nRounds, nMsg, nItems := runSync(t, syncA, syncB, 100)
