@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -20,9 +21,9 @@ func TestMalicious(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, mal)
 
-	var ballotProof types.BallotProof
+	var ballotProof wire.BallotProof
 	for i := 0; i < 2; i++ {
-		ballotProof.Messages[i] = types.BallotProofMsg{
+		ballotProof.Messages[i] = wire.BallotProofMsg{
 			InnerMsg: types.BallotMetadata{
 				Layer:   types.LayerID(9),
 				MsgHash: types.RandomHash(),
@@ -31,10 +32,10 @@ func TestMalicious(t *testing.T) {
 			SmesherID: nodeID,
 		}
 	}
-	proof := &types.MalfeasanceProof{
+	proof := &wire.MalfeasanceProof{
 		Layer: types.LayerID(11),
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
+		Proof: wire.Proof{
+			Type: wire.MultipleBallots,
 			Data: &ballotProof,
 		},
 	}

@@ -292,19 +292,18 @@ func (v *VM) execute(
 		executed    []types.TransactionWithResult
 		limit       = v.cfg.GasLimit
 	)
-	for i := range txs {
+	for i, tx := range txs {
 		logger := v.logger.WithFields(log.Int("ith", i))
 		txCount.Inc()
 
 		t1 := time.Now()
-		tx := txs[i]
 
 		rd.Reset(tx.GetRaw().Raw)
 		req := &Request{
 			vm:      v,
 			cache:   ss,
 			lid:     lctx.Layer,
-			raw:     txs[i].GetRaw(),
+			raw:     tx.GetRaw(),
 			decoder: decoder,
 		}
 
@@ -331,7 +330,7 @@ func (v *VM) execute(
 			continue
 		}
 		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
-			logger.With().Warning("ineffective transaction. intrinstic gas not covered",
+			logger.With().Warning("ineffective transaction. intrinsic gas not covered",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),
 				log.Uint64("intrinsic gas", intrinsic),

@@ -159,8 +159,9 @@ func (err *ServerError) Error() string {
 
 // Response is a server response.
 type Response struct {
-	Data  []byte `scale:"max=89128960"` // 85 MiB
-	Error string `scale:"max=1024"`     // TODO(mafa): make error code instead of string
+	// keep in line with limit of ResponseMessage.Data in `fetch/wire_types.go`
+	Data  []byte `scale:"max=125829120"` // 120 MiB > 3.5 mio ATX * 32 bytes per ID
+	Error string `scale:"max=1024"`      // TODO(mafa): make error code instead of string
 }
 
 // Server for the Handler.
@@ -234,10 +235,6 @@ func (s *Server) Run(ctx context.Context) error {
 	s.h.SetStreamHandler(protocol.ID(s.protocol), func(stream network.Stream) {
 		select {
 		case queue <- request{stream: stream, received: time.Now()}:
-			if s.metrics != nil {
-				s.metrics.queue.Set(float64(len(queue)))
-				s.metrics.accepted.Inc()
-			}
 		default:
 			if s.metrics != nil {
 				s.metrics.dropped.Inc()
@@ -254,6 +251,10 @@ func (s *Server) Run(ctx context.Context) error {
 			eg.Wait()
 			return nil
 		case req := <-queue:
+			if s.metrics != nil {
+				s.metrics.queue.Set(float64(len(queue)))
+				s.metrics.accepted.Inc()
+			}
 			if s.metrics != nil {
 				s.metrics.inQueueLatency.Observe(time.Since(req.received).Seconds())
 			}

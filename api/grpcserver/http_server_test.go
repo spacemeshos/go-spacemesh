@@ -26,7 +26,7 @@ func launchJsonServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg := DefaultTestConfig()
 
 	// run on random port
-	jsonService := NewJSONHTTPServer("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc.JSON"))
+	jsonService := NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0", []string{})
 
 	// start json server
 	require.NoError(tb, jsonService.StartService(context.Background(), services...))

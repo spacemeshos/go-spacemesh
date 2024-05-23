@@ -13,7 +13,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -143,7 +142,6 @@ func testFetch_getHashes(t *testing.T, streaming bool) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -451,11 +449,11 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{},
 			types.Address{1, 2, 3},
-			&types.NIPost{},
 			i,
 			nil,
 		)
-		require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
+		atx.SmesherID = sig.NodeID()
+		atx.SetID(types.RandomATXID())
 		atxs = append(atxs, atx)
 	}
 	return atxs
@@ -587,18 +585,18 @@ func generateEpochData(t *testing.T) (*EpochData, []byte) {
 
 func Test_PeerEpochInfo(t *testing.T) {
 	peer := p2p.Peer("p0")
-	errUnknown := errors.New("unknown")
 	tt := []struct {
 		name      string
-		err       error
+		err       string
 		streaming bool
+		padding   int
 	}{
 		{
 			name: "success",
 		},
 		{
 			name: "fail",
-			err:  errUnknown,
+			err:  "unknown",
 		},
 		{
 			name:      "success (streamed)",
@@ -606,13 +604,24 @@ func Test_PeerEpochInfo(t *testing.T) {
 		},
 		{
 			name:      "fail (streamed)",
-			err:       errUnknown,
+			err:       "unknown",
 			streaming: true,
+		},
+		{
+			name:      "fail (streamed, padding)",
+			err:       "bad slice length",
+			streaming: true,
+			padding:   10,
+		},
+		{
+			name:      "fail (streamed, truncated)",
+			err:       "bad slice length",
+			streaming: true,
+			padding:   -1,
 		},
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -632,32 +641,39 @@ func Test_PeerEpochInfo(t *testing.T) {
 							cbk server.StreamRequestCallback,
 							extraProtocols ...string,
 						) error {
-							if tc.err == nil {
+							if tc.err == "" || tc.padding != 0 {
 								var r server.Response
 								expected, r.Data = generateEpochData(t)
+								if tc.padding > 0 {
+									r.Data = append(r.Data, make([]byte, tc.padding)...)
+								} else {
+									r.Data = r.Data[:len(r.Data)+tc.padding]
+								}
 								var b bytes.Buffer
 								codec.MustEncodeTo(&b, &r)
 								return cbk(ctx, &b)
 							}
-							return tc.err
+							return errors.New(tc.err)
 						})
 			} else {
 				f.mAtxS.EXPECT().
 					Request(gomock.Any(), peer, epochIDBytes).
 					DoAndReturn(
 						func(context.Context, p2p.Peer, []byte, ...string) ([]byte, error) {
-							if tc.err == nil {
+							if tc.err == "" {
 								var data []byte
 								expected, data = generateEpochData(t)
 								return data, nil
 							}
-							return nil, tc.err
+							return nil, errors.New(tc.err)
 						})
 			}
 			got, err := f.PeerEpochInfo(context.Background(), peer, types.EpochID(111))
-			require.ErrorIs(t, err, tc.err)
-			if tc.err == nil {
+			if tc.err == "" {
+				require.NoError(t, err)
 				require.Equal(t, expected, got)
+			} else {
+				require.ErrorContains(t, err, tc.err)
 			}
 		})
 	}
@@ -685,7 +701,6 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -754,7 +769,6 @@ func TestFetch_GetCert(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -769,26 +783,23 @@ func TestFetch_GetCert(t *testing.T) {
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
 			for i, peer := range peers {
-				p := peer
-				ith := i
 				f.mOpn2S.EXPECT().
-					Request(gomock.Any(), p, gomock.Any()).
-					DoAndReturn(
-						func(
-							_ context.Context,
-							_ p2p.Peer,
-							gotReq []byte,
-							extraProtocols ...string,
-						) ([]byte, error) {
-							require.Equal(t, reqData, gotReq)
-							if tc.results[ith] == nil {
-								data, err := codec.Encode(&expected)
-								require.NoError(t, err)
-								return data, nil
-							}
-							return nil, tc.results[ith]
-						})
-				if tc.results[ith] == nil {
+					Request(gomock.Any(), peer, gomock.Any()).
+					DoAndReturn(func(
+						_ context.Context,
+						_ p2p.Peer,
+						gotReq []byte,
+						extraProtocols ...string,
+					) ([]byte, error) {
+						require.Equal(t, reqData, gotReq)
+						if tc.results[i] == nil {
+							data, err := codec.Encode(&expected)
+							require.NoError(t, err)
+							return data, nil
+						}
+						return nil, tc.results[i]
+					})
+				if tc.results[i] == nil {
 					break
 				}
 			}
@@ -967,7 +978,6 @@ func TestBatchErrorIgnore(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			require.Equal(t, tc.ignored, tc.error.Ignore())
 		})

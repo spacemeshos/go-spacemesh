@@ -197,6 +197,11 @@ func TestStartAndShutdown(t *testing.T) {
 	ts.syncer.Close()
 }
 
+func TestShutdownWithoutStart(t *testing.T) {
+	ts := newTestSyncer(t, time.Millisecond*5)
+	ts.syncer.Close()
+}
+
 func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
 	current := types.LayerID(10)
@@ -498,7 +503,6 @@ func TestSyncAtxs(t *testing.T) {
 		},
 	}
 	for _, tc := range tcs {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			ts := newSyncerWithoutPeriodicRuns(t)
 			ts.expectDownloadLoop()

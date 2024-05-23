@@ -17,7 +17,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -118,21 +117,17 @@ func createATX(
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
-		types.Address{},
-		nil,
+		types.GenerateAddress(types.RandomBytes(types.AddressLength)),
 		numUnits,
 		&nonce,
 	)
 
-	atx.SetEffectiveNumUnits(numUnits)
 	atx.SetReceived(received)
-	nodeID := sig.NodeID()
-	atx.NodeID = &nodeID
-	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(tb, err)
-	require.NoError(tb, atxs.Add(db, vAtx))
-	return vAtx.ID()
+	atx.SmesherID = sig.NodeID()
+	atx.SetID(types.RandomATXID())
+	atx.TickCount = 1
+	require.NoError(tb, atxs.Add(db, atx))
+	return atx.ID()
 }
 
 func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {
@@ -207,7 +202,6 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	}
 	var eg errgroup.Group
 	for _, node := range testNodes {
-		node := node
 		eg.Go(func() error {
 			return node.onNewEpoch(context.Background(), types.EpochID(2))
 		})
@@ -276,7 +270,6 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	}
 	var eg errgroup.Group
 	for _, node := range testNodes {
-		node := node
 		eg.Go(func() error {
 			return node.onNewEpoch(context.Background(), types.EpochID(2))
 		})
@@ -328,7 +321,6 @@ func TestBeacon_NoProposals(t *testing.T) {
 	}
 	var eg errgroup.Group
 	for _, node := range testNodes {
-		node := node
 		eg.Go(func() error {
 			return node.onNewEpoch(context.Background(), types.EpochID(2))
 		})
@@ -613,7 +605,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 
 	epoch := types.EpochID(5)
 	mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
-	for i := 0; i < numEpochsToKeep; i++ {
+	for i := range numEpochsToKeep {
 		e := epoch + types.EpochID(i)
 		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)
@@ -674,7 +666,6 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -972,7 +963,6 @@ func TestBeacon_atxThresholdFraction(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1016,7 +1006,6 @@ func TestBeacon_atxThreshold(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1052,7 +1041,6 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1099,7 +1087,6 @@ func TestBeacon_buildProposal(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1133,7 +1120,6 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

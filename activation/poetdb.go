@@ -90,13 +90,9 @@ func (db *PoetDb) Validate(
 	roundID string,
 	signature types.EdSignature,
 ) error {
-	const shortIDlth = 5 // check the length to prevent a panic in the errors
-	if len(poetID) < shortIDlth {
-		return types.ProcessingError{Err: fmt.Sprintf("invalid poet id %x", poetID)}
-	}
-
+	shortID := poetID[:min(5, len(poetID))]
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
-		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %w", poetID[:shortIDlth], roundID, err)
+		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %w", shortID, roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 
@@ -147,8 +143,8 @@ func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
 	return proof, nil
 }
 
-// GetProof returns full proof.
-func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
+// Proof returns full proof.
+func (db *PoetDb) Proof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
@@ -160,7 +156,17 @@ func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *type
 	return &proofMessage.PoetProof, &proofMessage.Statement, nil
 }
 
-func calcRoot(leaves []types.Member) ([]byte, error) {
+func (db *PoetDb) ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error) {
+	proofRef, err := db.GetProofRef(poetID, roundID)
+	if err != nil {
+		return nil, err
+	}
+
+	proof, _, err := db.Proof(proofRef)
+	return proof, err
+}
+
+func calcRoot(leaves []types.Hash32) ([]byte, error) {
 	tree, err := merkle.NewTreeBuilder().WithHashFunc(shared.HashMembershipTreeNode).Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate tree: %w", err)

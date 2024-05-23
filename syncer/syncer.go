@@ -197,7 +197,7 @@ func NewSyncer(
 	}
 
 	if s.dataFetcher == nil {
-		s.dataFetcher = NewDataFetch(mesh, fetcher, cdb, tortoise, s.logger)
+		s.dataFetcher = NewDataFetch(mesh, fetcher, tortoise, s.logger)
 	}
 	if s.forkFinder == nil {
 		s.forkFinder = NewForkFinder(s.logger, cdb, fetcher, s.cfg.MaxStaleDuration)
@@ -212,6 +212,9 @@ func NewSyncer(
 
 // Close stops the syncing process and the goroutines syncer spawns.
 func (s *Syncer) Close() {
+	if s.stop == nil {
+		return // not started yet
+	}
 	s.stop()
 	s.logger.With().Info("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()
@@ -292,6 +295,7 @@ func (s *Syncer) setATXSynced() {
 	select {
 	case <-s.awaitATXSyncedCh:
 	default:
+		s.logger.Info("reached ATX synced state")
 		close(s.awaitATXSyncedCh)
 		atxSynced.Set(1)
 	}

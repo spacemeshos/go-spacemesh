@@ -2,9 +2,9 @@ package builder
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -38,8 +38,10 @@ const (
 )
 
 type Op struct {
-	Field field
-	Token token
+	// Prefix will be added before field name
+	Prefix string
+	Field  field
+	Token  token
 	// Value will be type casted to one the expected types.
 	// Operation will panic if it doesn't match any of expected.
 	Value any
@@ -57,6 +59,14 @@ type Operations struct {
 	Modifiers []Modifier
 }
 
+func FilterEpochOnly(publish types.EpochID) Operations {
+	return Operations{
+		Filter: []Op{
+			{Field: Epoch, Token: Eq, Value: publish},
+		},
+	}
+}
+
 func FilterFrom(operations Operations) string {
 	var queryBuilder strings.Builder
 
@@ -66,7 +76,7 @@ func FilterFrom(operations Operations) string {
 		} else {
 			queryBuilder.WriteString(" and")
 		}
-		queryBuilder.WriteString(" " + string(op.Field) + " " + string(op.Token) + " ?" + strconv.Itoa(i+1))
+		fmt.Fprintf(&queryBuilder, " %s%s %s ?%d", op.Prefix, op.Field, op.Token, i+1)
 	}
 
 	for _, m := range operations.Modifiers {
@@ -84,6 +94,8 @@ func BindingsFrom(operations Operations) sql.Encoder {
 				stmt.BindInt64(i+1, value)
 			case []byte:
 				stmt.BindBytes(i+1, value)
+			case types.EpochID:
+				stmt.BindInt64(i+1, int64(value))
 			default:
 				panic(fmt.Sprintf("unexpected type %T", value))
 			}

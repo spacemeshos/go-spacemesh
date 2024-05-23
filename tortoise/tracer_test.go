@@ -78,7 +78,6 @@ func TestData(t *testing.T) {
 	}
 	require.NoError(t, err)
 	for _, entry := range entries {
-		entry := entry
 		if strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}

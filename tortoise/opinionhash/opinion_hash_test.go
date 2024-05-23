@@ -88,7 +88,6 @@ func TestOpinionHasher(t *testing.T) {
 			expected: "ae4b107c66",
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			var prev *types.Hash32
@@ -113,7 +112,7 @@ func TestOpinionHasher(t *testing.T) {
 				rst := hasher.Hash()
 				prev = &rst
 			}
-			require.Equal(t, tc.expected, prev.String())
+			require.Equal(t, tc.expected, prev.ShortString())
 		})
 	}
 }

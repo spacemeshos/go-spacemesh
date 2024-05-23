@@ -57,6 +57,8 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.LayerAvgSize, "Layer Avg size")
 	flagSet.BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
+	flagSet.StringVar(&cfg.PprofHTTPServerListener, "pprof-listener", cfg.PprofHTTPServerListener,
+		"Listen address for pprof server, not safe to expose publicly")
 	flagSet.Uint64Var(&cfg.TickSize, "tick-size", cfg.TickSize, "number of poet leaves in a single tick")
 	flagSet.StringVar(&cfg.ProfilerURL, "profiler-url", cfg.ProfilerURL,
 		"send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
@@ -175,6 +177,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.API.GrpcSendMsgSize, "GRPC api send message size")
 	flagSet.StringVar(&cfg.API.JSONListener, "grpc-json-listener",
 		cfg.API.JSONListener, "(Optional) endpoint to expose public grpc services via HTTP/JSON.")
+
+	flagSet.StringSliceVar(&cfg.API.JSONCorsAllowedOrigins, "grpc-cors-allowed-origin",
+		cfg.API.JSONCorsAllowedOrigins, "(Optional) CORS Allowed Origin, can be specified multiple times")
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
@@ -328,11 +333,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.Bootstrap.Version, "the update version of the bootstrap data")
 
 	/**======================== testing related flags ========================== **/
-	flagSet.StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
-		"", "import private smesher key for testing",
-	)
 	flagSet.VarP(flags.NewStringToUint64Value(&cfg.Genesis.Accounts), "accounts", "a",
-		"List of pre-funded accounts (use in tests only")
+		"List of pre-funded accounts (use in tests only)",
+	)
 
 	/**========================  Deprecated flags ========================== **/
 	flagSet.Var(flags.NewDeprecatedFlag(

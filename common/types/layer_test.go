@@ -158,7 +158,6 @@ func TestLayerID_GetEpoch(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			SetLayersPerEpoch(tc.layersPerEpoch)
 			require.EqualValues(t, tc.epoch, LayerID(tc.layer).GetEpoch())
@@ -224,7 +223,6 @@ func TestLayerID_OrdinalInEpoch(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			SetLayersPerEpoch(tc.layersPerEpoch)
 			require.EqualValues(t, tc.ordinal, LayerID(tc.layer).OrdinalInEpoch())
@@ -290,7 +288,6 @@ func TestLayerID_FirstInEpoch(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			SetLayersPerEpoch(tc.layersPerEpoch)
 			require.EqualValues(t, tc.isFirst, LayerID(tc.layer).FirstInEpoch())

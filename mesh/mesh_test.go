@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -133,13 +133,11 @@ func createIdentity(t *testing.T, db sql.Executor, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: types.EpochID(1),
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, nil, 1, nil)
-	require.NoError(t, activation.SignAndFinalizeAtx(sig, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
+	atx := types.NewActivationTx(challenge, types.Address{}, 1, nil)
+	atx.SmesherID = sig.NodeID()
 	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, vAtx))
+	atx.TickCount = 1
+	require.NoError(t, atxs.Add(db, atx))
 }
 
 func createLayerBlocks(
@@ -411,7 +409,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 		tm.cdb,
 		signing.NewEdVerifier(),
 		malfeasance.NewMockpostVerifier(gomock.NewController(t)),
-		&types.MalfeasanceGossip{MalfeasanceProof: *malProof},
+		&wire.MalfeasanceGossip{MalfeasanceProof: *malProof},
 	)
 	require.NoError(t, err)
 	require.Equal(t, sig.NodeID(), nodeID)
@@ -759,7 +757,6 @@ func TestProcessLayer(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
@@ -972,7 +969,6 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			tm := createTestMesh(t)

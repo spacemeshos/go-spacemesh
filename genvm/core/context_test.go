@@ -39,10 +39,10 @@ func TestTransfer(t *testing.T) {
 }
 
 func TestConsume(t *testing.T) {
-	t.Run("NoBalance", func(t *testing.T) {
+	t.Run("OutOfGas", func(t *testing.T) {
 		ctx := core.Context{}
 		ctx.Header.GasPrice = 1
-		require.ErrorIs(t, ctx.Consume(100), core.ErrNoBalance)
+		require.ErrorIs(t, ctx.Consume(100), core.ErrOutOfGas)
 	})
 	t.Run("MaxGas", func(t *testing.T) {
 		ctx := core.Context{}

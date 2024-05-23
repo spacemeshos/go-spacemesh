@@ -9,11 +9,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -92,12 +95,12 @@ func TestMalfeasanceProof_Honest(t *testing.T) {
 	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
 
 	// but an add will update the cache
-	proof := &types.MalfeasanceProof{
+	proof := &mwire.MalfeasanceProof{
 		Layer: types.LayerID(11),
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
-			Data: &types.BallotProof{
-				Messages: [2]types.BallotProofMsg{
+		Proof: mwire.Proof{
+			Type: mwire.MultipleBallots,
+			Data: &mwire.BallotProof{
+				Messages: [2]mwire.BallotProofMsg{
 					{},
 					{},
 				},
@@ -117,12 +120,12 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
 	// a bad guy
-	proof := &types.MalfeasanceProof{
+	proof := &mwire.MalfeasanceProof{
 		Layer: types.LayerID(11),
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
-			Data: &types.BallotProof{
-				Messages: [2]types.BallotProofMsg{
+		Proof: mwire.Proof{
+			Type: mwire.MultipleBallots,
+			Data: &mwire.BallotProof{
+				Messages: [2]mwire.BallotProofMsg{
 					{},
 					{},
 				},
@@ -139,86 +142,14 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	require.EqualValues(t, proof, got)
 }
 
-func TestIdentityExists(t *testing.T) {
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	exists, err := cdb.IdentityExists(signer.NodeID())
-	require.NoError(t, err)
-	require.False(t, exists)
-
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(22),
-				Sequence:     11,
-			},
-			NumUnits: 11,
-		},
-	}
-	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
-	atx.SetReceived(time.Now())
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(cdb, vAtx))
-
-	exists, err = cdb.IdentityExists(signer.NodeID())
-	require.NoError(t, err)
-	require.True(t, exists)
-}
-
-func TestStore_GetAtxByNodeID(t *testing.T) {
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-
-	atx3 := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(3),
-				Sequence:     11,
-			},
-			NumUnits: 11,
-		},
-	}
-	atx4 := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: types.EpochID(4),
-				Sequence:     12,
-			},
-			NumUnits: 11,
-		},
-	}
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	for _, atx := range []*types.ActivationTx{atx3, atx4} {
-		require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
-		atx.SetEffectiveNumUnits(atx.NumUnits)
-		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(t, err)
-		require.NoError(t, atxs.Add(cdb, vAtx))
-	}
-
-	got, err := cdb.GetEpochAtx(types.EpochID(3), signer.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, atx3.ID(), got.ID)
-
-	got, err = cdb.GetLastAtx(signer.NodeID())
-	require.NoError(t, err)
-	require.Equal(t, atx4.ID(), got.ID)
-}
-
 func TestBlobStore_GetATXBlob(t *testing.T) {
 	db := sql.InMemory()
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
+	atx := &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
 				PublishEpoch: types.EpochID(22),
 				Sequence:     11,
 			},
@@ -227,11 +158,8 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	require.NoError(t, activation.SignAndFinalizeAtx(signer, atx))
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now())
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
+	atx.Sign(signer)
+	vAtx := fixture.ToAtx(t, atx)
 
 	has, err := bs.Has(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
@@ -248,12 +176,10 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	got, err := getBytes(ctx, bs, datastore.ATXDB, atx.ID())
 	require.NoError(t, err)
 
-	var gotA types.ActivationTx
-	require.NoError(t, codec.Decode(got, &gotA))
-	require.NoError(t, gotA.Initialize())
-	gotA.SetEffectiveNumUnits(gotA.NumUnits)
-	gotA.SetReceived(atx.Received())
-	require.Equal(t, *atx, gotA)
+	var gotA wire.ActivationTxV1
+	codec.MustDecode(got, &gotA)
+	require.Equal(t, atx.ID(), gotA.ID())
+	require.Equal(t, atx, &gotA)
 
 	_, err = getBytes(ctx, bs, datastore.BallotDB, atx.ID())
 	require.ErrorIs(t, err, datastore.ErrNotFound)
@@ -429,12 +355,12 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
-	proof := &types.MalfeasanceProof{
+	proof := &mwire.MalfeasanceProof{
 		Layer: types.LayerID(11),
-		Proof: types.Proof{
-			Type: types.HareEquivocation,
-			Data: &types.HareProof{
-				Messages: [2]types.HareProofMsg{{}, {}},
+		Proof: mwire.Proof{
+			Type: mwire.HareEquivocation,
+			Data: &mwire.HareProof{
+				Messages: [2]mwire.HareProofMsg{{}, {}},
 			},
 		},
 	}
@@ -480,4 +406,17 @@ func TestBlobStore_GetActiveSet(t *testing.T) {
 	got, err := getBytes(ctx, bs, datastore.ActiveSet, hash)
 	require.NoError(t, err)
 	require.Equal(t, codec.MustEncode(as), got)
+}
+
+func Test_MarkingMalicious(t *testing.T) {
+	db := sql.InMemory()
+	store := atxsdata.New()
+	id := types.RandomNodeID()
+	cdb := datastore.NewCachedDB(db, logtest.New(t), datastore.WithConsensusCache(store))
+
+	cdb.CacheMalfeasanceProof(id, &mwire.MalfeasanceProof{})
+	m, err := cdb.IsMalicious(id)
+	require.NoError(t, err)
+	require.True(t, m)
+	require.True(t, store.IsMalicious(id))
 }

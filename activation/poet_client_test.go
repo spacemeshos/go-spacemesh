@@ -4,12 +4,16 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/spacemeshos/poet/server"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -138,26 +142,49 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_HTTPPoetClient_PoetServiceID(t *testing.T) {
+func TestPoetClient_CachesProof(t *testing.T) {
+	t.Parallel()
+
+	var proofsCalled atomic.Uint64
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proofsCalled.Add(1)
 		require.Equal(t, http.MethodGet, r.Method)
+		require.Contains(t, r.URL.Path, "/v1/proofs/")
 
-		w.WriteHeader(http.StatusOK)
-		resp, err := protojson.Marshal(&rpcapi.InfoResponse{})
+		resp, err := protojson.Marshal(&rpcapi.ProofResponse{
+			Proof: &rpcapi.PoetProof{},
+		})
 		require.NoError(t, err)
+		w.WriteHeader(http.StatusOK)
 		w.Write(resp)
-
-		require.Equal(t, "/v1/info", r.URL.Path)
 	}))
 	defer ts.Close()
 
-	cfg := server.DefaultRoundConfig()
-	key := types.MustBase64FromString("Zm9vYmFy")
-	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL, Pubkey: key}, PoetConfig{
-		PhaseShift: cfg.PhaseShift,
-		CycleGap:   cfg.CycleGap,
-	}, withCustomHttpClient(ts.Client()))
-	require.NoError(t, err)
+	server := types.PoetServer{
+		Address: ts.URL,
+		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
+	}
+	ctx := context.Background()
+	db := NewMockpoetDbAPI(gomock.NewController(t))
+	db.EXPECT().ValidateAndStore(ctx, gomock.Any())
+	db.EXPECT().ProofForRound(server.Pubkey.Bytes(), "1").Times(19)
 
-	require.Equal(t, key.Bytes(), client.PoetServiceID(context.Background()))
+	poet, err := newPoetClient(db, server, DefaultPoetConfig(), zaptest.NewLogger(t))
+	require.NoError(t, err)
+	poet.client.client.HTTPClient = ts.Client()
+
+	eg := errgroup.Group{}
+	for range 20 {
+		eg.Go(func() error {
+			_, _, err := poet.Proof(ctx, "1")
+			return err
+		})
+	}
+	require.NoError(t, eg.Wait())
+	require.Equal(t, uint64(1), proofsCalled.Load())
+
+	db.EXPECT().ValidateAndStore(ctx, gomock.Any())
+	_, _, err = poet.Proof(ctx, "2")
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), proofsCalled.Load())
 }

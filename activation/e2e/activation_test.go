@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -32,7 +33,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 
 	numSigners := 3
 	signers := make(map[types.NodeID]*signing.EdSigner, numSigners)
-	for i := 0; i < numSigners; i++ {
+	for range numSigners {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
@@ -53,6 +54,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	}).AnyTimes()
 
 	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -63,7 +65,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	var eg errgroup.Group
 	i := uint32(1)
 	for _, sig := range signers {
-		sig := sig
 		opts := opts
 		opts.DataDir = t.TempDir()
 		opts.NumUnits = min(i*2, cfg.MaxNumUnits)
@@ -122,7 +123,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		localDB,
 		poetDb,
 		svc,
-		[]types.PoetServer{{Address: poetProver.RestURL().String()}},
+		[]types.PoetServer{{Pubkey: types.NewBase64Enc([]byte("foobar")), Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
@@ -136,15 +137,16 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	}
 
 	var atxMtx sync.Mutex
-	atxs := make(map[types.NodeID]types.ActivationTx)
+	atxs := make(map[types.NodeID]wire.ActivationTxV1)
 	endChan := make(chan struct{})
 	mpub := mocks.NewMockPublisher(ctrl)
 	mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 		func(ctx context.Context, topic string, got []byte) error {
 			atxMtx.Lock()
 			defer atxMtx.Unlock()
-			var gotAtx types.ActivationTx
-			require.NoError(t, codec.Decode(got, &gotAtx))
+
+			var gotAtx wire.ActivationTxV1
+			codec.MustDecode(got, &gotAtx)
 			atxs[gotAtx.SmesherID] = gotAtx
 			if len(atxs) == numSigners {
 				close(endChan)
@@ -194,26 +196,27 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		_, err = v.NIPost(
 			context.Background(),
 			sig.NodeID(),
-			*atx.CommitmentATX,
-			atx.NIPost,
-			atx.NIPostChallenge.Hash(),
+			*atx.CommitmentATXID,
+			wire.NiPostFromWireV1(atx.NIPost),
+			atx.NIPostChallengeV1.Hash(),
 			atx.NumUnits,
 		)
 		require.NoError(t, err)
 
+		require.NotNil(t, atx.VRFNonce)
 		err := v.VRFNonce(
 			sig.NodeID(),
-			*atx.CommitmentATX,
-			atx.VRFNonce,
-			atx.NIPost.PostMetadata,
+			*atx.CommitmentATXID,
+			uint64(*atx.VRFNonce),
+			atx.NIPost.PostMetadata.LabelsPerUnit,
 			atx.NumUnits,
 		)
 		require.NoError(t, err)
 
-		require.Equal(t, postGenesisEpoch, atx.NIPostChallenge.TargetEpoch())
-		require.Equal(t, types.EmptyATXID, atx.NIPostChallenge.PrevATXID)
-		require.Equal(t, goldenATX, atx.NIPostChallenge.PositioningATX)
-		require.Equal(t, uint64(0), atx.NIPostChallenge.Sequence)
+		require.Equal(t, postGenesisEpoch, atx.PublishEpoch+1)
+		require.Equal(t, types.EmptyATXID, atx.PrevATXID)
+		require.Equal(t, goldenATX, atx.PositioningATXID)
+		require.Equal(t, uint64(0), atx.Sequence)
 
 		require.Equal(t, types.Address{}, atx.Coinbase)
 		require.Equal(t, sig.NodeID(), *atx.NodeID)

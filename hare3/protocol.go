@@ -11,6 +11,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
 type grade uint8
@@ -115,7 +116,7 @@ func (p *protocol) OnInitial(proposals []types.ProposalID) {
 	p.initial = proposals
 }
 
-func (p *protocol) OnInput(msg *input) (bool, *types.HareProof) {
+func (p *protocol) OnInput(msg *input) (bool, *wire.HareProof) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -346,7 +347,7 @@ type gossip struct {
 	state     map[messageKey]*gossipInput
 }
 
-func (g *gossip) receive(current IterRound, input *input) (bool, *types.HareProof) {
+func (g *gossip) receive(current IterRound, input *input) (bool, *wire.HareProof) {
 	// Case 1: will be discarded earlier
 	other, exist := g.state[input.key()]
 	if exist {
@@ -364,7 +365,7 @@ func (g *gossip) receive(current IterRound, input *input) (bool, *types.HareProo
 				other.malicious = true
 				other.otherReceived = &current
 			}
-			return true, &types.HareProof{Messages: [2]types.HareProofMsg{
+			return true, &wire.HareProof{Messages: [2]wire.HareProofMsg{
 				other.ToMalfeasanceProof(), input.ToMalfeasanceProof(),
 			}}
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -17,7 +18,7 @@ import (
 //go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
 
 type AtxReceiver interface {
-	OnAtx(*types.ActivationTxHeader)
+	OnAtx(*types.ActivationTx)
 }
 
 type PostVerifier interface {
@@ -33,8 +34,8 @@ type scaler interface {
 type validatorOption func(*validatorOptions)
 
 type nipostValidator interface {
-	InitialNIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, goldenATXID types.ATXID) error
-	NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error
+	InitialNIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, goldenATXID types.ATXID) error
+	NIPostChallengeV1(challenge *wire.NIPostChallengeV1, previous *types.ActivationTx, nodeID types.NodeID) error
 	NIPost(
 		ctx context.Context,
 		nodeId types.NodeID,
@@ -53,18 +54,16 @@ type nipostValidator interface {
 		ctx context.Context,
 		nodeId types.NodeID,
 		commitmentAtxId types.ATXID,
-		Post *types.Post,
-		PostMetadata *types.PostMetadata,
+		post *types.Post,
+		metadata *types.PostMetadata,
 		numUnits uint32,
 		opts ...validatorOption,
 	) error
-	PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error
 
 	VRFNonce(
 		nodeId types.NodeID,
 		commitmentAtxId types.ATXID,
-		vrfNonce *types.VRFPostIndex,
-		PostMetadata *types.PostMetadata,
+		vrfNonce, labelsPerUnit uint64,
 		numUnits uint32,
 	) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
@@ -83,7 +82,8 @@ type nipostBuilder interface {
 	BuildNIPost(
 		ctx context.Context,
 		sig *signing.EdSigner,
-		challenge *types.NIPostChallenge,
+		publish types.EpochID,
+		challenge types.Hash32,
 	) (*nipost.NIPostState, error)
 	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
 	ResetState(types.NodeID) error
@@ -94,7 +94,7 @@ type syncer interface {
 }
 
 type atxProvider interface {
-	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
+	GetAtx(id types.ATXID) (*types.ActivationTx, error)
 }
 
 // PostSetupProvider defines the functionality required for Post setup.
@@ -122,8 +122,6 @@ type SmeshingProvider interface {
 type poetClient interface {
 	Address() string
 
-	PowParams(ctx context.Context) (*PoetPowParams, error)
-
 	// Submit registers a challenge in the proving service current open round.
 	Submit(
 		ctx context.Context,
@@ -131,15 +129,15 @@ type poetClient interface {
 		prefix, challenge []byte,
 		signature types.EdSignature,
 		nodeID types.NodeID,
-		pow PoetPoW,
 	) (*types.PoetRound, error)
 
 	// Proof returns the proof for the given round ID.
-	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Member, error)
+	Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error)
 }
 
 type poetDbAPI interface {
-	GetProof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	Proof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 

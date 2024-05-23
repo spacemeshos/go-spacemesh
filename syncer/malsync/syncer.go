@@ -303,7 +303,6 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 
 		var eg errgroup.Group
 		for _, peer := range peers {
-			peer := peer
 			eg.Go(func() error {
 				malIDs, err := s.fetcher.GetMaliciousIDs(ctx, peer)
 				if err != nil {
@@ -318,7 +317,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 					)
 					return nil
 				}
-				s.logger.Info("downloaded malfeasant node IDs",
+				s.logger.Debug("downloaded malfeasant node IDs",
 					log.ZContext(ctx),
 					zap.String("peer", peer.String()),
 					zap.Int("ids", len(malIDs)),

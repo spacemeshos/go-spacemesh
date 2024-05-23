@@ -157,14 +157,13 @@ func (p *Peers) SelectBest(n int) []peer.ID {
 	}
 	best := make([]*data, 0, lth)
 	for _, peer := range p.peers {
-		worst := peer
 		for i := range best {
-			if worst.less(best[i], p.globalLatency) {
-				best[i], worst = worst, best[i]
+			if peer.less(best[i], p.globalLatency) {
+				best[i], peer = peer, best[i]
 			}
 		}
 		if len(best) < cap(best) {
-			best = append(best, worst)
+			best = append(best, peer)
 		}
 	}
 	rst := make([]peer.ID, len(best))

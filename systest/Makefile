@@ -6,7 +6,7 @@ test_name ?= TestSmeshing
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
 poet_image ?= $(org)/poet:v0.10.2
-post_service_image ?= $(org)/post-service:v0.7.5
+post_service_image ?= $(org)/post-service:v0.7.6
 post_init_image ?= $(org)/postcli:v0.12.5
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
@@ -79,7 +79,9 @@ gomplate:
 .PHONY: run
 run: gomplate $(run_deps)
 	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
-	@if [ -z "${norbac}" ]; then \
+	@ns=$$(kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null); \
+	export ns="$${ns:-default}"; \
+	if [ -z "$${norbac}" ]; then \
 	  testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" rbac=1 \
 	    gomplate --file systest_job.yml.tmpl | kubectl apply -f -; \
 	  testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" \

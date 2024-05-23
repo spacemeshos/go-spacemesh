@@ -13,12 +13,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmock "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -235,19 +237,15 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 }
 
 func createAtx(t *testing.T, db *sql.Database, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
-	atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-		NIPostChallenge: types.NIPostChallenge{
-			PublishEpoch: epoch,
-		},
-		NumUnits: 1,
-	}}
+	atx := &types.ActivationTx{
+		PublishEpoch: epoch,
+		NumUnits:     1,
+		TickCount:    1,
+		SmesherID:    nodeID,
+	}
 	atx.SetID(atxID)
-	atx.SetEffectiveNumUnits(1)
 	atx.SetReceived(time.Now())
-	atx.SmesherID = nodeID
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(db, vAtx))
+	require.NoError(t, atxs.Add(db, atx))
 }
 
 func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {
@@ -743,7 +741,7 @@ func TestBallot_MaliciousProofIgnoredInSyncFlow(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.Votes.Base}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), b, gomock.Any()).Return(nil)
-	th.mm.EXPECT().AddBallot(context.Background(), b).Return(&types.MalfeasanceProof{Layer: lid}, nil)
+	th.mm.EXPECT().AddBallot(context.Background(), b).Return(&wire.MalfeasanceProof{Layer: lid}, nil)
 	decoded := &tortoise.DecodedBallot{BallotTortoiseData: b.ToTortoiseData()}
 	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, nil)
 	th.md.EXPECT().StoreBallot(decoded).Return(nil)
@@ -958,7 +956,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})
@@ -990,7 +988,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})
@@ -1026,7 +1024,7 @@ func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})
@@ -1070,7 +1068,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).MinTimes(1).MaxTimes(2)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil).MinTimes(1).MaxTimes(2)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			_ = ballots.Add(th.db, got)
 			return nil, nil
 		}).MinTimes(1).MaxTimes(2)
@@ -1126,21 +1124,21 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{pMal.Votes.Base})
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{pMal.AtxID})
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &pMal.Ballot, gomock.Any()).Return(nil)
-	ballotProof := types.BallotProof{
-		Messages: [2]types.BallotProofMsg{
+	ballotProof := wire.BallotProof{
+		Messages: [2]wire.BallotProofMsg{
 			{},
 			{},
 		},
 	}
-	proof := &types.MalfeasanceProof{
+	proof := &wire.MalfeasanceProof{
 		Layer: lid,
-		Proof: types.Proof{
-			Type: types.MultipleBallots,
+		Proof: wire.Proof{
+			Type: wire.MultipleBallots,
 			Data: &ballotProof,
 		},
 	}
 	th.mm.EXPECT().AddBallot(context.Background(), &pMal.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			got.SetMalicious()
 			_ = ballots.Add(th.db, got)
 			return proof, nil
@@ -1149,7 +1147,7 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), pMal.Layer, pMal.ID(), pMal.TxIDs)
 	th.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
-			var gossip types.MalfeasanceGossip
+			var gossip wire.MalfeasanceGossip
 			require.NoError(t, codec.Decode(data, &gossip))
 			require.Equal(t, *proof, gossip.MalfeasanceProof)
 			return nil
@@ -1177,7 +1175,6 @@ func TestProposal_ProposalGossip_Fetched(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			th := createTestHandlerNoopDecoder(t)
 			lid := th.clock.CurrentLayer()
@@ -1246,7 +1243,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})
@@ -1285,7 +1282,7 @@ func TestMetrics(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
-		func(_ context.Context, got *types.Ballot) (*types.MalfeasanceProof, error) {
+		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			require.NoError(t, ballots.Add(th.db, got))
 			return nil, nil
 		})
@@ -1392,9 +1389,9 @@ func TestHandleActiveSet(t *testing.T) {
 	}
 }
 
-func gproposal(signer *signing.EdSigner, atxid types.ATXID,
+func gproposal(t *testing.T, signer *signing.EdSigner, atxid types.ATXID,
 	layer types.LayerID, edata *types.EpochData,
-) types.Proposal {
+) *types.Proposal {
 	p := types.Proposal{}
 	p.Layer = layer
 	p.AtxID = atxid
@@ -1406,39 +1403,50 @@ func gproposal(signer *signing.EdSigner, atxid types.ATXID,
 	if edata != nil {
 		p.SetBeacon(edata.Beacon)
 	}
-	return p
+	require.NoError(t, p.Initialize())
+	return &p
 }
 
-func TestHandleSyncedProposalActiveSet(t *testing.T) {
+type asTestHandler struct {
+	*testing.T
+	*testHandler
+	lid     types.LayerID
+	set     types.ATXIDList
+	p       []*types.Proposal
+	pid     p2p.Peer
+	startCh chan struct{}
+	contCh  chan error
+}
+
+func createASTestHandler(t *testing.T) *asTestHandler {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	set := types.ATXIDList{{1}, {2}}
-	lid := types.LayerID(20)
-	good := gproposal(signer, types.ATXID{1}, lid, &types.EpochData{
-		ActiveSetHash: set.Hash(),
-		Beacon:        types.Beacon{1},
-	})
-	require.NoError(t, good.Initialize())
-	th := createTestHandler(t)
-	pid := p2p.Peer("any")
+	th := &asTestHandler{
+		T:           t,
+		testHandler: createTestHandler(t),
+		lid:         types.LayerID(20),
+		set:         types.ATXIDList{{1}, {2}, {3}},
+		pid:         p2p.Peer("any"),
+		startCh:     make(chan struct{}),
+		contCh:      make(chan error),
+	}
+	th.p = []*types.Proposal{
+		gproposal(t, signer, types.ATXID{1}, th.lid, &types.EpochData{
+			ActiveSetHash: th.set.Hash(),
+			Beacon:        types.Beacon{1},
+		}),
+		gproposal(t, signer, types.ATXID{2}, th.lid, &types.EpochData{
+			ActiveSetHash: th.set.Hash(),
+			Beacon:        types.Beacon{1},
+		}),
+	}
 
-	th.mclock.EXPECT().CurrentLayer().Return(lid).AnyTimes()
-	th.mm.EXPECT().ProcessedLayer().Return(lid - 2).AnyTimes()
-	th.mclock.EXPECT().LayerToTime(gomock.Any())
-	th.mf.EXPECT().RegisterPeerHashes(pid, gomock.Any()).AnyTimes()
-	th.mf.EXPECT().GetActiveSet(gomock.Any(), set.Hash()).DoAndReturn(
-		func(_ context.Context, got types.Hash32) error {
-			require.NoError(t, activesets.Add(th.db, got, &types.EpochActiveSet{
-				Epoch: lid.GetEpoch(),
-				Set:   set,
-			}))
-			for _, id := range set {
-				th.atxsdata.AddAtx(lid.GetEpoch(), id, &atxsdata.ATX{Node: types.NodeID{1}})
-			}
-			return nil
-		},
-	)
+	th.mclock.EXPECT().CurrentLayer().Return(th.lid).AnyTimes()
+	th.mm.EXPECT().ProcessedLayer().Return(th.lid - 2).AnyTimes()
+	th.mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes()
+	th.mf.EXPECT().RegisterPeerHashes(th.pid, gomock.Any()).AnyTimes()
+
 	th.mf.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).AnyTimes()
 	th.mf.EXPECT().GetBallots(gomock.Any(), gomock.Any()).AnyTimes()
 	th.mockSet.decodeAnyBallots()
@@ -1446,10 +1454,152 @@ func TestHandleSyncedProposalActiveSet(t *testing.T) {
 	th.mm.EXPECT().AddBallot(gomock.Any(), gomock.Any()).AnyTimes()
 	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	th.mconsumer.EXPECT().IsKnown(good.Layer, good.ID())
-	th.mconsumer.EXPECT().OnProposal(gomock.Eq(&good))
-	err = th.HandleSyncedProposal(context.Background(), good.ID().AsHash32(), pid, codec.MustEncode(&good))
-	require.NoError(t, err)
+	return th
+}
+
+func (th *asTestHandler) expectIsKnown(n int) {
+	th.mconsumer.EXPECT().IsKnown(th.p[n].Layer, th.p[n].ID())
+}
+
+func (th *asTestHandler) expectProposal(n int) {
+	th.expectIsKnown(n)
+	th.mconsumer.EXPECT().OnProposal(gomock.Eq(th.p[n]))
+}
+
+func (th *asTestHandler) blockOnGetActiveSet(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case th.startCh <- struct{}{}:
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-th.contCh:
+		return err
+	}
+}
+
+func (th *asTestHandler) waitForFetchToStart() {
+	<-th.startCh
+}
+
+func (th *asTestHandler) continueFetching(err error) {
+	th.contCh <- err
+}
+
+func (th *asTestHandler) expectGetActiveSet(block bool) {
+	th.mf.EXPECT().GetActiveSet(gomock.Any(), th.set.Hash()).DoAndReturn(
+		func(ctx context.Context, got types.Hash32) error {
+			if block {
+				if err := th.blockOnGetActiveSet(ctx); err != nil {
+					return err
+				}
+			}
+			require.NoError(th, activesets.Add(th.db, got, &types.EpochActiveSet{
+				Epoch: th.lid.GetEpoch(),
+				Set:   th.set,
+			}))
+			for _, id := range th.set {
+				th.atxsdata.AddAtx(th.lid.GetEpoch(), id, &atxsdata.ATX{Node: types.NodeID{1}})
+			}
+			return nil
+		},
+	)
+}
+
+func (th *asTestHandler) handleSyncedProposal(ctx context.Context, n int) error {
+	return th.HandleSyncedProposal(
+		ctx, th.p[n].ID().AsHash32(), th.pid, codec.MustEncode(th.p[n]))
+}
+
+func (th *asTestHandler) waitForSubscription() {
+	require.Eventually(th, func() bool {
+		th.weightCalcLock.Lock()
+		defer th.weightCalcLock.Unlock()
+		return len(th.pendingWeightCalc[th.set.Hash()]) != 0
+	}, 10*time.Second, 10*time.Millisecond)
+}
+
+func TestHandleSyncedProposalActiveSet(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("non-concurrent fetch", func(t *testing.T) {
+		th := createASTestHandler(t)
+		th.expectProposal(0)
+		th.expectGetActiveSet(false)
+		require.NoError(t, th.handleSyncedProposal(ctx, 0))
+
+		th.expectProposal(1)
+		// ActiveSet not fetched again here
+		require.NoError(t, th.handleSyncedProposal(ctx, 1))
+	})
+
+	t.Run("concurrent fetch", func(t *testing.T) {
+		th := createASTestHandler(t)
+		th.expectProposal(0)
+		th.expectGetActiveSet(true)
+		var eg errgroup.Group
+		eg.Go(func() error { return th.handleSyncedProposal(ctx, 0) })
+		th.waitForFetchToStart()
+		th.expectProposal(1)
+		eg.Go(func() error { return th.handleSyncedProposal(ctx, 1) })
+		th.waitForSubscription()
+		th.continueFetching(nil)
+		require.NoError(t, eg.Wait())
+	})
+
+	t.Run("fetch failure and refetch", func(t *testing.T) {
+		th := createASTestHandler(t)
+		th.expectIsKnown(0)
+		th.expectGetActiveSet(true)
+		var eg errgroup.Group
+		eg.Go(func() error {
+			require.Error(t, th.handleSyncedProposal(ctx, 0))
+			return nil
+		})
+		th.waitForFetchToStart()
+		th.expectIsKnown(1)
+		eg.Go(func() error {
+			require.Error(t, th.handleSyncedProposal(ctx, 1))
+			return nil
+		})
+		th.waitForSubscription()
+		th.continueFetching(errors.New("fail"))
+		require.NoError(t, eg.Wait())
+
+		// refetch
+		th.expectProposal(0)
+		th.expectGetActiveSet(false)
+		require.NoError(t, th.handleSyncedProposal(ctx, 0))
+	})
+
+	t.Run("cancel fetch and refetch", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(ctx)
+		th := createASTestHandler(t)
+		th.expectIsKnown(0)
+		th.expectGetActiveSet(true)
+		var eg errgroup.Group
+		eg.Go(func() error {
+			require.ErrorIs(t, th.handleSyncedProposal(ctx, 0), context.Canceled)
+			return nil
+		})
+		th.waitForFetchToStart()
+		th.expectIsKnown(1)
+		eg.Go(func() error {
+			require.ErrorIs(t, th.handleSyncedProposal(ctx, 1), context.Canceled)
+			return nil
+		})
+		th.waitForSubscription()
+		cancel()
+		require.NoError(t, eg.Wait())
+
+		// refetch
+		th.expectProposal(0)
+		th.expectGetActiveSet(false)
+		require.NoError(t, th.handleSyncedProposal(ctx, 0))
+	})
 }
 
 func TestHandler_SettingBallotBeacon(t *testing.T) {

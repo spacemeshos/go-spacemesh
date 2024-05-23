@@ -14,8 +14,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
@@ -81,7 +82,7 @@ func (v *Validator) NIPost(
 	nodeId types.NodeID,
 	commitmentAtxId types.ATXID,
 	nipost *types.NIPost,
-	expectedChallenge types.Hash32,
+	poetChallenge types.Hash32,
 	numUnits uint32,
 	opts ...validatorOption,
 ) (uint64, error) {
@@ -89,22 +90,23 @@ func (v *Validator) NIPost(
 		return 0, err
 	}
 
-	if err := v.PostMetadata(&v.cfg, nipost.PostMetadata); err != nil {
+	if err := v.LabelsPerUnit(&v.cfg, nipost.PostMetadata.LabelsPerUnit); err != nil {
 		return 0, err
 	}
 
-	if err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...); err != nil {
+	err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...)
+	if err != nil {
 		return 0, fmt.Errorf("invalid Post: %w", err)
 	}
 
 	var ref types.PoetProofRef
 	copy(ref[:], nipost.PostMetadata.Challenge)
-	proof, statement, err := v.poetDb.GetProof(ref)
+	proof, statement, err := v.poetDb.Proof(ref)
 	if err != nil {
-		return 0, fmt.Errorf("poet proof is not available %x: %w", nipost.PostMetadata.Challenge, err)
+		return 0, fmt.Errorf("poet proof is not available %x: %w", ref, err)
 	}
 
-	if err := validateMerkleProof(expectedChallenge[:], &nipost.Membership, statement[:]); err != nil {
+	if err := validateMerkleProof(poetChallenge[:], &nipost.Membership, statement[:]); err != nil {
 		return 0, fmt.Errorf("invalid membership proof %w", err)
 	}
 
@@ -127,15 +129,11 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 		return fmt.Errorf("validating merkle proof: %w", err)
 	}
 	if !ok {
-		hexNodes := make([]string, 0, len(proof.Nodes))
-		for _, n := range proof.Nodes {
-			hexNodes = append(hexNodes, n.Hex())
-		}
 		return fmt.Errorf(
-			"invalid merkle proof, calculated root does not match proof root, leaf: %v, nodes: %v, expected root: %v",
-			util.Encode(leaf),
-			hexNodes,
-			util.Encode(expectedRoot),
+			"invalid merkle proof, calculated root does not match proof root, leaf: %x, nodes: %x, expected root: %x",
+			leaf,
+			proof.Nodes,
+			expectedRoot,
 		)
 	}
 	return nil
@@ -151,19 +149,19 @@ func (v *Validator) Post(
 	ctx context.Context,
 	nodeId types.NodeID,
 	commitmentAtxId types.ATXID,
-	PoST *types.Post,
-	PostMetadata *types.PostMetadata,
+	post *types.Post,
+	metadata *types.PostMetadata,
 	numUnits uint32,
 	opts ...validatorOption,
 ) error {
-	p := (*shared.Proof)(PoST)
+	p := (*shared.Proof)(post)
 
 	m := &shared.ProofMetadata{
 		NodeId:          nodeId.Bytes(),
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
-		Challenge:       PostMetadata.Challenge,
-		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
+		Challenge:       metadata.Challenge,
+		LabelsPerUnit:   metadata.LabelsPerUnit,
 	}
 
 	options := &validatorOptions{}
@@ -194,12 +192,12 @@ func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 	return nil
 }
 
-func (*Validator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) error {
-	if metadata.LabelsPerUnit < cfg.LabelsPerUnit {
+func (*Validator) LabelsPerUnit(cfg *PostConfig, labelsPerUnit uint64) error {
+	if labelsPerUnit < cfg.LabelsPerUnit {
 		return fmt.Errorf(
 			"invalid `LabelsPerUnit`; expected: >=%d, given: %d",
 			cfg.LabelsPerUnit,
-			metadata.LabelsPerUnit,
+			labelsPerUnit,
 		)
 	}
 	return nil
@@ -208,41 +206,39 @@ func (*Validator) PostMetadata(cfg *PostConfig, metadata *types.PostMetadata) er
 func (v *Validator) VRFNonce(
 	nodeId types.NodeID,
 	commitmentAtxId types.ATXID,
-	vrfNonce *types.VRFPostIndex,
-	PostMetadata *types.PostMetadata,
+	vrfNonce, labelsPerUnit uint64,
 	numUnits uint32,
 ) error {
-	if vrfNonce == nil {
-		return errors.New("VRFNonce is nil")
+	if err := v.LabelsPerUnit(&v.cfg, labelsPerUnit); err != nil {
+		return err
 	}
-
 	meta := &shared.VRFNonceMetadata{
 		NodeId:          nodeId.Bytes(),
 		CommitmentAtxId: commitmentAtxId.Bytes(),
 		NumUnits:        numUnits,
-		LabelsPerUnit:   PostMetadata.LabelsPerUnit,
+		LabelsPerUnit:   labelsPerUnit,
 	}
 
-	err := verifying.VerifyVRFNonce((*uint64)(vrfNonce), meta, verifying.WithLabelScryptParams(v.scrypt))
+	err := verifying.VerifyVRFNonce(&vrfNonce, meta, verifying.WithLabelScryptParams(v.scrypt))
 	if err != nil {
 		return fmt.Errorf("verify VRF nonce: %w", err)
 	}
 	return nil
 }
 
-func (v *Validator) InitialNIPostChallenge(
-	challenge *types.NIPostChallenge,
+func (v *Validator) InitialNIPostChallengeV1(
+	challenge *wire.NIPostChallengeV1,
 	atxs atxProvider,
 	goldenATXID types.ATXID,
 ) error {
-	if challenge.CommitmentATX == nil {
+	if challenge.CommitmentATXID == nil {
 		return errors.New("nil commitment atx in initial post challenge")
 	}
-
-	if *challenge.CommitmentATX != goldenATXID {
-		commitmentAtx, err := atxs.GetAtxHeader(*challenge.CommitmentATX)
+	commitmentATXId := *challenge.CommitmentATXID
+	if commitmentATXId != goldenATXID {
+		commitmentAtx, err := atxs.GetAtx(commitmentATXId)
 		if err != nil {
-			return &ErrAtxNotFound{Id: *challenge.CommitmentATX, source: err}
+			return &ErrAtxNotFound{Id: commitmentATXId, source: err}
 		}
 		if challenge.PublishEpoch <= commitmentAtx.PublishEpoch {
 			return fmt.Errorf(
@@ -255,16 +251,15 @@ func (v *Validator) InitialNIPostChallenge(
 	return nil
 }
 
-func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProvider, nodeID types.NodeID) error {
-	prevATX, err := atxs.GetAtxHeader(challenge.PrevATXID)
-	if err != nil {
-		return &ErrAtxNotFound{Id: challenge.PrevATXID, source: err}
-	}
-
-	if prevATX.NodeID != nodeID {
+func (*Validator) NIPostChallengeV1(
+	challenge *wire.NIPostChallengeV1,
+	prevATX *types.ActivationTx,
+	nodeID types.NodeID,
+) error {
+	if prevATX.SmesherID != nodeID {
 		return fmt.Errorf(
 			"previous atx belongs to different miner. nodeID: %v, prevAtx.ID: %v, prevAtx.NodeID: %v",
-			nodeID, prevATX.ID.ShortString(), prevATX.NodeID,
+			nodeID, prevATX.ID().ShortString(), prevATX.SmesherID,
 		)
 	}
 
@@ -276,7 +271,8 @@ func (*Validator) NIPostChallenge(challenge *types.NIPostChallenge, atxs atxProv
 	}
 
 	if prevATX.Sequence+1 != challenge.Sequence {
-		return errors.New("sequence number is not one more than prev sequence number")
+		return fmt.Errorf(
+			"sequence number (%d) is not one more than the prev one (%d)", challenge.Sequence, prevATX.Sequence)
 	}
 	return nil
 }
@@ -293,7 +289,7 @@ func (v *Validator) PositioningAtx(
 	if id == goldenATXID {
 		return nil
 	}
-	posAtx, err := atxs.GetAtxHeader(id)
+	posAtx, err := atxs.GetAtx(id)
 	if err != nil {
 		return &ErrAtxNotFound{Id: id, source: err}
 	}
@@ -368,6 +364,50 @@ func (v *Validator) VerifyChain(ctx context.Context, id, goldenATXID types.ATXID
 	return v.verifyChainWithOpts(ctx, id, goldenATXID, options)
 }
 
+type atxDeps struct {
+	nipost      types.NIPost
+	positioning types.ATXID
+	previous    types.ATXID
+	commitment  types.ATXID
+}
+
+func (v *Validator) getAtxDeps(ctx context.Context, db sql.Executor, id types.ATXID) (*atxDeps, error) {
+	var blob sql.Blob
+	version, err := atxs.LoadBlob(ctx, v.db, id.Bytes(), &blob)
+	if err != nil {
+		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
+	}
+
+	// TODO: implement ATX V2
+	switch version {
+	case types.AtxV1:
+		var commitment types.ATXID
+		var atx wire.ActivationTxV1
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return nil, fmt.Errorf("decoding ATX blob: %w", err)
+		}
+		if atx.CommitmentATXID != nil {
+			commitment = *atx.CommitmentATXID
+		} else {
+			catx, err := atxs.CommitmentATX(v.db, atx.SmesherID)
+			if err != nil {
+				return nil, fmt.Errorf("getting commitment ATX: %w", err)
+			}
+			commitment = catx
+		}
+
+		deps := &atxDeps{
+			nipost:      *wire.NiPostFromWireV1(atx.NIPost),
+			positioning: atx.PositioningATXID,
+			previous:    atx.PrevATXID,
+			commitment:  commitment,
+		}
+		return deps, nil
+	}
+
+	return nil, fmt.Errorf("unsupported ATX version: %v", version)
+}
+
 func (v *Validator) verifyChainWithOpts(
 	ctx context.Context,
 	id, goldenATXID types.ATXID,
@@ -377,6 +417,10 @@ func (v *Validator) verifyChainWithOpts(
 	atx, err := atxs.Get(v.db, id)
 	if err != nil {
 		return fmt.Errorf("get atx: %w", err)
+	}
+	if atx.Golden() {
+		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "golden"))
+		return nil
 	}
 
 	switch {
@@ -401,20 +445,16 @@ func (v *Validator) verifyChainWithOpts(
 	}
 
 	// validate POST fully
-	commitmentAtxId := atx.CommitmentATX
-	if commitmentAtxId == nil {
-		if atxId, err := atxs.CommitmentATX(v.db, atx.SmesherID); err != nil {
-			return fmt.Errorf("getting commitment atx: %w", err)
-		} else {
-			commitmentAtxId = &atxId
-		}
+	deps, err := v.getAtxDeps(ctx, v.db, id)
+	if err != nil {
+		return fmt.Errorf("getting ATX dependencies: %w", err)
 	}
 	if err := v.Post(
 		ctx,
 		atx.SmesherID,
-		*commitmentAtxId,
-		atx.NIPost.Post,
-		atx.NIPost.PostMetadata,
+		deps.commitment,
+		deps.nipost.Post,
+		deps.nipost.PostMetadata,
 		atx.NumUnits,
 	); err != nil {
 		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {
@@ -423,7 +463,7 @@ func (v *Validator) verifyChainWithOpts(
 		return &InvalidChainError{ID: id, src: err}
 	}
 
-	err = v.verifyChainDeps(ctx, atx.ActivationTx, goldenATXID, opts)
+	err = v.verifyChainDeps(ctx, deps, goldenATXID, opts)
 	invalidChain := &InvalidChainError{}
 	switch {
 	case err == nil:
@@ -440,23 +480,25 @@ func (v *Validator) verifyChainWithOpts(
 
 func (v *Validator) verifyChainDeps(
 	ctx context.Context,
-	atx *types.ActivationTx,
+	deps *atxDeps,
 	goldenATXID types.ATXID,
 	opts verifyChainOpts,
 ) error {
-	if atx.PrevATXID != types.EmptyATXID {
-		if err := v.verifyChainWithOpts(ctx, atx.PrevATXID, goldenATXID, opts); err != nil {
-			return fmt.Errorf("validating previous ATX %s chain: %w", atx.PrevATXID.ShortString(), err)
+	if deps.previous != types.EmptyATXID {
+		if err := v.verifyChainWithOpts(ctx, deps.previous, goldenATXID, opts); err != nil {
+			return fmt.Errorf("validating previous ATX %s chain: %w", deps.previous.ShortString(), err)
 		}
 	}
-	if atx.PositioningATX != goldenATXID {
-		if err := v.verifyChainWithOpts(ctx, atx.PositioningATX, goldenATXID, opts); err != nil {
-			return fmt.Errorf("validating positioning ATX %s chain: %w", atx.PositioningATX.ShortString(), err)
+	if deps.positioning != goldenATXID {
+		if err := v.verifyChainWithOpts(ctx, deps.positioning, goldenATXID, opts); err != nil {
+			return fmt.Errorf("validating positioning ATX %s chain: %w", deps.positioning.ShortString(), err)
 		}
 	}
-	if atx.CommitmentATX != nil && *atx.CommitmentATX != goldenATXID {
-		if err := v.verifyChainWithOpts(ctx, *atx.CommitmentATX, goldenATXID, opts); err != nil {
-			return fmt.Errorf("validating commitment ATX %s chain: %w", atx.CommitmentATX.ShortString(), err)
+	// verify commitment only if arrived at the first ATX in the chain
+	// to avoid verifying the same commitment ATX multiple times.
+	if deps.previous == types.EmptyATXID && deps.commitment != goldenATXID {
+		if err := v.verifyChainWithOpts(ctx, deps.commitment, goldenATXID, opts); err != nil {
+			return fmt.Errorf("validating commitment ATX %s chain: %w", deps.commitment.ShortString(), err)
 		}
 	}
 	return nil

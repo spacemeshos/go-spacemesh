@@ -3,10 +3,11 @@ package blocks
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"math"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"testing"
 	"time"
@@ -14,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -133,8 +133,9 @@ func createATXs(
 		data,
 		lid,
 		numATXs,
-		func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
-			return atx.Verify(baseTickHeight, 1)
+		func(atx *types.ActivationTx) {
+			atx.BaseTickHeight = baseTickHeight
+			atx.TickCount = 1
 		},
 	)
 }
@@ -144,7 +145,7 @@ func createModifiedATXs(
 	data *atxsdata.Data,
 	lid types.LayerID,
 	numATXs int,
-	onAtx func(*types.ActivationTx) (*types.VerifiedActivationTx, error),
+	onAtx func(*types.ActivationTx),
 ) ([]*signing.EdSigner, []*types.ActivationTx) {
 	tb.Helper()
 	atxes := make([]*types.ActivationTx, 0, numATXs)
@@ -157,17 +158,14 @@ func createModifiedATXs(
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
 			address,
-			nil,
 			numUnit,
 			nil,
 		)
-		atx.SetEffectiveNumUnits(numUnit)
 		atx.SetReceived(time.Now())
-		require.NoError(tb, activation.SignAndFinalizeAtx(signer, atx))
-		vAtx, err := onAtx(atx)
-		require.NoError(tb, err)
-
-		data.AddFromHeader(vAtx.ToHeader(), 0, false)
+		atx.SmesherID = signer.NodeID()
+		atx.SetID(types.RandomATXID())
+		onAtx(atx)
+		data.AddFromAtx(atx, 0, false)
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes
@@ -365,7 +363,6 @@ func Test_run(t *testing.T) {
 			expNumTxs:  numTXs,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			tg := createTestGenerator(t)
 			tg.cfg.BlockGasLimit = tc.gasLimit
@@ -658,19 +655,19 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	numProposals := 10
-	rng := rand.New(rand.NewSource(10101))
+	var seed [32]byte
+	binary.LittleEndian.PutUint64(seed[:], 10101)
+	rng := rand.New(rand.NewChaCha8(seed))
 	maxHeight := uint64(0)
 	signers, atxes := createModifiedATXs(
 		t,
 		tg.atxs,
 		(layerID.GetEpoch() - 1).FirstLayer(),
 		numProposals,
-		func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
-			n := rng.Uint64()
-			if n > maxHeight {
-				maxHeight = n
-			}
-			return atx.Verify(n, 1)
+		func(atx *types.ActivationTx) {
+			atx.TickCount = 1
+			atx.BaseTickHeight = rng.Uint64()
+			maxHeight = max(maxHeight, atx.BaseTickHeight)
 		},
 	)
 	activeSet := types.ToATXIDs(atxes)

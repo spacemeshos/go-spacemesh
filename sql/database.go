@@ -227,41 +227,42 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			zap.Int("current version", before),
 			zap.Int("target version", after),
 		)
-		tx, err := db.Tx(context.Background())
-		if err != nil {
-			return nil, err
-		}
 		for i, m := range config.migrations {
 			if m.Order() <= before {
 				continue
 			}
-			if _, ok := config.skipMigration[m.Order()]; !ok {
-				if err := m.Apply(tx); err != nil {
-					for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
-						if e := config.migrations[j].Rollback(); e != nil {
-							err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
-							break
+			if err := db.WithTx(context.Background(), func(tx *Tx) error {
+				if _, ok := config.skipMigration[m.Order()]; !ok {
+					if err := m.Apply(tx); err != nil {
+						for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
+							if e := config.migrations[j].Rollback(); e != nil {
+								err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
+								break
+							}
 						}
+
+						return fmt.Errorf("apply %s: %w", m.Name(), err)
 					}
-
-					tx.Release()
-					err = errors.Join(err, db.Close())
-					return nil, fmt.Errorf("apply %s: %w", m.Name(), err)
 				}
-			}
-			// version is set intentionally even if actual migration was skipped
-			if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
-				return nil, fmt.Errorf("update user_version to %d: %w", m.Order(), err)
-			}
-		}
-		tx.Commit()
-		tx.Release()
-
-		if config.vacuumState != 0 && before <= config.vacuumState {
-			if err := Vacuum(db); err != nil {
+				// version is set intentionally even if actual migration was skipped
+				if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
+					return fmt.Errorf("update user_version to %d: %w", m.Order(), err)
+				}
+				return nil
+			}); err != nil {
+				err = errors.Join(err, db.Close())
 				return nil, err
 			}
+
+			if config.vacuumState != 0 && before <= config.vacuumState {
+				if err := Vacuum(db); err != nil {
+					err = errors.Join(err, db.Close())
+					return nil, err
+				}
+			}
+			before = m.Order()
 		}
+
 	}
 	if config.cache {
 		config.logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
@@ -269,6 +270,16 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	}
 	db.queryCount.Store(0)
 	return db, nil
+}
+
+func Version(uri string) (int, error) {
+	pool, err := sqlitex.Open(uri, sqlite.SQLITE_OPEN_READONLY, 1)
+	if err != nil {
+		return 0, fmt.Errorf("open db %s: %w", uri, err)
+	}
+	db := &Database{pool: pool}
+	defer db.Close()
+	return version(db)
 }
 
 // Database is an instance of sqlite database.
@@ -494,14 +505,17 @@ type Blob struct {
 	Bytes []byte
 }
 
+// resize the underlying byte slice to the specified size.
+// The returned slice has length equal n, but it might have a larger capacity.
+// Warning: it is not guaranteed to keep the old data.
 func (b *Blob) resize(n int) {
 	if cap(b.Bytes) < n {
-		b.Bytes = slices.Grow(b.Bytes, n)
+		b.Bytes = make([]byte, n)
 	}
 	b.Bytes = b.Bytes[:n]
 }
 
-func (b *Blob) fromColumn(stmt *Statement, col int) {
+func (b *Blob) FromColumn(stmt *Statement, col int) {
 	if l := stmt.ColumnLen(col); l != 0 {
 		b.resize(l)
 		stmt.ColumnBytes(col, b.Bytes)
@@ -554,7 +568,7 @@ func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
 		func(stmt *Statement) {
 			stmt.BindBytes(1, id)
 		}, func(stmt *Statement) bool {
-			blob.fromColumn(stmt, 0)
+			blob.FromColumn(stmt, 0)
 			return true
 		}); err != nil {
 		return fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
@@ -562,4 +576,9 @@ func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
 		return fmt.Errorf("%w: object %s", ErrNotFound, util.Encode(id))
 	}
 	return nil
+}
+
+// IsNull returns true if the specified result column is null.
+func IsNull(stmt *Statement, col int) bool {
+	return stmt.ColumnType(col) == sqlite.SQLITE_NULL
 }

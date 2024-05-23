@@ -152,6 +152,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 			QueueSize:             cfg.GossipQueueSize,
 			PeerOutboundQueueSize: cfg.GossipPeerOutboundQueueSize,
 			Throttle:              cfg.GossipValidationThrottle,
+			EvictionStrategy:      cfg.GossipEvictionStrategy,
 		}); err != nil {
 			return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 		}
@@ -164,8 +165,19 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		discovery.WithLogger(fh.logger.Zap()),
 		discovery.WithAdvertiseDelay(fh.cfg.DiscoveryTimings.AdvertiseDelay),
 		discovery.WithAdvertiseInterval(fh.cfg.DiscoveryTimings.AdvertiseInterval),
+		discovery.WithAdvertiseIntervalSpread(fh.cfg.DiscoveryTimings.AdvertiseIntervalSpread),
 		discovery.WithAdvertiseRetryDelay(fh.cfg.DiscoveryTimings.AdvertiseInterval),
 		discovery.WithFindPeersRetryDelay(fh.cfg.DiscoveryTimings.FindPeersRetryDelay),
+		discovery.WithDiscoveryBackoff(true),
+		discovery.WithDiscoveryBackoffTimings(
+			fh.cfg.DiscoveryTimings.MinBackoff,
+			fh.cfg.DiscoveryTimings.MaxBackoff,
+		),
+		discovery.WithConnBackoffTimings(
+			fh.cfg.DiscoveryTimings.MinConnBackoff,
+			fh.cfg.DiscoveryTimings.MaxConnBackoff,
+			fh.cfg.DiscoveryTimings.DialTimeout,
+		),
 	}
 	if cfg.PrivateNetwork {
 		dopts = append(dopts, discovery.Private())
@@ -382,9 +394,11 @@ func (fh *Host) Start() error {
 	}
 	if err := fh.Network().Listen(fh.cfg.Listen...); err != nil {
 		fh.Network().Close()
-		return err
+		return fmt.Errorf("p2p: can't listen: %w", err)
 	}
-	fh.discovery.Start()
+	if err := fh.discovery.Start(); err != nil {
+		return fmt.Errorf("starting discovery: %w", err)
+	}
 	if fh.ping != nil {
 		fh.ping.Start()
 	}

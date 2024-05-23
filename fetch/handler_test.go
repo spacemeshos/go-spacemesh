@@ -8,8 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -97,7 +98,6 @@ func TestHandleLayerDataReq(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -137,7 +137,6 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -233,7 +232,6 @@ func TestHandleMeshHashReq(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -264,26 +262,23 @@ func TestHandleMeshHashReq(t *testing.T) {
 	}
 }
 
-func newAtx(t *testing.T, published types.EpochID) *types.VerifiedActivationTx {
+func newAtx(t *testing.T, published types.EpochID) *types.ActivationTx {
 	t.Helper()
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
+	nonce := uint64(123)
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx := &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
 				PublishEpoch: published,
 				PrevATXID:    types.RandomATXID(),
 			},
 			NumUnits: 2,
+			VRFNonce: &nonce,
 		},
 	}
-
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	activation.SignAndFinalizeAtx(signer, atx)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Now())
-	vatx, err := atx.Verify(0, 1)
-	require.NoError(t, err)
-	return vatx
+	atx.Sign(signer)
+	return fixture.ToAtx(t, atx)
 }
 
 func TestHandleEpochInfoReq(t *testing.T) {
@@ -301,7 +296,6 @@ func TestHandleEpochInfoReq(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -366,7 +360,7 @@ func testHandleEpochInfoReqWithQueryCache(
 	}
 
 	qc := th.cdb.Executor.(interface{ QueryCount() int })
-	require.Equal(t, 10, qc.QueryCount())
+	require.Equal(t, 20, qc.QueryCount())
 	epochBytes, err := codec.Encode(epoch)
 	require.NoError(t, err)
 
@@ -374,7 +368,7 @@ func testHandleEpochInfoReqWithQueryCache(
 	for i := 0; i < 3; i++ {
 		getInfo(th, epochBytes, &got)
 		require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
-		require.Equal(t, 11, qc.QueryCount())
+		require.Equal(t, 21, qc.QueryCount())
 	}
 
 	// Add another ATX which should be appended to the cached slice
@@ -382,14 +376,14 @@ func testHandleEpochInfoReqWithQueryCache(
 	require.NoError(t, atxs.Add(th.cdb, vatx))
 	atxs.AtxAdded(th.cdb, vatx)
 	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
-	require.Equal(t, 12, qc.QueryCount())
+	require.Equal(t, 23, qc.QueryCount())
 
 	getInfo(th, epochBytes, &got)
 	require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
 	// The query count is not incremented as the slice is still
 	// cached and the new atx is just appended to it, even though
 	// the response is re-serialized.
-	require.Equal(t, 12, qc.QueryCount())
+	require.Equal(t, 23, qc.QueryCount())
 }
 
 func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
@@ -428,7 +422,6 @@ func TestHandleMaliciousIDsReq(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
