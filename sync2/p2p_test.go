@@ -1,4 +1,4 @@
-package hashsync
+package sync2
 
 import (
 	"context"

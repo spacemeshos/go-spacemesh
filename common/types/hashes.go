@@ -16,6 +16,7 @@ import (
 const (
 	Hash32Length = 32
 	Hash20Length = 20
+	Hash12Length = 12
 )
 
 var (
@@ -29,11 +30,8 @@ type Hash32 [Hash32Length]byte
 // Hash20 represents the 20-byte blake3 hash of arbitrary data.
 type Hash20 [Hash20Length]byte
 
-// String implements the stringer interface and is used also by the logger when
-// doing full logging into a file.
-func (h Hash12) String() string {
-	return util.Encode(h[:5])
-}
+// Hash12 represents the 12-byte hash used for sync
+type Hash12 [Hash12Length]byte
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
@@ -92,6 +90,15 @@ func (h Hash20) ToHash32() (h32 Hash32) {
 	copy(h32[:], h[:])
 	return
 }
+
+// String implements the stringer interface and is used also by the logger when
+// doing full logging into a file.
+func (h Hash12) String() string {
+	return util.Encode(h[:5])
+}
+
+// Field returns a log field. Implements the LoggableField interface.
+func (h Hash12) Field() log.Field { return log.String("hash", hex.EncodeToString(h[:])) }
 
 // CalcProposalsHash32 returns the 32-byte blake3 sum of the IDs, sorted in lexicographic order. The pre-image is
 // prefixed with additionalBytes.
