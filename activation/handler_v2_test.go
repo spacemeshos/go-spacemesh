@@ -50,6 +50,15 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 	}
 }
 
+func (h *handlerMocks) expectFetchDeps(atx *wire.ActivationTxV2) {
+	h.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
+	h.mockFetch.EXPECT().GetPoetProof(gomock.Any(), atx.NiPosts[0].Challenge)
+	_, atxDeps := (&HandlerV2{goldenATXID: h.goldenATXID}).collectAtxDeps(atx)
+	if len(atxDeps) != 0 {
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxDeps, gomock.Any())
+	}
+}
+
 func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 	h.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
 	h.mValidatorV2.EXPECT().VRFNonceV2(
@@ -68,8 +77,9 @@ func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 		gomock.Any(),
 	)
 
+	h.expectFetchDeps(atx)
+
 	// TODO:
-	// 1. expect fetching dependencies
 	// 2. expect verifying nipost
 	// 3. expect storing ATX
 }
@@ -379,6 +389,142 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		// require.Nil(t, proof)
 	})
 	// TODO: more tests
+}
+
+func TestCollectDeps_AtxV2(t *testing.T) {
+	goldenATX := types.RandomATXID()
+	prev0 := types.RandomATXID()
+	prev1 := types.RandomATXID()
+	positioning := types.RandomATXID()
+	commitment := types.RandomATXID()
+	marriage := types.RandomATXID()
+	poetA := types.RandomHash()
+	poetB := types.RandomHash()
+
+	atxHandler := newV2TestHandler(t, goldenATX)
+
+	t.Run("all unique deps", func(t *testing.T) {
+		t.Parallel()
+		atx := wire.ActivationTxV2{
+			PreviousATXs:   []types.ATXID{prev0, prev1},
+			PositioningATX: positioning,
+			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: commitment},
+			MarriageATX:    &marriage,
+			NiPosts: []wire.NiPostsV2{
+				{Challenge: poetA},
+				{Challenge: poetB},
+			},
+		}
+		poetDeps, atxIDs := atxHandler.collectAtxDeps(&atx)
+		require.ElementsMatch(t, []types.Hash32{poetA, poetB}, poetDeps)
+		require.ElementsMatch(t, []types.ATXID{prev0, prev1, positioning, commitment, marriage}, atxIDs)
+	})
+	t.Run("eliminates duplicates", func(t *testing.T) {
+		t.Parallel()
+		atxA := types.RandomATXID()
+		atx := wire.ActivationTxV2{
+			PreviousATXs:   []types.ATXID{atxA, atxA},
+			PositioningATX: atxA,
+			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: atxA},
+			MarriageATX:    &atxA,
+			NiPosts: []wire.NiPostsV2{
+				{Challenge: poetA},
+				{Challenge: poetA},
+			},
+		}
+		poetDeps, atxIDs := atxHandler.collectAtxDeps(&atx)
+		require.ElementsMatch(t, []types.Hash32{poetA}, poetDeps)
+		require.ElementsMatch(t, []types.ATXID{atxA}, atxIDs)
+	})
+	t.Run("nil commitment ATX", func(t *testing.T) {
+		t.Parallel()
+		atx := wire.ActivationTxV2{
+			PreviousATXs:   []types.ATXID{prev0, prev1},
+			PositioningATX: positioning,
+			MarriageATX:    &marriage,
+			NiPosts: []wire.NiPostsV2{
+				{Challenge: poetA},
+				{Challenge: poetB},
+			},
+		}
+		poetDeps, atxIDs := atxHandler.collectAtxDeps(&atx)
+		require.ElementsMatch(t, []types.Hash32{poetA, poetB}, poetDeps)
+		require.ElementsMatch(t, []types.ATXID{prev0, prev1, positioning, marriage}, atxIDs)
+	})
+	t.Run("filters out golden ATX and empty ATX", func(t *testing.T) {
+		t.Parallel()
+		atx := wire.ActivationTxV2{
+			PreviousATXs:   []types.ATXID{types.EmptyATXID, goldenATX},
+			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: goldenATX},
+			PositioningATX: goldenATX,
+		}
+		poetDeps, atxIDs := atxHandler.collectAtxDeps(&atx)
+		require.Empty(t, poetDeps)
+		require.Empty(t, atxIDs)
+	})
+}
+
+func TestHandlerV2_RegisterReferences(t *testing.T) {
+	atxHdlr := newV2TestHandler(t, types.RandomATXID())
+
+	poets := []types.Hash32{types.RandomHash(), types.RandomHash()}
+	atxs := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
+	expectedHashes := poets
+	for _, atx := range atxs {
+		expectedHashes = append(expectedHashes, atx.Hash32())
+	}
+
+	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(atxHdlr.local, gomock.InAnyOrder(expectedHashes))
+	atxHdlr.registerHashes(atxHdlr.local, poets, atxs)
+}
+
+func TestHandlerV2_FetchesReferences(t *testing.T) {
+	golden := types.RandomATXID()
+	t.Run("fetch poet and atxs", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newV2TestHandler(t, golden)
+
+		poets := []types.Hash32{types.RandomHash(), types.RandomHash()}
+		atxs := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
+
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[0])
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[1])
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxs, gomock.Any())
+		require.NoError(t, atxHdlr.fetchReferences(context.Background(), poets, atxs))
+	})
+
+	t.Run("failed to fetch poet proof", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newV2TestHandler(t, golden)
+
+		poets := []types.Hash32{types.RandomHash(), types.RandomHash()}
+
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[0])
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[1]).Return(errors.New("pooh"))
+		require.Error(t, atxHdlr.fetchReferences(context.Background(), poets, nil))
+	})
+
+	t.Run("failed to fetch atxs", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newV2TestHandler(t, golden)
+
+		poets := []types.Hash32{types.RandomHash(), types.RandomHash()}
+		atxs := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
+
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[0])
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[1])
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxs, gomock.Any()).Return(errors.New("oh"))
+		require.Error(t, atxHdlr.fetchReferences(context.Background(), poets, atxs))
+	})
+	t.Run("no atxs to fetch", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newV2TestHandler(t, golden)
+
+		poets := []types.Hash32{types.RandomHash()}
+
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[0])
+		require.NoError(t, atxHdlr.fetchReferences(context.Background(), poets, nil))
+	})
 }
 
 func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
