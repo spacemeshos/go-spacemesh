@@ -10,11 +10,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -86,7 +85,7 @@ func createProposal(
 ) *ProposalMessage {
 	sig := buildSignedProposal(
 		context.Background(),
-		logtest.New(t),
+		zaptest.NewLogger(t),
 		vrfSigner,
 		epoch,
 		types.VRFPostIndex(rand.Uint64()),
@@ -138,7 +137,6 @@ func createFirstVote(
 	valid, pValid proposalList,
 	corruptSignature bool,
 ) *FirstVotingMessage {
-	logger := logtest.New(t)
 	msg := &FirstVotingMessage{
 		FirstVotingMessageBody: FirstVotingMessageBody{
 			EpochID:                   epoch,
@@ -146,10 +144,7 @@ func createFirstVote(
 			PotentiallyValidProposals: pValid,
 		},
 	}
-	encoded, err := codec.Encode(&msg.FirstVotingMessageBody)
-	if err != nil {
-		logger.With().Panic("failed to serialize message for signing", log.Err(err))
-	}
+	encoded := codec.MustEncode(&msg.FirstVotingMessageBody)
 	msg.Signature = signer.Sign(signing.BEACON_FIRST_MSG, encoded)
 	if corruptSignature {
 		msg.Signature = signer.Sign(signing.BEACON_FIRST_MSG, encoded[1:])
@@ -204,11 +199,7 @@ func createFollowingVote(
 			VotesBitVector: bitVector,
 		},
 	}
-	logger := logtest.New(t)
-	encoded, err := codec.Encode(&msg.FollowingVotingMessageBody)
-	if err != nil {
-		logger.With().Panic("failed to serialize message for signing", log.Err(err))
-	}
+	encoded := codec.MustEncode(&msg.FollowingVotingMessageBody)
 	msg.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encoded)
 	if corruptSignature {
 		msg.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encoded[1:])
@@ -1510,11 +1501,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 			VotesBitVector: votesBitVector,
 		},
 	}
-	logger := logtest.New(t)
-	encodedMsg1FollowingVotingMessageBody, err := codec.Encode(&msg1.FollowingVotingMessageBody)
-	if err != nil {
-		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
-	}
+	encodedMsg1FollowingVotingMessageBody := codec.MustEncode(&msg1.FollowingVotingMessageBody)
 	msg1.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg1FollowingVotingMessageBody)
 
 	data1, err := codec.Encode(&msg1)
@@ -1526,10 +1513,7 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 			VotesBitVector: votesBitVector,
 		},
 	}
-	encodedMsg2FollowingVotingMessageBody, err := codec.Encode(&msg2.FollowingVotingMessageBody)
-	if err != nil {
-		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
-	}
+	encodedMsg2FollowingVotingMessageBody := codec.MustEncode(&msg2.FollowingVotingMessageBody)
 	msg2.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg2FollowingVotingMessageBody)
 
 	data2, err := codec.Encode(&msg2)
@@ -1539,19 +1523,13 @@ func Test_UniqueFollowingVotingMessages(t *testing.T) {
 	require.Equal(t, data1, data2)
 
 	msg1.EpochID = types.EpochID(5)
-	encodedMsg1FollowingVotingMessageBody, err = codec.Encode(&msg1.FollowingVotingMessageBody)
-	if err != nil {
-		logger.With().Panic("failed to serialize msg1.FollowingVotingMessageBody for signing", log.Err(err))
-	}
+	encodedMsg1FollowingVotingMessageBody = codec.MustEncode(&msg1.FollowingVotingMessageBody)
 	msg1.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg1FollowingVotingMessageBody)
 	data1, err = codec.Encode(&msg1)
 	require.NoError(t, err)
 
 	msg2.EpochID = msg1.EpochID + 1
-	encodedMsg2FollowingVotingMessageBody, err = codec.Encode(&msg2.FollowingVotingMessageBody)
-	if err != nil {
-		logger.With().Panic("failed to serialize msg2.FollowingVotingMessageBody for signing", log.Err(err))
-	}
+	encodedMsg2FollowingVotingMessageBody = codec.MustEncode(&msg2.FollowingVotingMessageBody)
 	msg2.Signature = signer.Sign(signing.BEACON_FOLLOWUP_MSG, encodedMsg2FollowingVotingMessageBody)
 
 	data2, err = codec.Encode(&msg2)

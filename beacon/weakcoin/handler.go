@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -16,21 +18,23 @@ import (
 
 // HandleProposal defines method to handle Beacon Weak Coin Messages from gossip.
 func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	logger := wc.logger.WithContext(ctx)
-
 	var message Message
 	if err := codec.Decode(msg, &message); err != nil {
-		logger.With().Warning("malformed weak coin message", log.Err(err))
+		wc.logger.Warn("malformed weak coin message",
+			log.ZContext(ctx),
+			zap.Error(err),
+		)
 		return pubsub.ErrValidationReject
 	}
 
 	if err := wc.receiveMessage(ctx, message); err != nil {
 		if !errors.Is(err, errNotSmallest) {
-			logger.With().Debug("invalid proposal",
-				message.Epoch,
-				message.Round,
-				log.Stringer("peer", peer),
-				log.Err(err),
+			wc.logger.Debug("invalid proposal",
+				log.ZContext(ctx),
+				zap.Uint32("epoch_id", message.Epoch.Uint32()),
+				zap.Uint32("round_id", uint32(message.Round)),
+				zap.Stringer("peer", peer),
+				zap.Error(err),
 			)
 		}
 		return err

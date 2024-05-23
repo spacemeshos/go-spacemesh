@@ -684,7 +684,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		app.clock,
 		beacon.WithConfig(app.Config.Beacon),
-		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
 	)
 	for _, sig := range app.signers {
 		beaconProtocol.Register(sig)
