@@ -1,6 +1,10 @@
 package wire
 
-import "github.com/spacemeshos/go-spacemesh/common/types"
+import (
+	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
+)
 
 //go:generate scalegen
 
@@ -38,6 +42,25 @@ type ActivationTxV2 struct {
 
 	SmesherID types.NodeID
 	Signature types.EdSignature
+}
+
+// TODO: This is dummy implementation for testing.
+// It needs to be implemented properly.
+func (atx *ActivationTxV2) SignedBytes() []byte {
+	atxCopy := *atx
+	atxCopy.Signature = types.EdSignature{}
+	return codec.MustEncode(&atxCopy)
+}
+
+// TODO: This is dummy implementation for testing.
+// It needs to be implemented properly.
+func (atx *ActivationTxV2) ID() types.ATXID {
+	return types.BytesToATXID(atx.SignedBytes())
+}
+
+func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
+	atx.SmesherID = signer.NodeID()
+	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
 }
 
 type InitialAtxPartsV2 struct {
