@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -224,7 +225,8 @@ func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*Nan
 		if best == nil {
 			logger.Debug("no feasible transactions at nonce",
 				zap.Uint64("nonce", nonce),
-				zap.Uint64("balance", balance))
+				zap.Uint64("balance", balance),
+			)
 			continue
 		}
 
@@ -248,7 +250,7 @@ func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*Nan
 	if len(added) > 0 {
 		logger.Debug("added batch to account pool",
 			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				sort.Slice(added, func(i, j int) bool { return added[i] < added[j] })
+				slices.Sort(added)
 				for _, nonce := range added {
 					encoder.AppendUint64(nonce)
 				}
@@ -259,7 +261,7 @@ func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*Nan
 		logger.Debug("no feasible txs from batch",
 			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				nonces := maps.Keys(nonce2TXs)
-				sort.Slice(nonces, func(i, j int) bool { return nonces[i] < nonces[j] })
+				slices.Sort(nonces)
 				for _, nonce := range nonces {
 					encoder.AppendUint64(nonce)
 				}
@@ -525,7 +527,7 @@ func (c *Cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) err
 				zap.Stringer("address", principal),
 				zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 					nonces := maps.Keys(nonce2TXs)
-					sort.Slice(nonces, func(i, j int) bool { return nonces[i] < nonces[j] })
+					slices.Sort(nonces)
 					for _, nonce := range nonces {
 						encoder.AppendUint64(nonce)
 					}
