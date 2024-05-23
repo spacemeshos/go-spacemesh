@@ -102,10 +102,28 @@ func WithRequestsPerInterval(n int, interval time.Duration) Opt {
 	}
 }
 
+// WithDecayingTag specifies P2P decaying tag that is applied to the peer when a request
+// is being served
 func WithDecayingTag(tag DecayingTagSpec) Opt {
 	return func(s *Server) {
 		s.decayingTagSpec = &tag
 	}
+}
+
+type peerIDKey = struct{}
+
+func withPeerID(ctx context.Context, peerID peer.ID) context.Context {
+	return context.WithValue(ctx, peerIDKey{}, peerID)
+}
+
+// ContextPeerID retrieves the ID of the peer being served from the context and a boolean
+// value indicating that the context contains peer ID. If there's no peer ID associated
+// with the context, the function returns an empty peer ID and false.
+func ContextPeerID(ctx context.Context) (peer.ID, bool) {
+	if v := ctx.Value(peerIDKey{}); v != nil {
+		return v.(peer.ID), true
+	}
+	return peer.ID(""), false
 }
 
 // Handler is a handler to be defined by the application.
@@ -243,9 +261,11 @@ func (s *Server) Run(ctx context.Context) error {
 				eg.Wait()
 				return nil
 			}
+			peer := req.stream.Conn().RemotePeer()
+			ctx = withPeerID(ctx, peer)
 			eg.Go(func() error {
 				if s.decayingTag != nil {
-					s.decayingTag.Bump(req.stream.Conn().RemotePeer(), s.decayingTagSpec.Inc)
+					s.decayingTag.Bump(peer, s.decayingTagSpec.Inc)
 				}
 				ok := s.queueHandler(ctx, req.stream)
 				if s.metrics != nil {
