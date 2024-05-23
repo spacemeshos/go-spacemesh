@@ -3,7 +3,6 @@ package activation
 import (
 	"context"
 	"errors"
-	"net/url"
 	"testing"
 	"time"
 
@@ -622,7 +621,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		poet.EXPECT().
 			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(&types.PoetRound{}, nil)
-		poet.EXPECT().Address().AnyTimes().Return(&url.URL{Scheme: "http", Host: "localhost:9999"})
+		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		poet.EXPECT().Proof(gomock.Any(), "").Return(proofWorse, []types.Hash32{challenge}, nil)
 		poets = append(poets, poet)
 	}
@@ -679,7 +678,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetProver.EXPECT().
 			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), sig.NodeID()).
 			Return(nil, errors.New("test"))
-		poetProver.EXPECT().Address().AnyTimes().Return(&url.URL{Scheme: "http", Host: "localhost:9999"})
+		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
@@ -714,7 +713,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 				<-ctx.Done()
 				return nil, ctx.Err()
 			})
-		poetProver.EXPECT().Address().AnyTimes().Return(&url.URL{Scheme: "http", Host: "localhost:9999"})
+		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
@@ -936,7 +935,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 			return &types.PoetRound{}, context.Canceled
 		})
 	poet.EXPECT().Proof(gomock.Any(), "").Return(proof, []types.Hash32{challenge}, nil)
-	poet.EXPECT().Address().AnyTimes().Return(&url.URL{Scheme: "http", Host: "localhost:9999"})
+	poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 
 	poetCfg := PoetConfig{
 		PhaseShift: layerDuration * layersPerEpoch / 2,
