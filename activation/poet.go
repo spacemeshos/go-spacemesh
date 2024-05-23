@@ -142,8 +142,8 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 	return poetClient, nil
 }
 
-func (c *HTTPPoetClient) Address() *url.URL {
-	return c.baseURL
+func (c *HTTPPoetClient) Address() string {
+	return c.baseURL.String()
 }
 
 func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) {
@@ -359,7 +359,7 @@ func NewPoetClient(
 }
 
 func (c *poetClient) Address() string {
-	return c.client.Address().String()
+	return c.client.Address()
 }
 
 func (c *poetClient) authorize(
