@@ -262,7 +262,15 @@ func (s *Server) Run(ctx context.Context) error {
 				return nil
 			}
 			peer := req.stream.Conn().RemotePeer()
-			ctx = withPeerID(ctx, peer)
+			ctx, cancel := context.WithCancel(withPeerID(ctx, peer))
+			defer cancel()
+			var eg errgroup.Group
+			eg.Go(func() error {
+				<-ctx.Done()
+				// deadlineAdjuster.Close() is safe to call multiple times
+				req.stream.Close()
+				return nil
+			})
 			eg.Go(func() error {
 				if s.decayingTag != nil {
 					s.decayingTag.Bump(peer, s.decayingTagSpec.Inc)
@@ -376,6 +384,13 @@ func (s *Server) StreamRequest(
 	defer cancel()
 	stream, err := s.streamRequest(ctx, pid, req, extraProtocols...)
 	if err == nil {
+		var eg errgroup.Group
+		eg.Go(func() error {
+			<-ctx.Done()
+			// deadlineAdjuster.Close() is safe to call multiple times
+			stream.Close()
+			return nil
+		})
 		err = callback(ctx, stream)
 		s.logger.Debug("request execution time",
 			zap.String("protocol", s.protocol),
