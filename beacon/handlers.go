@@ -204,21 +204,23 @@ func (pd *ProtocolDriver) addProposal(m ProposalMessage, cat category) error {
 }
 
 func (pd *ProtocolDriver) verifyProposalMessage(logger *zap.Logger, m ProposalMessage) error {
+	propLogger := logger.Named("proposal")
+
 	nonce, err := pd.nonceFetcher.VRFNonce(m.NodeID, m.EpochID)
 	if err != nil {
-		logger.Warn("[proposal] failed to get VRF nonce", zap.Error(err))
-		return fmt.Errorf("[proposal] get VRF nonce (miner ID %s): %w", m.NodeID, err)
+		propLogger.Warn("failed to get VRF nonce", zap.Error(err))
+		return fmt.Errorf("get VRF nonce (miner ID %s): %w", m.NodeID, err)
 	}
 	currentEpochProposal := buildProposal(m.EpochID, nonce)
 	if !pd.vrfVerifier.Verify(m.NodeID, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
-		logger.Warn("[proposal] failed to verify VRF signature")
-		return fmt.Errorf("[proposal] verify VRF (miner ID %s): %w", m.NodeID, errVRFNotVerified)
+		propLogger.Warn("failed to verify VRF signature")
+		return fmt.Errorf("verify VRF (miner ID %s): %w", m.NodeID, errVRFNotVerified)
 	}
 
 	if err = pd.registerProposed(m.EpochID, m.NodeID); err != nil {
-		logger.Warn("[proposal] failed to register miner proposed", zap.Error(err))
-		return fmt.Errorf("[proposal] register proposal (miner ID %s): %w", m.NodeID, err)
+		propLogger.Warn("failed to register miner proposed", zap.Error(err))
+		return fmt.Errorf("register proposal (miner ID %s): %w", m.NodeID, err)
 	}
 
 	return nil
