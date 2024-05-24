@@ -1,7 +1,11 @@
 package wire
 
 import (
-	"github.com/spacemeshos/go-spacemesh/codec"
+	"unsafe"
+
+	"github.com/spacemeshos/merkle-tree"
+	"github.com/zeebo/blake3"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -42,20 +46,96 @@ type ActivationTxV2 struct {
 
 	SmesherID types.NodeID
 	Signature types.EdSignature
+
+	// cached fields to avoid repeated calculations
+	id types.ATXID
 }
 
-// TODO: This is dummy implementation for testing.
-// It needs to be implemented properly.
 func (atx *ActivationTxV2) SignedBytes() []byte {
-	atxCopy := *atx
-	atxCopy.Signature = types.EdSignature{}
-	return codec.MustEncode(&atxCopy)
+	return atx.ID().Bytes()
 }
 
-// TODO: This is dummy implementation for testing.
-// It needs to be implemented properly.
 func (atx *ActivationTxV2) ID() types.ATXID {
-	return types.BytesToATXID(atx.SignedBytes())
+	if atx.id != types.EmptyATXID {
+		return atx.id
+	}
+
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+
+	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&atx.PublishEpoch))[:])
+	tree.AddLeaf(atx.PositioningATX.Bytes())
+	if atx.Coinbase != nil {
+		tree.AddLeaf(atx.Coinbase.Bytes())
+	} else {
+		tree.AddLeaf(types.Address{}.Bytes())
+	}
+	if atx.Initial != nil {
+		tree.AddLeaf(atx.Initial.Root())
+	} else {
+		tree.AddLeaf(types.EmptyHash32.Bytes())
+	}
+
+	prevATXTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	for _, prevATX := range atx.PreviousATXs {
+		prevATXTree.AddLeaf(prevATX.Bytes())
+	}
+	for i := 0; i < 256-len(atx.PreviousATXs); i++ {
+		prevATXTree.AddLeaf(types.EmptyATXID.Bytes())
+	}
+	tree.AddLeaf(prevATXTree.Root())
+
+	niPostTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	for _, niPost := range atx.NiPosts {
+		niPostTree.AddLeaf(niPost.Root())
+	}
+	for i := 0; i < 2-len(atx.NiPosts); i++ {
+		niPostTree.AddLeaf(types.EmptyHash32.Bytes())
+	}
+	tree.AddLeaf(niPostTree.Root())
+
+	if atx.VRFNonce != nil {
+		tree.AddLeaf((*[8]byte)(unsafe.Pointer(atx.VRFNonce))[:])
+	} else {
+		tree.AddLeaf([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+	}
+
+	marriagesTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	for _, marriage := range atx.Marriages {
+		marriagesTree.AddLeaf(marriage.Root())
+	}
+	for i := 0; i < 256-len(atx.Marriages); i++ {
+		marriagesTree.AddLeaf(types.EmptyHash32.Bytes())
+	}
+	tree.AddLeaf(marriagesTree.Root())
+
+	if atx.MarriageATX != nil {
+		tree.AddLeaf(atx.MarriageATX.Bytes())
+	} else {
+		tree.AddLeaf(types.EmptyATXID.Bytes())
+	}
+
+	atx.id = types.ATXID(tree.Root())
+	return atx.id
 }
 
 func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
@@ -66,6 +146,18 @@ func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
 type InitialAtxPartsV2 struct {
 	CommitmentATX types.ATXID
 	Post          PostV1
+}
+
+func (i *InitialAtxPartsV2) Root() []byte {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	tree.AddLeaf(i.CommitmentATX.Bytes())
+	tree.AddLeaf(i.Post.Root())
+	return tree.Root()
 }
 
 // MarriageCertificate proves the will of ID to be married with the ID that includes this certificate.
@@ -79,11 +171,60 @@ type MarriageCertificate struct {
 	Signature types.EdSignature
 }
 
+func (mc *MarriageCertificate) Root() []byte {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	tree.AddLeaf(mc.ID.Bytes())
+	tree.AddLeaf(mc.Signature.Bytes())
+	return tree.Root()
+}
+
 // MerkleProofV2 proves membership of multiple challenges in a PoET membership merkle tree.
 type MerkleProofV2 struct {
 	// Nodes on path from leaf to root (not including leaf)
 	Nodes       []types.Hash32 `scale:"max=32"`
 	LeafIndices []uint64       `scale:"max=256"` // support merging up to 256 IDs
+}
+
+func (mp *MerkleProofV2) Root() []byte {
+	nodeTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	for _, node := range mp.Nodes {
+		nodeTree.AddLeaf(node.Bytes())
+	}
+	for i := 0; i < 32-len(mp.Nodes); i++ {
+		nodeTree.AddLeaf(types.EmptyHash32.Bytes())
+	}
+	leafIndicesTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	for _, index := range mp.LeafIndices {
+		leafIndicesTree.AddLeaf((*[8]byte)(unsafe.Pointer(&index))[:])
+	}
+	for i := 0; i < 256-len(mp.LeafIndices); i++ {
+		leafIndicesTree.AddLeaf([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
+	}
+
+	merkleTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	merkleTree.AddLeaf(nodeTree.Root())
+	merkleTree.AddLeaf(leafIndicesTree.Root())
+	return merkleTree.Root()
 }
 
 type SubPostV2 struct {
@@ -96,6 +237,20 @@ type SubPostV2 struct {
 	NumUnits      uint32
 }
 
+func (sp *SubPostV2) Root() []byte {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&sp.MarriageIndex))[:])
+	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&sp.PrevATXIndex))[:])
+	tree.AddLeaf(sp.Post.Root())
+	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&sp.NumUnits))[:])
+	return tree.Root()
+}
+
 type NiPostsV2 struct {
 	// Single membership proof for all IDs in `Posts`.
 	// The index of ID in `Posts` is the index of the challenge in the proof (`LeafIndices`).
@@ -103,4 +258,38 @@ type NiPostsV2 struct {
 	// The root of the PoET proof, that serves as the challenge for PoSTs.
 	Challenge types.Hash32
 	Posts     []SubPostV2 `scale:"max=256"` // support merging up to 256 IDs
+}
+
+func (np *NiPostsV2) Root() []byte {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	tree.AddLeaf(np.Membership.Root())
+	tree.AddLeaf(np.Challenge.Bytes())
+
+	postsTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	for _, subPost := range np.Posts {
+		postsTree.AddLeaf(subPost.Root())
+	}
+	for i := 0; i < 256-len(np.Posts); i++ {
+		postsTree.AddLeaf(types.EmptyHash32.Bytes())
+	}
+	tree.AddLeaf(postsTree.Root())
+	return tree.Root()
+}
+
+func atxTreeHash(buf, lChild, rChild []byte) []byte {
+	hash := blake3.New()
+	hash.Write([]byte{0x01})
+	hash.Write(lChild)
+	hash.Write(rChild)
+	return hash.Sum(buf)
 }

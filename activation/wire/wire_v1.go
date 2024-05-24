@@ -2,6 +2,9 @@ package wire
 
 import (
 	"encoding/hex"
+	"unsafe"
+
+	"github.com/spacemeshos/merkle-tree"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -38,6 +41,19 @@ type PostV1 struct {
 	Nonce   uint32
 	Indices []byte `scale:"max=800"` // up to K2=100
 	Pow     uint64
+}
+
+func (p *PostV1) Root() []byte {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&p.Nonce))[:])
+	tree.AddLeaf(p.Indices)
+	tree.AddLeaf((*[8]byte)(unsafe.Pointer(&p.Pow))[:])
+	return tree.Root()
 }
 
 type MerkleProofV1 struct {
