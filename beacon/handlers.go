@@ -67,7 +67,7 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 
 	if !pd.isProposalTimely(&m, receivedTime) {
 		logger.Debug("proposal too early",
-			zap.Uint32("epoch_id", uint32(m.EpochID)),
+			zap.Uint32("epoch", uint32(m.EpochID)),
 			zap.Time("received_at", receivedTime),
 		)
 		return errUntimelyMessage
@@ -75,8 +75,8 @@ func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg
 
 	proposal := ProposalFromVrf(m.VRFSignature)
 	logger.Debug("new beacon proposal",
-		zap.Uint32("epoch_id", uint32(m.EpochID)),
-		zap.Stringer("smesher", m.NodeID),
+		zap.Uint32("epoch", uint32(m.EpochID)),
+		zap.Stringer("node_id", m.NodeID),
 		zap.Inline(proposal),
 	)
 
@@ -235,7 +235,7 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 
 	pd.logger.Debug("new first votes",
 		log.ZContext(ctx),
-		zap.Uint32("round_id", uint32(types.FirstRound)),
+		zap.Uint32("round", uint32(types.FirstRound)),
 		zap.Stringer("sender", peer),
 	)
 
@@ -243,7 +243,7 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	if err := codec.Decode(msg, &m); err != nil {
 		pd.logger.Warn("received invalid first votes",
 			log.ZContext(ctx),
-			zap.Uint32("round_id", uint32(types.FirstRound)),
+			zap.Uint32("round", uint32(types.FirstRound)),
 			zap.Stringer("sender", peer),
 			zap.Error(err),
 		)
@@ -254,7 +254,7 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	if m.EpochID != currentEpoch {
 		pd.logger.Debug("first votes from different epoch",
 			log.ZContext(ctx),
-			zap.Uint32("round_id", uint32(types.FirstRound)),
+			zap.Uint32("round", uint32(types.FirstRound)),
 			zap.Stringer("sender", peer),
 			zap.Uint32("current_epoch", uint32(currentEpoch)),
 			zap.Uint32("message_epoch", uint32(m.EpochID)),
@@ -267,7 +267,7 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 	if currentRound > types.FirstRound {
 		pd.logger.Debug("first votes too late",
 			log.ZContext(ctx),
-			zap.Uint32("round_id", uint32(types.FirstRound)),
+			zap.Uint32("round", uint32(types.FirstRound)),
 			zap.Stringer("sender", peer),
 			zap.Uint32("current_round", uint32(currentRound)),
 			zap.Uint32("message_round", uint32(types.FirstRound)),
@@ -282,7 +282,7 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 
 	pd.logger.Debug("received first voting message, storing its votes",
 		log.ZContext(ctx),
-		zap.Uint32("round_id", uint32(types.FirstRound)),
+		zap.Uint32("round", uint32(types.FirstRound)),
 		zap.Stringer("sender", peer),
 	)
 	metrics.ReportMessageLatency(
@@ -298,8 +298,8 @@ func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMes
 	if err != nil {
 		pd.logger.Fatal("failed to serialize first voting message",
 			log.ZContext(ctx),
-			zap.Uint32("epoch_id", m.EpochID.Uint32()),
-			zap.Uint32("round_id", uint32(types.FirstRound)),
+			zap.Uint32("epoch", m.EpochID.Uint32()),
+			zap.Uint32("round", uint32(types.FirstRound)),
 			zap.Error(err),
 		)
 	}
@@ -401,7 +401,7 @@ func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Pee
 		pd.logger.Debug("following votes too early",
 			log.ZContext(ctx),
 			zap.Stringer("sender", peer),
-			zap.Uint32("round_id", uint32(m.RoundID)),
+			zap.Uint32("round", uint32(m.RoundID)),
 			zap.Time("received_at", receivedTime),
 		)
 		return errUntimelyMessage

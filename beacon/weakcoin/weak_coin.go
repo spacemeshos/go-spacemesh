@@ -187,7 +187,7 @@ func (wc *WeakCoin) StartEpoch(ctx context.Context, epoch types.EpochID) {
 	wc.epoch = epoch
 	wc.logger.Info("beacon weak coin started epoch",
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", epoch.Uint32()),
+		zap.Uint32("epoch", epoch.Uint32()),
 	)
 }
 
@@ -198,7 +198,7 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 	if epoch != wc.epoch {
 		wc.logger.Fatal("attempted to finish beacon weak coin for the wrong epoch",
 			log.ZContext(ctx),
-			zap.Uint32("epoch_id", epoch.Uint32()),
+			zap.Uint32("epoch", epoch.Uint32()),
 			zap.Uint32("weak_coin_epoch", wc.epoch.Uint32()),
 		)
 	}
@@ -207,7 +207,7 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 	wc.round = 0
 	wc.logger.Info("weak coin finished epoch",
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", epoch.Uint32()),
+		zap.Uint32("epoch", epoch.Uint32()),
 	)
 }
 
@@ -221,8 +221,8 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, partici
 	wc.mu.Lock()
 	wc.logger.Info("started beacon weak coin round",
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", wc.epoch.Uint32()),
-		zap.Uint32("round_id", uint32(round)),
+		zap.Uint32("epoch", wc.epoch.Uint32()),
+		zap.Uint32("round", uint32(round)),
 	)
 	wc.roundStarted = true
 	wc.round = round
@@ -233,8 +233,8 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, partici
 		if err := wc.updateProposal(ctx, msg); err != nil && !errors.Is(err, errNotSmallest) {
 			wc.logger.Warn("invalid weakcoin proposal",
 				log.ZContext(ctx),
-				zap.Uint32("epoch_id", wc.epoch.Uint32()),
-				zap.Uint32("round_id", uint32(round)),
+				zap.Uint32("epoch", wc.epoch.Uint32()),
+				zap.Uint32("round", uint32(round)),
 				zap.Error(err),
 			)
 		}
@@ -330,8 +330,8 @@ func (wc *WeakCoin) publishProposal(
 
 	if err := wc.publisher.Publish(ctx, pubsub.BeaconWeakCoinProtocol, msg); err != nil {
 		wc.logger.Warn("failed to publish own weak coin proposal",
-			zap.Uint32("epoch_id", epoch.Uint32()),
-			zap.Uint32("round_id", uint32(round)),
+			zap.Uint32("epoch", epoch.Uint32()),
+			zap.Uint32("round", uint32(round)),
 			zap.Stringer("proposal", proposal),
 			zap.Error(err),
 		)
@@ -340,8 +340,8 @@ func (wc *WeakCoin) publishProposal(
 
 	wc.logger.Info("published proposal",
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", epoch.Uint32()),
-		zap.Uint32("round_id", uint32(round)),
+		zap.Uint32("epoch", epoch.Uint32()),
+		zap.Uint32("round", uint32(round)),
 		zap.Stringer("proposal", proposal),
 	)
 }
@@ -355,8 +355,8 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	if wc.smallest == nil {
 		wc.logger.Warn("completed round without valid proposals",
 			log.ZContext(ctx),
-			zap.Uint32("epoch_id", wc.epoch.Uint32()),
-			zap.Uint32("round_id", uint32(wc.round)),
+			zap.Uint32("epoch", wc.epoch.Uint32()),
+			zap.Uint32("round", uint32(wc.round)),
 		)
 		return
 	}
@@ -365,8 +365,8 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	wc.coins[wc.round] = coinflip
 	wc.logger.Info("completed round with beacon weak coin",
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", wc.epoch.Uint32()),
-		zap.Uint32("round_id", uint32(wc.round)),
+		zap.Uint32("epoch", wc.epoch.Uint32()),
+		zap.Uint32("round", uint32(wc.round)),
 		zap.Stringer("proposal", wc.smallest),
 		zap.Bool("beacon_weak_coin", coinflip),
 	)
@@ -377,8 +377,8 @@ func (wc *WeakCoin) updateSmallest(ctx context.Context, sig types.VrfSignature) 
 	if sig.Cmp(wc.smallest) == -1 {
 		wc.logger.Debug("saving new proposal",
 			log.ZContext(ctx),
-			zap.Uint32("epoch_id", wc.epoch.Uint32()),
-			zap.Uint32("round_id", uint32(wc.round)),
+			zap.Uint32("epoch", wc.epoch.Uint32()),
+			zap.Uint32("round", uint32(wc.round)),
 			zap.Stringer("proposal", sig),
 			zap.Stringer("previous", wc.smallest),
 		)

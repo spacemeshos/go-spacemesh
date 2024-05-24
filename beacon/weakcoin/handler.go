@@ -31,8 +31,8 @@ func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byt
 		if !errors.Is(err, errNotSmallest) {
 			wc.logger.Debug("invalid proposal",
 				log.ZContext(ctx),
-				zap.Uint32("epoch_id", message.Epoch.Uint32()),
-				zap.Uint32("round_id", uint32(message.Round)),
+				zap.Uint32("epoch", message.Epoch.Uint32()),
+				zap.Uint32("round", uint32(message.Round)),
 				zap.Stringer("peer", peer),
 				zap.Error(err),
 			)

@@ -133,11 +133,11 @@ func (pd *ProtocolDriver) Register(sig *signing.EdSigner) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	if _, exists := pd.signers[sig.NodeID()]; exists {
-		pd.logger.Error("signing key already registered", log.ZShortStringer("id", sig.NodeID()))
+		pd.logger.Error("signing key already registered", log.ZShortStringer("node_id", sig.NodeID()))
 		return
 	}
 
-	pd.logger.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
+	pd.logger.Info("registered signing key", log.ZShortStringer("node_id", sig.NodeID()))
 	pd.signers[sig.NodeID()] = sig
 }
 
@@ -147,7 +147,7 @@ type participant struct {
 }
 
 func (s participant) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddString("id", s.signer.NodeID().ShortString())
+	enc.AddString("node_id", s.signer.NodeID().ShortString())
 	enc.AddUint64("nonce", uint64(s.nonce))
 	return nil
 }
@@ -244,7 +244,7 @@ func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon)
 	}
 	pd.beacons[epoch] = beacon
 	pd.logger.Info("using fallback beacon",
-		zap.Uint32("epoch_id", epoch.Uint32()),
+		zap.Uint32("epoch", epoch.Uint32()),
 		log.ZShortStringer("beacon", beacon),
 	)
 	pd.onResult(epoch, beacon)
@@ -283,7 +283,7 @@ func (pd *ProtocolDriver) onResult(epoch types.EpochID, beacon types.Beacon) {
 	case pd.results <- result.Beacon{Epoch: epoch, Beacon: beacon}:
 	default:
 		pd.logger.Error("results queue is congested",
-			zap.Uint32("epoch_id", epoch.Uint32()),
+			zap.Uint32("epoch", epoch.Uint32()),
 			zap.Stringer("beacon", beacon),
 		)
 	}
@@ -342,7 +342,7 @@ func (pd *ProtocolDriver) minerAtxHdr(
 	mi, ok := st.minerAtxs[nodeID]
 	if !ok {
 		pd.logger.Debug("miner does not have atx in previous epoch",
-			zap.Uint32("epoch_id", uint32(epoch-1)),
+			zap.Uint32("previous_epoch", uint32(epoch-1)),
 			zap.Stringer("smesher", nodeID),
 		)
 		return nil, false, errMinerNotActive
@@ -408,7 +408,7 @@ func (pd *ProtocolDriver) recordBeacon(
 			numEligibility: numEligibility,
 		}
 		pd.logger.Debug("added beacon from ballot",
-			zap.Uint32("epoch_id", epochID.Uint32()),
+			zap.Uint32("epoch", epochID.Uint32()),
 			zap.Stringer("ballotID", ballot.ID()),
 			log.ZShortStringer("beacon", beacon),
 			zap.Stringer("weight_per", weightPer),
@@ -421,7 +421,7 @@ func (pd *ProtocolDriver) recordBeacon(
 	// checks if we have recorded this ballot before
 	if _, ok = entry.ballots[ballot.ID()]; ok {
 		pd.logger.Warn("ballot already reported beacon",
-			zap.Uint32("epoch_id", epochID.Uint32()),
+			zap.Uint32("epoch", epochID.Uint32()),
 			zap.Stringer("ballotID", ballot.ID()),
 		)
 		return
@@ -431,7 +431,7 @@ func (pd *ProtocolDriver) recordBeacon(
 	entry.totalWeight = entry.totalWeight.Add(ballotWeight)
 	entry.numEligibility += numEligibility
 	pd.logger.Debug("added beacon from ballot",
-		zap.Uint32("epoch_id", epochID.Uint32()),
+		zap.Uint32("epoch", epochID.Uint32()),
 		zap.Stringer("ballotID", ballot.ID()),
 		log.ZShortStringer("beacon", beacon),
 		zap.Stringer("weight_per", weightPer),
@@ -455,7 +455,7 @@ func (pd *ProtocolDriver) findMajorityBeacon(epoch types.EpochID) types.Beacon {
 	}
 
 	logger := pd.logger.With(
-		zap.Uint32("epoch_id", epoch.Uint32()),
+		zap.Uint32("epoch", epoch.Uint32()),
 		zap.Int("total_weight_units", totalEligibility),
 	)
 	if totalEligibility < pd.config.BeaconSyncWeightUnits {
@@ -506,7 +506,7 @@ func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, er
 		return types.EmptyBeacon, errBeaconNotCalculated
 	}
 	pd.logger.Error("failed to get beacon from db",
-		zap.Uint32("epoch_id", targetEpoch.Uint32()),
+		zap.Uint32("target_epoch", targetEpoch.Uint32()),
 		zap.Error(err),
 	)
 	return types.EmptyBeacon, fmt.Errorf("get beacon from DB: %w", err)
@@ -538,7 +538,7 @@ func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beac
 
 	if err := beacons.Add(pd.cdb, targetEpoch, beacon); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		pd.logger.Error("failed to persist beacon",
-			zap.Uint32("epoch_id", targetEpoch.Uint32()),
+			zap.Uint32("target_epoch", targetEpoch.Uint32()),
 			log.ZShortStringer("beacon", beacon),
 			zap.Error(err),
 		)
@@ -671,7 +671,7 @@ func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {
 	nextEpochStart := pd.clock.LayerToTime((epoch + 1).FirstLayer())
 	t := nextEpochStart.Add(-pd.config.GracePeriodDuration)
 	pd.logger.Debug("earliest proposal time for epoch",
-		zap.Uint32("epoch_id", uint32(epoch+1)),
+		zap.Uint32("next_epoch", uint32(epoch+1)),
 		zap.Time("earliest_time", t),
 	)
 
@@ -737,8 +737,8 @@ func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 
 			pd.setProposalTimeForNextEpoch()
 			pd.logger.Info("processing epoch",
-				zap.Uint32("layer_id", current.Uint32()),
-				zap.Uint32("epoch_id", epoch.Uint32()),
+				zap.Uint32("layer", current.Uint32()),
+				zap.Uint32("epoch", epoch.Uint32()),
 			)
 			pd.eg.Go(func() error {
 				_ = pd.onNewEpoch(ctx, epoch)
@@ -758,7 +758,7 @@ func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
 	}
 	earliestVoteTime := nextRoundStartTime.Add(-pd.config.GracePeriodDuration)
 	pd.logger.Debug("earliest vote time for next round",
-		zap.Uint32("round_id", uint32(round)),
+		zap.Uint32("round", uint32(round)),
 		zap.Uint32("next_round", uint32(round+1)),
 		zap.Time("earliest_time", earliestVoteTime),
 	)
@@ -772,7 +772,7 @@ func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
 func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) error {
 	logger := pd.logger.With(
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", epoch.Uint32()),
+		zap.Uint32("epoch", epoch.Uint32()),
 	)
 	defer pd.cleanupEpoch(epoch)
 
@@ -804,7 +804,7 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 	targetEpoch := epoch + 1
 	logger := pd.logger.With(
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", epoch.Uint32()),
+		zap.Uint32("epoch", epoch.Uint32()),
 		zap.Uint32("target_epoch", targetEpoch.Uint32()),
 	)
 
@@ -857,7 +857,7 @@ func calcBeacon(logger *zap.Logger, set proposalSet) types.Beacon {
 func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.EpochID, st *state) error {
 	logger := pd.logger.With(
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", epoch.Uint32()),
+		zap.Uint32("epoch", epoch.Uint32()),
 	)
 	logger.Info("starting beacon proposal phase")
 
@@ -900,7 +900,7 @@ func (pd *ProtocolDriver) sendProposal(
 
 	logger := pd.logger.With(
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", epoch.Uint32()),
+		zap.Uint32("epoch", epoch.Uint32()),
 	)
 	vrfSig := buildSignedProposal(ctx, pd.logger, s.signer.VRFSigner(), epoch, s.nonce)
 	proposal := ProposalFromVrf(vrfSig)
@@ -913,32 +913,32 @@ func (pd *ProtocolDriver) sendProposal(
 	if invalid == pd.classifyProposal(logger, m, atx.Received(), time.Now(), checker) {
 		logger.Debug("own proposal doesn't pass threshold",
 			zap.Inline(proposal),
-			log.ZShortStringer("id", s.signer.NodeID()),
+			log.ZShortStringer("node_id", s.signer.NodeID()),
 		)
 		return
 	}
 
 	logger.Debug("own proposal passes threshold",
 		zap.Inline(proposal),
-		log.ZShortStringer("id", s.signer.NodeID()),
+		log.ZShortStringer("node_id", s.signer.NodeID()),
 	)
 	if err := pd.sendToGossip(ctx, pubsub.BeaconProposalProtocol, codec.MustEncode(&m)); err != nil {
 		logger.Error("failed to broadcast",
 			zap.Error(err),
 			zap.Inline(proposal),
-			log.ZShortStringer("id", s.signer.NodeID()),
+			log.ZShortStringer("node_id", s.signer.NodeID()),
 		)
 	} else {
 		logger.Info("beacon proposal sent",
 			zap.Inline(proposal),
-			log.ZShortStringer("id", s.signer.NodeID()),
+			log.ZShortStringer("node_id", s.signer.NodeID()),
 		)
 	}
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
 func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.EpochID, st *state) (allVotes, error) {
-	logger := pd.logger.With(log.ZContext(ctx), zap.Uint32("epoch_id", epoch.Uint32()))
+	logger := pd.logger.With(log.ZContext(ctx), zap.Uint32("epoch", epoch.Uint32()))
 	logger.Info("starting consensus phase")
 
 	// For K rounds: In each round that lasts δ, wait for votes to come in.
@@ -968,8 +968,8 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 			if err := pd.sendFirstRoundVote(ctx, msg, session.signer); err != nil {
 				logger.Error("failed to send proposal vote",
 					zap.Error(err),
-					log.ZShortStringer("id", session.signer.NodeID()),
-					zap.Uint32("round_id", uint32(round)),
+					log.ZShortStringer("node_id", session.signer.NodeID()),
+					zap.Uint32("round", uint32(round)),
 				)
 			}
 			return nil
@@ -986,7 +986,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	// Subsequent rounds
 	for round := types.FirstRound + 1; round < pd.config.RoundsNumber; round++ {
 		pd.setRoundInProgress(round)
-		rLogger := logger.With(zap.Uint32("round_id", uint32(round)))
+		rLogger := logger.With(zap.Uint32("round", uint32(round)))
 		timer.Reset(pd.config.VotingRoundDuration)
 
 		votes := ownVotes
@@ -995,7 +995,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 				if err := pd.sendFollowingVote(ctx, epoch, round, votes, session.signer); err != nil {
 					logger.Error("failed to send following vote",
 						zap.Error(err),
-						log.ZShortStringer("id", session.signer.NodeID()),
+						log.ZShortStringer("node_id", session.signer.NodeID()),
 					)
 				}
 				return nil
@@ -1073,9 +1073,9 @@ func (pd *ProtocolDriver) sendFirstRoundVote(
 
 	pd.logger.Debug("sending first round vote",
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", msg.EpochID.Uint32()),
-		zap.Uint32("round_id", uint32(types.FirstRound)),
-		log.ZShortStringer("id", signer.NodeID()),
+		zap.Uint32("epoch", msg.EpochID.Uint32()),
+		zap.Uint32("round", uint32(types.FirstRound)),
+		log.ZShortStringer("node_id", signer.NodeID()),
 	)
 	return pd.sendToGossip(ctx, pubsub.BeaconFirstVotesProtocol, codec.MustEncode(&m))
 }
@@ -1119,9 +1119,9 @@ func (pd *ProtocolDriver) sendFollowingVote(
 
 	pd.logger.Debug("sending following round vote",
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", epoch.Uint32()),
-		zap.Uint32("round_id", uint32(round)),
-		log.ZShortStringer("id", signer.NodeID()),
+		zap.Uint32("epoch", epoch.Uint32()),
+		zap.Uint32("round", uint32(round)),
+		log.ZShortStringer("node_id", signer.NodeID()),
 	)
 	return pd.sendToGossip(ctx, pubsub.BeaconFollowingVotesProtocol, codec.MustEncode(&m))
 }
@@ -1222,10 +1222,10 @@ func buildSignedProposal(
 	proposal := ProposalFromVrf(vrfSig)
 	logger.Debug("calculated beacon proposal",
 		log.ZContext(ctx),
-		zap.Uint32("epoch_id", epoch.Uint32()),
+		zap.Uint32("epoch", epoch.Uint32()),
 		zap.Uint64("vrf_nonce", uint64(nonce)),
 		zap.Inline(proposal),
-		log.ZShortStringer("id", signer.NodeID()),
+		log.ZShortStringer("node_id", signer.NodeID()),
 	)
 	return vrfSig
 }
