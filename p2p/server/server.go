@@ -246,7 +246,6 @@ func (s *Server) Run(ctx context.Context) error {
 			ctx, cancel := context.WithCancel(ctx)
 			eg.Go(func() error {
 				<-ctx.Done()
-				// deadlineAdjuster.Close() is safe to call multiple times
 				req.stream.Close()
 				return nil
 			})
@@ -367,7 +366,6 @@ func (s *Server) StreamRequest(
 		var eg errgroup.Group
 		eg.Go(func() error {
 			<-ctx.Done()
-			// deadlineAdjuster.Close() is safe to call multiple times
 			stream.Close()
 			return nil
 		})
