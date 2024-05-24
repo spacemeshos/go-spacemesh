@@ -468,7 +468,11 @@ func TestNewLocalServer(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			observer, observedLogs := observer.New(zapcore.WarnLevel)
-			logger := zap.New(observer)
+			logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+				func(core zapcore.Core) zapcore.Core {
+					return zapcore.NewTee(core, observer)
+				},
+			)))
 
 			ctrl := gomock.NewController(t)
 			peerCounter := NewMockpeerCounter(ctrl)
