@@ -350,7 +350,7 @@ func (f *Fetch) registerServer(
 	opts := []server.Opt{
 		server.WithTimeout(f.cfg.RequestTimeout),
 		server.WithHardTimeout(f.cfg.RequestHardTimeout),
-		server.WithLog(f.logger),
+		server.WithLog(f.logger.Zap()),
 		server.WithDecayingTag(f.cfg.DecayingTag),
 	}
 	if f.cfg.EnableServerMetrics {
