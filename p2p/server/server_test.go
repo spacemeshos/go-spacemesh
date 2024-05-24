@@ -32,7 +32,7 @@ func TestServer(t *testing.T) {
 	}
 	opts := []Opt{
 		WithTimeout(100 * time.Millisecond),
-		WithLog(zaptest.NewLogger(t)),
+		WithLog(zaptest.NewLogger(t, zaptest.Level(zap.InfoLevel))),
 		WithMetrics(),
 	}
 	client := New(mesh.Hosts()[0], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(2*limit))...)
