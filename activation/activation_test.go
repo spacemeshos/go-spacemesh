@@ -1498,7 +1498,8 @@ func TestFindFullyValidHighTickAtx(t *testing.T) {
 		mValidator := NewMocknipostValidator(gomock.NewController(t))
 		mValidator.EXPECT().VerifyChain(gomock.Any(), atxLower.ID(), golden, gomock.Any())
 
-		found, err := findFullyValidHighTickAtx(context.Background(), data, 0, golden, mValidator, zaptest.NewLogger(t))
+		lg := zaptest.NewLogger(t, zaptest.Level(zap.InfoLevel))
+		found, err := findFullyValidHighTickAtx(context.Background(), data, 0, golden, mValidator, lg)
 		require.NoError(t, err)
 		require.Equal(t, atxLower.ID(), found)
 	})

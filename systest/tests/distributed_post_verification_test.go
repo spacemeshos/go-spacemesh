@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -45,7 +44,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	testDir := t.TempDir()
 
 	ctx := testcontext.New(t, testcontext.Labels("sanity"))
-	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zapcore.InfoLevel), zap.WithCaller(false))
+	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
 
 	// Prepare cluster
 	ctx.PoetSize = 1 // one poet guarantees everybody gets the same proof
