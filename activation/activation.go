@@ -652,7 +652,10 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	b.logger.Debug("publication epoch has arrived!", log.ZShortStringer("smesherID", sig.NodeID()))
 
 	for {
-		b.logger.Info("broadcasting", log.ZShortStringer("atx", atx.ID()), log.ZShortStringer("smesherID", sig.NodeID()))
+		b.logger.Info("broadcasting",
+			log.ZShortStringer("atx", atx.ID()),
+			log.ZShortStringer("smesherID", sig.NodeID()),
+		)
 		size, err := b.broadcast(ctx, atx)
 		if err == nil {
 			b.logger.Info("atx published", zap.Inline(atx), zap.Int("size", size))
@@ -715,7 +718,10 @@ func (b *Builder) createAtx(
 	default:
 		oldNonce, err := atxs.NonceByID(b.db, challenge.PrevATXID)
 		if err != nil {
-			b.logger.Warn("failed to get VRF nonce for ATX", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
+			b.logger.Warn("failed to get VRF nonce for ATX",
+				zap.Error(err),
+				log.ZShortStringer("smesherID", sig.NodeID()),
+			)
 			break
 		}
 		if nipostState.VRFNonce != oldNonce {
