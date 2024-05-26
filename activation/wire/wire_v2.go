@@ -101,7 +101,7 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 		panic(err)
 	}
 	for _, niPost := range atx.NiPosts {
-		niPostTree.AddLeaf(niPost.Root())
+		niPostTree.AddLeaf(niPost.Root(atx.PreviousATXs))
 	}
 	for i := 0; i < 2-len(atx.NiPosts); i++ {
 		niPostTree.AddLeaf(types.EmptyHash32.Bytes())
@@ -228,24 +228,24 @@ func (mp *MerkleProofV2) Root() []byte {
 }
 
 type SubPostV2 struct {
-	// Index of marriage certificate for this ID in the 'Marriages' slice. Only valid for merged ATXs.
-	// Can be used to extract the nodeID and verify if it is married with the smesher of the ATX.
-	// Must be 0 for non-merged ATXs.
-	MarriageIndex uint32
-	PrevATXIndex  uint32 // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
-	Post          PostV1
-	NumUnits      uint32
+	NodeID       types.NodeID // NodeID this PoST belongs to
+	PrevATXIndex uint32       // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
+	Post         PostV1
+	NumUnits     uint32
 }
 
-func (sp *SubPostV2) Root() []byte {
+func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
 	if err != nil {
 		panic(err)
 	}
-	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&sp.MarriageIndex))[:])
-	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&sp.PrevATXIndex))[:])
+	tree.AddLeaf(sp.NodeID.Bytes())
+	if int(sp.PrevATXIndex) >= len(prevATXs) {
+		return nil // invalid index, root cannot be generated
+	}
+	tree.AddLeaf(prevATXs[sp.PrevATXIndex].Bytes())
 	tree.AddLeaf(sp.Post.Root())
 	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&sp.NumUnits))[:])
 	return tree.Root()
@@ -260,7 +260,7 @@ type NiPostsV2 struct {
 	Posts     []SubPostV2 `scale:"max=256"` // support merging up to 256 IDs
 }
 
-func (np *NiPostsV2) Root() []byte {
+func (np *NiPostsV2) Root(prevATXs []types.ATXID) []byte {
 	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
@@ -277,7 +277,11 @@ func (np *NiPostsV2) Root() []byte {
 		panic(err)
 	}
 	for _, subPost := range np.Posts {
-		postsTree.AddLeaf(subPost.Root())
+		// if root is nil it will be handled like 0x00...00
+		// this will still generate a valid ID for the ATX,
+		// but syntactical validation will catch the invalid subPost and
+		// consider the ATX invalid
+		postsTree.AddLeaf(subPost.Root(prevATXs))
 	}
 	for i := 0; i < 256-len(np.Posts); i++ {
 		postsTree.AddLeaf(types.EmptyHash32.Bytes())
