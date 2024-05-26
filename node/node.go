@@ -608,7 +608,7 @@ func (app *App) initServices(ctx context.Context) error {
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
 
-	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
+	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap())
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
@@ -760,7 +760,7 @@ func (app *App) initServices(ctx context.Context) error {
 		validator,
 		beaconProtocol,
 		trtl,
-		app.addLogger(ATXHandlerLogger, lg),
+		app.addLogger(ATXHandlerLogger, lg).Zap(),
 		activation.WithTickSize(app.Config.TickSize),
 		activation.WithAtxVersions(app.Config.AtxVersions),
 	)

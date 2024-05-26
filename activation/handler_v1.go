@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
+	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
@@ -39,7 +40,7 @@ type HandlerV1 struct {
 	nipostValidator nipostValidator
 	beacon          AtxReceiver
 	tortoise        system.Tortoise
-	log             log.Log
+	logger          *zap.Logger
 	fetcher         system.Fetcher
 
 	signerMtx sync.Mutex
@@ -50,11 +51,11 @@ func (h *HandlerV1) Register(sig *signing.EdSigner) {
 	h.signerMtx.Lock()
 	defer h.signerMtx.Unlock()
 	if _, exists := h.signers[sig.NodeID()]; exists {
-		h.log.With().Error("signing key already registered", log.ShortStringer("id", sig.NodeID()))
+		h.logger.Error("signing key already registered", log.ZShortStringer("id", sig.NodeID()))
 		return
 	}
 
-	h.log.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+	h.logger.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 	h.signers[sig.NodeID()] = sig
 }
 
@@ -202,9 +203,11 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	}
 
 	expectedChallengeHash := atx.NIPostChallengeV1.Hash()
-	h.log.WithContext(ctx).
-		With().
-		Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
+	h.logger.Info("validating nipost",
+		log.ZContext(ctx),
+		zap.Stringer("expected_challenge_hash", expectedChallengeHash),
+		zap.Stringer("atx_id", atx.ID()),
+	)
 
 	leaves, err = h.nipostValidator.NIPost(
 		ctx,
@@ -217,7 +220,11 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	)
 	var invalidIdx *verifying.ErrInvalidIndex
 	if errors.As(err, &invalidIdx) {
-		h.log.WithContext(ctx).With().Info("ATX with invalid post index", atx.ID(), log.Int("index", invalidIdx.Index))
+		h.logger.Info("ATX with invalid post index",
+			log.ZContext(ctx),
+			zap.Stringer("atx_id", atx.ID()),
+			zap.Int("index", invalidIdx.Index),
+		)
 		proof := &mwire.MalfeasanceProof{
 			Layer: atx.PublishEpoch.FirstLayer(),
 			Proof: mwire.Proof{
@@ -260,10 +267,11 @@ func (h *HandlerV1) validateNonInitialAtx(
 	}
 
 	if needRecheck {
-		h.log.WithContext(ctx).With().Info("validating VRF nonce",
-			atx.ID(),
-			log.Bool("post increaced", atx.NumUnits > previous.NumUnits),
-			log.Stringer("smesher", atx.SmesherID),
+		h.logger.Info("validating VRF nonce",
+			log.ZContext(ctx),
+			zap.Stringer("atx_id", atx.ID()),
+			zap.Bool("post increased", atx.NumUnits > previous.NumUnits),
+			zap.Stringer("smesher", atx.SmesherID),
 		)
 		err := h.nipostValidator.
 			VRFNonce(atx.SmesherID, commitment, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
@@ -305,10 +313,10 @@ func (h *HandlerV1) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 
 	if err != nil && atx.PrevATXID != types.EmptyATXID {
 		// no previous atx found but previous atx referenced
-		h.log.With().Error("could not fetch node last atx",
-			atx.ID(),
-			log.Stringer("smesher", atx.SmesherID),
-			log.Err(err),
+		h.logger.Error("could not fetch node last atx",
+			zap.Stringer("atx_id", atx.ID()),
+			zap.Stringer("smesher", atx.SmesherID),
+			zap.Error(err),
 		)
 		return fmt.Errorf("could not fetch node last atx: %w", err)
 	}
@@ -322,7 +330,7 @@ func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxs
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		malicious, err := h.cdb.IsMalicious(atx.SmesherID)
 		if err != nil {
-			h.log.With().Error("failed is malicious read", log.Err(err), log.Context(ctx))
+			h.logger.Error("failed is malicious read", zap.Error(err), log.ZContext(ctx))
 			return nil
 		}
 		return h.atxsdata.AddFromAtx(atx, malicious)
@@ -382,16 +390,17 @@ func (h *HandlerV1) checkDoublePublish(
 	}
 	encoded, err := codec.Encode(proof)
 	if err != nil {
-		h.log.With().Panic("failed to encode malfeasance proof", log.Err(err))
+		h.logger.Panic("failed to encode malfeasance proof", zap.Error(err))
 	}
 	if err := identities.SetMalicious(tx, atx.SmesherID, encoded, time.Now()); err != nil {
 		return nil, fmt.Errorf("add malfeasance proof: %w", err)
 	}
 
-	h.log.WithContext(ctx).With().Warning("smesher produced more than one atx in the same epoch",
-		log.Stringer("smesher", atx.SmesherID),
-		log.Stringer("previous", prev),
-		log.Stringer("current", atx.ID()),
+	h.logger.Warn("smesher produced more than one atx in the same epoch",
+		log.ZContext(ctx),
+		zap.Stringer("smesher", atx.SmesherID),
+		zap.Stringer("previous", prev),
+		zap.Stringer("current", atx.ID()),
 	)
 
 	return proof, nil
@@ -413,12 +422,13 @@ func (h *HandlerV1) checkWrongPrevAtx(
 
 	if _, ok := h.signers[atx.SmesherID]; ok {
 		// if we land here we tried to publish an ATX with a wrong prevATX
-		h.log.WithContext(ctx).With().Warning(
+		h.logger.Warn(
 			"Node produced an ATX with a wrong prevATX. This can happened when the node wasn't synced when "+
 				"registering at PoET",
-			log.Stringer("smesher", atx.SmesherID),
-			log.ShortStringer("expected", prevID),
-			log.ShortStringer("actual", atx.PrevATXID),
+			log.ZContext(ctx),
+			zap.Stringer("smesher", atx.SmesherID),
+			log.ZShortStringer("expected", prevID),
+			log.ZShortStringer("actual", atx.PrevATXID),
 		)
 		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
 	}
@@ -498,10 +508,11 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, fmt.Errorf("add malfeasance proof: %w", err)
 	}
 
-	h.log.WithContext(ctx).With().Warning("smesher referenced the wrong previous in published ATX",
-		log.Stringer("smesher", atx.SmesherID),
-		log.ShortStringer("expected", prevID),
-		log.ShortStringer("actual", atx.PrevATXID),
+	h.logger.Warn("smesher referenced the wrong previous in published ATX",
+		log.ZContext(ctx),
+		zap.Stringer("smesher", atx.SmesherID),
+		log.ZShortStringer("expected", prevID),
+		log.ZShortStringer("actual", atx.PrevATXID),
 	)
 	return proof, nil
 }
@@ -560,7 +571,10 @@ func (h *HandlerV1) storeAtx(
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 
-	h.log.WithContext(ctx).With().Debug("finished storing atx in epoch", atx.ID(), atx.PublishEpoch)
+	h.logger.Debug("finished storing atx in epoch",
+		zap.Stringer("atx_id", atx.ID()),
+		zap.Uint32("epoch_id", atx.PublishEpoch.Uint32()),
+	)
 	return proof, nil
 }
 
@@ -580,8 +594,12 @@ func (h *HandlerV1) processATX(
 		return nil, fmt.Errorf("%w atx %s", errKnownAtx, watx.ID())
 	}
 
-	h.log.WithContext(ctx).With().
-		Debug("processing atx", watx.ID(), watx.PublishEpoch, log.Stringer("smesherID", watx.SmesherID))
+	h.logger.Debug("processing atx",
+		log.ZContext(ctx),
+		zap.Stringer("atx_id", watx.ID()),
+		zap.Uint32("epoch_id", watx.PublishEpoch.Uint32()),
+		zap.Stringer("smesherID", watx.SmesherID),
+	)
 
 	if err := h.syntacticallyValidate(ctx, watx); err != nil {
 		return nil, fmt.Errorf("atx %s syntactically invalid: %w", watx.ID(), err)
@@ -602,10 +620,14 @@ func (h *HandlerV1) processATX(
 	}
 
 	if err := h.contextuallyValidateAtx(watx); err != nil {
-		h.log.WithContext(ctx).With().
-			Warning("atx is contextually invalid ", watx.ID(), log.Stringer("smesherID", watx.SmesherID), log.Err(err))
+		h.logger.Warn("atx is contextually invalid ",
+			log.ZContext(ctx),
+			zap.Stringer("atx_id", watx.ID()),
+			zap.Stringer("smesherID", watx.SmesherID),
+			zap.Error(err),
+		)
 	} else {
-		h.log.WithContext(ctx).With().Debug("atx is valid", watx.ID())
+		h.logger.Debug("atx is valid", zap.Stringer("atx_id", watx.ID()))
 	}
 
 	var baseTickHeight uint64
@@ -632,7 +654,11 @@ func (h *HandlerV1) processATX(
 	}
 
 	events.ReportNewActivation(atx)
-	h.log.WithContext(ctx).With().Info("new atx", log.Inline(atx), log.Bool("malicious", proof != nil))
+	h.logger.Info("new atx",
+		log.ZContext(ctx),
+		zap.Inline(atx),
+		zap.Bool("malicious", proof != nil),
+	)
 	return proof, err
 }
 
@@ -661,7 +687,10 @@ func (h *HandlerV1) fetchReferences(ctx context.Context, poetRef types.Hash32, a
 		return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
 	}
 
-	h.log.WithContext(ctx).With().Debug("done fetching references", log.Int("fetched", len(atxIDs)))
+	h.logger.Debug("done fetching references",
+		log.ZContext(ctx),
+		zap.Int("fetched", len(atxIDs)),
+	)
 	return nil
 }
 

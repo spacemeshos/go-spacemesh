@@ -50,7 +50,7 @@ type HandlerV2 struct {
 	nipostValidator nipostValidatorV2
 	beacon          AtxReceiver
 	tortoise        system.Tortoise
-	log             *zap.Logger
+	logger          *zap.Logger
 	fetcher         system.Fetcher
 }
 
@@ -69,7 +69,7 @@ func (h *HandlerV2) processATX(
 		return nil, nil
 	}
 
-	h.log.Debug(
+	h.logger.Debug(
 		"processing atx",
 		log.ZContext(ctx),
 		zap.Stringer("atx_id", watx.ID()),
