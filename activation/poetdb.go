@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -107,15 +108,17 @@ func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofM
 	}
 
 	if err := poets.Add(db.sqlDB, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
-		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %w",
-			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
+		return fmt.Errorf(
+			"failed to store poet proof for poetId %x round %s: %w",
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err,
+		)
 	}
 
 	db.logger.Info("stored poet proof",
 		log.ZContext(ctx),
 		log.ZShortStringer("poet_proof_id", types.Hash32(ref)),
 		zap.String("round_id", proofMessage.RoundID),
-		log.ZShortStringer("poet_service_id", types.Hash32(proofMessage.PoetServiceID)),
+		zap.String("poet_service_id", hex.EncodeToString(proofMessage.PoetServiceID[:5])),
 	)
 
 	return nil
