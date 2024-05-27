@@ -9,13 +9,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -32,8 +33,8 @@ type v1TestHandler struct {
 }
 
 func newV1TestHandler(tb testing.TB, goldenATXID types.ATXID) *v1TestHandler {
-	lg := logtest.New(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg.Zap())
+	lg := zaptest.NewLogger(tb)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	mocks := newTestHandlerMocks(tb, goldenATXID)
 	return &v1TestHandler{
 		HandlerV1: &HandlerV1{
@@ -45,7 +46,7 @@ func newV1TestHandler(tb testing.TB, goldenATXID types.ATXID) *v1TestHandler {
 			tickSize:        1,
 			goldenATXID:     goldenATXID,
 			nipostValidator: mocks.mValidator,
-			log:             lg,
+			logger:          lg,
 			fetcher:         mocks.mockFetch,
 			beacon:          mocks.mbeacon,
 			tortoise:        mocks.mtortoise,
@@ -643,7 +644,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		proof.SetReceived(time.Time{})
 		nodeID, err := malfeasance.Validate(
 			context.Background(),
-			atxHdlr.log,
+			log.NewFromLog(atxHdlr.logger),
 			atxHdlr.cdb,
 			atxHdlr.edVerifier,
 			nil,
@@ -749,7 +750,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		proof.SetReceived(time.Time{})
 		nodeID, err := malfeasance.Validate(
 			context.Background(),
-			atxHdlr.log,
+			log.NewFromLog(atxHdlr.logger),
 			atxHdlr.cdb,
 			atxHdlr.edVerifier,
 			nil,
