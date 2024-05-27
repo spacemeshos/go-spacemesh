@@ -4,9 +4,10 @@ import (
 	"math/rand"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -28,7 +29,7 @@ func WithLayerSize(size uint32) GenOpt {
 }
 
 // WithLogger configures logger.
-func WithLogger(logger log.Log) GenOpt {
+func WithLogger(logger *zap.Logger) GenOpt {
 	return func(g *Generator) {
 		g.logger = logger
 	}
@@ -85,7 +86,7 @@ func New(opts ...GenOpt) *Generator {
 	g := &Generator{
 		rng:       rand.New(rand.NewSource(0)),
 		conf:      defaults(),
-		logger:    log.NewNop(),
+		logger:    zap.NewNop(),
 		reordered: map[types.LayerID]types.LayerID{},
 	}
 	for _, opt := range opts {
@@ -101,7 +102,7 @@ func New(opts ...GenOpt) *Generator {
 
 // Generator for layers of blocks.
 type Generator struct {
-	logger log.Log
+	logger *zap.Logger
 	rng    *rand.Rand
 	conf   config
 

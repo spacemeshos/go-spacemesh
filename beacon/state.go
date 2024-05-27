@@ -6,8 +6,9 @@ import (
 	"math/big"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type minerInfo struct {
@@ -19,7 +20,7 @@ type minerInfo struct {
 // not thread-safe. it relies on ProtocolDriver's thread-safety mechanism.
 type state struct {
 	cfg         Config
-	logger      log.Log
+	logger      *zap.Logger
 	active      map[types.NodeID]participant
 	epochWeight uint64
 	// the original proposals as received, bucketed by validity.
@@ -37,7 +38,7 @@ type state struct {
 }
 
 func newState(
-	logger log.Log,
+	logger *zap.Logger,
 	cfg Config,
 	active map[types.NodeID]participant,
 	epochWeight uint64,
@@ -90,7 +91,7 @@ func (s *state) addVote(proposal Proposal, vote uint, voteWeight *big.Int) {
 	if _, ok := s.votesMargin[proposal]; !ok {
 		// voteMargin is updated during the proposal phase.
 		// ignore votes on proposals not in the original proposals.
-		s.logger.With().Warning("ignoring vote for unknown proposal", log.Inline(proposal))
+		s.logger.Warn("ignoring vote for unknown proposal", zap.Inline(proposal))
 		return
 	}
 	if vote == up {
@@ -100,7 +101,7 @@ func (s *state) addVote(proposal Proposal, vote uint, voteWeight *big.Int) {
 	}
 }
 
-func (s *state) registerProposed(logger log.Log, nodeID types.NodeID) error {
+func (s *state) registerProposed(nodeID types.NodeID) error {
 	if _, ok := s.hasProposed[nodeID]; ok {
 		return fmt.Errorf("already made proposal (miner ID %v): %w", nodeID.ShortString(), errAlreadyProposed)
 	}

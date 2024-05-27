@@ -156,11 +156,11 @@ func getBlockTXs(
 	stateF := func(_ types.Address) (uint64, uint64) {
 		return 0, math.MaxUint64
 	}
-	txCache := txs.NewCache(stateF, logger)
+	txCache := txs.NewCache(stateF, logger.Zap())
 	if err := txCache.BuildFromTXs(mtxs, blockSeed); err != nil {
 		return nil, fmt.Errorf("build txs for block: %w", err)
 	}
-	byAddrAndNonce := txCache.GetMempool(logger)
+	byAddrAndNonce := txCache.GetMempool(logger.Zap())
 	if len(byAddrAndNonce) == 0 {
 		logger.With().Warning("no feasible txs for block")
 		return nil, nil
@@ -179,7 +179,7 @@ func getBlockTXs(
 	mt := mt19937.New()
 	mt.SeedFromSlice(toUint64Slice(blockSeed))
 	rng := rand.New(mt)
-	ordered := txs.ShuffleWithNonceOrder(logger, rng, len(candidates), candidates, byAddrAndNonce)
+	ordered := txs.ShuffleWithNonceOrder(logger.Zap(), rng, len(candidates), candidates, byAddrAndNonce)
 	if gasLimit > 0 {
 		ordered = prune(logger, ordered, byTid, gasLimit)
 	}

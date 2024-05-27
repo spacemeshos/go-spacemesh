@@ -15,12 +15,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -72,7 +72,7 @@ func newTxWthRecipient(
 
 type testConState struct {
 	*ConservativeState
-	logger log.Log
+	logger *zap.Logger
 	db     *sql.Database
 	mvm    *MockvmState
 
@@ -91,7 +91,7 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 		BlockGasLimit:     gasLimit,
 		NumTXsPerProposal: numTXsInProposal,
 	}
-	logger := logtest.New(t)
+	logger := zaptest.NewLogger(t)
 	_, pub, err := crypto.GenerateEd25519Key(nil)
 	require.NoError(t, err)
 	id, err := peer.IDFromPublicKey(pub)

@@ -58,7 +58,7 @@ func createTestMesh(t *testing.T) *testMesh {
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
 		db:           db,
-		cdb:          datastore.NewCachedDB(db, lg),
+		cdb:          datastore.NewCachedDB(db, lg.Zap()),
 		atxsdata:     atxsdata,
 		mockClock:    mocks.NewMocklayerClock(ctrl),
 		mockVM:       mocks.NewMockvmState(ctrl),

@@ -608,7 +608,7 @@ func (app *App) initServices(ctx context.Context) error {
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
 
-	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
+	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap())
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
@@ -648,7 +648,7 @@ func (app *App) initServices(ctx context.Context) error {
 			BlockGasLimit:     app.Config.BlockGasLimit,
 			NumTXsPerProposal: app.Config.TxsPerProposal,
 		}),
-		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
+		txs.WithLogger(app.addLogger(ConStateLogger, lg).Zap()))
 
 	genesisAccts := app.Config.Genesis.ToAccounts()
 	if len(genesisAccts) > 0 {
@@ -684,7 +684,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		app.clock,
 		beacon.WithConfig(app.Config.Beacon),
-		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
 	)
 	for _, sig := range app.signers {
 		beaconProtocol.Register(sig)
@@ -696,7 +696,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	}
 	trtlopts := []tortoise.Opt{
-		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
+		tortoise.WithLogger(app.addLogger(TrtlLogger, lg).Zap()),
 		tortoise.WithConfig(trtlCfg),
 	}
 	if trtlCfg.EnableTracer {
@@ -760,7 +760,7 @@ func (app *App) initServices(ctx context.Context) error {
 		validator,
 		beaconProtocol,
 		trtl,
-		app.addLogger(ATXHandlerLogger, lg),
+		app.addLogger(ATXHandlerLogger, lg).Zap(),
 		activation.WithTickSize(app.Config.TickSize),
 		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
@@ -785,7 +785,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.txHandler = txs.NewTxHandler(
 		app.conState,
 		app.host.ID(),
-		app.addLogger(TxHandlerLogger, lg),
+		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
 
 	app.hOracle = eligibility.New(
@@ -1000,15 +1000,39 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
 	}
+
+	nipostLogger := app.addLogger(NipostBuilderLogger, lg).Zap()
+	client := activation.NewCertifierClient(
+		app.db,
+		app.localDB,
+		nipostLogger,
+		activation.WithCertifierClientConfig(app.Config.Certifier.Client),
+	)
+	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
+
+	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoetServers))
+	for _, server := range app.Config.PoetServers {
+		client, err := activation.NewPoetClient(
+			poetDb,
+			server,
+			app.Config.POET,
+			lg.Zap().Named("poet"),
+			activation.WithCertifier(certifier),
+		)
+		if err != nil {
+			app.log.Panic("failed to create poet client: %v", err)
+		}
+		poetClients = append(poetClients, client)
+	}
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.localDB,
-		poetDb,
 		grpcPostService.(*grpcserver.PostService),
-		app.Config.PoetServers,
-		app.addLogger(NipostBuilderLogger, lg).Zap(),
+		nipostLogger,
 		app.Config.POET,
 		app.clock,
 		activation.NipostbuilderWithPostStates(postStates),
+		activation.WithPoetClients(poetClients...),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -1036,6 +1060,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 		activation.WithPostStates(postStates),
+		activation.WithPoets(poetClients...),
 	)
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
@@ -1910,7 +1935,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	app.atxsdata = data
 	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
-	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg).Zap(),
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
@@ -2113,6 +2138,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 
 func (app *App) preserveAfterRecovery(ctx context.Context) {
 	if app.preserve == nil {
+		app.log.Info("no need to preserve data after recovery")
 		return
 	}
 	for i, poetProof := range app.preserve.Proofs {

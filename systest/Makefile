@@ -5,7 +5,8 @@ tmpfile := $(shell mktemp /tmp/systest-XXX)
 test_name ?= TestSmeshing
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
-poet_image ?= $(org)/poet:v0.10.2
+certifier_image ?= spacemeshos/certifier-service:v0.7.8
+poet_image ?= $(org)/poet:v0.10.3
 post_service_image ?= $(org)/post-service:v0.7.8
 post_init_image ?= $(org)/postcli:v0.12.5
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
@@ -61,6 +62,7 @@ template:
 	@echo node-selector=$(node_selector) >> $(tmpfile)
 	@echo image=$(smesher_image) >> $(tmpfile)
 	@echo bs-image=$(bs_image) >> $(tmpfile)
+	@echo certifier-image=$(certifier_image) >> $(tmpfile)
 	@echo poet-image=$(poet_image) >> $(tmpfile)
 	@echo poet-size=$(poet_size) >> $(tmpfile)
 	@echo post-service-image=$(post_service_image) >> $(tmpfile)

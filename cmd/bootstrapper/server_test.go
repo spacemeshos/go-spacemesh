@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -57,7 +58,7 @@ func updateCheckpoint(t *testing.T, ctx context.Context, data string) {
 
 func TestServer(t *testing.T) {
 	db := sql.InMemory()
-	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, logtest.New(t)))
+	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
 	t.Cleanup(cleanup)
 
 	fs := afero.NewMemMapFs()

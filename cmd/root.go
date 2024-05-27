@@ -159,7 +159,7 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	/** ======================== API Flags ========================== **/
 
 	flagSet.StringVar(&cfg.API.PublicListener, "grpc-public-listener",
-		cfg.API.PublicListener, "Socket for grpc services that are save to expose publicly.")
+		cfg.API.PublicListener, "Socket for grpc services that are safe to expose publicly.")
 	flagSet.StringVar(&cfg.API.PrivateListener, "grpc-private-listener",
 		cfg.API.PrivateListener, "Socket for grpc services that are not safe to expose publicly.")
 	flagSet.StringVar(&cfg.API.PostListener, "grpc-post-listener", cfg.API.PostListener,

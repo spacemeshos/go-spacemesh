@@ -6,10 +6,10 @@ import (
 
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -62,7 +62,7 @@ func TestFullBallotFilter(t *testing.T) {
 			config := Config{}
 			config.BadBeaconVoteDelayLayers = tc.distance
 			require.Equal(t, tc.expect, newFullTortoise(config, state).shouldBeDelayed(
-				logtest.Zap(t), &tc.ballot))
+				zaptest.NewLogger(t), &tc.ballot))
 		})
 	}
 }
@@ -321,7 +321,7 @@ func TestFullCountVotes(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			logger := logtest.Zap(t)
+			logger := zaptest.NewLogger(t)
 			tortoise := defaultAlgorithm(t)
 			var (
 				activeset []types.ATXID
@@ -556,7 +556,7 @@ func TestFullVerify(t *testing.T) {
 				}
 				layer.blocks = append(layer.blocks, block)
 			}
-			v, _ := full.verify(logtest.Zap(t), target)
+			v, _ := full.verify(zaptest.NewLogger(t), target)
 			require.Equal(t, tc.validity != nil, v)
 			if tc.validity != nil {
 				for i, expect := range tc.validity {

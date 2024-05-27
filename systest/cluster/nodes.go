@@ -40,6 +40,11 @@ import (
 )
 
 var (
+	certifierConfig = parameters.String(
+		"certifier",
+		"configuration for certifier service",
+		fastnet.CertifierConfig,
+	)
 	poetConfig = parameters.String(
 		"poet",
 		"configuration for poet service",
@@ -109,9 +114,11 @@ func toResources(value string) (*apiv1.ResourceRequirements, error) {
 const (
 	configDir = "/etc/config/"
 
-	attachedPoetConfig    = "poet.conf"
-	attachedSmesherConfig = "smesher.json"
+	attachedCertifierConfig = "certifier.yaml"
+	attachedPoetConfig      = "poet.conf"
+	attachedSmesherConfig   = "smesher.json"
 
+	certifierConfigMapName = "certifier"
 	poetConfigMapName      = "poet"
 	spacemeshConfigMapName = "spacemesh"
 
@@ -305,9 +312,64 @@ func (n *PrivNodeClient) NewStream(
 	return stream, err
 }
 
+func deployCertifierD(ctx *testcontext.Context, id, privkey string) (*NodeClient, error) {
+	args := []string{
+		"-c" + configDir + attachedCertifierConfig,
+	}
+
+	ctx.Log.Debugw("deploying certifier service pod", "id", id, "args", args, "image", ctx.CertifierImage)
+
+	labels := nodeLabels(certifierApp, id)
+
+	deployment := appsv1.Deployment(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(appsv1.DeploymentSpec().
+			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
+			WithReplicas(1).
+			WithTemplate(corev1.PodTemplateSpec().
+				WithLabels(labels).
+				WithSpec(corev1.PodSpec().
+					WithNodeSelector(ctx.NodeSelector).
+					WithVolumes(corev1.Volume().
+						WithName("config").
+						WithConfigMap(corev1.ConfigMapVolumeSource().WithName(certifierConfigMapName)),
+					).
+					WithContainers(corev1.Container().
+						WithName("certifier").
+						WithImage(ctx.CertifierImage).
+						WithArgs(args...).
+						WithEnv(corev1.EnvVar().WithName("CERTIFIER_SIGNING_KEY").WithValue(privkey)).
+						WithPorts(
+							corev1.ContainerPort().WithProtocol("TCP").WithContainerPort(certifierPort),
+						).
+						WithVolumeMounts(
+							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
+						).
+						WithResources(corev1.ResourceRequirements().
+							WithRequests(poetResources.Get(ctx.Parameters).Requests).
+							WithLimits(poetResources.Get(ctx.Parameters).Limits),
+						),
+					),
+				)))
+
+	_, err := ctx.Client.AppsV1().
+		Deployments(ctx.Namespace).
+		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return nil, fmt.Errorf("creating certifier: %w", err)
+	}
+	return &NodeClient{
+		session: ctx,
+		Node: Node{
+			Name: id,
+		},
+	}, nil
+}
+
 func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
 	args := []string{
 		"-c=" + configDir + attachedPoetConfig,
+		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
 	}
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
@@ -326,6 +388,12 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 			WithReplicas(1).
 			WithTemplate(corev1.PodTemplateSpec().
 				WithLabels(labels).
+				WithAnnotations(
+					map[string]string{
+						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
+						"prometheus.io/scrape": "true",
+					},
+				).
 				WithSpec(corev1.PodSpec().
 					WithNodeSelector(ctx.NodeSelector).
 					WithVolumes(corev1.Volume().
@@ -338,6 +406,7 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 						WithArgs(args...).
 						WithPorts(
 							corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(poetPort),
+							corev1.ContainerPort().WithName("prometheus").WithContainerPort(prometheusScrapePort),
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
@@ -407,6 +476,21 @@ func deployNodeSvc(ctx *testcontext.Context, id string) error {
 	return nil
 }
 
+func deployCertifierSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) {
+	ctx.Log.Debugw("deploying certifier service", "id", id)
+	labels := nodeLabels(certifierApp, id)
+	svc := corev1.Service(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(corev1.ServiceSpec().
+			WithSelector(labels).
+			WithPorts(
+				corev1.ServicePort().WithName("rest").WithPort(certifierPort).WithProtocol("TCP"),
+			),
+		)
+
+	return ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
+}
+
 func deployPoetSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) {
 	ctx.Log.Debugw("deploying poet service", "id", id)
 	labels := nodeLabels(poetApp, id)
@@ -416,6 +500,7 @@ func deployPoetSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) 
 			WithSelector(labels).
 			WithPorts(
 				corev1.ServicePort().WithName("rest").WithPort(poetPort).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("prometheus").WithPort(prometheusScrapePort),
 			),
 		)
 
@@ -440,6 +525,21 @@ func decodePoetIdentifier(id string) int {
 		panic(err)
 	}
 	return ord
+}
+
+// deployCertifier creates a certifier Deployment and exposes it via a Service.
+// The key is passed to the certifier Pod.
+func deployCertifier(ctx *testcontext.Context, id, privkey string) (*NodeClient, error) {
+	if _, err := deployCertifierSvc(ctx, id); err != nil {
+		return nil, fmt.Errorf("deploying certifier service: %w", err)
+	}
+
+	node, err := deployCertifierD(ctx, id, privkey)
+	if err != nil {
+		return nil, err
+	}
+
+	return node, nil
 }
 
 // deployPoet creates a poet Pod and exposes it via a Service.
@@ -1131,6 +1231,14 @@ func Accounts(accounts map[string]uint64) DeploymentFlag {
 // DurationFlag is a generic duration flag.
 func DurationFlag(flag string, d time.Duration) DeploymentFlag {
 	return DeploymentFlag{Name: flag, Value: d.String()}
+}
+
+func PoetCertifierURL(url string) DeploymentFlag {
+	return DeploymentFlag{Name: "--certifier-url", Value: url}
+}
+
+func PoetCertifierPubkey(key string) DeploymentFlag {
+	return DeploymentFlag{Name: "--certifier-pubkey", Value: key}
 }
 
 // PoetRestListen socket pair with http api.

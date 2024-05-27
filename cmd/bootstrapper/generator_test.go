@@ -103,7 +103,7 @@ func TestGenerator_Generate(t *testing.T) {
 	targetEpoch := types.EpochID(3)
 	db := sql.InMemory()
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
-	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, logtest.New(t)))
+	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
 	t.Cleanup(cleanup)
 
 	for _, tc := range []struct {
@@ -169,15 +169,16 @@ func TestGenerator_Generate(t *testing.T) {
 func TestGenerator_CheckAPI(t *testing.T) {
 	targetEpoch := types.EpochID(3)
 	db := sql.InMemory()
+	lg := logtest.New(t)
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
-	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, logtest.New(t)))
+	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, lg.Zap()))
 	t.Cleanup(cleanup)
 
 	fs := afero.NewMemMapFs()
 	g := NewGenerator(
 		"https://api.blockcypher.com/v1/btc/main",
 		cfg.PublicListener,
-		WithLogger(logtest.New(t)),
+		WithLogger(lg),
 		WithFilesystem(fs),
 		WithHttpClient(http.DefaultClient),
 	)
