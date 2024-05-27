@@ -12,12 +12,12 @@ import (
 	"sort"
 
 	"github.com/seehuhn/mt19937"
+	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -49,7 +49,7 @@ type proposalMetadata struct {
 
 func getProposalMetadata(
 	ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	db *sql.Database,
 	atxs *atxsdata.Data,
 	cfg Config,
@@ -107,18 +107,21 @@ func getProposalMetadata(
 	majority := cfg.OptFilterThreshold * total
 	var majorityState *meshState
 	for _, ms := range meshHashes {
-		logger.With().Debug("mesh hash",
-			ms.hash,
-			log.Int("count", ms.count),
-			log.Int("total", total),
-			log.Int("threshold", cfg.OptFilterThreshold),
-			log.Int("num_proposals", len(proposals)))
+		logger.Debug("mesh hash",
+			zap.Stringer("hash", ms.hash),
+			zap.Int("count", ms.count),
+			zap.Int("total", total),
+			zap.Int("threshold", cfg.OptFilterThreshold),
+			zap.Int("num_proposals", len(proposals)),
+		)
 		if ms.hash != types.EmptyLayerHash && ms.count*100 >= majority {
 			majorityState = ms
 		}
 	}
 	if majorityState == nil {
-		logger.With().Info("no consensus on mesh hash. NOT doing optimistic filtering", lid)
+		logger.Info("no consensus on mesh hash. NOT doing optimistic filtering",
+			zap.Uint32("layer_id", lid.Uint32()),
+		)
 	} else {
 		ownMeshHash, err := layers.GetAggregatedHash(db, lid.Sub(1))
 		if err != nil {
@@ -128,9 +131,10 @@ func getProposalMetadata(
 			return nil, fmt.Errorf("%w: majority %v, node %v",
 				errNodeHasBadMeshHash, majorityState.hash.ShortString(), ownMeshHash.ShortString())
 		}
-		logger.With().Debug("consensus on mesh hash. doing optimistic filtering",
-			lid,
-			log.Stringer("mesh_hash", majorityState.hash))
+		logger.Debug("consensus on mesh hash. doing optimistic filtering",
+			zap.Uint32("layer_id", lid.Uint32()),
+			zap.Stringer("mesh_hash", majorityState.hash),
+		)
 		md.optFilter = true
 	}
 	if len(mtxs) > 0 {
@@ -148,7 +152,7 @@ func getProposalMetadata(
 }
 
 func getBlockTXs(
-	logger log.Log,
+	logger *zap.Logger,
 	mtxs []*types.MeshTransaction,
 	blockSeed []byte,
 	gasLimit uint64,
@@ -156,13 +160,13 @@ func getBlockTXs(
 	stateF := func(_ types.Address) (uint64, uint64) {
 		return 0, math.MaxUint64
 	}
-	txCache := txs.NewCache(stateF, logger.Zap())
+	txCache := txs.NewCache(stateF, logger)
 	if err := txCache.BuildFromTXs(mtxs, blockSeed); err != nil {
 		return nil, fmt.Errorf("build txs for block: %w", err)
 	}
-	byAddrAndNonce := txCache.GetMempool(logger.Zap())
+	byAddrAndNonce := txCache.GetMempool(logger)
 	if len(byAddrAndNonce) == 0 {
-		logger.With().Warning("no feasible txs for block")
+		logger.Warn("no feasible txs for block")
 		return nil, nil
 	}
 	candidates := make([]*txs.NanoTX, 0, len(mtxs))
@@ -179,7 +183,7 @@ func getBlockTXs(
 	mt := mt19937.New()
 	mt.SeedFromSlice(toUint64Slice(blockSeed))
 	rng := rand.New(mt)
-	ordered := txs.ShuffleWithNonceOrder(logger.Zap(), rng, len(candidates), candidates, byAddrAndNonce)
+	ordered := txs.ShuffleWithNonceOrder(logger, rng, len(candidates), candidates, byAddrAndNonce)
 	if gasLimit > 0 {
 		ordered = prune(logger, ordered, byTid, gasLimit)
 	}
@@ -187,7 +191,7 @@ func getBlockTXs(
 }
 
 func prune(
-	logger log.Log,
+	logger *zap.Logger,
 	tids []types.TransactionID,
 	byTid map[types.TransactionID]*txs.NanoTX,
 	gasLimit uint64,
@@ -199,19 +203,20 @@ func prune(
 	)
 	for idx, tid = range tids {
 		if gasRemaining < txs.MinTXGas {
-			logger.With().Info("gas exhausted for block",
-				log.Int("num_txs", idx),
-				log.Uint64("gas_left", gasRemaining),
-				log.Uint64("gas_limit", gasLimit))
+			logger.Info("gas exhausted for block",
+				zap.Int("num_txs", idx),
+				zap.Uint64("gas_left", gasRemaining),
+				zap.Uint64("gas_limit", gasLimit),
+			)
 			return tids[:idx]
 		}
 		ntx, ok := byTid[tid]
 		if !ok {
-			logger.With().Fatal("tx missing", tid)
+			logger.Fatal("tx missing", zap.Stringer("tx_id", tid.Hash32()))
 		}
 		gasRemaining -= ntx.MaxGas
 	}
-	logger.With().Debug("block txs after pruning", log.Int("num_txs", len(tids)))
+	logger.Debug("block txs after pruning", zap.Int("num_txs", len(tids)))
 	return tids
 }
 
