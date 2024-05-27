@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"math/rand/v2"
 	"testing"
 	"unsafe"
 
@@ -102,8 +103,8 @@ func Test_GenerateDoublePublishProof(t *testing.T) {
 				Challenge: types.RandomHash(),
 				Posts: []SubPostV2{
 					{
-						NodeID:       types.RandomNodeID(),
-						PrevATXIndex: 0,
+						MarriageIndex: rand.Uint32N(256),
+						PrevATXIndex:  0,
 						Post: PostV1{
 							Nonce:   0,
 							Indices: make([]byte, 800),

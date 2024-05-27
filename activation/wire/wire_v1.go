@@ -5,7 +5,6 @@ import (
 	"unsafe"
 
 	"github.com/spacemeshos/merkle-tree"
-
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"

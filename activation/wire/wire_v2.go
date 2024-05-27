@@ -228,10 +228,13 @@ func (mp *MerkleProofV2) Root() []byte {
 }
 
 type SubPostV2 struct {
-	NodeID       types.NodeID // NodeID this PoST belongs to
-	PrevATXIndex uint32       // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
-	Post         PostV1
-	NumUnits     uint32
+	// Index of marriage certificate for this ID in the 'Marriages' slice. Only valid for merged ATXs.
+	// Can be used to extract the nodeID and verify if it is married with the smesher of the ATX.
+	// Must be 0 for non-merged ATXs.
+	MarriageIndex uint32
+	PrevATXIndex  uint32 // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
+	Post          PostV1
+	NumUnits      uint32
 }
 
 func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
@@ -241,7 +244,7 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 	if err != nil {
 		panic(err)
 	}
-	tree.AddLeaf(sp.NodeID.Bytes())
+	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&sp.MarriageIndex))[:])
 	if int(sp.PrevATXIndex) >= len(prevATXs) {
 		return nil // invalid index, root cannot be generated
 	}

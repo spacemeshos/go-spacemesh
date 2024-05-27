@@ -290,7 +290,7 @@ func (t *MerkleProofV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *SubPostV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
+		n, err := scale.EncodeCompact32(enc, uint32(t.MarriageIndex))
 		if err != nil {
 			return total, err
 		}
@@ -322,11 +322,12 @@ func (t *SubPostV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *SubPostV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
+		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.MarriageIndex = uint32(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact32(dec)
