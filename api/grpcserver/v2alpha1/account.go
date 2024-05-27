@@ -69,12 +69,12 @@ func (s *AccountService) List(
 		counterProjected, balanceProjected := s.conState.GetProjection(account.Address)
 		rst = append(rst, &spacemeshv2alpha1.Account{
 			Address: account.Address.String(),
-			StateCurrent: &spacemeshv2alpha1.AccountState{
+			Current: &spacemeshv2alpha1.AccountState{
 				Counter: account.NextNonce,
 				Balance: account.Balance,
 				Layer:   account.Layer.Uint32(),
 			},
-			StateProjected: &spacemeshv2alpha1.AccountState{
+			Projected: &spacemeshv2alpha1.AccountState{
 				Counter: counterProjected,
 				Balance: balanceProjected,
 			},
