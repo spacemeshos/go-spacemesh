@@ -28,7 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-//go:generate mockgen -typed -source=./handler_v2.go -destination=mocks_handler_v2.go -package=activation
 
 type nipostValidatorV2 interface {
 	IsVerifyingFullPost() bool
