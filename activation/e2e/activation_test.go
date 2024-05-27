@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -132,7 +131,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	)
 	certClient := activation.NewCertifierClient(db, localDB, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDB, logger, certClient)
-	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
+	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 	client, err := poetProver.Client(poetDb, poetCfg, logger, activation.WithCertifier(certifier))
 	require.NoError(t, err)
 

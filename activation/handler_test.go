@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
@@ -21,7 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -194,8 +195,8 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 }
 
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
-	lg := logtest.New(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg.Zap())
+	lg := zaptest.NewLogger(tb)
+	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)
@@ -262,7 +263,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 					Return(errors.New("invalid"))
 				nodeID, err := malfeasance.Validate(
 					context.Background(),
-					atxHdlr.log,
+					log.NewFromLog(atxHdlr.logger),
 					atxHdlr.cdb,
 					atxHdlr.edVerifier,
 					postVerifier,
@@ -426,7 +427,7 @@ func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 				require.NoError(t, codec.Decode(data, &got))
 				nodeID, err := malfeasance.Validate(
 					context.Background(),
-					hdlr.log,
+					log.NewFromLog(hdlr.logger),
 					hdlr.cdb,
 					hdlr.edVerifier,
 					nil,

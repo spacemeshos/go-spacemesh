@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -194,7 +193,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
+	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 
 	svc := grpcserver.NewPostService(logger)
 	svc.AllowConnections(true)
@@ -322,7 +321,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		WithCycleGap(poetCfg.CycleGap),
 	)
 
-	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
+	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 	client, err := activation.NewPoetClient(
 		poetDb,
 		poetProver.ServerCfg(),

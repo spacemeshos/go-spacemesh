@@ -6,10 +6,11 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -219,7 +220,7 @@ func PostFromWireV1(post *PostV1) *types.Post {
 	}
 }
 
-func (p *PostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (p *PostV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if p == nil {
 		return nil
 	}
@@ -229,7 +230,7 @@ func (p *PostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-func (nipost *NIPostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (nipost *NIPostV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if nipost == nil {
 		return nil
 	}
@@ -238,7 +239,7 @@ func (nipost *NIPostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-func (atx *ActivationTxV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (atx *ActivationTxV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if atx == nil {
 		return nil
 	}
