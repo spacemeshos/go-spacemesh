@@ -67,20 +67,18 @@ func (s *AccountService) List(
 	rst := make([]*spacemeshv2alpha1.Account, 0, request.Limit)
 	if err := accounts.IterateAccountsOps(s.db, ops, func(account *types.Account) bool {
 		counterProjected, balanceProjected := s.conState.GetProjection(account.Address)
-		rst = append(rst, &spacemeshv2alpha1.Account{Versioned: &spacemeshv2alpha1.Account_V1{
-			V1: &spacemeshv2alpha1.AccountV1{
-				AccountId: account.Address.String(),
-				StateCurrent: &spacemeshv2alpha1.AccountState{
-					Counter: account.NextNonce,
-					Balance: account.Balance,
-					Layer:   account.Layer.Uint32(),
-				},
-				StateProjected: &spacemeshv2alpha1.AccountState{
-					Counter: counterProjected,
-					Balance: balanceProjected,
-				},
+		rst = append(rst, &spacemeshv2alpha1.Account{
+			Address: account.Address.String(),
+			StateCurrent: &spacemeshv2alpha1.AccountState{
+				Counter: account.NextNonce,
+				Balance: account.Balance,
+				Layer:   account.Layer.Uint32(),
 			},
-		}})
+			StateProjected: &spacemeshv2alpha1.AccountState{
+				Counter: counterProjected,
+				Balance: balanceProjected,
+			},
+		})
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -94,9 +92,9 @@ func toAccountOperations(filter *spacemeshv2alpha1.AccountRequest) (builder.Oper
 		return ops, nil
 	}
 
-	if len(filter.Address) > 0 {
+	if len(filter.Addresses) > 0 {
 		var addrs [][]byte
-		for _, address := range filter.Address {
+		for _, address := range filter.Addresses {
 			addr, err := types.StringToAddress(address)
 			if err != nil {
 				return builder.Operations{}, err

@@ -107,31 +107,31 @@ func TestAccountService_List(t *testing.T) {
 
 	t.Run("address", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.AccountRequest{
-			Address: []string{accs[0].Address.String()},
-			Limit:   10,
+			Addresses: []string{accs[0].Address.String()},
+			Limit:     10,
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Accounts, 1)
-		require.Equal(t, accs[0].BalanceProjected, list.Accounts[0].GetV1().StateProjected.Balance)
-		require.Equal(t, accs[0].CounterProjected, list.Accounts[0].GetV1().StateProjected.Counter)
-		require.Equal(t, accs[0].BalanceCurrent, list.Accounts[0].GetV1().StateCurrent.Balance)
-		require.Equal(t, accs[0].CounterCurrent, list.Accounts[0].GetV1().StateCurrent.Counter)
+		require.Equal(t, accs[0].BalanceProjected, list.Accounts[0].StateProjected.Balance)
+		require.Equal(t, accs[0].CounterProjected, list.Accounts[0].StateProjected.Counter)
+		require.Equal(t, accs[0].BalanceCurrent, list.Accounts[0].StateCurrent.Balance)
+		require.Equal(t, accs[0].CounterCurrent, list.Accounts[0].StateCurrent.Counter)
 	})
 
 	t.Run("multiple addresses", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.AccountRequest{
-			Address: []string{accs[0].Address.String(), accs[1].Address.String()},
-			Limit:   10,
+			Addresses: []string{accs[0].Address.String(), accs[1].Address.String()},
+			Limit:     10,
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Accounts, 2)
-		require.Equal(t, accs[0].BalanceProjected, list.Accounts[0].GetV1().StateProjected.Balance)
-		require.Equal(t, accs[0].CounterProjected, list.Accounts[0].GetV1().StateProjected.Counter)
-		require.Equal(t, accs[0].BalanceCurrent, list.Accounts[0].GetV1().StateCurrent.Balance)
-		require.Equal(t, accs[0].CounterCurrent, list.Accounts[0].GetV1().StateCurrent.Counter)
-		require.Equal(t, accs[1].BalanceProjected, list.Accounts[1].GetV1().StateProjected.Balance)
-		require.Equal(t, accs[1].CounterProjected, list.Accounts[1].GetV1().StateProjected.Counter)
-		require.Equal(t, accs[1].BalanceCurrent, list.Accounts[1].GetV1().StateCurrent.Balance)
-		require.Equal(t, accs[1].CounterCurrent, list.Accounts[1].GetV1().StateCurrent.Counter)
+		require.Equal(t, accs[0].BalanceProjected, list.Accounts[0].StateProjected.Balance)
+		require.Equal(t, accs[0].CounterProjected, list.Accounts[0].StateProjected.Counter)
+		require.Equal(t, accs[0].BalanceCurrent, list.Accounts[0].StateCurrent.Balance)
+		require.Equal(t, accs[0].CounterCurrent, list.Accounts[0].StateCurrent.Counter)
+		require.Equal(t, accs[1].BalanceProjected, list.Accounts[1].StateProjected.Balance)
+		require.Equal(t, accs[1].CounterProjected, list.Accounts[1].StateProjected.Counter)
+		require.Equal(t, accs[1].BalanceCurrent, list.Accounts[1].StateCurrent.Balance)
+		require.Equal(t, accs[1].CounterCurrent, list.Accounts[1].StateCurrent.Counter)
 	})
 }
