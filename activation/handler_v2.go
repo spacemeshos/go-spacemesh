@@ -28,7 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-
 type nipostValidatorV2 interface {
 	IsVerifyingFullPost() bool
 	VRFNonceV2(smesherID types.NodeID, commitment types.ATXID, vrfNonce uint64, numUnits uint32) error
