@@ -43,7 +43,11 @@ func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
 
 func Test_MergeDBs_TargetIsSupervised(t *testing.T) {
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zap.New(observer)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
 	tmpDst := t.TempDir()
 
 	err := os.MkdirAll(filepath.Join(tmpDst, keyDir), 0o700)
@@ -99,7 +103,11 @@ func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
 
 func Test_MergeDBs_SourceIsSupervised(t *testing.T) {
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zap.New(observer)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
 	tmpDst := t.TempDir()
 
 	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))

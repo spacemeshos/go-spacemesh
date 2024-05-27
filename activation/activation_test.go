@@ -69,7 +69,7 @@ type testAtxBuilder struct {
 }
 
 func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
-	observer, observedLogs := observer.New(zapcore.DebugLevel)
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -1498,7 +1498,7 @@ func TestFindFullyValidHighTickAtx(t *testing.T) {
 		mValidator := NewMocknipostValidator(gomock.NewController(t))
 		mValidator.EXPECT().VerifyChain(gomock.Any(), atxLower.ID(), golden, gomock.Any())
 
-		lg := zaptest.NewLogger(t, zaptest.Level(zap.InfoLevel))
+		lg := zaptest.NewLogger(t)
 		found, err := findFullyValidHighTickAtx(context.Background(), data, 0, golden, mValidator, lg)
 		require.NoError(t, err)
 		require.Equal(t, atxLower.ID(), found)
