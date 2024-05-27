@@ -16,13 +16,15 @@ func Benchmark_ATXv2ID(b *testing.B) {
 	f := fuzz.New()
 	b.ResetTimer()
 
+	var atx *ActivationTxV2
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		atx := &ActivationTxV2{}
+		atx = &ActivationTxV2{}
 		f.Fuzz(atx)
 		b.StartTimer()
 		atx.ID()
 	}
+	_ = atx
 }
 
 func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
@@ -120,11 +122,11 @@ func Test_GenerateDoublePublishProof(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, proof)
 
-	// a malfeasanceproof for double publish will contain
+	// a malfeasance proof for double publish will contain
 	// - the value of the PublishEpoch (here 10) - 4 bytes
 	// - the two ATX IDs - 32 bytes each
 	// - the two signatures (atx.Signature + atx.NodeID) - 64 bytes each
-	// - two merkleproofs - one per ATX - that is 128 bytes each (4 * 32)
+	// - two merkle proofs - one per ATX - that is 128 bytes each (4 * 32)
 	// total: 452 bytes instead of two full ATXs (> 20 kB each in the worst case)
 
 	publishEpochLeaf := (*[4]byte)(unsafe.Pointer(&atx.PublishEpoch))[:]
