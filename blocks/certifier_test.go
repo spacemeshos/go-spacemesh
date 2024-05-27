@@ -7,13 +7,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmock "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -46,7 +46,7 @@ func newTestCertifier(t *testing.T, signers int) *testCertifier {
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
 	c := NewCertifier(db, mo, signing.NewEdVerifier(), mp, mc, mb, mtortoise,
-		WithCertifierLogger(logtest.New(t)),
+		WithCertifierLogger(zaptest.NewLogger(t)),
 	)
 	for i := 0; i < signers; i++ {
 		signer, err := signing.NewEdSigner()

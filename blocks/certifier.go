@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -58,7 +59,7 @@ func WithCertConfig(cfg CertConfig) CertifierOpt {
 }
 
 // WithCertifierLogger defines logger for Certifier.
-func WithCertifierLogger(logger log.Log) CertifierOpt {
+func WithCertifierLogger(logger *zap.Logger) CertifierOpt {
 	return func(c *Certifier) {
 		c.logger = logger
 	}
@@ -72,7 +73,7 @@ type certInfo struct {
 
 // Certifier collects enough CertifyMessage for a given hare output and generate certificate.
 type Certifier struct {
-	logger log.Log
+	logger *zap.Logger
 	cfg    CertConfig
 	once   sync.Once
 	eg     errgroup.Group
@@ -109,7 +110,7 @@ func NewCertifier(
 	opts ...CertifierOpt,
 ) *Certifier {
 	c := &Certifier{
-		logger:      log.NewNop(),
+		logger:      zap.NewNop(),
 		cfg:         defaultCertConfig(),
 		db:          db,
 		oracle:      o,
@@ -134,11 +135,11 @@ func (c *Certifier) Register(sig *signing.EdSigner) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, exists := c.signers[sig.NodeID()]; exists {
-		c.logger.With().Error("signing key already registered", log.ShortStringer("id", sig.NodeID()))
+		c.logger.Error("signing key already registered", log.ZShortStringer("id", sig.NodeID()))
 		return
 	}
 
-	c.logger.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+	c.logger.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 	c.signers[sig.NodeID()] = sig
 }
 
@@ -161,7 +162,7 @@ func (c *Certifier) Stop() {
 	c.stop()
 	err := c.eg.Wait()
 	if err != nil && !errors.Is(err, context.Canceled) {
-		c.logger.With().Error("certifier task failure", log.Err(err))
+		c.logger.Error("certifier task failure", zap.Error(err))
 	}
 }
 
@@ -187,7 +188,7 @@ func (c *Certifier) prune() {
 	}
 	for lid := range c.certifyMsgs {
 		if lid.Before(cutoff) {
-			c.logger.With().Debug("removing layer from cert registration", lid)
+			c.logger.Debug("removing layer from cert registration", zap.Stringer("layer_id", lid))
 			delete(c.certifyMsgs, lid)
 		}
 	}
@@ -207,7 +208,11 @@ func (c *Certifier) createIfNeeded(lid types.LayerID, bid types.BlockID) *certIn
 
 // RegisterForCert register to generate a certificate for the specified layer/block.
 func (c *Certifier) RegisterForCert(ctx context.Context, lid types.LayerID, bid types.BlockID) error {
-	logger := c.logger.WithContext(ctx).WithFields(lid, bid)
+	logger := c.logger.With(
+		log.ZContext(ctx),
+		zap.Stringer("layer_id", lid),
+		zap.Stringer("block_id", bid),
+	)
 	logger.Debug("certifier registered")
 
 	c.mu.Lock()
@@ -300,7 +305,11 @@ func (c *Certifier) NumCached() int {
 
 // HandleSyncedCertificate handles Certificate from sync.
 func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.LayerID, cert *types.Certificate) error {
-	logger := c.logger.WithContext(ctx).WithFields(lid, cert.BlockID)
+	logger := c.logger.With(
+		log.ZContext(ctx),
+		zap.Stringer("layer_id", lid),
+		zap.Stringer("block_id", cert.BlockID),
+	)
 	logger.Debug("processing synced certificate")
 	if err := c.validateCert(ctx, logger, cert); err != nil {
 		return err
@@ -314,7 +323,7 @@ func (c *Certifier) HandleSyncedCertificate(ctx context.Context, lid types.Layer
 	return nil
 }
 
-func (c *Certifier) validateCert(ctx context.Context, logger log.Log, cert *types.Certificate) error {
+func (c *Certifier) validateCert(ctx context.Context, logger *zap.Logger, cert *types.Certificate) error {
 	eligibilityCnt := uint16(0)
 	for _, msg := range cert.Signatures {
 		if err := c.validate(ctx, logger, msg); err != nil {
@@ -323,10 +332,10 @@ func (c *Certifier) validateCert(ctx context.Context, logger log.Log, cert *type
 		eligibilityCnt += msg.EligibilityCnt
 	}
 	if int(eligibilityCnt) < c.cfg.CertifyThreshold {
-		logger.With().Warning("certificate not meeting threshold",
-			log.Int("num_msgs", len(cert.Signatures)),
-			log.Int("threshold", c.cfg.CertifyThreshold),
-			log.Uint16("eligibility_count", eligibilityCnt),
+		logger.Warn("certificate not meeting threshold",
+			zap.Int("num_msgs", len(cert.Signatures)),
+			zap.Int("threshold", c.cfg.CertifyThreshold),
+			zap.Uint16("eligibility_count", eligibilityCnt),
 		)
 		return errInvalidCert
 	}
@@ -357,7 +366,11 @@ func (c *Certifier) expected(lid types.LayerID) bool {
 func (c *Certifier) HandleCertifyMessage(ctx context.Context, peer p2p.Peer, data []byte) error {
 	err := c.handleCertifyMessage(ctx, peer, data)
 	if err != nil && errors.Is(err, errMalformedData) {
-		c.logger.WithContext(ctx).With().Warning("malformed cert msg", log.Stringer("peer", peer), log.Err(err))
+		c.logger.Warn("malformed cert msg",
+			log.ZContext(ctx),
+			zap.Stringer("peer", peer),
+			zap.Error(err),
+		)
 	}
 	return err
 }
@@ -368,7 +381,6 @@ func (c *Certifier) handleCertifyMessage(ctx context.Context, _ p2p.Peer, data [
 		return errors.New("certifier shutting down")
 	}
 
-	logger := c.logger.WithContext(ctx)
 	var msg types.CertifyMessage
 	if err := codec.Decode(data, &msg); err != nil {
 		return errMalformedData
@@ -376,14 +388,20 @@ func (c *Certifier) handleCertifyMessage(ctx context.Context, _ p2p.Peer, data [
 
 	lid := msg.LayerID
 	bid := msg.BlockID
-	logger = logger.WithFields(lid, bid)
+	logger := c.logger.With(
+		log.ZContext(ctx),
+		zap.Stringer("layer_id", lid),
+		zap.Stringer("block_id", bid),
+	)
 
 	if _, err := c.beacon.GetBeacon(lid.GetEpoch()); err != nil {
 		return errBeaconNotAvailable
 	}
 
 	if !c.expected(lid) {
-		logger.With().Debug("received message for unexpected layer", lid)
+		logger.Debug("received message for unexpected layer",
+			zap.Stringer("layer_id", lid),
+		)
 		return errUnexpectedMsg
 	}
 
@@ -402,7 +420,7 @@ func (c *Certifier) handleCertifyMessage(ctx context.Context, _ p2p.Peer, data [
 	return nil
 }
 
-func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.CertifyMessage) error {
+func (c *Certifier) validate(ctx context.Context, logger *zap.Logger, msg types.CertifyMessage) error {
 	if !c.edVerifier.Verify(signing.HARE, msg.SmesherID, msg.Bytes(), msg.Signature) {
 		return fmt.Errorf("%w: failed to verify signature", errMalformedData)
 	}
@@ -416,17 +434,17 @@ func (c *Certifier) validate(ctx context.Context, logger log.Log, msg types.Cert
 		msg.EligibilityCnt,
 	)
 	if err != nil {
-		logger.With().Warning("failed to validate cert msg", log.Err(err))
+		logger.Warn("failed to validate cert msg", zap.Error(err))
 		return err
 	}
 	if !valid {
-		logger.With().Warning("oracle deemed cert msg invalid", log.Stringer("smesher", msg.SmesherID))
+		logger.Warn("oracle deemed cert msg invalid", zap.Stringer("smesher", msg.SmesherID))
 		return errInvalidCertMsg
 	}
 	return nil
 }
 
-func (c *Certifier) saveMessage(ctx context.Context, logger log.Log, msg types.CertifyMessage) error {
+func (c *Certifier) saveMessage(ctx context.Context, logger *zap.Logger, msg types.CertifyMessage) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -436,9 +454,9 @@ func (c *Certifier) saveMessage(ctx context.Context, logger log.Log, msg types.C
 
 	info.signatures = append(info.signatures, msg)
 	info.totalEligibility += msg.EligibilityCnt
-	logger.With().Debug("saved certify msg",
-		log.Uint16("eligibility_count", info.totalEligibility),
-		log.Int("num_msg", len(info.signatures)),
+	logger.Debug("saved certify msg",
+		zap.Uint16("eligibility_count", info.totalEligibility),
+		zap.Int("num_msg", len(info.signatures)),
 	)
 
 	if info.registered {
@@ -449,7 +467,7 @@ func (c *Certifier) saveMessage(ctx context.Context, logger log.Log, msg types.C
 
 func (c *Certifier) tryGenCert(
 	ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	lid types.LayerID,
 	bid types.BlockID,
 	info *certInfo,
@@ -464,9 +482,9 @@ func (c *Certifier) tryGenCert(
 		return nil
 	}
 
-	logger.With().Debug("generating certificate",
-		log.Uint16("eligibility_count", c.certifyMsgs[lid][bid].totalEligibility),
-		log.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)),
+	logger.Debug("generating certificate",
+		zap.Uint16("eligibility_count", c.certifyMsgs[lid][bid].totalEligibility),
+		zap.Int("num_msg", len(c.certifyMsgs[lid][bid].signatures)),
 	)
 	cert := &types.Certificate{
 		BlockID:    bid,
@@ -481,7 +499,7 @@ func (c *Certifier) tryGenCert(
 
 func (c *Certifier) checkAndSave(
 	ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	lid types.LayerID,
 	cert *types.Certificate,
 ) error {
@@ -490,7 +508,7 @@ func (c *Certifier) checkAndSave(
 		return err
 	}
 
-	logger.With().Debug("found old certs", log.Int("num_cert", len(oldCerts)))
+	logger.Debug("found old certs", zap.Int("num_cert", len(oldCerts)))
 	var valid, invalid []types.BlockID
 	for _, old := range oldCerts {
 		if old.Block == cert.BlockID {
@@ -499,15 +517,15 @@ func (c *Certifier) checkAndSave(
 		}
 		if old.Cert == nil {
 			// the original live hare output should be trumped by a valid certificate
-			logger.With().Warning("original hare output trumped", log.Stringer("hare_output", old.Block))
+			logger.Warn("original hare output trumped", zap.Stringer("hare_output", old.Block))
 			invalid = append(invalid, old.Block)
 			continue
 		}
 		if err = c.validateCert(ctx, logger, old.Cert); err == nil {
-			logger.With().Warning("old cert still valid", log.Stringer("old_cert", old.Block))
+			logger.Warn("old cert still valid", zap.Stringer("old_cert", old.Block))
 			valid = append(valid, old.Block)
 		} else {
-			logger.With().Debug("old cert not valid", log.Stringer("old_cert", old.Block))
+			logger.Debug("old cert not valid", zap.Stringer("old_cert", old.Block))
 			invalid = append(invalid, old.Block)
 		}
 	}
@@ -515,7 +533,7 @@ func (c *Certifier) checkAndSave(
 		return err
 	}
 	if len(valid) > 0 {
-		logger.Warning("multiple valid certificates found")
+		logger.Warn("multiple valid certificates found")
 		// stop processing certify message for this block
 		if _, ok := c.certifyMsgs[lid]; ok {
 			if _, ok = c.certifyMsgs[lid][cert.BlockID]; ok {
