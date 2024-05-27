@@ -160,7 +160,7 @@ func (s *TransactionService) ParseTransaction(
 		return nil, status.Error(codes.InvalidArgument, "signature is invalid")
 	}
 
-	t := &spacemeshv2alpha1.TransactionV1{
+	t := &spacemeshv2alpha1.Transaction{
 		Raw: raw.Raw,
 	}
 
@@ -176,11 +176,7 @@ func (s *TransactionService) ParseTransaction(
 	}
 
 	return &spacemeshv2alpha1.ParseTransactionResponse{
-		Tx: &spacemeshv2alpha1.Transaction{
-			Versioned: &spacemeshv2alpha1.Transaction_V1{
-				V1: t,
-			},
-		},
+		Tx: t,
 	}, nil
 }
 
@@ -309,7 +305,7 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 ) *spacemeshv2alpha1.TransactionResponse {
 	rst := &spacemeshv2alpha1.TransactionResponse{}
 
-	t := &spacemeshv2alpha1.TransactionV1{
+	t := &spacemeshv2alpha1.Transaction{
 		Id:  tx.ID.Bytes(),
 		Raw: tx.Raw,
 	}
@@ -380,7 +376,7 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 		rst.TxState = convertTxState(tx)
 	}
 
-	rst.Tx = &spacemeshv2alpha1.Transaction{Versioned: &spacemeshv2alpha1.Transaction_V1{V1: t}}
+	rst.Tx = t
 
 	return rst
 }
