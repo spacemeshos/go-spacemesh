@@ -1093,6 +1093,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.postVerifier,
 		activation.WithMalfeasanceLogger(malfeasanceLogger),
 	)
+	meshMH := mesh.NewMalfeasanceHandler(
+		app.cachedDB,
+		app.edVerifier,
+		mesh.WithMalfeasanceLogger(malfeasanceLogger),
+	)
 
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	for _, s := range app.signers {
@@ -1108,6 +1113,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.postVerifier,
 	)
 	malfeasanceHandler.RegisterHandlerV1(wire.MultipleATXs, activationMH.HandleDoublePublish)
+	malfeasanceHandler.RegisterHandlerV1(wire.MultipleBallots, meshMH.HandleMultipleBallots)
 	malfeasanceHandler.RegisterHandlerV1(wire.InvalidPostIndex, activationMH.HandleInvalidPostIndex)
 	malfeasanceHandler.RegisterHandlerV1(wire.InvalidPrevATX, activationMH.HandleInvalidPrevATX)
 

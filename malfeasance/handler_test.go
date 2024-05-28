@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
@@ -100,227 +99,6 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 				Proof: wire.Proof{
 					Type: wire.MultipleATXs,
 					Data: &ap,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.NoError(t, err)
-		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
-
-		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "self", data))
-		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.NoError(t, err)
-		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
-	})
-}
-
-func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
-	db := sql.InMemory()
-	lg := zaptest.NewLogger(t)
-	ctrl := gomock.NewController(t)
-	trt := malfeasance.NewMocktortoise(ctrl)
-	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
-
-	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
-		lg,
-		"self",
-		[]types.NodeID{types.RandomNodeID()},
-		signing.NewEdVerifier(),
-		trt,
-		postVerifier,
-	)
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	lid := types.LayerID(11)
-
-	ballotProof := wire.BallotProof{
-		Messages: [2]wire.BallotProofMsg{
-			{
-				InnerMsg: types.BallotMetadata{
-					Layer:   lid,
-					MsgHash: types.RandomHash(),
-				},
-			},
-			{
-				InnerMsg: types.BallotMetadata{
-					Layer:   lid,
-					MsgHash: types.RandomHash(),
-				},
-			},
-		},
-	}
-
-	t.Run("unknown identity", func(t *testing.T) {
-		bp := ballotProof
-		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
-		bp.Messages[0].SmesherID = sig.NodeID()
-		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
-		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.MultipleBallots,
-					Data: &bp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	createIdentity(t, db, sig)
-
-	t.Run("same msg hash", func(t *testing.T) {
-		msgHash := types.RandomHash()
-		bp := ballotProof
-		bp.Messages[0].InnerMsg.MsgHash = msgHash
-		bp.Messages[1].InnerMsg.MsgHash = msgHash
-		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
-		bp.Messages[0].SmesherID = sig.NodeID()
-		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
-		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.MultipleBallots,
-					Data: &bp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	t.Run("different layer", func(t *testing.T) {
-		bp := ballotProof
-		bp.Messages[1].InnerMsg.Layer = lid.Sub(1)
-		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
-		bp.Messages[0].SmesherID = sig.NodeID()
-		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
-		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.MultipleBallots,
-					Data: &bp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	t.Run("different signer", func(t *testing.T) {
-		bp := ballotProof
-		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
-		bp.Messages[0].SmesherID = sig.NodeID()
-		sig2, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		bp.Messages[1].Signature = sig2.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
-		bp.Messages[1].SmesherID = sig2.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.MultipleBallots,
-					Data: &bp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	t.Run("invalid hare eligibility", func(t *testing.T) {
-		bp := ballotProof
-		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
-		bp.Messages[0].SmesherID = sig.NodeID()
-		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
-		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.MultipleBallots,
-					Data: &bp,
-				},
-			},
-			Eligibility: &types.HareEligibilityGossip{
-				NodeID: types.RandomNodeID(),
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-	})
-
-	t.Run("valid", func(t *testing.T) {
-		bp := ballotProof
-		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
-		bp.Messages[0].SmesherID = sig.NodeID()
-		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
-		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.MultipleBallots,
-					Data: &bp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.NoError(t, err)
-		require.NotNil(t, malProof.Received())
-		malProof.SetReceived(time.Time{})
-		require.Equal(t, gossip.MalfeasanceProof, *malProof)
-	})
-
-	t.Run("proof equivalence", func(t *testing.T) {
-		bp := ballotProof
-		bp.Messages[0].Signature = sig.Sign(signing.BALLOT, bp.Messages[0].SignedBytes())
-		bp.Messages[0].SmesherID = sig.NodeID()
-		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
-		bp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid.Add(11),
-				Proof: wire.Proof{
-					Type: wire.MultipleBallots,
-					Data: &bp,
 				},
 			},
 		}
@@ -608,70 +386,6 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 	})
 }
 
-func TestHandler_CrossDomain(t *testing.T) {
-	db := sql.InMemory()
-	lg := zaptest.NewLogger(t)
-	ctrl := gomock.NewController(t)
-	trt := malfeasance.NewMocktortoise(ctrl)
-	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
-
-	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
-		lg,
-		"self",
-		[]types.NodeID{types.RandomNodeID()},
-		signing.NewEdVerifier(),
-		trt,
-		postVerifier,
-	)
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	createIdentity(t, db, sig)
-
-	target := 10
-	m1 := types.BallotMetadata{
-		Layer:   types.LayerID(uint32(target)),
-		MsgHash: types.Hash32{1, 1, 1},
-	}
-	m2 := types.ATXMetadata{
-		PublishEpoch: types.EpochID(target),
-		MsgHash:      types.Hash32{2, 2, 2},
-	}
-	m1buf, err := codec.Encode(&m1)
-	require.NoError(t, err)
-	m2buf, err := codec.Encode(&m2)
-	require.NoError(t, err)
-
-	msg, err := codec.Encode(&wire.MalfeasanceGossip{
-		MalfeasanceProof: wire.MalfeasanceProof{
-			Layer: types.LayerID(11),
-			Proof: wire.Proof{
-				Type: wire.MultipleBallots,
-				Data: &wire.BallotProof{
-					Messages: [2]wire.BallotProofMsg{
-						{
-							InnerMsg:  m1,
-							Signature: sig.Sign(signing.BALLOT, m1buf),
-							SmesherID: sig.NodeID(),
-						},
-						{
-							InnerMsg:  *(*types.BallotMetadata)(unsafe.Pointer(&m2)),
-							Signature: sig.Sign(signing.ATX, m2buf),
-							SmesherID: sig.NodeID(),
-						},
-					},
-				},
-			},
-		},
-	})
-	require.NoError(t, err)
-	require.Error(t, h.HandleMalfeasanceProof(context.Background(), "", msg))
-
-	malicious, err := identities.IsMalicious(db, sig.NodeID())
-	require.NoError(t, err)
-	require.False(t, malicious)
-}
-
 func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	db := sql.InMemory()
 	lg := zaptest.NewLogger(t)
@@ -898,6 +612,14 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 		trt,
 		postVerifier,
 	)
+	var handlerCalled bool
+	h.RegisterHandlerV1(wire.MultipleBallots, func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+		handlerCalled = true
+
+		require.IsType(t, &wire.BallotProof{}, data)
+		proof := data.(*wire.BallotProof)
+		return proof.Messages[0].SmesherID, nil
+	})
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -939,6 +661,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 	trt.EXPECT().OnMalfeasance(sig.NodeID())
 	err = h.HandleSyncedMalfeasanceProof(context.Background(), types.RandomHash(), "peer", data)
 	require.ErrorIs(t, err, pubsub.ErrValidationReject)
+	require.True(t, handlerCalled)
 
 	malicious, err = identities.IsMalicious(db, sig.NodeID())
 	require.NoError(t, err)

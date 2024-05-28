@@ -213,7 +213,7 @@ func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (type
 	case wire.MultipleATXs:
 		panic("incorrect implemented test")
 	case wire.MultipleBallots:
-		nodeID, err = validateMultipleBallots(ctx, h.logger, h.cdb, h.edVerifier, &p.MalfeasanceProof)
+		panic("incorrect implemented test")
 	case wire.InvalidPostIndex:
 		panic("incorrect implemented test")
 	case wire.InvalidPrevATX:
@@ -308,55 +308,4 @@ func validateHareEquivocation(
 	)
 	numInvalidProofsHare.Inc()
 	return types.EmptyNodeID, errors.New("invalid hare malfeasance proof")
-}
-
-func validateMultipleBallots(
-	ctx context.Context,
-	logger *zap.Logger,
-	db sql.Executor,
-	edVerifier SigVerifier,
-	proof *wire.MalfeasanceProof,
-) (types.NodeID, error) {
-	if proof.Proof.Type != wire.MultipleBallots {
-		return types.EmptyNodeID, fmt.Errorf(
-			"wrong malfeasance type. want %v, got %v",
-			wire.MultipleBallots,
-			proof.Proof.Type,
-		)
-	}
-	var (
-		firstNid types.NodeID
-		firstMsg wire.BallotProofMsg
-		err      error
-	)
-	bp, ok := proof.Proof.Data.(*wire.BallotProof)
-	if !ok {
-		return types.EmptyNodeID, errors.New("wrong message type for multi ballots")
-	}
-	for _, msg := range bp.Messages {
-		if !edVerifier.Verify(signing.BALLOT, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
-			return types.EmptyNodeID, errors.New("invalid signature")
-		}
-		if firstNid == types.EmptyNodeID {
-			if err = hasPublishedAtxs(db, msg.SmesherID); err != nil {
-				return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
-			}
-			firstNid = msg.SmesherID
-			firstMsg = msg
-		} else if msg.SmesherID == firstNid {
-			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
-				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return msg.SmesherID, nil
-			}
-		}
-	}
-	logger.Warn("received invalid ballot malfeasance proof",
-		log.ZContext(ctx),
-		zap.Stringer("first_smesher", bp.Messages[0].SmesherID),
-		zap.Object("first_proof", &bp.Messages[0].InnerMsg),
-		zap.Stringer("second_smesher", bp.Messages[1].SmesherID),
-		zap.Object("second_proof", &bp.Messages[1].InnerMsg),
-	)
-	numInvalidProofsBallot.Inc()
-	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
 }
