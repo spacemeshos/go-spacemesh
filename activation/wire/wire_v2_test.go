@@ -1,9 +1,9 @@
 package wire
 
 import (
+	"encoding/binary"
 	"math/rand/v2"
 	"testing"
-	"unsafe"
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/spacemeshos/merkle-tree"
@@ -127,10 +127,11 @@ func Test_GenerateDoublePublishProof(t *testing.T) {
 	// - two merkle proofs - one per ATX - that is 128 bytes each (4 * 32)
 	// total: 452 bytes instead of two full ATXs (> 20 kB each in the worst case)
 
-	publishEpochLeaf := (*[4]byte)(unsafe.Pointer(&atx.PublishEpoch))[:]
+	publishEpoch := make([]byte, 4)
+	binary.LittleEndian.PutUint32(publishEpoch, atx.PublishEpoch.Uint32())
 	ok, err := merkle.ValidatePartialTree(
 		[]uint64{PublishEpochIndex},
-		[][]byte{publishEpochLeaf},
+		[][]byte{publishEpoch},
 		proof,
 		atx.ID().Bytes(),
 		atxTreeHash,
@@ -139,10 +140,10 @@ func Test_GenerateDoublePublishProof(t *testing.T) {
 	require.True(t, ok)
 
 	// different PublishEpoch doesn't validate
-	publishEpochLeaf = []byte{0xFF, 0x00, 0x00, 0x00}
+	publishEpoch = []byte{0xFF, 0x00, 0x00, 0x00}
 	ok, err = merkle.ValidatePartialTree(
 		[]uint64{PublishEpochIndex},
-		[][]byte{publishEpochLeaf},
+		[][]byte{publishEpoch},
 		proof,
 		atx.ID().Bytes(),
 		atxTreeHash,
@@ -159,73 +160,6 @@ func generatePublishEpochProof(atx *ActivationTxV2) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&atx.PublishEpoch))[:])
-	tree.AddLeaf(atx.PositioningATX.Bytes())
-	if atx.Coinbase != nil {
-		tree.AddLeaf(atx.Coinbase.Bytes())
-	} else {
-		tree.AddLeaf(types.Address{}.Bytes())
-	}
-	if atx.Initial != nil {
-		tree.AddLeaf(atx.Initial.Root())
-	} else {
-		tree.AddLeaf(types.EmptyHash32.Bytes())
-	}
-
-	prevATXTree, err := merkle.NewTreeBuilder().
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		panic(err)
-	}
-	for _, prevATX := range atx.PreviousATXs {
-		prevATXTree.AddLeaf(prevATX.Bytes())
-	}
-	for i := 0; i < 256-len(atx.PreviousATXs); i++ {
-		prevATXTree.AddLeaf(types.EmptyATXID.Bytes())
-	}
-	tree.AddLeaf(prevATXTree.Root())
-
-	niPostTree, err := merkle.NewTreeBuilder().
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		panic(err)
-	}
-	for _, niPost := range atx.NiPosts {
-		niPostTree.AddLeaf(niPost.Root(atx.PreviousATXs))
-	}
-	for i := 0; i < 2-len(atx.NiPosts); i++ {
-		niPostTree.AddLeaf(types.EmptyHash32.Bytes())
-	}
-	tree.AddLeaf(niPostTree.Root())
-
-	if atx.VRFNonce != nil {
-		tree.AddLeaf((*[8]byte)(unsafe.Pointer(atx.VRFNonce))[:])
-	} else {
-		tree.AddLeaf([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})
-	}
-
-	marriagesTree, err := merkle.NewTreeBuilder().
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		panic(err)
-	}
-	for _, marriage := range atx.Marriages {
-		marriagesTree.AddLeaf(marriage.Root())
-	}
-	for i := 0; i < 256-len(atx.Marriages); i++ {
-		marriagesTree.AddLeaf(types.EmptyHash32.Bytes())
-	}
-	tree.AddLeaf(marriagesTree.Root())
-
-	if atx.MarriageATX != nil {
-		tree.AddLeaf(atx.MarriageATX.Bytes())
-	} else {
-		tree.AddLeaf(types.EmptyATXID.Bytes())
-	}
-
+	atx.merkleTree(tree)
 	return tree.Proof(), nil
 }

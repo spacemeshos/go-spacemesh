@@ -56,18 +56,7 @@ func (atx *ActivationTxV2) SignedBytes() []byte {
 	return atx.ID().Bytes()
 }
 
-func (atx *ActivationTxV2) ID() types.ATXID {
-	if atx.id != types.EmptyATXID {
-		return atx.id
-	}
-
-	tree, err := merkle.NewTreeBuilder().
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		panic(err)
-	}
-
+func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	publishEpoch := make([]byte, 4)
 	binary.LittleEndian.PutUint32(publishEpoch, atx.PublishEpoch.Uint32())
 	tree.AddLeaf(publishEpoch)
@@ -136,7 +125,20 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 	} else {
 		tree.AddLeaf(types.EmptyATXID.Bytes())
 	}
+}
 
+func (atx *ActivationTxV2) ID() types.ATXID {
+	if atx.id != types.EmptyATXID {
+		return atx.id
+	}
+
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	atx.merkleTree(tree)
 	atx.id = types.ATXID(tree.Root())
 	return atx.id
 }
