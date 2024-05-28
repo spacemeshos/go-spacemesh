@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
@@ -103,7 +104,7 @@ func (h *HandlerV2) processATX(
 		return nil, fmt.Errorf("validating positioning atx: %w", err)
 	}
 
-	leaves, effectiveNumUnits, proof, err := h.syntacticallyValidateDeps(ctx, watx)
+	parts, proof, err := h.syntacticallyValidateDeps(ctx, watx)
 	if err != nil {
 		return nil, fmt.Errorf("atx %s syntactically invalid based on deps: %w", watx.ID(), err)
 	}
@@ -111,8 +112,6 @@ func (h *HandlerV2) processATX(
 	if proof != nil {
 		return proof, err
 	}
-
-	// TODO: contextually validate ATX
 
 	coinbase, err := h.coinbase(ctx, watx)
 	if err != nil {
@@ -122,10 +121,10 @@ func (h *HandlerV2) processATX(
 	atx := &types.ActivationTx{
 		PublishEpoch:   watx.PublishEpoch,
 		Coinbase:       coinbase,
-		NumUnits:       effectiveNumUnits,
+		NumUnits:       parts.effectiveUnits,
 		BaseTickHeight: baseTickHeight,
-		TickCount:      leaves / h.tickSize,
-		VRFNonce:       (types.VRFPostIndex)(*watx.VRFNonce),
+		TickCount:      parts.leaves / h.tickSize,
+		VRFNonce:       parts.vrfNonce,
 		SmesherID:      watx.SmesherID,
 		AtxBlob:        types.AtxBlob{Blob: blob, Version: types.AtxV2},
 	}
@@ -321,7 +320,7 @@ func (h *HandlerV2) previous(ctx context.Context, id types.ATXID) (opaqueAtx, er
 		return nil, err
 	}
 
-	if blob.Bytes == nil {
+	if len(blob.Bytes) == 0 {
 		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
 		// Fallback to fetching it from the DB to get the effective NumUnits.
 		atx, err := atxs.Get(h.cdb, id)
@@ -387,29 +386,31 @@ func (h *HandlerV2) validateVrfNonce(
 	atx *wire.ActivationTxV2,
 	previous opaqueAtx,
 	commitment types.ATXID,
-) error {
+) (types.VRFPostIndex, error) {
 	numUnits := atx.TotalNumUnits()
 	needRecheck := numUnits > previous.TotalNumUnits() || atx.VRFNonce != nil
-
+	var nonce types.VRFPostIndex
 	if atx.VRFNonce == nil {
 		// lookup the previous nonce by this ID
 		// TODO: support merged ATXs
 		// For a merged ATX we need to follow ATXs chain for `id`, find the last ATX by this ID
 		// and check the nonce from it.
 		if atx.MarriageATX != nil {
-			return errors.New("merged ATXs are not supported")
+			return 0, errors.New("merged ATXs are not supported")
 		}
-		nonce, err := atxs.NonceByID(h.cdb, previous.ID())
+		n, err := atxs.NonceByID(h.cdb, previous.ID())
 		if err != nil {
-			return fmt.Errorf("getting nonce from previous ATX %s: %w", previous.ID(), err)
+			return 0, fmt.Errorf("getting nonce from previous ATX %s: %w", previous.ID(), err)
 		}
-		atx.VRFNonce = (*uint64)(&nonce)
+		nonce = n
+	} else {
+		nonce = types.VRFPostIndex(*atx.VRFNonce)
 	}
 
 	if needRecheck {
-		return h.nipostValidator.VRFNonceV2(atx.SmesherID, commitment, types.VRFPostIndex(*atx.VRFNonce), numUnits)
+		return nonce, h.nipostValidator.VRFNonceV2(atx.SmesherID, commitment, nonce, numUnits)
 	}
-	return nil
+	return nonce, nil
 }
 
 func (h *HandlerV2) validateCommitmentAtx(golden, commitmentAtxId types.ATXID, publish types.EpochID) error {
@@ -446,14 +447,20 @@ func (h *HandlerV2) validatePositioningAtx(publish types.EpochID, golden, positi
 	return posAtx.TickHeight(), nil
 }
 
+type atxParts struct {
+	leaves         uint64
+	effectiveUnits uint32
+	vrfNonce       types.VRFPostIndex
+}
+
 // Syntactically validate the ATX with its dependencies.
 func (h *HandlerV2) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV2,
-) (uint64, uint32, *mwire.MalfeasanceProof, error) {
+) (*atxParts, *mwire.MalfeasanceProof, error) {
 	if atx.Initial != nil {
 		if err := h.validateCommitmentAtx(h.goldenATXID, atx.Initial.CommitmentATX, atx.PublishEpoch); err != nil {
-			return 0, 0, nil, fmt.Errorf("verifying commitment ATX: %w", err)
+			return nil, nil, fmt.Errorf("verifying commitment ATX: %w", err)
 		}
 	}
 
@@ -461,11 +468,11 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	for i, prev := range atx.PreviousATXs {
 		prevAtx, err := h.previous(ctx, prev)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("fetching previous atx: %w", err)
+			return nil, nil, fmt.Errorf("fetching previous atx: %w", err)
 		}
 		if prevAtx.Published() >= atx.PublishEpoch {
 			err := fmt.Errorf("previous atx is too new (%d >= %d) (%s) ", prevAtx.Published(), atx.PublishEpoch, prev)
-			return 0, 0, nil, err
+			return nil, nil, err
 		}
 		previousAtxs[i] = prevAtx
 	}
@@ -484,7 +491,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		for _, post := range niposts.Posts {
 			if post.MarriageIndex >= uint32(len(equivocationSet)) {
 				err := fmt.Errorf("marriage index out of bounds: %d > %d", post.MarriageIndex, len(equivocationSet)-1)
-				return 0, 0, nil, err
+				return nil, nil, err
 			}
 			id := equivocationSet[post.MarriageIndex]
 			effectiveNumUnits := post.NumUnits
@@ -492,7 +499,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				var err error
 				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, previousAtxs)
 				if err != nil {
-					return 0, 0, nil, fmt.Errorf("validating previous atx for ID %s: %w", id, err)
+					return nil, nil, fmt.Errorf("validating previous atx for ID %s: %w", id, err)
 				}
 			}
 			totalEffectiveNumUnits += effectiveNumUnits
@@ -504,7 +511,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				var err error
 				commitment, err = atxs.CommitmentATX(h.cdb, id)
 				if err != nil {
-					return 0, 0, nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
+					return nil, nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
 				}
 				if smesherCommitment == nil {
 					smesherCommitment = &commitment
@@ -520,9 +527,17 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				post.NumUnits,
 				PostSubset([]byte(h.local)),
 			)
-			if err != nil {
+			var invalidIdx *verifying.ErrInvalidIndex
+			if errors.As(err, &invalidIdx) {
+				h.log.Info(
+					"ATX with invalid post index",
+					zap.Stringer("id", atx.ID()),
+					zap.Int("index", invalidIdx.Index),
+				)
 				// TODO generate malfeasance proof
-				return 0, 0, nil, fmt.Errorf("invalid post for ID %s: %w", id, err)
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("invalid post for ID %s: %w", id, err)
 			}
 
 			nipostChallenge := wire.NIPostChallengeV2{
@@ -543,18 +558,27 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		}
 		leaves, err := h.nipostValidator.PoetMembership(ctx, &membership, niposts.Challenge, poetChallenges)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("invalid poet membership: %w", err)
+			return nil, nil, fmt.Errorf("invalid poet membership: %w", err)
 		}
 		minLeaves = min(leaves, minLeaves)
 	}
 
-	if atx.Initial == nil {
-		if err := h.validateVrfNonce(atx, previousAtxs[0], *smesherCommitment); err != nil {
-			return 0, 0, nil, fmt.Errorf("validating VRF nonce: %w", err)
-		}
+	parts := &atxParts{
+		leaves:         minLeaves,
+		effectiveUnits: totalEffectiveNumUnits,
 	}
 
-	return minLeaves, totalEffectiveNumUnits, nil, nil
+	if atx.Initial == nil {
+		n, err := h.validateVrfNonce(atx, previousAtxs[0], *smesherCommitment)
+		if err != nil {
+			return nil, nil, fmt.Errorf("validating VRF nonce: %w", err)
+		}
+		parts.vrfNonce = n
+	} else {
+		parts.vrfNonce = types.VRFPostIndex(*atx.VRFNonce)
+	}
+
+	return parts, nil, nil
 }
 
 func (h *HandlerV2) checkMalicious(
@@ -570,9 +594,13 @@ func (h *HandlerV2) checkMalicious(
 		return true, nil, nil
 	}
 
-	// TODO:
+	// TODO: contextual validation:
 	// 1. check double-publish
 	// 2. check previous ATX
+	// 3  ID already married (same node ID in multiple marriage certificates)
+	// 4. two ATXs referencing the same marriage certificate in the same epoch
+	// 5. ID participated in two ATXs (merged and solo) in the same epoch
+
 	return false, nil, nil
 }
 

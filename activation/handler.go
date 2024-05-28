@@ -313,7 +313,7 @@ func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.E
 		return types.EmptyEdSignature, err
 	}
 
-	if blob.Bytes == nil {
+	if len(blob.Bytes) == 0 {
 		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
 		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
 	}

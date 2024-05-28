@@ -976,7 +976,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx.Initial.CommitmentATX = types.RandomATXID()
 		atx.Sign(sig)
 
-		_, _, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "verifying commitment ATX")
 		require.Nil(t, proof)
 	})
@@ -986,7 +986,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx := newSoloATXv2(t, 0, types.RandomATXID(), golden)
 		atx.Sign(sig)
 
-		_, _, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "fetching previous atx: database: not found")
 		require.Nil(t, proof)
 	})
@@ -1000,7 +1000,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx := newSoloATXv2(t, 0, prev.ID(), golden)
 		atx.Sign(sig)
 
-		_, _, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "previous atx is too new")
 		require.Nil(t, proof)
 	})
@@ -1016,7 +1016,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx := newSoloATXv2(t, 2, prev.ID(), golden)
 		atx.Sign(sig)
 
-		_, _, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "has different owner")
 		require.Nil(t, proof)
 	})
@@ -1037,7 +1037,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 				gomock.Any(),
 			).
 			Return(errors.New("post failure"))
-		_, _, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "post failure")
 		require.Nil(t, proof)
 	})
@@ -1059,7 +1059,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 				gomock.Any(),
 			).
 			Return(verifying.ErrInvalidIndex{Index: 7})
-		_, _, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "invalid post")
 		require.NotNil(t, proof)
 	})
@@ -1081,7 +1081,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atxHandler.mValidatorV2.EXPECT().
 			PoetMembership(gomock.Any(), gomock.Any(), atx.NiPosts[0].Challenge, gomock.Any()).
 			Return(0, errors.New("poet failure"))
-		_, _, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
+		_, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "poet failure")
 		require.Nil(t, proof)
 	})
