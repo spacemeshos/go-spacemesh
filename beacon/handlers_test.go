@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -86,7 +85,7 @@ func createProposal(
 ) *ProposalMessage {
 	sig := buildSignedProposal(
 		context.Background(),
-		zaptest.NewLogger(t, zaptest.Level(zap.InfoLevel)),
+		zaptest.NewLogger(t),
 		vrfSigner,
 		epoch,
 		types.VRFPostIndex(rand.Uint64()),

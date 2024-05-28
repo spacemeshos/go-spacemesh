@@ -62,7 +62,7 @@ type HandlerV2 struct {
 	nipostValidator nipostValidatorV2
 	beacon          AtxReceiver
 	tortoise        system.Tortoise
-	log             *zap.Logger
+	logger          *zap.Logger
 	fetcher         system.Fetcher
 }
 
@@ -81,7 +81,7 @@ func (h *HandlerV2) processATX(
 		return nil, nil
 	}
 
-	h.log.Debug(
+	h.logger.Debug(
 		"processing atx",
 		log.ZContext(ctx),
 		zap.Stringer("atx_id", watx.ID()),
@@ -147,7 +147,7 @@ func (h *HandlerV2) processATX(
 	}
 
 	events.ReportNewActivation(atx)
-	h.log.Info("new atx", log.ZContext(ctx), zap.Inline(atx), zap.Bool("malicious", proof != nil))
+	h.logger.Info("new atx", log.ZContext(ctx), zap.Inline(atx), zap.Bool("malicious", proof != nil))
 	return proof, err
 }
 
@@ -529,7 +529,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			)
 			var invalidIdx *verifying.ErrInvalidIndex
 			if errors.As(err, &invalidIdx) {
-				h.log.Info(
+				h.logger.Info(
 					"ATX with invalid post index",
 					zap.Stringer("id", atx.ID()),
 					zap.Int("index", invalidIdx.Index),
@@ -642,7 +642,7 @@ func (h *HandlerV2) storeAtx(
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 
-	h.log.Debug("finished storing atx in epoch",
+	h.logger.Debug("finished storing atx in epoch",
 		log.ZContext(ctx),
 		zap.Stringer("atx_id", atx.ID()),
 		zap.Uint32("publish", atx.PublishEpoch.Uint32()),

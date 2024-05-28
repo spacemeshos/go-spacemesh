@@ -608,7 +608,7 @@ func (app *App) initServices(ctx context.Context) error {
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
 
-	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
+	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap())
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
@@ -760,7 +760,7 @@ func (app *App) initServices(ctx context.Context) error {
 		validator,
 		beaconProtocol,
 		trtl,
-		app.addLogger(ATXHandlerLogger, lg),
+		app.addLogger(ATXHandlerLogger, lg).Zap(),
 		activation.WithTickSize(app.Config.TickSize),
 		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
@@ -780,7 +780,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, trtl, msh,
-		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
+		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()))
 
 	app.txHandler = txs.NewTxHandler(
 		app.conState,
@@ -824,7 +824,7 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		blocks.WithCertConfig(app.Config.Certificate),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
 	)
 	for _, sig := range app.signers {
 		app.certifier.Register(sig)
@@ -953,7 +953,7 @@ func (app *App) initServices(ctx context.Context) error {
 			GenBlockInterval:   500 * time.Millisecond,
 		}),
 		blocks.WithHareOutputChan(app.hare3.Results()),
-		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)),
+		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg).Zap()),
 	)
 
 	minerGoodAtxPct := 90

@@ -349,11 +349,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	logger := logtest.New(t)
 	// errlog is used to simulate errors in the app
 	errlog := log.NewFromLog(
-		zaptest.NewLogger(
-			t,
-			zaptest.Level(zap.ErrorLevel),
-			zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{})),
-		),
+		zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{}))),
 	)
 
 	cfg := getTestDefaultConfig(t)

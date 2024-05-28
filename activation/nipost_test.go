@@ -62,7 +62,11 @@ type testNIPostBuilder struct {
 
 func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zap.New(observer)
+	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
 
 	events.InitializeReporter()
 	sub, _, err := events.SubscribeUserEvents(events.WithBuffer(10))

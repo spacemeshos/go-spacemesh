@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 )
@@ -33,7 +32,7 @@ func TestServer(t *testing.T) {
 	}
 	opts := []Opt{
 		WithTimeout(100 * time.Millisecond),
-		WithLog(zaptest.NewLogger(t, zaptest.Level(zap.InfoLevel))),
+		WithLog(zaptest.NewLogger(t)),
 		WithMetrics(),
 	}
 	client := New(mesh.Hosts()[0], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(2*limit))...)

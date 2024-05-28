@@ -43,7 +43,7 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 			tickSize:        1,
 			goldenATXID:     golden,
 			nipostValidator: mocks.mValidatorV2,
-			log:             lg,
+			logger:          lg,
 			fetcher:         mocks.mockFetch,
 			beacon:          mocks.mbeacon,
 			tortoise:        mocks.mtortoise,

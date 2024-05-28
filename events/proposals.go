@@ -44,8 +44,8 @@ func ReportProposal(status ProposalStatus, proposal *types.Proposal) {
 	}
 }
 
-// SubcribeProposals subscribes to the proposals.
-func SubcribeProposals() Subscription {
+// SubscribeProposals subscribes to the proposals.
+func SubscribeProposals() Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 	if reporter != nil {

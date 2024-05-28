@@ -274,7 +274,7 @@ jobs:
       - name: unit tests
         timeout-minutes: 35
         env:
-          GOTESTSUM_FORMAT: standard-verbose
+          GOTESTSUM_FORMAT: standard-quiet
           GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
       - name: Publish Test Report

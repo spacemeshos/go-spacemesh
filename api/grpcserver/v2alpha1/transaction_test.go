@@ -94,7 +94,7 @@ func TestTransactionService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Transactions, 1)
-		require.Equal(t, list.Transactions[0].Tx.GetV1().Principal, principal)
+		require.Equal(t, list.Transactions[0].Tx.Principal, principal)
 	})
 
 	t.Run("tx id", func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestTransactionService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Transactions, 1)
-		require.Equal(t, list.Transactions[0].Tx.GetV1().Id, txsList[0].ID[:])
+		require.Equal(t, list.Transactions[0].Tx.Id, txsList[0].ID[:])
 	})
 
 	t.Run("multiple tx ids", func(t *testing.T) {
@@ -128,7 +128,7 @@ func TestTransactionService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Transactions, 1)
-		require.Equal(t, txsList[0].ID[:], list.Transactions[0].Tx.GetV1().Id)
+		require.Equal(t, txsList[0].ID[:], list.Transactions[0].Tx.Id)
 		require.Equal(t, spacemeshv2alpha1.TransactionResult_TRANSACTION_STATUS_SUCCESS,
 			list.Transactions[0].TxResult.Status)
 	})

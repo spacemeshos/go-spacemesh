@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
@@ -68,7 +69,7 @@ func (v AtxVersions) Validate() error {
 type Handler struct {
 	local     p2p.Peer
 	publisher pubsub.Publisher
-	log       log.Log
+	logger    *zap.Logger
 	versions  []atxVersion
 
 	// inProgress map gathers ATXs that are currently being processed.
@@ -107,13 +108,13 @@ func NewHandler(
 	nipostValidator nipostValidator,
 	beacon AtxReceiver,
 	tortoise system.Tortoise,
-	lg log.Log,
+	lg *zap.Logger,
 	opts ...HandlerOption,
 ) *Handler {
 	h := &Handler{
 		local:     local,
 		publisher: pub,
-		log:       lg,
+		logger:    lg,
 		versions:  []atxVersion{{0, types.AtxV1}},
 
 		v1: &HandlerV1{
@@ -125,7 +126,7 @@ func NewHandler(
 			tickSize:        1,
 			goldenATXID:     goldenATXID,
 			nipostValidator: nipostValidator,
-			log:             lg,
+			logger:          lg,
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
@@ -139,8 +140,8 @@ func NewHandler(
 		opt(h)
 	}
 
-	h.log.With().Info("atx handler created",
-		log.Array("supported ATX versions", log.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+	h.logger.Info("atx handler created",
+		zap.Array("supported ATX versions", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
 			for _, v := range h.versions {
 				enc.AppendString(fmt.Sprintf("v%v from epoch %d", v.AtxVersion, v.publish))
 			}
@@ -158,9 +159,10 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
 	_, err := h.handleAtx(ctx, expHash, peer, data)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
-		h.log.WithContext(ctx).With().Warning("failed to process synced atx",
-			log.Stringer("sender", peer),
-			log.Err(err),
+		h.logger.Warn("failed to process synced atx",
+			log.ZContext(ctx),
+			zap.Stringer("sender", peer),
+			zap.Error(err),
 		)
 	}
 	if errors.Is(err, errKnownAtx) {
@@ -173,9 +175,10 @@ func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, pee
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
 	proof, err := h.handleAtx(ctx, types.EmptyHash32, peer, msg)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
-		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
-			log.Stringer("sender", peer),
-			log.Err(err),
+		h.logger.Warn("failed to process atx gossip",
+			log.ZContext(ctx),
+			zap.Stringer("sender", peer),
+			zap.Error(err),
 		)
 	}
 	if errors.Is(err, errKnownAtx) && peer == h.local {
@@ -190,7 +193,7 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 		}
 		encodedProof := codec.MustEncode(&gossip)
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
-			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+			h.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
 			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
 		}
 		return errMaliciousATX
@@ -269,10 +272,17 @@ func (h *Handler) handleAtx(
 		ch := make(chan error, 1)
 		h.inProgress[id] = append(sub, ch)
 		h.inProgressMu.Unlock()
-		h.log.WithContext(ctx).With().Debug("atx is already being processed. waiting for result", id)
+		h.logger.Debug("atx is already being processed. waiting for result",
+			log.ZContext(ctx),
+			zap.Stringer("atx_id", id),
+		)
 		select {
 		case err := <-ch:
-			h.log.WithContext(ctx).With().Debug("atx processed in other task", id, log.Err(err))
+			h.logger.Debug("atx processed in other task",
+				log.ZContext(ctx),
+				zap.Stringer("atx_id", id),
+				zap.Error(err),
+			)
 			return nil, err
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -281,7 +291,11 @@ func (h *Handler) handleAtx(
 
 	h.inProgress[id] = []chan error{}
 	h.inProgressMu.Unlock()
-	h.log.WithContext(ctx).With().Info("handling incoming atx", id, log.Int("size", len(msg)))
+	h.logger.Info("handling incoming atx",
+		log.ZContext(ctx),
+		zap.Stringer("atx_id", id),
+		zap.Int("size", len(msg)),
+	)
 
 	var proof *mwire.MalfeasanceProof
 

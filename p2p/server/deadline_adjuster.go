@@ -16,6 +16,7 @@ const (
 )
 
 type deadlineAdjusterError struct {
+	what         string
 	innerErr     error
 	elapsed      time.Duration
 	totalRead    int
@@ -29,7 +30,8 @@ func (err *deadlineAdjusterError) Unwrap() error {
 }
 
 func (err *deadlineAdjusterError) Error() string {
-	return fmt.Sprintf("%v elapsed, %d bytes read, %d bytes written, timeout %v, hard timeout %v: %v",
+	return fmt.Sprintf("%s: %v elapsed, %d bytes read, %d bytes written, timeout %v, hard timeout %v: %v",
+		err.what,
 		err.elapsed,
 		err.totalRead,
 		err.totalWritten,
@@ -73,6 +75,7 @@ func (dadj *deadlineAdjuster) augmentError(what string, err error) error {
 	}
 
 	return &deadlineAdjusterError{
+		what:         what,
 		innerErr:     err,
 		elapsed:      dadj.clock.Now().Sub(dadj.start),
 		totalRead:    dadj.totalRead,
