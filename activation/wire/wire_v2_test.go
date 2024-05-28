@@ -16,15 +16,13 @@ func Benchmark_ATXv2ID(b *testing.B) {
 	f := fuzz.New()
 	b.ResetTimer()
 
-	var atx *ActivationTxV2
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
-		atx = &ActivationTxV2{}
+		atx := &ActivationTxV2{}
 		f.Fuzz(atx)
 		b.StartTimer()
 		atx.ID()
 	}
-	_ = atx
 }
 
 func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
