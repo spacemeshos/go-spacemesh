@@ -576,6 +576,54 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.ErrorIs(t, err, &InvalidChainError{ID: vAtx.ID()})
 		require.ErrorIs(t, err, expected)
 	})
+
+	t.Run("initial V2 ATX", func(t *testing.T) {
+		watx := newInitialATXv2(t, goldenATXID)
+		watx.Sign(signer)
+		atx := &types.ActivationTx{
+			PublishEpoch: watx.PublishEpoch,
+			SmesherID:    watx.SmesherID,
+			AtxBlob: types.AtxBlob{
+				Blob:    watx.SignedBytes(),
+				Version: types.AtxV2,
+			},
+		}
+		atx.SetID(watx.ID())
+		require.NoError(t, atxs.Add(db, atx))
+
+		v := NewMockPostVerifier(gomock.NewController(t))
+		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
+		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, watx.ID(), goldenATXID)
+		require.NoError(t, err)
+	})
+	t.Run("non-initial V2 ATX", func(t *testing.T) {
+		initialAtx := newInitialATXv1(t, goldenATXID)
+		initialAtx.Sign(signer)
+		require.NoError(t, atxs.Add(db, toAtx(t, initialAtx)))
+
+		watx := newSoloATXv2(t, initialAtx.PublishEpoch+1, initialAtx.ID(), initialAtx.ID())
+		watx.Sign(signer)
+		atx := &types.ActivationTx{
+			PublishEpoch: watx.PublishEpoch,
+			SmesherID:    watx.SmesherID,
+			AtxBlob: types.AtxBlob{
+				Blob:    watx.SignedBytes(),
+				Version: types.AtxV2,
+			},
+		}
+		atx.SetID(watx.ID())
+		require.NoError(t, atxs.Add(db, atx))
+
+		v := NewMockPostVerifier(gomock.NewController(t))
+		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
+		v.EXPECT().Verify(ctx, (*shared.Proof)(initialAtx.NIPost.Post), gomock.Any(), gomock.Any())
+		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, watx.ID(), goldenATXID)
+		require.NoError(t, err)
+	})
 }
 
 func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
