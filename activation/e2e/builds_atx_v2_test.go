@@ -212,6 +212,12 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, opts.NumUnits, atx.NumUnits)
 				require.Equal(t, coinbase, atx.Coinbase)
+
+				require.NotZero(t, atx.BaseTickHeight)
+				require.NotZero(t, atx.TickCount)
+				require.NotZero(t, atx.GetWeight())
+				require.NotZero(t, atx.TickHeight())
+				require.Equal(t, opts.NumUnits, atx.NumUnits)
 				return nil
 			},
 		),
