@@ -2,13 +2,13 @@ package accounts
 
 import (
 	"encoding/binary"
-	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 func genSeq(address types.Address, n int) []*types.Account {
