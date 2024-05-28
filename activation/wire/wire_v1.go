@@ -1,8 +1,10 @@
 package wire
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 
+	"github.com/spacemeshos/merkle-tree"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -39,6 +41,25 @@ type PostV1 struct {
 	Nonce   uint32
 	Indices []byte `scale:"max=800"` // up to K2=100
 	Pow     uint64
+}
+
+func (p *PostV1) Root() []byte {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	nonce := make([]byte, 4)
+	binary.LittleEndian.PutUint32(nonce, p.Nonce)
+	tree.AddLeaf(nonce)
+
+	tree.AddLeaf(p.Indices)
+
+	pow := make([]byte, 8)
+	binary.LittleEndian.PutUint64(pow, p.Pow)
+	tree.AddLeaf(pow)
+	return tree.Root()
 }
 
 type MerkleProofV1 struct {
