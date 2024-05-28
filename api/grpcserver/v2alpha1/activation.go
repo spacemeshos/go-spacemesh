@@ -100,9 +100,7 @@ func (s *ActivationStreamService) Stream(
 	for {
 		select {
 		case rst := <-eventsOut:
-			err := stream.Send(&spacemeshv2alpha1.Activation{
-				Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.ActivationTx)},
-			})
+			err := stream.Send(toAtx(rst.ActivationTx))
 			switch {
 			case errors.Is(err, io.EOF):
 				return nil
@@ -112,9 +110,7 @@ func (s *ActivationStreamService) Stream(
 		default:
 			select {
 			case rst := <-eventsOut:
-				err := stream.Send(&spacemeshv2alpha1.Activation{
-					Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.ActivationTx)},
-				})
+				err := stream.Send(toAtx(rst.ActivationTx))
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil
@@ -131,11 +127,7 @@ func (s *ActivationStreamService) Stream(
 					}
 					continue
 				}
-				err := stream.Send(&spacemeshv2alpha1.Activation{
-					Versioned: &spacemeshv2alpha1.Activation_V1{
-						V1: toAtx(rst),
-					},
-				})
+				err := stream.Send(toAtx(rst))
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil
@@ -151,8 +143,8 @@ func (s *ActivationStreamService) Stream(
 	}
 }
 
-func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.ActivationV1 {
-	return &spacemeshv2alpha1.ActivationV1{
+func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
+	return &spacemeshv2alpha1.Activation{
 		Id:           atx.ID().Bytes(),
 		PublishEpoch: atx.PublishEpoch.Uint32(),
 		PreviousAtx:  atx.PrevATXID[:],
@@ -200,7 +192,7 @@ func (s *ActivationService) List(
 	}
 	rst := make([]*spacemeshv2alpha1.Activation, 0, request.Limit)
 	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.ActivationTx) bool {
-		rst = append(rst, &spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})
+		rst = append(rst, toAtx(atx))
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
