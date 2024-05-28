@@ -1,8 +1,8 @@
 package wire
 
 import (
+	"encoding/binary"
 	"encoding/hex"
-	"unsafe"
 
 	"github.com/spacemeshos/merkle-tree"
 	"go.uber.org/zap/zapcore"
@@ -50,9 +50,15 @@ func (p *PostV1) Root() []byte {
 	if err != nil {
 		panic(err)
 	}
-	tree.AddLeaf((*[4]byte)(unsafe.Pointer(&p.Nonce))[:])
+	nonce := make([]byte, 4)
+	binary.LittleEndian.PutUint32(nonce, p.Nonce)
+	tree.AddLeaf(nonce)
+
 	tree.AddLeaf(p.Indices)
-	tree.AddLeaf((*[8]byte)(unsafe.Pointer(&p.Pow))[:])
+
+	pow := make([]byte, 8)
+	binary.LittleEndian.PutUint64(pow, p.Pow)
+	tree.AddLeaf(pow)
 	return tree.Root()
 }
 
