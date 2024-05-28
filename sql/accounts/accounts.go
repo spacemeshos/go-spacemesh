@@ -192,8 +192,7 @@ func IterateAccountsOps(
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
 			}
-			fn(&account)
-			return true
+			return fn(&account)
 		},
 	)
 	if err != nil {

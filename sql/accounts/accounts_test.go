@@ -1,6 +1,8 @@
 package accounts
 
 import (
+	"encoding/binary"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -103,4 +105,50 @@ func TestSnapshot(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestIterateAccountsOps(t *testing.T) {
+	db := sql.InMemory()
+
+	for i := 0; i < 100; i++ {
+		addr := types.Address{}
+		binary.BigEndian.PutUint64(addr[:], uint64(i))
+
+		require.NoError(t, Update(db, &types.Account{
+			Layer:     1,
+			Address:   addr,
+			NextNonce: uint64(1000 + i),
+			Balance:   uint64(1 + i),
+		}))
+	}
+	ops := builder.Operations{}
+	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+		Key:   builder.GroupBy,
+		Value: "address",
+	})
+
+	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+		Key:   builder.OrderBy,
+		Value: "layer_updated desc",
+	})
+
+	t.Run("callback return true", func(t *testing.T) {
+		var accs []*types.Account
+		err := IterateAccountsOps(db, ops, func(account *types.Account) bool {
+			accs = append(accs, account)
+			return true
+		})
+		require.NoError(t, err)
+		require.Len(t, accs, 100)
+	})
+
+	t.Run("callback return false", func(t *testing.T) {
+		var accs []*types.Account
+		err := IterateAccountsOps(db, ops, func(account *types.Account) bool {
+			accs = append(accs, account)
+			return false
+		})
+		require.NoError(t, err)
+		require.Len(t, accs, 1)
+	})
 }
