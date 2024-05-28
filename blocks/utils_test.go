@@ -9,10 +9,10 @@ import (
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -60,29 +60,30 @@ func Test_getBlockTXs(t *testing.T) {
 			nextNonce = nextNonce + 1 + rand.Uint64()
 		}
 	}
+	lg := zaptest.NewLogger(t)
 
 	blockSeed := types.RandomHash().Bytes()
 	// no pruning
-	got, err := getBlockTXs(logtest.New(t), mtxs, blockSeed, 0)
+	got, err := getBlockTXs(lg, mtxs, blockSeed, 0)
 	require.NoError(t, err)
 	require.Len(t, got, len(mtxs))
 	checkInNonceOrder(t, got, byTid)
 
 	// make sure order is stable
-	got2, err := getBlockTXs(logtest.New(t), mtxs, blockSeed, 0)
+	got2, err := getBlockTXs(lg, mtxs, blockSeed, 0)
 	require.NoError(t, err)
 	require.Equal(t, got, got2)
 
 	// pruning
 	expSize := len(mtxs) / 2
 	gasLimit := uint64(expSize) * defaultGas
-	got, err = getBlockTXs(logtest.New(t), mtxs, blockSeed, gasLimit)
+	got, err = getBlockTXs(lg, mtxs, blockSeed, gasLimit)
 	require.NoError(t, err)
 	require.Len(t, got, expSize)
 	checkInNonceOrder(t, got, byTid)
 
 	// make sure order is stable
-	got2, err = getBlockTXs(logtest.New(t), mtxs, blockSeed, gasLimit)
+	got2, err = getBlockTXs(lg, mtxs, blockSeed, gasLimit)
 	require.NoError(t, err)
 	require.Equal(t, got, got2)
 
@@ -90,12 +91,12 @@ func Test_getBlockTXs(t *testing.T) {
 	for _, mtx := range mtxs {
 		mtx.LayerID = types.LayerID(11)
 	}
-	got, err = getBlockTXs(logtest.New(t), mtxs, blockSeed, 0)
+	got, err = getBlockTXs(lg, mtxs, blockSeed, 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
 
 	// empty block
-	got, err = getBlockTXs(logtest.New(t), nil, blockSeed, 0)
+	got, err = getBlockTXs(lg, nil, blockSeed, 0)
 	require.NoError(t, err)
 	require.Empty(t, got)
 }
@@ -146,7 +147,7 @@ func Test_getBlockTXs_expected_order(t *testing.T) {
 	}
 
 	blockSeed := fmt.Sprintf("block seed %21d", 101)
-	got, err := getBlockTXs(logtest.New(t), mtxs, []byte(blockSeed), 0)
+	got, err := getBlockTXs(zaptest.NewLogger(t), mtxs, []byte(blockSeed), 0)
 	require.NoError(t, err)
 
 	require.Len(t, got, len(mtxs))
@@ -157,7 +158,7 @@ func Test_getBlockTXs_expected_order(t *testing.T) {
 }
 
 func Test_getProposalMetadata(t *testing.T) {
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	db := sql.InMemory()
 	data := atxsdata.New()
 	cfg := Config{OptFilterThreshold: 70}

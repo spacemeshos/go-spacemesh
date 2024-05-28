@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -23,7 +24,7 @@ import (
 
 // Generator generates a block from proposals.
 type Generator struct {
-	logger log.Log
+	logger *zap.Logger
 	cfg    Config
 	once   sync.Once
 	eg     errgroup.Group
@@ -68,7 +69,7 @@ func WithConfig(cfg Config) GeneratorOpt {
 }
 
 // WithGeneratorLogger defines logger for Generator.
-func WithGeneratorLogger(logger log.Log) GeneratorOpt {
+func WithGeneratorLogger(logger *zap.Logger) GeneratorOpt {
 	return func(g *Generator) {
 		g.logger = logger
 	}
@@ -94,7 +95,7 @@ func NewGenerator(
 	opts ...GeneratorOpt,
 ) *Generator {
 	g := &Generator{
-		logger:           log.NewNop(),
+		logger:           zap.NewNop(),
 		cfg:              defaultConfig(),
 		db:               db,
 		atxs:             atxs,
@@ -130,7 +131,7 @@ func (g *Generator) Stop() {
 	g.stop()
 	err := g.eg.Wait()
 	if err != nil && !errors.Is(err, context.Canceled) {
-		g.logger.With().Error("blockGen task failure", log.Err(err))
+		g.logger.Error("blockGen task failure", zap.Error(err))
 	}
 }
 
@@ -144,25 +145,25 @@ func (g *Generator) run(ctx context.Context) error {
 			if !open {
 				return nil
 			}
-			g.logger.With().Debug("received hare output",
-				log.Context(ctx),
-				out.Layer,
-				log.Int("num_proposals", len(out.Proposals)),
+			g.logger.Debug("received hare output",
+				log.ZContext(ctx),
+				zap.Uint32("layer_id", out.Layer.Uint32()),
+				zap.Int("num_proposals", len(out.Proposals)),
 			)
 			maxLayer = max(maxLayer, out.Layer)
 			_, err := g.processHareOutput(ctx, out)
 			if err != nil {
 				if errors.Is(err, errNodeHasBadMeshHash) {
-					g.logger.With().Info("node has different mesh hash from majority, will download block instead",
-						log.Context(ctx),
-						out.Layer,
-						log.Err(err),
+					g.logger.Info("node has different mesh hash from majority, will download block instead",
+						log.ZContext(ctx),
+						zap.Uint32("layer_id", out.Layer.Uint32()),
+						zap.Error(err),
 					)
 				} else {
-					g.logger.With().Error("failed to process hare output",
-						log.Context(ctx),
-						out.Layer,
-						log.Err(err),
+					g.logger.Error("failed to process hare output",
+						log.ZContext(ctx),
+						zap.Uint32("layer_id", out.Layer.Uint32()),
+						zap.Error(err),
 					)
 				}
 			}
@@ -222,7 +223,10 @@ func (g *Generator) processHareOutput(ctx context.Context, out hare3.ConsensusOu
 		}
 		block.Initialize()
 		hareOutput = block.ID()
-		g.logger.With().Debug("generated block", out.Layer, block.ID())
+		g.logger.Debug("generated block",
+			zap.Uint32("layer_id", out.Layer.Uint32()),
+			zap.Stringer("block_id", block.ID()),
+		)
 	}
 	if err := g.saveAndCertify(ctx, out.Layer, block); err != nil {
 		return block, err
@@ -236,7 +240,7 @@ func (g *Generator) processHareOutput(ctx context.Context, out hare3.ConsensusOu
 func (g *Generator) processOptimisticLayers(max types.LayerID) {
 	lastApplied, err := layers.GetLastApplied(g.db)
 	if err != nil {
-		g.logger.Error("failed to get latest applied layer", log.Err(err))
+		g.logger.Error("failed to get latest applied layer", zap.Error(err))
 		return
 	}
 	next := lastApplied.Add(1)
@@ -254,17 +258,20 @@ func (g *Generator) processOptimisticLayers(max types.LayerID) {
 				failGenCnt.Inc()
 				return err
 			}
-			g.logger.With().Debug("generated block (optimistic)", lid, block.ID())
+			g.logger.Debug("generated block (optimistic)",
+				zap.Uint32("layer_id", lid.Uint32()),
+				zap.Stringer("block_id", block.ID()),
+			)
 			if err = g.msh.ProcessLayerPerHareOutput(md.ctx, lid, block.ID(), true); err != nil {
 				return err
 			}
 			return nil
 		}
 		if err = doit(); err != nil {
-			g.logger.With().Warning("failed to process optimistic layer",
-				log.Context(md.ctx),
-				lid,
-				log.Err(err),
+			g.logger.Warn("failed to process optimistic layer",
+				log.ZContext(md.ctx),
+				zap.Uint32("layer_id", lid.Uint32()),
+				zap.Error(err),
 			)
 			return
 		}
@@ -285,20 +292,20 @@ func (g *Generator) saveAndCertify(ctx context.Context, lid types.LayerID, block
 	}
 
 	if err := g.cert.RegisterForCert(ctx, lid, hareOutput); err != nil {
-		g.logger.With().Warning("failed to register hare output for certifying",
-			log.Context(ctx),
-			lid,
-			hareOutput,
-			log.Err(err),
+		g.logger.Warn("failed to register hare output for certifying",
+			log.ZContext(ctx),
+			zap.Uint32("layer_id", lid.Uint32()),
+			zap.Stringer("block_id", hareOutput),
+			zap.Error(err),
 		)
 	}
 
 	if err := g.cert.CertifyIfEligible(ctx, lid, hareOutput); err != nil && !errors.Is(err, eligibility.ErrNotActive) {
-		g.logger.With().Warning("failed to certify block",
-			log.Context(ctx),
-			lid,
-			hareOutput,
-			log.Err(err),
+		g.logger.Warn("failed to certify block",
+			log.ZContext(ctx),
+			zap.Uint32("layer_id", lid.Uint32()),
+			zap.Stringer("block_id", hareOutput),
+			zap.Error(err),
 		)
 	}
 	return nil
