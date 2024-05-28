@@ -267,34 +267,34 @@ func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operatio
 }
 
 func toLayer(layer *layers.Layer) *spacemeshv2alpha1.Layer {
-	v1 := &spacemeshv2alpha1.Layer{
+	l := &spacemeshv2alpha1.Layer{
 		Number: layer.Id.Uint32(),
 	}
 
-	v1.Status = spacemeshv2alpha1.Layer_LAYER_STATUS_UNSPECIFIED
+	l.Status = spacemeshv2alpha1.Layer_LAYER_STATUS_UNSPECIFIED
 	if !layer.AppliedBlock.IsEmpty() {
-		v1.Status = spacemeshv2alpha1.Layer_LAYER_STATUS_APPLIED
+		l.Status = spacemeshv2alpha1.Layer_LAYER_STATUS_APPLIED
 	}
 	if layer.Processed {
-		v1.Status = spacemeshv2alpha1.Layer_LAYER_STATUS_VERIFIED
+		l.Status = spacemeshv2alpha1.Layer_LAYER_STATUS_VERIFIED
 	}
 
 	if !bytes.Equal(layer.AggregatedHash.Bytes(), types.Hash32{}.Bytes()) {
-		v1.ConsensusHash = layer.AggregatedHash.ShortString()
-		v1.CumulativeStateHash = layer.AggregatedHash.Bytes()
+		l.ConsensusHash = layer.AggregatedHash.ShortString()
+		l.CumulativeStateHash = layer.AggregatedHash.Bytes()
 	}
 
 	if !bytes.Equal(layer.StateHash.Bytes(), types.Hash32{}.Bytes()) {
-		v1.StateHash = layer.StateHash.Bytes()
+		l.StateHash = layer.StateHash.Bytes()
 	}
 
 	if layer.Block != nil {
-		v1.Block = &spacemeshv2alpha1.Block{
+		l.Block = &spacemeshv2alpha1.Block{
 			Id: types.Hash20(layer.Block.ID()).Bytes(),
 		}
 	}
 
-	return v1
+	return l
 }
 
 type layersMatcher struct {
