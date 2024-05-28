@@ -59,6 +59,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
@@ -1085,19 +1086,31 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
+	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	activationMH := activation.NewMalfeasanceHandler(
+		app.cachedDB,
+		app.edVerifier,
+		app.postVerifier,
+		activation.WithMalfeasanceLogger(malfeasanceLogger),
+	)
+
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	for _, s := range app.signers {
 		nodeIDs = append(nodeIDs, s.NodeID())
 	}
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
-		app.addLogger(MalfeasanceLogger, lg),
+		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
 		app.edVerifier,
 		trtl,
 		app.postVerifier,
 	)
+	malfeasanceHandler.RegisterHandlerV1(wire.MultipleATXs, activationMH.HandleDoublePublish)
+	malfeasanceHandler.RegisterHandlerV1(wire.InvalidPostIndex, activationMH.HandleInvalidPostIndex)
+	malfeasanceHandler.RegisterHandlerV1(wire.InvalidPrevATX, activationMH.HandleInvalidPrevATX)
+
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg),
