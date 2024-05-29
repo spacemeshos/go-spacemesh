@@ -208,6 +208,21 @@ func (v *Validator) Post(
 	return nil
 }
 
+func (v *Validator) PostV2(
+	ctx context.Context,
+	nodeId types.NodeID,
+	commitmentAtxId types.ATXID,
+	post *types.Post,
+	challenge []byte,
+	numUnits uint32,
+	opts ...validatorOption,
+) error {
+	return v.Post(ctx, nodeId, commitmentAtxId, post, &types.PostMetadata{
+		Challenge:     challenge,
+		LabelsPerUnit: v.cfg.LabelsPerUnit,
+	}, numUnits, opts...)
+}
+
 func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 	if numUnits < cfg.MinNumUnits {
 		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", cfg.MinNumUnits, numUnits)
@@ -251,6 +266,10 @@ func (v *Validator) VRFNonce(
 		return fmt.Errorf("verify VRF nonce: %w", err)
 	}
 	return nil
+}
+
+func (v *Validator) VRFNonceV2(nodeId types.NodeID, commitment types.ATXID, vrfNonce uint64, numUnits uint32) error {
+	return v.VRFNonce(nodeId, commitment, vrfNonce, v.cfg.LabelsPerUnit, numUnits)
 }
 
 func (v *Validator) InitialNIPostChallengeV1(
