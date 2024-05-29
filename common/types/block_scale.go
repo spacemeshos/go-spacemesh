@@ -45,7 +45,7 @@ func (t *InnerBlock) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Rewards, 1650)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Rewards, 1775)
 		if err != nil {
 			return total, err
 		}
@@ -79,7 +79,7 @@ func (t *InnerBlock) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.TickHeight = uint64(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[AnyReward](dec, 1650)
+		field, n, err := scale.DecodeStructSliceWithLimit[AnyReward](dec, 1775)
 		if err != nil {
 			return total, err
 		}
