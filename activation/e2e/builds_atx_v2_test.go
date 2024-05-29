@@ -218,9 +218,10 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 				require.NotZero(t, atx.GetWeight())
 				require.NotZero(t, atx.TickHeight())
 				require.Equal(t, opts.NumUnits, atx.NumUnits)
+				previous = atx
 				return nil
 			},
-		),
+		).Times(2),
 	)
 
 	tab := activation.NewBuilder(
@@ -250,10 +251,13 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		// 2nd epoch
 		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
 		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
+		// 3rd epoch
+		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
+		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
 	)
 	tab.Register(sig)
 
 	require.NoError(t, tab.StartSmeshing(coinbase))
-	require.Eventually(t, ctrl.Satisfied, epoch*3, time.Second)
+	require.Eventually(t, ctrl.Satisfied, epoch*4, time.Second)
 	require.NoError(t, tab.StopSmeshing(false))
 }
