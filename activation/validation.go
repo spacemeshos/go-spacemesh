@@ -113,14 +113,41 @@ func (v *Validator) NIPost(
 	return proof.LeafCount, nil
 }
 
+func (v *Validator) PoetMembership(
+	ctx context.Context,
+	membership *types.MultiMerkleProof,
+	postChallenge types.Hash32,
+	poetChallenges [][]byte,
+) (uint64, error) {
+	ref := types.PoetProofRef(postChallenge)
+	proof, statement, err := v.poetDb.Proof(ref)
+	if err != nil {
+		return 0, fmt.Errorf("poet proof %x is not available: %w", ref, err)
+	}
+
+	if err := validateMultiMerkleProof(poetChallenges, membership, statement[:]); err != nil {
+		return 0, fmt.Errorf("invalid membership proof %w", err)
+	}
+
+	return proof.LeafCount, nil
+}
+
 func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []byte) error {
+	membership := types.MultiMerkleProof{
+		Nodes:       proof.Nodes,
+		LeafIndices: []uint64{proof.LeafIndex},
+	}
+	return validateMultiMerkleProof([][]byte{leaf}, &membership, expectedRoot)
+}
+
+func validateMultiMerkleProof(leaves [][]byte, proof *types.MultiMerkleProof, expectedRoot []byte) error {
 	nodes := make([][]byte, 0, len(proof.Nodes))
 	for _, n := range proof.Nodes {
 		nodes = append(nodes, n.Bytes())
 	}
 	ok, err := merkle.ValidatePartialTree(
-		[]uint64{proof.LeafIndex},
-		[][]byte{leaf},
+		proof.LeafIndices,
+		leaves,
 		nodes,
 		expectedRoot,
 		poetShared.HashMembershipTreeNode,
@@ -131,7 +158,7 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 	if !ok {
 		return fmt.Errorf(
 			"invalid merkle proof, calculated root does not match proof root, leaf: %x, nodes: %x, expected root: %x",
-			leaf,
+			leaves,
 			proof.Nodes,
 			expectedRoot,
 		)
