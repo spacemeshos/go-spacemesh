@@ -505,10 +505,10 @@ type Blob struct {
 	Bytes []byte
 }
 
-// resize the underlying byte slice to the specified size.
+// Resize the underlying byte slice to the specified size.
 // The returned slice has length equal n, but it might have a larger capacity.
 // Warning: it is not guaranteed to keep the old data.
-func (b *Blob) resize(n int) {
+func (b *Blob) Resize(n int) {
 	if cap(b.Bytes) < n {
 		b.Bytes = make([]byte, n)
 	}
@@ -517,10 +517,10 @@ func (b *Blob) resize(n int) {
 
 func (b *Blob) FromColumn(stmt *Statement, col int) {
 	if l := stmt.ColumnLen(col); l != 0 {
-		b.resize(l)
+		b.Resize(l)
 		stmt.ColumnBytes(col, b.Bytes)
 	} else {
-		b.resize(0)
+		b.Resize(0)
 	}
 }
 
