@@ -87,7 +87,7 @@ func TestHandler_HandleMultipleBallots(t *testing.T) {
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.HandleMultipleBallots(context.Background(), &bp)
+		nodeID, _, err := h.HandleMultipleBallots(context.Background(), &bp)
 		require.ErrorContains(t, err, "identity does not exist")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -121,7 +121,7 @@ func TestHandler_HandleMultipleBallots(t *testing.T) {
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.HandleMultipleBallots(context.Background(), &bp)
+		nodeID, _, err := h.HandleMultipleBallots(context.Background(), &bp)
 		require.ErrorContains(t, err, "invalid ballot malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -154,7 +154,7 @@ func TestHandler_HandleMultipleBallots(t *testing.T) {
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.HandleMultipleBallots(context.Background(), &bp)
+		nodeID, _, err := h.HandleMultipleBallots(context.Background(), &bp)
 		require.ErrorContains(t, err, "invalid ballot malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -191,7 +191,7 @@ func TestHandler_HandleMultipleBallots(t *testing.T) {
 		bp.Messages[1].Signature = sig2.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig2.NodeID()
 
-		nodeID, err := h.HandleMultipleBallots(context.Background(), &bp)
+		nodeID, _, err := h.HandleMultipleBallots(context.Background(), &bp)
 		require.ErrorContains(t, err, "invalid ballot malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -224,7 +224,7 @@ func TestHandler_HandleMultipleBallots(t *testing.T) {
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.HandleMultipleBallots(context.Background(), &bp)
+		nodeID, _, err := h.HandleMultipleBallots(context.Background(), &bp)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})

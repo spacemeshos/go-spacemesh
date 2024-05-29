@@ -97,7 +97,7 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		ap.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
 		require.ErrorContains(t, err, "identity does not exist")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -131,7 +131,7 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 
-		nodeID, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
 		require.ErrorContains(t, err, "invalid atx malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -164,7 +164,7 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 
-		nodeID, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
 		require.ErrorContains(t, err, "invalid atx malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -201,7 +201,7 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig2.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 
-		nodeID, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
 		require.ErrorContains(t, err, "invalid atx malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -234,7 +234,7 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 
-		nodeID, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})
@@ -295,7 +295,7 @@ func TestHandler_HandleInvalidPostIndex(t *testing.T) {
 			meta,
 			gomock.Any(),
 		).Return(errors.New("invalid post"))
-		nodeID, err := h.HandleInvalidPostIndex(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPostIndex(context.Background(), proof)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})
@@ -354,7 +354,7 @@ func TestHandler_HandleInvalidPostIndex(t *testing.T) {
 			meta,
 			gomock.Any(),
 		).Return(nil)
-		nodeID, err := h.HandleInvalidPostIndex(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPostIndex(context.Background(), proof)
 		require.ErrorContains(t, err, "POST is valid")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -395,7 +395,7 @@ func TestHandler_HandleInvalidPostIndex(t *testing.T) {
 			InvalidIdx: 7,
 		}
 
-		nodeID, err := h.HandleInvalidPostIndex(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPostIndex(context.Background(), proof)
 		require.ErrorContains(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -435,7 +435,7 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})
@@ -472,7 +472,7 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
 		require.ErrorContains(t, err, "identity does not exist")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -511,7 +511,7 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
 		require.ErrorContains(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -550,7 +550,7 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
 		require.ErrorContains(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -580,7 +580,7 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
 		require.ErrorContains(t, err, "ATX IDs are the same")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -616,7 +616,7 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
 		require.ErrorContains(t, err, "prev ATX IDs are different")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -658,7 +658,7 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
 		require.ErrorContains(t, err, "smesher IDs are different")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})

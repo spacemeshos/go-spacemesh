@@ -30,8 +30,8 @@ var (
 )
 
 type (
-	MalfeasanceHandlerV1 func(ctx context.Context, data scale.Type) (types.NodeID, error)
-	MalfeasanceHandlerV2 func(ctx context.Context, data []byte) (types.NodeID, error)
+	MalfeasanceHandlerV1 func(ctx context.Context, data scale.Type) (types.NodeID, []string, error)
+	MalfeasanceHandlerV2 func(ctx context.Context, data []byte) (types.NodeID, []string, error)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
@@ -42,11 +42,9 @@ type Handler struct {
 	handlersV1 map[uint8]MalfeasanceHandlerV1
 	handlersV2 map[uint8]MalfeasanceHandlerV2
 
-	self         p2p.Peer
-	nodeIDs      []types.NodeID
-	edVerifier   SigVerifier
-	tortoise     tortoise
-	postVerifier postVerifier
+	self     p2p.Peer
+	nodeIDs  []types.NodeID
+	tortoise tortoise
 }
 
 func NewHandler(
@@ -54,18 +52,14 @@ func NewHandler(
 	lg *zap.Logger,
 	self p2p.Peer,
 	nodeID []types.NodeID,
-	edVerifier SigVerifier,
 	tortoise tortoise,
-	postVerifier postVerifier,
 ) *Handler {
 	return &Handler{
-		logger:       lg,
-		cdb:          cdb,
-		self:         self,
-		nodeIDs:      nodeID,
-		edVerifier:   edVerifier,
-		tortoise:     tortoise,
-		postVerifier: postVerifier,
+		logger:   lg,
+		cdb:      cdb,
+		self:     self,
+		nodeIDs:  nodeID,
+		tortoise: tortoise,
 
 		handlersV1: make(map[uint8]MalfeasanceHandlerV1),
 		handlersV2: make(map[uint8]MalfeasanceHandlerV2),
@@ -122,14 +116,15 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		return errMalformedData
 	}
 	if peer == h.self {
-		id, err := h.Validate(ctx, &p)
+		id, metricLabels, err := h.Validate(ctx, &p)
 		if err != nil {
+			numInvalidProofs.WithLabelValues(metricLabels...).Inc()
 			return err
 		}
 		h.reportMalfeasance(id, &p.MalfeasanceProof)
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
-		updateMetrics(p.Proof)
+		numProofs.WithLabelValues(metricLabels...).Inc()
 		return nil
 	}
 	_, err := h.validateAndSave(ctx, &p)
@@ -143,8 +138,9 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 			pubsub.ErrValidationReject,
 		)
 	}
-	nodeID, err := h.Validate(ctx, p)
+	nodeID, metricLabels, err := h.Validate(ctx, p)
 	if err != nil {
+		numInvalidProofs.WithLabelValues(metricLabels...).Inc()
 		return types.EmptyNodeID, err
 	}
 	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
@@ -176,7 +172,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 	}
 	h.reportMalfeasance(nodeID, &p.MalfeasanceProof)
 	h.cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
-	updateMetrics(p.Proof)
+	numProofs.WithLabelValues(metricLabels...).Inc()
 	h.logger.Info("new malfeasance proof",
 		log.ZContext(ctx),
 		zap.Stringer("smesher", nodeID),
@@ -185,53 +181,20 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 	return nodeID, nil
 }
 
-func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, error) {
-	var (
-		nodeID types.NodeID
-		err    error
-	)
-
+func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, []string, error) {
 	handler, ok := h.handlersV1[p.Proof.Type]
-	if ok {
-		nodeID, err = handler(ctx, p.Proof.Data)
-		if err == nil {
-			return nodeID, nil
-		}
-		h.logger.Warn("malfeasance proof failed validation",
-			log.ZContext(ctx),
-			zap.Inline(p),
-			zap.Error(err),
-		)
-		return nodeID, fmt.Errorf("%w: %v", errInvalidProof, err)
+	if !ok {
+		return types.EmptyNodeID, nil, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
 	}
 
-	switch p.Proof.Type {
-	case wire.HareEquivocation:
-		panic("incorrect implemented test")
-	case wire.MultipleATXs:
-		panic("incorrect implemented test")
-	case wire.MultipleBallots:
-		panic("incorrect implemented test")
-	case wire.InvalidPostIndex:
-		panic("incorrect implemented test")
-	case wire.InvalidPrevATX:
-		panic("incorrect implemented test")
-	default:
-		return nodeID, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
+	nodeID, metricLabels, err := handler(ctx, p.Proof.Data)
+	if err == nil {
+		return nodeID, metricLabels, nil
 	}
-}
-
-func updateMetrics(tp wire.Proof) {
-	switch tp.Type {
-	case wire.HareEquivocation:
-		numProofsHare.Inc()
-	case wire.MultipleATXs:
-		numProofsATX.Inc()
-	case wire.MultipleBallots:
-		numProofsBallot.Inc()
-	case wire.InvalidPostIndex:
-		numProofsPostIndex.Inc()
-	case wire.InvalidPrevATX:
-		numProofsPrevATX.Inc()
-	}
+	h.logger.Warn("malfeasance proof failed validation",
+		log.ZContext(ctx),
+		zap.Inline(p),
+		zap.Error(err),
+	)
+	return nodeID, metricLabels, fmt.Errorf("%w: %v", errInvalidProof, err)
 }

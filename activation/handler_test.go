@@ -266,7 +266,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 
 				postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(errors.New("invalid"))
-				nodeID, err := mh.HandleInvalidPostIndex(context.Background(), got.Proof.Data)
+				nodeID, _, err := mh.HandleInvalidPostIndex(context.Background(), got.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
 
@@ -425,7 +425,7 @@ func testHandler_HandleDoublePublish(t *testing.T, synced bool) {
 			func(_ context.Context, _ string, data []byte) error {
 				require.NoError(t, codec.Decode(data, &got))
 				require.Equal(t, mwire.MultipleATXs, got.Proof.Type)
-				nodeID, err := mh.HandleDoublePublish(context.Background(), got.Proof.Data)
+				nodeID, _, err := mh.HandleDoublePublish(context.Background(), got.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
 				return nil

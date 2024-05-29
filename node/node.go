@@ -1113,9 +1113,7 @@ func (app *App) initServices(ctx context.Context) error {
 		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
-		app.edVerifier,
 		trtl,
-		app.postVerifier,
 	)
 	malfeasanceHandler.RegisterHandlerV1(wire.MultipleATXs, activationMH.HandleDoublePublish)
 	malfeasanceHandler.RegisterHandlerV1(wire.MultipleBallots, meshMH.HandleMultipleBallots)

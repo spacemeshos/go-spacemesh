@@ -53,7 +53,6 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	store := atxsdata.New()
 	h := malfeasance.NewHandler(
@@ -61,9 +60,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
-		signing.NewEdVerifier(),
 		trt,
-		postVerifier,
 	)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -122,24 +119,21 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	lg := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
-		signing.NewEdVerifier(),
 		trt,
-		postVerifier,
 	)
 	var handlerCalled bool
-	h.RegisterHandlerV1(wire.MultipleATXs, func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+	h.RegisterHandlerV1(wire.MultipleATXs, func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
 		handlerCalled = true
 
 		require.IsType(t, &wire.AtxProof{}, data)
 		proof := data.(*wire.AtxProof)
-		return proof.Messages[0].SmesherID, nil
+		return proof.Messages[0].SmesherID, []string{"metric"}, nil
 	})
 
 	sig, err := signing.NewEdSigner()
@@ -195,25 +189,23 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 	lg := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
-		signing.NewEdVerifier(),
 		trt,
-		postVerifier,
 	)
 	var handlerCalled bool
-	h.RegisterHandlerV1(wire.MultipleBallots, func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+	handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
 		handlerCalled = true
 
 		require.IsType(t, &wire.BallotProof{}, data)
 		proof := data.(*wire.BallotProof)
-		return proof.Messages[0].SmesherID, nil
-	})
+		return proof.Messages[0].SmesherID, []string{"metric"}, nil
+	}
+	h.RegisterHandlerV1(wire.MultipleBallots, handler)
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -267,25 +259,23 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	lg := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
-		signing.NewEdVerifier(),
 		trt,
-		postVerifier,
 	)
 	var handlerCalled bool
-	h.RegisterHandlerV1(wire.HareEquivocation, func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+	handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
 		handlerCalled = true
 
 		require.IsType(t, &wire.HareProof{}, data)
 		proof := data.(*wire.HareProof)
-		return proof.Messages[0].SmesherID, nil
-	})
+		return proof.Messages[0].SmesherID, []string{"metric"}, nil
+	}
+	h.RegisterHandlerV1(wire.HareEquivocation, handler)
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -342,25 +332,24 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 	lg := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
-	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
 
 	h := malfeasance.NewHandler(
 		datastore.NewCachedDB(db, lg),
 		lg,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
-		signing.NewEdVerifier(),
 		trt,
-		postVerifier,
 	)
 	var handlerCalled bool
-	h.RegisterHandlerV1(wire.MultipleBallots, func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+	handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
 		handlerCalled = true
 
 		require.IsType(t, &wire.BallotProof{}, data)
 		proof := data.(*wire.BallotProof)
-		return proof.Messages[0].SmesherID, nil
-	})
+		return proof.Messages[0].SmesherID, []string{"metric"}, nil
+	}
+	h.RegisterHandlerV1(wire.MultipleBallots, handler)
+
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)

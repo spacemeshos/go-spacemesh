@@ -16,6 +16,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
+const (
+	hareEquivocate = "hare_eq"
+)
+
 type MalfeasanceHandler struct {
 	logger *zap.Logger
 	db     sql.Executor
@@ -48,26 +52,31 @@ func NewMalfeasanceHandler(
 	return mh
 }
 
-func (mh *MalfeasanceHandler) HandleHareEquivocation(ctx context.Context, data scale.Type) (types.NodeID, error) {
+func (mh *MalfeasanceHandler) HandleHareEquivocation(
+	ctx context.Context,
+	data scale.Type,
+) (types.NodeID, []string, error) {
 	var (
 		firstNid types.NodeID
 		firstMsg wire.HareProofMsg
 	)
 	hp, ok := data.(*wire.HareProof)
 	if !ok {
-		return types.EmptyNodeID, errors.New("wrong message type for hare equivocation")
+		return types.EmptyNodeID, []string{hareEquivocate}, errors.New("wrong message type for hare equivocation")
 	}
 	for _, msg := range hp.Messages {
 		if !mh.edVerifier.Verify(signing.HARE, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
-			return types.EmptyNodeID, errors.New("invalid signature")
+			return types.EmptyNodeID, []string{hareEquivocate}, errors.New("invalid signature")
 		}
 		if firstNid == types.EmptyNodeID {
 			ok, err := atxs.IdentityExists(mh.db, msg.SmesherID)
 			if err != nil {
-				return types.EmptyNodeID, fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
+				return types.EmptyNodeID, []string{hareEquivocate},
+					fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
 			}
 			if !ok {
-				return types.EmptyNodeID, fmt.Errorf("identity does not exist: %v", msg.SmesherID)
+				return types.EmptyNodeID, []string{hareEquivocate},
+					fmt.Errorf("identity does not exist: %v", msg.SmesherID)
 			}
 			firstNid = msg.SmesherID
 			firstMsg = msg
@@ -75,7 +84,7 @@ func (mh *MalfeasanceHandler) HandleHareEquivocation(ctx context.Context, data s
 			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
 				msg.InnerMsg.Round == firstMsg.InnerMsg.Round &&
 				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return msg.SmesherID, nil
+				return msg.SmesherID, []string{hareEquivocate}, nil
 			}
 		}
 	}
@@ -86,7 +95,5 @@ func (mh *MalfeasanceHandler) HandleHareEquivocation(ctx context.Context, data s
 		zap.Stringer("second_smesher", hp.Messages[1].SmesherID),
 		zap.Object("second_proof", &hp.Messages[1].InnerMsg),
 	)
-	// TODO(mafa): add metrics
-	// numInvalidProofsHare.Inc()
-	return types.EmptyNodeID, errors.New("invalid hare malfeasance proof")
+	return types.EmptyNodeID, []string{hareEquivocate}, errors.New("invalid hare malfeasance proof")
 }

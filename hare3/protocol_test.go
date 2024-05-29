@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
@@ -524,7 +524,7 @@ func TestProtocol(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
 				proto  *protocol
-				logger = logtest.New(t).Zap()
+				logger = zaptest.NewLogger(t)
 			)
 			for i, step := range tc.steps {
 				if i != 0 && proto == nil {

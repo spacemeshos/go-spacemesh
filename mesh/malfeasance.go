@@ -16,6 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
+const multiBallots = "ballot"
+
 type MalfeasanceHandler struct {
 	logger *zap.Logger
 	db     sql.Executor
@@ -48,33 +50,37 @@ func NewMalfeasanceHandler(
 	return mh
 }
 
-func (mh *MalfeasanceHandler) HandleMultipleBallots(ctx context.Context, data scale.Type) (types.NodeID, error) {
+func (mh *MalfeasanceHandler) HandleMultipleBallots(
+	ctx context.Context,
+	data scale.Type,
+) (types.NodeID, []string, error) {
 	var (
 		firstNid types.NodeID
 		firstMsg wire.BallotProofMsg
 	)
 	bp, ok := data.(*wire.BallotProof)
 	if !ok {
-		return types.EmptyNodeID, errors.New("wrong message type for multi ballots")
+		return types.EmptyNodeID, []string{multiBallots}, errors.New("wrong message type for multi ballots")
 	}
 	for _, msg := range bp.Messages {
 		if !mh.edVerifier.Verify(signing.BALLOT, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
-			return types.EmptyNodeID, errors.New("invalid signature")
+			return types.EmptyNodeID, []string{multiBallots}, errors.New("invalid signature")
 		}
 		if firstNid == types.EmptyNodeID {
 			ok, err := atxs.IdentityExists(mh.db, msg.SmesherID)
 			if err != nil {
-				return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
+				return types.EmptyNodeID, []string{multiBallots},
+					fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
 			}
 			if !ok {
-				return types.EmptyNodeID, errors.New("identity does not exist")
+				return types.EmptyNodeID, []string{multiBallots}, errors.New("identity does not exist")
 			}
 			firstNid = msg.SmesherID
 			firstMsg = msg
 		} else if msg.SmesherID == firstNid {
 			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
 				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return msg.SmesherID, nil
+				return msg.SmesherID, []string{multiBallots}, nil
 			}
 		}
 	}
@@ -85,7 +91,5 @@ func (mh *MalfeasanceHandler) HandleMultipleBallots(ctx context.Context, data sc
 		zap.Stringer("second_smesher", bp.Messages[1].SmesherID),
 		zap.Object("second_proof", &bp.Messages[1].InnerMsg),
 	)
-	// TODO(mafa): add metrics
-	// numInvalidProofsBallot.Inc()
-	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
+	return types.EmptyNodeID, []string{multiBallots}, errors.New("invalid ballot malfeasance proof")
 }
