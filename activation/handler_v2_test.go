@@ -42,7 +42,7 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 			clock:           mocks.mclock,
 			tickSize:        1,
 			goldenATXID:     golden,
-			nipostValidator: mocks.mValidatorV2,
+			nipostValidator: mocks.mValidator,
 			logger:          lg,
 			fetcher:         mocks.mockFetch,
 			beacon:          mocks.mbeacon,
@@ -62,16 +62,16 @@ func (h *handlerMocks) expectFetchDeps(atx *wire.ActivationTxV2) {
 }
 
 func (h *handlerMocks) expectVerifyNIPoST(atx *wire.ActivationTxV2) {
-	h.mValidatorV2.EXPECT().PostV2(
+	h.mValidator.EXPECT().PostV2(
 		gomock.Any(),
 		atx.SmesherID,
 		gomock.Any(),
-		&atx.NiPosts[0].Posts[0].Post,
+		wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post),
 		atx.NiPosts[0].Challenge.Bytes(),
 		atx.NiPosts[0].Posts[0].NumUnits,
 		gomock.Any(),
 	)
-	h.mValidatorV2.EXPECT().PoetMembership(
+	h.mValidator.EXPECT().PoetMembership(
 		gomock.Any(),
 		gomock.Any(),
 		atx.NiPosts[0].Challenge,
@@ -82,22 +82,22 @@ func (h *handlerMocks) expectVerifyNIPoST(atx *wire.ActivationTxV2) {
 func (h *handlerMocks) expectStoreAtxV2(atx *wire.ActivationTxV2) {
 	h.mbeacon.EXPECT().OnAtx(gomock.Any())
 	h.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	h.mValidatorV2.EXPECT().IsVerifyingFullPost().Return(false)
+	h.mValidator.EXPECT().IsVerifyingFullPost().Return(false)
 }
 
 func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 	h.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
-	h.mValidatorV2.EXPECT().VRFNonceV2(
+	h.mValidator.EXPECT().VRFNonceV2(
 		atx.SmesherID,
 		atx.Initial.CommitmentATX,
-		types.VRFPostIndex(*atx.VRFNonce),
+		*atx.VRFNonce,
 		atx.NiPosts[0].Posts[0].NumUnits,
 	)
-	h.mValidatorV2.EXPECT().PostV2(
+	h.mValidator.EXPECT().PostV2(
 		gomock.Any(),
 		atx.SmesherID,
 		atx.Initial.CommitmentATX,
-		&atx.Initial.Post,
+		wire.PostFromWireV1(&atx.Initial.Post),
 		shared.ZeroChallenge,
 		atx.NiPosts[0].Posts[0].NumUnits,
 		gomock.Any(),
@@ -195,17 +195,17 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 
 		atxHandler := newV2TestHandler(t, golden)
 		atxHandler.mclock.EXPECT().CurrentLayer()
-		atxHandler.mValidatorV2.EXPECT().VRFNonceV2(
+		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
 			atx.Initial.CommitmentATX,
-			types.VRFPostIndex(*atx.VRFNonce),
+			*atx.VRFNonce,
 			atx.NiPosts[0].Posts[0].NumUnits,
 		)
-		atxHandler.mValidatorV2.EXPECT().PostV2(
+		atxHandler.mValidator.EXPECT().PostV2(
 			context.Background(),
 			sig.NodeID(),
 			atx.Initial.CommitmentATX,
-			&atx.Initial.Post,
+			wire.PostFromWireV1(&atx.Initial.Post),
 			shared.ZeroChallenge,
 			atx.NiPosts[0].Posts[0].NumUnits,
 		)
@@ -280,11 +280,11 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 
 		atxHandler := newV2TestHandler(t, golden)
 		atxHandler.mclock.EXPECT().CurrentLayer()
-		atxHandler.mValidatorV2.EXPECT().
+		atxHandler.mValidator.EXPECT().
 			VRFNonceV2(
 				sig.NodeID(),
 				atx.Initial.CommitmentATX,
-				types.VRFPostIndex(*atx.VRFNonce),
+				*atx.VRFNonce,
 				atx.NiPosts[0].Posts[0].NumUnits,
 			).
 			Return(errors.New("invalid nonce"))
@@ -298,18 +298,18 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 
 		atxHandler := newV2TestHandler(t, golden)
 		atxHandler.mclock.EXPECT().CurrentLayer()
-		atxHandler.mValidatorV2.EXPECT().VRFNonceV2(
+		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
 			atx.Initial.CommitmentATX,
-			types.VRFPostIndex(*atx.VRFNonce),
+			*atx.VRFNonce,
 			atx.NiPosts[0].Posts[0].NumUnits,
 		)
-		atxHandler.mValidatorV2.EXPECT().
+		atxHandler.mValidator.EXPECT().
 			PostV2(
 				context.Background(),
 				sig.NodeID(),
 				atx.Initial.CommitmentATX,
-				&atx.Initial.Post,
+				wire.PostFromWireV1(&atx.Initial.Post),
 				shared.ZeroChallenge,
 				atx.NiPosts[0].Posts[0].NumUnits,
 			).
@@ -504,10 +504,10 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		atx.NiPosts[0].Posts[0].NumUnits *= 10
 		atx.Sign(sig)
 		atxHandler.expectAtxV2(atx)
-		atxHandler.mValidatorV2.EXPECT().VRFNonceV2(
+		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
 			prev.Initial.CommitmentATX,
-			(types.VRFPostIndex)(*prev.VRFNonce),
+			*prev.VRFNonce,
 			atx.TotalNumUnits(),
 		)
 
@@ -537,10 +537,10 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		atxHandler.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
 		atxHandler.expectFetchDeps(atx)
 		atxHandler.expectVerifyNIPoST(atx)
-		atxHandler.mValidatorV2.EXPECT().VRFNonceV2(
+		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
 			prev.Initial.CommitmentATX,
-			(types.VRFPostIndex)(*prev.VRFNonce),
+			*prev.VRFNonce,
 			atx.TotalNumUnits(),
 		).Return(errors.New("vrf nonce is not valid"))
 
@@ -568,10 +568,10 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		atx.NiPosts[0].Posts[0].NumUnits *= 10
 		atx.Sign(sig)
 		atxHandler.expectAtxV2(atx)
-		atxHandler.mValidatorV2.EXPECT().VRFNonceV2(
+		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
 			*prev.CommitmentATX,
-			(types.VRFPostIndex)(*atx.VRFNonce),
+			*atx.VRFNonce,
 			atx.TotalNumUnits(),
 		)
 
@@ -1026,12 +1026,12 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
-		atxHandler.mValidatorV2.EXPECT().
+		atxHandler.mValidator.EXPECT().
 			PostV2(
 				gomock.Any(),
 				sig.NodeID(),
 				golden,
-				&atx.NiPosts[0].Posts[0].Post,
+				wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post),
 				atx.NiPosts[0].Challenge.Bytes(),
 				atx.TotalNumUnits(),
 				gomock.Any(),
@@ -1048,12 +1048,12 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
-		atxHandler.mValidatorV2.EXPECT().
+		atxHandler.mValidator.EXPECT().
 			PostV2(
 				gomock.Any(),
 				sig.NodeID(),
 				golden,
-				&atx.NiPosts[0].Posts[0].Post,
+				wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post),
 				atx.NiPosts[0].Challenge.Bytes(),
 				atx.TotalNumUnits(),
 				gomock.Any(),
@@ -1069,16 +1069,16 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
-		atxHandler.mValidatorV2.EXPECT().PostV2(
+		atxHandler.mValidator.EXPECT().PostV2(
 			gomock.Any(),
 			sig.NodeID(),
 			golden,
-			&atx.NiPosts[0].Posts[0].Post,
+			wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post),
 			atx.NiPosts[0].Challenge.Bytes(),
 			atx.TotalNumUnits(),
 			gomock.Any(),
 		)
-		atxHandler.mValidatorV2.EXPECT().
+		atxHandler.mValidator.EXPECT().
 			PoetMembership(gomock.Any(), gomock.Any(), atx.NiPosts[0].Challenge, gomock.Any()).
 			Return(0, errors.New("poet failure"))
 		_, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
