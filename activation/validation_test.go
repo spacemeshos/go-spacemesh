@@ -14,6 +14,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -584,7 +585,7 @@ func TestVerifyChainDeps(t *testing.T) {
 			PublishEpoch: watx.PublishEpoch,
 			SmesherID:    watx.SmesherID,
 			AtxBlob: types.AtxBlob{
-				Blob:    watx.SignedBytes(),
+				Blob:    codec.MustEncode(watx),
 				Version: types.AtxV2,
 			},
 		}
@@ -609,7 +610,7 @@ func TestVerifyChainDeps(t *testing.T) {
 			PublishEpoch: watx.PublishEpoch,
 			SmesherID:    watx.SmesherID,
 			AtxBlob: types.AtxBlob{
-				Blob:    watx.SignedBytes(),
+				Blob:    codec.MustEncode(watx),
 				Version: types.AtxV2,
 			},
 		}

@@ -64,7 +64,6 @@ const (
 // Config defines configuration for Builder.
 type Config struct {
 	GoldenATXID      types.ATXID
-	LabelsPerUnit    uint64
 	RegossipInterval time.Duration
 }
 
@@ -375,10 +374,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 		CommitmentATX: postInfo.CommitmentATX,
 		VRFNonce:      *postInfo.Nonce,
 	}
-	err = b.validator.Post(ctx, nodeID, postInfo.CommitmentATX, post, &types.PostMetadata{
-		Challenge:     shared.ZeroChallenge,
-		LabelsPerUnit: postInfo.LabelsPerUnit,
-	}, postInfo.NumUnits)
+	err = b.validator.PostV2(ctx, nodeID, postInfo.CommitmentATX, post, shared.ZeroChallenge, postInfo.NumUnits)
 	if err != nil {
 		b.logger.Error("initial POST is invalid", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
 		if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
@@ -556,10 +552,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			Indices: post.Indices,
 			Pow:     post.Pow,
 		}
-		err = b.validator.Post(ctx, nodeID, post.CommitmentATX, initialPost, &types.PostMetadata{
-			Challenge:     shared.ZeroChallenge,
-			LabelsPerUnit: b.conf.LabelsPerUnit,
-		}, post.NumUnits)
+		err = b.validator.PostV2(ctx, nodeID, post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
 		if err != nil {
 			logger.Error("initial POST is invalid", zap.Error(err))
 			if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
@@ -786,9 +779,6 @@ func (b *Builder) createAtx(
 			PublishEpoch:   challenge.PublishEpoch,
 			PositioningATX: challenge.PositioningATX,
 			Coinbase:       &coinbase,
-			PreviousATXs: []types.ATXID{
-				challenge.PrevATXID,
-			},
 			NiPosts: []wire.NiPostsV2{
 				{
 					Membership: wire.MerkleProofV2{
@@ -813,6 +803,8 @@ func (b *Builder) createAtx(
 				Post:          *wire.PostToWireV1(challenge.InitialPost),
 				CommitmentATX: *challenge.CommitmentATX,
 			}
+		} else {
+			atx.PreviousATXs = []types.ATXID{challenge.PrevATXID}
 		}
 		atx.Sign(sig)
 		return atx, nil

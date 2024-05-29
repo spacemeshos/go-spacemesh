@@ -111,7 +111,7 @@ func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 }
 
 func (h *handlerMocks) expectAtxV2(atx *wire.ActivationTxV2) {
-	h.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
+	h.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 	h.expectFetchDeps(atx)
 	h.expectVerifyNIPoST(atx)
 	h.expectStoreAtxV2(atx)

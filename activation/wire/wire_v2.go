@@ -294,6 +294,8 @@ func (atx *ActivationTxV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error
 	if atx == nil {
 		return nil
 	}
+	encoder.AddString("ID", atx.ID().String())
+	encoder.AddString("Smesher", atx.SmesherID.String())
 	encoder.AddUint32("PublishEpoch", atx.PublishEpoch.Uint32())
 	encoder.AddString("PositioningATX", atx.PositioningATX.String())
 	if atx.Coinbase != nil {
