@@ -54,6 +54,21 @@ Upgrading to this version requires going through v1.5.x first. Removed migration
   ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
   eligible for them.
 
+## Release v1.5.7
+
+### Improvements
+
+* [#5999](https://github.com/spacemeshos/go-spacemesh/pull/5999) Increase limits to allow up to 6.0 Mio ATXs per epoch.
+
+## Release v1.5.6
+
+### Improvements
+
+* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of
+  a broken Poet.
+
+  Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
+
 ## Release v1.5.5
 
 ### Improvements
