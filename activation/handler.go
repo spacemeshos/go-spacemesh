@@ -220,6 +220,8 @@ func (h *Handler) determineVersion(msg []byte) (*types.AtxVersion, error) {
 
 type opaqueAtx interface {
 	ID() types.ATXID
+	Published() types.EpochID
+	TotalNumUnits() uint32
 }
 
 func (h *Handler) decodeATX(msg []byte) (opaqueAtx, error) {
@@ -325,7 +327,7 @@ func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.E
 		return types.EmptyEdSignature, err
 	}
 
-	if blob.Bytes == nil {
+	if len(blob.Bytes) == 0 {
 		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
 		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
 	}

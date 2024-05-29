@@ -1031,3 +1031,37 @@ func Test_PrevATXCollisions(t *testing.T) {
 	require.Equal(t, sig.NodeID(), got[0].NodeID2)
 	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, []types.ATXID{got[0].ATX1, got[0].ATX2})
 }
+
+func TestCoinbase(t *testing.T) {
+	t.Parallel()
+	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		_, err := atxs.Coinbase(db, types.NodeID{})
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("found", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		atx := newAtx(t, sig, func(a *types.ActivationTx) { a.Coinbase = types.Address{1, 2, 3} })
+		require.NoError(t, atxs.Add(db, atx))
+		cb, err := atxs.Coinbase(db, sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.Coinbase, cb)
+	})
+	t.Run("picks last", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		atx1 := newAtx(t, sig, withPublishEpoch(1), func(a *types.ActivationTx) { a.Coinbase = types.Address{1, 2, 3} })
+		atx2 := newAtx(t, sig, withPublishEpoch(2), func(a *types.ActivationTx) { a.Coinbase = types.Address{4, 5, 6} })
+		require.NoError(t, atxs.Add(db, atx1))
+		require.NoError(t, atxs.Add(db, atx2))
+		cb, err := atxs.Coinbase(db, sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx2.Coinbase, cb)
+	})
+}

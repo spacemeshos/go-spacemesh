@@ -143,7 +143,7 @@ func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*ty
 		return nil, err
 	}
 
-	if blob.Bytes == nil {
+	if len(blob.Bytes) == 0 {
 		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
 		// Fallback to fetching it from the DB to get the effective NumUnits.
 		atx, err := atxs.Get(h.cdb, atx.PrevATXID)

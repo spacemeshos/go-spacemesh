@@ -207,6 +207,14 @@ func (atx *ActivationTx) TargetEpoch() EpochID {
 	return atx.PublishEpoch + 1
 }
 
+func (atx *ActivationTx) Published() EpochID {
+	return atx.PublishEpoch
+}
+
+func (atx *ActivationTx) TotalNumUnits() uint32 {
+	return atx.NumUnits
+}
+
 // Golden returns true if atx is from a checkpoint snapshot.
 // a golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
 func (atx *ActivationTx) Golden() bool {
@@ -291,6 +299,12 @@ type MerkleProof struct {
 	// Nodes on path from leaf to root (not including leaf)
 	Nodes     []Hash32 `scale:"max=32"`
 	LeafIndex uint64
+}
+
+type MultiMerkleProof struct {
+	// Nodes on path from leaf to root (not including leaf)
+	Nodes       []Hash32 `scale:"max=32"`
+	LeafIndices []uint64
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.
