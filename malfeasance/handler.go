@@ -139,7 +139,11 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 		)
 	}
 	nodeID, metricLabels, err := h.Validate(ctx, p)
-	if err != nil {
+	switch {
+	case errors.Is(err, errInvalidProof):
+		numMalformed.Inc()
+		return types.EmptyNodeID, err
+	case err != nil:
 		numInvalidProofs.WithLabelValues(metricLabels...).Inc()
 		return types.EmptyNodeID, err
 	}
