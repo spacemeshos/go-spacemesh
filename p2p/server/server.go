@@ -127,11 +127,6 @@ func NewServerError(msg string) *ServerError {
 	return &ServerError{msg: msg}
 }
 
-func (*ServerError) Is(target error) bool {
-	_, ok := target.(*ServerError)
-	return ok
-}
-
 func (err *ServerError) Error() string {
 	return fmt.Sprintf("peer error: %s", err.msg)
 }
@@ -141,7 +136,7 @@ func (err *ServerError) Error() string {
 // Response is a server response.
 type Response struct {
 	// keep in line with limit of ResponseMessage.Data in `fetch/wire_types.go`
-	Data  []byte `scale:"max=183500800"` // 120 MiB > 3.5 mio ATX * 32 bytes per ID
+	Data  []byte `scale:"max=209715200"` // 200 MiB > 6.0 mio ATX * 32 bytes per ID
 	Error string `scale:"max=1024"`      // TODO(mafa): make error code instead of string
 }
 
@@ -364,11 +359,11 @@ func (s *Server) StreamRequest(
 		)
 	}
 
-	serverError := errors.Is(err, &ServerError{})
+	var srvError *ServerError
 	took := time.Since(start).Seconds()
 	switch {
 	case s.metrics == nil:
-	case serverError:
+	case errors.As(err, &srvError):
 		s.metrics.clientServerError.Inc()
 		s.metrics.clientLatency.Observe(took)
 	case err != nil:

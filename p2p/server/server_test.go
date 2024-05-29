@@ -75,7 +75,8 @@ func TestServer(t *testing.T) {
 	t.Run("ReceiveError", func(t *testing.T) {
 		n := srv1.NumAcceptedRequests()
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
-		require.ErrorIs(t, err, &ServerError{})
+		var srvErr *ServerError
+		require.ErrorAs(t, err, &srvErr)
 		require.ErrorContains(t, err, "peer error")
 		require.ErrorContains(t, err, testErr.Error())
 		require.Equal(t, n+1, srv1.NumAcceptedRequests())
