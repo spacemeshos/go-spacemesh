@@ -152,6 +152,24 @@ func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err er
 	return id, err
 }
 
+func IdentityExists(db sql.Executor, nodeID types.NodeID) (bool, error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+
+	rows, err := db.Exec(`
+		select 1 from atxs
+		where pubkey = ?1
+		limit 1;`, enc, nil)
+	if err != nil {
+		return false, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+	} else if rows == 0 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 // GetFirstIDByNodeID gets the initial ATX ID for a given node ID.
 func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {

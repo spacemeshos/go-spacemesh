@@ -18,9 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
@@ -209,7 +207,7 @@ func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (type
 
 	switch p.Proof.Type {
 	case wire.HareEquivocation:
-		nodeID, err = validateHareEquivocation(ctx, h.logger, h.cdb, h.edVerifier, &p.MalfeasanceProof)
+		panic("incorrect implemented test")
 	case wire.MultipleATXs:
 		panic("incorrect implemented test")
 	case wire.MultipleBallots:
@@ -221,16 +219,6 @@ func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (type
 	default:
 		return nodeID, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
 	}
-
-	if err == nil {
-		return nodeID, nil
-	}
-	h.logger.Warn("malfeasance proof failed validation",
-		log.ZContext(ctx),
-		zap.Inline(p),
-		zap.Error(err),
-	)
-	return nodeID, fmt.Errorf("%w: %v", errInvalidProof, err)
 }
 
 func updateMetrics(tp wire.Proof) {
@@ -246,66 +234,4 @@ func updateMetrics(tp wire.Proof) {
 	case wire.InvalidPrevATX:
 		numProofsPrevATX.Inc()
 	}
-}
-
-func hasPublishedAtxs(db sql.Executor, nodeID types.NodeID) error {
-	_, err := atxs.GetLastIDByNodeID(db, nodeID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			return errors.New("identity does not exist")
-		}
-		return err
-	}
-	return nil
-}
-
-func validateHareEquivocation(
-	ctx context.Context,
-	logger *zap.Logger,
-	db sql.Executor,
-	edVerifier SigVerifier,
-	proof *wire.MalfeasanceProof,
-) (types.NodeID, error) {
-	if proof.Proof.Type != wire.HareEquivocation {
-		return types.EmptyNodeID, fmt.Errorf(
-			"wrong malfeasance type. want %v, got %v",
-			wire.HareEquivocation,
-			proof.Proof.Type,
-		)
-	}
-	var (
-		firstNid types.NodeID
-		firstMsg wire.HareProofMsg
-	)
-	hp, ok := proof.Proof.Data.(*wire.HareProof)
-	if !ok {
-		return types.EmptyNodeID, errors.New("wrong message type for hare equivocation")
-	}
-	for _, msg := range hp.Messages {
-		if !edVerifier.Verify(signing.HARE, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
-			return types.EmptyNodeID, errors.New("invalid signature")
-		}
-		if firstNid == types.EmptyNodeID {
-			if err := hasPublishedAtxs(db, msg.SmesherID); err != nil {
-				return types.EmptyNodeID, fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
-			}
-			firstNid = msg.SmesherID
-			firstMsg = msg
-		} else if msg.SmesherID == firstNid {
-			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
-				msg.InnerMsg.Round == firstMsg.InnerMsg.Round &&
-				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return msg.SmesherID, nil
-			}
-		}
-	}
-	logger.Warn("received invalid hare malfeasance proof",
-		log.ZContext(ctx),
-		zap.Stringer("first_smesher", hp.Messages[0].SmesherID),
-		zap.Object("first_proof", &hp.Messages[0].InnerMsg),
-		zap.Stringer("second_smesher", hp.Messages[1].SmesherID),
-		zap.Object("second_proof", &hp.Messages[1].InnerMsg),
-	)
-	numInvalidProofsHare.Inc()
-	return types.EmptyNodeID, errors.New("invalid hare malfeasance proof")
 }

@@ -117,275 +117,6 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	})
 }
 
-func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
-	db := sql.InMemory()
-	lg := zaptest.NewLogger(t)
-	ctrl := gomock.NewController(t)
-	trt := malfeasance.NewMocktortoise(ctrl)
-	postVerifier := malfeasance.NewMockpostVerifier(ctrl)
-
-	h := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, lg),
-		lg,
-		"self",
-		[]types.NodeID{types.RandomNodeID()},
-		signing.NewEdVerifier(),
-		trt,
-		postVerifier,
-	)
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	lid := types.LayerID(11)
-
-	hareProof := wire.HareProof{
-		Messages: [2]wire.HareProofMsg{
-			{
-				InnerMsg: wire.HareMetadata{
-					Layer:   lid,
-					Round:   3,
-					MsgHash: types.RandomHash(),
-				},
-			},
-			{
-				InnerMsg: wire.HareMetadata{
-					Layer:   lid,
-					Round:   3,
-					MsgHash: types.RandomHash(),
-				},
-			},
-		},
-	}
-
-	t.Run("unknown identity", func(t *testing.T) {
-		hp := hareProof
-		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		hp.Messages[0].SmesherID = sig.NodeID()
-		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.HareEquivocation,
-					Data: &hp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	createIdentity(t, db, sig)
-
-	t.Run("invalid signature", func(t *testing.T) {
-		hp := hareProof
-		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		hp.Messages[0].SmesherID = sig.NodeID()
-		hp.Messages[1].Signature = types.RandomEdSignature()
-		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.HareEquivocation,
-					Data: &hp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	t.Run("same msg hash", func(t *testing.T) {
-		msgHash := types.RandomHash()
-		hp := hareProof
-		hp.Messages[0].InnerMsg.MsgHash = msgHash
-		hp.Messages[1].InnerMsg.MsgHash = msgHash
-		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		hp.Messages[0].SmesherID = sig.NodeID()
-		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		hp.Messages[1].SmesherID = sig.NodeID()
-
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.HareEquivocation,
-					Data: &hp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	t.Run("different layer", func(t *testing.T) {
-		hp := hareProof
-		hp.Messages[1].InnerMsg.Layer = lid.Sub(1)
-		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		hp.Messages[0].SmesherID = sig.NodeID()
-		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.HareEquivocation,
-					Data: &hp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	t.Run("different round", func(t *testing.T) {
-		hp := hareProof
-		hp.Messages[0].InnerMsg.Round = hp.Messages[1].InnerMsg.Round + 1
-		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		hp.Messages[0].SmesherID = sig.NodeID()
-		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.HareEquivocation,
-					Data: &hp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	t.Run("different signer", func(t *testing.T) {
-		hp := hareProof
-		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		sig2, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		hp.Messages[1].Signature = sig2.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.HareEquivocation,
-					Data: &hp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, malProof)
-	})
-
-	t.Run("hare eligibility is deprecated", func(t *testing.T) {
-		hp := hareProof
-		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.HareEquivocation,
-					Data: &hp,
-				},
-			},
-			Eligibility: &types.HareEligibilityGossip{
-				NodeID: types.RandomNodeID(),
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.ErrorIs(t, h.HandleMalfeasanceProof(context.Background(), "peer", data), pubsub.ErrValidationReject)
-	})
-
-	t.Run("valid", func(t *testing.T) {
-		hp := hareProof
-		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		hp.Messages[0].SmesherID = sig.NodeID()
-		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid,
-				Proof: wire.Proof{
-					Type: wire.HareEquivocation,
-					Data: &hp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.NoError(t, err)
-		require.NotNil(t, malProof.Received())
-		malProof.SetReceived(time.Time{})
-		require.Equal(t, gossip.MalfeasanceProof, *malProof)
-	})
-
-	t.Run("proof equivalence", func(t *testing.T) {
-		hp := hareProof
-		hp.Messages[0].Signature = sig.Sign(signing.HARE, hp.Messages[0].SignedBytes())
-		hp.Messages[0].SmesherID = sig.NodeID()
-		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
-		hp.Messages[1].SmesherID = sig.NodeID()
-		gossip := &wire.MalfeasanceGossip{
-			MalfeasanceProof: wire.MalfeasanceProof{
-				Layer: lid.Add(11),
-				Proof: wire.Proof{
-					Type: wire.HareEquivocation,
-					Data: &hp,
-				},
-			},
-		}
-		data, err := codec.Encode(gossip)
-		require.NoError(t, err)
-		require.Error(t, h.HandleMalfeasanceProof(context.Background(), "peer", data))
-		malProof, err := identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.NoError(t, err)
-		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
-
-		trt.EXPECT().OnMalfeasance(sig.NodeID())
-		require.NoError(t, h.HandleMalfeasanceProof(context.Background(), "self", data))
-		malProof, err = identities.GetMalfeasanceProof(db, sig.NodeID())
-		require.NoError(t, err)
-		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
-	})
-}
-
 func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 	db := sql.InMemory()
 	lg := zaptest.NewLogger(t)
@@ -547,6 +278,15 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 		trt,
 		postVerifier,
 	)
+	var handlerCalled bool
+	h.RegisterHandlerV1(wire.HareEquivocation, func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+		handlerCalled = true
+
+		require.IsType(t, &wire.HareProof{}, data)
+		proof := data.(*wire.HareProof)
+		return proof.Messages[0].SmesherID, nil
+	})
+
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createIdentity(t, db, sig)
@@ -590,6 +330,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 	require.NoError(t, err)
 	trt.EXPECT().OnMalfeasance(sig.NodeID())
 	require.NoError(t, h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(sig.NodeID()), "peer", data))
+	require.True(t, handlerCalled)
 
 	malicious, err = identities.IsMalicious(db, sig.NodeID())
 	require.NoError(t, err)

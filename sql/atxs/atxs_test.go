@@ -101,6 +101,24 @@ func TestHasID(t *testing.T) {
 	require.False(t, has)
 }
 
+func Test_IdentityExists(t *testing.T) {
+	db := sql.InMemory()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	yes, err := atxs.IdentityExists(db, sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, yes)
+
+	atx := newAtx(t, sig)
+	require.NoError(t, atxs.Add(db, atx))
+
+	yes, err = atxs.IdentityExists(db, sig.NodeID())
+	require.NoError(t, err)
+	require.True(t, yes)
+}
+
 func TestGetFirstIDByNodeID(t *testing.T) {
 	db := sql.InMemory()
 

@@ -1,4 +1,4 @@
-package mesh
+package hare3
 
 import (
 	"context"
@@ -48,44 +48,45 @@ func NewMalfeasanceHandler(
 	return mh
 }
 
-func (mh *MalfeasanceHandler) HandleMultipleBallots(ctx context.Context, data scale.Type) (types.NodeID, error) {
+func (mh *MalfeasanceHandler) HandleHareEquivocation(ctx context.Context, data scale.Type) (types.NodeID, error) {
 	var (
 		firstNid types.NodeID
-		firstMsg wire.BallotProofMsg
+		firstMsg wire.HareProofMsg
 	)
-	bp, ok := data.(*wire.BallotProof)
+	hp, ok := data.(*wire.HareProof)
 	if !ok {
-		return types.EmptyNodeID, errors.New("wrong message type for multi ballots")
+		return types.EmptyNodeID, errors.New("wrong message type for hare equivocation")
 	}
-	for _, msg := range bp.Messages {
-		if !mh.edVerifier.Verify(signing.BALLOT, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
+	for _, msg := range hp.Messages {
+		if !mh.edVerifier.Verify(signing.HARE, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
 			return types.EmptyNodeID, errors.New("invalid signature")
 		}
 		if firstNid == types.EmptyNodeID {
 			ok, err := atxs.IdentityExists(mh.db, msg.SmesherID)
 			if err != nil {
-				return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
+				return types.EmptyNodeID, fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
 			}
 			if !ok {
-				return types.EmptyNodeID, errors.New("identity does not exist")
+				return types.EmptyNodeID, fmt.Errorf("identity does not exist: %v", msg.SmesherID)
 			}
 			firstNid = msg.SmesherID
 			firstMsg = msg
 		} else if msg.SmesherID == firstNid {
 			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
+				msg.InnerMsg.Round == firstMsg.InnerMsg.Round &&
 				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
 				return msg.SmesherID, nil
 			}
 		}
 	}
-	mh.logger.Warn("received invalid ballot malfeasance proof",
+	mh.logger.Warn("received invalid hare malfeasance proof",
 		log.ZContext(ctx),
-		zap.Stringer("first_smesher", bp.Messages[0].SmesherID),
-		zap.Object("first_proof", &bp.Messages[0].InnerMsg),
-		zap.Stringer("second_smesher", bp.Messages[1].SmesherID),
-		zap.Object("second_proof", &bp.Messages[1].InnerMsg),
+		zap.Stringer("first_smesher", hp.Messages[0].SmesherID),
+		zap.Object("first_proof", &hp.Messages[0].InnerMsg),
+		zap.Stringer("second_smesher", hp.Messages[1].SmesherID),
+		zap.Object("second_proof", &hp.Messages[1].InnerMsg),
 	)
 	// TODO(mafa): add metrics
-	// numInvalidProofsBallot.Inc()
-	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
+	// numInvalidProofsHare.Inc()
+	return types.EmptyNodeID, errors.New("invalid hare malfeasance proof")
 }

@@ -1098,6 +1098,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edVerifier,
 		mesh.WithMalfeasanceLogger(malfeasanceLogger),
 	)
+	hareMH := hare3.NewMalfeasanceHandler(
+		app.cachedDB,
+		app.edVerifier,
+		hare3.WithMalfeasanceLogger(malfeasanceLogger),
+	)
 
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	for _, s := range app.signers {
@@ -1114,6 +1119,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	malfeasanceHandler.RegisterHandlerV1(wire.MultipleATXs, activationMH.HandleDoublePublish)
 	malfeasanceHandler.RegisterHandlerV1(wire.MultipleBallots, meshMH.HandleMultipleBallots)
+	malfeasanceHandler.RegisterHandlerV1(wire.HareEquivocation, hareMH.HandleHareEquivocation)
 	malfeasanceHandler.RegisterHandlerV1(wire.InvalidPostIndex, activationMH.HandleInvalidPostIndex)
 	malfeasanceHandler.RegisterHandlerV1(wire.InvalidPrevATX, activationMH.HandleInvalidPrevATX)
 

@@ -68,7 +68,7 @@ func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
 	require.NoError(tb, atxs.Add(db, atx))
 }
 
-func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
+func TestHandler_HandleDoublePublish(t *testing.T) {
 	t.Run("unknown identity", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
 
@@ -240,7 +240,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 	})
 }
 
-func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
+func TestHandler_HandleInvalidPostIndex(t *testing.T) {
 	t.Run("valid malfeasance proof", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
 
@@ -401,7 +401,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_InvalidPostIndex(t *testing.T) {
 	})
 }
 
-func TestHandler_HandleSyncedMalfeasanceProof_InvalidPrevATX(t *testing.T) {
+func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 	t.Run("valid malfeasance proof", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
 		sig, err := signing.NewEdSigner()

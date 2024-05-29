@@ -67,8 +67,12 @@ func (mh *MalfeasanceHandler) HandleDoublePublish(ctx context.Context, data scal
 			return types.EmptyNodeID, errors.New("invalid signature")
 		}
 		if firstNid == types.EmptyNodeID {
-			if err := hasPublishedAtxs(mh.db, msg.SmesherID); err != nil {
+			ok, err := atxs.IdentityExists(mh.db, msg.SmesherID)
+			if err != nil {
 				return types.EmptyNodeID, fmt.Errorf("check identity in atx malfeasance %v: %w", msg.SmesherID, err)
+			}
+			if !ok {
+				return types.EmptyNodeID, fmt.Errorf("identity does not exist: %v", msg.SmesherID)
 			}
 			firstNid = msg.SmesherID
 			firstMsg = msg
@@ -137,8 +141,12 @@ func (mh *MalfeasanceHandler) HandleInvalidPrevATX(ctx context.Context, data sca
 	}
 
 	atx1 := proof.Atx1
-	if err := hasPublishedAtxs(mh.db, atx1.SmesherID); err != nil {
+	ok, err := atxs.IdentityExists(mh.db, atx1.SmesherID)
+	if err != nil {
 		return types.EmptyNodeID, fmt.Errorf("check identity %v in invalid previous ATX: %w", atx1.SmesherID, err)
+	}
+	if !ok {
+		return types.EmptyNodeID, fmt.Errorf("identity does not exist: %v", atx1.SmesherID)
 	}
 
 	if !mh.edVerifier.Verify(signing.ATX, atx1.SmesherID, atx1.SignedBytes(), atx1.Signature) {
@@ -167,15 +175,4 @@ func (mh *MalfeasanceHandler) HandleInvalidPrevATX(ctx context.Context, data sca
 		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: prev ATX IDs are different")
 	}
 	return atx1.SmesherID, nil
-}
-
-func hasPublishedAtxs(db sql.Executor, nodeID types.NodeID) error {
-	_, err := atxs.GetLastIDByNodeID(db, nodeID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			return errors.New("identity does not exist")
-		}
-		return err
-	}
-	return nil
 }

@@ -58,7 +58,7 @@ func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
 	require.NoError(tb, atxs.Add(db, atx))
 }
 
-func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
+func TestHandler_HandleMultipleBallots(t *testing.T) {
 	t.Run("unknown identity", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
 
