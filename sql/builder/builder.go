@@ -38,6 +38,7 @@ const (
 	Offset  modifier = "offset"
 	Limit   modifier = "limit"
 	OrderBy modifier = "order by"
+	GroupBy modifier = "group by"
 )
 
 type Op struct {
