@@ -2,13 +2,20 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.5.7
+
+### Improvements
+
+* [#5999](https://github.com/spacemeshos/go-spacemesh/pull/5999) Increase limits to allow up to 6.0 Mio ATXs per epoch.
+
 ## Release v1.5.6
 
 ### Improvements
 
-* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of a broken Poet.
+* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of
+  a broken Poet.
 
-  Previously, every identitiy waited for the full timeout time (~20 minutes) before giving up.
+  Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
 
 ## Release v1.5.5
 
