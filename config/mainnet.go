@@ -73,7 +73,8 @@ func MainnetConfig() Config {
 			DatabaseConnections:   16,
 			DatabasePruneInterval: 30 * time.Minute,
 			DatabaseVacuumState:   15,
-			PruneActivesetsFrom:   12, // starting from epoch 13 activesets below 12 will be pruned
+			PruneActivesetsFrom:   12,    // starting from epoch 13 activesets below 12 will be pruned
+			ScanMalfeasantATXs:    false, // opt-in
 			NetworkHRP:            "sm",
 
 			LayerDuration:  5 * time.Minute,
@@ -108,9 +109,10 @@ func MainnetConfig() Config {
 					Pubkey:  types.MustBase64FromString("5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="),
 				},
 			},
-			RegossipAtxInterval: 2 * time.Hour,
-			ATXGradeDelay:       30 * time.Minute,
-			PostValidDelay:      time.Duration(math.MaxInt64),
+			RegossipAtxInterval:     2 * time.Hour,
+			ATXGradeDelay:           30 * time.Minute,
+			PostValidDelay:          time.Duration(math.MaxInt64),
+			PprofHTTPServerListener: "localhost:6060",
 		},
 		Genesis: GenesisConfig{
 			GenesisTime: "2023-07-14T08:00:00Z",

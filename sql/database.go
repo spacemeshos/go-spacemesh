@@ -505,14 +505,17 @@ type Blob struct {
 	Bytes []byte
 }
 
+// resize the underlying byte slice to the specified size.
+// The returned slice has length equal n, but it might have a larger capacity.
+// Warning: it is not guaranteed to keep the old data.
 func (b *Blob) resize(n int) {
 	if cap(b.Bytes) < n {
-		b.Bytes = slices.Grow(b.Bytes, n)
+		b.Bytes = make([]byte, n)
 	}
 	b.Bytes = b.Bytes[:n]
 }
 
-func (b *Blob) fromColumn(stmt *Statement, col int) {
+func (b *Blob) FromColumn(stmt *Statement, col int) {
 	if l := stmt.ColumnLen(col); l != 0 {
 		b.resize(l)
 		stmt.ColumnBytes(col, b.Bytes)
@@ -565,7 +568,7 @@ func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
 		func(stmt *Statement) {
 			stmt.BindBytes(1, id)
 		}, func(stmt *Statement) bool {
-			blob.fromColumn(stmt, 0)
+			blob.FromColumn(stmt, 0)
 			return true
 		}); err != nil {
 		return fmt.Errorf("get %v: %w", types.BytesToHash(id), err)

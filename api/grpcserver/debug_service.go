@@ -153,7 +153,7 @@ func (d DebugService) ActiveSet(ctx context.Context, req *pb.ActiveSetRequest) (
 
 // ProposalsStream streams all proposals confirmed by hare.
 func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_ProposalsStreamServer) error {
-	sub := events.SubcribeProposals()
+	sub := events.SubscribeProposals()
 	if sub == nil {
 		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
 	}

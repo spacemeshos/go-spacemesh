@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-varint"
 	dto "github.com/prometheus/client_model/go"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 
@@ -59,7 +60,7 @@ func WithHardTimeout(timeout time.Duration) Opt {
 }
 
 // WithLog configures logger for the server.
-func WithLog(log log.Log) Opt {
+func WithLog(log *zap.Logger) Opt {
 	return func(s *Server) {
 		s.logger = log
 	}
@@ -128,11 +129,6 @@ func NewServerError(msg string) *ServerError {
 	return &ServerError{msg: msg}
 }
 
-func (*ServerError) Is(target error) bool {
-	_, ok := target.(*ServerError)
-	return ok
-}
-
 func (err *ServerError) Error() string {
 	return fmt.Sprintf("peer error: %s", err.msg)
 }
@@ -142,13 +138,13 @@ func (err *ServerError) Error() string {
 // Response is a server response.
 type Response struct {
 	// keep in line with limit of ResponseMessage.Data in `fetch/wire_types.go`
-	Data  []byte `scale:"max=125829120"` // 120 MiB > 3.5 mio ATX * 32 bytes per ID
+	Data  []byte `scale:"max=209715200"` // 200 MiB > 6.0 mio ATX * 32 bytes per ID
 	Error string `scale:"max=1024"`      // TODO(mafa): make error code instead of string
 }
 
 // Server for the Handler.
 type Server struct {
-	logger              log.Log
+	logger              *zap.Logger
 	protocol            string
 	handler             StreamHandler
 	timeout             time.Duration
@@ -169,7 +165,7 @@ type Server struct {
 // New server for the handler.
 func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 	srv := &Server{
-		logger:              log.NewNop(),
+		logger:              zap.NewNop(),
 		protocol:            proto,
 		handler:             handler,
 		h:                   h,
@@ -197,7 +193,7 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 				connmgr.DecayFixed(srv.decayingTagSpec.Dec),
 				connmgr.BumpSumBounded(0, srv.decayingTagSpec.Cap))
 			if err != nil {
-				srv.logger.Error("error registering decaying tag", log.Err(err))
+				srv.logger.Error("error registering decaying tag", zap.Error(err))
 			} else {
 				srv.decayingTag = tag
 			}
@@ -280,21 +276,21 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	rd := bufio.NewReader(dadj)
 	size, err := varint.ReadUvarint(rd)
 	if err != nil {
-		s.logger.With().Debug("initial read failed",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Err(err),
+		s.logger.Debug("initial read failed",
+			zap.String("protocol", s.protocol),
+			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+			zap.Error(err),
 		)
 		return false
 	}
 	if size > uint64(s.requestLimit) {
-		s.logger.With().Warning("request limit overflow",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Int("limit", s.requestLimit),
-			log.Uint64("request", size),
+		s.logger.Warn("request limit overflow",
+			zap.String("protocol", s.protocol),
+			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+			zap.Int("limit", s.requestLimit),
+			zap.Uint64("request", size),
 		)
 		stream.Conn().Close()
 		return false
@@ -302,29 +298,29 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	buf := make([]byte, size)
 	_, err = io.ReadFull(rd, buf)
 	if err != nil {
-		s.logger.With().Debug("error reading request",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Err(err),
+		s.logger.Debug("error reading request",
+			zap.String("protocol", s.protocol),
+			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+			zap.Error(err),
 		)
 		return false
 	}
 	start := time.Now()
 	if err = s.handler(log.WithNewRequestID(ctx), buf, dadj); err != nil {
-		s.logger.With().Debug("handler reported error",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Err(err),
+		s.logger.Debug("handler reported error",
+			zap.String("protocol", s.protocol),
+			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+			zap.Error(err),
 		)
 		return false
 	}
-	s.logger.With().Debug("protocol handler execution time",
-		log.String("protocol", s.protocol),
-		log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-		log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-		log.Duration("duration", time.Since(start)),
+	s.logger.Debug("protocol handler execution time",
+		zap.String("protocol", s.protocol),
+		zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+		zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+		zap.Duration("duration", time.Since(start)),
 	)
 	return true
 }
@@ -369,14 +365,16 @@ func (s *Server) StreamRequest(
 	stream, info, err := s.streamRequest(ctx, pid, req, extraProtocols...)
 	if err == nil {
 		err = callback(ctx, stream)
-		s.logger.WithContext(ctx).With().Debug("request execution time",
-			log.String("protocol", s.protocol),
-			log.Duration("duration", time.Since(start)),
-			log.Err(err),
+		s.logger.Debug("request execution time",
+			zap.String("protocol", s.protocol),
+			zap.Duration("duration", time.Since(start)),
+			zap.Error(err),
+			log.ZContext(ctx),
 		)
 	}
 
-	serverError := errors.Is(err, &ServerError{})
+	var srvError *ServerError
+	isServerError := errors.As(err, &srvError)
 	took := time.Since(start)
 	tookSecs := took.Seconds()
 	if info != nil {
@@ -384,7 +382,7 @@ func (s *Server) StreamRequest(
 	}
 	switch {
 	case s.metrics == nil:
-	case serverError:
+	case isServerError:
 		s.metrics.clientServerError.Inc()
 		s.metrics.clientLatency.Observe(tookSecs)
 	case err != nil:

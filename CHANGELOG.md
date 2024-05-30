@@ -9,6 +9,12 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 With this release the minimum supported version for Intel Macs is now macOS 13 (Ventura) and for Apple Silicon Macs it
 is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spacemesh/pull/5879)).
 
+This update removes migration code for go-spacemesh databases created with versions before v1.5.0.
+Upgrading to this version requires going through v1.5.x first. Removed migrations for:
+
+* legacy keys in the post data directory ([#5907](https://github.com/spacemeshos/go-spacemesh/pull/5907)).
+* ATX blob separation and always populating nonce column in atxs ([#5942](https://github.com/spacemeshos/go-spacemesh/pull/5942))
+
 ### Highlights
 
 ### Features
@@ -25,7 +31,100 @@ is macOS 14 (Sonoma) or later ([#5879](https://github.com/spacemeshos/go-spaceme
 
 * [#5877](https://github.com/spacemeshos/go-spacemesh/pull/5877) Fix verifying ATX chain after checkpoint.
 
-## (v1.5.0)
+* [#5882](https://github.com/spacemeshos/go-spacemesh/pull/5882) Use backoff during routing discovery.
+  This should reduce network load from the peer discovery mechanism when it's enabled.
+
+* [#5888](https://github.com/spacemeshos/go-spacemesh/pull/5888) Handle DHT discovery startup errors properly
+
+* [#5932](https://github.com/spacemeshos/go-spacemesh/pull/5932) Fix caching malfeasance when processing new proofs
+
+* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of
+  a broken Poet.
+
+  Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
+
+* [#5958](https://github.com/spacemeshos/go-spacemesh/pull/5958) Fix node incorrectly detecting a remote smeshing setup
+  as supervised.
+
+  Ensure that your key file in `data/identities` is named `local.key` if you run a supervised node or with the change
+  the node will not start.
+
+* [#5965](https://github.com/spacemeshos/go-spacemesh/pull/5965) Start considering ballots that still contain the
+  deprecated inlined activeset as invalid. go-spacemesh references the active set via hash since v1.3.0, and has been
+  pruning the data of old ballots since then as well.
+
+* [#5927](https://github.com/spacemeshos/go-spacemesh/pull/5927) Fixed vulnerability in the way a node handles incoming
+  ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
+  eligible for them.
+
+## Release v1.5.7
+
+### Improvements
+
+* [#5999](https://github.com/spacemeshos/go-spacemesh/pull/5999) Increase limits to allow up to 6.0 Mio ATXs per epoch.
+
+## Release v1.5.6
+
+### Improvements
+
+* [#5943](https://github.com/spacemeshos/go-spacemesh/pull/5943) Fix timing out querying proof in 1:N in a presence of
+  a broken Poet.
+
+  Previously, every identity waited for the full timeout time (~20 minutes) before giving up.
+
+## Release v1.5.5
+
+### Improvements
+
+* [#5969](https://github.com/spacemeshos/go-spacemesh/pull/5969) Increase ResponseMessage to 183500800
+
+## Release v1.5.4
+
+### Improvements
+
+* [#5963](https://github.com/spacemeshos/go-spacemesh/pull/5963) Increase supported number of ATXs to 5.5 Mio.
+
+* [#5952](https://github.com/spacemeshos/go-spacemesh/pull/5952) Optimized searching for a positioning ATX.
+  Instead of a slow database query the ATX builder now uses the in-memory ATX store to pick a positioning ATX.
+
+## Release v1.5.3
+
+### Improvements
+
+* [#5929](https://github.com/spacemeshos/go-spacemesh/pull/5929) Fix "no nonce" error when persisting malicious
+  (initial) ATXs.
+
+* [#5930](https://github.com/spacemeshos/go-spacemesh/pull/5930) Check if identity for a given malfeasance proof
+  exists when validating it.
+
+* [#5923](https://github.com/spacemeshos/go-spacemesh/pull/5923) Fix high memory consumption and performance issues
+  in the proposal handler.
+
+## Release v1.5.2-hotfix1
+
+This release includes our first CVE fix. A vulnerability was found in the way a node handles incoming ATXs. We urge all
+node operators to update to this version as soon as possible.
+
+### Improvements
+
+* Fixed a vulnerability in the way a node handles incoming ATXs. This vulnerability allows an attacker to claim rewards
+  for a full tick amount although they should not be eligible for them.
+
+## Release v1.5.2
+
+### Improvements
+
+* [#5904](https://github.com/spacemeshos/go-spacemesh/pull/5904) Avoid repeated searching for positioning ATX in 1:N
+
+* [#5911](https://github.com/spacemeshos/go-spacemesh/pull/5911) Avoid pulling poet proof multiple times in 1:N setups
+
+## Release v1.5.1
+
+### Improvements
+
+* [#5896](https://github.com/spacemeshos/go-spacemesh/pull/5896) Increase supported number of ATXs to 4.5 Mio.
+
+## Release v1.5.0
 
 ### Upgrade information
 
@@ -41,8 +140,6 @@ coins. Fixes an oversight in the genesis VM implementation.
 
 * [#5791](https://github.com/spacemeshos/go-spacemesh/pull/5791) Speed up ATX queries.
   This also fixes ambiguity of nonces for equivocating identities.
-
-* [#5856](https://github.com/spacemeshos/go-spacemesh/pull/5856) Bump github.com/spacemeshos/api/release/go to v1.37.0.
 
 ## Release v1.4.6
 

@@ -104,6 +104,11 @@ func DefaultConfig() Config {
 			AdvertiseIntervalSpread: time.Hour,
 			AdvertiseRetryDelay:     time.Minute,
 			FindPeersRetryDelay:     time.Minute,
+			MinBackoff:              60 * time.Second,
+			MaxBackoff:              time.Hour,
+			MinConnBackoff:          10 * time.Second,
+			MaxConnBackoff:          time.Hour,
+			DialTimeout:             2 * time.Minute,
 		},
 	}
 }
@@ -171,6 +176,11 @@ type DiscoveryTimings struct {
 	AdvertiseIntervalSpread time.Duration `mapstructure:"advertise-interval-spread"`
 	AdvertiseRetryDelay     time.Duration `mapstructure:"advertise-retry-delay"`
 	FindPeersRetryDelay     time.Duration `mapstructure:"find-peers-retry-delay"`
+	MinBackoff              time.Duration `mapstructure:"min-backoff"`
+	MaxBackoff              time.Duration `mapstructure:"max-backoff"`
+	MinConnBackoff          time.Duration `mapstructure:"min-conn-backoff"`
+	MaxConnBackoff          time.Duration `mapstructure:"max-conn-backoff"`
+	DialTimeout             time.Duration `mapstructure:"dial-timeout"`
 }
 
 type AutoNATServer struct {

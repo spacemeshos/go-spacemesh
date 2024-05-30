@@ -2,12 +2,12 @@ package main
 
 import (
 	"flag"
+	"os"
 	"runtime"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -18,14 +18,18 @@ var (
 
 func main() {
 	flag.Parse()
-	atom := zap.NewAtomicLevelAt(*level)
-	logger := log.NewWithLevel("trace", atom)
-	logger.With().Debug("using trace", log.String("path", flag.Arg(0)))
+	core := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(zap.NewProductionEncoderConfig()),
+		os.Stdout,
+		zap.NewAtomicLevelAt(*level),
+	)
+	logger := zap.New(core)
+	logger.Debug("using trace", zap.String("path", flag.Arg(0)))
 	var breakpoint func()
 	if *bpoint {
 		breakpoint = runtime.Breakpoint
 	}
 	if err := tortoise.RunTrace(flag.Arg(0), breakpoint, tortoise.WithLogger(logger)); err != nil {
-		logger.With().Fatal("run trace failed", log.Err(err))
+		logger.Fatal("run trace failed", zap.Error(err))
 	}
 }

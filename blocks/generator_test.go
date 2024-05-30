@@ -14,15 +14,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -73,7 +72,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 		hareCh:     ch,
 	}
 	tg.mockMesh.EXPECT().ProcessedLayer().Return(types.LayerID(1)).AnyTimes()
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	db := sql.InMemory()
 	data := atxsdata.New()
 	proposals := store.New()
@@ -134,8 +133,9 @@ func createATXs(
 		data,
 		lid,
 		numATXs,
-		func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
-			return atx.Verify(baseTickHeight, 1)
+		func(atx *types.ActivationTx) {
+			atx.BaseTickHeight = baseTickHeight
+			atx.TickCount = 1
 		},
 	)
 }
@@ -145,7 +145,7 @@ func createModifiedATXs(
 	data *atxsdata.Data,
 	lid types.LayerID,
 	numATXs int,
-	onAtx func(*types.ActivationTx) (*types.VerifiedActivationTx, error),
+	onAtx func(*types.ActivationTx),
 ) ([]*signing.EdSigner, []*types.ActivationTx) {
 	tb.Helper()
 	atxes := make([]*types.ActivationTx, 0, numATXs)
@@ -159,15 +159,12 @@ func createModifiedATXs(
 			types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
 			address,
 			numUnit,
-			nil,
 		)
-		atx.SetEffectiveNumUnits(numUnit)
 		atx.SetReceived(time.Now())
-		require.NoError(tb, activation.SignAndFinalizeAtx(signer, atx))
-		vAtx, err := onAtx(atx)
-		require.NoError(tb, err)
-
-		data.AddFromHeader(vAtx.ToHeader(), 0, false)
+		atx.SmesherID = signer.NodeID()
+		atx.SetID(types.RandomATXID())
+		onAtx(atx)
+		data.AddFromAtx(atx, false)
 		atxes = append(atxes, atx)
 	}
 	return signers, atxes
@@ -666,12 +663,10 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 		tg.atxs,
 		(layerID.GetEpoch() - 1).FirstLayer(),
 		numProposals,
-		func(atx *types.ActivationTx) (*types.VerifiedActivationTx, error) {
-			n := rng.Uint64()
-			if n > maxHeight {
-				maxHeight = n
-			}
-			return atx.Verify(n, 1)
+		func(atx *types.ActivationTx) {
+			atx.TickCount = 1
+			atx.BaseTickHeight = rng.Uint64()
+			maxHeight = max(maxHeight, atx.BaseTickHeight)
 		},
 	)
 	activeSet := types.ToATXIDs(atxes)

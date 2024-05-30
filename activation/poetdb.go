@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,13 +23,13 @@ var ErrObjectExists = sql.ErrObjectExists
 
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	sqlDB *sql.Database
-	log   log.Log
+	sqlDB  *sql.Database
+	logger *zap.Logger
 }
 
 // NewPoetDb returns a new PoET handler.
-func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
-	return &PoetDb{sqlDB: db, log: log}
+func NewPoetDb(db *sql.Database, log *zap.Logger) *PoetDb {
+	return &PoetDb{sqlDB: db, logger: log}
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
@@ -107,14 +108,17 @@ func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofM
 	}
 
 	if err := poets.Add(db.sqlDB, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
-		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %w",
-			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
+		return fmt.Errorf(
+			"failed to store poet proof for poetId %x round %s: %w",
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err,
+		)
 	}
 
-	db.log.WithContext(ctx).With().Info("stored poet proof",
-		log.String("poet_proof_id", hex.EncodeToString(ref[:5])),
-		log.String("round_id", proofMessage.RoundID),
-		log.String("poet_service_id", hex.EncodeToString(proofMessage.PoetServiceID[:5])),
+	db.logger.Info("stored poet proof",
+		log.ZContext(ctx),
+		log.ZShortStringer("poet_proof_id", types.Hash32(ref)),
+		zap.String("round_id", proofMessage.RoundID),
+		zap.String("poet_service_id", hex.EncodeToString(proofMessage.PoetServiceID[:5])),
 	)
 
 	return nil
@@ -143,8 +147,8 @@ func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
 	return proof, nil
 }
 
-// GetProof returns full proof.
-func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
+// Proof returns full proof.
+func (db *PoetDb) Proof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
@@ -154,6 +158,16 @@ func (db *PoetDb) GetProof(proofRef types.PoetProofRef) (*types.PoetProof, *type
 		return nil, nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
 	}
 	return &proofMessage.PoetProof, &proofMessage.Statement, nil
+}
+
+func (db *PoetDb) ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error) {
+	proofRef, err := db.GetProofRef(poetID, roundID)
+	if err != nil {
+		return nil, err
+	}
+
+	proof, _, err := db.Proof(proofRef)
+	return proof, err
 }
 
 func calcRoot(leaves []types.Hash32) ([]byte, error) {

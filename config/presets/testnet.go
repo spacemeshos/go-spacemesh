@@ -64,6 +64,7 @@ func testnet() config.Config {
 			MetricsPort:                  1010,
 			DatabaseConnections:          16,
 			DatabaseSizeMeteringInterval: 10 * time.Minute,
+			DatabasePruneInterval:        30 * time.Minute,
 			NetworkHRP:                   "stest",
 
 			LayerDuration:  5 * time.Minute,
@@ -78,6 +79,8 @@ func testnet() config.Config {
 			TickSize:            666514,
 			RegossipAtxInterval: time.Hour,
 			ATXGradeDelay:       30 * time.Minute,
+
+			PprofHTTPServerListener: "localhost:6060",
 		},
 		Genesis: config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
@@ -160,5 +163,6 @@ func testnet() config.Config {
 			RetryInterval: time.Minute,
 			Tries:         5,
 		},
+		Certifier: activation.DefaultCertifierConfig(),
 	}
 }

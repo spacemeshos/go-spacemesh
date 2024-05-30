@@ -6,11 +6,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -27,7 +27,7 @@ const (
 	units     = 10
 )
 
-func newCore(rng *rand.Rand, id string, logger log.Log) *core {
+func newCore(rng *rand.Rand, id string, logger *zap.Logger) *core {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 	sig, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	if err != nil {
@@ -58,7 +58,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 // core state machine.
 type core struct {
 	id     string
-	logger log.Log
+	logger *zap.Logger
 	rng    *rand.Rand
 
 	cdb      *datastore.CachedDB
@@ -151,22 +151,17 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			PublishEpoch: ev.LayerID.GetEpoch(),
 		}
 		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, addr, c.units, nil)
-		if err := activation.SignAndFinalizeAtx(c.signer, atx); err != nil {
-			c.logger.With().Fatal("failed to sign atx", log.Err(err))
-		}
-		atx.SetEffectiveNumUnits(atx.NumUnits)
+		atx := types.NewActivationTx(nipost, addr, c.units)
+		atx.SmesherID = c.signer.NodeID()
+		atx.SetID(types.RandomATXID())
 		atx.SetReceived(time.Now())
-		vAtx, err := atx.Verify(1, 2)
-		if err != nil {
-			c.logger.With().Fatal("failed to verify atx", log.Err(err))
-		}
-
+		atx.BaseTickHeight = 1
+		atx.TickCount = 2
 		c.refBallot = nil
-		c.atx = vAtx.ID()
-		c.weight = vAtx.GetWeight()
+		c.atx = atx.ID()
+		c.weight = atx.GetWeight()
 
-		m.Send(MessageAtx{Atx: vAtx.ActivationTx})
+		m.Send(MessageAtx{Atx: atx})
 	case MessageBlock:
 		ids, err := blocks.IDsInLayer(c.cdb, ev.Block.LayerIndex)
 		if errors.Is(err, sql.ErrNotFound) || len(ids) == 0 {
@@ -176,16 +171,14 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageBallot:
 		ballots.Add(c.cdb, ev.Ballot)
 	case MessageAtx:
-		vAtx, err := ev.Atx.Verify(1, 2)
+		ev.Atx.BaseTickHeight = 1
+		ev.Atx.TickCount = 2
+		atxs.Add(c.cdb, ev.Atx)
+		malicious, err := c.cdb.IsMalicious(ev.Atx.SmesherID)
 		if err != nil {
-			panic(err)
+			c.logger.Fatal("failed is malicious lookup", zap.Error(err))
 		}
-		atxs.Add(c.cdb, vAtx)
-		malicious, err := c.cdb.IsMalicious(vAtx.SmesherID)
-		if err != nil {
-			c.logger.With().Fatal("failed is malicious lookup", log.Err(err))
-		}
-		c.atxdata.AddFromHeader(vAtx.ToHeader(), 0, malicious)
+		c.atxdata.AddFromAtx(ev.Atx, malicious)
 	case MessageBeacon:
 		beacons.Add(c.cdb, ev.EpochID+1, ev.Beacon)
 	case MessageCoinflip:

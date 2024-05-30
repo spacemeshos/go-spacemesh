@@ -65,7 +65,7 @@ func (s *ActivationStreamService) Stream(
 		}
 	}
 
-	dbChan := make(chan *types.VerifiedActivationTx, 100)
+	dbChan := make(chan *types.ActivationTx, 100)
 	errChan := make(chan error, 1)
 
 	ops, err := toAtxOperations(toAtxRequest(request))
@@ -76,7 +76,7 @@ func (s *ActivationStreamService) Stream(
 	// send db data to chan to avoid buffer overflow
 	go func() {
 		defer close(dbChan)
-		if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
+		if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.ActivationTx) bool {
 			select {
 			case dbChan <- atx:
 				return true
@@ -100,9 +100,7 @@ func (s *ActivationStreamService) Stream(
 	for {
 		select {
 		case rst := <-eventsOut:
-			err := stream.Send(&spacemeshv2alpha1.Activation{
-				Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
-			})
+			err := stream.Send(toAtx(rst.ActivationTx))
 			switch {
 			case errors.Is(err, io.EOF):
 				return nil
@@ -112,9 +110,7 @@ func (s *ActivationStreamService) Stream(
 		default:
 			select {
 			case rst := <-eventsOut:
-				err := stream.Send(&spacemeshv2alpha1.Activation{
-					Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(rst.VerifiedActivationTx)},
-				})
+				err := stream.Send(toAtx(rst.ActivationTx))
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil
@@ -131,11 +127,7 @@ func (s *ActivationStreamService) Stream(
 					}
 					continue
 				}
-				err := stream.Send(&spacemeshv2alpha1.Activation{
-					Versioned: &spacemeshv2alpha1.Activation_V1{
-						V1: toAtx(rst),
-					},
-				})
+				err := stream.Send(toAtx(rst))
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil
@@ -151,16 +143,14 @@ func (s *ActivationStreamService) Stream(
 	}
 }
 
-func toAtx(atx *types.VerifiedActivationTx) *spacemeshv2alpha1.ActivationV1 {
-	return &spacemeshv2alpha1.ActivationV1{
-		Id:             atx.ID().Bytes(),
-		Signature:      atx.Signature.Bytes(),
-		PublishEpoch:   atx.PublishEpoch.Uint32(),
-		PreviousAtx:    atx.PrevATXID[:],
-		PositioningAtx: atx.PositioningATX[:],
-		Coinbase:       atx.Coinbase.String(),
-		Weight:         atx.GetWeight(),
-		Height:         atx.TickHeight(),
+func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
+	return &spacemeshv2alpha1.Activation{
+		Id:           atx.ID().Bytes(),
+		PublishEpoch: atx.PublishEpoch.Uint32(),
+		PreviousAtx:  atx.PrevATXID[:],
+		Coinbase:     atx.Coinbase.String(),
+		Weight:       atx.GetWeight(),
+		Height:       atx.TickHeight(),
 	}
 }
 
@@ -201,8 +191,8 @@ func (s *ActivationService) List(
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 	rst := make([]*spacemeshv2alpha1.Activation, 0, request.Limit)
-	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.VerifiedActivationTx) bool {
-		rst = append(rst, &spacemeshv2alpha1.Activation{Versioned: &spacemeshv2alpha1.Activation_V1{V1: toAtx(atx)}})
+	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.ActivationTx) bool {
+		rst = append(rst, toAtx(atx))
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())

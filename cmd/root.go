@@ -79,6 +79,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
 		cfg.DatabasePruneInterval, "configure interval for database pruning")
 
+	flagSet.BoolVar(&cfg.ScanMalfeasantATXs, "scan-malfeasant-atxs", cfg.ScanMalfeasantATXs,
+		"scan for malfeasant ATXs")
+
 	flagSet.BoolVar(&cfg.NoMainOverride, "no-main-override",
 		cfg.NoMainOverride, "force 'nomain' builds to run on the mainnet")
 
@@ -156,7 +159,7 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	/** ======================== API Flags ========================== **/
 
 	flagSet.StringVar(&cfg.API.PublicListener, "grpc-public-listener",
-		cfg.API.PublicListener, "Socket for grpc services that are save to expose publicly.")
+		cfg.API.PublicListener, "Socket for grpc services that are safe to expose publicly.")
 	flagSet.StringVar(&cfg.API.PrivateListener, "grpc-private-listener",
 		cfg.API.PrivateListener, "Socket for grpc services that are not safe to expose publicly.")
 	flagSet.StringVar(&cfg.API.PostListener, "grpc-post-listener", cfg.API.PostListener,
@@ -333,11 +336,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.Bootstrap.Version, "the update version of the bootstrap data")
 
 	/**======================== testing related flags ========================== **/
-	flagSet.StringVar(&cfg.TestConfig.SmesherKey, "testing-smesher-key",
-		"", "import private smesher key for testing",
-	)
 	flagSet.VarP(flags.NewStringToUint64Value(&cfg.Genesis.Accounts), "accounts", "a",
-		"List of pre-funded accounts (use in tests only")
+		"List of pre-funded accounts (use in tests only)",
+	)
 
 	/**========================  Deprecated flags ========================== **/
 	flagSet.Var(flags.NewDeprecatedFlag(

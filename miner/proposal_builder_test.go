@@ -51,7 +51,7 @@ type genAtxOpt func(*types.ActivationTx)
 
 func genAtxWithNonce(nonce types.VRFPostIndex) genAtxOpt {
 	return func(atx *types.ActivationTx) {
-		atx.VRFNonce = &nonce
+		atx.VRFNonce = nonce
 	}
 }
 
@@ -69,24 +69,19 @@ func gatx(
 	smesher types.NodeID,
 	units uint32,
 	opts ...genAtxOpt,
-) *types.VerifiedActivationTx {
-	atx := &types.ActivationTx{}
-	atx.NumUnits = units
-	atx.PublishEpoch = epoch
-	atx.SmesherID = smesher
+) *types.ActivationTx {
+	atx := &types.ActivationTx{
+		NumUnits:     units,
+		PublishEpoch: epoch,
+		TickCount:    ticks,
+		SmesherID:    smesher,
+	}
 	atx.SetID(id)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
 	atx.SetReceived(time.Time{}.Add(1))
-	nonce := types.VRFPostIndex(0)
-	atx.VRFNonce = &nonce
 	for _, opt := range opts {
 		opt(atx)
 	}
-	verified, err := atx.Verify(0, ticks)
-	if err != nil {
-		panic(err)
-	}
-	return verified
+	return atx
 }
 
 func gactiveset(atxs ...types.ATXID) types.ATXIDList {
@@ -224,7 +219,7 @@ type aggHash struct {
 type step struct {
 	lid        types.LayerID
 	beacon     types.Beacon
-	atxs       []*types.VerifiedActivationTx
+	atxs       []*types.ActivationTx
 	ballots    []*types.Ballot
 	activeset  types.ATXIDList
 	identities []identity
@@ -272,7 +267,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    15,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
 						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1),
@@ -300,7 +295,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    15,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
 						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1),
@@ -337,7 +332,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    15,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
@@ -361,7 +356,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    16,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
 					},
@@ -398,13 +393,13 @@ func TestBuild(t *testing.T) {
 				},
 				{
 					lid: 15,
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{20}, 2, types.NodeID{20}, 1),
 					},
 				},
 				{
 					lid: 16,
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{10}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
@@ -432,7 +427,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    16,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 100),
 					},
@@ -456,7 +451,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    16,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
@@ -479,7 +474,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    16,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
@@ -508,7 +503,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    16,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
 					},
@@ -545,7 +540,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    16,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1, genAtxWithReceived(time.Unix(20, 0))),
 						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1, genAtxWithReceived(time.Unix(20, 0))),
@@ -575,7 +570,7 @@ func TestBuild(t *testing.T) {
 				},
 				{
 					lid: 16,
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1, genAtxWithReceived(time.Unix(20, 0))),
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
@@ -599,7 +594,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    16,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
@@ -616,7 +611,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    16,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
@@ -668,7 +663,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    16,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
@@ -711,7 +706,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid:    15,
 					beacon: types.Beacon{1},
-					atxs: []*types.VerifiedActivationTx{
+					atxs: []*types.ActivationTx{
 						gatx(types.ATXID{1}, 2, signers[0].NodeID(), 1, genAtxWithNonce(777)),
 						gatx(types.ATXID{2}, 2, signers[1].NodeID(), 1, genAtxWithNonce(999)),
 					},
@@ -782,7 +777,7 @@ func TestBuild(t *testing.T) {
 					}
 					for _, atx := range step.atxs {
 						require.NoError(t, atxs.Add(db, atx))
-						atxsdata.AddFromHeader(atx.ToHeader(), *atx.VRFNonce, false)
+						atxsdata.AddFromAtx(atx, false)
 					}
 					for _, ballot := range step.ballots {
 						require.NoError(t, ballots.Add(db, ballot))

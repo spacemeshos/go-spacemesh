@@ -7,9 +7,10 @@ import (
 	"math/rand"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -40,7 +41,7 @@ func WithCSConfig(cfg CSConfig) ConservativeStateOpt {
 }
 
 // WithLogger defines logger for conservative state.
-func WithLogger(logger log.Log) ConservativeStateOpt {
+func WithLogger(logger *zap.Logger) ConservativeStateOpt {
 	return func(cs *ConservativeState) {
 		cs.logger = logger
 	}
@@ -51,7 +52,7 @@ func WithLogger(logger log.Log) ConservativeStateOpt {
 type ConservativeState struct {
 	vmState
 
-	logger log.Log
+	logger *zap.Logger
 	cfg    CSConfig
 	db     *sql.Database
 	cache  *Cache
@@ -62,7 +63,7 @@ func NewConservativeState(state vmState, db *sql.Database, opts ...ConservativeS
 	cs := &ConservativeState{
 		vmState: state,
 		cfg:     defaultCSConfig(),
-		logger:  log.NewNop(),
+		logger:  zap.NewNop(),
 		db:      db,
 	}
 	for _, opt := range opts {
@@ -75,26 +76,26 @@ func NewConservativeState(state vmState, db *sql.Database, opts ...ConservativeS
 func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	nonce, err := cs.vmState.GetNonce(addr)
 	if err != nil {
-		cs.logger.With().Fatal("failed to get nonce", log.Err(err))
+		cs.logger.Fatal("failed to get nonce", zap.Error(err))
 	}
 	balance, err := cs.vmState.GetBalance(addr)
 	if err != nil {
-		cs.logger.With().Fatal("failed to get balance", log.Err(err))
+		cs.logger.Fatal("failed to get balance", zap.Error(err))
 	}
 	return nonce, balance
 }
 
 // SelectProposalTXs picks a specific number of random txs for miner to pack in a proposal.
 func (cs *ConservativeState) SelectProposalTXs(lid types.LayerID, numEligibility int) []types.TransactionID {
-	logger := cs.logger.WithFields(lid)
+	logger := cs.logger.With(zap.Uint32("layer_id", lid.Uint32()))
 	mi := newMempoolIterator(logger, cs.cache, cs.cfg.BlockGasLimit)
 	predictedBlock, byAddrAndNonce := mi.PopAll()
 	numTXs := numEligibility * cs.cfg.NumTXsPerProposal
-	return getProposalTXs(logger.WithFields(lid), numTXs, predictedBlock, byAddrAndNonce)
+	return getProposalTXs(logger, numTXs, predictedBlock, byAddrAndNonce)
 }
 
 func getProposalTXs(
-	logger log.Log,
+	logger *zap.Logger,
 	numTXs int,
 	predictedBlock []*NanoTX,
 	byAddrAndNonce map[types.Address][]*NanoTX,
@@ -202,7 +203,7 @@ func (cs *ConservativeState) GetMeshTransactions(
 			err error
 		)
 		if mtx, err = transactions.Get(cs.db, tid); err != nil {
-			cs.logger.With().Warning("could not get tx", tid, log.Err(err))
+			cs.logger.Warn("could not get tx", zap.Stringer("tx_id", tid), zap.Error(err))
 			missing[tid] = struct{}{}
 		} else {
 			mtxs = append(mtxs, mtx)

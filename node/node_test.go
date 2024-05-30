@@ -243,7 +243,6 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	conn, err := grpc.NewClient(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	r.NoError(err)
 	t.Cleanup(func() { r.NoError(conn.Close()) })
@@ -350,11 +349,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	logger := logtest.New(t)
 	// errlog is used to simulate errors in the app
 	errlog := log.NewFromLog(
-		zaptest.NewLogger(
-			t,
-			zaptest.Level(zap.ErrorLevel),
-			zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{})),
-		),
+		zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{}))),
 	)
 
 	cfg := getTestDefaultConfig(t)
@@ -407,7 +402,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	conn, err := grpc.NewClient(
 		app.grpcPublicServer.BoundAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
@@ -551,7 +545,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	conn, err := grpc.NewClient(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
@@ -1011,7 +1004,6 @@ func TestAdminEvents(t *testing.T) {
 	conn, err := grpc.NewClient(
 		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
@@ -1106,7 +1098,8 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 		mgr, err := activation.NewPostSetupManager(
 			cfg.POST,
 			logger.Zap(),
-			app.cachedDB,
+			app.db,
+			app.atxsdata,
 			types.ATXID(app.Config.Genesis.GoldenATX()),
 			app.syncer,
 			app.validator,
@@ -1127,7 +1120,6 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	conn, err := grpc.NewClient(
 		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })

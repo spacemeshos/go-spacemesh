@@ -233,7 +233,7 @@ func recoverFromLocalFile(
 	})
 	allProofs := make([]*types.PoetProofMessage, 0, len(proofs))
 	for _, dep := range allDeps {
-		poetProofRef, err := atxs.PoetProofRef(context.Background(), db, dep.ID)
+		poetProofRef, err := poetProofRef(context.Background(), db, dep.ID)
 		if err != nil {
 			return nil, fmt.Errorf("get poet proof ref (%v): %w", dep.ID, err)
 		}
@@ -388,6 +388,7 @@ func collectOwnAtxDeps(
 	nipostCh, _ := nipost.Challenge(localDB, nodeID)
 	if ref == types.EmptyATXID {
 		if nipostCh == nil {
+			logger.Debug("there is no own atx and none is being built")
 			return nil, nil, nil
 		}
 		if nipostCh.CommitmentATX != nil {
@@ -428,6 +429,7 @@ func collectOwnAtxDeps(
 		maps.Copy(deps, deps2)
 		maps.Copy(proofs, proofs2)
 	}
+	logger.With().Debug("collected atx deps", log.Any("deps", deps))
 	return deps, proofs, nil
 }
 
@@ -479,11 +481,16 @@ func collect(
 	if err = collect(db, atx.PrevATXID, all, deps); err != nil {
 		return err
 	}
-	if err = collect(db, atx.PositioningATX, all, deps); err != nil {
+
+	posAtx, err := positioningATX(context.Background(), db, ref)
+	if err != nil {
+		return fmt.Errorf("get positioning atx for atx %v: %w", ref, err)
+	}
+	if err = collect(db, posAtx, all, deps); err != nil {
 		return err
 	}
 	var blob sql.Blob
-	err = atxs.LoadBlob(context.Background(), db, ref.Bytes(), &blob)
+	_, err = atxs.LoadBlob(context.Background(), db, ref.Bytes(), &blob)
 	if err != nil {
 		return fmt.Errorf("load atx blob %v: %w", ref, err)
 	}
@@ -503,7 +510,7 @@ func poetProofs(
 ) (map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage, len(atxIds))
 	for atx := range atxIds {
-		ref, err := atxs.PoetProofRef(context.Background(), db, atx)
+		ref, err := poetProofRef(context.Background(), db, atx)
 		if err != nil {
 			return nil, fmt.Errorf("get poet proof ref: %w", err)
 		}

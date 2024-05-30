@@ -40,6 +40,11 @@ import (
 )
 
 var (
+	certifierConfig = parameters.String(
+		"certifier",
+		"configuration for certifier service",
+		fastnet.CertifierConfig,
+	)
 	poetConfig = parameters.String(
 		"poet",
 		"configuration for poet service",
@@ -109,9 +114,11 @@ func toResources(value string) (*apiv1.ResourceRequirements, error) {
 const (
 	configDir = "/etc/config/"
 
-	attachedPoetConfig    = "poet.conf"
-	attachedSmesherConfig = "smesher.json"
+	attachedCertifierConfig = "certifier.yaml"
+	attachedPoetConfig      = "poet.conf"
+	attachedSmesherConfig   = "smesher.json"
 
+	certifierConfigMapName = "certifier"
 	poetConfigMapName      = "poet"
 	spacemeshConfigMapName = "spacemesh"
 
@@ -305,9 +312,64 @@ func (n *PrivNodeClient) NewStream(
 	return stream, err
 }
 
+func deployCertifierD(ctx *testcontext.Context, id, privkey string) (*NodeClient, error) {
+	args := []string{
+		"-c" + configDir + attachedCertifierConfig,
+	}
+
+	ctx.Log.Debugw("deploying certifier service pod", "id", id, "args", args, "image", ctx.CertifierImage)
+
+	labels := nodeLabels(certifierApp, id)
+
+	deployment := appsv1.Deployment(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(appsv1.DeploymentSpec().
+			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
+			WithReplicas(1).
+			WithTemplate(corev1.PodTemplateSpec().
+				WithLabels(labels).
+				WithSpec(corev1.PodSpec().
+					WithNodeSelector(ctx.NodeSelector).
+					WithVolumes(corev1.Volume().
+						WithName("config").
+						WithConfigMap(corev1.ConfigMapVolumeSource().WithName(certifierConfigMapName)),
+					).
+					WithContainers(corev1.Container().
+						WithName("certifier").
+						WithImage(ctx.CertifierImage).
+						WithArgs(args...).
+						WithEnv(corev1.EnvVar().WithName("CERTIFIER_SIGNING_KEY").WithValue(privkey)).
+						WithPorts(
+							corev1.ContainerPort().WithProtocol("TCP").WithContainerPort(certifierPort),
+						).
+						WithVolumeMounts(
+							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
+						).
+						WithResources(corev1.ResourceRequirements().
+							WithRequests(poetResources.Get(ctx.Parameters).Requests).
+							WithLimits(poetResources.Get(ctx.Parameters).Limits),
+						),
+					),
+				)))
+
+	_, err := ctx.Client.AppsV1().
+		Deployments(ctx.Namespace).
+		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return nil, fmt.Errorf("creating certifier: %w", err)
+	}
+	return &NodeClient{
+		session: ctx,
+		Node: Node{
+			Name: id,
+		},
+	}, nil
+}
+
 func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (*NodeClient, error) {
 	args := []string{
 		"-c=" + configDir + attachedPoetConfig,
+		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
 	}
 	for _, flag := range flags {
 		args = append(args, flag.Flag())
@@ -326,6 +388,12 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 			WithReplicas(1).
 			WithTemplate(corev1.PodTemplateSpec().
 				WithLabels(labels).
+				WithAnnotations(
+					map[string]string{
+						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
+						"prometheus.io/scrape": "true",
+					},
+				).
 				WithSpec(corev1.PodSpec().
 					WithNodeSelector(ctx.NodeSelector).
 					WithVolumes(corev1.Volume().
@@ -338,6 +406,7 @@ func deployPoetD(ctx *testcontext.Context, id string, flags ...DeploymentFlag) (
 						WithArgs(args...).
 						WithPorts(
 							corev1.ContainerPort().WithName("rest").WithProtocol("TCP").WithContainerPort(poetPort),
+							corev1.ContainerPort().WithName("prometheus").WithContainerPort(prometheusScrapePort),
 						).
 						WithVolumeMounts(
 							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
@@ -407,6 +476,21 @@ func deployNodeSvc(ctx *testcontext.Context, id string) error {
 	return nil
 }
 
+func deployCertifierSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) {
+	ctx.Log.Debugw("deploying certifier service", "id", id)
+	labels := nodeLabels(certifierApp, id)
+	svc := corev1.Service(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(corev1.ServiceSpec().
+			WithSelector(labels).
+			WithPorts(
+				corev1.ServicePort().WithName("rest").WithPort(certifierPort).WithProtocol("TCP"),
+			),
+		)
+
+	return ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
+}
+
 func deployPoetSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) {
 	ctx.Log.Debugw("deploying poet service", "id", id)
 	labels := nodeLabels(poetApp, id)
@@ -416,6 +500,7 @@ func deployPoetSvc(ctx *testcontext.Context, id string) (*apiv1.Service, error) 
 			WithSelector(labels).
 			WithPorts(
 				corev1.ServicePort().WithName("rest").WithPort(poetPort).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("prometheus").WithPort(prometheusScrapePort),
 			),
 		)
 
@@ -440,6 +525,21 @@ func decodePoetIdentifier(id string) int {
 		panic(err)
 	}
 	return ord
+}
+
+// deployCertifier creates a certifier Deployment and exposes it via a Service.
+// The key is passed to the certifier Pod.
+func deployCertifier(ctx *testcontext.Context, id, privkey string) (*NodeClient, error) {
+	if _, err := deployCertifierSvc(ctx, id); err != nil {
+		return nil, fmt.Errorf("deploying certifier service: %w", err)
+	}
+
+	node, err := deployCertifierD(ctx, id, privkey)
+	if err != nil {
+		return nil, err
+	}
+
+	return node, nil
 }
 
 // deployPoet creates a poet Pod and exposes it via a Service.
@@ -563,15 +663,16 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 		} else {
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
 		}
+		var key ed25519.PrivateKey
 		if len(cfg.keys) > 0 {
-			finalFlags = append(finalFlags, SmesherKey(cfg.keys[i-from]))
+			key = cfg.keys[i-from]
 		}
 
 		eg.Go(func() error {
 			id := fmt.Sprintf("%s-%d", kind, i)
 			labels := nodeLabels(kind, id)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, id, labels, finalFlags); err != nil {
+			if err := deployNode(ctx, id, key, labels, finalFlags); err != nil {
 				return err
 			}
 			clients <- &NodeClient{
@@ -600,7 +701,9 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 	return rst, nil
 }
 
-func deployRemoteNodes(ctx *testcontext.Context, from, to int,
+func deployRemoteNodes(
+	ctx *testcontext.Context,
+	from, to int,
 	goldenAtxId types.ATXID,
 	opts ...DeploymentOpt,
 ) ([]*NodeClient, error) {
@@ -637,13 +740,11 @@ func deployRemoteNodes(ctx *testcontext.Context, from, to int,
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
 		}
 
-		finalFlags = append(finalFlags, SmesherKey(cfg.keys[i-from]))
-
 		nodeId := fmt.Sprintf("%s-%d", smesherApp, i)
 		eg.Go(func() error {
 			labels := nodeLabels(smesherApp, nodeId)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, nodeId, labels, finalFlags); err != nil {
+			if err := deployNode(ctx, nodeId, cfg.keys[i-from], labels, finalFlags); err != nil {
 				return err
 			}
 			deployNodeSvc(ctx, nodeId)
@@ -711,7 +812,13 @@ func deleteNode(ctx *testcontext.Context, id string) error {
 	return nil
 }
 
-func deployNode(ctx *testcontext.Context, id string, labels map[string]string, flags []DeploymentFlag) error {
+func deployNode(
+	ctx *testcontext.Context,
+	id string,
+	key ed25519.PrivateKey,
+	labels map[string]string,
+	flags []DeploymentFlag,
+) error {
 	ctx.Log.Debugw("deploying node", "id", id)
 	cmd := []string{
 		"/bin/go-spacemesh",
@@ -726,6 +833,66 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
+
+	podSpec := corev1.PodSpec().
+		WithNodeSelector(ctx.NodeSelector).
+		WithVolumes(
+			corev1.Volume().WithName("config").
+				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
+			corev1.Volume().WithName("data").
+				WithEmptyDir(corev1.EmptyDirVolumeSource().
+					WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
+		).
+		WithDNSConfig(corev1.PodDNSConfig().WithOptions(
+			corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
+			corev1.PodDNSConfigOption().WithName("attempts").WithValue("5"),
+		)).
+		WithContainers(corev1.Container().
+			WithName("smesher").
+			WithImage(ctx.Image).
+			WithImagePullPolicy(apiv1.PullIfNotPresent).
+			WithPorts(
+				corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
+				corev1.ContainerPort().WithContainerPort(9092).WithName("grpc-pub"),
+				corev1.ContainerPort().WithContainerPort(9093).WithName("grpc-priv"),
+				corev1.ContainerPort().WithContainerPort(9094).WithName("grpc-post"),
+				corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
+				corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
+			).
+			WithVolumeMounts(
+				corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+				corev1.VolumeMount().WithName("config").WithMountPath(configDir),
+			).
+			WithResources(corev1.ResourceRequirements().
+				WithRequests(smesherResources.Get(ctx.Parameters).Requests).
+				WithLimits(smesherResources.Get(ctx.Parameters).Limits),
+			).
+			WithStartupProbe(
+				corev1.Probe().WithTCPSocket(
+					corev1.TCPSocketAction().WithPort(intstr.FromInt32(9092)),
+				).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
+			).
+			WithEnv(
+				corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
+			).
+			WithCommand(cmd...),
+		)
+
+	if key != nil {
+		podSpec = podSpec.
+			WithInitContainers(
+				corev1.Container().
+					WithName("file-creator").
+					WithImage("busybox").
+					WithCommand("sh", "-c",
+						fmt.Sprintf("mkdir -p /data/identities && echo '%x' > /data/identities/local.key", key),
+					).
+					WithVolumeMounts(
+						corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+					),
+			)
+	}
+
 	deployment := appsv1.Deployment(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(appsv1.DeploymentSpec().
@@ -739,50 +906,7 @@ func deployNode(ctx *testcontext.Context, id string, labels map[string]string, f
 						"prometheus.io/scrape": "true",
 					},
 				).
-				WithSpec(corev1.PodSpec().
-					WithNodeSelector(ctx.NodeSelector).
-					WithVolumes(
-						corev1.Volume().WithName("config").
-							WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
-						corev1.Volume().WithName("data").
-							WithEmptyDir(corev1.EmptyDirVolumeSource().
-								WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
-					).
-					WithDNSConfig(corev1.PodDNSConfig().WithOptions(
-						corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
-						corev1.PodDNSConfigOption().WithName("attempts").WithValue("5"),
-					)).
-					WithContainers(corev1.Container().
-						WithName("smesher").
-						WithImage(ctx.Image).
-						WithImagePullPolicy(apiv1.PullIfNotPresent).
-						WithPorts(
-							corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
-							corev1.ContainerPort().WithContainerPort(9092).WithName("grpc-pub"),
-							corev1.ContainerPort().WithContainerPort(9093).WithName("grpc-priv"),
-							corev1.ContainerPort().WithContainerPort(9094).WithName("grpc-post"),
-							corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
-							corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
-						).
-						WithVolumeMounts(
-							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
-							corev1.VolumeMount().WithName("config").WithMountPath(configDir),
-						).
-						WithResources(corev1.ResourceRequirements().
-							WithRequests(smesherResources.Get(ctx.Parameters).Requests).
-							WithLimits(smesherResources.Get(ctx.Parameters).Limits),
-						).
-						WithStartupProbe(
-							corev1.Probe().WithTCPSocket(
-								corev1.TCPSocketAction().WithPort(intstr.FromInt32(9092)),
-							).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
-						).
-						WithEnv(
-							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
-						).
-						WithCommand(cmd...),
-					),
-				),
+				WithSpec(podSpec),
 			),
 		)
 	_, err := ctx.Client.AppsV1().
@@ -1109,6 +1233,14 @@ func DurationFlag(flag string, d time.Duration) DeploymentFlag {
 	return DeploymentFlag{Name: flag, Value: d.String()}
 }
 
+func PoetCertifierURL(url string) DeploymentFlag {
+	return DeploymentFlag{Name: "--certifier-url", Value: url}
+}
+
+func PoetCertifierPubkey(key string) DeploymentFlag {
+	return DeploymentFlag{Name: "--certifier-pubkey", Value: key}
+}
+
 // PoetRestListen socket pair with http api.
 func PoetRestListen(port int) DeploymentFlag {
 	return DeploymentFlag{Name: "--restlisten", Value: fmt.Sprintf("0.0.0.0:%d", port)}
@@ -1120,10 +1252,6 @@ func StartSmeshing(start bool) DeploymentFlag {
 
 func GenerateFallback() DeploymentFlag {
 	return DeploymentFlag{Name: "--fallback", Value: strconv.FormatBool(true)}
-}
-
-func SmesherKey(key ed25519.PrivateKey) DeploymentFlag {
-	return DeploymentFlag{Name: "--testing-smesher-key", Value: hex.EncodeToString(key)}
 }
 
 func Bootnode() DeploymentFlag {

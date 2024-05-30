@@ -2,7 +2,6 @@ package types
 
 import (
 	"encoding/hex"
-	"errors"
 	"time"
 
 	"github.com/spacemeshos/go-scale"
@@ -129,20 +128,6 @@ func (challenge *NIPostChallenge) TargetEpoch() EpochID {
 	return challenge.PublishEpoch + 1
 }
 
-type InnerActivationTx struct {
-	NIPostChallenge
-	Coinbase Address
-	NumUnits uint32
-
-	VRFNonce *VRFPostIndex
-
-	// the following fields are kept private and from being serialized
-	id                ATXID     // non-exported cache of the ATXID
-	effectiveNumUnits uint32    // the number of effective units in the ATX (minimum of this ATX and the previous ATX)
-	received          time.Time // time received by node, gossiped or synced
-	validity          Validity  // whether the chain is fully verified and OK
-}
-
 // ATXMetadata is the data of ActivationTx that is signed.
 // It is also used for Malfeasance proofs.
 type ATXMetadata struct {
@@ -158,7 +143,11 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 type AtxVersion uint
 
-const AtxV1 AtxVersion = 1
+const (
+	AtxV1   AtxVersion = 1
+	AtxV2   AtxVersion = 2
+	AtxVMAX AtxVersion = AtxV2
+)
 
 type AtxBlob struct {
 	Blob    []byte
@@ -168,29 +157,46 @@ type AtxBlob struct {
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
-	InnerActivationTx
+	PublishEpoch EpochID
+	// Sequence number counts the number of ancestors of the ATX. It sequentially increases for each ATX in the chain.
+	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against
+	// that miner.
+	Sequence uint64
+	// the previous ATX's ID (for all but the first in the sequence)
+	PrevATXID ATXID
 
-	SmesherID NodeID
-	Signature EdSignature
+	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
+	CommitmentATX  *ATXID
+	Coinbase       Address
+	NumUnits       uint32 // the minimum number of space units in this and the previous ATX
+	BaseTickHeight uint64
+	TickCount      uint64
+	VRFNonce       VRFPostIndex
+	SmesherID      NodeID
 
 	AtxBlob
-	golden bool
+
+	golden   bool
+	id       ATXID     // non-exported cache of the ATXID
+	received time.Time // time received by node, gossiped or synced
+	validity Validity  // whether the chain is fully verified and OK
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
+// NOTE: this function is deprecated and used in a few tests only.
+// Create a new ActivationTx with ActivationTx{...}, setting the fields manually.
 func NewActivationTx(
 	challenge NIPostChallenge,
 	coinbase Address,
 	numUnits uint32,
-	nonce *VRFPostIndex,
 ) *ActivationTx {
 	atx := &ActivationTx{
-		InnerActivationTx: InnerActivationTx{
-			NIPostChallenge: challenge,
-			Coinbase:        coinbase,
-			NumUnits:        numUnits,
-			VRFNonce:        nonce,
-		},
+		PublishEpoch:  challenge.PublishEpoch,
+		Sequence:      challenge.Sequence,
+		PrevATXID:     challenge.PrevATXID,
+		CommitmentATX: challenge.CommitmentATX,
+		Coinbase:      coinbase,
+		NumUnits:      numUnits,
 	}
 	return atx
 }
@@ -199,6 +205,14 @@ func NewActivationTx(
 // to participate thanks to the ATX.
 func (atx *ActivationTx) TargetEpoch() EpochID {
 	return atx.PublishEpoch + 1
+}
+
+func (atx *ActivationTx) Published() EpochID {
+	return atx.PublishEpoch
+}
+
+func (atx *ActivationTx) TotalNumUnits() uint32 {
+	return atx.NumUnits
 }
 
 // Golden returns true if atx is from a checkpoint snapshot.
@@ -212,26 +226,40 @@ func (atx *ActivationTx) SetGolden() {
 	atx.golden = true
 }
 
+// Weight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is
+// sum(atx.NumUnits * atx.TickCount for each ATX in a given epoch).
+// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^6.
+// PoETs should produce ~10k ticks at genesis, but are expected due to technological advances
+// to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
+// for at least the first few years.
+func (atx *ActivationTx) GetWeight() uint64 {
+	return getWeight(uint64(atx.NumUnits), atx.TickCount)
+}
+
+// TickHeight returns a sum of base tick height and tick count.
+func (atx *ActivationTx) TickHeight() uint64 {
+	return atx.BaseTickHeight + atx.TickCount
+}
+
 // MarshalLogObject implements logging interface.
 func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
-	// encoder.AddString("challenge", atx.NIPostChallenge.Hash().String())
 	encoder.AddString("smesher", atx.SmesherID.String())
+	encoder.AddUint32("publish_epoch", atx.PublishEpoch.Uint32())
 	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
-	encoder.AddString("pos_atx_id", atx.PositioningATX.String())
+
 	if atx.CommitmentATX != nil {
 		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
 	}
-	if atx.VRFNonce != nil {
-		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
-	}
+	encoder.AddUint64("vrf_nonce", uint64(atx.VRFNonce))
 	encoder.AddString("coinbase", atx.Coinbase.String())
 	encoder.AddUint32("epoch", atx.PublishEpoch.Uint32())
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
-	if atx.effectiveNumUnits != 0 {
-		encoder.AddUint64("effective_num_units", uint64(atx.effectiveNumUnits))
-	}
 	encoder.AddUint64("sequence_number", atx.Sequence)
+	encoder.AddUint64("base_tick_height", atx.BaseTickHeight)
+	encoder.AddUint64("tick_count", atx.TickCount)
+	encoder.AddUint64("weight", atx.GetWeight())
+	encoder.AddUint64("height", atx.TickHeight())
 	return nil
 }
 
@@ -245,20 +273,9 @@ func (atx *ActivationTx) ID() ATXID {
 	return atx.id
 }
 
-func (atx *ActivationTx) EffectiveNumUnits() uint32 {
-	if atx.effectiveNumUnits == 0 {
-		panic("effectiveNumUnits field must be set")
-	}
-	return atx.effectiveNumUnits
-}
-
 // SetID sets the ATXID in this ATX's cache.
 func (atx *ActivationTx) SetID(id ATXID) {
 	atx.id = id
-}
-
-func (atx *ActivationTx) SetEffectiveNumUnits(numUnits uint32) {
-	atx.effectiveNumUnits = numUnits
 }
 
 func (atx *ActivationTx) SetReceived(received time.Time) {
@@ -277,28 +294,17 @@ func (atx *ActivationTx) SetValidity(validity Validity) {
 	atx.validity = validity
 }
 
-// Verify an ATX for a given base TickHeight and TickCount.
-func (atx *ActivationTx) Verify(baseTickHeight, tickCount uint64) (*VerifiedActivationTx, error) {
-	if atx.effectiveNumUnits == 0 {
-		return nil, errors.New("effective num units not set")
-	}
-	if !atx.Golden() && atx.received.IsZero() {
-		return nil, errors.New("received time not set")
-	}
-	vAtx := &VerifiedActivationTx{
-		ActivationTx: atx,
-
-		baseTickHeight: baseTickHeight,
-		tickCount:      tickCount,
-	}
-	return vAtx, nil
-}
-
 // Merkle proof proving that a given leaf is included in the root of merkle tree.
 type MerkleProof struct {
 	// Nodes on path from leaf to root (not including leaf)
 	Nodes     []Hash32 `scale:"max=32"`
 	LeafIndex uint64
+}
+
+type MultiMerkleProof struct {
+	// Nodes on path from leaf to root (not including leaf)
+	Nodes       []Hash32 `scale:"max=32"`
+	LeafIndices []uint64
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.
@@ -378,7 +384,19 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=3500000"` // to be in line with `EpochData` in fetch/wire_types.go
+	Set   []ATXID `scale:"max=6000000"` // to be in line with `EpochData` in fetch/wire_types.go
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")
+
+func getWeight(numUnits, tickCount uint64) uint64 {
+	return safeMul(numUnits, tickCount)
+}
+
+func safeMul(a, b uint64) uint64 {
+	c := a * b
+	if a > 1 && b > 1 && c/b != a {
+		panic("uint64 overflow")
+	}
+	return c
+}

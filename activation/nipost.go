@@ -46,10 +46,9 @@ const (
 type NIPostBuilder struct {
 	localDB *localsql.Database
 
-	poetProvers map[string]poetClient
-	poetDB      poetDbAPI
+	poetProvers map[string]PoetClient
 	postService postService
-	log         *zap.Logger
+	logger      *zap.Logger
 	poetCfg     PoetConfig
 	layerClock  layerClock
 	postStates  PostStates
@@ -57,10 +56,9 @@ type NIPostBuilder struct {
 
 type NIPostBuilderOption func(*NIPostBuilder)
 
-// withPoetClients allows to pass in clients directly (for testing purposes).
-func withPoetClients(clients []poetClient) NIPostBuilderOption {
+func WithPoetClients(clients ...PoetClient) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
-		nb.poetProvers = make(map[string]poetClient, len(clients))
+		nb.poetProvers = make(map[string]PoetClient, len(clients))
 		for _, client := range clients {
 			nb.poetProvers[client.Address()] = client
 		}
@@ -76,30 +74,17 @@ func NipostbuilderWithPostStates(ps PostStates) NIPostBuilderOption {
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
 	db *localsql.Database,
-	poetDB poetDbAPI,
 	postService postService,
-	poetServers []types.PoetServer,
 	lg *zap.Logger,
 	poetCfg PoetConfig,
 	layerClock layerClock,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
-	poetClients := make(map[string]poetClient, len(poetServers))
-	for _, server := range poetServers {
-		client, err := NewHTTPPoetClient(server, poetCfg, WithLogger(lg.Named("poet")))
-		if err != nil {
-			return nil, fmt.Errorf("cannot create poet client: %w", err)
-		}
-		poetClients[client.Address()] = client
-	}
-
 	b := &NIPostBuilder{
 		localDB: db,
 
-		poetProvers: poetClients,
-		poetDB:      poetDB,
 		postService: postService,
-		log:         lg,
+		logger:      lg,
 		poetCfg:     poetCfg,
 		layerClock:  layerClock,
 		postStates:  NewPostStates(lg),
@@ -142,7 +127,7 @@ func (nb *NIPostBuilder) Proof(
 				retries++
 				if retries%10 == 0 { // every 20 seconds inform user about lost connection (for remote post service)
 					// TODO(mafa): emit event warning user about lost connection
-					nb.log.Warn("post service not connected - waiting for reconnection",
+					nb.logger.Warn("post service not connected - waiting for reconnection",
 						zap.Stringer("smesherID", nodeID),
 						zap.Error(err),
 					)
@@ -181,7 +166,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	publishEpoch types.EpochID,
 	challenge types.Hash32,
 ) (*nipost.NIPostState, error) {
-	logger := nb.log.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
+	logger := nb.logger.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
 	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
 	//   We can still publish an ATX late (i.e. within publish epoch) and receive rewards, but we will miss one
 	//   epoch because we didn't submit the challenge to PoET in time for next round.
@@ -234,7 +219,8 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		submitCtx, cancel := context.WithDeadline(ctx, poetRoundStart)
 		defer cancel()
-		if err := nb.submitPoetChallenges(submitCtx, signer, poetProofDeadline, challenge.Bytes()); err != nil {
+		err := nb.submitPoetChallenges(submitCtx, signer, poetProofDeadline, challenge.Bytes())
+		if err != nil {
 			return nil, fmt.Errorf("submitting to poets: %w", err)
 		}
 		count, err := nipost.PoetRegistrationCount(nb.localDB, signer.NodeID())
@@ -249,7 +235,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	// Phase 1: query PoET services for proofs
 	poetProofRef, membership, err := nipost.PoetProofRef(nb.localDB, signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		nb.log.Warn("cannot get poet proof ref", zap.Error(err))
+		nb.logger.Warn("cannot get poet proof ref", zap.Error(err))
 	}
 	if poetProofRef == types.EmptyPoetProofRef {
 		now := time.Now()
@@ -274,14 +260,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 			return nil, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
 		}
 		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
-			nb.log.Warn("cannot persist poet proof ref", zap.Error(err))
+			nb.logger.Warn("cannot persist poet proof ref", zap.Error(err))
 		}
 	}
 
 	// Phase 2: Post execution.
 	nipostState, err := nipost.NIPost(nb.localDB, signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		nb.log.Warn("cannot get nipost", zap.Error(err))
+		nb.logger.Warn("cannot get nipost", zap.Error(err))
 	}
 	if nipostState == nil {
 		now := time.Now()
@@ -299,14 +285,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 		postCtx, cancel := context.WithDeadline(ctx, publishEpochEnd)
 		defer cancel()
 
-		nb.log.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
+		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
 		startTime := time.Now()
 		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:])
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
 		postGenDuration := time.Since(startTime)
-		nb.log.Info("finished post execution", zap.Duration("duration", postGenDuration))
+		nb.logger.Info("finished post execution", zap.Duration("duration", postGenDuration))
 		metrics.PostDuration.Set(float64(postGenDuration.Nanoseconds()))
 		public.PostSeconds.Set(postGenDuration.Seconds())
 
@@ -323,11 +309,11 @@ func (nb *NIPostBuilder) BuildNIPost(
 			VRFNonce: *postInfo.Nonce,
 		}
 		if err := nipost.AddNIPost(nb.localDB, signer.NodeID(), nipostState); err != nil {
-			nb.log.Warn("cannot persist nipost state", zap.Error(err))
+			nb.logger.Warn("cannot persist nipost state", zap.Error(err))
 		}
 	}
 
-	nb.log.Info("finished nipost construction")
+	nb.logger.Info("finished nipost construction")
 	return nipostState, nil
 }
 
@@ -345,50 +331,25 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	ctx context.Context,
 	nodeID types.NodeID,
 	deadline time.Time,
-	client poetClient,
+	client PoetClient,
 	prefix, challenge []byte,
 	signature types.EdSignature,
 ) error {
-	logger := nb.log.With(
+	logger := nb.logger.With(
 		log.ZContext(ctx),
 		zap.String("poet", client.Address()),
 		log.ZShortStringer("smesherID", nodeID),
 	)
 
-	logger.Debug("querying for poet pow parameters")
-	powCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-	defer cancel()
-	powParams, err := client.PowParams(powCtx)
-	if err != nil {
-		return &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
-	}
-
-	logger.Debug("doing pow with params", zap.Any("pow_params", powParams))
-	startTime := time.Now()
-	nonce, err := shared.FindSubmitPowNonce(
-		ctx,
-		powParams.Challenge,
-		challenge,
-		nodeID.Bytes(),
-		powParams.Difficulty,
-	)
-	metrics.PoetPowDuration.Set(float64(time.Since(startTime).Nanoseconds()))
-	if err != nil {
-		return fmt.Errorf("running poet PoW: %w", err)
-	}
-
 	logger.Debug("submitting challenge to poet proving service")
 
 	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
-	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, PoetPoW{
-		Nonce:  nonce,
-		Params: *powParams,
-	})
+
+	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID)
 	if err != nil {
 		return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
-
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
 	return nipost.AddPoetRegistration(nb.localDB, nodeID, nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
@@ -426,19 +387,19 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 			continue
 		}
 
-		nb.log.Warn("failed to submit challenge to poet", zap.Error(err), log.ZShortStringer("smesherID", nodeID))
+		nb.logger.Warn("failed to submit challenge to poet", zap.Error(err), log.ZShortStringer("smesherID", nodeID))
 		if !errors.Is(err, ErrInvalidRequest) {
 			allInvalid = false
 		}
 	}
 	if allInvalid {
-		nb.log.Warn("all poet submits were too late. ATX challenge expires", log.ZShortStringer("smesherID", nodeID))
+		nb.logger.Warn("all poet submits were too late. ATX challenge expires", log.ZShortStringer("smesherID", nodeID))
 		return ErrATXChallengeExpired
 	}
 	return nil
 }
 
-func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) poetClient {
+func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) PoetClient {
 	for _, client := range nb.poetProvers {
 		if address == client.Address() {
 			return client
@@ -464,7 +425,7 @@ func (nb *NIPostBuilder) getBestProof(
 	publishEpoch types.EpochID,
 ) (types.PoetProofRef, *types.MerkleProof, error) {
 	type poetProof struct {
-		poet       *types.PoetProofMessage
+		poet       *types.PoetProof
 		membership *types.MerkleProof
 	}
 	registrations, err := nipost.PoetRegistrations(nb.localDB, nodeID)
@@ -475,7 +436,7 @@ func (nb *NIPostBuilder) getBestProof(
 
 	var eg errgroup.Group
 	for _, r := range registrations {
-		logger := nb.log.With(
+		logger := nb.logger.With(
 			log.ZContext(ctx),
 			log.ZShortStringer("smesherID", nodeID),
 			zap.String("poet_address", r.Address),
@@ -496,16 +457,9 @@ func (nb *NIPostBuilder) getBestProof(
 			case <-time.After(time.Until(waitDeadline)):
 			}
 
-			getProofsCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-			defer cancel()
-			proof, members, err := client.Proof(getProofsCtx, round)
+			proof, members, err := client.Proof(ctx, round)
 			if err != nil {
 				logger.Warn("failed to get proof from poet", zap.Error(err))
-				return nil
-			}
-
-			if err := nb.poetDB.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
-				logger.Warn("failed to validate and store proof", zap.Error(err), zap.Object("proof", proof))
 				return nil
 			}
 
@@ -529,7 +483,7 @@ func (nb *NIPostBuilder) getBestProof(
 
 	var bestProof *poetProof
 	for proof := range proofs {
-		nb.log.Info(
+		nb.logger.Info(
 			"got poet proof",
 			zap.Uint64("leaf count", proof.poet.LeafCount),
 			log.ZShortStringer("smesherID", nodeID),
@@ -544,7 +498,7 @@ func (nb *NIPostBuilder) getBestProof(
 		if err != nil {
 			return types.PoetProofRef{}, nil, err
 		}
-		nb.log.Info(
+		nb.logger.Info(
 			"selected the best proof",
 			zap.Uint64("leafCount", bestProof.poet.LeafCount),
 			zap.Binary("ref", ref[:]),

@@ -12,9 +12,9 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
@@ -48,7 +48,7 @@ func TestServer(t *testing.T) {
 	}
 	opts := []Opt{
 		WithTimeout(100 * time.Millisecond),
-		WithLog(logtest.New(t)),
+		WithLog(zaptest.NewLogger(t)),
 		WithMetrics(),
 	}
 	client := New(
@@ -133,7 +133,8 @@ func TestServer(t *testing.T) {
 		n := srv1.NumAcceptedRequests()
 		srvID := mesh.Hosts()[2].ID()
 		_, err := client.Request(ctx, srvID, request)
-		require.ErrorIs(t, err, &ServerError{})
+		var srvErr *ServerError
+		require.ErrorAs(t, err, &srvErr)
 		require.ErrorContains(t, err, "peer error")
 		require.ErrorContains(t, err, testErr.Error())
 		require.Equal(t, n+1, srv1.NumAcceptedRequests())

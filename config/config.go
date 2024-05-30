@@ -47,19 +47,20 @@ func init() {
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Preset          string                `mapstructure:"preset"`
-	Genesis         GenesisConfig         `mapstructure:"genesis"`
-	PublicMetrics   PublicMetrics         `mapstructure:"public-metrics"`
-	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
-	P2P             p2p.Config            `mapstructure:"p2p"`
-	API             grpcserver.Config     `mapstructure:"api"`
-	HARE3           hare3.Config          `mapstructure:"hare3"`
-	HareEligibility eligibility.Config    `mapstructure:"hare-eligibility"`
-	Certificate     blocks.CertConfig     `mapstructure:"certificate"`
-	Beacon          beacon.Config         `mapstructure:"beacon"`
-	TIME            timeConfig.TimeConfig `mapstructure:"time"`
-	VM              vm.Config             `mapstructure:"vm"`
-	POST            activation.PostConfig `mapstructure:"post"`
+	Preset          string                     `mapstructure:"preset"`
+	Genesis         GenesisConfig              `mapstructure:"genesis"`
+	PublicMetrics   PublicMetrics              `mapstructure:"public-metrics"`
+	Tortoise        tortoise.Config            `mapstructure:"tortoise"`
+	P2P             p2p.Config                 `mapstructure:"p2p"`
+	API             grpcserver.Config          `mapstructure:"api"`
+	HARE3           hare3.Config               `mapstructure:"hare3"`
+	HareEligibility eligibility.Config         `mapstructure:"hare-eligibility"`
+	Certificate     blocks.CertConfig          `mapstructure:"certificate"`
+	Beacon          beacon.Config              `mapstructure:"beacon"`
+	TIME            timeConfig.TimeConfig      `mapstructure:"time"`
+	VM              vm.Config                  `mapstructure:"vm"`
+	Certifier       activation.CertifierConfig `mapstructure:"certifier"`
+	POST            activation.PostConfig      `mapstructure:"post"`
 	POSTService     activation.PostSupervisorConfig
 	POET            activation.PoetConfig      `mapstructure:"poet"`
 	SMESHING        SmeshingConfig             `mapstructure:"smeshing"`
@@ -78,17 +79,12 @@ func (cfg *Config) DataDir() string {
 	return filepath.Clean(cfg.DataDirParent)
 }
 
-type TestConfig struct {
-	SmesherKey string `mapstructure:"testing-smesher-key"`
-}
-
 // BaseConfig defines the default configuration options for spacemesh app.
 type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
 	FileLock      string `mapstructure:"filelock"`
 
-	TestConfig TestConfig `mapstructure:"testing"`
-	Standalone bool       `mapstructure:"standalone"`
+	Standalone bool `mapstructure:"standalone"`
 
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
@@ -124,6 +120,9 @@ type BaseConfig struct {
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
+	// ScanMalfeasantATXs is a flag to enable scanning for malfeasant ATXs.
+	ScanMalfeasantATXs bool `mapstructure:"scan-malfeasant-atxs"`
+
 	NetworkHRP string `mapstructure:"network-hrp"`
 
 	// MinerGoodAtxsPercent is a threshold to decide if tortoise activeset should be
@@ -144,6 +143,12 @@ type BaseConfig struct {
 
 	// NoMainOverride forces the "nomain" builds to run on the mainnet
 	NoMainOverride bool `mapstructure:"no-main-override"`
+
+	// ATX version switches
+	// Each entry states on which publish epoch given ATX version becomes valid.
+	// Note: There is always one valid version at any given time.
+	// ATX V1 starts with epoch 0 unless configured otherwise.
+	AtxVersions activation.AtxVersions `mapstructure:"atx-versions"`
 }
 
 type DatabaseQueryCacheSizes struct {
@@ -200,7 +205,8 @@ func DefaultConfig() Config {
 		Sync:            syncer.DefaultConfig(),
 		Recovery:        checkpoint.DefaultConfig(),
 		Cache:           datastore.DefaultConfig(),
-		ActiveSet:       miner.DefaultActiveSetPrepartion(),
+		ActiveSet:       miner.DefaultActiveSetPreparation(),
+		Certifier:       activation.DefaultCertifierConfig(),
 	}
 }
 

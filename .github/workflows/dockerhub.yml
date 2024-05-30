@@ -20,12 +20,20 @@ on:
         default: ''
 jobs:
   dockerpush:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - name: checkout
       uses: actions/checkout@v4
       with:
         ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+    - uses: extractions/netrc@v2
+      with:
+        machine: github.com
+        username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+        password: ${{ secrets.GH_ACTION_TOKEN }}
+      if: vars.GOPRIVATE
+    
     - name: Build docker images
       run: |
         export VERSION="${{ github.ref_name }}"

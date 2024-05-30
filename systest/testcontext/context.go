@@ -72,6 +72,11 @@ var (
 		"bootstrapper image",
 		"spacemeshos/spacemesh-dev-bs:2beaf443f",
 	)
+	certifierImage = parameters.String(
+		"certifier-image",
+		"certifier service image",
+		"spacemeshos/certifier-service:latest",
+	)
 	poetImage = parameters.String(
 		"poet-image",
 		"poet server image",
@@ -167,6 +172,7 @@ type Context struct {
 	Namespace         string
 	Image             string
 	BootstrapperImage string
+	CertifierImage    string
 	PoetImage         string
 	PostServiceImage  string
 	PostInitImage     string
@@ -352,6 +358,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		BootstrapperSize:  bsSize.Get(p),
 		Image:             imageFlag.Get(p),
 		BootstrapperImage: bsImage.Get(p),
+		CertifierImage:    certifierImage.Get(p),
 		PoetImage:         poetImage.Get(p),
 		PostServiceImage:  postServiceImage.Get(p),
 		PostInitImage:     postInitImage.Get(p),

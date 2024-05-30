@@ -11,15 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -451,9 +450,9 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 			types.NIPostChallenge{},
 			types.Address{1, 2, 3},
 			i,
-			nil,
 		)
-		require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
+		atx.SmesherID = sig.NodeID()
+		atx.SetID(types.RandomATXID())
 		atxs = append(atxs, atx)
 	}
 	return atxs
@@ -868,7 +867,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			cfg.QueueSize = 1000
 			cfg.GetAtxsConcurrency = getAtxConcurrency
 
-			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+			cdb := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
 			client := server.New(mesh.Hosts()[0], hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)

@@ -1,6 +1,7 @@
 package atxsdata
 
 import (
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -67,18 +68,18 @@ func (d *Data) EvictEpoch(evict types.EpochID) {
 	}
 }
 
-// AddFromVerified extracts relevant fields from verified atx and adds them together with nonce and malicious flag.
+// AddFromHeader extracts relevant fields from an ActivationTx and adds them together with nonce and malicious flag.
 // Returns the ATX that was added to the store (if any) or `nil` if it wasn't.
-func (d *Data) AddFromHeader(atx *types.ActivationTxHeader, nonce types.VRFPostIndex, malicious bool) *ATX {
+func (d *Data) AddFromAtx(atx *types.ActivationTx, malicious bool) *ATX {
 	return d.Add(
 		atx.TargetEpoch(),
-		atx.NodeID,
+		atx.SmesherID,
 		atx.Coinbase,
-		atx.ID,
+		atx.ID(),
 		atx.GetWeight(),
 		atx.BaseTickHeight,
 		atx.TickHeight(),
-		nonce,
+		atx.VRFNonce,
 		malicious,
 	)
 }
@@ -169,6 +170,16 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	return data
 }
 
+func (d *Data) Size(target types.EpochID) int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[target]
+	if !exists {
+		return 0
+	}
+	return len(ecache.index)
+}
+
 type lockGuard struct{}
 
 // AtxFilter is a function that filters atxs.
@@ -200,6 +211,33 @@ func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), f
 		}
 		if ok {
 			fn(id, atx)
+		}
+	}
+}
+
+func (d *Data) IterateHighTicksInEpoch(target types.EpochID, fn func(types.ATXID) bool) {
+	type candidate struct {
+		id types.ATXID
+		*ATX
+	}
+	candidates := make([]candidate, 0, d.Size(target))
+	d.IterateInEpoch(target, func(id types.ATXID, atx *ATX) {
+		candidates = append(candidates, candidate{id: id, ATX: atx})
+	}, NotMalicious)
+
+	slices.SortFunc(candidates, func(a, b candidate) int {
+		switch {
+		case a.Height < b.Height:
+			return 1
+		case a.Height > b.Height:
+			return -1
+		}
+		return 0
+	})
+
+	for _, c := range candidates {
+		if cont := fn(c.id); !cont {
+			return
 		}
 	}
 }

@@ -128,7 +128,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
 	}
 	db := sql.InMemory()
-	ts.cdb = datastore.NewCachedDB(db, lg)
+	ts.cdb = datastore.NewCachedDB(db, lg.Zap())
 	var err error
 	atxsdata := atxsdata.New()
 	exec := mesh.NewExecutor(ts.cdb, atxsdata, ts.mVm, ts.mConState, lg)
@@ -194,6 +194,11 @@ func TestStartAndShutdown(t *testing.T) {
 
 	cancel()
 	require.False(t, ts.syncer.synchronize(ctx))
+	ts.syncer.Close()
+}
+
+func TestShutdownWithoutStart(t *testing.T) {
+	ts := newTestSyncer(t, time.Millisecond*5)
 	ts.syncer.Close()
 }
 
