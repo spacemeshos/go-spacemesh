@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -26,7 +26,7 @@ func TestRerunRevertNonverifiedLayers(t *testing.T) {
 	cfg.Hdist = good + 1
 	cfg.LayerSize = size
 
-	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(t, s.GetState(0), WithLogger(zaptest.NewLogger(t)), WithConfig(cfg))
 	var last, verified types.LayerID
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(good),
@@ -58,7 +58,7 @@ func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expected
 	cfg.Zdist = 1
 	cfg.WindowSize = uint32(windowSize)
 
-	tortoise := tortoiseFromSimState(tb, s.GetState(0), WithLogger(logtest.New(tb)), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(tb, s.GetState(0), WithLogger(zaptest.NewLogger(tb)), WithConfig(cfg))
 
 	const firstBatch = 2
 	misverified := genesis.Add(firstBatch)
@@ -133,7 +133,7 @@ func benchmarkTallyVotes(b *testing.B, size int, windowsize uint32, opts ...sim.
 	cfg.LayerSize = layerSize
 	cfg.WindowSize = windowsize
 
-	tortoise := tortoiseFromSimState(b, s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
+	tortoise := tortoiseFromSimState(b, s.GetState(0), WithConfig(cfg), WithLogger(zaptest.NewLogger(b)))
 
 	// generate info
 	start := time.Now()

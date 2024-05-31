@@ -2,8 +2,10 @@ package activation
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,6 +19,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
@@ -68,7 +72,7 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 		nil,
 		types.EmptyEdSignature,
 		types.NodeID{},
-		PoetPoW{},
+		PoetAuth{},
 	)
 	require.NoError(t, err)
 }
@@ -169,7 +173,7 @@ func TestPoetClient_CachesProof(t *testing.T) {
 	db.EXPECT().ValidateAndStore(ctx, gomock.Any())
 	db.EXPECT().ProofForRound(server.Pubkey.Bytes(), "1").Times(19)
 
-	poet, err := newPoetClient(db, server, DefaultPoetConfig(), zaptest.NewLogger(t))
+	poet, err := NewPoetClient(db, server, DefaultPoetConfig(), zaptest.NewLogger(t))
 	require.NoError(t, err)
 	poet.client.client.HTTPClient = ts.Client()
 
@@ -187,4 +191,199 @@ func TestPoetClient_CachesProof(t *testing.T) {
 	_, _, err = poet.Proof(ctx, "2")
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), proofsCalled.Load())
+}
+
+func TestPoetClient_QueryProofTimeout(t *testing.T) {
+	t.Parallel()
+
+	block := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-block
+	}))
+	defer ts.Close()
+	defer close(block)
+
+	server := types.PoetServer{
+		Address: ts.URL,
+		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
+	}
+	cfg := PoetConfig{
+		RequestTimeout: time.Millisecond * 100,
+	}
+	poet, err := NewPoetClient(nil, server, cfg, zaptest.NewLogger(t))
+	require.NoError(t, err)
+	poet.client.client.HTTPClient = ts.Client()
+
+	start := time.Now()
+	eg := errgroup.Group{}
+	for range 50 {
+		eg.Go(func() error {
+			_, _, err := poet.Proof(context.Background(), "1")
+			require.ErrorIs(t, err, context.DeadlineExceeded)
+			return nil
+		})
+	}
+	eg.Wait()
+	require.WithinDuration(t, start.Add(cfg.RequestTimeout), time.Now(), time.Millisecond*300)
+}
+
+func TestPoetClient_Certify(t *testing.T) {
+	t.Parallel()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
+	certifierPubKey := []byte("certifier-pubkey")
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/info":
+			resp, err := protojson.Marshal(&rpcapi.InfoResponse{
+				ServicePubkey: []byte("pubkey"),
+				Certifier: &rpcapi.InfoResponse_Cerifier{
+					Url:    certifierAddress.String(),
+					Pubkey: certifierPubKey,
+				},
+			})
+			require.NoError(t, err)
+			w.Write(resp)
+		}
+	}))
+	defer ts.Close()
+
+	server := types.PoetServer{
+		Address: ts.URL,
+		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
+	}
+	cfg := PoetConfig{RequestTimeout: time.Millisecond * 100}
+	cert := certifier.PoetCert{Data: []byte("abc")}
+	ctrl := gomock.NewController(t)
+	mCertifier := NewMockcertifierService(ctrl)
+	mCertifier.EXPECT().
+		Certificate(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
+		Return(&cert, nil)
+
+	poet, err := NewPoetClient(nil, server, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+	require.NoError(t, err)
+	poet.client.client.HTTPClient = ts.Client()
+
+	got, err := poet.Certify(context.Background(), sig.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, cert, *got)
+}
+
+func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
+	t.Parallel()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
+	certifierPubKey := []byte("certifier-pubkey")
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/info":
+			resp, err := protojson.Marshal(&rpcapi.InfoResponse{
+				ServicePubkey: []byte("pubkey"),
+				Certifier: &rpcapi.InfoResponse_Cerifier{
+					Url:    certifierAddress.String(),
+					Pubkey: certifierPubKey,
+				},
+			})
+			require.NoError(t, err)
+			w.Write(resp)
+		case "/v1/submit":
+			resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
+			require.NoError(t, err)
+			w.Write(resp)
+		}
+	}))
+
+	defer ts.Close()
+
+	server := types.PoetServer{
+		Address: ts.URL,
+		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
+	}
+	cfg := PoetConfig{RequestTimeout: time.Millisecond * 100}
+	cert := certifier.PoetCert{Data: []byte("abc")}
+	ctrl := gomock.NewController(t)
+	mCertifier := NewMockcertifierService(ctrl)
+	mCertifier.EXPECT().
+		Certificate(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
+		Return(&cert, nil)
+
+	poet, err := NewPoetClient(nil, server, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+	require.NoError(t, err)
+	poet.client.client.HTTPClient = ts.Client()
+
+	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+	require.NoError(t, err)
+}
+
+func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
+	t.Parallel()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
+	certifierPubKey := []byte("certifier-pubkey")
+	submitCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/info":
+			resp, err := protojson.Marshal(&rpcapi.InfoResponse{
+				ServicePubkey: []byte("pubkey"),
+				Certifier: &rpcapi.InfoResponse_Cerifier{
+					Url:    certifierAddress.String(),
+					Pubkey: certifierPubKey,
+				},
+			})
+			require.NoError(t, err)
+			w.Write(resp)
+		case "/v1/submit":
+			req := rpcapi.SubmitRequest{}
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			require.NoError(t, protojson.Unmarshal(body, &req))
+			if submitCount == 0 {
+				require.EqualValues(t, "first", req.Certificate.Data)
+				w.WriteHeader(http.StatusUnauthorized)
+			} else {
+				require.EqualValues(t, "second", req.Certificate.Data)
+				resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
+				require.NoError(t, err)
+				w.Write(resp)
+			}
+			submitCount++
+		}
+	}))
+
+	defer ts.Close()
+
+	server := types.PoetServer{
+		Address: ts.URL,
+		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
+	}
+	cfg := PoetConfig{RequestTimeout: time.Millisecond * 100}
+
+	ctrl := gomock.NewController(t)
+	mCertifier := NewMockcertifierService(ctrl)
+	gomock.InOrder(
+		mCertifier.EXPECT().
+			Certificate(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
+			Return(&certifier.PoetCert{Data: []byte("first")}, nil),
+		mCertifier.EXPECT().
+			Recertify(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
+			Return(&certifier.PoetCert{Data: []byte("second")}, nil),
+	)
+
+	poet, err := NewPoetClient(nil, server, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+	require.NoError(t, err)
+	poet.client.client.HTTPClient = ts.Client()
+
+	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, 2, submitCount)
 }

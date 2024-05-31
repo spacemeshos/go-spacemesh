@@ -58,7 +58,7 @@ func createTestMesh(t *testing.T) *testMesh {
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
 		db:           db,
-		cdb:          datastore.NewCachedDB(db, lg),
+		cdb:          datastore.NewCachedDB(db, lg.Zap()),
 		atxsdata:     atxsdata,
 		mockClock:    mocks.NewMocklayerClock(ctrl),
 		mockVM:       mocks.NewMockvmState(ctrl),
@@ -133,7 +133,7 @@ func createIdentity(t *testing.T, db sql.Executor, sig *signing.EdSigner) {
 	challenge := types.NIPostChallenge{
 		PublishEpoch: types.EpochID(1),
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, 1, nil)
+	atx := types.NewActivationTx(challenge, types.Address{}, 1)
 	atx.SmesherID = sig.NodeID()
 	atx.SetReceived(time.Now())
 	atx.TickCount = 1

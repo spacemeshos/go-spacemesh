@@ -12,11 +12,11 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -182,7 +182,7 @@ func TestWeakCoin(t *testing.T) {
 				mockAllowance,
 				&stubClock{},
 				weakcoin.WithThreshold(threshold),
-				weakcoin.WithLog(logtest.New(t)),
+				weakcoin.WithLog(zaptest.NewLogger(t)),
 			)
 
 			wc.StartEpoch(context.Background(), epoch)
@@ -334,7 +334,7 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				mockAllowance,
 				&stubClock{},
 				weakcoin.WithThreshold(threshold),
-				weakcoin.WithLog(logtest.New(t)),
+				weakcoin.WithLog(zaptest.NewLogger(t)),
 			)
 
 			wc.StartEpoch(context.Background(), tc.startedEpoch)
@@ -437,7 +437,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		nonceFetcher(t, ctrl),
 		mockAllowance,
 		&stubClock{},
-		weakcoin.WithLog(logtest.New(t)),
+		weakcoin.WithLog(zaptest.NewLogger(t)),
 	)
 	instance.StartEpoch(context.Background(), epoch)
 	instance.StartRound(context.Background(), round, []weakcoin.Participant{
@@ -492,7 +492,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 			nonceFetcher(t, ctrl),
 			mockAllowance,
 			&stubClock{},
-			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
+			weakcoin.WithLog(zaptest.NewLogger(t).Named(fmt.Sprintf("coin=%d", i))),
 		)
 	}
 

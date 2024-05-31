@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
@@ -21,7 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -192,7 +193,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 }
 
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
-	lg := logtest.New(tb)
+	lg := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	edVerifier := signing.NewEdVerifier()
 
@@ -227,9 +228,8 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	nodeID := sig.NodeID()
 
-	_, err = identities.GetMalfeasanceProof(atxHdlr.cdb, nodeID)
+	_, err = identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	atx := newInitialATXv1(t, goldenATXID)
@@ -261,7 +261,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 					Return(errors.New("invalid"))
 				nodeID, err := malfeasance.Validate(
 					context.Background(),
-					atxHdlr.log,
+					log.NewFromLog(atxHdlr.logger),
 					atxHdlr.cdb,
 					atxHdlr.edVerifier,
 					postVerifier,
@@ -314,7 +314,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.VRFPostIndex(*atx1.VRFNonce), got)
 
-	atx2 := newChainedActivationTxV1(t, goldenATXID, atx1, atx1.ID())
+	atx2 := newChainedActivationTxV1(t, atx1, atx1.ID())
 	nonce2 := types.VRFPostIndex(456)
 	atx2.VRFNonce = (*uint64)(&nonce2)
 	atx2.Sign(sig)
@@ -336,7 +336,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	first := newInitialATXv1(t, goldenATXID)
 	first.Sign(sig)
 
-	second := newChainedActivationTxV1(t, goldenATXID, first, first.ID())
+	second := newChainedActivationTxV1(t, first, first.ID())
 	second.Sign(sig)
 
 	// the poet is missing
@@ -425,7 +425,7 @@ func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 				require.NoError(t, codec.Decode(data, &got))
 				nodeID, err := malfeasance.Validate(
 					context.Background(),
-					hdlr.log,
+					log.NewFromLog(hdlr.logger),
 					hdlr.cdb,
 					hdlr.edVerifier,
 					nil,
@@ -520,6 +520,17 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		err := atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf)
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorContains(t, err, "invalid atx signature")
+	})
+	t.Run("atx V2", func(t *testing.T) {
+		t.Parallel()
+
+		atx := newInitialATXv2(t, goldenATXID)
+		atx.Sign(sig)
+
+		atxHdlr := newTestHandler(t, goldenATXID, WithAtxVersions(AtxVersions{0: types.AtxV2}))
+		atxHdlr.expectInitialAtxV2(atx)
+		err := atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, codec.MustEncode(atx))
+		require.NoError(t, err)
 	})
 }
 
@@ -639,7 +650,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, leaves/tickSize, stored1.TickHeight())
 	require.Equal(t, (leaves/tickSize)*units, stored1.GetWeight())
 
-	atx2 := newChainedActivationTxV1(t, goldenATXID, atx1, atx1.ID())
+	atx2 := newChainedActivationTxV1(t, atx1, atx1.ID())
 	atx2.Sign(sig)
 	buf = codec.MustEncode(atx2)
 
@@ -740,7 +751,6 @@ func newInitialATXv1(
 
 func newChainedActivationTxV1(
 	t testing.TB,
-	goldenATXID types.ATXID,
 	prev *wire.ActivationTxV1,
 	pos types.ATXID,
 ) *wire.ActivationTxV1 {
@@ -751,7 +761,7 @@ func newChainedActivationTxV1(
 			NIPostChallengeV1: wire.NIPostChallengeV1{
 				PrevATXID:        prev.ID(),
 				PublishEpoch:     prev.PublishEpoch + 1,
-				PositioningATXID: prev.ID(),
+				PositioningATXID: pos,
 			},
 			NIPost:   newNIPosV1tWithPoet(t, poetRef.Bytes()),
 			Coinbase: prev.Coinbase,
@@ -869,13 +879,25 @@ func TestHandler_DecodeATX(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, atx, decoded)
 	})
-	t.Run("v2 not supported", func(t *testing.T) {
-		// TODO: change this test when v2 is supported
+	t.Run("v2", func(t *testing.T) {
 		t.Parallel()
 		versions := map[types.EpochID]types.AtxVersion{10: types.AtxV2}
 		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersions(versions))
 
-		_, err := atxHdlr.decodeATX(codec.MustEncode(types.EpochID(20)))
-		require.ErrorContains(t, err, "unsupported ATX version")
+		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
+		atx.PublishEpoch = 10
+		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		require.NoError(t, err)
+		require.Equal(t, atx, decoded)
+	})
+	t.Run("rejects v2 in epoch when it's not supported", func(t *testing.T) {
+		t.Parallel()
+		versions := map[types.EpochID]types.AtxVersion{10: types.AtxV2}
+		atxHdlr := newTestHandler(t, types.RandomATXID(), WithAtxVersions(versions))
+
+		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
+		atx.PublishEpoch = 9
+		_, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		require.ErrorIs(t, err, errMalformedData)
 	})
 }

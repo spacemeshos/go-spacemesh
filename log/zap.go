@@ -62,10 +62,6 @@ func (f Field) Field() Field { return f }
 
 func (f Field) Zap() zap.Field { return zap.Field(f) }
 
-// Named is an alias to FieldNamed.
-// FieldNamed returns a field with the provided name instead of the default.
-var Named = FieldNamed
-
 // FieldNamed returns a field with the provided name instead of the default.
 func FieldNamed(name string, field LoggableField) Field {
 	if field == nil || (reflect.ValueOf(field).Kind() == reflect.Ptr && reflect.ValueOf(field).IsNil()) {
@@ -115,19 +111,9 @@ func ZShortStringer(name string, val ShortString) zap.Field {
 	return zap.Stringer(name, shortStringAdapter{val: val})
 }
 
-// Binary will encode binary content in base64 when logged.
-func Binary(name string, val []byte) Field {
-	return Field(zap.Binary(name, val))
-}
-
 // Int returns an int Field.
 func Int(name string, val int) Field {
 	return Field(zap.Int(name, val))
-}
-
-// Int32 returns an int32 Field.
-func Int32(name string, val int32) Field {
-	return Field(zap.Int32(name, val))
 }
 
 // Uint16 returns an uint32 Field.
@@ -148,11 +134,6 @@ func Uint64(name string, val uint64) Field {
 // Float64 returns a float64 Field.
 func Float64(name string, val float64) Field {
 	return Field(zap.Float64(name, val))
-}
-
-// Namespace make next fields be inside a namespace.
-func Namespace(name string) Field {
-	return Field(zap.Namespace(name))
 }
 
 // Bool returns a bool field.
@@ -311,20 +292,6 @@ func (l Log) WithContext(ctx context.Context) Log {
 		}
 	}
 	return l.WithFields(fields...)
-}
-
-const eventKey = "event"
-
-// Event returns a logger with the Event field appended to it.
-func (l Log) Event() FieldLogger {
-	return FieldLogger{l: l.logger.With(zap.Field(Bool(eventKey, true))), name: l.name}
-}
-
-// WithOptions clones the current Logger, applies the supplied Options, and
-// returns the resulting Logger. It's safe to use concurrently.
-func (l Log) WithOptions(opts ...zap.Option) Log {
-	lgr := l.logger.WithOptions(opts...)
-	return Log{logger: lgr, name: l.name}
 }
 
 // Zap returns internal zap logger.

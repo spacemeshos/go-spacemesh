@@ -8,9 +8,11 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
+	awire "github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestMain(m *testing.M) {
@@ -23,8 +25,8 @@ func TestMain(m *testing.M) {
 func TestCodec_MultipleATXs(t *testing.T) {
 	epoch := types.EpochID(11)
 
-	a1 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{1, 2, 3}, 10, nil)
-	a2 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{3, 2, 1}, 11, nil)
+	a1 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{1, 2, 3}, 10)
+	a2 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{3, 2, 1}, 11)
 
 	var atxProof wire.AtxProof
 	for i, a := range []*types.ActivationTx{a1, a2} {
@@ -180,9 +182,89 @@ func Test_HareMetadata_Equivocation(t *testing.T) {
 	require.False(t, hm1.Equivocation(&hm2))
 }
 
+func TestCodec_InvalidPostIndex(t *testing.T) {
+	lid := types.LayerID(11)
+
+	atx := awire.ActivationTxV1{
+		InnerActivationTxV1: awire.InnerActivationTxV1{
+			NIPostChallengeV1: awire.NIPostChallengeV1{
+				PublishEpoch: lid.GetEpoch(),
+			},
+			Coinbase: types.Address{1, 2, 3},
+			NumUnits: 10,
+		},
+	}
+
+	proof := &wire.MalfeasanceProof{
+		Layer: lid,
+		Proof: wire.Proof{
+			Type: wire.InvalidPostIndex,
+			Data: &wire.InvalidPostIndexProof{
+				Atx:        atx,
+				InvalidIdx: 5,
+			},
+		},
+	}
+	encoded := codec.MustEncode(proof)
+
+	var decoded wire.MalfeasanceProof
+	codec.MustDecode(encoded, &decoded)
+	require.Equal(t, *proof, decoded)
+}
+
+func TestCodec_InvalidPrevATX(t *testing.T) {
+	lid := types.LayerID(45)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	prevATXID := types.RandomATXID()
+
+	atx1 := awire.ActivationTxV1{
+		InnerActivationTxV1: awire.InnerActivationTxV1{
+			NIPostChallengeV1: awire.NIPostChallengeV1{
+				PublishEpoch: lid.GetEpoch() - 1,
+				PrevATXID:    prevATXID,
+			},
+			Coinbase: types.Address{1, 2, 3},
+			NumUnits: 10,
+		},
+	}
+	atx1.Sign(sig)
+
+	atx2 := awire.ActivationTxV1{
+		InnerActivationTxV1: awire.InnerActivationTxV1{
+			NIPostChallengeV1: awire.NIPostChallengeV1{
+				PublishEpoch: lid.GetEpoch(),
+				PrevATXID:    prevATXID,
+			},
+			Coinbase: types.Address{1, 2, 3},
+			NumUnits: 10,
+		},
+	}
+	atx2.Sign(sig)
+
+	proof := &wire.MalfeasanceProof{
+		Layer: lid,
+		Proof: wire.Proof{
+			Type: wire.InvalidPrevATX,
+			Data: &wire.InvalidPrevATXProof{
+				Atx1: atx1,
+				Atx2: atx2,
+			},
+		},
+	}
+	encoded, err := codec.Encode(proof)
+	require.NoError(t, err)
+
+	var decoded wire.MalfeasanceProof
+	require.NoError(t, codec.Decode(encoded, &decoded))
+	require.Equal(t, *proof, decoded)
+}
+
 func FuzzProofConsistency(f *testing.F) {
 	tester.FuzzConsistency[wire.Proof](f, func(p *wire.Proof, c fuzz.Continue) {
-		switch c.Intn(3) {
+		switch c.Intn(5) {
 		case 0:
 			p.Type = wire.MultipleATXs
 			data := wire.AtxProof{}
@@ -196,6 +278,16 @@ func FuzzProofConsistency(f *testing.F) {
 		case 2:
 			p.Type = wire.HareEquivocation
 			data := wire.HareProof{}
+			c.Fuzz(&data)
+			p.Data = &data
+		case 3:
+			p.Type = wire.InvalidPostIndex
+			data := wire.InvalidPostIndexProof{}
+			c.Fuzz(&data)
+			p.Data = &data
+		case 4:
+			p.Type = wire.InvalidPrevATX
+			data := wire.InvalidPrevATXProof{}
 			c.Fuzz(&data)
 			p.Data = &data
 		}

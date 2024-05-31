@@ -9,7 +9,10 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/logging"
+	"github.com/spacemeshos/poet/registration"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -19,12 +22,13 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 const (
@@ -37,6 +41,18 @@ func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	res := m.Run()
 	os.Exit(res)
+}
+
+func fullPost(post *types.Post, info *types.PostInfo, challenge []byte) *nipost.Post {
+	return &nipost.Post{
+		Nonce:         post.Nonce,
+		Indices:       post.Indices,
+		Pow:           post.Pow,
+		Challenge:     challenge,
+		NumUnits:      info.NumUnits,
+		CommitmentATX: info.CommitmentATX,
+		VRFNonce:      *info.Nonce,
+	}
 }
 
 func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
@@ -119,7 +135,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
+	cdb := datastore.NewCachedDB(db, logger)
+	localDb := localsql.InMemory()
 
 	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
@@ -129,7 +146,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	})
 
 	validator := activation.NewMocknipostValidator(ctrl)
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata.New(), goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
@@ -149,150 +166,20 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		RequestRetryDelay: epoch / 50,
 		MaxRequestRetries: 10,
 	}
-	poetProver := spawnPoet(
-		t,
-		WithGenesis(genesis),
-		WithEpochDuration(epoch),
-		WithPhaseShift(poetCfg.PhaseShift),
-		WithCycleGap(poetCfg.CycleGap),
-	)
 
-	mclock := activation.NewMocklayerClock(ctrl)
-	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
-		func(got types.LayerID) time.Time {
-			return genesis.Add(layerDuration * time.Duration(got))
-		},
-	)
-
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
-	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-
-	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
-
-	svc := grpcserver.NewPostService(logger)
-	svc.AllowConnections(true)
-	grpcCfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
-
-	require.Eventually(t, func() bool {
-		_, err := svc.Client(sig.NodeID())
-		return err == nil
-	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
-
-	localDB := localsql.InMemory()
-	nb, err := activation.NewNIPostBuilder(
-		localDB,
-		poetDb,
-		svc,
-		[]types.PoetServer{{Pubkey: types.NewBase64Enc([]byte("foobar")), Address: poetProver.RestURL().String()}},
-		logger.Named("nipostBuilder"),
-		poetCfg,
-		mclock,
-	)
-	require.NoError(t, err)
-
-	challenge := types.RandomHash()
-	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
-	require.NoError(t, err)
-
-	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
-	_, err = v.NIPost(
-		context.Background(),
-		sig.NodeID(),
-		goldenATX,
-		nipost.NIPost,
-		challenge,
-		nipost.NumUnits,
-	)
-	require.NoError(t, err)
-}
-
-func TestNIPostBuilder_Close(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	logger := zaptest.NewLogger(t)
-
-	poetProver := spawnPoet(t, WithGenesis(time.Now()), WithEpochDuration(time.Second))
-	poetDb := activation.NewMockpoetDbAPI(ctrl)
-
-	mclock := activation.NewMocklayerClock(ctrl)
-	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
-		func(got types.LayerID) time.Time {
-			// time.Now() ~= currentLayer
-			genesis := time.Now().Add(-time.Duration(postGenesisEpoch.FirstLayer()) * layerDuration)
-			return genesis.Add(layerDuration * time.Duration(got))
-		},
-	)
-
-	svc := grpcserver.NewPostService(logger)
-	svc.AllowConnections(true)
-
-	db := localsql.InMemory()
-	nb, err := activation.NewNIPostBuilder(
-		db,
-		poetDb,
-		svc,
-		[]types.PoetServer{{Pubkey: types.NewBase64Enc([]byte("foobar")), Address: poetProver.RestURL().String()}},
-		logger.Named("nipostBuilder"),
-		activation.PoetConfig{},
-		mclock,
-	)
-	require.NoError(t, err)
-
-	challenge := types.RandomHash()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	nipost, err := nb.BuildNIPost(ctx, sig, 7, challenge)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Nil(t, nipost)
-}
-
-func TestNewNIPostBuilderNotInitialized(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	logger := zaptest.NewLogger(t)
-	goldenATX := types.ATXID{2, 3, 4}
-	cfg := activation.DefaultPostConfig()
-	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
-
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
-		synced := make(chan struct{})
-		close(synced)
-		return synced
-	})
-
-	validator := activation.NewMocknipostValidator(ctrl)
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
-	require.NoError(t, err)
-
-	// ensure that genesis aligns with layer timings
-	genesis := time.Now().Add(layerDuration).Round(layerDuration)
-	epoch := layersPerEpoch * layerDuration
-	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch / 2,
-		CycleGap:          epoch / 4,
-		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 5,
-		RequestRetryDelay: epoch / 50,
-		MaxRequestRetries: 10,
+	pubKey, addr := spawnTestCertifier(t, cfg, nil, verifying.WithLabelScryptParams(opts.Scrypt))
+	certifierCfg := &registration.CertifierConfig{
+		URL:    "http://" + addr.String(),
+		PubKey: registration.Base64Enc(pubKey),
 	}
+
 	poetProver := spawnPoet(
 		t,
 		WithGenesis(genesis),
 		WithEpochDuration(epoch),
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
+		WithCertifier(certifierCfg),
 	)
 
 	mclock := activation.NewMocklayerClock(ctrl)
@@ -302,44 +189,53 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 		},
 	)
 
-	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
+
+	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 
 	svc := grpcserver.NewPostService(logger)
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	localDB := localsql.InMemory()
-	nb, err := activation.NewNIPostBuilder(
-		localDB,
+	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
+
+	var postClient activation.PostClient
+	require.Eventually(t, func() bool {
+		var err error
+		postClient, err = svc.Client(sig.NodeID())
+		return err == nil
+	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
+
+	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
+	require.NoError(t, err)
+	err = nipost.AddPost(localDb, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
+	require.NoError(t, err)
+
+	client, err := activation.NewPoetClient(
 		poetDb,
-		svc,
-		[]types.PoetServer{{Pubkey: types.NewBase64Enc([]byte("foobar")), Address: poetProver.RestURL().String()}},
-		logger.Named("nipostBuilder"),
+		poetProver.ServerCfg(),
 		poetCfg,
-		mclock,
+		logger,
 	)
 	require.NoError(t, err)
 
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
-
-	require.Eventually(t, func() bool {
-		_, err := svc.Client(sig.NodeID())
-		return err == nil
-	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
+	localDB := localsql.InMemory()
+	nb, err := activation.NewNIPostBuilder(
+		localDB,
+		svc,
+		logger.Named("nipostBuilder"),
+		poetCfg,
+		mclock,
+		activation.WithPoetClients(client),
+	)
+	require.NoError(t, err)
 
 	challenge := types.RandomHash()
 	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
 	require.NoError(t, err)
-	require.NotNil(t, nipost)
-
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
-	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
 	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
@@ -368,7 +264,6 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, log.NewFromLog(logger))
 
 	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
@@ -391,7 +286,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	for _, sig := range signers {
 		opts := opts
 		eg.Go(func() error {
-			mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, goldenATX, syncer, validator)
+			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			opts.DataDir = t.TempDir()
@@ -426,6 +321,15 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		WithCycleGap(poetCfg.CycleGap),
 	)
 
+	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	client, err := activation.NewPoetClient(
+		poetDb,
+		poetProver.ServerCfg(),
+		poetCfg,
+		logger,
+	)
+	require.NoError(t, err)
+
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
@@ -437,23 +341,25 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	poetDb := activation.NewPoetDb(db, log.NewFromLog(logger).Named("poetDb"))
-
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
-		poetDb,
 		svc,
-		[]types.PoetServer{{Pubkey: types.NewBase64Enc([]byte("foobar")), Address: poetProver.RestURL().String()}},
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		mclock,
+		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)
 
 	challenge := types.RandomHash()
 	for _, sig := range signers {
 		eg.Go(func() error {
+			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge)
+			require.NoError(t, err)
+			err = nipost.AddPost(localDB, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
+			require.NoError(t, err)
+
 			nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
 			require.NoError(t, err)
 

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
@@ -68,7 +69,7 @@ func (v AtxVersions) Validate() error {
 type Handler struct {
 	local     p2p.Peer
 	publisher pubsub.Publisher
-	log       log.Log
+	logger    *zap.Logger
 	versions  []atxVersion
 
 	// inProgress map gathers ATXs that are currently being processed.
@@ -77,6 +78,7 @@ type Handler struct {
 	inProgressMu sync.Mutex
 
 	v1 *HandlerV1
+	v2 *HandlerV2
 }
 
 // HandlerOption is a functional option for the handler.
@@ -91,6 +93,7 @@ func WithAtxVersions(v AtxVersions) HandlerOption {
 func WithTickSize(tickSize uint64) HandlerOption {
 	return func(h *Handler) {
 		h.v1.tickSize = tickSize
+		h.v2.tickSize = tickSize
 	}
 }
 
@@ -107,13 +110,13 @@ func NewHandler(
 	nipostValidator nipostValidator,
 	beacon AtxReceiver,
 	tortoise system.Tortoise,
-	lg log.Log,
+	lg *zap.Logger,
 	opts ...HandlerOption,
 ) *Handler {
 	h := &Handler{
 		local:     local,
 		publisher: pub,
-		log:       lg,
+		logger:    lg,
 		versions:  []atxVersion{{0, types.AtxV1}},
 
 		v1: &HandlerV1{
@@ -125,11 +128,26 @@ func NewHandler(
 			tickSize:        1,
 			goldenATXID:     goldenATXID,
 			nipostValidator: nipostValidator,
-			log:             lg,
+			logger:          lg,
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
 			signers:         make(map[types.NodeID]*signing.EdSigner),
+		},
+
+		v2: &HandlerV2{
+			local:           local,
+			cdb:             cdb,
+			atxsdata:        atxsdata,
+			edVerifier:      edVerifier,
+			clock:           c,
+			tickSize:        1,
+			goldenATXID:     goldenATXID,
+			nipostValidator: nipostValidator,
+			logger:          lg,
+			fetcher:         fetcher,
+			beacon:          beacon,
+			tortoise:        tortoise,
 		},
 
 		inProgress: make(map[types.ATXID][]chan error),
@@ -139,8 +157,8 @@ func NewHandler(
 		opt(h)
 	}
 
-	h.log.With().Info("atx handler created",
-		log.Array("supported ATX versions", log.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+	h.logger.Info("atx handler created",
+		zap.Array("supported ATX versions", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
 			for _, v := range h.versions {
 				enc.AppendString(fmt.Sprintf("v%v from epoch %d", v.AtxVersion, v.publish))
 			}
@@ -158,9 +176,10 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
 	_, err := h.handleAtx(ctx, expHash, peer, data)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
-		h.log.WithContext(ctx).With().Warning("failed to process synced atx",
-			log.Stringer("sender", peer),
-			log.Err(err),
+		h.logger.Warn("failed to process synced atx",
+			log.ZContext(ctx),
+			zap.Stringer("sender", peer),
+			zap.Error(err),
 		)
 	}
 	if errors.Is(err, errKnownAtx) {
@@ -171,11 +190,12 @@ func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, pee
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	proof, err := h.handleAtx(ctx, types.Hash32{}, peer, msg)
+	proof, err := h.handleAtx(ctx, types.EmptyHash32, peer, msg)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
-		h.log.WithContext(ctx).With().Warning("failed to process atx gossip",
-			log.Stringer("sender", peer),
-			log.Err(err),
+		h.logger.Warn("failed to process atx gossip",
+			log.ZContext(ctx),
+			zap.Stringer("sender", peer),
+			zap.Error(err),
 		)
 	}
 	if errors.Is(err, errKnownAtx) && peer == h.local {
@@ -190,7 +210,7 @@ func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte
 		}
 		encodedProof := codec.MustEncode(&gossip)
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
-			h.log.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+			h.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
 			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
 		}
 		return errMaliciousATX
@@ -217,6 +237,8 @@ func (h *Handler) determineVersion(msg []byte) (*types.AtxVersion, error) {
 
 type opaqueAtx interface {
 	ID() types.ATXID
+	Published() types.EpochID
+	TotalNumUnits() uint32
 }
 
 func (h *Handler) decodeATX(msg []byte) (opaqueAtx, error) {
@@ -228,6 +250,12 @@ func (h *Handler) decodeATX(msg []byte) (opaqueAtx, error) {
 	switch *version {
 	case types.AtxV1:
 		var atx wire.ActivationTxV1
+		if err := codec.Decode(msg, &atx); err != nil {
+			return nil, fmt.Errorf("%w: %w", errMalformedData, err)
+		}
+		return &atx, nil
+	case types.AtxV2:
+		var atx wire.ActivationTxV2
 		if err := codec.Decode(msg, &atx); err != nil {
 			return nil, fmt.Errorf("%w: %w", errMalformedData, err)
 		}
@@ -261,10 +289,17 @@ func (h *Handler) handleAtx(
 		ch := make(chan error, 1)
 		h.inProgress[id] = append(sub, ch)
 		h.inProgressMu.Unlock()
-		h.log.WithContext(ctx).With().Debug("atx is already being processed. waiting for result", id)
+		h.logger.Debug("atx is already being processed. waiting for result",
+			log.ZContext(ctx),
+			zap.Stringer("atx_id", id),
+		)
 		select {
 		case err := <-ch:
-			h.log.WithContext(ctx).With().Debug("atx processed in other task", id, log.Err(err))
+			h.logger.Debug("atx processed in other task",
+				log.ZContext(ctx),
+				zap.Stringer("atx_id", id),
+				zap.Error(err),
+			)
 			return nil, err
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -273,13 +308,19 @@ func (h *Handler) handleAtx(
 
 	h.inProgress[id] = []chan error{}
 	h.inProgressMu.Unlock()
-	h.log.WithContext(ctx).With().Info("handling incoming atx", id, log.Int("size", len(msg)))
+	h.logger.Info("handling incoming atx",
+		log.ZContext(ctx),
+		zap.Stringer("atx_id", id),
+		zap.Int("size", len(msg)),
+	)
 
 	var proof *mwire.MalfeasanceProof
 
 	switch atx := opaqueAtx.(type) {
 	case *wire.ActivationTxV1:
 		proof, err = h.v1.processATX(ctx, peer, atx, msg, receivedTime)
+	case *wire.ActivationTxV2:
+		proof, err = h.v2.processATX(ctx, peer, atx, msg, receivedTime)
 	default:
 		panic("unreachable")
 	}
@@ -302,7 +343,7 @@ func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.E
 		return types.EmptyEdSignature, err
 	}
 
-	if blob.Bytes == nil {
+	if len(blob.Bytes) == 0 {
 		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
 		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
 	}

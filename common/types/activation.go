@@ -171,7 +171,7 @@ type ActivationTx struct {
 	NumUnits       uint32 // the minimum number of space units in this and the previous ATX
 	BaseTickHeight uint64
 	TickCount      uint64
-	VRFNonce       *VRFPostIndex
+	VRFNonce       VRFPostIndex
 	SmesherID      NodeID
 
 	AtxBlob
@@ -183,11 +183,12 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
+// NOTE: this function is deprecated and used in a few tests only.
+// Create a new ActivationTx with ActivationTx{...}, setting the fields manually.
 func NewActivationTx(
 	challenge NIPostChallenge,
 	coinbase Address,
 	numUnits uint32,
-	nonce *VRFPostIndex,
 ) *ActivationTx {
 	atx := &ActivationTx{
 		PublishEpoch:  challenge.PublishEpoch,
@@ -196,7 +197,6 @@ func NewActivationTx(
 		CommitmentATX: challenge.CommitmentATX,
 		Coinbase:      coinbase,
 		NumUnits:      numUnits,
-		VRFNonce:      nonce,
 	}
 	return atx
 }
@@ -205,6 +205,14 @@ func NewActivationTx(
 // to participate thanks to the ATX.
 func (atx *ActivationTx) TargetEpoch() EpochID {
 	return atx.PublishEpoch + 1
+}
+
+func (atx *ActivationTx) Published() EpochID {
+	return atx.PublishEpoch
+}
+
+func (atx *ActivationTx) TotalNumUnits() uint32 {
+	return atx.NumUnits
 }
 
 // Golden returns true if atx is from a checkpoint snapshot.
@@ -243,9 +251,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	if atx.CommitmentATX != nil {
 		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
 	}
-	if atx.VRFNonce != nil {
-		encoder.AddUint64("vrf_nonce", uint64(*atx.VRFNonce))
-	}
+	encoder.AddUint64("vrf_nonce", uint64(atx.VRFNonce))
 	encoder.AddString("coinbase", atx.Coinbase.String())
 	encoder.AddUint32("epoch", atx.PublishEpoch.Uint32())
 	encoder.AddUint64("num_units", uint64(atx.NumUnits))
@@ -293,6 +299,12 @@ type MerkleProof struct {
 	// Nodes on path from leaf to root (not including leaf)
 	Nodes     []Hash32 `scale:"max=32"`
 	LeafIndex uint64
+}
+
+type MultiMerkleProof struct {
+	// Nodes on path from leaf to root (not including leaf)
+	Nodes       []Hash32 `scale:"max=32"`
+	LeafIndices []uint64
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.
@@ -372,7 +384,7 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=4500000"` // to be in line with `EpochData` in fetch/wire_types.go
+	Set   []ATXID `scale:"max=6000000"` // to be in line with `EpochData` in fetch/wire_types.go
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")

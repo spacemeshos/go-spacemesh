@@ -1,12 +1,15 @@
 package wire
 
 import (
+	"encoding/binary"
 	"encoding/hex"
+
+	"github.com/spacemeshos/merkle-tree"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -38,6 +41,25 @@ type PostV1 struct {
 	Nonce   uint32
 	Indices []byte `scale:"max=800"` // up to K2=100
 	Pow     uint64
+}
+
+func (p *PostV1) Root() []byte {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	nonce := make([]byte, 4)
+	binary.LittleEndian.PutUint32(nonce, p.Nonce)
+	tree.AddLeaf(nonce)
+
+	tree.AddLeaf(p.Indices)
+
+	pow := make([]byte, 8)
+	binary.LittleEndian.PutUint64(pow, p.Pow)
+	tree.AddLeaf(pow)
+	return tree.Root()
 }
 
 type MerkleProofV1 struct {
@@ -80,8 +102,16 @@ func (atx *ActivationTxV1) ID() types.ATXID {
 	return atx.id
 }
 
-func (atx *ActivationTxV1) Smesher() types.NodeID {
-	return atx.SmesherID
+func (atx *ActivationTxV1) SetID(id types.ATXID) {
+	atx.id = id
+}
+
+func (atx *ActivationTxV1) Published() types.EpochID {
+	return atx.PublishEpoch
+}
+
+func (atx *ActivationTxV1) TotalNumUnits() uint32 {
+	return atx.NumUnits
 }
 
 func (atx *ActivationTxV1) Sign(signer *signing.EdSigner) {
@@ -148,23 +178,6 @@ func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 	}
 }
 
-func ActivationTxToWireV1(a *types.ActivationTx) *ActivationTxV1 {
-	return &ActivationTxV1{
-		InnerActivationTxV1: InnerActivationTxV1{
-			NIPostChallengeV1: NIPostChallengeV1{
-				PublishEpoch:    a.PublishEpoch,
-				Sequence:        a.Sequence,
-				PrevATXID:       a.PrevATXID,
-				CommitmentATXID: a.CommitmentATX,
-			},
-			Coinbase: a.Coinbase,
-			NumUnits: a.NumUnits,
-			VRFNonce: (*uint64)(a.VRFNonce),
-		},
-		SmesherID: a.SmesherID,
-	}
-}
-
 func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.ActivationTx {
 	result := &types.ActivationTx{
 		PublishEpoch:  atx.PublishEpoch,
@@ -173,7 +186,6 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 		CommitmentATX: atx.CommitmentATXID,
 		Coinbase:      atx.Coinbase,
 		NumUnits:      atx.NumUnits,
-		VRFNonce:      (*types.VRFPostIndex)(atx.VRFNonce),
 		SmesherID:     atx.SmesherID,
 		AtxBlob: types.AtxBlob{
 			Version: types.AtxV1,
@@ -183,8 +195,12 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 	if len(blob) == 0 {
 		result.AtxBlob.Blob = codec.MustEncode(atx)
 	}
+	result.SetID(atx.ID())
 
-	result.SetID(types.ATXID(atx.HashInnerBytes()))
+	if atx.VRFNonce != nil {
+		result.VRFNonce = types.VRFPostIndex(*atx.VRFNonce)
+	}
+
 	return result
 }
 
@@ -217,7 +233,7 @@ func PostFromWireV1(post *PostV1) *types.Post {
 	}
 }
 
-func (p *PostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (p *PostV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if p == nil {
 		return nil
 	}
@@ -227,7 +243,7 @@ func (p *PostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-func (nipost *NIPostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (nipost *NIPostV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if nipost == nil {
 		return nil
 	}
@@ -236,7 +252,7 @@ func (nipost *NIPostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-func (atx *ActivationTxV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (atx *ActivationTxV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if atx == nil {
 		return nil
 	}

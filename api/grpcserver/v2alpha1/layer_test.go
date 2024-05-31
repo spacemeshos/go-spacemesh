@@ -85,16 +85,16 @@ func TestLayerService_List(t *testing.T) {
 
 func TestLayerConvertEventStatus(t *testing.T) {
 	s := convertEventStatus(events.LayerStatusTypeApproved)
-	require.Equal(t, spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED, s)
+	require.Equal(t, spacemeshv2alpha1.Layer_LAYER_STATUS_APPLIED, s)
 
 	s = convertEventStatus(events.LayerStatusTypeConfirmed)
-	require.Equal(t, spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED, s)
+	require.Equal(t, spacemeshv2alpha1.Layer_LAYER_STATUS_VERIFIED, s)
 
 	s = convertEventStatus(events.LayerStatusTypeApplied)
-	require.Equal(t, spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED, s)
+	require.Equal(t, spacemeshv2alpha1.Layer_LAYER_STATUS_VERIFIED, s)
 
 	s = convertEventStatus(events.LayerStatusTypeUnknown)
-	require.Equal(t, spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED, s)
+	require.Equal(t, spacemeshv2alpha1.Layer_LAYER_STATUS_UNSPECIFIED, s)
 }
 
 func TestLayerStreamService_Stream(t *testing.T) {
@@ -132,7 +132,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			assert.Equal(t, toLayer(&lrs[i]), l.GetV1())
+			assert.Equal(t, toLayer(&lrs[i]).String(), l.String())
 			i++
 		}
 		require.Len(t, lrs, i)
@@ -199,7 +199,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 				for _, rst := range expect {
 					received, err := stream.Recv()
 					require.NoError(t, err)
-					require.Equal(t, toLayer(rst).String(), received.GetV1().String())
+					require.Equal(t, toLayer(rst).String(), received.String())
 				}
 			})
 		}

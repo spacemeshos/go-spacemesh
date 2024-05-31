@@ -24,7 +24,7 @@ func gatx(
 	atx := types.ActivationTx{
 		NumUnits:     units,
 		PublishEpoch: epoch,
-		VRFNonce:     &nonce,
+		VRFNonce:     nonce,
 		TickCount:    100,
 		SmesherID:    smesher,
 	}
@@ -43,7 +43,7 @@ func gatxZeroHeight(
 	atx := types.ActivationTx{
 		NumUnits:     units,
 		PublishEpoch: epoch,
-		VRFNonce:     &nonce,
+		VRFNonce:     nonce,
 		SmesherID:    smesher,
 	}
 	atx.SetID(id)
@@ -567,11 +567,7 @@ func TestEligibilityValidator(t *testing.T) {
 				ms.mvrf,
 			)
 			for _, atx := range tc.atxs {
-				c.AddFromAtx(
-					&atx,
-					0,
-					false,
-				)
+				c.AddFromAtx(&atx, false)
 			}
 			for _, ballot := range tc.ballots {
 				ballots[ballot.ID()] = &ballot

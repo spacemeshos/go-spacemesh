@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -23,7 +25,7 @@ var (
 
 // Handler processes Block fetched from peers during sync.
 type Handler struct {
-	logger log.Log
+	logger *zap.Logger
 
 	fetcher  system.Fetcher
 	db       *sql.Database
@@ -35,7 +37,7 @@ type Handler struct {
 type Opt func(*Handler)
 
 // WithLogger defines logger for Handler.
-func WithLogger(logger log.Log) Opt {
+func WithLogger(logger *zap.Logger) Opt {
 	return func(h *Handler) {
 		h.logger = logger
 	}
@@ -44,7 +46,7 @@ func WithLogger(logger log.Log) Opt {
 // NewHandler creates new Handler.
 func NewHandler(f system.Fetcher, db *sql.Database, tortoise tortoiseProvider, m meshProvider, opts ...Opt) *Handler {
 	h := &Handler{
-		logger:   log.NewNop(),
+		logger:   zap.NewNop(),
 		fetcher:  f,
 		db:       db,
 		tortoise: tortoise,
@@ -58,11 +60,11 @@ func NewHandler(f system.Fetcher, db *sql.Database, tortoise tortoiseProvider, m
 
 // HandleSyncedBlock handles Block data from sync.
 func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
-	logger := h.logger.WithContext(ctx)
+	logger := h.logger.With(log.ZContext(ctx))
 
 	var b types.Block
 	if err := codec.Decode(data, &b); err != nil {
-		logger.With().Debug("malformed block", log.Err(err))
+		logger.Debug("malformed block", zap.Error(err))
 		return errMalformedData
 	}
 	// set the block ID when received
@@ -80,15 +82,15 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 		return fmt.Errorf("%w: %s", pubsub.ErrValidationReject, err.Error())
 	}
 
-	logger = logger.WithFields(b.ID(), b.LayerIndex)
+	logger = logger.With(zap.Stringer("block_id", b.ID()), zap.Uint32("layer_id", b.LayerIndex.Uint32()))
 
 	if exists, err := blocks.Has(h.db, b.ID()); err != nil {
-		logger.With().Error("failed to check block exist", log.Err(err))
+		logger.Error("failed to check block exist", zap.Error(err))
 	} else if exists {
 		logger.Debug("known block")
 		return nil
 	}
-	logger.With().Info("new block")
+	logger.Info("new block")
 
 	if missing := h.tortoise.GetMissingActiveSet(b.LayerIndex.GetEpoch(), toAtxIDs(b.Rewards)); len(missing) > 0 {
 		h.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(missing))
@@ -98,12 +100,12 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 	}
 	if len(b.TxIDs) > 0 {
 		if err := h.checkTransactions(ctx, peer, &b); err != nil {
-			logger.With().Warning("failed to fetch block TXs", log.Err(err))
+			logger.Warn("failed to fetch block TXs", zap.Error(err))
 			return err
 		}
 	}
 	if err := h.mesh.AddBlockWithTXs(ctx, &b); err != nil {
-		logger.With().Error("failed to save block", log.Err(err))
+		logger.Error("failed to save block", zap.Error(err))
 		return fmt.Errorf("save block: %w", err)
 	}
 	return nil

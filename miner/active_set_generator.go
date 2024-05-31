@@ -222,7 +222,7 @@ type gradedActiveSet struct {
 }
 
 // activeSetFromGrades includes activations with the highest grade.
-// Such activations were received atleast 4 network delays before the epoch start, and no malfeasence proof for
+// Such activations were received at least 4 network delays before the epoch start, and no malfeasance proof for
 // identity was received before the epoch start.
 //
 // On mainnet we use 30minutes as a network delay parameter.

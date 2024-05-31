@@ -252,10 +252,12 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 				},
 				nil,
 			)
-			require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+			err := tab.buildInitialPost(context.Background(), sig.NodeID())
+			require.NoError(t, err)
 
 			// postClient.Proof() should not be called again
-			require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+			err = tab.buildInitialPost(context.Background(), sig.NodeID())
+			require.NoError(t, err)
 			return nil
 		})
 	}
@@ -397,7 +399,9 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			VRFNonce: types.VRFPostIndex(rand.Uint64()),
 		}
 		nipostState[sig.NodeID()] = state
-		tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash()).Return(state, nil)
+		tab.mnipost.EXPECT().
+			BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash()).
+			Return(state, nil)
 
 		// awaiting atx publication epoch log
 		tab.mclock.EXPECT().CurrentLayer().DoAndReturn(

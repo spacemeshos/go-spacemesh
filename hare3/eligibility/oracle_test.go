@@ -141,11 +141,9 @@ func (t *testOracle) createActiveSet(
 	for i, id := range activeSet {
 		nodeID := types.BytesToNodeID([]byte(strconv.Itoa(i)))
 		miners = append(miners, nodeID)
-		nonce := types.VRFPostIndex(0)
 		atx := &types.ActivationTx{
 			PublishEpoch: lid.GetEpoch(),
 			NumUnits:     uint32(i + 1),
-			VRFNonce:     &nonce,
 			TickCount:    1,
 			SmesherID:    nodeID,
 		}
@@ -159,7 +157,7 @@ func (t *testOracle) createActiveSet(
 func (t *testOracle) addAtx(atx *types.ActivationTx) {
 	t.tb.Helper()
 	require.NoError(t.tb, atxs.Add(t.db, atx))
-	t.atxsdata.AddFromAtx(atx, *atx.VRFNonce, false)
+	t.atxsdata.AddFromAtx(atx, false)
 }
 
 // create n identities with weights and identifiers 1,2,3,...,n.
@@ -371,13 +369,11 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	numMiners := 2
 	activeSet := types.RandomActiveSet(numMiners)
-	nonce := types.VRFPostIndex(0)
 	atx1 := &types.ActivationTx{
 		PublishEpoch: prevEpoch,
 		NumUnits:     1 * 1024,
 		TickCount:    1,
 		SmesherID:    signer.NodeID(),
-		VRFNonce:     &nonce,
 	}
 	atx1.SetID(activeSet[0])
 	atx1.SetReceived(time.Now())
@@ -389,7 +385,6 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx2 := &types.ActivationTx{
 		PublishEpoch: prevEpoch,
 		NumUnits:     9 * 1024,
-		VRFNonce:     &nonce,
 		SmesherID:    signer2.NodeID(),
 		TickCount:    1,
 	}
@@ -732,12 +727,10 @@ func TestActiveSetMatrix(t *testing.T) {
 		node types.NodeID,
 		option ...func(*types.ActivationTx),
 	) *types.ActivationTx {
-		nonce := types.VRFPostIndex(0)
 		atx := &types.ActivationTx{
 			PublishEpoch: target - 1,
 			SmesherID:    node,
 			NumUnits:     1,
-			VRFNonce:     &nonce,
 			TickCount:    1,
 		}
 		atx.SetID(id)
@@ -917,7 +910,7 @@ func TestActiveSetMatrix(t *testing.T) {
 			}
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(oracle.db, atx))
-				oracle.atxsdata.AddFromAtx(atx, *atx.VRFNonce, false)
+				oracle.atxsdata.AddFromAtx(atx, false)
 			}
 			if tc.beacon != types.EmptyBeacon {
 				oracle.mBeacon.EXPECT().GetBeacon(target).Return(tc.beacon, nil)

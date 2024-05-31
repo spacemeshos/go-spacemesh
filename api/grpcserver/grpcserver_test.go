@@ -162,12 +162,12 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	globalAtx = types.NewActivationTx(challenge, addr1, numUnits, nil)
+	globalAtx = types.NewActivationTx(challenge, addr1, numUnits)
 	globalAtx.SetReceived(time.Now())
 	globalAtx.SmesherID = signer.NodeID()
 	globalAtx.TickCount = 1
 
-	globalAtx2 = types.NewActivationTx(challenge, addr2, numUnits, nil)
+	globalAtx2 = types.NewActivationTx(challenge, addr2, numUnits)
 	globalAtx2.SetReceived(time.Now())
 	globalAtx2.SmesherID = signer.NodeID()
 	globalAtx2.TickCount = 1
@@ -468,7 +468,11 @@ func TestNewLocalServer(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			observer, observedLogs := observer.New(zapcore.WarnLevel)
-			logger := zap.New(observer)
+			logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+				func(core zapcore.Core) zapcore.Core {
+					return zapcore.NewTee(core, observer)
+				},
+			)))
 
 			ctrl := gomock.NewController(t)
 			peerCounter := NewMockpeerCounter(ctrl)
@@ -718,7 +722,7 @@ func TestMeshService(t *testing.T) {
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	db := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
 	svc := NewMeshService(
 		db,
 		meshAPIMock,
@@ -1676,7 +1680,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	grpcService := NewMeshService(
-		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -1858,7 +1862,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	db := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
 
 	grpcService := NewMeshService(
 		db,
@@ -2004,7 +2008,7 @@ func TestMultiService(t *testing.T) {
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
 	svc2 := NewMeshService(
-		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -2274,8 +2278,9 @@ func TestEventsReceived(t *testing.T) {
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
 
-	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
+	lg := logtest.New(t)
+	svm := vm.New(sql.InMemory(), vm.WithLogger(lg))
+	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(lg.Zap().Named("conState")))
 	conState.AddToCache(context.Background(), globalTx, time.Now())
 
 	weight := new(big.Rat).SetFloat64(18.7)
@@ -2476,7 +2481,7 @@ func TestMeshService_EpochStream(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, logtest.New(t)),
+		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,

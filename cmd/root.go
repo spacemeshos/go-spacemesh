@@ -79,6 +79,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
 		cfg.DatabasePruneInterval, "configure interval for database pruning")
 
+	flagSet.BoolVar(&cfg.ScanMalfeasantATXs, "scan-malfeasant-atxs", cfg.ScanMalfeasantATXs,
+		"scan for malfeasant ATXs")
+
 	flagSet.BoolVar(&cfg.NoMainOverride, "no-main-override",
 		cfg.NoMainOverride, "force 'nomain' builds to run on the mainnet")
 
@@ -156,7 +159,7 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	/** ======================== API Flags ========================== **/
 
 	flagSet.StringVar(&cfg.API.PublicListener, "grpc-public-listener",
-		cfg.API.PublicListener, "Socket for grpc services that are save to expose publicly.")
+		cfg.API.PublicListener, "Socket for grpc services that are safe to expose publicly.")
 	flagSet.StringVar(&cfg.API.PrivateListener, "grpc-private-listener",
 		cfg.API.PrivateListener, "Socket for grpc services that are not safe to expose publicly.")
 	flagSet.StringVar(&cfg.API.PostListener, "grpc-post-listener", cfg.API.PostListener,

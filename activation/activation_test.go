@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -68,7 +69,7 @@ type testAtxBuilder struct {
 }
 
 func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
-	observer, observedLogs := observer.New(zapcore.DebugLevel)
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -103,6 +104,7 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 	b := NewBuilder(
 		cfg,
 		tab.db,
+		atxsdata.New(),
 		tab.localDb,
 		tab.mpub,
 		tab.mnipost,
@@ -174,6 +176,7 @@ func publishAtx(
 			built = new(wire.ActivationTxV1)
 			codec.MustDecode(got, built)
 			require.NoError(tb, atxs.Add(tab.db, toAtx(tb, built)))
+			tab.atxsdata.AddFromAtx(toAtx(tb, built), false)
 			return nil
 		})
 
@@ -335,6 +338,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
 	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	// create and publish ATX
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).Times(4)
@@ -342,16 +346,18 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	atx1, err := publishAtx(t, tab, sig.NodeID(), posEpoch, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx1)
+	require.Equal(t, prevAtx.ID(), atx1.PositioningATXID)
 
 	// create and publish another ATX
 	currLayer = (posEpoch + 1).FirstLayer()
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).Times(4)
-	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), prevAtx.ID(), tab.goldenATXID, gomock.Any())
+	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atx1.ID(), tab.goldenATXID, gomock.Any())
 	atx2, err := publishAtx(t, tab, sig.NodeID(), atx1.PublishEpoch, &currLayer, layersPerEpoch)
 	require.NoError(t, err)
 	require.NotNil(t, atx2)
 	require.NotEqual(t, atx1, atx2)
 	require.Equal(t, atx1.PublishEpoch+1, atx2.PublishEpoch)
+	require.Equal(t, atx1.ID(), atx2.PositioningATXID)
 
 	// state is cleaned up
 	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
@@ -370,6 +376,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
 	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
@@ -418,6 +425,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
 	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	publishEpoch := posEpoch + 1
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
@@ -491,6 +499,7 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 	prevAtx.Sign(sig)
 	vPrevAtx := toAtx(t, prevAtx)
 	require.NoError(t, atxs.Add(tab.db, vPrevAtx))
+	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	publishEpoch := currLayer.GetEpoch()
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
@@ -566,6 +575,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	prevAtx.Sign(sig)
 	vPrevAtx := toAtx(t, prevAtx)
 	require.NoError(t, atxs.Add(tab.db, vPrevAtx))
+	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	publishEpoch := posEpoch + 1
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(
@@ -625,6 +635,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	posAtx := newInitialATXv1(t, tab.goldenATXID, func(atx *wire.ActivationTxV1) { atx.PublishEpoch = posEpoch })
 	posAtx.Sign(sig)
 	require.NoError(t, atxs.Add(tab.db, toAtx(t, posAtx)))
+	tab.atxsdata.AddFromAtx(toAtx(t, posAtx), false)
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), posAtx.ID(), tab.goldenATXID, gomock.Any())
@@ -655,8 +666,9 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 		NumUnits:      uint32(12),
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		Challenge:     shared.ZeroChallenge,
 	}
-	require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), post))
+	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
 	initialPost := &types.Post{
 		Nonce:   post.Nonce,
 		Indices: post.Indices,
@@ -695,8 +707,9 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 		NumUnits:      uint32(12),
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		Challenge:     shared.ZeroChallenge,
 	}
-	require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), refPost))
+	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), refPost))
 	initialPost := &types.Post{
 		Nonce:   refPost.Nonce,
 		Indices: refPost.Indices,
@@ -717,12 +730,10 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
-
 	tab.mnipost.EXPECT().
 		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, ErrATXChallengeExpired)
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-
 	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(currLayer.Add(1)).Do(func(got types.LayerID) <-chan struct{} {
 		close(ch)
@@ -747,7 +758,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 	}
 
 	// initial post is preserved
-	post, err := nipost.InitialPost(tab.localDB, sig.NodeID())
+	post, err := nipost.GetPost(tab.localDB, sig.NodeID())
 	require.NoError(t, err)
 	require.NotNil(t, post)
 	require.Equal(t, refPost, *post)
@@ -774,6 +785,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	vPosAtx := toAtx(t, posAtx)
 	vPosAtx.TickCount = 100
 	r.NoError(atxs.Add(tab.db, vPosAtx))
+	tab.atxsdata.AddFromAtx(vPosAtx, false)
 
 	nonce := types.VRFPostIndex(123)
 	prevAtx := newInitialATXv1(t, tab.goldenATXID, func(atx *wire.ActivationTxV1) {
@@ -782,6 +794,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	prevAtx.Sign(sig)
 	vPrevAtx := toAtx(t, prevAtx)
 	r.NoError(atxs.Add(tab.db, vPrevAtx))
+	tab.atxsdata.AddFromAtx(vPrevAtx, false)
 
 	// Act
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
@@ -811,11 +824,13 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
 
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
-			currentLayer = currentLayer.Add(5)
-			return newNIPostWithPoet(t, poetBytes), nil
-		})
+	tab.mnipost.EXPECT().
+		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(
+			func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
+				currentLayer = currentLayer.Add(5)
+				return newNIPostWithPoet(t, poetBytes), nil
+			})
 
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
@@ -862,6 +877,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	posAtx := newInitialATXv1(t, tab.goldenATXID)
 	posAtx.Sign(otherSigner)
 	r.NoError(atxs.Add(tab.db, toAtx(t, posAtx)))
+	tab.atxsdata.AddFromAtx(toAtx(t, posAtx), false)
 
 	// Act & Assert
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
@@ -924,8 +940,9 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		NumUnits:      uint32(12),
 		CommitmentATX: types.RandomATXID(),
 		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		Challenge:     shared.ZeroChallenge,
 	}
-	require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), post))
+	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
 	initialPost := &types.Post{
 		Nonce:   post.Nonce,
 		Indices: post.Indices,
@@ -955,6 +972,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
 	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	tab.mclock.EXPECT().CurrentLayer().Return(posEpoch.FirstLayer()).AnyTimes()
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
@@ -964,7 +982,9 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	nipostErr := errors.New("NIPost builder error")
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), sig, gomock.Any(), gomock.Any()).Return(nil, nipostErr)
+	tab.mnipost.EXPECT().
+		BuildNIPost(gomock.Any(), sig, gomock.Any(), gomock.Any()).
+		Return(nil, nipostErr)
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 	require.ErrorIs(t, tab.PublishActivationTx(context.Background(), sig), nipostErr)
 
@@ -1010,8 +1030,8 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
 	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
-	publishEpoch := prevAtx.PublishEpoch + 1
 	currLayer := prevAtx.PublishEpoch.FirstLayer()
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
 	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
@@ -1022,7 +1042,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		}).AnyTimes()
 	done := make(chan struct{})
 	close(done)
-	tab.mclock.EXPECT().AwaitLayer(publishEpoch.FirstLayer()).DoAndReturn(
+	tab.mclock.EXPECT().AwaitLayer(prevAtx.PublishEpoch.Add(1).FirstLayer()).DoAndReturn(
 		func(got types.LayerID) <-chan struct{} {
 			// advance to publish layer
 			if currLayer.Before(got) {
@@ -1109,9 +1129,6 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	}
 
 	// state is cleaned up
-	_, err = nipost.InitialPost(tab.localDB, sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-
 	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -1153,7 +1170,8 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, metadata, post.NumUnits)
 	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 }
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
@@ -1185,10 +1203,12 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, metadata, numUnits)
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	err = tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 }
 
 func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
@@ -1218,7 +1238,8 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		LabelsPerUnit: tab.conf.LabelsPerUnit,
 	}
 	tab.mValidator.EXPECT().Post(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, metadata, numUnits)
-	require.ErrorContains(t, tab.buildInitialPost(context.Background(), sig.NodeID()), "nil VRF nonce")
+	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.ErrorContains(t, err, "nil VRF nonce")
 
 	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
 	require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
@@ -1240,7 +1261,8 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		},
 		nil,
 	)
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	err = tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 }
 
 func TestWaitPositioningAtx(t *testing.T) {
@@ -1271,7 +1293,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 			// everything else are stubs that are irrelevant for the test
 			tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{}, nil).AnyTimes()
 			tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-			tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			tab.mnipost.EXPECT().
+				BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&nipost.NIPostState{}, nil)
 			closed := make(chan struct{})
 			close(closed)
@@ -1293,8 +1316,9 @@ func TestWaitPositioningAtx(t *testing.T) {
 				NumUnits:      uint32(12),
 				CommitmentATX: types.RandomATXID(),
 				VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+				Challenge:     shared.ZeroChallenge,
 			}
-			require.NoError(t, nipost.AddInitialPost(tab.localDb, sig.NodeID(), post))
+			require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
 			initialPost := &types.Post{
 				Nonce:   post.Nonce,
 				Indices: post.Indices,
@@ -1360,6 +1384,7 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	vInvalidAtx.TickCount = 100
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(tab.db, vInvalidAtx))
+	tab.atxsdata.AddFromAtx(vInvalidAtx, false)
 
 	// Valid chain with lower height
 	sigValid, err := signing.NewEdSigner()
@@ -1369,6 +1394,7 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	validAtx.Sign(sigValid)
 	vValidAtx := toAtx(t, validAtx)
 	require.NoError(t, atxs.Add(tab.db, vValidAtx))
+	tab.atxsdata.AddFromAtx(vValidAtx, false)
 
 	tab.mValidator.EXPECT().
 		VerifyChain(gomock.Any(), invalidAtx.ID(), tab.goldenATXID, gomock.Any()).
@@ -1376,12 +1402,12 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	tab.mValidator.EXPECT().
 		VerifyChain(gomock.Any(), validAtx.ID(), tab.goldenATXID, gomock.Any())
 
-	posAtxID, err := tab.getPositioningAtx(context.Background(), sig.NodeID(), 77)
+	posAtxID, err := tab.getPositioningAtx(context.Background(), sig.NodeID(), 77, nil)
 	require.NoError(t, err)
 	require.Equal(t, posAtxID, vValidAtx.ID())
 
 	// should use the cached positioning ATX when asked for the same publish epoch
-	posAtxID, err = tab.getPositioningAtx(context.Background(), sig.NodeID(), 77)
+	posAtxID, err = tab.getPositioningAtx(context.Background(), sig.NodeID(), 77, nil)
 	require.NoError(t, err)
 	require.Equal(t, posAtxID, vValidAtx.ID())
 
@@ -1392,21 +1418,89 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	tab.mValidator.EXPECT().
 		VerifyChain(gomock.Any(), validAtx.ID(), tab.goldenATXID, gomock.Any())
 
-	posAtxID, err = tab.getPositioningAtx(context.Background(), sig.NodeID(), 99)
+	posAtxID, err = tab.getPositioningAtx(context.Background(), sig.NodeID(), 99, nil)
 	require.NoError(t, err)
 	require.Equal(t, posAtxID, vValidAtx.ID())
 }
 
-func TestGetPositioningAtxDbFailed(t *testing.T) {
-	tab := newTestBuilder(t, 1)
-	sig := maps.Values(tab.signers)[0]
+func TestGetPositioningAtx(t *testing.T) {
+	t.Parallel()
+	t.Run("db failed", func(t *testing.T) {
+		t.Parallel()
+		tab := newTestBuilder(t, 1)
 
-	db := sqlmocks.NewMockExecutor(gomock.NewController(t))
-	tab.Builder.db = db
-	expected := errors.New("db error")
-	db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)
+		db := sqlmocks.NewMockExecutor(gomock.NewController(t))
+		tab.Builder.db = db
+		expected := errors.New("db error")
+		db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)
 
-	none, err := tab.getPositioningAtx(context.Background(), sig.NodeID(), 99)
-	require.ErrorIs(t, err, expected)
-	require.Equal(t, types.ATXID{}, none)
+		none, err := tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, nil)
+		require.ErrorIs(t, err, expected)
+		require.Equal(t, types.ATXID{}, none)
+	})
+	t.Run("picks golden if no ATXs", func(t *testing.T) {
+		tab := newTestBuilder(t, 1)
+		atx, err := tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, nil)
+		require.NoError(t, err)
+		require.Equal(t, tab.goldenATXID, atx)
+	})
+	t.Run("prefers own previous to golden", func(t *testing.T) {
+		prev := &types.ActivationTx{}
+		prev.SetID(types.RandomATXID())
+		tab := newTestBuilder(t, 1)
+		atx, err := tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, prev)
+		require.NoError(t, err)
+		require.Equal(t, prev.ID(), atx)
+	})
+	t.Run("prefers own previous when it has GTE ticks", func(t *testing.T) {
+		tab := newTestBuilder(t, 1)
+
+		atxInDb := &types.ActivationTx{TickCount: 10}
+		atxInDb.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(tab.db, atxInDb))
+		tab.atxsdata.AddFromAtx(atxInDb, false)
+
+		prev := &types.ActivationTx{TickCount: 100}
+		prev.SetID(types.RandomATXID())
+
+		tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atxInDb.ID(), tab.goldenATXID, gomock.Any())
+		found, err := tab.searchPositioningAtx(context.Background(), types.EmptyNodeID, 99)
+		require.NoError(t, err)
+		require.Equal(t, atxInDb.ID(), found)
+
+		// prev.Height > found.Height
+		selected, err := tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, prev)
+		require.NoError(t, err)
+		require.Equal(t, prev.ID(), selected)
+
+		// prev.Height == found.Height
+		prev.TickCount = atxInDb.TickCount
+		selected, err = tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, prev)
+		require.NoError(t, err)
+		require.Equal(t, prev.ID(), selected)
+	})
+}
+
+func TestFindFullyValidHighTickAtx(t *testing.T) {
+	t.Parallel()
+	golden := types.RandomATXID()
+
+	t.Run("skips malicious ATXs", func(t *testing.T) {
+		data := atxsdata.New()
+		atxMal := &types.ActivationTx{TickCount: 100, SmesherID: types.RandomNodeID()}
+		atxMal.SetID(types.RandomATXID())
+		data.AddFromAtx(atxMal, true)
+
+		atxLower := &types.ActivationTx{TickCount: 10, SmesherID: types.RandomNodeID()}
+		atxLower.SetID(types.RandomATXID())
+		data.AddFromAtx(atxLower, false)
+
+		mValidator := NewMocknipostValidator(gomock.NewController(t))
+		mValidator.EXPECT().VerifyChain(gomock.Any(), atxLower.ID(), golden, gomock.Any())
+
+		lg := zaptest.NewLogger(t)
+		found, err := findFullyValidHighTickAtx(context.Background(), data, 0, golden, mValidator, lg)
+		require.NoError(t, err)
+		require.Equal(t, atxLower.ID(), found)
+	})
 }
