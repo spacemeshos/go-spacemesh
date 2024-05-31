@@ -11,8 +11,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -97,7 +97,7 @@ func TestDownload(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := logtest.New(t)
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			ctrl := gomock.NewController(t)
 			fetcher := mocks.NewMockAtxFetcher(ctrl)
 			for _, atx := range tc.existing {

@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestMain(m *testing.M) {
@@ -48,7 +49,7 @@ func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
 }
 
 func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lg := logtest.New(t)
 
 	ctrl := gomock.NewController(t)
@@ -270,7 +271,7 @@ func TestHandler_HandleMalfeasanceProof_multipleATXs(t *testing.T) {
 }
 
 func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
@@ -491,7 +492,7 @@ func TestHandler_HandleMalfeasanceProof_multipleBallots(t *testing.T) {
 }
 
 func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
@@ -760,7 +761,7 @@ func TestHandler_HandleMalfeasanceProof_hareEquivocation(t *testing.T) {
 }
 
 func TestHandler_CrossDomain(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
@@ -824,7 +825,7 @@ func TestHandler_CrossDomain(t *testing.T) {
 }
 
 func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
@@ -887,7 +888,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleATXs(t *testing.T) {
 }
 
 func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
@@ -949,7 +950,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_multipleBallots(t *testing.T) {
 }
 
 func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
@@ -1014,7 +1015,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_hareEquivocation(t *testing.T) {
 }
 
 func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lg := logtest.New(t)
 	ctrl := gomock.NewController(t)
 	trt := malfeasance.NewMocktortoise(ctrl)
@@ -1079,7 +1080,7 @@ func TestHandler_HandleSyncedMalfeasanceProof_wrongHash(t *testing.T) {
 type testMalfeasanceHandler struct {
 	*malfeasance.Handler
 
-	db  *sql.Database
+	db  *statesql.Database
 	sig *signing.EdSigner
 
 	mPostVerifier *malfeasance.MockpostVerifier
@@ -1087,7 +1088,7 @@ type testMalfeasanceHandler struct {
 }
 
 func newTestMalfeasanceHandler(t testing.TB) *testMalfeasanceHandler {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)

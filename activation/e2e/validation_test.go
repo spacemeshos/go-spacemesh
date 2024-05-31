@@ -17,8 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestValidator_Validate(t *testing.T) {
@@ -30,7 +30,7 @@ func TestValidator_Validate(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	validator := activation.NewMocknipostValidator(gomock.NewController(t))
 	syncer := activation.NewMocksyncer(gomock.NewController(t))
@@ -67,7 +67,7 @@ func TestValidator_Validate(t *testing.T) {
 		WithPhaseShift(poetCfg.PhaseShift),
 		WithCycleGap(poetCfg.CycleGap),
 	)
-	poetDb := activation.NewPoetDb(sql.InMemory(), logger.Named("poetDb"))
+	poetDb := activation.NewPoetDb(statesql.InMemory(), logger.Named("poetDb"))
 	client, err := activation.NewPoetClient(
 		poetDb,
 		types.PoetServer{Address: poetProver.RestURL().String()},

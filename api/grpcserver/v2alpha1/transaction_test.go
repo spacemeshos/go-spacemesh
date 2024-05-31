@@ -25,13 +25,14 @@ import (
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 func TestTransactionService_List(t *testing.T) {
 	types.SetLayersPerEpoch(5)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewTransactionResultGenerator().WithAddresses(2)
@@ -136,7 +137,7 @@ func TestTransactionService_List(t *testing.T) {
 
 func TestTransactionService_EstimateGas(t *testing.T) {
 	types.SetLayersPerEpoch(5)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	vminst := vm.New(db)
 	ctx := context.Background()
 
@@ -199,7 +200,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 
 func TestTransactionService_ParseTransaction(t *testing.T) {
 	types.SetLayersPerEpoch(5)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	vminst := vm.New(db)
 	ctx := context.Background()
 
@@ -292,7 +293,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	txHandler := NewMocktransactionValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
-	svc := NewTransactionService(sql.InMemory(), nil, syncer, txHandler, publisher)
+	svc := NewTransactionService(statesql.InMemory(), nil, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -335,7 +336,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	txHandler := NewMocktransactionValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
-	svc := NewTransactionService(sql.InMemory(), nil, syncer, txHandler, publisher)
+	svc := NewTransactionService(statesql.InMemory(), nil, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -372,7 +373,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	txHandler := NewMocktransactionValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
-	svc := NewTransactionService(sql.InMemory(), nil, syncer, txHandler, publisher)
+	svc := NewTransactionService(statesql.InMemory(), nil, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 

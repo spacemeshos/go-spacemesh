@@ -10,10 +10,10 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 
 func checkpointDB(
 	ctx context.Context,
-	db *sql.Database,
+	db *statesql.Database,
 	snapshot types.LayerID,
 	numAtxs int,
 ) (*types.Checkpoint, error) {
@@ -115,7 +115,7 @@ func checkpointDB(
 func Generate(
 	ctx context.Context,
 	fs afero.Fs,
-	db *sql.Database,
+	db *statesql.Database,
 	dataDir string,
 	snapshot types.LayerID,
 	numAtxs int,

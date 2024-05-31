@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -467,7 +468,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
-				db     = sql.InMemory()
+				db     = statesql.InMemory()
 				epochs = map[types.EpochID]*epochInfo{}
 				first  = tc.target.Add(1).GetEpoch()
 			)

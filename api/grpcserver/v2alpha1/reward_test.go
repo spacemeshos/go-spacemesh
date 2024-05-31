@@ -15,12 +15,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestRewardService_List(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewRewardsGenerator().WithAddresses(100).WithUniqueCoinbase()
@@ -103,7 +103,7 @@ func TestRewardService_List(t *testing.T) {
 }
 
 func TestRewardStreamService_Stream(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewRewardsGenerator()

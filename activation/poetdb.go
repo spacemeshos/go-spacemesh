@@ -17,18 +17,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 var ErrObjectExists = sql.ErrObjectExists
 
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	sqlDB  *sql.Database
+	sqlDB  *statesql.Database
 	logger *zap.Logger
 }
 
 // NewPoetDb returns a new PoET handler.
-func NewPoetDb(db *sql.Database, log *zap.Logger) *PoetDb {
+func NewPoetDb(db *statesql.Database, log *zap.Logger) *PoetDb {
 	return &PoetDb{sqlDB: db, logger: log}
 }
 

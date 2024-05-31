@@ -29,13 +29,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
 	logger   log.Log
-	cdb      *sql.Database
+	cdb      *statesql.Database
 	atxsdata *atxsdata.Data
 	clock    layerClock
 
@@ -58,7 +59,7 @@ type Mesh struct {
 
 // NewMesh creates a new instant of a mesh.
 func NewMesh(
-	db *sql.Database,
+	db *statesql.Database,
 	atxsdata *atxsdata.Data,
 	c layerClock,
 	trtl system.Tortoise,

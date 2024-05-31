@@ -12,26 +12,16 @@ import (
 )
 
 func Test_Transaction_Isolation(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	testMigration := NewMockMigration(ctrl)
-	testMigration.EXPECT().Name().Return("test").AnyTimes()
-	testMigration.EXPECT().Order().Return(1).AnyTimes()
-	testMigration.EXPECT().Apply(gomock.Any()).DoAndReturn(func(e Executor) error {
-		if _, err := e.Exec(`create table testing1 (
-			id varchar primary key,
-			field int
-		)`, nil, nil); err != nil {
-			return err
-		}
-		return nil
-	})
-
 	db := InMemory(
-		WithMigrations([]Migration{testMigration}),
 		WithConnections(10),
 		WithLatencyMetering(true),
+		WithDatabaseSchema(&Schema{
+			Script: `create table testing1 (
+				id varchar primary key,
+				field int
+			);`,
+		}),
 	)
-
 	tx, err := db.Tx(context.Background())
 	require.NoError(t, err)
 
@@ -74,7 +64,10 @@ func Test_Migration_Rollback(t *testing.T) {
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	_, err := Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
+		WithForceMigrations(true),
 	)
 	require.ErrorContains(t, err, "migration 2 failed")
 }
@@ -88,7 +81,10 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	db, err := Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1}),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1},
+		}),
+		WithForceMigrations(true),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -100,7 +96,9 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 	migration2.EXPECT().Rollback().Return(nil)
 
 	_, err = Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
 	)
 	require.ErrorContains(t, err, "migration 2 failed")
 }
@@ -115,10 +113,14 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 	migration2.EXPECT().Apply(gomock.Any()).Return(nil)
 
+	schema := &Schema{
+		Migrations: MigrationList{migration1, migration2},
+	}
+	schema.SkipMigrations(1)
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	db, err := Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
-		WithSkipMigrations(1),
+		WithDatabaseSchema(schema),
+		WithForceMigrations(true),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -138,13 +140,18 @@ func TestDatabaseVacuumState(t *testing.T) {
 
 	dbFile := filepath.Join(dir, "test.sql")
 	db, err := Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1}),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1},
+		}),
+		WithForceMigrations(true),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	db, err = Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
 		WithVacuumState(2),
 	)
 	require.NoError(t, err)
@@ -180,14 +187,16 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 
 	dbFile := filepath.Join(dir, "test.sql")
-	db, err := Open("file:" + dbFile)
+	db, err := Open("file:"+dbFile, WithForceMigrations(true))
 	require.NoError(t, err)
 	_, err = db.Exec("PRAGMA user_version = 3", nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	_, err = Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
 	)
 	require.ErrorIs(t, err, ErrTooNew)
 }

@@ -18,10 +18,10 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestMain(m *testing.M) {
@@ -231,7 +231,12 @@ func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
 	}
 }
 
-func createMesh(t *testing.T, db *sql.Database, miners map[types.NodeID][]*types.ActivationTx, accts []*types.Account) {
+func createMesh(
+	t *testing.T,
+	db *statesql.Database,
+	miners map[types.NodeID][]*types.ActivationTx,
+	accts []*types.Account,
+) {
 	for _, vatxs := range miners {
 		vatxs = slices.Clone(vatxs)
 		// ATXs are expected to be in reverse epoch order and we want older ATXs
@@ -293,7 +298,7 @@ func TestRunner_Generate(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			snapshot := types.LayerID(5)
 			createMesh(t, db, tc.atxes, tc.accts)
 
@@ -343,7 +348,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			snapshot := types.LayerID(5)
 			var atx *types.ActivationTx
 			if tc.missingCommitment {

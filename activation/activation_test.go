@@ -34,6 +34,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	sqlmocks "github.com/spacemeshos/go-spacemesh/sql/mocks"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 // ========== Vars / Consts ==========
@@ -78,7 +79,7 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
-		db:          sql.InMemory(),
+		db:          statesql.InMemory(),
 		localDb:     localsql.InMemory(sql.WithConnections(numSigners)),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 

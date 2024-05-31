@@ -20,9 +20,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync/mocks"
 )
 
@@ -138,7 +138,7 @@ type tester struct {
 	tb           testing.TB
 	syncer       *Syncer
 	localdb      *localsql.Database
-	db           *sql.Database
+	db           *statesql.Database
 	cfg          Config
 	ctrl         *gomock.Controller
 	fetcher      *mocks.Mockfetcher
@@ -151,7 +151,7 @@ type tester struct {
 
 func newTester(tb testing.TB, cfg Config) *tester {
 	localdb := localsql.InMemory()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
 	clock := clockwork.NewFakeClock()

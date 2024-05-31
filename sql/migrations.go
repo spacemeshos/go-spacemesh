@@ -3,15 +3,40 @@ package sql
 import (
 	"bufio"
 	"bytes"
-	"embed"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strconv"
 	"strings"
 )
 
-//go:embed migrations/**/*.sql
-var embedded embed.FS
+// MigrationList denotes a list of migrations.
+type MigrationList []Migration
+
+// AddMigration adds a Migration to the MigrationList, overriding the migration with the
+// same order number if it already exists. The function returns updated migration list.
+// The state of the original migration list is undefined after calling this function.
+func (l MigrationList) AddMigration(migration Migration) MigrationList {
+	for i, m := range l {
+		if m.Order() == migration.Order() {
+			l[i] = migration
+			return l
+		}
+		if m.Order() > migration.Order() {
+			l = slices.Insert(l, i, migration)
+			return l
+		}
+	}
+	return append(l, migration)
+}
+
+// Version returns database version for the specified migration list.
+func (l MigrationList) Version() int {
+	if len(l) == 0 {
+		return 0
+	}
+	return l[len(l)-1].Order()
+}
 
 type sqlMigration struct {
 	order   int
@@ -65,18 +90,9 @@ func version(db Executor) (int, error) {
 	return current, nil
 }
 
-func StateMigrations() ([]Migration, error) {
-	return sqlMigrations("state")
-}
-
-func LocalMigrations() ([]Migration, error) {
-	return sqlMigrations("local")
-}
-
-func sqlMigrations(dbname string) ([]Migration, error) {
-	var migrations []Migration
-	root := fmt.Sprintf("migrations/%s", dbname)
-	err := fs.WalkDir(embedded, root, func(path string, d fs.DirEntry, err error) error {
+func LoadSQLMigrations(fsys fs.FS) (MigrationList, error) {
+	var migrations MigrationList
+	err := fs.WalkDir(fsys, "schema/migrations", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("walkdir %s: %w", path, err)
 		}
@@ -91,7 +107,7 @@ func sqlMigrations(dbname string) ([]Migration, error) {
 		if err != nil {
 			return fmt.Errorf("invalid migration %s: %w", d.Name(), err)
 		}
-		f, err := embedded.Open(path)
+		f, err := fsys.Open(path)
 		if err != nil {
 			return fmt.Errorf("read file %s: %w", path, err)
 		}

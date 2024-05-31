@@ -18,9 +18,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
@@ -50,7 +50,7 @@ type proposalMetadata struct {
 func getProposalMetadata(
 	ctx context.Context,
 	logger *zap.Logger,
-	db *sql.Database,
+	db *statesql.Database,
 	atxs *atxsdata.Data,
 	cfg Config,
 	lid types.LayerID,
@@ -232,7 +232,7 @@ func toUint64Slice(b []byte) []uint64 {
 
 func rewardInfoAndHeight(
 	cfg Config,
-	db *sql.Database,
+	db *statesql.Database,
 	atxs *atxsdata.Data,
 	props []*types.Proposal,
 ) (uint64, []types.AnyReward, error) {

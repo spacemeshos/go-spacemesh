@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func Test_Highest_ReturnsGoldenAtxOnError(t *testing.T) {
@@ -137,7 +138,7 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
-	smesher, proof := grpcserver.BallotMalfeasance(t, sql.InMemory())
+	smesher, proof := grpcserver.BallotMalfeasance(t, statesql.InMemory())
 	id := types.RandomATXID()
 	atx := types.ActivationTx{
 		Sequence:     rand.Uint64(),

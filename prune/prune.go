@@ -7,9 +7,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -22,7 +22,7 @@ func WithLogger(logger *zap.Logger) Opt {
 	}
 }
 
-func New(db *sql.Database, safeDist uint32, activesetEpoch types.EpochID, opts ...Opt) *Pruner {
+func New(db *statesql.Database, safeDist uint32, activesetEpoch types.EpochID, opts ...Opt) *Pruner {
 	p := &Pruner{
 		logger:         zap.NewNop(),
 		db:             db,
@@ -37,7 +37,7 @@ func New(db *sql.Database, safeDist uint32, activesetEpoch types.EpochID, opts .
 
 type Pruner struct {
 	logger         *zap.Logger
-	db             *sql.Database
+	db             *statesql.Database
 	safeDist       uint32
 	activesetEpoch types.EpochID
 }

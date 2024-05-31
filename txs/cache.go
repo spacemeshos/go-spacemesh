@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -332,7 +333,7 @@ func (ac *accountCache) add(logger *zap.Logger, tx *types.Transaction, received 
 
 func (ac *accountCache) addPendingFromNonce(
 	logger *zap.Logger,
-	db *sql.Database,
+	db *statesql.Database,
 	nonce uint64,
 	applied types.LayerID,
 ) error {
@@ -423,7 +424,7 @@ func (ac *accountCache) getMempool(logger *zap.Logger) []*NanoTX {
 // because applying a layer changes the conservative balance in the cache.
 func (ac *accountCache) resetAfterApply(
 	logger *zap.Logger,
-	db *sql.Database,
+	db *statesql.Database,
 	nextNonce, newBalance uint64,
 	applied types.LayerID,
 ) error {
@@ -489,7 +490,7 @@ func groupTXsByPrincipal(logger *zap.Logger, mtxs []*types.MeshTransaction) map[
 }
 
 // buildFromScratch builds the cache from database.
-func (c *Cache) buildFromScratch(db *sql.Database) error {
+func (c *Cache) buildFromScratch(db *statesql.Database) error {
 	applied, err := layers.GetLastApplied(db)
 	if err != nil {
 		return fmt.Errorf("cache: get pending %w", err)
@@ -606,7 +607,7 @@ func acceptable(err error) bool {
 
 func (c *Cache) Add(
 	ctx context.Context,
-	db *sql.Database,
+	db *statesql.Database,
 	tx *types.Transaction,
 	received time.Time,
 	mustPersist bool,
@@ -653,7 +654,7 @@ func (c *Cache) has(tid types.TransactionID) bool {
 
 // LinkTXsWithProposal associates the transactions to a proposal.
 func (c *Cache) LinkTXsWithProposal(
-	db *sql.Database,
+	db *statesql.Database,
 	lid types.LayerID,
 	pid types.ProposalID,
 	tids []types.TransactionID,
@@ -670,7 +671,7 @@ func (c *Cache) LinkTXsWithProposal(
 
 // LinkTXsWithBlock associates the transactions to a block.
 func (c *Cache) LinkTXsWithBlock(
-	db *sql.Database,
+	db *statesql.Database,
 	lid types.LayerID,
 	bid types.BlockID,
 	tids []types.TransactionID,
@@ -702,7 +703,7 @@ func (c *Cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 	return nil
 }
 
-func (c *Cache) applyEmptyLayer(db *sql.Database, lid types.LayerID) error {
+func (c *Cache) applyEmptyLayer(db *statesql.Database, lid types.LayerID) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -721,7 +722,7 @@ func (c *Cache) applyEmptyLayer(db *sql.Database, lid types.LayerID) error {
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
 func (c *Cache) ApplyLayer(
 	ctx context.Context,
-	db *sql.Database,
+	db *statesql.Database,
 	lid types.LayerID,
 	bid types.BlockID,
 	results []types.TransactionWithResult,
@@ -838,7 +839,7 @@ func (c *Cache) ApplyLayer(
 	return nil
 }
 
-func (c *Cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
+func (c *Cache) RevertToLayer(db *statesql.Database, revertTo types.LayerID) error {
 	if err := undoLayers(db, revertTo.Add(1)); err != nil {
 		return err
 	}
@@ -879,7 +880,7 @@ func (c *Cache) GetMempool(logger *zap.Logger) map[types.Address][]*NanoTX {
 }
 
 // checkApplyOrder returns an error if layers were not applied in order.
-func checkApplyOrder(logger *zap.Logger, db *sql.Database, toApply types.LayerID) error {
+func checkApplyOrder(logger *zap.Logger, db *statesql.Database, toApply types.LayerID) error {
 	lastApplied, err := layers.GetLastApplied(db)
 	if err != nil {
 		logger.Error("failed to get last applied layer", zap.Error(err))
@@ -895,7 +896,7 @@ func checkApplyOrder(logger *zap.Logger, db *sql.Database, toApply types.LayerID
 	return nil
 }
 
-func addToProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
+func addToProposal(db *statesql.Database, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
 	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		for _, tid := range tids {
 			if err := transactions.AddToProposal(dbtx, tid, lid, pid); err != nil {
@@ -906,7 +907,7 @@ func addToProposal(db *sql.Database, lid types.LayerID, pid types.ProposalID, ti
 	})
 }
 
-func addToBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+func addToBlock(db *statesql.Database, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
 	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		for _, tid := range tids {
 			if err := transactions.AddToBlock(dbtx, tid, lid, bid); err != nil {
@@ -917,7 +918,7 @@ func addToBlock(db *sql.Database, lid types.LayerID, bid types.BlockID, tids []t
 	})
 }
 
-func undoLayers(db *sql.Database, from types.LayerID) error {
+func undoLayers(db *statesql.Database, from types.LayerID) error {
 	return db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		err := transactions.UndoLayers(dbtx, from)
 		if err != nil {

@@ -12,8 +12,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -28,7 +28,7 @@ type Handler struct {
 	logger *zap.Logger
 
 	fetcher  system.Fetcher
-	db       *sql.Database
+	db       *statesql.Database
 	tortoise tortoiseProvider
 	mesh     meshProvider
 }
@@ -44,7 +44,13 @@ func WithLogger(logger *zap.Logger) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(f system.Fetcher, db *sql.Database, tortoise tortoiseProvider, m meshProvider, opts ...Opt) *Handler {
+func NewHandler(
+	f system.Fetcher,
+	db *statesql.Database,
+	tortoise tortoiseProvider,
+	m meshProvider,
+	opts ...Opt,
+) *Handler {
 	h := &Handler{
 		logger:   zap.NewNop(),
 		fetcher:  f,

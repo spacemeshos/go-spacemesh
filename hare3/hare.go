@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -146,7 +147,7 @@ type nodeclock interface {
 func New(
 	nodeclock nodeclock,
 	pubsub pubsub.PublishSubsciber,
-	db *sql.Database,
+	db *statesql.Database,
 	atxsdata *atxsdata.Data,
 	proposals *store.Store,
 	verifier *signing.EdVerifier,
@@ -208,7 +209,7 @@ type Hare struct {
 	// dependencies
 	nodeclock nodeclock
 	pubsub    pubsub.PublishSubsciber
-	db        *sql.Database
+	db        *statesql.Database
 	atxsdata  *atxsdata.Data
 	proposals *store.Store
 	verifier  *signing.EdVerifier

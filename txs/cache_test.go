@@ -13,12 +13,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 type testCache struct {
 	*Cache
-	db *sql.Database
+	db *statesql.Database
 }
 
 type testAcct struct {
@@ -67,7 +68,7 @@ func newMeshTX(
 
 func genAndSaveTXs(
 	t *testing.T,
-	db *sql.Database,
+	db *statesql.Database,
 	signer *signing.EdSigner,
 	from, to uint64,
 	startTime time.Time,
@@ -88,14 +89,14 @@ func genTXs(t *testing.T, signer *signing.EdSigner, from, to uint64, startTime t
 	return mtxs
 }
 
-func saveTXs(t *testing.T, db *sql.Database, mtxs []*types.MeshTransaction) {
+func saveTXs(t *testing.T, db *statesql.Database, mtxs []*types.MeshTransaction) {
 	t.Helper()
 	for _, mtx := range mtxs {
 		require.NoError(t, transactions.Add(db, &mtx.Transaction, mtx.Received))
 	}
 }
 
-func checkTXStateFromDB(t *testing.T, db *sql.Database, txs []*types.MeshTransaction, state types.TXState) {
+func checkTXStateFromDB(t *testing.T, db *statesql.Database, txs []*types.MeshTransaction, state types.TXState) {
 	for _, mtx := range txs {
 		got, err := transactions.Get(db, mtx.ID)
 		require.NoError(t, err)
@@ -103,7 +104,7 @@ func checkTXStateFromDB(t *testing.T, db *sql.Database, txs []*types.MeshTransac
 	}
 }
 
-func checkTXNotInDB(t *testing.T, db *sql.Database, tid types.TransactionID) {
+func checkTXNotInDB(t *testing.T, db *statesql.Database, tid types.TransactionID) {
 	_, err := transactions.Get(db, tid)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -169,7 +170,7 @@ func createState(tb testing.TB, numAccounts int) map[types.Address]*testAcct {
 func createCache(tb testing.TB, numAccounts int) (*testCache, map[types.Address]*testAcct) {
 	tb.Helper()
 	accounts := createState(tb, numAccounts)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	return &testCache{
 		Cache: NewCache(getStateFunc(accounts), zaptest.NewLogger(tb)),
 		db:    db,
@@ -183,7 +184,7 @@ func createSingleAccountTestCache(tb testing.TB) (*testCache, *testAcct) {
 	principal := types.GenerateAddress(signer.PublicKey().Bytes())
 	ta := &testAcct{signer: signer, principal: principal, nonce: rand.Uint64()%1000 + 1, balance: defaultBalance}
 	states := map[types.Address]*testAcct{principal: ta}
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	return &testCache{
 		Cache: NewCache(getStateFunc(states), zaptest.NewLogger(tb)),
 		db:    db,

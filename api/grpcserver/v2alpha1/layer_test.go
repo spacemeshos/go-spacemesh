@@ -16,13 +16,13 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestLayerService_List(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	lrs := make([]layers.Layer, 100)
@@ -98,7 +98,7 @@ func TestLayerConvertEventStatus(t *testing.T) {
 }
 
 func TestLayerStreamService_Stream(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	lrs := make([]layers.Layer, 100)
@@ -225,7 +225,7 @@ func layerGenWithBlock(withBlock bool) layerGenOpt {
 	}
 }
 
-func generateLayer(db *sql.Database, id types.LayerID, opts ...layerGenOpt) (*layers.Layer, error) {
+func generateLayer(db *statesql.Database, id types.LayerID, opts ...layerGenOpt) (*layers.Layer, error) {
 	g := &layerGenOpts{}
 	for _, opt := range opts {
 		opt(g)

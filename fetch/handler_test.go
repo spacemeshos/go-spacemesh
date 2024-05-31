@@ -24,17 +24,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 type testHandler struct {
 	*handler
-	db  *sql.Database
+	db  *statesql.Database
 	cdb *datastore.CachedDB
 }
 
 func createTestHandler(t testing.TB, opts ...sql.Opt) *testHandler {
 	lg := logtest.New(t)
-	db := sql.InMemory(opts...)
+	db := statesql.InMemory(opts...)
 	cdb := datastore.NewCachedDB(db, lg.Zap())
 	return &testHandler{
 		handler: newHandler(cdb, datastore.NewBlobStore(cdb, store.New()), lg),

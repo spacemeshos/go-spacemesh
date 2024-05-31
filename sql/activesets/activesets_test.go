@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestActiveSet(t *testing.T) {
@@ -19,7 +20,7 @@ func TestActiveSet(t *testing.T) {
 		Epoch: 2,
 		Set:   []types.ATXID{{1}, {2}},
 	}
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	require.NoError(t, Add(db, ids[0], set))
 	require.ErrorIs(t, Add(db, ids[0], set), sql.ErrObjectExists)
@@ -68,7 +69,7 @@ func TestCachedActiveSet(t *testing.T) {
 		Epoch: 2,
 		Set:   []types.ATXID{{3}, {4}},
 	}
-	db := sql.InMemory(sql.WithQueryCache(true))
+	db := statesql.InMemory(sql.WithQueryCache(true))
 
 	require.NoError(t, Add(db, ids[0], set0))
 	require.NoError(t, Add(db, ids[1], set1))

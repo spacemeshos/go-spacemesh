@@ -77,6 +77,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -384,7 +385,7 @@ type App struct {
 	fileLock          *flock.Flock
 	signers           []*signing.EdSigner
 	Config            *config.Config
-	db                *sql.Database
+	db                *statesql.Database
 	cachedDB          *datastore.CachedDB
 	dbMetrics         *dbmetrics.DBMetricsCollector
 	localDB           *localsql.Database
@@ -1886,14 +1887,17 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
-	migrations, err := sql.StateMigrations()
-	if err != nil {
-		return fmt.Errorf("failed to load migrations: %w", err)
-	}
 	dbLog := app.addLogger(StateDbLogger, lg)
+	schema, err := statesql.Schema()
+	if err != nil {
+		return fmt.Errorf("error loading db schema: %w", err)
+	}
+	if len(app.Config.DatabaseSkipMigrations) > 0 {
+		schema.SkipMigrations(app.Config.DatabaseSkipMigrations...)
+	}
 	dbopts := []sql.Opt{
 		sql.WithLogger(dbLog.Zap()),
-		sql.WithMigrations(migrations),
+		sql.WithDatabaseSchema(schema),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
@@ -1904,10 +1908,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			activesets.CacheKindActiveSetBlob: app.Config.DatabaseQueryCacheSizes.ActiveSetBlob,
 		}),
 	}
-	if len(app.Config.DatabaseSkipMigrations) > 0 {
-		dbopts = append(dbopts, sql.WithSkipMigrations(app.Config.DatabaseSkipMigrations...))
-	}
-	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
+	sqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
@@ -1949,13 +1950,8 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		app.log.With().Info("malicious ATX check completed", log.Duration("duration", time.Since(start)))
 	}
 
-	migrations, err = sql.LocalMigrations()
-	if err != nil {
-		return fmt.Errorf("load local migrations: %w", err)
-	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog.Zap()),
-		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {

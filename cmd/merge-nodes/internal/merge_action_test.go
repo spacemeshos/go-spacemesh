@@ -24,20 +24,25 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
+func oldSchema(t *testing.T) *sql.Schema {
+	schema, err := localsql.Schema()
+	require.NoError(t, err)
+	schema.Migrations = schema.Migrations[:2]
+	return schema
+}
+
 func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
 	tmpDst := t.TempDir()
 
-	migrations, err := sql.LocalMigrations()
-	require.NoError(t, err)
-
 	db, err := localsql.Open("file:"+filepath.Join(tmpDst, localDbFile),
-		sql.WithMigrations(migrations[:2]), // old schema
+		sql.WithDatabaseSchema(oldSchema(t)),
+		sql.WithForceMigrations(true),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), zaptest.NewLogger(t), "", tmpDst)
-	require.ErrorIs(t, err, ErrInvalidSchema)
+	require.ErrorIs(t, err, sql.ErrOld)
 	require.ErrorContains(t, err, "target database")
 }
 
@@ -82,22 +87,20 @@ func Test_MergeDBs_InvalidSourcePath(t *testing.T) {
 func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
 	tmpDst := t.TempDir()
 
-	migrations, err := sql.LocalMigrations()
-	require.NoError(t, err)
-
 	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	tmpSrc := t.TempDir()
 	db, err = localsql.Open("file:"+filepath.Join(tmpSrc, localDbFile),
-		sql.WithMigrations(migrations[:2]), // old schema
+		sql.WithDatabaseSchema(oldSchema(t)),
+		sql.WithForceMigrations(true),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
-	require.ErrorIs(t, err, ErrInvalidSchema)
+	require.ErrorIs(t, err, sql.ErrOld)
 	require.ErrorContains(t, err, "source database")
 }
 

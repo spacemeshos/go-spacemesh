@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 const layersPerEpoch = 5
@@ -28,7 +29,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestGet(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	atxList := make([]*types.ActivationTx, 0)
 	for i := 0; i < 3; i++ {
@@ -54,7 +55,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestAll(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	atxList := make([]*types.ActivationTx, 0)
 	for i := 0; i < 3; i++ {
@@ -76,7 +77,7 @@ func TestAll(t *testing.T) {
 }
 
 func TestHasID(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	atxList := make([]*types.ActivationTx, 0)
 	for i := 0; i < 3; i++ {
@@ -102,7 +103,7 @@ func TestHasID(t *testing.T) {
 }
 
 func TestGetFirstIDByNodeID(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -137,7 +138,7 @@ func TestGetFirstIDByNodeID(t *testing.T) {
 }
 
 func TestLatestN(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sig1, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -228,7 +229,7 @@ func TestLatestN(t *testing.T) {
 }
 
 func TestGetByEpochAndNodeID(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sig1, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -260,7 +261,7 @@ func TestGetByEpochAndNodeID(t *testing.T) {
 }
 
 func TestGetLastIDByNodeID(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -295,7 +296,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 }
 
 func TestGetIDByEpochAndNodeID(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sig1, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -339,7 +340,7 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 }
 
 func TestGetIDsByEpoch(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	sig1, err := signing.NewEdSigner()
@@ -375,7 +376,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 }
 
 func TestGetIDsByEpochCached(t *testing.T) {
-	db := sql.InMemory(sql.WithQueryCache(true))
+	db := statesql.InMemory(sql.WithQueryCache(true))
 	ctx := context.Background()
 
 	sig1, err := signing.NewEdSigner()
@@ -449,7 +450,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 }
 
 func Test_IterateAtxsWithMalfeasance(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	e1 := types.EpochID(1)
 	m := make(map[types.ATXID]bool)
@@ -479,7 +480,7 @@ func Test_IterateAtxsWithMalfeasance(t *testing.T) {
 }
 
 func Test_IterateAtxIdsWithMalfeasance(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	e1 := types.EpochID(1)
 	m := make(map[types.ATXID]bool)
@@ -510,7 +511,7 @@ func Test_IterateAtxIdsWithMalfeasance(t *testing.T) {
 
 func TestVRFNonce(t *testing.T) {
 	// Arrange
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -543,7 +544,7 @@ func TestVRFNonce(t *testing.T) {
 }
 
 func TestLoadBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	sig, err := signing.NewEdSigner()
@@ -598,7 +599,7 @@ func TestLoadBlob(t *testing.T) {
 }
 
 func TestGetBlobCached(t *testing.T) {
-	db := sql.InMemory(sql.WithQueryCache(true))
+	db := statesql.InMemory(sql.WithQueryCache(true))
 	ctx := context.Background()
 
 	sig, err := signing.NewEdSigner()
@@ -620,7 +621,7 @@ func TestGetBlobCached(t *testing.T) {
 // Test that we don't put in the cache a reference to the blob that was passed to LoadBlob.
 // Each cache entry must use a unique slice for the blob.
 func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
-	db := sql.InMemory(sql.WithQueryCache(true))
+	db := statesql.InMemory(sql.WithQueryCache(true))
 
 	atx := types.ActivationTx{AtxBlob: types.AtxBlob{Blob: []byte("original blob")}}
 	atx.SetID(types.RandomATXID())
@@ -648,7 +649,7 @@ func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
 }
 
 func TestCachedBlobEviction(t *testing.T) {
-	db := sql.InMemory(
+	db := statesql.InMemory(
 		sql.WithQueryCache(true),
 		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
 			atxs.CacheKindATXBlob: 10,
@@ -689,7 +690,7 @@ func TestCachedBlobEviction(t *testing.T) {
 }
 
 func TestCheckpointATX(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	sig, err := signing.NewEdSigner()
@@ -736,7 +737,7 @@ func TestCheckpointATX(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	nonExistingATXID := types.ATXID(types.CalcHash32([]byte("0")))
 	_, err := atxs.Get(db, nonExistingATXID)
@@ -809,7 +810,7 @@ type header struct {
 	filteredOut bool
 }
 
-func createAtx(tb testing.TB, db *sql.Database, hdr header) (types.ATXID, *signing.EdSigner) {
+func createAtx(tb testing.TB, db *statesql.Database, hdr header) (types.ATXID, *signing.EdSigner) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 
@@ -923,7 +924,7 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			var sigs []*signing.EdSigner
 			var ids []types.ATXID
 			filtered := make(map[types.ATXID]struct{})
@@ -964,7 +965,7 @@ func TestLatest(t *testing.T) {
 		{"out of order", []uint32{3, 4, 1, 2}, 4},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			for i, epoch := range tc.epochs {
 				full := &types.ActivationTx{
 					PublishEpoch: types.EpochID(epoch),
@@ -983,7 +984,7 @@ func TestLatest(t *testing.T) {
 }
 
 func Test_PrevATXCollisions(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -1036,13 +1037,13 @@ func TestCoinbase(t *testing.T) {
 	t.Parallel()
 	t.Run("not found", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		_, err := atxs.Coinbase(db, types.NodeID{})
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 	t.Run("found", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		atx := newAtx(t, sig, func(a *types.ActivationTx) { a.Coinbase = types.Address{1, 2, 3} })
@@ -1053,7 +1054,7 @@ func TestCoinbase(t *testing.T) {
 	})
 	t.Run("picks last", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		atx1 := newAtx(t, sig, withPublishEpoch(1), func(a *types.ActivationTx) { a.Coinbase = types.Address{1, 2, 3} })

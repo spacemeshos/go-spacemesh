@@ -26,9 +26,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 const (
@@ -134,7 +134,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	cdb := datastore.NewCachedDB(db, logger)
 	localDb := localsql.InMemory()
 
@@ -263,7 +263,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {

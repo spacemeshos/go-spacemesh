@@ -23,7 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func launchPostSupervisor(
@@ -58,7 +58,7 @@ func launchPostSupervisor(
 		close(ch)
 		return ch
 	})
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	logger := log.Named("post manager")
 	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
@@ -102,7 +102,7 @@ func launchPostSupervisorTLS(
 		close(ch)
 		return ch
 	})
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	logger := log.Named("post supervisor")
 	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)

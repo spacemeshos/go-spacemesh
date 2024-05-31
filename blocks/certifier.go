@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -81,7 +82,7 @@ type Certifier struct {
 	stop    func()
 	stopped atomic.Bool
 
-	db         *sql.Database
+	db         *statesql.Database
 	oracle     eligibility.Rolacle
 	signers    map[types.NodeID]*signing.EdSigner
 	edVerifier *signing.EdVerifier
@@ -99,7 +100,7 @@ type Certifier struct {
 
 // NewCertifier creates new block certifier.
 func NewCertifier(
-	db *sql.Database,
+	db *statesql.Database,
 	o eligibility.Rolacle,
 
 	v *signing.EdVerifier,

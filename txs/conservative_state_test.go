@@ -23,8 +23,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -73,7 +73,7 @@ func newTxWthRecipient(
 type testConState struct {
 	*ConservativeState
 	logger *zap.Logger
-	db     *sql.Database
+	db     *statesql.Database
 	mvm    *MockvmState
 
 	id peer.ID
@@ -86,7 +86,7 @@ func (t *testConState) handler() *TxHandler {
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
 	ctrl := gomock.NewController(t)
 	mvm := NewMockvmState(ctrl)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	cfg := CSConfig{
 		BlockGasLimit:     gasLimit,
 		NumTXsPerProposal: numTXsInProposal,

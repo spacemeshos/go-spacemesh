@@ -11,10 +11,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestMalicious(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	nodeID := types.NodeID{1, 1, 1, 1}
 	mal, err := IsMalicious(db, nodeID)
@@ -56,7 +57,7 @@ func TestMalicious(t *testing.T) {
 }
 
 func Test_GetMalicious(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	got, err := GetMalicious(db)
 	require.NoError(t, err)
 	require.Nil(t, got)
@@ -74,7 +75,7 @@ func Test_GetMalicious(t *testing.T) {
 }
 
 func TestLoadMalfeasanceBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	nid1 := types.RandomNodeID()

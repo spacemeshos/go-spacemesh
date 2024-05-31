@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 const (
@@ -22,7 +23,7 @@ const (
 type DBMetricsCollector struct {
 	logger        log.Logger
 	checkInterval time.Duration
-	db            *sql.Database
+	db            *statesql.Database
 	tablesList    map[string]struct{}
 	eg            errgroup.Group
 	cancel        context.CancelFunc
@@ -35,7 +36,7 @@ type DBMetricsCollector struct {
 // NewDBMetricsCollector creates new DBMetricsCollector.
 func NewDBMetricsCollector(
 	ctx context.Context,
-	db *sql.Database,
+	db *statesql.Database,
 	logger log.Logger,
 	checkInterval time.Duration,
 ) *DBMetricsCollector {

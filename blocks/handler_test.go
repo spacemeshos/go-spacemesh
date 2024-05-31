@@ -13,8 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -34,7 +34,7 @@ func createTestHandler(t *testing.T) *testHandler {
 	}
 	th.Handler = NewHandler(
 		th.mockFetcher,
-		sql.InMemory(),
+		statesql.InMemory(),
 		th.mockTortoise,
 		th.mockMesh,
 		WithLogger(zaptest.NewLogger(t)),

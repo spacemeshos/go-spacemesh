@@ -186,35 +186,17 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 func openDB(dbLog *zap.Logger, path string) (*localsql.Database, error) {
 	dbPath := filepath.Join(path, localDbFile)
 	if _, err := os.Stat(dbPath); err != nil {
-		return nil, fmt.Errorf("open database %s: %w", dbPath, err)
-	}
-
-	migrations, err := sql.LocalMigrations()
-	if err != nil {
-		return nil, fmt.Errorf("get local migrations: %w", err)
+		return nil, fmt.Errorf("stat source database %s: %w", dbPath, err)
 	}
 
 	db, err := localsql.Open("file:"+dbPath,
 		sql.WithLogger(dbLog),
-		sql.WithMigrations(nil), // do not migrate database when opening
+		sql.WithEnableMigrations(false),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open source database %s: %w", dbPath, err)
 	}
 
-	// check if the source database has the right schema
-	var version int
-	_, err = db.Exec("PRAGMA user_version;", nil, func(stmt *sql.Statement) bool {
-		version = stmt.ColumnInt(0)
-		return true
-	})
-	if err != nil {
-		return nil, fmt.Errorf("get source database schema for %s: %w", dbPath, err)
-	}
-	if version != len(migrations) {
-		db.Close()
-		return nil, ErrInvalidSchema
-	}
 	return db, nil
 }
 

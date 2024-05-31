@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestMain(m *testing.M) {
@@ -101,7 +102,7 @@ func verifyUpdate(tb testing.TB, data []byte, epoch types.EpochID, expBeacon str
 
 func TestGenerator_Generate(t *testing.T) {
 	targetEpoch := types.EpochID(3)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
 	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
 	t.Cleanup(cleanup)
@@ -168,7 +169,7 @@ func TestGenerator_Generate(t *testing.T) {
 
 func TestGenerator_CheckAPI(t *testing.T) {
 	targetEpoch := types.EpochID(3)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lg := logtest.New(t)
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
 	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, lg.Zap()))

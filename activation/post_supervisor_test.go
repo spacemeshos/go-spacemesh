@@ -24,7 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func closedChan() <-chan struct{} {
@@ -56,7 +56,7 @@ func newPostManager(t *testing.T, cfg PostConfig, opts PostSetupOpts) *PostSetup
 		close(ch)
 		return ch
 	})
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	atxsdata := atxsdata.New()
 	mgr, err := NewPostSetupManager(cfg, zaptest.NewLogger(t), db, atxsdata, types.RandomATXID(), syncer, validator)
 	require.NoError(t, err)

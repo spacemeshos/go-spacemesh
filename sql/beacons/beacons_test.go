@@ -7,12 +7,13 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 const baseEpoch = 3
 
 func TestGet(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	beacons := []types.Beacon{
 		types.HexToBeacon("0x1"),
@@ -35,7 +36,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	_, err := Get(db, types.EpochID(baseEpoch))
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -50,7 +51,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	_, err := Get(db, types.EpochID(baseEpoch))
 	require.ErrorIs(t, err, sql.ErrNotFound)

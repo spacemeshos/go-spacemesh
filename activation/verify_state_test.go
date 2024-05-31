@@ -11,13 +11,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func Test_CheckPrevATXs(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	logger := zaptest.NewLogger(t)
 
 	// Arrange

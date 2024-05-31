@@ -9,7 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestVested(t *testing.T) {
@@ -392,7 +392,7 @@ func TestSpend(t *testing.T) {
 			}
 			ctx := core.Context{
 				LayerID: types.LayerID(tc.lid),
-				Loader:  core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()}),
+				Loader:  core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()}),
 				Header:  types.TxHeader{MaxSpend: math.MaxUint64},
 				PrincipalAccount: types.Account{
 					Address: owner,
@@ -419,7 +419,7 @@ func TestSpend(t *testing.T) {
 		}
 		ctx := core.Context{
 			LayerID: types.LayerID(2),
-			Loader:  core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()}),
+			Loader:  core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()}),
 			Header:  types.TxHeader{MaxSpend: math.MaxUint64},
 			PrincipalAccount: types.Account{
 				Address: owner,

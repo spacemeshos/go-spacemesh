@@ -6,11 +6,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestCacheGetCopies(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ss := core.NewStagedCache(core.DBLoader{db})
 	address := core.Address{1}
 	account, err := ss.Get(address)
@@ -23,7 +23,7 @@ func TestCacheGetCopies(t *testing.T) {
 }
 
 func TestCacheUpdatePreserveOrder(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ss := core.NewStagedCache(core.DBLoader{db})
 	order := []core.Address{{3}, {1}, {2}}
 	for _, address := range order {

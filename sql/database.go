@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,6 +28,9 @@ var (
 	ErrObjectExists = errors.New("database: object exists")
 	// ErrTooNew is returned if database version is newer than expected.
 	ErrTooNew = errors.New("database version is too new")
+	// ErrOld is returned when the database version differs from the expected one
+	// and migrations are disabled.
+	ErrOld = errors.New("old database version")
 )
 
 const (
@@ -61,29 +62,25 @@ type Encoder func(*Statement)
 type Decoder func(*Statement) bool
 
 func defaultConf() *conf {
-	migrations, err := StateMigrations()
-	if err != nil {
-		panic(err)
-	}
-
 	return &conf{
-		connections:   16,
-		migrations:    migrations,
-		skipMigration: map[int]struct{}{},
-		logger:        zap.NewNop(),
+		enableMigrations: true,
+		connections:      16,
+		logger:           zap.NewNop(),
+		schema:           &Schema{},
 	}
 }
 
 type conf struct {
-	flags         sqlite.OpenFlags
-	connections   int
-	skipMigration map[int]struct{}
-	vacuumState   int
-	migrations    []Migration
-	enableLatency bool
-	cache         bool
-	cacheSizes    map[QueryCacheKind]int
-	logger        *zap.Logger
+	enableMigrations bool
+	forceFresh       bool
+	forceMigrations  bool
+	connections      int
+	vacuumState      int
+	enableLatency    bool
+	cache            bool
+	cacheSizes       map[QueryCacheKind]int
+	logger           *zap.Logger
+	schema           *Schema
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -93,48 +90,18 @@ func WithConnections(n int) Opt {
 	}
 }
 
+// WithLogger specifies logger for the database.
 func WithLogger(logger *zap.Logger) Opt {
 	return func(c *conf) {
 		c.logger = logger
 	}
 }
 
-// WithMigrations overwrites embedded migrations.
-// Migrations are sorted by order before applying.
-func WithMigrations(migrations []Migration) Opt {
+// WithEnableMigrations enables or disables migrations on the database.
+// The migrations are enabled by default.
+func WithEnableMigrations(enable bool) Opt {
 	return func(c *conf) {
-		sort.Slice(migrations, func(i, j int) bool {
-			return migrations[i].Order() < migrations[j].Order()
-		})
-		c.migrations = migrations
-	}
-}
-
-// WithMigration adds migration to the list of migrations.
-// It will overwrite an existing migration with the same order.
-func WithMigration(migration Migration) Opt {
-	return func(c *conf) {
-		for i, m := range c.migrations {
-			if m.Order() == migration.Order() {
-				c.migrations[i] = migration
-				return
-			}
-			if m.Order() > migration.Order() {
-				c.migrations = slices.Insert(c.migrations, i, migration)
-				return
-			}
-		}
-		c.migrations = append(c.migrations, migration)
-	}
-}
-
-// WithSkipMigrations will update database version with executing associated migrations.
-// It should be used at your own risk.
-func WithSkipMigrations(i ...int) Opt {
-	return func(c *conf) {
-		for _, index := range i {
-			c.skipMigration[index] = struct{}{}
-		}
+		c.enableMigrations = enable
 	}
 }
 
@@ -172,12 +139,33 @@ func WithQueryCacheSizes(sizes map[QueryCacheKind]int) Opt {
 	}
 }
 
+// WithForceMigrations forces database to run all the migrations instead
+// of using a schema snapshot in case of a fresh database.
+func WithForceMigrations(force bool) Opt {
+	return func(c *conf) {
+		c.forceMigrations = true
+	}
+}
+
+// WithSchema specifies database schema script.
+func WithDatabaseSchema(schema *Schema) Opt {
+	return func(c *conf) {
+		c.schema = schema
+	}
+}
+
+func withForceFresh(fresh bool) Opt {
+	return func(c *conf) {
+		c.forceFresh = fresh
+	}
+}
+
 // Opt for configuring database.
 type Opt func(c *conf)
 
 // InMemory database for testing.
 func InMemory(opts ...Opt) *Database {
-	opts = append(opts, WithConnections(1))
+	opts = append(opts, WithConnections(1), withForceFresh(true))
 	db, err := Open("file::memory:?mode=memory", opts...)
 	if err != nil {
 		panic(err)
@@ -195,75 +183,57 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	for _, opt := range opts {
 		opt(config)
 	}
-	pool, err := sqlitex.Open(uri, config.flags, config.connections)
+	var flags sqlite.OpenFlags
+	if !config.forceFresh {
+		flags = sqlite.SQLITE_OPEN_READWRITE |
+			sqlite.SQLITE_OPEN_WAL |
+			sqlite.SQLITE_OPEN_URI |
+			sqlite.SQLITE_OPEN_NOMUTEX
+	}
+	freshDB := config.forceFresh
+	pool, err := sqlitex.Open(uri, flags, config.connections)
 	if err != nil {
-		return nil, fmt.Errorf("open db %s: %w", uri, err)
+		if config.forceFresh || sqlite.ErrCode(err) != sqlite.SQLITE_CANTOPEN {
+			return nil, fmt.Errorf("open db %s: %w", uri, err)
+		}
+		flags |= sqlite.SQLITE_OPEN_CREATE
+		freshDB = true
+		pool, err = sqlitex.Open(uri, flags, config.connections)
+		if err != nil {
+			return nil, fmt.Errorf("create db %s: %w", uri, err)
+		}
 	}
 	db := &Database{pool: pool}
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
-	//nolint:nestif
-	if config.migrations != nil {
-		before, err := version(db)
-		if err != nil {
-			return nil, err
+	if freshDB && !config.forceMigrations {
+		if err := config.schema.Apply(db); err != nil {
+			return nil, errors.Join(
+				fmt.Errorf("error running schema script: %w", err),
+				db.Close())
 		}
-		after := 0
-		if len(config.migrations) > 0 {
-			after = config.migrations[len(config.migrations)-1].Order()
+	} else {
+		if err := config.schema.Migrate(
+			config.logger.With(zap.String("uri", uri)),
+			db, config.vacuumState, config.enableMigrations,
+		); err != nil {
+			return nil, errors.Join(err, db.Close())
 		}
-		if before > after {
-			pool.Close()
-			config.logger.Error("database version is newer than expected - downgrade is not supported",
-				zap.String("uri", uri),
-				zap.Int("current version", before),
-				zap.Int("target version", after),
-			)
-			return nil, fmt.Errorf("%w: %d > %d", ErrTooNew, before, after)
-		}
-		config.logger.Info("running migrations",
-			zap.String("uri", uri),
-			zap.Int("current version", before),
-			zap.Int("target version", after),
-		)
-		for i, m := range config.migrations {
-			if m.Order() <= before {
-				continue
-			}
-			if err := db.WithTx(context.Background(), func(tx *Tx) error {
-				if _, ok := config.skipMigration[m.Order()]; !ok {
-					if err := m.Apply(tx); err != nil {
-						for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
-							if e := config.migrations[j].Rollback(); e != nil {
-								err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
-								break
-							}
-						}
-
-						return fmt.Errorf("apply %s: %w", m.Name(), err)
-					}
-				}
-				// version is set intentionally even if actual migration was skipped
-				if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
-					return fmt.Errorf("update user_version to %d: %w", m.Order(), err)
-				}
-				return nil
-			}); err != nil {
-				err = errors.Join(err, db.Close())
-				return nil, err
-			}
-
-			if config.vacuumState != 0 && before <= config.vacuumState {
-				if err := Vacuum(db); err != nil {
-					err = errors.Join(err, db.Close())
-					return nil, err
-				}
-			}
-			before = m.Order()
-		}
-
 	}
+
+	loaded, err := LoadDBSchemaScript(db)
+	if err != nil {
+		return nil, fmt.Errorf("error loading database schema: %w", err)
+	}
+	diff := config.schema.Diff(loaded)
+	if diff != "" {
+		config.logger.Warn("database schema drift detected",
+			zap.String("uri", uri),
+			zap.String("diff", diff),
+		)
+	}
+
 	if config.cache {
 		config.logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
 		db.queryCache = &queryCache{cacheSizesByKind: config.cacheSizes}

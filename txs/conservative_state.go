@@ -11,8 +11,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -54,12 +54,12 @@ type ConservativeState struct {
 
 	logger *zap.Logger
 	cfg    CSConfig
-	db     *sql.Database
+	db     *statesql.Database
 	cache  *Cache
 }
 
 // NewConservativeState returns a ConservativeState.
-func NewConservativeState(state vmState, db *sql.Database, opts ...ConservativeStateOpt) *ConservativeState {
+func NewConservativeState(state vmState, db *statesql.Database, opts ...ConservativeStateOpt) *ConservativeState {
 	cs := &ConservativeState{
 		vmState: state,
 		cfg:     defaultCSConfig(),

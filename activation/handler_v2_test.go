@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 type v2TestHandler struct {
@@ -31,7 +32,7 @@ type v2TestHandler struct {
 
 func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	cdb := datastore.NewCachedDB(statesql.InMemory(), lg)
 	mocks := newTestHandlerMocks(tb, golden)
 	return &v2TestHandler{
 		HandlerV2: &HandlerV2{

@@ -24,11 +24,11 @@ import (
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -114,7 +114,7 @@ type node struct {
 	vrfsigner  *signing.VRFSigner
 	atx        *types.ActivationTx
 	oracle     *eligibility.Oracle
-	db         *sql.Database
+	db         *statesql.Database
 	atxsdata   *atxsdata.Data
 	proposals  *store.Store
 
@@ -146,7 +146,7 @@ func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 }
 
 func (n *node) withDb() *node {
-	n.db = sql.InMemory()
+	n.db = statesql.InMemory()
 	n.atxsdata = atxsdata.New()
 	n.proposals = store.New()
 	return n
@@ -897,7 +897,7 @@ func TestProposals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			atxsdata := atxsdata.New()
 			proposals := store.New()
 			hare := New(
