@@ -9,6 +9,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func Test_Transaction_Isolation(t *testing.T) {
@@ -101,6 +105,35 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 		}),
 	)
 	require.ErrorContains(t, err, "migration 2 failed")
+}
+
+func Test_Migration_Disabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	migration1 := NewMockMigration(ctrl)
+	migration1.EXPECT().Name().Return("test").AnyTimes()
+	migration1.EXPECT().Order().Return(1).AnyTimes()
+	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
+
+	dbFile := filepath.Join(t.TempDir(), "test.sql")
+	db, err := Open("file:"+dbFile,
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1},
+		}),
+		WithForceMigrations(true),
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	migration2 := NewMockMigration(ctrl)
+	migration2.EXPECT().Order().Return(2).AnyTimes()
+
+	_, err = Open("file:"+dbFile,
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
+		WithEnableMigrations(false),
+	)
+	require.ErrorIs(t, err, ErrOld)
 }
 
 func TestDatabaseSkipMigrations(t *testing.T) {
@@ -199,4 +232,83 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 		}),
 	)
 	require.ErrorIs(t, err, ErrTooNew)
+}
+
+func TestSchemaDrift(t *testing.T) {
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
+	dbFile := filepath.Join(t.TempDir(), "test.sql")
+	schema := &Schema{
+		// Not using ` here to avoid schema drift warnings due to whitespace
+		// TODO: ignore whitespace and comments during schema comparison
+		Script: "PRAGMA user_version = 0;\n" +
+			"CREATE TABLE testing1 (\n" +
+			" id varchar primary key,\n" +
+			" field int\n" +
+			");\n",
+	}
+	db, err := Open("file:"+dbFile,
+		WithDatabaseSchema(schema),
+		WithLogger(logger),
+	)
+	require.NoError(t, err)
+
+	_, err = db.Exec("create table newtbl (id int)", nil, nil)
+	require.NoError(t, err)
+
+	require.NoError(t, db.Close())
+	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
+
+	db, err = Open("file:"+dbFile,
+		WithDatabaseSchema(schema),
+		WithLogger(logger),
+	)
+	require.NoError(t, db.Close())
+	require.NoError(t, err)
+	require.Equal(t, 1, observedLogs.Len(), "expected 1 log messages")
+	require.Equal(t, "database schema drift detected", observedLogs.All()[0].Message)
+	require.Contains(t, observedLogs.All()[0].ContextMap()["diff"],
+		"+CREATE TABLE newtbl (id int);")
+}
+
+func TestSchemaDrift_IgnoredTables(t *testing.T) {
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
+	dbFile := filepath.Join(t.TempDir(), "test.sql")
+	schema := &Schema{
+		// Not using ` here to avoid schema drift warnings due to whitespace
+		// TODO: ignore whitespace and comments during schema comparison
+		Script: "PRAGMA user_version = 0;\n" +
+			"CREATE TABLE testing1 (\n" +
+			" id varchar primary key,\n" +
+			" field int\n" +
+			");\n",
+	}
+	db, err := Open("file:"+dbFile,
+		WithDatabaseSchema(schema),
+		WithLogger(logger),
+	)
+	require.NoError(t, err)
+
+	_, err = db.Exec("create table _litestream_test (id int)", nil, nil)
+	require.NoError(t, err)
+
+	require.NoError(t, db.Close())
+	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
+
+	db, err = Open("file:"+dbFile,
+		WithDatabaseSchema(schema),
+		WithLogger(logger),
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
 }

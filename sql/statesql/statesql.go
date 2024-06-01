@@ -53,7 +53,5 @@ func InMemory(opts ...sql.Opt) *Database {
 	return &Database{Database: db}
 }
 
-// TBD: QQQQQ: check disabling migrations in database_test.go
 // TBD: QQQQQ: add sql/test package with test skeletons
-// TBD: QQQQQ: verify identity merging code
 // TBD: QQQQQ: instead of "not like '_litestream%'", use regex in the config
