@@ -65,6 +65,7 @@ func testnet() config.Config {
 			DatabaseConnections:          16,
 			DatabaseSizeMeteringInterval: 10 * time.Minute,
 			DatabasePruneInterval:        30 * time.Minute,
+			DatabaseIgnoreTableRx:        "^_litestream",
 			NetworkHRP:                   "stest",
 
 			LayerDuration:  5 * time.Minute,
