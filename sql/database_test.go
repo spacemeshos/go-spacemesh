@@ -295,6 +295,7 @@ func TestSchemaDrift_IgnoredTables(t *testing.T) {
 	db, err := Open("file:"+dbFile,
 		WithDatabaseSchema(schema),
 		WithLogger(logger),
+		WithIgnoreTableRx("^_litestream"),
 	)
 	require.NoError(t, err)
 
@@ -307,6 +308,7 @@ func TestSchemaDrift_IgnoredTables(t *testing.T) {
 	db, err = Open("file:"+dbFile,
 		WithDatabaseSchema(schema),
 		WithLogger(logger),
+		WithIgnoreTableRx("^_litestream"),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())

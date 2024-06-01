@@ -54,4 +54,3 @@ func InMemory(opts ...sql.Opt) *Database {
 }
 
 // TBD: QQQQQ: add sql/test package with test skeletons
-// TBD: QQQQQ: instead of "not like '_litestream%'", use regex in the config

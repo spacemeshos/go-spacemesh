@@ -81,6 +81,7 @@ type conf struct {
 	cacheSizes       map[QueryCacheKind]int
 	logger           *zap.Logger
 	schema           *Schema
+	ignoreTableRx    string
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -154,6 +155,14 @@ func WithDatabaseSchema(schema *Schema) Opt {
 	}
 }
 
+// WithIgnoreTableRx specifies regular expression for table names to ignore during schema
+// drift detection.
+func WithIgnoreTableRx(rx string) Opt {
+	return func(c *conf) {
+		c.ignoreTableRx = rx
+	}
+}
+
 func withForceFresh(fresh bool) Opt {
 	return func(c *conf) {
 		c.forceFresh = fresh
@@ -222,7 +231,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		}
 	}
 
-	loaded, err := LoadDBSchemaScript(db)
+	loaded, err := LoadDBSchemaScript(db, config.ignoreTableRx)
 	if err != nil {
 		return nil, fmt.Errorf("error loading database schema: %w", err)
 	}

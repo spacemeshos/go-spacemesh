@@ -1901,6 +1901,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
+		sql.WithIgnoreTableRx(app.Config.DatabaseIgnoreTableRx),
 		sql.WithQueryCache(app.Config.DatabaseQueryCache),
 		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
 			atxs.CacheKindEpochATXs:           app.Config.DatabaseQueryCacheSizes.EpochATXs,

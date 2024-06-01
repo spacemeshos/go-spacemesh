@@ -15,13 +15,13 @@ func TestDatabase_MigrateTwice_NoOp(t *testing.T) {
 	db, err := Open("file:"+file, sql.WithForceMigrations(true))
 	require.NoError(t, err)
 
-	sql1, err := sql.LoadDBSchemaScript(db)
+	sql1, err := sql.LoadDBSchemaScript(db, "")
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	db, err = Open("file:" + file)
 	require.NoError(t, err)
-	sql2, err := sql.LoadDBSchemaScript(db)
+	sql2, err := sql.LoadDBSchemaScript(db, "")
 	require.NoError(t, err)
 
 	require.Equal(t, sql1, sql2)
@@ -56,7 +56,7 @@ func TestSchema(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := InMemory(sql.WithForceMigrations(tc.forceMigrations))
-			loadedScript, err := sql.LoadDBSchemaScript(db)
+			loadedScript, err := sql.LoadDBSchemaScript(db, "")
 			require.NoError(t, err)
 			expSchema, err := Schema()
 			require.NoError(t, err)

@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
@@ -30,8 +31,19 @@ func LoadSchema(fsys fs.FS, migrations []Migration) (*Schema, error) {
 }
 
 // LoadDBSchemaScript retrieves the database schema as text.
-func LoadDBSchemaScript(db Executor) (string, error) {
-	var sb strings.Builder
+func LoadDBSchemaScript(db Executor, ignoreRx string) (string, error) {
+	var (
+		err   error
+		ignRx *regexp.Regexp
+		sb    strings.Builder
+	)
+	if ignoreRx != "" {
+		ignRx, err = regexp.Compile(ignoreRx)
+		if err != nil {
+			return "", fmt.Errorf("error compiling table ignore regexp %q: %w",
+				ignoreRx, err)
+		}
+	}
 	version, err := version(db)
 	if err != nil {
 		return "", err
@@ -40,14 +52,16 @@ func LoadDBSchemaScript(db Executor) (string, error) {
 	if _, err = db.Exec(
 		// Type is either 'index' or 'table', we want tables
 		// to go first. Also, we ignore _litestream tables
-		`select sql || ';' from sqlite_master
-                 where sql is not null and tbl_name not like '_litestream%'
+		`select tbl_name, sql || ';' from sqlite_master
+                 where sql is not null
                  order by tbl_name, type desc, name`,
 		nil, func(st *Statement) bool {
-			fmt.Fprintln(&sb, st.ColumnText(0))
+			if ignRx == nil || !ignRx.MatchString(st.ColumnText(0)) {
+				fmt.Fprintln(&sb, st.ColumnText(1))
+			}
 			return true
 		}); err != nil {
-		return "", err
+		return "", fmt.Errorf("error retrieving DB schema: %w", err)
 	}
 	return sb.String(), nil
 }
