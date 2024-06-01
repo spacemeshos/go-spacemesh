@@ -52,5 +52,3 @@ func InMemory(opts ...sql.Opt) *Database {
 	db := sql.InMemory(opts...)
 	return &Database{Database: db}
 }
-
-// TBD: QQQQQ: add sql/test package with test skeletons
