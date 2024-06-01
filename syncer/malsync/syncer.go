@@ -341,8 +341,10 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 	}
 }
 
-func (s *Syncer) updateState() error {
-	if err := malsync.UpdateSyncState(s.localdb, s.clock.Now()); err != nil {
+func (s *Syncer) updateState(ctx context.Context) error {
+	if err := s.localdb.WithTx(ctx, func(tx *sql.Tx) error {
+		return malsync.UpdateSyncState(tx, s.clock.Now())
+	}); err != nil {
 		return fmt.Errorf("error updating malsync state: %w", err)
 	}
 
@@ -360,13 +362,13 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 		if nothingToDownload {
 			sst.done()
 			if initial && sst.numSyncedPeers() >= s.cfg.MinSyncPeers {
-				if err := s.updateState(); err != nil {
+				if err := s.updateState(ctx); err != nil {
 					return err
 				}
 				s.logger.Info("initial sync of malfeasance proofs completed", log.ZContext(ctx))
 				return nil
 			} else if !initial && gotUpdate {
-				if err := s.updateState(); err != nil {
+				if err := s.updateState(ctx); err != nil {
 					return err
 				}
 			}

@@ -246,6 +246,7 @@ func Test_0008Migration(t *testing.T) {
 	// apply previous migrations
 	db := statesql.InMemory(
 		sql.WithDatabaseSchema(schema),
+		sql.WithForceMigrations(true),
 	)
 
 	// verify that the DB is empty
