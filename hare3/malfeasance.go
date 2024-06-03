@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -53,7 +52,7 @@ func NewMalfeasanceHandler(
 	return mh
 }
 
-func (mh *MalfeasanceHandler) Validate(ctx context.Context, data scale.Type) (types.NodeID, error) {
+func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 	hp, ok := data.(*wire.HareProof)
 	if !ok {
 		return types.EmptyNodeID, errors.New("wrong message type for hare equivocation")

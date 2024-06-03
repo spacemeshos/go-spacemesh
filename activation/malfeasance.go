@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/zap"
@@ -45,7 +44,7 @@ func NewMalfeasanceHandler(
 	}
 }
 
-func (mh *MalfeasanceHandler) Validate(ctx context.Context, data scale.Type) (types.NodeID, error) {
+func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 	ap, ok := data.(*wire.AtxProof)
 	if !ok {
 		return types.EmptyNodeID, errors.New("wrong message type for multiple ATXs")
@@ -110,7 +109,7 @@ func NewInvalidPostIndexHandler(
 	}
 }
 
-func (mh *InvalidPostIndexHandler) Validate(ctx context.Context, data scale.Type) (types.NodeID, error) {
+func (mh *InvalidPostIndexHandler) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 	proof, ok := data.(*wire.InvalidPostIndexProof)
 	if !ok {
 		return types.EmptyNodeID, errors.New("wrong message type for invalid post index")
@@ -175,7 +174,7 @@ func NewInvalidPrevATXHandler(
 	}
 }
 
-func (mh *InvalidPrevATXHandler) Validate(ctx context.Context, data scale.Type) (types.NodeID, error) {
+func (mh *InvalidPrevATXHandler) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 	proof, ok := data.(*wire.InvalidPrevATXProof)
 	if !ok {
 		return types.EmptyNodeID, errors.New("wrong message type for invalid previous ATX")

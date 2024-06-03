@@ -14,8 +14,8 @@ import (
 	reflect "reflect"
 
 	prometheus "github.com/prometheus/client_golang/prometheus"
-	scale "github.com/spacemeshos/go-scale"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -174,7 +174,7 @@ func (c *MockHandlerV1ReportProofCall) DoAndReturn(f func(*prometheus.CounterVec
 }
 
 // Validate mocks base method.
-func (m *MockHandlerV1) Validate(ctx context.Context, data scale.Type) (types.NodeID, error) {
+func (m *MockHandlerV1) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validate", ctx, data)
 	ret0, _ := ret[0].(types.NodeID)
@@ -201,13 +201,13 @@ func (c *MockHandlerV1ValidateCall) Return(arg0 types.NodeID, arg1 error) *MockH
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerV1ValidateCall) Do(f func(context.Context, scale.Type) (types.NodeID, error)) *MockHandlerV1ValidateCall {
+func (c *MockHandlerV1ValidateCall) Do(f func(context.Context, wire.ProofData) (types.NodeID, error)) *MockHandlerV1ValidateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerV1ValidateCall) DoAndReturn(f func(context.Context, scale.Type) (types.NodeID, error)) *MockHandlerV1ValidateCall {
+func (c *MockHandlerV1ValidateCall) DoAndReturn(f func(context.Context, wire.ProofData) (types.NodeID, error)) *MockHandlerV1ValidateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
