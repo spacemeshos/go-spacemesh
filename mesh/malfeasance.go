@@ -54,10 +54,6 @@ func (mh *MalfeasanceHandler) HandleMultipleBallots(
 	ctx context.Context,
 	data scale.Type,
 ) (types.NodeID, []string, error) {
-	var (
-		firstNid types.NodeID
-		firstMsg wire.BallotProofMsg
-	)
 	bp, ok := data.(*wire.BallotProof)
 	if !ok {
 		return types.EmptyNodeID, []string{multiBallots}, errors.New("wrong message type for multi ballots")
@@ -66,23 +62,21 @@ func (mh *MalfeasanceHandler) HandleMultipleBallots(
 		if !mh.edVerifier.Verify(signing.BALLOT, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
 			return types.EmptyNodeID, []string{multiBallots}, errors.New("invalid signature")
 		}
-		if firstNid == types.EmptyNodeID {
-			ok, err := atxs.IdentityExists(mh.db, msg.SmesherID)
-			if err != nil {
-				return types.EmptyNodeID, []string{multiBallots},
-					fmt.Errorf("check identity in ballot malfeasance %v: %w", msg.SmesherID, err)
-			}
-			if !ok {
-				return types.EmptyNodeID, []string{multiBallots}, errors.New("identity does not exist")
-			}
-			firstNid = msg.SmesherID
-			firstMsg = msg
-		} else if msg.SmesherID == firstNid {
-			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
-				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return msg.SmesherID, []string{multiBallots}, nil
-			}
-		}
+	}
+	msg1, msg2 := bp.Messages[0], bp.Messages[1]
+	ok, err := atxs.IdentityExists(mh.db, msg1.SmesherID)
+	if err != nil {
+		return types.EmptyNodeID, []string{multiBallots},
+			fmt.Errorf("check identity in ballot malfeasance %v: %w", msg1.SmesherID, err)
+	}
+	if !ok {
+		return types.EmptyNodeID, []string{multiBallots}, errors.New("identity does not exist")
+	}
+
+	if msg1.SmesherID == msg2.SmesherID &&
+		msg1.InnerMsg.Layer == msg2.InnerMsg.Layer &&
+		msg1.InnerMsg.MsgHash != msg2.InnerMsg.MsgHash {
+		return msg1.SmesherID, []string{multiBallots}, nil
 	}
 	mh.logger.Warn("received invalid ballot malfeasance proof",
 		log.ZContext(ctx),

@@ -56,10 +56,6 @@ func (mh *MalfeasanceHandler) HandleHareEquivocation(
 	ctx context.Context,
 	data scale.Type,
 ) (types.NodeID, []string, error) {
-	var (
-		firstNid types.NodeID
-		firstMsg wire.HareProofMsg
-	)
 	hp, ok := data.(*wire.HareProof)
 	if !ok {
 		return types.EmptyNodeID, []string{hareEquivocate}, errors.New("wrong message type for hare equivocation")
@@ -68,25 +64,23 @@ func (mh *MalfeasanceHandler) HandleHareEquivocation(
 		if !mh.edVerifier.Verify(signing.HARE, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
 			return types.EmptyNodeID, []string{hareEquivocate}, errors.New("invalid signature")
 		}
-		if firstNid == types.EmptyNodeID {
-			ok, err := atxs.IdentityExists(mh.db, msg.SmesherID)
-			if err != nil {
-				return types.EmptyNodeID, []string{hareEquivocate},
-					fmt.Errorf("check identity in hare malfeasance %v: %w", msg.SmesherID, err)
-			}
-			if !ok {
-				return types.EmptyNodeID, []string{hareEquivocate},
-					fmt.Errorf("identity does not exist: %v", msg.SmesherID)
-			}
-			firstNid = msg.SmesherID
-			firstMsg = msg
-		} else if msg.SmesherID == firstNid {
-			if msg.InnerMsg.Layer == firstMsg.InnerMsg.Layer &&
-				msg.InnerMsg.Round == firstMsg.InnerMsg.Round &&
-				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return msg.SmesherID, []string{hareEquivocate}, nil
-			}
-		}
+	}
+	msg1, msg2 := hp.Messages[0], hp.Messages[1]
+	ok, err := atxs.IdentityExists(mh.db, msg1.SmesherID)
+	if err != nil {
+		return types.EmptyNodeID, []string{hareEquivocate},
+			fmt.Errorf("check identity in hare malfeasance %v: %w", msg1.SmesherID, err)
+	}
+	if !ok {
+		return types.EmptyNodeID, []string{hareEquivocate},
+			fmt.Errorf("identity does not exist: %v", msg1.SmesherID)
+	}
+
+	if msg1.SmesherID == msg2.SmesherID &&
+		msg1.InnerMsg.Layer == msg2.InnerMsg.Layer &&
+		msg1.InnerMsg.Round == msg2.InnerMsg.Round &&
+		msg1.InnerMsg.MsgHash != msg2.InnerMsg.MsgHash {
+		return msg1.SmesherID, []string{hareEquivocate}, nil
 	}
 	mh.logger.Warn("received invalid hare malfeasance proof",
 		log.ZContext(ctx),

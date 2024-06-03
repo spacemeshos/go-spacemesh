@@ -87,7 +87,6 @@ func (mh *MalfeasanceHandler) HandleDoublePublish(
 		msg1.InnerMsg.MsgHash != msg2.InnerMsg.MsgHash {
 		return msg1.SmesherID, []string{multiATXs}, nil
 	}
-
 	mh.logger.Warn("received invalid atx malfeasance proof",
 		log.ZContext(ctx),
 		zap.Stringer("first_smesher", msg1.SmesherID),
