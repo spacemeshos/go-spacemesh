@@ -95,7 +95,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 			require.IsType(t, &wire.AtxProof{}, data)
 			return types.EmptyNodeID, []string{"metric"}, errors.New("invalid proof")
 		}
-		h.RegisterHandlerV1(wire.MultipleATXs, handler)
+		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
 			MalfeasanceProof: wire.MalfeasanceProof{
@@ -120,7 +120,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 			require.IsType(t, &wire.AtxProof{}, data)
 			return nodeID, []string{"metric"}, nil
 		}
-		h.RegisterHandlerV1(wire.MultipleATXs, handler)
+		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
 			MalfeasanceProof: wire.MalfeasanceProof{
@@ -158,7 +158,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 			require.IsType(t, &wire.AtxProof{}, data)
 			return nodeID, []string{"metric"}, nil
 		}
-		h.RegisterHandlerV1(wire.MultipleATXs, handler)
+		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
 			MalfeasanceProof: wire.MalfeasanceProof{
@@ -223,7 +223,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			require.IsType(t, &wire.AtxProof{}, data)
 			return nodeID, []string{"metric"}, nil
 		}
-		h.RegisterHandlerV1(wire.MultipleATXs, handler)
+		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
 			Layer: types.LayerID(22),
@@ -252,7 +252,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			require.IsType(t, &wire.AtxProof{}, data)
 			return types.EmptyNodeID, []string{"metric"}, errors.New("invalid proof")
 		}
-		h.RegisterHandlerV1(wire.MultipleATXs, handler)
+		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
 			Layer: types.LayerID(22),
@@ -280,7 +280,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			require.IsType(t, &wire.AtxProof{}, data)
 			return nodeID, []string{"metric"}, nil
 		}
-		h.RegisterHandlerV1(wire.MultipleATXs, handler)
+		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
 			Layer: types.LayerID(22),
@@ -321,7 +321,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			require.IsType(t, &wire.AtxProof{}, data)
 			return nodeID, []string{"metric"}, nil
 		}
-		h.RegisterHandlerV1(wire.MultipleATXs, handler)
+		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		newProof := &wire.MalfeasanceProof{
 			Layer: types.LayerID(22),

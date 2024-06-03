@@ -59,7 +59,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
-	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
@@ -1115,11 +1114,11 @@ func (app *App) initServices(ctx context.Context) error {
 		nodeIDs,
 		trtl,
 	)
-	malfeasanceHandler.RegisterHandlerV1(wire.MultipleATXs, activationMH.HandleDoublePublish)
-	malfeasanceHandler.RegisterHandlerV1(wire.MultipleBallots, meshMH.HandleMultipleBallots)
-	malfeasanceHandler.RegisterHandlerV1(wire.HareEquivocation, hareMH.HandleHareEquivocation)
-	malfeasanceHandler.RegisterHandlerV1(wire.InvalidPostIndex, activationMH.HandleInvalidPostIndex)
-	malfeasanceHandler.RegisterHandlerV1(wire.InvalidPrevATX, activationMH.HandleInvalidPrevATX)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleATXs, activationMH.HandleDoublePublish)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleBallots, meshMH.HandleMultipleBallots)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.HareEquivocation, hareMH.HandleHareEquivocation)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPostIndex, activationMH.HandleInvalidPostIndex)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPrevATX, activationMH.HandleInvalidPrevATX)
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(

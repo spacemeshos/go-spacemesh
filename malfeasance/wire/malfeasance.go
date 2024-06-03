@@ -94,7 +94,7 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 type Proof struct {
 	// MultipleATXs | MultipleBallots | HareEquivocation | InvalidPostIndex
-	Type uint8
+	Type byte
 	// AtxProof | BallotProof | HareProof | InvalidPostIndexProof
 	Data scale.Type
 }
@@ -103,7 +103,7 @@ func (e *Proof) EncodeScale(enc *scale.Encoder) (int, error) {
 	var total int
 	{
 		// not compact, as scale spec uses "full" uint8 for enums
-		n, err := scale.EncodeByte(enc, e.Type)
+		n, err := scale.EncodeByte(enc, byte(e.Type))
 		if err != nil {
 			return total, err
 		}

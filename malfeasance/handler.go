@@ -29,9 +29,26 @@ var (
 	errInvalidProof  = fmt.Errorf("%w: invalid proof", pubsub.ErrValidationReject)
 )
 
+type MalfeasanceType byte
+
+const (
+	// V1 types.
+	MultipleATXs     MalfeasanceType = MalfeasanceType(wire.MultipleATXs)
+	MultipleBallots                  = MalfeasanceType(wire.MultipleBallots)
+	HareEquivocation                 = MalfeasanceType(wire.HareEquivocation)
+	InvalidPostIndex                 = MalfeasanceType(wire.InvalidPostIndex)
+	InvalidPrevATX                   = MalfeasanceType(wire.InvalidPrevATX)
+
+	// V2 types
+	// TODO(mafa): for future use.
+	InvalidActivation MalfeasanceType = iota + 10
+	InvalidBallot
+	InvalidHareMsg
+)
+
 type (
-	MalfeasanceHandlerV1 func(ctx context.Context, data scale.Type) (types.NodeID, []string, error)
-	MalfeasanceHandlerV2 func(ctx context.Context, data []byte) (types.NodeID, []string, error)
+	HandlerV1 func(ctx context.Context, data scale.Type) (types.NodeID, []string, error)
+	HandlerV2 func(ctx context.Context, data []byte) (types.NodeID, []string, error)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
@@ -39,8 +56,8 @@ type Handler struct {
 	logger *zap.Logger
 	cdb    *datastore.CachedDB
 
-	handlersV1 map[uint8]MalfeasanceHandlerV1
-	handlersV2 map[uint8]MalfeasanceHandlerV2
+	handlersV1 map[MalfeasanceType]HandlerV1
+	handlersV2 map[MalfeasanceType]HandlerV2
 
 	self     p2p.Peer
 	nodeIDs  []types.NodeID
@@ -61,16 +78,16 @@ func NewHandler(
 		nodeIDs:  nodeID,
 		tortoise: tortoise,
 
-		handlersV1: make(map[uint8]MalfeasanceHandlerV1),
-		handlersV2: make(map[uint8]MalfeasanceHandlerV2),
+		handlersV1: make(map[MalfeasanceType]HandlerV1),
+		handlersV2: make(map[MalfeasanceType]HandlerV2),
 	}
 }
 
-func (h *Handler) RegisterHandlerV1(malfeasanceType uint8, handler MalfeasanceHandlerV1) {
+func (h *Handler) RegisterHandlerV1(malfeasanceType MalfeasanceType, handler HandlerV1) {
 	h.handlersV1[malfeasanceType] = handler
 }
 
-func (h *Handler) RegisterHandlerV2(malfeasanceType uint8, handler MalfeasanceHandlerV2) {
+func (h *Handler) RegisterHandlerV2(malfeasanceType MalfeasanceType, handler HandlerV2) {
 	h.handlersV2[malfeasanceType] = handler
 }
 
@@ -186,7 +203,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 }
 
 func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, []string, error) {
-	handler, ok := h.handlersV1[p.Proof.Type]
+	handler, ok := h.handlersV1[MalfeasanceType(p.Proof.Type)]
 	if !ok {
 		return types.EmptyNodeID, nil, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
 	}
