@@ -325,10 +325,6 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
-//
-// SAFETY: The contents of the returned blob MUST NOT be modified.
-// They might point to the inner sql cache and modifying them would
-// corrupt the cache.
 func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (types.AtxVersion, error) {
 	if sql.IsCached(db) {
 		type cachedBlob struct {
@@ -349,8 +345,8 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (
 		if err != nil {
 			return 0, err
 		}
-		// Here we return the cached slice, hence the safety warning.
-		blob.Bytes = cached.buf
+		blob.Resize(len(cached.buf))
+		copy(blob.Bytes, cached.buf)
 		return cached.version, nil
 	}
 
