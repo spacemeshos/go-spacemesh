@@ -91,10 +91,15 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 	t.Run("invalid proof", func(t *testing.T) {
 		h := newHandler(t)
 
-		handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
-			require.IsType(t, &wire.AtxProof{}, data)
-			return types.EmptyNodeID, []string{"metric"}, errors.New("invalid proof")
-		}
+		ctrl := gomock.NewController(t)
+		handler := NewMockHandlerV1(ctrl)
+		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+				require.IsType(t, &wire.AtxProof{}, data)
+				return types.EmptyNodeID, errors.New("invalid proof")
+			},
+		)
+		handler.EXPECT().ReportInvalidProof(gomock.Any())
 		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
@@ -108,18 +113,22 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		}
 
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
-		require.ErrorIs(t, err, errInvalidProof)
-		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+		require.ErrorContains(t, err, "invalid proof")
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
 		h := newHandler(t)
 
 		nodeID := types.RandomNodeID()
-		handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
-			require.IsType(t, &wire.AtxProof{}, data)
-			return nodeID, []string{"metric"}, nil
-		}
+		ctrl := gomock.NewController(t)
+		handler := NewMockHandlerV1(ctrl)
+		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+				require.IsType(t, &wire.AtxProof{}, data)
+				return nodeID, nil
+			},
+		)
+		handler.EXPECT().ReportProof(gomock.Any())
 		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
@@ -154,10 +163,14 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		}
 		identities.SetMalicious(h.db, nodeID, codec.MustEncode(proof), time.Now())
 
-		handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
-			require.IsType(t, &wire.AtxProof{}, data)
-			return nodeID, []string{"metric"}, nil
-		}
+		ctrl := gomock.NewController(t)
+		handler := NewMockHandlerV1(ctrl)
+		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+				require.IsType(t, &wire.AtxProof{}, data)
+				return nodeID, nil
+			},
+		)
 		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
@@ -219,10 +232,15 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		h := newHandler(t)
 
 		nodeID := types.RandomNodeID()
-		handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
-			require.IsType(t, &wire.AtxProof{}, data)
-			return nodeID, []string{"metric"}, nil
-		}
+		ctrl := gomock.NewController(t)
+		handler := NewMockHandlerV1(ctrl)
+		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+				require.IsType(t, &wire.AtxProof{}, data)
+				return nodeID, nil
+			},
+		)
+		handler.EXPECT().ReportProof(gomock.Any())
 		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
@@ -248,10 +266,15 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		h := newHandler(t)
 
 		nodeID := types.RandomNodeID()
-		handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
-			require.IsType(t, &wire.AtxProof{}, data)
-			return types.EmptyNodeID, []string{"metric"}, errors.New("invalid proof")
-		}
+		ctrl := gomock.NewController(t)
+		handler := NewMockHandlerV1(ctrl)
+		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+				require.IsType(t, &wire.AtxProof{}, data)
+				return types.EmptyNodeID, errors.New("invalid proof")
+			},
+		)
+		handler.EXPECT().ReportInvalidProof(gomock.Any())
 		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
@@ -268,18 +291,22 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			"peer",
 			codec.MustEncode(proof),
 		)
-		require.ErrorIs(t, err, errInvalidProof)
-		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+		require.ErrorContains(t, err, "invalid proof")
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
 		h := newHandler(t)
 
 		nodeID := types.RandomNodeID()
-		handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
-			require.IsType(t, &wire.AtxProof{}, data)
-			return nodeID, []string{"metric"}, nil
-		}
+		ctrl := gomock.NewController(t)
+		handler := NewMockHandlerV1(ctrl)
+		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+				require.IsType(t, &wire.AtxProof{}, data)
+				return nodeID, nil
+			},
+		)
+		handler.EXPECT().ReportProof(gomock.Any())
 		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
@@ -317,10 +344,14 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		}
 		identities.SetMalicious(h.db, nodeID, codec.MustEncode(proof), time.Now())
 
-		handler := func(ctx context.Context, data scale.Type) (types.NodeID, []string, error) {
-			require.IsType(t, &wire.AtxProof{}, data)
-			return nodeID, []string{"metric"}, nil
-		}
+		ctrl := gomock.NewController(t)
+		handler := NewMockHandlerV1(ctrl)
+		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+				require.IsType(t, &wire.AtxProof{}, data)
+				return nodeID, nil
+			},
+		)
 		h.RegisterHandlerV1(MultipleATXs, handler)
 
 		newProof := &wire.MalfeasanceProof{

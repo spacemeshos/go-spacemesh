@@ -7,7 +7,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -23,7 +22,8 @@ import (
 )
 
 var (
-	ErrKnownProof    = errors.New("known proof")
+	ErrKnownProof = errors.New("known proof")
+
 	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 	errInvalidProof  = fmt.Errorf("%w: invalid proof", pubsub.ErrValidationReject)
@@ -44,11 +44,6 @@ const (
 	InvalidActivation MalfeasanceType = iota + 10
 	InvalidBallot
 	InvalidHareMsg
-)
-
-type (
-	HandlerV1 func(ctx context.Context, data scale.Type) (types.NodeID, []string, error)
-	HandlerV2 func(ctx context.Context, data []byte) (types.NodeID, []string, error)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
@@ -99,6 +94,14 @@ func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *wire.MalfeasancePr
 	}
 }
 
+func (h *Handler) countProof(mp *wire.MalfeasanceProof) {
+	h.handlersV1[MalfeasanceType(mp.Proof.Type)].ReportProof(numProofs)
+}
+
+func (h *Handler) countInvalidProof(p *wire.MalfeasanceProof) {
+	h.handlersV1[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
+}
+
 // HandleSyncedMalfeasanceProof is the sync validator for MalfeasanceProof.
 func (h *Handler) HandleSyncedMalfeasanceProof(
 	ctx context.Context,
@@ -133,15 +136,15 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		return errMalformedData
 	}
 	if peer == h.self {
-		id, metricLabels, err := h.Validate(ctx, &p)
+		id, err := h.Validate(ctx, &p)
 		if err != nil {
-			numInvalidProofs.WithLabelValues(metricLabels...).Inc()
+			h.countInvalidProof(&p.MalfeasanceProof)
 			return err
 		}
 		h.reportMalfeasance(id, &p.MalfeasanceProof)
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
-		numProofs.WithLabelValues(metricLabels...).Inc()
+		h.countProof(&p.MalfeasanceProof)
 		return nil
 	}
 	_, err := h.validateAndSave(ctx, &p)
@@ -155,13 +158,13 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 			pubsub.ErrValidationReject,
 		)
 	}
-	nodeID, metricLabels, err := h.Validate(ctx, p)
+	nodeID, err := h.Validate(ctx, p)
 	switch {
 	case errors.Is(err, errInvalidProof):
 		numMalformed.Inc()
 		return types.EmptyNodeID, err
 	case err != nil:
-		numInvalidProofs.WithLabelValues(metricLabels...).Inc()
+		h.countInvalidProof(&p.MalfeasanceProof)
 		return types.EmptyNodeID, err
 	}
 	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
@@ -193,7 +196,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 	}
 	h.reportMalfeasance(nodeID, &p.MalfeasanceProof)
 	h.cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
-	numProofs.WithLabelValues(metricLabels...).Inc()
+	h.countProof(&p.MalfeasanceProof)
 	h.logger.Info("new malfeasance proof",
 		log.ZContext(ctx),
 		zap.Stringer("smesher", nodeID),
@@ -202,20 +205,20 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 	return nodeID, nil
 }
 
-func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, []string, error) {
-	handler, ok := h.handlersV1[MalfeasanceType(p.Proof.Type)]
+func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, error) {
+	mh, ok := h.handlersV1[MalfeasanceType(p.Proof.Type)]
 	if !ok {
-		return types.EmptyNodeID, nil, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
+		return types.EmptyNodeID, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
 	}
 
-	nodeID, metricLabels, err := handler(ctx, p.Proof.Data)
+	nodeID, err := mh.Validate(ctx, p.Proof.Data)
 	if err == nil {
-		return nodeID, metricLabels, nil
+		return nodeID, nil
 	}
 	h.logger.Warn("malfeasance proof failed validation",
 		log.ZContext(ctx),
 		zap.Inline(p),
 		zap.Error(err),
 	)
-	return nodeID, metricLabels, fmt.Errorf("%w: %v", errInvalidProof, err)
+	return nodeID, err
 }

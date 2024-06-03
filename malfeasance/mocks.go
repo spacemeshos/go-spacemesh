@@ -10,8 +10,11 @@
 package malfeasance
 
 import (
+	context "context"
 	reflect "reflect"
 
+	prometheus "github.com/prometheus/client_golang/prometheus"
+	scale "github.com/spacemeshos/go-scale"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -71,6 +74,140 @@ func (c *MocktortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *MocktortoiseOn
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MocktortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *MocktortoiseOnMalfeasanceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockHandlerV1 is a mock of HandlerV1 interface.
+type MockHandlerV1 struct {
+	ctrl     *gomock.Controller
+	recorder *MockHandlerV1MockRecorder
+}
+
+// MockHandlerV1MockRecorder is the mock recorder for MockHandlerV1.
+type MockHandlerV1MockRecorder struct {
+	mock *MockHandlerV1
+}
+
+// NewMockHandlerV1 creates a new mock instance.
+func NewMockHandlerV1(ctrl *gomock.Controller) *MockHandlerV1 {
+	mock := &MockHandlerV1{ctrl: ctrl}
+	mock.recorder = &MockHandlerV1MockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockHandlerV1) EXPECT() *MockHandlerV1MockRecorder {
+	return m.recorder
+}
+
+// ReportInvalidProof mocks base method.
+func (m *MockHandlerV1) ReportInvalidProof(vec *prometheus.CounterVec) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ReportInvalidProof", vec)
+}
+
+// ReportInvalidProof indicates an expected call of ReportInvalidProof.
+func (mr *MockHandlerV1MockRecorder) ReportInvalidProof(vec any) *MockHandlerV1ReportInvalidProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportInvalidProof", reflect.TypeOf((*MockHandlerV1)(nil).ReportInvalidProof), vec)
+	return &MockHandlerV1ReportInvalidProofCall{Call: call}
+}
+
+// MockHandlerV1ReportInvalidProofCall wrap *gomock.Call
+type MockHandlerV1ReportInvalidProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHandlerV1ReportInvalidProofCall) Return() *MockHandlerV1ReportInvalidProofCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHandlerV1ReportInvalidProofCall) Do(f func(*prometheus.CounterVec)) *MockHandlerV1ReportInvalidProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHandlerV1ReportInvalidProofCall) DoAndReturn(f func(*prometheus.CounterVec)) *MockHandlerV1ReportInvalidProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// ReportProof mocks base method.
+func (m *MockHandlerV1) ReportProof(vec *prometheus.CounterVec) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ReportProof", vec)
+}
+
+// ReportProof indicates an expected call of ReportProof.
+func (mr *MockHandlerV1MockRecorder) ReportProof(vec any) *MockHandlerV1ReportProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportProof", reflect.TypeOf((*MockHandlerV1)(nil).ReportProof), vec)
+	return &MockHandlerV1ReportProofCall{Call: call}
+}
+
+// MockHandlerV1ReportProofCall wrap *gomock.Call
+type MockHandlerV1ReportProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHandlerV1ReportProofCall) Return() *MockHandlerV1ReportProofCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHandlerV1ReportProofCall) Do(f func(*prometheus.CounterVec)) *MockHandlerV1ReportProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHandlerV1ReportProofCall) DoAndReturn(f func(*prometheus.CounterVec)) *MockHandlerV1ReportProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Validate mocks base method.
+func (m *MockHandlerV1) Validate(ctx context.Context, data scale.Type) (types.NodeID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Validate", ctx, data)
+	ret0, _ := ret[0].(types.NodeID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Validate indicates an expected call of Validate.
+func (mr *MockHandlerV1MockRecorder) Validate(ctx, data any) *MockHandlerV1ValidateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockHandlerV1)(nil).Validate), ctx, data)
+	return &MockHandlerV1ValidateCall{Call: call}
+}
+
+// MockHandlerV1ValidateCall wrap *gomock.Call
+type MockHandlerV1ValidateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHandlerV1ValidateCall) Return(arg0 types.NodeID, arg1 error) *MockHandlerV1ValidateCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHandlerV1ValidateCall) Do(f func(context.Context, scale.Type) (types.NodeID, error)) *MockHandlerV1ValidateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHandlerV1ValidateCall) DoAndReturn(f func(context.Context, scale.Type) (types.NodeID, error)) *MockHandlerV1ValidateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

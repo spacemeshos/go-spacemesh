@@ -1088,9 +1088,8 @@ func (app *App) initServices(ctx context.Context) error {
 	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	activationMH := activation.NewMalfeasanceHandler(
 		app.cachedDB,
+		malfeasanceLogger,
 		app.edVerifier,
-		app.postVerifier,
-		activation.WithMalfeasanceLogger(malfeasanceLogger),
 	)
 	meshMH := mesh.NewMalfeasanceHandler(
 		app.cachedDB,
@@ -1101,6 +1100,17 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		app.edVerifier,
 		hare3.WithMalfeasanceLogger(malfeasanceLogger),
+	)
+	invalidPostMH := activation.NewInvalidPostIndexHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.edVerifier,
+		app.postVerifier,
+	)
+	invalidPrevMH := activation.NewInvalidPrevATXHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.edVerifier,
 	)
 
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
@@ -1114,11 +1124,11 @@ func (app *App) initServices(ctx context.Context) error {
 		nodeIDs,
 		trtl,
 	)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleATXs, activationMH.HandleDoublePublish)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleBallots, meshMH.HandleMultipleBallots)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.HareEquivocation, hareMH.HandleHareEquivocation)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPostIndex, activationMH.HandleInvalidPostIndex)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPrevATX, activationMH.HandleInvalidPrevATX)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleATXs, activationMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleBallots, meshMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.HareEquivocation, hareMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPostIndex, invalidPostMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPrevATX, invalidPrevMH)
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(

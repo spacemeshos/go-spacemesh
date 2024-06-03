@@ -390,7 +390,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.True(t, blts[1].IsMalicious())
 
 	mh := NewMalfeasanceHandler(tm.cdb, signing.NewEdVerifier(), WithMalfeasanceLogger(tm.logger.Zap()))
-	nodeID, _, err := mh.HandleMultipleBallots(context.Background(), malProof.Proof.Data)
+	nodeID, err := mh.Validate(context.Background(), malProof.Proof.Data)
 	require.NoError(t, err)
 	require.Equal(t, sig.NodeID(), nodeID)
 

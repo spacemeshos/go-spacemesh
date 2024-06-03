@@ -252,10 +252,10 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, msg))
 	} else {
 		postVerifier := NewMockPostVerifier(gomock.NewController(t))
-		mh := NewMalfeasanceHandler(atxHdlr.cdb,
+		mh := NewInvalidPostIndexHandler(atxHdlr.cdb,
+			atxHdlr.logger,
 			atxHdlr.edVerifier,
 			postVerifier,
-			WithMalfeasanceLogger(atxHdlr.logger),
 		)
 		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ string, data []byte) error {
@@ -264,7 +264,7 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 
 				postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(errors.New("invalid"))
-				nodeID, _, err := mh.HandleInvalidPostIndex(context.Background(), got.Proof.Data)
+				nodeID, err := mh.Validate(context.Background(), got.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
 
@@ -418,12 +418,12 @@ func testHandler_HandleDoublePublish(t *testing.T, synced bool) {
 	if synced {
 		require.NoError(t, hdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, "", msg))
 	} else {
-		mh := NewMalfeasanceHandler(hdlr.cdb, hdlr.edVerifier, nil, WithMalfeasanceLogger(hdlr.logger))
+		mh := NewMalfeasanceHandler(hdlr.cdb, hdlr.logger, hdlr.edVerifier)
 		hdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ string, data []byte) error {
 				require.NoError(t, codec.Decode(data, &got))
 				require.Equal(t, mwire.MultipleATXs, got.Proof.Type)
-				nodeID, _, err := mh.HandleDoublePublish(context.Background(), got.Proof.Data)
+				nodeID, err := mh.Validate(context.Background(), got.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
 				return nil

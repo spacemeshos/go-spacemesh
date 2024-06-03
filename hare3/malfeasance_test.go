@@ -57,7 +57,7 @@ func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
 	require.NoError(tb, atxs.Add(db, atx))
 }
 
-func TestHandler_HandleHareEquivocation(t *testing.T) {
+func TestHandler_Validate(t *testing.T) {
 	t.Run("unknown identity", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
 
@@ -88,7 +88,7 @@ func TestHandler_HandleHareEquivocation(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, _, err := h.HandleHareEquivocation(context.Background(), &hp)
+		nodeID, err := h.Validate(context.Background(), &hp)
 		require.ErrorContains(t, err, "identity does not exist")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -123,7 +123,7 @@ func TestHandler_HandleHareEquivocation(t *testing.T) {
 		hp.Messages[1].Signature = types.RandomEdSignature()
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, _, err := h.HandleHareEquivocation(context.Background(), &hp)
+		nodeID, err := h.Validate(context.Background(), &hp)
 		require.ErrorContains(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -159,7 +159,7 @@ func TestHandler_HandleHareEquivocation(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, _, err := h.HandleHareEquivocation(context.Background(), &hp)
+		nodeID, err := h.Validate(context.Background(), &hp)
 		require.ErrorContains(t, err, "invalid hare malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -194,7 +194,7 @@ func TestHandler_HandleHareEquivocation(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, _, err := h.HandleHareEquivocation(context.Background(), &hp)
+		nodeID, err := h.Validate(context.Background(), &hp)
 		require.ErrorContains(t, err, "invalid hare malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -229,7 +229,7 @@ func TestHandler_HandleHareEquivocation(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, _, err := h.HandleHareEquivocation(context.Background(), &hp)
+		nodeID, err := h.Validate(context.Background(), &hp)
 		require.ErrorContains(t, err, "invalid hare malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -268,7 +268,7 @@ func TestHandler_HandleHareEquivocation(t *testing.T) {
 		hp.Messages[1].Signature = sig2.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig2.NodeID()
 
-		nodeID, _, err := h.HandleHareEquivocation(context.Background(), &hp)
+		nodeID, err := h.Validate(context.Background(), &hp)
 		require.ErrorContains(t, err, "invalid hare malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -303,7 +303,7 @@ func TestHandler_HandleHareEquivocation(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, _, err := h.HandleHareEquivocation(context.Background(), &hp)
+		nodeID, err := h.Validate(context.Background(), &hp)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 
@@ -50,33 +51,29 @@ func NewMalfeasanceHandler(
 	return mh
 }
 
-func (mh *MalfeasanceHandler) HandleMultipleBallots(
-	ctx context.Context,
-	data scale.Type,
-) (types.NodeID, []string, error) {
+func (mh *MalfeasanceHandler) Validate(ctx context.Context, data scale.Type) (types.NodeID, error) {
 	bp, ok := data.(*wire.BallotProof)
 	if !ok {
-		return types.EmptyNodeID, []string{multiBallots}, errors.New("wrong message type for multi ballots")
+		return types.EmptyNodeID, errors.New("wrong message type for multi ballots")
 	}
 	for _, msg := range bp.Messages {
 		if !mh.edVerifier.Verify(signing.BALLOT, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
-			return types.EmptyNodeID, []string{multiBallots}, errors.New("invalid signature")
+			return types.EmptyNodeID, errors.New("invalid signature")
 		}
 	}
 	msg1, msg2 := bp.Messages[0], bp.Messages[1]
 	ok, err := atxs.IdentityExists(mh.db, msg1.SmesherID)
 	if err != nil {
-		return types.EmptyNodeID, []string{multiBallots},
-			fmt.Errorf("check identity in ballot malfeasance %v: %w", msg1.SmesherID, err)
+		return types.EmptyNodeID, fmt.Errorf("check identity in ballot malfeasance %v: %w", msg1.SmesherID, err)
 	}
 	if !ok {
-		return types.EmptyNodeID, []string{multiBallots}, errors.New("identity does not exist")
+		return types.EmptyNodeID, errors.New("identity does not exist")
 	}
 
 	if msg1.SmesherID == msg2.SmesherID &&
 		msg1.InnerMsg.Layer == msg2.InnerMsg.Layer &&
 		msg1.InnerMsg.MsgHash != msg2.InnerMsg.MsgHash {
-		return msg1.SmesherID, []string{multiBallots}, nil
+		return msg1.SmesherID, nil
 	}
 	mh.logger.Warn("received invalid ballot malfeasance proof",
 		log.ZContext(ctx),
@@ -85,5 +82,13 @@ func (mh *MalfeasanceHandler) HandleMultipleBallots(
 		zap.Stringer("second_smesher", bp.Messages[1].SmesherID),
 		zap.Object("second_proof", &bp.Messages[1].InnerMsg),
 	)
-	return types.EmptyNodeID, []string{multiBallots}, errors.New("invalid ballot malfeasance proof")
+	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
+}
+
+func (mh *MalfeasanceHandler) ReportProof(numProofs *prometheus.CounterVec) {
+	numProofs.WithLabelValues(multiBallots).Inc()
+}
+
+func (mh *MalfeasanceHandler) ReportInvalidProof(numInvalidProofs *prometheus.CounterVec) {
+	numInvalidProofs.WithLabelValues(multiBallots).Inc()
 }

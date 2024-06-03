@@ -23,37 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
-type testMalfeasanceHandler struct {
-	*MalfeasanceHandler
-
-	observedLogs     *observer.ObservedLogs
-	db               *sql.Database
-	mockPostVerifier *MockPostVerifier
-}
-
-func newTestMalfeasanceHandler(tb testing.TB) *testMalfeasanceHandler {
-	db := sql.InMemory()
-	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
-		func(core zapcore.Core) zapcore.Core {
-			return zapcore.NewTee(core, observer)
-		},
-	)))
-
-	ctrl := gomock.NewController(tb)
-	postVerifier := NewMockPostVerifier(ctrl)
-
-	h := NewMalfeasanceHandler(db, signing.NewEdVerifier(), postVerifier, WithMalfeasanceLogger(logger))
-
-	return &testMalfeasanceHandler{
-		MalfeasanceHandler: h,
-
-		observedLogs:     observedLogs,
-		db:               db,
-		mockPostVerifier: postVerifier,
-	}
-}
-
 func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
 	tb.Helper()
 	atx := &types.ActivationTx{
@@ -67,7 +36,32 @@ func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
 	require.NoError(tb, atxs.Add(db, atx))
 }
 
-func TestHandler_HandleDoublePublish(t *testing.T) {
+type testMalfeasanceHandler struct {
+	*MalfeasanceHandler
+
+	observedLogs *observer.ObservedLogs
+	db           *sql.Database
+}
+
+func newTestMalfeasanceHandler(tb testing.TB) *testMalfeasanceHandler {
+	db := sql.InMemory()
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
+
+	h := NewMalfeasanceHandler(db, logger, signing.NewEdVerifier())
+	return &testMalfeasanceHandler{
+		MalfeasanceHandler: h,
+
+		observedLogs: observedLogs,
+		db:           db,
+	}
+}
+
+func TestMalfeasanceHandler_Validate(t *testing.T) {
 	t.Run("unknown identity", func(t *testing.T) {
 		h := newTestMalfeasanceHandler(t)
 
@@ -96,7 +90,7 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 		ap.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, err := h.Validate(context.Background(), &ap)
 		require.ErrorContains(t, err, "identity does not exist")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -130,7 +124,7 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 
-		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, err := h.Validate(context.Background(), &ap)
 		require.ErrorContains(t, err, "invalid atx malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -163,7 +157,7 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 
-		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, err := h.Validate(context.Background(), &ap)
 		require.ErrorContains(t, err, "invalid atx malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -200,7 +194,7 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig2.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 
-		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, err := h.Validate(context.Background(), &ap)
 		require.ErrorContains(t, err, "invalid atx malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -233,15 +227,45 @@ func TestHandler_HandleDoublePublish(t *testing.T) {
 		ap.Messages[0].Signature = sig.Sign(signing.ATX, ap.Messages[0].SignedBytes())
 		ap.Messages[1].Signature = sig.Sign(signing.ATX, ap.Messages[1].SignedBytes())
 
-		nodeID, _, err := h.HandleDoublePublish(context.Background(), &ap)
+		nodeID, err := h.Validate(context.Background(), &ap)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})
 }
 
-func TestHandler_HandleInvalidPostIndex(t *testing.T) {
+type testInvalidPostIndexHandler struct {
+	*InvalidPostIndexHandler
+
+	observedLogs     *observer.ObservedLogs
+	db               *sql.Database
+	mockPostVerifier *MockPostVerifier
+}
+
+func newTestInvalidPostIndexHandler(tb testing.TB) *testInvalidPostIndexHandler {
+	db := sql.InMemory()
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
+
+	ctrl := gomock.NewController(tb)
+	postVerifier := NewMockPostVerifier(ctrl)
+
+	h := NewInvalidPostIndexHandler(db, logger, signing.NewEdVerifier(), postVerifier)
+	return &testInvalidPostIndexHandler{
+		InvalidPostIndexHandler: h,
+
+		observedLogs:     observedLogs,
+		db:               db,
+		mockPostVerifier: postVerifier,
+	}
+}
+
+func TestInvalidPostIndexHandler_Validate(t *testing.T) {
 	t.Run("valid malfeasance proof", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPostIndexHandler(t)
 
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -294,13 +318,13 @@ func TestHandler_HandleInvalidPostIndex(t *testing.T) {
 			meta,
 			gomock.Any(),
 		).Return(errors.New("invalid post"))
-		nodeID, _, err := h.HandleInvalidPostIndex(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})
 
 	t.Run("invalid malfeasance proof (POST valid)", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPostIndexHandler(t)
 
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -353,13 +377,13 @@ func TestHandler_HandleInvalidPostIndex(t *testing.T) {
 			meta,
 			gomock.Any(),
 		).Return(nil)
-		nodeID, _, err := h.HandleInvalidPostIndex(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.ErrorContains(t, err, "POST is valid")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
 
 	t.Run("invalid malfeasance proof (ATX signature invalid)", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPostIndexHandler(t)
 
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
@@ -394,15 +418,40 @@ func TestHandler_HandleInvalidPostIndex(t *testing.T) {
 			InvalidIdx: 7,
 		}
 
-		nodeID, _, err := h.HandleInvalidPostIndex(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.ErrorContains(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
 }
 
-func TestHandler_HandleInvalidPrevATX(t *testing.T) {
+type testInvalidPrevATXHandler struct {
+	*InvalidPrevATXHandler
+
+	observedLogs *observer.ObservedLogs
+	db           *sql.Database
+}
+
+func newTestInvalidPrevATXHandler(tb testing.TB) *testInvalidPrevATXHandler {
+	db := sql.InMemory()
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
+
+	h := NewInvalidPrevATXHandler(db, logger, signing.NewEdVerifier())
+	return &testInvalidPrevATXHandler{
+		InvalidPrevATXHandler: h,
+
+		observedLogs: observedLogs,
+		db:           db,
+	}
+}
+
+func TestInvalidPrevATX_Validate(t *testing.T) {
 	t.Run("valid malfeasance proof", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPrevATXHandler(t)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		createIdentity(t, h.db, sig)
@@ -434,13 +483,13 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})
 
 	t.Run("unknown identity", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPrevATXHandler(t)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
@@ -471,13 +520,13 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.ErrorContains(t, err, "identity does not exist")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
 
 	t.Run("invalid malfeasance proof (invalid signature for first)", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPrevATXHandler(t)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		createIdentity(t, h.db, sig)
@@ -510,13 +559,13 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.ErrorContains(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
 
 	t.Run("invalid malfeasance proof (invalid signature for first)", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPrevATXHandler(t)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		createIdentity(t, h.db, sig)
@@ -549,13 +598,13 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.ErrorContains(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
 
 	t.Run("invalid malfeasance proof (same ATX)", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPrevATXHandler(t)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		createIdentity(t, h.db, sig)
@@ -579,13 +628,13 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.ErrorContains(t, err, "ATX IDs are the same")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
 
 	t.Run("invalid malfeasance proof (prev ATXs differ)", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPrevATXHandler(t)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		createIdentity(t, h.db, sig)
@@ -615,13 +664,13 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.ErrorContains(t, err, "prev ATX IDs are different")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
 
 	t.Run("invalid malfeasance proof (ATXs by different identities)", func(t *testing.T) {
-		h := newTestMalfeasanceHandler(t)
+		h := newTestInvalidPrevATXHandler(t)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		createIdentity(t, h.db, sig)
@@ -657,7 +706,7 @@ func TestHandler_HandleInvalidPrevATX(t *testing.T) {
 			Atx2: atx2,
 		}
 
-		nodeID, _, err := h.HandleInvalidPrevATX(context.Background(), proof)
+		nodeID, err := h.Validate(context.Background(), proof)
 		require.ErrorContains(t, err, "smesher IDs are different")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})

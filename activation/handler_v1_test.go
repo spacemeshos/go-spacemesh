@@ -639,8 +639,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		require.NotNil(t, proof)
 		require.Equal(t, mwire.MultipleATXs, proof.Proof.Type)
 
-		mh := NewMalfeasanceHandler(atxHdlr.cdb, atxHdlr.edVerifier, nil, WithMalfeasanceLogger(atxHdlr.logger))
-		nodeID, _, err := mh.HandleDoublePublish(context.Background(), proof.Proof.Data)
+		mh := NewMalfeasanceHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier)
+		nodeID, err := mh.Validate(context.Background(), proof.Proof.Data)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 
@@ -739,8 +739,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		require.NotNil(t, proof)
 		require.Equal(t, mwire.InvalidPrevATX, proof.Proof.Type)
 
-		mh := NewMalfeasanceHandler(atxHdlr.cdb, atxHdlr.edVerifier, nil, WithMalfeasanceLogger(atxHdlr.logger))
-		nodeID, _, err := mh.HandleInvalidPrevATX(context.Background(), proof.Proof.Data)
+		mh := NewInvalidPrevATXHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier)
+		nodeID, err := mh.Validate(context.Background(), proof.Proof.Data)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})
