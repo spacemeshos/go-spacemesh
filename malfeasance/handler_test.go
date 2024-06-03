@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -94,7 +93,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		handler := NewMockHandlerV1(ctrl)
 		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+			func(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 				require.IsType(t, &wire.AtxProof{}, data)
 				return types.EmptyNodeID, errors.New("invalid proof")
 			},
@@ -123,7 +122,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		handler := NewMockHandlerV1(ctrl)
 		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+			func(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 				require.IsType(t, &wire.AtxProof{}, data)
 				return nodeID, nil
 			},
@@ -166,7 +165,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		handler := NewMockHandlerV1(ctrl)
 		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+			func(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 				require.IsType(t, &wire.AtxProof{}, data)
 				return nodeID, nil
 			},
@@ -235,7 +234,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		handler := NewMockHandlerV1(ctrl)
 		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+			func(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 				require.IsType(t, &wire.AtxProof{}, data)
 				return nodeID, nil
 			},
@@ -269,7 +268,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		handler := NewMockHandlerV1(ctrl)
 		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+			func(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 				require.IsType(t, &wire.AtxProof{}, data)
 				return types.EmptyNodeID, errors.New("invalid proof")
 			},
@@ -301,7 +300,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		handler := NewMockHandlerV1(ctrl)
 		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+			func(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 				require.IsType(t, &wire.AtxProof{}, data)
 				return nodeID, nil
 			},
@@ -347,7 +346,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		handler := NewMockHandlerV1(ctrl)
 		handler.EXPECT().Validate(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, data scale.Type) (types.NodeID, error) {
+			func(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 				require.IsType(t, &wire.AtxProof{}, data)
 				return nodeID, nil
 			},
