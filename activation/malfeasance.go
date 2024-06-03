@@ -63,10 +63,6 @@ func (mh *MalfeasanceHandler) HandleDoublePublish(
 	ctx context.Context,
 	data scale.Type,
 ) (types.NodeID, []string, error) {
-	var (
-		firstNid types.NodeID
-		firstMsg wire.AtxProofMsg
-	)
 	ap, ok := data.(*wire.AtxProof)
 	if !ok {
 		return types.EmptyNodeID, []string{multiATXs}, errors.New("wrong message type for multiple ATXs")
@@ -75,31 +71,29 @@ func (mh *MalfeasanceHandler) HandleDoublePublish(
 		if !mh.edVerifier.Verify(signing.ATX, msg.SmesherID, msg.SignedBytes(), msg.Signature) {
 			return types.EmptyNodeID, []string{multiATXs}, errors.New("invalid signature")
 		}
-		if firstNid == types.EmptyNodeID {
-			ok, err := atxs.IdentityExists(mh.db, msg.SmesherID)
-			if err != nil {
-				return types.EmptyNodeID, []string{multiATXs},
-					fmt.Errorf("check identity in atx malfeasance %v: %w", msg.SmesherID, err)
-			}
-			if !ok {
-				return types.EmptyNodeID, []string{multiATXs}, fmt.Errorf("identity does not exist: %v", msg.SmesherID)
-			}
-			firstNid = msg.SmesherID
-			firstMsg = msg
-		} else if msg.SmesherID == firstNid {
-			if msg.InnerMsg.PublishEpoch == firstMsg.InnerMsg.PublishEpoch &&
-				msg.InnerMsg.MsgHash != firstMsg.InnerMsg.MsgHash {
-				return msg.SmesherID, []string{multiATXs}, nil
-			}
-		}
+	}
+	msg1, msg2 := ap.Messages[0], ap.Messages[1]
+	ok, err := atxs.IdentityExists(mh.db, msg1.SmesherID)
+	if err != nil {
+		return types.EmptyNodeID, []string{multiATXs},
+			fmt.Errorf("check identity in atx malfeasance %v: %w", msg1.SmesherID, err)
+	}
+	if !ok {
+		return types.EmptyNodeID, []string{multiATXs}, fmt.Errorf("identity does not exist: %v", msg1.SmesherID)
+	}
+
+	if msg1.SmesherID == msg2.SmesherID &&
+		msg1.InnerMsg.PublishEpoch == msg2.InnerMsg.PublishEpoch &&
+		msg1.InnerMsg.MsgHash != msg2.InnerMsg.MsgHash {
+		return msg1.SmesherID, []string{multiATXs}, nil
 	}
 
 	mh.logger.Warn("received invalid atx malfeasance proof",
 		log.ZContext(ctx),
-		zap.Stringer("first_smesher", ap.Messages[0].SmesherID),
-		zap.Object("first_proof", &ap.Messages[0].InnerMsg),
-		zap.Stringer("second_smesher", ap.Messages[1].SmesherID),
-		zap.Object("second_proof", &ap.Messages[1].InnerMsg),
+		zap.Stringer("first_smesher", msg1.SmesherID),
+		zap.Object("first_proof", &msg1.InnerMsg),
+		zap.Stringer("second_smesher", msg2.SmesherID),
+		zap.Object("second_proof", &msg2.InnerMsg),
 	)
 	return types.EmptyNodeID, []string{multiATXs}, errors.New("invalid atx malfeasance proof")
 }
