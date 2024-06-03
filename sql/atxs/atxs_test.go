@@ -665,6 +665,26 @@ func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
 	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
 }
 
+// Test that the cached blob is not shared with the caller
+// but copied into the provided blob.
+func TestGetBlobCached_OverwriteSafety(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+	atx := types.ActivationTx{}
+	atx.SetID(types.RandomATXID())
+	atx.AtxBlob.Blob = []byte("original blob")
+	require.NoError(t, atxs.Add(db, &atx))
+	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
+
+	var b sql.Blob // we will reuse the blob between queries
+	_, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &b)
+	require.NoError(t, err)
+	require.Equal(t, atx.AtxBlob.Blob, b.Bytes)
+	b.Bytes[0] = 'X' // modify the blob
+	_, err = atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &b)
+	require.NoError(t, err)
+	require.Equal(t, atx.AtxBlob.Blob, b.Bytes)
+}
+
 func TestCachedBlobEviction(t *testing.T) {
 	db := sql.InMemory(
 		sql.WithQueryCache(true),
