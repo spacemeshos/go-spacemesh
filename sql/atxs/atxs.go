@@ -152,7 +152,26 @@ func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err er
 	return id, err
 }
 
-// Retrieve the last coinbase address used by the given node ID.
+// IdentityExists checks if an identity has ever published an ATX.
+func IdentityExists(db sql.Executor, nodeID types.NodeID) (bool, error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+
+	rows, err := db.Exec(`
+		select 1 from atxs
+		where pubkey = ?1
+		limit 1;`, enc, nil)
+	if err != nil {
+		return false, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+	} else if rows == 0 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// Coinbase retrieves the last coinbase address used by the given node ID.
 func Coinbase(db sql.Executor, id types.NodeID) (types.Address, error) {
 	var coinbase types.Address
 	enc := func(stmt *sql.Statement) {

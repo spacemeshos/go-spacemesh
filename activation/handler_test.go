@@ -22,8 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -253,23 +251,23 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	if synced {
 		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, msg))
 	} else {
+		postVerifier := NewMockPostVerifier(gomock.NewController(t))
+		mh := NewInvalidPostIndexHandler(atxHdlr.cdb,
+			atxHdlr.logger,
+			atxHdlr.edVerifier,
+			postVerifier,
+		)
 		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ string, data []byte) error {
 				require.NoError(t, codec.Decode(data, &got))
-				postVerifier := NewMockPostVerifier(gomock.NewController(t))
+				require.Equal(t, mwire.InvalidPostIndex, got.Proof.Type)
+
 				postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(errors.New("invalid"))
-				nodeID, err := malfeasance.Validate(
-					context.Background(),
-					log.NewFromLog(atxHdlr.logger),
-					atxHdlr.cdb,
-					atxHdlr.edVerifier,
-					postVerifier,
-					&got,
-				)
+				nodeID, err := mh.Validate(context.Background(), got.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
-				require.Equal(t, mwire.InvalidPostIndex, got.Proof.Type)
+
 				p, ok := got.Proof.Data.(*mwire.InvalidPostIndexProof)
 				require.True(t, ok)
 				require.EqualValues(t, 2, p.InvalidIdx)
@@ -398,7 +396,7 @@ func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
-func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
+func testHandler_HandleDoublePublish(t *testing.T, synced bool) {
 	t.Parallel()
 	goldenATXID := types.ATXID{2, 3, 4}
 	sig, err := signing.NewEdSigner()
@@ -420,17 +418,12 @@ func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 	if synced {
 		require.NoError(t, hdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, "", msg))
 	} else {
+		mh := NewMalfeasanceHandler(hdlr.cdb, hdlr.logger, hdlr.edVerifier)
 		hdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ string, data []byte) error {
 				require.NoError(t, codec.Decode(data, &got))
-				nodeID, err := malfeasance.Validate(
-					context.Background(),
-					log.NewFromLog(hdlr.logger),
-					hdlr.cdb,
-					hdlr.edVerifier,
-					nil,
-					&got,
-				)
+				require.Equal(t, mwire.MultipleATXs, got.Proof.Type)
+				nodeID, err := mh.Validate(context.Background(), got.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
 				return nil
@@ -449,11 +442,11 @@ func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 
 func TestHandler_HandleMaliciousAtx(t *testing.T) {
 	t.Run("produced but not published during sync", func(t *testing.T) {
-		testHandler_HandleMaliciousAtx(t, true)
+		testHandler_HandleDoublePublish(t, true)
 	})
 
 	t.Run("produced and published during gossip", func(t *testing.T) {
-		testHandler_HandleMaliciousAtx(t, false)
+		testHandler_HandleDoublePublish(t, false)
 	})
 }
 
