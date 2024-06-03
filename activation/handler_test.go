@@ -120,13 +120,12 @@ func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 type handlerMocks struct {
 	goldenATXID types.ATXID
 
-	mclock       *MocklayerClock
-	mpub         *pubsubmocks.MockPublisher
-	mockFetch    *mocks.MockFetcher
-	mValidator   *MocknipostValidator
-	mValidatorV2 *MocknipostValidatorV2
-	mbeacon      *MockAtxReceiver
-	mtortoise    *mocks.MockTortoise
+	mclock     *MocklayerClock
+	mpub       *pubsubmocks.MockPublisher
+	mockFetch  *mocks.MockFetcher
+	mValidator *MocknipostValidator
+	mbeacon    *MockAtxReceiver
+	mtortoise  *mocks.MockTortoise
 }
 
 type testHandler struct {
@@ -183,14 +182,13 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	ctrl := gomock.NewController(tb)
 	return handlerMocks{
-		goldenATXID:  golden,
-		mclock:       NewMocklayerClock(ctrl),
-		mpub:         pubsubmocks.NewMockPublisher(ctrl),
-		mockFetch:    mocks.NewMockFetcher(ctrl),
-		mValidator:   NewMocknipostValidator(ctrl),
-		mValidatorV2: NewMocknipostValidatorV2(ctrl),
-		mbeacon:      NewMockAtxReceiver(ctrl),
-		mtortoise:    mocks.NewMockTortoise(ctrl),
+		goldenATXID: golden,
+		mclock:      NewMocklayerClock(ctrl),
+		mpub:        pubsubmocks.NewMockPublisher(ctrl),
+		mockFetch:   mocks.NewMockFetcher(ctrl),
+		mValidator:  NewMocknipostValidator(ctrl),
+		mbeacon:     NewMockAtxReceiver(ctrl),
+		mtortoise:   mocks.NewMockTortoise(ctrl),
 	}
 }
 
@@ -523,8 +521,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorContains(t, err, "invalid atx signature")
 	})
-	t.Run("initial atx V2", func(t *testing.T) {
-		t.Skip("atx V2 is not supported yet")
+	t.Run("atx V2", func(t *testing.T) {
 		t.Parallel()
 
 		atx := newInitialATXv2(t, goldenATXID)

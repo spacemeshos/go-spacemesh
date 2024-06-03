@@ -466,6 +466,45 @@ func (c *MocknipostValidatorNumUnitsCall) DoAndReturn(f func(*PostConfig, uint32
 	return c
 }
 
+// PoetMembership mocks base method.
+func (m *MocknipostValidator) PoetMembership(ctx context.Context, membership *types.MultiMerkleProof, postChallenge types.Hash32, poetChallenges [][]byte) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PoetMembership", ctx, membership, postChallenge, poetChallenges)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PoetMembership indicates an expected call of PoetMembership.
+func (mr *MocknipostValidatorMockRecorder) PoetMembership(ctx, membership, postChallenge, poetChallenges any) *MocknipostValidatorPoetMembershipCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PoetMembership", reflect.TypeOf((*MocknipostValidator)(nil).PoetMembership), ctx, membership, postChallenge, poetChallenges)
+	return &MocknipostValidatorPoetMembershipCall{Call: call}
+}
+
+// MocknipostValidatorPoetMembershipCall wrap *gomock.Call
+type MocknipostValidatorPoetMembershipCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostValidatorPoetMembershipCall) Return(arg0 uint64, arg1 error) *MocknipostValidatorPoetMembershipCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostValidatorPoetMembershipCall) Do(f func(context.Context, *types.MultiMerkleProof, types.Hash32, [][]byte) (uint64, error)) *MocknipostValidatorPoetMembershipCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostValidatorPoetMembershipCall) DoAndReturn(f func(context.Context, *types.MultiMerkleProof, types.Hash32, [][]byte) (uint64, error)) *MocknipostValidatorPoetMembershipCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // PositioningAtx mocks base method.
 func (m *MocknipostValidator) PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
 	m.ctrl.T.Helper()
@@ -547,6 +586,49 @@ func (c *MocknipostValidatorPostCall) DoAndReturn(f func(context.Context, types.
 	return c
 }
 
+// PostV2 mocks base method.
+func (m *MocknipostValidator) PostV2(ctx context.Context, smesherID types.NodeID, commitment types.ATXID, post *types.Post, challenge []byte, numUnits uint32, opts ...validatorOption) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, smesherID, commitment, post, challenge, numUnits}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PostV2", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PostV2 indicates an expected call of PostV2.
+func (mr *MocknipostValidatorMockRecorder) PostV2(ctx, smesherID, commitment, post, challenge, numUnits any, opts ...any) *MocknipostValidatorPostV2Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, smesherID, commitment, post, challenge, numUnits}, opts...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostV2", reflect.TypeOf((*MocknipostValidator)(nil).PostV2), varargs...)
+	return &MocknipostValidatorPostV2Call{Call: call}
+}
+
+// MocknipostValidatorPostV2Call wrap *gomock.Call
+type MocknipostValidatorPostV2Call struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostValidatorPostV2Call) Return(arg0 error) *MocknipostValidatorPostV2Call {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostValidatorPostV2Call) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, ...validatorOption) error) *MocknipostValidatorPostV2Call {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostValidatorPostV2Call) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, ...validatorOption) error) *MocknipostValidatorPostV2Call {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // VRFNonce mocks base method.
 func (m *MocknipostValidator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce, labelsPerUnit uint64, numUnits uint32) error {
 	m.ctrl.T.Helper()
@@ -581,6 +663,44 @@ func (c *MocknipostValidatorVRFNonceCall) Do(f func(types.NodeID, types.ATXID, u
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MocknipostValidatorVRFNonceCall) DoAndReturn(f func(types.NodeID, types.ATXID, uint64, uint64, uint32) error) *MocknipostValidatorVRFNonceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// VRFNonceV2 mocks base method.
+func (m *MocknipostValidator) VRFNonceV2(smesherID types.NodeID, commitment types.ATXID, vrfNonce uint64, numUnits uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRFNonceV2", smesherID, commitment, vrfNonce, numUnits)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VRFNonceV2 indicates an expected call of VRFNonceV2.
+func (mr *MocknipostValidatorMockRecorder) VRFNonceV2(smesherID, commitment, vrfNonce, numUnits any) *MocknipostValidatorVRFNonceV2Call {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRFNonceV2", reflect.TypeOf((*MocknipostValidator)(nil).VRFNonceV2), smesherID, commitment, vrfNonce, numUnits)
+	return &MocknipostValidatorVRFNonceV2Call{Call: call}
+}
+
+// MocknipostValidatorVRFNonceV2Call wrap *gomock.Call
+type MocknipostValidatorVRFNonceV2Call struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostValidatorVRFNonceV2Call) Return(arg0 error) *MocknipostValidatorVRFNonceV2Call {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostValidatorVRFNonceV2Call) Do(f func(types.NodeID, types.ATXID, uint64, uint32) error) *MocknipostValidatorVRFNonceV2Call {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostValidatorVRFNonceV2Call) DoAndReturn(f func(types.NodeID, types.ATXID, uint64, uint32) error) *MocknipostValidatorVRFNonceV2Call {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

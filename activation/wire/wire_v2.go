@@ -148,6 +148,20 @@ func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
 	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
 }
 
+func (atx *ActivationTxV2) Published() types.EpochID {
+	return atx.PublishEpoch
+}
+
+func (atx *ActivationTxV2) TotalNumUnits() uint32 {
+	var total uint32
+	for _, post := range atx.NiPosts {
+		for _, subPost := range post.Posts {
+			total += subPost.NumUnits
+		}
+	}
+	return total
+}
+
 type InitialAtxPartsV2 struct {
 	CommitmentATX types.ATXID
 	Post          PostV1

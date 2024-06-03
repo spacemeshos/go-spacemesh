@@ -128,11 +128,6 @@ func NewServerError(msg string) *ServerError {
 	return &ServerError{msg: msg}
 }
 
-func (*ServerError) Is(target error) bool {
-	_, ok := target.(*ServerError)
-	return ok
-}
-
 func (err *ServerError) Error() string {
 	return fmt.Sprintf("peer error: %s", err.msg)
 }
@@ -142,7 +137,7 @@ func (err *ServerError) Error() string {
 // Response is a server response.
 type Response struct {
 	// keep in line with limit of ResponseMessage.Data in `fetch/wire_types.go`
-	Data  []byte `scale:"max=183500800"` // 120 MiB > 3.5 mio ATX * 32 bytes per ID
+	Data  []byte `scale:"max=209715200"` // 200 MiB > 6.0 mio ATX * 32 bytes per ID
 	Error string `scale:"max=1024"`      // TODO(mafa): make error code instead of string
 }
 
@@ -226,7 +221,7 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 
 	var eg errgroup.Group
-	eg.SetLimit(s.queueSize)
+	eg.SetLimit(s.queueSize * 2)
 	for {
 		select {
 		case <-ctx.Done():
@@ -244,7 +239,14 @@ func (s *Server) Run(ctx context.Context) error {
 				eg.Wait()
 				return nil
 			}
+			ctx, cancel := context.WithCancel(ctx)
 			eg.Go(func() error {
+				<-ctx.Done()
+				req.stream.Close()
+				return nil
+			})
+			eg.Go(func() error {
+				defer cancel()
 				if s.decayingTag != nil {
 					s.decayingTag.Bump(req.stream.Conn().RemotePeer(), s.decayingTagSpec.Inc)
 				}
@@ -357,6 +359,12 @@ func (s *Server) StreamRequest(
 	defer cancel()
 	stream, err := s.streamRequest(ctx, pid, req, extraProtocols...)
 	if err == nil {
+		var eg errgroup.Group
+		eg.Go(func() error {
+			<-ctx.Done()
+			stream.Close()
+			return nil
+		})
 		err = callback(ctx, stream)
 		s.logger.Debug("request execution time",
 			zap.String("protocol", s.protocol),
@@ -364,13 +372,15 @@ func (s *Server) StreamRequest(
 			zap.Error(err),
 			log.ZContext(ctx),
 		)
+		cancel()
+		eg.Wait()
 	}
 
-	serverError := errors.Is(err, &ServerError{})
+	var srvError *ServerError
 	took := time.Since(start).Seconds()
 	switch {
 	case s.metrics == nil:
-	case serverError:
+	case errors.As(err, &srvError):
 		s.metrics.clientServerError.Inc()
 		s.metrics.clientLatency.Observe(took)
 	case err != nil:

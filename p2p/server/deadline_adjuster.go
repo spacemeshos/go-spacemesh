@@ -85,6 +85,7 @@ func (dadj *deadlineAdjuster) augmentError(what string, err error) error {
 	}
 }
 
+// Close closes the stream. This method is safe to call multiple times.
 func (dadj *deadlineAdjuster) Close() error {
 	// FIXME: unsure if this is really needed (inherited from the older Server code)
 	_ = dadj.peerStream.SetDeadline(time.Time{})

@@ -207,6 +207,14 @@ func (atx *ActivationTx) TargetEpoch() EpochID {
 	return atx.PublishEpoch + 1
 }
 
+func (atx *ActivationTx) Published() EpochID {
+	return atx.PublishEpoch
+}
+
+func (atx *ActivationTx) TotalNumUnits() uint32 {
+	return atx.NumUnits
+}
+
 // Golden returns true if atx is from a checkpoint snapshot.
 // a golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
 func (atx *ActivationTx) Golden() bool {
@@ -293,6 +301,12 @@ type MerkleProof struct {
 	LeafIndex uint64
 }
 
+type MultiMerkleProof struct {
+	// Nodes on path from leaf to root (not including leaf)
+	Nodes       []Hash32 `scale:"max=32"`
+	LeafIndices []uint64
+}
+
 // NIPost is Non-Interactive Proof of Space-Time.
 // Given an id, a space parameter S, a duration D and a challenge C,
 // it can convince a verifier that (1) the prover expended S * D space-time
@@ -370,7 +384,7 @@ func ATXIDsToHashes(ids []ATXID) []Hash32 {
 
 type EpochActiveSet struct {
 	Epoch EpochID
-	Set   []ATXID `scale:"max=5500000"` // to be in line with `EpochData` in fetch/wire_types.go
+	Set   []ATXID `scale:"max=6000000"` // to be in line with `EpochData` in fetch/wire_types.go
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")

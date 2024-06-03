@@ -78,6 +78,7 @@ type Handler struct {
 	inProgressMu sync.Mutex
 
 	v1 *HandlerV1
+	v2 *HandlerV2
 }
 
 // HandlerOption is a functional option for the handler.
@@ -92,6 +93,7 @@ func WithAtxVersions(v AtxVersions) HandlerOption {
 func WithTickSize(tickSize uint64) HandlerOption {
 	return func(h *Handler) {
 		h.v1.tickSize = tickSize
+		h.v2.tickSize = tickSize
 	}
 }
 
@@ -131,6 +133,21 @@ func NewHandler(
 			beacon:          beacon,
 			tortoise:        tortoise,
 			signers:         make(map[types.NodeID]*signing.EdSigner),
+		},
+
+		v2: &HandlerV2{
+			local:           local,
+			cdb:             cdb,
+			atxsdata:        atxsdata,
+			edVerifier:      edVerifier,
+			clock:           c,
+			tickSize:        1,
+			goldenATXID:     goldenATXID,
+			nipostValidator: nipostValidator,
+			logger:          lg,
+			fetcher:         fetcher,
+			beacon:          beacon,
+			tortoise:        tortoise,
 		},
 
 		inProgress: make(map[types.ATXID][]chan error),
@@ -220,6 +237,8 @@ func (h *Handler) determineVersion(msg []byte) (*types.AtxVersion, error) {
 
 type opaqueAtx interface {
 	ID() types.ATXID
+	Published() types.EpochID
+	TotalNumUnits() uint32
 }
 
 func (h *Handler) decodeATX(msg []byte) (opaqueAtx, error) {
@@ -301,8 +320,7 @@ func (h *Handler) handleAtx(
 	case *wire.ActivationTxV1:
 		proof, err = h.v1.processATX(ctx, peer, atx, msg, receivedTime)
 	case *wire.ActivationTxV2:
-		// proof, err = h.v2.processATX(ctx, peer, atx, msg, receivedTime)
-		return nil, errors.New("ATX V2 is not supported yet")
+		proof, err = h.v2.processATX(ctx, peer, atx, msg, receivedTime)
 	default:
 		panic("unreachable")
 	}
@@ -325,7 +343,7 @@ func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.E
 		return types.EmptyEdSignature, err
 	}
 
-	if blob.Bytes == nil {
+	if len(blob.Bytes) == 0 {
 		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
 		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
 	}
