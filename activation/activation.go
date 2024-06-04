@@ -778,7 +778,6 @@ func (b *Builder) createAtx(
 		atx := &wire.ActivationTxV2{
 			PublishEpoch:   challenge.PublishEpoch,
 			PositioningATX: challenge.PositioningATX,
-			Coinbase:       &coinbase,
 			NiPosts: []wire.NiPostsV2{
 				{
 					Membership: wire.MerkleProofV2{
@@ -795,6 +794,19 @@ func (b *Builder) createAtx(
 				},
 			},
 		}
+		// only populate coinbase if it changed or it is the first ATX
+		if challenge.PrevATXID == types.EmptyATXID {
+			atx.Coinbase = &coinbase
+		} else {
+			previousCoinbase, err := atxs.Coinbase(b.db, sig.NodeID())
+			if err != nil {
+				b.logger.Warn("failed to lookup previous coinbase", zap.Error(err))
+			}
+			if coinbase != previousCoinbase {
+				atx.Coinbase = &coinbase
+			}
+		}
+
 		if nonce != nil {
 			atx.VRFNonce = (*uint64)(nonce)
 		}
@@ -808,9 +820,11 @@ func (b *Builder) createAtx(
 		}
 		atx.Sign(sig)
 		return atx, nil
+	default:
+		// `version` is already checked in the beginning of the function
+		// and it cannot have a different value.
+		panic("unreachable")
 	}
-
-	panic("unreachable")
 }
 
 func (b *Builder) broadcast(ctx context.Context, atx scale.Encodable) (int, error) {
