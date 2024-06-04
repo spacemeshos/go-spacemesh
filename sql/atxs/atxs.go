@@ -390,6 +390,11 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (t
 		return 0, fmt.Errorf("%w: atx %s", sql.ErrNotFound, types.BytesToATXID(id))
 	}
 
+	// The migration adding the version column does not set it to 1 for existing ATXs.
+	// Thus, both values 0 and 1 mean V1.
+	if version == 0 {
+		version = types.AtxV1
+	}
 	return version, nil
 }
 
