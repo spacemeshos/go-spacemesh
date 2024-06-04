@@ -1227,7 +1227,6 @@ func Test_MarryingMalicious(t *testing.T) {
 		t.Parallel()
 		test(t, otherSig.NodeID())
 	})
-
 }
 
 func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
