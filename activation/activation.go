@@ -163,7 +163,7 @@ func WithPostStates(ps PostStates) BuilderOption {
 
 func BuilderAtxVersions(v AtxVersions) BuilderOption {
 	return func(h *Builder) {
-		h.versions = append(h.versions, v.asSlice()...)
+		h.versions = append([]atxVersion{{0, types.AtxV1}}, v.asSlice()...)
 	}
 }
 
