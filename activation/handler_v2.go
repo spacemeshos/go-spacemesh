@@ -151,7 +151,6 @@ func (h *HandlerV2) processATX(
 
 // Syntactically validate an ATX.
 // TODOs:
-// 1. support marriages
 // 2. support merged ATXs.
 func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.ActivationTxV2) error {
 	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
@@ -160,9 +159,10 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	if atx.PositioningATX == types.EmptyATXID {
 		return errors.New("empty positioning atx")
 	}
-	// TODO: support marriages
-	if len(atx.Marriages) != 0 {
-		return errors.New("marriages are not supported")
+	for i, m := range atx.Marriages {
+		if !h.edVerifier.Verify(signing.MARRIAGE, m.ID, atx.SmesherID.Bytes(), m.Signature) {
+			return fmt.Errorf("invalid marriage[%d] signature", i)
+		}
 	}
 
 	current := h.clock.CurrentLayer().GetEpoch()
@@ -227,6 +227,9 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	switch {
 	case atx.MarriageATX != nil:
 		// Merged ATX
+		if len(atx.Marriages) != 0 {
+			return errors.New("merged atx cannot have marriages")
+		}
 		// TODO: support merged ATXs
 		return errors.New("atx merge is not supported")
 	default:
@@ -593,6 +596,14 @@ func (h *HandlerV2) checkMalicious(
 		return true, nil, nil
 	}
 
+	proof, err := h.checkDoubleMarry(tx, watx)
+	if err != nil {
+		return false, nil, fmt.Errorf("checking double marry: %w", err)
+	}
+	if proof != nil {
+		return true, proof, nil
+	}
+
 	// TODO: contextual validation:
 	// 1. check double-publish
 	// 2. check previous ATX
@@ -601,6 +612,39 @@ func (h *HandlerV2) checkMalicious(
 	// 5. ID participated in two ATXs (merged and solo) in the same epoch
 
 	return false, nil, nil
+}
+
+func (h *HandlerV2) checkDoubleMarry(
+	tx *sql.Tx,
+	watx *wire.ActivationTxV2,
+) (*mwire.MalfeasanceProof, error) {
+	checkMarried := func(tx *sql.Tx, id types.NodeID) (*mwire.MalfeasanceProof, error) {
+		married, err := identities.Married(tx, id)
+		if err != nil {
+			return nil, fmt.Errorf("checking if ID is married: %w", err)
+		}
+		if married {
+			proof := &mwire.MalfeasanceProof{
+				Proof: mwire.Proof{
+					Type: mwire.DoubleMarry,
+					Data: &mwire.DoubleMarryProof{},
+				},
+			}
+			return proof, nil
+		}
+		return nil, nil
+	}
+
+	if p, err := checkMarried(tx, watx.SmesherID); p != nil || err != nil {
+		return p, err
+	}
+
+	for _, m := range watx.Marriages {
+		if p, err := checkMarried(tx, m.ID); p != nil || err != nil {
+			return p, err
+		}
+	}
+	return nil, nil
 }
 
 // Store an ATX in the DB.
@@ -625,6 +669,16 @@ func (h *HandlerV2) storeAtx(
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
+		if len(watx.Marriages) != 0 {
+			for _, m := range watx.Marriages {
+				if err := identities.SetMarriage(tx, m.ID, atx.ID()); err != nil {
+					return err
+				}
+			}
+			if err := identities.SetMarriage(tx, atx.SmesherID, atx.ID()); err != nil {
+				return err
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
@@ -632,8 +686,31 @@ func (h *HandlerV2) storeAtx(
 
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
-		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
-		h.tortoise.OnMalfeasance(atx.SmesherID)
+		// Combine IDs from the present equivocation set for atx.SmesherID and IDs in atx.Marriages.
+		allMalicious := map[types.NodeID]struct{}{}
+
+		set, err := identities.EquivocationSet(h.cdb, atx.SmesherID)
+		if err != nil {
+			return nil, fmt.Errorf("getting equivocation set: %w", err)
+		}
+		for _, id := range set {
+			allMalicious[id] = struct{}{}
+		}
+		for _, m := range watx.Marriages {
+			allMalicious[m.ID] = struct{}{}
+		}
+		encoded, err := codec.Encode(proof)
+		if err != nil {
+			return nil, fmt.Errorf("encoding malfeasance proof: %w", err)
+		}
+
+		for id := range allMalicious {
+			if err := identities.SetMalicious(h.cdb, id, encoded, atx.Received()); err != nil {
+				return nil, fmt.Errorf("setting malfeasance proof: %w", err)
+			}
+			h.cdb.CacheMalfeasanceProof(id, proof)
+			h.tortoise.OnMalfeasance(id)
+		}
 	}
 
 	h.beacon.OnAtx(atx)
