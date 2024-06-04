@@ -23,13 +23,19 @@ This update introduces certificate authentication against PoETs. For this a new 
   "main": {
     "certifier": {
       "client": {
-        "retry-delay": "5s",
-        "max-retry-delay": "1m",
-        "max-retries": 3,
+        "retry-delay": "1s",
+        "max-retry-delay": "30s",
+        "max-retries": 5,
       }
     }
   }
 ```
+
+Changing these values should not be needed unless you experience connectivity issues to a certifier and not explicitly
+including them in the config will use the default values above. The usage of a certifier needs to be supported by the
+PoET your node is connecting to. If you are using the default PoETs the switch will happen automatically in the near
+future, so no action is needed from your side. If you are operating your own PoET and want to use certificate
+authentication please refer to the PoET documentation: [PoET README](https://github.com/spacemeshos/poet/blob/main/README.md).
 
 ### Features
 
