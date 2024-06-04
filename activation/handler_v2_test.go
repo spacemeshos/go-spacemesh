@@ -1079,8 +1079,8 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 }
 
 func Test_Marriages(t *testing.T) {
-	golden := types.RandomATXID()
 	t.Parallel()
+	golden := types.RandomATXID()
 	t.Run("invalid marriage signature", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
@@ -1179,15 +1179,18 @@ func Test_Marriages(t *testing.T) {
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
 	})
+}
 
-	t.Run("marry malicious ID", func(t *testing.T) {
-		t.Parallel()
+func Test_MarryingMalicious(t *testing.T) {
+	t.Parallel()
+	golden := types.RandomATXID()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	otherSig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	test := func(t *testing.T, malicious types.NodeID) {
 		atxHandler := newV2TestHandler(t, golden)
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-
-		otherSig, err := signing.NewEdSigner()
-		require.NoError(t, err)
 
 		atx := newInitialATXv2(t, golden)
 		atx.Marriages = []wire.MarriageCertificate{{
@@ -1196,7 +1199,7 @@ func Test_Marriages(t *testing.T) {
 		}}
 		atx.Sign(sig)
 
-		require.NoError(t, identities.SetMalicious(atxHandler.cdb, sig.NodeID(), []byte("proof"), time.Now()))
+		require.NoError(t, identities.SetMalicious(atxHandler.cdb, malicious, []byte("proof"), time.Now()))
 
 		atxHandler.expectInitialAtxV2(atx)
 		atxHandler.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
@@ -1209,10 +1212,22 @@ func Test_Marriages(t *testing.T) {
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
 
-		malicious, err := identities.IsMalicious(atxHandler.cdb, otherSig.NodeID())
-		require.NoError(t, err)
-		require.True(t, malicious)
+		for _, id := range []types.NodeID{sig.NodeID(), otherSig.NodeID()} {
+			m, err := identities.IsMalicious(atxHandler.cdb, id)
+			require.NoError(t, err)
+			require.True(t, m)
+		}
+	}
+	t.Run("owner is malicious", func(t *testing.T) {
+		t.Parallel()
+		test(t, sig.NodeID())
 	})
+
+	t.Run("other is malicious", func(t *testing.T) {
+		t.Parallel()
+		test(t, otherSig.NodeID())
+	})
+
 }
 
 func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
