@@ -432,7 +432,8 @@ are covered by tests and which not.
 
 ### Continuous Integration
 
-We've enabled continuous integration on this repository in GitHub. You can see more details about our CI workflows on the [Actions tab](https://github.com/spacemeshos/go-spacemesh/actions).
+We've enabled continuous integration on this repository in GitHub. You can see more details about our CI workflows on
+the [Actions tab](https://github.com/spacemeshos/go-spacemesh/actions).
 
 ### Docker
 
