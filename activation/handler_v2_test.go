@@ -1179,6 +1179,40 @@ func Test_Marriages(t *testing.T) {
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
 	})
+
+	t.Run("marry malicious ID", func(t *testing.T) {
+		t.Parallel()
+		atxHandler := newV2TestHandler(t, golden)
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx := newInitialATXv2(t, golden)
+		atx.Marriages = []wire.MarriageCertificate{{
+			ID:        otherSig.NodeID(),
+			Signature: otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+		}}
+		atx.Sign(sig)
+
+		require.NoError(t, identities.SetMalicious(atxHandler.cdb, sig.NodeID(), []byte("proof"), time.Now()))
+
+		atxHandler.expectInitialAtxV2(atx)
+		atxHandler.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
+		atxHandler.mtortoise.EXPECT().OnMalfeasance(otherSig.NodeID())
+
+		_, err = atxHandler.processATX(context.Background(), "", atx, codec.MustEncode(atx), time.Now())
+		require.NoError(t, err)
+
+		equiv, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
+
+		malicious, err := identities.IsMalicious(atxHandler.cdb, otherSig.NodeID())
+		require.NoError(t, err)
+		require.True(t, malicious)
+	})
 }
 
 func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {

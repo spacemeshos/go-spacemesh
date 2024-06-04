@@ -685,9 +685,11 @@ func (h *HandlerV2) storeAtx(
 	}
 
 	atxs.AtxAdded(h.cdb, atx)
-	if proof != nil {
+
+	var allMalicious map[types.NodeID]struct{}
+	if malicious || proof != nil {
 		// Combine IDs from the present equivocation set for atx.SmesherID and IDs in atx.Marriages.
-		allMalicious := map[types.NodeID]struct{}{}
+		allMalicious = make(map[types.NodeID]struct{})
 
 		set, err := identities.EquivocationSet(h.cdb, atx.SmesherID)
 		if err != nil {
@@ -699,6 +701,8 @@ func (h *HandlerV2) storeAtx(
 		for _, m := range watx.Marriages {
 			allMalicious[m.ID] = struct{}{}
 		}
+	}
+	if proof != nil {
 		encoded, err := codec.Encode(proof)
 		if err != nil {
 			return nil, fmt.Errorf("encoding malfeasance proof: %w", err)
@@ -709,8 +713,11 @@ func (h *HandlerV2) storeAtx(
 				return nil, fmt.Errorf("setting malfeasance proof: %w", err)
 			}
 			h.cdb.CacheMalfeasanceProof(id, proof)
-			h.tortoise.OnMalfeasance(id)
 		}
+	}
+
+	for id := range allMalicious {
+		h.tortoise.OnMalfeasance(id)
 	}
 
 	h.beacon.OnAtx(atx)

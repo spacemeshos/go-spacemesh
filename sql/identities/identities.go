@@ -31,7 +31,12 @@ func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received t
 
 // IsMalicious returns true if identity is known to be malicious.
 func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
-	rows, err := db.Exec("select 1 from identities where pubkey = ?1 AND proof IS NOT NULL;",
+	rows, err := db.Exec(`
+	SELECT 1 FROM identities
+	WHERE (marriage_atx = (
+		SELECT marriage_atx FROM identities WHERE pubkey = ?1 AND marriage_atx IS NOT NULL) AND proof IS NOT NULL
+	)
+	OR (pubkey = ?1 AND marriage_atx IS NULL AND proof IS NOT NULL);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 		}, nil)

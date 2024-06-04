@@ -48,6 +48,10 @@ func TestMalicious(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, mal)
 
+	mal, err = IsMalicious(db, types.RandomNodeID())
+	require.NoError(t, err)
+	require.False(t, mal)
+
 	got, err := GetMalfeasanceProof(db, nodeID)
 	require.NoError(t, err)
 	require.Equal(t, now.UTC(), got.Received().UTC())
@@ -230,5 +234,25 @@ func TestEquivocationSet(t *testing.T) {
 		ids, err := GetMalicious(db)
 		require.NoError(t, err)
 		require.Empty(t, ids)
+	})
+	t.Run("all IDs in equivocation set are malicious if one is", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		atx := types.RandomATXID()
+		ids := []types.NodeID{
+			types.RandomNodeID(),
+			types.RandomNodeID(),
+		}
+		for _, id := range ids {
+			require.NoError(t, SetMarriage(db, id, atx))
+		}
+
+		require.NoError(t, SetMalicious(db, ids[0], []byte("proof"), time.Now()))
+
+		for _, id := range ids {
+			malicious, err := IsMalicious(db, id)
+			require.NoError(t, err)
+			require.True(t, malicious)
+		}
 	})
 }
