@@ -2,7 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## Release v1.6.0
 
 ### Upgrade information
 
@@ -16,6 +16,20 @@ Upgrading to this version requires going through v1.5.x first. Removed migration
 * ATX blob separation and always populating nonce column in atxs ([#5942](https://github.com/spacemeshos/go-spacemesh/pull/5942))
 
 ### Highlights
+
+This update introduces certificate authentication against PoETs. For this a new section in the config was introduced:
+
+```json
+  "main": {
+    "certifier": {
+      "client": {
+        "retry-delay": "5s",
+        "max-retry-delay": "1m",
+        "max-retries": 3,
+      }
+    }
+  }
+```
 
 ### Features
 
