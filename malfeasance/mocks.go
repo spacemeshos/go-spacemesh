@@ -13,73 +13,11 @@ import (
 	context "context"
 	reflect "reflect"
 
+	prometheus "github.com/prometheus/client_golang/prometheus"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	signing "github.com/spacemeshos/go-spacemesh/signing"
-	shared "github.com/spacemeshos/post/shared"
-	verifying "github.com/spacemeshos/post/verifying"
+	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	gomock "go.uber.org/mock/gomock"
 )
-
-// MockSigVerifier is a mock of SigVerifier interface.
-type MockSigVerifier struct {
-	ctrl     *gomock.Controller
-	recorder *MockSigVerifierMockRecorder
-}
-
-// MockSigVerifierMockRecorder is the mock recorder for MockSigVerifier.
-type MockSigVerifierMockRecorder struct {
-	mock *MockSigVerifier
-}
-
-// NewMockSigVerifier creates a new mock instance.
-func NewMockSigVerifier(ctrl *gomock.Controller) *MockSigVerifier {
-	mock := &MockSigVerifier{ctrl: ctrl}
-	mock.recorder = &MockSigVerifierMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockSigVerifier) EXPECT() *MockSigVerifierMockRecorder {
-	return m.recorder
-}
-
-// Verify mocks base method.
-func (m *MockSigVerifier) Verify(arg0 signing.Domain, arg1 types.NodeID, arg2 []byte, arg3 types.EdSignature) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Verify indicates an expected call of Verify.
-func (mr *MockSigVerifierMockRecorder) Verify(arg0, arg1, arg2, arg3 any) *MockSigVerifierVerifyCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockSigVerifier)(nil).Verify), arg0, arg1, arg2, arg3)
-	return &MockSigVerifierVerifyCall{Call: call}
-}
-
-// MockSigVerifierVerifyCall wrap *gomock.Call
-type MockSigVerifierVerifyCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockSigVerifierVerifyCall) Return(arg0 bool) *MockSigVerifierVerifyCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockSigVerifierVerifyCall) Do(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *MockSigVerifierVerifyCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSigVerifierVerifyCall) DoAndReturn(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *MockSigVerifierVerifyCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
 
 // Mocktortoise is a mock of tortoise interface.
 type Mocktortoise struct {
@@ -140,68 +78,198 @@ func (c *MocktortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *Mockt
 	return c
 }
 
-// MockpostVerifier is a mock of postVerifier interface.
-type MockpostVerifier struct {
+// MockHandlerV1 is a mock of HandlerV1 interface.
+type MockHandlerV1 struct {
 	ctrl     *gomock.Controller
-	recorder *MockpostVerifierMockRecorder
+	recorder *MockHandlerV1MockRecorder
 }
 
-// MockpostVerifierMockRecorder is the mock recorder for MockpostVerifier.
-type MockpostVerifierMockRecorder struct {
-	mock *MockpostVerifier
+// MockHandlerV1MockRecorder is the mock recorder for MockHandlerV1.
+type MockHandlerV1MockRecorder struct {
+	mock *MockHandlerV1
 }
 
-// NewMockpostVerifier creates a new mock instance.
-func NewMockpostVerifier(ctrl *gomock.Controller) *MockpostVerifier {
-	mock := &MockpostVerifier{ctrl: ctrl}
-	mock.recorder = &MockpostVerifierMockRecorder{mock}
+// NewMockHandlerV1 creates a new mock instance.
+func NewMockHandlerV1(ctrl *gomock.Controller) *MockHandlerV1 {
+	mock := &MockHandlerV1{ctrl: ctrl}
+	mock.recorder = &MockHandlerV1MockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockpostVerifier) EXPECT() *MockpostVerifierMockRecorder {
+func (m *MockHandlerV1) EXPECT() *MockHandlerV1MockRecorder {
 	return m.recorder
 }
 
-// Verify mocks base method.
-func (m_2 *MockpostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
-	m_2.ctrl.T.Helper()
-	varargs := []any{ctx, p, m}
-	for _, a := range opts {
-		varargs = append(varargs, a)
-	}
-	ret := m_2.ctrl.Call(m_2, "Verify", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
+// ReportInvalidProof mocks base method.
+func (m *MockHandlerV1) ReportInvalidProof(vec *prometheus.CounterVec) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ReportInvalidProof", vec)
 }
 
-// Verify indicates an expected call of Verify.
-func (mr *MockpostVerifierMockRecorder) Verify(ctx, p, m any, opts ...any) *MockpostVerifierVerifyCall {
+// ReportInvalidProof indicates an expected call of ReportInvalidProof.
+func (mr *MockHandlerV1MockRecorder) ReportInvalidProof(vec any) *MockHandlerV1ReportInvalidProofCall {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, p, m}, opts...)
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockpostVerifier)(nil).Verify), varargs...)
-	return &MockpostVerifierVerifyCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportInvalidProof", reflect.TypeOf((*MockHandlerV1)(nil).ReportInvalidProof), vec)
+	return &MockHandlerV1ReportInvalidProofCall{Call: call}
 }
 
-// MockpostVerifierVerifyCall wrap *gomock.Call
-type MockpostVerifierVerifyCall struct {
+// MockHandlerV1ReportInvalidProofCall wrap *gomock.Call
+type MockHandlerV1ReportInvalidProofCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockpostVerifierVerifyCall) Return(arg0 error) *MockpostVerifierVerifyCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockHandlerV1ReportInvalidProofCall) Return() *MockHandlerV1ReportInvalidProofCall {
+	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockpostVerifierVerifyCall) Do(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error) *MockpostVerifierVerifyCall {
+func (c *MockHandlerV1ReportInvalidProofCall) Do(f func(*prometheus.CounterVec)) *MockHandlerV1ReportInvalidProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockpostVerifierVerifyCall) DoAndReturn(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error) *MockpostVerifierVerifyCall {
+func (c *MockHandlerV1ReportInvalidProofCall) DoAndReturn(f func(*prometheus.CounterVec)) *MockHandlerV1ReportInvalidProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// ReportProof mocks base method.
+func (m *MockHandlerV1) ReportProof(vec *prometheus.CounterVec) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ReportProof", vec)
+}
+
+// ReportProof indicates an expected call of ReportProof.
+func (mr *MockHandlerV1MockRecorder) ReportProof(vec any) *MockHandlerV1ReportProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportProof", reflect.TypeOf((*MockHandlerV1)(nil).ReportProof), vec)
+	return &MockHandlerV1ReportProofCall{Call: call}
+}
+
+// MockHandlerV1ReportProofCall wrap *gomock.Call
+type MockHandlerV1ReportProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHandlerV1ReportProofCall) Return() *MockHandlerV1ReportProofCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHandlerV1ReportProofCall) Do(f func(*prometheus.CounterVec)) *MockHandlerV1ReportProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHandlerV1ReportProofCall) DoAndReturn(f func(*prometheus.CounterVec)) *MockHandlerV1ReportProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Validate mocks base method.
+func (m *MockHandlerV1) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Validate", ctx, data)
+	ret0, _ := ret[0].(types.NodeID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Validate indicates an expected call of Validate.
+func (mr *MockHandlerV1MockRecorder) Validate(ctx, data any) *MockHandlerV1ValidateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockHandlerV1)(nil).Validate), ctx, data)
+	return &MockHandlerV1ValidateCall{Call: call}
+}
+
+// MockHandlerV1ValidateCall wrap *gomock.Call
+type MockHandlerV1ValidateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHandlerV1ValidateCall) Return(arg0 types.NodeID, arg1 error) *MockHandlerV1ValidateCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHandlerV1ValidateCall) Do(f func(context.Context, wire.ProofData) (types.NodeID, error)) *MockHandlerV1ValidateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHandlerV1ValidateCall) DoAndReturn(f func(context.Context, wire.ProofData) (types.NodeID, error)) *MockHandlerV1ValidateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockHandlerV2 is a mock of HandlerV2 interface.
+type MockHandlerV2 struct {
+	ctrl     *gomock.Controller
+	recorder *MockHandlerV2MockRecorder
+}
+
+// MockHandlerV2MockRecorder is the mock recorder for MockHandlerV2.
+type MockHandlerV2MockRecorder struct {
+	mock *MockHandlerV2
+}
+
+// NewMockHandlerV2 creates a new mock instance.
+func NewMockHandlerV2(ctrl *gomock.Controller) *MockHandlerV2 {
+	mock := &MockHandlerV2{ctrl: ctrl}
+	mock.recorder = &MockHandlerV2MockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockHandlerV2) EXPECT() *MockHandlerV2MockRecorder {
+	return m.recorder
+}
+
+// Validate mocks base method.
+func (m *MockHandlerV2) Validate(ctx context.Context, data []byte) (types.NodeID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Validate", ctx, data)
+	ret0, _ := ret[0].(types.NodeID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Validate indicates an expected call of Validate.
+func (mr *MockHandlerV2MockRecorder) Validate(ctx, data any) *MockHandlerV2ValidateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockHandlerV2)(nil).Validate), ctx, data)
+	return &MockHandlerV2ValidateCall{Call: call}
+}
+
+// MockHandlerV2ValidateCall wrap *gomock.Call
+type MockHandlerV2ValidateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHandlerV2ValidateCall) Return(arg0 types.NodeID, arg1 error) *MockHandlerV2ValidateCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHandlerV2ValidateCall) Do(f func(context.Context, []byte) (types.NodeID, error)) *MockHandlerV2ValidateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHandlerV2ValidateCall) DoAndReturn(f func(context.Context, []byte) (types.NodeID, error)) *MockHandlerV2ValidateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

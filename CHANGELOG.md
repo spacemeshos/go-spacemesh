@@ -2,7 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## Release v1.6.0
 
 ### Upgrade information
 
@@ -16,6 +16,28 @@ Upgrading to this version requires going through v1.5.x first. Removed migration
 * ATX blob separation and always populating nonce column in atxs ([#5942](https://github.com/spacemeshos/go-spacemesh/pull/5942))
 
 ### Highlights
+
+This update introduces certificate authentication against PoETs. The default values are included in the mainnet preset
+and changing them is not needed unless you experience connection issues to a certifier:
+
+```json
+  "main": {
+    "certifier": {
+      "client": {
+        "retry-delay": "1s",
+        "max-retry-delay": "30s",
+        "max-retries": 5,
+      }
+    }
+  }
+```
+
+The usage of a certifier needs to be supported by the PoET your node is connecting to. If you are using the default
+PoETs the switch will happen automatically in the near future, so no action is needed from your side. If you are
+operating your own PoET and want to use certificate authentication please refer to the documentation:
+
+* [PoET README](https://github.com/spacemeshos/poet/blob/main/README.md) for configuration of the PoET.
+* [certifier README](https://github.com/spacemeshos/post-rs/blob/main/certifier/README.md) for setting up a certifier.
 
 ### Features
 

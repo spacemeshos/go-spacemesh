@@ -1086,19 +1086,51 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
+	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	activationMH := activation.NewMalfeasanceHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.edVerifier,
+	)
+	meshMH := mesh.NewMalfeasanceHandler(
+		app.cachedDB,
+		app.edVerifier,
+		mesh.WithMalfeasanceLogger(malfeasanceLogger),
+	)
+	hareMH := hare3.NewMalfeasanceHandler(
+		app.cachedDB,
+		app.edVerifier,
+		hare3.WithMalfeasanceLogger(malfeasanceLogger),
+	)
+	invalidPostMH := activation.NewInvalidPostIndexHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.edVerifier,
+		app.postVerifier,
+	)
+	invalidPrevMH := activation.NewInvalidPrevATXHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.edVerifier,
+	)
+
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	for _, s := range app.signers {
 		nodeIDs = append(nodeIDs, s.NodeID())
 	}
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
-		app.addLogger(MalfeasanceLogger, lg),
+		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
-		app.edVerifier,
 		trtl,
-		app.postVerifier,
 	)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleATXs, activationMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleBallots, meshMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.HareEquivocation, hareMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPostIndex, invalidPostMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPrevATX, invalidPrevMH)
+
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg),

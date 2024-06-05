@@ -152,7 +152,26 @@ func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err er
 	return id, err
 }
 
-// Retrieve the last coinbase address used by the given node ID.
+// IdentityExists checks if an identity has ever published an ATX.
+func IdentityExists(db sql.Executor, nodeID types.NodeID) (bool, error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+
+	rows, err := db.Exec(`
+		select 1 from atxs
+		where pubkey = ?1
+		limit 1;`, enc, nil)
+	if err != nil {
+		return false, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+	} else if rows == 0 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// Coinbase retrieves the last coinbase address used by the given node ID.
 func Coinbase(db sql.Executor, id types.NodeID) (types.Address, error) {
 	var coinbase types.Address
 	enc := func(stmt *sql.Statement) {
@@ -325,10 +344,6 @@ func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 }
 
 // LoadBlob loads ATX as an encoded blob, ready to be sent over the wire.
-//
-// SAFETY: The contents of the returned blob MUST NOT be modified.
-// They might point to the inner sql cache and modifying them would
-// corrupt the cache.
 func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (types.AtxVersion, error) {
 	if sql.IsCached(db) {
 		type cachedBlob struct {
@@ -349,8 +364,8 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (
 		if err != nil {
 			return 0, err
 		}
-		// Here we return the cached slice, hence the safety warning.
-		blob.Bytes = cached.buf
+		blob.Resize(len(cached.buf))
+		copy(blob.Bytes, cached.buf)
 		return cached.version, nil
 	}
 
