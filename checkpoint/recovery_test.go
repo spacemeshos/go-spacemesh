@@ -118,11 +118,11 @@ func verifyDbContent(tb testing.TB, db *sql.Database) {
 }
 
 func TestRecover(t *testing.T) {
+	var method string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
+		method = r.Method
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
+		w.Write([]byte(checkpointData))
 	}))
 	defer ts.Close()
 
@@ -185,16 +185,15 @@ func TestRecover(t *testing.T) {
 			exist, err := afero.Exists(fs, bsdir)
 			require.NoError(t, err)
 			require.False(t, exist)
+			require.Equal(t, http.MethodGet, method)
 		})
 	}
 }
 
 func TestRecover_SameRecoveryInfo(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
+		w.Write([]byte(checkpointData))
 	}))
 	defer ts.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -460,10 +459,8 @@ func proofRefs(proofs []*types.PoetProofMessage) []types.PoetProofRef {
 
 func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
+		w.Write([]byte(checkpointData))
 	}))
 	defer ts.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -552,10 +549,8 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 
 func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
+		w.Write([]byte(checkpointData))
 	}))
 	defer ts.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -673,10 +668,8 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 
 func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
+		w.Write([]byte(checkpointData))
 	}))
 	defer ts.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -772,10 +765,8 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 
 func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
+		w.Write([]byte(checkpointData))
 	}))
 	defer ts.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -854,10 +845,8 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 
 func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
+		w.Write([]byte(checkpointData))
 	}))
 	defer ts.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -919,10 +908,8 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 
 func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
 		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
+		w.Write([]byte(checkpointData))
 	}))
 	defer ts.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

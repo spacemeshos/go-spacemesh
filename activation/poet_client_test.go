@@ -46,15 +46,14 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Submit(t *testing.T) {
+	var path, method string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
+		path, method = r.URL.Path, r.Method
 		w.WriteHeader(http.StatusOK)
 
-		resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
-		require.NoError(t, err)
+		resp, _ := protojson.Marshal(&rpcapi.SubmitResponse{})
 
 		w.Write(resp)
-		require.Equal(t, "/v1/submit", r.URL.Path)
 	}))
 	defer ts.Close()
 
@@ -75,29 +74,23 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 		PoetAuth{},
 	)
 	require.NoError(t, err)
+	require.Equal(t, "/v1/submit", path)
+	require.Equal(t, http.MethodPost, method)
 }
 
 func Test_HTTPPoetClient_Address(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-
-		w.WriteHeader(http.StatusOK)
-		resp, err := protojson.Marshal(&rpcapi.InfoResponse{})
+	t.Run("with scheme", func(t *testing.T) {
+		client, err := NewHTTPPoetClient(types.PoetServer{Address: "https://poet-address"}, PoetConfig{})
 		require.NoError(t, err)
-		w.Write(resp)
 
-		require.Equal(t, "/v1/info", r.URL.Path)
-	}))
-	defer ts.Close()
+		require.Equal(t, "https://poet-address", client.Address())
+	})
+	t.Run("appends 'http://' scheme if not present", func(t *testing.T) {
+		client, err := NewHTTPPoetClient(types.PoetServer{Address: "poet-address"}, PoetConfig{})
+		require.NoError(t, err)
 
-	cfg := server.DefaultRoundConfig()
-	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
-		PhaseShift: cfg.PhaseShift,
-		CycleGap:   cfg.CycleGap,
-	}, withCustomHttpClient(ts.Client()))
-	require.NoError(t, err)
-
-	require.Equal(t, ts.URL, client.Address())
+		require.Equal(t, "http://poet-address", client.Address())
+	})
 }
 
 func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
@@ -123,15 +116,14 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Proof(t *testing.T) {
+	var path, method string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
+		path, method = r.URL.Path, r.Method
 
 		w.WriteHeader(http.StatusOK)
-		resp, err := protojson.Marshal(&rpcapi.ProofResponse{})
-		require.NoError(t, err)
+		resp, _ := protojson.Marshal(&rpcapi.ProofResponse{})
 
 		w.Write(resp)
-		require.Equal(t, "/v1/proofs/1", r.URL.Path)
 	}))
 	defer ts.Close()
 
@@ -144,21 +136,22 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 
 	_, _, err = client.Proof(context.Background(), "1")
 	require.NoError(t, err)
+	require.Equal(t, "/v1/proofs/1", path)
+	require.Equal(t, http.MethodGet, method)
 }
 
 func TestPoetClient_CachesProof(t *testing.T) {
 	t.Parallel()
 
 	var proofsCalled atomic.Uint64
+	var path string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proofsCalled.Add(1)
-		require.Equal(t, http.MethodGet, r.Method)
-		require.Contains(t, r.URL.Path, "/v1/proofs/")
+		path = r.URL.Path
 
-		resp, err := protojson.Marshal(&rpcapi.ProofResponse{
+		resp, _ := protojson.Marshal(&rpcapi.ProofResponse{
 			Proof: &rpcapi.PoetProof{},
 		})
-		require.NoError(t, err)
 		w.WriteHeader(http.StatusOK)
 		w.Write(resp)
 	}))
@@ -186,11 +179,13 @@ func TestPoetClient_CachesProof(t *testing.T) {
 	}
 	require.NoError(t, eg.Wait())
 	require.Equal(t, uint64(1), proofsCalled.Load())
+	require.Equal(t, "/v1/proofs/1", path)
 
 	db.EXPECT().ValidateAndStore(ctx, gomock.Any())
 	_, _, err = poet.Proof(ctx, "2")
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), proofsCalled.Load())
+	require.Equal(t, "/v1/proofs/2", path)
 }
 
 func TestPoetClient_QueryProofTimeout(t *testing.T) {
@@ -238,14 +233,13 @@ func TestPoetClient_Certify(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/info":
-			resp, err := protojson.Marshal(&rpcapi.InfoResponse{
+			resp, _ := protojson.Marshal(&rpcapi.InfoResponse{
 				ServicePubkey: []byte("pubkey"),
 				Certifier: &rpcapi.InfoResponse_Cerifier{
 					Url:    certifierAddress.String(),
 					Pubkey: certifierPubKey,
 				},
 			})
-			require.NoError(t, err)
 			w.Write(resp)
 		}
 	}))
@@ -283,18 +277,16 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/info":
-			resp, err := protojson.Marshal(&rpcapi.InfoResponse{
+			resp, _ := protojson.Marshal(&rpcapi.InfoResponse{
 				ServicePubkey: []byte("pubkey"),
 				Certifier: &rpcapi.InfoResponse_Cerifier{
 					Url:    certifierAddress.String(),
 					Pubkey: certifierPubKey,
 				},
 			})
-			require.NoError(t, err)
 			w.Write(resp)
 		case "/v1/submit":
-			resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
-			require.NoError(t, err)
+			resp, _ := protojson.Marshal(&rpcapi.SubmitResponse{})
 			w.Write(resp)
 		}
 	}))
@@ -330,30 +322,27 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
 	certifierPubKey := []byte("certifier-pubkey")
 	submitCount := 0
+	certs := make(chan []byte, 2)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/info":
-			resp, err := protojson.Marshal(&rpcapi.InfoResponse{
+			resp, _ := protojson.Marshal(&rpcapi.InfoResponse{
 				ServicePubkey: []byte("pubkey"),
 				Certifier: &rpcapi.InfoResponse_Cerifier{
 					Url:    certifierAddress.String(),
 					Pubkey: certifierPubKey,
 				},
 			})
-			require.NoError(t, err)
 			w.Write(resp)
 		case "/v1/submit":
 			req := rpcapi.SubmitRequest{}
-			body, err := io.ReadAll(r.Body)
-			require.NoError(t, err)
-			require.NoError(t, protojson.Unmarshal(body, &req))
+			body, _ := io.ReadAll(r.Body)
+			protojson.Unmarshal(body, &req)
+			certs <- req.Certificate.Data
 			if submitCount == 0 {
-				require.EqualValues(t, "first", req.Certificate.Data)
 				w.WriteHeader(http.StatusUnauthorized)
 			} else {
-				require.EqualValues(t, "second", req.Certificate.Data)
-				resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
-				require.NoError(t, err)
+				resp, _ := protojson.Marshal(&rpcapi.SubmitResponse{})
 				w.Write(resp)
 			}
 			submitCount++
@@ -386,4 +375,6 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, 2, submitCount)
+	require.EqualValues(t, "first", <-certs)
+	require.EqualValues(t, "second", <-certs)
 }

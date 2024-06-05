@@ -126,7 +126,6 @@ func TestGenerator_Generate(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				require.Equal(t, http.MethodGet, r.Method)
 				w.WriteHeader(http.StatusOK)
 				var content string
 				if strings.HasSuffix(r.URL.String(), "/blocks/782685") {
@@ -134,8 +133,7 @@ func TestGenerator_Generate(t *testing.T) {
 				} else {
 					content = bitcoinResponse1
 				}
-				_, err := w.Write([]byte(content))
-				require.NoError(t, err)
+				w.Write([]byte(content))
 			}))
 			defer ts.Close()
 
