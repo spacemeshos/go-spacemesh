@@ -144,8 +144,8 @@ func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 type AtxVersion uint
 
 const (
-	AtxV1   AtxVersion = 0
-	AtxV2   AtxVersion = 1
+	AtxV1   AtxVersion = 1
+	AtxV2   AtxVersion = 2
 	AtxVMAX AtxVersion = AtxV2
 )
 

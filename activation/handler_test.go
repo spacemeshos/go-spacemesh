@@ -833,6 +833,7 @@ func Test_ValidateAtxVersions(t *testing.T) {
 		t.Parallel()
 
 		require.Error(t, AtxVersions(map[types.EpochID]types.AtxVersion{0: types.AtxVMAX + 1}).Validate())
+		require.Error(t, AtxVersions(map[types.EpochID]types.AtxVersion{0: 0}).Validate())
 	})
 }
 
