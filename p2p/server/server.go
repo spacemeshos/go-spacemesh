@@ -222,7 +222,7 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 
 	var eg errgroup.Group
-	eg.SetLimit(s.queueSize)
+	eg.SetLimit(s.queueSize * 2)
 	for {
 		select {
 		case <-ctx.Done():
@@ -240,7 +240,14 @@ func (s *Server) Run(ctx context.Context) error {
 				eg.Wait()
 				return nil
 			}
+			ctx, cancel := context.WithCancel(ctx)
 			eg.Go(func() error {
+				<-ctx.Done()
+				req.stream.Close()
+				return nil
+			})
+			eg.Go(func() error {
+				defer cancel()
 				conn := req.stream.Conn()
 				if s.decayingTag != nil {
 					s.decayingTag.Bump(conn.RemotePeer(), s.decayingTagSpec.Inc)
@@ -359,6 +366,12 @@ func (s *Server) StreamRequest(
 	defer cancel()
 	stream, info, err := s.streamRequest(ctx, pid, req, extraProtocols...)
 	if err == nil {
+		var eg errgroup.Group
+		eg.Go(func() error {
+			<-ctx.Done()
+			stream.Close()
+			return nil
+		})
 		err = callback(ctx, stream)
 		s.logger.Debug("request execution time",
 			zap.String("protocol", s.protocol),
@@ -366,6 +379,8 @@ func (s *Server) StreamRequest(
 			zap.Error(err),
 			log.ZContext(ctx),
 		)
+		cancel()
+		eg.Wait()
 	}
 
 	var srvError *ServerError

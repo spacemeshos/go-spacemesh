@@ -16,8 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -641,15 +639,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		require.NotNil(t, proof)
 		require.Equal(t, mwire.MultipleATXs, proof.Proof.Type)
 
-		proof.SetReceived(time.Time{})
-		nodeID, err := malfeasance.Validate(
-			context.Background(),
-			log.NewFromLog(atxHdlr.logger),
-			atxHdlr.cdb,
-			atxHdlr.edVerifier,
-			nil,
-			&mwire.MalfeasanceGossip{MalfeasanceProof: *proof},
-		)
+		mh := NewMalfeasanceHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier)
+		nodeID, err := mh.Validate(context.Background(), proof.Proof.Data)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 
@@ -747,17 +738,9 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, proof)
 		require.Equal(t, mwire.InvalidPrevATX, proof.Proof.Type)
-		proof.SetReceived(time.Time{})
-		nodeID, err := malfeasance.Validate(
-			context.Background(),
-			log.NewFromLog(atxHdlr.logger),
-			atxHdlr.cdb,
-			atxHdlr.edVerifier,
-			nil,
-			&mwire.MalfeasanceGossip{
-				MalfeasanceProof: *proof,
-			},
-		)
+
+		mh := NewInvalidPrevATXHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier)
+		nodeID, err := mh.Validate(context.Background(), proof.Proof.Data)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})
