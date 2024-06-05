@@ -131,9 +131,9 @@ func Test_Migration_Disabled(t *testing.T) {
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1, migration2},
 		}),
-		WithEnableMigrations(false),
+		WithMigrationsDisabled(),
 	)
-	require.ErrorIs(t, err, ErrOld)
+	require.ErrorIs(t, err, ErrOldSchema)
 }
 
 func TestDatabaseSkipMigrations(t *testing.T) {
@@ -271,8 +271,8 @@ func TestSchemaDrift(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, observedLogs.Len(), "expected 1 log messages")
 	require.Equal(t, "database schema drift detected", observedLogs.All()[0].Message)
-	require.Contains(t, observedLogs.All()[0].ContextMap()["diff"],
-		"+CREATE TABLE newtbl (id int);")
+	require.Regexp(t, `.*\n\s*\+\s*CREATE TABLE newtbl \(id int\);`,
+		observedLogs.All()[0].ContextMap()["diff"])
 }
 
 func TestSchemaDrift_IgnoredTables(t *testing.T) {

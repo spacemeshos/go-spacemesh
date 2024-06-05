@@ -3,15 +3,16 @@ package localsql
 import (
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/test"
 )
 
-var fns = test.DBFuncs[*Database]{Schema: Schema, Open: Open, InMemory: InMemory}
+type fns struct{}
 
-func TestDatabase_MigrateTwice_NoOp(t *testing.T) {
-	test.VerifyMigrateTwiceNoOp(t, fns)
-}
+func (fns) Schema() (*sql.Schema, error)                        { return Schema() }
+func (fns) InMemory(opts ...sql.Opt) *Database                  { return InMemory(opts...) }
+func (fns) Open(uri string, opts ...sql.Opt) (*Database, error) { return Open(uri, opts...) }
 
 func TestSchema(t *testing.T) {
-	test.VerifySchema(t, fns)
+	test.RunSchemaTests(t, fns{})
 }

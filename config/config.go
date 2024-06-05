@@ -117,7 +117,7 @@ type BaseConfig struct {
 	DatabaseSkipMigrations       []int                   `mapstructure:"db-skip-migrations"`
 	DatabaseQueryCache           bool                    `mapstructure:"db-query-cache"`
 	DatabaseQueryCacheSizes      DatabaseQueryCacheSizes `mapstructure:"db-query-cache-sizes"`
-	DatabaseIgnoreTableRx        string                  `mapstructure:"db-ignore-table-rx"`
+	DatabaseSchemaIgnoreRx       string                  `mapstructure:"db-ignore-schema-rx"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
@@ -246,10 +246,10 @@ func defaultBaseConfig() BaseConfig {
 			ATXBlob:       10000,
 			ActiveSetBlob: 200,
 		},
-		DatabaseIgnoreTableRx: "^_litestream",
-		NetworkHRP:            "sm",
-		ATXGradeDelay:         10 * time.Second,
-		PostValidDelay:        12 * time.Hour,
+		DatabaseSchemaIgnoreRx: "^_litestream",
+		NetworkHRP:             "sm",
+		ATXGradeDelay:          10 * time.Second,
+		PostValidDelay:         12 * time.Hour,
 
 		PprofHTTPServerListener: "localhost:6060",
 	}

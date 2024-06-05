@@ -6,13 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	godiffpatch "github.com/sourcegraph/go-diff-patch"
+	"github.com/google/go-cmp/cmp"
 	"go.uber.org/zap"
 )
 
@@ -20,15 +19,6 @@ const (
 	SchemaPath        = "schema/schema.sql"
 	UpdatedSchemaPath = "schema/schema.sql.updated"
 )
-
-// LoadSchema loads the schema embedded in the executable.
-func LoadSchema(fsys fs.FS, migrations []Migration) (*Schema, error) {
-	text, err := fs.ReadFile(fsys, SchemaPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading schema file %s: %w", SchemaPath, err)
-	}
-	return &Schema{Script: string(text), Migrations: migrations}, nil
-}
 
 // LoadDBSchemaScript retrieves the database schema as text.
 func LoadDBSchemaScript(db Executor, ignoreRx string) (string, error) {
@@ -50,8 +40,7 @@ func LoadDBSchemaScript(db Executor, ignoreRx string) (string, error) {
 	}
 	fmt.Fprintf(&sb, "PRAGMA user_version = %d;\n", version)
 	if _, err = db.Exec(
-		// Type is either 'index' or 'table', we want tables
-		// to go first. Also, we ignore _litestream tables
+		// Type is either 'index' or 'table', we want tables to go first
 		`select tbl_name, sql || ';' from sqlite_master
                  where sql is not null
                  order by tbl_name, type desc, name`,
@@ -76,14 +65,7 @@ type Schema struct {
 // Diff diffs the database schema against the actual schema.
 // If there's no differences, it returns an empty string.
 func (s *Schema) Diff(actualScript string) string {
-	if s.Script == actualScript {
-		return ""
-	}
-	diff := godiffpatch.GeneratePatch(SchemaPath, s.Script, actualScript)
-	if diff == "" {
-		return "<diff>"
-	}
-	return diff
+	return cmp.Diff(s.Script, actualScript)
 }
 
 // WriteToFile writes the schema to the corresponding updated schema file.
@@ -156,7 +138,7 @@ func (s *Schema) Migrate(logger *zap.Logger, db *Database, vacuumState int, enab
 			zap.Int("current version", before),
 			zap.Int("target version", after),
 		)
-		return fmt.Errorf("%w: %d < %d", ErrOld, before, after)
+		return fmt.Errorf("%w: %d < %d", ErrOldSchema, before, after)
 	}
 
 	logger.Info("running migrations",

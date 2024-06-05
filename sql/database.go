@@ -28,9 +28,9 @@ var (
 	ErrObjectExists = errors.New("database: object exists")
 	// ErrTooNew is returned if database version is newer than expected.
 	ErrTooNew = errors.New("database version is too new")
-	// ErrOld is returned when the database version differs from the expected one
+	// ErrOldSchema is returned when the database version differs from the expected one
 	// and migrations are disabled.
-	ErrOld = errors.New("old database version")
+	ErrOldSchema = errors.New("old database version")
 )
 
 const (
@@ -98,11 +98,11 @@ func WithLogger(logger *zap.Logger) Opt {
 	}
 }
 
-// WithEnableMigrations enables or disables migrations on the database.
+// WithMigrationsDisabled disables migrations for the database.
 // The migrations are enabled by default.
-func WithEnableMigrations(enable bool) Opt {
+func WithMigrationsDisabled() Opt {
 	return func(c *conf) {
-		c.enableMigrations = enable
+		c.enableMigrations = false
 	}
 }
 
@@ -163,9 +163,9 @@ func WithIgnoreTableRx(rx string) Opt {
 	}
 }
 
-func withForceFresh(fresh bool) Opt {
+func withForceFresh() Opt {
 	return func(c *conf) {
-		c.forceFresh = fresh
+		c.forceFresh = true
 	}
 }
 
@@ -174,7 +174,7 @@ type Opt func(c *conf)
 
 // InMemory database for testing.
 func InMemory(opts ...Opt) *Database {
-	opts = append(opts, WithConnections(1), withForceFresh(true))
+	opts = append(opts, WithConnections(1), withForceFresh())
 	db, err := Open("file::memory:?mode=memory", opts...)
 	if err != nil {
 		panic(err)

@@ -42,7 +42,7 @@ func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
 	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), zaptest.NewLogger(t), "", tmpDst)
-	require.ErrorIs(t, err, sql.ErrOld)
+	require.ErrorIs(t, err, sql.ErrOldSchema)
 	require.ErrorContains(t, err, "target database")
 }
 
@@ -100,7 +100,7 @@ func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
 	require.NoError(t, db.Close())
 
 	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
-	require.ErrorIs(t, err, sql.ErrOld)
+	require.ErrorIs(t, err, sql.ErrOldSchema)
 	require.ErrorContains(t, err, "source database")
 }
 

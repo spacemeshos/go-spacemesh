@@ -1,4 +1,4 @@
-PRAGMA user_version = 8;
+PRAGMA user_version = 9;
 CREATE TABLE atx_sync_requests 
 (
     epoch     INT NOT NULL,
@@ -26,6 +26,7 @@ CREATE TABLE "challenge"
 , poet_proof_ref        CHAR(32), poet_proof_membership VARCHAR) WITHOUT ROWID;
 CREATE TABLE malfeasance_sync_state
 (
+  id INT NOT NULL PRIMARY KEY,
   timestamp INT NOT NULL
 );
 CREATE TABLE nipost

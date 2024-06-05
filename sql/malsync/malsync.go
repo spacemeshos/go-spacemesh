@@ -8,13 +8,8 @@ import (
 )
 
 func GetSyncState(db sql.Executor) (time.Time, error) {
-	timestamp, _, err := getSyncState(db)
-	return timestamp, err
-}
-
-func getSyncState(db sql.Executor) (time.Time, bool, error) {
 	var timestamp time.Time
-	rows, err := db.Exec("select timestamp from malfeasance_sync_state",
+	rows, err := db.Exec("select timestamp from malfeasance_sync_state where id = 1",
 		nil, func(stmt *sql.Statement) bool {
 			v := stmt.ColumnInt64(0)
 			if v > 0 {
@@ -24,34 +19,23 @@ func getSyncState(db sql.Executor) (time.Time, bool, error) {
 		})
 	switch {
 	case err != nil:
-		return time.Time{}, false, fmt.Errorf("error getting malfeasance sync state: %w", err)
-	case rows == 0:
-		return timestamp, false, nil
-	case rows == 1:
-		return timestamp, true, nil
+		return time.Time{}, fmt.Errorf("error getting malfeasance sync state: %w", err)
+	case rows <= 1:
+		return timestamp, nil
 	default:
-		return time.Time{}, false, fmt.Errorf("expected malfeasance_sync_state to have 1 row but got %d rows", rows)
+		return time.Time{}, fmt.Errorf("expected malfeasance_sync_state to have 1 row but got %d rows", rows)
 	}
 }
 
 func updateSyncState(db sql.Executor, ts int64) error {
-	_, haveTS, err := getSyncState(db)
-	if err != nil {
-		return err
-	}
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, ts)
-	}
-	if haveTS {
-		_, err := db.Exec("update malfeasance_sync_state set timestamp = ?1", enc, nil)
-		if err != nil {
-			return fmt.Errorf("error updating malfeasance sync state: %w", err)
-		}
-	} else {
-		_, err = db.Exec("insert into malfeasance_sync_state (timestamp) values(?1)", enc, nil)
-		if err != nil {
-			return fmt.Errorf("error initializing malfeasance sync state: %w", err)
-		}
+	if _, err := db.Exec(
+		`insert into malfeasance_sync_state (id, timestamp) values(1, ?1)
+                   on conflict (id) do update set timestamp = ?1`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, ts)
+		}, nil,
+	); err != nil {
+		return fmt.Errorf("error initializing malfeasance sync state: %w", err)
 	}
 	return nil
 }

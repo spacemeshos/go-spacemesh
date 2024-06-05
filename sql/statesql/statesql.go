@@ -6,8 +6,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-//go:embed schema/schema.sql schema/migrations/*.sql
-var embedded embed.FS
+//go:embed schema/schema.sql
+var schemaScript string
+
+//go:embed schema/migrations/*.sql
+var migrations embed.FS
 
 // Database represents a state database.
 type Database struct {
@@ -16,13 +19,13 @@ type Database struct {
 
 // Schema returns the schema for the state database.
 func Schema() (*sql.Schema, error) {
-	migrations, err := sql.LoadSQLMigrations(embedded)
+	sqlMigrations, err := sql.LoadSQLMigrations(migrations)
 	if err != nil {
 		return nil, err
 	}
 	// NOTE: coded state migrations can be added here
-	// They can be a part of this statesql package
-	return sql.LoadSchema(embedded, migrations)
+	// They can be a part of this localsql package
+	return &sql.Schema{Script: schemaScript, Migrations: sqlMigrations}, nil
 }
 
 // Open opens a state database.
