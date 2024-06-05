@@ -659,6 +659,12 @@ func (h *HandlerV2) storeAtx(
 		proof     *mwire.MalfeasanceProof
 	)
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		malicious, proof, err = h.checkMalicious(ctx, tx, watx)
+		if err != nil {
+			return fmt.Errorf("check malicious: %w", err)
+		}
+
 		if len(watx.Marriages) != 0 {
 			for _, m := range watx.Marriages {
 				if err := identities.SetMarriage(tx, m.ID, atx.ID()); err != nil {
@@ -668,12 +674,13 @@ func (h *HandlerV2) storeAtx(
 			if err := identities.SetMarriage(tx, atx.SmesherID, atx.ID()); err != nil {
 				return err
 			}
-		}
-
-		var err error
-		malicious, proof, err = h.checkMalicious(ctx, tx, watx)
-		if err != nil {
-			return fmt.Errorf("check malicious: %w", err)
+			if !malicious && proof == nil {
+				// We check for malfeasance again becase the marriage increased the equivocation set.
+				malicious, err = identities.IsMalicious(tx, atx.SmesherID)
+				if err != nil {
+					return fmt.Errorf("re-checking if smesherID is malicious: %w", err)
+				}
+			}
 		}
 
 		err = atxs.Add(tx, atx)
