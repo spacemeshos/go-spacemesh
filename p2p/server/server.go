@@ -253,13 +253,13 @@ func (s *Server) Run(ctx context.Context) error {
 					s.decayingTag.Bump(conn.RemotePeer(), s.decayingTagSpec.Inc)
 				}
 				ok := s.queueHandler(ctx, req.stream)
-				took := time.Since(req.received)
+				duration := time.Since(req.received)
 				if s.h.PeerInfo() != nil {
 					info := s.h.PeerInfo().EnsurePeerInfo(conn.RemotePeer())
-					info.ServerStats.RequestDone(took, ok)
+					info.ServerStats.RequestDone(duration, ok)
 				}
 				if s.metrics != nil {
-					s.metrics.serverLatency.Observe(took.Seconds())
+					s.metrics.serverLatency.Observe(duration.Seconds())
 					if ok {
 						s.metrics.completed.Inc()
 					} else {
@@ -384,22 +384,21 @@ func (s *Server) StreamRequest(
 	}
 
 	var srvError *ServerError
-	took := time.Since(start)
-	tookSecs := took.Seconds()
+	duration := time.Since(start)
 	if info != nil {
-		info.ClientStats.RequestDone(took, err == nil)
+		info.ClientStats.RequestDone(duration, err == nil)
 	}
 	switch {
 	case s.metrics == nil:
 	case errors.As(err, &srvError):
 		s.metrics.clientServerError.Inc()
-		s.metrics.clientLatency.Observe(tookSecs)
+		s.metrics.clientLatency.Observe(duration.Seconds())
 	case err != nil:
 		s.metrics.clientFailed.Inc()
-		s.metrics.clientLatencyFailure.Observe(tookSecs)
+		s.metrics.clientLatencyFailure.Observe(duration.Seconds())
 	default:
 		s.metrics.clientSucceeded.Inc()
-		s.metrics.clientLatency.Observe(tookSecs)
+		s.metrics.clientLatency.Observe(duration.Seconds())
 	}
 	return err
 }
