@@ -513,6 +513,86 @@ $ grpcurl -plaintext 127.0.0.1:9093 spacemesh.v1.DebugService.NetworkInfo
 }
 ```
 
+#### Handling database schema changes
+
+go-spacemesh currently maintains 2 SQLite databases in the data folder: `state.sql` (state database) and `local.sql` (local database). It employs schema versioning for both databases, with a possibility to upgrade older versions of each database to the current schema version by means of running a series of migrations. Also, go-spacemesh tracks any schema drift (unexpected schema changes) in the databases.
+
+When a database is first created, the corresponding schema file embedded in go-spacemesh executable is used to initialize it:
+* `sql/statesql/schema/schema.sql` for `state.sql`
+* `sql/localsql/schema/schema.sql` for `local.sql`
+The schema file includes `PRAGMA user_version = ...` which sets the version of the database schema. The version of the schema is equal to the number of migrations defined for the corresponding database (`state.sql` or `local.sql`).
+
+For an existing database, the `PRAGMA user_version` is checked against the expected version number. If the database's schema version is too new, go-spacemesh fails right away as an older go-spacemesh version cannot be expected to work with a database from a newer version. If the database version number is older than the expected version, go-spacemesh runs the necessary migration scripts embedded in go-spacemesh executable and updates `PRAGMA user_version = ...`. The migration scripts are located in the following folders:
+* `sql/statesql/schema/migrations` for `state.sql`
+* `sql/localsql/schema/migrations` for `local.sql`
+
+Additionally, some migrations ("coded migrations") can be implemented in Go code, in which case they reside in `.go` files located in `sql/statesql` and `sql/localsql` packages, respectively. It is worth noting that old coded migrations can be removed at some point, rendering database versions that are *too* old unusable with newer go-spacemesh versions.
+
+After all the migrations are run, go-spacemesh compares the schema of each database to the embedded schema scripts and if they differ, warns the user about any differences:
+```
+logger.go:146: 2024-06-05T05:39:32.247+0400	WARN	database schema drift detected	{"uri": "file:/var/folders/r0/4mks2v4n5ysbntnf3xq6h_q80000gn/T/TestSchemaidempotent_migration3425594786/001/test.db", "diff": "  (\n  \t\"\"\"\n  \t... // 81 identical lines\n  \t    PRIMARY KEY (kind, epoch)\n  \t) WITHOUT ROWID;\n- \t\n- \t-- some change\n  \t\"\"\"\n  )\n"}
+```
+
+In this case, an empty line and `-- some change` was added to `schema.sql` by hand. The pretty-printed diff looks like this:
+```
+  (
+  	"""
+  	... // 81 identical lines
+  	    PRIMARY KEY (kind, epoch)
+  	) WITHOUT ROWID;
+-
+- 	-- some change
+  	"""
+  )
+```
+
+The possible reasons for schema drift can be the following:
+* running an unreleased version of go-spacemesh using your data folder. The unreleased version may contain migrations that may be changed before the release happens
+* manual changes in the database
+* external SQLite tooling used on the database that adds some tables, indices etc.
+
+In the latter case, it is possible to make go-spacemesh ignore certain objects (tables and indices) when checking for schema drift. For this, you can use `main.db-schema-ignore-rx` setting to set a regular expression that is used to ignore tables and indices in the database during schema drift checks. The setting defaults to `_litestream` to help with certain tooling.
+
+The schema changes in go-spacemesh code should be always done by means of adding migrations. After that, the schema tests in `sql/localsql` and `sql/statesql` will start failing. When the tests fail, they display the difference between the schema stored in `schema.sql` and the schema that is loaded from the database after running all the migrations.
+If the schema changes shown in the diff are expected, the schema file needs to be updated.
+
+```console
+$ # run the tests
+$ eval $(make print-test-env) go test ./sql/localsql ./sql/statesql
+...
+=== RUN   TestSchema/schema/force_migrations
+    test.go:106: updated schema written to schema/schema.sql.updated
+    test.go:108: 
+        	Error Trace:	/Users/ivan4th/work/spacemesh/go-spacemesh/sql/test/test.go:108
+        	Error:      	Should be empty, but was   (
+        	            	  	"""
+        	            	  	... // 81 identical lines
+        	            	  	    PRIMARY KEY (kind, epoch)
+        	            	  	) WITHOUT ROWID;
+        	            	- 	-- some change
+        	            	  	"""
+        	            	  )
+        	Test:       	TestSchema/schema/force_migrations
+        	Messages:   	schema diff
+FAIL
+FAIL    github.com/spacemeshos/go-spacemesh/sql/localsql        0.163s
+ok      github.com/spacemeshos/go-spacemesh/sql/statesql        0.286s
+FAIL
+$ git status
+...
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        sql/localsql/schema/schema.sql.updated
+
+$ # update the schema file
+$ mv sql/localsql/schema/schema.sql{.updated,}
+
+$ # rerun the tests
+$ eval $(make print-test-env) go test -count=1 ./sql/localsql ./sql/statesql
+ok      github.com/spacemeshos/go-spacemesh/sql/localsql        0.166s
+ok      github.com/spacemeshos/go-spacemesh/sql/statesql        0.293s
+```
+
 #### Next Steps
 
 - Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)
