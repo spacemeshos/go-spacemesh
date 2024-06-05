@@ -655,9 +655,11 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	b.logger.Debug("publication epoch has arrived!", log.ZShortStringer("smesherID", sig.NodeID()))
 
 	for {
-		b.logger.Info("broadcasting",
-			zap.Object("atx", atx),
+		b.logger.Info(
+			"broadcasting ATX",
+			log.ZShortStringer("atx_id", atx.ID()),
 			log.ZShortStringer("smesherID", sig.NodeID()),
+			log.DebugField(b.logger, zap.Object("atx", atx)),
 		)
 		size, err := b.broadcast(ctx, atx)
 		if err == nil {
