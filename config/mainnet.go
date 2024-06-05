@@ -203,5 +203,6 @@ func MainnetConfig() Config {
 			RetryInterval: time.Minute,
 			Tries:         20,
 		},
+		Certifier: activation.DefaultCertifierConfig(),
 	}
 }

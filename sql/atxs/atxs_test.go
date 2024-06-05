@@ -615,6 +615,24 @@ func TestLoadBlob(t *testing.T) {
 	require.Equal(t, []int{len(blob1.Bytes), -1, len(blob2.Bytes)}, blobSizes)
 }
 
+func TestLoadBlob_DefaultsToV1(t *testing.T) {
+	db := sql.InMemory()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx := newAtx(t, sig)
+	atx.AtxBlob.Blob = []byte("blob1")
+	atx.AtxBlob.Version = 0
+
+	require.NoError(t, atxs.Add(db, atx))
+
+	var blob sql.Blob
+	version, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &blob)
+	require.NoError(t, err)
+	require.Equal(t, types.AtxV1, version)
+	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
+}
+
 func TestGetBlobCached(t *testing.T) {
 	db := sql.InMemory(sql.WithQueryCache(true))
 	ctx := context.Background()
