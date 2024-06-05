@@ -158,8 +158,7 @@ type Server struct {
 
 	metrics *tracker // metrics can be nil
 
-	h        Host
-	peerInfo peerinfo.PeerInfo
+	h Host
 }
 
 // New server for the handler.
@@ -178,10 +177,6 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 	}
 	for _, opt := range opts {
 		opt(srv)
-	}
-
-	if peerInfo, ok := h.(peerinfo.PeerInfo); ok {
-		srv.peerInfo = peerInfo
 	}
 
 	if srv.decayingTagSpec != nil {
@@ -252,8 +247,8 @@ func (s *Server) Run(ctx context.Context) error {
 				}
 				ok := s.queueHandler(ctx, req.stream)
 				took := time.Since(req.received)
-				if s.peerInfo != nil {
-					info := s.peerInfo.EnsurePeerInfo(conn.RemotePeer())
+				if s.h.PeerInfo() != nil {
+					info := s.h.PeerInfo().EnsurePeerInfo(conn.RemotePeer())
 					info.ServerStats.RequestDone(took, ok)
 				}
 				if s.metrics != nil {
@@ -374,7 +369,6 @@ func (s *Server) StreamRequest(
 	}
 
 	var srvError *ServerError
-	isServerError := errors.As(err, &srvError)
 	took := time.Since(start)
 	tookSecs := took.Seconds()
 	if info != nil {
@@ -382,7 +376,7 @@ func (s *Server) StreamRequest(
 	}
 	switch {
 	case s.metrics == nil:
-	case isServerError:
+	case errors.As(err, &srvError):
 		s.metrics.clientServerError.Inc()
 		s.metrics.clientLatency.Observe(tookSecs)
 	case err != nil:
@@ -418,8 +412,8 @@ func (s *Server) streamRequest(
 	if err != nil {
 		return nil, nil, err
 	}
-	if s.peerInfo != nil {
-		info = s.peerInfo.EnsurePeerInfo(stream.Conn().RemotePeer())
+	if s.h.PeerInfo() != nil {
+		info = s.h.PeerInfo().EnsurePeerInfo(stream.Conn().RemotePeer())
 	}
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	defer func() {

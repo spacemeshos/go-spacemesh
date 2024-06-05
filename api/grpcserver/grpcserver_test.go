@@ -45,6 +45,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
+	peerinfomocks "github.com/spacemeshos/go-spacemesh/p2p/peerinfo/mocks"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -2127,8 +2128,9 @@ func TestDebugService(t *testing.T) {
 		netInfo.EXPECT().NATDeviceType().Return(network.NATDeviceTypeCone, network.NATDeviceTypeSymmetric)
 		netInfo.EXPECT().Reachability().Return(network.ReachabilityPrivate)
 		netInfo.EXPECT().DHTServerEnabled().Return(true)
-		netInfo.EXPECT().Protocols().Return([]protocol.ID{"foo"})
-		netInfo.EXPECT().EnsureProtoStats(protocol.ID("foo")).
+		peerInfo := peerinfomocks.NewMockPeerInfo(ctrl)
+		peerInfo.EXPECT().Protocols().Return([]protocol.ID{"foo"})
+		peerInfo.EXPECT().EnsureProtoStats(protocol.ID("foo")).
 			DoAndReturn(func(protocol.ID) *peerinfo.DataStats {
 				var ds peerinfo.DataStats
 				ds.RecordReceived(6000)
@@ -2137,6 +2139,7 @@ func TestDebugService(t *testing.T) {
 				ds.Tick(2)
 				return &ds
 			})
+		netInfo.EXPECT().PeerInfo().Return(peerInfo).AnyTimes()
 
 		response, err := c.NetworkInfo(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)

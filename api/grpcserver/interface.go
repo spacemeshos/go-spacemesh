@@ -20,7 +20,7 @@ import (
 
 // networkInfo interface.
 type networkInfo interface {
-	peerinfo.PeerInfo
+	PeerInfo() peerinfo.PeerInfo
 	ID() p2p.Peer
 	ListenAddresses() []ma.Multiaddr
 	KnownAddresses() []ma.Multiaddr

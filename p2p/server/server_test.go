@@ -18,17 +18,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
-func wrapHost(t *testing.T, h host.Host) host.Host {
+type hostWrapper struct {
+	host.Host
+	pi peerinfo.PeerInfo
+}
+
+var _ Host = &hostWrapper{}
+
+func (hw *hostWrapper) PeerInfo() peerinfo.PeerInfo {
+	return hw.pi
+}
+
+func wrapHost(t *testing.T, h host.Host) Host {
 	pt := peerinfo.NewPeerInfoTracker()
 	pt.Start(h.Network())
 	t.Cleanup(pt.Stop)
-	return &struct {
-		host.Host
-		peerinfo.PeerInfo
-	}{
-		Host:     h,
-		PeerInfo: pt,
-	}
+	return &hostWrapper{Host: h, pi: pt}
 }
 
 func TestServer(t *testing.T) {
@@ -70,7 +75,7 @@ func TestServer(t *testing.T) {
 		append(opts, WithRequestSizeLimit(limit))...,
 	)
 	srv3 := New(
-		mesh.Hosts()[3],
+		wrapHost(t, mesh.Hosts()[3]),
 		proto,
 		WrapHandler(handler),
 		append(opts, WithRequestSizeLimit(limit))...,
@@ -109,11 +114,11 @@ func TestServer(t *testing.T) {
 		require.NotEmpty(t, srvConns)
 		require.Equal(t, n+1, srv1.NumAcceptedRequests())
 
-		clientInfo := client.peerInfo.EnsurePeerInfo(srvID)
+		clientInfo := client.h.PeerInfo().EnsurePeerInfo(srvID)
 		require.Equal(t, 1, clientInfo.ClientStats.SuccessCount())
 		require.Zero(t, clientInfo.ClientStats.FailureCount())
 
-		serverInfo := srv1.peerInfo.EnsurePeerInfo(mesh.Hosts()[0].ID())
+		serverInfo := srv1.h.PeerInfo().EnsurePeerInfo(mesh.Hosts()[0].ID())
 		require.Eventually(t, func() bool {
 			return serverInfo.ServerStats.SuccessCount() == 1
 		}, 10*time.Second, 10*time.Millisecond)
@@ -139,11 +144,11 @@ func TestServer(t *testing.T) {
 		require.ErrorContains(t, err, testErr.Error())
 		require.Equal(t, n+1, srv1.NumAcceptedRequests())
 
-		clientInfo := client.peerInfo.EnsurePeerInfo(srvID)
+		clientInfo := client.h.PeerInfo().EnsurePeerInfo(srvID)
 		require.Zero(t, clientInfo.ClientStats.SuccessCount())
 		require.Equal(t, 1, clientInfo.ClientStats.FailureCount())
 
-		serverInfo := srv2.peerInfo.EnsurePeerInfo(mesh.Hosts()[0].ID())
+		serverInfo := srv2.h.PeerInfo().EnsurePeerInfo(mesh.Hosts()[0].ID())
 		require.Eventually(t, func() bool {
 			return serverInfo.ServerStats.FailureCount() == 1
 		}, 10*time.Second, 10*time.Millisecond)

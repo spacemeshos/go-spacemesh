@@ -112,8 +112,8 @@ func (d DebugService) NetworkInfo(ctx context.Context, _ *emptypb.Empty) (*pb.Ne
 	resp.Reachability = convertReachability(d.netInfo.Reachability())
 	resp.DhtServerEnabled = d.netInfo.DHTServerEnabled()
 	resp.Stats = make(map[string]*pb.DataStats)
-	for _, proto := range d.netInfo.Protocols() {
-		s := d.netInfo.EnsureProtoStats(proto)
+	for _, proto := range d.netInfo.PeerInfo().Protocols() {
+		s := d.netInfo.PeerInfo().EnsureProtoStats(proto)
 		ds := &pb.DataStats{
 			BytesSent:     uint64(s.BytesSent()),
 			BytesReceived: uint64(s.BytesReceived()),

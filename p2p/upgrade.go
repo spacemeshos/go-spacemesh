@@ -78,7 +78,7 @@ func WithRelayCandidateChannel(relayCh chan<- peer.AddrInfo) Opt {
 
 func WithPeerInfo(pi peerinfo.PeerInfo) Opt {
 	return func(fh *Host) {
-		fh.PeerInfo = pi
+		fh.peerInfo = pi
 	}
 }
 
@@ -98,7 +98,7 @@ type Host struct {
 	}
 
 	host.Host
-	peerinfo.PeerInfo
+	peerInfo peerinfo.PeerInfo
 	pubsub.PubSub
 
 	nodeReporter func()
@@ -279,7 +279,7 @@ func (fh *Host) Connected(p Peer) bool {
 // ConnectedPeerInfo retrieves a peer info object for the given peer.ID, if the
 // given peer is not connected then nil is returned.
 func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
-	if fh.PeerInfo == nil {
+	if fh.peerInfo == nil {
 		panic("no PeerInfo")
 	}
 	conns := fh.Network().ConnsToPeer(id)
@@ -289,7 +289,7 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 		return nil
 	}
 
-	pi := fh.PeerInfo.EnsurePeerInfo(id)
+	pi := fh.PeerInfo().EnsurePeerInfo(id)
 	var connections []ConnectionInfo
 	for _, c := range conns {
 		connections = append(connections, ConnectionInfo{
@@ -331,8 +331,8 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 // ProtocolDataStats returns per-protocol data stats.
 func (fh *Host) ProtocolDataStats() map[protocol.ID]*peerinfo.DataStats {
 	r := make(map[protocol.ID]*peerinfo.DataStats)
-	for _, proto := range fh.PeerInfo.Protocols() {
-		r[proto] = fh.PeerInfo.EnsureProtoStats(proto)
+	for _, proto := range fh.peerInfo.Protocols() {
+		r[proto] = fh.peerInfo.EnsureProtoStats(proto)
 	}
 	return r
 }
@@ -503,4 +503,8 @@ func (fh *Host) trackNetEvents() error {
 			return fh.ctx.Err()
 		}
 	}
+}
+
+func (fh *Host) PeerInfo() peerinfo.PeerInfo {
+	return fh.peerInfo
 }

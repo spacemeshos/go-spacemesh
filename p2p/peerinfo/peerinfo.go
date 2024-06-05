@@ -35,27 +35,27 @@ const (
 )
 
 type PeerRequestStats struct {
-	sync.Mutex
+	mtx          sync.Mutex
 	successCount int
 	failureCount int
 	duration     time.Duration
 }
 
 func (ps *PeerRequestStats) SuccessCount() int {
-	ps.Lock()
-	defer ps.Unlock()
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
 	return ps.successCount
 }
 
 func (ps *PeerRequestStats) FailureCount() int {
-	ps.Lock()
-	defer ps.Unlock()
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
 	return ps.failureCount
 }
 
 func (ps *PeerRequestStats) Latency() time.Duration {
-	ps.Lock()
-	defer ps.Unlock()
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
 	count := ps.successCount + ps.failureCount
 	if count == 0 {
 		return 0
@@ -64,8 +64,8 @@ func (ps *PeerRequestStats) Latency() time.Duration {
 }
 
 func (ps *PeerRequestStats) RequestDone(took time.Duration, success bool) {
-	ps.Lock()
-	defer ps.Unlock()
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
 	if success {
 		ps.successCount++
 	} else {
@@ -75,7 +75,7 @@ func (ps *PeerRequestStats) RequestDone(took time.Duration, success bool) {
 }
 
 type DataStats struct {
-	sync.Mutex
+	mtx sync.Mutex
 	// [0] is the current value
 	// [1] is prev value for rate 1
 	// [2] is prev value for rate 2
@@ -107,8 +107,8 @@ func bpsInterval(which int) time.Duration {
 }
 
 func (ds *DataStats) Tick(which int) {
-	ds.Lock()
-	defer ds.Unlock()
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
 	interval := bpsInterval(which)
 	idx := rateIndex(which)
 	ds.recvRate[idx] = int64(float64(ds.bytesReceived[0]-ds.bytesReceived[which]) / interval.Seconds())
@@ -118,38 +118,38 @@ func (ds *DataStats) Tick(which int) {
 }
 
 func (ds *DataStats) RecvRate(which int) int64 {
-	ds.Lock()
-	defer ds.Unlock()
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
 	return ds.recvRate[rateIndex(which)]
 }
 
 func (ds *DataStats) SendRate(which int) int64 {
-	ds.Lock()
-	defer ds.Unlock()
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
 	return ds.sendRate[rateIndex(which)]
 }
 
 func (ds *DataStats) RecordSent(n int64) {
-	ds.Lock()
-	defer ds.Unlock()
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
 	ds.bytesSent[0] += n
 }
 
 func (ds *DataStats) RecordReceived(n int64) {
-	ds.Lock()
-	defer ds.Unlock()
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
 	ds.bytesReceived[0] += n
 }
 
 func (ds *DataStats) BytesSent() int64 {
-	ds.Lock()
-	defer ds.Unlock()
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
 	return ds.bytesSent[0]
 }
 
 func (ds *DataStats) BytesReceived() int64 {
-	ds.Lock()
-	defer ds.Unlock()
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
 	return ds.bytesReceived[0]
 }
 
@@ -172,6 +172,8 @@ func (i *Info) SetKind(c network.Conn, k Kind) {
 	i.connKinds.Store(c.ID(), k)
 }
 
+//go:generate mockgen -typed -package=peerinfo -destination=./mocks/mocks.go -source=./peerinfo.go
+
 // PeerInfo provides peer-related connection status and statistics.
 type PeerInfo interface {
 	// EnsurePeerInfo returns Info structure for the specific peers.
@@ -192,7 +194,7 @@ type PeerInfo interface {
 }
 
 type PeerInfoTracker struct {
-	sync.Mutex
+	mtx        sync.Mutex
 	info       map[peer.ID]*Info
 	protoStats map[protocol.ID]*DataStats
 	clock      clockwork.Clock
@@ -256,8 +258,8 @@ func (t *PeerInfoTracker) Stop() {
 }
 
 func (t *PeerInfoTracker) tick(which int) {
-	t.Lock()
-	defer t.Unlock()
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
 	for _, ds := range t.protoStats {
 		ds.Tick(which)
 	}
@@ -290,8 +292,8 @@ func (t *PeerInfoTracker) Connected(_ network.Network, c network.Conn) {
 
 // Disconnected implements network.Notifiee.
 func (t *PeerInfoTracker) Disconnected(n network.Network, c network.Conn) {
-	t.Lock()
-	defer t.Unlock()
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
 	for _, cur := range n.ConnsToPeer(c.RemotePeer()) {
 		if c.ID() != cur.ID() {
 			// other connections exist
@@ -308,8 +310,8 @@ func (*PeerInfoTracker) Listen(network.Network, ma.Multiaddr) {}
 func (*PeerInfoTracker) ListenClose(network.Network, ma.Multiaddr) {}
 
 func (t *PeerInfoTracker) EnsurePeerInfo(p peer.ID) *Info {
-	t.Lock()
-	defer t.Unlock()
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
 	info, found := t.info[p]
 	if !found {
 		info = &Info{}
@@ -319,8 +321,8 @@ func (t *PeerInfoTracker) EnsurePeerInfo(p peer.ID) *Info {
 }
 
 func (t *PeerInfoTracker) EnsureProtoStats(proto protocol.ID) *DataStats {
-	t.Lock()
-	defer t.Unlock()
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
 	if proto == "" {
 		proto = otherProto
 	}
@@ -345,8 +347,8 @@ func (t *PeerInfoTracker) RecordSent(n int64, proto protocol.ID, p peer.ID) {
 }
 
 func (t *PeerInfoTracker) Protocols() []protocol.ID {
-	t.Lock()
-	defer t.Unlock()
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
 	return maps.Keys(t.protoStats)
 }
 
