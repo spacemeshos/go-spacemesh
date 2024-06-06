@@ -44,7 +44,7 @@ const (
 	InvalidActivation MalfeasanceType = iota + 10
 	InvalidBallot
 	InvalidHareMsg
-	DoubleMarry = MalfeasanceType(wire.InvalidPrevATX)
+	DoubleMarry = MalfeasanceType(wire.DoubleMarry)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
