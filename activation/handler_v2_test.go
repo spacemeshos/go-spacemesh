@@ -29,6 +29,8 @@ type v2TestHandler struct {
 	handlerMocks
 }
 
+const poetLeaves = 200
+
 func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 	lg := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
@@ -76,7 +78,7 @@ func (h *handlerMocks) expectVerifyNIPoST(atx *wire.ActivationTxV2) {
 		gomock.Any(),
 		atx.NiPosts[0].Challenge,
 		gomock.Any(),
-	)
+	).Return(poetLeaves, nil)
 }
 
 func (h *handlerMocks) expectStoreAtxV2(atx *wire.ActivationTxV2) {
@@ -109,7 +111,7 @@ func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 }
 
 func (h *handlerMocks) expectAtxV2(atx *wire.ActivationTxV2) {
-	h.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
+	h.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 	h.expectFetchDeps(atx)
 	h.expectVerifyNIPoST(atx)
 	h.expectStoreAtxV2(atx)
@@ -413,8 +415,14 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
-		_, err = atxs.Get(atxHandler.cdb, atx.ID())
+		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
 		require.NoError(t, err)
+		require.NotNil(t, atx)
+		require.Equal(t, atx.ID(), atxFromDb.ID())
+		require.Equal(t, *atx.Coinbase, atxFromDb.Coinbase)
+		require.EqualValues(t, poetLeaves, atxFromDb.TickCount)
+		require.EqualValues(t, poetLeaves, atxFromDb.TickHeight())
+		require.Equal(t, atx.NiPosts[0].Posts[0].NumUnits, atxFromDb.NumUnits)
 
 		// processing ATX for the second time should skip checks
 		proof, err = atxHandler.processATX(context.Background(), peer, atx, blob, time.Now())

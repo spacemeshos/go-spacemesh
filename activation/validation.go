@@ -424,7 +424,6 @@ func (v *Validator) getAtxDeps(ctx context.Context, db sql.Executor, id types.AT
 		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
 	}
 
-	// TODO: implement ATX V2
 	switch version {
 	case types.AtxV1:
 		var commitment types.ATXID
@@ -446,6 +445,41 @@ func (v *Validator) getAtxDeps(ctx context.Context, db sql.Executor, id types.AT
 			nipost:      *wire.NiPostFromWireV1(atx.NIPost),
 			positioning: atx.PositioningATXID,
 			previous:    atx.PrevATXID,
+			commitment:  commitment,
+		}
+		return deps, nil
+	case types.AtxV2:
+		// TODO: support merged ATXs
+		var atx wire.ActivationTxV2
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return nil, fmt.Errorf("decoding ATX blob: %w", err)
+		}
+
+		var commitment types.ATXID
+		if atx.Initial != nil {
+			commitment = atx.Initial.CommitmentATX
+		} else {
+			catx, err := atxs.CommitmentATX(v.db, atx.SmesherID)
+			if err != nil {
+				return nil, fmt.Errorf("getting commitment ATX: %w", err)
+			}
+			commitment = catx
+		}
+		var previous types.ATXID
+		if len(atx.PreviousATXs) != 0 {
+			previous = atx.PreviousATXs[0]
+		}
+
+		deps := &atxDeps{
+			nipost: types.NIPost{
+				Post: wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post),
+				PostMetadata: &types.PostMetadata{
+					Challenge:     atx.NiPosts[0].Challenge[:],
+					LabelsPerUnit: v.cfg.LabelsPerUnit,
+				},
+			},
+			positioning: atx.PositioningATX,
+			previous:    previous,
 			commitment:  commitment,
 		}
 		return deps, nil

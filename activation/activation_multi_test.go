@@ -240,7 +240,7 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 			}
 			commitmentATX := types.RandomATXID()
 			tab.mValidator.EXPECT().
-				Post(gomock.Any(), sig.NodeID(), commitmentATX, post, gomock.Any(), numUnits)
+				PostV2(gomock.Any(), sig.NodeID(), commitmentATX, post, shared.ZeroChallenge, numUnits)
 			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
 				post,
 				&types.PostInfo{
@@ -248,7 +248,7 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 					Nonce:         new(types.VRFPostIndex),
 					NumUnits:      numUnits,
 					NodeID:        sig.NodeID(),
-					LabelsPerUnit: tab.conf.LabelsPerUnit,
+					LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 				},
 				nil,
 			)
@@ -294,7 +294,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			Pow:     nipost.Pow,
 		}
 		tab.mValidator.EXPECT().
-			Post(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, gomock.Any(), nipost.NumUnits)
+			PostV2(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, shared.ZeroChallenge, nipost.NumUnits)
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
 				<-initialPostChan
@@ -308,7 +308,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 					NumUnits:      nipost.NumUnits,
 					CommitmentATX: nipost.CommitmentATX,
 					Nonce:         &nipost.VRFNonce,
-					LabelsPerUnit: tab.conf.LabelsPerUnit,
+					LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 				}
 
 				return post, postInfo, nil
@@ -349,7 +349,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			Pow:     nipost.Pow,
 		}
 		tab.mValidator.EXPECT().
-			Post(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, gomock.Any(), nipost.NumUnits)
+			PostV2(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, shared.ZeroChallenge, nipost.NumUnits)
 	}
 
 	// step 3: create ATX
