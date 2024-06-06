@@ -172,7 +172,11 @@ func (s *TransactionService) ParseTransaction(
 		t.MaxGas = header.MaxGas
 		t.GasPrice = header.GasPrice
 		t.MaxSpend = header.MaxSpend
-		t.Contents = &spacemeshv2alpha1.TransactionContents{}
+		contents, err := toTxContents(raw.Raw)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		t.Contents = contents
 	}
 
 	return &spacemeshv2alpha1.ParseTransactionResponse{
@@ -318,41 +322,12 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 		t.MaxGas = tx.MaxGas
 		t.GasPrice = tx.GasPrice
 		t.MaxSpend = tx.MaxSpend
-		t.Contents = &spacemeshv2alpha1.TransactionContents{}
 
-		txArgs, _ := decodeTxArgs(scale.NewDecoder(bytes.NewReader(tx.Raw)))
-		switch tx.Method {
-		case core.MethodSpawn:
-			switch tx.TxHeader.TemplateAddress {
-			case wallet.TemplateAddress:
-				args := txArgs.(*wallet.SpawnArguments)
-				t.Contents.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
-					SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
-						Pubkey: args.PublicKey.String(),
-					},
-				}
-			case multisig.TemplateAddress:
-				args := txArgs.(*multisig.SpawnArguments)
-				contents := &spacemeshv2alpha1.TransactionContents_MultiSigSpawn{
-					MultiSigSpawn: &spacemeshv2alpha1.ContentsMultiSigSpawn{
-						Required: uint32(args.Required),
-					},
-				}
-				contents.MultiSigSpawn.Pubkey = make([]string, len(args.PublicKeys))
-				for i := range args.PublicKeys {
-					contents.MultiSigSpawn.Pubkey[i] = args.PublicKeys[i].String()
-				}
-				t.Contents.Contents = contents
-			}
-		case core.MethodSpend:
-			args := txArgs.(*wallet.SpendArguments)
-			t.Contents.Contents = &spacemeshv2alpha1.TransactionContents_Send{
-				Send: &spacemeshv2alpha1.ContentsSend{
-					Destination: args.Destination.String(),
-					Amount:      args.Amount,
-				},
-			}
+		contents, err := toTxContents(tx.Raw)
+		if err != nil {
+			return nil
 		}
+		t.Contents = contents
 	}
 
 	if includeResult {
@@ -404,7 +379,7 @@ func convertTxState(tx *types.MeshTransaction) spacemeshv2alpha1.TransactionStat
 	}
 }
 
-func decodeTxArgs(decoder *scale.Decoder) (scale.Encodable, error) {
+func decodeTxArgs(decoder *scale.Decoder) (uint8, *core.Address, scale.Encodable, error) {
 	reg := registry.New()
 	wallet.Register(reg)
 	multisig.Register(reg)
@@ -413,17 +388,17 @@ func decodeTxArgs(decoder *scale.Decoder) (scale.Encodable, error) {
 
 	_, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
+		return 0, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
 	}
 
 	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
+		return 0, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
 	}
 
 	method, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
+		return 0, nil, nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
 	}
 
 	var templateAddress *core.Address
@@ -431,7 +406,7 @@ func decodeTxArgs(decoder *scale.Decoder) (scale.Encodable, error) {
 	if method == core.MethodSpawn {
 		templateAddress = &core.Address{}
 		if _, err := templateAddress.DecodeScale(decoder); err != nil {
-			return nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
+			return 0, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
 		}
 	} else {
 		templateAddress = &wallet.TemplateAddress
@@ -439,21 +414,63 @@ func decodeTxArgs(decoder *scale.Decoder) (scale.Encodable, error) {
 
 	handler = reg.Get(*templateAddress)
 	if handler == nil {
-		return nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
+		return 0, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
 	}
 
 	var p core.Payload
 	if _, err = p.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("%w: %w", core.ErrMalformed, err)
+		return 0, nil, nil, fmt.Errorf("%w: %w", core.ErrMalformed, err)
 	}
 
 	args := handler.Args(method)
 	if args == nil {
-		return nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
+		return 0, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
 	}
 	if _, err := args.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
+		return 0, nil, nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
 	}
 
-	return args, nil
+	return method, templateAddress, args, nil
+}
+
+func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents, error) {
+	method, template, txArgs, err := decodeTxArgs(scale.NewDecoder(bytes.NewReader(rawTx)))
+	if err != nil {
+		return nil, err
+	}
+	res := &spacemeshv2alpha1.TransactionContents{}
+	switch method {
+	case core.MethodSpawn:
+		switch *template {
+		case wallet.TemplateAddress:
+			args := txArgs.(*wallet.SpawnArguments)
+			res.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
+				SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
+					Pubkey: args.PublicKey.String(),
+				},
+			}
+		case multisig.TemplateAddress:
+			args := txArgs.(*multisig.SpawnArguments)
+			contents := &spacemeshv2alpha1.TransactionContents_MultiSigSpawn{
+				MultiSigSpawn: &spacemeshv2alpha1.ContentsMultiSigSpawn{
+					Required: uint32(args.Required),
+				},
+			}
+			contents.MultiSigSpawn.Pubkey = make([]string, len(args.PublicKeys))
+			for i := range args.PublicKeys {
+				contents.MultiSigSpawn.Pubkey[i] = args.PublicKeys[i].String()
+			}
+			res.Contents = contents
+		}
+	case core.MethodSpend:
+		args := txArgs.(*wallet.SpendArguments)
+		res.Contents = &spacemeshv2alpha1.TransactionContents_Send{
+			Send: &spacemeshv2alpha1.ContentsSend{
+				Destination: args.Destination.String(),
+				Amount:      args.Amount,
+			},
+		}
+	}
+
+	return res, nil
 }
