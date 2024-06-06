@@ -4,6 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    ignore:
+      - dependency-name: github.com/libp2p/*
 
   - package-ecosystem: "github-actions"
     directory: "/"
