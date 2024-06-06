@@ -132,6 +132,25 @@ func TestTransactionService_List(t *testing.T) {
 		require.Equal(t, spacemeshv2alpha1.TransactionResult_TRANSACTION_STATUS_SUCCESS,
 			list.Transactions[0].TxResult.Status)
 	})
+
+	t.Run("start layer & end layer", func(t *testing.T) {
+		layer := txsList[0].Layer.Uint32()
+
+		var expectedTxs []types.TransactionWithResult
+		for _, tx := range txsList {
+			if tx.Layer.Uint32() == layer {
+				expectedTxs = append(expectedTxs, tx)
+			}
+		}
+
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
+			StartLayer: &layer,
+			EndLayer:   &layer,
+			Limit:      100,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, len(expectedTxs))
+	})
 }
 
 func TestTransactionService_EstimateGas(t *testing.T) {

@@ -270,7 +270,7 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 
 	if filter.EndLayer != nil {
 		ops.Filter = append(ops.Filter, builder.Op{
-			Field: builder.Address,
+			Field: builder.Layer,
 			Token: builder.Lte,
 			Value: int64(filter.GetEndLayer()),
 		})
