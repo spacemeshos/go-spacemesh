@@ -2,7 +2,7 @@ VERSION ?= $(shell git describe --tags)
 COMMIT = $(shell git rev-parse HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-GOLANGCI_LINT_VERSION := v1.57.0
+GOLANGCI_LINT_VERSION := v1.58.0
 STATICCHECK_VERSION := v0.4.7
 GOTESTSUM_VERSION := v1.11.0
 GOSCALE_VERSION := v1.2.0
@@ -54,11 +54,9 @@ all: install build
 .PHONY: all
 
 install:
-	# report exit code
-	curl -sL -o test.txt https://github.com/golangci/golangci-lint/releases/v1.57.0 || (echo "mycommand failed $$?"; sh -c 'exit 1')
 	git lfs install
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -d $(GOLANGCI_LINT_VERSION)
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
 	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
