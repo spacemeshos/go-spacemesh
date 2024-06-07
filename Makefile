@@ -2,7 +2,7 @@ VERSION ?= $(shell git describe --tags)
 COMMIT = $(shell git rev-parse HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-GOLANGCI_LINT_VERSION := tag/v1.57.0 # The golangci-lint install script is broken, so we use a specific tag. I'll open a PR to fix it.
+GOLANGCI_LINT_VERSION := v1.57.0
 STATICCHECK_VERSION := v0.4.7
 GOTESTSUM_VERSION := v1.11.0
 GOSCALE_VERSION := v1.2.0
@@ -56,7 +56,13 @@ all: install build
 install:
 	git lfs install
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
+
+	ifeq ($(OS), Windows_NT)
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	else
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
+	endif
+
 	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
