@@ -53,16 +53,13 @@ FUZZTIME ?= "10s"
 all: install build
 .PHONY: all
 
-
-
-
 install:
 	git lfs install
 	go mod download
 
-ifeq ($(OS),Windows_NT)
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-else
+ifneq ($(OS),Windows_NT)
+	# On GH windows runners this fails at the moment: https://github.com/actions/runner-images/issues/10009
+	# since we don't run the linter on windows in the CI, we can skip this step for now
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
 endif
 
