@@ -564,7 +564,7 @@ $ eval $(make print-test-env) go test ./sql/localsql ./sql/statesql
 === RUN   TestSchema/schema/force_migrations
     test.go:106: updated schema written to schema/schema.sql.updated
     test.go:108: 
-        	Error Trace:	/Users/ivan4th/work/spacemesh/go-spacemesh/sql/test/test.go:108
+        	Error Trace:	/Users/user/spacemesh/go-spacemesh/sql/test/test.go:108
         	Error:      	Should be empty, but was   (
         	            	  	"""
         	            	  	... // 81 identical lines
