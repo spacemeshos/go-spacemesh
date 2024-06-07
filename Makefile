@@ -53,15 +53,18 @@ FUZZTIME ?= "10s"
 all: install build
 .PHONY: all
 
+
+
+
 install:
 	git lfs install
 	go mod download
 
-	ifeq ($(OS), Windows_NT)
-		go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
-	else
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
-	endif
+ifeq ($(OS),Windows_NT)
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+else
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
+endif
 
 	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
