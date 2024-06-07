@@ -54,9 +54,11 @@ all: install build
 .PHONY: all
 
 install:
+	# report exit code
+	curl -sL -o test.txt https://github.com/golangci/golangci-lint/releases/v1.57.0 || (echo "mycommand failed $$?"; sh -c 'exit 1')
 	git lfs install
 	go mod download
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -d $(GOLANGCI_LINT_VERSION) || (echo "install failed $$?"; exit 1)
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -d $(GOLANGCI_LINT_VERSION)
 	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
