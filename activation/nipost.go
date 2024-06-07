@@ -42,6 +42,10 @@ const (
 	maxPoetGetProofJitter = 0.04
 )
 
+var (
+	ErrInvalidInitialPost = errors.New("invalid initial post")
+)
+
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
 	localDB *localsql.Database
@@ -110,6 +114,7 @@ func (nb *NIPostBuilder) Proof(
 	ctx context.Context,
 	nodeID types.NodeID,
 	challenge []byte,
+	initialPost *nipost.Post,
 ) (*types.Post, *types.PostInfo, error) {
 	nb.postStates.Set(nodeID, types.PostStateProving)
 	started := false
@@ -141,6 +146,23 @@ func (nb *NIPostBuilder) Proof(
 		}
 
 		retries = 0
+
+		// we check whether an initialPost is included, if so, it means
+		// we land under the possible edge case where the storage units
+		// have changed between the initial PoST and the upcoming one (initial ATX
+		// still not published)
+		if initialPost != nil {
+			info, err := client.Info(ctx)
+			if errors.Is(err, ErrPostClientClosed) {
+				continue
+			} else if err != nil {
+				events.EmitPostFailure(nodeID)
+				return nil, nil, fmt.Errorf("failed to get post info: %w", err)
+			}
+			if info.NumUnits != initialPost.NumUnits {
+				return nil, nil, ErrInvalidInitialPost
+			}
+		}
 		post, postInfo, err := client.Proof(ctx, challenge)
 		switch {
 		case errors.Is(err, ErrPostClientClosed):
@@ -165,6 +187,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	signer *signing.EdSigner,
 	publishEpoch types.EpochID,
 	challenge types.Hash32,
+	initialPost *nipost.Post,
 ) (*nipost.NIPostState, error) {
 	logger := nb.logger.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
 	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
@@ -287,7 +310,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
 		startTime := time.Now()
-		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:])
+		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], initialPost)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}

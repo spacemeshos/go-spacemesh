@@ -53,9 +53,10 @@ type nipostBuilder interface {
 		ctx context.Context,
 		sig *signing.EdSigner,
 		publish types.EpochID,
-		challenge types.Hash32,
+		challengeHash types.Hash32,
+		initialPost *nipost.Post,
 	) (*nipost.NIPostState, error)
-	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
+	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte, initialPost *nipost.Post) (*types.Post, *types.PostInfo, error)
 	ResetState(types.NodeID) error
 }
 
