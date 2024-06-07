@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/poet/registration"
 	poetShared "github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,12 +66,9 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	opts := activation.DefaultPostSetupOpts()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
-
 	var eg errgroup.Group
 	i := uint32(1)
+	opts := testPostSetupOpts(t)
 	for _, sig := range signers {
 		opts := opts
 		opts.DataDir = t.TempDir()

@@ -138,7 +138,7 @@ func (atx *ActivationTxV1) HashInnerBytes() (result types.Hash32) {
 	return result
 }
 
-func postToWireV1(p *types.Post) *PostV1 {
+func PostToWireV1(p *types.Post) *PostV1 {
 	if p == nil {
 		return nil
 	}
@@ -159,7 +159,7 @@ func NiPostToWireV1(n *types.NIPost) *NIPostV1 {
 			Nodes:     n.Membership.Nodes,
 			LeafIndex: n.Membership.LeafIndex,
 		},
-		Post: postToWireV1(n.Post),
+		Post: PostToWireV1(n.Post),
 		PostMetadata: &PostMetadataV1{
 			Challenge:     n.PostMetadata.Challenge,
 			LabelsPerUnit: n.PostMetadata.LabelsPerUnit,
@@ -174,7 +174,7 @@ func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 		PrevATXID:        c.PrevATXID,
 		PositioningATXID: c.PositioningATX,
 		CommitmentATXID:  c.CommitmentATX,
-		InitialPost:      postToWireV1(c.InitialPost),
+		InitialPost:      PostToWireV1(c.InitialPost),
 	}
 }
 

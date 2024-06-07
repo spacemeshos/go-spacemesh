@@ -197,7 +197,7 @@ func (c *CertifierClient) obtainPostFromLastAtx(ctx context.Context, nodeId type
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve ATX: %w", err)
 	}
-	atxNipost, err := loadNipost(ctx, c.db, atxid)
+	post, challenge, err := loadPost(ctx, c.db, atxid)
 	if err != nil {
 		return nil, errors.New("no NIPoST found in last ATX")
 	}
@@ -211,10 +211,10 @@ func (c *CertifierClient) obtainPostFromLastAtx(ctx context.Context, nodeId type
 
 	c.logger.Info("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
 	return &nipost.Post{
-		Nonce:         atxNipost.Post.Nonce,
-		Indices:       atxNipost.Post.Indices,
-		Pow:           atxNipost.Post.Pow,
-		Challenge:     atxNipost.PostMetadata.Challenge,
+		Nonce:         post.Nonce,
+		Indices:       post.Indices,
+		Pow:           post.Pow,
+		Challenge:     challenge,
 		NumUnits:      atx.NumUnits,
 		CommitmentATX: *atx.CommitmentATX,
 		// VRF nonce is not needed
@@ -328,22 +328,26 @@ func (c *CertifierClient) Certify(
 }
 
 // load NIPoST for the given ATX from the database.
-func loadNipost(ctx context.Context, db sql.Executor, id types.ATXID) (*types.NIPost, error) {
+func loadPost(ctx context.Context, db sql.Executor, id types.ATXID) (*types.Post, []byte, error) {
 	var blob sql.Blob
 	version, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
 	if err != nil {
-		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
+		return nil, nil, fmt.Errorf("getting blob for %s: %w", id, err)
 	}
 
 	switch version {
 	case types.AtxV1:
 		var atx wire.ActivationTxV1
 		if err := codec.Decode(blob.Bytes, &atx); err != nil {
-			return nil, fmt.Errorf("decoding ATX blob: %w", err)
+			return nil, nil, fmt.Errorf("decoding ATX blob: %w", err)
 		}
-		return wire.NiPostFromWireV1(atx.NIPost), nil
+		return wire.PostFromWireV1(atx.NIPost.Post), atx.NIPost.PostMetadata.Challenge, nil
 	case types.AtxV2:
-		// TODO: support ATX V2
+		var atx wire.ActivationTxV2
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return nil, nil, fmt.Errorf("decoding ATX blob: %w", err)
+		}
+		return wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post), atx.NiPosts[0].Challenge[:], nil
 	}
 	panic("unsupported ATX version")
 }
