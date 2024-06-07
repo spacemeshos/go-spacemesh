@@ -37,3 +37,12 @@ func (c *NIPostChallengeV2) MarshalLogObject(encoder zapcore.ObjectEncoder) erro
 	encoder.AddObject("InitialPost", c.InitialPost)
 	return nil
 }
+
+func NIPostChallengeToWireV2(c *types.NIPostChallenge) *NIPostChallengeV2 {
+	return &NIPostChallengeV2{
+		PublishEpoch:     c.PublishEpoch,
+		PrevATXID:        c.PrevATXID,
+		PositioningATXID: c.PositioningATX,
+		InitialPost:      PostToWireV1(c.InitialPost),
+	}
+}

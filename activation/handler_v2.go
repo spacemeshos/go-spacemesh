@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/spacemeshos/post/shared"
@@ -481,7 +482,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	// For a merged ATX we need to fetch the equivocation this smesher is part of.
 	equivocationSet := []types.NodeID{atx.SmesherID}
 	var totalEffectiveNumUnits uint32
-	var minLeaves uint64
+	var minLeaves uint64 = math.MaxUint64
 	var smesherCommitment *types.ATXID
 	for _, niposts := range atx.NiPosts {
 		// verify PoET memberships in a single go

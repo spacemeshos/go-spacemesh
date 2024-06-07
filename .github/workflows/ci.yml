@@ -63,6 +63,7 @@ jobs:
     steps:
       - name: Add OpenCL support
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
+
       - name: checkout
         uses: actions/checkout@v4
         with:
@@ -139,6 +140,12 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
@@ -185,6 +192,12 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
@@ -243,6 +256,12 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
