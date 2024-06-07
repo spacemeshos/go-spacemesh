@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/stretchr/testify/assert"
