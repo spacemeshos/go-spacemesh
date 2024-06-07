@@ -2,7 +2,7 @@ VERSION ?= $(shell git describe --tags)
 COMMIT = $(shell git rev-parse HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-GOLANGCI_LINT_VERSION := v1.57.0
+GOLANGCI_LINT_VERSION := tag/v1.57.0 # The golangci-lint install script is broken, so we use a specific tag. I'll open a PR to fix it.
 STATICCHECK_VERSION := v0.4.7
 GOTESTSUM_VERSION := v1.11.0
 GOSCALE_VERSION := v1.2.0
