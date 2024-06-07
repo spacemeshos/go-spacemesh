@@ -252,15 +252,19 @@ func castTransaction(t *types.Transaction) *pb.Transaction {
 	return tx
 }
 
-func convertActivation(a *types.ActivationTx) *pb.Activation {
+func convertActivation(a *types.ActivationTx, previous []types.ATXID) *pb.Activation {
+	if len(previous) == 0 {
+		previous = []types.ATXID{types.EmptyATXID}
+	}
 	return &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PublishEpoch.Uint32()},
 		SmesherId: &pb.SmesherId{Id: a.SmesherID.Bytes()},
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
-		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
-		NumUnits:  uint32(a.NumUnits),
-		Sequence:  a.Sequence,
+		// TODO: should we update the API to support multiple previous ATXs?
+		PrevAtx:  &pb.ActivationId{Id: previous[0].Bytes()},
+		NumUnits: uint32(a.NumUnits),
+		Sequence: a.Sequence,
 	}
 }
 
@@ -440,10 +444,14 @@ func (s MeshService) AccountMeshDataStream(
 			activation := activationEvent.ActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
+				previous, err := s.cdb.Previous(activation.ID())
+				if err != nil {
+					return status.Error(codes.Internal, "getting previous ATXs failed")
+				}
 				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_Activation{
-							Activation: convertActivation(activation),
+							Activation: convertActivation(activation, previous),
 						},
 					},
 				}

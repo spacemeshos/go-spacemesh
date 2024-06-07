@@ -174,8 +174,6 @@ type ActivationTx struct {
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against
 	// that miner.
 	Sequence uint64
-	// the previous ATX's ID (for all but the first in the sequence)
-	PrevATXID ATXID
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
 	CommitmentATX  *ATXID
@@ -226,7 +224,6 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
 	encoder.AddString("smesher", atx.SmesherID.String())
 	encoder.AddUint32("publish_epoch", atx.PublishEpoch.Uint32())
-	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 
 	if atx.CommitmentATX != nil {
 		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())

@@ -131,10 +131,7 @@ func (h *HandlerV2) processATX(
 		SmesherID:      watx.SmesherID,
 	}
 
-	if watx.Initial == nil {
-		// FIXME: update to keep many previous ATXs to support merged ATXs
-		atx.PrevATXID = watx.PreviousATXs[0]
-	} else {
+	if watx.Initial != nil {
 		atx.CommitmentATX = &watx.Initial.CommitmentATX
 	}
 
@@ -745,7 +742,7 @@ func (h *HandlerV2) storeAtx(
 			}
 		}
 
-		err = atxs.Add(tx, atx, watx.Blob())
+		err = atxs.Add(tx, atx, watx.Blob(), watx.PreviousATXs...)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}

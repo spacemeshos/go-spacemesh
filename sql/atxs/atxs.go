@@ -22,7 +22,7 @@ const (
 // filters that refer to the id column.
 const fieldsQuery = `select
 atxs.id, atxs.nonce, atxs.base_tick_height, atxs.tick_count, atxs.pubkey, atxs.effective_num_units,
-atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.prev_id, atxs.commitment_atx, atxs.weight`
+atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.commitment_atx, atxs.weight`
 
 const fullQuery = fieldsQuery + ` from atxs`
 
@@ -55,13 +55,10 @@ func decoder(fn decoderCallback) sql.Decoder {
 		stmt.ColumnBytes(9, a.Coinbase[:])
 		a.SetValidity(types.Validity(stmt.ColumnInt(10)))
 		if stmt.ColumnType(11) != sqlite.SQLITE_NULL {
-			stmt.ColumnBytes(11, a.PrevATXID[:])
-		}
-		if stmt.ColumnType(12) != sqlite.SQLITE_NULL {
 			a.CommitmentATX = new(types.ATXID)
-			stmt.ColumnBytes(12, a.CommitmentATX[:])
+			stmt.ColumnBytes(11, a.CommitmentATX[:])
 		}
-		a.Weight = uint64(stmt.ColumnInt64(13))
+		a.Weight = uint64(stmt.ColumnInt64(12))
 
 		return fn(&a)
 	}
@@ -399,6 +396,25 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (t
 	return version, nil
 }
 
+// Previous gets all previous ATXs for a given ATX ID.
+func Previous(db sql.Executor, id types.ATXID) ([]types.ATXID, error) {
+	var previous []types.ATXID
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var prev types.ATXID
+		stmt.ColumnBytes(0, prev[:])
+		previous = append(previous, prev)
+		return true
+	}
+
+	if _, err := db.Exec("select previous_id from previous_atxs where id = ?1;", enc, dec); err != nil {
+		return nil, fmt.Errorf("previous ATXs for id %v: %w", id, err)
+	}
+	return previous, nil
+}
+
 // NonceByID retrieves VRFNonce corresponding to the specified ATX ID.
 func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err error) {
 	enc := func(stmt *sql.Statement) {
@@ -418,7 +434,7 @@ func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err e
 	return nonce, err
 }
 
-func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
+func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob, previous ...types.ATXID) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PublishEpoch))
@@ -436,21 +452,29 @@ func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
 		stmt.BindInt64(10, int64(atx.Sequence))
 		stmt.BindBytes(11, atx.Coinbase.Bytes())
 		stmt.BindInt64(12, int64(atx.Validity()))
-		if atx.PrevATXID != types.EmptyATXID {
-			stmt.BindBytes(13, atx.PrevATXID.Bytes())
-		} else {
-			stmt.BindNull(13)
-		}
-		stmt.BindInt64(14, int64(atx.Weight))
+		stmt.BindInt64(13, int64(atx.Weight))
 	}
 
 	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
 			 pubkey, received, base_tick_height, tick_count, sequence, coinbase,
-			 validity, prev_id, weight)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`, enc, nil)
+			 validity, weight)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
+	}
+
+	for _, id := range previous {
+		if id == types.EmptyATXID {
+			continue
+		}
+		_, err := db.Exec("insert into previous_atxs (id, previous_id) values (?1, ?2)", func(stmt *sql.Statement) {
+			stmt.BindBytes(1, atx.ID().Bytes())
+			stmt.BindBytes(2, id.Bytes())
+		}, nil)
+		if err != nil {
+			return fmt.Errorf("inserting previous ATX %s: %w", id, err)
+		}
 	}
 
 	return AddBlob(db, atx.ID(), blob.Blob, blob.Version)
@@ -462,6 +486,7 @@ func AddBlob(db sql.Executor, id types.ATXID, blob []byte, version types.AtxVers
 		stmt.BindBytes(2, blob)
 		stmt.BindInt64(3, int64(version))
 	}
+
 	_, err := db.Exec("insert into atx_blobs (id, atx, version) values (?1, ?2, ?3)", enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX blob %v: %w", id, err)
@@ -803,7 +828,7 @@ func IterateAtxsWithMalfeasance(
 		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
 		func(s *sql.Statement) bool {
 			return decoder(func(atx *types.ActivationTx) bool {
-				return fn(atx, s.ColumnInt(14) != 0)
+				return fn(atx, s.ColumnInt(13) != 0)
 			})(s)
 		},
 	)
@@ -862,10 +887,12 @@ func PrevATXCollisions(db sql.Executor) ([]PrevATXCollision, error) {
 	// we are joining the table with itself to find ATXs with the same prevATX
 	// the WHERE clause ensures that we only get the pairs once
 	if _, err := db.Exec(`
-		SELECT t1.pubkey, t2.pubkey, t1.id, t2.id
-		FROM atxs t1
-		INNER JOIN atxs t2 ON t1.prev_id = t2.prev_id
-		WHERE t1.id < t2.id;`, nil, dec); err != nil {
+		SELECT a1.pubkey, a2.pubkey, a1.id, a2.id
+		FROM previous_atxs p1
+		INNER JOIN previous_atxs p2 ON p1.previous_id = p2.previous_id
+		JOIN atxs a1 ON p1.id = a1.id
+		JOIN atxs a2 ON p2.id = a2.id
+		WHERE p1.id < p2.id;`, nil, dec); err != nil {
 		return nil, fmt.Errorf("error getting ATXs with same prevATX: %w", err)
 	}
 

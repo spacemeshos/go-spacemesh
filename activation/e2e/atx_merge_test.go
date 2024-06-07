@@ -513,6 +513,5 @@ func Test_MarryAndMerge(t *testing.T) {
 		require.Equal(t, units[i], atxFromDb.NumUnits)
 		require.Equal(t, signer.NodeID(), atxFromDb.SmesherID)
 		require.Equal(t, publish, atxFromDb.PublishEpoch)
-		require.Equal(t, mergedATX2.ID(), atxFromDb.PrevATXID)
 	}
 }

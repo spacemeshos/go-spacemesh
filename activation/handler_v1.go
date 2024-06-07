@@ -459,16 +459,24 @@ func (h *HandlerV1) checkWrongPrevAtx(
 				return nil, fmt.Errorf("get prev atx id by node id: %w", err)
 			}
 
-			atx2, err := atxs.Get(tx, id)
-			if err != nil {
-				return nil, fmt.Errorf("get prev atx: %w", err)
+			if atx.ID() != id {
+				prev, err := atxs.Previous(tx, id)
+				if err != nil {
+					return nil, fmt.Errorf("get prev atx: %w", err)
+				}
+				if (atx.PrevATXID == types.EmptyATXID && len(prev) == 0) || atx.PrevATXID == prev[0] {
+					// found an ATX that points to the same previous ATX
+					atx2ID = id
+					break
+				}
+				atx2, err := atxs.Get(tx, id)
+				if err != nil {
+					return nil, fmt.Errorf("get atx: %w", err)
+				}
+				pubEpoch = atx2.PublishEpoch
+			} else {
+				pubEpoch = atx.PublishEpoch
 			}
-			if atx.ID() != atx2.ID() && atx.PrevATXID == atx2.PrevATXID {
-				// found an ATX that points to the same previous ATX
-				atx2ID = id
-				break
-			}
-			pubEpoch = atx2.PublishEpoch
 		}
 	}
 
@@ -551,7 +559,7 @@ func (h *HandlerV1) storeAtx(
 			return fmt.Errorf("check malicious: %w", err)
 		}
 
-		err = atxs.Add(tx, atx, watx.Blob())
+		err = atxs.Add(tx, atx, watx.Blob(), watx.PrevATXID)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}

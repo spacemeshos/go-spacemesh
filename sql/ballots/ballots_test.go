@@ -147,7 +147,6 @@ func TestLayerBallotBySmesher(t *testing.T) {
 func newAtx(signer *signing.EdSigner, layerID types.LayerID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		PublishEpoch: layerID.GetEpoch(),
-		PrevATXID:    types.RandomATXID(),
 		NumUnits:     2,
 		TickCount:    1,
 		SmesherID:    signer.NodeID(),

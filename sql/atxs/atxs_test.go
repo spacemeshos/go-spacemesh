@@ -522,8 +522,8 @@ func TestVRFNonce(t *testing.T) {
 	atx1, blob := newAtx(t, sig, withPublishEpoch(20), withNonce(333))
 	require.NoError(t, atxs.Add(db, atx1, blob))
 
-	atx2, blob := newAtx(t, sig, withPublishEpoch(50), withNonce(777), withPrevATXID(atx1.ID()))
-	require.NoError(t, atxs.Add(db, atx2, blob))
+	atx2, blob := newAtx(t, sig, withPublishEpoch(50), withNonce(777))
+	require.NoError(t, atxs.Add(db, atx2, blob, atx1.ID()))
 
 	// Act & Assert
 
@@ -814,12 +814,6 @@ func withNonce(nonce types.VRFPostIndex) createAtxOpt {
 	}
 }
 
-func withPrevATXID(id types.ATXID) createAtxOpt {
-	return func(atx *types.ActivationTx) {
-		atx.PrevATXID = id
-	}
-}
-
 func withCoinbase(addr types.Address) createAtxOpt {
 	return func(atx *types.ActivationTx) {
 		atx.Coinbase = addr
@@ -1035,11 +1029,11 @@ func Test_PrevATXCollisions(t *testing.T) {
 	// create two ATXs with the same PrevATXID
 	prevATXID := types.RandomATXID()
 
-	atx1, blob1 := newAtx(t, sig, withPublishEpoch(1), withPrevATXID(prevATXID))
-	atx2, blob2 := newAtx(t, sig, withPublishEpoch(2), withPrevATXID(prevATXID))
+	atx1, blob1 := newAtx(t, sig, withPublishEpoch(1))
+	atx2, blob2 := newAtx(t, sig, withPublishEpoch(2))
 
-	require.NoError(t, atxs.Add(db, atx1, blob1))
-	require.NoError(t, atxs.Add(db, atx2, blob2))
+	require.NoError(t, atxs.Add(db, atx1, blob1, prevATXID))
+	require.NoError(t, atxs.Add(db, atx2, blob2, prevATXID))
 
 	// verify that the ATXs were added
 	got1, err := atxs.Get(db, atx1.ID())
@@ -1060,9 +1054,8 @@ func Test_PrevATXCollisions(t *testing.T) {
 
 		atx2, blob2 := newAtx(t, otherSig,
 			withPublishEpoch(types.EpochID(i+1)),
-			withPrevATXID(atx.ID()),
 		)
-		require.NoError(t, atxs.Add(db, atx2, blob2))
+		require.NoError(t, atxs.Add(db, atx2, blob2, atx.ID()))
 	}
 
 	// get the collisions

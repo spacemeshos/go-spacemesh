@@ -129,7 +129,7 @@ func (s *ActivationStreamService) Stream(
 					}
 					continue
 				}
-				err := stream.Send(toAtx(rst))
+				err = stream.Send(toAtx(rst))
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil

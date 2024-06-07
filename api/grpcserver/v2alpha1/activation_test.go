@@ -194,19 +194,19 @@ func TestActivationStreamService_Stream(t *testing.T) {
 				_, err = stream.Header()
 				require.NoError(t, err)
 
-				var expect []*types.ActivationTx
+				var expect []*events.ActivationTx
 				for _, rst := range streamed {
 					events.ReportNewActivation(rst.ActivationTx)
 					matcher := atxsMatcher{tc.request, ctx}
 					if matcher.match(rst) {
-						expect = append(expect, rst.ActivationTx)
+						expect = append(expect, rst)
 					}
 				}
 
 				for _, rst := range expect {
 					received, err := stream.Recv()
 					require.NoError(t, err)
-					require.Equal(t, toAtx(rst).String(), received.String())
+					require.Equal(t, toAtx(rst.ActivationTx).String(), received.String())
 				}
 			})
 		}
