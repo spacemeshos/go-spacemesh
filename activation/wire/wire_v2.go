@@ -12,6 +12,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+// MerkleTreeIndex is the index of the leaf containing the given field in the merkle tree.
+type MerkleTreeIndex uint16
+
+const (
+	PublishEpochIndex MerkleTreeIndex = iota
+	PositioningATXIndex
+	CoinbaseIndex
+	InitialPostIndex
+	PreviousATXsRootIndex
+	NIPostsRootIndex
+	VRFNonceIndex
+	MarriagesRootIndex
+	MarriageATXIndex
+)
+
 //go:generate scalegen
 
 type ActivationTxV2 struct {
@@ -42,10 +57,6 @@ type ActivationTxV2 struct {
 
 	// cached fields to avoid repeated calculations
 	id types.ATXID
-}
-
-func (atx *ActivationTxV2) SignedBytes() []byte {
-	return atx.ID().Bytes()
 }
 
 func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
@@ -132,7 +143,7 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 
 func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
 	atx.SmesherID = signer.NodeID()
-	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
+	atx.Signature = signer.Sign(signing.ATX, atx.ID().Bytes())
 }
 
 func (atx *ActivationTxV2) Published() types.EpochID {
