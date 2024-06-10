@@ -758,14 +758,12 @@ func (b *Builder) createAtx(
 		}
 	}
 
-	coinbase := b.Coinbase()
-
 	switch version {
 	case types.AtxV1:
 		atx := wire.ActivationTxV1{
 			InnerActivationTxV1: wire.InnerActivationTxV1{
 				NIPostChallengeV1: *wire.NIPostChallengeToWireV1(challenge),
-				Coinbase:          coinbase,
+				Coinbase:          b.Coinbase(),
 				NumUnits:          nipostState.NumUnits,
 				NIPost:            wire.NiPostToWireV1(nipostState.NIPost),
 			},
@@ -780,6 +778,8 @@ func (b *Builder) createAtx(
 		atx := &wire.ActivationTxV2{
 			PublishEpoch:   challenge.PublishEpoch,
 			PositioningATX: challenge.PositioningATX,
+			Coinbase:       b.Coinbase(),
+			VRFNonce:       (uint64)(nipostState.VRFNonce),
 			NiPosts: []wire.NiPostsV2{
 				{
 					Membership: wire.MerkleProofV2{
@@ -796,22 +796,7 @@ func (b *Builder) createAtx(
 				},
 			},
 		}
-		// only populate coinbase if it changed or it is the first ATX
-		if challenge.PrevATXID == types.EmptyATXID {
-			atx.Coinbase = &coinbase
-		} else {
-			previousCoinbase, err := atxs.Coinbase(b.db, sig.NodeID())
-			if err != nil {
-				b.logger.Warn("failed to lookup previous coinbase", zap.Error(err))
-			}
-			if coinbase != previousCoinbase {
-				atx.Coinbase = &coinbase
-			}
-		}
 
-		if nonce != nil {
-			atx.VRFNonce = (*uint64)(nonce)
-		}
 		if challenge.InitialPost != nil {
 			atx.Initial = &wire.InitialAtxPartsV2{
 				Post:          *wire.PostToWireV1(challenge.InitialPost),

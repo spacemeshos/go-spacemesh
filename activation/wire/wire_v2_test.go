@@ -67,7 +67,6 @@ func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
 				Pow:     0,
 			}
 		}
-		atx.VRFNonce = new(uint64)
 		atx.MarriageATX = new(types.ATXID)
 		b.StartTimer()
 		atx.ID()
