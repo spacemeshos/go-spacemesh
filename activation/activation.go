@@ -731,33 +731,6 @@ func (b *Builder) createAtx(
 		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
 	}
 
-	var nonce *types.VRFPostIndex
-	var atxNodeID *types.NodeID
-	switch {
-	case challenge.PrevATXID == types.EmptyATXID:
-		atxNodeID = new(types.NodeID)
-		*atxNodeID = sig.NodeID()
-		nonce = &nipostState.VRFNonce
-	default:
-		oldNonce, err := atxs.NonceByID(b.db, challenge.PrevATXID)
-		if err != nil {
-			b.logger.Warn("failed to get VRF nonce for ATX",
-				zap.Error(err),
-				log.ZShortStringer("smesherID", sig.NodeID()),
-			)
-			break
-		}
-		if nipostState.VRFNonce != oldNonce {
-			b.logger.Info(
-				"attaching a new VRF nonce in ATX",
-				log.ZShortStringer("smesherID", sig.NodeID()),
-				zap.Uint64("new nonce", uint64(nipostState.VRFNonce)),
-				zap.Uint64("old nonce", uint64(oldNonce)),
-			)
-			nonce = &nipostState.VRFNonce
-		}
-	}
-
 	switch version {
 	case types.AtxV1:
 		atx := wire.ActivationTxV1{
@@ -768,8 +741,28 @@ func (b *Builder) createAtx(
 				NIPost:            wire.NiPostToWireV1(nipostState.NIPost),
 			},
 		}
-		if nonce != nil {
-			atx.VRFNonce = (*uint64)(nonce)
+
+		switch {
+		case challenge.PrevATXID == types.EmptyATXID:
+			atx.VRFNonce = (*uint64)(&nipostState.VRFNonce)
+		default:
+			oldNonce, err := atxs.NonceByID(b.db, challenge.PrevATXID)
+			if err != nil {
+				b.logger.Warn("failed to get VRF nonce for ATX",
+					zap.Error(err),
+					log.ZShortStringer("smesherID", sig.NodeID()),
+				)
+				break
+			}
+			if nipostState.VRFNonce != oldNonce {
+				b.logger.Info(
+					"attaching a new VRF nonce in ATX",
+					log.ZShortStringer("smesherID", sig.NodeID()),
+					zap.Uint64("new nonce", uint64(nipostState.VRFNonce)),
+					zap.Uint64("old nonce", uint64(oldNonce)),
+				)
+				atx.VRFNonce = (*uint64)(&nipostState.VRFNonce)
+			}
 		}
 		atx.Sign(sig)
 
