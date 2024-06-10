@@ -171,8 +171,8 @@ func publishAtx(
 		NumUnits:      DefaultPostSetupOpts().NumUnits,
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32, _ *nipost.Post) (*nipost.NIPostState, error) {
 			*currLayer = currLayer.Add(buildNIPostLayerDuration)
 			return newNIPostWithPoet(tb, types.RandomHash().Bytes()), nil
 		})
@@ -190,7 +190,7 @@ func publishAtx(
 	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(onPublish)
 	tab.mnipost.EXPECT().ResetState(nodeID).Return(nil)
 	// create and publish ATX
-	err := tab.PublishActivationTx(context.Background(), tab.signers[nodeID])
+	err := tab.PublishActivationTx(context.Background(), tab.signers[nodeID], nil)
 	require.NoError(tb, err)
 }
 
@@ -201,8 +201,8 @@ func Test_Builder_StartSmeshingCoinbase(t *testing.T) {
 	sig := maps.Values(tab.signers)[0]
 	coinbase := types.Address{1, 1, 1}
 
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
-		func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
+		func(ctx context.Context, _ types.NodeID, _ []byte, _ *nipost.Post) (*types.Post, *types.PostInfo, error) {
 			<-ctx.Done()
 			return nil, nil, ctx.Err()
 		})
@@ -223,8 +223,8 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		tab := newTestBuilder(t, 1)
 		sig := maps.Values(tab.signers)[0]
 
-		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).AnyTimes().DoAndReturn(
-			func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
+		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).AnyTimes().DoAndReturn(
+			func(ctx context.Context, _ types.NodeID, _ []byte, _ *nipost.Post) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
 				return nil, nil, ctx.Err()
 			})
@@ -279,8 +279,8 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer)
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{}))
 
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
-		func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
+		func(ctx context.Context, _ types.NodeID, _ []byte, _ *nipost.Post) (*types.Post, *types.PostInfo, error) {
 			<-ctx.Done()
 			return nil, nil, ctx.Err()
 		})
@@ -300,8 +300,8 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 	require.Equal(t, refChallenge, challenge) // challenge still present
 
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
-		func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
+		func(ctx context.Context, _ types.NodeID, _ []byte, _ *nipost.Post) (*types.Post, *types.PostInfo, error) {
 			<-ctx.Done()
 			return nil, nil, ctx.Err()
 		})
@@ -318,8 +318,8 @@ func TestBuilder_StopSmeshing_Delete(t *testing.T) {
 	require.Nil(t, challenge) // challenge deleted
 
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
-		func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
+		func(ctx context.Context, _ types.NodeID, _ []byte, _ *nipost.Post) (*types.Post, *types.PostInfo, error) {
 			<-ctx.Done()
 			return nil, nil, ctx.Err()
 		})
@@ -393,7 +393,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 		}).AnyTimes()
 
 	tab.mnipost.EXPECT().
-		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, ErrATXChallengeExpired)
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 
@@ -451,8 +451,8 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 		NumUnits:      DefaultPostSetupOpts().NumUnits,
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32, _ *nipost.Post) (*nipost.NIPostState, error) {
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithPoet(t, []byte("66666")), nil
 		})
@@ -486,7 +486,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 		},
 	)
 	// create and publish ATX
-	require.NoError(t, tab.PublishActivationTx(context.Background(), sig))
+	require.NoError(t, tab.PublishActivationTx(context.Background(), sig, nil))
 
 	// state is cleaned up
 	_, err := nipost.Challenge(tab.localDB, sig.NodeID())
@@ -525,8 +525,8 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 		NumUnits:      DefaultPostSetupOpts().NumUnits,
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32, _ *nipost.Post) (*nipost.NIPostState, error) {
 			currLayer = currLayer.Add(1)
 			return newNIPostWithPoet(t, []byte("66666")), nil
 		})
@@ -564,7 +564,7 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 	)
 
 	// create and publish ATX
-	require.NoError(t, tab.PublishActivationTx(context.Background(), sig))
+	require.NoError(t, tab.PublishActivationTx(context.Background(), sig, nil))
 
 	// state is cleaned up
 	_, err := nipost.Challenge(tab.localDB, sig.NodeID())
@@ -594,8 +594,8 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32, _ *nipost.Post) (*nipost.NIPostState, error) {
 			currLayer = currLayer.Add(layersPerEpoch)
 			return newNIPostWithPoet(t, []byte("66666")), nil
 		})
@@ -624,7 +624,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 		},
 	)
 	// create and publish ATX
-	err := tab.PublishActivationTx(ctx, sig)
+	err := tab.PublishActivationTx(ctx, sig, nil)
 	require.ErrorIs(t, err, context.Canceled) // publish returning an error will just cause a retry if not canceled
 	require.NotNil(t, built)
 
@@ -729,7 +729,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 			return genesis.Add(layerDuration * time.Duration(got))
 		}).AnyTimes()
 	tab.mnipost.EXPECT().
-		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, ErrATXChallengeExpired)
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 	ch := make(chan struct{})
@@ -823,9 +823,9 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	}, nil).AnyTimes()
 
 	tab.mnipost.EXPECT().
-		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(
-			func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
+			func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32, _ *nipost.Post) (*nipost.NIPostState, error) {
 				currentLayer = currentLayer.Add(5)
 				return newNIPostWithPoet(t, poetBytes), nil
 			})
@@ -852,7 +852,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 
 	tab.mnipost.EXPECT().ResetState(sig.NodeID())
 
-	r.NoError(tab.PublishActivationTx(context.Background(), sig))
+	r.NoError(tab.PublishActivationTx(context.Background(), sig, nil))
 
 	// state is cleaned up
 	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
@@ -906,8 +906,8 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
 	}, nil).AnyTimes()
 
-	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
+	tab.mnipost.EXPECT().BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32, _ *nipost.Post) (*nipost.NIPostState, error) {
 			currentLayer = currentLayer.Add(layersPerEpoch)
 			return newNIPostWithPoet(t, poetBytes), nil
 		})
@@ -951,7 +951,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		PostV2(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 
-	r.NoError(tab.PublishActivationTx(context.Background(), sig))
+	r.NoError(tab.PublishActivationTx(context.Background(), sig, nil))
 
 	// state is cleaned up
 	_, err = nipost.Challenge(tab.localDB, sig.NodeID())
@@ -978,10 +978,10 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 		}).AnyTimes()
 	nipostErr := errors.New("NIPost builder error")
 	tab.mnipost.EXPECT().
-		BuildNIPost(gomock.Any(), sig, gomock.Any(), gomock.Any()).
+		BuildNIPost(gomock.Any(), sig, gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, nipostErr)
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
-	require.ErrorIs(t, tab.PublishActivationTx(context.Background(), sig), nipostErr)
+	require.ErrorIs(t, tab.PublishActivationTx(context.Background(), sig, nil), nipostErr)
 
 	// state is preserved
 	challenge, err := nipost.Challenge(tab.localDB, sig.NodeID())
@@ -1052,7 +1052,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	var last time.Time
 	builderConfirmation := make(chan struct{})
 	tab.mnipost.EXPECT().
-		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(expectedTries).
 		DoAndReturn(
 			// nolint:lll
@@ -1147,7 +1147,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 		Pow:     post.Pow,
 	}
 
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).Return(
 		initialPost,
 		&types.PostInfo{
 			NodeID:        sig.NodeID(),
@@ -1161,9 +1161,10 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	)
 	tab.mValidator.EXPECT().
 		PostV2(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	_, err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	require.NoError(t, err)
 	// postClient.Proof() should not be called again
-	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	_, err = tab.buildInitialPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 }
 
@@ -1179,7 +1180,7 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 		Indices: types.RandomBytes(10),
 		Pow:     rand.Uint64(),
 	}
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).Return(
 		initialPost,
 		&types.PostInfo{
 			NodeID:        sig.NodeID(),
@@ -1193,11 +1194,11 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	)
 	tab.mValidator.EXPECT().
 		PostV2(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits)
-	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	_, err := tab.buildInitialPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 
 	// postClient.Proof() should not be called again
-	err = tab.buildInitialPost(context.Background(), sig.NodeID())
+	_, err = tab.buildInitialPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 }
 
@@ -1212,7 +1213,7 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		Indices: types.RandomBytes(10),
 		Pow:     rand.Uint64(),
 	}
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).Return(
 		initialPost,
 		&types.PostInfo{
 			NodeID:        sig.NodeID(),
@@ -1225,7 +1226,7 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 	)
 	tab.mValidator.EXPECT().
 		PostV2(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits)
-	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	_, err := tab.buildInitialPost(context.Background(), sig.NodeID())
 	require.ErrorContains(t, err, "nil VRF nonce")
 
 	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
@@ -1236,7 +1237,7 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 
 	// postClient.Proof() should be called again and no error if vrf nonce is provided
 	nonce := types.VRFPostIndex(rand.Uint64())
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).Return(
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).Return(
 		initialPost,
 		&types.PostInfo{
 			NodeID:        sig.NodeID(),
@@ -1248,7 +1249,7 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		},
 		nil,
 	)
-	err = tab.buildInitialPost(context.Background(), sig.NodeID())
+	_, err = tab.buildInitialPost(context.Background(), sig.NodeID())
 	require.NoError(t, err)
 }
 
@@ -1281,7 +1282,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mpostClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{}, nil).AnyTimes()
 			tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 			tab.mnipost.EXPECT().
-				BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&nipost.NIPostState{}, nil)
 			closed := make(chan struct{})
 			close(closed)
@@ -1314,7 +1315,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mValidator.EXPECT().
 				PostV2(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, post.Challenge, post.NumUnits)
 
-			require.NoError(t, tab.PublishActivationTx(context.Background(), sig))
+			require.NoError(t, tab.PublishActivationTx(context.Background(), sig, nil))
 		})
 	}
 }
@@ -1486,4 +1487,45 @@ func TestFindFullyValidHighTickAtx(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, atxLower.ID(), found)
 	})
+}
+
+// Test_Builder_RegenerateInitialPost tests the coverage for the edge case
+// where a node operator may change SUs after creating the initial PoST but before
+// submitting the first ATX, which should result in the initial PoST to be deleted
+// and for the new PoST to be generated instead (this also loses the eligibility
+// for the current epoch).
+func Test_Builder_RegenerateInitialPost(t *testing.T) {
+	tab := newTestBuilder(t, 1)
+	sig := maps.Values(tab.signers)[0]
+	//coinbase := types.Address{1, 1, 1}
+
+	// test setup is that we need an existing post in the localdb
+	post := nipost.Post{
+		Nonce:         1,
+		Indices:       []byte{1, 2, 3},
+		Pow:           12345,
+		Challenge:     []byte{2, 3, 5},
+		NumUnits:      2,
+		CommitmentATX: types.ATXID{},
+		VRFNonce:      types.VRFPostIndex(1),
+	}
+	if err := nipost.AddPost(tab.db, sig.NodeID(), post); err != nil {
+		t.Fatal(err)
+	}
+
+	//tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
+	//func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
+	//<-ctx.Done()
+	//return nil, nil, ctx.Err()
+	//})
+	//tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
+	//tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
+	//require.NoError(t, tab.StartSmeshing(coinbase))
+	//require.Equal(t, coinbase, tab.Coinbase())
+
+	//// calling StartSmeshing more than once before calling StopSmeshing is an error
+	//require.ErrorContains(t, tab.StartSmeshing(coinbase), "already started")
+
+	//tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
+	//require.NoError(t, tab.StopSmeshing(true))
 }
