@@ -338,36 +338,34 @@ func (b *Builder) SmesherIDs() []types.NodeID {
 	return maps.Keys(b.signers)
 }
 
-func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) (*nipost.Post, error) {
+func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) error {
 	// Generate the initial POST if we don't have an ATX...
 	if _, err := atxs.GetLastIDByNodeID(b.db, nodeID); err == nil {
-		panic(1)
-		return nil, nil
+		return nil
 	}
 	// ...and if we haven't stored an initial post yet.
-	dbPost, err := nipost.GetPost(b.localDB, nodeID)
-	panic(2)
+	_, err := nipost.GetPost(b.localDB, nodeID)
 	switch {
 	case err == nil:
 		b.logger.Info("load initial post from db")
-		return dbPost, nil
+		return nil
 	case errors.Is(err, sql.ErrNotFound):
 		b.logger.Info("creating initial post")
 	default:
-		return nil, fmt.Errorf("get initial post: %w", err)
+		return fmt.Errorf("get initial post: %w", err)
 	}
 
 	// Create the initial post and save it.
 	startTime := time.Now()
 	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge, nil)
 	if err != nil {
-		return nil, fmt.Errorf("post execution: %w", err)
+		return fmt.Errorf("post execution: %w", err)
 	}
 	if postInfo.Nonce == nil {
 		b.logger.Error("initial PoST is invalid: missing VRF nonce. Check your PoST data",
 			log.ZShortStringer("smesherID", nodeID),
 		)
-		return nil, nilVrfNonce
+		return nilVrfNonce
 	}
 	initialPost := nipost.Post{
 		Nonce:     post.Nonce,
@@ -385,26 +383,22 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) (*n
 		if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
 			b.logger.Fatal("failed to remove initial post", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
 		}
-		return nil, fmt.Errorf("initial POST is invalid: %w", err)
+		return fmt.Errorf("initial POST is invalid: %w", err)
 	}
 
 	metrics.PostDuration.Set(float64(time.Since(startTime).Nanoseconds()))
 	public.PostSeconds.Set(float64(time.Since(startTime)))
 	b.logger.Info("created the initial post")
 
-	return &initialPost, nipost.AddPost(b.localDB, nodeID, initialPost)
+	return nipost.AddPost(b.localDB, nodeID, initialPost)
 }
 
 func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	defer b.logger.Info("atx builder stopped")
-	var (
-		persistedPost *nipost.Post
-		err           error
-	)
 
 OUTER:
 	for {
-		persistedPost, err = b.buildInitialPost(ctx, sig.NodeID())
+		err := b.buildInitialPost(ctx, sig.NodeID())
 		if err == nil {
 			break
 		}
@@ -429,7 +423,7 @@ OUTER:
 	eg.Wait()
 
 	for {
-		err := b.PublishActivationTx(ctx, sig, persistedPost)
+		err := b.PublishActivationTx(ctx, sig)
 		if err == nil {
 			continue
 		} else if errors.Is(err, context.Canceled) {
@@ -646,7 +640,7 @@ func (b *Builder) Coinbase() types.Address {
 }
 
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
-func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner, initialPost *nipost.Post) error {
+func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner) error {
 	challenge, err := b.BuildNIPostChallenge(ctx, sig.NodeID())
 	if err != nil {
 		return err
