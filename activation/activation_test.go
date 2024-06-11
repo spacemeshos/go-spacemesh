@@ -3,7 +3,6 @@ package activation
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -69,12 +68,12 @@ type testAtxBuilder struct {
 }
 
 func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
-	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	observer, observedLogs := observer.New(zapcore.FatalLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
 		},
-	)))
+	)), zaptest.Level(zap.WarnLevel))
 
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
@@ -1493,22 +1492,20 @@ func TestFindFullyValidHighTickAtx(t *testing.T) {
 // and for the new PoST to be generated instead (this also loses the eligibility
 // for the current epoch).
 func Test_Builder_RegenerateInitialPost_WithDbCopy(t *testing.T) {
-	tab := newTestBuilder(t, 1)
-	sig := maps.Values(tab.signers)[0]
-	genesis := time.Now()
-	ctx, cancel := context.WithCancel(context.Background())
-	//defer cancel()
-
-	//coinbase := types.Address{1, 1, 1}
-
-	commitmentATX := types.RandomATXID()
-	nonce := types.VRFPostIndex(rand.Uint64())
-	numUnits := uint32(12)
-	initialPost := &types.Post{
-		Nonce:   rand.Uint32(),
-		Indices: types.RandomBytes(10),
-		Pow:     rand.Uint64(),
-	}
+	var (
+		tab           = newTestBuilder(t, 1)
+		sig           = maps.Values(tab.signers)[0]
+		genesis       = time.Now()
+		ctx, cancel   = context.WithCancel(context.Background())
+		commitmentATX = types.RandomATXID()
+		nonce         = types.VRFPostIndex(rand.Uint64())
+		numUnits      = uint32(12)
+		initialPost   = &types.Post{
+			Nonce:   rand.Uint32(),
+			Indices: types.RandomBytes(10),
+			Pow:     rand.Uint64(),
+		}
+	)
 
 	postV2Calls := 0
 	tab.mValidator.EXPECT().
@@ -1526,7 +1523,9 @@ func Test_Builder_RegenerateInitialPost_WithDbCopy(t *testing.T) {
 
 	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(func(id types.LayerID) <-chan struct{} {
-		fmt.Println("id on awaitlayer", id)
+		// this is our way to end the test - the code will wait on AwaitLayer in PublishActivationTx while
+		// waiting for the publication epoch. otherwise the `run` method will keep on looping to broadcast
+		// future atxs
 		cancel()
 		return make(chan struct{})
 	}).AnyTimes()
@@ -1535,6 +1534,7 @@ func Test_Builder_RegenerateInitialPost_WithDbCopy(t *testing.T) {
 		return genesis.Add(time.Duration(lid) * 20 * time.Millisecond)
 	}).AnyTimes()
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil).Times(1)
+
 	nipostCalls := 0
 	tab.mnipost.EXPECT().
 		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -1555,7 +1555,6 @@ func Test_Builder_RegenerateInitialPost_WithDbCopy(t *testing.T) {
 	proofCalls := 0
 	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
 		func(context.Context, types.NodeID, []byte, *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
-			fmt.Println("proof call", proofCalls)
 			switch proofCalls {
 			case 0, 1, 2:
 				proofCalls++
@@ -1574,7 +1573,6 @@ func Test_Builder_RegenerateInitialPost_WithDbCopy(t *testing.T) {
 			}
 		}).AnyTimes()
 
-	//tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).Return(nil)
 	var eg errgroup.Group
 	eg.Go(func() error {
 		tab.run(ctx, sig)

@@ -398,7 +398,6 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 BUILD:
 	for {
-		fmt.Println("build initial")
 		err := b.buildInitialPost(ctx, sig.NodeID())
 		if err == nil {
 			break
@@ -409,7 +408,6 @@ BUILD:
 		case <-ctx.Done():
 			return
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
-			fmt.Println("got layer")
 		}
 	}
 	var eg errgroup.Group
@@ -425,7 +423,6 @@ BUILD:
 	eg.Wait()
 
 	for {
-		fmt.Println("publish atx")
 		err := b.PublishActivationTx(ctx, sig)
 		if err == nil {
 			continue
