@@ -112,18 +112,13 @@ func (h *HandlerV2) processATX(
 		return proof, err
 	}
 
-	coinbase, err := h.coinbase(ctx, watx)
-	if err != nil {
-		return nil, fmt.Errorf("getting coinbase: %w", err)
-	}
-
 	atx := &types.ActivationTx{
 		PublishEpoch:   watx.PublishEpoch,
-		Coinbase:       coinbase,
+		Coinbase:       watx.Coinbase,
 		NumUnits:       parts.effectiveUnits,
 		BaseTickHeight: baseTickHeight,
 		TickCount:      parts.leaves / h.tickSize,
-		VRFNonce:       parts.vrfNonce,
+		VRFNonce:       types.VRFPostIndex(watx.VRFNonce),
 		SmesherID:      watx.SmesherID,
 		AtxBlob:        types.AtxBlob{Blob: blob, Version: types.AtxV2},
 	}
@@ -190,20 +185,13 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 		if atx.Initial.CommitmentATX == types.EmptyATXID {
 			return errors.New("initial atx missing commitment atx")
 		}
-		if atx.VRFNonce == nil {
-			return errors.New("initial atx missing vrf nonce")
-		}
 		if len(atx.PreviousATXs) != 0 {
 			return errors.New("initial atx must not have previous atxs")
 		}
 
-		if atx.Coinbase == nil {
-			return errors.New("initial atx missing coinbase")
-		}
-
 		numUnits := atx.NiPosts[0].Posts[0].NumUnits
 		if err := h.nipostValidator.VRFNonceV2(
-			atx.SmesherID, atx.Initial.CommitmentATX, *atx.VRFNonce, numUnits,
+			atx.SmesherID, atx.Initial.CommitmentATX, atx.VRFNonce, numUnits,
 		); err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
@@ -309,13 +297,6 @@ func (h *HandlerV2) collectAtxDeps(atx *wire.ActivationTxV2) ([]types.Hash32, []
 	return maps.Keys(poetRefs), maps.Keys(filtered)
 }
 
-func (h *HandlerV2) coinbase(ctx context.Context, atx *wire.ActivationTxV2) (types.Address, error) {
-	if atx.Coinbase != nil {
-		return *atx.Coinbase, nil
-	}
-	return atxs.Coinbase(h.cdb, atx.SmesherID)
-}
-
 func (h *HandlerV2) previous(ctx context.Context, id types.ATXID) (opaqueAtx, error) {
 	var blob sql.Blob
 	version, err := atxs.LoadBlob(ctx, h.cdb, id[:], &blob)
@@ -383,39 +364,6 @@ func (h *HandlerV2) validatePreviousAtx(id types.NodeID, post *wire.SubPostV2, p
 	return 0, fmt.Errorf("unexpected previous ATX type: %T", prev)
 }
 
-// VRF nonce must be valid for the collected space of all included IDs.
-// TODO: support merged ATXs.
-func (h *HandlerV2) validateVrfNonce(
-	atx *wire.ActivationTxV2,
-	previous opaqueAtx,
-	commitment types.ATXID,
-) (types.VRFPostIndex, error) {
-	numUnits := atx.TotalNumUnits()
-	needRecheck := numUnits > previous.TotalNumUnits() || atx.VRFNonce != nil
-	var nonce types.VRFPostIndex
-	if atx.VRFNonce == nil {
-		// lookup the previous nonce by this ID
-		// TODO: support merged ATXs
-		// For a merged ATX we need to follow ATXs chain for `id`, find the last ATX by this ID
-		// and check the nonce from it.
-		if atx.MarriageATX != nil {
-			return 0, errors.New("merged ATXs are not supported")
-		}
-		n, err := atxs.NonceByID(h.cdb, previous.ID())
-		if err != nil {
-			return 0, fmt.Errorf("getting nonce from previous ATX %s: %w", previous.ID(), err)
-		}
-		nonce = n
-	} else {
-		nonce = types.VRFPostIndex(*atx.VRFNonce)
-	}
-
-	if needRecheck {
-		return nonce, h.nipostValidator.VRFNonceV2(atx.SmesherID, commitment, uint64(nonce), numUnits)
-	}
-	return nonce, nil
-}
-
 func (h *HandlerV2) validateCommitmentAtx(golden, commitmentAtxId types.ATXID, publish types.EpochID) error {
 	if commitmentAtxId != golden {
 		commitment, err := atxs.Get(h.cdb, commitmentAtxId)
@@ -453,7 +401,6 @@ func (h *HandlerV2) validatePositioningAtx(publish types.EpochID, golden, positi
 type atxParts struct {
 	leaves         uint64
 	effectiveUnits uint32
-	vrfNonce       types.VRFPostIndex
 }
 
 // Syntactically validate the ATX with its dependencies.
@@ -572,13 +519,10 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	if atx.Initial == nil {
-		n, err := h.validateVrfNonce(atx, previousAtxs[0], *smesherCommitment)
+		err := h.nipostValidator.VRFNonceV2(atx.SmesherID, *smesherCommitment, atx.VRFNonce, atx.TotalNumUnits())
 		if err != nil {
 			return nil, nil, fmt.Errorf("validating VRF nonce: %w", err)
 		}
-		parts.vrfNonce = n
-	} else {
-		parts.vrfNonce = types.VRFPostIndex(*atx.VRFNonce)
 	}
 
 	return parts, nil, nil

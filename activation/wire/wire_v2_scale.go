@@ -24,7 +24,7 @@ func (t *ActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeOption(enc, t.Coinbase)
+		n, err := scale.EncodeByteArray(enc, t.Coinbase[:])
 		if err != nil {
 			return total, err
 		}
@@ -52,7 +52,7 @@ func (t *ActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64Ptr(enc, t.VRFNonce)
+		n, err := scale.EncodeCompact64(enc, uint64(t.VRFNonce))
 		if err != nil {
 			return total, err
 		}
@@ -106,12 +106,11 @@ func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeOption[types.Address](dec)
+		n, err := scale.DecodeByteArray(dec, t.Coinbase[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Coinbase = field
 	}
 	{
 		field, n, err := scale.DecodeOption[InitialAtxPartsV2](dec)
@@ -138,12 +137,12 @@ func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		t.NiPosts = field
 	}
 	{
-		field, n, err := scale.DecodeCompact64Ptr(dec)
+		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.VRFNonce = field
+		t.VRFNonce = uint64(field)
 	}
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[MarriageCertificate](dec, 255)

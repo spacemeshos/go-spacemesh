@@ -21,6 +21,8 @@ func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 	tab := newTestBuilder(t, 1,
 		WithPoetConfig(PoetConfig{PhaseShift: layerDuration}),
 		BuilderAtxVersions(AtxVersions{1: types.AtxV2}))
+
+	tab.SetCoinbase(types.Address{1, 2, 3, 4})
 	sig := maps.Values(tab.signers)[0]
 
 	initialPost := types.Post{
@@ -59,6 +61,7 @@ func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 	require.Empty(t, atx.PreviousATXs)
 	require.Equal(t, tab.goldenATXID, atx.PositioningATX)
 	require.NotNil(t, atx.Initial)
+	require.Equal(t, tab.Coinbase(), atx.Coinbase)
 	require.Equal(t, initialPost, *wire.PostFromWireV1(&atx.Initial.Post))
 	require.Equal(t, commitment, atx.Initial.CommitmentATX)
 	require.Nil(t, atx.MarriageATX)
@@ -104,48 +107,4 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	require.Equal(t, atx1.PublishEpoch+1, atx2.PublishEpoch)
 	require.Equal(t, sig.NodeID(), atx2.SmesherID)
 	require.True(t, signing.NewEdVerifier().Verify(signing.ATX, atx2.SmesherID, atx2.SignedBytes(), atx2.Signature))
-}
-
-func TestBuilder_PopulatingCoinbase(t *testing.T) {
-	tab := newTestBuilder(t, 1,
-		WithPoetConfig(PoetConfig{PhaseShift: layerDuration}),
-		BuilderAtxVersions(AtxVersions{2: types.AtxV2}))
-	sig := maps.Values(tab.signers)[0]
-
-	coinbase0 := types.Address{1, 2, 3, 4}
-	tab.SetCoinbase(coinbase0)
-
-	prevAtx := newInitialATXv1(t, tab.goldenATXID)
-	prevAtx.Coinbase = coinbase0
-	prevAtx.PublishEpoch = 1
-	prevAtx.Sign(sig)
-	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
-
-	posEpoch := prevAtx.PublishEpoch
-	layer := posEpoch.FirstLayer()
-
-	// create and publish ATX V2
-	// it shouldn't have a coinbase because it is the same as in the previous ATX
-	tab.mclock.EXPECT().CurrentLayer().Return(layer).Times(4)
-	var atx1 wire.ActivationTxV2
-	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch,
-		func(_ context.Context, _ string, got []byte) error {
-			return codec.Decode(got, &atx1)
-		})
-	require.Nil(t, atx1.Coinbase)
-
-	// change coinbase and publish again
-	// it should have a coinbase because it is different from the one in the previous ATX
-	coinbase1 := types.Address{5, 6, 7, 8}
-	tab.SetCoinbase(coinbase1)
-
-	posEpoch += 1
-	layer = posEpoch.FirstLayer()
-	tab.mclock.EXPECT().CurrentLayer().Return(layer).Times(4)
-	var atx2 wire.ActivationTxV2
-	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch,
-		func(_ context.Context, _ string, got []byte) error {
-			return codec.Decode(got, &atx2)
-		})
-	require.Equal(t, coinbase1, *atx2.Coinbase)
 }
