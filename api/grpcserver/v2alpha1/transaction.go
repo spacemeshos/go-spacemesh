@@ -368,14 +368,17 @@ func convertTxResult(result *types.TransactionResult) spacemeshv2alpha1.Transact
 }
 
 // TODO: REJECTED, INSUFFICIENT_FUNDS, CONFLICTING, MESH.
-func convertTxState(tx *types.MeshTransaction) spacemeshv2alpha1.TransactionState {
+func convertTxState(tx *types.MeshTransaction) *spacemeshv2alpha1.TransactionState {
 	switch tx.State {
 	case types.MEMPOOL:
-		return spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_MEMPOOL
+		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_MEMPOOL
+		return &state
 	case types.APPLIED:
-		return spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_PROCESSED
+		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_PROCESSED
+		return &state
 	default:
-		return spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+		return &state
 	}
 }
 

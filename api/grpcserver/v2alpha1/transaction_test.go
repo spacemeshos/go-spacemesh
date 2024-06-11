@@ -2,6 +2,7 @@ package v2alpha1
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"math/rand"
 	"testing"
@@ -22,7 +23,9 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	multisig2 "github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -321,6 +324,77 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, resp.Tx.Contents.GetSingleSigSpawn().Pubkey, publicKey.String())
+	})
+}
+
+func TestTransactionService_ParseTransactionMultisig(t *testing.T) {
+	types.SetLayersPerEpoch(5)
+	db := sql.InMemory()
+	vminst := vm.New(db)
+	ctx := context.Background()
+
+	svc := NewTransactionService(db, txs.NewConservativeState(vminst, db), nil, nil, nil)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	rng := rand.New(rand.NewSource(10101))
+	pks := []ed25519.PrivateKey{}
+	pubs := []ed25519.PublicKey{}
+	for j := 0; j < 2; j++ {
+		pub, pk, _ := ed25519.GenerateKey(rng)
+		pks = append(pks, pk)
+		pubs = append(pubs, pub)
+	}
+
+	accounts := []types.Account{
+		{Address: multisig.Address(
+			multisig2.TemplateAddress, 2, pubs[0], pubs[1]), Balance: 1e12},
+	}
+
+	var spawnAgg *multisig.Aggregator
+	for i := 0; i < 2; i++ {
+		part := multisig.SelfSpawn(uint8(i), pks[i], multisig2.TemplateAddress, 2, pubs, core.Nonce(0))
+		if i == 0 {
+			spawnAgg = part
+		} else {
+			spawnAgg.Add(*part.Part(uint8(i)))
+		}
+	}
+	spawnTx := spawnAgg.Raw()
+
+	require.NoError(t, vminst.ApplyGenesis(accounts))
+	_, _, err := vminst.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+		[]types.Transaction{{RawTx: types.NewRawTx(spawnTx)}}, nil)
+	require.NoError(t, err)
+
+	conn := dialGrpc(ctx, t, cfg)
+	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
+
+	t.Run("multisig spawn tx", func(t *testing.T) {
+		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
+			Transaction: spawnTx,
+			Verify:      true,
+		})
+		require.NoError(t, err)
+		require.Equal(t, multisig2.TemplateAddress.String(), resp.Tx.Template)
+		require.Equal(t, uint32(core.MethodSpawn), resp.Tx.Method)
+		require.Equal(t, uint32(2), resp.Tx.Contents.GetMultiSigSpawn().Required)
+		require.Equal(t, hex.EncodeToString(pubs[0]), resp.Tx.Contents.GetMultiSigSpawn().Pubkey[0])
+		require.Equal(t, hex.EncodeToString(pubs[1]), resp.Tx.Contents.GetMultiSigSpawn().Pubkey[1])
+	})
+
+	t.Run("multisig spend tx", func(t *testing.T) {
+		agg := multisig.Spend(0, pks[0], accounts[0].Address, accounts[0].Address, 100, core.Nonce(1))
+		part := multisig.Spend(1, pks[1], accounts[0].Address, accounts[0].Address, 100, core.Nonce(0))
+		agg.Add(*part.Part(uint8(1)))
+
+		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
+			Transaction: agg.Raw(),
+			Verify:      false,
+		})
+		require.NoError(t, err)
+		require.Equal(t, multisig2.TemplateAddress.String(), resp.Tx.Template)
+		require.Equal(t, uint32(core.MethodSpend), resp.Tx.Method)
 	})
 }
 
