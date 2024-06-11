@@ -199,7 +199,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 				require.EqualValues(t, previous.PublishEpoch+1, watx.PublishEpoch)
 				require.Equal(t, previous.ID(), watx.PreviousATXs[0])
 				require.Equal(t, previous.ID(), watx.PositioningATX)
-				require.Nil(t, watx.Coinbase)
+				require.Equal(t, coinbase, watx.Coinbase)
 
 				mFetch.EXPECT().RegisterPeerHashes(peer.ID("peer"), gomock.Any())
 				mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
