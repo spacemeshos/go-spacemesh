@@ -1490,8 +1490,9 @@ func TestFindFullyValidHighTickAtx(t *testing.T) {
 // where a node operator may change SUs after creating the initial PoST but before
 // submitting the first ATX, which should result in the initial PoST to be deleted
 // and for the new PoST to be generated instead (this also loses the eligibility
-// for the current epoch).
-func Test_Builder_RegenerateInitialPost_WithDbCopy(t *testing.T) {
+// for the current epoch). This behavior is mocked by mocking the response of the
+// proof validator.
+func Test_Builder_RegenerateInitialPost(t *testing.T) {
 	var (
 		tab           = newTestBuilder(t, 1)
 		sig           = maps.Values(tab.signers)[0]
