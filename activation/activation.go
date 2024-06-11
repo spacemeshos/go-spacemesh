@@ -341,10 +341,12 @@ func (b *Builder) SmesherIDs() []types.NodeID {
 func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) (*nipost.Post, error) {
 	// Generate the initial POST if we don't have an ATX...
 	if _, err := atxs.GetLastIDByNodeID(b.db, nodeID); err == nil {
+		panic(1)
 		return nil, nil
 	}
 	// ...and if we haven't stored an initial post yet.
 	dbPost, err := nipost.GetPost(b.localDB, nodeID)
+	panic(2)
 	switch {
 	case err == nil:
 		b.logger.Info("load initial post from db")
@@ -357,7 +359,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) (*n
 
 	// Create the initial post and save it.
 	startTime := time.Now()
-	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge, dbPost)
+	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge, nil)
 	if err != nil {
 		return nil, fmt.Errorf("post execution: %w", err)
 	}
@@ -400,6 +402,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 		err           error
 	)
 
+OUTER:
 	for {
 		persistedPost, err = b.buildInitialPost(ctx, sig.NodeID())
 		if err == nil {
@@ -458,6 +461,20 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 				return
 			case <-time.After(b.poetRetryInterval):
 			}
+		case errors.Is(err, ErrInvalidInitialPost):
+			// delete the existing db post
+			// call build initial post again
+			panic(1)
+			b.logger.Debug("retrying with new challenge after waiting for a layer")
+			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
+				b.logger.Error("failed to reset nipost builder state", zap.Error(err))
+			}
+			if err := nipost.RemoveChallenge(b.localDB, sig.NodeID()); err != nil {
+				b.logger.Error("failed to discard challenge", zap.Error(err))
+			}
+			nipost.RemovePost(b.localDB, sig.NodeID())
+			//buildInitialPost()
+			goto OUTER
 		default:
 			b.logger.Warn("unknown error", zap.Error(err))
 			// other failures are related to in-process software. we may as well panic here
@@ -643,7 +660,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	targetEpoch := challenge.PublishEpoch.Add(1)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime(targetEpoch.FirstLayer()))
 	defer cancel()
-	atx, err := b.createAtx(ctx, sig, challenge, initialPost)
+	atx, err := b.createAtx(ctx, sig, challenge)
 	if err != nil {
 		return fmt.Errorf("create ATX: %w", err)
 	}
@@ -713,7 +730,6 @@ func (b *Builder) createAtx(
 	ctx context.Context,
 	sig *signing.EdSigner,
 	challenge *types.NIPostChallenge,
-	initialPost *nipost.Post,
 ) (builtAtx, error) {
 	version := b.version(challenge.PublishEpoch)
 	var challengeHash types.Hash32
@@ -726,7 +742,7 @@ func (b *Builder) createAtx(
 		return nil, fmt.Errorf("unknown ATX version: %v", version)
 	}
 	b.logger.Info("building ATX", zap.Stringer("smesherID", sig.NodeID()), zap.Stringer("version", version))
-	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge.PublishEpoch, challengeHash, initialPost)
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge.PublishEpoch, challengeHash, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}

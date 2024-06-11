@@ -58,6 +58,7 @@ type testNIPostBuilder struct {
 	mClock       *MocklayerClock
 	mPostService *MockpostService
 	mPostClient  *MockPostClient
+	mValidator   *MocknipostValidator
 }
 
 func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
@@ -88,6 +89,7 @@ func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
 		mPostClient:  NewMockPostClient(ctrl),
 		mLogger:      logger,
 		mClock:       defaultLayerClockMock(ctrl),
+		mValidator:   NewMocknipostValidator(ctrl),
 	}
 
 	nb, err := NewNIPostBuilder(
@@ -96,6 +98,7 @@ func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
 		tnb.mLogger,
 		PoetConfig{},
 		tnb.mClock,
+		tnb.mValidator,
 	)
 	require.NoError(tb, err)
 	tnb.NIPostBuilder = nb
@@ -341,6 +344,7 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		mclock,
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -399,6 +403,7 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		mclock,
+		nil,
 		WithPoetClients(poetProvider),
 	)
 	require.NoError(t, err)
@@ -433,6 +438,7 @@ func TestPostSetup(t *testing.T) {
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		mclock,
+		nil,
 		WithPoetClients(poetProvider),
 	)
 	require.NoError(t, err)
@@ -484,6 +490,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		mclock,
+		nil,
 		WithPoetClients(poetProver),
 	)
 	require.NoError(t, err)
@@ -500,6 +507,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		mclock,
+		nil,
 		WithPoetClients(poetProver),
 	)
 	require.NoError(t, err)
@@ -518,6 +526,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		mclock,
+		nil,
 		WithPoetClients(poetProver),
 	)
 	require.NoError(t, err)
@@ -595,6 +604,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		zaptest.NewLogger(t),
 		poetCfg,
 		mclock,
+		nil,
 		WithPoetClients(poets...),
 	)
 	require.NoError(t, err)
@@ -652,6 +662,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		mclock,
+		nil,
 		WithPoetClients(poets...),
 	)
 	require.NoError(t, err)
@@ -691,6 +702,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			zaptest.NewLogger(t),
 			poetCfg,
 			mclock,
+			nil,
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -726,6 +738,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			zaptest.NewLogger(t),
 			poetCfg,
 			mclock,
+			nil,
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -748,6 +761,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			zaptest.NewLogger(t),
 			poetCfg,
 			mclock,
+			nil,
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -772,6 +786,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			zaptest.NewLogger(t),
 			poetCfg,
 			mclock,
+			nil,
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -812,6 +827,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			zaptest.NewLogger(t),
 			PoetConfig{},
 			mclock,
+			nil,
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -839,6 +855,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			zaptest.NewLogger(t),
 			PoetConfig{},
 			mclock,
+			nil,
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -880,6 +897,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			zaptest.NewLogger(t),
 			PoetConfig{},
 			mclock,
+			nil,
 			WithPoetClients(poetProver),
 		)
 		require.NoError(t, err)
@@ -959,6 +977,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		zaptest.NewLogger(t),
 		poetCfg,
 		mclock,
+		nil,
 		WithPoetClients(poet),
 	)
 	require.NoError(t, err)
@@ -1093,6 +1112,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 				zaptest.NewLogger(t),
 				poetCfg,
 				mclock,
+				nil,
 				WithPoetClients(poets...),
 			)
 			require.NoError(t, err)
@@ -1160,6 +1180,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		defaultLayerClockMock(ctrl),
+		nil,
 		WithPoetClients(poet),
 	)
 	require.NoError(t, err)

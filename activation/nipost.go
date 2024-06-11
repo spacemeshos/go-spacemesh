@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
+	postshared "github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -56,6 +57,7 @@ type NIPostBuilder struct {
 	poetCfg     PoetConfig
 	layerClock  layerClock
 	postStates  PostStates
+	validator   nipostValidator
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
@@ -82,6 +84,7 @@ func NewNIPostBuilder(
 	lg *zap.Logger,
 	poetCfg PoetConfig,
 	layerClock layerClock,
+	validator nipostValidator,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
 	b := &NIPostBuilder{
@@ -92,6 +95,7 @@ func NewNIPostBuilder(
 		poetCfg:     poetCfg,
 		layerClock:  layerClock,
 		postStates:  NewPostStates(lg),
+		validator:   validator,
 	}
 
 	for _, opt := range opts {
@@ -114,7 +118,7 @@ func (nb *NIPostBuilder) Proof(
 	ctx context.Context,
 	nodeID types.NodeID,
 	challenge []byte,
-	initialPost *nipost.Post,
+	postChallenge *types.NIPostChallenge,
 ) (*types.Post, *types.PostInfo, error) {
 	nb.postStates.Set(nodeID, types.PostStateProving)
 	started := false
@@ -147,11 +151,11 @@ func (nb *NIPostBuilder) Proof(
 
 		retries = 0
 
-		// we check whether an initialPost is included, if so, it means
+		// we check whether an initial post is included, if so, it means
 		// we land under the possible edge case where the storage units
 		// have changed between the initial PoST and the upcoming one (initial ATX
 		// still not published)
-		if initialPost != nil {
+		if postChallenge != nil {
 			info, err := client.Info(ctx)
 			if errors.Is(err, ErrPostClientClosed) {
 				continue
@@ -159,7 +163,13 @@ func (nb *NIPostBuilder) Proof(
 				events.EmitPostFailure(nodeID)
 				return nil, nil, fmt.Errorf("failed to get post info: %w", err)
 			}
-			if info.NumUnits != initialPost.NumUnits {
+			if err := nb.validator.PostV2(ctx,
+				nodeID,
+				info.CommitmentATX,
+				postChallenge.InitialPost,
+				postshared.ZeroChallenge,
+				info.NumUnits,
+			); err != nil {
 				return nil, nil, ErrInvalidInitialPost
 			}
 		}
@@ -187,7 +197,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	signer *signing.EdSigner,
 	publishEpoch types.EpochID,
 	challenge types.Hash32,
-	initialPost *nipost.Post,
+	postChallenge *types.NIPostChallenge,
 ) (*nipost.NIPostState, error) {
 	logger := nb.logger.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
 	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
@@ -310,7 +320,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
 		startTime := time.Now()
-		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], initialPost)
+		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], postChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
