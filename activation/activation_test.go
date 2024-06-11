@@ -3,6 +3,7 @@ package activation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"os"
 	"testing"
@@ -1494,94 +1495,90 @@ func TestFindFullyValidHighTickAtx(t *testing.T) {
 func Test_Builder_RegenerateInitialPost_WithDbCopy(t *testing.T) {
 	tab := newTestBuilder(t, 1)
 	sig := maps.Values(tab.signers)[0]
+	genesis := time.Now()
+	ctx, cancel := context.WithCancel(context.Background())
+	//defer cancel()
+
 	//coinbase := types.Address{1, 1, 1}
 
-	//commitmentATX := types.RandomATXID()
-	//nonce := types.VRFPostIndex(rand.Uint64())
-	//numUnits := uint32(12)
-	//initialPost := &types.Post{
-	//Nonce:   rand.Uint32(),
-	//Indices: types.RandomBytes(10),
-	//Pow:     rand.Uint64(),
-	//}
-	//tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).Return(
-	//initialPost,
-	//&types.PostInfo{
-	//NodeID:        sig.NodeID(),
-	//CommitmentATX: commitmentATX,
-	//Nonce:         &nonce,
-
-	//NumUnits:      numUnits,
-	//LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
-	//},
-	//nil,
-	//)
-	//tab.mValidator.EXPECT().
-	//PostV2(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits)
-	// test setup is that we need an existing post in the localdb
-	post := nipost.Post{
-		Nonce:         1,
-		Indices:       []byte{1, 2, 3},
-		Pow:           12345,
-		Challenge:     []byte{2, 3, 5},
-		NumUnits:      2,
-		CommitmentATX: types.ATXID{},
-		VRFNonce:      types.VRFPostIndex(1),
-	}
-	if err := nipost.AddPost(tab.localDb, sig.NodeID(), post); err != nil {
-		t.Fatal(err)
-	}
-	err := tab.buildInitialPost(context.Background(), sig.NodeID())
-	panic(err)
-
-	//tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
-	//func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
-	//<-ctx.Done()
-	//return nil, nil, ctx.Err()
-	//})
-	//tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
-	//tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
-	//require.NoError(t, tab.StartSmeshing(coinbase))
-	//require.Equal(t, coinbase, tab.Coinbase())
-
-	//// calling StartSmeshing more than once before calling StopSmeshing is an error
-	//require.ErrorContains(t, tab.StartSmeshing(coinbase), "already started")
-
-	//tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-	//require.NoError(t, tab.StopSmeshing(true))
-}
-func Test_Builder_RegenerateInitialPost_WithGeneratingProof(t *testing.T) {
-	tab := newTestBuilder(t, 1)
-	sig := maps.Values(tab.signers)[0]
-	//coinbase := types.Address{1, 1, 1}
-
-	// test setup is that we need an existing post in the localdb
-	post := nipost.Post{
-		Nonce:         1,
-		Indices:       []byte{1, 2, 3},
-		Pow:           12345,
-		Challenge:     []byte{2, 3, 5},
-		NumUnits:      2,
-		CommitmentATX: types.ATXID{},
-		VRFNonce:      types.VRFPostIndex(1),
-	}
-	if err := nipost.AddPost(tab.db, sig.NodeID(), post); err != nil {
-		t.Fatal(err)
+	commitmentATX := types.RandomATXID()
+	nonce := types.VRFPostIndex(rand.Uint64())
+	numUnits := uint32(12)
+	initialPost := &types.Post{
+		Nonce:   rand.Uint32(),
+		Indices: types.RandomBytes(10),
+		Pow:     rand.Uint64(),
 	}
 
-	//tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge).DoAndReturn(
-	//func(ctx context.Context, _ types.NodeID, _ []byte) (*types.Post, *types.PostInfo, error) {
-	//<-ctx.Done()
-	//return nil, nil, ctx.Err()
-	//})
-	//tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
-	//tab.mclock.EXPECT().AwaitLayer(gomock.Any()).Return(make(chan struct{})).AnyTimes()
-	//require.NoError(t, tab.StartSmeshing(coinbase))
-	//require.Equal(t, coinbase, tab.Coinbase())
+	postV2Calls := 0
+	tab.mValidator.EXPECT().
+		PostV2(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits).DoAndReturn(func(_ context.Context, _ types.NodeID, _ types.ATXID, _ *types.Post, _ []byte, _ uint32, _ ...validatorOption) error {
+		switch postV2Calls {
+		case 0, 1, 3:
+			postV2Calls++
+			return nil
+		case 2:
+			postV2Calls++
+			return nil
+		}
+		panic("unexpected test branch")
+	}).Times(4)
 
-	//// calling StartSmeshing more than once before calling StopSmeshing is an error
-	//require.ErrorContains(t, tab.StartSmeshing(coinbase), "already started")
+	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
+	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(func(id types.LayerID) <-chan struct{} {
+		fmt.Println("id on awaitlayer", id)
+		cancel()
+		return make(chan struct{})
+	}).AnyTimes()
+	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(lid types.LayerID) time.Time {
+		// layer duration is 10ms to speed up test
+		return genesis.Add(time.Duration(lid) * 20 * time.Millisecond)
+	}).AnyTimes()
+	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil).Times(1)
+	nipostCalls := 0
+	tab.mnipost.EXPECT().
+		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(context.Context, *signing.EdSigner, types.EpochID, types.Hash32, *types.NIPostChallenge) (*nipost.NIPostState, error) {
+			switch nipostCalls {
+			case 0:
+				nipostCalls++
+				return nil, ErrInvalidInitialPost
+			case 1:
+				nipostCalls++
+				return &nipost.NIPostState{}, nil
+			default:
+				panic("unexpected branch")
+			}
 
-	//tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-	//require.NoError(t, tab.StopSmeshing(true))
+		}).AnyTimes()
+
+	proofCalls := 0
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
+		func(context.Context, types.NodeID, []byte, *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
+			fmt.Println("proof call", proofCalls)
+			switch proofCalls {
+			case 0, 1, 2:
+				proofCalls++
+				return initialPost,
+					&types.PostInfo{
+						NodeID:        sig.NodeID(),
+						CommitmentATX: commitmentATX,
+						Nonce:         &nonce,
+
+						NumUnits:      numUnits,
+						LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
+					},
+					nil
+			default:
+				panic("unexpected branch")
+			}
+		}).AnyTimes()
+
+	//tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).Return(nil)
+	var eg errgroup.Group
+	eg.Go(func() error {
+		tab.run(ctx, sig)
+		return nil
+	})
+	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 }

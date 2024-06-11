@@ -396,8 +396,9 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	defer b.logger.Info("atx builder stopped")
 
-OUTER:
+BUILD:
 	for {
+		fmt.Println("build initial")
 		err := b.buildInitialPost(ctx, sig.NodeID())
 		if err == nil {
 			break
@@ -408,6 +409,7 @@ OUTER:
 		case <-ctx.Done():
 			return
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
+			fmt.Println("got layer")
 		}
 	}
 	var eg errgroup.Group
@@ -423,6 +425,7 @@ OUTER:
 	eg.Wait()
 
 	for {
+		fmt.Println("publish atx")
 		err := b.PublishActivationTx(ctx, sig)
 		if err == nil {
 			continue
@@ -458,17 +461,17 @@ OUTER:
 		case errors.Is(err, ErrInvalidInitialPost):
 			// delete the existing db post
 			// call build initial post again
-			panic(1)
-			b.logger.Debug("retrying with new challenge after waiting for a layer")
+			b.logger.Error("initial post is no longer valid. regenerating initial post")
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
 				b.logger.Error("failed to reset nipost builder state", zap.Error(err))
 			}
 			if err := nipost.RemoveChallenge(b.localDB, sig.NodeID()); err != nil {
 				b.logger.Error("failed to discard challenge", zap.Error(err))
 			}
-			nipost.RemovePost(b.localDB, sig.NodeID())
-			//buildInitialPost()
-			goto OUTER
+			if err := nipost.RemovePost(b.localDB, sig.NodeID()); err != nil {
+				b.logger.Error("failed to remove existing post from db", zap.Error(err))
+			}
+			goto BUILD
 		default:
 			b.logger.Warn("unknown error", zap.Error(err))
 			// other failures are related to in-process software. we may as well panic here
