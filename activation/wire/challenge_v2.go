@@ -31,6 +31,7 @@ func (c *NIPostChallengeV2) MarshalLogObject(encoder zapcore.ObjectEncoder) erro
 	if c == nil {
 		return nil
 	}
+	encoder.AddString("Hash", c.Hash().String())
 	encoder.AddUint32("PublishEpoch", c.PublishEpoch.Uint32())
 	encoder.AddString("PrevATXID", c.PrevATXID.String())
 	encoder.AddString("PositioningATX", c.PositioningATXID.String())

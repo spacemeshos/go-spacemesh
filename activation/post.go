@@ -110,6 +110,14 @@ func DefaultPostVerifyingOpts() PostProofVerifyingOpts {
 	}
 }
 
+func DefaultTestPostVerifyingOpts() PostProofVerifyingOpts {
+	return PostProofVerifyingOpts{
+		MinWorkers: 1,
+		Workers:    1,
+		Flags:      PostPowFlags(config.DefaultVerifyingPowFlags()),
+	}
+}
+
 // PostSetupStatus represents a status snapshot of the Post setup.
 type PostSetupStatus struct {
 	State            PostSetupState

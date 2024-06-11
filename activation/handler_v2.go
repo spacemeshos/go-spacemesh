@@ -152,8 +152,6 @@ func (h *HandlerV2) processATX(
 }
 
 // Syntactically validate an ATX.
-// TODOs:
-// 2. support merged ATXs.
 func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.ActivationTxV2) error {
 	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return fmt.Errorf("invalid atx signature: %w", errMalformedData)
@@ -230,8 +228,9 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 		if len(atx.Marriages) != 0 {
 			return errors.New("merged atx cannot have marriages")
 		}
-		// TODO: support merged ATXs
-		return errors.New("atx merge is not supported")
+		if err := h.verifyIncludedIDsUniqueness(atx); err != nil {
+			return err
+		}
 	default:
 		// Solo chained (non-initial) ATX
 		if len(atx.PreviousATXs) != 1 {
@@ -367,13 +366,28 @@ func (h *HandlerV2) validatePreviousAtx(id types.NodeID, post *wire.SubPostV2, p
 		}
 		return min(prev.NumUnits, post.NumUnits), nil
 	case *wire.ActivationTxV2:
-		// TODO: support previous merged-ATX
-
-		// previous is solo ATX
-		if prev.SmesherID == id {
-			return min(prev.NiPosts[0].Posts[0].NumUnits, post.NumUnits), nil
+		if prev.MarriageATX != nil {
+			// Previous is a merged ATX
+			// need to find out if the given ID was present in the previous ATX
+			_, idx, err := identities.MarriageInfo(h.cdb, id)
+			if err != nil {
+				return 0, fmt.Errorf("fetching marriage info for ID %s: %w", id, err)
+			}
+			for _, nipost := range prev.NiPosts {
+				for _, post := range nipost.Posts {
+					if post.MarriageIndex == uint32(idx) {
+						return min(post.NumUnits, post.NumUnits), nil
+					}
+				}
+			}
+		} else {
+			// Previous is a solo ATX
+			if prev.SmesherID == id {
+				return min(prev.NiPosts[0].Posts[0].NumUnits, post.NumUnits), nil
+			}
 		}
-		return 0, fmt.Errorf("previous solo ATX V2 has different owner: %s (expected %s)", prev.SmesherID, id)
+
+		return 0, fmt.Errorf("previous ATX V2 doesn't contain %s", id)
 	}
 	return 0, fmt.Errorf("unexpected previous ATX type: %T", prev)
 }
@@ -440,9 +454,54 @@ func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]types.NodeID,
 	return marryingIDs, nil
 }
 
+// Validate marriage ATX and return the full equivocation set.
+func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, error) {
+	if atx.MarriageATX == nil {
+		return []types.NodeID{atx.SmesherID}, nil
+	}
+	marriageAtxID, _, err := identities.MarriageInfo(h.cdb, atx.SmesherID)
+	switch {
+	case errors.Is(err, sql.ErrNotFound) || marriageAtxID == nil:
+		return nil, errors.New("smesher is not married")
+	case err != nil:
+		return nil, fmt.Errorf("fetching smesher's marriage atx ID: %w", err)
+	}
+
+	if *atx.MarriageATX != *marriageAtxID {
+		return nil, fmt.Errorf("smesher's marriage ATX ID mismatch: %s != %s", *atx.MarriageATX, *marriageAtxID)
+	}
+
+	marriageAtx, err := atxs.Get(h.cdb, *atx.MarriageATX)
+	if err != nil {
+		return nil, fmt.Errorf("fetching marriage atx: %w", err)
+	}
+	if !(marriageAtx.PublishEpoch <= atx.PublishEpoch-2) {
+		return nil, fmt.Errorf(
+			"marriage atx must be published at least 2 epochs before %v (is %v)",
+			atx.PublishEpoch,
+			marriageAtx.PublishEpoch,
+		)
+	}
+
+	return identities.EquivocationSetByMarriageATX(h.cdb, *atx.MarriageATX)
+}
+
 type atxParts struct {
 	leaves         uint64
 	effectiveUnits uint32
+}
+
+func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error {
+	seen := make(map[uint32]struct{})
+	for _, niposts := range atx.NiPosts {
+		for _, post := range niposts.Posts {
+			if _, ok := seen[post.MarriageIndex]; ok {
+				return fmt.Errorf("ID present twice (duplicated marriage index): %d", post.MarriageIndex)
+			}
+			seen[post.MarriageIndex] = struct{}{}
+		}
+	}
+	return nil
 }
 
 // Syntactically validate the ATX with its dependencies.
@@ -469,11 +528,34 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		previousAtxs[i] = prevAtx
 	}
 
-	// validate all niposts
-	// TODO: support merged ATXs
-	// For a merged ATX we need to fetch the equivocation this smesher is part of.
-	equivocationSet := []types.NodeID{atx.SmesherID}
+	equivocationSet, err := h.equivocationSet(atx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validating marriages: %w", err)
+	}
+
+	// validate previous ATXs
 	var totalEffectiveNumUnits uint32
+	for _, niposts := range atx.NiPosts {
+		for _, post := range niposts.Posts {
+			if post.MarriageIndex >= uint32(len(equivocationSet)) {
+				err := fmt.Errorf("marriage index out of bounds: %d > %d", post.MarriageIndex, len(equivocationSet)-1)
+				return nil, nil, err
+			}
+
+			id := equivocationSet[post.MarriageIndex]
+			effectiveNumUnits := post.NumUnits
+			if atx.Initial == nil {
+				var err error
+				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, previousAtxs)
+				if err != nil {
+					return nil, nil, fmt.Errorf("validating previous atx: %w", err)
+				}
+			}
+			totalEffectiveNumUnits += effectiveNumUnits
+		}
+	}
+
+	// validate all niposts
 	var minLeaves uint64 = math.MaxUint64
 	var smesherCommitment *types.ATXID
 	for _, niposts := range atx.NiPosts {
@@ -481,21 +563,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		var poetChallenges [][]byte
 
 		for _, post := range niposts.Posts {
-			if post.MarriageIndex >= uint32(len(equivocationSet)) {
-				err := fmt.Errorf("marriage index out of bounds: %d > %d", post.MarriageIndex, len(equivocationSet)-1)
-				return nil, nil, err
-			}
 			id := equivocationSet[post.MarriageIndex]
-			effectiveNumUnits := post.NumUnits
-			if atx.Initial == nil {
-				var err error
-				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, previousAtxs)
-				if err != nil {
-					return nil, nil, fmt.Errorf("validating previous atx for ID %s: %w", id, err)
-				}
-			}
-			totalEffectiveNumUnits += effectiveNumUnits
-
 			var commitment types.ATXID
 			if atx.Initial != nil {
 				commitment = atx.Initial.CommitmentATX
@@ -505,7 +573,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				if err != nil {
 					return nil, nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
 				}
-				if smesherCommitment == nil {
+				if id == atx.SmesherID {
 					smesherCommitment = &commitment
 				}
 			}
@@ -561,6 +629,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	if atx.Initial == nil {
+		if smesherCommitment == nil {
+			return nil, nil, errors.New("ATX signer not present in merged ATX")
+		}
 		err := h.nipostValidator.VRFNonceV2(atx.SmesherID, *smesherCommitment, atx.VRFNonce, atx.TotalNumUnits())
 		if err != nil {
 			return nil, nil, fmt.Errorf("validating VRF nonce: %w", err)
@@ -645,8 +716,8 @@ func (h *HandlerV2) storeAtx(
 		}
 
 		if len(marrying) != 0 {
-			for _, id := range marrying {
-				if err := identities.SetMarriage(tx, id, atx.ID()); err != nil {
+			for i, id := range marrying {
+				if err := identities.SetMarriage(tx, id, atx.ID(), i); err != nil {
 					return err
 				}
 			}
