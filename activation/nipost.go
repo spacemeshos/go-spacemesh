@@ -155,6 +155,7 @@ func (nb *NIPostBuilder) Proof(
 		// we land under the possible edge case where the storage units
 		// have changed between the initial PoST and the upcoming one (initial ATX
 		// still not published)
+		// TODO change to postChallenge.InitialPost
 		if postChallenge != nil {
 			info, err := client.Info(ctx)
 			if errors.Is(err, ErrPostClientClosed) {

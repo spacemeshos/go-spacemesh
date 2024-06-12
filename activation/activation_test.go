@@ -68,7 +68,7 @@ type testAtxBuilder struct {
 }
 
 func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testAtxBuilder {
-	observer, observedLogs := observer.New(zapcore.FatalLevel)
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -1056,7 +1056,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 		Times(expectedTries).
 		DoAndReturn(
 			// nolint:lll
-			func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32) (*nipost.NIPostState, error) {
+			func(_ context.Context, _ *signing.EdSigner, _ types.EpochID, _ types.Hash32, _ *types.NIPostChallenge) (*nipost.NIPostState, error) {
 				now := time.Now()
 				if now.Sub(last) < retryInterval {
 					require.FailNow(t, "retry interval not respected")
@@ -1211,7 +1211,7 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		Indices: types.RandomBytes(10),
 		Pow:     rand.Uint64(),
 	}
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).Return(
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, gomock.Any()).Return(
 		initialPost,
 		&types.PostInfo{
 			NodeID:        sig.NodeID(),
@@ -1225,7 +1225,7 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 	tab.mValidator.EXPECT().
 		PostV2(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits)
 	err := tab.buildInitialPost(context.Background(), sig.NodeID())
-	require.ErrorContains(t, err, "nil VRF nonce")
+	require.ErrorIs(t, err, nilVrfNonce)
 
 	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
 	require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")

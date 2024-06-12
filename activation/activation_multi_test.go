@@ -398,7 +398,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		}
 		nipostState[sig.NodeID()] = state
 		tab.mnipost.EXPECT().
-			BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash(), nil).
+			BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash(), gomock.Any()).
 			Return(state, nil)
 
 		// awaiting atx publication epoch log

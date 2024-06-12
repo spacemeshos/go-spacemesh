@@ -354,7 +354,6 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	default:
 		return fmt.Errorf("get initial post: %w", err)
 	}
-
 	// Create the initial post and save it.
 	startTime := time.Now()
 	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge, nil)
@@ -367,6 +366,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 		)
 		return nilVrfNonce
 	}
+
 	initialPost := nipost.Post{
 		Nonce:     post.Nonce,
 		Indices:   post.Indices,
