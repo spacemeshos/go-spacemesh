@@ -30,6 +30,8 @@ type v2TestHandler struct {
 	handlerMocks
 }
 
+const poetLeaves = 200
+
 func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 	lg := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(statesql.InMemory(), lg)
@@ -77,7 +79,7 @@ func (h *handlerMocks) expectVerifyNIPoST(atx *wire.ActivationTxV2) {
 		gomock.Any(),
 		atx.NiPosts[0].Challenge,
 		gomock.Any(),
-	)
+	).Return(poetLeaves, nil)
 }
 
 func (h *handlerMocks) expectStoreAtxV2(atx *wire.ActivationTxV2) {
@@ -91,7 +93,7 @@ func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 	h.mValidator.EXPECT().VRFNonceV2(
 		atx.SmesherID,
 		atx.Initial.CommitmentATX,
-		*atx.VRFNonce,
+		atx.VRFNonce,
 		atx.NiPosts[0].Posts[0].NumUnits,
 	)
 	h.mValidator.EXPECT().PostV2(
@@ -110,7 +112,13 @@ func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 }
 
 func (h *handlerMocks) expectAtxV2(atx *wire.ActivationTxV2) {
-	h.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
+	h.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+	h.mValidator.EXPECT().VRFNonceV2(
+		atx.SmesherID,
+		gomock.Any(),
+		atx.VRFNonce,
+		atx.NiPosts[0].Posts[0].NumUnits,
+	)
 	h.expectFetchDeps(atx)
 	h.expectVerifyNIPoST(atx)
 	h.expectStoreAtxV2(atx)
@@ -199,7 +207,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
 			atx.Initial.CommitmentATX,
-			*atx.VRFNonce,
+			atx.VRFNonce,
 			atx.NiPosts[0].Posts[0].NumUnits,
 		)
 		atxHandler.mValidator.EXPECT().PostV2(
@@ -229,28 +237,6 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 		atxHandler.mclock.EXPECT().CurrentLayer()
 		err = atxHandler.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "initial atx must not have previous atxs")
-	})
-	t.Run("rejects when VRF nonce is nil", func(t *testing.T) {
-		t.Parallel()
-		atx := newInitialATXv2(t, golden)
-		atx.VRFNonce = nil
-		atx.Sign(sig)
-
-		atxHandler := newV2TestHandler(t, golden)
-		atxHandler.mclock.EXPECT().CurrentLayer()
-		err := atxHandler.syntacticallyValidate(context.Background(), atx)
-		require.ErrorContains(t, err, "initial atx missing vrf nonce")
-	})
-	t.Run("rejects when Coinbase is nil", func(t *testing.T) {
-		t.Parallel()
-		atx := newInitialATXv2(t, golden)
-		atx.Coinbase = nil
-		atx.Sign(sig)
-
-		atxHandler := newV2TestHandler(t, golden)
-		atxHandler.mclock.EXPECT().CurrentLayer()
-		err := atxHandler.syntacticallyValidate(context.Background(), atx)
-		require.ErrorContains(t, err, "initial atx missing coinbase")
 	})
 	t.Run("rejects when marriage ATX ref is set", func(t *testing.T) {
 		t.Parallel()
@@ -285,7 +271,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 			VRFNonceV2(
 				sig.NodeID(),
 				atx.Initial.CommitmentATX,
-				*atx.VRFNonce,
+				atx.VRFNonce,
 				atx.NiPosts[0].Posts[0].NumUnits,
 			).
 			Return(errors.New("invalid nonce"))
@@ -302,7 +288,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
 			atx.Initial.CommitmentATX,
-			*atx.VRFNonce,
+			atx.VRFNonce,
 			atx.NiPosts[0].Posts[0].NumUnits,
 		)
 		atxHandler.mValidator.EXPECT().
@@ -414,8 +400,14 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
-		_, err = atxs.Get(atxHandler.cdb, atx.ID())
+		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
 		require.NoError(t, err)
+		require.NotNil(t, atx)
+		require.Equal(t, atx.ID(), atxFromDb.ID())
+		require.Equal(t, atx.Coinbase, atxFromDb.Coinbase)
+		require.EqualValues(t, poetLeaves, atxFromDb.TickCount)
+		require.EqualValues(t, poetLeaves, atxFromDb.TickHeight())
+		require.Equal(t, atx.NiPosts[0].Posts[0].NumUnits, atxFromDb.NumUnits)
 
 		// processing ATX for the second time should skip checks
 		proof, err = atxHandler.processATX(context.Background(), peer, atx, blob, time.Now())
@@ -505,12 +497,6 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		atx.NiPosts[0].Posts[0].NumUnits *= 10
 		atx.Sign(sig)
 		atxHandler.expectAtxV2(atx)
-		atxHandler.mValidator.EXPECT().VRFNonceV2(
-			sig.NodeID(),
-			prev.Initial.CommitmentATX,
-			*prev.VRFNonce,
-			atx.TotalNumUnits(),
-		)
 
 		proof, err = atxHandler.processATX(context.Background(), peer, atx, codec.MustEncode(atx), time.Now())
 		require.NoError(t, err)
@@ -519,7 +505,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		// picks the VRF nonce from the previous ATX
 		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
 		require.NoError(t, err)
-		require.EqualValues(t, *prev.VRFNonce, atxFromDb.VRFNonce)
+		require.EqualValues(t, prev.VRFNonce, atxFromDb.VRFNonce)
 	})
 	t.Run("second ATX, previous V2, increases space (no nonce, previous invalid)", func(t *testing.T) {
 		t.Parallel()
@@ -541,7 +527,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
 			prev.Initial.CommitmentATX,
-			*prev.VRFNonce,
+			prev.VRFNonce,
 			atx.TotalNumUnits(),
 		).Return(errors.New("vrf nonce is not valid"))
 
@@ -564,17 +550,10 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		require.NoError(t, atxs.Add(atxHandler.cdb, prev))
 
 		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), golden)
-		newNonce := uint64(123)
-		atx.VRFNonce = &newNonce
+		atx.VRFNonce = uint64(123)
 		atx.NiPosts[0].Posts[0].NumUnits *= 10
 		atx.Sign(sig)
 		atxHandler.expectAtxV2(atx)
-		atxHandler.mValidator.EXPECT().VRFNonceV2(
-			sig.NodeID(),
-			*prev.CommitmentATX,
-			*atx.VRFNonce,
-			atx.TotalNumUnits(),
-		)
 
 		proof, err := atxHandler.processATX(context.Background(), peer, atx, codec.MustEncode(atx), time.Now())
 		require.NoError(t, err)
@@ -584,7 +563,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
 		require.NoError(t, err)
 		require.Equal(t, lowerNumUnits, atxFromDb.TotalNumUnits())
-		require.EqualValues(t, newNonce, atxFromDb.VRFNonce)
+		require.EqualValues(t, atx.VRFNonce, atxFromDb.VRFNonce)
 	})
 	t.Run("can't find positioning ATX", func(t *testing.T) {
 		t.Parallel()
@@ -1090,8 +1069,6 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
 	t.Helper()
-	nonce := uint64(999)
-	coinbase := types.GenerateAddress([]byte("aaaa"))
 	atx := &wire.ActivationTxV2{
 		PositioningATX: golden,
 		Initial:        &wire.InitialAtxPartsV2{CommitmentATX: golden},
@@ -1105,8 +1082,8 @@ func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
 				},
 			},
 		},
-		Coinbase: &coinbase,
-		VRFNonce: &nonce,
+		Coinbase: types.GenerateAddress([]byte("aaaa")),
+		VRFNonce: uint64(999),
 	}
 
 	return atx
@@ -1129,6 +1106,8 @@ func newSoloATXv2(t testing.TB, publish types.EpochID, prev, pos types.ATXID) *w
 				},
 			},
 		},
+		Coinbase: types.GenerateAddress([]byte("aaaa")),
+		VRFNonce: uint64(999),
 	}
 
 	return atx

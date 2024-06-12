@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/zeebo/blake3"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,13 +17,7 @@ import (
 type ActivationTxV2 struct {
 	PublishEpoch   types.EpochID
 	PositioningATX types.ATXID
-
-	// Must be present in the initial ATX.
-	// Nil in subsequent ATXs unless smesher wants to change it.
-	// If Nil, the value is inferred from the previous ATX of this smesher.
-	// It's not allowed to pass the same coinbase as already used by the previous ATX
-	// to avoid spamming the network with redundant information.
-	Coinbase *types.Address
+	Coinbase       types.Address
 
 	// only present in initial ATX
 	Initial      *InitialAtxPartsV2
@@ -30,10 +25,7 @@ type ActivationTxV2 struct {
 	NiPosts      []NiPostsV2   `scale:"max=2"`
 
 	// The VRF nonce must be valid for the collected space of all included IDs.
-	// only present when:
-	// - the nonce changed (included more/heavier IDs)
-	// - it's an initial ATX
-	VRFNonce *uint64
+	VRFNonce uint64
 
 	// The list of marriages with other IDs.
 	// A marriage is permanent and cannot be revoked or repeated.
@@ -61,11 +53,8 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	binary.LittleEndian.PutUint32(publishEpoch, atx.PublishEpoch.Uint32())
 	tree.AddLeaf(publishEpoch)
 	tree.AddLeaf(atx.PositioningATX.Bytes())
-	if atx.Coinbase != nil {
-		tree.AddLeaf(atx.Coinbase.Bytes())
-	} else {
-		tree.AddLeaf(types.Address{}.Bytes())
-	}
+	tree.AddLeaf(atx.Coinbase.Bytes())
+
 	if atx.Initial != nil {
 		tree.AddLeaf(atx.Initial.Root())
 	} else {
@@ -101,9 +90,7 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	tree.AddLeaf(niPostTree.Root())
 
 	vrfNonce := make([]byte, 8)
-	if atx.VRFNonce != nil {
-		binary.LittleEndian.PutUint64(vrfNonce, *atx.VRFNonce)
-	}
+	binary.LittleEndian.PutUint64(vrfNonce, atx.VRFNonce)
 	tree.AddLeaf(vrfNonce)
 
 	marriagesTree, err := merkle.NewTreeBuilder().
@@ -287,4 +274,80 @@ func atxTreeHash(buf, lChild, rChild []byte) []byte {
 	hash.Write(lChild)
 	hash.Write(rChild)
 	return hash.Sum(buf)
+}
+
+func (atx *ActivationTxV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if atx == nil {
+		return nil
+	}
+	encoder.AddString("ID", atx.ID().String())
+	encoder.AddString("Smesher", atx.SmesherID.String())
+	encoder.AddUint32("PublishEpoch", atx.PublishEpoch.Uint32())
+	encoder.AddString("PositioningATX", atx.PositioningATX.String())
+	encoder.AddString("Coinbase", atx.Coinbase.String())
+	encoder.AddObject("Initial", atx.Initial)
+	encoder.AddArray("PreviousATXs", types.ATXIDs(atx.PreviousATXs))
+	encoder.AddArray("NiPosts", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+		for _, nipost := range atx.NiPosts {
+			encoder.AppendObject(&nipost)
+		}
+		return nil
+	}))
+	encoder.AddUint64("VRFNonce", atx.VRFNonce)
+
+	encoder.AddArray("Marriages", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+		for _, marriage := range atx.Marriages {
+			encoder.AppendObject(&marriage)
+		}
+		return nil
+	}))
+	if atx.MarriageATX != nil {
+		encoder.AddString("MarriageATX", atx.MarriageATX.String())
+	}
+	encoder.AddString("Signature", atx.Signature.String())
+	return nil
+}
+
+func (marriage *MarriageCertificate) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if marriage == nil {
+		return nil
+	}
+	encoder.AddString("ID", marriage.ID.String())
+	encoder.AddString("Signature", marriage.Signature.String())
+	return nil
+}
+
+func (parts *InitialAtxPartsV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if parts == nil {
+		return nil
+	}
+	encoder.AddString("CommitmentATX", parts.CommitmentATX.String())
+	encoder.AddObject("Post", &parts.Post)
+	return nil
+}
+
+func (post *SubPostV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if post == nil {
+		return nil
+	}
+	encoder.AddUint32("MarriageIndex", post.MarriageIndex)
+	encoder.AddUint32("PrevATXIndex", post.PrevATXIndex)
+	encoder.AddObject("Post", &post.Post)
+	encoder.AddUint32("NumUnits", post.NumUnits)
+	return nil
+}
+
+func (posts *NiPostsV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if posts == nil {
+		return nil
+	}
+	// skip membership proof
+	encoder.AddString("Challenge", posts.Challenge.String())
+	encoder.AddArray("Posts", zapcore.ArrayMarshalerFunc(func(ae zapcore.ArrayEncoder) error {
+		for _, post := range posts.Posts {
+			ae.AppendObject(&post)
+		}
+		return nil
+	}))
+	return nil
 }

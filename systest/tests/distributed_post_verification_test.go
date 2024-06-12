@@ -205,7 +205,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 		challenge = &wire.NIPostChallengeV1{
 			PrevATXID:        types.EmptyATXID,
-			PublishEpoch:     2,
+			PublishEpoch:     1,
 			PositioningATXID: goldenATXID,
 			CommitmentATXID:  &postInfo.CommitmentATX,
 			InitialPost: &wire.PostV1{
