@@ -46,10 +46,12 @@ jobs:
         with:
           # this pattern matches using picomatch syntax (used by this third party Action), which is slightly
           # different than GitHub syntax: it matches any file in any path ending in '.md'. this checks if
-          # any non-markdown files were changed.
+          # any non-markdown files were changed. Additionally changing the CODEOWNERS file should not trigger
+          # a full CI run.
           filters: |
             nondoc:
               - '!**/*.md'
+              - '!.github/CODEOWNERS'
 
   ## stage 1: run unit tests and app tests as a prerequisite
   ## these run on all pushes to all pull requests, all branches
