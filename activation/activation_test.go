@@ -73,7 +73,7 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
 		},
-	)), zaptest.Level(zap.WarnLevel))
+	)))
 
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
