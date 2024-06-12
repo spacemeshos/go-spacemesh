@@ -6,6 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+//go:generate go run ../schemagen -dbtype state -output schema/schema.sql
+
 //go:embed schema/schema.sql
 var schemaScript string
 

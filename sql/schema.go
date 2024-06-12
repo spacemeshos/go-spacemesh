@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -179,6 +180,61 @@ func (s *Schema) Migrate(logger *zap.Logger, db *Database, vacuumState int, enab
 			}
 		}
 		before = m.Order()
+	}
+	return nil
+}
+
+// SchemaGenOpt represents a schema generator option
+type SchemaGenOpt func(g *SchemaGen)
+
+func withDefaultOut(w io.Writer) SchemaGenOpt {
+	return func(g *SchemaGen) {
+		g.defaultOut = w
+	}
+}
+
+// SchemaGen generates database schema files
+type SchemaGen struct {
+	logger     *zap.Logger
+	schema     *Schema
+	defaultOut io.Writer
+}
+
+// NewSchemaGen creates a new SchemaGen instance
+func NewSchemaGen(logger *zap.Logger, schema *Schema, opts ...SchemaGenOpt) *SchemaGen {
+	g := &SchemaGen{logger: logger, schema: schema, defaultOut: os.Stdout}
+	for _, opt := range opts {
+		opt(g)
+	}
+	return g
+}
+
+// Generate generates database schema and writes it to the specified file.
+// If an empty string is specified as outputFile, the
+func (g *SchemaGen) Generate(outputFile string) error {
+	db, err := OpenInMemory(
+		WithLogger(g.logger),
+		WithDatabaseSchema(g.schema),
+		WithForceMigrations(true),
+		withIgnoreSchemaDrift(true))
+	if err != nil {
+		return fmt.Errorf("error opening in-memory db: %w", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			g.logger.Error("error closing in-memory db: %w", zap.Error(err))
+		}
+	}()
+	loadedScript, err := LoadDBSchemaScript(db, "")
+	if err != nil {
+		return fmt.Errorf("error loading DB schema script: %w", err)
+	}
+	if outputFile == "" {
+		if _, err := io.WriteString(g.defaultOut, loadedScript); err != nil {
+			return fmt.Errorf("error writing schema file: %w", err)
+		}
+	} else if err := os.WriteFile(outputFile, []byte(loadedScript), 0777); err != nil {
+		return fmt.Errorf("error writing schema file %q: %w", outputFile, err)
 	}
 	return nil
 }

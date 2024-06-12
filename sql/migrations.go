@@ -1,10 +1,9 @@
 package sql
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"io/fs"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -41,8 +40,10 @@ func (l MigrationList) Version() int {
 type sqlMigration struct {
 	order   int
 	name    string
-	content *bufio.Scanner
+	content string
 }
+
+var sqlCommentRx = regexp.MustCompile(`(?m)--.*$`)
 
 func (m *sqlMigration) Apply(db Executor) error {
 	current, err := version(db)
@@ -53,9 +54,14 @@ func (m *sqlMigration) Apply(db Executor) error {
 	if m.order <= current {
 		return nil
 	}
-	for m.content.Scan() {
-		if _, err := db.Exec(m.content.Text(), nil, nil); err != nil {
-			return fmt.Errorf("exec %s: %w", m.content.Text(), err)
+	// TODO: use more advanced approach to split the SQL script
+	// into commands
+	for _, cmd := range strings.Split(m.content, ";") {
+		cmd = sqlCommentRx.ReplaceAllString(cmd, "")
+		if strings.TrimSpace(cmd) != "" {
+			if _, err := db.Exec(cmd, nil, nil); err != nil {
+				return fmt.Errorf("exec %s: %w", cmd, err)
+			}
 		}
 	}
 	// binding values in pragma statement is not allowed
@@ -107,21 +113,14 @@ func LoadSQLMigrations(fsys fs.FS) (MigrationList, error) {
 		if err != nil {
 			return fmt.Errorf("invalid migration %s: %w", d.Name(), err)
 		}
-		f, err := fsys.Open(path)
+		script, err := fs.ReadFile(fsys, path)
 		if err != nil {
 			return fmt.Errorf("read file %s: %w", path, err)
 		}
-		scanner := bufio.NewScanner(f)
-		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-			if i := bytes.Index(data, []byte(";")); i >= 0 {
-				return i + 1, data[0 : i+1], nil
-			}
-			return 0, nil, nil
-		})
 		migrations = append(migrations, &sqlMigration{
 			order:   order,
 			name:    d.Name(),
-			content: scanner,
+			content: string(script),
 		})
 		return nil
 	})

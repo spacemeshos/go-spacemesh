@@ -71,17 +71,18 @@ func defaultConf() *conf {
 }
 
 type conf struct {
-	enableMigrations bool
-	forceFresh       bool
-	forceMigrations  bool
-	connections      int
-	vacuumState      int
-	enableLatency    bool
-	cache            bool
-	cacheSizes       map[QueryCacheKind]int
-	logger           *zap.Logger
-	schema           *Schema
-	ignoreTableRx    string
+	enableMigrations  bool
+	forceFresh        bool
+	forceMigrations   bool
+	connections       int
+	vacuumState       int
+	enableLatency     bool
+	cache             bool
+	cacheSizes        map[QueryCacheKind]int
+	logger            *zap.Logger
+	schema            *Schema
+	ignoreTableRx     string
+	ignoreSchemaDrift bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -163,6 +164,12 @@ func WithIgnoreTableRx(rx string) Opt {
 	}
 }
 
+func withIgnoreSchemaDrift(ignore bool) Opt {
+	return func(c *conf) {
+		c.ignoreSchemaDrift = ignore
+	}
+}
+
 func withForceFresh() Opt {
 	return func(c *conf) {
 		c.forceFresh = true
@@ -172,10 +179,16 @@ func withForceFresh() Opt {
 // Opt for configuring database.
 type Opt func(c *conf)
 
-// InMemory database for testing.
-func InMemory(opts ...Opt) *Database {
+// OpenInMemory creates an in-memory database.
+func OpenInMemory(opts ...Opt) (*Database, error) {
 	opts = append(opts, WithConnections(1), withForceFresh())
-	db, err := Open("file::memory:?mode=memory", opts...)
+	return Open("file::memory:?mode=memory", opts...)
+}
+
+// InMemory creates an in-memory database for testing and panics if
+// there's an error.
+func InMemory(opts ...Opt) *Database {
+	db, err := OpenInMemory(opts...)
 	if err != nil {
 		panic(err)
 	}
@@ -231,16 +244,18 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		}
 	}
 
-	loaded, err := LoadDBSchemaScript(db, config.ignoreTableRx)
-	if err != nil {
-		return nil, fmt.Errorf("error loading database schema: %w", err)
-	}
-	diff := config.schema.Diff(loaded)
-	if diff != "" {
-		config.logger.Warn("database schema drift detected",
-			zap.String("uri", uri),
-			zap.String("diff", diff),
-		)
+	if !config.ignoreSchemaDrift {
+		loaded, err := LoadDBSchemaScript(db, config.ignoreTableRx)
+		if err != nil {
+			return nil, fmt.Errorf("error loading database schema: %w", err)
+		}
+		diff := config.schema.Diff(loaded)
+		if diff != "" {
+			config.logger.Warn("database schema drift detected",
+				zap.String("uri", uri),
+				zap.String("diff", diff),
+			)
+		}
 	}
 
 	if config.cache {
