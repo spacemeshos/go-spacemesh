@@ -140,6 +140,17 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
+	require.NoError(t, err)
+
+	validator := activation.NewValidator(
+		db,
+		poetDb,
+		cfg,
+		opts.Scrypt,
+		verifier,
+	)
+
 	postStates := activation.NewMockPostStates(ctrl)
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
@@ -147,6 +158,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
+		validator,
 		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetClients(client),
 	)
@@ -187,8 +199,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		},
 	).Times(totalAtxs)
 
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
-	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 	v := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 	tab := activation.NewBuilder(

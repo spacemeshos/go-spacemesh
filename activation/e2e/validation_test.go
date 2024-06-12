@@ -86,7 +86,13 @@ func TestValidator_Validate(t *testing.T) {
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-
+	validator := activation.NewValidator(
+		db,
+		poetDb,
+		cfg,
+		opts.Scrypt,
+		verifier,
+	)
 	svc := grpcserver.NewPostService(logger)
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
@@ -106,11 +112,12 @@ func TestValidator_Validate(t *testing.T) {
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		mclock,
+		validator,
 		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge, nil)
 	require.NoError(t, err)
 
 	v := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)

@@ -131,6 +131,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
+		validator,
 		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetClients(client),
 	)

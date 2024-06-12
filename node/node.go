@@ -1031,6 +1031,7 @@ func (app *App) initServices(ctx context.Context) error {
 		nipostLogger,
 		app.Config.POET,
 		app.clock,
+		app.validator,
 		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetClients(poetClients...),
 	)

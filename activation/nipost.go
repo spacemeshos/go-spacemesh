@@ -156,7 +156,7 @@ func (nb *NIPostBuilder) Proof(
 		// have changed between the initial PoST and the upcoming one (initial ATX
 		// still not published)
 		// TODO change to postChallenge.InitialPost
-		if postChallenge != nil {
+		if postChallenge != nil && postChallenge.InitialPost != nil {
 			info, err := client.Info(ctx)
 			if errors.Is(err, ErrPostClientClosed) {
 				continue
