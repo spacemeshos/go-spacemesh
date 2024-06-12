@@ -1933,7 +1933,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
-		sql.WithIgnoreTableRx(app.Config.DatabaseSchemaIgnoreRx),
 		sql.WithAllowSchemaDrift(app.Config.DatabaseSchemaAllowDrift),
 		sql.WithQueryCache(app.Config.DatabaseQueryCache),
 		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{

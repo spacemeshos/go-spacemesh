@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
@@ -22,19 +21,11 @@ const (
 )
 
 // LoadDBSchemaScript retrieves the database schema as text.
-func LoadDBSchemaScript(db Executor, ignoreRx string) (string, error) {
+func LoadDBSchemaScript(db Executor) (string, error) {
 	var (
-		err   error
-		ignRx *regexp.Regexp
-		sb    strings.Builder
+		err error
+		sb  strings.Builder
 	)
-	if ignoreRx != "" {
-		ignRx, err = regexp.Compile(ignoreRx)
-		if err != nil {
-			return "", fmt.Errorf("error compiling table ignore regexp %q: %w",
-				ignoreRx, err)
-		}
-	}
 	version, err := version(db)
 	if err != nil {
 		return "", err
@@ -46,9 +37,7 @@ func LoadDBSchemaScript(db Executor, ignoreRx string) (string, error) {
                  where sql is not null
                  order by tbl_name, type desc, name`,
 		nil, func(st *Statement) bool {
-			if ignRx == nil || !ignRx.MatchString(st.ColumnText(0)) {
-				fmt.Fprintln(&sb, st.ColumnText(1))
-			}
+			fmt.Fprintln(&sb, st.ColumnText(1))
 			return true
 		}); err != nil {
 		return "", fmt.Errorf("error retrieving DB schema: %w", err)
@@ -184,7 +173,7 @@ func (s *Schema) Migrate(logger *zap.Logger, db *Database, vacuumState int, enab
 	return nil
 }
 
-// SchemaGenOpt represents a schema generator option
+// SchemaGenOpt represents a schema generator option.
 type SchemaGenOpt func(g *SchemaGen)
 
 func withDefaultOut(w io.Writer) SchemaGenOpt {
@@ -193,14 +182,14 @@ func withDefaultOut(w io.Writer) SchemaGenOpt {
 	}
 }
 
-// SchemaGen generates database schema files
+// SchemaGen generates database schema files.
 type SchemaGen struct {
 	logger     *zap.Logger
 	schema     *Schema
 	defaultOut io.Writer
 }
 
-// NewSchemaGen creates a new SchemaGen instance
+// NewSchemaGen creates a new SchemaGen instance.
 func NewSchemaGen(logger *zap.Logger, schema *Schema, opts ...SchemaGenOpt) *SchemaGen {
 	g := &SchemaGen{logger: logger, schema: schema, defaultOut: os.Stdout}
 	for _, opt := range opts {
@@ -210,7 +199,7 @@ func NewSchemaGen(logger *zap.Logger, schema *Schema, opts ...SchemaGenOpt) *Sch
 }
 
 // Generate generates database schema and writes it to the specified file.
-// If an empty string is specified as outputFile, the
+// If an empty string is specified as outputFile, os.Stdout is used for output.
 func (g *SchemaGen) Generate(outputFile string) error {
 	db, err := OpenInMemory(
 		WithLogger(g.logger),
@@ -225,7 +214,7 @@ func (g *SchemaGen) Generate(outputFile string) error {
 			g.logger.Error("error closing in-memory db: %w", zap.Error(err))
 		}
 	}()
-	loadedScript, err := LoadDBSchemaScript(db, "")
+	loadedScript, err := LoadDBSchemaScript(db)
 	if err != nil {
 		return fmt.Errorf("error loading DB schema script: %w", err)
 	}
@@ -233,7 +222,7 @@ func (g *SchemaGen) Generate(outputFile string) error {
 		if _, err := io.WriteString(g.defaultOut, loadedScript); err != nil {
 			return fmt.Errorf("error writing schema file: %w", err)
 		}
-	} else if err := os.WriteFile(outputFile, []byte(loadedScript), 0777); err != nil {
+	} else if err := os.WriteFile(outputFile, []byte(loadedScript), 0o777); err != nil {
 		return fmt.Errorf("error writing schema file %q: %w", outputFile, err)
 	}
 	return nil

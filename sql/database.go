@@ -81,7 +81,6 @@ type conf struct {
 	cacheSizes        map[QueryCacheKind]int
 	logger            *zap.Logger
 	schema            *Schema
-	ignoreTableRx     string
 	allowSchemaDrift  bool
 	ignoreSchemaDrift bool
 }
@@ -157,15 +156,7 @@ func WithDatabaseSchema(schema *Schema) Opt {
 	}
 }
 
-// WithIgnoreTableRx specifies regular expression for table names to ignore during schema
-// drift detection.
-func WithIgnoreTableRx(rx string) Opt {
-	return func(c *conf) {
-		c.ignoreTableRx = rx
-	}
-}
-
-// WithAllowSchemaDrift prevents Open from failing upon schema drift. A warning is printed instead
+// WithAllowSchemaDrift prevents Open from failing upon schema drift. A warning is printed instead.
 func WithAllowSchemaDrift(allow bool) Opt {
 	return func(c *conf) {
 		c.allowSchemaDrift = allow
@@ -253,7 +244,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	}
 
 	if !config.ignoreSchemaDrift {
-		loaded, err := LoadDBSchemaScript(db, config.ignoreTableRx)
+		loaded, err := LoadDBSchemaScript(db)
 		if err != nil {
 			return nil, fmt.Errorf("error loading database schema: %w", err)
 		}

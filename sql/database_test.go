@@ -270,7 +270,7 @@ func TestSchemaDrift(t *testing.T) {
 	require.NoError(t, db.Close())
 	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
 
-	db, err = Open("file:"+dbFile,
+	_, err = Open("file:"+dbFile,
 		WithDatabaseSchema(schema),
 		WithLogger(logger),
 	)
@@ -289,44 +289,4 @@ func TestSchemaDrift(t *testing.T) {
 	require.Equal(t, "database schema drift detected", observedLogs.All()[0].Message)
 	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`,
 		observedLogs.All()[0].ContextMap()["diff"])
-}
-
-func TestSchemaDrift_IgnoredTables(t *testing.T) {
-	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
-		func(core zapcore.Core) zapcore.Core {
-			return zapcore.NewTee(core, observer)
-		},
-	)))
-	dbFile := filepath.Join(t.TempDir(), "test.sql")
-	schema := &Schema{
-		// Not using ` here to avoid schema drift warnings due to whitespace
-		// TODO: ignore whitespace and comments during schema comparison
-		Script: "PRAGMA user_version = 0;\n" +
-			"CREATE TABLE testing1 (\n" +
-			" id varchar primary key,\n" +
-			" field int\n" +
-			");\n",
-	}
-	db, err := Open("file:"+dbFile,
-		WithDatabaseSchema(schema),
-		WithLogger(logger),
-		WithIgnoreTableRx("^_litestream"),
-	)
-	require.NoError(t, err)
-
-	_, err = db.Exec("create table _litestream_test (id int)", nil, nil)
-	require.NoError(t, err)
-
-	require.NoError(t, db.Close())
-	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
-
-	db, err = Open("file:"+dbFile,
-		WithDatabaseSchema(schema),
-		WithLogger(logger),
-		WithIgnoreTableRx("^_litestream"),
-	)
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
 }

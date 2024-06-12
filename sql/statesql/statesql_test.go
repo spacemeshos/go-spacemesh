@@ -33,7 +33,7 @@ func TestIdempotentMigration(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	sql1, err := sql.LoadDBSchemaScript(db, "")
+	sql1, err := sql.LoadDBSchemaScript(db)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
@@ -45,7 +45,7 @@ func TestIdempotentMigration(t *testing.T) {
 
 	db, err = Open("file:"+file, sql.WithLogger(logger))
 	require.NoError(t, err)
-	sql2, err := sql.LoadDBSchemaScript(db, "")
+	sql2, err := sql.LoadDBSchemaScript(db)
 	require.NoError(t, err)
 
 	require.Equal(t, sql1, sql2)

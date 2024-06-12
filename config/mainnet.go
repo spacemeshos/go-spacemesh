@@ -67,16 +67,15 @@ func MainnetConfig() Config {
 	hare3conf.EnableLayer = 35117
 	return Config{
 		BaseConfig: BaseConfig{
-			DataDirParent:          defaultDataDir,
-			FileLock:               filepath.Join(os.TempDir(), "spacemesh.lock"),
-			MetricsPort:            1010,
-			DatabaseConnections:    16,
-			DatabasePruneInterval:  30 * time.Minute,
-			DatabaseVacuumState:    15,
-			DatabaseSchemaIgnoreRx: "^_litestream",
-			PruneActivesetsFrom:    12,    // starting from epoch 13 activesets below 12 will be pruned
-			ScanMalfeasantATXs:     false, // opt-in
-			NetworkHRP:             "sm",
+			DataDirParent:         defaultDataDir,
+			FileLock:              filepath.Join(os.TempDir(), "spacemesh.lock"),
+			MetricsPort:           1010,
+			DatabaseConnections:   16,
+			DatabasePruneInterval: 30 * time.Minute,
+			DatabaseVacuumState:   15,
+			PruneActivesetsFrom:   12,    // starting from epoch 13 activesets below 12 will be pruned
+			ScanMalfeasantATXs:    false, // opt-in
+			NetworkHRP:            "sm",
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,
