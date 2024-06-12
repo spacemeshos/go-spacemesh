@@ -244,13 +244,13 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 		return ops, nil
 	}
 
-	if filter.GetPrincipal() != "" {
-		addr, err := types.StringToAddress(filter.GetPrincipal())
+	if filter.GetAddress() != "" {
+		addr, err := types.StringToAddress(filter.GetAddress())
 		if err != nil {
 			return builder.Operations{}, err
 		}
 		ops.Filter = append(ops.Filter, builder.Op{
-			Field: builder.Principal,
+			Field: builder.Address,
 			Token: builder.Eq,
 			Value: addr.Bytes(),
 		})
@@ -278,10 +278,6 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 			Token: builder.Lte,
 			Value: int64(filter.GetEndLayer()),
 		})
-	}
-
-	if len(ops.Filter) > 0 {
-		ops.StartWith = "and"
 	}
 
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
@@ -330,7 +326,7 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 		t.Contents = contents
 	}
 
-	if includeResult {
+	if includeResult && result != nil {
 		rst.TxResult = &spacemeshv2alpha1.TransactionResult{
 			Status:      convertTxResult(result),
 			Message:     result.Message,
@@ -368,14 +364,17 @@ func convertTxResult(result *types.TransactionResult) spacemeshv2alpha1.Transact
 }
 
 // TODO: REJECTED, INSUFFICIENT_FUNDS, CONFLICTING, MESH.
-func convertTxState(tx *types.MeshTransaction) spacemeshv2alpha1.TransactionState {
+func convertTxState(tx *types.MeshTransaction) *spacemeshv2alpha1.TransactionState {
 	switch tx.State {
 	case types.MEMPOOL:
-		return spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_MEMPOOL
+		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_MEMPOOL
+		return &state
 	case types.APPLIED:
-		return spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_PROCESSED
+		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_PROCESSED
+		return &state
 	default:
-		return spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+		return &state
 	}
 }
 

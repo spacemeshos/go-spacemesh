@@ -87,15 +87,28 @@ func TestTransactionService_List(t *testing.T) {
 		require.Len(t, list.Transactions, len(txsList))
 	})
 
-	t.Run("principal", func(t *testing.T) {
-		principal := txsList[0].TxHeader.Principal.String()
+	t.Run("address", func(t *testing.T) {
+		address := txsList[0].Principal.String()
+		var expectedTxs []types.TransactionWithResult
+		for _, tx := range txsList {
+			found := false
+			for _, addr := range tx.TransactionResult.Addresses {
+				if addr.String() == address {
+					found = true
+					break
+				}
+			}
+			if found {
+				expectedTxs = append(expectedTxs, tx)
+			}
+		}
+
 		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
-			Principal: &principal,
-			Limit:     1,
+			Address: &address,
+			Limit:   100,
 		})
 		require.NoError(t, err)
-		require.Len(t, list.Transactions, 1)
-		require.Equal(t, list.Transactions[0].Tx.Principal, principal)
+		require.Len(t, list.Transactions, len(expectedTxs))
 	})
 
 	t.Run("tx id", func(t *testing.T) {
