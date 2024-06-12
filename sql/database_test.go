@@ -25,6 +25,7 @@ func Test_Transaction_Isolation(t *testing.T) {
 				field int
 			);`,
 		}),
+		withIgnoreSchemaDrift(),
 	)
 	tx, err := db.Tx(context.Background())
 	require.NoError(t, err)
@@ -89,6 +90,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 			Migrations: MigrationList{migration1},
 		}),
 		WithForceMigrations(true),
+		withIgnoreSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -120,6 +122,7 @@ func Test_Migration_Disabled(t *testing.T) {
 			Migrations: MigrationList{migration1},
 		}),
 		WithForceMigrations(true),
+		withIgnoreSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -154,6 +157,7 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	db, err := Open("file:"+dbFile,
 		WithDatabaseSchema(schema),
 		WithForceMigrations(true),
+		withIgnoreSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -177,6 +181,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 			Migrations: MigrationList{migration1},
 		}),
 		WithForceMigrations(true),
+		withIgnoreSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -186,6 +191,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 			Migrations: MigrationList{migration1, migration2},
 		}),
 		WithVacuumState(2),
+		withIgnoreSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -196,7 +202,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 }
 
 func TestQueryCount(t *testing.T) {
-	db := InMemory()
+	db := InMemory(withIgnoreSchemaDrift())
 	require.Equal(t, 0, db.QueryCount())
 
 	n, err := db.Exec("select 1", nil, nil)
@@ -220,7 +226,7 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 
 	dbFile := filepath.Join(dir, "test.sql")
-	db, err := Open("file:"+dbFile, WithForceMigrations(true))
+	db, err := Open("file:"+dbFile, WithForceMigrations(true), withIgnoreSchemaDrift())
 	require.NoError(t, err)
 	_, err = db.Exec("PRAGMA user_version = 3", nil, nil)
 	require.NoError(t, err)
@@ -230,6 +236,7 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1, migration2},
 		}),
+		withIgnoreSchemaDrift(),
 	)
 	require.ErrorIs(t, err, ErrTooNew)
 }
@@ -267,11 +274,20 @@ func TestSchemaDrift(t *testing.T) {
 		WithDatabaseSchema(schema),
 		WithLogger(logger),
 	)
+	require.Error(t, err)
+	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`, err.Error())
+	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
+
+	db, err = Open("file:"+dbFile,
+		WithDatabaseSchema(schema),
+		WithLogger(logger),
+		WithAllowSchemaDrift(true),
+	)
 	require.NoError(t, db.Close())
 	require.NoError(t, err)
 	require.Equal(t, 1, observedLogs.Len(), "expected 1 log messages")
 	require.Equal(t, "database schema drift detected", observedLogs.All()[0].Message)
-	require.Regexp(t, `.*\n\s*\+\s*CREATE TABLE newtbl \(id int\);`,
+	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`,
 		observedLogs.All()[0].ContextMap()["diff"])
 }
 

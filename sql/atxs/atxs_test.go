@@ -103,7 +103,7 @@ func TestHasID(t *testing.T) {
 }
 
 func Test_IdentityExists(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -669,7 +669,7 @@ func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
 // Test that the cached blob is not shared with the caller
 // but copied into the provided blob.
 func TestGetBlobCached_OverwriteSafety(t *testing.T) {
-	db := sql.InMemory(sql.WithQueryCache(true))
+	db := statesql.InMemory(sql.WithQueryCache(true))
 	atx := types.ActivationTx{}
 	atx.SetID(types.RandomATXID())
 	atx.AtxBlob.Blob = []byte("original blob")

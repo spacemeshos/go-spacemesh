@@ -82,6 +82,7 @@ type conf struct {
 	logger            *zap.Logger
 	schema            *Schema
 	ignoreTableRx     string
+	allowSchemaDrift  bool
 	ignoreSchemaDrift bool
 }
 
@@ -164,9 +165,16 @@ func WithIgnoreTableRx(rx string) Opt {
 	}
 }
 
-func withIgnoreSchemaDrift(ignore bool) Opt {
+// WithAllowSchemaDrift prevents Open from failing upon schema drift. A warning is printed instead
+func WithAllowSchemaDrift(allow bool) Opt {
 	return func(c *conf) {
-		c.ignoreSchemaDrift = ignore
+		c.allowSchemaDrift = allow
+	}
+}
+
+func withIgnoreSchemaDrift() Opt {
+	return func(c *conf) {
+		c.ignoreSchemaDrift = true
 	}
 }
 
@@ -250,11 +258,17 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			return nil, fmt.Errorf("error loading database schema: %w", err)
 		}
 		diff := config.schema.Diff(loaded)
-		if diff != "" {
+		switch {
+		case diff == "": // ok
+		case config.allowSchemaDrift:
 			config.logger.Warn("database schema drift detected",
 				zap.String("uri", uri),
 				zap.String("diff", diff),
 			)
+		default:
+			return nil, errors.Join(
+				fmt.Errorf("schema drift detected (uri %s):\n%s", uri, diff),
+				db.Close())
 		}
 	}
 
