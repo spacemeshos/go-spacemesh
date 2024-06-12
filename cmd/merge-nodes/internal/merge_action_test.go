@@ -37,6 +37,7 @@ func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
 	db, err := localsql.Open("file:"+filepath.Join(tmpDst, localDbFile),
 		sql.WithDatabaseSchema(oldSchema(t)),
 		sql.WithForceMigrations(true),
+		sql.WithIgnoreSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -95,6 +96,7 @@ func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
 	db, err = localsql.Open("file:"+filepath.Join(tmpSrc, localDbFile),
 		sql.WithDatabaseSchema(oldSchema(t)),
 		sql.WithForceMigrations(true),
+		sql.WithIgnoreSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())

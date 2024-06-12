@@ -7,6 +7,6 @@ import (
 )
 
 func TestVacuumDB(t *testing.T) {
-	db := InMemory(withIgnoreSchemaDrift())
+	db := InMemory(WithIgnoreSchemaDrift())
 	require.NoError(t, Vacuum(db))
 }

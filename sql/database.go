@@ -156,14 +156,15 @@ func WithDatabaseSchema(schema *Schema) Opt {
 	}
 }
 
-// WithAllowSchemaDrift prevents Open from failing upon schema drift. A warning is printed instead.
+// WithAllowSchemaDrift prevents Open from failing upon schema
+// drift. A warning is printed instead.
 func WithAllowSchemaDrift(allow bool) Opt {
 	return func(c *conf) {
 		c.allowSchemaDrift = allow
 	}
 }
 
-func withIgnoreSchemaDrift() Opt {
+func WithIgnoreSchemaDrift() Opt {
 	return func(c *conf) {
 		c.ignoreSchemaDrift = true
 	}
@@ -284,6 +285,7 @@ func Version(uri string) (int, error) {
 // Database represents a database.
 type Database interface {
 	Executor
+	QueryCache
 	Close() error
 	QueryCount() int
 	QueryCache() QueryCache

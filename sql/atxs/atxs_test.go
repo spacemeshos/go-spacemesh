@@ -617,7 +617,7 @@ func TestLoadBlob(t *testing.T) {
 }
 
 func TestLoadBlob_DefaultsToV1(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
