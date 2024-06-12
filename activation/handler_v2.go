@@ -346,7 +346,7 @@ func (h *HandlerV2) previous(ctx context.Context, id types.ATXID) (opaqueAtx, er
 
 // Validate the previous ATX for the given PoST and return the effective numunits.
 func (h *HandlerV2) validatePreviousAtx(id types.NodeID, post *wire.SubPostV2, prevAtxs []opaqueAtx) (uint32, error) {
-	if post.PrevATXIndex > uint32(len(prevAtxs)) {
+	if post.PrevATXIndex >= uint32(len(prevAtxs)) {
 		return 0, fmt.Errorf("prevATXIndex out of bounds: %d > %d", post.PrevATXIndex, len(prevAtxs))
 	}
 	prev := prevAtxs[post.PrevATXIndex]
@@ -555,13 +555,38 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		}
 	}
 
-	// validate all niposts
+	// validate poet membership proofs
 	var minLeaves uint64 = math.MaxUint64
-	var smesherCommitment *types.ATXID
 	for _, niposts := range atx.NiPosts {
 		// verify PoET memberships in a single go
 		var poetChallenges [][]byte
 
+		for _, post := range niposts.Posts {
+			nipostChallenge := wire.NIPostChallengeV2{
+				PublishEpoch:     atx.PublishEpoch,
+				PositioningATXID: atx.PositioningATX,
+			}
+			if atx.Initial != nil {
+				nipostChallenge.InitialPost = &atx.Initial.Post
+			} else {
+				nipostChallenge.PrevATXID = atx.PreviousATXs[post.PrevATXIndex]
+			}
+			poetChallenges = append(poetChallenges, nipostChallenge.Hash().Bytes())
+		}
+		membership := types.MultiMerkleProof{
+			Nodes:       niposts.Membership.Nodes,
+			LeafIndices: niposts.Membership.LeafIndices,
+		}
+		leaves, err := h.nipostValidator.PoetMembership(ctx, &membership, niposts.Challenge, poetChallenges)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid poet membership: %w", err)
+		}
+		minLeaves = min(leaves, minLeaves)
+	}
+
+	// validate all niposts
+	var smesherCommitment *types.ATXID
+	for _, niposts := range atx.NiPosts {
 		for _, post := range niposts.Posts {
 			id := equivocationSet[post.MarriageIndex]
 			var commitment types.ATXID
@@ -599,28 +624,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			if err != nil {
 				return nil, nil, fmt.Errorf("invalid post for ID %s: %w", id, err)
 			}
-
-			nipostChallenge := wire.NIPostChallengeV2{
-				PublishEpoch:     atx.PublishEpoch,
-				PositioningATXID: atx.PositioningATX,
-			}
-			if atx.Initial != nil {
-				nipostChallenge.InitialPost = &atx.Initial.Post
-			} else {
-				nipostChallenge.PrevATXID = atx.PreviousATXs[post.PrevATXIndex]
-			}
-
-			poetChallenges = append(poetChallenges, nipostChallenge.Hash().Bytes())
 		}
-		membership := types.MultiMerkleProof{
-			Nodes:       niposts.Membership.Nodes,
-			LeafIndices: niposts.Membership.LeafIndices,
-		}
-		leaves, err := h.nipostValidator.PoetMembership(ctx, &membership, niposts.Challenge, poetChallenges)
-		if err != nil {
-			return nil, nil, fmt.Errorf("invalid poet membership: %w", err)
-		}
-		minLeaves = min(leaves, minLeaves)
 	}
 
 	parts := &atxParts{
