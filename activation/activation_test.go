@@ -1508,19 +1508,8 @@ func Test_Builder_RegenerateInitialPost(t *testing.T) {
 		}
 	)
 
-	postV2Calls := 0
 	tab.mValidator.EXPECT().
-		PostV2(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits).DoAndReturn(func(_ context.Context, _ types.NodeID, _ types.ATXID, _ *types.Post, _ []byte, _ uint32, _ ...validatorOption) error {
-		switch postV2Calls {
-		case 0, 1, 3:
-			postV2Calls++
-			return nil
-		case 2:
-			postV2Calls++
-			return nil
-		}
-		panic("unexpected test branch")
-	}).Times(4)
+		PostV2(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits).Return(nil).Times(4)
 
 	tab.mclock.EXPECT().CurrentLayer().Return(types.LayerID(0)).AnyTimes()
 	tab.mclock.EXPECT().AwaitLayer(gomock.Any()).DoAndReturn(func(id types.LayerID) <-chan struct{} {
@@ -1536,43 +1525,22 @@ func Test_Builder_RegenerateInitialPost(t *testing.T) {
 	}).AnyTimes()
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil).Times(1)
 
-	nipostCalls := 0
 	tab.mnipost.EXPECT().
-		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(context.Context, *signing.EdSigner, types.EpochID, types.Hash32, *types.NIPostChallenge) (*nipost.NIPostState, error) {
-			switch nipostCalls {
-			case 0:
-				nipostCalls++
-				return nil, ErrInvalidInitialPost
-			case 1:
-				nipostCalls++
-				return &nipost.NIPostState{}, nil
-			default:
-				panic("unexpected branch")
-			}
+		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, ErrInvalidInitialPost)
+	tab.mnipost.EXPECT().
+		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&nipost.NIPostState{}, nil)
 
-		}).AnyTimes()
+	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).Return(initialPost,
+		&types.PostInfo{
+			NodeID:        sig.NodeID(),
+			CommitmentATX: commitmentATX,
+			Nonce:         &nonce,
 
-	proofCalls := 0
-	tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
-		func(context.Context, types.NodeID, []byte, *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
-			switch proofCalls {
-			case 0, 1, 2:
-				proofCalls++
-				return initialPost,
-					&types.PostInfo{
-						NodeID:        sig.NodeID(),
-						CommitmentATX: commitmentATX,
-						Nonce:         &nonce,
-
-						NumUnits:      numUnits,
-						LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
-					},
-					nil
-			default:
-				panic("unexpected branch")
-			}
-		}).AnyTimes()
+			NumUnits:      numUnits,
+			LabelsPerUnit: DefaultPostConfig().LabelsPerUnit,
+		},
+		nil,
+	).Times(2)
 
 	var eg errgroup.Group
 	eg.Go(func() error {
