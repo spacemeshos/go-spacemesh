@@ -834,7 +834,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipost, err := nb.BuildNIPost(context.Background(), sig, currLayer.GetEpoch(), types.RandomHash(), nil)
+		nipost, err := nb.BuildNIPost(context.Background(), sig, types.RandomHash(), &types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()})
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet round has already started")
 		require.Nil(t, nipost)

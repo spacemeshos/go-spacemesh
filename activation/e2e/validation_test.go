@@ -110,7 +110,7 @@ func TestValidator_Validate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, postGenesisEpoch+2, challenge, nil)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 	require.NoError(t, err)
 
 	v := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)

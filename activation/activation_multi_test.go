@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -398,8 +399,11 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		}
 		nipostState[sig.NodeID()] = state
 		tab.mnipost.EXPECT().
-			BuildNIPost(gomock.Any(), sig, ref.PublishEpoch, ref.Hash(), gomock.Any()).
-			Return(state, nil)
+			BuildNIPost(gomock.Any(), sig, ref.Hash(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ *signing.EdSigner, _ types.Hash32, postChallenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
+				require.Equal(t, postChallenge.PublishEpoch, ref.PublishEpoch, "publish epoch mismatch")
+				return state, nil
+			})
 
 		// awaiting atx publication epoch log
 		tab.mclock.EXPECT().CurrentLayer().DoAndReturn(
