@@ -1192,3 +1192,38 @@ func TestNIPostBuilder_Close(t *testing.T) {
 	_, err = nb.BuildNIPost(ctx, sig, postGenesisEpoch+2, challenge, nil)
 	require.Error(t, err)
 }
+
+func TestNIPostBuilderProof_WithBadInitialPost(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	poet := defaultPoetServiceMock(t, ctrl, "http://localhost:9999")
+	poet.EXPECT().Proof(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+		func(ctx context.Context, _ string) (*types.PoetProofMessage, []types.Hash32, error) {
+			return nil, nil, ctx.Err()
+		})
+	validator := NewMocknipostValidator(ctrl)
+	validator.EXPECT().PostV2(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("some error"))
+
+	postClient := NewMockPostClient(ctrl)
+	postClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{}, nil)
+	postService := NewMockpostService(ctrl)
+	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
+	nb, err := NewNIPostBuilder(
+		localsql.InMemory(),
+		postService,
+		zaptest.NewLogger(t),
+		PoetConfig{},
+		defaultLayerClockMock(ctrl),
+		validator,
+		WithPoetClients(poet),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	challenge := types.RandomHash()
+	_, _, err = nb.Proof(ctx, sig.NodeID(), challenge[:], &types.NIPostChallenge{InitialPost: &types.Post{}})
+	require.ErrorIs(t, err, ErrInvalidInitialPost)
+}
