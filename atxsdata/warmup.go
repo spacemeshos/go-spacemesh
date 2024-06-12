@@ -8,10 +8,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
-func Warm(db *statesql.Database, keep types.EpochID) (*Data, error) {
+func Warm(db sql.StateDatabase, keep types.EpochID) (*Data, error) {
 	cache := New()
 	tx, err := db.Tx(context.Background())
 	if err != nil {

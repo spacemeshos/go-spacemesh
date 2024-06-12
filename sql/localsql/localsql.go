@@ -14,10 +14,13 @@ var schemaScript string
 //go:embed schema/migrations/*.sql
 var migrations embed.FS
 
-// Database represents a local database.
-type Database struct {
-	*sql.Database
+type database struct {
+	sql.Database
 }
+
+var _ sql.LocalDatabase = &database{}
+
+func (d *database) IsLocalDatabase() bool { return true }
 
 // Schema returns the schema for the local database.
 func Schema() (*sql.Schema, error) {
@@ -31,7 +34,7 @@ func Schema() (*sql.Schema, error) {
 }
 
 // Open opens a local database.
-func Open(uri string, opts ...sql.Opt) (*Database, error) {
+func Open(uri string, opts ...sql.Opt) (*database, error) {
 	schema, err := Schema()
 	if err != nil {
 		return nil, err
@@ -45,11 +48,11 @@ func Open(uri string, opts ...sql.Opt) (*Database, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Database{Database: db}, nil
+	return &database{Database: db}, nil
 }
 
 // Open opens an in-memory local database.
-func InMemory(opts ...sql.Opt) *Database {
+func InMemory(opts ...sql.Opt) *database {
 	schema, err := Schema()
 	if err != nil {
 		panic(err)
@@ -60,5 +63,5 @@ func InMemory(opts ...sql.Opt) *Database {
 	}
 	opts = append(defaultOpts, opts...)
 	db := sql.InMemory(opts...)
-	return &Database{Database: db}
+	return &database{Database: db}
 }

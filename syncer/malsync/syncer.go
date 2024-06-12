@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -218,12 +217,12 @@ type Syncer struct {
 	cfg           Config
 	fetcher       fetcher
 	db            sql.Executor
-	localdb       *localsql.Database
+	localdb       sql.LocalDatabase
 	clock         clockwork.Clock
 	peerErrMetric counter
 }
 
-func New(fetcher fetcher, db sql.Executor, localdb *localsql.Database, opts ...Opt) *Syncer {
+func New(fetcher fetcher, db sql.Executor, localdb sql.LocalDatabase, opts ...Opt) *Syncer {
 	s := &Syncer{
 		logger:        zap.NewNop(),
 		cfg:           DefaultConfig(),
@@ -342,7 +341,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 }
 
 func (s *Syncer) updateState(ctx context.Context) error {
-	if err := s.localdb.WithTx(ctx, func(tx *sql.Tx) error {
+	if err := s.localdb.WithTx(ctx, func(tx sql.Transaction) error {
 		return malsync.UpdateSyncState(tx, s.clock.Now())
 	}); err != nil {
 		return fmt.Errorf("error updating malsync state: %w", err)

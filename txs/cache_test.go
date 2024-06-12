@@ -19,7 +19,7 @@ import (
 
 type testCache struct {
 	*Cache
-	db *statesql.Database
+	db sql.StateDatabase
 }
 
 type testAcct struct {
@@ -68,7 +68,7 @@ func newMeshTX(
 
 func genAndSaveTXs(
 	t *testing.T,
-	db *statesql.Database,
+	db sql.StateDatabase,
 	signer *signing.EdSigner,
 	from, to uint64,
 	startTime time.Time,
@@ -89,14 +89,14 @@ func genTXs(t *testing.T, signer *signing.EdSigner, from, to uint64, startTime t
 	return mtxs
 }
 
-func saveTXs(t *testing.T, db *statesql.Database, mtxs []*types.MeshTransaction) {
+func saveTXs(t *testing.T, db sql.StateDatabase, mtxs []*types.MeshTransaction) {
 	t.Helper()
 	for _, mtx := range mtxs {
 		require.NoError(t, transactions.Add(db, &mtx.Transaction, mtx.Received))
 	}
 }
 
-func checkTXStateFromDB(t *testing.T, db *statesql.Database, txs []*types.MeshTransaction, state types.TXState) {
+func checkTXStateFromDB(t *testing.T, db sql.StateDatabase, txs []*types.MeshTransaction, state types.TXState) {
 	for _, mtx := range txs {
 		got, err := transactions.Get(db, mtx.ID)
 		require.NoError(t, err)
@@ -104,7 +104,7 @@ func checkTXStateFromDB(t *testing.T, db *statesql.Database, txs []*types.MeshTr
 	}
 }
 
-func checkTXNotInDB(t *testing.T, db *statesql.Database, tid types.TransactionID) {
+func checkTXNotInDB(t *testing.T, db sql.StateDatabase, tid types.TransactionID) {
 	_, err := transactions.Get(db, tid)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }

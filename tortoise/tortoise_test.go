@@ -337,7 +337,7 @@ func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *recovery
 	return &recoveryAdapter{
 		TB:       tb,
 		Tortoise: trtl,
-		db:       state.DB.Executor,
+		db:       state.DB.Database,
 		atxdata:  state.Atxdata,
 	}
 }

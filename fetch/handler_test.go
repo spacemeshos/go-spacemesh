@@ -29,7 +29,7 @@ import (
 
 type testHandler struct {
 	*handler
-	db  *statesql.Database
+	db  sql.StateDatabase
 	cdb *datastore.CachedDB
 }
 
@@ -360,7 +360,7 @@ func testHandleEpochInfoReqWithQueryCache(
 		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 	}
 
-	qc := th.cdb.Executor.(interface{ QueryCount() int })
+	qc := th.cdb.Database.(interface{ QueryCount() int })
 	require.Equal(t, 20, qc.QueryCount())
 	epochBytes, err := codec.Encode(epoch)
 	require.NoError(t, err)

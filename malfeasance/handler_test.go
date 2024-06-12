@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
@@ -27,7 +28,7 @@ type testMalfeasanceHandler struct {
 	*Handler
 
 	observedLogs *observer.ObservedLogs
-	db           *statesql.Database
+	db           sql.StateDatabase
 	mockTrt      *Mocktortoise
 }
 

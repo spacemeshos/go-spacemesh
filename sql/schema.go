@@ -78,8 +78,8 @@ func (s *Schema) SkipMigrations(i ...int) {
 }
 
 // Apply applies the schema to the database.
-func (s *Schema) Apply(db *Database) error {
-	return db.WithTx(context.Background(), func(tx *Tx) error {
+func (s *Schema) Apply(db Database) error {
+	return db.WithTx(context.Background(), func(tx Transaction) error {
 		scanner := bufio.NewScanner(strings.NewReader(s.Script))
 		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 			if i := bytes.Index(data, []byte(";")); i >= 0 {
@@ -99,7 +99,7 @@ func (s *Schema) Apply(db *Database) error {
 // Migrate performs database migration. In case if migrations are disabled, the database
 // version is checked but no migrations are run, and if the database is too old and
 // migrations are disabled, an error is returned.
-func (s *Schema) Migrate(logger *zap.Logger, db *Database, vacuumState int, enable bool) error {
+func (s *Schema) Migrate(logger *zap.Logger, db Database, vacuumState int, enable bool) error {
 	if len(s.Migrations) == 0 {
 		return nil
 	}
@@ -139,7 +139,7 @@ func (s *Schema) Migrate(logger *zap.Logger, db *Database, vacuumState int, enab
 		if m.Order() <= before {
 			continue
 		}
-		if err := db.WithTx(context.Background(), func(tx *Tx) error {
+		if err := db.WithTx(context.Background(), func(tx Transaction) error {
 			if _, ok := s.skipMigration[m.Order()]; !ok {
 				if err := m.Apply(tx); err != nil {
 					for j := i; j >= 0 && s.Migrations[j].Order() > before; j-- {

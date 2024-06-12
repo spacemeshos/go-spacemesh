@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -25,7 +26,7 @@ import (
 
 type testForkFinder struct {
 	*syncer.ForkFinder
-	db       *statesql.Database
+	db       sql.StateDatabase
 	mFetcher *mocks.Mockfetcher
 }
 
@@ -88,7 +89,7 @@ func layerHash(layer int, good bool) types.Hash32 {
 	return h2
 }
 
-func storeNodeHashes(t *testing.T, db *statesql.Database, diverge, max int) {
+func storeNodeHashes(t *testing.T, db sql.StateDatabase, diverge, max int) {
 	for lid := 0; lid <= max; lid++ {
 		if lid < diverge {
 			require.NoError(t, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, true)))

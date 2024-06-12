@@ -18,6 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -233,7 +234,7 @@ func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
 
 func createMesh(
 	t *testing.T,
-	db *statesql.Database,
+	db sql.StateDatabase,
 	miners map[types.NodeID][]*types.ActivationTx,
 	accts []*types.Account,
 ) {

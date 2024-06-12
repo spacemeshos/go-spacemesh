@@ -385,10 +385,10 @@ type App struct {
 	fileLock          *flock.Flock
 	signers           []*signing.EdSigner
 	Config            *config.Config
-	db                *statesql.Database
+	db                sql.StateDatabase
 	cachedDB          *datastore.CachedDB
 	dbMetrics         *dbmetrics.DBMetricsCollector
-	localDB           *localsql.Database
+	localDB           sql.LocalDatabase
 	grpcPublicServer  *grpcserver.Server
 	grpcPrivateServer *grpcserver.Server
 	grpcPostServer    *grpcserver.Server

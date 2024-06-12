@@ -29,14 +29,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
 	logger   log.Log
-	cdb      *statesql.Database
+	cdb      sql.StateDatabase
 	atxsdata *atxsdata.Data
 	clock    layerClock
 
@@ -59,7 +58,7 @@ type Mesh struct {
 
 // NewMesh creates a new instant of a mesh.
 func NewMesh(
-	db *statesql.Database,
+	db sql.StateDatabase,
 	atxsdata *atxsdata.Data,
 	c layerClock,
 	trtl system.Tortoise,
@@ -93,7 +92,7 @@ func NewMesh(
 	}
 
 	genesis := types.GetEffectiveGenesis()
-	if err = db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
+	if err = db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
 		if err = layers.SetProcessed(dbtx, genesis); err != nil {
 			return fmt.Errorf("mesh init: %w", err)
 		}
@@ -371,7 +370,7 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 				return fmt.Errorf("execute block %v/%v: %w", layer.Layer, target, err)
 			}
 		}
-		if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+		if err := msh.cdb.WithTx(ctx, func(dbtx sql.Transaction) error {
 			if err := layers.SetApplied(dbtx, layer.Layer, target); err != nil {
 				return fmt.Errorf("set applied for %v/%v: %w", layer.Layer, target, err)
 			}
@@ -421,7 +420,7 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid type
 		certs []certificates.CertValidity
 		err   error
 	)
-	if err = msh.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+	if err = msh.cdb.WithTx(ctx, func(tx sql.Transaction) error {
 		// check if a certificate has been generated or sync'ed.
 		// - node generated the certificate when it collected enough certify messages
 		// - hare outputs are processed in layer order. i.e. when hare fails for a previous layer N,
@@ -543,7 +542,7 @@ func (msh *Mesh) AddBallot(
 	var proof *wire.MalfeasanceProof
 	// ballots.LayerBallotByNodeID and ballots.Add should be atomic
 	// otherwise concurrent ballots.Add from the same smesher may not be noticed
-	if err := msh.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+	if err := msh.cdb.WithTx(ctx, func(dbtx sql.Transaction) error {
 		if !malicious {
 			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID)
 			if err != nil && !errors.Is(err, sql.ErrNotFound) {

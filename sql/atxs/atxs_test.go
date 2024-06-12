@@ -443,7 +443,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		require.Equal(t, 11, db.QueryCount())
 	}
 
-	require.NoError(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
+	require.NoError(t, db.WithTx(context.Background(), func(tx sql.Transaction) error {
 		atxs.Add(tx, atx5)
 		return nil
 	}))
@@ -455,7 +455,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
 	require.Equal(t, 13, db.QueryCount()) // not incremented after Add
 
-	require.Error(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
+	require.Error(t, db.WithTx(context.Background(), func(tx sql.Transaction) error {
 		atxs.Add(tx, atx6)
 		return errors.New("fail") // rollback
 	}))
@@ -848,7 +848,7 @@ type header struct {
 	filteredOut bool
 }
 
-func createAtx(tb testing.TB, db *statesql.Database, hdr header) (types.ATXID, *signing.EdSigner) {
+func createAtx(tb testing.TB, db sql.StateDatabase, hdr header) (types.ATXID, *signing.EdSigner) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 

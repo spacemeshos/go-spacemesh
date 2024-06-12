@@ -10,6 +10,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	sql "github.com/spacemeshos/go-spacemesh/sql"
@@ -74,6 +75,1210 @@ func (c *MockExecutorExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int,
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockExecutorExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockExecutorExecCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockDatabase is a mock of Database interface.
+type MockDatabase struct {
+	ctrl     *gomock.Controller
+	recorder *MockDatabaseMockRecorder
+}
+
+// MockDatabaseMockRecorder is the mock recorder for MockDatabase.
+type MockDatabaseMockRecorder struct {
+	mock *MockDatabase
+}
+
+// NewMockDatabase creates a new mock instance.
+func NewMockDatabase(ctrl *gomock.Controller) *MockDatabase {
+	mock := &MockDatabase{ctrl: ctrl}
+	mock.recorder = &MockDatabaseMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDatabase) EXPECT() *MockDatabaseMockRecorder {
+	return m.recorder
+}
+
+// Close mocks base method.
+func (m *MockDatabase) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockDatabaseMockRecorder) Close() *MockDatabaseCloseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockDatabase)(nil).Close))
+	return &MockDatabaseCloseCall{Call: call}
+}
+
+// MockDatabaseCloseCall wrap *gomock.Call
+type MockDatabaseCloseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseCloseCall) Return(arg0 error) *MockDatabaseCloseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseCloseCall) Do(f func() error) *MockDatabaseCloseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseCloseCall) DoAndReturn(f func() error) *MockDatabaseCloseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Exec mocks base method.
+func (m *MockDatabase) Exec(arg0 string, arg1 sql.Encoder, arg2 sql.Decoder) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockDatabaseMockRecorder) Exec(arg0, arg1, arg2 any) *MockDatabaseExecCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockDatabase)(nil).Exec), arg0, arg1, arg2)
+	return &MockDatabaseExecCall{Call: call}
+}
+
+// MockDatabaseExecCall wrap *gomock.Call
+type MockDatabaseExecCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseExecCall) Return(arg0 int, arg1 error) *MockDatabaseExecCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockDatabaseExecCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockDatabaseExecCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// QueryCache mocks base method.
+func (m *MockDatabase) QueryCache() sql.QueryCache {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryCache")
+	ret0, _ := ret[0].(sql.QueryCache)
+	return ret0
+}
+
+// QueryCache indicates an expected call of QueryCache.
+func (mr *MockDatabaseMockRecorder) QueryCache() *MockDatabaseQueryCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryCache", reflect.TypeOf((*MockDatabase)(nil).QueryCache))
+	return &MockDatabaseQueryCacheCall{Call: call}
+}
+
+// MockDatabaseQueryCacheCall wrap *gomock.Call
+type MockDatabaseQueryCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseQueryCacheCall) Return(arg0 sql.QueryCache) *MockDatabaseQueryCacheCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseQueryCacheCall) Do(f func() sql.QueryCache) *MockDatabaseQueryCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseQueryCacheCall) DoAndReturn(f func() sql.QueryCache) *MockDatabaseQueryCacheCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// QueryCount mocks base method.
+func (m *MockDatabase) QueryCount() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryCount")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// QueryCount indicates an expected call of QueryCount.
+func (mr *MockDatabaseMockRecorder) QueryCount() *MockDatabaseQueryCountCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryCount", reflect.TypeOf((*MockDatabase)(nil).QueryCount))
+	return &MockDatabaseQueryCountCall{Call: call}
+}
+
+// MockDatabaseQueryCountCall wrap *gomock.Call
+type MockDatabaseQueryCountCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseQueryCountCall) Return(arg0 int) *MockDatabaseQueryCountCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseQueryCountCall) Do(f func() int) *MockDatabaseQueryCountCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseQueryCountCall) DoAndReturn(f func() int) *MockDatabaseQueryCountCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Tx mocks base method.
+func (m *MockDatabase) Tx(ctx context.Context) (sql.Transaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Tx", ctx)
+	ret0, _ := ret[0].(sql.Transaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Tx indicates an expected call of Tx.
+func (mr *MockDatabaseMockRecorder) Tx(ctx any) *MockDatabaseTxCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Tx", reflect.TypeOf((*MockDatabase)(nil).Tx), ctx)
+	return &MockDatabaseTxCall{Call: call}
+}
+
+// MockDatabaseTxCall wrap *gomock.Call
+type MockDatabaseTxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseTxCall) Return(arg0 sql.Transaction, arg1 error) *MockDatabaseTxCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseTxCall) Do(f func(context.Context) (sql.Transaction, error)) *MockDatabaseTxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseTxCall) DoAndReturn(f func(context.Context) (sql.Transaction, error)) *MockDatabaseTxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// TxImmediate mocks base method.
+func (m *MockDatabase) TxImmediate(ctx context.Context) (sql.Transaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TxImmediate", ctx)
+	ret0, _ := ret[0].(sql.Transaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TxImmediate indicates an expected call of TxImmediate.
+func (mr *MockDatabaseMockRecorder) TxImmediate(ctx any) *MockDatabaseTxImmediateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TxImmediate", reflect.TypeOf((*MockDatabase)(nil).TxImmediate), ctx)
+	return &MockDatabaseTxImmediateCall{Call: call}
+}
+
+// MockDatabaseTxImmediateCall wrap *gomock.Call
+type MockDatabaseTxImmediateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseTxImmediateCall) Return(arg0 sql.Transaction, arg1 error) *MockDatabaseTxImmediateCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseTxImmediateCall) Do(f func(context.Context) (sql.Transaction, error)) *MockDatabaseTxImmediateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseTxImmediateCall) DoAndReturn(f func(context.Context) (sql.Transaction, error)) *MockDatabaseTxImmediateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// WithTx mocks base method.
+func (m *MockDatabase) WithTx(ctx context.Context, exec func(sql.Transaction) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", ctx, exec)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockDatabaseMockRecorder) WithTx(ctx, exec any) *MockDatabaseWithTxCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockDatabase)(nil).WithTx), ctx, exec)
+	return &MockDatabaseWithTxCall{Call: call}
+}
+
+// MockDatabaseWithTxCall wrap *gomock.Call
+type MockDatabaseWithTxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseWithTxCall) Return(arg0 error) *MockDatabaseWithTxCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseWithTxCall) Do(f func(context.Context, func(sql.Transaction) error) error) *MockDatabaseWithTxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseWithTxCall) DoAndReturn(f func(context.Context, func(sql.Transaction) error) error) *MockDatabaseWithTxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// WithTxImmediate mocks base method.
+func (m *MockDatabase) WithTxImmediate(ctx context.Context, exec func(sql.Transaction) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTxImmediate", ctx, exec)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTxImmediate indicates an expected call of WithTxImmediate.
+func (mr *MockDatabaseMockRecorder) WithTxImmediate(ctx, exec any) *MockDatabaseWithTxImmediateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTxImmediate", reflect.TypeOf((*MockDatabase)(nil).WithTxImmediate), ctx, exec)
+	return &MockDatabaseWithTxImmediateCall{Call: call}
+}
+
+// MockDatabaseWithTxImmediateCall wrap *gomock.Call
+type MockDatabaseWithTxImmediateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseWithTxImmediateCall) Return(arg0 error) *MockDatabaseWithTxImmediateCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseWithTxImmediateCall) Do(f func(context.Context, func(sql.Transaction) error) error) *MockDatabaseWithTxImmediateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseWithTxImmediateCall) DoAndReturn(f func(context.Context, func(sql.Transaction) error) error) *MockDatabaseWithTxImmediateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockTransaction is a mock of Transaction interface.
+type MockTransaction struct {
+	ctrl     *gomock.Controller
+	recorder *MockTransactionMockRecorder
+}
+
+// MockTransactionMockRecorder is the mock recorder for MockTransaction.
+type MockTransactionMockRecorder struct {
+	mock *MockTransaction
+}
+
+// NewMockTransaction creates a new mock instance.
+func NewMockTransaction(ctrl *gomock.Controller) *MockTransaction {
+	mock := &MockTransaction{ctrl: ctrl}
+	mock.recorder = &MockTransactionMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockTransaction) EXPECT() *MockTransactionMockRecorder {
+	return m.recorder
+}
+
+// Commit mocks base method.
+func (m *MockTransaction) Commit() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Commit")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Commit indicates an expected call of Commit.
+func (mr *MockTransactionMockRecorder) Commit() *MockTransactionCommitCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockTransaction)(nil).Commit))
+	return &MockTransactionCommitCall{Call: call}
+}
+
+// MockTransactionCommitCall wrap *gomock.Call
+type MockTransactionCommitCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockTransactionCommitCall) Return(arg0 error) *MockTransactionCommitCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockTransactionCommitCall) Do(f func() error) *MockTransactionCommitCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockTransactionCommitCall) DoAndReturn(f func() error) *MockTransactionCommitCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Exec mocks base method.
+func (m *MockTransaction) Exec(arg0 string, arg1 sql.Encoder, arg2 sql.Decoder) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockTransactionMockRecorder) Exec(arg0, arg1, arg2 any) *MockTransactionExecCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockTransaction)(nil).Exec), arg0, arg1, arg2)
+	return &MockTransactionExecCall{Call: call}
+}
+
+// MockTransactionExecCall wrap *gomock.Call
+type MockTransactionExecCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockTransactionExecCall) Return(arg0 int, arg1 error) *MockTransactionExecCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockTransactionExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockTransactionExecCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockTransactionExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockTransactionExecCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Release mocks base method.
+func (m *MockTransaction) Release() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Release")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Release indicates an expected call of Release.
+func (mr *MockTransactionMockRecorder) Release() *MockTransactionReleaseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockTransaction)(nil).Release))
+	return &MockTransactionReleaseCall{Call: call}
+}
+
+// MockTransactionReleaseCall wrap *gomock.Call
+type MockTransactionReleaseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockTransactionReleaseCall) Return(arg0 error) *MockTransactionReleaseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockTransactionReleaseCall) Do(f func() error) *MockTransactionReleaseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockTransactionReleaseCall) DoAndReturn(f func() error) *MockTransactionReleaseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockStateDatabase is a mock of StateDatabase interface.
+type MockStateDatabase struct {
+	ctrl     *gomock.Controller
+	recorder *MockStateDatabaseMockRecorder
+}
+
+// MockStateDatabaseMockRecorder is the mock recorder for MockStateDatabase.
+type MockStateDatabaseMockRecorder struct {
+	mock *MockStateDatabase
+}
+
+// NewMockStateDatabase creates a new mock instance.
+func NewMockStateDatabase(ctrl *gomock.Controller) *MockStateDatabase {
+	mock := &MockStateDatabase{ctrl: ctrl}
+	mock.recorder = &MockStateDatabaseMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockStateDatabase) EXPECT() *MockStateDatabaseMockRecorder {
+	return m.recorder
+}
+
+// Close mocks base method.
+func (m *MockStateDatabase) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockStateDatabaseMockRecorder) Close() *MockStateDatabaseCloseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockStateDatabase)(nil).Close))
+	return &MockStateDatabaseCloseCall{Call: call}
+}
+
+// MockStateDatabaseCloseCall wrap *gomock.Call
+type MockStateDatabaseCloseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseCloseCall) Return(arg0 error) *MockStateDatabaseCloseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseCloseCall) Do(f func() error) *MockStateDatabaseCloseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseCloseCall) DoAndReturn(f func() error) *MockStateDatabaseCloseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Exec mocks base method.
+func (m *MockStateDatabase) Exec(arg0 string, arg1 sql.Encoder, arg2 sql.Decoder) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockStateDatabaseMockRecorder) Exec(arg0, arg1, arg2 any) *MockStateDatabaseExecCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockStateDatabase)(nil).Exec), arg0, arg1, arg2)
+	return &MockStateDatabaseExecCall{Call: call}
+}
+
+// MockStateDatabaseExecCall wrap *gomock.Call
+type MockStateDatabaseExecCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseExecCall) Return(arg0 int, arg1 error) *MockStateDatabaseExecCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockStateDatabaseExecCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockStateDatabaseExecCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// IsStateDatabase mocks base method.
+func (m *MockStateDatabase) IsStateDatabase() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsStateDatabase")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsStateDatabase indicates an expected call of IsStateDatabase.
+func (mr *MockStateDatabaseMockRecorder) IsStateDatabase() *MockStateDatabaseIsStateDatabaseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsStateDatabase", reflect.TypeOf((*MockStateDatabase)(nil).IsStateDatabase))
+	return &MockStateDatabaseIsStateDatabaseCall{Call: call}
+}
+
+// MockStateDatabaseIsStateDatabaseCall wrap *gomock.Call
+type MockStateDatabaseIsStateDatabaseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseIsStateDatabaseCall) Return(arg0 bool) *MockStateDatabaseIsStateDatabaseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseIsStateDatabaseCall) Do(f func() bool) *MockStateDatabaseIsStateDatabaseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseIsStateDatabaseCall) DoAndReturn(f func() bool) *MockStateDatabaseIsStateDatabaseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// QueryCache mocks base method.
+func (m *MockStateDatabase) QueryCache() sql.QueryCache {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryCache")
+	ret0, _ := ret[0].(sql.QueryCache)
+	return ret0
+}
+
+// QueryCache indicates an expected call of QueryCache.
+func (mr *MockStateDatabaseMockRecorder) QueryCache() *MockStateDatabaseQueryCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryCache", reflect.TypeOf((*MockStateDatabase)(nil).QueryCache))
+	return &MockStateDatabaseQueryCacheCall{Call: call}
+}
+
+// MockStateDatabaseQueryCacheCall wrap *gomock.Call
+type MockStateDatabaseQueryCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseQueryCacheCall) Return(arg0 sql.QueryCache) *MockStateDatabaseQueryCacheCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseQueryCacheCall) Do(f func() sql.QueryCache) *MockStateDatabaseQueryCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseQueryCacheCall) DoAndReturn(f func() sql.QueryCache) *MockStateDatabaseQueryCacheCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// QueryCount mocks base method.
+func (m *MockStateDatabase) QueryCount() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryCount")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// QueryCount indicates an expected call of QueryCount.
+func (mr *MockStateDatabaseMockRecorder) QueryCount() *MockStateDatabaseQueryCountCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryCount", reflect.TypeOf((*MockStateDatabase)(nil).QueryCount))
+	return &MockStateDatabaseQueryCountCall{Call: call}
+}
+
+// MockStateDatabaseQueryCountCall wrap *gomock.Call
+type MockStateDatabaseQueryCountCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseQueryCountCall) Return(arg0 int) *MockStateDatabaseQueryCountCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseQueryCountCall) Do(f func() int) *MockStateDatabaseQueryCountCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseQueryCountCall) DoAndReturn(f func() int) *MockStateDatabaseQueryCountCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Tx mocks base method.
+func (m *MockStateDatabase) Tx(ctx context.Context) (sql.Transaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Tx", ctx)
+	ret0, _ := ret[0].(sql.Transaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Tx indicates an expected call of Tx.
+func (mr *MockStateDatabaseMockRecorder) Tx(ctx any) *MockStateDatabaseTxCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Tx", reflect.TypeOf((*MockStateDatabase)(nil).Tx), ctx)
+	return &MockStateDatabaseTxCall{Call: call}
+}
+
+// MockStateDatabaseTxCall wrap *gomock.Call
+type MockStateDatabaseTxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseTxCall) Return(arg0 sql.Transaction, arg1 error) *MockStateDatabaseTxCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseTxCall) Do(f func(context.Context) (sql.Transaction, error)) *MockStateDatabaseTxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseTxCall) DoAndReturn(f func(context.Context) (sql.Transaction, error)) *MockStateDatabaseTxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// TxImmediate mocks base method.
+func (m *MockStateDatabase) TxImmediate(ctx context.Context) (sql.Transaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TxImmediate", ctx)
+	ret0, _ := ret[0].(sql.Transaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TxImmediate indicates an expected call of TxImmediate.
+func (mr *MockStateDatabaseMockRecorder) TxImmediate(ctx any) *MockStateDatabaseTxImmediateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TxImmediate", reflect.TypeOf((*MockStateDatabase)(nil).TxImmediate), ctx)
+	return &MockStateDatabaseTxImmediateCall{Call: call}
+}
+
+// MockStateDatabaseTxImmediateCall wrap *gomock.Call
+type MockStateDatabaseTxImmediateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseTxImmediateCall) Return(arg0 sql.Transaction, arg1 error) *MockStateDatabaseTxImmediateCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseTxImmediateCall) Do(f func(context.Context) (sql.Transaction, error)) *MockStateDatabaseTxImmediateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseTxImmediateCall) DoAndReturn(f func(context.Context) (sql.Transaction, error)) *MockStateDatabaseTxImmediateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// WithTx mocks base method.
+func (m *MockStateDatabase) WithTx(ctx context.Context, exec func(sql.Transaction) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", ctx, exec)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockStateDatabaseMockRecorder) WithTx(ctx, exec any) *MockStateDatabaseWithTxCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockStateDatabase)(nil).WithTx), ctx, exec)
+	return &MockStateDatabaseWithTxCall{Call: call}
+}
+
+// MockStateDatabaseWithTxCall wrap *gomock.Call
+type MockStateDatabaseWithTxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseWithTxCall) Return(arg0 error) *MockStateDatabaseWithTxCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseWithTxCall) Do(f func(context.Context, func(sql.Transaction) error) error) *MockStateDatabaseWithTxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseWithTxCall) DoAndReturn(f func(context.Context, func(sql.Transaction) error) error) *MockStateDatabaseWithTxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// WithTxImmediate mocks base method.
+func (m *MockStateDatabase) WithTxImmediate(ctx context.Context, exec func(sql.Transaction) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTxImmediate", ctx, exec)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTxImmediate indicates an expected call of WithTxImmediate.
+func (mr *MockStateDatabaseMockRecorder) WithTxImmediate(ctx, exec any) *MockStateDatabaseWithTxImmediateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTxImmediate", reflect.TypeOf((*MockStateDatabase)(nil).WithTxImmediate), ctx, exec)
+	return &MockStateDatabaseWithTxImmediateCall{Call: call}
+}
+
+// MockStateDatabaseWithTxImmediateCall wrap *gomock.Call
+type MockStateDatabaseWithTxImmediateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseWithTxImmediateCall) Return(arg0 error) *MockStateDatabaseWithTxImmediateCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseWithTxImmediateCall) Do(f func(context.Context, func(sql.Transaction) error) error) *MockStateDatabaseWithTxImmediateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseWithTxImmediateCall) DoAndReturn(f func(context.Context, func(sql.Transaction) error) error) *MockStateDatabaseWithTxImmediateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockLocalDatabase is a mock of LocalDatabase interface.
+type MockLocalDatabase struct {
+	ctrl     *gomock.Controller
+	recorder *MockLocalDatabaseMockRecorder
+}
+
+// MockLocalDatabaseMockRecorder is the mock recorder for MockLocalDatabase.
+type MockLocalDatabaseMockRecorder struct {
+	mock *MockLocalDatabase
+}
+
+// NewMockLocalDatabase creates a new mock instance.
+func NewMockLocalDatabase(ctrl *gomock.Controller) *MockLocalDatabase {
+	mock := &MockLocalDatabase{ctrl: ctrl}
+	mock.recorder = &MockLocalDatabaseMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockLocalDatabase) EXPECT() *MockLocalDatabaseMockRecorder {
+	return m.recorder
+}
+
+// Close mocks base method.
+func (m *MockLocalDatabase) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockLocalDatabaseMockRecorder) Close() *MockLocalDatabaseCloseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockLocalDatabase)(nil).Close))
+	return &MockLocalDatabaseCloseCall{Call: call}
+}
+
+// MockLocalDatabaseCloseCall wrap *gomock.Call
+type MockLocalDatabaseCloseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseCloseCall) Return(arg0 error) *MockLocalDatabaseCloseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseCloseCall) Do(f func() error) *MockLocalDatabaseCloseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseCloseCall) DoAndReturn(f func() error) *MockLocalDatabaseCloseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Exec mocks base method.
+func (m *MockLocalDatabase) Exec(arg0 string, arg1 sql.Encoder, arg2 sql.Decoder) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockLocalDatabaseMockRecorder) Exec(arg0, arg1, arg2 any) *MockLocalDatabaseExecCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockLocalDatabase)(nil).Exec), arg0, arg1, arg2)
+	return &MockLocalDatabaseExecCall{Call: call}
+}
+
+// MockLocalDatabaseExecCall wrap *gomock.Call
+type MockLocalDatabaseExecCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseExecCall) Return(arg0 int, arg1 error) *MockLocalDatabaseExecCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockLocalDatabaseExecCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockLocalDatabaseExecCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// IsLocalDatabase mocks base method.
+func (m *MockLocalDatabase) IsLocalDatabase() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsLocalDatabase")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsLocalDatabase indicates an expected call of IsLocalDatabase.
+func (mr *MockLocalDatabaseMockRecorder) IsLocalDatabase() *MockLocalDatabaseIsLocalDatabaseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLocalDatabase", reflect.TypeOf((*MockLocalDatabase)(nil).IsLocalDatabase))
+	return &MockLocalDatabaseIsLocalDatabaseCall{Call: call}
+}
+
+// MockLocalDatabaseIsLocalDatabaseCall wrap *gomock.Call
+type MockLocalDatabaseIsLocalDatabaseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseIsLocalDatabaseCall) Return(arg0 bool) *MockLocalDatabaseIsLocalDatabaseCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseIsLocalDatabaseCall) Do(f func() bool) *MockLocalDatabaseIsLocalDatabaseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseIsLocalDatabaseCall) DoAndReturn(f func() bool) *MockLocalDatabaseIsLocalDatabaseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// QueryCache mocks base method.
+func (m *MockLocalDatabase) QueryCache() sql.QueryCache {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryCache")
+	ret0, _ := ret[0].(sql.QueryCache)
+	return ret0
+}
+
+// QueryCache indicates an expected call of QueryCache.
+func (mr *MockLocalDatabaseMockRecorder) QueryCache() *MockLocalDatabaseQueryCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryCache", reflect.TypeOf((*MockLocalDatabase)(nil).QueryCache))
+	return &MockLocalDatabaseQueryCacheCall{Call: call}
+}
+
+// MockLocalDatabaseQueryCacheCall wrap *gomock.Call
+type MockLocalDatabaseQueryCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseQueryCacheCall) Return(arg0 sql.QueryCache) *MockLocalDatabaseQueryCacheCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseQueryCacheCall) Do(f func() sql.QueryCache) *MockLocalDatabaseQueryCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseQueryCacheCall) DoAndReturn(f func() sql.QueryCache) *MockLocalDatabaseQueryCacheCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// QueryCount mocks base method.
+func (m *MockLocalDatabase) QueryCount() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryCount")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// QueryCount indicates an expected call of QueryCount.
+func (mr *MockLocalDatabaseMockRecorder) QueryCount() *MockLocalDatabaseQueryCountCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryCount", reflect.TypeOf((*MockLocalDatabase)(nil).QueryCount))
+	return &MockLocalDatabaseQueryCountCall{Call: call}
+}
+
+// MockLocalDatabaseQueryCountCall wrap *gomock.Call
+type MockLocalDatabaseQueryCountCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseQueryCountCall) Return(arg0 int) *MockLocalDatabaseQueryCountCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseQueryCountCall) Do(f func() int) *MockLocalDatabaseQueryCountCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseQueryCountCall) DoAndReturn(f func() int) *MockLocalDatabaseQueryCountCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Tx mocks base method.
+func (m *MockLocalDatabase) Tx(ctx context.Context) (sql.Transaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Tx", ctx)
+	ret0, _ := ret[0].(sql.Transaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Tx indicates an expected call of Tx.
+func (mr *MockLocalDatabaseMockRecorder) Tx(ctx any) *MockLocalDatabaseTxCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Tx", reflect.TypeOf((*MockLocalDatabase)(nil).Tx), ctx)
+	return &MockLocalDatabaseTxCall{Call: call}
+}
+
+// MockLocalDatabaseTxCall wrap *gomock.Call
+type MockLocalDatabaseTxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseTxCall) Return(arg0 sql.Transaction, arg1 error) *MockLocalDatabaseTxCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseTxCall) Do(f func(context.Context) (sql.Transaction, error)) *MockLocalDatabaseTxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseTxCall) DoAndReturn(f func(context.Context) (sql.Transaction, error)) *MockLocalDatabaseTxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// TxImmediate mocks base method.
+func (m *MockLocalDatabase) TxImmediate(ctx context.Context) (sql.Transaction, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TxImmediate", ctx)
+	ret0, _ := ret[0].(sql.Transaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TxImmediate indicates an expected call of TxImmediate.
+func (mr *MockLocalDatabaseMockRecorder) TxImmediate(ctx any) *MockLocalDatabaseTxImmediateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TxImmediate", reflect.TypeOf((*MockLocalDatabase)(nil).TxImmediate), ctx)
+	return &MockLocalDatabaseTxImmediateCall{Call: call}
+}
+
+// MockLocalDatabaseTxImmediateCall wrap *gomock.Call
+type MockLocalDatabaseTxImmediateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseTxImmediateCall) Return(arg0 sql.Transaction, arg1 error) *MockLocalDatabaseTxImmediateCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseTxImmediateCall) Do(f func(context.Context) (sql.Transaction, error)) *MockLocalDatabaseTxImmediateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseTxImmediateCall) DoAndReturn(f func(context.Context) (sql.Transaction, error)) *MockLocalDatabaseTxImmediateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// WithTx mocks base method.
+func (m *MockLocalDatabase) WithTx(ctx context.Context, exec func(sql.Transaction) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTx", ctx, exec)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTx indicates an expected call of WithTx.
+func (mr *MockLocalDatabaseMockRecorder) WithTx(ctx, exec any) *MockLocalDatabaseWithTxCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTx", reflect.TypeOf((*MockLocalDatabase)(nil).WithTx), ctx, exec)
+	return &MockLocalDatabaseWithTxCall{Call: call}
+}
+
+// MockLocalDatabaseWithTxCall wrap *gomock.Call
+type MockLocalDatabaseWithTxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseWithTxCall) Return(arg0 error) *MockLocalDatabaseWithTxCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseWithTxCall) Do(f func(context.Context, func(sql.Transaction) error) error) *MockLocalDatabaseWithTxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseWithTxCall) DoAndReturn(f func(context.Context, func(sql.Transaction) error) error) *MockLocalDatabaseWithTxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// WithTxImmediate mocks base method.
+func (m *MockLocalDatabase) WithTxImmediate(ctx context.Context, exec func(sql.Transaction) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTxImmediate", ctx, exec)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithTxImmediate indicates an expected call of WithTxImmediate.
+func (mr *MockLocalDatabaseMockRecorder) WithTxImmediate(ctx, exec any) *MockLocalDatabaseWithTxImmediateCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTxImmediate", reflect.TypeOf((*MockLocalDatabase)(nil).WithTxImmediate), ctx, exec)
+	return &MockLocalDatabaseWithTxImmediateCall{Call: call}
+}
+
+// MockLocalDatabaseWithTxImmediateCall wrap *gomock.Call
+type MockLocalDatabaseWithTxImmediateCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseWithTxImmediateCall) Return(arg0 error) *MockLocalDatabaseWithTxImmediateCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseWithTxImmediateCall) Do(f func(context.Context, func(sql.Transaction) error) error) *MockLocalDatabaseWithTxImmediateCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseWithTxImmediateCall) DoAndReturn(f func(context.Context, func(sql.Transaction) error) error) *MockLocalDatabaseWithTxImmediateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

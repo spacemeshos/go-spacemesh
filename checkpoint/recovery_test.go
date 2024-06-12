@@ -29,6 +29,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -76,7 +77,7 @@ func accountEqual(tb testing.TB, cacct types.AccountSnapshot, acct *types.Accoun
 	}
 }
 
-func verifyDbContent(tb testing.TB, db *statesql.Database) {
+func verifyDbContent(tb testing.TB, db sql.StateDatabase) {
 	var expected types.Checkpoint
 	require.NoError(tb, json.Unmarshal([]byte(checkpointData), &expected))
 	expAtx := map[types.ATXID]types.AtxSnapshot{}
@@ -227,7 +228,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 
 func validateAndPreserveData(
 	tb testing.TB,
-	db *statesql.Database,
+	db sql.StateDatabase,
 	deps []*checkpoint.AtxDep,
 ) {
 	lg := zaptest.NewLogger(tb)

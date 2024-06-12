@@ -28,7 +28,7 @@ const defaultCnt = uint16(2)
 
 type testCertifier struct {
 	*Certifier
-	db        *statesql.Database
+	db        sql.StateDatabase
 	mOracle   *eligibility.MockRolacle
 	mPub      *pubsubmock.MockPublisher
 	mClk      *mocks.MocklayerClock

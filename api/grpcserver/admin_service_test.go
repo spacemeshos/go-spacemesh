@@ -20,7 +20,7 @@ import (
 
 const snapshot uint32 = 15
 
-func newAtx(tb testing.TB, db *statesql.Database) {
+func newAtx(tb testing.TB, db sql.StateDatabase) {
 	atx := &types.ActivationTx{
 		PublishEpoch:   types.EpochID(2),
 		Sequence:       0,
@@ -37,7 +37,7 @@ func newAtx(tb testing.TB, db *statesql.Database) {
 	require.NoError(tb, atxs.Add(db, atx))
 }
 
-func createMesh(tb testing.TB, db *statesql.Database) {
+func createMesh(tb testing.TB, db sql.StateDatabase) {
 	for range 10 {
 		newAtx(tb, db)
 	}

@@ -22,13 +22,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
-	db        *statesql.Database
+	db        sql.StateDatabase
 	publisher pubsub.Publisher // P2P Swarm
 	mesh      meshAPI          // Mesh
 	conState  conservativeState
@@ -52,7 +52,7 @@ func (s TransactionService) String() string {
 
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
-	db *statesql.Database,
+	db sql.StateDatabase,
 	publisher pubsub.Publisher,
 	msh meshAPI,
 	conState conservativeState,

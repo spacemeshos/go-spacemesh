@@ -14,10 +14,13 @@ var schemaScript string
 //go:embed schema/migrations/*.sql
 var migrations embed.FS
 
-// Database represents a state database.
-type Database struct {
-	*sql.Database
+type database struct {
+	sql.Database
 }
+
+var _ sql.StateDatabase = &database{}
+
+func (db *database) IsStateDatabase() bool { return true }
 
 // Schema returns the schema for the state database.
 func Schema() (*sql.Schema, error) {
@@ -31,7 +34,7 @@ func Schema() (*sql.Schema, error) {
 }
 
 // Open opens a state database.
-func Open(uri string, opts ...sql.Opt) (*Database, error) {
+func Open(uri string, opts ...sql.Opt) (sql.StateDatabase, error) {
 	schema, err := Schema()
 	if err != nil {
 		return nil, err
@@ -41,11 +44,11 @@ func Open(uri string, opts ...sql.Opt) (*Database, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Database{Database: db}, nil
+	return &database{Database: db}, nil
 }
 
 // Open opens an in-memory state database.
-func InMemory(opts ...sql.Opt) *Database {
+func InMemory(opts ...sql.Opt) sql.StateDatabase {
 	schema, err := Schema()
 	if err != nil {
 		panic(err)
@@ -55,5 +58,5 @@ func InMemory(opts ...sql.Opt) *Database {
 	}
 	opts = append(defaultOpts, opts...)
 	db := sql.InMemory(opts...)
-	return &Database{Database: db}
+	return &database{Database: db}
 }

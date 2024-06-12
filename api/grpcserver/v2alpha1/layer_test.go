@@ -16,6 +16,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -225,7 +226,7 @@ func layerGenWithBlock(withBlock bool) layerGenOpt {
 	}
 }
 
-func generateLayer(db *statesql.Database, id types.LayerID, opts ...layerGenOpt) (*layers.Layer, error) {
+func generateLayer(db sql.StateDatabase, id types.LayerID, opts ...layerGenOpt) (*layers.Layer, error) {
 	g := &layerGenOpts{}
 	for _, opt := range opts {
 		opt(g)

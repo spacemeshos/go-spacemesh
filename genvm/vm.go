@@ -23,7 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -59,7 +58,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New returns VM instance.
-func New(db *statesql.Database, opts ...Opt) *VM {
+func New(db sql.StateDatabase, opts ...Opt) *VM {
 	vm := &VM{
 		logger:   log.NewNop(),
 		db:       db,
@@ -79,7 +78,7 @@ func New(db *statesql.Database, opts ...Opt) *VM {
 // VM handles modifications to the account state.
 type VM struct {
 	logger   log.Log
-	db       *statesql.Database
+	db       sql.StateDatabase
 	cfg      Config
 	registry *registry.Registry
 }

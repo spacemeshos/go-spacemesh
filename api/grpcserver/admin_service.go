@@ -22,7 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
@@ -32,14 +32,14 @@ const (
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
-	db      *statesql.Database
+	db      sql.StateDatabase
 	dataDir string
 	recover func()
 	p       peers
 }
 
 // NewAdminService creates a new admin grpc service.
-func NewAdminService(db *statesql.Database, dataDir string, p peers) *AdminService {
+func NewAdminService(db sql.StateDatabase, dataDir string, p peers) *AdminService {
 	return &AdminService{
 		db:      db,
 		dataDir: dataDir,

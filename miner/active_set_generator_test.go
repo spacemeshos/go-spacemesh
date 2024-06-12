@@ -98,8 +98,8 @@ type testerActiveSetGenerator struct {
 	tb  testing.TB
 	gen *activeSetGenerator
 
-	db        *statesql.Database
-	localdb   *localsql.Database
+	db        sql.StateDatabase
+	localdb   sql.LocalDatabase
 	atxsdata  *atxsdata.Data
 	ctrl      *gomock.Controller
 	clock     *mocks.MocklayerClock

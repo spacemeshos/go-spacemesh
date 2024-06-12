@@ -125,7 +125,7 @@ func Recover(
 	}
 	defer localDB.Close()
 	logger.With().Info("clearing atx and malfeasance sync metadata from local database")
-	if err := localDB.WithTx(ctx, func(tx *sql.Tx) error {
+	if err := localDB.WithTx(ctx, func(tx sql.Transaction) error {
 		if err := atxsync.Clear(tx); err != nil {
 			return err
 		}
@@ -149,8 +149,8 @@ func Recover(
 func RecoverWithDb(
 	ctx context.Context,
 	logger log.Log,
-	db *statesql.Database,
-	localDB *localsql.Database,
+	db sql.StateDatabase,
+	localDB sql.LocalDatabase,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 ) (*PreservedData, error) {
@@ -181,8 +181,8 @@ type recoveryData struct {
 func recoverFromLocalFile(
 	ctx context.Context,
 	logger log.Log,
-	db *statesql.Database,
-	localDB *localsql.Database,
+	db sql.StateDatabase,
+	localDB sql.LocalDatabase,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 	file string,
@@ -268,7 +268,7 @@ func recoverFromLocalFile(
 		log.Int("num accounts", len(data.accounts)),
 		log.Int("num atxs", len(data.atxs)),
 	)
-	if err = newDB.WithTx(ctx, func(tx *sql.Tx) error {
+	if err = newDB.WithTx(ctx, func(tx sql.Transaction) error {
 		for _, acct := range data.accounts {
 			if err = accounts.Update(tx, acct); err != nil {
 				return fmt.Errorf("restore account snapshot: %w", err)
@@ -367,8 +367,8 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 
 func collectOwnAtxDeps(
 	logger log.Log,
-	db *statesql.Database,
-	localDB *localsql.Database,
+	db sql.StateDatabase,
+	localDB sql.LocalDatabase,
 	nodeID types.NodeID,
 	goldenATX types.ATXID,
 	data *recoveryData,
@@ -435,7 +435,7 @@ func collectOwnAtxDeps(
 }
 
 func collectDeps(
-	db *statesql.Database,
+	db sql.StateDatabase,
 	ref types.ATXID,
 	all map[types.ATXID]struct{},
 ) (map[types.ATXID]*AtxDep, map[types.PoetProofRef]*types.PoetProofMessage, error) {
@@ -451,7 +451,7 @@ func collectDeps(
 }
 
 func collect(
-	db *statesql.Database,
+	db sql.StateDatabase,
 	ref types.ATXID,
 	all map[types.ATXID]struct{},
 	deps map[types.ATXID]*AtxDep,
@@ -506,7 +506,7 @@ func collect(
 }
 
 func poetProofs(
-	db *statesql.Database,
+	db sql.StateDatabase,
 	atxIds map[types.ATXID]*AtxDep,
 ) (map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage, len(atxIds))

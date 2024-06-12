@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 type testAtxBuilder struct {
 	*Builder
 	db          sql.Executor
-	localDb     *localsql.Database
+	localDb     sql.LocalDatabase
 	goldenATXID types.ATXID
 
 	observedLogs *observer.ObservedLogs

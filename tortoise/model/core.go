@@ -135,7 +135,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
 			tortoise.RecoverLayer(context.Background(),
 				c.tortoise,
-				c.cdb.Executor,
+				c.cdb.Database,
 				c.atxdata,
 				ev.LayerID,
 				c.tortoise.OnBallot,

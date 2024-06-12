@@ -26,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -50,7 +49,7 @@ type Handler struct {
 	logger log.Log
 	cfg    Config
 
-	db                *statesql.Database
+	db                sql.StateDatabase
 	atxsdata          *atxsdata.Data
 	activeSets        *lru.Cache[types.Hash32, uint64]
 	edVerifier        *signing.EdVerifier
@@ -109,7 +108,7 @@ func WithConfig(cfg Config) Opt {
 
 // NewHandler creates new Handler.
 func NewHandler(
-	db *statesql.Database,
+	db sql.StateDatabase,
 	atxsdata *atxsdata.Data,
 	proposals proposalsConsumer,
 	edVerifier *signing.EdVerifier,

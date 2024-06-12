@@ -237,7 +237,7 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	return p
 }
 
-func createAtx(t *testing.T, db *statesql.Database, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
+func createAtx(t *testing.T, db sql.StateDatabase, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
 	atx := &types.ActivationTx{
 		PublishEpoch: epoch,
 		NumUnits:     1,

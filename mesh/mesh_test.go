@@ -37,7 +37,7 @@ const (
 
 type testMesh struct {
 	*Mesh
-	db *statesql.Database
+	db sql.StateDatabase
 	// it is used in malfeasence.Validate, which is called in the tests
 	cdb          *datastore.CachedDB
 	atxsdata     *atxsdata.Data

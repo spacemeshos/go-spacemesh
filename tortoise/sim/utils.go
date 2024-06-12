@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -16,7 +17,7 @@ const (
 
 func newCacheDB(logger *zap.Logger, conf config) *datastore.CachedDB {
 	var (
-		db  *statesql.Database
+		db  sql.StateDatabase
 		err error
 	)
 	if len(conf.Path) == 0 {

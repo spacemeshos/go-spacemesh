@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -137,8 +138,8 @@ func malData(ids ...string) []types.NodeID {
 type tester struct {
 	tb           testing.TB
 	syncer       *Syncer
-	localdb      *localsql.Database
-	db           *statesql.Database
+	localdb      sql.LocalDatabase
+	db           sql.StateDatabase
 	cfg          Config
 	ctrl         *gomock.Controller
 	fetcher      *mocks.Mockfetcher

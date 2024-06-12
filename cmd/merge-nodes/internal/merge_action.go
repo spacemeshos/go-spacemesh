@@ -26,7 +26,7 @@ const (
 
 func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	// Open the target database
-	var dstDB *localsql.Database
+	var dstDB sql.LocalDatabase
 	var err error
 	dstDB, err = openDB(dbLog, to)
 	switch {
@@ -150,7 +150,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	}
 
 	dbLog.Info("merging databases", zap.String("from", from), zap.String("to", to))
-	err = dstDB.WithTx(ctx, func(tx *sql.Tx) error {
+	err = dstDB.WithTx(ctx, func(tx sql.Transaction) error {
 		enc := func(stmt *sql.Statement) {
 			stmt.BindText(1, filepath.Join(from, localDbFile))
 		}
@@ -183,7 +183,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	return nil
 }
 
-func openDB(dbLog *zap.Logger, path string) (*localsql.Database, error) {
+func openDB(dbLog *zap.Logger, path string) (sql.LocalDatabase, error) {
 	dbPath := filepath.Join(path, localDbFile)
 	if _, err := os.Stat(dbPath); err != nil {
 		return nil, fmt.Errorf("stat source database %s: %w", dbPath, err)

@@ -58,7 +58,7 @@ func TestRecoverState(t *testing.T) {
 
 	tortoise2, err := Recover(
 		context.Background(),
-		s.GetState(0).DB.Executor,
+		s.GetState(0).DB.Database,
 		simState.Atxdata,
 		last,
 		WithLogger(lg),
@@ -82,7 +82,7 @@ func TestRecoverEmpty(t *testing.T) {
 	cfg.LayerSize = size
 	tortoise, err := Recover(
 		context.Background(),
-		s.GetState(0).DB.Executor,
+		s.GetState(0).DB.Database,
 		atxsdata.New(),
 		100,
 		WithLogger(zaptest.NewLogger(t)),
@@ -108,18 +108,18 @@ func TestRecoverWithOpinion(t *testing.T) {
 	var last result.Layer
 	for _, rst := range trt.Updates() {
 		if rst.Verified {
-			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB.Executor, rst.Layer, rst.Opinion))
+			require.NoError(t, layers.SetMeshHash(s.GetState(0).DB.Database, rst.Layer, rst.Opinion))
 		}
 		for _, block := range rst.Blocks {
 			if block.Valid {
-				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Executor, block.Header.ID))
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Database, block.Header.ID))
 			}
 		}
 		last = rst
 	}
 	tortoise, err := Recover(
 		context.Background(),
-		s.GetState(0).DB.Executor,
+		s.GetState(0).DB.Database,
 		atxsdata.New(),
 		last.Layer,
 		WithLogger(lg),
@@ -156,14 +156,14 @@ func TestResetPending(t *testing.T) {
 		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
 		for _, block := range rst.Blocks {
 			if block.Valid {
-				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Executor, block.Header.ID))
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Database, block.Header.ID))
 			}
 		}
 	}
 
 	recovered, err := Recover(
 		context.Background(),
-		s.GetState(0).DB.Executor,
+		s.GetState(0).DB.Database,
 		atxsdata.New(),
 		last,
 		WithLogger(lg),
@@ -203,14 +203,14 @@ func TestWindowRecovery(t *testing.T) {
 		require.NoError(t, layers.SetMeshHash(s.GetState(0).DB, rst.Layer, rst.Opinion))
 		for _, block := range rst.Blocks {
 			if block.Valid {
-				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Executor, block.Header.ID))
+				require.NoError(t, blocks.SetValid(s.GetState(0).DB.Database, block.Header.ID))
 			}
 		}
 	}
 
 	recovered, err := Recover(
 		context.Background(),
-		s.GetState(0).DB.Executor,
+		s.GetState(0).DB.Database,
 		atxsdata.New(),
 		last,
 		WithLogger(lg),
@@ -239,7 +239,7 @@ func TestRecoverOnlyAtxs(t *testing.T) {
 		trt.TallyVotes(context.Background(), lid)
 	}
 	future := last + 1000
-	recovered, err := Recover(context.Background(), s.GetState(0).DB.Executor, s.GetState(0).Atxdata, future,
+	recovered, err := Recover(context.Background(), s.GetState(0).DB.Database, s.GetState(0).Atxdata, future,
 		WithLogger(zaptest.NewLogger(t)),
 		WithConfig(cfg),
 	)

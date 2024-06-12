@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -60,8 +61,8 @@ func newTester(tb testing.TB, cfg Config) *tester {
 type tester struct {
 	tb      testing.TB
 	syncer  *Syncer
-	localdb *localsql.Database
-	db      *statesql.Database
+	localdb sql.LocalDatabase
+	db      sql.StateDatabase
 	cfg     Config
 	ctrl    *gomock.Controller
 	fetcher *mocks.Mockfetcher

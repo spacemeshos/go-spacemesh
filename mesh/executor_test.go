@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 type testExecutor struct {
 	tb       testing.TB
 	exec     *mesh.Executor
-	db       *statesql.Database
+	db       sql.StateDatabase
 	atxsdata *atxsdata.Data
 	mcs      *mocks.MockconservativeState
 	mvm      *mocks.MockvmState

@@ -47,7 +47,7 @@ func TestMain(m *testing.M) {
 type testOracle struct {
 	*Oracle
 	tb        testing.TB
-	db        *statesql.Database
+	db        sql.StateDatabase
 	atxsdata  *atxsdata.Data
 	mBeacon   *mocks.MockBeaconGetter
 	mVerifier *MockvrfVerifier

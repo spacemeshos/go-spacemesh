@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -73,7 +74,7 @@ func newTxWthRecipient(
 type testConState struct {
 	*ConservativeState
 	logger *zap.Logger
-	db     *statesql.Database
+	db     sql.StateDatabase
 	mvm    *MockvmState
 
 	id peer.ID

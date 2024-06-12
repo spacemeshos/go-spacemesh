@@ -179,14 +179,14 @@ func withForceFresh() Opt {
 type Opt func(c *conf)
 
 // OpenInMemory creates an in-memory database.
-func OpenInMemory(opts ...Opt) (*Database, error) {
+func OpenInMemory(opts ...Opt) (*sqliteDatabase, error) {
 	opts = append(opts, WithConnections(1), withForceFresh())
 	return Open("file::memory:?mode=memory", opts...)
 }
 
 // InMemory creates an in-memory database for testing and panics if
 // there's an error.
-func InMemory(opts ...Opt) *Database {
+func InMemory(opts ...Opt) *sqliteDatabase {
 	db, err := OpenInMemory(opts...)
 	if err != nil {
 		panic(err)
@@ -199,7 +199,7 @@ func InMemory(opts ...Opt) *Database {
 // Database is opened in WAL mode and pragma synchronous=normal.
 // https://sqlite.org/wal.html
 // https://www.sqlite.org/pragma.html#pragma_synchronous
-func Open(uri string, opts ...Opt) (*Database, error) {
+func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 	config := defaultConf()
 	for _, opt := range opts {
 		opt(config)
@@ -224,7 +224,7 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 			return nil, fmt.Errorf("create db %s: %w", uri, err)
 		}
 	}
-	db := &Database{pool: pool}
+	db := &sqliteDatabase{pool: pool}
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
@@ -276,13 +276,31 @@ func Version(uri string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("open db %s: %w", uri, err)
 	}
-	db := &Database{pool: pool}
+	db := &sqliteDatabase{pool: pool}
 	defer db.Close()
 	return version(db)
 }
 
-// Database is an instance of sqlite database.
-type Database struct {
+// Database represents a database.
+type Database interface {
+	Executor
+	Close() error
+	QueryCount() int
+	QueryCache() QueryCache
+	Tx(ctx context.Context) (Transaction, error)
+	WithTx(ctx context.Context, exec func(Transaction) error) error
+	TxImmediate(ctx context.Context) (Transaction, error)
+	WithTxImmediate(ctx context.Context, exec func(Transaction) error) error
+}
+
+// Transaction represents a transaction.
+type Transaction interface {
+	Executor
+	Commit() error
+	Release() error
+}
+
+type sqliteDatabase struct {
 	*queryCache
 	pool *sqlitex.Pool
 
@@ -293,7 +311,9 @@ type Database struct {
 	queryCount atomic.Int64
 }
 
-func (db *Database) getConn(ctx context.Context) *sqlite.Conn {
+var _ Database = &sqliteDatabase{}
+
+func (db *sqliteDatabase) getConn(ctx context.Context) *sqlite.Conn {
 	start := time.Now()
 	conn := db.pool.Get(ctx)
 	if conn != nil {
@@ -302,19 +322,19 @@ func (db *Database) getConn(ctx context.Context) *sqlite.Conn {
 	return conn
 }
 
-func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
+func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx, error) {
 	conn := db.getConn(ctx)
 	if conn == nil {
 		return nil, ErrNoConnection
 	}
-	tx := &Tx{queryCache: db.queryCache, db: db, conn: conn}
+	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn}
 	if err := tx.begin(initstmt); err != nil {
 		return nil, err
 	}
 	return tx, nil
 }
 
-func (db *Database) withTx(ctx context.Context, initstmt string, exec func(*Tx) error) error {
+func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func(Transaction) error) error {
 	tx, err := db.getTx(ctx, initstmt)
 	if err != nil {
 		return err
@@ -334,13 +354,13 @@ func (db *Database) withTx(ctx context.Context, initstmt string, exec func(*Tx) 
 // after one of the write statements.
 //
 // https://www.sqlite.org/lang_transaction.html
-func (db *Database) Tx(ctx context.Context) (*Tx, error) {
+func (db *sqliteDatabase) Tx(ctx context.Context) (Transaction, error) {
 	return db.getTx(ctx, beginDefault)
 }
 
 // WithTx will pass initialized deferred transaction to exec callback.
 // Will commit only if error is nil.
-func (db *Database) WithTx(ctx context.Context, exec func(*Tx) error) error {
+func (db *sqliteDatabase) WithTx(ctx context.Context, exec func(Transaction) error) error {
 	return db.withTx(ctx, beginImmediate, exec)
 }
 
@@ -349,13 +369,16 @@ func (db *Database) WithTx(ctx context.Context, exec func(*Tx) error) error {
 // IMMEDIATE cause the database connection to start a new write immediately, without waiting
 // for a write statement. The BEGIN IMMEDIATE might fail with SQLITE_BUSY if another write
 // transaction is already active on another database connection.
-func (db *Database) TxImmediate(ctx context.Context) (*Tx, error) {
+func (db *sqliteDatabase) TxImmediate(ctx context.Context) (Transaction, error) {
 	return db.getTx(ctx, beginImmediate)
 }
 
 // WithTxImmediate will pass initialized immediate transaction to exec callback.
 // Will commit only if error is nil.
-func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) error {
+func (db *sqliteDatabase) WithTxImmediate(
+	ctx context.Context,
+	exec func(Transaction) error,
+) error {
 	return db.withTx(ctx, beginImmediate, exec)
 }
 
@@ -367,7 +390,7 @@ func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) e
 //
 // Note that Exec will block until database is closed or statement has finished.
 // If application needs to control statement execution lifetime use one of the transaction.
-func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+func (db *sqliteDatabase) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	db.queryCount.Add(1)
 	conn := db.getConn(context.Background())
 	if conn == nil {
@@ -384,7 +407,7 @@ func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 }
 
 // Close closes all pooled connections.
-func (db *Database) Close() error {
+func (db *sqliteDatabase) Close() error {
 	db.closeMux.Lock()
 	defer db.closeMux.Unlock()
 	if db.closed {
@@ -399,12 +422,12 @@ func (db *Database) Close() error {
 
 // QueryCount returns the number of queries executed, including failed
 // queries, but not counting transaction start / commit / rollback.
-func (db *Database) QueryCount() int {
+func (db *sqliteDatabase) QueryCount() int {
 	return int(db.queryCount.Load())
 }
 
 // Return database's QueryCache.
-func (db *Database) QueryCache() QueryCache {
+func (db *sqliteDatabase) QueryCache() QueryCache {
 	return db.queryCache
 }
 
@@ -445,16 +468,16 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 	}
 }
 
-// Tx is wrapper for database transaction.
-type Tx struct {
+// sqliteTx is wrapper for database transaction.
+type sqliteTx struct {
 	*queryCache
-	db        *Database
+	db        *sqliteDatabase
 	conn      *sqlite.Conn
 	committed bool
 	err       error
 }
 
-func (tx *Tx) begin(initstmt string) error {
+func (tx *sqliteTx) begin(initstmt string) error {
 	stmt := tx.conn.Prep(initstmt)
 	_, err := stmt.Step()
 	if err != nil {
@@ -464,7 +487,7 @@ func (tx *Tx) begin(initstmt string) error {
 }
 
 // Commit transaction.
-func (tx *Tx) Commit() error {
+func (tx *sqliteTx) Commit() error {
 	stmt := tx.conn.Prep("COMMIT;")
 	_, tx.err = stmt.Step()
 	if tx.err != nil {
@@ -475,7 +498,7 @@ func (tx *Tx) Commit() error {
 }
 
 // Release transaction. Every transaction that was created must be released.
-func (tx *Tx) Release() error {
+func (tx *sqliteTx) Release() error {
 	defer tx.db.pool.Put(tx.conn)
 	if tx.committed {
 		return nil
@@ -486,7 +509,7 @@ func (tx *Tx) Release() error {
 }
 
 // Exec query.
-func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	tx.db.queryCount.Add(1)
 	if tx.db.latency != nil {
 		start := time.Now()
@@ -580,4 +603,16 @@ func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
 // IsNull returns true if the specified result column is null.
 func IsNull(stmt *Statement, col int) bool {
 	return stmt.ColumnType(col) == sqlite.SQLITE_NULL
+}
+
+// StateDatabase is a Database used for Spacemesh state.
+type StateDatabase interface {
+	Database
+	IsStateDatabase() bool
+}
+
+// LocalDatabase is a Database used for local node data.
+type LocalDatabase interface {
+	Database
+	IsLocalDatabase() bool
 }

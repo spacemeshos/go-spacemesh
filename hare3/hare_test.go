@@ -24,6 +24,7 @@ import (
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
@@ -114,7 +115,7 @@ type node struct {
 	vrfsigner  *signing.VRFSigner
 	atx        *types.ActivationTx
 	oracle     *eligibility.Oracle
-	db         *statesql.Database
+	db         sql.StateDatabase
 	atxsdata   *atxsdata.Data
 	proposals  *store.Store
 

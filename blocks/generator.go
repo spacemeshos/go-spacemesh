@@ -17,8 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -30,7 +30,7 @@ type Generator struct {
 	eg     errgroup.Group
 	stop   func()
 
-	db        *statesql.Database
+	db        sql.StateDatabase
 	atxs      *atxsdata.Data
 	proposals *store.Store
 	msh       meshProvider
@@ -84,7 +84,7 @@ func WithHareOutputChan(ch <-chan hare3.ConsensusOutput) GeneratorOpt {
 
 // NewGenerator creates new block generator.
 func NewGenerator(
-	db *statesql.Database,
+	db sql.StateDatabase,
 	atxs *atxsdata.Data,
 	proposals *store.Store,
 	exec executor,

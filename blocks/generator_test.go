@@ -266,7 +266,7 @@ func Test_StopBeforeStart(t *testing.T) {
 
 func genData(
 	t *testing.T,
-	db *statesql.Database,
+	db sql.StateDatabase,
 	data *atxsdata.Data,
 	store *store.Store,
 	lid types.LayerID,

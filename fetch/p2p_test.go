@@ -38,13 +38,13 @@ type blobKey struct {
 
 type testP2PFetch struct {
 	t        *testing.T
-	clientDB *statesql.Database
+	clientDB sql.StateDatabase
 	// client proposals
 	clientPDB   *store.Store
 	clientCDB   *datastore.CachedDB
 	clientFetch *Fetch
 	serverID    peer.ID
-	serverDB    *statesql.Database
+	serverDB    sql.StateDatabase
 	// server proposals
 	serverPDB    *store.Store
 	serverCDB    *datastore.CachedDB

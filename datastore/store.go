@@ -32,15 +32,9 @@ type VrfNonceKey struct {
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./store.go
 
-type Executor interface {
-	sql.Executor
-	WithTx(context.Context, func(*sql.Tx) error) error
-	QueryCache() sql.QueryCache
-}
-
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
-	Executor
+	sql.Database
 	sql.QueryCache
 	logger *zap.Logger
 
@@ -91,7 +85,7 @@ func WithConsensusCache(c *atxsdata.Data) Opt {
 }
 
 // NewCachedDB create an instance of a CachedDB.
-func NewCachedDB(db Executor, lg *zap.Logger, opts ...Opt) *CachedDB {
+func NewCachedDB(db sql.StateDatabase, lg *zap.Logger, opts ...Opt) *CachedDB {
 	o := cacheOpts{cfg: DefaultConfig()}
 	for _, opt := range opts {
 		opt(&o)
@@ -114,7 +108,7 @@ func NewCachedDB(db Executor, lg *zap.Logger, opts ...Opt) *CachedDB {
 	}
 
 	return &CachedDB{
-		Executor:         db,
+		Database:         db,
 		QueryCache:       db.QueryCache(),
 		logger:           lg,
 		atxsdata:         o.atxsdata,
@@ -169,7 +163,7 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof
 		return proof, nil
 	}
 
-	proof, err := identities.GetMalfeasanceProof(db.Executor, id)
+	proof, err := identities.GetMalfeasanceProof(db.Database, id)
 	if err != nil && err != sql.ErrNotFound {
 		return nil, err
 	}
