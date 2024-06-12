@@ -340,14 +340,6 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
-	validator := activation.NewValidator(
-		db,
-		poetDb,
-		cfg,
-		opts.Scrypt,
-		verifier,
-	)
-
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
 	localDB := localsql.InMemory()

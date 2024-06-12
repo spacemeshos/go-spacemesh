@@ -393,22 +393,27 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	return nipost.AddPost(b.localDB, nodeID, initialPost)
 }
 
-func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
-	defer b.logger.Info("atx builder stopped")
-
-BUILD:
+func (b *Builder) buildPost(ctx context.Context, nodeID types.NodeID) error {
 	for {
-		err := b.buildInitialPost(ctx, sig.NodeID())
+		err := b.buildInitialPost(ctx, nodeID)
 		if err == nil {
-			break
+			return nil
 		}
 		b.logger.Error("failed to generate initial proof:", zap.Error(err))
 		currentLayer := b.layerClock.CurrentLayer()
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 		}
+	}
+}
+
+func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
+	defer b.logger.Info("atx builder stopped")
+	if err := b.buildPost(ctx, sig.NodeID()); err != nil {
+		b.logger.Error("failed to build initial post:", zap.Error(err))
+		return
 	}
 	var eg errgroup.Group
 	for _, poet := range b.poets {
@@ -468,7 +473,9 @@ BUILD:
 			if err := nipost.RemovePost(b.localDB, sig.NodeID()); err != nil {
 				b.logger.Error("failed to remove existing post from db", zap.Error(err))
 			}
-			goto BUILD
+			if err := b.buildPost(ctx, sig.NodeID()); err != nil {
+				b.logger.Error("failed to regenerate initial post:", zap.Error(err))
+			}
 		default:
 			b.logger.Warn("unknown error", zap.Error(err))
 			// other failures are related to in-process software. we may as well panic here
@@ -736,7 +743,7 @@ func (b *Builder) createAtx(
 		return nil, fmt.Errorf("unknown ATX version: %v", version)
 	}
 	b.logger.Info("building ATX", zap.Stringer("smesherID", sig.NodeID()), zap.Stringer("version", version))
-	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge.PublishEpoch, challengeHash, challenge)
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challengeHash, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}

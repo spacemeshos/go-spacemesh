@@ -86,13 +86,6 @@ func TestValidator_Validate(t *testing.T) {
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	validator := activation.NewValidator(
-		db,
-		poetDb,
-		cfg,
-		opts.Scrypt,
-		verifier,
-	)
 	svc := grpcserver.NewPostService(logger)
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)

@@ -52,7 +52,6 @@ type nipostBuilder interface {
 	BuildNIPost(
 		ctx context.Context,
 		sig *signing.EdSigner,
-		publish types.EpochID,
 		challengeHash types.Hash32,
 		postChallenge *types.NIPostChallenge,
 	) (*nipost.NIPostState, error)

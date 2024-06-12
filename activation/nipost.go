@@ -196,7 +196,6 @@ func (nb *NIPostBuilder) Proof(
 func (nb *NIPostBuilder) BuildNIPost(
 	ctx context.Context,
 	signer *signing.EdSigner,
-	publishEpoch types.EpochID,
 	challenge types.Hash32,
 	postChallenge *types.NIPostChallenge,
 ) (*nipost.NIPostState, error) {
@@ -214,13 +213,13 @@ func (nb *NIPostBuilder) BuildNIPost(
 	//  WE ARE HERE            PROOF BECOMES         ATX PUBLICATION
 	//                           AVAILABLE               DEADLINE
 
-	poetRoundStart := nb.layerClock.LayerToTime((publishEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
-	poetRoundEnd := nb.layerClock.LayerToTime(publishEpoch.FirstLayer()).
+	poetRoundStart := nb.layerClock.LayerToTime((postChallenge.PublishEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
+	poetRoundEnd := nb.layerClock.LayerToTime(postChallenge.PublishEpoch.FirstLayer()).
 		Add(nb.poetCfg.PhaseShift).
 		Add(-nb.poetCfg.CycleGap)
 
 	// we want to publish before the publish epoch ends or we won't receive rewards
-	publishEpochEnd := nb.layerClock.LayerToTime((publishEpoch + 1).FirstLayer())
+	publishEpochEnd := nb.layerClock.LayerToTime((postChallenge.PublishEpoch + 1).FirstLayer())
 
 	// we want to fetch the PoET proof latest 1 CycleGap before the publish epoch ends
 	// so that a node that is setup correctly (i.e. can generate a PoST proof within the cycle gap)
@@ -231,7 +230,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		zap.Time("poet round start", poetRoundStart),
 		zap.Time("poet round end", poetRoundEnd),
 		zap.Time("publish epoch end", publishEpochEnd),
-		zap.Uint32("publish epoch", publishEpoch.Uint32()),
+		zap.Uint32("publish epoch", postChallenge.PublishEpoch.Uint32()),
 	)
 
 	// Phase 0: Submit challenge to PoET services.
@@ -279,14 +278,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 			return nil, fmt.Errorf(
 				"%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)",
 				ErrATXChallengeExpired,
-				publishEpoch,
+				postChallenge.PublishEpoch,
 				poetProofDeadline,
 				now,
 			)
 		}
 
-		events.EmitPoetWaitProof(signer.NodeID(), publishEpoch, poetRoundEnd)
-		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, publishEpoch)
+		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, poetRoundEnd)
+		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, postChallenge.PublishEpoch)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
@@ -311,7 +310,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 			return nil, fmt.Errorf(
 				"%w: deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)",
 				ErrATXChallengeExpired,
-				publishEpoch,
+				postChallenge.PublishEpoch,
 				publishEpochEnd,
 				now,
 			)
