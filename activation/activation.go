@@ -33,8 +33,8 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
-	nilVrfNonce = errors.New("nil VRF nonce")
+	ErrNotFound    = errors.New("not found")
+	errNilVrfNonce = errors.New("nil VRF nonce")
 )
 
 // PoetConfig is the configuration to interact with the poet server.
@@ -364,7 +364,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 		b.logger.Error("initial PoST is invalid: missing VRF nonce. Check your PoST data",
 			log.ZShortStringer("smesherID", nodeID),
 		)
-		return nilVrfNonce
+		return errNilVrfNonce
 	}
 
 	initialPost := nipost.Post{
