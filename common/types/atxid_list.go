@@ -7,7 +7,7 @@ type ATXIDList []ATXID
 
 // Hash returns ATX ID list hash.
 func (atxList ATXIDList) Hash() Hash32 {
-	hasher := hash.New()
+	hasher := hash.GetHasher()
 
 	for _, id := range atxList {
 		if _, err := hasher.Write(id.Bytes()); err != nil {
@@ -17,5 +17,7 @@ func (atxList ATXIDList) Hash() Hash32 {
 
 	var rst Hash32
 	hasher.Sum(rst[:0])
+	hasher.Reset()
+	hash.PutHasher(hasher)
 	return rst
 }

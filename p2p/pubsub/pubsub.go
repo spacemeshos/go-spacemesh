@@ -204,12 +204,15 @@ func DropPeerOnSyncValidationReject(handler SyncHandler, h host.Host, logger log
 }
 
 func msgID(msg *pubsubpb.Message) string {
-	hasher := hash.New()
+	hasher := hash.GetHasher()
 	if msg.Topic != nil {
 		hasher.Write([]byte(*msg.Topic))
 	}
 	hasher.Write(msg.Data)
-	return string(hasher.Sum(nil))
+	sum := string(hasher.Sum(nil))
+	hasher.Reset()
+	hash.PutHasher(hasher)
+	return sum
 }
 
 func getOptions(cfg Config) []pubsub.Option {

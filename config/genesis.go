@@ -30,14 +30,18 @@ func (g *GenesisConfig) GenesisID() types.Hash20 {
 }
 
 func (g *GenesisConfig) GoldenATX() types.Hash32 {
-	hh := hash.New()
+	hh := hash.GetHasher()
 	parsed, err := time.Parse(time.RFC3339, g.GenesisTime)
 	if err != nil {
 		panic("code should have run Validate before this method")
 	}
 	hh.Write([]byte(strconv.FormatInt(parsed.Unix(), 10)))
 	hh.Write([]byte(g.ExtraData))
-	return types.BytesToHash(hh.Sum(nil))
+	sum := types.BytesToHash(hh.Sum(nil))
+
+	hh.Reset()
+	hash.PutHasher(hh)
+	return sum
 }
 
 // Validate GenesisConfig.

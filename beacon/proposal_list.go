@@ -22,7 +22,11 @@ func (hl proposalList) sort() []Proposal {
 }
 
 func (hl proposalList) hash() types.Hash32 {
-	hasher := hash.New()
+	hasher := hash.GetHasher()
+	defer func() {
+		hasher.Reset()
+		hash.PutHasher(hasher)
+	}()
 
 	for _, proposal := range hl {
 		// an error is never returned: https://golang.org/pkg/hash/#Hash

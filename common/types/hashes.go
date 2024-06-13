@@ -101,13 +101,15 @@ func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
 // CalcProposalHash32Presorted returns the 32-byte blake3 sum of the IDs, in the order given. The pre-image is
 // prefixed with additionalBytes.
 func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
-	hasher := hash.New()
+	hasher := hash.GetHasher()
 	hasher.Write(additionalBytes)
 	for _, id := range sortedView {
 		hasher.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
 	}
 	var res Hash32
 	hasher.Sum(res[:0])
+	hasher.Reset()
+	hash.PutHasher(hasher)
 	return res
 }
 

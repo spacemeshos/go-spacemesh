@@ -273,12 +273,15 @@ func (b *Ballot) SignedBytes() []byte {
 
 // HashInnerBytes returns the hash of the InnerBallot.
 func (b *Ballot) HashInnerBytes() []byte {
-	h := hash.New()
+	h := hash.GetHasher()
 	_, err := codec.EncodeTo(h, &b.InnerBallot)
 	if err != nil {
 		log.With().Fatal("failed to encode InnerBallot for hashing", log.Err(err))
 	}
-	return h.Sum(nil)
+	sum := h.Sum(nil)
+	h.Reset()
+	hash.PutHasher(h)
+	return sum
 }
 
 // SetID from stored data.

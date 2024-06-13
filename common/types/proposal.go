@@ -107,12 +107,15 @@ func (p *Proposal) SignedBytes() []byte {
 
 // HashInnerProposal returns the hash of the InnerProposal.
 func (p *Proposal) HashInnerProposal() []byte {
-	h := hash.New()
+	h := hash.GetHasher()
 	_, err := codec.EncodeTo(h, &p.InnerProposal)
 	if err != nil {
 		log.With().Fatal("failed to encode InnerProposal for hashing", log.Err(err))
 	}
-	return h.Sum(nil)
+	sum := h.Sum(nil)
+	h.Reset()
+	hash.PutHasher(h)
+	return sum
 }
 
 // ID returns the ProposalID.

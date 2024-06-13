@@ -36,10 +36,13 @@ func (n *NanoTX) MaxSpending() uint64 {
 }
 
 func (n *NanoTX) combinedHash(blockSeed []byte) []byte {
-	hash := hash.New()
-	hash.Write(blockSeed)
-	hash.Write(n.ID.Bytes())
-	return hash.Sum(nil)
+	h := hash.GetHasher()
+	h.Write(blockSeed)
+	h.Write(n.ID.Bytes())
+	sum := h.Sum(nil)
+	h.Reset()
+	hash.PutHasher(h)
+	return sum
 }
 
 // Better returns true if this transaction takes priority than `other`.
