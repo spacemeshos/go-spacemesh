@@ -239,6 +239,7 @@ func (c *queryCache) GetValue(
 	v, found := c.get(key, subKey)
 	var err error
 	if !found {
+		queryCacheMisses.WithLabelValues(string(key.Kind), key.Key).Inc()
 		// This may seem like a race, but at worst, retrieve() will be
 		// called several times when populating this cached entry.
 		// That's better than locking for the duration of retrieve(),
@@ -247,6 +248,8 @@ func (c *queryCache) GetValue(
 		if err == nil {
 			c.set(key, subKey, v)
 		}
+	} else {
+		queryCacheHits.WithLabelValues(string(key.Kind), key.Key).Inc()
 	}
 	return v, err
 }
