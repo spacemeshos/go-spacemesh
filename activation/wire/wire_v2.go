@@ -82,9 +82,9 @@ func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {
 }
 
 func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
-	publishEpoch := make([]byte, 32)
-	binary.LittleEndian.PutUint32(publishEpoch, atx.PublishEpoch.Uint32())
-	tree.AddLeaf(publishEpoch)
+	var publishEpoch types.Hash32
+	binary.LittleEndian.PutUint32(publishEpoch[:], atx.PublishEpoch.Uint32())
+	tree.AddLeaf(publishEpoch.Bytes())
 	tree.AddLeaf(atx.PositioningATX.Bytes())
 	tree.AddLeaf(atx.Coinbase.Bytes())
 
@@ -122,9 +122,9 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	}
 	tree.AddLeaf(niPostTree.Root())
 
-	vrfNonce := make([]byte, 32)
-	binary.LittleEndian.PutUint64(vrfNonce, atx.VRFNonce)
-	tree.AddLeaf(vrfNonce)
+	var vrfNonce types.Hash32
+	binary.LittleEndian.PutUint64(vrfNonce[:], atx.VRFNonce)
+	tree.AddLeaf(vrfNonce.Bytes())
 
 	tree.AddLeaf(atx.Marriages.Root())
 
@@ -234,9 +234,9 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 	if err != nil {
 		panic(err)
 	}
-	marriageIndex := make([]byte, 32)
-	binary.LittleEndian.PutUint32(marriageIndex, sp.MarriageIndex)
-	tree.AddLeaf(marriageIndex)
+	var marriageIndex types.Hash32
+	binary.LittleEndian.PutUint32(marriageIndex[:], sp.MarriageIndex)
+	tree.AddLeaf(marriageIndex.Bytes())
 
 	if int(sp.PrevATXIndex) >= len(prevATXs) {
 		return nil // invalid index, root cannot be generated
@@ -244,9 +244,9 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 	tree.AddLeaf(prevATXs[sp.PrevATXIndex].Bytes())
 	tree.AddLeaf(sp.Post.Root())
 
-	numUnits := make([]byte, 32)
-	binary.LittleEndian.PutUint32(numUnits, sp.NumUnits)
-	tree.AddLeaf(numUnits)
+	var numUnits types.Hash32
+	binary.LittleEndian.PutUint32(numUnits[:], sp.NumUnits)
+	tree.AddLeaf(numUnits.Bytes())
 	return tree.Root()
 }
 
