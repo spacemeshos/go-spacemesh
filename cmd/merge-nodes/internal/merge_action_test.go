@@ -31,7 +31,7 @@ func oldSchema(t *testing.T) *sql.Schema {
 	return schema
 }
 
-func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
+func Test_MergeDBs_InvalidTargetSchema(t *testing.T) {
 	tmpDst := t.TempDir()
 
 	db, err := localsql.Open("file:"+filepath.Join(tmpDst, localDbFile),
@@ -85,7 +85,7 @@ func Test_MergeDBs_InvalidSourcePath(t *testing.T) {
 	require.ErrorIs(t, err, fs.ErrNotExist)
 }
 
-func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
+func Test_MergeDBs_InvalidSourceSchema(t *testing.T) {
 	tmpDst := t.TempDir()
 
 	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
