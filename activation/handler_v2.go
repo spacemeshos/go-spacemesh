@@ -559,7 +559,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	var minLeaves uint64 = math.MaxUint64
 	for _, niposts := range atx.NiPosts {
 		// verify PoET memberships in a single go
-		var poetChallenges [][]byte
+		indexedChallenges := make(map[uint64][]byte)
 
 		for _, post := range niposts.Posts {
 			nipostChallenge := wire.NIPostChallengeV2{
@@ -571,11 +571,24 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			} else {
 				nipostChallenge.PrevATXID = atx.PreviousATXs[post.PrevATXIndex]
 			}
-			poetChallenges = append(poetChallenges, nipostChallenge.Hash().Bytes())
+			if _, ok := indexedChallenges[post.MembershipLeafIndex]; !ok {
+				indexedChallenges[post.MembershipLeafIndex] = nipostChallenge.Hash().Bytes()
+			}
 		}
+
+		leafIndicies := make([]uint64, 0, len(indexedChallenges))
+		for i := range indexedChallenges {
+			leafIndicies = append(leafIndicies, i)
+		}
+		slices.Sort(leafIndicies)
+		poetChallenges := make([][]byte, 0, len(indexedChallenges))
+		for _, i := range leafIndicies {
+			poetChallenges = append(poetChallenges, indexedChallenges[i])
+		}
+
 		membership := types.MultiMerkleProof{
 			Nodes:       niposts.Membership.Nodes,
-			LeafIndices: niposts.Membership.LeafIndices,
+			LeafIndices: leafIndicies,
 		}
 		leaves, err := h.nipostValidator.PoetMembership(ctx, &membership, niposts.Challenge, poetChallenges)
 		if err != nil {

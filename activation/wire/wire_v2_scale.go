@@ -257,13 +257,6 @@ func (t *MerkleProofV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeUint64SliceWithLimit(enc, t.LeafIndices, 256)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	return total, nil
 }
 
@@ -275,14 +268,6 @@ func (t *MerkleProofV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.Nodes = field
-	}
-	{
-		field, n, err := scale.DecodeUint64SliceWithLimit(dec, 256)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.LeafIndices = field
 	}
 	return total, nil
 }
@@ -297,6 +282,13 @@ func (t *SubPostV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	}
 	{
 		n, err := scale.EncodeCompact32(enc, uint32(t.PrevATXIndex))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.MembershipLeafIndex))
 		if err != nil {
 			return total, err
 		}
@@ -335,6 +327,14 @@ func (t *SubPostV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.PrevATXIndex = uint32(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.MembershipLeafIndex = uint64(field)
 	}
 	{
 		n, err := t.Post.DecodeScale(dec)

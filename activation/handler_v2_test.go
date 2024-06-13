@@ -1402,6 +1402,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
+		atxHandler.mValidator.EXPECT().PoetMembership(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 		atxHandler.mValidator.EXPECT().
 			PostV2(
 				gomock.Any(),
@@ -1445,15 +1446,6 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
-		atxHandler.mValidator.EXPECT().PostV2(
-			gomock.Any(),
-			sig.NodeID(),
-			golden,
-			wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post),
-			atx.NiPosts[0].Challenge.Bytes(),
-			atx.TotalNumUnits(),
-			gomock.Any(),
-		)
 		atxHandler.mValidator.EXPECT().
 			PoetMembership(gomock.Any(), gomock.Any(), atx.NiPosts[0].Challenge, gomock.Any()).
 			Return(0, errors.New("poet failure"))

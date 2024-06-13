@@ -19,7 +19,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -41,12 +40,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-func constructMerkleProof(t *testing.T, members []types.Hash32) wire.MerkleProofV2 {
+func constructMerkleProof(t *testing.T, members []types.Hash32, ids map[uint64]bool) wire.MerkleProofV2 {
 	t.Helper()
-	ids := make(map[uint64]bool)
-	for i := range members {
-		ids[uint64(i)] = true
-	}
 
 	tree, err := merkle.NewTreeBuilder().
 		WithLeavesToProve(ids).
@@ -61,12 +56,7 @@ func constructMerkleProof(t *testing.T, members []types.Hash32) wire.MerkleProof
 	for _, n := range nodes {
 		nodesH32 = append(nodesH32, types.BytesToHash(n))
 	}
-	indicies := maps.Keys(ids)
-	slices.Sort(indicies)
-	return wire.MerkleProofV2{
-		LeafIndices: indicies,
-		Nodes:       nodesH32,
-	}
+	return wire.MerkleProofV2{Nodes: nodesH32}
 }
 
 type nipostData struct {
@@ -106,23 +96,22 @@ func createMerged(
 			{
 				Membership: membership,
 				Challenge:  types.Hash32(niposts[0].PostMetadata.Challenge),
-				Posts:      make([]wire.SubPostV2, 2),
 			},
 		},
 	}
 	// Append PoSTs for all IDs
-	// PoSTs must be ordered by their leaf index in the poet membership proof
 	for i, nipost := range niposts {
 		idx := slices.IndexFunc(previous, func(a types.ATXID) bool { return a == nipost.previous })
 		if idx == -1 {
 			panic(fmt.Sprintf("previous ATX %s not found in %s", nipost.previous, previous))
 		}
-		atx.NiPosts[0].Posts[nipost.Membership.LeafIndex] = wire.SubPostV2{
-			MarriageIndex: uint32(i),
-			PrevATXIndex:  uint32(idx),
-			Post:          *wire.PostToWireV1(nipost.Post),
-			NumUnits:      nipost.NumUnits,
-		}
+		atx.NiPosts[0].Posts = append(atx.NiPosts[0].Posts, wire.SubPostV2{
+			MarriageIndex:       uint32(i),
+			PrevATXIndex:        uint32(idx),
+			MembershipLeafIndex: nipost.Membership.LeafIndex,
+			Post:                *wire.PostToWireV1(nipost.Post),
+			NumUnits:            nipost.NumUnits,
+		})
 	}
 	return atx
 }
@@ -378,14 +367,14 @@ func Test_MarryAndMerge(t *testing.T) {
 		NiPosts: []wire.NiPostsV2{
 			{
 				Membership: wire.MerkleProofV2{
-					Nodes:       nipostState.Membership.Nodes,
-					LeafIndices: []uint64{nipostState.Membership.LeafIndex},
+					Nodes: nipostState.Membership.Nodes,
 				},
 				Challenge: types.Hash32(nipostState.NIPost.PostMetadata.Challenge),
 				Posts: []wire.SubPostV2{
 					{
-						Post:     *wire.PostToWireV1(nipostState.Post),
-						NumUnits: nipostState.NumUnits,
+						Post:                *wire.PostToWireV1(nipostState.Post),
+						NumUnits:            nipostState.NumUnits,
+						MembershipLeafIndex: nipostState.Membership.LeafIndex,
 					},
 				},
 			},
@@ -424,8 +413,9 @@ func Test_MarryAndMerge(t *testing.T) {
 	var niposts [2]nipostData
 	// 3.1. NiPOST for main ID (the publisher)
 	eg.Go(func() error {
-		niposts[0], err = buildNipost(nb, mainID, publish, marriageATX.ID(), marriageATX.ID())
+		n, err := buildNipost(nb, mainID, publish, marriageATX.ID(), marriageATX.ID())
 		logger.Info("built NiPoST", zap.Any("post", niposts[0]))
+		niposts[0] = n
 		return err
 	})
 
@@ -433,8 +423,9 @@ func Test_MarryAndMerge(t *testing.T) {
 	prevATXID, err = atxs.GetLastIDByNodeID(db, mergedID.NodeID())
 	require.NoError(t, err)
 	eg.Go(func() error {
-		niposts[1], err = buildNipost(nb, mergedID, publish, prevATXID, marriageATX.ID())
-		logger.Info("built NiPoST", zap.Any("post", niposts[1]))
+		n, err := buildNipost(nb, mergedID, publish, prevATXID, marriageATX.ID())
+		logger.Info("built NiPoST", zap.Any("post", n))
+		niposts[1] = n
 		return err
 	})
 	require.NoError(t, eg.Wait())
@@ -442,7 +433,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	// 3.3 Construct a multi-ID poet membership merkle proof for both IDs
 	poetProof, members, err := poetClient.Proof(context.Background(), "2")
 	require.NoError(t, err)
-	membershipProof := constructMerkleProof(t, members)
+	membershipProof := constructMerkleProof(t, members, map[uint64]bool{0: true, 1: true})
 
 	mergedATX := createMerged(
 		niposts[:],
@@ -484,18 +475,16 @@ func Test_MarryAndMerge(t *testing.T) {
 	eg = errgroup.Group{}
 	for i, sig := range signers {
 		eg.Go(func() error {
-			niposts[i], err = buildNipost(nb, sig, publish, mergedATX.ID(), mergedATX.ID())
-			logger.Info("built NiPoST", zap.Any("post", niposts[i]))
+			n, err := buildNipost(nb, sig, publish, mergedATX.ID(), mergedATX.ID())
+			logger.Info("built NiPoST", zap.Any("post", n))
+			niposts[i] = n
 			return err
 		})
 	}
 	require.NoError(t, eg.Wait())
 	poetProof, members, err = poetClient.Proof(context.Background(), "3")
 	require.NoError(t, err)
-	membershipProof = constructMerkleProof(t, members)
-
-	// Both IDs have the same nipost challenge, we need to fix the leaf index of the 2nd ID
-	niposts[1].Membership.LeafIndex = 1
+	membershipProof = constructMerkleProof(t, members, map[uint64]bool{0: true})
 
 	mergedATX2 := createMerged(
 		niposts[:],
