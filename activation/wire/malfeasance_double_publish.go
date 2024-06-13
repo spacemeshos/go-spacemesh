@@ -11,24 +11,95 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+//go:generate scalegen
+
 // ProofDoublePublish is a proof that two distinct ATXs with the same publish epoch were signed by the same smesher.
+//
+// We are proofing the following:
+// 1. The ATXs have different IDs.
+// 2. Both ATXs have a valid signature.
+// 3. Both ATXs were signed by the same smesher.
+// 4. Both ATXs have the same publish epoch.
 type ProofDoublePublish struct {
 	Proofs [2]PublishProof
+}
+
+func NewDoublePublishProof(atx1, atx2 *ActivationTxV2) (*ProofDoublePublish, error) {
+	if atx1.ID() == atx2.ID() {
+		return nil, errors.New("ATXs have the same ID")
+	}
+
+	if atx1.SmesherID != atx2.SmesherID {
+		return nil, errors.New("ATXs have different smesher IDs")
+	}
+
+	if atx1.PublishEpoch != atx2.PublishEpoch {
+		return nil, errors.New("ATXs have different publish epochs")
+	}
+
+	proof1, err := publishEpochProof(atx1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create proof for ATX 1: %w", err)
+	}
+
+	proof2, err := publishEpochProof(atx2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create proof for ATX 2: %w", err)
+	}
+
+	proof := &ProofDoublePublish{
+		Proofs: [2]PublishProof{
+			{
+				ATXID:     atx1.ID(),
+				PubEpoch:  atx1.PublishEpoch,
+				Proof:     proof1,
+				SmesherID: atx1.SmesherID,
+				Signature: atx1.Signature,
+			},
+			{
+				ATXID:     atx2.ID(),
+				PubEpoch:  atx2.PublishEpoch,
+				Proof:     proof2,
+				SmesherID: atx2.SmesherID,
+				Signature: atx2.Signature,
+			},
+		},
+	}
+
+	return proof, nil
+}
+
+func publishEpochProof(atx *ActivationTxV2) ([]types.Hash32, error) {
+	tree, err := merkle.NewTreeBuilder().
+		WithLeavesToProve(map[uint64]bool{uint64(PublishEpochIndex): true}).
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		return nil, err
+	}
+	atx.merkleTree(tree)
+	proof := tree.Proof()
+
+	proofHashes := make([]types.Hash32, len(proof))
+	for i, h := range proof {
+		proofHashes[i] = types.Hash32(h)
+	}
+	return proofHashes, nil
 }
 
 // Valid returns true if the proof is valid. It verifies that the two proofs have the same publish epoch, smesher ID,
 // and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
 func (p ProofDoublePublish) Valid(edVerifier *signing.EdVerifier) (bool, error) {
-	if p.Proofs[0].PubEpoch != p.Proofs[1].PubEpoch {
-		return false, errors.New("proofs have different publish epochs")
+	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
+		return false, errors.New("proofs have the same ATX ID")
 	}
 
 	if p.Proofs[0].SmesherID != p.Proofs[1].SmesherID {
 		return false, errors.New("proofs have different smesher IDs")
 	}
 
-	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
-		return false, errors.New("proofs have the same ATX ID")
+	if p.Proofs[0].PubEpoch != p.Proofs[1].PubEpoch {
+		return false, errors.New("proofs have different publish epochs")
 	}
 
 	atx1Valid, err := p.Proofs[0].Valid(edVerifier)
@@ -36,7 +107,7 @@ func (p ProofDoublePublish) Valid(edVerifier *signing.EdVerifier) (bool, error) 
 		return false, fmt.Errorf("proof 1 is invalid: %w", err)
 	}
 	if !atx1Valid {
-		return false, errors.New("proof 1 is invalid")
+		return false, nil
 	}
 
 	atx2Valid, err := p.Proofs[1].Valid(edVerifier)
@@ -52,6 +123,7 @@ type PublishProof struct {
 	ATXID types.ATXID
 	// PubEpoch is the epoch in which the ATX was published.
 	PubEpoch types.EpochID
+
 	// Proof contains the merkle path from the root of the ATX merkle tree (ATXID) to the PublishEpoch field.
 	Proof []types.Hash32 `scale:"max=32"`
 

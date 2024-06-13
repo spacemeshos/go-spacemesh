@@ -4,7 +4,6 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/spacemeshos/merkle-tree"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -62,33 +61,11 @@ func Test_DoublePublishProof(t *testing.T) {
 		atx2 := newActivationTxV2(WithPublishEpoch(10))
 		atx2.Sign(sig)
 
-		proof1, err := publishEpochProof(atx1)
+		proof, err := NewDoublePublishProof(atx1, atx2)
 		require.NoError(t, err)
-
-		proof2, err := publishEpochProof(atx2)
-		require.NoError(t, err)
-
-		doublePublishProof := &ProofDoublePublish{
-			Proofs: [2]PublishProof{
-				{
-					ATXID:     atx1.ID(),
-					PubEpoch:  atx1.PublishEpoch,
-					Proof:     proof1,
-					SmesherID: atx1.SmesherID,
-					Signature: atx1.Signature,
-				},
-				{
-					ATXID:     atx2.ID(),
-					PubEpoch:  atx2.PublishEpoch,
-					Proof:     proof2,
-					SmesherID: atx2.SmesherID,
-					Signature: atx2.Signature,
-				},
-			},
-		}
 
 		verifier := signing.NewEdVerifier()
-		ok, err := doublePublishProof.Valid(verifier)
+		ok, err := proof.Valid(verifier)
 		require.NoError(t, err)
 		require.True(t, ok)
 	})
@@ -100,13 +77,18 @@ func Test_DoublePublishProof(t *testing.T) {
 		atx2 := newActivationTxV2(WithPublishEpoch(11))
 		atx2.Sign(sig)
 
+		proof, err := NewDoublePublishProof(atx1, atx2)
+		require.ErrorContains(t, err, "ATXs have different publish epochs")
+		require.Nil(t, proof)
+
+		// manually construct an invalid proof
 		proof1, err := publishEpochProof(atx1)
 		require.NoError(t, err)
 
 		proof2, err := publishEpochProof(atx2)
 		require.NoError(t, err)
 
-		doublePublishProof := &ProofDoublePublish{
+		proof = &ProofDoublePublish{
 			Proofs: [2]PublishProof{
 				{
 					ATXID:     atx1.ID(),
@@ -126,25 +108,33 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		ok, err := doublePublishProof.Valid(verifier)
+		ok, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "different publish epochs")
 		require.False(t, ok)
 	})
 
 	t.Run("not same smesher", func(t *testing.T) {
+		sig1 := sig
 		atx1 := newActivationTxV2(WithPublishEpoch(10))
-		atx1.Sign(sig)
+		atx1.Sign(sig1)
 
+		sig2, err := signing.NewEdSigner()
+		require.NoError(t, err)
 		atx2 := newActivationTxV2(WithPublishEpoch(10))
-		atx2.Sign(sig)
+		atx2.Sign(sig2)
 
+		proof, err := NewDoublePublishProof(atx1, atx2)
+		require.ErrorContains(t, err, "ATXs have different smesher IDs")
+		require.Nil(t, proof)
+
+		// manually construct an invalid proof
 		proof1, err := publishEpochProof(atx1)
 		require.NoError(t, err)
 
 		proof2, err := publishEpochProof(atx2)
 		require.NoError(t, err)
 
-		doublePublishProof := &ProofDoublePublish{
+		proof = &ProofDoublePublish{
 			Proofs: [2]PublishProof{
 				{
 					ATXID:     atx1.ID(),
@@ -157,14 +147,14 @@ func Test_DoublePublishProof(t *testing.T) {
 					ATXID:     atx2.ID(),
 					PubEpoch:  atx2.PublishEpoch,
 					Proof:     proof2,
-					SmesherID: types.RandomNodeID(),
+					SmesherID: atx2.SmesherID,
 					Signature: atx2.Signature,
 				},
 			},
 		}
 
 		verifier := signing.NewEdVerifier()
-		ok, err := doublePublishProof.Valid(verifier)
+		ok, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "different smesher IDs")
 		require.False(t, ok)
 	})
@@ -173,10 +163,15 @@ func Test_DoublePublishProof(t *testing.T) {
 		atx1 := newActivationTxV2(WithPublishEpoch(10))
 		atx1.Sign(sig)
 
+		proof, err := NewDoublePublishProof(atx1, atx1)
+		require.ErrorContains(t, err, "ATXs have the same ID")
+		require.Nil(t, proof)
+
+		// manually construct an invalid proof
 		proof1, err := publishEpochProof(atx1)
 		require.NoError(t, err)
 
-		doublePublishProof := &ProofDoublePublish{
+		proof = &ProofDoublePublish{
 			Proofs: [2]PublishProof{
 				{
 					ATXID:     atx1.ID(),
@@ -196,7 +191,7 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		ok, err := doublePublishProof.Valid(verifier)
+		ok, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "same ATX ID")
 		require.False(t, ok)
 	})
@@ -208,6 +203,7 @@ func Test_DoublePublishProof(t *testing.T) {
 		atx2 := newActivationTxV2(WithPublishEpoch(10))
 		atx2.Sign(sig)
 
+		// manually construct an invalid proof
 		proof1, err := publishEpochProof(atx1)
 		require.NoError(t, err)
 		proof1[0] = types.RandomHash()
@@ -215,7 +211,7 @@ func Test_DoublePublishProof(t *testing.T) {
 		proof2, err := publishEpochProof(atx2)
 		require.NoError(t, err)
 
-		doublePublishProof := &ProofDoublePublish{
+		proof := &ProofDoublePublish{
 			Proofs: [2]PublishProof{
 				{
 					ATXID:     atx1.ID(),
@@ -235,8 +231,8 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		ok, err := doublePublishProof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 1 is invalid")
+		ok, err := proof.Valid(verifier)
+		require.NoError(t, err)
 		require.False(t, ok)
 	})
 
@@ -247,6 +243,7 @@ func Test_DoublePublishProof(t *testing.T) {
 		atx2 := newActivationTxV2(WithPublishEpoch(10))
 		atx2.Sign(sig)
 
+		// manually construct an invalid proof
 		proof1, err := publishEpochProof(atx1)
 		require.NoError(t, err)
 
@@ -254,7 +251,7 @@ func Test_DoublePublishProof(t *testing.T) {
 		require.NoError(t, err)
 		proof2[0] = types.RandomHash()
 
-		doublePublishProof := &ProofDoublePublish{
+		proof := &ProofDoublePublish{
 			Proofs: [2]PublishProof{
 				{
 					ATXID:     atx1.ID(),
@@ -274,8 +271,8 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		ok, err := doublePublishProof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 2 is invalid")
+		ok, err := proof.Valid(verifier)
+		require.NoError(t, err)
 		require.False(t, ok)
 	})
 
@@ -286,33 +283,13 @@ func Test_DoublePublishProof(t *testing.T) {
 		atx2 := newActivationTxV2(WithPublishEpoch(10))
 		atx2.Sign(sig)
 
-		proof1, err := publishEpochProof(atx1)
+		proof, err := NewDoublePublishProof(atx1, atx2)
 		require.NoError(t, err)
 
-		proof2, err := publishEpochProof(atx2)
-		require.NoError(t, err)
-
-		doublePublishProof := &ProofDoublePublish{
-			Proofs: [2]PublishProof{
-				{
-					ATXID:     atx1.ID(),
-					PubEpoch:  atx1.PublishEpoch,
-					Proof:     proof1,
-					SmesherID: atx1.SmesherID,
-					Signature: types.RandomEdSignature(),
-				},
-				{
-					ATXID:     atx2.ID(),
-					PubEpoch:  atx2.PublishEpoch,
-					Proof:     proof2,
-					SmesherID: atx2.SmesherID,
-					Signature: atx2.Signature,
-				},
-			},
-		}
+		proof.Proofs[0].Signature = types.RandomEdSignature()
 
 		verifier := signing.NewEdVerifier()
-		ok, err := doublePublishProof.Valid(verifier)
+		ok, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid signature")
 		require.False(t, ok)
 	})
@@ -324,53 +301,14 @@ func Test_DoublePublishProof(t *testing.T) {
 		atx2 := newActivationTxV2(WithPublishEpoch(10))
 		atx2.Sign(sig)
 
-		proof1, err := publishEpochProof(atx1)
+		proof, err := NewDoublePublishProof(atx1, atx2)
 		require.NoError(t, err)
 
-		proof2, err := publishEpochProof(atx2)
-		require.NoError(t, err)
-
-		doublePublishProof := &ProofDoublePublish{
-			Proofs: [2]PublishProof{
-				{
-					ATXID:     atx1.ID(),
-					PubEpoch:  atx1.PublishEpoch,
-					Proof:     proof1,
-					SmesherID: atx1.SmesherID,
-					Signature: atx1.Signature,
-				},
-				{
-					ATXID:     atx2.ID(),
-					PubEpoch:  atx2.PublishEpoch,
-					Proof:     proof2,
-					SmesherID: atx2.SmesherID,
-					Signature: types.RandomEdSignature(),
-				},
-			},
-		}
+		proof.Proofs[1].Signature = types.RandomEdSignature()
 
 		verifier := signing.NewEdVerifier()
-		ok, err := doublePublishProof.Valid(verifier)
+		ok, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid signature")
 		require.False(t, ok)
 	})
-}
-
-func publishEpochProof(atx *ActivationTxV2) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(PublishEpochIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	atx.merkleTree(tree)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, h := range proof {
-		proofHashes[i] = types.Hash32(h)
-	}
-
-	return proofHashes, nil
 }

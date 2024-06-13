@@ -46,7 +46,7 @@ type ActivationTxV2 struct {
 	// A marriage is permanent and cannot be revoked or repeated.
 	// All new IDs that are married to this ID are added to the equivocation set
 	// that this ID belongs to.
-	Marriages []MarriageCertificate `scale:"max=256"`
+	Marriages MarriageCertificates `scale:"max=256"`
 
 	// The ID of the ATX containing marriage for the included IDs.
 	// Only required when the ATX includes married IDs.
@@ -57,6 +57,28 @@ type ActivationTxV2 struct {
 
 	// cached fields to avoid repeated calculations
 	id types.ATXID
+}
+
+type MarriageCertificates []MarriageCertificate
+
+func (mcs MarriageCertificates) Root() []byte {
+	marriagesTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	mcs.merkleTree(marriagesTree)
+	return marriagesTree.Root()
+}
+
+func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {
+	for _, marriage := range mcs {
+		tree.AddLeaf(marriage.Root())
+	}
+	for i := len(mcs); i < 256; i++ {
+		tree.AddLeaf(types.EmptyHash32.Bytes())
+	}
 }
 
 func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
@@ -104,19 +126,7 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	binary.LittleEndian.PutUint64(vrfNonce, atx.VRFNonce)
 	tree.AddLeaf(vrfNonce)
 
-	marriagesTree, err := merkle.NewTreeBuilder().
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		panic(err)
-	}
-	for _, marriage := range atx.Marriages {
-		marriagesTree.AddLeaf(marriage.Root())
-	}
-	for i := len(atx.Marriages); i < 256; i++ {
-		marriagesTree.AddLeaf(types.EmptyHash32.Bytes())
-	}
-	tree.AddLeaf(marriagesTree.Root())
+	tree.AddLeaf(atx.Marriages.Root())
 
 	if atx.MarriageATX != nil {
 		tree.AddLeaf(atx.MarriageATX.Bytes())
