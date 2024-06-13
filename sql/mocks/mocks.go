@@ -102,6 +102,42 @@ func (m *MockDatabase) EXPECT() *MockDatabaseMockRecorder {
 	return m.recorder
 }
 
+// ClearCache mocks base method.
+func (m *MockDatabase) ClearCache() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ClearCache")
+}
+
+// ClearCache indicates an expected call of ClearCache.
+func (mr *MockDatabaseMockRecorder) ClearCache() *MockDatabaseClearCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearCache", reflect.TypeOf((*MockDatabase)(nil).ClearCache))
+	return &MockDatabaseClearCacheCall{Call: call}
+}
+
+// MockDatabaseClearCacheCall wrap *gomock.Call
+type MockDatabaseClearCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseClearCacheCall) Return() *MockDatabaseClearCacheCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseClearCacheCall) Do(f func()) *MockDatabaseClearCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseClearCacheCall) DoAndReturn(f func()) *MockDatabaseClearCacheCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Close mocks base method.
 func (m *MockDatabase) Close() error {
 	m.ctrl.T.Helper()
@@ -175,6 +211,83 @@ func (c *MockDatabaseExecCall) Do(f func(string, sql.Encoder, sql.Decoder) (int,
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockDatabaseExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockDatabaseExecCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetValue mocks base method.
+func (m *MockDatabase) GetValue(ctx context.Context, key queryCacheKey, subKey sql.QueryCacheSubKey, retrieve sql.UntypedRetrieveFunc) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValue", ctx, key, subKey, retrieve)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetValue indicates an expected call of GetValue.
+func (mr *MockDatabaseMockRecorder) GetValue(ctx, key, subKey, retrieve any) *MockDatabaseGetValueCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockDatabase)(nil).GetValue), ctx, key, subKey, retrieve)
+	return &MockDatabaseGetValueCall{Call: call}
+}
+
+// MockDatabaseGetValueCall wrap *gomock.Call
+type MockDatabaseGetValueCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseGetValueCall) Return(arg0 any, arg1 error) *MockDatabaseGetValueCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseGetValueCall) Do(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockDatabaseGetValueCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseGetValueCall) DoAndReturn(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockDatabaseGetValueCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// IsCached mocks base method.
+func (m *MockDatabase) IsCached() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsCached")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsCached indicates an expected call of IsCached.
+func (mr *MockDatabaseMockRecorder) IsCached() *MockDatabaseIsCachedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsCached", reflect.TypeOf((*MockDatabase)(nil).IsCached))
+	return &MockDatabaseIsCachedCall{Call: call}
+}
+
+// MockDatabaseIsCachedCall wrap *gomock.Call
+type MockDatabaseIsCachedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseIsCachedCall) Return(arg0 bool) *MockDatabaseIsCachedCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseIsCachedCall) Do(f func() bool) *MockDatabaseIsCachedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseIsCachedCall) DoAndReturn(f func() bool) *MockDatabaseIsCachedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -329,6 +442,42 @@ func (c *MockDatabaseTxImmediateCall) Do(f func(context.Context) (sql.Transactio
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockDatabaseTxImmediateCall) DoAndReturn(f func(context.Context) (sql.Transaction, error)) *MockDatabaseTxImmediateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// UpdateSlice mocks base method.
+func (m *MockDatabase) UpdateSlice(key queryCacheKey, update sql.SliceAppender) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UpdateSlice", key, update)
+}
+
+// UpdateSlice indicates an expected call of UpdateSlice.
+func (mr *MockDatabaseMockRecorder) UpdateSlice(key, update any) *MockDatabaseUpdateSliceCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSlice", reflect.TypeOf((*MockDatabase)(nil).UpdateSlice), key, update)
+	return &MockDatabaseUpdateSliceCall{Call: call}
+}
+
+// MockDatabaseUpdateSliceCall wrap *gomock.Call
+type MockDatabaseUpdateSliceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockDatabaseUpdateSliceCall) Return() *MockDatabaseUpdateSliceCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockDatabaseUpdateSliceCall) Do(f func(queryCacheKey, sql.SliceAppender)) *MockDatabaseUpdateSliceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockDatabaseUpdateSliceCall) DoAndReturn(f func(queryCacheKey, sql.SliceAppender)) *MockDatabaseUpdateSliceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -570,6 +719,42 @@ func (m *MockStateDatabase) EXPECT() *MockStateDatabaseMockRecorder {
 	return m.recorder
 }
 
+// ClearCache mocks base method.
+func (m *MockStateDatabase) ClearCache() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ClearCache")
+}
+
+// ClearCache indicates an expected call of ClearCache.
+func (mr *MockStateDatabaseMockRecorder) ClearCache() *MockStateDatabaseClearCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearCache", reflect.TypeOf((*MockStateDatabase)(nil).ClearCache))
+	return &MockStateDatabaseClearCacheCall{Call: call}
+}
+
+// MockStateDatabaseClearCacheCall wrap *gomock.Call
+type MockStateDatabaseClearCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseClearCacheCall) Return() *MockStateDatabaseClearCacheCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseClearCacheCall) Do(f func()) *MockStateDatabaseClearCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseClearCacheCall) DoAndReturn(f func()) *MockStateDatabaseClearCacheCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Close mocks base method.
 func (m *MockStateDatabase) Close() error {
 	m.ctrl.T.Helper()
@@ -643,6 +828,83 @@ func (c *MockStateDatabaseExecCall) Do(f func(string, sql.Encoder, sql.Decoder) 
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockStateDatabaseExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockStateDatabaseExecCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetValue mocks base method.
+func (m *MockStateDatabase) GetValue(ctx context.Context, key queryCacheKey, subKey sql.QueryCacheSubKey, retrieve sql.UntypedRetrieveFunc) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValue", ctx, key, subKey, retrieve)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetValue indicates an expected call of GetValue.
+func (mr *MockStateDatabaseMockRecorder) GetValue(ctx, key, subKey, retrieve any) *MockStateDatabaseGetValueCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockStateDatabase)(nil).GetValue), ctx, key, subKey, retrieve)
+	return &MockStateDatabaseGetValueCall{Call: call}
+}
+
+// MockStateDatabaseGetValueCall wrap *gomock.Call
+type MockStateDatabaseGetValueCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseGetValueCall) Return(arg0 any, arg1 error) *MockStateDatabaseGetValueCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseGetValueCall) Do(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockStateDatabaseGetValueCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseGetValueCall) DoAndReturn(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockStateDatabaseGetValueCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// IsCached mocks base method.
+func (m *MockStateDatabase) IsCached() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsCached")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsCached indicates an expected call of IsCached.
+func (mr *MockStateDatabaseMockRecorder) IsCached() *MockStateDatabaseIsCachedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsCached", reflect.TypeOf((*MockStateDatabase)(nil).IsCached))
+	return &MockStateDatabaseIsCachedCall{Call: call}
+}
+
+// MockStateDatabaseIsCachedCall wrap *gomock.Call
+type MockStateDatabaseIsCachedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseIsCachedCall) Return(arg0 bool) *MockStateDatabaseIsCachedCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseIsCachedCall) Do(f func() bool) *MockStateDatabaseIsCachedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseIsCachedCall) DoAndReturn(f func() bool) *MockStateDatabaseIsCachedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -839,6 +1101,42 @@ func (c *MockStateDatabaseTxImmediateCall) DoAndReturn(f func(context.Context) (
 	return c
 }
 
+// UpdateSlice mocks base method.
+func (m *MockStateDatabase) UpdateSlice(key queryCacheKey, update sql.SliceAppender) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UpdateSlice", key, update)
+}
+
+// UpdateSlice indicates an expected call of UpdateSlice.
+func (mr *MockStateDatabaseMockRecorder) UpdateSlice(key, update any) *MockStateDatabaseUpdateSliceCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSlice", reflect.TypeOf((*MockStateDatabase)(nil).UpdateSlice), key, update)
+	return &MockStateDatabaseUpdateSliceCall{Call: call}
+}
+
+// MockStateDatabaseUpdateSliceCall wrap *gomock.Call
+type MockStateDatabaseUpdateSliceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockStateDatabaseUpdateSliceCall) Return() *MockStateDatabaseUpdateSliceCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockStateDatabaseUpdateSliceCall) Do(f func(queryCacheKey, sql.SliceAppender)) *MockStateDatabaseUpdateSliceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockStateDatabaseUpdateSliceCall) DoAndReturn(f func(queryCacheKey, sql.SliceAppender)) *MockStateDatabaseUpdateSliceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // WithTx mocks base method.
 func (m *MockStateDatabase) WithTx(ctx context.Context, exec func(sql.Transaction) error) error {
 	m.ctrl.T.Helper()
@@ -938,6 +1236,42 @@ func (m *MockLocalDatabase) EXPECT() *MockLocalDatabaseMockRecorder {
 	return m.recorder
 }
 
+// ClearCache mocks base method.
+func (m *MockLocalDatabase) ClearCache() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ClearCache")
+}
+
+// ClearCache indicates an expected call of ClearCache.
+func (mr *MockLocalDatabaseMockRecorder) ClearCache() *MockLocalDatabaseClearCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearCache", reflect.TypeOf((*MockLocalDatabase)(nil).ClearCache))
+	return &MockLocalDatabaseClearCacheCall{Call: call}
+}
+
+// MockLocalDatabaseClearCacheCall wrap *gomock.Call
+type MockLocalDatabaseClearCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseClearCacheCall) Return() *MockLocalDatabaseClearCacheCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseClearCacheCall) Do(f func()) *MockLocalDatabaseClearCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseClearCacheCall) DoAndReturn(f func()) *MockLocalDatabaseClearCacheCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Close mocks base method.
 func (m *MockLocalDatabase) Close() error {
 	m.ctrl.T.Helper()
@@ -1011,6 +1345,83 @@ func (c *MockLocalDatabaseExecCall) Do(f func(string, sql.Encoder, sql.Decoder) 
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockLocalDatabaseExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decoder) (int, error)) *MockLocalDatabaseExecCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetValue mocks base method.
+func (m *MockLocalDatabase) GetValue(ctx context.Context, key queryCacheKey, subKey sql.QueryCacheSubKey, retrieve sql.UntypedRetrieveFunc) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValue", ctx, key, subKey, retrieve)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetValue indicates an expected call of GetValue.
+func (mr *MockLocalDatabaseMockRecorder) GetValue(ctx, key, subKey, retrieve any) *MockLocalDatabaseGetValueCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockLocalDatabase)(nil).GetValue), ctx, key, subKey, retrieve)
+	return &MockLocalDatabaseGetValueCall{Call: call}
+}
+
+// MockLocalDatabaseGetValueCall wrap *gomock.Call
+type MockLocalDatabaseGetValueCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseGetValueCall) Return(arg0 any, arg1 error) *MockLocalDatabaseGetValueCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseGetValueCall) Do(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockLocalDatabaseGetValueCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseGetValueCall) DoAndReturn(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockLocalDatabaseGetValueCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// IsCached mocks base method.
+func (m *MockLocalDatabase) IsCached() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsCached")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsCached indicates an expected call of IsCached.
+func (mr *MockLocalDatabaseMockRecorder) IsCached() *MockLocalDatabaseIsCachedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsCached", reflect.TypeOf((*MockLocalDatabase)(nil).IsCached))
+	return &MockLocalDatabaseIsCachedCall{Call: call}
+}
+
+// MockLocalDatabaseIsCachedCall wrap *gomock.Call
+type MockLocalDatabaseIsCachedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseIsCachedCall) Return(arg0 bool) *MockLocalDatabaseIsCachedCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseIsCachedCall) Do(f func() bool) *MockLocalDatabaseIsCachedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseIsCachedCall) DoAndReturn(f func() bool) *MockLocalDatabaseIsCachedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1203,6 +1614,42 @@ func (c *MockLocalDatabaseTxImmediateCall) Do(f func(context.Context) (sql.Trans
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockLocalDatabaseTxImmediateCall) DoAndReturn(f func(context.Context) (sql.Transaction, error)) *MockLocalDatabaseTxImmediateCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// UpdateSlice mocks base method.
+func (m *MockLocalDatabase) UpdateSlice(key queryCacheKey, update sql.SliceAppender) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UpdateSlice", key, update)
+}
+
+// UpdateSlice indicates an expected call of UpdateSlice.
+func (mr *MockLocalDatabaseMockRecorder) UpdateSlice(key, update any) *MockLocalDatabaseUpdateSliceCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSlice", reflect.TypeOf((*MockLocalDatabase)(nil).UpdateSlice), key, update)
+	return &MockLocalDatabaseUpdateSliceCall{Call: call}
+}
+
+// MockLocalDatabaseUpdateSliceCall wrap *gomock.Call
+type MockLocalDatabaseUpdateSliceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockLocalDatabaseUpdateSliceCall) Return() *MockLocalDatabaseUpdateSliceCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockLocalDatabaseUpdateSliceCall) Do(f func(queryCacheKey, sql.SliceAppender)) *MockLocalDatabaseUpdateSliceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockLocalDatabaseUpdateSliceCall) DoAndReturn(f func(queryCacheKey, sql.SliceAppender)) *MockLocalDatabaseUpdateSliceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
