@@ -55,7 +55,8 @@ type nipostBuilder interface {
 		challengeHash types.Hash32,
 		postChallenge *types.NIPostChallenge,
 	) (*nipost.NIPostState, error)
-	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte, postChallenge *types.NIPostChallenge) (*types.Post, *types.PostInfo, error)
+	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte, postChallenge *types.NIPostChallenge,
+	) (*types.Post, *types.PostInfo, error)
 	ResetState(types.NodeID) error
 }
 

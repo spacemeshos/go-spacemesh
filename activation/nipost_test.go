@@ -408,7 +408,8 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge,
+		&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -443,7 +444,8 @@ func TestPostSetup(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge,
+		&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 	require.NoError(t, err)
 	require.NotNil(t, nipost)
 }
@@ -612,7 +614,8 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	require.NoError(t, err)
 
 	// Act
-	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge,
+		&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 	require.NoError(t, err)
 
 	// Verify
@@ -670,7 +673,8 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act
-	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge,
+		&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 	require.NoError(t, err)
 
 	// Verify
@@ -709,7 +713,8 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
+			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -745,7 +750,8 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
+			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
@@ -768,7 +774,8 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
+			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -793,7 +800,8 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
+			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 		require.ErrorIs(t, err, ErrPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
@@ -834,7 +842,8 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipost, err := nb.BuildNIPost(context.Background(), sig, types.RandomHash(), &types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()})
+		nipost, err := nb.BuildNIPost(context.Background(), sig, types.RandomHash(),
+			&types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()})
 		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.ErrorContains(t, err, "poet round has already started")
 		require.Nil(t, nipost)
@@ -994,7 +1003,8 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&types.PoetRound{}, nil)
 
-	nipost, err = nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
+	nipost, err = nb.BuildNIPost(context.Background(), sig, challenge,
+		&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
 	require.NoError(t, err)
 
 	// Verify
@@ -1119,7 +1129,8 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: tc.epoch})
+			nipost, err := nb.BuildNIPost(context.Background(), sig, challenge,
+				&types.NIPostChallenge{PublishEpoch: tc.epoch})
 			require.NoError(t, err)
 			require.NotNil(t, nipost)
 		})
@@ -1206,7 +1217,8 @@ func TestNIPostBuilderProof_WithBadInitialPost(t *testing.T) {
 			return nil, nil, ctx.Err()
 		})
 	validator := NewMocknipostValidator(ctrl)
-	validator.EXPECT().PostV2(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("some error"))
+	validator.EXPECT().PostV2(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(errors.New("some error"))
 
 	postClient := NewMockPostClient(ctrl)
 	postClient.EXPECT().Info(gomock.Any()).Return(&types.PostInfo{}, nil)

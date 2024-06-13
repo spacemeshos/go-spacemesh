@@ -240,7 +240,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			Nonce:   challenge.InitialPost.Nonce,
 			Indices: challenge.InitialPost.Indices,
 			Pow:     challenge.InitialPost.Pow,
-		}}
+		},
+	}
 
 	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.Hash(), nipostChallenge)
 	require.NoError(t, err)

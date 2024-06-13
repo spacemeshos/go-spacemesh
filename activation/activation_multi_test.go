@@ -28,7 +28,8 @@ func Test_Builder_Multi_StartSmeshingCoinbase(t *testing.T) {
 
 	for _, sig := range tab.signers {
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
-			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
+			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge,
+			) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
 				return nil, nil, ctx.Err()
 			})
@@ -53,7 +54,8 @@ func Test_Builder_Multi_RestartSmeshing(t *testing.T) {
 
 		for _, sig := range tab.signers {
 			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).AnyTimes().DoAndReturn(
-				func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
+				func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge,
+				) (*types.Post, *types.PostInfo, error) {
 					<-ctx.Done()
 					return nil, nil, ctx.Err()
 				})
@@ -111,7 +113,8 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 
 	for _, sig := range tab.signers {
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
-			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
+			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge,
+			) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
 				return nil, nil, ctx.Err()
 			})
@@ -134,7 +137,8 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 
 		tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
-			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
+			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge,
+			) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
 				return nil, nil, ctx.Err()
 			})
@@ -154,7 +158,8 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 
 		tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
-			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
+			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge,
+			) (*types.Post, *types.PostInfo, error) {
 				<-ctx.Done()
 				return nil, nil, ctx.Err()
 			})
@@ -295,7 +300,8 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		tab.mValidator.EXPECT().
 			PostV2(gomock.Any(), sig.NodeID(), dbPost.CommitmentATX, post, shared.ZeroChallenge, dbPost.NumUnits)
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
-			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
+			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge,
+			) (*types.Post, *types.PostInfo, error) {
 				<-initialPostChan
 				close(ch)
 				post := &types.Post{
@@ -400,7 +406,9 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		nipostState[sig.NodeID()] = state
 		tab.mnipost.EXPECT().
 			BuildNIPost(gomock.Any(), sig, ref.Hash(), gomock.Any()).
-			DoAndReturn(func(_ context.Context, _ *signing.EdSigner, _ types.Hash32, postChallenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
+			DoAndReturn(func(_ context.Context, _ *signing.EdSigner, _ types.Hash32,
+				postChallenge *types.NIPostChallenge,
+			) (*nipost.NIPostState, error) {
 				require.Equal(t, postChallenge.PublishEpoch, ref.PublishEpoch, "publish epoch mismatch")
 				return state, nil
 			})

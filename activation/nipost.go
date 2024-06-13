@@ -43,9 +43,7 @@ const (
 	maxPoetGetProofJitter = 0.04
 )
 
-var (
-	ErrInvalidInitialPost = errors.New("invalid initial post")
-)
+var ErrInvalidInitialPost = errors.New("invalid initial post")
 
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
@@ -213,7 +211,8 @@ func (nb *NIPostBuilder) BuildNIPost(
 	//  WE ARE HERE            PROOF BECOMES         ATX PUBLICATION
 	//                           AVAILABLE               DEADLINE
 
-	poetRoundStart := nb.layerClock.LayerToTime((postChallenge.PublishEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
+	poetRoundStart := nb.layerClock.LayerToTime((postChallenge.PublishEpoch - 1).FirstLayer()).
+		Add(nb.poetCfg.PhaseShift)
 	poetRoundEnd := nb.layerClock.LayerToTime(postChallenge.PublishEpoch.FirstLayer()).
 		Add(nb.poetCfg.PhaseShift).
 		Add(-nb.poetCfg.CycleGap)
