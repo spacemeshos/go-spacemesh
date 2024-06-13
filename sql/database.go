@@ -205,6 +205,7 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 	for _, opt := range opts {
 		opt(config)
 	}
+	logger := config.logger.With(zap.String("uri", uri))
 	var flags sqlite.OpenFlags
 	if !config.forceFresh {
 		flags = sqlite.SQLITE_OPEN_READWRITE |
@@ -236,11 +237,26 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 				db.Close())
 		}
 	} else {
-		if err := config.schema.Migrate(
-			config.logger.With(zap.String("uri", uri)),
-			db, config.vacuumState, config.enableMigrations,
-		); err != nil {
+		before, after, err := config.schema.CheckDBVersion(logger, db)
+		switch {
+		case err != nil:
 			return nil, errors.Join(err, db.Close())
+		case before != after && config.enableMigrations:
+			logger.Info("running migrations",
+				zap.Int("current version", before),
+				zap.Int("target version", after),
+			)
+			if err := config.schema.Migrate(
+				logger, db, before, config.vacuumState,
+			); err != nil {
+				return nil, errors.Join(err, db.Close())
+			}
+		case before != after:
+			logger.Error("database version is too old",
+				zap.Int("current version", before),
+				zap.Int("target version", after),
+			)
+			return nil, fmt.Errorf("%w: %d < %d", ErrOldSchema, before, after)
 		}
 	}
 
@@ -253,7 +269,7 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 		switch {
 		case diff == "": // ok
 		case config.allowSchemaDrift:
-			config.logger.Warn("database schema drift detected",
+			logger.Warn("database schema drift detected",
 				zap.String("uri", uri),
 				zap.String("diff", diff),
 			)
@@ -265,7 +281,7 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 	}
 
 	if config.cache {
-		config.logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
+		logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
 		db.queryCache = &queryCache{cacheSizesByKind: config.cacheSizes}
 	}
 	db.queryCount.Store(0)

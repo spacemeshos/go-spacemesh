@@ -17,6 +17,7 @@ import (
 
 func Test_Transaction_Isolation(t *testing.T) {
 	db := InMemory(
+		WithLogger(zaptest.NewLogger(t)),
 		WithConnections(10),
 		WithLatencyMetering(true),
 		WithDatabaseSchema(&Schema{
@@ -78,6 +79,7 @@ func Test_Migration_Rollback(t *testing.T) {
 }
 
 func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
+	logger := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Name().Return("test").AnyTimes()
@@ -86,6 +88,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	db, err := Open("file:"+dbFile,
+		WithLogger(logger),
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1},
 		}),
@@ -102,6 +105,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 	migration2.EXPECT().Rollback().Return(nil)
 
 	_, err = Open("file:"+dbFile,
+		WithLogger(logger),
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1, migration2},
 		}),
@@ -165,6 +169,7 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 
 func TestDatabaseVacuumState(t *testing.T) {
 	dir := t.TempDir()
+	logger := zaptest.NewLogger(t)
 
 	ctrl := gomock.NewController(t)
 	migration1 := NewMockMigration(ctrl)
@@ -177,6 +182,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 
 	dbFile := filepath.Join(dir, "test.sql")
 	db, err := Open("file:"+dbFile,
+		WithLogger(logger),
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1},
 		}),
@@ -187,6 +193,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 	require.NoError(t, db.Close())
 
 	db, err = Open("file:"+dbFile,
+		WithLogger(logger),
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1, migration2},
 		}),
@@ -202,7 +209,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 }
 
 func TestQueryCount(t *testing.T) {
-	db := InMemory(WithIgnoreSchemaDrift())
+	db := InMemory(WithLogger(zaptest.NewLogger(t)), WithIgnoreSchemaDrift())
 	require.Equal(t, 0, db.QueryCount())
 
 	n, err := db.Exec("select 1", nil, nil)
@@ -217,6 +224,7 @@ func TestQueryCount(t *testing.T) {
 
 func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	dir := t.TempDir()
+	logger := zaptest.NewLogger(t)
 
 	ctrl := gomock.NewController(t)
 	migration1 := NewMockMigration(ctrl)
@@ -226,13 +234,17 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 
 	dbFile := filepath.Join(dir, "test.sql")
-	db, err := Open("file:"+dbFile, WithForceMigrations(true), WithIgnoreSchemaDrift())
+	db, err := Open("file:"+dbFile,
+		WithLogger(logger),
+		WithForceMigrations(true),
+		WithIgnoreSchemaDrift())
 	require.NoError(t, err)
 	_, err = db.Exec("PRAGMA user_version = 3", nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	_, err = Open("file:"+dbFile,
+		WithLogger(logger),
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1, migration2},
 		}),

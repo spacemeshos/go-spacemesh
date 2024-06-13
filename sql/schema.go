@@ -97,18 +97,15 @@ func (s *Schema) Apply(db Database) error {
 	})
 }
 
-// Migrate performs database migration. In case if migrations are disabled, the database
-// version is checked but no migrations are run, and if the database is too old and
-// migrations are disabled, an error is returned.
-func (s *Schema) Migrate(logger *zap.Logger, db Database, vacuumState int, enable bool) error {
+func (s *Schema) CheckDBVersion(logger *zap.Logger, db Database) (before, after int, err error) {
 	if len(s.Migrations) == 0 {
-		return nil
+		return 0, 0, nil
 	}
-	before, err := version(db)
+	before, err = version(db)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
-	after := 0
+	after = 0
 	if len(s.Migrations) > 0 {
 		after = s.Migrations.Version()
 	}
@@ -117,25 +114,16 @@ func (s *Schema) Migrate(logger *zap.Logger, db Database, vacuumState int, enabl
 			zap.Int("current version", before),
 			zap.Int("target version", after),
 		)
-		return fmt.Errorf("%w: %d > %d", ErrTooNew, before, after)
+		return before, after, fmt.Errorf("%w: %d > %d", ErrTooNew, before, after)
 	}
 
-	if before == after {
-		return nil
-	}
+	return before, after, nil
+}
 
-	if !enable {
-		logger.Error("database version is too old",
-			zap.Int("current version", before),
-			zap.Int("target version", after),
-		)
-		return fmt.Errorf("%w: %d < %d", ErrOldSchema, before, after)
-	}
-
-	logger.Info("running migrations",
-		zap.Int("current version", before),
-		zap.Int("target version", after),
-	)
+// Migrate performs database migration. In case if migrations are disabled, the database
+// version is checked but no migrations are run, and if the database is too old and
+// migrations are disabled, an error is returned.
+func (s *Schema) Migrate(logger *zap.Logger, db Database, before, vacuumState int) error {
 	for i, m := range s.Migrations {
 		if m.Order() <= before {
 			continue
