@@ -80,6 +80,30 @@ func buildNipost(
 	return nipostData{previous, nipost}, err
 }
 
+func createSoloAtx(publish types.EpochID, prev, pos types.ATXID, nipost *nipost.NIPostState) *wire.ActivationTxV2 {
+	return &wire.ActivationTxV2{
+		PublishEpoch:   publish,
+		PreviousATXs:   []types.ATXID{prev},
+		PositioningATX: pos,
+		VRFNonce:       uint64(nipost.VRFNonce),
+		NiPosts: []wire.NiPostsV2{
+			{
+				Membership: wire.MerkleProofV2{
+					Nodes: nipost.Membership.Nodes,
+				},
+				Challenge: types.Hash32(nipost.PostMetadata.Challenge),
+				Posts: []wire.SubPostV2{
+					{
+						Post:                *wire.PostToWireV1(nipost.Post),
+						NumUnits:            nipost.NumUnits,
+						MembershipLeafIndex: nipost.Membership.LeafIndex,
+					},
+				},
+			},
+		},
+	}
+}
+
 func createMerged(
 	niposts []nipostData,
 	publish types.EpochID,
@@ -348,42 +372,18 @@ func Test_MarryAndMerge(t *testing.T) {
 	prev, err := atxs.Get(db, prevATXID)
 	require.NoError(t, err)
 
-	challenge := wire.NIPostChallengeV2{
-		PublishEpoch:     prev.PublishEpoch + 1,
-		PrevATXID:        prevATXID,
-		PositioningATXID: prevATXID,
-	}
-
-	nipostState, err := nb.BuildNIPost(context.Background(), mainID, challenge.PublishEpoch, challenge.Hash())
+	publish := prev.PublishEpoch + 1
+	nipostState, err := buildNipost(nb, mainID, publish, prevATXID, prevATXID)
 	require.NoError(t, err)
-	require.NoError(t, nb.ResetState(mainID.NodeID()))
 
-	marriageATX := &wire.ActivationTxV2{
-		PublishEpoch:   challenge.PublishEpoch,
-		PositioningATX: challenge.PositioningATXID,
-		PreviousATXs:   []types.ATXID{challenge.PrevATXID},
-		Coinbase:       builder.Coinbase(),
-		VRFNonce:       (uint64)(nipostState.VRFNonce),
-		NiPosts: []wire.NiPostsV2{
-			{
-				Membership: wire.MerkleProofV2{
-					Nodes: nipostState.Membership.Nodes,
-				},
-				Challenge: types.Hash32(nipostState.NIPost.PostMetadata.Challenge),
-				Posts: []wire.SubPostV2{
-					{
-						Post:                *wire.PostToWireV1(nipostState.Post),
-						NumUnits:            nipostState.NumUnits,
-						MembershipLeafIndex: nipostState.Membership.LeafIndex,
-					},
-				},
-			},
+	marriageATX := createSoloAtx(publish, prevATXID, prevATXID, nipostState.NIPostState)
+	marriageATX.Marriages = []wire.MarriageCertificate{
+		{
+			Signature: mainID.Sign(signing.MARRIAGE, mainID.NodeID().Bytes()),
 		},
-		Marriages: []wire.MarriageCertificate{
-			{
-				ReferenceAtx: prevMergedIDATX,
-				Signature:    mergedID.Sign(signing.MARRIAGE, mainID.NodeID().Bytes()),
-			},
+		{
+			ReferenceAtx: prevMergedIDATX,
+			Signature:    mergedID.Sign(signing.MARRIAGE, mainID.NodeID().Bytes()),
 		},
 	}
 	marriageATX.Sign(mainID)
@@ -407,7 +407,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	}
 
 	// Step 3. Publish merged ATX together
-	publish := marriageATX.PublishEpoch + 2
+	publish = marriageATX.PublishEpoch + 2
 	eg = errgroup.Group{}
 
 	var niposts [2]nipostData
@@ -516,4 +516,38 @@ func Test_MarryAndMerge(t *testing.T) {
 	posATX, err = atxs.Get(db, mergedATX.ID())
 	require.NoError(t, err)
 	require.Equal(t, posATX.TickHeight(), atx.BaseTickHeight)
+
+	// Step 6. Make an emergency split and publish separately
+	publish = mergedATX2.PublishEpoch + 1
+	eg = errgroup.Group{}
+	for i, sig := range signers {
+		eg.Go(func() error {
+			n, err := buildNipost(nb, sig, publish, mergedATX2.ID(), mergedATX2.ID())
+			logger.Info("built NiPoST", zap.Any("post", n))
+			niposts[i] = n
+			return err
+		})
+	}
+	require.NoError(t, eg.Wait())
+
+	for i, signer := range signers {
+		atx := createSoloAtx(publish, mergedATX2.ID(), mergedATX2.ID(), niposts[i].NIPostState)
+		atx.Sign(signer)
+		logger.Info("publishing split ATX", zap.Inline(atx))
+
+		mFetch.EXPECT().RegisterPeerHashes(peer.ID(""), gomock.Any())
+		mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
+		mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
+		mBeacon.EXPECT().OnAtx(gomock.Any())
+		mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+		err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx))
+		require.NoError(t, err)
+
+		atxFromDb, err := atxs.Get(db, atx.ID())
+		require.NoError(t, err)
+		require.Equal(t, units[i], atxFromDb.NumUnits)
+		require.Equal(t, signer.NodeID(), atxFromDb.SmesherID)
+		require.Equal(t, publish, atxFromDb.PublishEpoch)
+		require.Equal(t, mergedATX2.ID(), atxFromDb.PrevATXID)
+	}
 }

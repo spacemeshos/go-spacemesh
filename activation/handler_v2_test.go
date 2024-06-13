@@ -1637,7 +1637,7 @@ func Test_MarryingMalicious(t *testing.T) {
 			atxHandler.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
 			atxHandler.mtortoise.EXPECT().OnMalfeasance(otherSig.NodeID())
 
-			_, err = atxHandler.processATX(context.Background(), "", atx, codec.MustEncode(atx), time.Now())
+			_, err := atxHandler.processATX(context.Background(), "", atx, codec.MustEncode(atx), time.Now())
 			require.NoError(t, err)
 
 			equiv, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
