@@ -2,6 +2,7 @@ package statesql
 
 import (
 	"embed"
+	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -30,7 +31,10 @@ func Schema() (*sql.Schema, error) {
 	}
 	// NOTE: coded state migrations can be added here
 	// They can be a part of this localsql package
-	return &sql.Schema{Script: schemaScript, Migrations: sqlMigrations}, nil
+	return &sql.Schema{
+		Script:     strings.ReplaceAll(schemaScript, "\r", ""),
+		Migrations: sqlMigrations,
+	}, nil
 }
 
 // Open opens a state database.
