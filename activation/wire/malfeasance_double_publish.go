@@ -89,32 +89,24 @@ func publishEpochProof(atx *ActivationTxV2) ([]types.Hash32, error) {
 
 // Valid returns true if the proof is valid. It verifies that the two proofs have the same publish epoch, smesher ID,
 // and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
-func (p ProofDoublePublish) Valid(edVerifier *signing.EdVerifier) (bool, error) {
+func (p ProofDoublePublish) Valid(edVerifier *signing.EdVerifier) error {
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
-		return false, errors.New("proofs have the same ATX ID")
+		return errors.New("proofs have the same ATX ID")
 	}
-
 	if p.Proofs[0].SmesherID != p.Proofs[1].SmesherID {
-		return false, errors.New("proofs have different smesher IDs")
+		return errors.New("proofs have different smesher IDs")
 	}
-
 	if p.Proofs[0].PubEpoch != p.Proofs[1].PubEpoch {
-		return false, errors.New("proofs have different publish epochs")
+		return errors.New("proofs have different publish epochs")
 	}
 
-	atx1Valid, err := p.Proofs[0].Valid(edVerifier)
-	if err != nil {
-		return false, fmt.Errorf("proof 1 is invalid: %w", err)
+	if err := p.Proofs[0].Valid(edVerifier); err != nil {
+		return fmt.Errorf("proof 1 is invalid: %w", err)
 	}
-	if !atx1Valid {
-		return false, nil
+	if err := p.Proofs[1].Valid(edVerifier); err != nil {
+		return fmt.Errorf("proof 2 is invalid: %w", err)
 	}
-
-	atx2Valid, err := p.Proofs[1].Valid(edVerifier)
-	if err != nil {
-		return false, fmt.Errorf("proof 2 is invalid: %w", err)
-	}
-	return atx2Valid, nil
+	return nil
 }
 
 // PublishProof proofs that an ATX was published with a given publish epoch by a given smesher.
@@ -134,9 +126,9 @@ type PublishProof struct {
 }
 
 // Valid returns true if the proof is valid. It verifies that the signature is valid and that the merkle proof is valid.
-func (p PublishProof) Valid(edVerifier *signing.EdVerifier) (bool, error) {
+func (p PublishProof) Valid(edVerifier *signing.EdVerifier) error {
 	if !edVerifier.Verify(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
-		return false, errors.New("invalid signature")
+		return errors.New("invalid signature")
 	}
 	proof := make([][]byte, len(p.Proof))
 	for i, h := range p.Proof {
@@ -144,11 +136,18 @@ func (p PublishProof) Valid(edVerifier *signing.EdVerifier) (bool, error) {
 	}
 	epoch := make([]byte, 32)
 	binary.LittleEndian.PutUint32(epoch, p.PubEpoch.Uint32())
-	return merkle.ValidatePartialTree(
+	ok, err := merkle.ValidatePartialTree(
 		[]uint64{uint64(PublishEpochIndex)},
 		[][]byte{epoch},
 		proof,
 		p.ATXID.Bytes(),
 		atxTreeHash,
 	)
+	if err != nil {
+		return fmt.Errorf("validate publish epoch proof: %w", err)
+	}
+	if !ok {
+		return errors.New("invalid publish epoch proof")
+	}
+	return nil
 }

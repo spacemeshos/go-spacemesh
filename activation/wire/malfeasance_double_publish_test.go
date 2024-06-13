@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,9 +25,7 @@ func Test_DoublePublishProof(t *testing.T) {
 		require.NoError(t, err)
 
 		verifier := signing.NewEdVerifier()
-		ok, err := proof.Valid(verifier)
-		require.NoError(t, err)
-		require.True(t, ok)
+		require.NoError(t, proof.Valid(verifier))
 	})
 
 	t.Run("not same epoch", func(t *testing.T) {
@@ -67,9 +66,8 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		ok, err := proof.Valid(verifier)
+		err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "different publish epochs")
-		require.False(t, ok)
 	})
 
 	t.Run("not same smesher", func(t *testing.T) {
@@ -113,9 +111,8 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		ok, err := proof.Valid(verifier)
+		err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "different smesher IDs")
-		require.False(t, ok)
 	})
 
 	t.Run("same ATX ID", func(t *testing.T) {
@@ -150,9 +147,8 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		ok, err := proof.Valid(verifier)
+		err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "same ATX ID")
-		require.False(t, ok)
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -174,14 +170,14 @@ func Test_DoublePublishProof(t *testing.T) {
 				{
 					ATXID:     atx1.ID(),
 					PubEpoch:  atx1.PublishEpoch,
-					Proof:     proof1,
+					Proof:     slices.Clone(proof1),
 					SmesherID: atx1.SmesherID,
 					Signature: atx1.Signature,
 				},
 				{
 					ATXID:     atx2.ID(),
 					PubEpoch:  atx2.PublishEpoch,
-					Proof:     proof2,
+					Proof:     slices.Clone(proof2),
 					SmesherID: atx2.SmesherID,
 					Signature: atx2.Signature,
 				},
@@ -190,15 +186,13 @@ func Test_DoublePublishProof(t *testing.T) {
 
 		verifier := signing.NewEdVerifier()
 		proof.Proofs[0].Proof[0] = types.RandomHash()
-		ok, err := proof.Valid(verifier)
-		require.NoError(t, err)
-		require.False(t, ok)
+		err = proof.Valid(verifier)
+		require.ErrorContains(t, err, "proof 1 is invalid: invalid publish epoch proof")
 
 		proof.Proofs[0].Proof[0] = proof1[0]
 		proof.Proofs[1].Proof[0] = types.RandomHash()
-		ok, err = proof.Valid(verifier)
-		require.NoError(t, err)
-		require.False(t, ok)
+		err = proof.Valid(verifier)
+		require.ErrorContains(t, err, "proof 2 is invalid: invalid publish epoch proof")
 	})
 
 	t.Run("invalid signature", func(t *testing.T) {
@@ -214,14 +208,12 @@ func Test_DoublePublishProof(t *testing.T) {
 		verifier := signing.NewEdVerifier()
 
 		proof.Proofs[0].Signature = types.RandomEdSignature()
-		ok, err := proof.Valid(verifier)
+		err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid signature")
-		require.False(t, ok)
 
 		proof.Proofs[0].Signature = atx1.Signature
 		proof.Proofs[1].Signature = types.RandomEdSignature()
-		ok, err = proof.Valid(verifier)
+		err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid signature")
-		require.False(t, ok)
 	})
 }

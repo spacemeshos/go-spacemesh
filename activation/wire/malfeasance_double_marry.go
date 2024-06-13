@@ -135,32 +135,21 @@ func certificateProof(certs MarriageCertificates, index uint64) ([]types.Hash32,
 	return proofHashes, nil
 }
 
-func (p ProofDoubleMarry) Valid(edVerifier *signing.EdVerifier) (bool, error) {
+func (p ProofDoubleMarry) Valid(edVerifier *signing.EdVerifier) error {
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
-		return false, errors.New("proofs have the same ATX ID")
+		return errors.New("proofs have the same ATX ID")
 	}
-
 	if p.Proofs[0].NodeID != p.Proofs[1].NodeID {
-		return false, errors.New("proofs have different node IDs")
+		return errors.New("proofs have different node IDs")
 	}
 
-	atx1Valid, err := p.Proofs[0].Valid(edVerifier)
-	if err != nil {
-		return false, fmt.Errorf("proof 1 is invalid: %w", err)
+	if err := p.Proofs[0].Valid(edVerifier); err != nil {
+		return fmt.Errorf("proof 1 is invalid: %w", err)
 	}
-	if !atx1Valid {
-		return false, nil
+	if err := p.Proofs[1].Valid(edVerifier); err != nil {
+		return fmt.Errorf("proof 2 is invalid: %w", err)
 	}
-
-	atx2Valid, err := p.Proofs[1].Valid(edVerifier)
-	if err != nil {
-		return false, fmt.Errorf("proof 2 is invalid: %w", err)
-	}
-	if !atx2Valid {
-		return false, nil
-	}
-
-	return true, nil
+	return nil
 }
 
 type MarryProof struct {
@@ -185,14 +174,14 @@ type MarryProof struct {
 	Signature types.EdSignature
 }
 
-func (p MarryProof) Valid(edVerifier *signing.EdVerifier) (bool, error) {
+func (p MarryProof) Valid(edVerifier *signing.EdVerifier) error {
 	if !edVerifier.Verify(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
-		return false, errors.New("invalid ATX signature")
+		return errors.New("invalid ATX signature")
 	}
 
 	// TODO(mafa): check domain
 	if !edVerifier.Verify(signing.ATX, p.NodeID, p.SmesherID.Bytes(), p.CertificateSignature) {
-		return false, errors.New("invalid certificate signature")
+		return errors.New("invalid certificate signature")
 	}
 
 	proof := make([][]byte, len(p.MarriageProof))
@@ -207,10 +196,10 @@ func (p MarryProof) Valid(edVerifier *signing.EdVerifier) (bool, error) {
 		atxTreeHash,
 	)
 	if err != nil {
-		return false, fmt.Errorf("validate marriage proof: %w", err)
+		return fmt.Errorf("validate marriage proof: %w", err)
 	}
 	if !ok {
-		return false, nil
+		return errors.New("invalid marriage proof")
 	}
 
 	mc := MarriageCertificate{
@@ -230,7 +219,10 @@ func (p MarryProof) Valid(edVerifier *signing.EdVerifier) (bool, error) {
 		atxTreeHash,
 	)
 	if err != nil {
-		return false, fmt.Errorf("validate certificate proof: %w", err)
+		return fmt.Errorf("validate certificate proof: %w", err)
 	}
-	return ok, nil
+	if !ok {
+		return errors.New("invalid certificate proof")
+	}
+	return nil
 }
