@@ -17,6 +17,13 @@ func (t *MalfeasanceProofV2) EncodeScale(enc *scale.Encoder) (total int, err err
 		total += n
 	}
 	{
+		n, err := scale.EncodeCompact8(enc, uint8(t.ProofType))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeByteSliceWithLimit(enc, t.Proof, 1048576)
 		if err != nil {
 			return total, err
@@ -34,6 +41,14 @@ func (t *MalfeasanceProofV2) DecodeScale(dec *scale.Decoder) (total int, err err
 		}
 		total += n
 		t.Layer = types.LayerID(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact8(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.ProofType = ProofType(field)
 	}
 	{
 		field, n, err := scale.DecodeByteSliceWithLimit(dec, 1048576)

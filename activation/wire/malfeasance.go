@@ -8,3 +8,18 @@ const (
 	ATXVersion1 ATXVersion = 1
 	ATXVersion2 ATXVersion = 2
 )
+
+type ProofType byte
+
+const (
+	DoublePublish ProofType = iota + 1
+	DoubleMarry
+)
+
+type ATXProof struct {
+	ProofType ProofType
+
+	// TODO(mafa): add field with certificates for IDs that share the marriage set with the ID proven to be malfeasant
+
+	Proof []byte `scale:"max=1048576"` // max size of proof is 1MiB
+}

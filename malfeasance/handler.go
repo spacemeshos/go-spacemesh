@@ -41,9 +41,9 @@ const (
 
 	// V2 types
 	// TODO(mafa): for future use.
-	InvalidActivation MalfeasanceType = iota + 10
-	InvalidBallot
-	InvalidHareMsg
+	InvalidActivation MalfeasanceType = MalfeasanceType(wire.InvalidActivation)
+	InvalidBallot                     = MalfeasanceType(wire.InvalidBallot)
+	InvalidHareMsg                    = MalfeasanceType(wire.InvalidHareMsg)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
