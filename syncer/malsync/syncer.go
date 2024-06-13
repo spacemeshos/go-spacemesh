@@ -344,6 +344,11 @@ func (s *Syncer) updateState(ctx context.Context) error {
 	if err := s.localdb.WithTx(ctx, func(tx sql.Transaction) error {
 		return malsync.UpdateSyncState(tx, s.clock.Now())
 	}); err != nil {
+		if ctx.Err() != nil {
+			// FIXME: with crawshaw, canceling the context which has been used to get
+			// a connection from the pool may cause "database: no free connection" errors
+			err = ctx.Err()
+		}
 		return fmt.Errorf("error updating malsync state: %w", err)
 	}
 
