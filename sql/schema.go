@@ -42,7 +42,8 @@ func LoadDBSchemaScript(db Executor) (string, error) {
 		}); err != nil {
 		return "", fmt.Errorf("error retrieving DB schema: %w", err)
 	}
-	return sb.String(), nil
+	// On Windows, the result contains extra carriage returns
+	return strings.ReplaceAll(sb.String(), "\r", ""), nil
 }
 
 // Schema represents database schema.
