@@ -256,14 +256,18 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 				zap.Int("current version", before),
 				zap.Int("target version", after),
 			)
-			return nil, fmt.Errorf("%w: %d < %d", ErrOldSchema, before, after)
+			return nil, errors.Join(
+				fmt.Errorf("%w: %d < %d", ErrOldSchema, before, after),
+				db.Close())
 		}
 	}
 
 	if !config.ignoreSchemaDrift {
 		loaded, err := LoadDBSchemaScript(db)
 		if err != nil {
-			return nil, fmt.Errorf("error loading database schema: %w", err)
+			return nil, errors.Join(
+				fmt.Errorf("error loading database schema: %w", err),
+				db.Close())
 		}
 		diff := config.schema.Diff(loaded)
 		switch {
