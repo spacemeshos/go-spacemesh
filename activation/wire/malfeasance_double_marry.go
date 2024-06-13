@@ -23,7 +23,7 @@ import (
 //
 // HINT: this only works if the identity that publishes the ATX with the certificates marries itself.
 type ProofDoubleMarry struct {
-	ATXs [2]MarryProof
+	Proofs [2]MarryProof
 }
 
 func NewDoubleMarryProof(atx1, atx2 *ActivationTxV2, nodeID types.NodeID) (*ProofDoubleMarry, error) {
@@ -65,7 +65,7 @@ func NewDoubleMarryProof(atx1, atx2 *ActivationTxV2, nodeID types.NodeID) (*Proo
 	}
 
 	proof := &ProofDoubleMarry{
-		ATXs: [2]MarryProof{
+		Proofs: [2]MarryProof{
 			{
 				ATXID:  atx1.ID(),
 				NodeID: nodeID,
@@ -136,19 +136,15 @@ func certificateProof(certs MarriageCertificates, index uint64) ([]types.Hash32,
 }
 
 func (p ProofDoubleMarry) Valid(edVerifier *signing.EdVerifier) (bool, error) {
-	if p.ATXs[0].ATXID == p.ATXs[1].ATXID {
+	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
 		return false, errors.New("proofs have the same ATX ID")
 	}
 
-	if p.ATXs[0].SmesherID != p.ATXs[1].SmesherID {
-		return false, errors.New("proofs have different smesher IDs")
-	}
-
-	if p.ATXs[0].NodeID != p.ATXs[1].NodeID {
+	if p.Proofs[0].NodeID != p.Proofs[1].NodeID {
 		return false, errors.New("proofs have different node IDs")
 	}
 
-	atx1Valid, err := p.ATXs[0].Valid(edVerifier)
+	atx1Valid, err := p.Proofs[0].Valid(edVerifier)
 	if err != nil {
 		return false, fmt.Errorf("proof 1 is invalid: %w", err)
 	}
@@ -156,7 +152,7 @@ func (p ProofDoubleMarry) Valid(edVerifier *signing.EdVerifier) (bool, error) {
 		return false, nil
 	}
 
-	atx2Valid, err := p.ATXs[1].Valid(edVerifier)
+	atx2Valid, err := p.Proofs[1].Valid(edVerifier)
 	if err != nil {
 		return false, fmt.Errorf("proof 2 is invalid: %w", err)
 	}

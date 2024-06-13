@@ -142,7 +142,7 @@ func (p PublishProof) Valid(edVerifier *signing.EdVerifier) (bool, error) {
 	for i, h := range p.Proof {
 		proof[i] = h.Bytes()
 	}
-	epoch := make([]byte, 4)
+	epoch := make([]byte, 32)
 	binary.LittleEndian.PutUint32(epoch, p.PubEpoch.Uint32())
 	return merkle.ValidatePartialTree(
 		[]uint64{uint64(PublishEpochIndex)},

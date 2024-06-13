@@ -82,7 +82,7 @@ func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {
 }
 
 func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
-	publishEpoch := make([]byte, 4)
+	publishEpoch := make([]byte, 32)
 	binary.LittleEndian.PutUint32(publishEpoch, atx.PublishEpoch.Uint32())
 	tree.AddLeaf(publishEpoch)
 	tree.AddLeaf(atx.PositioningATX.Bytes())
@@ -122,7 +122,7 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	}
 	tree.AddLeaf(niPostTree.Root())
 
-	vrfNonce := make([]byte, 8)
+	vrfNonce := make([]byte, 32)
 	binary.LittleEndian.PutUint64(vrfNonce, atx.VRFNonce)
 	tree.AddLeaf(vrfNonce)
 
@@ -234,7 +234,7 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 	if err != nil {
 		panic(err)
 	}
-	marriageIndex := make([]byte, 4)
+	marriageIndex := make([]byte, 32)
 	binary.LittleEndian.PutUint32(marriageIndex, sp.MarriageIndex)
 	tree.AddLeaf(marriageIndex)
 
@@ -244,7 +244,7 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 	tree.AddLeaf(prevATXs[sp.PrevATXIndex].Bytes())
 	tree.AddLeaf(sp.Post.Root())
 
-	numUnits := make([]byte, 4)
+	numUnits := make([]byte, 32)
 	binary.LittleEndian.PutUint32(numUnits, sp.NumUnits)
 	tree.AddLeaf(numUnits)
 	return tree.Root()
