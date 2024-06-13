@@ -3,7 +3,6 @@
 package main
 
 import (
-	"fmt"
 	_ "net/http/pprof"
 	"os"
 
@@ -24,7 +23,8 @@ func main() { // run the app
 	cmd.Branch = branch
 	cmd.NoMainNet = noMainNet == "true"
 	if err := node.GetCommand().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		// Do not print error as cmd.SilenceErrors is false
+		// and the error was already printed
 		os.Exit(1)
 	}
 }
