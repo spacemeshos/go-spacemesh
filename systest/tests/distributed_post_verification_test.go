@@ -159,8 +159,9 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	localDb := localsql.InMemory()
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
+	poetDb := activation.NewPoetDb(db, zap.NewNop())
 	poetClient, err := activation.NewPoetClient(
-		activation.NewPoetDb(db, zap.NewNop()),
+		poetDb,
 		types.PoetServer{
 			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
 		}, cfg.POET,
@@ -169,12 +170,26 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	verifyingOpts := activation.DefaultPostVerifyingOpts()
+	verifyingOpts.Workers = 1
+	verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
+	require.NoError(t, err)
+
+	validator := activation.NewValidator(
+		db,
+		poetDb,
+		cfg.POST,
+		cfg.SMESHING.Opts.Scrypt,
+		verifier,
+	)
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		localDb,
 		grpcPostService,
 		logger.Named("nipostBuilder"),
 		cfg.POET,
 		clock,
+		validator,
 		activation.WithPoetClients(poetClient),
 	)
 	require.NoError(t, err)
@@ -216,19 +231,27 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		}
 		break
 	}
+	nipostChallenge := &types.NIPostChallenge{
+		PublishEpoch:   challenge.PublishEpoch,
+		PrevATXID:      types.EmptyATXID,
+		PositioningATX: challenge.PositioningATXID,
+		CommitmentATX:  challenge.CommitmentATXID,
+		InitialPost: &types.Post{
+			Nonce:   challenge.InitialPost.Nonce,
+			Indices: challenge.InitialPost.Indices,
+			Pow:     challenge.InitialPost.Pow,
+		},
+	}
 
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challenge.Hash())
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.Hash(), nipostChallenge)
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST
 	for i := range nipost.Post.Indices {
 		nipost.Post.Indices[i] += 1
 	}
+
 	// Sanity check that the POST is invalid
-	verifyingOpts := activation.DefaultPostVerifyingOpts()
-	verifyingOpts.Workers = 1
-	verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
-	require.NoError(t, err)
 	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
 		NodeId:          signer.NodeID().Bytes(),
 		CommitmentAtxId: challenge.CommitmentATXID.Bytes(),

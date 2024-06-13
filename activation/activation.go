@@ -32,7 +32,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound    = errors.New("not found")
+	errNilVrfNonce = errors.New("nil VRF nonce")
+)
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
@@ -351,10 +354,9 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	default:
 		return fmt.Errorf("get initial post: %w", err)
 	}
-
 	// Create the initial post and save it.
 	startTime := time.Now()
-	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge)
+	post, postInfo, err := b.nipostBuilder.Proof(ctx, nodeID, shared.ZeroChallenge, nil)
 	if err != nil {
 		return fmt.Errorf("post execution: %w", err)
 	}
@@ -362,8 +364,9 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 		b.logger.Error("initial PoST is invalid: missing VRF nonce. Check your PoST data",
 			log.ZShortStringer("smesherID", nodeID),
 		)
-		return errors.New("nil VRF nonce")
+		return errNilVrfNonce
 	}
+
 	initialPost := nipost.Post{
 		Nonce:     post.Nonce,
 		Indices:   post.Indices,
@@ -390,21 +393,27 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	return nipost.AddPost(b.localDB, nodeID, initialPost)
 }
 
-func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
-	defer b.logger.Info("atx builder stopped")
-
+func (b *Builder) buildPost(ctx context.Context, nodeID types.NodeID) error {
 	for {
-		err := b.buildInitialPost(ctx, sig.NodeID())
+		err := b.buildInitialPost(ctx, nodeID)
 		if err == nil {
-			break
+			return nil
 		}
 		b.logger.Error("failed to generate initial proof:", zap.Error(err))
 		currentLayer := b.layerClock.CurrentLayer()
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 		}
+	}
+}
+
+func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
+	defer b.logger.Info("atx builder stopped")
+	if err := b.buildPost(ctx, sig.NodeID()); err != nil {
+		b.logger.Error("failed to build initial post:", zap.Error(err))
+		return
 	}
 	var eg errgroup.Group
 	for _, poet := range b.poets {
@@ -450,6 +459,22 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 			case <-ctx.Done():
 				return
 			case <-time.After(b.poetRetryInterval):
+			}
+		case errors.Is(err, ErrInvalidInitialPost):
+			// delete the existing db post
+			// call build initial post again
+			b.logger.Error("initial post is no longer valid. regenerating initial post")
+			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
+				b.logger.Error("failed to reset nipost builder state", zap.Error(err))
+			}
+			if err := nipost.RemoveChallenge(b.localDB, sig.NodeID()); err != nil {
+				b.logger.Error("failed to discard challenge", zap.Error(err))
+			}
+			if err := nipost.RemovePost(b.localDB, sig.NodeID()); err != nil {
+				b.logger.Error("failed to remove existing post from db", zap.Error(err))
+			}
+			if err := b.buildPost(ctx, sig.NodeID()); err != nil {
+				b.logger.Error("failed to regenerate initial post:", zap.Error(err))
 			}
 		default:
 			b.logger.Warn("unknown error", zap.Error(err))
@@ -718,7 +743,7 @@ func (b *Builder) createAtx(
 		return nil, fmt.Errorf("unknown ATX version: %v", version)
 	}
 	b.logger.Info("building ATX", zap.Stringer("smesherID", sig.NodeID()), zap.Stringer("version", version))
-	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challenge.PublishEpoch, challengeHash)
+	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challengeHash, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)
 	}

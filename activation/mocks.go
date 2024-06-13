@@ -909,18 +909,18 @@ func (m *MocknipostBuilder) EXPECT() *MocknipostBuilderMockRecorder {
 }
 
 // BuildNIPost mocks base method.
-func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, sig *signing.EdSigner, publish types.EpochID, challenge types.Hash32) (*nipost.NIPostState, error) {
+func (m *MocknipostBuilder) BuildNIPost(ctx context.Context, sig *signing.EdSigner, challengeHash types.Hash32, postChallenge *types.NIPostChallenge) (*nipost.NIPostState, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildNIPost", ctx, sig, publish, challenge)
+	ret := m.ctrl.Call(m, "BuildNIPost", ctx, sig, challengeHash, postChallenge)
 	ret0, _ := ret[0].(*nipost.NIPostState)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BuildNIPost indicates an expected call of BuildNIPost.
-func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, sig, publish, challenge any) *MocknipostBuilderBuildNIPostCall {
+func (mr *MocknipostBuilderMockRecorder) BuildNIPost(ctx, sig, challengeHash, postChallenge any) *MocknipostBuilderBuildNIPostCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, sig, publish, challenge)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildNIPost", reflect.TypeOf((*MocknipostBuilder)(nil).BuildNIPost), ctx, sig, challengeHash, postChallenge)
 	return &MocknipostBuilderBuildNIPostCall{Call: call}
 }
 
@@ -936,21 +936,21 @@ func (c *MocknipostBuilderBuildNIPostCall) Return(arg0 *nipost.NIPostState, arg1
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostBuilderBuildNIPostCall) Do(f func(context.Context, *signing.EdSigner, types.EpochID, types.Hash32) (*nipost.NIPostState, error)) *MocknipostBuilderBuildNIPostCall {
+func (c *MocknipostBuilderBuildNIPostCall) Do(f func(context.Context, *signing.EdSigner, types.Hash32, *types.NIPostChallenge) (*nipost.NIPostState, error)) *MocknipostBuilderBuildNIPostCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *signing.EdSigner, types.EpochID, types.Hash32) (*nipost.NIPostState, error)) *MocknipostBuilderBuildNIPostCall {
+func (c *MocknipostBuilderBuildNIPostCall) DoAndReturn(f func(context.Context, *signing.EdSigner, types.Hash32, *types.NIPostChallenge) (*nipost.NIPostState, error)) *MocknipostBuilderBuildNIPostCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Proof mocks base method.
-func (m *MocknipostBuilder) Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error) {
+func (m *MocknipostBuilder) Proof(ctx context.Context, nodeID types.NodeID, challenge []byte, postChallenge *types.NIPostChallenge) (*types.Post, *types.PostInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Proof", ctx, nodeID, challenge)
+	ret := m.ctrl.Call(m, "Proof", ctx, nodeID, challenge, postChallenge)
 	ret0, _ := ret[0].(*types.Post)
 	ret1, _ := ret[1].(*types.PostInfo)
 	ret2, _ := ret[2].(error)
@@ -958,9 +958,9 @@ func (m *MocknipostBuilder) Proof(ctx context.Context, nodeID types.NodeID, chal
 }
 
 // Proof indicates an expected call of Proof.
-func (mr *MocknipostBuilderMockRecorder) Proof(ctx, nodeID, challenge any) *MocknipostBuilderProofCall {
+func (mr *MocknipostBuilderMockRecorder) Proof(ctx, nodeID, challenge, postChallenge any) *MocknipostBuilderProofCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MocknipostBuilder)(nil).Proof), ctx, nodeID, challenge)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MocknipostBuilder)(nil).Proof), ctx, nodeID, challenge, postChallenge)
 	return &MocknipostBuilderProofCall{Call: call}
 }
 
@@ -976,13 +976,13 @@ func (c *MocknipostBuilderProofCall) Return(arg0 *types.Post, arg1 *types.PostIn
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknipostBuilderProofCall) Do(f func(context.Context, types.NodeID, []byte) (*types.Post, *types.PostInfo, error)) *MocknipostBuilderProofCall {
+func (c *MocknipostBuilderProofCall) Do(f func(context.Context, types.NodeID, []byte, *types.NIPostChallenge) (*types.Post, *types.PostInfo, error)) *MocknipostBuilderProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknipostBuilderProofCall) DoAndReturn(f func(context.Context, types.NodeID, []byte) (*types.Post, *types.PostInfo, error)) *MocknipostBuilderProofCall {
+func (c *MocknipostBuilderProofCall) DoAndReturn(f func(context.Context, types.NodeID, []byte, *types.NIPostChallenge) (*types.Post, *types.PostInfo, error)) *MocknipostBuilderProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
