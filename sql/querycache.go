@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/hashicorp/golang-lru/v2/simplelru"
 )
@@ -222,24 +223,11 @@ func (c *queryCache) IsCached() bool {
 	return c != nil
 }
 
-func reportHit(key queryCacheKey) {
-	switch key.Kind {
-	case "atx-blob":
-		// don't use the key as it would create too many labels
-		queryCacheHits.WithLabelValues(string(key.Kind), "").Inc()
-	default:
-		queryCacheHits.WithLabelValues(string(key.Kind), key.Key).Inc()
+func keyLabel(key queryCacheKey) string {
+	if key.Kind == "atx-blob" || key.Kind == "activeset-blob" || !utf8.ValidString(key.Key) {
+		return ""
 	}
-}
-
-func reportMiss(key queryCacheKey) {
-	switch key.Kind {
-	case "atx-blob":
-		// don't use the key as it would create too many labels
-		queryCacheMisses.WithLabelValues(string(key.Kind), "").Inc()
-	default:
-		queryCacheMisses.WithLabelValues(string(key.Kind), key.Key).Inc()
-	}
+	return key.Key
 }
 
 func (c *queryCache) GetValue(
@@ -259,7 +247,7 @@ func (c *queryCache) GetValue(
 	v, found := c.get(key, subKey)
 	var err error
 	if !found {
-		reportMiss(key)
+		queryCacheMisses.WithLabelValues(string(key.Kind), keyLabel(key)).Inc()
 		// This may seem like a race, but at worst, retrieve() will be
 		// called several times when populating this cached entry.
 		// That's better than locking for the duration of retrieve(),
@@ -269,7 +257,7 @@ func (c *queryCache) GetValue(
 			c.set(key, subKey, v)
 		}
 	} else {
-		reportHit(key)
+		queryCacheHits.WithLabelValues(string(key.Kind), keyLabel(key)).Inc()
 	}
 	return v, err
 }
