@@ -216,7 +216,7 @@ func (c *MockDatabaseExecCall) DoAndReturn(f func(string, sql.Encoder, sql.Decod
 }
 
 // GetValue mocks base method.
-func (m *MockDatabase) GetValue(ctx context.Context, key queryCacheKey, subKey sql.QueryCacheSubKey, retrieve sql.UntypedRetrieveFunc) (any, error) {
+func (m *MockDatabase) GetValue(ctx context.Context, key sql.QueryCacheItemKey, subKey sql.QueryCacheSubKey, retrieve sql.UntypedRetrieveFunc) (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValue", ctx, key, subKey, retrieve)
 	ret0, _ := ret[0].(any)
@@ -243,13 +243,13 @@ func (c *MockDatabaseGetValueCall) Return(arg0 any, arg1 error) *MockDatabaseGet
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockDatabaseGetValueCall) Do(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockDatabaseGetValueCall {
+func (c *MockDatabaseGetValueCall) Do(f func(context.Context, sql.QueryCacheItemKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockDatabaseGetValueCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockDatabaseGetValueCall) DoAndReturn(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockDatabaseGetValueCall {
+func (c *MockDatabaseGetValueCall) DoAndReturn(f func(context.Context, sql.QueryCacheItemKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockDatabaseGetValueCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -447,7 +447,7 @@ func (c *MockDatabaseTxImmediateCall) DoAndReturn(f func(context.Context) (sql.T
 }
 
 // UpdateSlice mocks base method.
-func (m *MockDatabase) UpdateSlice(key queryCacheKey, update sql.SliceAppender) {
+func (m *MockDatabase) UpdateSlice(key sql.QueryCacheItemKey, update sql.SliceAppender) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "UpdateSlice", key, update)
 }
@@ -471,13 +471,13 @@ func (c *MockDatabaseUpdateSliceCall) Return() *MockDatabaseUpdateSliceCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockDatabaseUpdateSliceCall) Do(f func(queryCacheKey, sql.SliceAppender)) *MockDatabaseUpdateSliceCall {
+func (c *MockDatabaseUpdateSliceCall) Do(f func(sql.QueryCacheItemKey, sql.SliceAppender)) *MockDatabaseUpdateSliceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockDatabaseUpdateSliceCall) DoAndReturn(f func(queryCacheKey, sql.SliceAppender)) *MockDatabaseUpdateSliceCall {
+func (c *MockDatabaseUpdateSliceCall) DoAndReturn(f func(sql.QueryCacheItemKey, sql.SliceAppender)) *MockDatabaseUpdateSliceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -833,7 +833,7 @@ func (c *MockStateDatabaseExecCall) DoAndReturn(f func(string, sql.Encoder, sql.
 }
 
 // GetValue mocks base method.
-func (m *MockStateDatabase) GetValue(ctx context.Context, key queryCacheKey, subKey sql.QueryCacheSubKey, retrieve sql.UntypedRetrieveFunc) (any, error) {
+func (m *MockStateDatabase) GetValue(ctx context.Context, key sql.QueryCacheItemKey, subKey sql.QueryCacheSubKey, retrieve sql.UntypedRetrieveFunc) (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValue", ctx, key, subKey, retrieve)
 	ret0, _ := ret[0].(any)
@@ -860,13 +860,13 @@ func (c *MockStateDatabaseGetValueCall) Return(arg0 any, arg1 error) *MockStateD
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockStateDatabaseGetValueCall) Do(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockStateDatabaseGetValueCall {
+func (c *MockStateDatabaseGetValueCall) Do(f func(context.Context, sql.QueryCacheItemKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockStateDatabaseGetValueCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockStateDatabaseGetValueCall) DoAndReturn(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockStateDatabaseGetValueCall {
+func (c *MockStateDatabaseGetValueCall) DoAndReturn(f func(context.Context, sql.QueryCacheItemKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockStateDatabaseGetValueCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1102,7 +1102,7 @@ func (c *MockStateDatabaseTxImmediateCall) DoAndReturn(f func(context.Context) (
 }
 
 // UpdateSlice mocks base method.
-func (m *MockStateDatabase) UpdateSlice(key queryCacheKey, update sql.SliceAppender) {
+func (m *MockStateDatabase) UpdateSlice(key sql.QueryCacheItemKey, update sql.SliceAppender) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "UpdateSlice", key, update)
 }
@@ -1126,13 +1126,13 @@ func (c *MockStateDatabaseUpdateSliceCall) Return() *MockStateDatabaseUpdateSlic
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockStateDatabaseUpdateSliceCall) Do(f func(queryCacheKey, sql.SliceAppender)) *MockStateDatabaseUpdateSliceCall {
+func (c *MockStateDatabaseUpdateSliceCall) Do(f func(sql.QueryCacheItemKey, sql.SliceAppender)) *MockStateDatabaseUpdateSliceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockStateDatabaseUpdateSliceCall) DoAndReturn(f func(queryCacheKey, sql.SliceAppender)) *MockStateDatabaseUpdateSliceCall {
+func (c *MockStateDatabaseUpdateSliceCall) DoAndReturn(f func(sql.QueryCacheItemKey, sql.SliceAppender)) *MockStateDatabaseUpdateSliceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1350,7 +1350,7 @@ func (c *MockLocalDatabaseExecCall) DoAndReturn(f func(string, sql.Encoder, sql.
 }
 
 // GetValue mocks base method.
-func (m *MockLocalDatabase) GetValue(ctx context.Context, key queryCacheKey, subKey sql.QueryCacheSubKey, retrieve sql.UntypedRetrieveFunc) (any, error) {
+func (m *MockLocalDatabase) GetValue(ctx context.Context, key sql.QueryCacheItemKey, subKey sql.QueryCacheSubKey, retrieve sql.UntypedRetrieveFunc) (any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValue", ctx, key, subKey, retrieve)
 	ret0, _ := ret[0].(any)
@@ -1377,13 +1377,13 @@ func (c *MockLocalDatabaseGetValueCall) Return(arg0 any, arg1 error) *MockLocalD
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockLocalDatabaseGetValueCall) Do(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockLocalDatabaseGetValueCall {
+func (c *MockLocalDatabaseGetValueCall) Do(f func(context.Context, sql.QueryCacheItemKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockLocalDatabaseGetValueCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockLocalDatabaseGetValueCall) DoAndReturn(f func(context.Context, queryCacheKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockLocalDatabaseGetValueCall {
+func (c *MockLocalDatabaseGetValueCall) DoAndReturn(f func(context.Context, sql.QueryCacheItemKey, sql.QueryCacheSubKey, sql.UntypedRetrieveFunc) (any, error)) *MockLocalDatabaseGetValueCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1619,7 +1619,7 @@ func (c *MockLocalDatabaseTxImmediateCall) DoAndReturn(f func(context.Context) (
 }
 
 // UpdateSlice mocks base method.
-func (m *MockLocalDatabase) UpdateSlice(key queryCacheKey, update sql.SliceAppender) {
+func (m *MockLocalDatabase) UpdateSlice(key sql.QueryCacheItemKey, update sql.SliceAppender) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "UpdateSlice", key, update)
 }
@@ -1643,13 +1643,13 @@ func (c *MockLocalDatabaseUpdateSliceCall) Return() *MockLocalDatabaseUpdateSlic
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockLocalDatabaseUpdateSliceCall) Do(f func(queryCacheKey, sql.SliceAppender)) *MockLocalDatabaseUpdateSliceCall {
+func (c *MockLocalDatabaseUpdateSliceCall) Do(f func(sql.QueryCacheItemKey, sql.SliceAppender)) *MockLocalDatabaseUpdateSliceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockLocalDatabaseUpdateSliceCall) DoAndReturn(f func(queryCacheKey, sql.SliceAppender)) *MockLocalDatabaseUpdateSliceCall {
+func (c *MockLocalDatabaseUpdateSliceCall) DoAndReturn(f func(sql.QueryCacheItemKey, sql.SliceAppender)) *MockLocalDatabaseUpdateSliceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
