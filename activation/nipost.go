@@ -148,12 +148,9 @@ func (nb *NIPostBuilder) Proof(
 		}
 
 		retries = 0
-
-		// we check whether an initial post is included, if so, it means
-		// we land under the possible edge case where the storage units
-		// have changed between the initial PoST and the upcoming one (initial ATX
-		// still not published)
-		// TODO change to postChallenge.InitialPost
+		// we check whether an initial post is included in the challenge
+		// if so, we verify it to still be valid before creating the post
+		// e.g. the PoST size might have changed
 		if postChallenge != nil && postChallenge.InitialPost != nil {
 			info, err := client.Info(ctx)
 			if errors.Is(err, ErrPostClientClosed) {
