@@ -25,7 +25,9 @@ func Test_DoublePublishProof(t *testing.T) {
 		require.NoError(t, err)
 
 		verifier := signing.NewEdVerifier()
-		require.NoError(t, proof.Valid(verifier))
+		id, err := proof.Valid(verifier)
+		require.NoError(t, err)
+		require.Equal(t, sig.NodeID(), id)
 	})
 
 	t.Run("not same epoch", func(t *testing.T) {
@@ -66,8 +68,9 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "different publish epochs")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("not same smesher", func(t *testing.T) {
@@ -111,8 +114,9 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "different smesher IDs")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("same ATX ID", func(t *testing.T) {
@@ -147,8 +151,9 @@ func Test_DoublePublishProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "same ATX ID")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -186,13 +191,15 @@ func Test_DoublePublishProof(t *testing.T) {
 
 		verifier := signing.NewEdVerifier()
 		proof.Proofs[0].Proof[0] = types.RandomHash()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid publish epoch proof")
+		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].Proof[0] = proof1[0]
 		proof.Proofs[1].Proof[0] = types.RandomHash()
-		err = proof.Valid(verifier)
+		id, err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid publish epoch proof")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("invalid signature", func(t *testing.T) {
@@ -208,12 +215,14 @@ func Test_DoublePublishProof(t *testing.T) {
 		verifier := signing.NewEdVerifier()
 
 		proof.Proofs[0].Signature = types.RandomEdSignature()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid signature")
+		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].Signature = atx1.Signature
 		proof.Proofs[1].Signature = types.RandomEdSignature()
-		err = proof.Valid(verifier)
+		id, err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid signature")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 }

@@ -19,7 +19,7 @@ func WithMarriageCertificate(sig *signing.EdSigner, atxPublisher types.NodeID) t
 	return func(atx *ActivationTxV2) {
 		certificate := MarriageCertificate{
 			ID:        sig.NodeID(),
-			Signature: sig.Sign(signing.ATX, atxPublisher.Bytes()),
+			Signature: sig.Sign(signing.MARRIAGE, atxPublisher.Bytes()),
 		}
 		atx.Marriages = append(atx.Marriages, certificate)
 	}

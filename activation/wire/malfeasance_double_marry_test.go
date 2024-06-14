@@ -34,7 +34,9 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, err)
 
 		verifier := signing.NewEdVerifier()
-		require.NoError(t, proof.Valid(verifier))
+		id, err := proof.Valid(verifier)
+		require.NoError(t, err)
+		require.Equal(t, otherSig.NodeID(), id)
 	})
 
 	t.Run("does not contain same certificate owner", func(t *testing.T) {
@@ -71,8 +73,9 @@ func Test_DoubleMarryProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "proofs have different node IDs")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("same ATX ID", func(t *testing.T) {
@@ -96,8 +99,9 @@ func Test_DoubleMarryProof(t *testing.T) {
 		}
 
 		verifier := signing.NewEdVerifier()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "same ATX ID")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("invalid marriage proof", func(t *testing.T) {
@@ -152,13 +156,15 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		verifier := signing.NewEdVerifier()
 		proof.Proofs[0].MarriageProof[0] = types.RandomHash()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid marriage proof")
+		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].MarriageProof[0] = proof1[0]
 		proof.Proofs[1].MarriageProof[0] = types.RandomHash()
-		err = proof.Valid(verifier)
+		id, err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid marriage proof")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("invalid certificate proof", func(t *testing.T) {
@@ -213,13 +219,15 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		verifier := signing.NewEdVerifier()
 		proof.Proofs[0].CertificateProof[0] = types.RandomHash()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid certificate proof")
+		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].CertificateProof[0] = certProof1[0]
 		proof.Proofs[1].CertificateProof[0] = types.RandomHash()
-		err = proof.Valid(verifier)
+		id, err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid certificate proof")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("invalid atx signature", func(t *testing.T) {
@@ -241,13 +249,15 @@ func Test_DoubleMarryProof(t *testing.T) {
 		verifier := signing.NewEdVerifier()
 
 		proof.Proofs[0].Signature = types.RandomEdSignature()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
+		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].Signature = atx1.Signature
 		proof.Proofs[1].Signature = types.RandomEdSignature()
-		err = proof.Valid(verifier)
+		id, err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("invalid certificate signature", func(t *testing.T) {
@@ -269,12 +279,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 		verifier := signing.NewEdVerifier()
 
 		proof.Proofs[0].CertificateSignature = types.RandomEdSignature()
-		err = proof.Valid(verifier)
+		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid certificate signature")
+		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].CertificateSignature = atx1.Marriages[1].Signature
 		proof.Proofs[1].CertificateSignature = types.RandomEdSignature()
-		err = proof.Valid(verifier)
+		id, err = proof.Valid(verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid certificate signature")
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 }

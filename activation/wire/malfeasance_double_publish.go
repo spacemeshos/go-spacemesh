@@ -24,6 +24,8 @@ type ProofDoublePublish struct {
 	Proofs [2]PublishProof
 }
 
+var _ Proof = &ProofDoublePublish{}
+
 func NewDoublePublishProof(atx1, atx2 *ActivationTxV2) (*ProofDoublePublish, error) {
 	if atx1.ID() == atx2.ID() {
 		return nil, errors.New("ATXs have the same ID")
@@ -89,24 +91,24 @@ func publishEpochProof(atx *ActivationTxV2) ([]types.Hash32, error) {
 
 // Valid returns true if the proof is valid. It verifies that the two proofs have the same publish epoch, smesher ID,
 // and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
-func (p ProofDoublePublish) Valid(edVerifier *signing.EdVerifier) error {
+func (p ProofDoublePublish) Valid(edVerifier *signing.EdVerifier) (types.NodeID, error) {
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
-		return errors.New("proofs have the same ATX ID")
+		return types.EmptyNodeID, errors.New("proofs have the same ATX ID")
 	}
 	if p.Proofs[0].SmesherID != p.Proofs[1].SmesherID {
-		return errors.New("proofs have different smesher IDs")
+		return types.EmptyNodeID, errors.New("proofs have different smesher IDs")
 	}
 	if p.Proofs[0].PubEpoch != p.Proofs[1].PubEpoch {
-		return errors.New("proofs have different publish epochs")
+		return types.EmptyNodeID, errors.New("proofs have different publish epochs")
 	}
 
 	if err := p.Proofs[0].Valid(edVerifier); err != nil {
-		return fmt.Errorf("proof 1 is invalid: %w", err)
+		return types.EmptyNodeID, fmt.Errorf("proof 1 is invalid: %w", err)
 	}
 	if err := p.Proofs[1].Valid(edVerifier); err != nil {
-		return fmt.Errorf("proof 2 is invalid: %w", err)
+		return types.EmptyNodeID, fmt.Errorf("proof 2 is invalid: %w", err)
 	}
-	return nil
+	return p.Proofs[0].SmesherID, nil
 }
 
 // PublishProof proofs that an ATX was published with a given publish epoch by a given smesher.

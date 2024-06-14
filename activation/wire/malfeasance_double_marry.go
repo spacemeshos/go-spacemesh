@@ -26,6 +26,8 @@ type ProofDoubleMarry struct {
 	Proofs [2]MarryProof
 }
 
+var _ Proof = &ProofDoubleMarry{}
+
 func NewDoubleMarryProof(atx1, atx2 *ActivationTxV2, nodeID types.NodeID) (*ProofDoubleMarry, error) {
 	if atx1.ID() == atx2.ID() {
 		return nil, errors.New("ATXs have the same ID")
@@ -135,21 +137,21 @@ func certificateProof(certs MarriageCertificates, index uint64) ([]types.Hash32,
 	return proofHashes, nil
 }
 
-func (p ProofDoubleMarry) Valid(edVerifier *signing.EdVerifier) error {
+func (p ProofDoubleMarry) Valid(edVerifier *signing.EdVerifier) (types.NodeID, error) {
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
-		return errors.New("proofs have the same ATX ID")
+		return types.EmptyNodeID, errors.New("proofs have the same ATX ID")
 	}
 	if p.Proofs[0].NodeID != p.Proofs[1].NodeID {
-		return errors.New("proofs have different node IDs")
+		return types.EmptyNodeID, errors.New("proofs have different node IDs")
 	}
 
 	if err := p.Proofs[0].Valid(edVerifier); err != nil {
-		return fmt.Errorf("proof 1 is invalid: %w", err)
+		return types.EmptyNodeID, fmt.Errorf("proof 1 is invalid: %w", err)
 	}
 	if err := p.Proofs[1].Valid(edVerifier); err != nil {
-		return fmt.Errorf("proof 2 is invalid: %w", err)
+		return types.EmptyNodeID, fmt.Errorf("proof 2 is invalid: %w", err)
 	}
-	return nil
+	return p.Proofs[0].NodeID, nil
 }
 
 type MarryProof struct {
@@ -179,8 +181,7 @@ func (p MarryProof) Valid(edVerifier *signing.EdVerifier) error {
 		return errors.New("invalid ATX signature")
 	}
 
-	// TODO(mafa): check domain
-	if !edVerifier.Verify(signing.ATX, p.NodeID, p.SmesherID.Bytes(), p.CertificateSignature) {
+	if !edVerifier.Verify(signing.MARRIAGE, p.NodeID, p.SmesherID.Bytes(), p.CertificateSignature) {
 		return errors.New("invalid certificate signature")
 	}
 
