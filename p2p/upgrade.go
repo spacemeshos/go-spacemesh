@@ -263,13 +263,13 @@ func (fh *Host) GetPeers() []Peer {
 }
 
 // Connected returns true if the specified peer is connected.
-// Peers that only have limited connections to them aren't considered connected.
+// Peers that only have transient connections to them aren't considered connected.
 func (fh *Host) Connected(p Peer) bool {
 	if fh.Host.Network().Connectedness(p) != network.Connected {
 		return false
 	}
 	for _, c := range fh.Host.Network().ConnsToPeer(p) {
-		if !c.Stat().Limited {
+		if !c.Stat().Transient {
 			return true
 		}
 	}

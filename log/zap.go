@@ -332,3 +332,11 @@ func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
 func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
 	fl.l.Fatal(msg, unpack(append(fields, String("name", fl.name)))...)
 }
+
+// DebugField is only added if debug level is enabled.
+func DebugField(logger *zap.Logger, field zap.Field) zap.Field {
+	if logger.Core().Enabled(zap.DebugLevel) {
+		return field
+	}
+	return zap.Skip()
+}

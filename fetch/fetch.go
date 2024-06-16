@@ -294,12 +294,12 @@ func NewFetch(
 		}
 		host.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(_ network.Network, c network.Conn) {
-				if !c.Stat().Limited {
+				if !c.Stat().Transient {
 					connectedf(c.RemotePeer())
 				}
 			},
 			DisconnectedF: func(_ network.Network, c network.Conn) {
-				if !c.Stat().Limited && !host.Connected(c.RemotePeer()) {
+				if !c.Stat().Transient && !host.Connected(c.RemotePeer()) {
 					f.logger.With().Debug("remove peer", log.Stringer("id", c.RemotePeer()))
 					f.peers.Delete(c.RemotePeer())
 				}

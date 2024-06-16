@@ -46,10 +46,12 @@ jobs:
         with:
           # this pattern matches using picomatch syntax (used by this third party Action), which is slightly
           # different than GitHub syntax: it matches any file in any path ending in '.md'. this checks if
-          # any non-markdown files were changed.
+          # any non-markdown files were changed. Additionally changing the CODEOWNERS file should not trigger
+          # a full CI run.
           filters: |
             nondoc:
               - '!**/*.md'
+              - '!.github/CODEOWNERS'
 
   ## stage 1: run unit tests and app tests as a prerequisite
   ## these run on all pushes to all pull requests, all branches
@@ -63,6 +65,7 @@ jobs:
     steps:
       - name: Add OpenCL support
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
+
       - name: checkout
         uses: actions/checkout@v4
         with:
@@ -139,6 +142,12 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
@@ -185,6 +194,12 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
@@ -243,6 +258,12 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
