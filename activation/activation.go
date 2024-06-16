@@ -39,18 +39,20 @@ var (
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
-	PhaseShift        time.Duration `mapstructure:"phase-shift"`
-	CycleGap          time.Duration `mapstructure:"cycle-gap"`
-	GracePeriod       time.Duration `mapstructure:"grace-period"`
-	RequestTimeout    time.Duration `mapstructure:"poet-request-timeout"`
-	RequestRetryDelay time.Duration `mapstructure:"retry-delay"`
-	MaxRequestRetries int           `mapstructure:"retry-max"`
+	PhaseShift                     time.Duration `mapstructure:"phase-shift"`
+	CycleGap                       time.Duration `mapstructure:"cycle-gap"`
+	GracePeriod                    time.Duration `mapstructure:"grace-period"`
+	RequestTimeout                 time.Duration `mapstructure:"poet-request-timeout"`
+	RequestRetryDelay              time.Duration `mapstructure:"retry-delay"`
+	PositioningATXSelectionTimeout time.Duration `mapstructure:"positioning-atx-selection-timeout"`
+	MaxRequestRetries              int           `mapstructure:"retry-max"`
 }
 
 func DefaultPoetConfig() PoetConfig {
 	return PoetConfig{
-		RequestRetryDelay: 400 * time.Millisecond,
-		MaxRequestRetries: 10,
+		RequestRetryDelay:              400 * time.Millisecond,
+		MaxRequestRetries:              10,
+		PositioningATXSelectionTimeout: defaultPositioningATXSelectionTimeout,
 	}
 }
 
@@ -62,6 +64,8 @@ const (
 	//  mainnet (grace period 1h) -> 36s
 	//  systest (grace period 10s) -> 0.1s
 	maxNipostChallengeBuildJitter = 1.0
+
+	defaultPositioningATXSelectionTimeout = 1 * time.Minute
 )
 
 // Config defines configuration for Builder.
@@ -202,6 +206,11 @@ func NewBuilder(
 	}
 	for _, opt := range opts {
 		opt(b)
+	}
+
+	// TODO find better place for this verification
+	if b.poetCfg.PositioningATXSelectionTimeout.Milliseconds() < defaultPositioningATXSelectionTimeout.Milliseconds() {
+		b.poetCfg.PositioningATXSelectionTimeout = defaultPositioningATXSelectionTimeout
 	}
 	return b
 }
@@ -585,7 +594,11 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			}
 			return nil, fmt.Errorf("initial POST is invalid: %w", err)
 		}
-		posAtx, err := b.getPositioningAtx(ctx, nodeID, publish, nil)
+
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, b.poetCfg.PositioningATXSelectionTimeout)
+		defer cancel()
+
+		posAtx, err := b.getPositioningAtx(ctxWithTimeout, nodeID, publish, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 		}
@@ -605,7 +618,10 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		return nil, fmt.Errorf("get last ATX: %w", err)
 	default:
 		// regular ATX challenge
-		posAtx, err := b.getPositioningAtx(ctx, nodeID, publish, prevAtx)
+		ctxWithTimeout, cancel := context.WithTimeout(ctx, b.poetCfg.PositioningATXSelectionTimeout)
+		defer cancel()
+
+		posAtx, err := b.getPositioningAtx(ctxWithTimeout, nodeID, publish, prevAtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 		}
@@ -851,8 +867,10 @@ func (b *Builder) searchPositioningAtx(
 	publish types.EpochID,
 ) (types.ATXID, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID), zap.Uint32("publish epoch", publish.Uint32()))
+
 	b.posAtxFinder.finding.Lock()
 	defer b.posAtxFinder.finding.Unlock()
+
 	if found := b.posAtxFinder.found; found != nil && found.forPublish == publish {
 		logger.Debug("using cached positioning atx", log.ZShortStringer("atx_id", found.id))
 		return found.id, nil
@@ -863,6 +881,7 @@ func (b *Builder) searchPositioningAtx(
 		return types.EmptyATXID, fmt.Errorf("get latest epoch: %w", err)
 	}
 	logger.Info("searching for positioning atx", zap.Uint32("latest_epoch", latestPublished.Uint32()))
+
 	// positioning ATX publish epoch must be lower than the publish epoch of built ATX
 	positioningAtxPublished := min(latestPublished, publish-1)
 	id, err := findFullyValidHighTickAtx(
