@@ -7,13 +7,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/host"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
+
+type hostWrapper struct {
+	host.Host
+	pi peerinfo.PeerInfo
+}
+
+var _ Host = &hostWrapper{}
+
+func (hw *hostWrapper) PeerInfo() peerinfo.PeerInfo {
+	return hw.pi
+}
+
+func wrapHost(t *testing.T, h host.Host) Host {
+	pt := peerinfo.NewPeerInfoTracker()
+	pt.Start(h.Network())
+	t.Cleanup(pt.Stop)
+	return &hostWrapper{Host: h, pi: pt}
+}
 
 func TestServer(t *testing.T) {
 	const limit = 1024
@@ -35,10 +56,30 @@ func TestServer(t *testing.T) {
 		WithLog(zaptest.NewLogger(t)),
 		WithMetrics(),
 	}
-	client := New(mesh.Hosts()[0], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(2*limit))...)
-	srv1 := New(mesh.Hosts()[1], proto, WrapHandler(handler), append(opts, WithRequestSizeLimit(limit))...)
-	srv2 := New(mesh.Hosts()[2], proto, WrapHandler(errhandler), append(opts, WithRequestSizeLimit(limit))...)
-	srv3 := New(mesh.Hosts()[3], "otherproto", WrapHandler(errhandler), append(opts, WithRequestSizeLimit(limit))...)
+	client := New(
+		wrapHost(t, mesh.Hosts()[0]),
+		proto,
+		WrapHandler(handler),
+		append(opts, WithRequestSizeLimit(2*limit))...,
+	)
+	srv1 := New(
+		wrapHost(t, mesh.Hosts()[1]),
+		proto,
+		WrapHandler(handler),
+		append(opts, WithRequestSizeLimit(limit))...,
+	)
+	srv2 := New(
+		wrapHost(t, mesh.Hosts()[2]),
+		proto,
+		WrapHandler(errhandler),
+		append(opts, WithRequestSizeLimit(limit))...,
+	)
+	srv3 := New(
+		wrapHost(t, mesh.Hosts()[3]),
+		proto,
+		WrapHandler(handler),
+		append(opts, WithRequestSizeLimit(limit))...,
+	)
 	ctx, cancel := context.WithCancel(context.Background())
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -65,20 +106,53 @@ func TestServer(t *testing.T) {
 
 	t.Run("ReceiveMessage", func(t *testing.T) {
 		n := srv1.NumAcceptedRequests()
-		response, err := client.Request(ctx, mesh.Hosts()[1].ID(), request)
+		srvID := mesh.Hosts()[1].ID()
+		response, err := client.Request(ctx, srvID, request)
 		require.NoError(t, err)
 		require.Equal(t, request, response)
-		require.NotEmpty(t, mesh.Hosts()[2].Network().ConnsToPeer(mesh.Hosts()[0].ID()))
+		srvConns := mesh.Hosts()[1].Network().ConnsToPeer(mesh.Hosts()[0].ID())
+		require.NotEmpty(t, srvConns)
+		require.Equal(t, n+1, srv1.NumAcceptedRequests())
+
+		clientInfo := client.h.PeerInfo().EnsurePeerInfo(srvID)
+		require.Equal(t, 1, clientInfo.ClientStats.SuccessCount())
+		require.Zero(t, clientInfo.ClientStats.FailureCount())
+
+		serverInfo := srv1.h.PeerInfo().EnsurePeerInfo(mesh.Hosts()[0].ID())
+		require.Eventually(t, func() bool {
+			return serverInfo.ServerStats.SuccessCount() == 1
+		}, 10*time.Second, 10*time.Millisecond)
+		require.Zero(t, serverInfo.ServerStats.FailureCount())
+	})
+	t.Run("ReceiveNoPeerInfo", func(t *testing.T) {
+		n := srv1.NumAcceptedRequests()
+		srvID := mesh.Hosts()[3].ID()
+		response, err := client.Request(ctx, srvID, request)
+		require.NoError(t, err)
+		require.Equal(t, request, response)
+		srvConns := mesh.Hosts()[3].Network().ConnsToPeer(mesh.Hosts()[0].ID())
+		require.NotEmpty(t, srvConns)
 		require.Equal(t, n+1, srv1.NumAcceptedRequests())
 	})
 	t.Run("ReceiveError", func(t *testing.T) {
 		n := srv1.NumAcceptedRequests()
-		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
+		srvID := mesh.Hosts()[2].ID()
+		_, err := client.Request(ctx, srvID, request)
 		var srvErr *ServerError
 		require.ErrorAs(t, err, &srvErr)
 		require.ErrorContains(t, err, "peer error")
 		require.ErrorContains(t, err, testErr.Error())
 		require.Equal(t, n+1, srv1.NumAcceptedRequests())
+
+		clientInfo := client.h.PeerInfo().EnsurePeerInfo(srvID)
+		require.Zero(t, clientInfo.ClientStats.SuccessCount())
+		require.Equal(t, 1, clientInfo.ClientStats.FailureCount())
+
+		serverInfo := srv2.h.PeerInfo().EnsurePeerInfo(mesh.Hosts()[0].ID())
+		require.Eventually(t, func() bool {
+			return serverInfo.ServerStats.FailureCount() == 1
+		}, 10*time.Second, 10*time.Millisecond)
+		require.Zero(t, serverInfo.ServerStats.SuccessCount())
 	})
 	t.Run("DialError", func(t *testing.T) {
 		_, err := client.Request(ctx, mesh.Hosts()[2].ID(), request)
@@ -109,9 +183,9 @@ func TestQueued(t *testing.T) {
 		wait             = make(chan struct{}, total)
 	)
 
-	client := New(mesh.Hosts()[0], proto, nil)
+	client := New(wrapHost(t, mesh.Hosts()[0]), proto, nil)
 	srv := New(
-		mesh.Hosts()[1],
+		wrapHost(t, mesh.Hosts()[1]),
 		proto,
 		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
 			return msg, nil
