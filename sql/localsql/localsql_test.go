@@ -57,7 +57,6 @@ func TestIdempotentMigration(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, err)
 	schema, err := Schema()
 	require.NoError(t, err)
 	expectedVersion := slices.MaxFunc(
