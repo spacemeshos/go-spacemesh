@@ -15,7 +15,7 @@ import (
 var (
 	level  = zap.LevelFlag("level", zapcore.ErrorLevel, "set log verbosity level")
 	dbType = flag.String("dbtype", "state", "database type (state, local, default state)")
-	output = flag.String("output", "", "output file (defaults to stdin)")
+	output = flag.String("output", "", "output file (defaults to stdout)")
 )
 
 func main() {
