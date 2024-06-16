@@ -229,12 +229,13 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		mclock,
+		nil,
 		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)
 
 	challenge := types.RandomHash()
-	nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})
 	require.NoError(t, err)
 
 	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
@@ -348,6 +349,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		mclock,
+		validator,
 		activation.WithPoetClients(client),
 	)
 	require.NoError(t, err)
@@ -355,12 +357,12 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	challenge := types.RandomHash()
 	for _, sig := range signers {
 		eg.Go(func() error {
-			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge)
+			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge, nil)
 			require.NoError(t, err)
 			err = nipost.AddPost(localDB, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
 			require.NoError(t, err)
 
-			nipost, err := nb.BuildNIPost(context.Background(), sig, 7, challenge)
+			nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})
 			require.NoError(t, err)
 
 			v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)

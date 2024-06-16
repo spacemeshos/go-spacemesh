@@ -140,6 +140,17 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
+	require.NoError(t, err)
+
+	validator := activation.NewValidator(
+		db,
+		poetDb,
+		cfg,
+		opts.Scrypt,
+		verifier,
+	)
+
 	postStates := activation.NewMockPostStates(ctrl)
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
@@ -147,6 +158,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
+		validator,
 		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetClients(client),
 	)
@@ -187,10 +199,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		},
 	).Times(totalAtxs)
 
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
-	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	v := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 	tab := activation.NewBuilder(
 		conf,
 		db,
@@ -202,7 +211,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		syncer,
 		logger,
 		activation.WithPoetConfig(poetCfg),
-		activation.WithValidator(v),
+		activation.WithValidator(validator),
 		activation.WithPostStates(postStates),
 		activation.WithPoets(client),
 	)
@@ -241,7 +250,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 				require.Equal(t, sig.NodeID(), *atx.NodeID)
 				require.Equal(t, goldenATX, atx.PositioningATXID)
 				require.NotNil(t, atx.VRFNonce)
-				err := v.VRFNonce(
+				err := validator.VRFNonce(
 					sig.NodeID(),
 					commitment,
 					uint64(*atx.VRFNonce),
@@ -253,7 +262,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 				require.Nil(t, atx.VRFNonce)
 				require.Equal(t, previous, atx.PositioningATXID)
 			}
-			_, err = v.NIPost(
+			_, err = validator.NIPost(
 				context.Background(),
 				sig.NodeID(),
 				commitment,
