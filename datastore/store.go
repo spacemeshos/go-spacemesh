@@ -30,8 +30,6 @@ type VrfNonceKey struct {
 	Epoch types.EpochID
 }
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./store.go
-
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	sql.Database

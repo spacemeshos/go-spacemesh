@@ -38,7 +38,7 @@ const (
 	beginImmediate = "BEGIN IMMEDIATE;"
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./database.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/sql Executor
 
 // Executor is an interface for executing raw statement.
 type Executor interface {
