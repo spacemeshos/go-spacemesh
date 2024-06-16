@@ -467,7 +467,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 	for {
 		row, err := stmt.Step()
 		if err != nil {
-			return 0, fmt.Errorf("step %d: %w", rows, fixError(err))
+			return 0, fmt.Errorf("step %d: %w", rows, mapSqliteError(err))
 		}
 		if !row {
 			return rows, nil
@@ -499,7 +499,7 @@ func (tx *sqliteTx) begin(initstmt string) error {
 	stmt := tx.conn.Prep(initstmt)
 	_, err := stmt.Step()
 	if err != nil {
-		return fmt.Errorf("begin: %w", fixError(err))
+		return fmt.Errorf("begin: %w", mapSqliteError(err))
 	}
 	return nil
 }
@@ -509,7 +509,7 @@ func (tx *sqliteTx) Commit() error {
 	stmt := tx.conn.Prep("COMMIT;")
 	_, tx.err = stmt.Step()
 	if tx.err != nil {
-		return fixError(tx.err)
+		return mapSqliteError(tx.err)
 	}
 	tx.committed = true
 	return nil
@@ -523,7 +523,7 @@ func (tx *sqliteTx) Release() error {
 	}
 	stmt := tx.conn.Prep("ROLLBACK")
 	_, tx.err = stmt.Step()
-	return fixError(tx.err)
+	return mapSqliteError(tx.err)
 }
 
 // Exec query.
@@ -538,7 +538,7 @@ func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 	return exec(tx.conn, query, encoder, decoder)
 }
 
-func fixError(err error) error {
+func mapSqliteError(err error) error {
 	code := sqlite.ErrCode(err)
 	if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY || code == sqlite.SQLITE_CONSTRAINT_UNIQUE {
 		return ErrObjectExists
