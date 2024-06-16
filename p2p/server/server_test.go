@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
@@ -24,8 +25,10 @@ func TestServer(t *testing.T) {
 	request := []byte("test request")
 	testErr := errors.New("test error")
 
-	handler := func(_ context.Context, msg []byte) ([]byte, error) {
-		return msg, nil
+	handler := func(ctx context.Context, msg []byte) ([]byte, error) {
+		peerID, found := ContextPeerID(ctx)
+		require.True(t, found)
+		return append(msg, []byte(peerID)...), nil
 	}
 	errhandler := func(_ context.Context, _ []byte) ([]byte, error) {
 		return nil, testErr
@@ -40,6 +43,9 @@ func TestServer(t *testing.T) {
 	srv2 := New(mesh.Hosts()[2], proto, WrapHandler(errhandler), append(opts, WithRequestSizeLimit(limit))...)
 	srv3 := New(mesh.Hosts()[3], "otherproto", WrapHandler(errhandler), append(opts, WithRequestSizeLimit(limit))...)
 	ctx, cancel := context.WithCancel(context.Background())
+	noPeerID, found := ContextPeerID(ctx)
+	require.Equal(t, peer.ID(""), noPeerID)
+	require.False(t, found)
 	var eg errgroup.Group
 	eg.Go(func() error {
 		return srv1.Run(ctx)
@@ -67,7 +73,8 @@ func TestServer(t *testing.T) {
 		n := srv1.NumAcceptedRequests()
 		response, err := client.Request(ctx, mesh.Hosts()[1].ID(), request)
 		require.NoError(t, err)
-		require.Equal(t, request, response)
+		expResponse := append(request, []byte(mesh.Hosts()[0].ID())...)
+		require.Equal(t, expResponse, response)
 		require.NotEmpty(t, mesh.Hosts()[2].Network().ConnsToPeer(mesh.Hosts()[0].ID()))
 		require.Equal(t, n+1, srv1.NumAcceptedRequests())
 	})
