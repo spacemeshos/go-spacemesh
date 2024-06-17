@@ -133,10 +133,9 @@ func (atx *ActivationTxV1) SignedBytes() []byte {
 
 func (atx *ActivationTxV1) HashInnerBytes() (result types.Hash32) {
 	h := hash.GetHasher()
+	defer hash.PutHasher(h)
 	codec.MustEncodeTo(h, &atx.InnerActivationTxV1)
 	h.Sum(result[:0])
-	h.Reset()
-	hash.PutHasher(h)
 	return result
 }
 

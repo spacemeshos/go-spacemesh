@@ -264,7 +264,6 @@ func (v *VM) Apply(
 	for _, reward := range rewardsResult {
 		events.ReportRewardReceived(reward)
 	}
-	hasher.Reset()
 	hash.PutHasher(hasher)
 
 	blockDurationPersist.Observe(float64(time.Since(t3)))

@@ -205,13 +205,12 @@ func DropPeerOnSyncValidationReject(handler SyncHandler, h host.Host, logger log
 
 func msgID(msg *pubsubpb.Message) string {
 	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
 	if msg.Topic != nil {
 		hasher.Write([]byte(*msg.Topic))
 	}
 	hasher.Write(msg.Data)
 	sum := string(hasher.Sum(nil))
-	hasher.Reset()
-	hash.PutHasher(hasher)
 	return sum
 }
 

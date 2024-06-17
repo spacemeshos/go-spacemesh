@@ -102,14 +102,13 @@ func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
 // prefixed with additionalBytes.
 func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
 	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
 	hasher.Write(additionalBytes)
 	for _, id := range sortedView {
 		hasher.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
 	}
 	var res Hash32
 	hasher.Sum(res[:0])
-	hasher.Reset()
-	hash.PutHasher(hasher)
 	return res
 }
 

@@ -37,11 +37,10 @@ func (n *NanoTX) MaxSpending() uint64 {
 
 func (n *NanoTX) combinedHash(blockSeed []byte) []byte {
 	h := hash.GetHasher()
+	defer hash.PutHasher(h)
 	h.Write(blockSeed)
 	h.Write(n.ID.Bytes())
 	sum := h.Sum(nil)
-	h.Reset()
-	hash.PutHasher(h)
 	return sum
 }
 

@@ -15,16 +15,15 @@ var pool = &sync.Pool{
 }
 
 // GetHasher will get a blake3 hasher from the pool.
-// It may or may not allocate a new one. Consumers are expected
+// It may or may not allocate a new one. Consumers are not required
 // to call Reset() on the hasher before putting it back in
 // the pool.
 func GetHasher() *blake3.Hasher {
 	return pool.Get().(*blake3.Hasher)
 }
 
-// PutHasher returns the hasher back to the pool.
-// Consumers are expected to call Reset() on the
-// instance before putting it back in the pool.
+// PutHasher resets the hasher and puts it back to the pool.
 func PutHasher(hasher *blake3.Hasher) {
+	hasher.Reset()
 	pool.Put(hasher)
 }

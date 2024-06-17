@@ -174,6 +174,7 @@ func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) t
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
 	h := hash.GetHasher()
+	defer hash.PutHasher(h)
 	enc := scale.NewEncoder(h)
 	_, err := instanceID.EncodeScale(enc)
 	_, err2 := h.Write(kInBytes)
@@ -183,10 +184,7 @@ func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) t
 			log.FieldNamed("err1", log.Err(err)),
 			log.FieldNamed("err2", log.Err(err2)))
 	}
-	sum := types.BytesToHash(h.Sum([]byte{}))
-	h.Reset()
-	hash.PutHasher(h)
-	return sum
+	return types.BytesToHash(h.Sum([]byte{}))
 }
 
 // Validate is required to conform to the Rolacle interface, but should never be called.
@@ -264,12 +262,11 @@ func (fo *FixedRolacle) Proof(
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, round)
 	h := hash.GetHasher()
+	defer hash.PutHasher(h)
 	if _, err := h.Write(kInBytes); err != nil {
 		fo.logger.WithContext(ctx).With().Error("error writing hash", log.Err(err))
 	}
 	var proof types.VrfSignature
 	_, err := h.Digest().Read(proof[:])
-	h.Reset()
-	hash.PutHasher(h)
 	return proof, err
 }

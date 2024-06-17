@@ -274,13 +274,12 @@ func (b *Ballot) SignedBytes() []byte {
 // HashInnerBytes returns the hash of the InnerBallot.
 func (b *Ballot) HashInnerBytes() []byte {
 	h := hash.GetHasher()
+	defer hash.PutHasher(h)
 	_, err := codec.EncodeTo(h, &b.InnerBallot)
 	if err != nil {
 		log.With().Fatal("failed to encode InnerBallot for hashing", log.Err(err))
 	}
 	sum := h.Sum(nil)
-	h.Reset()
-	hash.PutHasher(h)
 	return sum
 }
 
