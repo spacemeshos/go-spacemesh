@@ -179,17 +179,19 @@ func (s *ActivationService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.ActivationRequest,
 ) (*spacemeshv2alpha1.ActivationList, error) {
-	ops, err := toAtxOperations(request)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	// every full atx is ~1KB. 100 atxs is ~100KB.
 	switch {
 	case request.Limit > 100:
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
 	case request.Limit == 0:
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
+
+	ops, err := toAtxOperations(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	// every full atx is ~1KB. 100 atxs is ~100KB.
 	rst := make([]*spacemeshv2alpha1.Activation, 0, request.Limit)
 	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.ActivationTx) bool {
 		rst = append(rst, toAtx(atx))
@@ -197,7 +199,14 @@ func (s *ActivationService) List(
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &spacemeshv2alpha1.ActivationList{Activations: rst}, nil
+
+	ops.Modifiers = nil
+	count, err := atxs.CountAtxsByOps(s.db, ops)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &spacemeshv2alpha1.ActivationList{Activations: rst, Total: count}, nil
 }
 
 func (s *ActivationService) ActivationsCount(
