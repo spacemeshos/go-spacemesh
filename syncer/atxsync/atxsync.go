@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -50,12 +49,7 @@ func Download(
 		logger.Info("downloaded atxs",
 			zap.Int("total", total),
 			zap.Int("downloaded", downloaded),
-			zap.Array("missing", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
-				for _, atx := range missing {
-					enc.AppendString(atx.ShortString())
-				}
-				return nil
-			})))
+			zap.Int("missing", len(missing)))
 		if len(missing) == 0 {
 			return nil
 		}
