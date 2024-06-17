@@ -1168,44 +1168,50 @@ func Test_MarryingMalicious(t *testing.T) {
 	otherSig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	test := func(t *testing.T, malicious types.NodeID) {
-		atxHandler := newV2TestHandler(t, golden)
-
-		atx := newInitialATXv2(t, golden)
-		atx.Marriages = []wire.MarriageCertificate{{
-			ID:        otherSig.NodeID(),
-			Signature: otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-		}}
-		atx.Sign(sig)
-
-		require.NoError(t, identities.SetMalicious(atxHandler.cdb, malicious, []byte("proof"), time.Now()))
-
-		atxHandler.expectInitialAtxV2(atx)
-		atxHandler.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
-		atxHandler.mtortoise.EXPECT().OnMalfeasance(otherSig.NodeID())
-
-		_, err = atxHandler.processATX(context.Background(), "", atx, codec.MustEncode(atx), time.Now())
-		require.NoError(t, err)
-
-		equiv, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
-
-		for _, id := range []types.NodeID{sig.NodeID(), otherSig.NodeID()} {
-			m, err := identities.IsMalicious(atxHandler.cdb, id)
-			require.NoError(t, err)
-			require.True(t, m)
-		}
+	tt := []struct {
+		name      string
+		malicious types.NodeID
+	}{
+		{
+			name:      "owner is malicious",
+			malicious: sig.NodeID(),
+		}, {
+			name:      "other is malicious",
+			malicious: otherSig.NodeID(),
+		},
 	}
-	t.Run("owner is malicious", func(t *testing.T) {
-		t.Parallel()
-		test(t, sig.NodeID())
-	})
 
-	t.Run("other is malicious", func(t *testing.T) {
-		t.Parallel()
-		test(t, otherSig.NodeID())
-	})
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			atxHandler := newV2TestHandler(t, golden)
+
+			atx := newInitialATXv2(t, golden)
+			atx.Marriages = []wire.MarriageCertificate{{
+				ID:        otherSig.NodeID(),
+				Signature: otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+			}}
+			atx.Sign(sig)
+
+			require.NoError(t, identities.SetMalicious(atxHandler.cdb, tc.malicious, []byte("proof"), time.Now()))
+
+			atxHandler.expectInitialAtxV2(atx)
+			atxHandler.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
+			atxHandler.mtortoise.EXPECT().OnMalfeasance(otherSig.NodeID())
+
+			_, err = atxHandler.processATX(context.Background(), "", atx, codec.MustEncode(atx), time.Now())
+			require.NoError(t, err)
+
+			equiv, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
+
+			for _, id := range []types.NodeID{sig.NodeID(), otherSig.NodeID()} {
+				m, err := identities.IsMalicious(atxHandler.cdb, id)
+				require.NoError(t, err)
+				require.True(t, m)
+			}
+		})
+	}
 }
 
 func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
