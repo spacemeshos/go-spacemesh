@@ -114,7 +114,7 @@ func (v *Validator) NIPost(
 }
 
 func (v *Validator) PoetMembership(
-	ctx context.Context,
+	_ context.Context,
 	membership *types.MultiMerkleProof,
 	postChallenge types.Hash32,
 	poetChallenges [][]byte,
@@ -417,7 +417,7 @@ type atxDeps struct {
 	commitment  types.ATXID
 }
 
-func (v *Validator) getAtxDeps(ctx context.Context, db sql.Executor, id types.ATXID) (*atxDeps, error) {
+func (v *Validator) getAtxDeps(ctx context.Context, id types.ATXID) (*atxDeps, error) {
 	var blob sql.Blob
 	version, err := atxs.LoadBlob(ctx, v.db, id.Bytes(), &blob)
 	if err != nil {
@@ -525,10 +525,11 @@ func (v *Validator) verifyChainWithOpts(
 	}
 
 	// validate POST fully
-	deps, err := v.getAtxDeps(ctx, v.db, id)
+	deps, err := v.getAtxDeps(ctx, id)
 	if err != nil {
 		return fmt.Errorf("getting ATX dependencies: %w", err)
 	}
+
 	if err := v.Post(
 		ctx,
 		atx.SmesherID,

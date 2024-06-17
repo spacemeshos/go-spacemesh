@@ -3,6 +3,7 @@
 package activation
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -865,6 +866,7 @@ func (b *Builder) searchPositioningAtx(
 	ctx context.Context,
 	nodeID types.NodeID,
 	publish types.EpochID,
+	previous *types.ActivationTx,
 ) (types.ATXID, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID), zap.Uint32("publish epoch", publish.Uint32()))
 
@@ -880,6 +882,7 @@ func (b *Builder) searchPositioningAtx(
 	if err != nil {
 		return types.EmptyATXID, fmt.Errorf("get latest epoch: %w", err)
 	}
+
 	logger.Info("searching for positioning atx", zap.Uint32("latest_epoch", latestPublished.Uint32()))
 
 	// positioning ATX publish epoch must be lower than the publish epoch of built ATX
@@ -895,10 +898,17 @@ func (b *Builder) searchPositioningAtx(
 		VerifyChainOpts.WithTrustedID(nodeID),
 		VerifyChainOpts.WithLogger(b.logger),
 	)
+
 	if err != nil {
-		logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
-		id = b.conf.GoldenATXID
+		if previous != nil {
+			id = previous.ID()
+			logger.Info("search failed - using previous atx as positioning atx", zap.Error(err))
+		} else {
+			id = b.conf.GoldenATXID
+			logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
+		}
 	}
+
 	b.posAtxFinder.found = &struct {
 		id         types.ATXID
 		forPublish types.EpochID
@@ -916,20 +926,15 @@ func (b *Builder) getPositioningAtx(
 	publish types.EpochID,
 	previous *types.ActivationTx,
 ) (types.ATXID, error) {
-	id, err := b.searchPositioningAtx(ctx, nodeID, publish)
+	id, err := b.searchPositioningAtx(ctx, nodeID, publish, previous)
 	if err != nil {
 		return types.EmptyATXID, err
 	}
 
-	if previous != nil {
-		switch {
-		case id == b.conf.GoldenATXID:
-			id = previous.ID()
-		case id != b.conf.GoldenATXID:
-			if candidate, err := atxs.Get(b.db, id); err == nil {
-				if previous.TickHeight() >= candidate.TickHeight() {
-					id = previous.ID()
-				}
+	if previous != nil && !bytes.Equal(id.Bytes(), previous.ID().Bytes()) {
+		if candidate, err := atxs.Get(b.db, id); err == nil {
+			if previous.TickHeight() >= candidate.TickHeight() {
+				id = previous.ID()
 			}
 		}
 	}
@@ -984,9 +989,24 @@ func findFullyValidHighTickAtx(
 	logger *zap.Logger,
 	opts ...VerifyChainOption,
 ) (types.ATXID, error) {
-	var found *types.ATXID
-	atxdata.IterateHighTicksInEpoch(publish+1, func(id types.ATXID) bool {
+	var (
+		found    *types.ATXID
+		emptyAtx types.ATXID
+		ctxErr   error
+	)
+
+	// iterate trough epochs, to get first valid, not malicious ATX with the biggest height
+	atxdata.IterateHighTicksInEpoch(publish+1, func(id types.ATXID) (contSearch bool) {
 		logger.Info("found candidate for high-tick atx", log.ZShortStringer("id", id))
+
+		if ctx.Err() != nil {
+			logger.Info("got error in context", log.ZShortStringer("id", id))
+			ctxErr = ctx.Err()
+			return false
+		}
+
+		// verify ATX-candidate by getting their dependencies (previous Atx, positioning ATX etc.)
+		// and verifying PoST for every dependency
 		if err := validator.VerifyChain(ctx, id, goldenATXID, opts...); err != nil {
 			logger.Info("rejecting candidate for high-tick atx", zap.Error(err), log.ZShortStringer("id", id))
 			return true
@@ -995,8 +1015,13 @@ func findFullyValidHighTickAtx(
 		return false
 	})
 
-	if found != nil {
-		return *found, nil
+	if ctxErr != nil {
+		return emptyAtx, ctxErr
 	}
-	return types.ATXID{}, ErrNotFound
+
+	if found == nil {
+		return emptyAtx, ErrNotFound
+	}
+
+	return *found, nil
 }
