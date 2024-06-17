@@ -611,6 +611,7 @@ func (b *Builder) getExistingChallenge(logger *zap.Logger, currentEpochId types.
 		if err := nipost.RemoveChallenge(b.localDB, nodeID); err != nil {
 			return nil, fmt.Errorf("remove stale nipost challenge: %w", err)
 		}
+		return nil, nil
 	}
 
 	// challenge is fresh
