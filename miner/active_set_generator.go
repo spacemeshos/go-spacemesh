@@ -52,7 +52,7 @@ func newActiveSetGenerator(
 	for _, opt := range opts {
 		opt(a)
 	}
-	a.fallback.data = map[types.EpochID][]types.ATXID{}
+	a.fallback.data = make(map[types.EpochID][]*types.ATXID)
 	return a
 }
 
@@ -67,14 +67,14 @@ type activeSetGenerator struct {
 
 	fallback struct {
 		sync.Mutex
-		data map[types.EpochID][]types.ATXID
+		data map[types.EpochID][]*types.ATXID
 	}
 
 	// we use it to avoid running `prepare` method in parallel
 	linearized sync.Mutex
 }
 
-func (p *activeSetGenerator) updateFallback(target types.EpochID, set []types.ATXID) {
+func (p *activeSetGenerator) updateFallback(target types.EpochID, set []*types.ATXID) {
 	p.log.Info("received trusted activeset update",
 		target.Field().Zap(),
 		zap.Int("size", len(set)),
@@ -118,7 +118,7 @@ func (a *activeSetGenerator) ensure(ctx context.Context, target types.EpochID) {
 func (p *activeSetGenerator) generate(
 	current types.LayerID,
 	target types.EpochID,
-) (types.Hash32, uint64, []types.ATXID, error) {
+) (types.Hash32, uint64, []*types.ATXID, error) {
 	p.linearized.Lock()
 	defer p.linearized.Unlock()
 
@@ -203,8 +203,10 @@ func (p *activeSetGenerator) generate(
 		sort.Slice(set, func(i, j int) bool {
 			return bytes.Compare(set[i].Bytes(), set[j].Bytes()) < 0
 		})
-		id := types.ATXIDList(set).Hash()
-		if err := activeset.Add(p.localdb, activeset.Tortoise, target, id, setWeight, set); err != nil {
+		setCpy := types.ATXIDListFromPtr(set)
+		id := setCpy.Hash()
+		if err := activeset.Add(p.localdb, activeset.Tortoise, target, id, setWeight,
+			[]types.ATXID(setCpy)); err != nil {
 			return id, 0, nil, fmt.Errorf("failed to persist prepared active set for epoch %v: %w", target, err)
 		}
 		return id, setWeight, set, nil
@@ -214,7 +216,7 @@ func (p *activeSetGenerator) generate(
 
 type gradedActiveSet struct {
 	// Set includes activations with highest grade.
-	Set []types.ATXID
+	Set []*types.ATXID
 	// Weight of the activations in the Set.
 	Weight uint64
 	// Total number of activations in the database that targets requests epoch.
@@ -231,13 +233,13 @@ func activeSetFromGrades(
 	target types.EpochID,
 	epochStart time.Time,
 	networkDelay time.Duration,
-) (gradedActiveSet, error) {
+) (*gradedActiveSet, error) {
 	var (
 		setWeight uint64
-		set       []types.ATXID
+		set       []*types.ATXID
 		total     int
 	)
-	if err := atxs.IterateForGrading(db, target-1, func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool {
+	if err := atxs.IterateForGrading(db, target-1, func(id *types.ATXID, atxtime, prooftime int64, weight uint64) bool {
 		total++
 		if gradeAtx(epochStart, networkDelay, atxtime, prooftime) == good {
 			set = append(set, id)
@@ -245,16 +247,16 @@ func activeSetFromGrades(
 		}
 		return true
 	}); err != nil {
-		return gradedActiveSet{}, fmt.Errorf("failed to iterate atxs that target epoch %v: %w", target, err)
+		return nil, fmt.Errorf("failed to iterate atxs that target epoch %v: %w", target, err)
 	}
-	return gradedActiveSet{
+	return &gradedActiveSet{
 		Set:    set,
 		Weight: setWeight,
 		Total:  total,
 	}, nil
 }
 
-func getSetWeight(atxsdata *atxsdata.Data, target types.EpochID, set []types.ATXID) (uint64, error) {
+func getSetWeight(atxsdata *atxsdata.Data, target types.EpochID, set []*types.ATXID) (uint64, error) {
 	var setWeight uint64
 	for _, id := range set {
 		atx := atxsdata.Get(target, id)
@@ -293,7 +295,7 @@ func gradeAtx(epochStart time.Time, networkDelay time.Duration, atxNsec, proofNs
 	return evil
 }
 
-func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]types.ATXID, error) {
+func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]*types.ATXID, error) {
 	bid, err := layers.FirstAppliedInEpoch(db, epoch)
 	if err != nil {
 		return nil, fmt.Errorf("first block in epoch %d not found: %w", epoch, err)
@@ -301,7 +303,7 @@ func ActiveSetFromEpochFirstBlock(db sql.Executor, epoch types.EpochID) ([]types
 	return activeSetFromBlock(db, bid)
 }
 
-func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, error) {
+func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]*types.ATXID, error) {
 	block, err := blocks.Get(db, bid)
 	if err != nil {
 		return nil, fmt.Errorf("actives get block: %w", err)
@@ -309,7 +311,7 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 	activeMap := make(map[types.ATXID]struct{})
 	// the active set is the union of all active sets recorded in rewarded miners' ref ballot
 	for _, r := range block.Rewards {
-		activeMap[r.AtxID] = struct{}{}
+		activeMap[*r.AtxID] = struct{}{}
 		ballot, err := ballots.FirstInEpoch(db, r.AtxID, block.LayerIndex.GetEpoch())
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -331,5 +333,5 @@ func activeSetFromBlock(db sql.Executor, bid types.BlockID) ([]types.ATXID, erro
 			activeMap[id] = struct{}{}
 		}
 	}
-	return maps.Keys(activeMap), nil
+	return types.SliceToPtrSlice(maps.Keys(activeMap)), nil
 }

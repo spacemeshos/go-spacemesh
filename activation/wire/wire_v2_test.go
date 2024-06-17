@@ -32,7 +32,7 @@ func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
 		b.StopTimer()
 		atx := &ActivationTxV2{
 			PublishEpoch:   0,
-			PositioningATX: types.RandomATXID(),
+			PositioningATX: *types.RandomATXID(),
 			PreviousATXs:   make([]types.ATXID, 256),
 			NiPosts: []NiPostsV2{
 				{
@@ -82,7 +82,7 @@ func Test_NoATXv2IDCollisions(t *testing.T) {
 		f.Fuzz(atx)
 		id := atx.ID()
 		require.NotContains(t, atxIDs, id, "ATX ID collision")
-		atxIDs = append(atxIDs, id)
+		atxIDs = append(atxIDs, *id)
 	}
 }
 
@@ -91,7 +91,7 @@ const PublishEpochIndex = 0
 func Test_GenerateDoublePublishProof(t *testing.T) {
 	atx := &ActivationTxV2{
 		PublishEpoch:   10,
-		PositioningATX: types.RandomATXID(),
+		PositioningATX: *types.RandomATXID(),
 		PreviousATXs:   make([]types.ATXID, 1),
 		NiPosts: []NiPostsV2{
 			{

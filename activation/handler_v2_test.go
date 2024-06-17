@@ -33,7 +33,7 @@ type v2TestHandler struct {
 
 const poetLeaves = 200
 
-func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
+func newV2TestHandler(tb testing.TB, golden *types.ATXID) *v2TestHandler {
 	lg := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	mocks := newTestHandlerMocks(tb, golden)
@@ -93,14 +93,14 @@ func (h *handlerMocks) expectInitialAtxV2(atx *wire.ActivationTxV2) {
 	h.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
 	h.mValidator.EXPECT().VRFNonceV2(
 		atx.SmesherID,
-		atx.Initial.CommitmentATX,
+		&atx.Initial.CommitmentATX,
 		atx.VRFNonce,
 		atx.NiPosts[0].Posts[0].NumUnits,
 	)
 	h.mValidator.EXPECT().PostV2(
 		gomock.Any(),
 		atx.SmesherID,
-		atx.Initial.CommitmentATX,
+		&atx.Initial.CommitmentATX,
 		wire.PostFromWireV1(&atx.Initial.Post),
 		shared.ZeroChallenge,
 		atx.NiPosts[0].Posts[0].NumUnits,
@@ -167,7 +167,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	t.Run("rejects empty positioning ATX", func(t *testing.T) {
 		t.Parallel()
 		atx := newInitialATXv2(t, golden)
-		atx.PositioningATX = types.EmptyATXID
+		atx.PositioningATX = *types.EmptyATXID
 		atx.Sign(sig)
 
 		atxHandler := newV2TestHandler(t, golden)
@@ -187,7 +187,7 @@ func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	t.Run("reject empty previous ATX", func(t *testing.T) {
 		t.Parallel()
 		atx := newSoloATXv2(t, 0, types.EmptyATXID, golden)
-		atx.PreviousATXs = append(atx.PreviousATXs, types.EmptyATXID)
+		atx.PreviousATXs = append(atx.PreviousATXs, *types.EmptyATXID)
 		atx.Sign(sig)
 
 		atxHandler := newV2TestHandler(t, golden)
@@ -212,14 +212,14 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 		atxHandler.mclock.EXPECT().CurrentLayer()
 		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
-			atx.Initial.CommitmentATX,
+			&atx.Initial.CommitmentATX,
 			atx.VRFNonce,
 			atx.NiPosts[0].Posts[0].NumUnits,
 		)
 		atxHandler.mValidator.EXPECT().PostV2(
 			context.Background(),
 			sig.NodeID(),
-			atx.Initial.CommitmentATX,
+			&atx.Initial.CommitmentATX,
 			wire.PostFromWireV1(&atx.Initial.Post),
 			shared.ZeroChallenge,
 			atx.NiPosts[0].Posts[0].NumUnits,
@@ -229,7 +229,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	t.Run("rejects previous ATXs", func(t *testing.T) {
 		t.Parallel()
 		atx := newInitialATXv2(t, golden)
-		atx.PreviousATXs = []types.ATXID{types.RandomATXID()}
+		atx.PreviousATXs = []types.ATXID{*types.RandomATXID()}
 		atx.Sign(sig)
 
 		atxHandler := newV2TestHandler(t, golden)
@@ -237,7 +237,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 		err := atxHandler.syntacticallyValidate(context.Background(), atx)
 		require.ErrorContains(t, err, "initial atx must not have previous atxs")
 
-		atx.PreviousATXs = []types.ATXID{types.EmptyATXID}
+		atx.PreviousATXs = []types.ATXID{*types.EmptyATXID}
 		atx.Sign(sig)
 
 		atxHandler.mclock.EXPECT().CurrentLayer()
@@ -247,7 +247,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	t.Run("rejects when marriage ATX ref is set", func(t *testing.T) {
 		t.Parallel()
 		atx := newInitialATXv2(t, golden)
-		atx.MarriageATX = &golden
+		atx.MarriageATX = golden
 		atx.Sign(sig)
 
 		atxHandler := newV2TestHandler(t, golden)
@@ -258,7 +258,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 	t.Run("rejects when commitment ATX is missing", func(t *testing.T) {
 		t.Parallel()
 		atx := newInitialATXv2(t, golden)
-		atx.Initial.CommitmentATX = types.EmptyATXID
+		atx.Initial.CommitmentATX = *types.EmptyATXID
 		atx.Sign(sig)
 
 		atxHandler := newV2TestHandler(t, golden)
@@ -276,7 +276,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 		atxHandler.mValidator.EXPECT().
 			VRFNonceV2(
 				sig.NodeID(),
-				atx.Initial.CommitmentATX,
+				&atx.Initial.CommitmentATX,
 				atx.VRFNonce,
 				atx.NiPosts[0].Posts[0].NumUnits,
 			).
@@ -293,7 +293,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 		atxHandler.mclock.EXPECT().CurrentLayer()
 		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
-			atx.Initial.CommitmentATX,
+			&atx.Initial.CommitmentATX,
 			atx.VRFNonce,
 			atx.NiPosts[0].Posts[0].NumUnits,
 		)
@@ -301,7 +301,7 @@ func TestHandlerV2_SyntacticallyValidate_InitialAtx(t *testing.T) {
 			PostV2(
 				context.Background(),
 				sig.NodeID(),
-				atx.Initial.CommitmentATX,
+				&atx.Initial.CommitmentATX,
 				wire.PostFromWireV1(&atx.Initial.Post),
 				shared.ZeroChallenge,
 				atx.NiPosts[0].Posts[0].NumUnits,
@@ -328,7 +328,7 @@ func TestHandlerV2_SyntacticallyValidate_SoloAtx(t *testing.T) {
 	})
 	t.Run("must have 1 previous ATX", func(t *testing.T) {
 		atx := newSoloATXv2(t, 0, types.RandomATXID(), types.RandomATXID())
-		atx.PreviousATXs = append(atx.PreviousATXs, types.RandomATXID())
+		atx.PreviousATXs = append(atx.PreviousATXs, *types.RandomATXID())
 		atx.Sign(sig)
 
 		atxHandler.mclock.EXPECT().CurrentLayer()
@@ -377,7 +377,7 @@ func TestHandlerV2_SyntacticallyValidate_MergedAtx(t *testing.T) {
 	t.Run("merged ATXs are not supported yet", func(t *testing.T) {
 		t.Parallel()
 		atx := newSoloATXv2(t, 0, types.RandomATXID(), types.RandomATXID())
-		atx.MarriageATX = &golden
+		atx.MarriageATX = golden
 		atx.Sign(sig)
 
 		atxHandler.mclock.EXPECT().CurrentLayer()
@@ -532,7 +532,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		atxHandler.expectVerifyNIPoST(atx)
 		atxHandler.mValidator.EXPECT().VRFNonceV2(
 			sig.NodeID(),
-			prev.Initial.CommitmentATX,
+			&prev.Initial.CommitmentATX,
 			prev.VRFNonce,
 			atx.TotalNumUnits(),
 		).Return(errors.New("vrf nonce is not valid"))
@@ -550,7 +550,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		prev := &types.ActivationTx{
 			NumUnits:      lowerNumUnits,
 			SmesherID:     sig.NodeID(),
-			CommitmentATX: &golden,
+			CommitmentATX: golden,
 		}
 		prev.SetID(types.RandomATXID())
 		require.NoError(t, atxs.Add(atxHandler.cdb, prev))
@@ -604,32 +604,32 @@ func TestCollectDeps_AtxV2(t *testing.T) {
 	t.Run("all unique deps", func(t *testing.T) {
 		t.Parallel()
 		atx := wire.ActivationTxV2{
-			PreviousATXs:   []types.ATXID{prev0, prev1},
-			PositioningATX: positioning,
-			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: commitment},
-			MarriageATX:    &marriage,
+			PreviousATXs:   []types.ATXID{*prev0, *prev1},
+			PositioningATX: *positioning,
+			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: *commitment},
+			MarriageATX:    marriage,
 			NiPosts: []wire.NiPostsV2{
 				{Challenge: poetA},
 				{Challenge: poetB},
 			},
 			Marriages: []wire.MarriageCertificate{
-				{ReferenceAtx: types.EmptyATXID},
-				{ReferenceAtx: ref0},
-				{ReferenceAtx: ref1},
+				{ReferenceAtx: *types.EmptyATXID},
+				{ReferenceAtx: *ref0},
+				{ReferenceAtx: *ref1},
 			},
 		}
 		poetDeps, atxIDs := atxHandler.collectAtxDeps(&atx)
 		require.ElementsMatch(t, []types.Hash32{poetA, poetB}, poetDeps)
-		require.ElementsMatch(t, []types.ATXID{prev0, prev1, positioning, commitment, marriage, ref0, ref1}, atxIDs)
+		require.ElementsMatch(t, []*types.ATXID{prev0, prev1, positioning, commitment, marriage, ref0, ref1}, atxIDs)
 	})
 	t.Run("eliminates duplicates", func(t *testing.T) {
 		t.Parallel()
 		atxA := types.RandomATXID()
 		atx := wire.ActivationTxV2{
-			PreviousATXs:   []types.ATXID{atxA, atxA},
-			PositioningATX: atxA,
-			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: atxA},
-			MarriageATX:    &atxA,
+			PreviousATXs:   []types.ATXID{*atxA, *atxA},
+			PositioningATX: *atxA,
+			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: *atxA},
+			MarriageATX:    atxA,
 			NiPosts: []wire.NiPostsV2{
 				{Challenge: poetA},
 				{Challenge: poetA},
@@ -637,14 +637,14 @@ func TestCollectDeps_AtxV2(t *testing.T) {
 		}
 		poetDeps, atxIDs := atxHandler.collectAtxDeps(&atx)
 		require.ElementsMatch(t, []types.Hash32{poetA}, poetDeps)
-		require.ElementsMatch(t, []types.ATXID{atxA}, atxIDs)
+		require.ElementsMatch(t, []*types.ATXID{atxA}, atxIDs)
 	})
 	t.Run("nil commitment ATX", func(t *testing.T) {
 		t.Parallel()
 		atx := wire.ActivationTxV2{
-			PreviousATXs:   []types.ATXID{prev0, prev1},
-			PositioningATX: positioning,
-			MarriageATX:    &marriage,
+			PreviousATXs:   []types.ATXID{*prev0, *prev1},
+			PositioningATX: *positioning,
+			MarriageATX:    marriage,
 			NiPosts: []wire.NiPostsV2{
 				{Challenge: poetA},
 				{Challenge: poetB},
@@ -652,14 +652,14 @@ func TestCollectDeps_AtxV2(t *testing.T) {
 		}
 		poetDeps, atxIDs := atxHandler.collectAtxDeps(&atx)
 		require.ElementsMatch(t, []types.Hash32{poetA, poetB}, poetDeps)
-		require.ElementsMatch(t, []types.ATXID{prev0, prev1, positioning, marriage}, atxIDs)
+		require.ElementsMatch(t, []*types.ATXID{prev0, prev1, positioning, marriage}, atxIDs)
 	})
 	t.Run("filters out golden ATX and empty ATX", func(t *testing.T) {
 		t.Parallel()
 		atx := wire.ActivationTxV2{
-			PreviousATXs:   []types.ATXID{types.EmptyATXID, goldenATX},
-			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: goldenATX},
-			PositioningATX: goldenATX,
+			PreviousATXs:   []types.ATXID{*types.EmptyATXID, *goldenATX},
+			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: *goldenATX},
+			PositioningATX: *goldenATX,
 		}
 		poetDeps, atxIDs := atxHandler.collectAtxDeps(&atx)
 		require.Empty(t, poetDeps)
@@ -671,7 +671,7 @@ func TestHandlerV2_RegisterReferences(t *testing.T) {
 	atxHdlr := newV2TestHandler(t, types.RandomATXID())
 
 	poets := []types.Hash32{types.RandomHash(), types.RandomHash()}
-	atxs := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
+	atxs := []*types.ATXID{types.RandomATXID(), types.RandomATXID()}
 	expectedHashes := poets
 	for _, atx := range atxs {
 		expectedHashes = append(expectedHashes, atx.Hash32())
@@ -688,7 +688,7 @@ func TestHandlerV2_FetchesReferences(t *testing.T) {
 		atxHdlr := newV2TestHandler(t, golden)
 
 		poets := []types.Hash32{types.RandomHash(), types.RandomHash()}
-		atxs := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
+		atxs := []*types.ATXID{types.RandomATXID(), types.RandomATXID()}
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[0])
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[1])
@@ -712,7 +712,7 @@ func TestHandlerV2_FetchesReferences(t *testing.T) {
 		atxHdlr := newV2TestHandler(t, golden)
 
 		poets := []types.Hash32{types.RandomHash(), types.RandomHash()}
-		atxs := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
+		atxs := []*types.ATXID{types.RandomATXID(), types.RandomATXID()}
 
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[0])
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[1])
@@ -966,7 +966,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
 
 		atx := newInitialATXv2(t, golden)
-		atx.Initial.CommitmentATX = types.RandomATXID()
+		atx.Initial.CommitmentATX = *types.RandomATXID()
 		atx.Sign(sig)
 
 		_, proof, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
@@ -1111,7 +1111,7 @@ func Test_Marriages(t *testing.T) {
 				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 			},
 			{
-				ReferenceAtx: othersAtx.ID(),
+				ReferenceAtx: *othersAtx.ID(),
 				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 			},
 		}
@@ -1148,7 +1148,7 @@ func Test_Marriages(t *testing.T) {
 				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 			},
 			{
-				ReferenceAtx: othersAtx.ID(),
+				ReferenceAtx: *othersAtx.ID(),
 				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 			},
 		}
@@ -1168,7 +1168,7 @@ func Test_Marriages(t *testing.T) {
 				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 			},
 			{
-				ReferenceAtx: others2Atx.ID(),
+				ReferenceAtx: *others2Atx.ID(),
 				Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 			},
 		}
@@ -1206,7 +1206,7 @@ func Test_Marriages(t *testing.T) {
 		atx := newInitialATXv2(t, golden)
 		atx.Marriages = []wire.MarriageCertificate{
 			{
-				ReferenceAtx: othersAtx.ID(),
+				ReferenceAtx: *othersAtx.ID(),
 				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 			},
 		}
@@ -1250,7 +1250,7 @@ func Test_MarryingMalicious(t *testing.T) {
 				{
 					Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 				}, {
-					ReferenceAtx: othersAtx.ID(),
+					ReferenceAtx: *othersAtx.ID(),
 					Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 				},
 			}
@@ -1278,11 +1278,11 @@ func Test_MarryingMalicious(t *testing.T) {
 	}
 }
 
-func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
+func newInitialATXv2(t testing.TB, golden *types.ATXID) *wire.ActivationTxV2 {
 	t.Helper()
 	atx := &wire.ActivationTxV2{
-		PositioningATX: golden,
-		Initial:        &wire.InitialAtxPartsV2{CommitmentATX: golden},
+		PositioningATX: *golden,
+		Initial:        &wire.InitialAtxPartsV2{CommitmentATX: *golden},
 		NiPosts: []wire.NiPostsV2{
 			{
 				Challenge: types.RandomHash(),
@@ -1300,13 +1300,13 @@ func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
 	return atx
 }
 
-func newSoloATXv2(t testing.TB, publish types.EpochID, prev, pos types.ATXID) *wire.ActivationTxV2 {
+func newSoloATXv2(t testing.TB, publish types.EpochID, prev, pos *types.ATXID) *wire.ActivationTxV2 {
 	t.Helper()
 
 	atx := &wire.ActivationTxV2{
 		PublishEpoch:   publish,
-		PreviousATXs:   []types.ATXID{prev},
-		PositioningATX: pos,
+		PreviousATXs:   []types.ATXID{*prev},
+		PositioningATX: *pos,
 		NiPosts: []wire.NiPostsV2{
 			{
 				Challenge: types.RandomHash(),

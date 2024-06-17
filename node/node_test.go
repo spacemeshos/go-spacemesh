@@ -1100,7 +1100,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 			logger.Zap(),
 			app.db,
 			app.atxsdata,
-			types.ATXID(app.Config.Genesis.GoldenATX()),
+			types.AtxIdFromHash32(app.Config.Genesis.GoldenATX()),
 			app.syncer,
 			app.validator,
 		)

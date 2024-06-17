@@ -102,7 +102,7 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, e
 			return nil, err
 		}
 		ed := EpochData{
-			AtxIDs: atxids,
+			AtxIDs: types.PtrSliceToSlice(atxids),
 		}
 		h.logger.With().Debug("serve: responded to epoch info request",
 			epoch, log.Context(ctx), log.Int("atx_count", len(ed.AtxIDs)))

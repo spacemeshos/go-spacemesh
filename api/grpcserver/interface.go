@@ -55,8 +55,8 @@ type txValidator interface {
 
 // atxProvider is used by ActivationService to get ATXes.
 type atxProvider interface {
-	GetAtx(id types.ATXID) (*types.ActivationTx, error)
-	MaxHeightAtx() (types.ATXID, error)
+	GetAtx(id *types.ATXID) (*types.ActivationTx, error)
+	MaxHeightAtx() (*types.ATXID, error)
 	GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error)
 }
 
@@ -109,5 +109,5 @@ type meshAPI interface {
 }
 
 type oracle interface {
-	ActiveSet(context.Context, types.EpochID) ([]types.ATXID, error)
+	ActiveSet(context.Context, types.EpochID) ([]*types.ATXID, error)
 }

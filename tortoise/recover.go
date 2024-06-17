@@ -131,7 +131,7 @@ func Recover(
 }
 
 func recoverEpoch(target types.EpochID, trtl *Tortoise, db sql.Executor, atxdata *atxsdata.Data) error {
-	atxdata.IterateInEpoch(target, func(id types.ATXID, atx *atxsdata.ATX) {
+	atxdata.IterateInEpoch(target, func(id *types.ATXID, atx *atxsdata.ATX) {
 		trtl.OnAtx(target, id, atx)
 	})
 

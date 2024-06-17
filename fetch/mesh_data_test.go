@@ -326,7 +326,7 @@ func genLayerProposal(
 			Ballot: types.Ballot{
 				InnerBallot: types.InnerBallot{
 					Layer: layerID,
-					AtxID: types.RandomATXID(),
+					AtxID: *types.RandomATXID(),
 					EpochData: &types.EpochData{
 						Beacon: types.RandomBeacon(),
 					},
@@ -587,7 +587,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 func generateEpochData(t *testing.T) (*EpochData, []byte) {
 	t.Helper()
 	ed := &EpochData{
-		AtxIDs: types.RandomActiveSet(11),
+		AtxIDs: types.PtrSliceToSlice(types.RandomActiveSet(11)),
 	}
 	data, err := codec.Encode(ed)
 	require.NoError(t, err)
@@ -899,14 +899,14 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			var atxIds []types.ATXID
 			for i := 0; i < totalRequests; i++ {
 				id := types.RandomATXID()
-				atxIds = append(atxIds, id)
+				atxIds = append(atxIds, *id)
 				atxValidatorMock.EXPECT().HandleMessage(gomock.Any(), id.Hash32(), mesh.Hosts()[1].ID(), gomock.Any())
 			}
 
 			if withLimiting {
-				err = f.GetAtxs(context.Background(), atxIds)
+				err = f.GetAtxs(context.Background(), types.SliceToPtrSlice(atxIds))
 			} else {
-				err = f.GetAtxs(context.Background(), atxIds, system.WithoutLimiting())
+				err = f.GetAtxs(context.Background(), types.SliceToPtrSlice(atxIds), system.WithoutLimiting())
 			}
 			require.NoError(t, err)
 		})

@@ -117,7 +117,7 @@ func (t *testOracle) createBlock(blts []*types.Ballot) {
 		},
 	}
 	for _, b := range blts {
-		block.Rewards = append(block.Rewards, types.AnyReward{AtxID: b.AtxID})
+		block.Rewards = append(block.Rewards, types.AnyReward{AtxID: &b.AtxID})
 	}
 	block.Initialize()
 	require.NoError(t.tb, blocks.Add(t.db, block))
@@ -127,8 +127,8 @@ func (t *testOracle) createBlock(blts []*types.Ballot) {
 func (t *testOracle) createLayerData(lid types.LayerID, numMiners int) []types.NodeID {
 	t.tb.Helper()
 	activeSet := types.RandomActiveSet(numMiners)
-	miners := t.createActiveSet(lid.GetEpoch().FirstLayer().Sub(1), activeSet)
-	blts := t.createBallots(lid, activeSet, miners)
+	miners := t.createActiveSet(lid.GetEpoch().FirstLayer().Sub(1), types.PtrSliceToSlice(activeSet))
+	blts := t.createBallots(lid, types.PtrSliceToSlice(activeSet), miners)
 	t.createBlock(blts)
 	return miners
 }
@@ -147,7 +147,7 @@ func (t *testOracle) createActiveSet(
 			TickCount:    1,
 			SmesherID:    nodeID,
 		}
-		atx.SetID(id)
+		atx.SetID(&id)
 		atx.SetReceived(time.Now())
 		t.addAtx(atx)
 	}
@@ -165,7 +165,7 @@ func createIdentities(n int) map[types.NodeID]identityWeight {
 	m := map[types.NodeID]identityWeight{}
 	for i := 0; i < n; i++ {
 		m[types.BytesToNodeID([]byte(strconv.Itoa(i)))] = identityWeight{
-			atx:    types.ATXID(types.BytesToHash([]byte(strconv.Itoa(i)))),
+			atx:    types.AtxIdFromHash32(types.BytesToHash([]byte(strconv.Itoa(i)))),
 			weight: uint64(i + 1),
 		}
 	}
@@ -233,7 +233,7 @@ func TestCalcEligibility(t *testing.T) {
 		require.Equal(t, 0, int(res))
 
 		activeSet := types.RandomActiveSet(111)
-		miners := o.createActiveSet(types.EpochID(4).FirstLayer(), activeSet)
+		miners := o.createActiveSet(types.EpochID(4).FirstLayer(), types.PtrSliceToSlice(activeSet))
 		o.UpdateActiveSet(5, activeSet)
 		o.mBeacon.EXPECT().GetBeacon(lid.GetEpoch()).Return(types.RandomBeacon(), nil)
 		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
@@ -392,7 +392,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	atx2.SetReceived(time.Now())
 	o.addAtx(atx2)
 	miners := []types.NodeID{atx1.SmesherID, atx2.SmesherID}
-	o.createBlock(o.createBallots(first, activeSet, miners))
+	o.createBlock(o.createBallots(first, types.PtrSliceToSlice(activeSet), miners))
 
 	o.vrfVerifier = signing.NewVRFVerifier()
 
@@ -543,7 +543,7 @@ func TestActives(t *testing.T) {
 		o := defaultOracle(t)
 		first := types.GetEffectiveGenesis().Add(1)
 		bootstrap := types.RandomActiveSet(numMiners)
-		o.createActiveSet(types.EpochID(1).FirstLayer(), bootstrap)
+		o.createActiveSet(types.EpochID(1).FirstLayer(), types.PtrSliceToSlice(bootstrap))
 		o.UpdateActiveSet(types.GetEffectiveGenesis().GetEpoch()+1, bootstrap)
 
 		for lid := types.LayerID(0); lid.Before(first); lid = lid.Add(1) {
@@ -596,7 +596,7 @@ func TestActives(t *testing.T) {
 		end := layer.Add(o.cfg.ConfidenceParam)
 		o.createLayerData(layer, numMiners)
 		fallback := types.RandomActiveSet(numMiners + 1)
-		o.createActiveSet(types.EpochID(3).FirstLayer(), fallback)
+		o.createActiveSet(types.EpochID(3).FirstLayer(), types.PtrSliceToSlice(fallback))
 		o.UpdateActiveSet(end.GetEpoch(), fallback)
 
 		for lid := layer; lid.Before(end); lid = lid.Add(1) {
@@ -625,7 +625,7 @@ func TestActives(t *testing.T) {
 		})
 		o.createLayerData(layer, numMiners)
 		fallback := types.RandomActiveSet(numMiners + 1)
-		o.createActiveSet(types.EpochID(3).FirstLayer(), fallback)
+		o.createActiveSet(types.EpochID(3).FirstLayer(), types.PtrSliceToSlice(fallback))
 		o.UpdateActiveSet(layer.GetEpoch(), fallback)
 
 		activeSet, err := o.actives(context.Background(), layer)
@@ -733,7 +733,7 @@ func TestActiveSetMatrix(t *testing.T) {
 			NumUnits:     1,
 			TickCount:    1,
 		}
-		atx.SetID(id)
+		atx.SetID(&id)
 		atx.SetReceived(time.Time{}.Add(1))
 
 		for _, opt := range option {
@@ -922,7 +922,7 @@ func TestActiveSetMatrix(t *testing.T) {
 			switch typed := tc.expect.(type) {
 			case []types.ATXID:
 				require.NoError(t, err)
-				require.ElementsMatch(t, typed, rst)
+				require.ElementsMatch(t, typed, types.PtrSliceToSlice(rst))
 			case string:
 				require.Empty(t, rst)
 				require.ErrorContains(t, err, typed)

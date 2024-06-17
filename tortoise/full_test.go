@@ -335,8 +335,8 @@ func TestFullCountVotes(t *testing.T) {
 					BaseHeight: tc.activeset[i].BaseHeight,
 					Height:     tc.activeset[i].BaseHeight + tc.activeset[i].TickCount,
 				}
-				tortoise.trtl.atxsdata.AddAtx(2, atxid, &atx)
-				tortoise.OnAtx(2, atxid, &atx)
+				tortoise.trtl.atxsdata.AddAtx(2, &atxid, &atx)
+				tortoise.OnAtx(2, &atxid, &atx)
 				activeset = append(activeset, atxid)
 				weights = append(weights, atx.Weight)
 				total += atx.Weight

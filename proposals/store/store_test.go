@@ -16,7 +16,7 @@ func generateProposal(layer types.LayerID) *types.Proposal {
 	proposal.EpochData = &types.EpochData{
 		Beacon: types.RandomBeacon(),
 	}
-	proposal.AtxID = types.RandomATXID()
+	proposal.AtxID = *types.RandomATXID()
 	proposal.SmesherID = types.RandomNodeID()
 	proposal.Ballot.SmesherID = proposal.SmesherID
 	proposal.SetID(types.RandomProposalID())

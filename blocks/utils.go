@@ -239,7 +239,7 @@ func rewardInfoAndHeight(
 	weights := make(map[types.ATXID]*big.Rat)
 	maxHeight := uint64(0)
 	for _, p := range props {
-		atx := atxs.Get(p.Layer.GetEpoch(), p.AtxID)
+		atx := atxs.Get(p.Layer.GetEpoch(), &p.AtxID)
 		if atx == nil {
 			return 0, nil, fmt.Errorf(
 				"proposal ATX not found: atx %s proposal %s", p.AtxID.ShortString(), p.ID().String(),
@@ -283,7 +283,7 @@ func rewardInfoAndHeight(
 	for _, id := range atxids {
 		weight := weights[id]
 		rewards = append(rewards, types.AnyReward{
-			AtxID: id,
+			AtxID: &id,
 			Weight: types.RatNum{
 				Num:   weight.Num().Uint64(),
 				Denom: weight.Denom().Uint64(),

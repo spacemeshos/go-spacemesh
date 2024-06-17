@@ -316,7 +316,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 }
 
 // OnAtx is expected to be called before ballots that use this atx.
-func (t *Tortoise) OnAtx(target types.EpochID, id types.ATXID, atx *atxsdata.ATX) {
+func (t *Tortoise) OnAtx(target types.EpochID, id *types.ATXID, atx *atxsdata.ATX) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -428,7 +428,7 @@ type DecodedBallot struct {
 type BallotData struct {
 	ID           types.BallotID
 	Layer        types.LayerID
-	ATXID        types.ATXID
+	ATXID        *types.ATXID
 	Smesher      types.NodeID
 	Beacon       types.Beacon
 	Eligiblities uint32
@@ -531,7 +531,7 @@ func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
 
 // GetMissingActiveSet returns unknown atxs from the original list. It is done for a specific epoch
 // as active set atxs never cross epoch boundary.
-func (t *Tortoise) GetMissingActiveSet(target types.EpochID, atxs []types.ATXID) []types.ATXID {
+func (t *Tortoise) GetMissingActiveSet(target types.EpochID, atxs []*types.ATXID) []*types.ATXID {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.trtl.atxsdata.MissingInEpoch(target, atxs)

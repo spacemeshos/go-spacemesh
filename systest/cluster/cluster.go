@@ -258,7 +258,8 @@ func (c *Cluster) GenesisExtraData() string {
 
 // GenesisID computes id from the configuration.
 func (c *Cluster) GenesisID() types.Hash20 {
-	return c.GoldenATX().Hash32().ToHash20()
+	v := c.GoldenATX()
+	return (&v).Hash32().ToHash20()
 }
 
 func (c *Cluster) GoldenATX() types.ATXID {

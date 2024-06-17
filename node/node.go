@@ -447,8 +447,10 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 	for i, sig := range app.signers {
 		nodeIDs[i] = sig.NodeID()
 	}
+
+	golden := types.ATXID(app.Config.Genesis.GoldenATX())
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
+		GoldenAtx:      &golden,
 		DataDir:        app.Config.DataDir(),
 		DbFile:         dbFile,
 		LocalDbFile:    localDbFile,
@@ -668,7 +670,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	goldenATXID := types.ATXID(app.Config.Genesis.GoldenATX())
-	if goldenATXID == types.EmptyATXID {
+	if goldenATXID == *types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
 
@@ -756,7 +758,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.host,
 		fetcherWrapped,
-		goldenATXID,
+		&goldenATXID,
 		validator,
 		beaconProtocol,
 		trtl,
@@ -931,7 +933,7 @@ func (app *App) initServices(ctx context.Context) error {
 		proposals.WithConfig(proposals.Config{
 			LayerSize:              layerSize,
 			LayersPerEpoch:         layersPerEpoch,
-			GoldenATXID:            goldenATXID,
+			GoldenATXID:            &goldenATXID,
 			MaxExceptions:          trtlCfg.MaxExceptions,
 			Hdist:                  trtlCfg.Hdist,
 			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
@@ -987,7 +989,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(PostLogger, lg).Zap(),
 		app.db,
 		app.atxsdata,
-		goldenATXID,
+		&goldenATXID,
 		newSyncer,
 		app.validator,
 		activation.PostValidityDelay(app.Config.PostValidDelay),
@@ -1040,7 +1042,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	builderConfig := activation.Config{
-		GoldenATXID:      goldenATXID,
+		GoldenATXID:      &goldenATXID,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
@@ -1361,9 +1363,9 @@ func (app *App) listenToUpdates(ctx context.Context) {
 						app.errCh <- fmt.Errorf("error storing ActiveSet: %w", err)
 						return nil
 					}
-
-					app.hOracle.UpdateActiveSet(epoch, set)
-					app.proposalBuilder.UpdateActiveSet(epoch, set)
+					setP := types.SliceToPtrSlice(set)
+					app.hOracle.UpdateActiveSet(epoch, setP)
+					app.proposalBuilder.UpdateActiveSet(epoch, setP)
 
 					app.eg.Go(func() error {
 						select {
@@ -1377,7 +1379,7 @@ func (app *App) listenToUpdates(ctx context.Context) {
 							app.syncLogger.Zap(),
 							app.db,
 							app.fetcher,
-							set,
+							types.SliceToPtrSlice(set),
 						); err != nil {
 							app.errCh <- err
 						}

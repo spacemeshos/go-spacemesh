@@ -20,6 +20,6 @@ type Tortoise interface {
 	Updates() []result.Layer
 	OnApplied(types.LayerID, types.Hash32) bool
 	OnMalfeasance(types.NodeID)
-	OnAtx(types.EpochID, types.ATXID, *atxsdata.ATX)
-	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
+	OnAtx(types.EpochID, *types.ATXID, *atxsdata.ATX)
+	GetMissingActiveSet(types.EpochID, []*types.ATXID) []*types.ATXID
 }

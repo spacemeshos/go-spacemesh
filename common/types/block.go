@@ -115,7 +115,7 @@ func RatNumFromBigRat(r *big.Rat) RatNum {
 
 // AnyReward contains the reward information by ATXID.
 type AnyReward struct {
-	AtxID  ATXID
+	AtxID  *ATXID
 	Weight RatNum
 }
 

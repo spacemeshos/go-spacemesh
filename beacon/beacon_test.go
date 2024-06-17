@@ -113,7 +113,7 @@ func createATX(
 	sig *signing.EdSigner,
 	numUnits uint32,
 	received time.Time,
-) types.ATXID {
+) *types.ATXID {
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},

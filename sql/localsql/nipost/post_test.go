@@ -21,7 +21,7 @@ func Test_AddPost(t *testing.T) {
 		Challenge: shared.Challenge([]byte{4, 5, 6}),
 
 		NumUnits:      2,
-		CommitmentATX: types.RandomATXID(),
+		CommitmentATX: *types.RandomATXID(),
 		VRFNonce:      3,
 	}
 	err := AddPost(db, nodeID, post)
@@ -44,7 +44,7 @@ func Test_AddPost_NoDuplicates(t *testing.T) {
 		Challenge: shared.ZeroChallenge,
 
 		NumUnits:      2,
-		CommitmentATX: types.RandomATXID(),
+		CommitmentATX: *types.RandomATXID(),
 		VRFNonce:      3,
 	}
 	err := AddPost(db, nodeID, post)
@@ -58,7 +58,7 @@ func Test_AddPost_NoDuplicates(t *testing.T) {
 		Challenge: shared.ZeroChallenge,
 
 		NumUnits:      4,
-		CommitmentATX: types.RandomATXID(),
+		CommitmentATX: *types.RandomATXID(),
 		VRFNonce:      5,
 	}
 	err = AddPost(db, nodeID, post2)

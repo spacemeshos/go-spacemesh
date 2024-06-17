@@ -39,5 +39,5 @@ type certifier interface {
 }
 
 type tortoiseProvider interface {
-	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
+	GetMissingActiveSet(types.EpochID, []*types.ATXID) []*types.ATXID
 }

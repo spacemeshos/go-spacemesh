@@ -76,7 +76,7 @@ func gatx(
 		TickCount:    ticks,
 		SmesherID:    smesher,
 	}
-	atx.SetID(id)
+	atx.SetID(&id)
 	atx.SetReceived(time.Time{}.Add(1))
 	for _, opt := range opts {
 		opt(atx)
@@ -108,7 +108,7 @@ func gblock(lid types.LayerID, atxs ...types.ATXID) *types.Block {
 	block := types.Block{}
 	block.LayerIndex = lid
 	for _, atx := range atxs {
-		block.Rewards = append(block.Rewards, types.AnyReward{AtxID: atx})
+		block.Rewards = append(block.Rewards, types.AnyReward{AtxID: &atx})
 	}
 	block.Initialize()
 	return &block
@@ -804,7 +804,7 @@ func TestBuild(t *testing.T) {
 						)
 					}
 					for _, activeSet := range step.fallbackActiveSets {
-						builder.UpdateActiveSet(activeSet.epoch, activeSet.atxs)
+						builder.UpdateActiveSet(activeSet.epoch, types.SliceToPtrSlice(activeSet.atxs))
 					}
 				}
 				{

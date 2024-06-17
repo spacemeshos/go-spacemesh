@@ -88,9 +88,10 @@ func TestSyncer(t *testing.T) {
 
 		tester.fetcher.EXPECT().
 			GetAtxs(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(_ context.Context, ids []types.ATXID, _ ...system.GetAtxOpt) error {
+			DoAndReturn(func(_ context.Context, ids []*types.ATXID, _ ...system.GetAtxOpt) error {
 				for _, id := range ids {
-					require.NoError(t, atxs.Add(tester.db, atx(id)))
+					a := atx(*id)
+					require.NoError(t, atxs.Add(tester.db, a))
 				}
 				return nil
 			}).AnyTimes()
@@ -151,9 +152,10 @@ func TestSyncer(t *testing.T) {
 
 		tester.fetcher.EXPECT().
 			GetAtxs(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(_ context.Context, ids []types.ATXID, _ ...system.GetAtxOpt) error {
+			DoAndReturn(func(_ context.Context, ids []*types.ATXID, _ ...system.GetAtxOpt) error {
 				for _, id := range ids {
-					require.NoError(t, atxs.Add(tester.db, atx(id)))
+					a := atx(*id)
+					require.NoError(t, atxs.Add(tester.db, a))
 				}
 				return nil
 			}).AnyTimes()
@@ -179,17 +181,18 @@ func TestSyncer(t *testing.T) {
 
 		tester.fetcher.EXPECT().
 			GetAtxs(gomock.Any(), gomock.Any()).
-			DoAndReturn(func(_ context.Context, ids []types.ATXID, _ ...system.GetAtxOpt) error {
+			DoAndReturn(func(_ context.Context, ids []*types.ATXID, _ ...system.GetAtxOpt) error {
 				require.LessOrEqual(t, len(ids), tester.cfg.AtxsBatch)
 				berr := fetch.BatchError{}
 				for _, id := range ids {
 					for _, good := range good.AtxIDs {
-						if good == id {
-							require.NoError(t, atxs.Add(tester.db, atx(id)))
+						if good == *id {
+							a := atx(*id)
+							require.NoError(t, atxs.Add(tester.db, a))
 						}
 					}
 					for _, bad := range bad.AtxIDs {
-						if bad == id {
+						if bad == *id {
 							berr.Add(bad.Hash32(), fmt.Errorf("%w: test", fetch.ErrExceedMaxRetries))
 						}
 					}

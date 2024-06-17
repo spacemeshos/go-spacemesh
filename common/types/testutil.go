@@ -27,8 +27,8 @@ func RandomBeacon() Beacon {
 }
 
 // RandomActiveSet generates a random set of ATXIDs of the specified size.
-func RandomActiveSet(size int) []ATXID {
-	ids := make([]ATXID, 0, size)
+func RandomActiveSet(size int) []*ATXID {
+	ids := make([]*ATXID, 0, size)
 	for i := 0; i < size; i++ {
 		ids = append(ids, RandomATXID())
 	}
@@ -45,13 +45,14 @@ func RandomTXSet(size int) []TransactionID {
 }
 
 // RandomATXID generates a random ATXID for testing.
-func RandomATXID() ATXID {
+func RandomATXID() *ATXID {
 	var b [ATXIDSize]byte
 	_, err := rand.Read(b[:])
 	if err != nil {
 		return EmptyATXID
 	}
-	return ATXID(b)
+	v := ATXID(b)
+	return &v
 }
 
 // RandomNodeID generates a random NodeID for testing.
@@ -104,7 +105,7 @@ func RandomBallot() *Ballot {
 	return &Ballot{
 		InnerBallot: InnerBallot{
 			Layer:     LayerID(10),
-			AtxID:     RandomATXID(),
+			AtxID:     *RandomATXID(),
 			RefBallot: RandomBallotID(),
 		},
 		Votes: Votes{

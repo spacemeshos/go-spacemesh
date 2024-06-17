@@ -166,7 +166,7 @@ func backupOldDb(fs afero.Fs, srcDir, dbFile string) (string, error) {
 	return backupDir, nil
 }
 
-func positioningATX(ctx context.Context, db sql.Executor, id types.ATXID) (types.ATXID, error) {
+func positioningATX(ctx context.Context, db sql.Executor, id *types.ATXID) (*types.ATXID, error) {
 	var blob sql.Blob
 	version, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
 	if err != nil {
@@ -178,18 +178,18 @@ func positioningATX(ctx context.Context, db sql.Executor, id types.ATXID) (types
 		if err := codec.Decode(blob.Bytes, &atx); err != nil {
 			return types.EmptyATXID, fmt.Errorf("decode %s: %w", id, err)
 		}
-		return atx.PositioningATXID, nil
+		return &atx.PositioningATXID, nil
 	case types.AtxV2:
 		var atx wire.ActivationTxV2
 		if err := codec.Decode(blob.Bytes, &atx); err != nil {
 			return types.EmptyATXID, fmt.Errorf("decode %s: %w", id, err)
 		}
-		return atx.PositioningATX, nil
+		return &atx.PositioningATX, nil
 	}
 	return types.EmptyATXID, fmt.Errorf("unsupported ATX version: %v", version)
 }
 
-func poetProofRefs(ctx context.Context, db sql.Executor, id types.ATXID) ([]types.PoetProofRef, error) {
+func poetProofRefs(ctx context.Context, db sql.Executor, id *types.ATXID) ([]types.PoetProofRef, error) {
 	var blob sql.Blob
 	version, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
 	if err != nil {

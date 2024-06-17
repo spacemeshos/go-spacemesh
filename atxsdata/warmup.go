@@ -40,7 +40,7 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 
 	return atxs.IterateAtxsData(db, cache.Evicted(), latest,
 		func(
-			id types.ATXID,
+			id *types.ATXID,
 			node types.NodeID,
 			epoch types.EpochID,
 			coinbase types.Address,

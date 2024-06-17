@@ -74,7 +74,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
 	atxsdata := atxsdata.New()
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata, goldenATX, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata, &goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	initPost(t, mgr, opts, sig.NodeID())
@@ -138,7 +138,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	require.NoError(t, err)
 
 	conf := activation.Config{
-		GoldenATXID:      goldenATX,
+		GoldenATXID:      &goldenATX,
 		RegossipInterval: 0,
 	}
 
@@ -157,7 +157,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		clock,
 		mpub,
 		mFetch,
-		goldenATX,
+		&goldenATX,
 		validator,
 		mBeacon,
 		mTortoise,
@@ -174,7 +174,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 				require.Equal(t, sig.NodeID(), watx.SmesherID)
 				require.EqualValues(t, 1, watx.PublishEpoch)
-				require.Equal(t, types.EmptyATXID, watx.PrevATXID)
+				require.Equal(t, types.EmptyATXID, &watx.PrevATXID)
 				require.Equal(t, goldenATX, watx.PositioningATXID)
 				require.Equal(t, coinbase, watx.Coinbase)
 

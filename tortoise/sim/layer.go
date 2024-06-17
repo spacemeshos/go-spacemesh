@@ -189,7 +189,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		ballot := &types.Ballot{
 			InnerBallot: types.InnerBallot{
 				Layer: g.nextLayer,
-				AtxID: atx.ID(),
+				AtxID: *atx.ID(),
 				EpochData: &types.EpochData{
 					EligibilityCount: n,
 					ActiveSetHash:    types.Hash32{1, 2, 3},

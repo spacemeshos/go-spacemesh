@@ -175,14 +175,14 @@ func (o PostSetupOpts) ToInitOpts() config.InitOpts {
 
 // PostSetupManager implements the PostProvider interface.
 type PostSetupManager struct {
-	commitmentAtxId types.ATXID
+	commitmentAtxId *types.ATXID
 	syncer          syncer
 
 	cfg         PostConfig
 	logger      *zap.Logger
 	db          sql.Executor
 	atxsdata    *atxsdata.Data
-	goldenATXID types.ATXID
+	goldenATXID *types.ATXID
 	validator   nipostValidator
 
 	mu       sync.Mutex                  // mu protects setting the values below.
@@ -210,7 +210,7 @@ func NewPostSetupManager(
 	logger *zap.Logger,
 	db sql.Executor,
 	atxsdata *atxsdata.Data,
-	goldenATXID types.ATXID,
+	goldenATXID *types.ATXID,
 	syncer syncer,
 	validator nipostValidator,
 	opts ...PostSetupManagerOpt,
@@ -362,11 +362,11 @@ func (mgr *PostSetupManager) PrepareInitializer(ctx context.Context, opts PostSe
 	return nil
 }
 
-func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string, id types.NodeID) (types.ATXID, error) {
+func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string, id types.NodeID) (*types.ATXID, error) {
 	m, err := initialization.LoadMetadata(dataDir)
 	switch {
 	case err == nil:
-		return types.ATXID(types.BytesToHash(m.CommitmentAtxId)), nil
+		return types.AtxIdFromHash32(types.BytesToHash(m.CommitmentAtxId)), nil
 	case errors.Is(err, initialization.ErrStateMetadataFileMissing):
 		// if this node has already published an ATX, get its initial ATX and from it the commitment ATX
 		atxId, err := atxs.GetFirstIDByNodeID(mgr.db, id)
@@ -378,7 +378,7 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string, 
 			if atx.CommitmentATX == nil {
 				return types.EmptyATXID, fmt.Errorf("initial ATX %s does not contain a commitment ATX", atxId)
 			}
-			return *atx.CommitmentATX, nil
+			return atx.CommitmentATX, nil
 		}
 
 		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
@@ -391,7 +391,7 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string, 
 // findCommitmentAtx determines the best commitment ATX to use for the node.
 // It will use the ATX with the highest height seen by the node and defaults to the goldenATX,
 // when no ATXs have yet been published.
-func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID, error) {
+func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (*types.ATXID, error) {
 	mgr.logger.Info("waiting for ATXs to sync before selecting commitment ATX")
 	select {
 	case <-ctx.Done():

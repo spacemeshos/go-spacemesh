@@ -90,7 +90,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		}
 		if c.refBallot == nil {
 			total := uint64(0)
-			c.atxdata.IterateInEpoch(ev.LayerID.GetEpoch(), func(_ types.ATXID, atx *atxsdata.ATX) {
+			c.atxdata.IterateInEpoch(ev.LayerID.GetEpoch(), func(_ *types.ATXID, atx *atxsdata.ATX) {
 				total += atx.Weight
 			})
 			c.eligibilities = max(uint32(c.weight*layerSize/total), 1)
@@ -158,7 +158,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		atx.BaseTickHeight = 1
 		atx.TickCount = 2
 		c.refBallot = nil
-		c.atx = atx.ID()
+		c.atx = *atx.ID()
 		c.weight = atx.GetWeight()
 
 		m.Send(MessageAtx{Atx: atx})

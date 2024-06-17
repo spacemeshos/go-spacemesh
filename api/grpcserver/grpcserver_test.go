@@ -169,16 +169,19 @@ func TestMain(m *testing.M) {
 	globalAtx.SetReceived(time.Now())
 	globalAtx.SmesherID = signer.NodeID()
 	globalAtx.TickCount = 1
+	globalAtx.SetID(types.EmptyATXID)
 
 	globalAtx2 = types.NewActivationTx(challenge, addr2, numUnits)
 	globalAtx2.SetReceived(time.Now())
 	globalAtx2.SmesherID = signer.NodeID()
 	globalAtx2.TickCount = 1
+	globalAtx2.SetID(types.EmptyATXID)
 
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
-	ballot1.AtxID = globalAtx.ID()
-	ballot1.EpochData = &types.EpochData{ActiveSetHash: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}.Hash()}
+	// panic(globalAtx.ID())
+	ballot1.AtxID = *globalAtx.ID()
+	ballot1.EpochData = &types.EpochData{ActiveSetHash: types.ATXIDList{*globalAtx.ID(), *globalAtx2.ID()}.Hash()}
 
 	globalTx = NewTx(0, addr1, signer1)
 	globalTx2 = NewTx(1, addr2, signer2)
@@ -262,8 +265,8 @@ func (m *MeshAPIMock) GetATXs(
 	[]types.ATXID,
 ) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
 	atxs := map[types.ATXID]*types.ActivationTx{
-		globalAtx.ID():  globalAtx,
-		globalAtx2.ID(): globalAtx2,
+		*globalAtx.ID():  globalAtx,
+		*globalAtx2.ID(): globalAtx2,
 	}
 	return atxs, nil
 }
@@ -742,7 +745,7 @@ func TestMeshService(t *testing.T) {
 		activesets.Add(
 			db,
 			ballot1.EpochData.ActiveSetHash,
-			&types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}},
+			&types.EpochActiveSet{Set: types.ATXIDList{*globalAtx.ID(), *globalAtx2.ID()}},
 		),
 	)
 	cfg, cleanup := launchServer(t, svc)
@@ -2177,7 +2180,7 @@ func TestDebugService(t *testing.T) {
 		for _, a := range res.GetIds() {
 			ids = append(ids, types.ATXID(types.BytesToHash(a.GetId())))
 		}
-		require.ElementsMatch(t, activeSet, ids)
+		require.ElementsMatch(t, activeSet, types.SliceToPtrSlice(ids))
 	})
 	t.Run("ProposalsStream", func(t *testing.T) {
 		events.InitializeReporter()
@@ -2492,7 +2495,7 @@ func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*typ
 			TickCount:    1,
 			SmesherID:    types.RandomNodeID(),
 		}
-		atx.SetID(id)
+		atx.SetID(&id)
 		atx.SetReceived(time.Now())
 		all = append(all, atx)
 	}
@@ -2519,14 +2522,14 @@ func TestMeshService_EpochStream(t *testing.T) {
 
 	epoch := types.EpochID(3)
 	atxids := types.RandomActiveSet(100)
-	all := createAtxs(t, epoch, atxids)
+	all := createAtxs(t, epoch, types.PtrSliceToSlice(atxids))
 	var expected, got []types.ATXID
 	for i, vatx := range all {
 		require.NoError(t, atxs.Add(db, vatx))
 		if i%2 == 0 {
 			require.NoError(t, identities.SetMalicious(db, vatx.SmesherID, []byte("bad"), time.Now()))
 		} else {
-			expected = append(expected, vatx.ID())
+			expected = append(expected, *vatx.ID())
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

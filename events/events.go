@@ -31,7 +31,7 @@ func EmitBeacon(epoch types.EpochID, beacon types.Beacon) {
 	)
 }
 
-func EmitInitStart(nodeID types.NodeID, commitment types.ATXID) {
+func EmitInitStart(nodeID types.NodeID, commitment *types.ATXID) {
 	const help = "Node started PoST data initialization. Initialization will not be performed again if " +
 		"already completed."
 	emitUserEvent(
@@ -46,7 +46,7 @@ func EmitInitStart(nodeID types.NodeID, commitment types.ATXID) {
 	)
 }
 
-func EmitInitFailure(nodeID types.NodeID, commitment types.ATXID, err error) {
+func EmitInitFailure(nodeID types.NodeID, commitment *types.ATXID, err error) {
 	const help = "Node failed PoST data initialization."
 	emitUserEvent(
 		help,
@@ -182,7 +182,7 @@ func EmitInvalidPostProof(nodeID types.NodeID) {
 func EmitAtxPublished(
 	nodeID types.NodeID,
 	current, target types.EpochID,
-	atxID types.ATXID,
+	atxID *types.ATXID,
 	wait time.Time,
 ) {
 	const help = "Node published activation for the current epoch. " +
@@ -207,7 +207,7 @@ func EmitEligibilities(
 	nodeID types.NodeID,
 	epoch types.EpochID,
 	beacon types.Beacon,
-	atxID types.ATXID,
+	atxID *types.ATXID,
 	activeSetSize uint32,
 	eligibilities map[types.LayerID][]types.VotingEligibility,
 ) {

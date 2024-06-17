@@ -125,7 +125,7 @@ func (mh *InvalidPostIndexHandler) Validate(ctx context.Context, data wire.Proof
 		if err != nil {
 			return types.EmptyNodeID, fmt.Errorf("getting commitment ATX: %w", err)
 		}
-		commitmentAtx = &atx
+		commitmentAtx = atx
 	}
 	post := (*shared.Proof)(atx.NIPost.Post)
 	meta := &shared.ProofMetadata{
@@ -202,7 +202,7 @@ func (mh *InvalidPrevATXHandler) Validate(ctx context.Context, data wire.ProofDa
 		return types.EmptyNodeID, errors.New("atx2: invalid signature")
 	}
 
-	if atx1.ID() == atx2.ID() {
+	if atx1.ID().Equal(atx2.ID()) {
 		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: ATX IDs are the same")
 	}
 	if atx1.PrevATXID != atx2.PrevATXID {

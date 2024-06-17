@@ -46,14 +46,15 @@ func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 	layer := posEpoch.FirstLayer()
 
 	tab.mclock.EXPECT().CurrentLayer().Return(layer).Times(4)
-	tab.mValidator.EXPECT().PostV2(gomock.Any(), sig.NodeID(), commitment, &initialPost, post.Challenge, post.NumUnits)
+	tab.mValidator.EXPECT().PostV2(gomock.Any(), sig.NodeID(), &commitment, &initialPost, post.Challenge, post.NumUnits)
 
 	var atx wire.ActivationTxV2
 	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch,
 		func(_ context.Context, _ string, got []byte) error {
 			require.NoError(t, codec.Decode(got, &atx))
+			t.Log("got atx", atx.PositioningATX)
 
-			atxHandler := newTestHandler(t, tab.goldenATXID, WithAtxVersions(AtxVersions{1: types.AtxV2}))
+			atxHandler := newTestHandler(t, &tab.goldenATXID, WithAtxVersions(AtxVersions{1: types.AtxV2}))
 			atxHandler.expectInitialAtxV2(&atx)
 			require.NoError(t, atxHandler.HandleGossipAtx(context.Background(), "", got))
 			return nil
@@ -77,7 +78,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		BuilderAtxVersions(AtxVersions{4: types.AtxV2}))
 	sig := maps.Values(tab.signers)[0]
 
-	prevAtx := newInitialATXv1(t, tab.goldenATXID)
+	prevAtx := newInitialATXv1(t, &tab.goldenATXID)
 	prevAtx.Sign(sig)
 	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
 
@@ -93,14 +94,14 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	posEpoch += 1
 	layer = posEpoch.FirstLayer()
 	tab.mclock.EXPECT().CurrentLayer().Return(layer).Times(4)
-	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atx1.ID(), tab.goldenATXID, gomock.Any())
+	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atx1.ID(), &tab.goldenATXID, gomock.Any())
 	var atx2 wire.ActivationTxV2
 	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch,
 		func(_ context.Context, _ string, got []byte) error {
 			return codec.Decode(got, &atx2)
 		})
-	require.Equal(t, atx1.ID(), atx2.PreviousATXs[0])
-	require.Equal(t, atx1.ID(), atx2.PositioningATX)
+	require.Equal(t, atx1.ID(), &atx2.PreviousATXs[0])
+	require.Equal(t, atx1.ID(), &atx2.PositioningATX)
 	require.Nil(t, atx2.Initial)
 	require.Nil(t, atx2.MarriageATX)
 	require.Empty(t, atx2.Marriages)

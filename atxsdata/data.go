@@ -86,7 +86,7 @@ func (d *Data) AddFromAtx(atx *types.ActivationTx, malicious bool) *ATX {
 
 // Add adds ATX data to the store.
 // Returns whether the ATX was added to the store.
-func (d *Data) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
+func (d *Data) AddAtx(target types.EpochID, id *types.ATXID, atx *ATX) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.IsEvicted(target) {
@@ -100,13 +100,13 @@ func (d *Data) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 		d.epochs[target] = ecache
 	}
 
-	if _, exists = ecache.index[id]; exists {
+	if _, exists = ecache.index[*id]; exists {
 		return false
 	}
 
 	atxsCounter.WithLabelValues(target.String()).Inc()
 
-	ecache.index[id] = atx
+	ecache.index[*id] = atx
 	if atx.malicious {
 		d.malicious[atx.Node] = struct{}{}
 	}
@@ -119,7 +119,7 @@ func (d *Data) Add(
 	epoch types.EpochID,
 	node types.NodeID,
 	coinbase types.Address,
-	atxid types.ATXID,
+	atxid *types.ATXID,
 	weight, baseHeight, height uint64,
 	nonce types.VRFPostIndex,
 	malicious bool,
@@ -154,14 +154,14 @@ func (d *Data) SetMalicious(node types.NodeID) {
 
 // Get returns atx data.
 // SAFETY: The returned pointer MUST NOT be modified.
-func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
+func (d *Data) Get(epoch types.EpochID, atx *types.ATXID) *ATX {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	ecache, exists := d.epochs[epoch]
 	if !exists {
 		return nil
 	}
-	data, exists := ecache.index[atx]
+	data, exists := ecache.index[*atx]
 	if !exists {
 		return nil
 	}
@@ -194,7 +194,7 @@ func NotMalicious(data *ATX, _ lockGuard) bool {
 // IterateInEpoch calls `fn` for every ATX in epoch.
 // If filters are provided, only atxs that pass all filters are returned.
 // SAFETY: The returned pointer MUST NOT be modified.
-func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), filters ...AtxFilter) {
+func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(*types.ATXID, *ATX), filters ...AtxFilter) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	ecache, exists := d.epochs[epoch]
@@ -210,18 +210,18 @@ func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), f
 			ok = ok && filter(atx, lockGuard{})
 		}
 		if ok {
-			fn(id, atx)
+			fn(&id, atx)
 		}
 	}
 }
 
-func (d *Data) IterateHighTicksInEpoch(target types.EpochID, fn func(types.ATXID) bool) {
+func (d *Data) IterateHighTicksInEpoch(target types.EpochID, fn func(*types.ATXID) bool) {
 	type candidate struct {
-		id types.ATXID
+		id *types.ATXID
 		*ATX
 	}
 	candidates := make([]candidate, 0, d.Size(target))
-	d.IterateInEpoch(target, func(id types.ATXID, atx *ATX) {
+	d.IterateInEpoch(target, func(id *types.ATXID, atx *ATX) {
 		candidates = append(candidates, candidate{id: id, ATX: atx})
 	}, NotMalicious)
 
@@ -242,16 +242,16 @@ func (d *Data) IterateHighTicksInEpoch(target types.EpochID, fn func(types.ATXID
 	}
 }
 
-func (d *Data) MissingInEpoch(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {
+func (d *Data) MissingInEpoch(epoch types.EpochID, atxs []*types.ATXID) []*types.ATXID {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	ecache, exists := d.epochs[epoch]
 	if !exists {
 		return atxs
 	}
-	var missing []types.ATXID
+	var missing []*types.ATXID
 	for _, id := range atxs {
-		if _, exists := ecache.index[id]; !exists {
+		if _, exists := ecache.index[*id]; !exists {
 			missing = append(missing, id)
 		}
 	}

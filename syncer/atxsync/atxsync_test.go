@@ -24,7 +24,7 @@ func atx(id types.ATXID) *types.ActivationTx {
 		TickCount:    1,
 		SmesherID:    types.BytesToNodeID(id[:]),
 	}
-	atx.SetID(id)
+	atx.SetID(&id)
 	atx.SetReceived(time.Now())
 	return atx
 }
@@ -106,16 +106,17 @@ func TestDownload(t *testing.T) {
 			for i := range tc.fetched {
 				req := tc.fetched[i]
 				fetcher.EXPECT().
-					GetAtxs(tc.ctx, req.request, gomock.Any()).
+					GetAtxs(tc.ctx, types.SliceToPtrSlice(req.request), gomock.Any()).
 					Times(1).
-					DoAndReturn(func(_ context.Context, _ []types.ATXID, _ ...system.GetAtxOpt) error {
+					DoAndReturn(func(_ context.Context, _ []*types.ATXID, _ ...system.GetAtxOpt) error {
 						for _, atx := range req.result {
 							require.NoError(t, atxs.Add(db, atx))
 						}
 						return req.error
 					})
 			}
-			require.Equal(t, tc.rst, Download(tc.ctx, tc.retry, logger.Zap(), db, fetcher, tc.set))
+			require.Equal(t, tc.rst,
+				Download(tc.ctx, tc.retry, logger.Zap(), db, fetcher, types.SliceToPtrSlice(tc.set)))
 		})
 	}
 }

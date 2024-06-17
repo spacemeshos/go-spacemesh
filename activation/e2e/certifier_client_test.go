@@ -50,7 +50,8 @@ func TestCertification(t *testing.T) {
 		AnyTimes()
 	validator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), types.ATXID{2, 3, 4}, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), &types.ATXID{2, 3, 4},
+		syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()

@@ -104,7 +104,7 @@ func Test_Builder_Multi_StopSmeshing_Delete(t *testing.T) {
 	atx := types.RandomATXID()
 	refChallenge := &types.NIPostChallenge{
 		PublishEpoch:  postGenesisEpoch + 2,
-		CommitmentATX: &atx,
+		CommitmentATX: atx,
 	}
 
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
@@ -220,9 +220,10 @@ func TestRegossip(t *testing.T) {
 		tab := newTestBuilder(t, 5)
 		for _, sig := range tab.signers {
 			atx := atxs.CheckpointAtx{
-				ID:        types.RandomATXID(),
-				Epoch:     layer.GetEpoch(),
-				SmesherID: sig.NodeID(),
+				ID:            types.RandomATXID(),
+				Epoch:         layer.GetEpoch(),
+				SmesherID:     sig.NodeID(),
+				CommitmentATX: types.RandomATXID(),
 			}
 			require.NoError(t, atxs.AddCheckpointed(tab.db, &atx))
 			tab.mclock.EXPECT().CurrentLayer().Return(layer)
@@ -250,7 +251,7 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 			tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).Return(
 				post,
 				&types.PostInfo{
-					CommitmentATX: commitmentATX,
+					CommitmentATX: *commitmentATX,
 					Nonce:         new(types.VRFPostIndex),
 					NumUnits:      numUnits,
 					NodeID:        sig.NodeID(),
@@ -287,7 +288,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			Pow:     rand.Uint64(),
 
 			NumUnits:      uint32(12),
-			CommitmentATX: types.RandomATXID(),
+			CommitmentATX: *types.RandomATXID(),
 			VRFNonce:      types.VRFPostIndex(rand.Uint64()),
 		}
 		initialPost[sig.NodeID()] = &dbPost
@@ -298,7 +299,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			Pow:     dbPost.Pow,
 		}
 		tab.mValidator.EXPECT().
-			PostV2(gomock.Any(), sig.NodeID(), dbPost.CommitmentATX, post, shared.ZeroChallenge, dbPost.NumUnits)
+			PostV2(gomock.Any(), sig.NodeID(), &dbPost.CommitmentATX, post, shared.ZeroChallenge, dbPost.NumUnits)
 		tab.mnipost.EXPECT().Proof(gomock.Any(), sig.NodeID(), shared.ZeroChallenge, nil).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, _ []byte, _ *types.NIPostChallenge,
 			) (*types.Post, *types.PostInfo, error) {
@@ -354,7 +355,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			Pow:     nipost.Pow,
 		}
 		tab.mValidator.EXPECT().
-			PostV2(gomock.Any(), sig.NodeID(), nipost.CommitmentATX, post, shared.ZeroChallenge, nipost.NumUnits)
+			PostV2(gomock.Any(), sig.NodeID(), &nipost.CommitmentATX, post, shared.ZeroChallenge, nipost.NumUnits)
 	}
 
 	// step 3: create ATX
@@ -382,7 +383,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 			PublishEpoch:     postGenesisEpoch + 1,
 			CommitmentATXID:  &initialPost[sig.NodeID()].CommitmentATX,
 			Sequence:         0,
-			PrevATXID:        types.EmptyATXID,
+			PrevATXID:        *types.EmptyATXID,
 			PositioningATXID: tab.goldenATXID,
 			InitialPost:      post,
 		}
@@ -511,7 +512,7 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 
 		require.Equal(t, initialPost[sig.NodeID()].CommitmentATX, *atx.CommitmentATXID)
 		require.Equal(t, postGenesisEpoch+1, atx.PublishEpoch)
-		require.Equal(t, types.EmptyATXID, atx.PrevATXID)
+		require.Equal(t, types.EmptyATXID, &atx.PrevATXID)
 		require.Equal(t, tab.goldenATXID, atx.PositioningATXID)
 		require.Equal(t, uint64(0), atx.Sequence)
 

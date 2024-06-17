@@ -324,7 +324,7 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 	// add an atx by the same node
 	commitmentAtx := types.RandomATXID()
 	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 1)
-	atx.CommitmentATX = &commitmentAtx
+	atx.CommitmentATX = commitmentAtx
 	atx.SmesherID = signer.NodeID()
 	atx.SetID(types.RandomATXID())
 	atx.SetReceived(time.Now())
@@ -366,7 +366,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 
 	logger := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
-	mgr, err := NewPostSetupManager(DefaultPostConfig(), logger, cdb, atxsdata.New(), goldenATXID, syncer, validator)
+	mgr, err := NewPostSetupManager(DefaultPostConfig(), logger, cdb, atxsdata.New(), &goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	return &testPostManager{

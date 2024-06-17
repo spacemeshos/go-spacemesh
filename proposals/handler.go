@@ -69,7 +69,7 @@ type Handler struct {
 type Config struct {
 	LayerSize              uint32
 	LayersPerEpoch         uint32
-	GoldenATXID            types.ATXID
+	GoldenATXID            *types.ATXID
 	MaxExceptions          int
 	Hdist                  uint32
 	MinimalActiveSetWeight []types.EpochMinimalActiveWeight
@@ -196,7 +196,7 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, 
 		)
 	}
 
-	if b.AtxID == types.EmptyATXID || b.AtxID == h.cfg.GoldenATXID {
+	if b.AtxID.Empty() || b.AtxID.Equal(h.cfg.GoldenATXID) {
 		return errInvalidATXID
 	}
 	ballotDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
@@ -235,10 +235,11 @@ func (h *Handler) handleSet(ctx context.Context, id types.Hash32, set types.Epoc
 	}
 	// active set is invalid unless all activations that it references are from the correct epoch
 	_, used := h.atxsdata.WeightForSet(set.Epoch, set.Set)
-	var atxids []types.ATXID
+	var atxids []*types.ATXID
 	for i := range set.Set {
 		if !used[i] {
-			atxids = append(atxids, set.Set[i])
+			id := set.Set[i]
+			atxids = append(atxids, &id)
 		}
 	}
 	if err := h.fetcher.GetAtxs(ctx, atxids); err != nil {
@@ -333,7 +334,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		)
 	}
 
-	if p.AtxID == types.EmptyATXID || p.AtxID == h.cfg.GoldenATXID {
+	if p.AtxID.Empty() || p.AtxID.Equal(h.cfg.GoldenATXID) {
 		badData.Inc()
 		return errInvalidATXID
 	}
@@ -688,8 +689,8 @@ func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ball
 	if err := h.fetcher.GetBallots(ctx, blts); err != nil {
 		return fmt.Errorf("fetch ballots: %w", err)
 	}
-	if h.atxsdata.Get(b.Layer.GetEpoch(), b.AtxID) == nil {
-		if err := h.fetcher.GetAtxs(ctx, []types.ATXID{b.AtxID}); err != nil {
+	if h.atxsdata.Get(b.Layer.GetEpoch(), &b.AtxID) == nil {
+		if err := h.fetcher.GetAtxs(ctx, []*types.ATXID{&b.AtxID}); err != nil {
 			return fmt.Errorf("proposal get ATXs: %w", err)
 		}
 	}

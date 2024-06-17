@@ -48,7 +48,7 @@ type CachedDB struct {
 	// for properly checking malfeasance.
 	atxsdata *atxsdata.Data
 
-	atxCache      *lru.Cache[types.ATXID, *types.ActivationTx]
+	atxCache      *lru.Cache[*types.ATXID, *types.ActivationTx]
 	vrfNonceCache *lru.Cache[VrfNonceKey, types.VRFPostIndex]
 
 	// used to coordinate db update and cache
@@ -98,7 +98,7 @@ func NewCachedDB(db Executor, lg *zap.Logger, opts ...Opt) *CachedDB {
 	}
 	lg.Info("initialized datastore", zap.Any("config", o.cfg))
 
-	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTx](o.cfg.ATXSize)
+	atxHdrCache, err := lru.New[*types.ATXID, *types.ActivationTx](o.cfg.ATXSize)
 	if err != nil {
 		lg.Fatal("failed to create atx cache", zap.Error(err))
 	}
@@ -208,8 +208,8 @@ func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPos
 
 // GetAtx returns the ATX by the given ID. This function is thread safe and will return an error if the ID
 // is not found in the ATX DB.
-func (db *CachedDB) GetAtx(id types.ATXID) (*types.ActivationTx, error) {
-	if id == types.EmptyATXID {
+func (db *CachedDB) GetAtx(id *types.ATXID) (*types.ActivationTx, error) {
+	if id.Empty() {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
@@ -245,7 +245,7 @@ func (db *CachedDB) IterateMalfeasanceProofs(
 	return nil
 }
 
-func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {
+func (db *CachedDB) MaxHeightAtx() (*types.ATXID, error) {
 	return atxs.GetIDWithMaxHeight(db, types.EmptyNodeID, atxs.FilterAll)
 }
 
@@ -375,7 +375,7 @@ func (bs *BlobStore) GetBlobSizes(hint Hint, ids [][]byte) (sizes []int, err err
 func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
 	switch hint {
 	case ATXDB:
-		return atxs.Has(bs.DB, types.BytesToATXID(key))
+		return atxs.Has(bs.DB, types.NewAtxId(key))
 	case ProposalDB:
 		return bs.proposals.Has(types.ProposalID(types.BytesToHash(key).ToHash20())), nil
 	case BallotDB:

@@ -93,7 +93,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 	logger.Info("new block")
 
 	if missing := h.tortoise.GetMissingActiveSet(b.LayerIndex.GetEpoch(), toAtxIDs(b.Rewards)); len(missing) > 0 {
-		h.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(missing))
+		h.fetcher.RegisterPeerHashes(peer, types.ATXIDsPtrToHashes(missing))
 		if err := h.fetcher.GetAtxs(ctx, missing); err != nil {
 			return err
 		}
@@ -126,10 +126,10 @@ func ValidateRewards(rewards []types.AnyReward) error {
 				reward.AtxID,
 			)
 		}
-		if _, exists := unique[reward.AtxID]; exists {
+		if _, exists := unique[*reward.AtxID]; exists {
 			return fmt.Errorf("multiple rewards for the same atx %v", reward.AtxID)
 		}
-		unique[reward.AtxID] = struct{}{}
+		unique[*reward.AtxID] = struct{}{}
 	}
 	return nil
 }
@@ -152,8 +152,8 @@ func (h *Handler) checkTransactions(ctx context.Context, peer p2p.Peer, b *types
 	return nil
 }
 
-func toAtxIDs(rewards []types.AnyReward) []types.ATXID {
-	rst := make([]types.ATXID, 0, len(rewards))
+func toAtxIDs(rewards []types.AnyReward) []*types.ATXID {
+	rst := make([]*types.ATXID, 0, len(rewards))
 	for i := range rewards {
 		rst = append(rst, rewards[i].AtxID)
 	}

@@ -76,7 +76,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		i += 1
 		eg.Go(func() error {
 			validator := activation.NewMocknipostValidator(ctrl)
-			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
+			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), &goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			initPost(t, mgr, opts, sig.NodeID())
@@ -165,7 +165,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 
 	conf := activation.Config{
-		GoldenATXID:      goldenATX,
+		GoldenATXID:      &goldenATX,
 		RegossipInterval: 0,
 	}
 
@@ -185,7 +185,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			gotAtxs[gotAtx.SmesherID] = append(gotAtxs[gotAtx.SmesherID], gotAtx)
 			atx := wire.ActivationTxFromWireV1(&gotAtx)
 			if gotAtx.VRFNonce == nil {
-				atx.VRFNonce, err = atxs.NonceByID(db, gotAtx.PrevATXID)
+				atx.VRFNonce, err = atxs.NonceByID(db, &gotAtx.PrevATXID)
 				require.NoError(t, err)
 			}
 			logger.Debug("persisting ATX", zap.Inline(atx))
@@ -252,7 +252,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 				require.NotNil(t, atx.VRFNonce)
 				err := validator.VRFNonce(
 					sig.NodeID(),
-					commitment,
+					&commitment,
 					uint64(*atx.VRFNonce),
 					atx.NIPost.PostMetadata.LabelsPerUnit,
 					atx.NumUnits,
@@ -265,7 +265,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			_, err = validator.NIPost(
 				context.Background(),
 				sig.NodeID(),
-				commitment,
+				&commitment,
 				wire.NiPostFromWireV1(atx.NIPost),
 				atx.NIPostChallengeV1.Hash(),
 				atx.NumUnits,
@@ -277,7 +277,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			require.Equal(t, uint64(seq), atx.Sequence)
 			require.Equal(t, types.Address{}, atx.Coinbase)
 
-			previous = atx.ID()
+			previous = *atx.ID()
 		}
 	}
 }

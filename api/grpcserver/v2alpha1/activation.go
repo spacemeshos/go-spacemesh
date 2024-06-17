@@ -322,7 +322,7 @@ func (m *atxsMatcher) match(t *events.ActivationTx) bool {
 	}
 
 	if len(m.Id) > 0 {
-		var atxId types.ATXID
+		atxId := new(types.ATXID)
 		copy(atxId[:], m.Id)
 
 		if t.ID() != atxId {

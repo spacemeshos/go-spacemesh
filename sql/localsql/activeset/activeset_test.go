@@ -39,7 +39,7 @@ func TestGet(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, expectId, id)
 	require.Equal(t, expectWeight, weight)
-	require.Equal(t, expectSet, set)
+	require.Equal(t, expectSet, types.PtrSliceToSlice(set))
 }
 
 func TestLarge(t *testing.T) {
@@ -48,5 +48,5 @@ func TestLarge(t *testing.T) {
 	require.NoError(t, Add(db, Tortoise, 1, types.Hash32{1}, 10, expect))
 	_, _, set, err := Get(db, Tortoise, 1)
 	require.NoError(t, err)
-	require.Equal(t, expect, set)
+	require.Equal(t, expect, types.PtrSliceToSlice(set))
 }

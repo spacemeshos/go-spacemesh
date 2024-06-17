@@ -147,12 +147,12 @@ func TestLayerBallotBySmesher(t *testing.T) {
 func newAtx(signer *signing.EdSigner, layerID types.LayerID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		PublishEpoch: layerID.GetEpoch(),
-		PrevATXID:    types.RandomATXID(),
+		PrevATXID:    *types.RandomATXID(),
 		NumUnits:     2,
 		TickCount:    1,
 		SmesherID:    signer.NodeID(),
 	}
-	atx.SetID(types.ATXID{1, 2, 3})
+	atx.SetID(&types.ATXID{1, 2, 3})
 	atx.SetReceived(time.Now().Local())
 	return atx
 }
@@ -170,20 +170,20 @@ func TestFirstInEpoch(t *testing.T) {
 	require.Nil(t, got)
 
 	b1 := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, sig.NodeID(), lid)
-	b1.AtxID = atx.ID()
+	b1.AtxID = *atx.ID()
 	require.NoError(t, Add(db, &b1))
 	b2 := types.NewExistingBallot(types.BallotID{2}, types.EmptyEdSignature, sig.NodeID(), lid)
-	b2.AtxID = atx.ID()
+	b2.AtxID = *atx.ID()
 	b2.EpochData = &types.EpochData{}
 	require.NoError(t, Add(db, &b2))
 	b3 := types.NewExistingBallot(types.BallotID{3}, types.EmptyEdSignature, sig.NodeID(), lid.Add(1))
-	b3.AtxID = atx.ID()
+	b3.AtxID = *atx.ID()
 	require.NoError(t, Add(db, &b3))
 
 	got, err = FirstInEpoch(db, atx.ID(), 2)
 	require.NoError(t, err)
 	require.False(t, got.IsMalicious())
-	require.Equal(t, got.AtxID, atx.ID())
+	require.Equal(t, got.AtxID, *atx.ID())
 	require.Equal(t, got.ID(), b1.ID())
 
 	last, err := LastInEpoch(db, atx.ID(), 2)
@@ -194,7 +194,7 @@ func TestFirstInEpoch(t *testing.T) {
 	got, err = FirstInEpoch(db, atx.ID(), 2)
 	require.NoError(t, err)
 	require.True(t, got.IsMalicious())
-	require.Equal(t, got.AtxID, atx.ID())
+	require.Equal(t, got.AtxID, *atx.ID())
 	require.Equal(t, got.ID(), b1.ID())
 }
 

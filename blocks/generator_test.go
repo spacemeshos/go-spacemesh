@@ -275,7 +275,7 @@ func genData(
 	numProposals := 10
 	txIDs := createAndSaveTxs(t, numTXs, db)
 	signers, atxes := createATXs(t, data, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	var meshHash types.Hash32
 	if optimistic {
 		meshHash = types.RandomHash()
@@ -380,7 +380,7 @@ func Test_run(t *testing.T) {
 			numProposals := 10
 			txIDs := createAndSaveTxs(t, numTXs, tg.db)
 			signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
-			activeSet := types.ToATXIDs(atxes)
+			activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 			plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 			pids := types.ToProposalIDs(plist)
 			tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
@@ -493,7 +493,7 @@ func Test_run_DiffHasFromConsensus(t *testing.T) {
 	// create multiple proposals with overlapping TXs
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	meshHash := types.RandomHash()
 	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
@@ -513,7 +513,7 @@ func Test_run_ExecuteFailed(t *testing.T) {
 	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	meshHash := types.RandomHash()
 	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
@@ -546,7 +546,7 @@ func Test_run_AddBlockFailed(t *testing.T) {
 	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	meshHash := types.RandomHash()
 	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
@@ -571,7 +571,7 @@ func Test_run_RegisterCertFailureIgnored(t *testing.T) {
 	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	meshHash := types.RandomHash()
 	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
@@ -599,7 +599,7 @@ func Test_run_CertifyFailureIgnored(t *testing.T) {
 	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	meshHash := types.RandomHash()
 	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
@@ -627,7 +627,7 @@ func Test_run_ProcessLayerFailed(t *testing.T) {
 	tg.Start(context.Background())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	meshHash := types.RandomHash()
 	plist := createProposals(t, tg.db, tg.proposals, layerID, meshHash, signers, activeSet, txIDs)
 	pids := types.ToProposalIDs(plist)
@@ -669,7 +669,7 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 			maxHeight = max(maxHeight, atx.BaseTickHeight)
 		},
 	)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	pList := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers, activeSet, nil)
 	ctx := context.Background()
 	ho := hare3.ConsensusOutput{
@@ -714,7 +714,7 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 1)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 
 	t.Run("tx missing", func(t *testing.T) {
 		p := createProposal(
@@ -775,7 +775,7 @@ func Test_processHareOutput_EmptyProposals(t *testing.T) {
 	numProposals := 10
 	lid := types.GetEffectiveGenesis().Add(20)
 	signers, atxes := createATXs(t, tg.atxs, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	plist := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
 		p := createProposal(t, tg.db, tg.proposals, activeSet, lid, types.Hash32{}, activeSet[i], signers[i], nil, 1)
@@ -828,7 +828,7 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	numProposals := 10
 	txIDs := createAndSaveTxs(t, numTXs, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	plist := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers, activeSet, txIDs)
 	ctx := context.Background()
 	ho1 := hare3.ConsensusOutput{
@@ -874,7 +874,7 @@ func Test_processHareOutput_SameATX(t *testing.T) {
 	numProposals := 10
 	txIDs := createAndSaveTxs(t, numTXs, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	atxID := activeSet[0]
 	plist := []*types.Proposal{
 		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[0:500], 1),
@@ -898,9 +898,9 @@ func Test_processHareOutput_EmptyATXID(t *testing.T) {
 	numProposals := 10
 	txIDs := createAndSaveTxs(t, numTXs, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	plist := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers[1:], activeSet[1:], txIDs[1:])
-	p := createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, types.EmptyATXID, signers[0],
+	p := createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, *types.EmptyATXID, signers[0],
 		txIDs, 1,
 	)
 	plist = append(plist, p)
@@ -920,11 +920,11 @@ func Test_processHareOutput_MultipleEligibilities(t *testing.T) {
 	layerID := types.GetEffectiveGenesis().Add(100)
 	ids := createAndSaveTxs(t, 1000, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
-	activeSet := types.ToATXIDs(atxes)
+	activeSet := types.PtrSliceToSlice(types.ToATXIDs(atxes))
 	plist := []*types.Proposal{
-		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxes[0].ID(), signers[0], ids, 2),
-		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxes[1].ID(), signers[1], ids, 1),
-		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
+		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, *atxes[0].ID(), signers[0], ids, 2),
+		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, *atxes[1].ID(), signers[1], ids, 1),
+		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, *atxes[2].ID(), signers[2], ids, 5),
 	}
 	ctx := context.Background()
 	ho := hare3.ConsensusOutput{
@@ -946,7 +946,7 @@ func Test_processHareOutput_MultipleEligibilities(t *testing.T) {
 	})
 	totalWeight := new(big.Rat)
 	for i, r := range got.Rewards {
-		require.Equal(t, plist[i].AtxID, r.AtxID)
+		require.Equal(t, plist[i].AtxID, *r.AtxID)
 		got := r.Weight.ToBigRat()
 		// numUint is the ATX weight. eligible slots per epoch is 3 for each atx
 		// the expected weight for each eligibility is `numUnit` * 1/3

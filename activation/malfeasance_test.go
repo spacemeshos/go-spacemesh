@@ -273,8 +273,8 @@ func TestInvalidPostIndexHandler_Validate(t *testing.T) {
 		atx := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PositioningATXID: types.RandomATXID(),
-					PrevATXID:        types.EmptyATXID,
+					PositioningATXID: *types.RandomATXID(),
+					PrevATXID:        *types.EmptyATXID,
 					PublishEpoch:     rand.N[types.EpochID](types.EpochID(100)),
 					Sequence:         0,
 					CommitmentATXID:  &types.ATXID{1, 2, 3},
@@ -332,8 +332,8 @@ func TestInvalidPostIndexHandler_Validate(t *testing.T) {
 		atx := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PositioningATXID: types.RandomATXID(),
-					PrevATXID:        types.EmptyATXID,
+					PositioningATXID: *types.RandomATXID(),
+					PrevATXID:        *types.EmptyATXID,
 					PublishEpoch:     rand.N[types.EpochID](types.EpochID(100)),
 					Sequence:         0,
 					CommitmentATXID:  &types.ATXID{1, 2, 3},
@@ -391,8 +391,8 @@ func TestInvalidPostIndexHandler_Validate(t *testing.T) {
 		atx := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PositioningATXID: types.RandomATXID(),
-					PrevATXID:        types.EmptyATXID,
+					PositioningATXID: *types.RandomATXID(),
+					PrevATXID:        *types.EmptyATXID,
 					PublishEpoch:     rand.N[types.EpochID](types.EpochID(100)),
 					Sequence:         0,
 					CommitmentATXID:  &types.ATXID{1, 2, 3},
@@ -461,7 +461,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx1 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(2),
 				},
 			},
@@ -471,7 +471,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx2 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(3),
 				},
 			},
@@ -498,7 +498,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx1 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(2),
 				},
 			},
@@ -508,7 +508,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx2 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(3),
 				},
 			},
@@ -536,7 +536,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx1 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(2),
 				},
 			},
@@ -547,7 +547,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx2 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(3),
 				},
 			},
@@ -575,7 +575,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx1 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(2),
 				},
 			},
@@ -585,7 +585,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx2 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(3),
 				},
 			},
@@ -614,7 +614,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx1 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(2),
 				},
 			},
@@ -642,7 +642,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx1 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    types.RandomATXID(),
+					PrevATXID:    *types.RandomATXID(),
 					PublishEpoch: types.EpochID(2),
 				},
 			},
@@ -652,7 +652,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx2 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    atx1.ID(),
+					PrevATXID:    *atx1.ID(),
 					PublishEpoch: types.EpochID(3),
 				},
 			},
@@ -684,7 +684,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx1 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(2),
 				},
 			},
@@ -694,7 +694,7 @@ func TestInvalidPrevATX_Validate(t *testing.T) {
 		atx2 := awire.ActivationTxV1{
 			InnerActivationTxV1: awire.InnerActivationTxV1{
 				NIPostChallengeV1: awire.NIPostChallengeV1{
-					PrevATXID:    prevATXID,
+					PrevATXID:    *prevATXID,
 					PublishEpoch: types.EpochID(3),
 				},
 			},

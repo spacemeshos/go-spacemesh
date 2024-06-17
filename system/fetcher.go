@@ -40,7 +40,7 @@ func WithoutLimiting() GetAtxOpt {
 
 // AtxFetcher defines an interface for fetching ATXs from remote peers.
 type AtxFetcher interface {
-	GetAtxs(context.Context, []types.ATXID, ...GetAtxOpt) error
+	GetAtxs(context.Context, []*types.ATXID, ...GetAtxOpt) error
 }
 
 // TxFetcher defines an interface for fetching transactions from remote peers.

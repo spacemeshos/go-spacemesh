@@ -29,7 +29,7 @@ func Test_CheckPrevATXs(t *testing.T) {
 	goldenATXID := types.RandomATXID()
 
 	atx1 := newInitialATXv1(t, goldenATXID, func(atx *wire.ActivationTxV1) {
-		atx.PrevATXID = prevATXID
+		atx.PrevATXID = *prevATXID
 		atx.PublishEpoch = 2
 	})
 	atx1.Sign(sig)
@@ -37,7 +37,7 @@ func Test_CheckPrevATXs(t *testing.T) {
 	require.NoError(t, atxs.Add(db, vAtx1))
 
 	atx2 := newInitialATXv1(t, goldenATXID, func(atx *wire.ActivationTxV1) {
-		atx.PrevATXID = prevATXID
+		atx.PrevATXID = *prevATXID
 		atx.PublishEpoch = 3
 	})
 	atx2.Sign(sig)
@@ -49,7 +49,7 @@ func Test_CheckPrevATXs(t *testing.T) {
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		atx := newInitialATXv1(t, types.RandomATXID(), func(atx *wire.ActivationTxV1) {
-			atx.PrevATXID = types.RandomATXID()
+			atx.PrevATXID = *types.RandomATXID()
 			atx.NumUnits = rand.Uint32()
 			atx.PublishEpoch = rand.N[types.EpochID](100)
 		})

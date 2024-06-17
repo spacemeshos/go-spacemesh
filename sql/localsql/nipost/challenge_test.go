@@ -21,9 +21,9 @@ func Test_AddChallenge(t *testing.T) {
 			ch: &types.NIPostChallenge{
 				PublishEpoch:   4,
 				Sequence:       0,
-				PrevATXID:      types.RandomATXID(),
-				PositioningATX: types.RandomATXID(),
-				CommitmentATX:  &commitmentATX,
+				PrevATXID:      *types.RandomATXID(),
+				PositioningATX: *types.RandomATXID(),
+				CommitmentATX:  commitmentATX,
 				InitialPost:    &types.Post{Nonce: 1, Indices: []byte{1, 2, 3}, Pow: 1},
 			},
 		},
@@ -32,8 +32,8 @@ func Test_AddChallenge(t *testing.T) {
 			ch: &types.NIPostChallenge{
 				PublishEpoch:   77,
 				Sequence:       13,
-				PrevATXID:      types.RandomATXID(),
-				PositioningATX: types.RandomATXID(),
+				PrevATXID:      *types.RandomATXID(),
+				PositioningATX: *types.RandomATXID(),
 				CommitmentATX:  nil,
 				InitialPost:    nil,
 			},
@@ -69,16 +69,16 @@ func Test_AddChallenge_NoDuplicates(t *testing.T) {
 	ch1 := &types.NIPostChallenge{
 		PublishEpoch:   4,
 		Sequence:       2,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
+		PrevATXID:      *types.RandomATXID(),
+		PositioningATX: *types.RandomATXID(),
 		CommitmentATX:  nil,
 		InitialPost:    nil,
 	}
 	ch2 := &types.NIPostChallenge{
 		PublishEpoch:   4,
 		Sequence:       3,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
+		PrevATXID:      *types.RandomATXID(),
+		PositioningATX: *types.RandomATXID(),
 		CommitmentATX:  nil,
 		InitialPost:    nil,
 	}
@@ -103,9 +103,9 @@ func Test_UpdateChallenge(t *testing.T) {
 	ch := &types.NIPostChallenge{
 		PublishEpoch:   6,
 		Sequence:       0,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  &commitmentATX,
+		PrevATXID:      *types.RandomATXID(),
+		PositioningATX: *types.RandomATXID(),
+		CommitmentATX:  commitmentATX,
 		InitialPost:    &types.Post{Nonce: 1, Indices: []byte{1, 2, 3}, Pow: 1},
 	}
 
@@ -131,9 +131,9 @@ func Test_UpdatePoetProofRef(t *testing.T) {
 	ch := &types.NIPostChallenge{
 		PublishEpoch:   6,
 		Sequence:       0,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  &commitmentATX,
+		PrevATXID:      *types.RandomATXID(),
+		PositioningATX: *types.RandomATXID(),
+		CommitmentATX:  commitmentATX,
 		InitialPost:    &types.Post{Nonce: 1, Indices: []byte{1, 2, 3}, Pow: 1},
 	}
 
@@ -164,9 +164,9 @@ func Test_PoetProofRef_NotSet(t *testing.T) {
 	ch := &types.NIPostChallenge{
 		PublishEpoch:   6,
 		Sequence:       0,
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  &commitmentATX,
+		PrevATXID:      *types.RandomATXID(),
+		PositioningATX: *types.RandomATXID(),
+		CommitmentATX:  commitmentATX,
 		InitialPost:    &types.Post{Nonce: 1, Indices: []byte{1, 2, 3}, Pow: 1},
 	}
 

@@ -81,7 +81,7 @@ func (c *MockFetcherGetActiveSetCall) DoAndReturn(f func(context.Context, types.
 }
 
 // GetAtxs mocks base method.
-func (m *MockFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 ...system.GetAtxOpt) error {
+func (m *MockFetcher) GetAtxs(arg0 context.Context, arg1 []*types.ATXID, arg2 ...system.GetAtxOpt) error {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0, arg1}
 	for _, a := range arg2 {
@@ -112,13 +112,13 @@ func (c *MockFetcherGetAtxsCall) Return(arg0 error) *MockFetcherGetAtxsCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockFetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *MockFetcherGetAtxsCall {
+func (c *MockFetcherGetAtxsCall) Do(f func(context.Context, []*types.ATXID, ...system.GetAtxOpt) error) *MockFetcherGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *MockFetcherGetAtxsCall {
+func (c *MockFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []*types.ATXID, ...system.GetAtxOpt) error) *MockFetcherGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -472,7 +472,7 @@ func (m *MockAtxFetcher) EXPECT() *MockAtxFetcherMockRecorder {
 }
 
 // GetAtxs mocks base method.
-func (m *MockAtxFetcher) GetAtxs(arg0 context.Context, arg1 []types.ATXID, arg2 ...system.GetAtxOpt) error {
+func (m *MockAtxFetcher) GetAtxs(arg0 context.Context, arg1 []*types.ATXID, arg2 ...system.GetAtxOpt) error {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0, arg1}
 	for _, a := range arg2 {
@@ -503,13 +503,13 @@ func (c *MockAtxFetcherGetAtxsCall) Return(arg0 error) *MockAtxFetcherGetAtxsCal
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockAtxFetcherGetAtxsCall) Do(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *MockAtxFetcherGetAtxsCall {
+func (c *MockAtxFetcherGetAtxsCall) Do(f func(context.Context, []*types.ATXID, ...system.GetAtxOpt) error) *MockAtxFetcherGetAtxsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockAtxFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATXID, ...system.GetAtxOpt) error) *MockAtxFetcherGetAtxsCall {
+func (c *MockAtxFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []*types.ATXID, ...system.GetAtxOpt) error) *MockAtxFetcherGetAtxsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

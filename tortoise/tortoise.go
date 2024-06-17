@@ -523,7 +523,7 @@ func (t *turtle) computeEpochHeight(lid types.LayerID) {
 	var heights []uint64
 	t.atxsdata.IterateInEpoch(
 		lid.GetEpoch(),
-		func(_ types.ATXID, atx *atxsdata.ATX) {
+		func(_ *types.ATXID, atx *atxsdata.ATX) {
 			heights = append(heights, atx.Height)
 		},
 		atxsdata.NotMalicious,
@@ -649,7 +649,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 	}
 }
 
-func (t *turtle) onAtx(target types.EpochID, id types.ATXID, atx *atxsdata.ATX) {
+func (t *turtle) onAtx(target types.EpochID, id *types.ATXID, atx *atxsdata.ATX) {
 	start := time.Now()
 	epoch := t.epoch(target)
 	mal := t.isMalfeasant(atx.Node)

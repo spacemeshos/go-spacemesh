@@ -108,13 +108,14 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		return ch
 	}).AnyTimes()
 
+	golden := cl.GoldenATX()
 	// 1. Initialize
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
 		datastore.NewCachedDB(sql.InMemory(), zap.NewNop()),
 		atxsdata.New(),
-		cl.GoldenATX(),
+		&golden,
 		syncer,
 		activation.NewMocknipostValidator(ctrl),
 	)
@@ -219,7 +220,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.NoError(t, err)
 
 		challenge = &wire.NIPostChallengeV1{
-			PrevATXID:        types.EmptyATXID,
+			PrevATXID:        *types.EmptyATXID,
 			PublishEpoch:     1,
 			PositioningATXID: goldenATXID,
 			CommitmentATXID:  &postInfo.CommitmentATX,
@@ -233,7 +234,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	}
 	nipostChallenge := &types.NIPostChallenge{
 		PublishEpoch:   challenge.PublishEpoch,
-		PrevATXID:      types.EmptyATXID,
+		PrevATXID:      *types.EmptyATXID,
 		PositioningATX: challenge.PositioningATXID,
 		CommitmentATX:  challenge.CommitmentATXID,
 		InitialPost: &types.Post{

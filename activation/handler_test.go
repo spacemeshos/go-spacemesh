@@ -117,7 +117,7 @@ func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 }
 
 type handlerMocks struct {
-	goldenATXID types.ATXID
+	goldenATXID *types.ATXID
 
 	mclock     *MocklayerClock
 	mpub       *pubsubmocks.MockPublisher
@@ -155,12 +155,12 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	}
 	h.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	h.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.BytesToHash(atx.NIPost.PostMetadata.Challenge))
-	if atx.PrevATXID == types.EmptyATXID {
+	if atx.PrevATXID.Empty() {
 		h.mValidator.EXPECT().InitialNIPostChallengeV1(gomock.Any(), gomock.Any(), h.goldenATXID)
 		h.mValidator.EXPECT().
 			Post(gomock.Any(), nodeId, h.goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			DoAndReturn(func(
-				_ context.Context, _ types.NodeID, _ types.ATXID, _ *types.Post,
+				_ context.Context, _ types.NodeID, _ *types.ATXID, _ *types.Post,
 				_ *types.PostMetadata, _ uint32, _ ...validatorOption,
 			) error {
 				time.Sleep(settings.postVerificationDuration)
@@ -169,7 +169,7 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	} else {
 		h.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), nodeId)
 	}
-	h.mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, gomock.Any(), h.goldenATXID, atx.PublishEpoch)
+	h.mValidator.EXPECT().PositioningAtx(&atx.PositioningATXID, gomock.Any(), h.goldenATXID, atx.PublishEpoch)
 	h.mValidator.EXPECT().
 		NIPost(gomock.Any(), nodeId, h.goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 		Return(settings.poetLeaves, nil)
@@ -178,7 +178,7 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	h.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 }
 
-func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
+func newTestHandlerMocks(tb testing.TB, golden *types.ATXID) handlerMocks {
 	ctrl := gomock.NewController(tb)
 	return handlerMocks{
 		goldenATXID: golden,
@@ -191,7 +191,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	}
 }
 
-func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
+func newTestHandler(tb testing.TB, goldenATXID *types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
 	edVerifier := signing.NewEdVerifier()
@@ -222,7 +222,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 }
 
 func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
-	goldenATXID := types.ATXID{2, 3, 4}
+	goldenATXID := &types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
 
 	sig, err := signing.NewEdSigner()
@@ -238,11 +238,11 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 	atxHdlr.mValidator.EXPECT().VRFNonce(atx.SmesherID, goldenATXID, *atx.VRFNonce, gomock.Any(), atx.NumUnits)
 	atxHdlr.mValidator.EXPECT().
-		Post(gomock.Any(), gomock.Any(), *atx.CommitmentATXID, gomock.Any(), gomock.Any(), atx.NumUnits)
+		Post(gomock.Any(), gomock.Any(), atx.CommitmentATXID, gomock.Any(), gomock.Any(), atx.NumUnits)
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
 	atxHdlr.mValidator.EXPECT().InitialNIPostChallengeV1(gomock.Any(), gomock.Any(), goldenATXID)
-	atxHdlr.mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, gomock.Any(), goldenATXID, atx.PublishEpoch)
+	atxHdlr.mValidator.EXPECT().PositioningAtx(&atx.PositioningATXID, gomock.Any(), goldenATXID, atx.PublishEpoch)
 	atxHdlr.mValidator.EXPECT().
 		NIPost(gomock.Any(), atx.SmesherID, goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 		Return(0, &verifying.ErrInvalidIndex{Index: 2})
@@ -276,7 +276,6 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 			})
 		require.ErrorIs(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg), errMaliciousATX)
 	}
-
 	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, atx.SmesherID)
 	require.NoError(t, err)
 	require.NotNil(t, proof.Received())
@@ -313,7 +312,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.VRFPostIndex(*atx1.VRFNonce), got)
 
-	atx2 := newChainedActivationTxV1(t, atx1, atx1.ID())
+	atx2 := newChainedActivationTxV1(t, atx1, *atx1.ID())
 	nonce2 := types.VRFPostIndex(456)
 	atx2.VRFNonce = (*uint64)(&nonce2)
 	atx2.Sign(sig)
@@ -327,7 +326,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 }
 
 func TestHandler_HandleGossipAtx(t *testing.T) {
-	goldenATXID := types.ATXID{2, 3, 4}
+	goldenATXID := &types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
 
 	sig, err := signing.NewEdSigner()
@@ -335,7 +334,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	first := newInitialATXv1(t, goldenATXID)
 	first.Sign(sig)
 
-	second := newChainedActivationTxV1(t, first, first.ID())
+	second := newChainedActivationTxV1(t, first, *first.ID())
 	second.Sign(sig)
 
 	// the poet is missing
@@ -358,7 +357,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 		[]types.Hash32{first.ID().Hash32(), types.Hash32(second.NIPost.PostMetadata.Challenge)},
 	)
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.Hash32(second.NIPost.PostMetadata.Challenge))
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{second.PrevATXID}, gomock.Any())
+	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []*types.ATXID{&second.PrevATXID}, gomock.Any())
 	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second))
 	require.ErrorContains(t, err, "syntactically invalid based on deps")
 
@@ -368,12 +367,12 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 
 	// second is now valid (deps are in)
 	atxHdlr.expectAtxV1(second, sig.NodeID())
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{second.PrevATXID}, gomock.Any())
+	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []*types.ATXID{&second.PrevATXID}, gomock.Any())
 	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second)))
 }
 
 func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
-	goldenATXID := types.ATXID{2, 3, 4}
+	goldenATXID := &types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID)
 
 	sig, err := signing.NewEdSigner()
@@ -387,6 +386,8 @@ func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
 		func(o *atxHandleOpts) { o.postVerificationDuration = time.Millisecond * 100 },
 	)
 
+	// atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx1))
+	// atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx1))
 	var eg errgroup.Group
 	for range 10 {
 		eg.Go(func() error {
@@ -399,7 +400,7 @@ func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
 
 func testHandler_HandleDoublePublish(t *testing.T, synced bool) {
 	t.Parallel()
-	goldenATXID := types.ATXID{2, 3, 4}
+	goldenATXID := &types.ATXID{2, 3, 4}
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	hdlr := newTestHandler(t, goldenATXID)
@@ -540,9 +541,9 @@ func TestCollectDeps(t *testing.T) {
 		atx := wire.ActivationTxV1{
 			InnerActivationTxV1: wire.InnerActivationTxV1{
 				NIPostChallengeV1: wire.NIPostChallengeV1{
-					PrevATXID:        atxA,
-					PositioningATXID: atxB,
-					CommitmentATXID:  &atxC,
+					PrevATXID:        *atxA,
+					PositioningATXID: *atxB,
+					CommitmentATXID:  atxC,
 				},
 				NIPost: &wire.NIPostV1{
 					PostMetadata: &wire.PostMetadataV1{
@@ -553,16 +554,16 @@ func TestCollectDeps(t *testing.T) {
 		}
 		poetDep, atxIDs := collectAtxDeps(goldenATX, &atx)
 		require.Equal(t, poet, poetDep)
-		require.ElementsMatch(t, []types.ATXID{atxA, atxB, atxC}, atxIDs)
+		require.ElementsMatch(t, []*types.ATXID{atxA, atxB, atxC}, atxIDs)
 	})
 	t.Run("eliminates duplicates", func(t *testing.T) {
 		t.Parallel()
 		atx := wire.ActivationTxV1{
 			InnerActivationTxV1: wire.InnerActivationTxV1{
 				NIPostChallengeV1: wire.NIPostChallengeV1{
-					PrevATXID:        atxA,
-					PositioningATXID: atxA,
-					CommitmentATXID:  &atxA,
+					PrevATXID:        *atxA,
+					PositioningATXID: *atxA,
+					CommitmentATXID:  atxA,
 				},
 				NIPost: &wire.NIPostV1{
 					PostMetadata: &wire.PostMetadataV1{
@@ -573,15 +574,15 @@ func TestCollectDeps(t *testing.T) {
 		}
 		poetDep, atxIDs := collectAtxDeps(goldenATX, &atx)
 		require.Equal(t, poet, poetDep)
-		require.ElementsMatch(t, []types.ATXID{atxA}, atxIDs)
+		require.ElementsMatch(t, []*types.ATXID{atxA}, atxIDs)
 	})
 	t.Run("nil commitment ATX", func(t *testing.T) {
 		t.Parallel()
 		atx := wire.ActivationTxV1{
 			InnerActivationTxV1: wire.InnerActivationTxV1{
 				NIPostChallengeV1: wire.NIPostChallengeV1{
-					PrevATXID:        atxA,
-					PositioningATXID: atxB,
+					PrevATXID:        *atxA,
+					PositioningATXID: *atxB,
 				},
 				NIPost: &wire.NIPostV1{
 					PostMetadata: &wire.PostMetadataV1{
@@ -592,15 +593,15 @@ func TestCollectDeps(t *testing.T) {
 		}
 		poetDep, atxIDs := collectAtxDeps(goldenATX, &atx)
 		require.Equal(t, poet, poetDep)
-		require.ElementsMatch(t, []types.ATXID{atxA, atxB}, atxIDs)
+		require.ElementsMatch(t, []*types.ATXID{atxA, atxB}, atxIDs)
 	})
 	t.Run("filters out golden ATX and empty ATX", func(t *testing.T) {
 		t.Parallel()
 		atx := wire.ActivationTxV1{
 			InnerActivationTxV1: wire.InnerActivationTxV1{
 				NIPostChallengeV1: wire.NIPostChallengeV1{
-					PrevATXID:        types.EmptyATXID,
-					PositioningATXID: goldenATX,
+					PrevATXID:        *types.EmptyATXID,
+					PositioningATXID: *goldenATX,
 				},
 				NIPost: &wire.NIPostV1{
 					PostMetadata: &wire.PostMetadataV1{
@@ -623,7 +624,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 		leaves   = uint64(11)
 	)
 
-	goldenATXID := types.ATXID{2, 3, 4}
+	goldenATXID := &types.ATXID{2, 3, 4}
 	atxHdlr := newTestHandler(t, goldenATXID, WithTickSize(tickSize))
 
 	sig, err := signing.NewEdSigner()
@@ -644,12 +645,12 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, leaves/tickSize, stored1.TickHeight())
 	require.Equal(t, (leaves/tickSize)*units, stored1.GetWeight())
 
-	atx2 := newChainedActivationTxV1(t, atx1, atx1.ID())
+	atx2 := newChainedActivationTxV1(t, atx1, *atx1.ID())
 	atx2.Sign(sig)
 	buf = codec.MustEncode(atx2)
 
 	atxHdlr.expectAtxV1(atx2, sig.NodeID(), func(o *atxHandleOpts) { o.poetLeaves = leaves })
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx1.ID()}, gomock.Any())
+	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []*types.ATXID{atx1.ID()}, gomock.Any())
 	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx2.ID().Hash32(), peer, buf))
 
 	stored2, err := atxHdlr.cdb.GetAtx(atx2.ID())
@@ -716,7 +717,7 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 
 func newInitialATXv1(
 	t testing.TB,
-	goldenATXID types.ATXID,
+	goldenATXID *types.ATXID,
 	opts ...func(*wire.ActivationTxV1),
 ) *wire.ActivationTxV1 {
 	t.Helper()
@@ -725,10 +726,10 @@ func newInitialATXv1(
 	atx := &wire.ActivationTxV1{
 		InnerActivationTxV1: wire.InnerActivationTxV1{
 			NIPostChallengeV1: wire.NIPostChallengeV1{
-				PrevATXID:        types.EmptyATXID,
+				PrevATXID:        *types.EmptyATXID,
 				PublishEpoch:     postGenesisEpoch,
-				PositioningATXID: goldenATXID,
-				CommitmentATXID:  &goldenATXID,
+				PositioningATXID: *goldenATXID,
+				CommitmentATXID:  goldenATXID,
 				InitialPost:      &wire.PostV1{},
 			},
 			NIPost:   newNIPosV1tWithPoet(t, poetRef.Bytes()),
@@ -753,7 +754,7 @@ func newChainedActivationTxV1(
 	return &wire.ActivationTxV1{
 		InnerActivationTxV1: wire.InnerActivationTxV1{
 			NIPostChallengeV1: wire.NIPostChallengeV1{
-				PrevATXID:        prev.ID(),
+				PrevATXID:        *prev.ID(),
 				PublishEpoch:     prev.PublishEpoch + 1,
 				PositioningATXID: pos,
 			},

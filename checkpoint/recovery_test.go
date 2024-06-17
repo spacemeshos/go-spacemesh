@@ -93,14 +93,14 @@ func verifyDbContent(tb testing.TB, db *sql.Database) {
 	require.NoError(tb, err)
 	var extra []*types.ActivationTx
 	for _, id := range allIds {
-		vatx, err := atxs.Get(db, id)
+		vatx, err := atxs.Get(db, &id)
 		require.NoError(tb, err)
 		commitAtx, err := atxs.CommitmentATX(db, vatx.SmesherID)
 		require.NoError(tb, err)
 		vrfNonce, err := atxs.VRFNonce(db, vatx.SmesherID, vatx.PublishEpoch+1)
 		require.NoError(tb, err)
 		if _, ok := expAtx[id]; ok {
-			atxEqual(tb, expAtx[id], vatx, commitAtx, vrfNonce)
+			atxEqual(tb, expAtx[id], vatx, *commitAtx, vrfNonce)
 		} else {
 			extra = append(extra, vatx)
 		}
@@ -154,7 +154,7 @@ func TestRecover(t *testing.T) {
 
 			fs := afero.NewMemMapFs()
 			cfg := &checkpoint.RecoverConfig{
-				GoldenAtx:      goldenAtx,
+				GoldenAtx:      &goldenAtx,
 				DataDir:        t.TempDir(),
 				DbFile:         "test.sql",
 				LocalDbFile:    "local.sql",
@@ -202,7 +202,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 
 	fs := afero.NewMemMapFs()
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
+		GoldenAtx:      &goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		PreserveOwnAtx: true,
@@ -246,7 +246,7 @@ func validateAndPreserveData(
 		mclock,
 		nil,
 		mfetch,
-		goldenAtx,
+		&goldenAtx,
 		mvalidator,
 		mreceiver,
 		mtrtl,
@@ -260,14 +260,14 @@ func validateAndPreserveData(
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
-		if vatx.PrevATXID == types.EmptyATXID {
+		if vatx.PrevATXID == *types.EmptyATXID {
 			mvalidator.EXPECT().
-				InitialNIPostChallengeV1(&atx.NIPostChallengeV1, gomock.Any(), goldenAtx).
+				InitialNIPostChallengeV1(&atx.NIPostChallengeV1, gomock.Any(), &goldenAtx).
 				AnyTimes()
 			mvalidator.EXPECT().Post(
 				gomock.Any(),
 				vatx.SmesherID,
-				*vatx.CommitmentATX,
+				vatx.CommitmentATX,
 				wire.PostFromWireV1(atx.InitialPost),
 				gomock.Any(),
 				vatx.NumUnits,
@@ -275,7 +275,7 @@ func validateAndPreserveData(
 			)
 			mvalidator.EXPECT().VRFNonce(
 				vatx.SmesherID,
-				*vatx.CommitmentATX,
+				vatx.CommitmentATX,
 				(uint64)(vatx.VRFNonce),
 				atx.NIPost.PostMetadata.LabelsPerUnit,
 				vatx.NumUnits,
@@ -283,12 +283,12 @@ func validateAndPreserveData(
 		} else {
 			mvalidator.EXPECT().NIPostChallengeV1(
 				&atx.NIPostChallengeV1,
-				gomock.Cond(func(prev any) bool { return prev.(*types.ActivationTx).ID() == atx.PrevATXID }),
+				gomock.Cond(func(prev any) bool { return *prev.(*types.ActivationTx).ID() == atx.PrevATXID }),
 				vatx.SmesherID,
 			)
 		}
 
-		mvalidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, vatx.PublishEpoch)
+		mvalidator.EXPECT().PositioningAtx(&atx.PositioningATXID, cdb, &goldenAtx, vatx.PublishEpoch)
 		mvalidator.EXPECT().
 			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), vatx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)
@@ -327,7 +327,7 @@ func newChainedAtx(
 		},
 		SmesherID: sig.NodeID(),
 	}
-	if prev == types.EmptyATXID {
+	if prev == *types.EmptyATXID {
 		watx.InitialPost = &wire.PostV1{}
 		nodeID := sig.NodeID()
 		watx.NodeID = &nodeID
@@ -378,24 +378,24 @@ func createInterlinkedAtxChain(
 	}
 
 	// epoch 2
-	sig1Atx1 := newChainedAtx(tb, types.EmptyATXID, goldenAtx, &goldenAtx, poetRef(), 2, 0, 113, sig1)
+	sig1Atx1 := newChainedAtx(tb, *types.EmptyATXID, goldenAtx, &goldenAtx, poetRef(), 2, 0, 113, sig1)
 	// epoch 3
-	sig1Atx2 := newChainedAtx(tb, sig1Atx1.ID, sig1Atx1.ID, nil, poetRef(), 3, 1, 0, sig1)
+	sig1Atx2 := newChainedAtx(tb, *sig1Atx1.ID, *sig1Atx1.ID, nil, poetRef(), 3, 1, 0, sig1)
 	// epoch 4
-	sig1Atx3 := newChainedAtx(tb, sig1Atx2.ID, sig1Atx2.ID, nil, poetRef(), 4, 2, 0, sig1)
+	sig1Atx3 := newChainedAtx(tb, *sig1Atx2.ID, *sig1Atx2.ID, nil, poetRef(), 4, 2, 0, sig1)
 	commitAtxID := sig1Atx2.ID
-	sig2Atx1 := newChainedAtx(tb, types.EmptyATXID, sig1Atx2.ID, &commitAtxID, poetRef(), 4, 0, 513, sig2)
+	sig2Atx1 := newChainedAtx(tb, *types.EmptyATXID, *sig1Atx2.ID, commitAtxID, poetRef(), 4, 0, 513, sig2)
 	// epoch 5
-	sig1Atx4 := newChainedAtx(tb, sig1Atx3.ID, sig2Atx1.ID, nil, poetRef(), 5, 3, 0, sig1)
+	sig1Atx4 := newChainedAtx(tb, *sig1Atx3.ID, *sig2Atx1.ID, nil, poetRef(), 5, 3, 0, sig1)
 	// epoch 6
-	sig1Atx5 := newChainedAtx(tb, sig1Atx4.ID, sig1Atx4.ID, nil, poetRef(), 6, 4, 0, sig1)
-	sig2Atx2 := newChainedAtx(tb, sig2Atx1.ID, sig1Atx4.ID, nil, poetRef(), 6, 1, 0, sig2)
+	sig1Atx5 := newChainedAtx(tb, *sig1Atx4.ID, *sig1Atx4.ID, nil, poetRef(), 6, 4, 0, sig1)
+	sig2Atx2 := newChainedAtx(tb, *sig2Atx1.ID, *sig1Atx4.ID, nil, poetRef(), 6, 1, 0, sig2)
 	// epoch 7
-	sig1Atx6 := newChainedAtx(tb, sig1Atx5.ID, sig2Atx2.ID, nil, poetRef(), 7, 5, 0, sig1)
+	sig1Atx6 := newChainedAtx(tb, *sig1Atx5.ID, *sig2Atx2.ID, nil, poetRef(), 7, 5, 0, sig1)
 	// epoch 8
-	sig2Atx3 := newChainedAtx(tb, sig2Atx2.ID, sig1Atx6.ID, nil, poetRef(), 8, 2, 0, sig2)
+	sig2Atx3 := newChainedAtx(tb, *sig2Atx2.ID, *sig1Atx6.ID, nil, poetRef(), 8, 2, 0, sig2)
 	// epoch 9
-	sig1Atx7 := newChainedAtx(tb, sig1Atx6.ID, sig2Atx3.ID, nil, poetRef(), 9, 6, 0, sig1)
+	sig1Atx7 := newChainedAtx(tb, *sig1Atx6.ID, *sig2Atx3.ID, nil, poetRef(), 9, 6, 0, sig1)
 
 	vAtxs := []*checkpoint.AtxDep{
 		sig1Atx1,
@@ -431,11 +431,11 @@ func createAtxChainDepsOnly(tb testing.TB) ([]*checkpoint.AtxDep, []*types.PoetP
 	}
 
 	// epoch 2
-	othAtx1 := newChainedAtx(tb, types.EmptyATXID, goldenAtx, &goldenAtx, poetRef(), 2, 0, 113, other)
+	othAtx1 := newChainedAtx(tb, *types.EmptyATXID, goldenAtx, &goldenAtx, poetRef(), 2, 0, 113, other)
 	// epoch 3
-	othAtx2 := newChainedAtx(tb, othAtx1.ID, othAtx1.ID, nil, poetRef(), 3, 1, 0, other)
+	othAtx2 := newChainedAtx(tb, *othAtx1.ID, *othAtx1.ID, nil, poetRef(), 3, 1, 0, other)
 	// epoch 4
-	othAtx3 := newChainedAtx(tb, othAtx2.ID, othAtx2.ID, nil, poetRef(), 4, 2, 0, other)
+	othAtx3 := newChainedAtx(tb, *othAtx2.ID, *othAtx2.ID, nil, poetRef(), 4, 2, 0, other)
 	atxDeps := []*checkpoint.AtxDep{othAtx1, othAtx2, othAtx3}
 
 	return atxDeps, proofs
@@ -444,7 +444,7 @@ func createAtxChainDepsOnly(tb testing.TB) ([]*checkpoint.AtxDep, []*types.PoetP
 func atxIDs(atxs []*checkpoint.AtxDep) []types.ATXID {
 	ids := make([]types.ATXID, 0, len(atxs))
 	for _, atx := range atxs {
-		ids = append(ids, atx.ID)
+		ids = append(ids, *atx.ID)
 	}
 	return ids
 }
@@ -479,7 +479,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
+		GoldenAtx:      &goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
@@ -569,7 +569,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
+		GoldenAtx:      &goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
@@ -630,16 +630,16 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	err = nipost.AddChallenge(localDB, sig1.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   posAtx1.PublishEpoch + 1,
 		Sequence:       prevAtx1.Sequence + 1,
-		PrevATXID:      prevAtx1.ID(),
-		PositioningATX: posAtx1.ID(),
+		PrevATXID:      *prevAtx1.ID(),
+		PositioningATX: *posAtx1.ID(),
 	})
 	require.NoError(t, err)
 
 	err = nipost.AddChallenge(localDB, sig2.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   posAtx2.PublishEpoch + 1,
 		Sequence:       prevAtx2.Sequence + 1,
-		PrevATXID:      prevAtx2.ID(),
-		PositioningATX: posAtx2.ID(),
+		PrevATXID:      *prevAtx2.ID(),
+		PositioningATX: *posAtx2.ID(),
 	})
 	require.NoError(t, err)
 	require.NoError(t, localDB.Close())
@@ -688,7 +688,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	require.NoError(t, err)
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
+		GoldenAtx:      &goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
@@ -733,20 +733,20 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	err = nipost.AddChallenge(localDB, sig1.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   0, // will be updated later
 		Sequence:       0,
-		PrevATXID:      types.EmptyATXID, // initial has no previous ATX
-		PositioningATX: types.EmptyATXID, // will be updated later
+		PrevATXID:      *types.EmptyATXID, // initial has no previous ATX
+		PositioningATX: *types.EmptyATXID, // will be updated later
 		InitialPost:    &post,
-		CommitmentATX:  &commitmentAtx,
+		CommitmentATX:  commitmentAtx,
 	})
 	require.NoError(t, err)
 
 	err = nipost.AddChallenge(localDB, sig2.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   0, // will be updated later
 		Sequence:       0,
-		PrevATXID:      types.EmptyATXID, // initial has no previous ATX
-		PositioningATX: types.EmptyATXID, // will be updated later
+		PrevATXID:      *types.EmptyATXID, // initial has no previous ATX
+		PositioningATX: *types.EmptyATXID, // will be updated later
 		InitialPost:    &post,
-		CommitmentATX:  &commitmentAtx,
+		CommitmentATX:  commitmentAtx,
 	})
 	require.NoError(t, err)
 	require.NoError(t, localDB.Close())
@@ -784,7 +784,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
+		GoldenAtx:      &goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
@@ -805,7 +805,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	require.NoError(t, atxs.AddCheckpointed(oldDB, &atxs.CheckpointAtx{
 		ID:            golden.ID(),
 		Epoch:         golden.PublishEpoch,
-		CommitmentATX: *golden.CommitmentATX,
+		CommitmentATX: golden.CommitmentATX,
 		VRFNonce:      golden.VRFNonce,
 		NumUnits:      golden.NumUnits,
 		SmesherID:     golden.SmesherID,
@@ -866,7 +866,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
+		GoldenAtx:      &goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
@@ -933,10 +933,10 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	nid := types.BytesToNodeID(data)
 	data, err = hex.DecodeString("98e47278c1f58acfd2b670a730f28898f74eb140482a07b91ff81f9ff0b7d9f4")
 	require.NoError(t, err)
-	atx := newAtx(types.ATXID(types.BytesToHash(data)), types.EmptyATXID, nil, 3, 1, 0, nid)
+	atx := newAtx(types.ATXID(types.BytesToHash(data)), *types.EmptyATXID, nil, 3, 1, 0, nid)
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
+		GoldenAtx:      &goldenAtx,
 		DataDir:        t.TempDir(),
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",

@@ -12,7 +12,7 @@ import (
 )
 
 type minerInfo struct {
-	atxid     types.ATXID
+	atxid     *types.ATXID
 	malicious bool
 }
 

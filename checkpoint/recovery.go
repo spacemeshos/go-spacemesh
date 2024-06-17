@@ -45,7 +45,7 @@ func DefaultConfig() Config {
 }
 
 type RecoverConfig struct {
-	GoldenAtx      types.ATXID
+	GoldenAtx      *types.ATXID
 	DataDir        string
 	DbFile         string
 	LocalDbFile    string
@@ -97,7 +97,7 @@ func copyToLocalFile(
 }
 
 type AtxDep struct {
-	ID           types.ATXID
+	ID           *types.ATXID
 	PublishEpoch types.EpochID
 	Blob         []byte
 }
@@ -348,9 +348,9 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 	allAtxs := make([]*atxs.CheckpointAtx, 0, len(checkpoint.Data.Atxs))
 	for _, atx := range checkpoint.Data.Atxs {
 		var cAtx atxs.CheckpointAtx
-		cAtx.ID = types.ATXID(types.BytesToHash(atx.ID))
+		cAtx.ID = types.AtxIdFromHash32(types.BytesToHash(atx.ID))
 		cAtx.Epoch = types.EpochID(atx.Epoch)
-		cAtx.CommitmentATX = types.ATXID(types.BytesToHash(atx.CommitmentAtx))
+		cAtx.CommitmentATX = types.AtxIdFromHash32(types.BytesToHash(atx.CommitmentAtx))
 		cAtx.SmesherID = types.BytesToNodeID(atx.PublicKey)
 		cAtx.NumUnits = atx.NumUnits
 		cAtx.VRFNonce = types.VRFPostIndex(atx.VrfNonce)
@@ -371,14 +371,14 @@ func collectOwnAtxDeps(
 	db *sql.Database,
 	localDB *localsql.Database,
 	nodeID types.NodeID,
-	goldenATX types.ATXID,
+	goldenATX *types.ATXID,
 	data *recoveryData,
 ) (map[types.ATXID]*AtxDep, map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	atxid, err := atxs.GetLastIDByNodeID(db, nodeID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, nil, fmt.Errorf("query own last atx id: %w", err)
 	}
-	var ref types.ATXID
+	var ref *types.ATXID
 	var own bool
 	if atxid != types.EmptyATXID {
 		ref = atxid
@@ -394,19 +394,22 @@ func collectOwnAtxDeps(
 			return nil, nil, nil
 		}
 		if nipostCh.CommitmentATX != nil {
-			ref = *nipostCh.CommitmentATX
+			ref = nipostCh.CommitmentATX
 		}
 	}
 
-	all := map[types.ATXID]struct{}{goldenATX: {}, types.EmptyATXID: {}}
+	all := make(map[types.ATXID]struct{})
+	all[*goldenATX] = struct{}{}
+	all[*types.EmptyATXID] = struct{}{}
+
 	for _, cAtx := range data.atxs {
-		all[cAtx.ID] = struct{}{}
+		all[*cAtx.ID] = struct{}{}
 	}
 	var (
 		deps   map[types.ATXID]*AtxDep
 		proofs map[types.PoetProofRef]*types.PoetProofMessage
 	)
-	if ref != types.EmptyATXID {
+	if !ref.Empty() {
 		logger.With().Info("collecting atx and deps",
 			ref,
 			log.Bool("own", own),
@@ -424,7 +427,7 @@ func collectOwnAtxDeps(
 		logger.With().Info("collecting pending atx and deps", log.Object("nipost", nipostCh))
 		// any previous atx in nipost should already be captured earlier
 		// we only care about positioning atx here
-		deps2, proofs2, err := collectDeps(db, nipostCh.PositioningATX, all)
+		deps2, proofs2, err := collectDeps(db, &nipostCh.PositioningATX, all)
 		if err != nil {
 			return nil, nil, fmt.Errorf("deps from nipost positioning atx (%v): %w", nipostCh.PositioningATX, err)
 		}
@@ -437,7 +440,7 @@ func collectOwnAtxDeps(
 
 func collectDeps(
 	db *sql.Database,
-	ref types.ATXID,
+	ref *types.ATXID,
 	all map[types.ATXID]struct{},
 ) (map[types.ATXID]*AtxDep, map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	deps := make(map[types.ATXID]*AtxDep)
@@ -453,11 +456,11 @@ func collectDeps(
 
 func collect(
 	db *sql.Database,
-	ref types.ATXID,
+	ref *types.ATXID,
 	all map[types.ATXID]struct{},
 	deps map[types.ATXID]*AtxDep,
 ) error {
-	if _, ok := all[ref]; ok {
+	if _, ok := all[*ref]; ok {
 		return nil
 	}
 	atx, err := atxs.Get(db, ref)
@@ -468,7 +471,7 @@ func collect(
 		return fmt.Errorf("atx %v belong to previous snapshot. cannot be preserved", ref)
 	}
 	if atx.CommitmentATX != nil {
-		if err = collect(db, *atx.CommitmentATX, all, deps); err != nil {
+		if err = collect(db, atx.CommitmentATX, all, deps); err != nil {
 			return err
 		}
 	} else {
@@ -480,7 +483,7 @@ func collect(
 			return err
 		}
 	}
-	if err = collect(db, atx.PrevATXID, all, deps); err != nil {
+	if err = collect(db, &atx.PrevATXID, all, deps); err != nil {
 		return err
 	}
 
@@ -497,12 +500,12 @@ func collect(
 		return fmt.Errorf("load atx blob %v: %w", ref, err)
 	}
 
-	deps[ref] = &AtxDep{
+	deps[*ref] = &AtxDep{
 		ID:           ref,
 		PublishEpoch: atx.PublishEpoch,
 		Blob:         blob.Bytes,
 	}
-	all[ref] = struct{}{}
+	all[*ref] = struct{}{}
 	return nil
 }
 
@@ -512,7 +515,7 @@ func poetProofs(
 ) (map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage, len(atxIds))
 	for atx := range atxIds {
-		refs, err := poetProofRefs(context.Background(), db, atx)
+		refs, err := poetProofRefs(context.Background(), db, &atx)
 		if err != nil {
 			return nil, fmt.Errorf("get poet proof ref: %w", err)
 		}

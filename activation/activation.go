@@ -66,7 +66,7 @@ const (
 
 // Config defines configuration for Builder.
 type Config struct {
-	GoldenATXID      types.ATXID
+	GoldenATXID      *types.ATXID
 	RegossipInterval time.Duration
 }
 
@@ -111,7 +111,7 @@ type Builder struct {
 type positioningAtxFinder struct {
 	finding sync.Mutex
 	found   *struct {
-		id         types.ATXID
+		id         *types.ATXID
 		forPublish types.EpochID
 	}
 }
@@ -377,7 +377,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 		CommitmentATX: postInfo.CommitmentATX,
 		VRFNonce:      *postInfo.Nonce,
 	}
-	err = b.validator.PostV2(ctx, nodeID, postInfo.CommitmentATX, post, shared.ZeroChallenge, postInfo.NumUnits)
+	err = b.validator.PostV2(ctx, nodeID, &postInfo.CommitmentATX, post, shared.ZeroChallenge, postInfo.NumUnits)
 	if err != nil {
 		b.logger.Error("initial POST is invalid", log.ZShortStringer("smesherID", nodeID), zap.Error(err))
 		if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
@@ -577,7 +577,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			Indices: post.Indices,
 			Pow:     post.Pow,
 		}
-		err = b.validator.PostV2(ctx, nodeID, post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
+		err = b.validator.PostV2(ctx, nodeID, &post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
 		if err != nil {
 			logger.Error("initial POST is invalid", zap.Error(err))
 			if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
@@ -592,8 +592,8 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		challenge = &types.NIPostChallenge{
 			PublishEpoch:   publish,
 			Sequence:       0,
-			PrevATXID:      types.EmptyATXID,
-			PositioningATX: posAtx,
+			PrevATXID:      *types.EmptyATXID,
+			PositioningATX: *posAtx,
 			CommitmentATX:  &post.CommitmentATX,
 			InitialPost: &types.Post{
 				Nonce:   post.Nonce,
@@ -612,8 +612,8 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		challenge = &types.NIPostChallenge{
 			PublishEpoch:   publish,
 			Sequence:       prevAtx.Sequence + 1,
-			PrevATXID:      prevAtx.ID(),
-			PositioningATX: posAtx,
+			PrevATXID:      *prevAtx.ID(),
+			PositioningATX: *posAtx,
 		}
 	}
 	logger.Info("persisting the new NiPOST challenge", zap.Object("challenge", challenge))
@@ -721,7 +721,7 @@ func (b *Builder) poetRoundStart(epoch types.EpochID) time.Time {
 }
 
 type builtAtx interface {
-	ID() types.ATXID
+	ID() *types.ATXID
 
 	scale.Encodable
 	zapcore.ObjectMarshaler
@@ -749,7 +749,7 @@ func (b *Builder) createAtx(
 	}
 
 	if challenge.PublishEpoch < b.layerClock.CurrentLayer().GetEpoch() {
-		if challenge.PrevATXID == types.EmptyATXID {
+		if challenge.PrevATXID == *types.EmptyATXID {
 			// initial NIPoST challenge is not discarded; don't return ErrATXChallengeExpired
 			return nil, errors.New("atx publish epoch has passed during nipost construction")
 		}
@@ -768,10 +768,10 @@ func (b *Builder) createAtx(
 		}
 
 		switch {
-		case challenge.PrevATXID == types.EmptyATXID:
+		case challenge.PrevATXID == *types.EmptyATXID:
 			atx.VRFNonce = (*uint64)(&nipostState.VRFNonce)
 		default:
-			oldNonce, err := atxs.NonceByID(b.db, challenge.PrevATXID)
+			oldNonce, err := atxs.NonceByID(b.db, &challenge.PrevATXID)
 			if err != nil {
 				b.logger.Warn("failed to get VRF nonce for ATX",
 					zap.Error(err),
@@ -849,7 +849,7 @@ func (b *Builder) searchPositioningAtx(
 	ctx context.Context,
 	nodeID types.NodeID,
 	publish types.EpochID,
-) (types.ATXID, error) {
+) (*types.ATXID, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID), zap.Uint32("publish epoch", publish.Uint32()))
 	b.posAtxFinder.finding.Lock()
 	defer b.posAtxFinder.finding.Unlock()
@@ -881,7 +881,7 @@ func (b *Builder) searchPositioningAtx(
 		id = b.conf.GoldenATXID
 	}
 	b.posAtxFinder.found = &struct {
-		id         types.ATXID
+		id         *types.ATXID
 		forPublish types.EpochID
 	}{id, publish}
 
@@ -896,10 +896,10 @@ func (b *Builder) getPositioningAtx(
 	nodeID types.NodeID,
 	publish types.EpochID,
 	previous *types.ActivationTx,
-) (types.ATXID, error) {
+) (*types.ATXID, error) {
 	id, err := b.searchPositioningAtx(ctx, nodeID, publish)
 	if err != nil {
-		return types.EmptyATXID, err
+		return nil, err
 	}
 
 	if previous != nil {
@@ -960,24 +960,24 @@ func findFullyValidHighTickAtx(
 	ctx context.Context,
 	atxdata *atxsdata.Data,
 	publish types.EpochID,
-	goldenATXID types.ATXID,
+	goldenATXID *types.ATXID,
 	validator nipostValidator,
 	logger *zap.Logger,
 	opts ...VerifyChainOption,
-) (types.ATXID, error) {
+) (*types.ATXID, error) {
 	var found *types.ATXID
-	atxdata.IterateHighTicksInEpoch(publish+1, func(id types.ATXID) bool {
+	atxdata.IterateHighTicksInEpoch(publish+1, func(id *types.ATXID) bool {
 		logger.Info("found candidate for high-tick atx", log.ZShortStringer("id", id))
 		if err := validator.VerifyChain(ctx, id, goldenATXID, opts...); err != nil {
 			logger.Info("rejecting candidate for high-tick atx", zap.Error(err), log.ZShortStringer("id", id))
 			return true
 		}
-		found = &id
+		found = id
 		return false
 	})
 
 	if found != nil {
-		return *found, nil
+		return found, nil
 	}
-	return types.ATXID{}, ErrNotFound
+	return nil, ErrNotFound
 }

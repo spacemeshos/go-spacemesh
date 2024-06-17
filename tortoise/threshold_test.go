@@ -172,7 +172,7 @@ func TestReferenceHeight(t *testing.T) {
 					NumUnits:     2,
 					TickCount:    height,
 				}
-				atx.SetID(types.ATXID{byte(i + 1)})
+				atx.SetID(&types.ATXID{byte(i + 1)})
 				atx.SetReceived(time.Now())
 				require.NoError(t, atxs.Add(db, atx))
 			}

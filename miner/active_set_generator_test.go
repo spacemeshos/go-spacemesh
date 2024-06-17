@@ -277,7 +277,7 @@ func TestActiveSetGenerate(t *testing.T) {
 				require.NoError(t, activesets.Add(tester.db, types.ATXIDList(ac.Set).Hash(), ac))
 			}
 			for _, fallback := range tc.fallbacks {
-				tester.gen.updateFallback(fallback.Epoch, fallback.Set)
+				tester.gen.updateFallback(fallback.Epoch, types.SliceToPtrSlice(fallback.Set))
 			}
 			if tc.epochStart != nil {
 				tester.clock.EXPECT().LayerToTime(tc.target.FirstLayer()).Return(*tc.epochStart)
@@ -292,7 +292,7 @@ func TestActiveSetGenerate(t *testing.T) {
 			if tc.expect != nil {
 				require.Equal(t, tc.expect.id, id)
 				require.Equal(t, tc.expect.weight, setWeight)
-				require.Equal(t, tc.expect.set, set)
+				require.Equal(t, tc.expect.set, types.PtrSliceToSlice(set))
 			}
 		})
 	}
@@ -314,7 +314,7 @@ func TestActiveSetEnsure(t *testing.T) {
 	terminated := make(chan struct{})
 	expected := []types.ATXID{{1}}
 	// verify that it tries compute activeset for configured number of tries
-	tester.gen.updateFallback(target, expected)
+	tester.gen.updateFallback(target, types.SliceToPtrSlice(expected))
 	tester.clock.EXPECT().CurrentLayer().Return(0).Times(tries)
 	go func() {
 		tester.gen.ensure(ctx, target)
@@ -349,6 +349,6 @@ func TestActiveSetEnsure(t *testing.T) {
 	id, weight, set, err := activeset.Get(tester.localdb, activeset.Tortoise, target)
 	require.NoError(t, err)
 	require.Equal(t, types.ATXIDList(expected).Hash(), id)
-	require.Equal(t, expected, set)
+	require.Equal(t, expected, types.PtrSliceToSlice(set))
 	require.Equal(t, 1*ticks, int(weight))
 }

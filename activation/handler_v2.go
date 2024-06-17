@@ -32,11 +32,11 @@ import (
 
 type nipostValidatorV2 interface {
 	IsVerifyingFullPost() bool
-	VRFNonceV2(smesherID types.NodeID, commitment types.ATXID, vrfNonce uint64, numUnits uint32) error
+	VRFNonceV2(smesherID types.NodeID, commitment *types.ATXID, vrfNonce uint64, numUnits uint32) error
 	PostV2(
 		ctx context.Context,
 		smesherID types.NodeID,
-		commitment types.ATXID,
+		commitment *types.ATXID,
 		post *types.Post,
 		challenge []byte,
 		numUnits uint32,
@@ -58,7 +58,7 @@ type HandlerV2 struct {
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
 	tickSize        uint64
-	goldenATXID     types.ATXID
+	goldenATXID     *types.ATXID
 	nipostValidator nipostValidatorV2
 	beacon          AtxReceiver
 	tortoise        system.Tortoise
@@ -98,8 +98,7 @@ func (h *HandlerV2) processATX(
 	if err := h.fetchReferences(ctx, poetRef, atxIDs); err != nil {
 		return nil, fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
 	}
-
-	baseTickHeight, err := h.validatePositioningAtx(watx.PublishEpoch, h.goldenATXID, watx.PositioningATX)
+	baseTickHeight, err := h.validatePositioningAtx(watx.PublishEpoch, h.goldenATXID, &watx.PositioningATX)
 	if err != nil {
 		return nil, fmt.Errorf("validating positioning atx: %w", err)
 	}
@@ -158,14 +157,14 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return fmt.Errorf("invalid atx signature: %w", errMalformedData)
 	}
-	if atx.PositioningATX == types.EmptyATXID {
+	if atx.PositioningATX == *types.EmptyATXID {
 		return errors.New("empty positioning atx")
 	}
 	if len(atx.Marriages) != 0 {
 		// Marriage ATX must contain a self-signed certificate.
 		// It's identified by having ReferenceAtx == EmptyATXID.
 		idx := slices.IndexFunc(atx.Marriages, func(cert wire.MarriageCertificate) bool {
-			return cert.ReferenceAtx == types.EmptyATXID
+			return cert.ReferenceAtx.Empty()
 		})
 		if idx == -1 {
 			return errors.New("signer must marry itself")
@@ -193,7 +192,7 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 		if atx.MarriageATX != nil {
 			return errors.New("initial atx cannot reference a marriage atx")
 		}
-		if atx.Initial.CommitmentATX == types.EmptyATXID {
+		if atx.Initial.CommitmentATX == *types.EmptyATXID {
 			return errors.New("initial atx missing commitment atx")
 		}
 		if len(atx.PreviousATXs) != 0 {
@@ -202,13 +201,13 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 
 		numUnits := atx.NiPosts[0].Posts[0].NumUnits
 		if err := h.nipostValidator.VRFNonceV2(
-			atx.SmesherID, atx.Initial.CommitmentATX, atx.VRFNonce, numUnits,
+			atx.SmesherID, &atx.Initial.CommitmentATX, atx.VRFNonce, numUnits,
 		); err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
 		post := wire.PostFromWireV1(&atx.Initial.Post)
 		if err := h.nipostValidator.PostV2(
-			ctx, atx.SmesherID, atx.Initial.CommitmentATX, post, shared.ZeroChallenge, numUnits,
+			ctx, atx.SmesherID, &atx.Initial.CommitmentATX, post, shared.ZeroChallenge, numUnits,
 		); err != nil {
 			return fmt.Errorf("invalid initial post: %w", err)
 		}
@@ -216,10 +215,10 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	}
 
 	for i, prev := range atx.PreviousATXs {
-		if prev == types.EmptyATXID {
+		if prev == *types.EmptyATXID {
 			return fmt.Errorf("previous atx[%d] is empty", i)
 		}
-		if prev == h.goldenATXID {
+		if prev == *h.goldenATXID {
 			return fmt.Errorf("previous atx[%d] is the golden ATX", i)
 		}
 	}
@@ -244,7 +243,7 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 
 // registerHashes registers that the given peer should be asked for
 // the hashes of the poet proofs and ATXs.
-func (h *HandlerV2) registerHashes(peer p2p.Peer, poetRefs []types.Hash32, atxIDs []types.ATXID) {
+func (h *HandlerV2) registerHashes(peer p2p.Peer, poetRefs []types.Hash32, atxIDs []*types.ATXID) {
 	hashes := make([]types.Hash32, 0, len(atxIDs)+1)
 	for _, id := range atxIDs {
 		hashes = append(hashes, id.Hash32())
@@ -257,7 +256,7 @@ func (h *HandlerV2) registerHashes(peer p2p.Peer, poetRefs []types.Hash32, atxID
 }
 
 // fetchReferences makes sure that the referenced poet proof and ATXs are available.
-func (h *HandlerV2) fetchReferences(ctx context.Context, poetRefs []types.Hash32, atxIDs []types.ATXID) error {
+func (h *HandlerV2) fetchReferences(ctx context.Context, poetRefs []types.Hash32, atxIDs []*types.ATXID) error {
 	eg, ctx := errgroup.WithContext(ctx)
 
 	for _, poetRef := range poetRefs {
@@ -282,24 +281,27 @@ func (h *HandlerV2) fetchReferences(ctx context.Context, poetRefs []types.Hash32
 
 // Collect unique dependencies of an ATX.
 // Filters out EmptyATXID and the golden ATX.
-func (h *HandlerV2) collectAtxDeps(atx *wire.ActivationTxV2) ([]types.Hash32, []types.ATXID) {
-	ids := []types.ATXID{atx.PositioningATX}
-	ids = append(ids, atx.PreviousATXs...)
+func (h *HandlerV2) collectAtxDeps(atx *wire.ActivationTxV2) ([]types.Hash32, []*types.ATXID) {
+	ids := make([]*types.ATXID, 0, 1+len(atx.PreviousATXs)+2)
+	ids = append(ids, &atx.PositioningATX)
+	for _, id := range atx.PreviousATXs {
+		ids = append(ids, &id)
+	}
 
 	if atx.Initial != nil {
-		ids = append(ids, types.ATXID(atx.Initial.CommitmentATX))
+		ids = append(ids, &atx.Initial.CommitmentATX)
 	}
 	if atx.MarriageATX != nil {
-		ids = append(ids, *atx.MarriageATX)
+		ids = append(ids, atx.MarriageATX)
 	}
 	for _, cert := range atx.Marriages {
-		ids = append(ids, cert.ReferenceAtx)
+		ids = append(ids, &cert.ReferenceAtx)
 	}
 
 	filtered := make(map[types.ATXID]struct{})
 	for _, id := range ids {
-		if id != types.EmptyATXID && id != h.goldenATXID {
-			filtered[id] = struct{}{}
+		if !id.Empty() && !id.Equal(h.goldenATXID) {
+			filtered[*id] = struct{}{}
 		}
 	}
 
@@ -308,12 +310,12 @@ func (h *HandlerV2) collectAtxDeps(atx *wire.ActivationTxV2) ([]types.Hash32, []
 		poetRefs[nipost.Challenge] = struct{}{}
 	}
 
-	return maps.Keys(poetRefs), maps.Keys(filtered)
+	return maps.Keys(poetRefs), types.SliceToPtrSlice(maps.Keys(filtered))
 }
 
-func (h *HandlerV2) previous(ctx context.Context, id types.ATXID) (opaqueAtx, error) {
+func (h *HandlerV2) previous(ctx context.Context, id *types.ATXID) (opaqueAtx, error) {
 	var blob sql.Blob
-	version, err := atxs.LoadBlob(ctx, h.cdb, id[:], &blob)
+	version, err := atxs.LoadBlob(ctx, h.cdb, id.Bytes(), &blob)
 	if err != nil {
 		return nil, err
 	}
@@ -378,11 +380,11 @@ func (h *HandlerV2) validatePreviousAtx(id types.NodeID, post *wire.SubPostV2, p
 	return 0, fmt.Errorf("unexpected previous ATX type: %T", prev)
 }
 
-func (h *HandlerV2) validateCommitmentAtx(golden, commitmentAtxId types.ATXID, publish types.EpochID) error {
-	if commitmentAtxId != golden {
+func (h *HandlerV2) validateCommitmentAtx(golden, commitmentAtxId *types.ATXID, publish types.EpochID) error {
+	if !commitmentAtxId.Equal(golden) {
 		commitment, err := atxs.Get(h.cdb, commitmentAtxId)
 		if err != nil {
-			return &ErrAtxNotFound{Id: commitmentAtxId, source: err}
+			return &ErrAtxNotFound{Id: *commitmentAtxId, source: err}
 		}
 		if publish <= commitment.PublishEpoch {
 			return fmt.Errorf(
@@ -396,14 +398,14 @@ func (h *HandlerV2) validateCommitmentAtx(golden, commitmentAtxId types.ATXID, p
 }
 
 // validate positioning ATX and return its tick height.
-func (h *HandlerV2) validatePositioningAtx(publish types.EpochID, golden, positioning types.ATXID) (uint64, error) {
-	if positioning == golden {
+func (h *HandlerV2) validatePositioningAtx(publish types.EpochID, golden, positioning *types.ATXID) (uint64, error) {
+	if positioning.Equal(golden) {
 		return 0, nil
 	}
 
 	posAtx, err := atxs.Get(h.cdb, positioning)
 	if err != nil {
-		return 0, &ErrAtxNotFound{Id: positioning, source: err}
+		return 0, &ErrAtxNotFound{Id: *positioning, source: err}
 	}
 	if posAtx.PublishEpoch >= publish {
 		return 0, fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, publish)
@@ -422,10 +424,10 @@ func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]types.NodeID,
 	var marryingIDs []types.NodeID
 	for i, m := range atx.Marriages {
 		var id types.NodeID
-		if m.ReferenceAtx == types.EmptyATXID {
+		if m.ReferenceAtx.Empty() {
 			id = atx.SmesherID
 		} else {
-			atx, err := atxs.Get(h.cdb, m.ReferenceAtx)
+			atx, err := atxs.Get(h.cdb, &m.ReferenceAtx)
 			if err != nil {
 				return nil, fmt.Errorf("getting marriage reference atx: %w", err)
 			}
@@ -451,14 +453,14 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	atx *wire.ActivationTxV2,
 ) (*atxParts, *mwire.MalfeasanceProof, error) {
 	if atx.Initial != nil {
-		if err := h.validateCommitmentAtx(h.goldenATXID, atx.Initial.CommitmentATX, atx.PublishEpoch); err != nil {
+		if err := h.validateCommitmentAtx(h.goldenATXID, &atx.Initial.CommitmentATX, atx.PublishEpoch); err != nil {
 			return nil, nil, fmt.Errorf("verifying commitment ATX: %w", err)
 		}
 	}
 
 	previousAtxs := make([]opaqueAtx, len(atx.PreviousATXs))
 	for i, prev := range atx.PreviousATXs {
-		prevAtx, err := h.previous(ctx, prev)
+		prevAtx, err := h.previous(ctx, &prev)
 		if err != nil {
 			return nil, nil, fmt.Errorf("fetching previous atx: %w", err)
 		}
@@ -496,9 +498,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			}
 			totalEffectiveNumUnits += effectiveNumUnits
 
-			var commitment types.ATXID
+			var commitment *types.ATXID
 			if atx.Initial != nil {
-				commitment = atx.Initial.CommitmentATX
+				commitment = &atx.Initial.CommitmentATX
 			} else {
 				var err error
 				commitment, err = atxs.CommitmentATX(h.cdb, id)
@@ -506,7 +508,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 					return nil, nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
 				}
 				if smesherCommitment == nil {
-					smesherCommitment = &commitment
+					smesherCommitment = commitment
 				}
 			}
 
@@ -561,7 +563,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	if atx.Initial == nil {
-		err := h.nipostValidator.VRFNonceV2(atx.SmesherID, *smesherCommitment, atx.VRFNonce, atx.TotalNumUnits())
+		err := h.nipostValidator.VRFNonceV2(atx.SmesherID, smesherCommitment, atx.VRFNonce, atx.TotalNumUnits())
 		if err != nil {
 			return nil, nil, fmt.Errorf("validating VRF nonce: %w", err)
 		}
@@ -646,7 +648,7 @@ func (h *HandlerV2) storeAtx(
 
 		if len(marrying) != 0 {
 			for _, id := range marrying {
-				if err := identities.SetMarriage(tx, id, atx.ID()); err != nil {
+				if err := identities.SetMarriage(tx, id, *atx.ID()); err != nil {
 					return err
 				}
 			}

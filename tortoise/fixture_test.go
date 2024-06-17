@@ -206,15 +206,15 @@ func (b *bopt) assert(onDecode func(*DecodedBallot, error), onStore func(error))
 }
 
 func (a *atxAction) execute(trt *Tortoise) {
-	trt.trtl.atxsdata.AddAtx(a.atx.target, a.atx.id, &a.atx.ATX)
-	trt.OnAtx(a.atx.target, a.atx.id, &a.atx.ATX)
+	trt.trtl.atxsdata.AddAtx(a.atx.target, &a.atx.id, &a.atx.ATX)
+	trt.OnAtx(a.atx.target, &a.atx.id, &a.atx.ATX)
 }
 
 func (a *atxAction) rawballot(id types.BallotID, n int, opts ...*bopt) *ballotAction {
 	lid := uint32(n) + types.GetEffectiveGenesis().Uint32()
 	b := types.BallotTortoiseData{}
 	b.Smesher = a.atx.Node
-	b.AtxID = a.atx.id
+	b.AtxID = &a.atx.id
 	b.Layer = types.LayerID(lid)
 	b.ID = id
 

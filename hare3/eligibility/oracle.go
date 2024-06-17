@@ -41,7 +41,7 @@ var (
 )
 
 type identityWeight struct {
-	atx    types.ATXID
+	atx    *types.ATXID
 	weight uint64
 }
 
@@ -50,8 +50,8 @@ type cachedActiveSet struct {
 	total uint64
 }
 
-func (c *cachedActiveSet) atxs() []types.ATXID {
-	atxs := make([]types.ATXID, 0, len(c.set))
+func (c *cachedActiveSet) atxs() []*types.ATXID {
+	atxs := make([]*types.ATXID, 0, len(c.set))
 	for _, id := range c.set {
 		atxs = append(atxs, id.atx)
 	}
@@ -83,7 +83,7 @@ func DefaultConfig() Config {
 type Oracle struct {
 	mu           sync.Mutex
 	activesCache activeSetCache
-	fallback     map[types.EpochID][]types.ATXID
+	fallback     map[types.EpochID][]*types.ATXID
 	sync         system.SyncStateProvider
 	// NOTE(dshulyak) on switch from synced to not synced reset the cache
 	// to cope with https://github.com/spacemeshos/go-spacemesh/issues/4552
@@ -133,7 +133,7 @@ func New(
 		vrfVerifier:    vrfVerifier,
 		layersPerEpoch: layersPerEpoch,
 		activesCache:   activesCache,
-		fallback:       map[types.EpochID][]types.ATXID{},
+		fallback:       make(map[types.EpochID][]*types.ATXID),
 		cfg:            DefaultConfig(),
 		log:            log.NewNop(),
 	}
@@ -460,7 +460,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	return aset, nil
 }
 
-func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
+func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]*types.ATXID, error) {
 	aset, err := o.actives(ctx, targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam))
 	if err != nil {
 		return nil, err
@@ -468,7 +468,7 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 	return aset.atxs(), nil
 }
 
-func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
+func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]*types.ATXID, error) {
 	activeSet, ok := o.fallback[targetEpoch]
 	if ok {
 		o.log.WithContext(ctx).With().Info("using fallback active set",
@@ -490,7 +490,7 @@ func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID
 
 func (o *Oracle) computeActiveWeights(
 	targetEpoch types.EpochID,
-	activeSet []types.ATXID,
+	activeSet []*types.ATXID,
 ) (map[types.NodeID]identityWeight, error) {
 	identities := make(map[types.NodeID]identityWeight, len(activeSet))
 	for _, id := range activeSet {
@@ -503,7 +503,7 @@ func (o *Oracle) computeActiveWeights(
 	return identities, nil
 }
 
-func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, error) {
+func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]*types.ATXID, error) {
 	beacon, err := o.beacons.GetBeacon(epoch)
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
@@ -540,7 +540,7 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 		log.Uint32("epoch", epoch.Uint32()),
 		log.Stringer("beacon", beacon),
 	)
-	return maps.Keys(activeMap), nil
+	return types.SliceToPtrSlice(maps.Keys(activeMap)), nil
 }
 
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
@@ -562,7 +562,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(
 	return exist, nil
 }
 
-func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
+func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []*types.ATXID) {
 	o.log.With().Info("received activeset update",
 		epoch,
 		log.Int("size", len(activeSet)),

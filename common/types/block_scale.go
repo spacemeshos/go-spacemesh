@@ -137,7 +137,7 @@ func (t *RatNum) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *AnyReward) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.AtxID[:])
+		n, err := scale.EncodeOption(enc, t.AtxID)
 		if err != nil {
 			return total, err
 		}
@@ -155,11 +155,12 @@ func (t *AnyReward) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *AnyReward) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.AtxID[:])
+		field, n, err := scale.DecodeOption[ATXID](dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
+		t.AtxID = field
 	}
 	{
 		n, err := t.Weight.DecodeScale(dec)

@@ -66,7 +66,7 @@ func makeResults(lid types.LayerID, txs ...types.Transaction) []types.Transactio
 	return results
 }
 
-func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.ATXID, types.NodeID) {
+func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (*types.ATXID, types.NodeID) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t.tb, err)
 	atx := types.NewActivationTx(

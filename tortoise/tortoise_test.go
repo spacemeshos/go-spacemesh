@@ -1616,7 +1616,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				}
 				trtl.trtl.atxsdata.AddAtx(lid.GetEpoch(), atxID, &atx)
 				trtl.OnAtx(lid.GetEpoch(), atxID, &atx)
-				atxids = append(atxids, atxID)
+				atxids = append(atxids, *atxID)
 			}
 
 			var currentJ int
@@ -1712,7 +1712,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	partitionEnd := last
 	s1.Merge(s2)
 	s1.GetState(0).Atxdata.IterateInEpoch(
-		partitionEnd.GetEpoch(), func(id types.ATXID, atx *atxsdata.ATX) {
+		partitionEnd.GetEpoch(), func(id *types.ATXID, atx *atxsdata.ATX) {
 			tortoise1.OnAtx(partitionEnd.GetEpoch(), id, atx)
 			tortoise2.OnAtx(partitionEnd.GetEpoch(), id, atx)
 		})
@@ -2387,8 +2387,8 @@ func TestSwitchMode(t *testing.T) {
 			Height: 200,
 			Weight: 200,
 		}
-		tortoise.trtl.atxsdata.AddAtx(types.EpochID(2), types.ATXID{1}, &atx)
-		tortoise.OnAtx(types.EpochID(2), types.ATXID{1}, &atx)
+		tortoise.trtl.atxsdata.AddAtx(types.EpochID(2), &types.ATXID{1}, &atx)
+		tortoise.OnAtx(types.EpochID(2), &types.ATXID{1}, &atx)
 		// feed ballots that vote against previously validated layer
 		// without the fix they would be ignored
 		for i := 1; i <= 16; i++ {
@@ -2892,8 +2892,8 @@ func TestEncodeVotes(t *testing.T) {
 			BaseHeight: 1,
 			Height:     2,
 		}
-		atxdata.AddAtx(lid.GetEpoch(), atxid, &atx)
-		tortoise.OnAtx(lid.GetEpoch(), atxid, &atx)
+		atxdata.AddAtx(lid.GetEpoch(), &atxid, &atx)
+		tortoise.OnAtx(lid.GetEpoch(), &atxid, &atx)
 		tortoise.OnBeacon(lid.GetEpoch(), types.EmptyBeacon)
 
 		ballot.EpochData = &types.EpochData{
@@ -3014,17 +3014,19 @@ func TestMissingActiveSet(t *testing.T) {
 	}
 	for _, atxid := range aset[:2] {
 		atx := &atxsdata.ATX{}
-		tortoise.trtl.atxsdata.AddAtx(target, atxid, atx)
-		tortoise.OnAtx(target, atxid, atx)
+		tortoise.trtl.atxsdata.AddAtx(target, &atxid, atx)
+		tortoise.OnAtx(target, &atxid, atx)
 	}
 	t.Run("empty", func(t *testing.T) {
-		require.Equal(t, aset, tortoise.GetMissingActiveSet(target+1, aset))
+		require.Equal(t, aset,
+			types.PtrSliceToSlice(tortoise.GetMissingActiveSet(target+1, types.SliceToPtrSlice(aset))))
 	})
 	t.Run("all available", func(t *testing.T) {
-		require.Empty(t, tortoise.GetMissingActiveSet(target, aset[:2]))
+		require.Empty(t, tortoise.GetMissingActiveSet(target, types.SliceToPtrSlice(aset[:2])))
 	})
 	t.Run("some available", func(t *testing.T) {
-		require.Equal(t, []types.ATXID{aset[2]}, tortoise.GetMissingActiveSet(target, aset))
+		require.Equal(t, []types.ATXID{aset[2]},
+			types.PtrSliceToSlice(tortoise.GetMissingActiveSet(target, types.SliceToPtrSlice(aset))))
 	})
 }
 

@@ -375,7 +375,7 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		opn.SetPeer(p2p.Peer(strconv.Itoa(i)))
 		opns = append(opns, opn)
 		ed := &fetch.EpochData{
-			AtxIDs: types.RandomActiveSet(11),
+			AtxIDs: types.PtrSliceToSlice(types.RandomActiveSet(11)),
 		}
 		eds = append(eds, ed)
 	}
@@ -405,7 +405,8 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		} else {
 			ts.mForkFinder.EXPECT().NeedResync(instate.Sub(1), opns[i].PrevAggHash).Return(true)
 			if i != 4 {
-				ts.mTortoise.EXPECT().GetMissingActiveSet(epoch, eds[i].AtxIDs).Return(eds[i].AtxIDs)
+				ts.mTortoise.EXPECT().GetMissingActiveSet(epoch, types.SliceToPtrSlice(eds[i].AtxIDs)).
+					Return(types.SliceToPtrSlice(eds[i].AtxIDs))
 			}
 		}
 	}
@@ -426,26 +427,26 @@ func TestProcessLayers_MeshHashDiverged(t *testing.T) {
 		PeerEpochInfo(gomock.Any(), opns[5].Peer(), epoch-1).
 		Return(eds[5], nil)
 	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
-			require.ElementsMatch(t, eds[0].AtxIDs, got)
+		func(_ context.Context, got []*types.ATXID, _ ...system.GetAtxOpt) error {
+			require.ElementsMatch(t, eds[0].AtxIDs, types.PtrSliceToSlice(got))
 			return nil
 		},
 	)
 	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
-			require.ElementsMatch(t, eds[2].AtxIDs, got)
+		func(_ context.Context, got []*types.ATXID, _ ...system.GetAtxOpt) error {
+			require.ElementsMatch(t, eds[2].AtxIDs, types.PtrSliceToSlice(got))
 			return nil
 		},
 	)
 	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
-			require.ElementsMatch(t, eds[3].AtxIDs, got)
+		func(_ context.Context, got []*types.ATXID, _ ...system.GetAtxOpt) error {
+			require.ElementsMatch(t, eds[3].AtxIDs, types.PtrSliceToSlice(got))
 			return errors.New("not available")
 		},
 	)
 	ts.mDataFetcher.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, got []types.ATXID, _ ...system.GetAtxOpt) error {
-			require.ElementsMatch(t, eds[5].AtxIDs, got)
+		func(_ context.Context, got []*types.ATXID, _ ...system.GetAtxOpt) error {
+			require.ElementsMatch(t, eds[5].AtxIDs, types.PtrSliceToSlice(got))
 			return nil
 		},
 	)

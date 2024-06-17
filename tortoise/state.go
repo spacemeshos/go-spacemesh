@@ -216,7 +216,7 @@ type (
 
 	referenceInfo struct {
 		smesher         types.NodeID
-		atxid           types.ATXID
+		atxid           *types.ATXID
 		expectedBallots uint32
 		beacon          types.Beacon
 		weight          *big.Rat

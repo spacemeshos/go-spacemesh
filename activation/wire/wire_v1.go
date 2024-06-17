@@ -21,7 +21,7 @@ type ActivationTxV1 struct {
 	SmesherID types.NodeID
 	Signature types.EdSignature
 
-	id types.ATXID
+	id *types.ATXID
 }
 
 // InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
@@ -95,14 +95,14 @@ type ATXMetadataV1 struct {
 	MsgHash types.Hash32
 }
 
-func (atx *ActivationTxV1) ID() types.ATXID {
-	if atx.id == types.EmptyATXID {
-		atx.id = types.ATXID(atx.HashInnerBytes())
+func (atx *ActivationTxV1) ID() *types.ATXID {
+	if atx.id == nil {
+		atx.id = types.AtxIdFromHash32(atx.HashInnerBytes())
 	}
 	return atx.id
 }
 
-func (atx *ActivationTxV1) SetID(id types.ATXID) {
+func (atx *ActivationTxV1) SetID(id *types.ATXID) {
 	atx.id = id
 }
 
@@ -115,7 +115,7 @@ func (atx *ActivationTxV1) TotalNumUnits() uint32 {
 }
 
 func (atx *ActivationTxV1) Sign(signer *signing.EdSigner) {
-	if atx.PrevATXID == types.EmptyATXID {
+	if atx.PrevATXID == *types.EmptyATXID {
 		nodeID := signer.NodeID()
 		atx.NodeID = &nodeID
 	}

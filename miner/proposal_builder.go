@@ -96,7 +96,7 @@ type sharedSession struct {
 // session per every signing key for the whole epoch.
 type session struct {
 	epoch         types.EpochID
-	atx           types.ATXID
+	atx           *types.ATXID
 	atxWeight     uint64
 	ref           types.BallotID
 	beacon        types.Beacon
@@ -440,7 +440,7 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	return mesh
 }
 
-func (pb *ProposalBuilder) UpdateActiveSet(target types.EpochID, set []types.ATXID) {
+func (pb *ProposalBuilder) UpdateActiveSet(target types.EpochID, set []*types.ATXID) {
 	pb.activeGen.updateFallback(target, set)
 }
 
@@ -469,7 +469,7 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 		log.Uint64("weight", weight),
 	)
 	pb.shared.active.id = id
-	pb.shared.active.set = set
+	pb.shared.active.set = types.ATXIDListFromPtr(set)
 	pb.shared.active.weight = weight
 	return nil
 }
@@ -482,7 +482,7 @@ func (pb *ProposalBuilder) initSignerData(
 	if ss.session.epoch != lid.GetEpoch() {
 		ss.session = session{epoch: lid.GetEpoch()}
 	}
-	if ss.session.atx == types.EmptyATXID {
+	if ss.session.atx.Empty() {
 		atxid, err := atxs.GetIDByEpochAndNodeID(pb.db, ss.session.epoch-1, ss.signer.NodeID())
 		if err != nil {
 			if errors.Is(err, sql.ErrNotFound) {
@@ -706,7 +706,7 @@ func createProposal(
 			Ballot: types.Ballot{
 				InnerBallot: types.InnerBallot{
 					Layer:       lid,
-					AtxID:       session.atx,
+					AtxID:       *session.atx,
 					OpinionHash: opinion.Hash,
 				},
 				Votes:             opinion.Votes,

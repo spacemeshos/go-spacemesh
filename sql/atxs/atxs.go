@@ -35,7 +35,7 @@ func decoder(fn decoderCallback) sql.Decoder {
 			id types.ATXID
 		)
 		stmt.ColumnBytes(0, id[:])
-		a.SetID(id)
+		a.SetID(&id)
 		a.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(1))
 		a.BaseTickHeight = uint64(stmt.ColumnInt64(2))
 		a.TickCount = uint64(stmt.ColumnInt64(3))
@@ -76,7 +76,7 @@ func load(db sql.Executor, query string, enc sql.Encoder) (*types.ActivationTx, 
 }
 
 // Get gets an ATX by a given ATX ID.
-func Get(db sql.Executor, id types.ATXID) (*types.ActivationTx, error) {
+func Get(db sql.Executor, id *types.ATXID) (*types.ActivationTx, error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
@@ -96,7 +96,7 @@ func GetByEpochAndNodeID(
 	db sql.Executor,
 	epoch types.EpochID,
 	nodeID types.NodeID,
-) (types.ATXID, error) {
+) (*types.ATXID, error) {
 	var id types.ATXID
 	rows, err := db.Exec("select id from atxs where epoch = ?1 and pubkey = ?2 limit 1;",
 		func(stmt *sql.Statement) {
@@ -114,11 +114,11 @@ func GetByEpochAndNodeID(
 	if rows == 0 {
 		return types.EmptyATXID, fmt.Errorf("get by epoch %v nid %s: %w", epoch, nodeID.String(), sql.ErrNotFound)
 	}
-	return id, nil
+	return &id, nil
 }
 
 // Has checks if an ATX exists by a given ATX ID.
-func Has(db sql.Executor, id types.ATXID) (bool, error) {
+func Has(db sql.Executor, id *types.ATXID) (bool, error) {
 	rows, err := db.Exec("select 1 from atxs where id = ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
@@ -130,23 +130,27 @@ func Has(db sql.Executor, id types.ATXID) (bool, error) {
 	return rows > 0, nil
 }
 
-func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-	}
-	dec := func(stmt *sql.Statement) bool {
-		stmt.ColumnBytes(0, id[:])
-		return true
-	}
+func CommitmentATX(db sql.Executor, nodeID types.NodeID) (*types.ATXID, error) {
+	var (
+		id  = new(types.ATXID)
+		err error
+		enc = func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+		}
+		dec = func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, id[:])
+			return true
+		}
+	)
 
 	if rows, err := db.Exec(`
 		select commitment_atx from atxs
 		where pubkey = ?1 and commitment_atx is not null
 		order by epoch desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return nil, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return nil, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -196,46 +200,54 @@ func Coinbase(db sql.Executor, id types.NodeID) (types.Address, error) {
 }
 
 // GetFirstIDByNodeID gets the initial ATX ID for a given node ID.
-func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-	}
-	dec := func(stmt *sql.Statement) bool {
-		stmt.ColumnBytes(0, id[:])
-		return true
-	}
+func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (*types.ATXID, error) {
+	var (
+		id  = new(types.ATXID)
+		err error
+		enc = func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+		}
+		dec = func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, id[:])
+			return true
+		}
+	)
 
 	if rows, err := db.Exec(`
 		select id from atxs
 		where pubkey = ?1
 		order by epoch asc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return nil, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return nil, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
 }
 
 // GetLastIDByNodeID gets the last ATX ID for a given node ID.
-func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-	}
-	dec := func(stmt *sql.Statement) bool {
-		stmt.ColumnBytes(0, id[:])
-		return true
-	}
+func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (*types.ATXID, error) {
+	var (
+		id  = new(types.ATXID)
+		err error
+		enc = func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+		}
+		dec = func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, id[:])
+			return true
+		}
+	)
 
 	if rows, err := db.Exec(`
 		select id from atxs
 		where pubkey = ?1
 		order by epoch desc, received desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, err)
+		return nil, fmt.Errorf("exec nodeID %s: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return nil, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -243,15 +255,19 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 
 // PrevIDByNodeID returns the previous ATX ID for a given node ID and public epoch.
 // It returns the newest ATX ID that was published before the given public epoch.
-func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID) (id types.ATXID, err error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-		stmt.BindInt64(2, int64(pubEpoch))
-	}
-	dec := func(stmt *sql.Statement) bool {
-		stmt.ColumnBytes(0, id[:])
-		return true
-	}
+func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID) (*types.ATXID, error) {
+	var (
+		id  = new(types.ATXID)
+		err error
+		enc = func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+			stmt.BindInt64(2, int64(pubEpoch))
+		}
+		dec = func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, id[:])
+			return true
+		}
+	)
 
 	if rows, err := db.Exec(`
 		select id from atxs
@@ -267,37 +283,41 @@ func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID
 }
 
 // GetIDByEpochAndNodeID gets an ATX ID for a given epoch and node ID.
-func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (id types.ATXID, err error) {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(epoch))
-		stmt.BindBytes(2, nodeID.Bytes())
-	}
-	dec := func(stmt *sql.Statement) bool {
-		stmt.ColumnBytes(0, id[:])
-		return true
-	}
+func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.NodeID) (*types.ATXID, error) {
+	var (
+		id  = new(types.ATXID)
+		err error
+		enc = func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(epoch))
+			stmt.BindBytes(2, nodeID.Bytes())
+		}
+		dec = func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, id[:])
+			return true
+		}
+	)
 
 	if rows, err := db.Exec(`
 		select id from atxs
 		where epoch = ?1 and pubkey = ?2
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return nil, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return nil, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
 }
 
 // GetIDsByEpoch gets ATX IDs for a given epoch.
-func GetIDsByEpoch(ctx context.Context, db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err error) {
+func GetIDsByEpoch(ctx context.Context, db sql.Executor, epoch types.EpochID) (ids []*types.ATXID, err error) {
 	cacheKey := sql.QueryCacheKey(CacheKindEpochATXs, epoch.String())
-	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) (ids []types.ATXID, err error) {
+	return sql.WithCachedValue(ctx, db, cacheKey, func(context.Context) (ids []*types.ATXID, err error) {
 		enc := func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(epoch))
 		}
 		dec := func(stmt *sql.Statement) bool {
-			var id types.ATXID
+			id := new(types.ATXID)
 			stmt.ColumnBytes(0, id[:])
 			ids = append(ids, id)
 			return true
@@ -306,7 +326,7 @@ func GetIDsByEpoch(ctx context.Context, db sql.Executor, epoch types.EpochID) (i
 		if rows, err := db.Exec("select id from atxs where epoch = ?1;", enc, dec); err != nil {
 			return nil, fmt.Errorf("exec epoch %v: %w", epoch, err)
 		} else if rows == 0 {
-			return []types.ATXID{}, nil
+			return make([]*types.ATXID, 0), nil
 		}
 
 		return ids, nil
@@ -399,7 +419,7 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (t
 }
 
 // NonceByID retrieves VRFNonce corresponding to the specified ATX ID.
-func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err error) {
+func NonceByID(db sql.Executor, id *types.ATXID) (nonce types.VRFPostIndex, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
@@ -435,7 +455,7 @@ func Add(db sql.Executor, atx *types.ActivationTx) error {
 		stmt.BindInt64(10, int64(atx.Sequence))
 		stmt.BindBytes(11, atx.Coinbase.Bytes())
 		stmt.BindInt64(12, int64(atx.Validity()))
-		if atx.PrevATXID != types.EmptyATXID {
+		if atx.PrevATXID != *types.EmptyATXID {
 			stmt.BindBytes(13, atx.PrevATXID.Bytes())
 		} else {
 			stmt.BindNull(13)
@@ -460,7 +480,6 @@ func Add(db sql.Executor, atx *types.ActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("insert ATX blob %v: %w", atx.ID(), err)
 	}
-
 	return nil
 }
 
@@ -470,25 +489,25 @@ func AtxAdded(db sql.Executor, atx *types.ActivationTx) {
 	sql.AppendToCachedSlice(db, epochCacheKey, atx.ID())
 }
 
-type Filter func(types.ATXID) bool
+type Filter func(*types.ATXID) bool
 
-func FilterAll(types.ATXID) bool { return true }
+func FilterAll(*types.ATXID) bool { return true }
 
 // GetIDWithMaxHeight returns the ID of the atx from the last 2 epoch with the highest (or tied for the highest)
 // tick height. It is possible that some poet servers are faster than others and the network ends up having its
 // highest ticked atx still in previous epoch and the atxs building on top of it have not been published yet.
 // Selecting from the last two epochs to strike a balance between being fair to honest miners while not giving
 // unfair advantage for malicious actors who retroactively publish a high tick atx many epochs back.
-func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (types.ATXID, error) {
+func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (*types.ATXID, error) {
 	if filter == nil {
 		filter = FilterAll
 	}
 	var (
-		rst     types.ATXID
+		rst     *types.ATXID
 		highest uint64
 	)
 	dec := func(stmt *sql.Statement) bool {
-		var id types.ATXID
+		id := new(types.ATXID)
 		stmt.ColumnBytes(0, id[:])
 		height := uint64(stmt.ColumnInt64(1))
 
@@ -522,18 +541,18 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (type
 	ORDER BY height DESC, epoch DESC;`, nil, dec)
 	switch {
 	case err != nil:
-		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", err)
-	case rst == types.EmptyATXID:
-		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", sql.ErrNotFound)
+		return nil, fmt.Errorf("selecting high-tick atx: %w", err)
+	case rst.Empty():
+		return nil, fmt.Errorf("selecting high-tick atx: %w", sql.ErrNotFound)
 	}
 
 	return rst, nil
 }
 
 type CheckpointAtx struct {
-	ID             types.ATXID
+	ID             *types.ATXID
 	Epoch          types.EpochID
-	CommitmentATX  types.ATXID
+	CommitmentATX  *types.ATXID
 	VRFNonce       types.VRFPostIndex
 	NumUnits       uint32
 	BaseTickHeight uint64
@@ -554,6 +573,7 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 	}
 	dec := func(stmt *sql.Statement) bool {
 		var catx CheckpointAtx
+		catx.ID = new(types.ATXID)
 		stmt.ColumnBytes(0, catx.ID[:])
 		catx.Epoch = types.EpochID(uint32(stmt.ColumnInt64(1)))
 		catx.NumUnits = uint32(stmt.ColumnInt64(2))
@@ -649,7 +669,7 @@ func IterateAtxsData(
 	db sql.Executor,
 	from, to types.EpochID,
 	fn func(
-		id types.ATXID,
+		id *types.ATXID,
 		node types.NodeID,
 		epoch types.EpochID,
 		coinbase types.Address,
@@ -679,7 +699,7 @@ func IterateAtxsData(
 			if epoch < from || epoch > to {
 				return true
 			}
-			var id types.ATXID
+			id := new(types.ATXID)
 			stmt.ColumnBytes(0, id[:])
 			var node types.NodeID
 			stmt.ColumnBytes(1, node[:])
@@ -700,7 +720,7 @@ func IterateAtxsData(
 	return nil
 }
 
-func SetValidity(db sql.Executor, id types.ATXID, validity types.Validity) error {
+func SetValidity(db sql.Executor, id *types.ATXID, validity types.Validity) error {
 	_, err := db.Exec("UPDATE atxs SET validity = ?1 where id = ?2;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(validity))
@@ -741,7 +761,7 @@ func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint3
 func IterateForGrading(
 	db sql.Executor,
 	epoch types.EpochID,
-	fn func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool,
+	fn func(id *types.ATXID, atxtime, prooftime int64, weight uint64) bool,
 ) error {
 	if _, err := db.Exec(`
 		select atxs.id, atxs.received, identities.received, effective_num_units, tick_count from atxs
@@ -756,7 +776,7 @@ func IterateForGrading(
 			prooftime := stmt.ColumnInt64(2)
 			units := uint64(stmt.ColumnInt64(3))
 			ticks := uint64(stmt.ColumnInt64(4))
-			return fn(id, atxtime, prooftime, units*ticks)
+			return fn(&id, atxtime, prooftime, units*ticks)
 		}); err != nil {
 		return fmt.Errorf("iterate for grading: %w", err)
 	}
@@ -805,10 +825,10 @@ func IterateAtxIdsWithMalfeasance(
 
 type PrevATXCollision struct {
 	NodeID1 types.NodeID
-	ATX1    types.ATXID
+	ATX1    *types.ATXID
 
 	NodeID2 types.NodeID
-	ATX2    types.ATXID
+	ATX2    *types.ATXID
 }
 
 func PrevATXCollisions(db sql.Executor) ([]PrevATXCollision, error) {
@@ -819,7 +839,7 @@ func PrevATXCollisions(db sql.Executor) ([]PrevATXCollision, error) {
 		stmt.ColumnBytes(0, nodeID1[:])
 		stmt.ColumnBytes(1, nodeID2[:])
 
-		var id1, id2 types.ATXID
+		id1, id2 := new(types.ATXID), new(types.ATXID)
 		stmt.ColumnBytes(2, id1[:])
 		stmt.ColumnBytes(3, id2[:])
 

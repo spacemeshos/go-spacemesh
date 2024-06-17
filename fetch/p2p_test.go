@@ -88,6 +88,7 @@ func createP2PFetch(
 	sqlCache bool,
 	opts ...Option,
 ) (*testP2PFetch, context.Context) {
+	t.Helper()
 	lg := logtest.New(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	t.Cleanup(cancel)
@@ -167,7 +168,7 @@ func (tpf *testP2PFetch) createATXs(epoch types.EpochID) []types.ATXID {
 	for i := range atxIDs {
 		atx := newAtx(tpf.t, epoch)
 		require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx))
-		atxIDs[i] = atx.ID()
+		atxIDs[i] = *atx.ID()
 	}
 	return atxIDs
 }
@@ -202,6 +203,7 @@ func forStreaming(
 	sqlCache bool,
 	toCall func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string),
 ) {
+	t.Helper()
 	for _, tc := range []struct {
 		name            string
 		clientStreaming bool
@@ -242,6 +244,7 @@ func forStreamingCachedUncached(
 	errStr string,
 	toCall func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string),
 ) {
+	t.Helper()
 	for _, tc := range []struct {
 		name     string
 		sqlCache bool
@@ -350,9 +353,9 @@ func TestP2PGetATXs(t *testing.T) {
 			tpf.verifyGetHash(
 				func() error {
 					return tpf.clientFetch.GetAtxs(
-						context.Background(), []types.ATXID{atx.ID()})
+						context.Background(), []*types.ATXID{atx.ID()})
 				},
-				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
+				errStr, "atx", "hs/1", types.Hash32(*atx.ID()), atx.ID().Bytes(),
 				atx.AtxBlob.Blob)
 		})
 }

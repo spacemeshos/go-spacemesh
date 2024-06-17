@@ -106,7 +106,7 @@ func NewHandler(
 	c layerClock,
 	pub pubsub.Publisher,
 	fetcher system.Fetcher,
-	goldenATXID types.ATXID,
+	goldenATXID *types.ATXID,
 	nipostValidator nipostValidator,
 	beacon AtxReceiver,
 	tortoise system.Tortoise,
@@ -236,7 +236,7 @@ func (h *Handler) determineVersion(msg []byte) (*types.AtxVersion, error) {
 }
 
 type opaqueAtx interface {
-	ID() types.ATXID
+	ID() *types.ATXID
 	Published() types.EpochID
 	TotalNumUnits() uint32
 }
@@ -285,9 +285,9 @@ func (h *Handler) handleAtx(
 
 	// Check if processing is already in progress
 	h.inProgressMu.Lock()
-	if sub, ok := h.inProgress[id]; ok {
+	if sub, ok := h.inProgress[*id]; ok {
 		ch := make(chan error, 1)
-		h.inProgress[id] = append(sub, ch)
+		h.inProgress[*id] = append(sub, ch)
 		h.inProgressMu.Unlock()
 		h.logger.Debug("atx is already being processed. waiting for result",
 			log.ZContext(ctx),
@@ -306,7 +306,7 @@ func (h *Handler) handleAtx(
 		}
 	}
 
-	h.inProgress[id] = []chan error{}
+	h.inProgress[*id] = []chan error{}
 	h.inProgressMu.Unlock()
 	h.logger.Info("handling incoming atx",
 		log.ZContext(ctx),
@@ -327,16 +327,16 @@ func (h *Handler) handleAtx(
 
 	h.inProgressMu.Lock()
 	defer h.inProgressMu.Unlock()
-	for _, ch := range h.inProgress[id] {
+	for _, ch := range h.inProgress[*id] {
 		ch <- err
 		close(ch)
 	}
-	delete(h.inProgress, id)
+	delete(h.inProgress, *id)
 	return proof, err
 }
 
 // Obtain the atxSignature of the given ATX.
-func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.EdSignature, error) {
+func atxSignature(ctx context.Context, db sql.Executor, id *types.ATXID) (types.EdSignature, error) {
 	var blob sql.Blob
 	v, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
 	if err != nil {

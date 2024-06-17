@@ -337,7 +337,7 @@ func (b *Ballot) ToTortoiseData() *BallotTortoiseData {
 		Smesher:       b.SmesherID,
 		Layer:         b.Layer,
 		Eligibilities: uint32(len(b.EligibilityProofs)),
-		AtxID:         b.AtxID,
+		AtxID:         &b.AtxID,
 		Opinion: Opinion{
 			Votes: b.Votes,
 			Hash:  b.OpinionHash,

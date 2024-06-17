@@ -53,7 +53,7 @@ func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []ty
 			TickCount:    1,
 			SmesherID:    types.RandomNodeID(),
 		}
-		atx.SetID(id)
+		atx.SetID(&id)
 		atx.SetReceived(time.Now())
 		require.NoError(tb, atxs.Add(db, atx))
 	}
@@ -102,7 +102,7 @@ func verifyUpdate(tb testing.TB, data []byte, epoch types.EpochID, expBeacon str
 func TestGenerator_Generate(t *testing.T) {
 	targetEpoch := types.EpochID(3)
 	db := sql.InMemory()
-	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
+	createAtxs(t, db, targetEpoch-1, types.PtrSliceToSlice(types.RandomActiveSet(activeSetSize)))
 	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
 	t.Cleanup(cleanup)
 
@@ -170,7 +170,7 @@ func TestGenerator_CheckAPI(t *testing.T) {
 	targetEpoch := types.EpochID(3)
 	db := sql.InMemory()
 	lg := logtest.New(t)
-	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
+	createAtxs(t, db, targetEpoch-1, types.PtrSliceToSlice(types.RandomActiveSet(activeSetSize)))
 	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, lg.Zap()))
 	t.Cleanup(cleanup)
 

@@ -29,7 +29,7 @@ func gatx(
 		VRFNonce:     nonce,
 		TickCount:    1,
 	}
-	atx.SetID(id)
+	atx.SetID(&id)
 	atx.SetReceived(time.Time{}.Add(1))
 	return *atx
 }

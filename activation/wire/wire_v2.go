@@ -42,7 +42,7 @@ type ActivationTxV2 struct {
 	Signature types.EdSignature
 
 	// cached fields to avoid repeated calculations
-	id types.ATXID
+	id *types.ATXID
 }
 
 func (atx *ActivationTxV2) SignedBytes() []byte {
@@ -115,8 +115,8 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	}
 }
 
-func (atx *ActivationTxV2) ID() types.ATXID {
-	if atx.id != types.EmptyATXID {
+func (atx *ActivationTxV2) ID() *types.ATXID {
+	if atx.id != nil {
 		return atx.id
 	}
 
@@ -127,7 +127,8 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 		panic(err)
 	}
 	atx.merkleTree(tree)
-	atx.id = types.ATXID(tree.Root())
+	id := types.ATXID(tree.Root())
+	atx.id = &id
 	return atx.id
 }
 

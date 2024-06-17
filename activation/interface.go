@@ -39,7 +39,7 @@ type nipostValidator interface {
 	nipostValidatorV2
 
 	// VerifyChain fully verifies all dependencies of the given ATX and the ATX itself.
-	VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error
+	VerifyChain(ctx context.Context, id, goldenATXID *types.ATXID, opts ...VerifyChainOption) error
 }
 
 type layerClock interface {
@@ -65,7 +65,7 @@ type syncer interface {
 }
 
 type atxProvider interface {
-	GetAtx(id types.ATXID) (*types.ActivationTx, error)
+	GetAtx(id *types.ATXID) (*types.ActivationTx, error)
 }
 
 // PostSetupProvider defines the functionality required for Post setup.

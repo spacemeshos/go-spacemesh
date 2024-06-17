@@ -70,7 +70,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 			ballot.ID(),
 		)
 	}
-	atx := v.atxsdata.Get(ballot.Layer.GetEpoch(), ballot.AtxID)
+	atx := v.atxsdata.Get(ballot.Layer.GetEpoch(), &ballot.AtxID)
 	if atx == nil {
 		return fmt.Errorf(
 			"failed to load atx from cache with epoch %d %s",
@@ -189,7 +189,7 @@ func (v *Validator) validateSecondary(ballot *types.Ballot) (*types.EpochData, e
 	if refdata == nil {
 		return nil, fmt.Errorf("ref ballot is missing %v", ballot.RefBallot)
 	}
-	if refdata.ATXID != ballot.AtxID {
+	if !refdata.ATXID.Equal(&ballot.AtxID) {
 		return nil, fmt.Errorf(
 			"%w: ballot (%v/%v) should be sharing atx with a reference ballot (%v/%v)",
 			pubsub.ErrValidationReject,

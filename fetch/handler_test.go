@@ -271,7 +271,7 @@ func newAtx(t *testing.T, published types.EpochID) *types.ActivationTx {
 		InnerActivationTxV1: wire.InnerActivationTxV1{
 			NIPostChallengeV1: wire.NIPostChallengeV1{
 				PublishEpoch: published,
-				PrevATXID:    types.RandomATXID(),
+				PrevATXID:    *types.RandomATXID(),
 			},
 			NumUnits: 2,
 			VRFNonce: &nonce,
@@ -306,7 +306,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 				for i := 0; i < 10; i++ {
 					vatx := newAtx(t, epoch)
 					require.NoError(t, atxs.Add(th.cdb, vatx))
-					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+					expected.AtxIDs = append(expected.AtxIDs, *vatx.ID())
 				}
 			}
 
@@ -356,7 +356,7 @@ func testHandleEpochInfoReqWithQueryCache(
 		vatx := newAtx(t, epoch)
 		require.NoError(t, atxs.Add(th.cdb, vatx))
 		atxs.AtxAdded(th.cdb, vatx)
-		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+		expected.AtxIDs = append(expected.AtxIDs, *vatx.ID())
 	}
 
 	qc := th.cdb.Executor.(interface{ QueryCount() int })
@@ -375,7 +375,7 @@ func testHandleEpochInfoReqWithQueryCache(
 	vatx := newAtx(t, epoch)
 	require.NoError(t, atxs.Add(th.cdb, vatx))
 	atxs.AtxAdded(th.cdb, vatx)
-	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
+	expected.AtxIDs = append(expected.AtxIDs, *vatx.ID())
 	require.Equal(t, 23, qc.QueryCount())
 
 	getInfo(th, epochBytes, &got)

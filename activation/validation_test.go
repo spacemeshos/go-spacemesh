@@ -66,7 +66,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 	t.Run("wrong commitmentAtxId", func(t *testing.T) {
 		t.Parallel()
 
-		commitmentAtxId := types.ATXID{1, 2, 3}
+		commitmentAtxId := &types.ATXID{1, 2, 3}
 		require.Error(t, v.VRFNonce(nodeId, commitmentAtxId, nonce, postCfg.LabelsPerUnit, initOpts.NumUnits))
 	})
 
@@ -105,7 +105,7 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 
 		challenge := wire.NIPostChallengeV1{
 			Sequence:         0,
-			PrevATXID:        types.EmptyATXID,
+			PrevATXID:        *types.EmptyATXID,
 			PublishEpoch:     2,
 			PositioningATXID: posAtxId,
 			CommitmentATXID:  &commitmentAtxId,
@@ -113,9 +113,9 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtx(commitmentAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
+		atxProvider.EXPECT().GetAtx(&commitmentAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
 
-		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
+		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, &goldenATXID)
 		require.NoError(t, err)
 	})
 
@@ -124,16 +124,16 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 
 		challenge := wire.NIPostChallengeV1{
 			Sequence:         0,
-			PrevATXID:        types.EmptyATXID,
+			PrevATXID:        *types.EmptyATXID,
 			PublishEpoch:     0,
-			PositioningATXID: types.RandomATXID(),
+			PositioningATXID: *types.RandomATXID(),
 			CommitmentATXID:  &goldenATXID,
 			InitialPost:      &wire.PostV1{},
 		}
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
+		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, &goldenATXID)
 		require.NoError(t, err)
 	})
 
@@ -143,22 +143,21 @@ func Test_Validation_InitialNIPostChallenge(t *testing.T) {
 		commitmentAtxId := types.ATXID{5, 6, 7}
 		challenge := wire.NIPostChallengeV1{
 			Sequence:         0,
-			PrevATXID:        types.EmptyATXID,
+			PrevATXID:        *types.EmptyATXID,
 			PublishEpoch:     1,
 			PositioningATXID: types.ATXID{1, 2, 3},
 			CommitmentATXID:  &commitmentAtxId,
 			InitialPost:      &wire.PostV1{},
 		}
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtx(commitmentAtxId).Return(&types.ActivationTx{PublishEpoch: 2}, nil)
+		atxProvider.EXPECT().GetAtx(&commitmentAtxId).Return(&types.ActivationTx{PublishEpoch: 2}, nil)
 
-		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, goldenATXID)
+		err := v.InitialNIPostChallengeV1(&challenge, atxProvider, &goldenATXID)
 		require.EqualError(t, err, "challenge pubepoch (1) must be after commitment atx pubepoch (2)")
 	})
 }
 
 func Test_Validation_NIPostChallenge(t *testing.T) {
-	// Arrange
 	layers := types.GetLayersPerEpoch()
 	types.SetLayersPerEpoch(layersPerEpochBig)
 	t.Cleanup(func() { types.SetLayersPerEpoch(layers) })
@@ -183,9 +182,9 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 
 		challenge := wire.NIPostChallengeV1{
 			Sequence:         prevAtx.Sequence + 1,
-			PrevATXID:        prevAtx.ID(),
+			PrevATXID:        *prevAtx.ID(),
 			PublishEpoch:     prevAtx.PublishEpoch + 1,
-			PositioningATXID: goldenAtxID,
+			PositioningATXID: *goldenAtxID,
 		}
 
 		err := v.NIPostChallengeV1(&challenge, wire.ActivationTxFromWireV1(prevAtx), sig.NodeID())
@@ -202,9 +201,9 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 
 		challenge := wire.NIPostChallengeV1{
 			Sequence:         prevAtx.Sequence + 1,
-			PrevATXID:        prevAtx.ID(),
+			PrevATXID:        *prevAtx.ID(),
 			PublishEpoch:     prevAtx.PublishEpoch + 1,
-			PositioningATXID: goldenAtxID,
+			PositioningATXID: *goldenAtxID,
 		}
 
 		err = v.NIPostChallengeV1(&challenge, wire.ActivationTxFromWireV1(prevAtx), sig.NodeID())
@@ -219,9 +218,9 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 
 		challenge := wire.NIPostChallengeV1{
 			Sequence:         prevAtx.Sequence + 1,
-			PrevATXID:        prevAtx.ID(),
+			PrevATXID:        *prevAtx.ID(),
 			PublishEpoch:     prevAtx.PublishEpoch,
-			PositioningATXID: goldenAtxID,
+			PositioningATXID: *goldenAtxID,
 		}
 
 		err := v.NIPostChallengeV1(&challenge, wire.ActivationTxFromWireV1(prevAtx), sig.NodeID())
@@ -238,9 +237,9 @@ func Test_Validation_NIPostChallenge(t *testing.T) {
 
 		challenge := wire.NIPostChallengeV1{
 			Sequence:         prevAtx.Sequence,
-			PrevATXID:        prevAtx.ID(),
+			PrevATXID:        *prevAtx.ID(),
 			PublishEpoch:     prevAtx.PublishEpoch + 1,
-			PositioningATXID: goldenAtxID,
+			PositioningATXID: *goldenAtxID,
 		}
 
 		err := v.NIPostChallengeV1(&challenge, wire.ActivationTxFromWireV1(prevAtx), sig.NodeID())
@@ -295,9 +294,9 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtx(posAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
+		atxProvider.EXPECT().GetAtx(&posAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
 
-		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 2)
+		err := v.PositioningAtx(&posAtxId, atxProvider, &goldenAtxId, 2)
 		require.NoError(t, err)
 	})
 
@@ -308,7 +307,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(goldenAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch())
+		err := v.PositioningAtx(&goldenAtxId, atxProvider, &goldenAtxId, types.LayerID(1012).GetEpoch())
 		require.NoError(t, err)
 	})
 
@@ -319,7 +318,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 
 		atxProvider := NewMockatxProvider(ctrl)
 
-		err := v.PositioningAtx(goldenAtxId, atxProvider, goldenAtxId, 5)
+		err := v.PositioningAtx(&goldenAtxId, atxProvider, &goldenAtxId, 5)
 		require.NoError(t, err)
 	})
 
@@ -330,9 +329,9 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtx(posAtxId).Return(nil, errors.New("db error"))
+		atxProvider.EXPECT().GetAtx(&posAtxId).Return(nil, errors.New("db error"))
 
-		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch())
+		err := v.PositioningAtx(&posAtxId, atxProvider, &goldenAtxId, types.LayerID(1012).GetEpoch())
 		require.ErrorIs(t, err, &ErrAtxNotFound{Id: posAtxId})
 		require.ErrorContains(t, err, "db error")
 	})
@@ -344,9 +343,9 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtx(posAtxId).Return(&types.ActivationTx{PublishEpoch: 5}, nil)
+		atxProvider.EXPECT().GetAtx(&posAtxId).Return(&types.ActivationTx{PublishEpoch: 5}, nil)
 
-		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 3)
+		err := v.PositioningAtx(&posAtxId, atxProvider, &goldenAtxId, 3)
 		require.EqualError(t, err, "positioning atx epoch (5) must be before 3")
 	})
 
@@ -357,9 +356,9 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		goldenAtxId := types.ATXID{9, 9, 9}
 
 		atxProvider := NewMockatxProvider(ctrl)
-		atxProvider.EXPECT().GetAtx(posAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
+		atxProvider.EXPECT().GetAtx(&posAtxId).Return(&types.ActivationTx{PublishEpoch: 1}, nil)
 
-		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, 10)
+		err := v.PositioningAtx(&posAtxId, atxProvider, &goldenAtxId, 10)
 		require.NoError(t, err)
 	})
 }
@@ -483,7 +482,7 @@ func TestVerifyChainDeps(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	invalidAtx := newInitialATXv1(t, goldenATXID)
+	invalidAtx := newInitialATXv1(t, &goldenATXID)
 	invalidAtx.Sign(signer)
 	vInvalidAtx := toAtx(t, invalidAtx)
 	vInvalidAtx.SetValidity(types.Invalid)
@@ -500,8 +499,8 @@ func TestVerifyChainDeps(t *testing.T) {
 		v.EXPECT().Verify(ctx, gomock.Any(), gomock.Any(), gomock.Any())
 
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
-		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
+		err = validator.VerifyChain(ctx, vAtx.ID(), &goldenATXID)
+		require.ErrorIs(t, err, &InvalidChainError{ID: *invalidAtx.ID()})
 	})
 
 	t.Run("invalid pos ATX", func(t *testing.T) {
@@ -515,15 +514,15 @@ func TestVerifyChainDeps(t *testing.T) {
 		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
 
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
-		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
+		err = validator.VerifyChain(ctx, vAtx.ID(), &goldenATXID)
+		require.ErrorIs(t, err, &InvalidChainError{ID: *invalidAtx.ID()})
 	})
 
 	t.Run("invalid commitment ATX", func(t *testing.T) {
 		commitmentAtxID := vInvalidAtx.ID()
-		atx := newInitialATXv1(t, goldenATXID)
+		atx := newInitialATXv1(t, &goldenATXID)
 		atx.Sign(signer)
-		atx.CommitmentATXID = &commitmentAtxID
+		atx.CommitmentATXID = commitmentAtxID
 		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
 
@@ -531,8 +530,8 @@ func TestVerifyChainDeps(t *testing.T) {
 		v := NewMockPostVerifier(ctrl)
 		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any())
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
-		require.ErrorIs(t, err, &InvalidChainError{ID: invalidAtx.ID()})
+		err = validator.VerifyChain(ctx, vAtx.ID(), &goldenATXID)
+		require.ErrorIs(t, err, &InvalidChainError{ID: *invalidAtx.ID()})
 	})
 
 	t.Run("with trusted node ID", func(t *testing.T) {
@@ -544,7 +543,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.WithTrustedID(signer.NodeID()))
+		err = validator.VerifyChain(ctx, vAtx.ID(), &goldenATXID, VerifyChainOpts.WithTrustedID(signer.NodeID()))
 		require.NoError(t, err)
 	})
 
@@ -558,12 +557,12 @@ func TestVerifyChainDeps(t *testing.T) {
 		v := NewMockPostVerifier(ctrl)
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		before := time.Now().Add(10 * time.Second)
-		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.AssumeValidBefore(before))
+		err = validator.VerifyChain(ctx, vAtx.ID(), &goldenATXID, VerifyChainOpts.AssumeValidBefore(before))
 		require.NoError(t, err)
 	})
 
 	t.Run("invalid top-level", func(t *testing.T) {
-		atx := newInitialATXv1(t, goldenATXID)
+		atx := newInitialATXv1(t, &goldenATXID)
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
 		require.NoError(t, atxs.Add(db, vAtx))
@@ -573,13 +572,13 @@ func TestVerifyChainDeps(t *testing.T) {
 		expected := errors.New("post is invalid")
 		v.EXPECT().Verify(ctx, (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).Return(expected)
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
-		require.ErrorIs(t, err, &InvalidChainError{ID: vAtx.ID()})
+		err = validator.VerifyChain(ctx, vAtx.ID(), &goldenATXID)
+		require.ErrorIs(t, err, &InvalidChainError{ID: *vAtx.ID()})
 		require.ErrorIs(t, err, expected)
 	})
 
 	t.Run("initial V2 ATX", func(t *testing.T) {
-		watx := newInitialATXv2(t, goldenATXID)
+		watx := newInitialATXv2(t, &goldenATXID)
 		watx.Sign(signer)
 		atx := &types.ActivationTx{
 			PublishEpoch: watx.PublishEpoch,
@@ -596,11 +595,11 @@ func TestVerifyChainDeps(t *testing.T) {
 		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
 		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, watx.ID(), goldenATXID)
+		err = validator.VerifyChain(ctx, watx.ID(), &goldenATXID)
 		require.NoError(t, err)
 	})
 	t.Run("non-initial V2 ATX", func(t *testing.T) {
-		initialAtx := newInitialATXv1(t, goldenATXID)
+		initialAtx := newInitialATXv1(t, &goldenATXID)
 		initialAtx.Sign(signer)
 		require.NoError(t, atxs.Add(db, toAtx(t, initialAtx)))
 
@@ -622,7 +621,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		v.EXPECT().Verify(ctx, (*shared.Proof)(initialAtx.NIPost.Post), gomock.Any(), gomock.Any())
 		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, watx.ID(), goldenATXID)
+		err = validator.VerifyChain(ctx, watx.ID(), &goldenATXID)
 		require.NoError(t, err)
 	})
 }
@@ -635,13 +634,13 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 
 	// The previous and positioning ATXs of the verified ATX will be a checkpointed (golden) ATX.
-	checkpointedAtx := newInitialATXv1(t, goldenATXID)
+	checkpointedAtx := newInitialATXv1(t, &goldenATXID)
 	checkpointedAtx.Sign(signer)
 	vCheckpointedAtx := toAtx(t, checkpointedAtx)
 	require.NoError(t, atxs.AddCheckpointed(db, &atxs.CheckpointAtx{
 		ID:             vCheckpointedAtx.ID(),
 		Epoch:          vCheckpointedAtx.PublishEpoch,
-		CommitmentATX:  *vCheckpointedAtx.CommitmentATX,
+		CommitmentATX:  vCheckpointedAtx.CommitmentATX,
 		VRFNonce:       vCheckpointedAtx.VRFNonce,
 		NumUnits:       vCheckpointedAtx.NumUnits,
 		BaseTickHeight: vCheckpointedAtx.BaseTickHeight,
@@ -651,7 +650,7 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 		Coinbase:       vCheckpointedAtx.Coinbase,
 	}))
 
-	atx := newChainedActivationTxV1(t, checkpointedAtx, checkpointedAtx.ID())
+	atx := newChainedActivationTxV1(t, checkpointedAtx, *checkpointedAtx.ID())
 	atx.Sign(signer)
 	vAtx := toAtx(t, atx)
 	require.NoError(t, atxs.Add(db, vAtx))
@@ -661,7 +660,7 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 	v.EXPECT().Verify(ctx, gomock.Any(), gomock.Any(), gomock.Any())
 
 	validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-	err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID)
+	err = validator.VerifyChain(ctx, vAtx.ID(), &goldenATXID)
 	require.NoError(t, err)
 }
 

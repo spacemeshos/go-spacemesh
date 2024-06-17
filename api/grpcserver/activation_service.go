@@ -54,7 +54,7 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 		)
 	}
 
-	atxId := types.ATXID(types.BytesToHash(request.Id))
+	atxId := types.AtxIdFromHash32(types.BytesToHash(request.Id))
 	atx, err := s.atxProvider.GetAtx(atxId)
 	if err != nil || atx == nil {
 		ctxzap.Debug(ctx, "failed to get ATX",

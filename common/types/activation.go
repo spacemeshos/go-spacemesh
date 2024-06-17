@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/hex"
 	"strconv"
 	"time"
@@ -36,28 +37,50 @@ const (
 	ATXIDSize = Hash32Length
 )
 
+func AtxIdFromHash32(h Hash32) *ATXID {
+	v := ATXID(h)
+	return &v
+}
+
+func NewAtxId(b []byte) *ATXID {
+	v := ATXID(b)
+	return &v
+}
+
 // String implements stringer interface.
-func (t ATXID) String() string {
+func (t *ATXID) String() string {
 	return t.ShortString()
 }
 
 // ShortString returns the first few characters of the ID, for logging purposes.
-func (t ATXID) ShortString() string {
-	return t.Hash32().ShortString()
+func (t *ATXID) ShortString() string {
+	if t.Empty() {
+		return "0000000000"
+	}
+	return hex.EncodeToString(t[:5])
 }
 
 // Hash32 returns the ATXID as a Hash32.
-func (t ATXID) Hash32() Hash32 {
-	return Hash32(t)
+func (t *ATXID) Hash32() Hash32 {
+	v := *t
+	return Hash32(v)
 }
 
 // Bytes returns the ATXID as a byte slice.
-func (t ATXID) Bytes() []byte {
-	return Hash32(t).Bytes()
+func (t *ATXID) Bytes() []byte {
+	return t[:]
+}
+
+func (t *ATXID) Equal(a *ATXID) bool {
+	return bytes.Equal(t[:], a[:])
+}
+
+func (t *ATXID) Empty() bool {
+	return t == nil || len(t[:]) == 0 || bytes.Equal(t[:], EmptyATXID[:])
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
+func (t *ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
 
 // EncodeScale implements scale codec interface.
 func (t *ATXID) EncodeScale(e *scale.Encoder) (int, error) {
@@ -78,7 +101,7 @@ func (t *ATXID) UnmarshalText(buf []byte) error {
 }
 
 // EmptyATXID is a canonical empty ATXID.
-var EmptyATXID = ATXID{}
+var EmptyATXID = &ATXID{}
 
 type ATXIDs []ATXID
 
@@ -189,7 +212,7 @@ type ActivationTx struct {
 	AtxBlob
 
 	golden   bool
-	id       ATXID     // non-exported cache of the ATXID
+	id       *ATXID    // non-exported cache of the ATXID
 	received time.Time // time received by node, gossiped or synced
 	validity Validity  // whether the chain is fully verified and OK
 }
@@ -281,12 +304,12 @@ func (atx *ActivationTx) ShortString() string {
 }
 
 // ID returns the ATX's ID.
-func (atx *ActivationTx) ID() ATXID {
+func (atx *ActivationTx) ID() *ATXID {
 	return atx.id
 }
 
 // SetID sets the ATXID in this ATX's cache.
-func (atx *ActivationTx) SetID(id ATXID) {
+func (atx *ActivationTx) SetID(id *ATXID) {
 	atx.id = id
 }
 
@@ -377,8 +400,8 @@ func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 // ToATXIDs returns a slice of ATXID corresponding to the given activation tx.
-func ToATXIDs(atxs []*ActivationTx) []ATXID {
-	ids := make([]ATXID, 0, len(atxs))
+func ToATXIDs(atxs []*ActivationTx) []*ATXID {
+	ids := make([]*ATXID, 0, len(atxs))
 	for _, atx := range atxs {
 		ids = append(ids, atx.ID())
 	}
@@ -387,6 +410,14 @@ func ToATXIDs(atxs []*ActivationTx) []ATXID {
 
 // ATXIDsToHashes turns a list of ATXID into their Hash32 representation.
 func ATXIDsToHashes(ids []ATXID) []Hash32 {
+	hashes := make([]Hash32, 0, len(ids))
+	for _, id := range ids {
+		hashes = append(hashes, id.Hash32())
+	}
+	return hashes
+}
+
+func ATXIDsPtrToHashes(ids []*ATXID) []Hash32 {
 	hashes := make([]Hash32, 0, len(ids))
 	for _, id := range ids {
 		hashes = append(hashes, id.Hash32())

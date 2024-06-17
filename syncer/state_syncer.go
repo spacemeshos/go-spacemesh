@@ -327,7 +327,7 @@ func (s *Syncer) ensureMeshAgreement(
 			)
 			continue
 		}
-		missing := s.tortoise.GetMissingActiveSet(diffLayer.GetEpoch(), ed.AtxIDs)
+		missing := s.tortoise.GetMissingActiveSet(diffLayer.GetEpoch(), types.SliceToPtrSlice(ed.AtxIDs))
 		if len(missing) > 0 {
 			s.logger.WithContext(ctx).With().Debug("fetching missing atxs from peer",
 				log.Stringer("peer", peer),

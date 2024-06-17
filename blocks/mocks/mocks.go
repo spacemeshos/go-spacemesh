@@ -497,10 +497,10 @@ func (m *MocktortoiseProvider) EXPECT() *MocktortoiseProviderMockRecorder {
 }
 
 // GetMissingActiveSet mocks base method.
-func (m *MocktortoiseProvider) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
+func (m *MocktortoiseProvider) GetMissingActiveSet(arg0 types.EpochID, arg1 []*types.ATXID) []*types.ATXID {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMissingActiveSet", arg0, arg1)
-	ret0, _ := ret[0].([]types.ATXID)
+	ret0, _ := ret[0].([]*types.ATXID)
 	return ret0
 }
 
@@ -517,19 +517,19 @@ type MocktortoiseProviderGetMissingActiveSetCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MocktortoiseProviderGetMissingActiveSetCall) Return(arg0 []types.ATXID) *MocktortoiseProviderGetMissingActiveSetCall {
+func (c *MocktortoiseProviderGetMissingActiveSetCall) Return(arg0 []*types.ATXID) *MocktortoiseProviderGetMissingActiveSetCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocktortoiseProviderGetMissingActiveSetCall) Do(f func(types.EpochID, []types.ATXID) []types.ATXID) *MocktortoiseProviderGetMissingActiveSetCall {
+func (c *MocktortoiseProviderGetMissingActiveSetCall) Do(f func(types.EpochID, []*types.ATXID) []*types.ATXID) *MocktortoiseProviderGetMissingActiveSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocktortoiseProviderGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []types.ATXID) []types.ATXID) *MocktortoiseProviderGetMissingActiveSetCall {
+func (c *MocktortoiseProviderGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []*types.ATXID) []*types.ATXID) *MocktortoiseProviderGetMissingActiveSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

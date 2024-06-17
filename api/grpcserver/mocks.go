@@ -874,7 +874,7 @@ func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
 }
 
 // GetAtx mocks base method.
-func (m *MockatxProvider) GetAtx(id types.ATXID) (*types.ActivationTx, error) {
+func (m *MockatxProvider) GetAtx(id *types.ATXID) (*types.ActivationTx, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAtx", id)
 	ret0, _ := ret[0].(*types.ActivationTx)
@@ -901,13 +901,13 @@ func (c *MockatxProviderGetAtxCall) Return(arg0 *types.ActivationTx, arg1 error)
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderGetAtxCall) Do(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxCall {
+func (c *MockatxProviderGetAtxCall) Do(f func(*types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxCall {
+func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(*types.ATXID) (*types.ActivationTx, error)) *MockatxProviderGetAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -952,10 +952,10 @@ func (c *MockatxProviderGetMalfeasanceProofCall) DoAndReturn(f func(types.NodeID
 }
 
 // MaxHeightAtx mocks base method.
-func (m *MockatxProvider) MaxHeightAtx() (types.ATXID, error) {
+func (m *MockatxProvider) MaxHeightAtx() (*types.ATXID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxHeightAtx")
-	ret0, _ := ret[0].(types.ATXID)
+	ret0, _ := ret[0].(*types.ATXID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -973,19 +973,19 @@ type MockatxProviderMaxHeightAtxCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxProviderMaxHeightAtxCall) Return(arg0 types.ATXID, arg1 error) *MockatxProviderMaxHeightAtxCall {
+func (c *MockatxProviderMaxHeightAtxCall) Return(arg0 *types.ATXID, arg1 error) *MockatxProviderMaxHeightAtxCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderMaxHeightAtxCall) Do(f func() (types.ATXID, error)) *MockatxProviderMaxHeightAtxCall {
+func (c *MockatxProviderMaxHeightAtxCall) Do(f func() (*types.ATXID, error)) *MockatxProviderMaxHeightAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderMaxHeightAtxCall) DoAndReturn(f func() (types.ATXID, error)) *MockatxProviderMaxHeightAtxCall {
+func (c *MockatxProviderMaxHeightAtxCall) DoAndReturn(f func() (*types.ATXID, error)) *MockatxProviderMaxHeightAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1978,10 +1978,10 @@ func (m *Mockoracle) EXPECT() *MockoracleMockRecorder {
 }
 
 // ActiveSet mocks base method.
-func (m *Mockoracle) ActiveSet(arg0 context.Context, arg1 types.EpochID) ([]types.ATXID, error) {
+func (m *Mockoracle) ActiveSet(arg0 context.Context, arg1 types.EpochID) ([]*types.ATXID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ActiveSet", arg0, arg1)
-	ret0, _ := ret[0].([]types.ATXID)
+	ret0, _ := ret[0].([]*types.ATXID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1999,19 +1999,19 @@ type MockoracleActiveSetCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockoracleActiveSetCall) Return(arg0 []types.ATXID, arg1 error) *MockoracleActiveSetCall {
+func (c *MockoracleActiveSetCall) Return(arg0 []*types.ATXID, arg1 error) *MockoracleActiveSetCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockoracleActiveSetCall) Do(f func(context.Context, types.EpochID) ([]types.ATXID, error)) *MockoracleActiveSetCall {
+func (c *MockoracleActiveSetCall) Do(f func(context.Context, types.EpochID) ([]*types.ATXID, error)) *MockoracleActiveSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockoracleActiveSetCall) DoAndReturn(f func(context.Context, types.EpochID) ([]types.ATXID, error)) *MockoracleActiveSetCall {
+func (c *MockoracleActiveSetCall) DoAndReturn(f func(context.Context, types.EpochID) ([]*types.ATXID, error)) *MockoracleActiveSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

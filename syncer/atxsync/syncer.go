@@ -216,7 +216,7 @@ func (s *Syncer) downloadAtxs(
 	updates <-chan epochUpdate,
 ) error {
 	var (
-		batch                = make([]types.ATXID, 0, s.cfg.AtxsBatch)
+		batch                = make([]*types.ATXID, 0, s.cfg.AtxsBatch)
 		downloaded           = map[types.ATXID]bool{}
 		previouslyDownloaded = 0
 		start                = time.Now()
@@ -267,7 +267,7 @@ func (s *Syncer) downloadAtxs(
 			if downloaded[atx] {
 				continue
 			}
-			exists, err := atxs.Has(s.db, atx)
+			exists, err := atxs.Has(s.db, &atx)
 			if err != nil {
 				return err
 			}
@@ -279,7 +279,7 @@ func (s *Syncer) downloadAtxs(
 				delete(state, atx)
 				continue
 			}
-			batch = append(batch, atx)
+			batch = append(batch, &atx)
 			if len(batch) == cap(batch) {
 				break
 			}
@@ -311,13 +311,13 @@ func (s *Syncer) downloadAtxs(
 				batchError := &fetch.BatchError{}
 				if errors.As(err, &batchError) {
 					for hash, err := range batchError.Errors {
-						if _, exists := state[types.ATXID(hash)]; !exists {
+						if _, exists := state[*types.AtxIdFromHash32(hash)]; !exists {
 							continue
 						}
 						if errors.Is(err, fetch.ErrExceedMaxRetries) {
-							state[types.ATXID(hash)]++
+							state[*types.AtxIdFromHash32(hash)]++
 						} else if errors.Is(err, pubsub.ErrValidationReject) {
-							state[types.ATXID(hash)] = s.cfg.RequestsLimit
+							state[*types.AtxIdFromHash32(hash)] = s.cfg.RequestsLimit
 						}
 					}
 				}

@@ -7,7 +7,7 @@ type BallotTortoiseData struct {
 	Smesher       NodeID         `json:"node"`
 	Layer         LayerID        `json:"lid"`
 	Eligibilities uint32         `json:"elig"`
-	AtxID         ATXID          `json:"atxid"`
+	AtxID         *ATXID         `json:"atxid"`
 	Opinion       Opinion        `json:"opinion"`
 	EpochData     *ReferenceData `json:"epochdata"`
 	Ref           *BallotID      `json:"ref"`

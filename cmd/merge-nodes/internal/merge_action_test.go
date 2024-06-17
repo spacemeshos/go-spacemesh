@@ -220,8 +220,8 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	sig1Ch := &types.NIPostChallenge{
 		PublishEpoch:   types.EpochID(rand.Uint32()),
 		Sequence:       rand.Uint64(),
-		PrevATXID:      types.RandomATXID(),
-		PositioningATX: types.RandomATXID(),
+		PrevATXID:      *types.RandomATXID(),
+		PositioningATX: *types.RandomATXID(),
 	}
 	err = nipost.AddChallenge(dstDB, sig1.NodeID(), sig1Ch)
 	require.NoError(t, err)
@@ -274,8 +274,8 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	sig2Ch := &types.NIPostChallenge{
 		PublishEpoch:   types.EpochID(rand.Uint32()),
 		Sequence:       rand.Uint64(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  &cAtx,
+		PositioningATX: *types.RandomATXID(),
+		CommitmentATX:  cAtx,
 		InitialPost: &types.Post{
 			Nonce:   rand.Uint32(),
 			Pow:     rand.Uint64(),
@@ -375,8 +375,8 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 	sigCh := &types.NIPostChallenge{
 		PublishEpoch:   types.EpochID(rand.Uint32()),
 		Sequence:       rand.Uint64(),
-		PositioningATX: types.RandomATXID(),
-		CommitmentATX:  &cAtx,
+		PositioningATX: *types.RandomATXID(),
+		CommitmentATX:  cAtx,
 		InitialPost: &types.Post{
 			Nonce:   rand.Uint32(),
 			Pow:     rand.Uint64(),

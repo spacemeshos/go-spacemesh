@@ -71,6 +71,9 @@ func checkpointDB(
 		if err != nil {
 			return nil, fmt.Errorf("atxs snapshot commitment: %w", err)
 		}
+		if atxSnapshot[i].CommitmentATX == nil {
+			atxSnapshot[i].CommitmentATX = new(types.ATXID)
+		}
 		copy(atxSnapshot[i].CommitmentATX[:], commitmentAtx[:])
 	}
 	for _, catx := range atxSnapshot {

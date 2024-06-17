@@ -205,7 +205,7 @@ func (c *CertifierClient) obtainPostFromLastAtx(ctx context.Context, nodeId type
 		if commitmentAtx, err := atxs.CommitmentATX(c.db, nodeId); err != nil {
 			return nil, fmt.Errorf("failed to retrieve commitment ATX: %w", err)
 		} else {
-			atx.CommitmentATX = &commitmentAtx
+			atx.CommitmentATX = commitmentAtx
 		}
 	}
 
@@ -328,7 +328,7 @@ func (c *CertifierClient) Certify(
 }
 
 // load NIPoST for the given ATX from the database.
-func loadPost(ctx context.Context, db sql.Executor, id types.ATXID) (*types.Post, []byte, error) {
+func loadPost(ctx context.Context, db sql.Executor, id *types.ATXID) (*types.Post, []byte, error) {
 	var blob sql.Blob
 	version, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
 	if err != nil {

@@ -31,6 +31,6 @@ func Test_NoATXv1IDCollisions(t *testing.T) {
 		f.Fuzz(atx)
 		id := atx.ID()
 		require.NotContains(t, atxIDs, id, "ATX ID collision")
-		atxIDs = append(atxIDs, id)
+		atxIDs = append(atxIDs, *id)
 	}
 }

@@ -43,10 +43,10 @@ func (m *MockTortoise) EXPECT() *MockTortoiseMockRecorder {
 }
 
 // GetMissingActiveSet mocks base method.
-func (m *MockTortoise) GetMissingActiveSet(arg0 types.EpochID, arg1 []types.ATXID) []types.ATXID {
+func (m *MockTortoise) GetMissingActiveSet(arg0 types.EpochID, arg1 []*types.ATXID) []*types.ATXID {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMissingActiveSet", arg0, arg1)
-	ret0, _ := ret[0].([]types.ATXID)
+	ret0, _ := ret[0].([]*types.ATXID)
 	return ret0
 }
 
@@ -63,19 +63,19 @@ type MockTortoiseGetMissingActiveSetCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockTortoiseGetMissingActiveSetCall) Return(arg0 []types.ATXID) *MockTortoiseGetMissingActiveSetCall {
+func (c *MockTortoiseGetMissingActiveSetCall) Return(arg0 []*types.ATXID) *MockTortoiseGetMissingActiveSetCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTortoiseGetMissingActiveSetCall) Do(f func(types.EpochID, []types.ATXID) []types.ATXID) *MockTortoiseGetMissingActiveSetCall {
+func (c *MockTortoiseGetMissingActiveSetCall) Do(f func(types.EpochID, []*types.ATXID) []*types.ATXID) *MockTortoiseGetMissingActiveSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTortoiseGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []types.ATXID) []types.ATXID) *MockTortoiseGetMissingActiveSetCall {
+func (c *MockTortoiseGetMissingActiveSetCall) DoAndReturn(f func(types.EpochID, []*types.ATXID) []*types.ATXID) *MockTortoiseGetMissingActiveSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -157,7 +157,7 @@ func (c *MockTortoiseOnAppliedCall) DoAndReturn(f func(types.LayerID, types.Hash
 }
 
 // OnAtx mocks base method.
-func (m *MockTortoise) OnAtx(arg0 types.EpochID, arg1 types.ATXID, arg2 *atxsdata.ATX) {
+func (m *MockTortoise) OnAtx(arg0 types.EpochID, arg1 *types.ATXID, arg2 *atxsdata.ATX) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnAtx", arg0, arg1, arg2)
 }
@@ -181,13 +181,13 @@ func (c *MockTortoiseOnAtxCall) Return() *MockTortoiseOnAtxCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTortoiseOnAtxCall) Do(f func(types.EpochID, types.ATXID, *atxsdata.ATX)) *MockTortoiseOnAtxCall {
+func (c *MockTortoiseOnAtxCall) Do(f func(types.EpochID, *types.ATXID, *atxsdata.ATX)) *MockTortoiseOnAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTortoiseOnAtxCall) DoAndReturn(f func(types.EpochID, types.ATXID, *atxsdata.ATX)) *MockTortoiseOnAtxCall {
+func (c *MockTortoiseOnAtxCall) DoAndReturn(f func(types.EpochID, *types.ATXID, *atxsdata.ATX)) *MockTortoiseOnAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -39,26 +39,26 @@ var allAtxs = map[types.NodeID][]*types.ActivationTx{
 		newAtx(types.ATXID{14}, types.ATXID{13}, nil, 4, 3, 123, types.BytesToNodeID([]byte("smesher1"))),
 		newAtx(types.ATXID{13}, types.ATXID{12}, nil, 3, 2, 123, types.BytesToNodeID([]byte("smesher1"))),
 		newAtx(types.ATXID{12}, types.ATXID{11}, nil, 2, 1, 123, types.BytesToNodeID([]byte("smesher1"))),
-		newAtx(types.ATXID{11}, types.EmptyATXID,
+		newAtx(types.ATXID{11}, *types.EmptyATXID,
 			&types.ATXID{1}, 1, 0, 123, types.BytesToNodeID([]byte("smesher1"))),
 	},
 
 	// smesher 2 has 1 ATX in epoch 7
 	types.BytesToNodeID([]byte("smesher2")): {
-		newAtx(types.ATXID{27}, types.EmptyATXID, &types.ATXID{2}, 7, 0, 152,
+		newAtx(types.ATXID{27}, *types.EmptyATXID, &types.ATXID{2}, 7, 0, 152,
 			types.BytesToNodeID([]byte("smesher2"))),
 	},
 
 	// smesher 3 has 1 ATX in epoch 2
 	types.BytesToNodeID([]byte("smesher3")): {
-		newAtx(types.ATXID{32}, types.EmptyATXID, &types.ATXID{3}, 2, 0, 211,
+		newAtx(types.ATXID{32}, *types.EmptyATXID, &types.ATXID{3}, 2, 0, 211,
 			types.BytesToNodeID([]byte("smesher3"))),
 	},
 
 	// smesher 4 has 1 ATX in epoch 3 and one in epoch 7
 	types.BytesToNodeID([]byte("smesher4")): {
 		newAtx(types.ATXID{47}, types.ATXID{43}, nil, 7, 1, 420, types.BytesToNodeID([]byte("smesher4"))),
-		newAtx(types.ATXID{43}, types.EmptyATXID, &types.ATXID{4}, 4, 0, 420,
+		newAtx(types.ATXID{43}, *types.EmptyATXID, &types.ATXID{4}, 4, 0, 420,
 			types.BytesToNodeID([]byte("smesher4"))),
 	},
 }
@@ -211,7 +211,7 @@ func newAtx(
 		SmesherID:     nodeID,
 		VRFNonce:      types.VRFPostIndex(vrfnonce),
 	}
-	atx.SetID(id)
+	atx.SetID(&id)
 	atx.SetReceived(time.Now().Local())
 	return atx
 }
@@ -249,8 +249,8 @@ func createMesh(t *testing.T, db *sql.Database, miners map[types.NodeID][]*types
 
 	// smesher 5 is malicious and equivocated in epoch 7
 	bad := types.BytesToNodeID([]byte("smesher5"))
-	require.NoError(t, atxs.Add(db, newAtx(types.ATXID{83}, types.EmptyATXID, &types.ATXID{27}, 7, 0, 113, bad)))
-	require.NoError(t, atxs.Add(db, newAtx(types.ATXID{97}, types.EmptyATXID, &types.ATXID{16}, 7, 0, 113, bad)))
+	require.NoError(t, atxs.Add(db, newAtx(types.ATXID{83}, *types.EmptyATXID, &types.ATXID{27}, 7, 0, 113, bad)))
+	require.NoError(t, atxs.Add(db, newAtx(types.ATXID{97}, *types.EmptyATXID, &types.ATXID{16}, 7, 0, 113, bad)))
 	require.NoError(t, identities.SetMalicious(db, bad, []byte("bad"), time.Now()))
 }
 
@@ -347,7 +347,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 			snapshot := types.LayerID(5)
 			var atx *types.ActivationTx
 			if tc.missingCommitment {
-				atx = newAtx(types.ATXID{13}, types.EmptyATXID,
+				atx = newAtx(types.ATXID{13}, *types.EmptyATXID,
 					nil, 2, 1, 11, types.BytesToNodeID([]byte("smesher1")))
 			}
 			createMesh(t, db, map[types.NodeID][]*types.ActivationTx{

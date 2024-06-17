@@ -161,7 +161,7 @@ func (nb *NIPostBuilder) Proof(
 			}
 			if err := nb.validator.PostV2(ctx,
 				nodeID,
-				info.CommitmentATX,
+				&info.CommitmentATX,
 				postChallenge.InitialPost,
 				postshared.ZeroChallenge,
 				info.NumUnits,

@@ -174,7 +174,7 @@ func (c *ConfigTrace) Run(r *traceRunner) error {
 }
 
 type AtxTrace struct {
-	ID          types.ATXID   `json:"id"`
+	ID          *types.ATXID  `json:"id"`
 	TargetEpoch types.EpochID `json:"target"`
 	Atx         *atxsdata.ATX `json:",inline"`
 }

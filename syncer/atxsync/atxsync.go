@@ -14,8 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-func getMissing(db *sql.Database, set []types.ATXID) ([]types.ATXID, error) {
-	missing := []types.ATXID{}
+func getMissing(db *sql.Database, set []*types.ATXID) ([]*types.ATXID, error) {
+	missing := []*types.ATXID{}
 	for _, atx := range set {
 		exist, err := atxs.Has(db, atx)
 		if err != nil {
@@ -37,7 +37,7 @@ func Download(
 	logger *zap.Logger,
 	db *sql.Database,
 	fetcher system.AtxFetcher,
-	set []types.ATXID,
+	set []*types.ATXID,
 ) error {
 	total := len(set)
 	for {

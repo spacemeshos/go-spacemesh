@@ -224,7 +224,7 @@ func TestCodec_InvalidPrevATX(t *testing.T) {
 		InnerActivationTxV1: awire.InnerActivationTxV1{
 			NIPostChallengeV1: awire.NIPostChallengeV1{
 				PublishEpoch: lid.GetEpoch() - 1,
-				PrevATXID:    prevATXID,
+				PrevATXID:    *prevATXID,
 			},
 			Coinbase: types.Address{1, 2, 3},
 			NumUnits: 10,
@@ -236,7 +236,7 @@ func TestCodec_InvalidPrevATX(t *testing.T) {
 		InnerActivationTxV1: awire.InnerActivationTxV1{
 			NIPostChallengeV1: awire.NIPostChallengeV1{
 				PublishEpoch: lid.GetEpoch(),
-				PrevATXID:    prevATXID,
+				PrevATXID:    *prevATXID,
 			},
 			Coinbase: types.Address{1, 2, 3},
 			NumUnits: 10,

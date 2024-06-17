@@ -49,7 +49,7 @@ func TestGet(t *testing.T) {
 		require.Equal(t, want, got)
 	}
 
-	_, err := atxs.Get(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	_, err := atxs.Get(db, types.AtxIdFromHash32(types.CalcHash32([]byte("0"))))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -67,7 +67,7 @@ func TestAll(t *testing.T) {
 	var expected []types.ATXID
 	for _, atx := range atxList {
 		require.NoError(t, atxs.Add(db, atx))
-		expected = append(expected, atx.ID())
+		expected = append(expected, *atx.ID())
 	}
 
 	all, err := atxs.All(db)
@@ -96,7 +96,7 @@ func TestHasID(t *testing.T) {
 		require.True(t, has)
 	}
 
-	has, err := atxs.Has(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	has, err := atxs.Has(db, types.AtxIdFromHash32(types.CalcHash32([]byte("0"))))
 	require.NoError(t, err)
 	require.False(t, has)
 }
@@ -185,16 +185,16 @@ func TestLatestN(t *testing.T) {
 			n:    3,
 			expected: map[types.NodeID]map[types.ATXID]struct{}{
 				sig1.NodeID(): {
-					atx1.ID(): struct{}{},
-					atx2.ID(): struct{}{},
+					*atx1.ID(): struct{}{},
+					*atx2.ID(): struct{}{},
 				},
 				sig2.NodeID(): {
-					atx3.ID(): struct{}{},
-					atx4.ID(): struct{}{},
-					atx5.ID(): struct{}{},
+					*atx3.ID(): struct{}{},
+					*atx4.ID(): struct{}{},
+					*atx5.ID(): struct{}{},
 				},
 				sig3.NodeID(): {
-					atx6.ID(): struct{}{},
+					*atx6.ID(): struct{}{},
 				},
 			},
 		},
@@ -203,15 +203,15 @@ func TestLatestN(t *testing.T) {
 			n:    2,
 			expected: map[types.NodeID]map[types.ATXID]struct{}{
 				sig1.NodeID(): {
-					atx1.ID(): struct{}{},
-					atx2.ID(): struct{}{},
+					*atx1.ID(): struct{}{},
+					*atx2.ID(): struct{}{},
 				},
 				sig2.NodeID(): {
-					atx4.ID(): struct{}{},
-					atx5.ID(): struct{}{},
+					*atx4.ID(): struct{}{},
+					*atx5.ID(): struct{}{},
 				},
 				sig3.NodeID(): {
-					atx6.ID(): struct{}{},
+					*atx6.ID(): struct{}{},
 				},
 			},
 		},
@@ -220,13 +220,13 @@ func TestLatestN(t *testing.T) {
 			n:    1,
 			expected: map[types.NodeID]map[types.ATXID]struct{}{
 				sig1.NodeID(): {
-					atx2.ID(): struct{}{},
+					*atx2.ID(): struct{}{},
 				},
 				sig2.NodeID(): {
-					atx5.ID(): struct{}{},
+					*atx5.ID(): struct{}{},
 				},
 				sig3.NodeID(): {
-					atx6.ID(): struct{}{},
+					*atx6.ID(): struct{}{},
 				},
 			},
 		},
@@ -235,7 +235,7 @@ func TestLatestN(t *testing.T) {
 			got, err := atxs.LatestN(db, tc.n)
 			require.NoError(t, err)
 			for _, catx := range got {
-				delete(tc.expected[catx.SmesherID], catx.ID)
+				delete(tc.expected[catx.SmesherID], *catx.ID)
 				if len(tc.expected[catx.SmesherID]) == 0 {
 					delete(tc.expected, catx.SmesherID)
 				}
@@ -380,7 +380,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 
 	ids1, err := atxs.GetIDsByEpoch(ctx, db, e1)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids1)
+	require.ElementsMatch(t, []*types.ATXID{atx1.ID()}, ids1)
 
 	ids2, err := atxs.GetIDsByEpoch(ctx, db, e2)
 	require.NoError(t, err)
@@ -389,7 +389,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 
 	ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
+	require.ElementsMatch(t, []*types.ATXID{atx4.ID()}, ids3)
 }
 
 func TestGetIDsByEpochCached(t *testing.T) {
@@ -423,7 +423,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		ids1, err := atxs.GetIDsByEpoch(ctx, db, e1)
 		require.NoError(t, err)
-		require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids1)
+		require.ElementsMatch(t, []*types.ATXID{atx1.ID()}, ids1)
 		require.Equal(t, 9, db.QueryCount())
 	}
 
@@ -438,7 +438,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
 		require.NoError(t, err)
-		require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
+		require.ElementsMatch(t, []*types.ATXID{atx4.ID()}, ids3)
 		require.Equal(t, 11, db.QueryCount())
 	}
 
@@ -451,7 +451,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 
 	ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
+	require.ElementsMatch(t, []*types.ATXID{atx4.ID(), atx5.ID()}, ids3)
 	require.Equal(t, 13, db.QueryCount()) // not incremented after Add
 
 	require.Error(t, db.WithTx(context.Background(), func(tx *sql.Tx) error {
@@ -462,7 +462,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	// atx6 should not be in the cache
 	ids4, err := atxs.GetIDsByEpoch(ctx, db, e3)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids4)
+	require.ElementsMatch(t, []*types.ATXID{atx4.ID(), atx5.ID()}, ids4)
 	require.Equal(t, 16, db.QueryCount()) // not incremented after Add
 }
 
@@ -477,7 +477,7 @@ func Test_IterateAtxsWithMalfeasance(t *testing.T) {
 		atx := newAtx(t, sig, withPublishEpoch(types.EpochID(i/4)))
 		require.NoError(t, atxs.Add(db, atx))
 		malicious := (i % 2) == 0
-		m[atx.ID()] = malicious
+		m[*atx.ID()] = malicious
 		if malicious {
 			require.NoError(t, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
 		}
@@ -485,9 +485,9 @@ func Test_IterateAtxsWithMalfeasance(t *testing.T) {
 
 	n := 0
 	err := atxs.IterateAtxsWithMalfeasance(db, e1, func(atx *types.ActivationTx, malicious bool) bool {
-		require.Contains(t, m, atx.ID())
-		require.Equal(t, m[atx.ID()], malicious)
-		delete(m, atx.ID())
+		require.Contains(t, m, *atx.ID())
+		require.Equal(t, m[*atx.ID()], malicious)
+		delete(m, *atx.ID())
 		n++
 		return n < 2
 	})
@@ -507,7 +507,7 @@ func Test_IterateAtxIdsWithMalfeasance(t *testing.T) {
 		atx := newAtx(t, sig, withPublishEpoch(types.EpochID(i/4)))
 		require.NoError(t, atxs.Add(db, atx))
 		malicious := (i % 2) == 0
-		m[atx.ID()] = malicious
+		m[*atx.ID()] = malicious
 		if malicious {
 			require.NoError(t, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
 		}
@@ -536,7 +536,7 @@ func TestVRFNonce(t *testing.T) {
 	atx1 := newAtx(t, sig, withPublishEpoch(20), withNonce(333))
 	require.NoError(t, atxs.Add(db, atx1))
 
-	atx2 := newAtx(t, sig, withPublishEpoch(50), withNonce(777), withPrevATXID(atx1.ID()))
+	atx2 := newAtx(t, sig, withPublishEpoch(50), withNonce(777), withPrevATXID(*atx1.ID()))
 	require.NoError(t, atxs.Add(db, atx2))
 
 	// Act & Assert
@@ -754,7 +754,7 @@ func TestCheckpointATX(t *testing.T) {
 	catx := &atxs.CheckpointAtx{
 		ID:             atx.ID(),
 		Epoch:          atx.PublishEpoch,
-		CommitmentATX:  types.ATXID{1, 2, 3},
+		CommitmentATX:  &types.ATXID{1, 2, 3},
 		VRFNonce:       types.VRFPostIndex(119),
 		NumUnits:       atx.NumUnits,
 		BaseTickHeight: 1000,
@@ -795,7 +795,7 @@ func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 
 	nonExistingATXID := types.ATXID(types.CalcHash32([]byte("0")))
-	_, err := atxs.Get(db, nonExistingATXID)
+	_, err := atxs.Get(db, &nonExistingATXID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	sig, err := signing.NewEdSigner()
@@ -842,7 +842,7 @@ func newAtx(t testing.TB, signer *signing.EdSigner, opts ...createAtxOpt) *types
 	watx := &wire.ActivationTxV1{
 		InnerActivationTxV1: wire.InnerActivationTxV1{
 			NIPostChallengeV1: wire.NIPostChallengeV1{
-				PrevATXID: types.RandomATXID(),
+				PrevATXID: *types.RandomATXID(),
 			},
 			NumUnits: 2,
 			VRFNonce: &nonce,
@@ -885,7 +885,7 @@ func createAtx(tb testing.TB, db *sql.Database, hdr header) (types.ATXID, *signi
 		require.NoError(tb, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
 	}
 
-	return full.ID(), sig
+	return *full.ID(), sig
 }
 
 func TestGetIDWithMaxHeight(t *testing.T) {
@@ -996,14 +996,14 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 			if tc.pref > 0 {
 				pref = sigs[tc.pref].NodeID()
 			}
-			rst, err := atxs.GetIDWithMaxHeight(db, pref, func(id types.ATXID) bool {
-				_, ok := filtered[id]
+			rst, err := atxs.GetIDWithMaxHeight(db, pref, func(id *types.ATXID) bool {
+				_, ok := filtered[*id]
 				return !ok
 			})
 			if len(tc.atxs) == 0 || tc.expect < 0 {
 				require.ErrorIs(t, err, sql.ErrNotFound)
 			} else {
-				require.Equal(t, ids[tc.expect], rst)
+				require.Equal(t, ids[tc.expect], *rst)
 			}
 		})
 	}
@@ -1028,7 +1028,7 @@ func TestLatest(t *testing.T) {
 					TickCount:    1,
 				}
 				full.SetReceived(time.Now())
-				full.SetID(types.ATXID{byte(i)})
+				full.SetID(&types.ATXID{byte(i)})
 				require.NoError(t, atxs.Add(db, full))
 			}
 			latest, err := atxs.LatestEpoch(db)
@@ -1046,8 +1046,8 @@ func Test_PrevATXCollisions(t *testing.T) {
 	// create two ATXs with the same PrevATXID
 	prevATXID := types.RandomATXID()
 
-	atx1 := newAtx(t, sig, withPublishEpoch(1), withPrevATXID(prevATXID))
-	atx2 := newAtx(t, sig, withPublishEpoch(2), withPrevATXID(prevATXID))
+	atx1 := newAtx(t, sig, withPublishEpoch(1), withPrevATXID(*prevATXID))
+	atx2 := newAtx(t, sig, withPublishEpoch(2), withPrevATXID(*prevATXID))
 
 	require.NoError(t, atxs.Add(db, atx1))
 	require.NoError(t, atxs.Add(db, atx2))
@@ -1073,7 +1073,7 @@ func Test_PrevATXCollisions(t *testing.T) {
 
 		atx2 := newAtx(t, otherSig,
 			withPublishEpoch(types.EpochID(i+1)),
-			withPrevATXID(atx.ID()),
+			withPrevATXID(*atx.ID()),
 		)
 		require.NoError(t, atxs.Add(db, atx2))
 	}
@@ -1085,7 +1085,7 @@ func Test_PrevATXCollisions(t *testing.T) {
 
 	require.Equal(t, sig.NodeID(), got[0].NodeID1)
 	require.Equal(t, sig.NodeID(), got[0].NodeID2)
-	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, []types.ATXID{got[0].ATX1, got[0].ATX2})
+	require.ElementsMatch(t, []types.ATXID{*atx1.ID(), *atx2.ID()}, []types.ATXID{*got[0].ATX1, *got[0].ATX2})
 }
 
 func TestCoinbase(t *testing.T) {

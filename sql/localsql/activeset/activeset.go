@@ -52,7 +52,7 @@ func Add(
 	return nil
 }
 
-func Get(db sql.Executor, kind Kind, epoch types.EpochID) (types.Hash32, uint64, []types.ATXID, error) {
+func Get(db sql.Executor, kind Kind, epoch types.EpochID) (types.Hash32, uint64, []*types.ATXID, error) {
 	var (
 		id     types.Hash32
 		weight uint64
@@ -79,5 +79,9 @@ func Get(db sql.Executor, kind Kind, epoch types.EpochID) (types.Hash32, uint64,
 	} else if rows == 0 {
 		return id, 0, nil, fmt.Errorf("%w: activeset %v for epoch %d", sql.ErrNotFound, kind, epoch)
 	}
-	return id, weight, set, nil
+	setSlice := make([]*types.ATXID, 0, len(set))
+	for _, s := range set {
+		setSlice = append(setSlice, &s)
+	}
+	return id, weight, setSlice, nil
 }

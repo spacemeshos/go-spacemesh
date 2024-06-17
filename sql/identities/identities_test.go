@@ -131,7 +131,7 @@ func TestMarried(t *testing.T) {
 		require.False(t, married)
 
 		atx := types.RandomATXID()
-		require.NoError(t, SetMarriage(db, id, atx))
+		require.NoError(t, SetMarriage(db, id, *atx))
 
 		married, err = Married(db, id)
 		require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestMarried(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, married)
 
-		require.NoError(t, SetMarriage(db, id, types.RandomATXID()))
+		require.NoError(t, SetMarriage(db, id, *types.RandomATXID()))
 
 		married, err = Married(db, id)
 		require.NoError(t, err)
@@ -170,7 +170,7 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 		}
 		for _, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx))
+			require.NoError(t, SetMarriage(db, id, *atx))
 		}
 
 		for _, id := range ids {
@@ -199,7 +199,7 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 		}
 		for _, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx))
+			require.NoError(t, SetMarriage(db, id, *atx))
 		}
 
 		for _, id := range ids {
@@ -210,7 +210,7 @@ func TestEquivocationSet(t *testing.T) {
 
 		// try to marry via another random ATX
 		// the set should remain intact
-		require.NoError(t, SetMarriage(db, ids[0], types.RandomATXID()))
+		require.NoError(t, SetMarriage(db, ids[0], *types.RandomATXID()))
 		for _, id := range ids {
 			set, err := EquivocationSet(db, id)
 			require.NoError(t, err)
@@ -221,7 +221,7 @@ func TestEquivocationSet(t *testing.T) {
 		db := sql.InMemory()
 		atx := types.RandomATXID()
 		id := types.RandomNodeID()
-		require.NoError(t, SetMarriage(db, id, atx))
+		require.NoError(t, SetMarriage(db, id, *atx))
 
 		malicious, err := IsMalicious(db, id)
 		require.NoError(t, err)
@@ -244,7 +244,7 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 		}
 		for _, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx))
+			require.NoError(t, SetMarriage(db, id, *atx))
 		}
 
 		require.NoError(t, SetMalicious(db, ids[0], []byte("proof"), time.Now()))

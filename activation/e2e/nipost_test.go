@@ -146,7 +146,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	})
 
 	validator := activation.NewMocknipostValidator(ctrl)
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata.New(), goldenATX, syncer, validator)
+	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata.New(), &goldenATX, syncer, validator)
 	require.NoError(t, err)
 
 	opts := activation.DefaultPostSetupOpts()
@@ -242,7 +242,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	_, err = v.NIPost(
 		context.Background(),
 		sig.NodeID(),
-		goldenATX,
+		&goldenATX,
 		nipost.NIPost,
 		challenge,
 		nipost.NumUnits,
@@ -287,7 +287,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	for _, sig := range signers {
 		opts := opts
 		eg.Go(func() error {
-			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
+			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), &goldenATX, syncer, validator)
 			require.NoError(t, err)
 
 			opts.DataDir = t.TempDir()
@@ -369,7 +369,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 			_, err = v.NIPost(
 				context.Background(),
 				sig.NodeID(),
-				goldenATX,
+				&goldenATX,
 				nipost.NIPost,
 				challenge,
 				nipost.NumUnits,

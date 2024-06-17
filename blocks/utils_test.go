@@ -164,14 +164,14 @@ func Test_getProposalMetadata(t *testing.T) {
 	cfg := Config{OptFilterThreshold: 70}
 	lid := types.LayerID(111)
 	_, atxs := createATXs(t, data, (lid.GetEpoch() - 1).FirstLayer(), 10)
-	actives := types.ATXIDList(types.ToATXIDs(atxs))
+	actives := types.ATXIDList(types.PtrSliceToSlice(types.ToATXIDs(atxs)))
 	props := make([]*types.Proposal, 0, 10)
 	hash1 := types.Hash32{1, 2, 3}
 	hash2 := types.Hash32{3, 2, 1}
 	for i := 0; i < 10; i++ {
 		var p types.Proposal
 		p.Layer = lid
-		p.AtxID = atxs[i].ID()
+		p.AtxID = *atxs[i].ID()
 		if i < 5 {
 			p.MeshHash = hash1
 		} else {

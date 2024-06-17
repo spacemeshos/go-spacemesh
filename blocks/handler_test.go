@@ -47,8 +47,8 @@ func TestHandleSyncedBlock(t *testing.T) {
 	good := &types.Block{InnerBlock: types.InnerBlock{
 		LayerIndex: layer,
 		Rewards: []types.AnyReward{
-			{AtxID: types.ATXID{1}, Weight: types.RatNum{Num: 1, Denom: 1}},
-			{AtxID: types.ATXID{2}, Weight: types.RatNum{Num: 1, Denom: 1}},
+			{AtxID: &types.ATXID{1}, Weight: types.RatNum{Num: 1, Denom: 1}},
+			{AtxID: &types.ATXID{2}, Weight: types.RatNum{Num: 1, Denom: 1}},
 		},
 		TxIDs: []types.TransactionID{{1}, {2}},
 	}}
@@ -57,8 +57,8 @@ func TestHandleSyncedBlock(t *testing.T) {
 	badrewards := &types.Block{InnerBlock: types.InnerBlock{
 		LayerIndex: layer,
 		Rewards: []types.AnyReward{
-			{AtxID: types.ATXID{1}},
-			{AtxID: types.ATXID{2}},
+			{AtxID: &types.ATXID{1}},
+			{AtxID: &types.ATXID{2}},
 		},
 	}}
 	badrewards.Initialize()
@@ -73,7 +73,7 @@ func TestHandleSyncedBlock(t *testing.T) {
 		id                types.Hash32
 		dup               bool
 		epoch             types.EpochID
-		tortoise, missing []types.ATXID
+		tortoise, missing []*types.ATXID
 		failAtxs          error
 		txs               []types.TransactionID
 		failTxs           error
@@ -85,8 +85,8 @@ func TestHandleSyncedBlock(t *testing.T) {
 			data:     codec.MustEncode(good),
 			id:       good.ID().AsHash32(),
 			epoch:    good.LayerIndex.GetEpoch(),
-			tortoise: []types.ATXID{{1}, {2}},
-			missing:  []types.ATXID{{2}},
+			tortoise: []*types.ATXID{{1}, {2}},
+			missing:  []*types.ATXID{{2}},
 			txs:      []types.TransactionID{{1}, {2}},
 		},
 		{
@@ -123,8 +123,8 @@ func TestHandleSyncedBlock(t *testing.T) {
 			data:     codec.MustEncode(good),
 			id:       good.ID().AsHash32(),
 			epoch:    good.LayerIndex.GetEpoch(),
-			tortoise: []types.ATXID{{1}, {2}},
-			missing:  []types.ATXID{{2}},
+			tortoise: []*types.ATXID{{1}, {2}},
+			missing:  []*types.ATXID{{2}},
 			failAtxs: errors.New("atxs failed"),
 			err:      "atxs failed",
 		},
@@ -133,8 +133,8 @@ func TestHandleSyncedBlock(t *testing.T) {
 			data:     codec.MustEncode(good),
 			id:       good.ID().AsHash32(),
 			epoch:    good.LayerIndex.GetEpoch(),
-			tortoise: []types.ATXID{{1}, {2}},
-			missing:  []types.ATXID{{2}},
+			tortoise: []*types.ATXID{{1}, {2}},
+			missing:  []*types.ATXID{{2}},
 			txs:      []types.TransactionID{{1}, {2}},
 			failTxs:  errors.New("txs failed"),
 			err:      "txs failed",
@@ -144,8 +144,8 @@ func TestHandleSyncedBlock(t *testing.T) {
 			data:     codec.MustEncode(good),
 			id:       good.ID().AsHash32(),
 			epoch:    good.LayerIndex.GetEpoch(),
-			tortoise: []types.ATXID{{1}, {2}},
-			missing:  []types.ATXID{{2}},
+			tortoise: []*types.ATXID{{1}, {2}},
+			missing:  []*types.ATXID{{2}},
 			txs:      []types.TransactionID{{1}, {2}},
 			failMesh: errors.New("add block failed"),
 			err:      "add block failed",
@@ -162,7 +162,8 @@ func TestHandleSyncedBlock(t *testing.T) {
 			}
 
 			th.mockTortoise.EXPECT().GetMissingActiveSet(tc.epoch, tc.tortoise).Return(tc.missing).MaxTimes(1)
-			th.mockFetcher.EXPECT().RegisterPeerHashes(pid, types.ATXIDsToHashes(tc.missing)).MaxTimes(1)
+			th.mockFetcher.EXPECT().RegisterPeerHashes(pid, types.ATXIDsToHashes(types.PtrSliceToSlice(tc.missing))).
+				MaxTimes(1)
 			th.mockFetcher.EXPECT().GetAtxs(gomock.Any(), tc.missing).Return(tc.failAtxs).MaxTimes(1)
 			th.mockFetcher.EXPECT().RegisterPeerHashes(pid, types.TransactionIDsToHashes(tc.txs)).MaxTimes(1)
 			th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), tc.txs).Return(tc.failTxs).MaxTimes(1)
@@ -188,15 +189,15 @@ func TestValidateRewards(t *testing.T) {
 			desc: "sanity",
 			rewards: []types.AnyReward{
 				{
-					AtxID:  types.ATXID{1},
+					AtxID:  &types.ATXID{1},
 					Weight: types.RatNum{Num: 1, Denom: 3},
 				},
 				{
-					AtxID:  types.ATXID{2},
+					AtxID:  &types.ATXID{2},
 					Weight: types.RatNum{Num: 1, Denom: 3},
 				},
 				{
-					AtxID:  types.ATXID{3},
+					AtxID:  &types.ATXID{3},
 					Weight: types.RatNum{Num: 1, Denom: 3},
 				},
 			},
@@ -214,11 +215,11 @@ func TestValidateRewards(t *testing.T) {
 			desc: "zero num",
 			rewards: []types.AnyReward{
 				{
-					AtxID:  types.ATXID{1},
+					AtxID:  &types.ATXID{1},
 					Weight: types.RatNum{Num: 1, Denom: 3},
 				},
 				{
-					AtxID:  types.ATXID{3},
+					AtxID:  &types.ATXID{3},
 					Weight: types.RatNum{Num: 0, Denom: 3},
 				},
 			},
@@ -228,11 +229,11 @@ func TestValidateRewards(t *testing.T) {
 			desc: "zero denom",
 			rewards: []types.AnyReward{
 				{
-					AtxID:  types.ATXID{1},
+					AtxID:  &types.ATXID{1},
 					Weight: types.RatNum{Num: 1, Denom: 3},
 				},
 				{
-					AtxID:  types.ATXID{3},
+					AtxID:  &types.ATXID{3},
 					Weight: types.RatNum{Num: 1, Denom: 0},
 				},
 			},
@@ -242,15 +243,15 @@ func TestValidateRewards(t *testing.T) {
 			desc: "multiple per coinbase",
 			rewards: []types.AnyReward{
 				{
-					AtxID:  types.ATXID{1},
+					AtxID:  &types.ATXID{1},
 					Weight: types.RatNum{Num: 1, Denom: 3},
 				},
 				{
-					AtxID:  types.ATXID{3},
+					AtxID:  &types.ATXID{3},
 					Weight: types.RatNum{Num: 1, Denom: 3},
 				},
 				{
-					AtxID:  types.ATXID{1},
+					AtxID:  &types.ATXID{1},
 					Weight: types.RatNum{Num: 1, Denom: 3},
 				},
 			},

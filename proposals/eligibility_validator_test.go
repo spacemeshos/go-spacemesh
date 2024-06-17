@@ -28,7 +28,7 @@ func gatx(
 		TickCount:    100,
 		SmesherID:    smesher,
 	}
-	atx.SetID(id)
+	atx.SetID(&id)
 	atx.SetReceived(time.Time{}.Add(1))
 	return atx
 }
@@ -46,7 +46,7 @@ func gatxZeroHeight(
 		VRFNonce:     nonce,
 		SmesherID:    smesher,
 	}
-	atx.SetID(id)
+	atx.SetID(&id)
 	atx.SetReceived(time.Time{}.Add(1))
 	return atx
 }
@@ -58,7 +58,7 @@ func gatxNilNonce(id types.ATXID, epoch types.EpochID, smesher types.NodeID, uni
 		TickCount:    100,
 		SmesherID:    smesher,
 	}
-	atx.SetID(id)
+	atx.SetID(&id)
 	atx.SetReceived(time.Time{}.Add(1))
 	return atx
 }
@@ -545,7 +545,7 @@ func TestEligibilityValidator(t *testing.T) {
 				return &tortoise.BallotData{
 					ID:           ballot.ID(),
 					Layer:        ballot.Layer,
-					ATXID:        ballot.AtxID,
+					ATXID:        &ballot.AtxID,
 					Smesher:      ballot.SmesherID,
 					Beacon:       ballot.EpochData.Beacon,
 					Eligiblities: ballot.EpochData.EligibilityCount,

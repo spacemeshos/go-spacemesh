@@ -87,7 +87,7 @@ func TestServer(t *testing.T) {
 	srv.Start(ctx, ch, np)
 
 	for _, epoch := range epochs {
-		createAtxs(t, db, epoch-1, types.RandomActiveSet(activeSetSize))
+		createAtxs(t, db, epoch-1, types.PtrSliceToSlice(types.RandomActiveSet(activeSetSize)))
 		fname := PersistedFilename(epoch, bootstrap.SuffixBootstrap)
 		require.Eventually(t, func() bool {
 			_, err := fs.Stat(fname)

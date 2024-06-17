@@ -213,15 +213,15 @@ func LatestLayer(db sql.Executor) (types.LayerID, error) {
 	return lid, nil
 }
 
-func FirstInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
+func FirstInEpoch(db sql.Executor, atx *types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
 	return inEpoch(db, atx, epoch, "asc")
 }
 
-func LastInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
+func LastInEpoch(db sql.Executor, atx *types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
 	return inEpoch(db, atx, epoch, "desc")
 }
 
-func inEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID, order string) (*types.Ballot, error) {
+func inEpoch(db sql.Executor, atx *types.ATXID, epoch types.EpochID, order string) (*types.Ballot, error) {
 	var (
 		bid     types.BallotID
 		ballot  types.Ballot

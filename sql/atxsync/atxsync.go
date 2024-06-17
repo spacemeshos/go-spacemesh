@@ -14,9 +14,9 @@ func GetSyncState(db sql.Executor, epoch types.EpochID) (map[types.ATXID]int, er
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(epoch))
 		}, func(stmt *sql.Statement) bool {
-			var id types.ATXID
+			id := new(types.ATXID)
 			stmt.ColumnBytes(0, id[:])
-			states[id] = int(stmt.ColumnInt64(1))
+			states[*id] = int(stmt.ColumnInt64(1))
 			return true
 		})
 	if err != nil {

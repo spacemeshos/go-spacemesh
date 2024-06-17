@@ -165,7 +165,7 @@ func (n *node) withAtx(min, max int) *node {
 	}
 	id := types.ATXID{}
 	n.t.rng.Read(id[:])
-	atx.SetID(id)
+	atx.SetID(&id)
 	atx.SetReceived(n.t.start)
 	atx.VRFNonce = types.VRFPostIndex(n.t.rng.Uint64())
 
@@ -382,11 +382,11 @@ func (cl *lockstepCluster) activeSet() types.ATXIDList {
 		if n.atx == nil {
 			continue
 		}
-		if _, exists := unique[n.atx.ID()]; exists {
+		if _, exists := unique[*n.atx.ID()]; exists {
 			continue
 		}
-		unique[n.atx.ID()] = struct{}{}
-		ids = append(ids, n.atx.ID())
+		unique[*n.atx.ID()] = struct{}{}
+		ids = append(ids, *n.atx.ID())
 	}
 	return ids
 }
@@ -404,7 +404,7 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 			Beacon:        cl.t.beacon,
 			ActiveSetHash: active.Hash(),
 		}
-		proposal.AtxID = n.atx.ID()
+		proposal.AtxID = *n.atx.ID()
 		proposal.SmesherID = n.signer.NodeID()
 		id := types.ProposalID{}
 		cl.t.rng.Read(id[:])
@@ -440,7 +440,7 @@ func (cl *lockstepCluster) setup() {
 			}
 			require.NoError(cl.t, n.storeAtx(other.atx))
 		}
-		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
+		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, types.SliceToPtrSlice([]types.ATXID(active)))
 		n.mpublisher.EXPECT().
 			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 			Do(func(ctx context.Context, _ string, msg []byte) error {
@@ -679,7 +679,7 @@ func TestHandler(t *testing.T) {
 	n := cluster.nodes[0]
 	require.NoError(t, beacons.Add(n.db, tst.genesis.GetEpoch()+1, tst.beacon))
 	require.NoError(t, n.storeAtx(n.atx))
-	n.oracle.UpdateActiveSet(tst.genesis.GetEpoch()+1, []types.ATXID{n.atx.ID()})
+	n.oracle.UpdateActiveSet(tst.genesis.GetEpoch()+1, []*types.ATXID{n.atx.ID()})
 	n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	layer := tst.genesis + 1
 	n.nclock.StartLayer(layer)
@@ -768,7 +768,7 @@ func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, base, heigh
 		TickCount:      height - base,
 		SmesherID:      smesher,
 	}
-	atx.SetID(id)
+	atx.SetID(&id)
 	atx.SetReceived(time.Time{}.Add(1))
 	return *atx
 }
@@ -939,7 +939,7 @@ func TestHare_AddProposal(t *testing.T) {
 
 	p := gproposal(
 		types.RandomProposalID(),
-		types.RandomATXID(),
+		*types.RandomATXID(),
 		types.RandomNodeID(),
 		types.LayerID(0),
 		types.RandomBeacon(),

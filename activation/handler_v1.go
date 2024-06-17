@@ -29,12 +29,12 @@ import (
 )
 
 type nipostValidatorV1 interface {
-	InitialNIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, goldenATXID types.ATXID) error
+	InitialNIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, goldenATXID *types.ATXID) error
 	NIPostChallengeV1(challenge *wire.NIPostChallengeV1, previous *types.ActivationTx, nodeID types.NodeID) error
 	NIPost(
 		ctx context.Context,
 		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
+		commitmentAtxId *types.ATXID,
 		NIPost *types.NIPost,
 		expectedChallenge types.Hash32,
 		numUnits uint32,
@@ -48,7 +48,7 @@ type nipostValidatorV1 interface {
 	Post(
 		ctx context.Context,
 		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
+		commitmentAtxId *types.ATXID,
 		post *types.Post,
 		metadata *types.PostMetadata,
 		numUnits uint32,
@@ -57,11 +57,11 @@ type nipostValidatorV1 interface {
 
 	VRFNonce(
 		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
+		commitmentAtxId *types.ATXID,
 		vrfNonce, labelsPerUnit uint64,
 		numUnits uint32,
 	) error
-	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+	PositioningAtx(id *types.ATXID, atxs atxProvider, goldenATXID *types.ATXID, pubepoch types.EpochID) error
 }
 
 // HandlerV1 processes ATXs version 1.
@@ -72,7 +72,7 @@ type HandlerV1 struct {
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
 	tickSize        uint64
-	goldenATXID     types.ATXID
+	goldenATXID     *types.ATXID
 	nipostValidator nipostValidatorV1
 	beacon          AtxReceiver
 	tortoise        system.Tortoise
@@ -103,12 +103,12 @@ func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	if atx.PublishEpoch > current+1 {
 		return fmt.Errorf("atx publish epoch is too far in the future: %d > %d", atx.PublishEpoch, current+1)
 	}
-	if atx.PositioningATXID == types.EmptyATXID {
+	if atx.PositioningATXID == *types.EmptyATXID {
 		return errors.New("empty positioning atx")
 	}
 
 	switch {
-	case atx.PrevATXID == types.EmptyATXID:
+	case atx.PrevATXID == *types.EmptyATXID:
 		if atx.InitialPost == nil {
 			return errors.New("no prev atx declared, but initial post is not included")
 		}
@@ -121,7 +121,7 @@ func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 		if atx.CommitmentATXID == nil {
 			return errors.New("no prev atx declared, but commitment atx is missing")
 		}
-		if *atx.CommitmentATXID == types.EmptyATXID {
+		if *atx.CommitmentATXID == *types.EmptyATXID {
 			return errors.New("empty commitment atx")
 		}
 		if atx.Sequence != 0 {
@@ -135,13 +135,13 @@ func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 			LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
 		}
 		if err := h.nipostValidator.VRFNonce(
-			atx.SmesherID, *atx.CommitmentATXID, *atx.VRFNonce, initialPostMetadata.LabelsPerUnit, atx.NumUnits,
+			atx.SmesherID, atx.CommitmentATXID, *atx.VRFNonce, initialPostMetadata.LabelsPerUnit, atx.NumUnits,
 		); err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
 		post := wire.PostFromWireV1(atx.InitialPost)
 		if err := h.nipostValidator.Post(
-			ctx, atx.SmesherID, *atx.CommitmentATXID, post, &initialPostMetadata, atx.NumUnits,
+			ctx, atx.SmesherID, atx.CommitmentATXID, post, &initialPostMetadata, atx.NumUnits,
 		); err != nil {
 			return fmt.Errorf("invalid initial post: %w", err)
 		}
@@ -160,9 +160,9 @@ func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 }
 
 // Obtain the commitment ATX ID for the given ATX.
-func (h *HandlerV1) commitment(atx *wire.ActivationTxV1) (types.ATXID, error) {
-	if atx.PrevATXID == types.EmptyATXID {
-		return *atx.CommitmentATXID, nil
+func (h *HandlerV1) commitment(atx *wire.ActivationTxV1) (*types.ATXID, error) {
+	if atx.PrevATXID == *types.EmptyATXID {
+		return atx.CommitmentATXID, nil
 	}
 	return atxs.CommitmentATX(h.cdb, atx.SmesherID)
 }
@@ -182,7 +182,7 @@ func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*ty
 	if len(blob.Bytes) == 0 {
 		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
 		// Fallback to fetching it from the DB to get the effective NumUnits.
-		atx, err := atxs.Get(h.cdb, atx.PrevATXID)
+		atx, err := atxs.Get(h.cdb, &atx.PrevATXID)
 		if err != nil {
 			return nil, fmt.Errorf("fetching golden previous atx: %w", err)
 		}
@@ -196,7 +196,7 @@ func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*ty
 	if err := codec.Decode(blob.Bytes, &prev); err != nil {
 		return nil, fmt.Errorf("decoding previous atx: %w", err)
 	}
-	prev.SetID(atx.PrevATXID)
+	prev.SetID(&atx.PrevATXID)
 	if prev.VRFNonce == nil {
 		nonce, err := atxs.NonceByID(h.cdb, prev.ID())
 		if err != nil {
@@ -217,7 +217,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 		return 0, 0, nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
 	}
 
-	if atx.PrevATXID == types.EmptyATXID {
+	if atx.PrevATXID == *types.EmptyATXID {
 		if err := h.nipostValidator.InitialNIPostChallengeV1(&atx.NIPostChallengeV1, h.cdb, h.goldenATXID); err != nil {
 			return 0, 0, nil, err
 		}
@@ -233,7 +233,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 		effectiveNumUnits = min(previous.NumUnits, atx.NumUnits)
 	}
 
-	err = h.nipostValidator.PositioningAtx(atx.PositioningATXID, h.cdb, h.goldenATXID, atx.PublishEpoch)
+	err = h.nipostValidator.PositioningAtx(&atx.PositioningATXID, h.cdb, h.goldenATXID, atx.PublishEpoch)
 	if err != nil {
 		return 0, 0, nil, err
 	}
@@ -290,7 +290,7 @@ func (h *HandlerV1) validateNonInitialAtx(
 	ctx context.Context,
 	atx *wire.ActivationTxV1,
 	previous *types.ActivationTx,
-	commitment types.ATXID,
+	commitment *types.ATXID,
 ) error {
 	if err := h.nipostValidator.NIPostChallengeV1(&atx.NIPostChallengeV1, previous, atx.SmesherID); err != nil {
 		return err
@@ -323,12 +323,12 @@ func (h *HandlerV1) validateNonInitialAtx(
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (h *HandlerV1) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 	lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.SmesherID)
-	if err == nil && atx.PrevATXID == lastAtx {
+	if err == nil && atx.PrevATXID == *lastAtx {
 		// last atx referenced equals last ATX seen from node
 		return nil
 	}
 
-	if err == nil && atx.PrevATXID == types.EmptyATXID {
+	if err == nil && atx.PrevATXID == *types.EmptyATXID {
 		// no previous atx declared, but already seen at least one atx from node
 		return fmt.Errorf(
 			"no prev atx reported, but other atx with same node id (%v) found: %v",
@@ -337,17 +337,17 @@ func (h *HandlerV1) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 		)
 	}
 
-	if err == nil && atx.PrevATXID != lastAtx {
+	if err == nil && atx.PrevATXID != *lastAtx {
 		// last atx referenced does not equal last ATX seen from node
 		return errors.New("last atx is not the one referenced")
 	}
 
-	if errors.Is(err, sql.ErrNotFound) && atx.PrevATXID == types.EmptyATXID {
+	if errors.Is(err, sql.ErrNotFound) && atx.PrevATXID == *types.EmptyATXID {
 		// no previous atx found and none referenced
 		return nil
 	}
 
-	if err != nil && atx.PrevATXID != types.EmptyATXID {
+	if err != nil && atx.PrevATXID != *types.EmptyATXID {
 		// no previous atx found but previous atx referenced
 		h.logger.Error("could not fetch node last atx",
 			zap.Stringer("atx_id", atx.ID()),
@@ -384,7 +384,7 @@ func (h *HandlerV1) checkDoublePublish(
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, err
 	}
-	if prev == types.EmptyATXID || prev == atx.ID() {
+	if prev.Empty() || prev.Equal(atx.ID()) {
 		// no ATX previously published for this epoch, or we are handling the same ATX again
 		return nil, nil
 	}
@@ -452,7 +452,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("get last atx by node id: %w", err)
 	}
-	if prevID == atx.PrevATXID {
+	if *prevID == atx.PrevATXID {
 		return nil, nil
 	}
 
@@ -464,13 +464,13 @@ func (h *HandlerV1) checkWrongPrevAtx(
 			log.ZContext(ctx),
 			zap.Stringer("smesher", atx.SmesherID),
 			log.ZShortStringer("expected", prevID),
-			log.ZShortStringer("actual", atx.PrevATXID),
+			log.ZShortStringer("actual", &atx.PrevATXID),
 		)
 		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
 	}
 
-	var atx2ID types.ATXID
-	if atx.PrevATXID == types.EmptyATXID {
+	var atx2ID *types.ATXID
+	if atx.PrevATXID == *types.EmptyATXID {
 		// if the ATX references an empty previous ATX, we can just take the initial ATX and create a proof
 		// that the node referenced the wrong previous ATX
 		id, err := atxs.GetFirstIDByNodeID(tx, atx.SmesherID)
@@ -480,7 +480,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 
 		atx2ID = id
 	} else {
-		prev, err := atxs.Get(tx, atx.PrevATXID)
+		prev, err := atxs.Get(tx, &atx.PrevATXID)
 		if err != nil {
 			return nil, fmt.Errorf("get prev atx: %w", err)
 		}
@@ -548,7 +548,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		log.ZContext(ctx),
 		zap.Stringer("smesher", atx.SmesherID),
 		log.ZShortStringer("expected", prevID),
-		log.ZShortStringer("actual", atx.PrevATXID),
+		log.ZShortStringer("actual", &atx.PrevATXID),
 	)
 	return proof, nil
 }
@@ -667,8 +667,8 @@ func (h *HandlerV1) processATX(
 	}
 
 	var baseTickHeight uint64
-	if watx.PositioningATXID != h.goldenATXID {
-		posAtx, err := h.cdb.GetAtx(watx.PositioningATXID)
+	if watx.PositioningATXID != *h.goldenATXID {
+		posAtx, err := h.cdb.GetAtx(&watx.PositioningATXID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
 		}
@@ -700,7 +700,7 @@ func (h *HandlerV1) processATX(
 
 // registerHashes registers that the given peer should be asked for
 // the hashes of the poet proof and ATXs.
-func (h *HandlerV1) registerHashes(peer p2p.Peer, poetRef types.Hash32, atxIDs []types.ATXID) {
+func (h *HandlerV1) registerHashes(peer p2p.Peer, poetRef types.Hash32, atxIDs []*types.ATXID) {
 	hashes := make([]types.Hash32, 0, len(atxIDs)+1)
 	for _, id := range atxIDs {
 		hashes = append(hashes, id.Hash32())
@@ -710,15 +710,13 @@ func (h *HandlerV1) registerHashes(peer p2p.Peer, poetRef types.Hash32, atxIDs [
 }
 
 // fetchReferences makes sure that the referenced poet proof and ATXs are available.
-func (h *HandlerV1) fetchReferences(ctx context.Context, poetRef types.Hash32, atxIDs []types.ATXID) error {
+func (h *HandlerV1) fetchReferences(ctx context.Context, poetRef types.Hash32, atxIDs []*types.ATXID) error {
 	if err := h.fetcher.GetPoetProof(ctx, poetRef); err != nil {
 		return fmt.Errorf("missing poet proof (%s): %w", poetRef.ShortString(), err)
 	}
-
 	if len(atxIDs) == 0 {
 		return nil
 	}
-
 	if err := h.fetcher.GetAtxs(ctx, atxIDs, system.WithoutLimiting()); err != nil {
 		return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
 	}
@@ -732,18 +730,19 @@ func (h *HandlerV1) fetchReferences(ctx context.Context, poetRef types.Hash32, a
 
 // Collect unique dependencies of an ATX.
 // Filters out EmptyATXID and the golden ATX.
-func collectAtxDeps(goldenAtxId types.ATXID, atx *wire.ActivationTxV1) (types.Hash32, []types.ATXID) {
-	ids := []types.ATXID{atx.PrevATXID, atx.PositioningATXID}
+func collectAtxDeps(goldenAtxId *types.ATXID, atx *wire.ActivationTxV1) (types.Hash32, []*types.ATXID) {
+	var ids []*types.ATXID
+	ids = append(ids, &atx.PrevATXID, &atx.PositioningATXID)
 	if atx.CommitmentATXID != nil {
-		ids = append(ids, *atx.CommitmentATXID)
+		ids = append(ids, atx.CommitmentATXID)
 	}
 
 	filtered := make(map[types.ATXID]struct{})
 	for _, id := range ids {
-		if id != types.EmptyATXID && id != goldenAtxId {
-			filtered[id] = struct{}{}
+		if !id.Empty() && !id.Equal(goldenAtxId) {
+			filtered[*id] = struct{}{}
 		}
 	}
 
-	return types.BytesToHash(atx.NIPost.PostMetadata.Challenge), maps.Keys(filtered)
+	return types.BytesToHash(atx.NIPost.PostMetadata.Challenge), types.SliceToPtrSlice(maps.Keys(filtered))
 }

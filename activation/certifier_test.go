@@ -130,7 +130,7 @@ func TestObtainingPost(t *testing.T) {
 			Pow:           17,
 			Challenge:     types.RandomBytes(32),
 			NumUnits:      2,
-			CommitmentATX: types.RandomATXID(),
+			CommitmentATX: *types.RandomATXID(),
 			VRFNonce:      15,
 		}
 		err := nipost.AddPost(localDb, id, post)

@@ -45,7 +45,7 @@ func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 
 	atx := types.ActivationTx{
 		Sequence:     rand.Uint64(),
-		PrevATXID:    types.RandomATXID(),
+		PrevATXID:    *types.RandomATXID(),
 		PublishEpoch: 0,
 		Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
 		NumUnits:     rand.Uint32(),
@@ -110,7 +110,7 @@ func TestGet_HappyPath(t *testing.T) {
 	id := types.RandomATXID()
 	atx := types.ActivationTx{
 		Sequence:     rand.Uint64(),
-		PrevATXID:    types.RandomATXID(),
+		PrevATXID:    *types.RandomATXID(),
 		PublishEpoch: 0,
 		Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
 		NumUnits:     rand.Uint32(),
@@ -141,7 +141,7 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	id := types.RandomATXID()
 	atx := types.ActivationTx{
 		Sequence:     rand.Uint64(),
-		PrevATXID:    types.RandomATXID(),
+		PrevATXID:    *types.RandomATXID(),
 		PublishEpoch: 0,
 		Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
 		NumUnits:     rand.Uint32(),

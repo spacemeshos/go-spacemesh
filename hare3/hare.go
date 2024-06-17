@@ -557,13 +557,13 @@ func (h *Hare) selectProposals(session *session) []types.ProposalID {
 			h.log.Error("proposal with same atx added several times in the recorded set",
 				zap.Int("n", n),
 				zap.Stringer("id", p.ID()),
-				zap.Stringer("atxid", p.AtxID),
+				zap.Stringer("atxid", &p.AtxID),
 			)
 			continue
 		}
-		header := h.atxsdata.Get(target, p.AtxID)
+		header := h.atxsdata.Get(target, &p.AtxID)
 		if header == nil {
-			h.log.Error("atx is not loaded", zap.Stringer("atxid", p.AtxID))
+			h.log.Error("atx is not loaded", zap.Stringer("atxid", &p.AtxID))
 			return []types.ProposalID{}
 		}
 		if header.BaseHeight >= min.Height {
