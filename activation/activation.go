@@ -496,20 +496,110 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		return nil, ctx.Err()
 	case <-b.syncer.RegisterForATXSynced():
 	}
-	current := b.layerClock.CurrentLayer().GetEpoch()
 
-	challenge, err := nipost.Challenge(b.localDB, nodeID)
+	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()
+
+	// try to get exising challenge
+	existingChallenge, err := b.getExistingChallenge(logger, currentEpochId, nodeID)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, err
+	}
+
+	if existingChallenge != nil {
+		return existingChallenge, nil
+	}
+
+	// Start building new challenge:
+	// 1. get previous ATX
+	prevAtx, err := b.GetPrevAtx(nodeID)
+	switch {
+	case err == nil:
+		currentEpochId = max(currentEpochId, prevAtx.PublishEpoch)
+	case errors.Is(err, sql.ErrNotFound):
+		// no previous ATX
+	case err != nil:
+		return nil, fmt.Errorf("get last ATX: %w", err)
+	}
+
+	// 2. check if we didn't miss beginning of PoET round
+	untilPoetStarts := time.Until(b.poetRoundStart(currentEpochId))
+	if untilPoetStarts <= 0 {
+		// missed
+		metrics.PublishLateWindowLatency.Observe(-untilPoetStarts.Seconds())
+		currentEpochId++
+		untilPoetStarts = time.Until(b.poetRoundStart(currentEpochId))
+	}
+
+	metrics.PublishOntimeWindowLatency.Observe(untilPoetStarts.Seconds())
+
+	// 3. wait if needed till getting closer to PoET round start
+	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(currentEpochId), b.poetCfg.GracePeriod)
+	publishEpochId := currentEpochId + 1
+	if time.Until(wait) > 0 {
+		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better posATX",
+			zap.Duration("till poet round", untilPoetStarts),
+			zap.Uint32("current epoch", currentEpochId.Uint32()),
+			zap.Time("waiting until", wait),
+		)
+		events.EmitPoetWaitRound(nodeID, currentEpochId, publishEpochId, wait)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(time.Until(wait)):
+		}
+	}
+
+	// 4. build new challenge
+	var challenge *types.NIPostChallenge
+
+	prevAtx, err = b.GetPrevAtx(nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
-		// build new challenge
-		logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", current.Uint32()))
+		logger.Info("no previous ATX found, creating an initial nipost challenge")
+
+		challenge, err = b.buildInitialNIPostChallenge(ctx, logger, nodeID, publishEpochId)
+		if err != nil {
+			return nil, err
+		}
+	case err != nil:
+		return nil, fmt.Errorf("get last ATX: %w", err)
+	default:
+		// regular ATX challenge
+		posAtx, err := b.getPositioningAtx(ctx, nodeID, publishEpochId, prevAtx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
+		}
+		challenge = &types.NIPostChallenge{
+			PublishEpoch:   publishEpochId,
+			Sequence:       prevAtx.Sequence + 1,
+			PrevATXID:      prevAtx.ID(),
+			PositioningATX: posAtx,
+		}
+	}
+
+	logger.Info("persisting the new NiPOST challenge", zap.Object("challenge", challenge))
+	if err := nipost.AddChallenge(b.localDB, nodeID, challenge); err != nil {
+		return nil, fmt.Errorf("add nipost challenge: %w", err)
+	}
+	return challenge, nil
+}
+
+func (b *Builder) getExistingChallenge(logger *zap.Logger, currentEpochId types.EpochID, nodeID types.NodeID) (*types.NIPostChallenge, error) {
+	challenge, err := nipost.Challenge(b.localDB, nodeID)
+
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", currentEpochId.Uint32()))
+		return nil, err
+
 	case err != nil:
 		logger.Info("failed to load NiPoST challenge from local state", zap.Error(err))
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
-	case challenge.PublishEpoch < current:
+
+	case challenge.PublishEpoch < currentEpochId:
 		logger.Info(
 			"existing NiPoST challenge is stale, resetting state",
-			zap.Uint32("current_epoch", current.Uint32()),
+			zap.Uint32("current_epoch", currentEpochId.Uint32()),
 			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
 		)
 		// Reset the state to idle because we won't be building POST until we get a new PoET proof
@@ -521,106 +611,51 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		if err := nipost.RemoveChallenge(b.localDB, nodeID); err != nil {
 			return nil, fmt.Errorf("remove stale nipost challenge: %w", err)
 		}
-	default:
-		// challenge is fresh
-		logger.Info("loaded NiPoST challenge from local state",
-			zap.Uint32("current_epoch", current.Uint32()),
-			zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
-		)
-		return challenge, nil
 	}
 
-	prevAtx, err := b.GetPrevAtx(nodeID)
-	switch {
-	case err == nil:
-		current = max(current, prevAtx.PublishEpoch)
-	case errors.Is(err, sql.ErrNotFound):
-		// no previous ATX
-	case err != nil:
-		return nil, fmt.Errorf("get last ATX: %w", err)
-	}
+	// challenge is fresh
+	logger.Info("loaded NiPoST challenge from local state",
+		zap.Uint32("current_epoch", currentEpochId.Uint32()),
+		zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
+	)
+	return challenge, nil
+}
 
-	until := time.Until(b.poetRoundStart(current))
-	if until <= 0 {
-		metrics.PublishLateWindowLatency.Observe(-until.Seconds())
-		current++
-		until = time.Until(b.poetRoundStart(current))
+func (b *Builder) buildInitialNIPostChallenge(ctx context.Context, logger *zap.Logger, nodeID types.NodeID, publishEpochId types.EpochID) (*types.NIPostChallenge, error) {
+	post, err := nipost.GetPost(b.localDB, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("get initial post: %w", err)
 	}
-	publish := current + 1
-	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
-	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
-	if time.Until(wait) > 0 {
-		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better posATX",
-			zap.Duration("till poet round", until),
-			zap.Uint32("current epoch", current.Uint32()),
-			zap.Time("waiting until", wait),
-		)
-		events.EmitPoetWaitRound(nodeID, current, publish, wait)
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(time.Until(wait)):
+	logger.Info("verifying the initial post")
+	initialPost := &types.Post{
+		Nonce:   post.Nonce,
+		Indices: post.Indices,
+		Pow:     post.Pow,
+	}
+	err = b.validator.PostV2(ctx, nodeID, post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
+	if err != nil {
+		logger.Error("initial POST is invalid", zap.Error(err))
+		if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
+			logger.Fatal("failed to remove initial post", zap.Error(err))
 		}
+		return nil, fmt.Errorf("initial POST is invalid: %w", err)
 	}
-
-	prevAtx, err = b.GetPrevAtx(nodeID)
-	switch {
-	case errors.Is(err, sql.ErrNotFound):
-		logger.Info("no previous ATX found, creating an initial nipost challenge")
-		post, err := nipost.GetPost(b.localDB, nodeID)
-		if err != nil {
-			return nil, fmt.Errorf("get initial post: %w", err)
-		}
-		logger.Info("verifying the initial post")
-		initialPost := &types.Post{
+	posAtx, err := b.getPositioningAtx(ctx, nodeID, publishEpochId, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
+	}
+	return &types.NIPostChallenge{
+		PublishEpoch:   publishEpochId,
+		Sequence:       0,
+		PrevATXID:      types.EmptyATXID,
+		PositioningATX: posAtx,
+		CommitmentATX:  &post.CommitmentATX,
+		InitialPost: &types.Post{
 			Nonce:   post.Nonce,
 			Indices: post.Indices,
 			Pow:     post.Pow,
-		}
-		err = b.validator.PostV2(ctx, nodeID, post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
-		if err != nil {
-			logger.Error("initial POST is invalid", zap.Error(err))
-			if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
-				logger.Fatal("failed to remove initial post", zap.Error(err))
-			}
-			return nil, fmt.Errorf("initial POST is invalid: %w", err)
-		}
-		posAtx, err := b.getPositioningAtx(ctx, nodeID, publish, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
-		}
-		challenge = &types.NIPostChallenge{
-			PublishEpoch:   publish,
-			Sequence:       0,
-			PrevATXID:      types.EmptyATXID,
-			PositioningATX: posAtx,
-			CommitmentATX:  &post.CommitmentATX,
-			InitialPost: &types.Post{
-				Nonce:   post.Nonce,
-				Indices: post.Indices,
-				Pow:     post.Pow,
-			},
-		}
-	case err != nil:
-		return nil, fmt.Errorf("get last ATX: %w", err)
-	default:
-		// regular ATX challenge
-		posAtx, err := b.getPositioningAtx(ctx, nodeID, publish, prevAtx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
-		}
-		challenge = &types.NIPostChallenge{
-			PublishEpoch:   publish,
-			Sequence:       prevAtx.Sequence + 1,
-			PrevATXID:      prevAtx.ID(),
-			PositioningATX: posAtx,
-		}
-	}
-	logger.Info("persisting the new NiPOST challenge", zap.Object("challenge", challenge))
-	if err := nipost.AddChallenge(b.localDB, nodeID, challenge); err != nil {
-		return nil, fmt.Errorf("add nipost challenge: %w", err)
-	}
-	return challenge, nil
+		},
+	}, nil
 }
 
 func (b *Builder) GetPrevAtx(nodeID types.NodeID) (*types.ActivationTx, error) {
