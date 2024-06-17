@@ -113,8 +113,7 @@ func (p *Proposal) HashInnerProposal() []byte {
 	if err != nil {
 		log.With().Fatal("failed to encode InnerProposal for hashing", log.Err(err))
 	}
-	sum := h.Sum(nil)
-	return sum
+	return h.Sum(nil)
 }
 
 // ID returns the ProposalID.

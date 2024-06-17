@@ -20,7 +20,6 @@ func Sum(chunks ...[]byte) (rst [32]byte) {
 		hh.Write(chunk)
 	}
 	hh.Sum(rst[:0])
-
 	return rst
 }
 
@@ -31,6 +30,5 @@ func Sum20(chunks ...[]byte) (rst [20]byte) {
 		hh.Write(chunk)
 	}
 	hh.Digest().Read(rst[:])
-
 	return rst
 }

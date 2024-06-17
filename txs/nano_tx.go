@@ -40,8 +40,7 @@ func (n *NanoTX) combinedHash(blockSeed []byte) []byte {
 	defer hash.PutHasher(h)
 	h.Write(blockSeed)
 	h.Write(n.ID.Bytes())
-	sum := h.Sum(nil)
-	return sum
+	return h.Sum(nil)
 }
 
 // Better returns true if this transaction takes priority than `other`.

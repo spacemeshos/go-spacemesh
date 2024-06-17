@@ -279,8 +279,7 @@ func (b *Ballot) HashInnerBytes() []byte {
 	if err != nil {
 		log.With().Fatal("failed to encode InnerBallot for hashing", log.Err(err))
 	}
-	sum := h.Sum(nil)
-	return sum
+	return h.Sum(nil)
 }
 
 // SetID from stored data.

@@ -210,8 +210,7 @@ func msgID(msg *pubsubpb.Message) string {
 		hasher.Write([]byte(*msg.Topic))
 	}
 	hasher.Write(msg.Data)
-	sum := string(hasher.Sum(nil))
-	return sum
+	return string(hasher.Sum(nil))
 }
 
 func getOptions(cfg Config) []pubsub.Option {
