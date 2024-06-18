@@ -108,10 +108,11 @@ type Message struct {
 }
 
 func (m *Message) ToHash() types.Hash32 {
-	hash := hash.New()
-	codec.MustEncodeTo(hash, &m.Body)
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
+	codec.MustEncodeTo(h, &m.Body)
 	var rst types.Hash32
-	hash.Sum(rst[:0])
+	h.Sum(rst[:0])
 	return rst
 }
 

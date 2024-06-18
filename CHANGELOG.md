@@ -83,6 +83,9 @@ operating your own PoET and want to use certificate authentication please refer 
   changed after the initial PoST was generated but before the first ATX has been emitted, invalidating the initial PoST.
   The node will now try to verify the initial PoST and regenerate it if necessary.
 
+* [#6044](https://github.com/spacemeshos/go-spacemesh/pull/6044) The node will now reuse `blake3` hashers in a pool which
+  reduces stress on the garbage collector.
+
 ## Release v1.5.7
 
 ### Improvements
