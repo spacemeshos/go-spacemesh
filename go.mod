@@ -7,7 +7,7 @@ require (
 	github.com/ALTree/bigfloat v0.2.0
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240514101152-6411f530b0a5
 	github.com/cosmos/btcutil v1.0.5
-	github.com/go-llsqlite/crawshaw v0.5.2
+	github.com/go-llsqlite/crawshaw v0.5.3
 	github.com/gofrs/flock v0.8.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0
@@ -38,7 +38,7 @@ require (
 	github.com/rs/cors v1.11.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
-	github.com/spacemeshos/api/release/go v1.44.0
+	github.com/spacemeshos/api/release/go v1.45.0
 	github.com/spacemeshos/economics v0.1.3
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.2.0
@@ -46,7 +46,7 @@ require (
 	github.com/spacemeshos/poet v0.10.3
 	github.com/spacemeshos/post v0.12.6
 	github.com/spf13/afero v1.11.0
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.9.0

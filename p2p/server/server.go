@@ -21,6 +21,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
 type DecayingTagSpec struct {
@@ -247,12 +248,18 @@ func (s *Server) Run(ctx context.Context) error {
 			})
 			eg.Go(func() error {
 				defer cancel()
+				conn := req.stream.Conn()
 				if s.decayingTag != nil {
-					s.decayingTag.Bump(req.stream.Conn().RemotePeer(), s.decayingTagSpec.Inc)
+					s.decayingTag.Bump(conn.RemotePeer(), s.decayingTagSpec.Inc)
 				}
 				ok := s.queueHandler(ctx, req.stream)
+				duration := time.Since(req.received)
+				if s.h.PeerInfo() != nil {
+					info := s.h.PeerInfo().EnsurePeerInfo(conn.RemotePeer())
+					info.ServerStats.RequestDone(duration, ok)
+				}
 				if s.metrics != nil {
-					s.metrics.serverLatency.Observe(time.Since(req.received).Seconds())
+					s.metrics.serverLatency.Observe(duration.Seconds())
 					if ok {
 						s.metrics.completed.Inc()
 					} else {
@@ -357,7 +364,7 @@ func (s *Server) StreamRequest(
 
 	ctx, cancel := context.WithTimeout(ctx, s.hardTimeout)
 	defer cancel()
-	stream, err := s.streamRequest(ctx, pid, req, extraProtocols...)
+	stream, info, err := s.streamRequest(ctx, pid, req, extraProtocols...)
 	if err == nil {
 		var eg errgroup.Group
 		eg.Go(func() error {
@@ -377,18 +384,21 @@ func (s *Server) StreamRequest(
 	}
 
 	var srvError *ServerError
-	took := time.Since(start).Seconds()
+	duration := time.Since(start)
+	if info != nil {
+		info.ClientStats.RequestDone(duration, err == nil)
+	}
 	switch {
 	case s.metrics == nil:
 	case errors.As(err, &srvError):
 		s.metrics.clientServerError.Inc()
-		s.metrics.clientLatency.Observe(took)
+		s.metrics.clientLatency.Observe(duration.Seconds())
 	case err != nil:
 		s.metrics.clientFailed.Inc()
-		s.metrics.clientLatencyFailure.Observe(took)
+		s.metrics.clientLatencyFailure.Observe(duration.Seconds())
 	default:
 		s.metrics.clientSucceeded.Inc()
-		s.metrics.clientLatency.Observe(took)
+		s.metrics.clientLatency.Observe(duration.Seconds())
 	}
 	return err
 }
@@ -398,7 +408,11 @@ func (s *Server) streamRequest(
 	pid peer.ID,
 	req []byte,
 	extraProtocols ...string,
-) (stm io.ReadWriteCloser, err error) {
+) (
+	stm io.ReadWriteCloser,
+	info *peerinfo.Info,
+	err error,
+) {
 	protoIDs := make([]protocol.ID, len(extraProtocols)+1)
 	for n, p := range extraProtocols {
 		protoIDs[n] = protocol.ID(p)
@@ -410,7 +424,10 @@ func (s *Server) streamRequest(
 		protoIDs...,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if s.h.PeerInfo() != nil {
+		info = s.h.PeerInfo().EnsurePeerInfo(stream.Conn().RemotePeer())
 	}
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	defer func() {
@@ -422,18 +439,18 @@ func (s *Server) streamRequest(
 	sz := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutUvarint(sz, uint64(len(req)))
 	if _, err := wr.Write(sz[:n]); err != nil {
-		return nil, fmt.Errorf("peer %s address %s: %w",
+		return nil, info, fmt.Errorf("peer %s address %s: %w",
 			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 	if _, err := wr.Write(req); err != nil {
-		return nil, fmt.Errorf("peer %s address %s: %w",
+		return nil, info, fmt.Errorf("peer %s address %s: %w",
 			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 	if err := wr.Flush(); err != nil {
-		return nil, fmt.Errorf("peer %s address %s: %w",
+		return nil, info, fmt.Errorf("peer %s address %s: %w",
 			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
-	return dadj, nil
+	return dadj, info, nil
 }
 
 // NumAcceptedRequests returns the number of accepted requests for this server.
@@ -498,13 +515,16 @@ func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) (int, er
 
 func WrapHandler(handler Handler) StreamHandler {
 	return func(ctx context.Context, req []byte, stream io.ReadWriter) error {
-		buf, err := handler(ctx, req)
+		buf, hErr := handler(ctx, req)
 		var resp Response
-		if err != nil {
-			resp.Error = err.Error()
+		if hErr != nil {
+			resp.Error = hErr.Error()
 		} else {
 			resp.Data = buf
 		}
-		return writeResponse(stream, &resp)
+		if err := writeResponse(stream, &resp); err != nil {
+			return err
+		}
+		return hErr
 	}
 }
