@@ -51,9 +51,8 @@ type PoetConfig struct {
 
 func DefaultPoetConfig() PoetConfig {
 	return PoetConfig{
-		RequestRetryDelay:              400 * time.Millisecond,
-		MaxRequestRetries:              10,
-		PositioningATXSelectionTimeout: defaultPositioningATXSelectionTimeout,
+		RequestRetryDelay: 400 * time.Millisecond,
+		MaxRequestRetries: 10,
 	}
 }
 
@@ -65,8 +64,6 @@ const (
 	//  mainnet (grace period 1h) -> 36s
 	//  systest (grace period 10s) -> 0.1s
 	maxNipostChallengeBuildJitter = 1.0
-
-	defaultPositioningATXSelectionTimeout = 1 * time.Minute
 )
 
 // Config defines configuration for Builder.
@@ -209,10 +206,6 @@ func NewBuilder(
 		opt(b)
 	}
 
-	// TODO find better place for this verification
-	if b.poetCfg.PositioningATXSelectionTimeout.Milliseconds() < defaultPositioningATXSelectionTimeout.Milliseconds() {
-		b.poetCfg.PositioningATXSelectionTimeout = defaultPositioningATXSelectionTimeout
-	}
 	return b
 }
 
@@ -558,7 +551,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	}
 	publish := current + 1
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
-	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
+	wait := b.poetRoundStart(current).Add(-b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
 		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better posATX",
 			zap.Duration("till poet round", until),
