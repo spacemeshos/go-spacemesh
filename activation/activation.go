@@ -589,10 +589,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			return nil, fmt.Errorf("initial POST is invalid: %w", err)
 		}
 
-		ctxWithTimeout, cancel := context.WithTimeout(ctx, b.poetCfg.PositioningATXSelectionTimeout)
-		defer cancel()
-
-		posAtx, err := b.getPositioningAtx(ctxWithTimeout, nodeID, publish, nil)
+		posAtx, err := b.getPositioningAtx(ctx, nodeID, publish, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 		}
@@ -611,11 +608,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
 	default:
-		// regular ATX challenge
-		ctxWithTimeout, cancel := context.WithTimeout(ctx, b.poetCfg.PositioningATXSelectionTimeout)
-		defer cancel()
-
-		posAtx, err := b.getPositioningAtx(ctxWithTimeout, nodeID, publish, prevAtx)
+		posAtx, err := b.getPositioningAtx(ctx, nodeID, publish, prevAtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
 		}
@@ -919,7 +912,15 @@ func (b *Builder) getPositioningAtx(
 	publish types.EpochID,
 	previous *types.ActivationTx,
 ) (types.ATXID, error) {
-	id, err := b.searchPositioningAtx(ctx, nodeID, publish, previous)
+	ctxWithTimeout := ctx
+	var cancel context.CancelFunc
+
+	if b.poetCfg.PositioningATXSelectionTimeout > 0 {
+		ctxWithTimeout, cancel = context.WithTimeout(ctx, b.poetCfg.PositioningATXSelectionTimeout)
+		defer cancel()
+	}
+
+	id, err := b.searchPositioningAtx(ctxWithTimeout, nodeID, publish, previous)
 	if err != nil {
 		return types.EmptyATXID, err
 	}

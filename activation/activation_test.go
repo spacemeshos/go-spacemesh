@@ -1456,7 +1456,7 @@ func TestGetPositioningAtx(t *testing.T) {
 		prev.SetID(types.RandomATXID())
 
 		tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atxInDb.ID(), tab.goldenATXID, gomock.Any())
-		found, err := tab.searchPositioningAtx(context.Background(), types.EmptyNodeID, 99)
+		found, err := tab.searchPositioningAtx(context.Background(), types.EmptyNodeID, 99, prev)
 		require.NoError(t, err)
 		require.Equal(t, atxInDb.ID(), found)
 
@@ -1470,6 +1470,43 @@ func TestGetPositioningAtx(t *testing.T) {
 		selected, err = tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, prev)
 		require.NoError(t, err)
 		require.Equal(t, prev.ID(), selected)
+	})
+	t.Run("prefers own previous or golded when positioning ATX selection timout expired", func(t *testing.T) {
+		tab := newTestBuilder(t, 1)
+
+		atxInDb := &types.ActivationTx{TickCount: 100}
+		atxInDb.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(tab.db, atxInDb))
+		tab.atxsdata.AddFromAtx(atxInDb, false)
+
+		prev := &types.ActivationTx{TickCount: 90}
+		prev.SetID(types.RandomATXID())
+
+		// no timeout set up
+		tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atxInDb.ID(), tab.goldenATXID, gomock.Any())
+		found, err := tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, prev)
+		require.NoError(t, err)
+		require.Equal(t, atxInDb.ID(), found)
+
+		tab.posAtxFinder.found = nil 
+
+		// timeout set up, prev ATX exists
+		ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
+
+		selected, err := tab.getPositioningAtx(ctx, types.EmptyNodeID, 99, prev)
+		require.NoError(t, err)
+		require.Equal(t, prev.ID(), selected)
+
+		tab.posAtxFinder.found = nil 
+
+		// timeout set up, prev ATX do not exists
+		ctx, _ = context.WithTimeout(context.Background(), 1*time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
+
+		selected, err = tab.getPositioningAtx(ctx, types.EmptyNodeID, 99, nil)
+		require.NoError(t, err)
+		require.Equal(t, tab.goldenATXID, selected)
 	})
 }
 
