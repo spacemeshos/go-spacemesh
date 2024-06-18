@@ -584,7 +584,10 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	return challenge, nil
 }
 
-func (b *Builder) getExistingChallenge(logger *zap.Logger, currentEpochId types.EpochID, nodeID types.NodeID) (*types.NIPostChallenge, error) {
+func (b *Builder) getExistingChallenge(
+	logger *zap.Logger,
+	currentEpochId types.EpochID,
+	nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	challenge, err := nipost.Challenge(b.localDB, nodeID)
 
 	switch {
@@ -622,7 +625,11 @@ func (b *Builder) getExistingChallenge(logger *zap.Logger, currentEpochId types.
 	return challenge, nil
 }
 
-func (b *Builder) buildInitialNIPostChallenge(ctx context.Context, logger *zap.Logger, nodeID types.NodeID, publishEpochId types.EpochID) (*types.NIPostChallenge, error) {
+func (b *Builder) buildInitialNIPostChallenge(
+	ctx context.Context,
+	logger *zap.Logger,
+	nodeID types.NodeID,
+	publishEpochId types.EpochID) (*types.NIPostChallenge, error) {
 	post, err := nipost.GetPost(b.localDB, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("get initial post: %w", err)
