@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"math/bits"
-	"os"
 	"strconv"
 
 	"golang.org/x/exp/slices"
@@ -53,6 +52,13 @@ const (
 )
 
 // NOTE: all leafs are on the last level
+
+// type node struct {
+// 	fp          fingerprint
+// 	c           uint32
+// 	left, right uint32
+// 	refCount    atomic.Uint32
+// }
 
 type node struct {
 	// 16-byte structure with alignment
@@ -184,7 +190,7 @@ type aggResult struct {
 
 func (r *aggResult) update(node *node) {
 	r.fp.update(node.fp[:])
-	r.count += node.c
+	r.count += node.count()
 }
 
 type fpTree struct {
@@ -209,8 +215,8 @@ func (ft *fpTree) pushDown(node *node, p prefix) {
 	pushDownNode := &ft.nodes[pushDownIdx]
 
 	// QQQQQ: rm
-	idx, _ := p.cacheIndex()
-	fmt.Fprintf(os.Stderr, "QQQQQ: idx: %d pushDownIdx: %d c: %d\n", idx, pushDownIdx, pushDownNode.c)
+	// idx, _ := p.cacheIndex()
+	// fmt.Fprintf(os.Stderr, "QQQQQ: idx: %d pushDownIdx: %d c: %d\n", idx, pushDownIdx, pushDownNode.c)
 
 	if !pushDownNode.empty() {
 		panic("BUG: non-empty push down node")
@@ -233,7 +239,7 @@ func (ft *fpTree) addHash(h []byte) {
 		case node.empty():
 			node.c = uint32(vFull>>(64-cachedBits)) | nodeFlagLeaf
 			node.fp.update(h[:])
-			fmt.Fprintf(os.Stderr, "QQQQQ: leaf at idx: %d\n", idx)
+			// fmt.Fprintf(os.Stderr, "QQQQQ: leaf at idx: %d\n", idx)
 			return
 		case node.leaf():
 			// push down the old leaf
@@ -263,25 +269,35 @@ func (ft *fpTree) addHash(h []byte) {
 func (ft *fpTree) aggregateLeft(v uint64, p prefix, r *aggResult) {
 	if p.len() >= cachedBits {
 		r.tails = append(r.tails, p.bits()<<(24-p.len()))
-		fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: add tail\n", v, p)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: add tail\n", v, p)
 		return
 	}
-	idx, gotIdx := p.right().cacheIndex()
+	idx, gotIdx := p.cacheIndex()
 	if !gotIdx {
 		panic("BUG: no idx")
 	}
 	node := &ft.nodes[idx]
+	if node.empty() {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: idx=%d: %016x %s: empty node\n", idx, v, p)
+		return
+	}
 	if node.leaf() {
 		r.tails = append(r.tails, uint64(node.c & ^uint32(nodeFlagMask)))
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: leaf\n", v, p)
 		return
 	}
 	if bit := v & (1 << (63 - p.len())); bit == 0 {
-		r.update(node)
-		fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: 0 -> add count %d fp %s + go left\n", v, p,
-			node.c, node.fp)
+		rIdx, gotIdx := p.right().cacheIndex()
+		if !gotIdx {
+			panic("BUG: no idx")
+		}
+		rNode := &ft.nodes[rIdx]
+		r.update(rNode)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: 0 -> add count %d fp %s + go left\n", v, p,
+		// rNode.c, rNode.fp)
 		ft.aggregateLeft(v, p.left(), r)
 	} else {
-		fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: 1 -> go right\n", v, p)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: 1 -> go right\n", v, p)
 		ft.aggregateLeft(v, p.right(), r)
 	}
 
@@ -307,25 +323,35 @@ func (ft *fpTree) aggregateLeft(v uint64, p prefix, r *aggResult) {
 func (ft *fpTree) aggregateRight(v uint64, p prefix, r *aggResult) {
 	if p.len() >= cachedBits {
 		r.tails = append(r.tails, p.bits()<<(24-p.len()))
-		fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: add tail\n", v, p)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: add tail\n", v, p)
 		return
 	}
-	idx, gotIdx := p.left().cacheIndex()
+	idx, gotIdx := p.cacheIndex()
 	if !gotIdx {
 		panic("BUG: no idx")
 	}
 	node := &ft.nodes[idx]
+	if node.empty() {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: idx=%d: %016x %s: empty node\n", idx, v, p)
+		return
+	}
 	if node.leaf() {
 		r.tails = append(r.tails, uint64(node.c & ^uint32(nodeFlagMask)))
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: leaf\n", v, p)
 		return
 	}
 	if bit := v & (1 << (63 - p.len())); bit == 0 {
-		fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: 1 -> go left\n", v, p)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: 1 -> go left\n", v, p)
 		ft.aggregateRight(v, p.left(), r)
 	} else {
-		r.update(node)
-		fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: 0 -> add count %d fp %s + go right\n", v, p,
-			node.c, node.fp)
+		lIdx, gotIdx := p.left().cacheIndex()
+		if !gotIdx {
+			panic("BUG: no idx")
+		}
+		lNode := &ft.nodes[lIdx]
+		r.update(lNode)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: 0 -> add count %d fp %s + go right\n", v, p,
+		// lNode.c, lNode.fp)
 		ft.aggregateRight(v, p.right(), r)
 	}
 
@@ -350,6 +376,7 @@ func (ft *fpTree) aggregateRight(v uint64, p prefix, r *aggResult) {
 }
 
 func (ft *fpTree) aggregateInterval(x, y []byte) aggResult {
+	// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateInterval: %s %s\n", hex.EncodeToString(x), hex.EncodeToString(y))
 	var r aggResult
 	r.itype = bytes.Compare(x, y)
 	switch {
@@ -387,7 +414,7 @@ func (ft *fpTree) dumpNode(w io.Writer, p prefix, indent, dir string) {
 	} else {
 		countStr = strconv.Itoa(int(node.count()))
 	}
-	fmt.Fprintf(w, "%s%s%s %s\n", indent, dir, node.fp, countStr)
+	fmt.Fprintf(w, "%s%sidx=%d %s %s\n", indent, dir, idx, node.fp, countStr)
 	if !leaf {
 		indent += "  "
 		ft.dumpNode(w, p.left(), indent, "l: ")
@@ -429,8 +456,11 @@ func (mft *inMemFPTree) aggregateInterval(x, y []byte) fpResult {
 		for _, id := range ids {
 			// FIXME: this can be optimized as the IDs are ordered
 			if idWithinInterval(id, x, y, r.itype) {
+				// fmt.Fprintf(os.Stderr, "QQQQQ: including tail: %s\n", hex.EncodeToString(id))
 				r.fp.update(id)
 				r.count++
+			} else {
+				// fmt.Fprintf(os.Stderr, "QQQQQ: NOT including tail: %s\n", hex.EncodeToString(id))
 			}
 		}
 	}

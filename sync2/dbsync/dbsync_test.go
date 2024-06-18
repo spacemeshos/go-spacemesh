@@ -1,6 +1,7 @@
 package dbsync
 
 import (
+	"bytes"
 	"math/bits"
 	"slices"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
+	// "golang.org/x/exp/rand"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -315,4 +317,93 @@ func TestInMemFPTree(t *testing.T) {
 		count: 3,
 	}, mft.aggregateInterval(hs[1][:], hs[4][:]))
 	// TBD: test reverse range
+}
+
+func TestInMemFPTreeRmme1(t *testing.T) {
+	var mft inMemFPTree
+	var hs []types.Hash32
+	for _, hex := range []string{
+		"829977b444c8408dcddc1210536f3b3bdc7fd97777426264b9ac8f70b97a7fd1",
+		"6e476ca729c3840d0118785496e488124ee7dade1aef0c87c6edc78f72e4904f",
+		"a280bcb8123393e0d4a15e5c9850aab5dddffa03d5efa92e59bc96202e8992bc",
+		"e93163f908630280c2a8bffd9930aa684be7a3085432035f5c641b0786590d1d",
+	} {
+		t.Logf("QQQQQ: ADD: %s", hex)
+		h := types.HexToHash32(hex)
+		hs = append(hs, h)
+		mft.addHash(h[:])
+	}
+	var sb strings.Builder
+	mft.tree.dump(&sb)
+	t.Logf("QQQQQ: tree:\n%s", sb.String())
+	require.Equal(t, hexToFingerprint("a76fc452775b55e0dacd8be5"), mft.tree.nodes[0].fp)
+	require.Equal(t, fpResult{
+		fp:    hexToFingerprint("2019cb0c56fbd36d197d4c4c"),
+		count: 2,
+	}, mft.aggregateInterval(hs[0][:], hs[3][:]))
+}
+
+type hashList []types.Hash32
+
+func (l hashList) findGTE(h types.Hash32) int {
+	p, _ := slices.BinarySearchFunc(l, h, func(a, b types.Hash32) int {
+		return a.Compare(b)
+	})
+	return p
+}
+
+func TestInMemFPTreeManyItems(t *testing.T) {
+	var mft inMemFPTree
+	const numItems = 1 << 20
+	hs := make(hashList, numItems)
+	var fp fingerprint
+	for i := range hs {
+		h := types.RandomHash()
+		hs[i] = h
+		mft.addHash(h[:])
+		fp.update(h[:])
+	}
+	// var sb strings.Builder
+	// mft.tree.dump(&sb)
+	// t.Logf("QQQQQ: tree:\n%s", sb.String())
+	slices.SortFunc(hs, func(a, b types.Hash32) int {
+		return a.Compare(b)
+	})
+	// for i, h := range hs {
+	// 	t.Logf("h[%d] = %s", i, h.String())
+	// }
+	require.Equal(t, fp, mft.tree.nodes[0].fp)
+	for i := 0; i < 100; i++ {
+		// TBD: allow reverse order
+		// TBD: pick some intervals from the hashes
+		x := types.RandomHash()
+		y := types.RandomHash()
+		// x := hs[rand.Intn(numItems)]
+		// y := hs[rand.Intn(numItems)]
+		c := bytes.Compare(x[:], y[:])
+		var (
+			expFP fingerprint
+			expN  uint32
+		)
+		if c > 0 {
+			x, y = y, x
+		}
+		if c == 0 {
+			expFP = fp
+			expN = numItems
+		} else {
+			pX := hs.findGTE(x)
+			pY := hs.findGTE(y)
+			// t.Logf("x=%s y=%s pX=%d y=%d", x.String(), y.String(), pX, pY)
+			for p := pX; p < pY; p++ {
+				// t.Logf("XOR %s", hs[p].String())
+				expFP.update(hs[p][:])
+			}
+			expN = uint32(pY - pX)
+		}
+		require.Equal(t, fpResult{
+			fp:    expFP,
+			count: expN,
+		}, mft.aggregateInterval(x[:], y[:]))
+	}
 }
