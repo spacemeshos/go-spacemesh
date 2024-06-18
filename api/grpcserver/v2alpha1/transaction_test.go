@@ -85,6 +85,7 @@ func TestTransactionService_List(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Len(t, list.Transactions, len(txsList))
+		require.Equal(t, len(txsList), int(list.Total))
 	})
 
 	t.Run("address", func(t *testing.T) {

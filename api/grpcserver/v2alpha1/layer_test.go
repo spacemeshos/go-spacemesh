@@ -80,6 +80,7 @@ func TestLayerService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, lrs, len(ls.Layers))
+		require.Equal(t, len(lrs), int(ls.Total))
 	})
 }
 
