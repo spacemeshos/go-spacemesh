@@ -65,6 +65,7 @@ func TestRewardService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Rewards, 25)
+		require.Equal(t, len(rwds), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {

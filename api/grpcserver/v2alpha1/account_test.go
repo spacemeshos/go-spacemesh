@@ -97,6 +97,7 @@ func TestAccountService_List(t *testing.T) {
 		require.NoError(t, err)
 		fmt.Println(list)
 		require.Len(t, list.Accounts, 25)
+		require.Equal(t, len(accs), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
