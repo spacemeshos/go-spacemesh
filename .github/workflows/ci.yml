@@ -130,7 +130,7 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - [gh-linux-arm64, linux, arm64]
+          - [ubuntu-latest-arm-8-cores, linux, arm64]
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-2022
@@ -182,7 +182,7 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - [gh-linux-arm64, linux, arm64]
+          - [ubuntu-latest-arm-8-cores, linux, arm64]
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-2022
@@ -232,7 +232,7 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - [gh-linux-arm64, linux, arm64]
+          - [ubuntu-latest-arm-8-cores, linux, arm64]
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-2022
