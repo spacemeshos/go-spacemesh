@@ -9,6 +9,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 //go:generate scalegen
@@ -28,75 +30,66 @@ type ProofDoubleMarry struct {
 
 var _ Proof = &ProofDoubleMarry{}
 
-func NewDoubleMarryProof(atx1, atx2 *ActivationTxV2, nodeID types.NodeID) (*ProofDoubleMarry, error) {
+func NewDoubleMarryProof(db sql.Executor, atx1, atx2 *ActivationTxV2, nodeID types.NodeID) (*ProofDoubleMarry, error) {
 	if atx1.ID() == atx2.ID() {
 		return nil, errors.New("ATXs have the same ID")
 	}
 
-	atx1Index := slices.IndexFunc(atx1.Marriages, func(cert MarriageCertificate) bool {
-		return cert.ID == nodeID
-	})
-	if atx1Index == -1 {
-		return nil, errors.New("ATX 1 does not contain a marriage certificate signed by the given node ID")
-	}
-	atx2Index := slices.IndexFunc(atx2.Marriages, func(cert MarriageCertificate) bool {
-		return cert.ID == nodeID
-	})
-	if atx2Index == -1 {
-		return nil, errors.New("ATX 2 does not contain a marriage certificate signed by the given node ID")
+	proof1, err := createMarryProof(db, atx1, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("proof for atx1: %w", err)
 	}
 
-	proof1, err := marriageProof(atx1)
+	proof2, err := createMarryProof(db, atx2, nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create proof for ATX 1: %w", err)
-	}
-
-	proof2, err := marriageProof(atx2)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create proof for ATX 2: %w", err)
-	}
-
-	certProof1, err := certificateProof(atx1.Marriages, uint64(atx1Index))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create certificate proof for ATX 1: %w", err)
-	}
-
-	certProof2, err := certificateProof(atx2.Marriages, uint64(atx2Index))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create certificate proof for ATX 2: %w", err)
+		return nil, fmt.Errorf("proof for atx2: %w", err)
 	}
 
 	proof := &ProofDoubleMarry{
-		Proofs: [2]MarryProof{
-			{
-				ATXID:  atx1.ID(),
-				NodeID: nodeID,
+		Proofs: [2]MarryProof{proof1, proof2},
+	}
+	return proof, nil
+}
 
-				MarriageRoot:  types.Hash32(atx1.Marriages.Root()),
-				MarriageProof: proof1,
+func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID) (MarryProof, error) {
+	marriageProof, err := marriageProof(atx)
+	if err != nil {
+		return MarryProof{}, fmt.Errorf("failed to create proof for ATX 1: %w", err)
+	}
 
-				CertificateSignature: atx1.Marriages[atx1Index].Signature,
-				CertificateIndex:     uint64(atx1Index),
-				CertificateProof:     certProof1,
+	marriageIndex := slices.IndexFunc(atx.Marriages, func(cert MarriageCertificate) bool {
+		if cert.ReferenceAtx == types.EmptyATXID && atx.SmesherID == nodeID {
+			// special case of the self signed certificate of the ATX publisher
+			return true
+		}
+		refATX, err := atxs.Get(db, cert.ReferenceAtx)
+		if err != nil {
+			return false
+		}
+		return refATX.SmesherID == nodeID
+	})
+	if marriageIndex == -1 {
+		return MarryProof{}, fmt.Errorf("does not contain a marriage certificate signed by %s", nodeID.ShortString())
+	}
+	certProof, err := certificateProof(atx.Marriages, uint64(marriageIndex))
+	if err != nil {
+		return MarryProof{}, fmt.Errorf("failed to create certificate proof for ATX 1: %w", err)
+	}
 
-				SmesherID: atx1.SmesherID,
-				Signature: atx1.Signature,
-			},
-			{
-				ATXID:  atx2.ID(),
-				NodeID: nodeID,
+	proof := MarryProof{
+		ATXID:  atx.ID(),
+		NodeID: nodeID,
 
-				MarriageRoot:  types.Hash32(atx2.Marriages.Root()),
-				MarriageProof: proof2,
+		MarriageRoot:  types.Hash32(atx.Marriages.Root()),
+		MarriageProof: marriageProof,
 
-				CertificateSignature: atx2.Marriages[atx2Index].Signature,
-				CertificateIndex:     uint64(atx2Index),
-				CertificateProof:     certProof2,
+		CertificateReference: atx.Marriages[marriageIndex].ReferenceAtx,
+		CertificateSignature: atx.Marriages[marriageIndex].Signature,
+		CertificateIndex:     uint64(marriageIndex),
+		CertificateProof:     certProof,
 
-				SmesherID: atx2.SmesherID,
-				Signature: atx2.Signature,
-			},
-		},
+		SmesherID: atx.SmesherID,
+		Signature: atx.Signature,
 	}
 	return proof, nil
 }
@@ -166,6 +159,7 @@ type MarryProof struct {
 
 	// The signature of the certificate and the proof that the certificate is contained in the MarriageRoot at
 	// the given index.
+	CertificateReference types.ATXID
 	CertificateSignature types.EdSignature
 	CertificateIndex     uint64
 	CertificateProof     []types.Hash32 `scale:"max=32"`
@@ -204,8 +198,8 @@ func (p MarryProof) Valid(edVerifier *signing.EdVerifier) error {
 	}
 
 	mc := MarriageCertificate{
-		ID:        p.NodeID,
-		Signature: p.CertificateSignature,
+		ReferenceAtx: p.CertificateReference,
+		Signature:    p.CertificateSignature,
 	}
 
 	certProof := make([][]byte, len(p.CertificateProof))

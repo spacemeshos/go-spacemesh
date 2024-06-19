@@ -15,11 +15,11 @@ func WithPublishEpoch(epoch types.EpochID) testAtxV2Opt {
 	}
 }
 
-func WithMarriageCertificate(sig *signing.EdSigner, atxPublisher types.NodeID) testAtxV2Opt {
+func WithMarriageCertificate(sig *signing.EdSigner, refAtx types.ATXID, atxPublisher types.NodeID) testAtxV2Opt {
 	return func(atx *ActivationTxV2) {
 		certificate := MarriageCertificate{
-			ID:        sig.NodeID(),
-			Signature: sig.Sign(signing.MARRIAGE, atxPublisher.Bytes()),
+			ReferenceAtx: refAtx,
+			Signature:    sig.Sign(signing.MARRIAGE, atxPublisher.Bytes()),
 		}
 		atx.Marriages = append(atx.Marriages, certificate)
 	}
