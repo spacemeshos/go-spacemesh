@@ -884,7 +884,6 @@ func (b *Builder) searchPositioningAtx(
 		VerifyChainOpts.WithTrustedID(nodeID),
 		VerifyChainOpts.WithLogger(b.logger),
 	)
-
 	if err != nil {
 		if previous != nil {
 			id = previous.ID()

@@ -1488,7 +1488,7 @@ func TestGetPositioningAtx(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, atxInDb.ID(), found)
 
-		tab.posAtxFinder.found = nil 
+		tab.posAtxFinder.found = nil
 
 		// timeout set up, prev ATX exists
 		ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
@@ -1498,7 +1498,7 @@ func TestGetPositioningAtx(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, prev.ID(), selected)
 
-		tab.posAtxFinder.found = nil 
+		tab.posAtxFinder.found = nil
 
 		// timeout set up, prev ATX do not exists
 		ctx, _ = context.WithTimeout(context.Background(), 1*time.Millisecond)
