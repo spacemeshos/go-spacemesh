@@ -7,21 +7,24 @@ import (
 	"fmt"
 	"io"
 	"math/bits"
+	"slices"
 	"strconv"
-
-	"golang.org/x/exp/slices"
 )
 
 const (
 	fingerprintBytes = 12
-	cachedBits       = 24
-	cachedSize       = 1 << cachedBits
-	cacheMask        = cachedSize - 1
-	maxIDBytes       = 32
-	bit63            = 1 << 63
+	// cachedBits       = 24
+	// cachedSize       = 1 << cachedBits
+	// cacheMask        = cachedSize - 1
+	maxIDBytes = 32
+	bit63      = 1 << 63
 )
 
 type fingerprint [fingerprintBytes]byte
+
+func (fp fingerprint) Compare(other fingerprint) int {
+	return bytes.Compare(fp[:], other[:])
+}
 
 func (fp fingerprint) String() string {
 	return hex.EncodeToString(fp[:])
@@ -31,6 +34,13 @@ func (fp *fingerprint) update(h []byte) {
 	for n := range *fp {
 		(*fp)[n] ^= h[n]
 	}
+}
+
+func (fp *fingerprint) bitFromLeft(n int) bool {
+	if n > fingerprintBytes*8 {
+		panic("BUG: bad fingerprint bit index")
+	}
+	return (fp[n>>3]>>(7-n&0x7))&1 != 0
 }
 
 func hexToFingerprint(s string) fingerprint {
@@ -46,43 +56,142 @@ func hexToFingerprint(s string) fingerprint {
 	return fp
 }
 
-const (
-	nodeFlagLeaf = 1 << 31
-	nodeFlagMask = nodeFlagLeaf
-)
+// const (
+// 	nodeFlagLeaf = 1 << 31
+// 	nodeFlagMask = nodeFlagLeaf
+// )
 
 // NOTE: all leafs are on the last level
 
-// type node struct {
-// 	fp          fingerprint
-// 	c           uint32
-// 	left, right uint32
-// 	refCount    atomic.Uint32
+// type nodeIndex uint32
+
+// const noIndex nodeIndex = ^nodeIndex(0)
+
+// // TODO: nodePool limiting
+// type nodePool struct {
+// 	mtx   sync.Mutex
+// 	nodes []node
+// 	// freeList is 1-based so that nodePool doesn't need a constructor
+// 	freeList nodeIndex
 // }
 
+// func (np *nodePool) node(idx nodeIndex) node {
+// 	np.mtx.Lock()
+// 	defer np.mtx.Unlock()
+// 	return np.nodeUnlocked(idx)
+// }
+
+// func (np *nodePool) nodeUnlocked(idx nodeIndex) node {
+// 	node := &np.nodes[idx]
+// 	refs := node.refCount
+// 	if refs < 0 {
+// 		panic("BUG: negative nodePool entry refcount")
+// 	} else if refs == 0 {
+// 		panic("BUG: referencing a free nodePool entry")
+// 	}
+// 	return *node
+// }
+
+// func (np *nodePool) add(fp fingerprint, c uint32, left, right nodeIndex) nodeIndex {
+// 	np.mtx.Lock()
+// 	defer np.mtx.Unlock()
+// 	var idx nodeIndex
+// 	// validate indices
+// 	if left != noIndex {
+// 		np.nodeUnlocked(left)
+// 	}
+// 	if right != noIndex {
+// 		np.nodeUnlocked(right)
+// 	}
+// 	if np.freeList != 0 {
+// 		idx = nodeIndex(np.freeList - 1)
+// 		np.freeList = np.nodes[idx].left
+// 		np.nodes[idx].refCount++
+// 		if np.nodes[idx].refCount != 1 {
+// 			panic("BUG: refCount != 1 for a node taken from the freelist")
+// 		}
+// 	} else {
+// 		idx = nodeIndex(len(np.nodes))
+// 		np.nodes = append(np.nodes, node{refCount: 1})
+// 	}
+// 	node := &np.nodes[idx]
+// 	node.fp = fp
+// 	node.c = c
+// 	node.left = left
+// 	node.right = right
+// 	return idx
+// }
+
+// func (np *nodePool) release(idx nodeIndex) {
+// 	np.mtx.Lock()
+// 	defer np.mtx.Unlock()
+// 	node := &np.nodes[idx]
+// 	if node.refCount <= 0 {
+// 		panic("BUG: negative nodePool entry refcount")
+// 	}
+// 	node.refCount--
+// 	if node.refCount == 0 {
+// 		node.left = np.freeList
+// 		np.freeList = idx + 1
+// 	}
+// }
+
+// func (np *nodePool) ref(idx nodeIndex) {
+// 	np.mtx.Lock()
+// 	np.nodes[idx].refCount++
+// 	np.mtx.Unlock()
+// }
+
+type nodeIndex uint32
+
+const noIndex = ^nodeIndex(0)
+
+type nodePool struct {
+	rcPool[node, nodeIndex]
+}
+
+func (np *nodePool) add(fp fingerprint, c uint32, left, right nodeIndex) nodeIndex {
+	return np.rcPool.add(node{fp: fp, c: c, left: left, right: right})
+}
+
+func (np *nodePool) node(idx nodeIndex) node {
+	return np.rcPool.item(idx)
+}
+
+// fpTree node.
+// The nodes are immutable except for refCount field, which should
+// only be used directly by nodePool methods
 type node struct {
-	// 16-byte structure with alignment
-	// The cache is 512 MiB per 1<<24 (16777216) IDs
-	fp fingerprint
-	c  uint32
+	fp          fingerprint
+	c           uint32
+	left, right nodeIndex
 }
 
-func (node *node) empty() bool {
-	return node.c == 0
+func (n node) leaf() bool {
+	return n.left == noIndex && n.right == noIndex
 }
 
-func (node *node) leaf() bool {
-	return node.c&nodeFlagLeaf != 0
-}
+// type node struct {
+// 	// 16-byte structure with alignment
+// 	// The cache is 512 MiB per 1<<24 (16777216) IDs
+// 	fp fingerprint
+// 	c  uint32
+// }
 
-func (node *node) count() uint32 {
-	if node.leaf() {
-		return 1
-	}
-	return node.c
-}
+// func (node *node) empty() bool {
+// 	return node.c == 0
+// }
 
-type cacheIndex uint32
+// func (node *node) leaf() bool {
+// 	return node.c&nodeFlagLeaf != 0
+// }
+
+// func (node *node) count() uint32 {
+// 	if node.leaf() {
+// 		return 1
+// 	}
+// 	return node.c
+// }
 
 const (
 	prefixLenBits = 6
@@ -113,27 +222,11 @@ func (p prefix) right() prefix {
 	return p.left() + (1 << prefixLenBits)
 }
 
-func (p prefix) cacheIndex() (cacheIndex, bool) {
-	if l := p.len(); l <= cachedBits {
-		// Notation: prefix(cacheIndex)
-		//
-		//          empty(0)
-		//         /       \
-		//        /         \
-		//       /           \
-		//     0(1)          1(2)
-		//    /   \         /   \
-		//   /     \       /     \
-		// 00(3)  01(4)  10(5)  11(6)
-
-		// indexing starts at 1
-		// left:  n = n*2
-		// right: n = n*2+1
-		// but in the end we substract 1 to make it 0-based again
-
-		return cacheIndex(p.bits() | (1 << l) - 1), true
+func (p prefix) dir(bit bool) prefix {
+	if bit {
+		return p.right()
 	}
-	return 0, false
+	return p.left()
 }
 
 func (p prefix) String() string {
@@ -144,29 +237,48 @@ func (p prefix) String() string {
 	return fmt.Sprintf("<%d:%s>", p.len(), b[64-p.len():])
 }
 
+func (p prefix) highBit() bool {
+	if p == 0 {
+		return false
+	}
+	return p.bits()>>(p.len()-1) != 0
+}
+
+// shift removes the highest bit from the prefix
+// TBD: QQQQQ: test shift
+func (p prefix) shift() prefix {
+	switch l := uint64(p.len()); l {
+	case 0:
+		panic("BUG: can't shift zero prefix")
+	case 1:
+		return 0
+	default:
+		return prefix(((p.bits() & ((1 << (l - 1)) - 1)) << prefixLenBits) + l - 1)
+	}
+}
+
 func load64(h []byte) uint64 {
 	return binary.BigEndian.Uint64(h[:8])
 }
 
-func hashPrefix(h []byte, nbits int) prefix {
-	if nbits < 0 || nbits > maxPrefixLen {
-		panic("BUG: bad prefix length")
-	}
-	if nbits == 0 {
-		return 0
-	}
-	v := load64(h)
-	return prefix((v>>(64-nbits-prefixLenBits))&prefixBitMask + uint64(nbits))
-}
+// func hashPrefix(h []byte, nbits int) prefix {
+// 	if nbits < 0 || nbits > maxPrefixLen {
+// 		panic("BUG: bad prefix length")
+// 	}
+// 	if nbits == 0 {
+// 		return 0
+// 	}
+// 	v := load64(h)
+// 	return prefix((v>>(64-nbits-prefixLenBits))&prefixBitMask + uint64(nbits))
+// }
 
 func preFirst0(h []byte) prefix {
 	l := min(maxPrefixLen, bits.LeadingZeros64(^load64(h)))
-	return hashPrefix(h, l)
+	return prefix(((1<<l)-1)<<prefixLenBits + l)
 }
 
 func preFirst1(h []byte) prefix {
-	l := min(maxPrefixLen, bits.LeadingZeros64(load64(h)))
-	return hashPrefix(h, l)
+	return prefix(min(maxPrefixLen, bits.LeadingZeros64(load64(h))))
 }
 
 func commonPrefix(a, b []byte) prefix {
@@ -176,203 +288,210 @@ func commonPrefix(a, b []byte) prefix {
 	return prefix((v1>>(64-l))<<prefixLenBits + l)
 }
 
-type fpResult struct {
-	fp    fingerprint
-	count uint32
-}
-
 type aggResult struct {
-	tails []uint64
-	fp    fingerprint
-	count uint32
-	itype int
+	tailRefs []uint64
+	fp       fingerprint
+	count    uint32
+	itype    int
 }
 
-func (r *aggResult) update(node *node) {
+func (r *aggResult) update(node node) {
 	r.fp.update(node.fp[:])
-	r.count += node.count()
+	r.count += node.c
+	// fmt.Fprintf(os.Stderr, "QQQQQ: r.count <= %d r.fp <= %s\n", r.count, r.fp)
 }
 
 type fpTree struct {
-	nodes [cachedSize * 2]node
+	np       *nodePool
+	root     nodeIndex
+	maxDepth int
 }
 
-func (ft *fpTree) pushDown(node *node, p prefix) {
-	if p.len() >= cachedBits {
-		return
+func newFPTree(np *nodePool, maxDepth int) *fpTree {
+	return &fpTree{np: np, root: noIndex, maxDepth: maxDepth}
+}
+
+func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) nodeIndex {
+	// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: fpA %s fpB %s p %s\n", fpA.String(), fpB.String(), p)
+	fpCombined := fpA
+	fpCombined.update(fpB[:])
+	if ft.maxDepth != 0 && p.len() == ft.maxDepth {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: add at maxDepth\n")
+		return ft.np.add(fpCombined, curCount+1, noIndex, noIndex)
 	}
-	pushDownBit := node.c & (1 << (cachedBits - 1 - p.len()))
-	var pushDownPrefix prefix
-	if pushDownBit == 0 {
-		pushDownPrefix = p.left()
+	if curCount != 1 {
+		panic("BUG: pushDown of non-1-leaf below maxDepth")
+	}
+	dirA := fpA.bitFromLeft(p.len())
+	dirB := fpB.bitFromLeft(p.len())
+	// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: bitFromLeft %d: dirA %v dirB %v\n", p.len(), dirA, dirB)
+	if dirA == dirB {
+		childIdx := ft.pushDown(fpA, fpB, p.dir(dirA), 1)
+		if dirA {
+			// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: sameDir: left\n")
+			return ft.np.add(fpCombined, 2, noIndex, childIdx)
+		} else {
+			// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: sameDir: right\n")
+			return ft.np.add(fpCombined, 2, childIdx, noIndex)
+		}
+	}
+
+	idxA := ft.np.add(fpA, 1, noIndex, noIndex)
+	idxB := ft.np.add(fpB, curCount, noIndex, noIndex)
+	if dirA {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: add A-B\n")
+		return ft.np.add(fpCombined, 2, idxB, idxA)
 	} else {
-		pushDownPrefix = p.right()
+		// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: add B-A\n")
+		return ft.np.add(fpCombined, 2, idxA, idxB)
 	}
-	pushDownIdx, haveIdx := pushDownPrefix.cacheIndex()
-	if !haveIdx {
-		panic("BUG: no idx for pushDownPrefix")
-	}
-	pushDownNode := &ft.nodes[pushDownIdx]
+}
 
-	// QQQQQ: rm
-	// idx, _ := p.cacheIndex()
-	// fmt.Fprintf(os.Stderr, "QQQQQ: idx: %d pushDownIdx: %d c: %d\n", idx, pushDownIdx, pushDownNode.c)
-
-	if !pushDownNode.empty() {
-		panic("BUG: non-empty push down node")
+func (ft *fpTree) addValue(fp fingerprint, p prefix, idx nodeIndex) nodeIndex {
+	if idx == noIndex {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: addNew fp %s p %s idx %d\n", fp.String(), p.String(), idx)
+		return ft.np.add(fp, 1, noIndex, noIndex)
 	}
-	pushDownNode.c = node.c
-	pushDownNode.fp = node.fp
+	node := ft.np.node(idx)
+	// We've got a copy of the node, so we release it right away.
+	// This way, it'll likely be reused for the new nodes created
+	// as this hash is being added, as the node pool's freeList is
+	// LIFO
+	ft.np.release(idx)
+	if node.c == 1 || (ft.maxDepth != 0 && p.len() == ft.maxDepth) {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: pushDown fp %s p %s idx %d\n", fp.String(), p.String(), idx)
+		// we're at a leaf node, need to push down the old fingerprint, or,
+		// if we've reached the max depth, just update the current node
+		return ft.pushDown(fp, node.fp, p, node.c)
+	}
+	fpCombined := fp
+	fpCombined.update(node.fp[:])
+	if fp.bitFromLeft(p.len()) {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceRight fp %s p %s idx %d\n", fp.String(), p.String(), idx)
+		newRight := ft.addValue(fp, p.right(), node.right)
+		return ft.np.add(fpCombined, node.c+1, node.left, newRight)
+	} else {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceLeft fp %s p %s idx %d\n", fp.String(), p.String(), idx)
+		newLeft := ft.addValue(fp, p.left(), node.left)
+		return ft.np.add(fpCombined, node.c+1, newLeft, node.right)
+	}
 }
 
 func (ft *fpTree) addHash(h []byte) {
-	var p prefix
-	v := binary.BigEndian.Uint64(h[:8])
-	vFull := v
-	for {
-		idx, haveIdx := p.cacheIndex()
-		if !haveIdx {
-			panic("BUG: no cache idx")
-		}
-		node := &ft.nodes[idx]
-		switch {
-		case node.empty():
-			node.c = uint32(vFull>>(64-cachedBits)) | nodeFlagLeaf
-			node.fp.update(h[:])
-			// fmt.Fprintf(os.Stderr, "QQQQQ: leaf at idx: %d\n", idx)
-			return
-		case node.leaf():
-			// push down the old leaf
-			ft.pushDown(node, p)
-			node.c = 2
-			node.fp.update(h[:])
-		default:
-			node.c++
-			node.fp.update(h[:])
-		}
-		switch {
-		case !haveIdx:
-			panic("BUG: no cache idx")
-		case p.len() > cachedBits:
-			panic("BUG: prefix too long")
-		case p.len() == cachedBits:
-			return
-		case v&bit63 == 0:
-			p = p.left()
-		default:
-			p = p.right()
-		}
-		v <<= 1
+	var fp fingerprint
+	fp.update(h)
+	ft.root = ft.addValue(fp, 0, ft.root)
+	// fmt.Fprintf(os.Stderr, "QQQQQ: addHash: new root %d\n", ft.root)
+}
+
+func (ft *fpTree) followPrefix(from nodeIndex, p prefix) (nodeIndex, bool) {
+	// fmt.Fprintf(os.Stderr, "QQQQQ: followPrefix: from %d p %s highBit %v\n", from, p, p.highBit())
+	switch {
+	case p == 0:
+		return from, true
+	case from == noIndex:
+		return noIndex, false
+	case ft.np.node(from).leaf():
+		return from, false
+	case p.highBit():
+		return ft.followPrefix(ft.np.node(from).right, p.shift())
+	default:
+		return ft.followPrefix(ft.np.node(from).left, p.shift())
 	}
 }
 
-func (ft *fpTree) aggregateLeft(v uint64, p prefix, r *aggResult) {
-	if p.len() >= cachedBits {
-		r.tails = append(r.tails, p.bits()<<(24-p.len()))
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: add tail\n", v, p)
-		return
+func (ft *fpTree) tailRefFromPrefix(p prefix) uint64 {
+	if p.len() != ft.maxDepth {
+		panic("BUG: tail from short prefix")
 	}
-	idx, gotIdx := p.cacheIndex()
-	if !gotIdx {
-		panic("BUG: no idx")
-	}
-	node := &ft.nodes[idx]
-	if node.empty() {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: idx=%d: %016x %s: empty node\n", idx, v, p)
-		return
-	}
-	if node.leaf() {
-		r.tails = append(r.tails, uint64(node.c & ^uint32(nodeFlagMask)))
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: leaf\n", v, p)
-		return
-	}
-	if bit := v & (1 << (63 - p.len())); bit == 0 {
-		rIdx, gotIdx := p.right().cacheIndex()
-		if !gotIdx {
-			panic("BUG: no idx")
-		}
-		rNode := &ft.nodes[rIdx]
-		r.update(rNode)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: 0 -> add count %d fp %s + go left\n", v, p,
-		// rNode.c, rNode.fp)
-		ft.aggregateLeft(v, p.left(), r)
-	} else {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: 1 -> go right\n", v, p)
-		ft.aggregateLeft(v, p.right(), r)
-	}
-
-	// switch {
-	// case p.len() >= cachedBits:
-	// 	r.tails = append(r.tails, p)
-	// 	fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: add tail\n", v, p)
-	// case bit == 0:
-	// 	idx, gotIdx := p.right().cacheIndex()
-	// 	if !gotIdx {
-	// 		panic("BUG: no idx")
-	// 	}
-	// 	r.update(&ft.nodes[idx])
-	// 	fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: 0 -> add count %d fp %s\n", v, p,
-	// 		ft.nodes[idx].c, ft.nodes[idx].fp)
-	// 	ft.aggregateLeft(v, p.left(), r)
-	// default:
-	// 	fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: %016x %s: 1 -> go right\n", v, p)
-	// 	ft.aggregateLeft(v, p.right(), r)
-	// }
+	return p.bits()
 }
 
-func (ft *fpTree) aggregateRight(v uint64, p prefix, r *aggResult) {
-	if p.len() >= cachedBits {
-		r.tails = append(r.tails, p.bits()<<(24-p.len()))
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: add tail\n", v, p)
-		return
+func (ft *fpTree) tailRefFromFingerprint(fp fingerprint) uint64 {
+	v := load64(fp[:])
+	if ft.maxDepth >= 64 {
+		return v
 	}
-	idx, gotIdx := p.cacheIndex()
-	if !gotIdx {
-		panic("BUG: no idx")
-	}
-	node := &ft.nodes[idx]
-	if node.empty() {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: idx=%d: %016x %s: empty node\n", idx, v, p)
-		return
-	}
-	if node.leaf() {
-		r.tails = append(r.tails, uint64(node.c & ^uint32(nodeFlagMask)))
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: leaf\n", v, p)
-		return
-	}
-	if bit := v & (1 << (63 - p.len())); bit == 0 {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: 1 -> go left\n", v, p)
-		ft.aggregateRight(v, p.left(), r)
-	} else {
-		lIdx, gotIdx := p.left().cacheIndex()
-		if !gotIdx {
-			panic("BUG: no idx")
-		}
-		lNode := &ft.nodes[lIdx]
-		r.update(lNode)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: 0 -> add count %d fp %s + go right\n", v, p,
-		// lNode.c, lNode.fp)
-		ft.aggregateRight(v, p.right(), r)
-	}
+	// fmt.Fprintf(os.Stderr, "QQQQQ: AAAAA: v %016x maxDepth %d shift %d\n", v, ft.maxDepth, (64 - ft.maxDepth))
+	return v >> (64 - ft.maxDepth)
+}
 
-	// bit := v & (1 << (63 - p.len()))
-	// switch {
-	// case p.len() >= cachedBits:
-	// 	r.tails = append(r.tails, p)
-	// 	fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: add tail\n", v, p)
-	// case bit == 0:
-	// 	fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: 0 -> go left\n", v, p)
-	// 	ft.aggregateRight(v, p.left(), r)
-	// default:
-	// 	idx, gotIdx := p.left().cacheIndex()
-	// 	if !gotIdx {
-	// 		panic("BUG: no idx")
-	// 	}
-	// 	r.update(&ft.nodes[idx])
-	// 	fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight: %016x %s: 1 -> add count %d fp %s + go right\n", v, p,
-	// 		ft.nodes[idx].c, ft.nodes[idx].fp)
-	// 	ft.aggregateRight(v, p.right(), r)
-	// }
+func (ft *fpTree) tailRefFromNodeAndPrefix(n node, p prefix) uint64 {
+	if n.c == 1 {
+		return ft.tailRefFromFingerprint(n.fp)
+	} else {
+		return ft.tailRefFromPrefix(p)
+	}
+}
+
+func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, r *aggResult) {
+	if idx == noIndex {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft %d %016x %s: noIndex\n", idx, v, p)
+		return
+	}
+	node := ft.np.node(idx)
+	switch {
+	case p.len() == ft.maxDepth:
+		if node.left != noIndex || node.right != noIndex {
+			panic("BUG: node @ maxDepth has children")
+		}
+		tail := ft.tailRefFromPrefix(p)
+		r.tailRefs = append(r.tailRefs, tail)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft %d %016x %s: hit maxDepth, add prefix to the tails: %016x\n", idx, v, p, tail)
+	case node.leaf():
+		// For leaf 1-nodes, we can use the fingerprint to get tailRef
+		// by which the actual IDs will be selected
+		if node.c != 1 {
+			panic("BUG: leaf non-1 node below maxDepth")
+		}
+		tail := ft.tailRefFromFingerprint(node.fp)
+		r.tailRefs = append(r.tailRefs, tail)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft %d %016x %s: hit 1-leaf, add prefix to the tails: %016x (fp %s)\n", idx, v, p, tail, node.fp)
+	case v&bit63 == 0:
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft %d %016x %s: incl right node %d + go left to node %d\n", idx, v, p, node.right, node.left)
+		if node.right != noIndex {
+			r.update(ft.np.node(node.right))
+		}
+		ft.aggregateLeft(node.left, v<<1, p.left(), r)
+	default:
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft %d %016x %s: go right node %d\n", idx, v, p, node.right)
+		ft.aggregateLeft(node.right, v<<1, p.right(), r)
+	}
+}
+
+func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, r *aggResult) {
+	if idx == noIndex {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight %d %016x %s: noIndex\n", idx, v, p)
+		return
+	}
+	node := ft.np.node(idx)
+	switch {
+	case p.len() == ft.maxDepth:
+		if node.left != noIndex || node.right != noIndex {
+			panic("BUG: node @ maxDepth has children")
+		}
+		tail := ft.tailRefFromPrefix(p)
+		r.tailRefs = append(r.tailRefs, tail)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight %d %016x %s: hit maxDepth, add prefix to the tails: %016x\n", idx, v, p, tail)
+	case node.leaf():
+		// For leaf 1-nodes, we can use the fingerprint to get tailRef
+		// by which the actual IDs will be selected
+		if node.c != 1 {
+			panic("BUG: leaf non-1 node below maxDepth")
+		}
+		tail := ft.tailRefFromFingerprint(node.fp)
+		r.tailRefs = append(r.tailRefs, tail)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight %d %016x %s: hit 1-leaf, add prefix to the tails: %016x (fp %s)\n", idx, v, p, tail, node.fp)
+	case v&bit63 == 0:
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight %d %016x %s: go left to node %d\n", idx, v, p, node.left)
+		ft.aggregateRight(node.left, v<<1, p.left(), r)
+	default:
+		// fmt.Fprintf(os.Stderr, "QQQQQ: aggregateRight %d %016x %s: incl left node %d + go right to node %d\n", idx, v, p, node.left, node.right)
+		if node.left != noIndex {
+			r.update(ft.np.node(node.left))
+		}
+		ft.aggregateRight(node.right, v<<1, p.right(), r)
+	}
 }
 
 func (ft *fpTree) aggregateInterval(x, y []byte) aggResult {
@@ -382,62 +501,103 @@ func (ft *fpTree) aggregateInterval(x, y []byte) aggResult {
 	switch {
 	case r.itype == 0:
 		// the whole set
-		r.update(&ft.nodes[0])
+		if ft.root != noIndex {
+			r.update(ft.np.node(ft.root))
+		}
 	case r.itype < 0:
 		// "proper" interval: [x; lca); (lca; y)
 		p := commonPrefix(x, y)
-		ft.aggregateLeft(load64(x), p.left(), &r)
-		ft.aggregateRight(load64(y), p.right(), &r)
+		lca, found := ft.followPrefix(ft.root, p)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: commonPrefix %s lca %d found %v\n", p, lca, found)
+		switch {
+		case found:
+			lcaNode := ft.np.node(lca)
+			ft.aggregateLeft(lcaNode.left, load64(x)<<(p.len()+1), p.left(), &r)
+			ft.aggregateRight(lcaNode.right, load64(y)<<(p.len()+1), p.right(), &r)
+		case lca != noIndex:
+			// fmt.Fprintf(os.Stderr, "QQQQQ: commonPrefix %s NOT found but have lca %d\n", p, lca)
+			// Didn't reach LCA in the tree b/c ended up
+			// at a leaf, just use the prefix to go
+			// through the IDs
+			lcaNode := ft.np.node(lca)
+			r.tailRefs = append(r.tailRefs, ft.tailRefFromNodeAndPrefix(lcaNode, p))
+		}
 	default:
 		// inverse interval: [min; y); [x; max]
-		ft.aggregateRight(load64(y), preFirst1(y), &r)
-		ft.aggregateLeft(load64(x), preFirst0(x), &r)
+		pf1 := preFirst1(y)
+		idx1, found := ft.followPrefix(ft.root, pf1)
+		switch {
+		case found:
+			ft.aggregateRight(idx1, load64(y)<<pf1.len(), pf1, &r)
+		case idx1 != noIndex:
+			pf1Node := ft.np.node(idx1)
+			r.tailRefs = append(r.tailRefs, ft.tailRefFromNodeAndPrefix(pf1Node, pf1))
+		}
+
+		pf0 := preFirst0(x)
+		idx2, found := ft.followPrefix(ft.root, pf0)
+		switch {
+		case found:
+			ft.aggregateLeft(idx2, load64(x)<<pf0.len(), pf0, &r)
+		case idx2 != noIndex:
+			pf0Node := ft.np.node(idx2)
+			r.tailRefs = append(r.tailRefs, ft.tailRefFromNodeAndPrefix(pf0Node, pf0))
+		}
 	}
 	return r
 }
 
-func (ft *fpTree) dumpNode(w io.Writer, p prefix, indent, dir string) {
-	idx, gotIdx := p.cacheIndex()
-	if !gotIdx {
+func (ft *fpTree) dumpNode(w io.Writer, idx nodeIndex, indent, dir string) {
+	if idx == noIndex {
 		return
 	}
-	node := &ft.nodes[idx]
-	if node.empty() {
-		return
-	}
+	node := ft.np.node(idx)
 	var countStr string
 	leaf := node.leaf()
 	if leaf {
 		countStr = "LEAF"
-	} else if node.empty() {
-		countStr = "EMPTY"
 	} else {
-		countStr = strconv.Itoa(int(node.count()))
+		countStr = strconv.Itoa(int(node.c))
 	}
 	fmt.Fprintf(w, "%s%sidx=%d %s %s\n", indent, dir, idx, node.fp, countStr)
 	if !leaf {
 		indent += "  "
-		ft.dumpNode(w, p.left(), indent, "l: ")
-		ft.dumpNode(w, p.right(), indent, "r: ")
+		ft.dumpNode(w, node.left, indent, "l: ")
+		ft.dumpNode(w, node.right, indent, "r: ")
 	}
 }
 
 func (ft *fpTree) dump(w io.Writer) {
-	if ft.nodes[0].c == 0 {
+	if ft.root == noIndex {
 		fmt.Fprintln(w, "empty tree")
 	} else {
-		ft.dumpNode(w, 0, "", "")
+		ft.dumpNode(w, ft.root, "", "")
 	}
 }
 
 type inMemFPTree struct {
-	tree fpTree
-	ids  [cachedSize][][]byte
+	tree *fpTree
+	ids  [][][]byte
+}
+
+type fpResult struct {
+	fp    fingerprint
+	count uint32
+}
+
+func newInMemFPTree(np *nodePool, maxDepth int) *inMemFPTree {
+	if maxDepth == 0 {
+		panic("BUG: can't use newInMemFPTree with zero maxDepth")
+	}
+	return &inMemFPTree{
+		tree: newFPTree(np, maxDepth),
+		ids:  make([][][]byte, 1<<maxDepth),
+	}
 }
 
 func (mft *inMemFPTree) addHash(h []byte) {
 	mft.tree.addHash(h)
-	idx := load64(h) >> (64 - cachedBits)
+	idx := load64(h) >> (64 - mft.tree.maxDepth)
 	s := mft.ids[idx]
 	n := slices.IndexFunc(s, func(cur []byte) bool {
 		return bytes.Compare(cur, h) > 0
@@ -451,7 +611,7 @@ func (mft *inMemFPTree) addHash(h []byte) {
 
 func (mft *inMemFPTree) aggregateInterval(x, y []byte) fpResult {
 	r := mft.tree.aggregateInterval(x, y)
-	for _, t := range r.tails {
+	for _, t := range r.tailRefs {
 		ids := mft.ids[t]
 		for _, id := range ids {
 			// FIXME: this can be optimized as the IDs are ordered
