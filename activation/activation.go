@@ -874,7 +874,7 @@ func (b *Builder) searchPositioningAtx(
 	// positioning ATX publish epoch must be lower than the publish epoch of built ATX
 	positioningAtxPublished := min(latestPublished, publish-1)
 	id, err := findFullyValidHighTickAtx(
-		ctx,
+		context.WithValue(ctx, prioritizedVerifyCall, true),
 		b.atxsdata,
 		positioningAtxPublished,
 		b.conf.GoldenATXID,
@@ -988,8 +988,6 @@ func findFullyValidHighTickAtx(
 		ctxErr   error
 	)
 
-	newCtx := context.WithValue(ctx, prioritizedVerifyCall, true)
-
 	// iterate trough epochs, to get first valid, not malicious ATX with the biggest height
 	atxdata.IterateHighTicksInEpoch(publish+1, func(id types.ATXID) (contSearch bool) {
 		logger.Info("found candidate for high-tick atx", log.ZShortStringer("id", id))
@@ -1002,7 +1000,7 @@ func findFullyValidHighTickAtx(
 
 		// verify ATX-candidate by getting their dependencies (previous Atx, positioning ATX etc.)
 		// and verifying PoST for every dependency
-		if err := validator.VerifyChain(newCtx, id, goldenATXID, opts...); err != nil {
+		if err := validator.VerifyChain(ctx, id, goldenATXID, opts...); err != nil {
 			logger.Info("rejecting candidate for high-tick atx", zap.Error(err), log.ZShortStringer("id", id))
 			return true
 		}

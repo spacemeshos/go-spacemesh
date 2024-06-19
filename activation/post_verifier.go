@@ -28,7 +28,9 @@ type verifyPostJob struct {
 	result   chan error
 }
 
-const prioritizedVerifyCall = 1
+type prioritizedVerifyCallKey = int
+
+const prioritizedVerifyCall prioritizedVerifyCallKey = 1
 
 type postStatesGetter interface {
 	Get() map[types.NodeID]types.PostState
