@@ -28,6 +28,8 @@ type verifyPostJob struct {
 	result   chan error
 }
 
+const prioritizedVerifyCall = 1
+
 type postStatesGetter interface {
 	Get() map[types.NodeID]types.PostState
 }
@@ -296,6 +298,7 @@ func (v *offloadingPostVerifier) scale(target int) {
 	}
 }
 
+// Verify creates a Job from given parameters, adds to jobs queue (prioritized or not) and waits for result of Job execution
 func (v *offloadingPostVerifier) Verify(
 	ctx context.Context,
 	p *shared.Proof,
@@ -314,13 +317,19 @@ func (v *offloadingPostVerifier) Verify(
 	defer metrics.PostVerificationQueue.Dec()
 
 	var jobChannel chan<- *verifyPostJob
-	_, prioritize := v.prioritizedIds[types.BytesToNodeID(m.NodeId)]
-	switch {
-	case prioritize:
-		v.log.Debug("prioritizing post verification", zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
+
+	if ctx.Value(prioritizedVerifyCall) == true {
+		v.log.Debug("prioritizing current post verification call", zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
 		jobChannel = v.prioritized
-	default:
-		jobChannel = v.jobs
+	} else {
+		_, prioritize := v.prioritizedIds[types.BytesToNodeID(m.NodeId)]
+		switch {
+		case prioritize:
+			v.log.Debug("prioritizing post verification by Node ID", zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
+			jobChannel = v.prioritized
+		default:
+			jobChannel = v.jobs
+		}
 	}
 
 	select {
