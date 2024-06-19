@@ -346,13 +346,29 @@ func TestInMemFPTree(t *testing.T) {
 					fp:    hexToFingerprint("cfe98ba54761032ddddddddd"),
 					count: 3,
 				},
+				{1, 0}: {
+					fp:    hexToFingerprint("642464b773377bbddddddddd"),
+					count: 4,
+				},
+				{2, 0}: {
+					fp:    hexToFingerprint("761032cfe98ba54ddddddddd"),
+					count: 3,
+				},
+				{3, 1}: {
+					fp:    hexToFingerprint("2345679abcdef01888888888"),
+					count: 3,
+				},
+				{3, 2}: {
+					fp:    hexToFingerprint("317131e226622ee888888888"),
+					count: 4,
+				},
 			},
 		},
 		{
 			name: "ids2",
 			ids: []string{
-				"829977b444c8408dcddc1210536f3b3bdc7fd97777426264b9ac8f70b97a7fd1",
 				"6e476ca729c3840d0118785496e488124ee7dade1aef0c87c6edc78f72e4904f",
+				"829977b444c8408dcddc1210536f3b3bdc7fd97777426264b9ac8f70b97a7fd1",
 				"a280bcb8123393e0d4a15e5c9850aab5dddffa03d5efa92e59bc96202e8992bc",
 				"e93163f908630280c2a8bffd9930aa684be7a3085432035f5c641b0786590d1d",
 			},
@@ -362,7 +378,11 @@ func TestInMemFPTree(t *testing.T) {
 					count: 4,
 				},
 				{0, 3}: {
-					fp:    hexToFingerprint("2019cb0c56fbd36d197d4c4c"),
+					fp:    hexToFingerprint("4e5ea7ab7f38576018653418"),
+					count: 3,
+				},
+				{3, 1}: {
+					fp:    hexToFingerprint("87760f5e21a0868dc3b0c7a9"),
 					count: 2,
 				},
 			},
@@ -373,7 +393,7 @@ func TestInMemFPTree(t *testing.T) {
 			mft := newInMemFPTree(&np, 24)
 			var hs []types.Hash32
 			for _, hex := range tc.ids {
-				t.Logf("QQQQQ: ADD: %s", hex)
+				t.Logf("add: %s", hex)
 				h := types.HexToHash32(hex)
 				hs = append(hs, h)
 				mft.addHash(h[:])
@@ -485,18 +505,12 @@ func testInMemFPTreeManyItems(t *testing.T, randomXY bool) {
 			x = hs[rand.Intn(numItems)]
 			y = hs[rand.Intn(numItems)]
 		}
-		c := bytes.Compare(x[:], y[:])
 		var (
 			expFP fingerprint
 			expN  uint32
 		)
-		if c > 0 {
-			x, y = y, x
-		}
-		if c == 0 {
-			expFP = fp
-			expN = numItems
-		} else {
+		switch bytes.Compare(x[:], y[:]) {
+		case -1:
 			pX := hs.findGTE(x)
 			pY := hs.findGTE(y)
 			// t.Logf("x=%s y=%s pX=%d y=%d", x.String(), y.String(), pX, pY)
@@ -505,13 +519,25 @@ func testInMemFPTreeManyItems(t *testing.T, randomXY bool) {
 				expFP.update(hs[p][:])
 			}
 			expN = uint32(pY - pX)
+		case 1:
+			pX := hs.findGTE(x)
+			pY := hs.findGTE(y)
+			for p := 0; p < pY; p++ {
+				expFP.update(hs[p][:])
+			}
+			for p := pX; p < len(hs); p++ {
+				expFP.update(hs[p][:])
+			}
+			expN = uint32(pY + len(hs) - pX)
+		default:
+			expFP = fp
+			expN = numItems
 		}
 		require.Equal(t, fpResult{
 			fp:    expFP,
 			count: expN,
 		}, mft.aggregateInterval(x[:], y[:]))
 	}
-	// TODO: test inverse intervals
 }
 
 func TestInMemFPTreeManyItems(t *testing.T) {
