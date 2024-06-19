@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math/bits"
+	// "os"
 	"slices"
 	"strconv"
 )
@@ -526,6 +527,7 @@ func (ft *fpTree) aggregateInterval(x, y []byte) aggResult {
 		// inverse interval: [min; y); [x; max]
 		pf1 := preFirst1(y)
 		idx1, found := ft.followPrefix(ft.root, pf1)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: pf1 %s idx1 %d found %v\n", pf1, idx1, found)
 		switch {
 		case found:
 			ft.aggregateRight(idx1, load64(y)<<pf1.len(), pf1, &r)
@@ -536,6 +538,7 @@ func (ft *fpTree) aggregateInterval(x, y []byte) aggResult {
 
 		pf0 := preFirst0(x)
 		idx2, found := ft.followPrefix(ft.root, pf0)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: pf0 %s idx2 %d found %v\n", pf0, idx2, found)
 		switch {
 		case found:
 			ft.aggregateLeft(idx2, load64(x)<<pf0.len(), pf0, &r)
