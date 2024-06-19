@@ -162,7 +162,7 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 		return errors.New("empty positioning atx")
 	}
 	if len(atx.Marriages) != 0 {
-		// Mariage ATX must contain a self-signed certificate.
+		// Marriage ATX must contain a self-signed certificate.
 		// It's identified by having ReferenceAtx == EmptyATXID.
 		idx := slices.IndexFunc(atx.Marriages, func(cert wire.MarriageCertificate) bool {
 			return cert.ReferenceAtx == types.EmptyATXID
