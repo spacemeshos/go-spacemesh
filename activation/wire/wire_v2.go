@@ -31,8 +31,8 @@ type ActivationTxV2 struct {
 	// A marriage is permanent and cannot be revoked or repeated.
 	// All new IDs that are married to this ID are added to the equivocation set
 	// that this ID belongs to.
-	// Note: 255 IDs + the owner of the ATX = 256 total IDs in a marriage.
-	Marriages []MarriageCertificate `scale:"max=255"`
+	// It must contain a self-marriage certificate (needed for malfeasance proofs).
+	Marriages []MarriageCertificate `scale:"max=256"`
 
 	// The ID of the ATX containing marriage for the included IDs.
 	// Only required when the ATX includes married IDs.

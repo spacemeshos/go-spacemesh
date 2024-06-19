@@ -124,6 +124,18 @@ func (h *handlerMocks) expectAtxV2(atx *wire.ActivationTxV2) {
 	h.expectStoreAtxV2(atx)
 }
 
+// create marriage certs that signers in the `set` marry the `target`.
+func marriageCerts(target types.NodeID, set []*signing.EdSigner) []wire.MarriageCertificate {
+	certs := make([]wire.MarriageCertificate, 0, len(set))
+	for _, sig := range set {
+		certs = append(certs, wire.MarriageCertificate{
+			ID:        sig.NodeID(),
+			Signature: sig.Sign(signing.MARRIAGE, target.Bytes()),
+		})
+	}
+	return certs
+}
+
 func TestHandlerV2_SyntacticallyValidate(t *testing.T) {
 	t.Parallel()
 	golden := types.RandomATXID()
@@ -1060,11 +1072,11 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 func Test_Marriages(t *testing.T) {
 	t.Parallel()
 	golden := types.RandomATXID()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
 	t.Run("invalid marriage signature", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
 
 		atx := newInitialATXv2(t, golden)
 		atx.Marriages = []wire.MarriageCertificate{{
@@ -1078,17 +1090,12 @@ func Test_Marriages(t *testing.T) {
 	t.Run("valid signature", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
 
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
 		atx := newInitialATXv2(t, golden)
-		atx.Marriages = []wire.MarriageCertificate{{
-			ID:        otherSig.NodeID(),
-			Signature: otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-		}}
+		atx.Marriages = marriageCerts(sig.NodeID(), []*signing.EdSigner{sig, otherSig})
 		atx.Sign(sig)
 
 		atxHandler.expectInitialAtxV2(atx)
@@ -1110,17 +1117,12 @@ func Test_Marriages(t *testing.T) {
 	t.Run("can't marry twice", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
 
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
 		atx := newInitialATXv2(t, golden)
-		atx.Marriages = []wire.MarriageCertificate{{
-			ID:        otherSig.NodeID(),
-			Signature: otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-		}}
+		atx.Marriages = marriageCerts(sig.NodeID(), []*signing.EdSigner{sig, otherSig})
 		atx.Sign(sig)
 
 		atxHandler.expectInitialAtxV2(atx)
@@ -1131,10 +1133,7 @@ func Test_Marriages(t *testing.T) {
 		otherSig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
-		atx2.Marriages = []wire.MarriageCertificate{{
-			ID:        otherSig2.NodeID(),
-			Signature: otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-		}}
+		atx2.Marriages = marriageCerts(sig.NodeID(), []*signing.EdSigner{sig, otherSig2})
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
 		ids := []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}
@@ -1157,6 +1156,20 @@ func Test_Marriages(t *testing.T) {
 		equiv, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
+	})
+	t.Run("signer must marry self", func(t *testing.T) {
+		t.Parallel()
+		atxHandler := newV2TestHandler(t, golden)
+
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx := newInitialATXv2(t, golden)
+		atx.Marriages = marriageCerts(sig.NodeID(), []*signing.EdSigner{otherSig})
+		atx.Sign(sig)
+
+		_, err = atxHandler.processATX(context.Background(), "", atx, codec.MustEncode(atx), time.Now())
+		require.ErrorContains(t, err, "signer must marry itself")
 	})
 }
 
@@ -1186,10 +1199,15 @@ func Test_MarryingMalicious(t *testing.T) {
 			atxHandler := newV2TestHandler(t, golden)
 
 			atx := newInitialATXv2(t, golden)
-			atx.Marriages = []wire.MarriageCertificate{{
-				ID:        otherSig.NodeID(),
-				Signature: otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			}}
+			atx.Marriages = []wire.MarriageCertificate{
+				{
+					ID:        sig.NodeID(),
+					Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				}, {
+					ID:        otherSig.NodeID(),
+					Signature: otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+			}
 			atx.Sign(sig)
 
 			require.NoError(t, identities.SetMalicious(atxHandler.cdb, tc.malicious, []byte("proof"), time.Now()))

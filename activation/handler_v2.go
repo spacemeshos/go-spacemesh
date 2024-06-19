@@ -155,9 +155,16 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	if atx.PositioningATX == types.EmptyATXID {
 		return errors.New("empty positioning atx")
 	}
-	for i, m := range atx.Marriages {
-		if !h.edVerifier.Verify(signing.MARRIAGE, m.ID, atx.SmesherID.Bytes(), m.Signature) {
-			return fmt.Errorf("invalid marriage[%d] signature", i)
+	if len(atx.Marriages) != 0 {
+		var marriesSelf bool
+		for i, m := range atx.Marriages {
+			marriesSelf = marriesSelf || m.ID == atx.SmesherID
+			if !h.edVerifier.Verify(signing.MARRIAGE, m.ID, atx.SmesherID.Bytes(), m.Signature) {
+				return fmt.Errorf("invalid marriage[%d] signature", i)
+			}
+		}
+		if !marriesSelf {
+			return errors.New("signer must marry itself")
 		}
 	}
 
@@ -615,9 +622,6 @@ func (h *HandlerV2) storeAtx(
 				if err := identities.SetMarriage(tx, m.ID, atx.ID()); err != nil {
 					return err
 				}
-			}
-			if err := identities.SetMarriage(tx, atx.SmesherID, atx.ID()); err != nil {
-				return err
 			}
 			if !malicious && proof == nil {
 				// We check for malfeasance again becase the marriage increased the equivocation set.
