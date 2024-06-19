@@ -127,7 +127,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - [self-hosted, linux, arm64]
+          - [gh-linux-arm64, linux, arm64]
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-latest
@@ -173,7 +173,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - [self-hosted, linux, arm64]
+          - [gh-linux-arm64, linux, arm64]
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-latest
@@ -217,7 +217,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - [self-hosted, linux, arm64]
+          - [gh-linux-arm64, linux, arm64]
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-latest
