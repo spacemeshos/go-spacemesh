@@ -531,7 +531,7 @@ func (v *Validator) verifyChainWithOpts(
 	}
 
 	if err := v.Post(
-		context.WithValue(ctx, prioritizedVerifyCall, true),
+		ctx,
 		atx.SmesherID,
 		deps.commitment,
 		deps.nipost.Post,
