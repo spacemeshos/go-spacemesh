@@ -28,7 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -36,6 +35,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/system"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -78,6 +78,38 @@ func buildNipost(
 	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
 	nb.ResetState(sig.NodeID())
 	return nipostData{previous, nipost}, err
+}
+
+func createInitialAtx(
+	publish types.EpochID,
+	commitment, pos types.ATXID,
+	nipost *nipost.NIPostState,
+	initial *types.Post,
+) *wire.ActivationTxV2 {
+	return &wire.ActivationTxV2{
+		PublishEpoch:   publish,
+		PositioningATX: pos,
+		Initial: &wire.InitialAtxPartsV2{
+			CommitmentATX: commitment,
+			Post:          *wire.PostToWireV1(initial),
+		},
+		VRFNonce: uint64(nipost.VRFNonce),
+		NiPosts: []wire.NiPostsV2{
+			{
+				Membership: wire.MerkleProofV2{
+					Nodes: nipost.Membership.Nodes,
+				},
+				Challenge: types.Hash32(nipost.PostMetadata.Challenge),
+				Posts: []wire.SubPostV2{
+					{
+						Post:                *wire.PostToWireV1(nipost.Post),
+						NumUnits:            nipost.NumUnits,
+						MembershipLeafIndex: nipost.Membership.LeafIndex,
+					},
+				},
+			},
+		},
+	}
 }
 
 func createSoloAtx(publish types.EpochID, prev, pos types.ATXID, nipost *nipost.NIPostState) *wire.ActivationTxV2 {
@@ -179,6 +211,7 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
+	coinbase := types.Address{1, 2, 3, 4, 5, 6, 7}
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, logger)
@@ -275,14 +308,6 @@ func Test_MarryAndMerge(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	conf := activation.Config{
-		GoldenATXID:      goldenATX,
-		RegossipInterval: 0,
-	}
-
-	data := atxsdata.New()
-	atxVersions := activation.AtxVersions{postGenesisEpoch: types.AtxV2}
-	edVerifier := signing.NewEdVerifier()
 	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
 	mBeacon := activation.NewMockAtxReceiver(ctrl)
@@ -292,8 +317,8 @@ func Test_MarryAndMerge(t *testing.T) {
 	atxHdlr := activation.NewHandler(
 		"local",
 		cdb,
-		data,
-		edVerifier,
+		atxsdata.New(),
+		signing.NewEdVerifier(),
 		clock,
 		mpub,
 		mFetch,
@@ -302,36 +327,14 @@ func Test_MarryAndMerge(t *testing.T) {
 		mBeacon,
 		mTortoise,
 		logger,
-		activation.WithAtxVersions(atxVersions),
+		activation.WithAtxVersions(activation.AtxVersions{0: types.AtxV2}),
 		activation.WithTickSize(tickSize),
 	)
 
-	mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, p string, got []byte) error {
-			mFetch.EXPECT().RegisterPeerHashes(peer.ID(p), gomock.Any())
-			mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
-			mBeacon.EXPECT().OnAtx(gomock.Any())
-			mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-			return atxHdlr.HandleGossipAtx(ctx, peer.ID(p), got)
-		},
-	).Times(2)
-
-	v := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
-	builder := activation.NewBuilder(
-		conf,
-		db,
-		data,
-		localDB,
-		mpub,
-		nb,
-		clock,
-		syncer,
-		logger,
-		activation.WithPoetConfig(poetCfg),
-		activation.WithValidator(v),
-	)
-
-	// Step 1. Publish initial ATXs for each signer
+	// Step 1. Marry
+	publish := types.EpochID(1)
+	var niposts [2]nipostData
+	var initialPosts [2]*types.Post
 	eg = errgroup.Group{}
 	for i, signer := range signers {
 		eg.Go(func() error {
@@ -339,50 +342,39 @@ func Test_MarryAndMerge(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			initialPost := nipost.Post{
-				Nonce:         post.Nonce,
-				Indices:       post.Indices,
-				Pow:           post.Pow,
-				Challenge:     types.EmptyHash32[:],
-				NumUnits:      postInfo.NumUnits,
-				CommitmentATX: postInfo.CommitmentATX,
-				VRFNonce:      *postInfo.Nonce,
+
+			challenge := wire.NIPostChallengeV2{
+				PublishEpoch:     publish,
+				PositioningATXID: goldenATX,
+				InitialPost:      wire.PostToWireV1(post),
 			}
-			// make sure that the vrf nonce is good enough for the combined storage
-			err = v.VRFNonceV2(signer.NodeID(), postInfo.CommitmentATX, uint64(*postInfo.Nonce), totalNumUnits)
+			nipost, err := nb.BuildNIPost(context.Background(), signer, challenge.PublishEpoch, challenge.Hash())
 			if err != nil {
 				return err
 			}
+			nb.ResetState(signer.NodeID())
+
+			initialPosts[i] = post
 			nonces[i] = uint64(*postInfo.Nonce)
-			if err := nipost.AddPost(localDB, signer.NodeID(), initialPost); err != nil {
-				return err
-			}
-			return builder.PublishActivationTx(context.Background(), signer)
+			niposts[i] = nipostData{types.EmptyATXID, nipost}
+			return nil
 		})
 	}
 	require.NoError(t, eg.Wait())
 
-	// Step 2. Marry
+	// mainID will create marriage ATX
 	mainID, mergedID := signers[0], signers[1]
 
-	prevMergedIDATX, err := atxs.GetLastIDByNodeID(db, mergedID.NodeID())
-	require.NoError(t, err)
-	prevATXID, err := atxs.GetLastIDByNodeID(db, mainID.NodeID())
-	require.NoError(t, err)
-	prev, err := atxs.Get(db, prevATXID)
-	require.NoError(t, err)
+	mergedIdAtx := createInitialAtx(publish, goldenATX, goldenATX, niposts[1].NIPostState, initialPosts[1])
+	mergedIdAtx.Sign(mergedID)
 
-	publish := prev.PublishEpoch + 1
-	nipostState, err := buildNipost(nb, mainID, publish, prevATXID, prevATXID)
-	require.NoError(t, err)
-
-	marriageATX := createSoloAtx(publish, prevATXID, prevATXID, nipostState.NIPostState)
+	marriageATX := createInitialAtx(publish, goldenATX, goldenATX, niposts[0].NIPostState, initialPosts[0])
 	marriageATX.Marriages = []wire.MarriageCertificate{
 		{
 			Signature: mainID.Sign(signing.MARRIAGE, mainID.NodeID().Bytes()),
 		},
 		{
-			ReferenceAtx: prevMergedIDATX,
+			ReferenceAtx: mergedIdAtx.ID(),
 			Signature:    mergedID.Sign(signing.MARRIAGE, mainID.NodeID().Bytes()),
 		},
 	}
@@ -391,7 +383,15 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	mFetch.EXPECT().RegisterPeerHashes(peer.ID(""), gomock.Any())
 	mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
-	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
+	mFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{mergedIdAtx.ID()}, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ []types.ATXID, _ ...system.GetAtxOpt) error {
+			// Provide the referenced ATX for the married ID
+			mFetch.EXPECT().RegisterPeerHashes(peer.ID(""), gomock.Any())
+			mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
+			mBeacon.EXPECT().OnAtx(gomock.Any())
+			mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+			return atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedIdAtx))
+		})
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(marriageATX))
@@ -406,12 +406,11 @@ func Test_MarryAndMerge(t *testing.T) {
 		require.Equal(t, i, idx)
 	}
 
-	// Step 3. Publish merged ATX together
+	// Step 2. Publish merged ATX together
 	publish = marriageATX.PublishEpoch + 2
 	eg = errgroup.Group{}
 
-	var niposts [2]nipostData
-	// 3.1. NiPOST for main ID (the publisher)
+	// 2.1. NiPOST for main ID (the publisher)
 	eg.Go(func() error {
 		n, err := buildNipost(nb, mainID, publish, marriageATX.ID(), marriageATX.ID())
 		logger.Info("built NiPoST", zap.Any("post", niposts[0]))
@@ -419,8 +418,8 @@ func Test_MarryAndMerge(t *testing.T) {
 		return err
 	})
 
-	// 3.2. NiPOST for merged ID
-	prevATXID, err = atxs.GetLastIDByNodeID(db, mergedID.NodeID())
+	// 2.2. NiPOST for merged ID
+	prevATXID, err := atxs.GetLastIDByNodeID(db, mergedID.NodeID())
 	require.NoError(t, err)
 	eg.Go(func() error {
 		n, err := buildNipost(nb, mergedID, publish, prevATXID, marriageATX.ID())
@@ -430,8 +429,8 @@ func Test_MarryAndMerge(t *testing.T) {
 	})
 	require.NoError(t, eg.Wait())
 
-	// 3.3 Construct a multi-ID poet membership merkle proof for both IDs
-	poetProof, members, err := poetClient.Proof(context.Background(), "2")
+	// 2.3 Construct a multi-ID poet membership merkle proof for both IDs
+	poetProof, members, err := poetClient.Proof(context.Background(), "1")
 	require.NoError(t, err)
 	membershipProof := constructMerkleProof(t, members, map[uint64]bool{0: true, 1: true})
 
@@ -443,11 +442,11 @@ func Test_MarryAndMerge(t *testing.T) {
 		[]types.ATXID{marriageATX.ID(), prevATXID},
 		membershipProof,
 	)
-	mergedATX.Coinbase = builder.Coinbase()
+	mergedATX.Coinbase = coinbase
 	mergedATX.VRFNonce = nonces[0]
 	mergedATX.Sign(mainID)
 
-	// 3.5 Publish
+	// 2.4 Publish
 	logger.Info("publishing merged ATX", zap.Inline(mergedATX))
 
 	mFetch.EXPECT().RegisterPeerHashes(peer.ID(""), gomock.Any())
@@ -458,7 +457,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedATX))
 	require.NoError(t, err)
 
-	// Step 4. verify the merged ATX
+	// Step 3. verify the merged ATX
 	atx, err := atxs.Get(db, mergedATX.ID())
 	require.NoError(t, err)
 	require.Equal(t, totalNumUnits, atx.NumUnits)
@@ -469,7 +468,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, posATX.TickHeight(), atx.BaseTickHeight)
 
-	// Step 5. Publish merged using the same previous now
+	// Step 4. Publish merged using the same previous now
 	// Publish by the other signer this time.
 	publish = mergedATX.PublishEpoch + 1
 	eg = errgroup.Group{}
@@ -482,7 +481,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		})
 	}
 	require.NoError(t, eg.Wait())
-	poetProof, members, err = poetClient.Proof(context.Background(), "3")
+	poetProof, members, err = poetClient.Proof(context.Background(), "2")
 	require.NoError(t, err)
 	membershipProof = constructMerkleProof(t, members, map[uint64]bool{0: true})
 
@@ -494,7 +493,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		[]types.ATXID{mergedATX.ID()},
 		membershipProof,
 	)
-	mergedATX2.Coinbase = builder.Coinbase()
+	mergedATX2.Coinbase = coinbase
 	mergedATX2.VRFNonce = nonces[1]
 	mergedATX2.Sign(signers[1])
 
@@ -517,7 +516,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, posATX.TickHeight(), atx.BaseTickHeight)
 
-	// Step 6. Make an emergency split and publish separately
+	// Step 5. Make an emergency split and publish separately
 	publish = mergedATX2.PublishEpoch + 1
 	eg = errgroup.Group{}
 	for i, sig := range signers {
