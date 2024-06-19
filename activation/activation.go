@@ -499,7 +499,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 
 	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()
 
-	// try to get exising challenge
+	// try to get existing challenge
 	existingChallenge, err := b.getExistingChallenge(logger, currentEpochId, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("getting existing NiPoST challenge: %w", err)
