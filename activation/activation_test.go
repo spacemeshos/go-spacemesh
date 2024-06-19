@@ -1491,7 +1491,8 @@ func TestGetPositioningAtx(t *testing.T) {
 		tab.posAtxFinder.found = nil
 
 		// timeout set up, prev ATX exists
-		ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+		defer cancel()
 		time.Sleep(10 * time.Millisecond)
 
 		selected, err := tab.getPositioningAtx(ctx, types.EmptyNodeID, 99, prev)
@@ -1501,7 +1502,8 @@ func TestGetPositioningAtx(t *testing.T) {
 		tab.posAtxFinder.found = nil
 
 		// timeout set up, prev ATX do not exists
-		ctx, _ = context.WithTimeout(context.Background(), 1*time.Millisecond)
+		ctx, cancel = context.WithTimeout(context.Background(), 1*time.Millisecond)
+		defer cancel()
 		time.Sleep(10 * time.Millisecond)
 
 		selected, err = tab.getPositioningAtx(ctx, types.EmptyNodeID, 99, nil)

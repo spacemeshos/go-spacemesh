@@ -114,6 +114,15 @@ func TestPostVerifierPrioritization(t *testing.T) {
 	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: nodeID.Bytes()})
 	require.NoError(t, err)
 
+	verifier.EXPECT().
+		Verify(context.WithValue(context.Background(), prioritizedVerifyCall, true),
+			gomock.Any(), &shared.ProofMetadata{NodeId: nodeID.Bytes()}, gomock.Any()).
+		Return(nil)
+
+	err = v.Verify(context.WithValue(context.Background(), prioritizedVerifyCall, true),
+		&shared.Proof{}, &shared.ProofMetadata{NodeId: nodeID.Bytes()})
+	require.NoError(t, err)
+
 	verifier.EXPECT().Close().Return(nil)
 	require.NoError(t, v.Close())
 }
