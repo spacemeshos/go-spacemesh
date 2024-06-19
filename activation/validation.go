@@ -113,14 +113,41 @@ func (v *Validator) NIPost(
 	return proof.LeafCount, nil
 }
 
+func (v *Validator) PoetMembership(
+	ctx context.Context,
+	membership *types.MultiMerkleProof,
+	postChallenge types.Hash32,
+	poetChallenges [][]byte,
+) (uint64, error) {
+	ref := types.PoetProofRef(postChallenge)
+	proof, statement, err := v.poetDb.Proof(ref)
+	if err != nil {
+		return 0, fmt.Errorf("poet proof %x is not available: %w", ref, err)
+	}
+
+	if err := validateMultiMerkleProof(poetChallenges, membership, statement[:]); err != nil {
+		return 0, fmt.Errorf("invalid membership proof %w", err)
+	}
+
+	return proof.LeafCount, nil
+}
+
 func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []byte) error {
+	membership := types.MultiMerkleProof{
+		Nodes:       proof.Nodes,
+		LeafIndices: []uint64{proof.LeafIndex},
+	}
+	return validateMultiMerkleProof([][]byte{leaf}, &membership, expectedRoot)
+}
+
+func validateMultiMerkleProof(leaves [][]byte, proof *types.MultiMerkleProof, expectedRoot []byte) error {
 	nodes := make([][]byte, 0, len(proof.Nodes))
 	for _, n := range proof.Nodes {
 		nodes = append(nodes, n.Bytes())
 	}
 	ok, err := merkle.ValidatePartialTree(
-		[]uint64{proof.LeafIndex},
-		[][]byte{leaf},
+		proof.LeafIndices,
+		leaves,
 		nodes,
 		expectedRoot,
 		poetShared.HashMembershipTreeNode,
@@ -131,7 +158,7 @@ func validateMerkleProof(leaf []byte, proof *types.MerkleProof, expectedRoot []b
 	if !ok {
 		return fmt.Errorf(
 			"invalid merkle proof, calculated root does not match proof root, leaf: %x, nodes: %x, expected root: %x",
-			leaf,
+			leaves,
 			proof.Nodes,
 			expectedRoot,
 		)
@@ -181,6 +208,21 @@ func (v *Validator) Post(
 	return nil
 }
 
+func (v *Validator) PostV2(
+	ctx context.Context,
+	nodeId types.NodeID,
+	commitmentAtxId types.ATXID,
+	post *types.Post,
+	challenge []byte,
+	numUnits uint32,
+	opts ...validatorOption,
+) error {
+	return v.Post(ctx, nodeId, commitmentAtxId, post, &types.PostMetadata{
+		Challenge:     challenge,
+		LabelsPerUnit: v.cfg.LabelsPerUnit,
+	}, numUnits, opts...)
+}
+
 func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 	if numUnits < cfg.MinNumUnits {
 		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", cfg.MinNumUnits, numUnits)
@@ -224,6 +266,10 @@ func (v *Validator) VRFNonce(
 		return fmt.Errorf("verify VRF nonce: %w", err)
 	}
 	return nil
+}
+
+func (v *Validator) VRFNonceV2(nodeId types.NodeID, commitment types.ATXID, vrfNonce uint64, numUnits uint32) error {
+	return v.VRFNonce(nodeId, commitment, vrfNonce, v.cfg.LabelsPerUnit, numUnits)
 }
 
 func (v *Validator) InitialNIPostChallengeV1(
@@ -378,7 +424,6 @@ func (v *Validator) getAtxDeps(ctx context.Context, db sql.Executor, id types.AT
 		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
 	}
 
-	// TODO: implement ATX V2
 	switch version {
 	case types.AtxV1:
 		var commitment types.ATXID
@@ -400,6 +445,41 @@ func (v *Validator) getAtxDeps(ctx context.Context, db sql.Executor, id types.AT
 			nipost:      *wire.NiPostFromWireV1(atx.NIPost),
 			positioning: atx.PositioningATXID,
 			previous:    atx.PrevATXID,
+			commitment:  commitment,
+		}
+		return deps, nil
+	case types.AtxV2:
+		// TODO: support merged ATXs
+		var atx wire.ActivationTxV2
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return nil, fmt.Errorf("decoding ATX blob: %w", err)
+		}
+
+		var commitment types.ATXID
+		if atx.Initial != nil {
+			commitment = atx.Initial.CommitmentATX
+		} else {
+			catx, err := atxs.CommitmentATX(v.db, atx.SmesherID)
+			if err != nil {
+				return nil, fmt.Errorf("getting commitment ATX: %w", err)
+			}
+			commitment = catx
+		}
+		var previous types.ATXID
+		if len(atx.PreviousATXs) != 0 {
+			previous = atx.PreviousATXs[0]
+		}
+
+		deps := &atxDeps{
+			nipost: types.NIPost{
+				Post: wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post),
+				PostMetadata: &types.PostMetadata{
+					Challenge:     atx.NiPosts[0].Challenge[:],
+					LabelsPerUnit: v.cfg.LabelsPerUnit,
+				},
+			},
+			positioning: atx.PositioningATX,
+			previous:    previous,
 			commitment:  commitment,
 		}
 		return deps, nil

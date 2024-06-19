@@ -47,19 +47,20 @@ func init() {
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Preset          string                `mapstructure:"preset"`
-	Genesis         GenesisConfig         `mapstructure:"genesis"`
-	PublicMetrics   PublicMetrics         `mapstructure:"public-metrics"`
-	Tortoise        tortoise.Config       `mapstructure:"tortoise"`
-	P2P             p2p.Config            `mapstructure:"p2p"`
-	API             grpcserver.Config     `mapstructure:"api"`
-	HARE3           hare3.Config          `mapstructure:"hare3"`
-	HareEligibility eligibility.Config    `mapstructure:"hare-eligibility"`
-	Certificate     blocks.CertConfig     `mapstructure:"certificate"`
-	Beacon          beacon.Config         `mapstructure:"beacon"`
-	TIME            timeConfig.TimeConfig `mapstructure:"time"`
-	VM              vm.Config             `mapstructure:"vm"`
-	POST            activation.PostConfig `mapstructure:"post"`
+	Preset          string                     `mapstructure:"preset"`
+	Genesis         GenesisConfig              `mapstructure:"genesis"`
+	PublicMetrics   PublicMetrics              `mapstructure:"public-metrics"`
+	Tortoise        tortoise.Config            `mapstructure:"tortoise"`
+	P2P             p2p.Config                 `mapstructure:"p2p"`
+	API             grpcserver.Config          `mapstructure:"api"`
+	HARE3           hare3.Config               `mapstructure:"hare3"`
+	HareEligibility eligibility.Config         `mapstructure:"hare-eligibility"`
+	Certificate     blocks.CertConfig          `mapstructure:"certificate"`
+	Beacon          beacon.Config              `mapstructure:"beacon"`
+	TIME            timeConfig.TimeConfig      `mapstructure:"time"`
+	VM              vm.Config                  `mapstructure:"vm"`
+	Certifier       activation.CertifierConfig `mapstructure:"certifier"`
+	POST            activation.PostConfig      `mapstructure:"post"`
 	POSTService     activation.PostSupervisorConfig
 	POET            activation.PoetConfig      `mapstructure:"poet"`
 	SMESHING        SmeshingConfig             `mapstructure:"smeshing"`
@@ -118,6 +119,9 @@ type BaseConfig struct {
 	DatabaseQueryCacheSizes      DatabaseQueryCacheSizes `mapstructure:"db-query-cache-sizes"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
+
+	// ScanMalfeasantATXs is a flag to enable scanning for malfeasant ATXs.
+	ScanMalfeasantATXs bool `mapstructure:"scan-malfeasant-atxs"`
 
 	NetworkHRP string `mapstructure:"network-hrp"`
 
@@ -202,6 +206,7 @@ func DefaultConfig() Config {
 		Recovery:        checkpoint.DefaultConfig(),
 		Cache:           datastore.DefaultConfig(),
 		ActiveSet:       miner.DefaultActiveSetPreparation(),
+		Certifier:       activation.DefaultCertifierConfig(),
 	}
 }
 

@@ -1,12 +1,15 @@
 package wire
 
 import (
+	"encoding/binary"
 	"encoding/hex"
+
+	"github.com/spacemeshos/merkle-tree"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -38,6 +41,25 @@ type PostV1 struct {
 	Nonce   uint32
 	Indices []byte `scale:"max=800"` // up to K2=100
 	Pow     uint64
+}
+
+func (p *PostV1) Root() []byte {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	nonce := make([]byte, 4)
+	binary.LittleEndian.PutUint32(nonce, p.Nonce)
+	tree.AddLeaf(nonce)
+
+	tree.AddLeaf(p.Indices)
+
+	pow := make([]byte, 8)
+	binary.LittleEndian.PutUint64(pow, p.Pow)
+	tree.AddLeaf(pow)
+	return tree.Root()
 }
 
 type MerkleProofV1 struct {
@@ -84,8 +106,12 @@ func (atx *ActivationTxV1) SetID(id types.ATXID) {
 	atx.id = id
 }
 
-func (atx *ActivationTxV1) Smesher() types.NodeID {
-	return atx.SmesherID
+func (atx *ActivationTxV1) Published() types.EpochID {
+	return atx.PublishEpoch
+}
+
+func (atx *ActivationTxV1) TotalNumUnits() uint32 {
+	return atx.NumUnits
 }
 
 func (atx *ActivationTxV1) Sign(signer *signing.EdSigner) {
@@ -106,13 +132,14 @@ func (atx *ActivationTxV1) SignedBytes() []byte {
 }
 
 func (atx *ActivationTxV1) HashInnerBytes() (result types.Hash32) {
-	h := hash.New()
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
 	codec.MustEncodeTo(h, &atx.InnerActivationTxV1)
 	h.Sum(result[:0])
 	return result
 }
 
-func postToWireV1(p *types.Post) *PostV1 {
+func PostToWireV1(p *types.Post) *PostV1 {
 	if p == nil {
 		return nil
 	}
@@ -133,7 +160,7 @@ func NiPostToWireV1(n *types.NIPost) *NIPostV1 {
 			Nodes:     n.Membership.Nodes,
 			LeafIndex: n.Membership.LeafIndex,
 		},
-		Post: postToWireV1(n.Post),
+		Post: PostToWireV1(n.Post),
 		PostMetadata: &PostMetadataV1{
 			Challenge:     n.PostMetadata.Challenge,
 			LabelsPerUnit: n.PostMetadata.LabelsPerUnit,
@@ -148,7 +175,7 @@ func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 		PrevATXID:        c.PrevATXID,
 		PositioningATXID: c.PositioningATX,
 		CommitmentATXID:  c.CommitmentATX,
-		InitialPost:      postToWireV1(c.InitialPost),
+		InitialPost:      PostToWireV1(c.InitialPost),
 	}
 }
 
@@ -207,7 +234,7 @@ func PostFromWireV1(post *PostV1) *types.Post {
 	}
 }
 
-func (p *PostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (p *PostV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if p == nil {
 		return nil
 	}
@@ -217,7 +244,7 @@ func (p *PostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-func (nipost *NIPostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (nipost *NIPostV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if nipost == nil {
 		return nil
 	}
@@ -226,7 +253,7 @@ func (nipost *NIPostV1) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-func (atx *ActivationTxV1) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (atx *ActivationTxV1) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if atx == nil {
 		return nil
 	}

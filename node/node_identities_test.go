@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -21,7 +22,11 @@ import (
 
 func setupAppWithKeys(tb testing.TB, data ...[]byte) (*App, *observer.ObservedLogs) {
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zap.New(observer)
+	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
 	app := New(WithLog(log.NewFromLog(logger)))
 	app.Config.DataDirParent = tb.TempDir()
 	if len(data) == 0 {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 func load(db sql.Executor, address types.Address, query string, enc sql.Encoder) (types.Account, error) {
@@ -167,5 +168,48 @@ func Revert(db sql.Executor, after types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("failed to revert up to %v: %w", after, err)
 	}
+	return nil
+}
+
+func CountAccountsByOps(db sql.Executor, operations builder.Operations) (count uint32, err error) {
+	_, err = db.Exec(
+		"SELECT COUNT(DISTINCT address) FROM accounts"+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			count = uint32(stmt.ColumnInt32(0))
+			return true
+		},
+	)
+	return
+}
+
+func IterateAccountsOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(account *types.Account) bool,
+) error {
+	_, err := db.Exec(`select address, balance, next_nonce, max(layer_updated), template, state from accounts`+
+		builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			var account types.Account
+			stmt.ColumnBytes(0, account.Address[:])
+			account.Balance = uint64(stmt.ColumnInt64(1))
+			account.NextNonce = uint64(stmt.ColumnInt64(2))
+			account.Layer = types.LayerID(uint32(stmt.ColumnInt64(3)))
+			if stmt.ColumnLen(4) > 0 {
+				var template types.Address
+				stmt.ColumnBytes(4, template[:])
+				account.TemplateAddress = &template
+				account.State = make([]byte, stmt.ColumnLen(5))
+				stmt.ColumnBytes(5, account.State)
+			}
+			return fn(&account)
+		},
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

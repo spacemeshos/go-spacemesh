@@ -23,6 +23,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
+	"github.com/libp2p/go-libp2p/p2p/protocol/holepunch"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/quicreuse"
@@ -34,6 +35,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
 // DefaultConfig config.
@@ -273,12 +275,13 @@ func New(
 		return nil, fmt.Errorf("can't set up connection gater: %w", err)
 	}
 
+	pt := peerinfo.NewPeerInfoTracker()
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.UserAgent("go-spacemesh"),
 		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Peerstore(ps),
-		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector()),
+		libp2p.BandwidthReporter(p2pmetrics.NewBandwidthCollector(pt)),
 		libp2p.EnableNATService(),
 		libp2p.AutoNATServiceRateLimit(
 			cfg.AutoNATServer.GlobalMax,
@@ -351,7 +354,10 @@ func New(
 		)
 	}
 	if cfg.EnableHolepunching {
-		lopts = append(lopts, libp2p.EnableHolePunching())
+		mt := holepunch.NewMetricsTracer(holepunch.WithRegisterer(prometheus.DefaultRegisterer))
+		hpt := peerinfo.NewHolePunchTracer(pt, mt)
+		lopts = append(lopts,
+			libp2p.EnableHolePunching(holepunch.WithMetricsTracer(hpt)))
 	}
 	if cfg.Relay {
 		if cfg.RelayServer.Enable {
@@ -403,6 +409,7 @@ func New(
 	}
 	g.updateHost(h)
 	h.Network().Notify(p2pmetrics.NewConnectionsMeeter())
+	pt.Start(h.Network())
 
 	logger.Zap().Info("local node identity", zap.Stringer("identity", h.ID()))
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
@@ -413,6 +420,7 @@ func New(
 		WithLog(logger),
 		WithBootnodes(bootnodesMap),
 		WithDirectNodes(g.direct),
+		WithPeerInfo(pt),
 	)
 	return Upgrade(h, opts...)
 }

@@ -4,8 +4,9 @@ import (
 	"math/rand"
 	"path/filepath"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -13,7 +14,7 @@ const (
 	atxpath = "atx"
 )
 
-func newCacheDB(logger log.Log, conf config) *datastore.CachedDB {
+func newCacheDB(logger *zap.Logger, conf config) *datastore.CachedDB {
 	var (
 		db  *sql.Database
 		err error

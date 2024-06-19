@@ -4,6 +4,12 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    ignore:
+      # Following cutting edge releases of libp2p is risky.
+      # Latest problem fixed here: https://github.com/libp2p/go-libp2p/pull/2825
+      # We need QUIC and routing discovery systest cases before we can re-enable
+      # dependabot for libp2p
+      - dependency-name: github.com/libp2p/*
 
   - package-ecosystem: "github-actions"
     directory: "/"

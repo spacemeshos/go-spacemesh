@@ -1,8 +1,9 @@
 package sim
 
 import (
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
@@ -179,11 +180,11 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		}
 		beacon, err := beacons.Get(g.states[0].DB, g.nextLayer.GetEpoch())
 		if err != nil {
-			g.logger.With().Panic("failed to get a beacon", log.Err(err))
+			g.logger.Panic("failed to get a beacon", zap.Error(err))
 		}
 		n, err := util.GetNumEligibleSlots(atx.GetWeight(), 0, total, g.conf.LayerSize, g.conf.LayersPerEpoch)
 		if err != nil {
-			g.logger.With().Panic("eligible slots", log.Err(err))
+			g.logger.Panic("eligible slots", zap.Error(err))
 		}
 		ballot := &types.Ballot{
 			InnerBallot: types.InnerBallot{
@@ -201,7 +202,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		ballot.Signature = signer.Sign(signing.BALLOT, ballot.SignedBytes())
 		ballot.SmesherID = signer.NodeID()
 		if err := ballot.Initialize(); err != nil {
-			g.logger.With().Panic("failed to init ballot", log.Err(err))
+			g.logger.Panic("failed to init ballot", zap.Error(err))
 		}
 		for _, state := range g.states {
 			state.OnBallot(ballot)
@@ -209,8 +210,8 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		layer.AddBallot(ballot)
 	}
 	if len(cfg.BlockTickHeights) < cfg.NumBlocks {
-		g.logger.With().Panic("BlockTickHeights should be at least NumBlocks",
-			log.Int("num blocks", cfg.NumBlocks),
+		g.logger.Panic("BlockTickHeights should be at least NumBlocks",
+			zap.Int("num blocks", cfg.NumBlocks),
 		)
 	}
 	for i := 0; i < cfg.NumBlocks; i++ {

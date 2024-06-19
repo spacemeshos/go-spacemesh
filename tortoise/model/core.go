@@ -6,10 +6,11 @@ import (
 	"math/rand"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -26,7 +27,7 @@ const (
 	units     = 10
 )
 
-func newCore(rng *rand.Rand, id string, logger log.Log) *core {
+func newCore(rng *rand.Rand, id string, logger *zap.Logger) *core {
 	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
 	sig, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	if err != nil {
@@ -57,7 +58,7 @@ func newCore(rng *rand.Rand, id string, logger log.Log) *core {
 // core state machine.
 type core struct {
 	id     string
-	logger log.Log
+	logger *zap.Logger
 	rng    *rand.Rand
 
 	cdb      *datastore.CachedDB
@@ -175,7 +176,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		atxs.Add(c.cdb, ev.Atx)
 		malicious, err := c.cdb.IsMalicious(ev.Atx.SmesherID)
 		if err != nil {
-			c.logger.With().Fatal("failed is malicious lookup", log.Err(err))
+			c.logger.Fatal("failed is malicious lookup", zap.Error(err))
 		}
 		c.atxdata.AddFromAtx(ev.Atx, malicious)
 	case MessageBeacon:

@@ -37,5 +37,13 @@
         "post-k1": 26,
         "post-k2": 37,
         "post-k3": 37
+    },
+    "certifier": {
+        "client": {
+            "max-retries": 10
+        }
+    },
+    "logging": {
+        "log-encoder": "json"
     }
 }

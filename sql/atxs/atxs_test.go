@@ -101,6 +101,24 @@ func TestHasID(t *testing.T) {
 	require.False(t, has)
 }
 
+func Test_IdentityExists(t *testing.T) {
+	db := sql.InMemory()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	yes, err := atxs.IdentityExists(db, sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, yes)
+
+	atx := newAtx(t, sig)
+	require.NoError(t, atxs.Add(db, atx))
+
+	yes, err = atxs.IdentityExists(db, sig.NodeID())
+	require.NoError(t, err)
+	require.True(t, yes)
+}
+
 func TestGetFirstIDByNodeID(t *testing.T) {
 	db := sql.InMemory()
 
@@ -597,6 +615,24 @@ func TestLoadBlob(t *testing.T) {
 	require.Equal(t, []int{len(blob1.Bytes), -1, len(blob2.Bytes)}, blobSizes)
 }
 
+func TestLoadBlob_DefaultsToV1(t *testing.T) {
+	db := sql.InMemory()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx := newAtx(t, sig)
+	atx.AtxBlob.Blob = []byte("blob1")
+	atx.AtxBlob.Version = 0
+
+	require.NoError(t, atxs.Add(db, atx))
+
+	var blob sql.Blob
+	version, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &blob)
+	require.NoError(t, err)
+	require.Equal(t, types.AtxV1, version)
+	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
+}
+
 func TestGetBlobCached(t *testing.T) {
 	db := sql.InMemory(sql.WithQueryCache(true))
 	ctx := context.Background()
@@ -645,6 +681,26 @@ func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
 	_, err = atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), blob)
 	require.NoError(t, err)
 	require.Equal(t, atx.AtxBlob.Blob, blob.Bytes)
+}
+
+// Test that the cached blob is not shared with the caller
+// but copied into the provided blob.
+func TestGetBlobCached_OverwriteSafety(t *testing.T) {
+	db := sql.InMemory(sql.WithQueryCache(true))
+	atx := types.ActivationTx{}
+	atx.SetID(types.RandomATXID())
+	atx.AtxBlob.Blob = []byte("original blob")
+	require.NoError(t, atxs.Add(db, &atx))
+	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
+
+	var b sql.Blob // we will reuse the blob between queries
+	_, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &b)
+	require.NoError(t, err)
+	require.Equal(t, atx.AtxBlob.Blob, b.Bytes)
+	b.Bytes[0] = 'X' // modify the blob
+	_, err = atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &b)
+	require.NoError(t, err)
+	require.Equal(t, atx.AtxBlob.Blob, b.Bytes)
 }
 
 func TestCachedBlobEviction(t *testing.T) {
@@ -980,4 +1036,88 @@ func TestLatest(t *testing.T) {
 			require.EqualValues(t, tc.expect, latest)
 		})
 	}
+}
+
+func Test_PrevATXCollisions(t *testing.T) {
+	db := sql.InMemory()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	// create two ATXs with the same PrevATXID
+	prevATXID := types.RandomATXID()
+
+	atx1 := newAtx(t, sig, withPublishEpoch(1), withPrevATXID(prevATXID))
+	atx2 := newAtx(t, sig, withPublishEpoch(2), withPrevATXID(prevATXID))
+
+	require.NoError(t, atxs.Add(db, atx1))
+	require.NoError(t, atxs.Add(db, atx2))
+
+	// verify that the ATXs were added
+	got1, err := atxs.Get(db, atx1.ID())
+	require.NoError(t, err)
+	atx1.AtxBlob = types.AtxBlob{}
+	require.Equal(t, atx1, got1)
+
+	got2, err := atxs.Get(db, atx2.ID())
+	require.NoError(t, err)
+	atx2.AtxBlob = types.AtxBlob{}
+	require.Equal(t, atx2, got2)
+
+	// add 10 valid ATXs by 10 other smeshers
+	for i := 2; i < 6; i++ {
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx := newAtx(t, otherSig, withPublishEpoch(types.EpochID(i)))
+		require.NoError(t, atxs.Add(db, atx))
+
+		atx2 := newAtx(t, otherSig,
+			withPublishEpoch(types.EpochID(i+1)),
+			withPrevATXID(atx.ID()),
+		)
+		require.NoError(t, atxs.Add(db, atx2))
+	}
+
+	// get the collisions
+	got, err := atxs.PrevATXCollisions(db)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+
+	require.Equal(t, sig.NodeID(), got[0].NodeID1)
+	require.Equal(t, sig.NodeID(), got[0].NodeID2)
+	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, []types.ATXID{got[0].ATX1, got[0].ATX2})
+}
+
+func TestCoinbase(t *testing.T) {
+	t.Parallel()
+	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		_, err := atxs.Coinbase(db, types.NodeID{})
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("found", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		atx := newAtx(t, sig, func(a *types.ActivationTx) { a.Coinbase = types.Address{1, 2, 3} })
+		require.NoError(t, atxs.Add(db, atx))
+		cb, err := atxs.Coinbase(db, sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.Coinbase, cb)
+	})
+	t.Run("picks last", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		atx1 := newAtx(t, sig, withPublishEpoch(1), func(a *types.ActivationTx) { a.Coinbase = types.Address{1, 2, 3} })
+		atx2 := newAtx(t, sig, withPublishEpoch(2), func(a *types.ActivationTx) { a.Coinbase = types.Address{4, 5, 6} })
+		require.NoError(t, atxs.Add(db, atx1))
+		require.NoError(t, atxs.Add(db, atx2))
+		cb, err := atxs.Coinbase(db, sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx2.Coinbase, cb)
+	})
 }

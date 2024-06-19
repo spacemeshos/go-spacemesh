@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"testing"
 
+	p2phost "github.com/libp2p/go-libp2p/core/host"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -18,8 +20,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -32,6 +34,16 @@ const (
 	txsForBlock    = iota
 	txsForProposal = iota
 )
+
+type hostWrapper struct {
+	p2phost.Host
+}
+
+func (hw *hostWrapper) PeerInfo() peerinfo.PeerInfo { return nil }
+
+func wrapHost(h p2phost.Host) server.Host {
+	return &hostWrapper{Host: h}
+}
 
 func (f *testFetch) withMethod(method int) *testFetch {
 	f.method = method
@@ -826,7 +838,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 	for _, withLimiting := range []bool{false, true} {
 		t.Run(fmt.Sprintf("with limiting: %v", withLimiting), func(t *testing.T) {
 			srv := server.New(
-				mesh.Hosts()[1],
+				wrapHost(mesh.Hosts()[1]),
 				hashProtocol,
 				server.WrapHandler(func(_ context.Context, data []byte) ([]byte, error) {
 					var requestBatch RequestBatch
@@ -867,8 +879,8 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			cfg.QueueSize = 1000
 			cfg.GetAtxsConcurrency = getAtxConcurrency
 
-			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-			client := server.New(mesh.Hosts()[0], hashProtocol, nil)
+			cdb := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
+			client := server.New(wrapHost(mesh.Hosts()[0]), hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
 			f := NewFetch(cdb, store.New(), host,

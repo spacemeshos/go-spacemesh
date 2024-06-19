@@ -72,9 +72,7 @@ func (s *LayerStreamService) Stream(
 		defer close(dbChan)
 		if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
 			select {
-			case dbChan <- &spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
-				V1: toLayer(layer),
-			}}:
+			case dbChan <- toLayer(layer):
 				return true
 			case <-ctx.Done():
 				// exit if the stream context is canceled
@@ -101,9 +99,7 @@ func (s *LayerStreamService) Stream(
 				l := toLayer(layer)
 				l.Status = convertEventStatus(rst.Status)
 
-				derr = stream.Send(&spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
-					V1: l,
-				}})
+				derr = stream.Send(l)
 			} else {
 				return status.Error(codes.Internal, derr.Error())
 			}
@@ -122,9 +118,7 @@ func (s *LayerStreamService) Stream(
 					l := toLayer(layer)
 					l.Status = convertEventStatus(rst.Status)
 
-					derr = stream.Send(&spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
-						V1: l,
-					}})
+					derr = stream.Send(l)
 				} else {
 					return status.Error(codes.Internal, derr.Error())
 				}
@@ -200,11 +194,6 @@ func (s *LayerService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.LayerRequest,
 ) (*spacemeshv2alpha1.LayerList, error) {
-	ops, err := toLayerOperations(request)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
 	switch {
 	case request.Limit > 100:
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
@@ -212,12 +201,15 @@ func (s *LayerService) List(
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 
+	ops, err := toLayerOperations(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	rst := make([]*spacemeshv2alpha1.Layer, 0, request.Limit)
 	var derr error
 	if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
-		rst = append(rst, &spacemeshv2alpha1.Layer{Versioned: &spacemeshv2alpha1.Layer_V1{
-			V1: toLayer(layer),
-		}})
+		rst = append(rst, toLayer(layer))
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -226,7 +218,13 @@ func (s *LayerService) List(
 		return nil, derr
 	}
 
-	return &spacemeshv2alpha1.LayerList{Layers: rst}, nil
+	ops.Modifiers = nil
+	count, err := layers.CountLayersByOps(s.db, ops)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &spacemeshv2alpha1.LayerList{Layers: rst, Total: count}, nil
 }
 
 func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operations, error) {
@@ -274,39 +272,35 @@ func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operatio
 	return ops, nil
 }
 
-func toLayer(layer *layers.Layer) *spacemeshv2alpha1.LayerV1 {
-	v1 := &spacemeshv2alpha1.LayerV1{
+func toLayer(layer *layers.Layer) *spacemeshv2alpha1.Layer {
+	l := &spacemeshv2alpha1.Layer{
 		Number: layer.Id.Uint32(),
 	}
 
-	v1.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
+	l.Status = spacemeshv2alpha1.Layer_LAYER_STATUS_UNSPECIFIED
 	if !layer.AppliedBlock.IsEmpty() {
-		v1.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED
+		l.Status = spacemeshv2alpha1.Layer_LAYER_STATUS_APPLIED
 	}
 	if layer.Processed {
-		v1.Status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
+		l.Status = spacemeshv2alpha1.Layer_LAYER_STATUS_VERIFIED
 	}
 
 	if !bytes.Equal(layer.AggregatedHash.Bytes(), types.Hash32{}.Bytes()) {
-		v1.ConsensusHash = layer.AggregatedHash.ShortString()
-		v1.CumulativeStateHash = layer.AggregatedHash.Bytes()
+		l.ConsensusHash = layer.AggregatedHash.ShortString()
+		l.CumulativeStateHash = layer.AggregatedHash.Bytes()
 	}
 
 	if !bytes.Equal(layer.StateHash.Bytes(), types.Hash32{}.Bytes()) {
-		v1.StateHash = layer.StateHash.Bytes()
+		l.StateHash = layer.StateHash.Bytes()
 	}
 
 	if layer.Block != nil {
-		v1.Block = &spacemeshv2alpha1.Block{
-			Versioned: &spacemeshv2alpha1.Block_V1{
-				V1: &spacemeshv2alpha1.BlockV1{
-					Id: types.Hash20(layer.Block.ID()).Bytes(),
-				},
-			},
+		l.Block = &spacemeshv2alpha1.Block{
+			Id: types.Hash20(layer.Block.ID()).Bytes(),
 		}
 	}
 
-	return v1
+	return l
 }
 
 type layersMatcher struct {
@@ -330,13 +324,13 @@ func (m *layersMatcher) match(l *events.LayerUpdate) bool {
 	return true
 }
 
-func convertEventStatus(eventStatus int) (status spacemeshv2alpha1.LayerV1_LayerStatus) {
-	status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_UNSPECIFIED
+func convertEventStatus(eventStatus int) (status spacemeshv2alpha1.Layer_LayerStatus) {
+	status = spacemeshv2alpha1.Layer_LAYER_STATUS_UNSPECIFIED
 	if eventStatus == events.LayerStatusTypeApproved {
-		status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_APPLIED
+		status = spacemeshv2alpha1.Layer_LAYER_STATUS_APPLIED
 	}
 	if eventStatus == events.LayerStatusTypeConfirmed || eventStatus == events.LayerStatusTypeApplied {
-		status = spacemeshv2alpha1.LayerV1_LAYER_STATUS_VERIFIED
+		status = spacemeshv2alpha1.Layer_LAYER_STATUS_VERIFIED
 	}
 	return
 }

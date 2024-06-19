@@ -8,20 +8,21 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata,InvalidPostIndexProof
+//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata,InvalidPostIndexProof,InvalidPrevATXProof
 
 const (
 	MultipleATXs byte = iota + 1
 	MultipleBallots
 	HareEquivocation
 	InvalidPostIndex
+	InvalidPrevATX
 )
 
 type MalfeasanceProof struct {
@@ -40,7 +41,7 @@ func (mp *MalfeasanceProof) SetReceived(received time.Time) {
 	mp.received = received
 }
 
-func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (mp *MalfeasanceProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("generated_layer", mp.Layer.Uint32())
 	switch mp.Proof.Type {
 	case MultipleATXs:
@@ -75,6 +76,15 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 			encoder.AddString("smesher", p.Atx.SmesherID.String())
 			encoder.AddUint32("invalid index", p.InvalidIdx)
 		}
+	case InvalidPrevATX:
+		encoder.AddString("type", "invalid prev atx")
+		p, ok := mp.Proof.Data.(*InvalidPrevATXProof)
+		if ok {
+			encoder.AddString("atx1_id", p.Atx1.ID().String())
+			encoder.AddString("atx2_id", p.Atx2.ID().String())
+			encoder.AddString("smesher", p.Atx1.SmesherID.String())
+			encoder.AddString("prev_atx", p.Atx1.PrevATXID.String())
+		}
 	default:
 		encoder.AddString("type", "unknown")
 	}
@@ -84,9 +94,15 @@ func (mp *MalfeasanceProof) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 type Proof struct {
 	// MultipleATXs | MultipleBallots | HareEquivocation | InvalidPostIndex
-	Type uint8
+	Type byte
 	// AtxProof | BallotProof | HareProof | InvalidPostIndexProof
-	Data scale.Type
+	Data ProofData
+}
+
+type ProofData interface {
+	scale.Type
+
+	isProof()
 }
 
 func (e *Proof) EncodeScale(enc *scale.Encoder) (int, error) {
@@ -152,6 +168,14 @@ func (e *Proof) DecodeScale(dec *scale.Decoder) (int, error) {
 		}
 		e.Data = &proof
 		total += n
+	case InvalidPrevATX:
+		var proof InvalidPrevATXProof
+		n, err := proof.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		e.Data = &proof
+		total += n
 	default:
 		return total, errors.New("unknown malfeasance proof type")
 	}
@@ -163,7 +187,7 @@ type MalfeasanceGossip struct {
 	Eligibility *types.HareEligibilityGossip // deprecated - to be removed in the next version
 }
 
-func (mg *MalfeasanceGossip) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (mg *MalfeasanceGossip) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddObject("proof", &mg.MalfeasanceProof)
 	if mg.Eligibility != nil {
 		encoder.AddObject("hare eligibility", mg.Eligibility)
@@ -175,7 +199,9 @@ type AtxProof struct {
 	Messages [2]AtxProofMsg
 }
 
-func (ap *AtxProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (ap *AtxProof) isProof() {}
+
+func (ap *AtxProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddObject("first", &ap.Messages[0].InnerMsg)
 	encoder.AddObject("second", &ap.Messages[1].InnerMsg)
 	return nil
@@ -185,7 +211,9 @@ type BallotProof struct {
 	Messages [2]BallotProofMsg
 }
 
-func (bp *BallotProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (bp *BallotProof) isProof() {}
+
+func (bp *BallotProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddObject("first", &bp.Messages[0].InnerMsg)
 	encoder.AddObject("second", &bp.Messages[1].InnerMsg)
 	return nil
@@ -195,7 +223,9 @@ type HareProof struct {
 	Messages [2]HareProofMsg
 }
 
-func (hp *HareProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (hp *HareProof) isProof() {}
+
+func (hp *HareProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddObject("first", &hp.Messages[0].InnerMsg)
 	encoder.AddObject("second", &hp.Messages[1].InnerMsg)
 	return nil
@@ -220,11 +250,7 @@ type AtxProofMsg struct {
 
 // SignedBytes returns the actual data being signed in a AtxProofMsg.
 func (m *AtxProofMsg) SignedBytes() []byte {
-	data, err := codec.Encode(&m.InnerMsg)
-	if err != nil {
-		log.With().Fatal("failed to serialize AtxProofMsg", log.Err(err))
-	}
-	return data
+	return codec.MustEncode(&m.InnerMsg)
 }
 
 type InvalidPostIndexProof struct {
@@ -233,6 +259,8 @@ type InvalidPostIndexProof struct {
 	// Which index in POST is invalid
 	InvalidIdx uint32
 }
+
+func (p *InvalidPostIndexProof) isProof() {}
 
 type BallotProofMsg struct {
 	InnerMsg types.BallotMetadata
@@ -243,11 +271,7 @@ type BallotProofMsg struct {
 
 // SignedBytes returns the actual data being signed in a BallotProofMsg.
 func (m *BallotProofMsg) SignedBytes() []byte {
-	data, err := codec.Encode(&m.InnerMsg)
-	if err != nil {
-		log.With().Fatal("failed to serialize MultiBlockProposalsMsg", log.Err(err))
-	}
-	return data
+	return codec.MustEncode(&m.InnerMsg)
 }
 
 type HareMetadata struct {
@@ -258,7 +282,7 @@ type HareMetadata struct {
 	MsgHash types.Hash32
 }
 
-func (hm *HareMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (hm *HareMetadata) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("layer", hm.Layer.Uint32())
 	encoder.AddUint32("round", hm.Round)
 	encoder.AddString("msgHash", hm.MsgHash.String())
@@ -290,6 +314,15 @@ type HareProofMsg struct {
 func (m *HareProofMsg) SignedBytes() []byte {
 	return m.InnerMsg.ToBytes()
 }
+
+// InvalidPrevAtxProof is a proof that a smesher published an ATX with an old previous ATX ID.
+// The proof contains two ATXs that reference the same previous ATX.
+type InvalidPrevATXProof struct {
+	Atx1 wire.ActivationTxV1
+	Atx2 wire.ActivationTxV1
+}
+
+func (p *InvalidPrevATXProof) isProof() {}
 
 func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 	var b strings.Builder
@@ -364,6 +397,17 @@ func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 					p.Atx.ID().ShortString(),
 					p.InvalidIdx,
 					p.Atx.PublishEpoch,
+				))
+		}
+	case InvalidPrevATX:
+		p, ok := mp.Proof.Data.(*InvalidPrevATXProof)
+		if ok {
+			b.WriteString(
+				fmt.Sprintf(
+					"cause: smesher published ATX %s with invalid previous ATX %s in epoch %d\n",
+					p.Atx1.ID().ShortString(),
+					p.Atx2.ID().ShortString(),
+					p.Atx1.PublishEpoch,
 				))
 		}
 	}

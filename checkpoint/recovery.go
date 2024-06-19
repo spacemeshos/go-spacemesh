@@ -233,15 +233,17 @@ func recoverFromLocalFile(
 	})
 	allProofs := make([]*types.PoetProofMessage, 0, len(proofs))
 	for _, dep := range allDeps {
-		poetProofRef, err := poetProofRef(context.Background(), db, dep.ID)
+		poetProofRefs, err := poetProofRefs(context.Background(), db, dep.ID)
 		if err != nil {
 			return nil, fmt.Errorf("get poet proof ref (%v): %w", dep.ID, err)
 		}
-		proof, ok := proofs[poetProofRef]
-		if !ok {
-			return nil, fmt.Errorf("missing poet proof for atx %v", dep.ID)
+		for _, poetProofRef := range poetProofRefs {
+			proof, ok := proofs[poetProofRef]
+			if !ok {
+				return nil, fmt.Errorf("missing poet proof for atx %v", dep.ID)
+			}
+			allProofs = append(allProofs, proof)
 		}
-		allProofs = append(allProofs, proof)
 	}
 	if err := db.Close(); err != nil {
 		return nil, fmt.Errorf("close old db: %w", err)
@@ -388,6 +390,7 @@ func collectOwnAtxDeps(
 	nipostCh, _ := nipost.Challenge(localDB, nodeID)
 	if ref == types.EmptyATXID {
 		if nipostCh == nil {
+			logger.Debug("there is no own atx and none is being built")
 			return nil, nil, nil
 		}
 		if nipostCh.CommitmentATX != nil {
@@ -428,6 +431,7 @@ func collectOwnAtxDeps(
 		maps.Copy(deps, deps2)
 		maps.Copy(proofs, proofs2)
 	}
+	logger.With().Debug("collected atx deps", log.Any("deps", deps))
 	return deps, proofs, nil
 }
 
@@ -508,19 +512,21 @@ func poetProofs(
 ) (map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage, len(atxIds))
 	for atx := range atxIds {
-		ref, err := poetProofRef(context.Background(), db, atx)
+		refs, err := poetProofRefs(context.Background(), db, atx)
 		if err != nil {
 			return nil, fmt.Errorf("get poet proof ref: %w", err)
 		}
-		proof, err := poets.Get(db, ref)
-		if err != nil {
-			return nil, fmt.Errorf("get poet proof (atx: %v): %w", atx, err)
+		for _, ref := range refs {
+			proof, err := poets.Get(db, ref)
+			if err != nil {
+				return nil, fmt.Errorf("get poet proof (atx: %v): %w", atx, err)
+			}
+			var msg types.PoetProofMessage
+			if err := codec.Decode(proof, &msg); err != nil {
+				return nil, fmt.Errorf("decode poet proof (%v): %w", atx, err)
+			}
+			proofs[ref] = &msg
 		}
-		var msg types.PoetProofMessage
-		if err := codec.Decode(proof, &msg); err != nil {
-			return nil, fmt.Errorf("decode poet proof (%v): %w", atx, err)
-		}
-		proofs[ref] = &msg
 	}
 	return proofs, nil
 }

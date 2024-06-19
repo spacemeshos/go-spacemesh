@@ -128,7 +128,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
 	}
 	db := sql.InMemory()
-	ts.cdb = datastore.NewCachedDB(db, lg)
+	ts.cdb = datastore.NewCachedDB(db, lg.Zap())
 	var err error
 	atxsdata := atxsdata.New()
 	exec := mesh.NewExecutor(ts.cdb, atxsdata, ts.mVm, ts.mConState, lg)

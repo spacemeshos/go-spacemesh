@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
@@ -229,7 +230,7 @@ func validateAndPreserveData(
 	db *sql.Database,
 	deps []*checkpoint.AtxDep,
 ) {
-	lg := logtest.New(tb)
+	lg := zaptest.NewLogger(tb)
 	ctrl := gomock.NewController(tb)
 	mclock := activation.NewMocklayerClock(ctrl)
 	mfetch := smocks.NewMockFetcher(ctrl)

@@ -13,9 +13,9 @@ import (
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -283,6 +283,7 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	atx.TickCount = 1
 	require.NoError(t, err)
 	require.NoError(t, atxs.Add(mgr.db, atx))
+	mgr.atxsdata.AddFromAtx(atx, false)
 
 	commitmentAtx, err := mgr.findCommitmentAtx(context.Background())
 	require.NoError(t, err)
@@ -363,8 +364,9 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	close(synced)
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
 
-	cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(tb))
-	mgr, err := NewPostSetupManager(DefaultPostConfig(), zaptest.NewLogger(tb), cdb, goldenATXID, syncer, validator)
+	logger := zaptest.NewLogger(tb)
+	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
+	mgr, err := NewPostSetupManager(DefaultPostConfig(), logger, cdb, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	return &testPostManager{

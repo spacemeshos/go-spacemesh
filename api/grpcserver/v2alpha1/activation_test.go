@@ -67,12 +67,14 @@ func TestActivationService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Activations, 25)
+		require.Equal(t, len(activations), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Equal(t, len(activations), len(list.Activations))
+		require.Equal(t, len(activations), int(list.Total))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {
@@ -81,7 +83,7 @@ func TestActivationService_List(t *testing.T) {
 			Coinbase: activations[3].Coinbase.String(),
 		})
 		require.NoError(t, err)
-		require.Equal(t, activations[3].ID().Bytes(), list.GetActivations()[0].GetV1().GetId())
+		require.Equal(t, activations[3].ID().Bytes(), list.GetActivations()[0].GetId())
 	})
 
 	t.Run("nodeId", func(t *testing.T) {
@@ -90,7 +92,7 @@ func TestActivationService_List(t *testing.T) {
 			NodeId: activations[1].SmesherID.Bytes(),
 		})
 		require.NoError(t, err)
-		require.Equal(t, activations[1].ID().Bytes(), list.GetActivations()[0].GetV1().GetId())
+		require.Equal(t, activations[1].ID().Bytes(), list.GetActivations()[0].GetId())
 	})
 
 	t.Run("id", func(t *testing.T) {
@@ -99,7 +101,7 @@ func TestActivationService_List(t *testing.T) {
 			Id:    activations[3].ID().Bytes(),
 		})
 		require.NoError(t, err)
-		require.Equal(t, activations[3].ID().Bytes(), list.GetActivations()[0].GetV1().GetId())
+		require.Equal(t, activations[3].ID().Bytes(), list.GetActivations()[0].GetId())
 	})
 }
 
@@ -205,7 +207,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 				for _, rst := range expect {
 					received, err := stream.Recv()
 					require.NoError(t, err)
-					require.Equal(t, toAtx(rst).String(), received.GetV1().String())
+					require.Equal(t, toAtx(rst).String(), received.String())
 				}
 			})
 		}

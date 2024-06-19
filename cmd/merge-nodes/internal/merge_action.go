@@ -157,7 +157,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		if _, err := tx.Exec("ATTACH DATABASE ?1 AS srcDB;", enc, nil); err != nil {
 			return fmt.Errorf("attach source database: %w", err)
 		}
-		if _, err := tx.Exec("INSERT INTO main.initial_post SELECT * FROM srcDB.initial_post;", nil, nil); err != nil {
+		if _, err := tx.Exec("INSERT INTO main.post SELECT * FROM srcDB.post;", nil, nil); err != nil {
 			return fmt.Errorf("merge initial_post: %w", err)
 		}
 		if _, err := tx.Exec("INSERT INTO main.challenge SELECT * FROM srcDB.challenge;", nil, nil); err != nil {

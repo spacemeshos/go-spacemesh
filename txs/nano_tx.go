@@ -6,7 +6,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // NanoTX represents minimal info about a transaction for the conservative cache/mempool.
@@ -37,10 +36,11 @@ func (n *NanoTX) MaxSpending() uint64 {
 }
 
 func (n *NanoTX) combinedHash(blockSeed []byte) []byte {
-	hash := hash.New()
-	hash.Write(blockSeed)
-	hash.Write(n.ID.Bytes())
-	return hash.Sum(nil)
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
+	h.Write(blockSeed)
+	h.Write(n.ID.Bytes())
+	return h.Sum(nil)
 }
 
 // Better returns true if this transaction takes priority than `other`.
@@ -50,7 +50,7 @@ func (n *NanoTX) combinedHash(blockSeed []byte) []byte {
 func (n *NanoTX) Better(other *NanoTX, blockSeed []byte) bool {
 	if n.Principal != other.Principal ||
 		n.Nonce != other.Nonce {
-		log.Panic("invalid arguments")
+		panic("invalid arguments")
 	}
 	if n.Fee() > other.Fee() {
 		return true

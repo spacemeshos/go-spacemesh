@@ -7,10 +7,10 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -42,14 +42,14 @@ type Executor interface {
 type CachedDB struct {
 	Executor
 	sql.QueryCache
-	logger log.Log
+	logger *zap.Logger
 
 	// cache is optional in tests. It MUST be set for the 'App'
 	// for properly checking malfeasance.
 	atxsdata *atxsdata.Data
 
 	atxCache      *lru.Cache[types.ATXID, *types.ActivationTx]
-	vrfNonceCache *lru.Cache[VrfNonceKey, *types.VRFPostIndex]
+	vrfNonceCache *lru.Cache[VrfNonceKey, types.VRFPostIndex]
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
@@ -91,26 +91,26 @@ func WithConsensusCache(c *atxsdata.Data) Opt {
 }
 
 // NewCachedDB create an instance of a CachedDB.
-func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
+func NewCachedDB(db Executor, lg *zap.Logger, opts ...Opt) *CachedDB {
 	o := cacheOpts{cfg: DefaultConfig()}
 	for _, opt := range opts {
 		opt(&o)
 	}
-	lg.With().Info("initialized datastore", log.Any("config", o.cfg))
+	lg.Info("initialized datastore", zap.Any("config", o.cfg))
 
 	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTx](o.cfg.ATXSize)
 	if err != nil {
-		lg.Fatal("failed to create atx cache", err)
+		lg.Fatal("failed to create atx cache", zap.Error(err))
 	}
 
 	malfeasanceCache, err := lru.New[types.NodeID, *wire.MalfeasanceProof](o.cfg.MalfeasanceSize)
 	if err != nil {
-		lg.Fatal("failed to create malfeasance cache", err)
+		lg.Fatal("failed to create malfeasance cache", zap.Error(err))
 	}
 
-	vrfNonceCache, err := lru.New[VrfNonceKey, *types.VRFPostIndex](o.cfg.ATXSize)
+	vrfNonceCache, err := lru.New[VrfNonceKey, types.VRFPostIndex](o.cfg.ATXSize)
 	if err != nil {
-		lg.Fatal("failed to create vrf nonce cache", err)
+		lg.Fatal("failed to create vrf nonce cache", zap.Error(err))
 	}
 
 	return &CachedDB{
@@ -194,7 +194,7 @@ func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *wire.Malfeasan
 func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
 	key := VrfNonceKey{id, epoch}
 	if nonce, ok := db.vrfNonceCache.Get(key); ok {
-		return *nonce, nil
+		return nonce, nil
 	}
 
 	nonce, err := atxs.VRFNonce(db, id, epoch)
@@ -202,7 +202,7 @@ func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPos
 		return types.VRFPostIndex(0), err
 	}
 
-	db.vrfNonceCache.Add(key, &nonce)
+	db.vrfNonceCache.Add(key, nonce)
 	return nonce, nil
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -19,6 +20,7 @@ import (
 
 // networkInfo interface.
 type networkInfo interface {
+	PeerInfo() peerinfo.PeerInfo
 	ID() p2p.Peer
 	ListenAddresses() []ma.Multiaddr
 	KnownAddresses() []ma.Multiaddr

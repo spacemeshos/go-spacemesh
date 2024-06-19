@@ -608,7 +608,7 @@ func (app *App) initServices(ctx context.Context) error {
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
 
-	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg))
+	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap())
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
@@ -648,7 +648,7 @@ func (app *App) initServices(ctx context.Context) error {
 			BlockGasLimit:     app.Config.BlockGasLimit,
 			NumTXsPerProposal: app.Config.TxsPerProposal,
 		}),
-		txs.WithLogger(app.addLogger(ConStateLogger, lg)))
+		txs.WithLogger(app.addLogger(ConStateLogger, lg).Zap()))
 
 	genesisAccts := app.Config.Genesis.ToAccounts()
 	if len(genesisAccts) > 0 {
@@ -684,7 +684,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.cachedDB,
 		app.clock,
 		beacon.WithConfig(app.Config.Beacon),
-		beacon.WithLogger(app.addLogger(BeaconLogger, lg)),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
 	)
 	for _, sig := range app.signers {
 		beaconProtocol.Register(sig)
@@ -696,7 +696,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	}
 	trtlopts := []tortoise.Opt{
-		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
+		tortoise.WithLogger(app.addLogger(TrtlLogger, lg).Zap()),
 		tortoise.WithConfig(trtlCfg),
 	}
 	if trtlCfg.EnableTracer {
@@ -760,7 +760,7 @@ func (app *App) initServices(ctx context.Context) error {
 		validator,
 		beaconProtocol,
 		trtl,
-		app.addLogger(ATXHandlerLogger, lg),
+		app.addLogger(ATXHandlerLogger, lg).Zap(),
 		activation.WithTickSize(app.Config.TickSize),
 		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
@@ -780,12 +780,12 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, trtl, msh,
-		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
+		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()))
 
 	app.txHandler = txs.NewTxHandler(
 		app.conState,
 		app.host.ID(),
-		app.addLogger(TxHandlerLogger, lg),
+		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
 
 	app.hOracle = eligibility.New(
@@ -824,7 +824,7 @@ func (app *App) initServices(ctx context.Context) error {
 		beaconProtocol,
 		trtl,
 		blocks.WithCertConfig(app.Config.Certificate),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg)),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
 	)
 	for _, sig := range app.signers {
 		app.certifier.Register(sig)
@@ -953,7 +953,7 @@ func (app *App) initServices(ctx context.Context) error {
 			GenBlockInterval:   500 * time.Millisecond,
 		}),
 		blocks.WithHareOutputChan(app.hare3.Results()),
-		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)),
+		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg).Zap()),
 	)
 
 	minerGoodAtxPct := 90
@@ -985,7 +985,8 @@ func (app *App) initServices(ctx context.Context) error {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.Config.POST,
 		app.addLogger(PostLogger, lg).Zap(),
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		goldenATXID,
 		newSyncer,
 		app.validator,
@@ -999,15 +1000,40 @@ func (app *App) initServices(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
 	}
+
+	nipostLogger := app.addLogger(NipostBuilderLogger, lg).Zap()
+	client := activation.NewCertifierClient(
+		app.db,
+		app.localDB,
+		nipostLogger,
+		activation.WithCertifierClientConfig(app.Config.Certifier.Client),
+	)
+	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
+
+	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoetServers))
+	for _, server := range app.Config.PoetServers {
+		client, err := activation.NewPoetClient(
+			poetDb,
+			server,
+			app.Config.POET,
+			lg.Zap().Named("poet"),
+			activation.WithCertifier(certifier),
+		)
+		if err != nil {
+			app.log.Panic("failed to create poet client: %v", err)
+		}
+		poetClients = append(poetClients, client)
+	}
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.localDB,
-		poetDb,
 		grpcPostService.(*grpcserver.PostService),
-		app.Config.PoetServers,
-		app.addLogger(NipostBuilderLogger, lg).Zap(),
+		nipostLogger,
 		app.Config.POET,
 		app.clock,
+		app.validator,
 		activation.NipostbuilderWithPostStates(postStates),
+		activation.WithPoetClients(poetClients...),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -1015,12 +1041,12 @@ func (app *App) initServices(ctx context.Context) error {
 
 	builderConfig := activation.Config{
 		GoldenATXID:      goldenATXID,
-		LabelsPerUnit:    app.Config.POST.LabelsPerUnit,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.cachedDB,
+		app.db,
+		app.atxsdata,
 		app.localDB,
 		app.host,
 		nipostBuilder,
@@ -1034,6 +1060,8 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 		activation.WithPostStates(postStates),
+		activation.WithPoets(poetClients...),
+		activation.BuilderAtxVersions(app.Config.AtxVersions),
 	)
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
@@ -1058,19 +1086,51 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
+	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	activationMH := activation.NewMalfeasanceHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.edVerifier,
+	)
+	meshMH := mesh.NewMalfeasanceHandler(
+		app.cachedDB,
+		app.edVerifier,
+		mesh.WithMalfeasanceLogger(malfeasanceLogger),
+	)
+	hareMH := hare3.NewMalfeasanceHandler(
+		app.cachedDB,
+		app.edVerifier,
+		hare3.WithMalfeasanceLogger(malfeasanceLogger),
+	)
+	invalidPostMH := activation.NewInvalidPostIndexHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.edVerifier,
+		app.postVerifier,
+	)
+	invalidPrevMH := activation.NewInvalidPrevATXHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.edVerifier,
+	)
+
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	for _, s := range app.signers {
 		nodeIDs = append(nodeIDs, s.NodeID())
 	}
 	malfeasanceHandler := malfeasance.NewHandler(
 		app.cachedDB,
-		app.addLogger(MalfeasanceLogger, lg),
+		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
-		app.edVerifier,
 		trtl,
-		app.postVerifier,
 	)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleATXs, activationMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleBallots, meshMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.HareEquivocation, hareMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPostIndex, invalidPostMH)
+	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPrevATX, invalidPrevMH)
+
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg),
@@ -1492,6 +1552,18 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewLayerStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.Transaction:
+		service := v2alpha1.NewTransactionService(app.db, app.conState, app.syncer, app.txHandler, app.host)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.TransactionStream:
+		service := v2alpha1.NewTransactionStreamService(app.db)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.Account:
+		service := v2alpha1.NewAccountService(app.db, app.conState)
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -1658,8 +1730,13 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			if app.Config.SMESHING.CoinbaseAccount == "" {
 				return errors.New("smeshing enabled but no coinbase account provided")
 			}
-			if len(app.signers) > 1 {
-				return errors.New("supervised smeshing cannot be started in a multi-smeshing setup")
+			if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
+				app.log.Error("supervised smeshing cannot be started in a remote or multi-smeshing setup")
+				app.log.Error(
+					"if you run a supervised node ensure your key file is named %s and try again",
+					supervisedIDKeyFileName,
+				)
+				return errors.New("smeshing enabled in remote setup")
 			}
 			if err := app.postSupervisor.Start(
 				app.Config.POSTService,
@@ -1891,10 +1968,19 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	app.atxsdata = data
 	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
-	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg),
+	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg).Zap(),
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
+
+	if app.Config.ScanMalfeasantATXs {
+		app.log.With().Info("checking DB for malicious ATXs")
+		start = time.Now()
+		if err := activation.CheckPrevATXs(ctx, app.log.Zap(), app.db); err != nil {
+			return fmt.Errorf("malicious ATX check: %w", err)
+		}
+		app.log.With().Info("malicious ATX check completed", log.Duration("duration", time.Since(start)))
+	}
 
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
@@ -1934,9 +2020,6 @@ func (app *App) Start(ctx context.Context) error {
 			return nil
 		})
 	}
-
-	// uncomment to verify ATXs signatures
-	// app.verifyDB(ctx)
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
@@ -2088,6 +2171,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 
 func (app *App) preserveAfterRecovery(ctx context.Context) {
 	if app.preserve == nil {
+		app.log.Info("no need to preserve data after recovery")
 		return
 	}
 	for i, poetProof := range app.preserve.Proofs {

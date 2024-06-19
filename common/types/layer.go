@@ -18,7 +18,7 @@ var (
 	effectiveGenesis uint32
 
 	// EmptyLayerHash is the layer hash for an empty layer.
-	EmptyLayerHash = Hash32{}
+	EmptyLayerHash = EmptyHash32
 )
 
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param.

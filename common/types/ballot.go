@@ -73,7 +73,7 @@ type Ballot struct {
 	// only present in smesher's first ballot of the epoch
 	// this field isn't actually used any more (replaced by InnerBallot.EpochData)
 	// TODO (mafa): remove this field in Ballot v2
-	ActiveSet []ATXID `scale:"max=3500000"`
+	ActiveSet []ATXID `scale:"max=1"`
 
 	// the following fields are kept private and from being serialized
 	ballotID BallotID
@@ -273,7 +273,8 @@ func (b *Ballot) SignedBytes() []byte {
 
 // HashInnerBytes returns the hash of the InnerBallot.
 func (b *Ballot) HashInnerBytes() []byte {
-	h := hash.New()
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
 	_, err := codec.EncodeTo(h, &b.InnerBallot)
 	if err != nil {
 		log.With().Fatal("failed to encode InnerBallot for hashing", log.Err(err))

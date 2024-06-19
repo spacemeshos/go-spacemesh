@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,13 +23,13 @@ var ErrObjectExists = sql.ErrObjectExists
 
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	sqlDB *sql.Database
-	log   log.Log
+	sqlDB  *sql.Database
+	logger *zap.Logger
 }
 
 // NewPoetDb returns a new PoET handler.
-func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
-	return &PoetDb{sqlDB: db, log: log}
+func NewPoetDb(db *sql.Database, log *zap.Logger) *PoetDb {
+	return &PoetDb{sqlDB: db, logger: log}
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
@@ -107,14 +108,17 @@ func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofM
 	}
 
 	if err := poets.Add(db.sqlDB, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
-		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %w",
-			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
+		return fmt.Errorf(
+			"failed to store poet proof for poetId %x round %s: %w",
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err,
+		)
 	}
 
-	db.log.WithContext(ctx).With().Info("stored poet proof",
-		log.String("poet_proof_id", hex.EncodeToString(ref[:5])),
-		log.String("round_id", proofMessage.RoundID),
-		log.String("poet_service_id", hex.EncodeToString(proofMessage.PoetServiceID[:5])),
+	db.logger.Info("stored poet proof",
+		log.ZContext(ctx),
+		log.ZShortStringer("poet_proof_id", types.Hash32(ref)),
+		zap.String("round_id", proofMessage.RoundID),
+		zap.String("poet_service_id", hex.EncodeToString(proofMessage.PoetServiceID[:5])),
 	)
 
 	return nil

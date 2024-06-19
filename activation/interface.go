@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/url"
 	"time"
 
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
@@ -34,39 +35,8 @@ type scaler interface {
 type validatorOption func(*validatorOptions)
 
 type nipostValidator interface {
-	InitialNIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, goldenATXID types.ATXID) error
-	NIPostChallengeV1(challenge *wire.NIPostChallengeV1, previous *types.ActivationTx, nodeID types.NodeID) error
-	NIPost(
-		ctx context.Context,
-		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
-		NIPost *types.NIPost,
-		expectedChallenge types.Hash32,
-		numUnits uint32,
-		opts ...validatorOption,
-	) (uint64, error)
-
-	NumUnits(cfg *PostConfig, numUnits uint32) error
-
-	IsVerifyingFullPost() bool
-
-	Post(
-		ctx context.Context,
-		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
-		post *types.Post,
-		metadata *types.PostMetadata,
-		numUnits uint32,
-		opts ...validatorOption,
-	) error
-
-	VRFNonce(
-		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
-		vrfNonce, labelsPerUnit uint64,
-		numUnits uint32,
-	) error
-	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+	nipostValidatorV1
+	nipostValidatorV2
 
 	// VerifyChain fully verifies all dependencies of the given ATX and the ATX itself.
 	VerifyChain(ctx context.Context, id, goldenATXID types.ATXID, opts ...VerifyChainOption) error
@@ -82,10 +52,11 @@ type nipostBuilder interface {
 	BuildNIPost(
 		ctx context.Context,
 		sig *signing.EdSigner,
-		publish types.EpochID,
-		challenge types.Hash32,
+		challengeHash types.Hash32,
+		postChallenge *types.NIPostChallenge,
 	) (*nipost.NIPostState, error)
-	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte) (*types.Post, *types.PostInfo, error)
+	Proof(ctx context.Context, nodeID types.NodeID, challenge []byte, postChallenge *types.NIPostChallenge,
+	) (*types.Post, *types.PostInfo, error)
 	ResetState(types.NodeID) error
 }
 
@@ -117,9 +88,9 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 }
 
-// poetClient servers as an interface to communicate with a PoET server.
+// PoetClient servers as an interface to communicate with a PoET server.
 // It is used to submit challenges and fetch proofs.
-type poetClient interface {
+type PoetClient interface {
 	Address() string
 
 	// Submit registers a challenge in the proving service current open round.
@@ -131,8 +102,43 @@ type poetClient interface {
 		nodeID types.NodeID,
 	) (*types.PoetRound, error)
 
+	Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error)
+
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error)
+}
+
+// A certifier client that the certifierService uses to obtain certificates
+// The implementation can use any method to obtain the certificate,
+// for example, POST verification.
+type certifierClient interface {
+	// Certify obtains a certificate in a remote certifier service.
+	Certify(
+		ctx context.Context,
+		id types.NodeID,
+		certifierAddress *url.URL,
+		pubkey []byte,
+	) (*certifier.PoetCert, error)
+}
+
+// certifierService is used to certify nodeID for registering in the poet.
+// It holds the certificates and can recertify if needed.
+type certifierService interface {
+	// Acquire a certificate for the ID in the given certifier.
+	// The certificate confirms that the ID is verified and it can be later used to submit in poet.
+	Certificate(
+		ctx context.Context,
+		id types.NodeID,
+		certifierAddress *url.URL,
+		pubkey []byte,
+	) (*certifier.PoetCert, error)
+
+	Recertify(
+		ctx context.Context,
+		id types.NodeID,
+		certifierAddress *url.URL,
+		pubkey []byte,
+	) (*certifier.PoetCert, error)
 }
 
 type poetDbAPI interface {
