@@ -501,8 +501,8 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 
 	// try to get exising challenge
 	existingChallenge, err := b.getExistingChallenge(logger, currentEpochId, nodeID)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return nil, err
+	if err != nil {
+		return nil, fmt.Errorf("getting existing NiPoST challenge: %w", err)
 	}
 
 	if existingChallenge != nil {
@@ -550,8 +550,9 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	}
 
 	// 4. build new challenge
-	var challenge *types.NIPostChallenge
+	logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", currentEpochId.Uint32()))
 
+	var challenge *types.NIPostChallenge
 	prevAtx, err = b.GetPrevAtx(nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
@@ -587,16 +588,15 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 func (b *Builder) getExistingChallenge(
 	logger *zap.Logger,
 	currentEpochId types.EpochID,
-	nodeID types.NodeID) (*types.NIPostChallenge, error) {
+	nodeID types.NodeID,
+) (*types.NIPostChallenge, error) {
 	challenge, err := nipost.Challenge(b.localDB, nodeID)
 
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
-		logger.Info("building new NiPOST challenge", zap.Uint32("current_epoch", currentEpochId.Uint32()))
-		return nil, err
+		return nil, nil
 
 	case err != nil:
-		logger.Info("failed to load NiPoST challenge from local state", zap.Error(err))
 		return nil, fmt.Errorf("get nipost challenge: %w", err)
 
 	case challenge.PublishEpoch < currentEpochId:
@@ -629,7 +629,8 @@ func (b *Builder) buildInitialNIPostChallenge(
 	ctx context.Context,
 	logger *zap.Logger,
 	nodeID types.NodeID,
-	publishEpochId types.EpochID) (*types.NIPostChallenge, error) {
+	publishEpochId types.EpochID,
+) (*types.NIPostChallenge, error) {
 	post, err := nipost.GetPost(b.localDB, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("get initial post: %w", err)
