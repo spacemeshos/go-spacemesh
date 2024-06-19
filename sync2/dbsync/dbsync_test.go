@@ -163,78 +163,6 @@ func TestPrefix(t *testing.T) {
 	}
 }
 
-// func TestHashPrefix(t *testing.T) {
-// 	for _, tc := range []struct {
-// 		h         string
-// 		l         int
-// 		p         prefix
-// 		preFirst0 prefix
-// 		preFirst1 prefix
-// 	}{
-// 		{
-// 			h:         "ABCDEF1234567890000000000000000000000000000000000000000000000000",
-// 			l:         0,
-// 			p:         0,
-// 			preFirst0: 0b1_000001,
-// 			preFirst1: 0,
-// 		},
-// 		{
-// 			h:         "ABCDEF1234567890000000000000000000000000000000000000000000000000",
-// 			l:         1,
-// 			p:         0b1_000001,
-// 			preFirst0: 0b1_000001,
-// 			preFirst1: 0,
-// 		},
-// 		{
-// 			h:         "2BCDEF1234567890000000000000000000000000000000000000000000000000",
-// 			l:         1,
-// 			p:         0b0_000001,
-// 			preFirst0: 0,
-// 			preFirst1: 0b00_000010,
-// 		},
-// 		{
-// 			h:         "ABCDEF1234567890000000000000000000000000000000000000000000000000",
-// 			l:         4,
-// 			p:         0b1010_000100,
-// 			preFirst0: 0b1_000001,
-// 			preFirst1: 0,
-// 		},
-// 		{
-// 			h:         "ABCDEF1234567890000000000000000000000000000000000000000000000000",
-// 			l:         57,
-// 			p:         0x55e6f7891a2b3c79,
-// 			preFirst0: 0b1_000001,
-// 			preFirst1: 0,
-// 		},
-// 		{
-// 			h:         "ABCDEF1234567890000000000000000000000000000000000000000000000000",
-// 			l:         58,
-// 			p:         0xabcdef12345678ba,
-// 			preFirst0: 0b1_000001,
-// 			preFirst1: 0,
-// 		},
-// 		{
-// 			h:         "0000000000000000000000000000000000000000000000000000000000000000",
-// 			l:         0,
-// 			p:         0,
-// 			preFirst0: 0,
-// 			preFirst1: 58,
-// 		},
-// 		{
-// 			h:         "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
-// 			l:         0,
-// 			p:         0,
-// 			preFirst0: 0xfffffffffffffffa,
-// 			preFirst1: 0,
-// 		},
-// 	} {
-// 		h := types.HexToHash32(tc.h)
-// 		require.Equal(t, tc.p, hashPrefix(h[:], tc.l), "hash prefix: h %s l %d", tc.h, tc.l)
-// 		require.Equal(t, tc.preFirst0, preFirst0(h[:]), "preFirst0: h %s", tc.h)
-// 		require.Equal(t, tc.preFirst1, preFirst1(h[:]), "preFirst1: h %s", tc.h)
-// 	}
-// }
-
 func TestCommonPrefix(t *testing.T) {
 	for _, tc := range []struct {
 		a, b string
@@ -474,15 +402,9 @@ func testInMemFPTreeManyItems(t *testing.T, randomXY bool) {
 		require.False(t, rmmeMap[h])
 		rmmeMap[h] = true
 	}
-	// var sb strings.Builder
-	// mft.tree.dump(&sb)
-	// t.Logf("QQQQQ: tree:\n%s", sb.String())
 	slices.SortFunc(hs, func(a, b types.Hash32) int {
 		return a.Compare(b)
 	})
-	// for i, h := range hs {
-	// 	t.Logf("h[%d] = %s", i, h.String())
-	// }
 
 	total := 0
 	nums := make(map[int]int)
