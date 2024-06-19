@@ -15,7 +15,7 @@ jobs:
         include:
           - os: ubuntu-22.04
             outname_sufix: "linux-amd64"
-          - os: [ubuntu-latest-arm-8-cores, linux, arm64]
+          - os: ubuntu-latest-arm-8-cores
             outname_sufix: "linux-arm64"
           - os: macos-13
             outname_sufix: "mac-amd64"
