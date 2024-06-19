@@ -187,7 +187,14 @@ func (s *RewardService) List(
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &spacemeshv2alpha1.RewardList{Rewards: rst}, nil
+
+	ops.Modifiers = nil
+	count, err := rewards.CountRewardsByOps(s.db, ops)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &spacemeshv2alpha1.RewardList{Rewards: rst, Total: count}, nil
 }
 
 func toRewardRequest(filter *spacemeshv2alpha1.RewardStreamRequest) *spacemeshv2alpha1.RewardRequest {

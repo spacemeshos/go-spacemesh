@@ -41,6 +41,9 @@ operating your own PoET and want to use certificate authentication please refer 
 
 ### Features
 
+* [#5792](https://github.com/spacemeshos/go-spacemesh/pull/5792) Add hole punching info and data transfer stats
+   to the API.
+
 ### Improvements
 
 * [#5863](https://github.com/spacemeshos/go-spacemesh/pull/5863) Identity files are now created with 0600 permissions,
@@ -79,6 +82,9 @@ operating your own PoET and want to use certificate authentication please refer 
 * [#6031](https://github.com/spacemeshos/go-spacemesh/pull/6031) Fixed an edge case where the storage units might have
   changed after the initial PoST was generated but before the first ATX has been emitted, invalidating the initial PoST.
   The node will now try to verify the initial PoST and regenerate it if necessary.
+
+* [#6044](https://github.com/spacemeshos/go-spacemesh/pull/6044) The node will now reuse `blake3` hashers in a pool which
+  reduces stress on the garbage collector.
 
 ## Release v1.5.7
 

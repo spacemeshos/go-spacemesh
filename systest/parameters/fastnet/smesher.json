@@ -37,6 +37,7 @@
         }
     },
     "logging": {
+        "log-encoder": "json",
         "txHandler": "debug",
         "grpc": "debug",
         "sync": "debug",

@@ -194,16 +194,16 @@ func (s *LayerService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.LayerRequest,
 ) (*spacemeshv2alpha1.LayerList, error) {
-	ops, err := toLayerOperations(request)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
 	switch {
 	case request.Limit > 100:
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
 	case request.Limit == 0:
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
+	}
+
+	ops, err := toLayerOperations(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	rst := make([]*spacemeshv2alpha1.Layer, 0, request.Limit)
@@ -218,7 +218,13 @@ func (s *LayerService) List(
 		return nil, derr
 	}
 
-	return &spacemeshv2alpha1.LayerList{Layers: rst}, nil
+	ops.Modifiers = nil
+	count, err := layers.CountLayersByOps(s.db, ops)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &spacemeshv2alpha1.LayerList{Layers: rst, Total: count}, nil
 }
 
 func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operations, error) {

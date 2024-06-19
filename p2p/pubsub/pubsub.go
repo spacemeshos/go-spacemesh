@@ -204,7 +204,8 @@ func DropPeerOnSyncValidationReject(handler SyncHandler, h host.Host, logger log
 }
 
 func msgID(msg *pubsubpb.Message) string {
-	hasher := hash.New()
+	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
 	if msg.Topic != nil {
 		hasher.Write([]byte(*msg.Topic))
 	}
