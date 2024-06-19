@@ -171,7 +171,10 @@ func (i *InitialAtxPartsV2) Root() []byte {
 // A marriage allows for publishing a merged ATX, which can contain PoST for all married IDs.
 // Any ID from the marriage can publish a merged ATX on behalf of all married IDs.
 type MarriageCertificate struct {
-	ID types.NodeID
+	// An ATX of the ID that marries. It proves that the ID exists.
+	// Note: the reference ATX does not need to be from the previous epoch.
+	// It only needs to prove the existence of the ID.
+	ReferenceAtx types.ATXID
 	// Signature over the other ID that this ID marries with
 	// If Alice marries Bob, then Alice signs Bob's ID
 	// and Bob includes this certificate in his ATX.
@@ -185,7 +188,7 @@ func (mc *MarriageCertificate) Root() []byte {
 	if err != nil {
 		panic(err)
 	}
-	tree.AddLeaf(mc.ID.Bytes())
+	tree.AddLeaf(mc.ReferenceAtx.Bytes())
 	tree.AddLeaf(mc.Signature.Bytes())
 	return tree.Root()
 }
@@ -313,7 +316,7 @@ func (marriage *MarriageCertificate) MarshalLogObject(encoder zapcore.ObjectEnco
 	if marriage == nil {
 		return nil
 	}
-	encoder.AddString("ID", marriage.ID.String())
+	encoder.AddString("ReferenceATX", marriage.ReferenceAtx.String())
 	encoder.AddString("Signature", marriage.Signature.String())
 	return nil
 }

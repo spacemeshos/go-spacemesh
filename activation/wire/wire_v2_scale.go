@@ -215,7 +215,7 @@ func (t *InitialAtxPartsV2) DecodeScale(dec *scale.Decoder) (total int, err erro
 
 func (t *MarriageCertificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.ID[:])
+		n, err := scale.EncodeByteArray(enc, t.ReferenceAtx[:])
 		if err != nil {
 			return total, err
 		}
@@ -233,7 +233,7 @@ func (t *MarriageCertificate) EncodeScale(enc *scale.Encoder) (total int, err er
 
 func (t *MarriageCertificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.ID[:])
+		n, err := scale.DecodeByteArray(dec, t.ReferenceAtx[:])
 		if err != nil {
 			return total, err
 		}
