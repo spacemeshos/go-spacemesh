@@ -35,13 +35,6 @@ func (rc *rcPool[T, I]) add(item T) I {
 	rc.mtx.Lock()
 	defer rc.mtx.Unlock()
 	var idx I
-	// // validate indices
-	// if left != I(^uint32(0)) {
-	// 	rc.entry(left)
-	// }
-	// if right != I(^uint32(0)) {
-	// 	rc.entry(right)
-	// }
 	if rc.freeList != 0 {
 		idx = I(rc.freeList - 1)
 		rc.freeList = rc.entries[idx].refCount & freeListMask
@@ -73,3 +66,5 @@ func (rc *rcPool[T, I]) ref(idx nodeIndex) {
 	rc.entries[idx].refCount++
 	rc.mtx.Unlock()
 }
+
+// TODO: convert TestNodePool to TestRCPool
