@@ -30,7 +30,8 @@ func (g *GenesisConfig) GenesisID() types.Hash20 {
 }
 
 func (g *GenesisConfig) GoldenATX() types.Hash32 {
-	hh := hash.New()
+	hh := hash.GetHasher()
+	defer hash.PutHasher(hh)
 	parsed, err := time.Parse(time.RFC3339, g.GenesisTime)
 	if err != nil {
 		panic("code should have run Validate before this method")

@@ -107,7 +107,8 @@ func (p *Proposal) SignedBytes() []byte {
 
 // HashInnerProposal returns the hash of the InnerProposal.
 func (p *Proposal) HashInnerProposal() []byte {
-	h := hash.New()
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
 	_, err := codec.EncodeTo(h, &p.InnerProposal)
 	if err != nil {
 		log.With().Fatal("failed to encode InnerProposal for hashing", log.Err(err))
