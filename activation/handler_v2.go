@@ -157,7 +157,7 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
 		return fmt.Errorf("invalid atx signature: %w", errMalformedData)
 	}
-	if atx.PositioningATX == *types.EmptyATXID {
+	if atx.PositioningATX.Empty() {
 		return errors.New("empty positioning atx")
 	}
 	if len(atx.Marriages) != 0 {
@@ -192,7 +192,7 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 		if atx.MarriageATX != nil {
 			return errors.New("initial atx cannot reference a marriage atx")
 		}
-		if atx.Initial.CommitmentATX == *types.EmptyATXID {
+		if atx.Initial.CommitmentATX.Empty() {
 			return errors.New("initial atx missing commitment atx")
 		}
 		if len(atx.PreviousATXs) != 0 {
@@ -215,10 +215,10 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	}
 
 	for i, prev := range atx.PreviousATXs {
-		if prev == *types.EmptyATXID {
+		if prev.Empty() {
 			return fmt.Errorf("previous atx[%d] is empty", i)
 		}
-		if prev == *h.goldenATXID {
+		if prev.Equal(h.goldenATXID) {
 			return fmt.Errorf("previous atx[%d] is the golden ATX", i)
 		}
 	}

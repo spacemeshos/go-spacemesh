@@ -198,8 +198,8 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 				require.Equal(t, sig.NodeID(), watx.SmesherID)
 				require.EqualValues(t, previous.PublishEpoch+1, watx.PublishEpoch)
-				require.Equal(t, previous.ID(), watx.PreviousATXs[0])
-				require.Equal(t, previous.ID(), watx.PositioningATX)
+				require.Equal(t, *previous.ID(), watx.PreviousATXs[0])
+				require.Equal(t, *previous.ID(), watx.PositioningATX)
 				require.Equal(t, coinbase, watx.Coinbase)
 
 				mFetch.EXPECT().RegisterPeerHashes(peer.ID("peer"), gomock.Any())

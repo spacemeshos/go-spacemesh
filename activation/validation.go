@@ -281,7 +281,7 @@ func (v *Validator) InitialNIPostChallengeV1(
 		return errors.New("nil commitment atx in initial post challenge")
 	}
 	commitmentATXId := challenge.CommitmentATXID
-	if commitmentATXId != goldenATXID {
+	if !commitmentATXId.Equal(goldenATXID) {
 		commitmentAtx, err := atxs.GetAtx(commitmentATXId)
 		if err != nil {
 			return &ErrAtxNotFound{Id: *commitmentATXId, source: err}

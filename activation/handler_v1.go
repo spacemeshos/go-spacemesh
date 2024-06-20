@@ -217,7 +217,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 		return 0, 0, nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
 	}
 
-	if atx.PrevATXID == *types.EmptyATXID {
+	if atx.PrevATXID.Empty() {
 		if err := h.nipostValidator.InitialNIPostChallengeV1(&atx.NIPostChallengeV1, h.cdb, h.goldenATXID); err != nil {
 			return 0, 0, nil, err
 		}
