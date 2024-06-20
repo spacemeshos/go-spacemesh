@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"math/bits"
-	// "os"
 	"slices"
 	"strconv"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
@@ -203,6 +205,10 @@ const (
 
 type prefix uint64
 
+func mkprefix(bits uint64, l int) prefix {
+	return prefix(bits<<prefixLenBits + uint64(l))
+}
+
 func (p prefix) len() int {
 	return int(p & prefixLenMask)
 }
@@ -245,16 +251,39 @@ func (p prefix) highBit() bool {
 	return p.bits()>>(p.len()-1) != 0
 }
 
+func (p prefix) minID(b []byte) {
+	if len(b) < 8 {
+		panic("BUG: id slice too small")
+	}
+	v := p.bits() << (64 - p.len())
+	binary.BigEndian.PutUint64(b, v)
+	for n := 8; n < len(b); n++ {
+		b[n] = 0
+	}
+}
+
+func (p prefix) maxID(b []byte) {
+	if len(b) < 8 {
+		panic("BUG: id slice too small")
+	}
+	s := uint64(64 - p.len())
+	v := (p.bits() << s) | ((1 << s) - 1)
+	binary.BigEndian.PutUint64(b, v)
+	for n := 8; n < len(b); n++ {
+		b[n] = 0xff
+	}
+}
+
 // shift removes the highest bit from the prefix
-// TBD: QQQQQ: test shift
 func (p prefix) shift() prefix {
-	switch l := uint64(p.len()); l {
+	switch l := p.len(); l {
 	case 0:
 		panic("BUG: can't shift zero prefix")
 	case 1:
 		return 0
 	default:
-		return prefix(((p.bits() & ((1 << (l - 1)) - 1)) << prefixLenBits) + l - 1)
+		l--
+		return mkprefix(p.bits()&((1<<l)-1), l)
 	}
 }
 
@@ -275,7 +304,7 @@ func load64(h []byte) uint64 {
 
 func preFirst0(h []byte) prefix {
 	l := min(maxPrefixLen, bits.LeadingZeros64(^load64(h)))
-	return prefix(((1<<l)-1)<<prefixLenBits + l)
+	return mkprefix((1<<l)-1, l)
 }
 
 func preFirst1(h []byte) prefix {
@@ -285,8 +314,13 @@ func preFirst1(h []byte) prefix {
 func commonPrefix(a, b []byte) prefix {
 	v1 := load64(a)
 	v2 := load64(b)
-	l := uint64(min(maxPrefixLen, bits.LeadingZeros64(v1^v2)))
-	return prefix((v1>>(64-l))<<prefixLenBits + l)
+	l := min(maxPrefixLen, bits.LeadingZeros64(v1^v2))
+	return mkprefix(v1>>(64-l), l)
+}
+
+type fpResult struct {
+	fp    fingerprint
+	count uint32
 }
 
 type aggResult struct {
@@ -302,14 +336,20 @@ func (r *aggResult) update(node node) {
 	// fmt.Fprintf(os.Stderr, "QQQQQ: r.count <= %d r.fp <= %s\n", r.count, r.fp)
 }
 
+type idStore interface {
+	registerHash(h []byte, maxDepth int) error
+	iterateIDs(tailRefs []uint64, maxDepth int, toCall func(id []byte)) error
+}
+
 type fpTree struct {
 	np       *nodePool
+	idStore  idStore
 	root     nodeIndex
 	maxDepth int
 }
 
-func newFPTree(np *nodePool, maxDepth int) *fpTree {
-	return &fpTree{np: np, root: noIndex, maxDepth: maxDepth}
+func newFPTree(np *nodePool, idStore idStore, maxDepth int) *fpTree {
+	return &fpTree{np: np, idStore: idStore, root: noIndex, maxDepth: maxDepth}
 }
 
 func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) nodeIndex {
@@ -378,10 +418,11 @@ func (ft *fpTree) addValue(fp fingerprint, p prefix, idx nodeIndex) nodeIndex {
 	}
 }
 
-func (ft *fpTree) addHash(h []byte) {
+func (ft *fpTree) addHash(h []byte) error {
 	var fp fingerprint
 	fp.update(h)
 	ft.root = ft.addValue(fp, 0, ft.root)
+	return ft.idStore.registerHash(h, ft.maxDepth)
 	// fmt.Fprintf(os.Stderr, "QQQQQ: addHash: new root %d\n", ft.root)
 }
 
@@ -402,9 +443,11 @@ func (ft *fpTree) followPrefix(from nodeIndex, p prefix) (nodeIndex, bool) {
 }
 
 func (ft *fpTree) tailRefFromPrefix(p prefix) uint64 {
-	if p.len() != ft.maxDepth {
-		panic("BUG: tail from short prefix")
-	}
+	// TODO: QQQQ: FIXME: this may happen with reverse intervals,
+	// but should we even be checking the prefixes in this case?
+	// if p.len() != ft.maxDepth {
+	// 	panic("BUG: tail from short prefix")
+	// }
 	return p.bits()
 }
 
@@ -550,6 +593,19 @@ func (ft *fpTree) aggregateInterval(x, y []byte) aggResult {
 	return r
 }
 
+func (ft *fpTree) fingerprintInterval(x, y []byte) (fpResult, error) {
+	r := ft.aggregateInterval(x, y)
+	if err := ft.idStore.iterateIDs(r.tailRefs, ft.maxDepth, func(id []byte) {
+		if idWithinInterval(id, x, y, r.itype) {
+			r.fp.update(id)
+			r.count++
+		}
+	}); err != nil {
+		return fpResult{}, err
+	}
+	return fpResult{fp: r.fp, count: r.count}, nil
+}
+
 func (ft *fpTree) dumpNode(w io.Writer, idx nodeIndex, indent, dir string) {
 	if idx == noIndex {
 		return
@@ -578,57 +634,125 @@ func (ft *fpTree) dump(w io.Writer) {
 	}
 }
 
-type inMemFPTree struct {
-	tree *fpTree
-	ids  [][][]byte
+type memIDStore struct {
+	ids [][][]byte
 }
 
-type fpResult struct {
-	fp    fingerprint
-	count uint32
-}
+var _ idStore = &memIDStore{}
 
-func newInMemFPTree(np *nodePool, maxDepth int) *inMemFPTree {
-	if maxDepth == 0 {
-		panic("BUG: can't use newInMemFPTree with zero maxDepth")
+func (m *memIDStore) registerHash(h []byte, maxDepth int) error {
+	if m.ids == nil {
+		m.ids = make([][][]byte, 1<<maxDepth)
 	}
-	return &inMemFPTree{
-		tree: newFPTree(np, maxDepth),
-		ids:  make([][][]byte, 1<<maxDepth),
-	}
-}
-
-func (mft *inMemFPTree) addHash(h []byte) {
-	mft.tree.addHash(h)
-	idx := load64(h) >> (64 - mft.tree.maxDepth)
-	s := mft.ids[idx]
+	idx := load64(h) >> (64 - maxDepth)
+	s := m.ids[idx]
 	n := slices.IndexFunc(s, func(cur []byte) bool {
 		return bytes.Compare(cur, h) > 0
 	})
 	if n < 0 {
-		mft.ids[idx] = append(s, h)
+		m.ids[idx] = append(s, h)
 	} else {
-		mft.ids[idx] = slices.Insert(s, n, h)
+		m.ids[idx] = slices.Insert(s, n, h)
 	}
+	return nil
 }
 
-func (mft *inMemFPTree) aggregateInterval(x, y []byte) fpResult {
-	r := mft.tree.aggregateInterval(x, y)
-	for _, t := range r.tailRefs {
-		ids := mft.ids[t]
+func (m *memIDStore) iterateIDs(tailRefs []uint64, maxDepth int, toCall func(id []byte)) error {
+	for _, t := range tailRefs {
+		ids := m.ids[t]
 		for _, id := range ids {
-			// FIXME: this can be optimized as the IDs are ordered
-			if idWithinInterval(id, x, y, r.itype) {
-				// fmt.Fprintf(os.Stderr, "QQQQQ: including tail: %s\n", hex.EncodeToString(id))
-				r.fp.update(id)
-				r.count++
-			} else {
-				// fmt.Fprintf(os.Stderr, "QQQQQ: NOT including tail: %s\n", hex.EncodeToString(id))
-			}
+			toCall(id)
 		}
 	}
-	return fpResult{fp: r.fp, count: r.count}
+	return nil
 }
+
+type sqlIDStore struct {
+	db sql.StateDatabase
+}
+
+func newSQLIDStore(db sql.StateDatabase) *sqlIDStore {
+	return &sqlIDStore{db: db}
+}
+
+func (s *sqlIDStore) registerHash(h []byte, maxDepth int) error {
+	// should be registered by the handler code
+	return nil
+}
+
+func (s *sqlIDStore) iterateIDs(tailRefs []uint64, maxDepth int, toCall func(id []byte)) error {
+	for _, t := range tailRefs {
+		p := mkprefix(t, maxDepth)
+		var minID, maxID types.Hash32
+		p.minID(minID[:])
+		p.maxID(maxID[:])
+		// start := time.Now()
+		if _, err := s.db.Exec(
+			"select id from atxs where id between ? and ?",
+			func(stmt *sql.Statement) {
+				stmt.BindBytes(1, minID[:])
+				stmt.BindBytes(2, maxID[:])
+			},
+			func(stmt *sql.Statement) bool {
+				var id types.Hash32
+				stmt.ColumnBytes(0, id[:])
+				toCall(id[:])
+				return true
+			},
+		); err != nil {
+			return err
+		}
+		// fmt.Fprintf(os.Stderr, "QQQQQ: %v: sel atxs between %s and %s\n", time.Now().Sub(start), minID.String(), maxID.String())
+	}
+	return nil
+}
+
+// type inMemFPTree struct {
+// 	tree *fpTree
+// 	ids  [][][]byte
+// }
+
+// func newInMemFPTree(np *nodePool, maxDepth int) *inMemFPTree {
+// 	if maxDepth == 0 {
+// 		panic("BUG: can't use newInMemFPTree with zero maxDepth")
+// 	}
+// 	return &inMemFPTree{
+// 		tree: newFPTree(np, maxDepth),
+// 		ids:  make([][][]byte, 1<<maxDepth),
+// 	}
+// }
+
+// func (mft *inMemFPTree) addHash(h []byte) {
+// 	mft.tree.addHash(h)
+// 	idx := load64(h) >> (64 - mft.tree.maxDepth)
+// 	s := mft.ids[idx]
+// 	n := slices.IndexFunc(s, func(cur []byte) bool {
+// 		return bytes.Compare(cur, h) > 0
+// 	})
+// 	if n < 0 {
+// 		mft.ids[idx] = append(s, h)
+// 	} else {
+// 		mft.ids[idx] = slices.Insert(s, n, h)
+// 	}
+// }
+
+// func (mft *inMemFPTree) aggregateInterval(x, y []byte) fpResult {
+// 	r := mft.tree.aggregateInterval(x, y)
+// 	for _, t := range r.tailRefs {
+// 		ids := mft.ids[t]
+// 		for _, id := range ids {
+// 			// FIXME: this can be optimized as the IDs are ordered
+// 			if idWithinInterval(id, x, y, r.itype) {
+// 				// fmt.Fprintf(os.Stderr, "QQQQQ: including tail: %s\n", hex.EncodeToString(id))
+// 				r.fp.update(id)
+// 				r.count++
+// 			} else {
+// 				// fmt.Fprintf(os.Stderr, "QQQQQ: NOT including tail: %s\n", hex.EncodeToString(id))
+// 			}
+// 		}
+// 	}
+// 	return fpResult{fp: r.fp, count: r.count}
+// }
 
 func idWithinInterval(id, x, y []byte, itype int) bool {
 	switch itype {
