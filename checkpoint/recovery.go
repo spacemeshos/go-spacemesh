@@ -388,7 +388,7 @@ func collectOwnAtxDeps(
 
 	// check for if smesher is building any atx
 	nipostCh, _ := nipost.Challenge(localDB, nodeID)
-	if ref == types.EmptyATXID {
+	if ref.Empty() {
 		if nipostCh == nil {
 			logger.Debug("there is no own atx and none is being built")
 			return nil, nil, nil

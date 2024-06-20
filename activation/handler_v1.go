@@ -507,7 +507,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		}
 	}
 
-	if atx2ID == types.EmptyATXID {
+	if atx2ID.Empty() {
 		// something went wrong, we couldn't find an ATX that points to the same previous ATX
 		// this should never happen since we are checking in other places that all ATXs from the same node
 		// form a chain

@@ -329,10 +329,10 @@ func (v *Validator) PositioningAtx(
 	goldenATXID *types.ATXID,
 	pubepoch types.EpochID,
 ) error {
-	if id == types.EmptyATXID {
+	if id.Empty() {
 		return errors.New("positioning atx id is empty")
 	}
-	if id == goldenATXID {
+	if id.Equal(goldenATXID) {
 		return nil
 	}
 	posAtx, err := atxs.GetAtx(id)

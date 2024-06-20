@@ -904,9 +904,9 @@ func (b *Builder) getPositioningAtx(
 
 	if previous != nil {
 		switch {
-		case id == b.conf.GoldenATXID:
+		case id.Equal(b.conf.GoldenATXID):
 			id = previous.ID()
-		case id != b.conf.GoldenATXID:
+		case !id.Equal(b.conf.GoldenATXID):
 			if candidate, err := atxs.Get(b.db, id); err == nil {
 				if previous.TickHeight() >= candidate.TickHeight() {
 					id = previous.ID()
