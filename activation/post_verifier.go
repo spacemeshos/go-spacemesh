@@ -322,8 +322,7 @@ func (v *offloadingPostVerifier) Verify(
 	var jobChannel chan<- *verifyPostJob
 
 	if ctx.Value(prioritizedVerifyCall) == true {
-		v.log.Debug("prioritizing current post verification call",
-			zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
+		v.log.Debug("prioritizing current post verification call")
 		jobChannel = v.prioritized
 	} else {
 		_, prioritize := v.prioritizedIds[types.BytesToNodeID(m.NodeId)]
