@@ -1,6 +1,6 @@
 # Coding guide
 
-This project is written in Go and adheres to the accepted coding styles and practices defined in [Effective Go](https://golang.org/doc/effective_go.html) and [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments). 
+This project is written in Go and adheres to the accepted coding styles and practices defined in [Effective Go](https://golang.org/doc/effective_go.html) and [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments). 
 
 ## Static code analysis
 
