@@ -160,7 +160,7 @@ func MainnetConfig() Config {
 			CycleGap:                       12 * time.Hour,
 			GracePeriod:                    1 * time.Hour,
 			PositioningATXSelectionTimeout: 50 * time.Minute,
-			// RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+			// RequestTimeout * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
 			RequestTimeout:    1100 * time.Second,
 			RequestRetryDelay: 10 * time.Second,
 			MaxRequestRetries: 10,

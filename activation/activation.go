@@ -3,7 +3,6 @@
 package activation
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -551,7 +550,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	}
 	publish := current + 1
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
-	wait := b.poetRoundStart(current).Add(-b.poetCfg.GracePeriod)
+	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
 		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better posATX",
 			zap.Duration("till poet round", until),
@@ -564,6 +563,15 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			return nil, ctx.Err()
 		case <-time.After(time.Until(wait)):
 		}
+	}
+
+	poetStartsAt := b.poetRoundStart(current)
+	if b.poetCfg.PositioningATXSelectionTimeout > 0 {
+		var cancel context.CancelFunc
+
+		deadline := poetStartsAt.Add(-b.poetCfg.GracePeriod).Add(b.poetCfg.PositioningATXSelectionTimeout)
+		ctx, cancel = context.WithDeadline(ctx, deadline)
+		defer cancel()
 	}
 
 	prevAtx, err = b.GetPrevAtx(nodeID)
@@ -911,20 +919,12 @@ func (b *Builder) getPositioningAtx(
 	publish types.EpochID,
 	previous *types.ActivationTx,
 ) (types.ATXID, error) {
-	ctxWithTimeout := ctx
-	var cancel context.CancelFunc
-
-	if b.poetCfg.PositioningATXSelectionTimeout > 0 {
-		ctxWithTimeout, cancel = context.WithTimeout(ctx, b.poetCfg.PositioningATXSelectionTimeout)
-		defer cancel()
-	}
-
-	id, err := b.searchPositioningAtx(ctxWithTimeout, nodeID, publish, previous)
+	id, err := b.searchPositioningAtx(ctx, nodeID, publish, previous)
 	if err != nil {
 		return types.EmptyATXID, err
 	}
 
-	if previous != nil && !bytes.Equal(id.Bytes(), previous.ID().Bytes()) {
+	if previous != nil && id != previous.ID() {
 		if candidate, err := atxs.Get(b.db, id); err == nil {
 			if previous.TickHeight() >= candidate.TickHeight() {
 				id = previous.ID()
@@ -959,8 +959,7 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 }
 
 func buildNipostChallengeStartDeadline(roundStart time.Time, gracePeriod time.Duration) time.Time {
-	jitter := randomDurationInRange(time.Duration(0), gracePeriod*maxNipostChallengeBuildJitter/100.0)
-	return roundStart.Add(jitter).Add(-gracePeriod)
+	return roundStart.Add(-gracePeriod)
 }
 
 func (b *Builder) version(publish types.EpochID) types.AtxVersion {
@@ -982,19 +981,13 @@ func findFullyValidHighTickAtx(
 	logger *zap.Logger,
 	opts ...VerifyChainOption,
 ) (types.ATXID, error) {
-	var (
-		found    *types.ATXID
-		emptyAtx types.ATXID
-		ctxErr   error
-	)
+	var found *types.ATXID
 
 	// iterate trough epochs, to get first valid, not malicious ATX with the biggest height
 	atxdata.IterateHighTicksInEpoch(publish+1, func(id types.ATXID) (contSearch bool) {
 		logger.Info("found candidate for high-tick atx", log.ZShortStringer("id", id))
 
 		if ctx.Err() != nil {
-			logger.Info("got error in context", log.ZShortStringer("id", id))
-			ctxErr = ctx.Err()
 			return false
 		}
 
@@ -1008,12 +1001,12 @@ func findFullyValidHighTickAtx(
 		return false
 	})
 
-	if ctxErr != nil {
-		return emptyAtx, ctxErr
+	if ctx.Err() != nil {
+		return types.ATXID{}, ctx.Err()
 	}
 
 	if found == nil {
-		return emptyAtx, ErrNotFound
+		return types.ATXID{}, ErrNotFound
 	}
 
 	return *found, nil

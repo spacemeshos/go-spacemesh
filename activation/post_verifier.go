@@ -319,20 +319,16 @@ func (v *offloadingPostVerifier) Verify(
 	metrics.PostVerificationQueue.Inc()
 	defer metrics.PostVerificationQueue.Dec()
 
-	var jobChannel chan<- *verifyPostJob
+	jobChannel := v.jobs
 
-	if ctx.Value(prioritizedVerifyCall) == true {
-		v.log.Debug("prioritizing current post verification call")
+	if ctx.Value(prioritizedVerifyCall) == true { // TODO (make as an functional option?)
+		v.log.Debug("prioritizing post verification call")
 		jobChannel = v.prioritized
 	} else {
-		_, prioritize := v.prioritizedIds[types.BytesToNodeID(m.NodeId)]
-		switch {
-		case prioritize:
-			v.log.Debug("prioritizing post verification by Node ID",
-				zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
+		nodeID := types.BytesToNodeID(m.NodeId)
+		if _, prioritizedID := v.prioritizedIds[nodeID]; prioritizedID {
+			v.log.Debug("prioritizing post verification by Node ID", zap.Stringer("proof_node_id", nodeID))
 			jobChannel = v.prioritized
-		default:
-			jobChannel = v.jobs
 		}
 	}
 
