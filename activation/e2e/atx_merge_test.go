@@ -463,6 +463,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.Equal(t, totalNumUnits, atx.NumUnits)
 	require.Equal(t, mainID.NodeID(), atx.SmesherID)
 	require.Equal(t, poetProof.LeafCount/tickSize, atx.TickCount)
+	require.Equal(t, uint64(totalNumUnits)*atx.TickCount, atx.Weight)
 
 	posATX, err := atxs.Get(db, marriageATX.ID())
 	require.NoError(t, err)
@@ -511,6 +512,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.Equal(t, totalNumUnits, atx.NumUnits)
 	require.Equal(t, signers[1].NodeID(), atx.SmesherID)
 	require.Equal(t, poetProof.LeafCount/tickSize, atx.TickCount)
+	require.Equal(t, uint64(totalNumUnits)*atx.TickCount, atx.Weight)
 
 	posATX, err = atxs.Get(db, mergedATX.ID())
 	require.NoError(t, err)

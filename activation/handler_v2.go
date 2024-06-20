@@ -1,10 +1,11 @@
 package activation
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"math"
+	"math/bits"
 	"slices"
 	"time"
 
@@ -121,9 +122,10 @@ func (h *HandlerV2) processATX(
 	atx := &types.ActivationTx{
 		PublishEpoch:   watx.PublishEpoch,
 		Coinbase:       watx.Coinbase,
-		NumUnits:       parts.effectiveUnits,
 		BaseTickHeight: baseTickHeight,
-		TickCount:      parts.leaves / h.tickSize,
+		NumUnits:       parts.effectiveUnits,
+		TickCount:      parts.ticks,
+		Weight:         parts.weight,
 		VRFNonce:       types.VRFPostIndex(watx.VRFNonce),
 		SmesherID:      watx.SmesherID,
 		AtxBlob:        types.AtxBlob{Blob: blob, Version: types.AtxV2},
@@ -487,8 +489,48 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 }
 
 type atxParts struct {
-	leaves         uint64
+	ticks          uint64
+	weight         uint64
 	effectiveUnits uint32
+}
+
+type nipostSize struct {
+	units uint32
+	ticks uint64
+}
+
+func (n *nipostSize) addUnits(units uint32) error {
+	sum, carry := bits.Add32(n.units, units, 0)
+	if carry != 0 {
+		return errors.New("units overflow")
+	}
+	n.units = sum
+	return nil
+}
+
+type nipostSizes []*nipostSize
+
+func (n nipostSizes) minTicks() uint64 {
+	return slices.MinFunc(n, func(a, b *nipostSize) int { return cmp.Compare(a.ticks, b.ticks) }).ticks
+}
+
+func (n nipostSizes) sumUp() (units uint32, weight uint64, err error) {
+	var totalEffectiveNumUnits uint32
+	var totalWeight uint64
+	for _, ns := range n {
+		sum, carry := bits.Add32(totalEffectiveNumUnits, ns.units, 0)
+		if carry != 0 {
+			return 0, 0, fmt.Errorf("total units overflow (%d + %d)", totalEffectiveNumUnits, ns.units)
+		}
+		totalEffectiveNumUnits = sum
+
+		hi, weight := bits.Mul64(uint64(ns.units), ns.ticks)
+		if hi != 0 {
+			return 0, 0, fmt.Errorf("weight overflow (%d * %d)", ns.units, ns.ticks)
+		}
+		totalWeight += weight
+	}
+	return totalEffectiveNumUnits, totalWeight, nil
 }
 
 func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error {
@@ -534,8 +576,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	// validate previous ATXs
-	var totalEffectiveNumUnits uint32
-	for _, niposts := range atx.NiPosts {
+	nipostSizes := make(nipostSizes, len(atx.NiPosts))
+	for i, niposts := range atx.NiPosts {
+		nipostSizes[i] = new(nipostSize)
 		for _, post := range niposts.Posts {
 			if post.MarriageIndex >= uint32(len(equivocationSet)) {
 				err := fmt.Errorf("marriage index out of bounds: %d > %d", post.MarriageIndex, len(equivocationSet)-1)
@@ -551,13 +594,13 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 					return nil, nil, fmt.Errorf("validating previous atx: %w", err)
 				}
 			}
-			totalEffectiveNumUnits += effectiveNumUnits
+			nipostSizes[i].addUnits(effectiveNumUnits)
+
 		}
 	}
 
 	// validate poet membership proofs
-	var minLeaves uint64 = math.MaxUint64
-	for _, niposts := range atx.NiPosts {
+	for i, niposts := range atx.NiPosts {
 		// verify PoET memberships in a single go
 		indexedChallenges := make(map[uint64][]byte)
 
@@ -594,7 +637,12 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid poet membership: %w", err)
 		}
-		minLeaves = min(leaves, minLeaves)
+		nipostSizes[i].ticks = leaves / h.tickSize
+	}
+
+	totalEffectiveNumUnits, totalWeight, err := nipostSizes.sumUp()
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// validate all niposts
@@ -641,8 +689,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	parts := &atxParts{
-		leaves:         minLeaves,
+		ticks:          nipostSizes.minTicks(),
 		effectiveUnits: totalEffectiveNumUnits,
+		weight:         totalWeight,
 	}
 
 	if atx.Initial == nil {

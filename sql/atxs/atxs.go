@@ -22,7 +22,7 @@ const (
 // filters that refer to the id column.
 const fieldsQuery = `select
 atxs.id, atxs.nonce, atxs.base_tick_height, atxs.tick_count, atxs.pubkey, atxs.effective_num_units,
-atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.prev_id, atxs.commitment_atx`
+atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.prev_id, atxs.commitment_atx, atxs.weight`
 
 const fullQuery = fieldsQuery + ` from atxs`
 
@@ -61,6 +61,7 @@ func decoder(fn decoderCallback) sql.Decoder {
 			a.CommitmentATX = new(types.ATXID)
 			stmt.ColumnBytes(12, a.CommitmentATX[:])
 		}
+		a.Weight = uint64(stmt.ColumnInt64(13))
 
 		return fn(&a)
 	}
@@ -440,13 +441,14 @@ func Add(db sql.Executor, atx *types.ActivationTx) error {
 		} else {
 			stmt.BindNull(13)
 		}
+		stmt.BindInt64(14, int64(atx.Weight))
 	}
 
 	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
 			 pubkey, received, base_tick_height, tick_count, sequence, coinbase,
-			 validity, prev_id)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`, enc, nil)
+			 validity, prev_id, weight)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
@@ -776,7 +778,7 @@ func IterateAtxsWithMalfeasance(
 		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
 		func(s *sql.Statement) bool {
 			return decoder(func(atx *types.ActivationTx) bool {
-				return fn(atx, s.ColumnInt(13) != 0)
+				return fn(atx, s.ColumnInt(14) != 0)
 			})(s)
 		},
 	)

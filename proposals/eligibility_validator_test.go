@@ -27,6 +27,7 @@ func gatx(
 		VRFNonce:     nonce,
 		TickCount:    100,
 		SmesherID:    smesher,
+		Weight:       uint64(units) * 100,
 	}
 	atx.SetID(id)
 	atx.SetReceived(time.Time{}.Add(1))

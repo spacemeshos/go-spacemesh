@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/bits"
 	"sync"
 	"time"
 
@@ -683,6 +684,11 @@ func (h *HandlerV1) processATX(
 	atx.NumUnits = effectiveNumUnits
 	atx.BaseTickHeight = baseTickHeight
 	atx.TickCount = leaves / h.tickSize
+	hi, weight := bits.Mul64(uint64(atx.NumUnits), atx.TickCount)
+	if hi != 0 {
+		return nil, errors.New("atx weight would overflow uint64")
+	}
+	atx.Weight = weight
 
 	proof, err = h.storeAtx(ctx, atx, watx)
 	if err != nil {

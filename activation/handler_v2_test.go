@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"slices"
 	"testing"
 	"time"
 
@@ -37,7 +39,10 @@ type marriedId struct {
 	refAtx *wire.ActivationTxV2
 }
 
-const poetLeaves = 200
+const (
+	tickSize   = 20
+	poetLeaves = 200
+)
 
 func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 	lg := zaptest.NewLogger(tb)
@@ -50,7 +55,7 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 			atxsdata:        atxsdata.New(),
 			edVerifier:      signing.NewEdVerifier(),
 			clock:           mocks.mclock,
-			tickSize:        1,
+			tickSize:        tickSize,
 			goldenATXID:     golden,
 			nipostValidator: mocks.mValidator,
 			logger:          lg,
@@ -89,8 +94,12 @@ func (h *handlerMocks) expectVerifyNIPoST(atx *wire.ActivationTxV2) {
 	).Return(poetLeaves, nil)
 }
 
-func (h *handlerMocks) expectVerifyNIPoSTs(atx *wire.ActivationTxV2, equivocationSet []types.NodeID) {
-	for _, nipost := range atx.NiPosts {
+func (h *handlerMocks) expectVerifyNIPoSTs(
+	atx *wire.ActivationTxV2,
+	equivocationSet []types.NodeID,
+	poetLeaves []uint64,
+) {
+	for i, nipost := range atx.NiPosts {
 		for _, post := range nipost.Posts {
 			h.mValidator.EXPECT().PostV2(
 				gomock.Any(),
@@ -107,7 +116,7 @@ func (h *handlerMocks) expectVerifyNIPoSTs(atx *wire.ActivationTxV2, equivocatio
 			gomock.Any(),
 			nipost.Challenge,
 			gomock.Any(),
-		)
+		).Return(poetLeaves[i], nil)
 	}
 }
 
@@ -153,7 +162,11 @@ func (h *handlerMocks) expectAtxV2(atx *wire.ActivationTxV2) {
 	h.expectStoreAtxV2(atx)
 }
 
-func (h *handlerMocks) expectMergedAtxV2(atx *wire.ActivationTxV2, equivocationSet []types.NodeID) {
+func (h *handlerMocks) expectMergedAtxV2(
+	atx *wire.ActivationTxV2,
+	equivocationSet []types.NodeID,
+	poetLeaves []uint64,
+) {
 	h.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
 	h.expectFetchDeps(atx)
 	h.mValidator.EXPECT().VRFNonceV2(
@@ -162,7 +175,7 @@ func (h *handlerMocks) expectMergedAtxV2(atx *wire.ActivationTxV2, equivocationS
 		atx.VRFNonce,
 		atx.TotalNumUnits(),
 	)
-	h.expectVerifyNIPoSTs(atx, equivocationSet)
+	h.expectVerifyNIPoSTs(atx, equivocationSet, poetLeaves)
 	h.expectStoreAtxV2(atx)
 }
 
@@ -445,6 +458,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		blob := codec.MustEncode(atx)
 
 		atxHandler := newV2TestHandler(t, golden)
+		atxHandler.tickSize = tickSize
 		atxHandler.expectInitialAtxV2(atx)
 
 		proof, err := atxHandler.processATX(context.Background(), peer, atx, blob, time.Now())
@@ -456,9 +470,10 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		require.NotNil(t, atx)
 		require.Equal(t, atx.ID(), atxFromDb.ID())
 		require.Equal(t, atx.Coinbase, atxFromDb.Coinbase)
-		require.EqualValues(t, poetLeaves, atxFromDb.TickCount)
-		require.EqualValues(t, poetLeaves, atxFromDb.TickHeight())
+		require.EqualValues(t, poetLeaves/tickSize, atxFromDb.TickCount)
+		require.EqualValues(t, 0+atxFromDb.TickCount, atxFromDb.TickHeight()) // positioning is golden
 		require.Equal(t, atx.NiPosts[0].Posts[0].NumUnits, atxFromDb.NumUnits)
+		require.EqualValues(t, atx.NiPosts[0].Posts[0].NumUnits*poetLeaves/tickSize, atxFromDb.Weight)
 
 		// processing ATX for the second time should skip checks
 		proof, err = atxHandler.processATX(context.Background(), peer, atx, blob, time.Now())
@@ -471,9 +486,10 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 
 		prev := newInitialATXv1(t, golden)
 		prev.Sign(sig)
-		atxs.Add(atxHandler.cdb, toAtx(t, prev))
+		prevAtx := toAtx(t, prev)
+		atxs.Add(atxHandler.cdb, prevAtx)
 
-		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), golden)
+		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), prevAtx.ID())
 		atx.Sign(sig)
 		blob := codec.MustEncode(atx)
 		atxHandler.expectAtxV2(atx)
@@ -486,34 +502,39 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Nil(t, atxFromDb.CommitmentATX)
-		// copies coinbase and VRF nonce from the previous ATX
-		require.Equal(t, prev.Coinbase, atxFromDb.Coinbase)
-		require.EqualValues(t, *prev.VRFNonce, atxFromDb.VRFNonce)
+
+		require.Equal(t, atx.Coinbase, atxFromDb.Coinbase)
+		require.EqualValues(t, atx.VRFNonce, atxFromDb.VRFNonce)
+		require.EqualValues(t, poetLeaves/tickSize, atxFromDb.TickCount)
+		require.EqualValues(t, prevAtx.TickHeight(), atxFromDb.BaseTickHeight)
+		require.EqualValues(t, prevAtx.TickHeight()+atxFromDb.TickCount, atxFromDb.TickHeight())
+		require.Equal(t, atx.NiPosts[0].Posts[0].NumUnits, atxFromDb.NumUnits)
+		require.EqualValues(t, atx.NiPosts[0].Posts[0].NumUnits*poetLeaves/tickSize, atxFromDb.Weight)
 	})
 	t.Run("second ATX, previous V2", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
 
-		prev := newInitialATXv2(t, golden)
-		prev.Sign(sig)
-		blob := codec.MustEncode(prev)
+		prev := atxHandler.createAndProcessInitial(t, sig)
 
-		atxHandler.expectInitialAtxV2(prev)
-		proof, err := atxHandler.processATX(context.Background(), peer, prev, blob, time.Now())
-		require.NoError(t, err)
-		require.Nil(t, proof)
-
-		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), golden)
+		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), prev.ID())
 		atx.Sign(sig)
-		blob = codec.MustEncode(atx)
-		atxHandler.expectAtxV2(atx)
+		blob := codec.MustEncode(atx)
 
-		proof, err = atxHandler.processATX(context.Background(), peer, atx, blob, time.Now())
+		atxHandler.expectAtxV2(atx)
+		proof, err := atxHandler.processATX(context.Background(), peer, atx, blob, time.Now())
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
-		_, err = atxs.Get(atxHandler.cdb, atx.ID())
+		prevAtx, err := atxs.Get(atxHandler.cdb, prev.ID())
 		require.NoError(t, err)
+		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
+		require.NoError(t, err)
+		require.EqualValues(t, poetLeaves/tickSize, atxFromDb.TickCount)
+		require.EqualValues(t, prevAtx.TickHeight(), atxFromDb.BaseTickHeight)
+		require.EqualValues(t, prevAtx.TickHeight()+atxFromDb.TickCount, atxFromDb.TickHeight())
+		require.Equal(t, atx.NiPosts[0].Posts[0].NumUnits, atxFromDb.NumUnits)
+		require.EqualValues(t, atx.NiPosts[0].Posts[0].NumUnits*poetLeaves/tickSize, atxFromDb.Weight)
 	})
 	t.Run("second ATX, previous checkpointed", func(t *testing.T) {
 		t.Parallel()
@@ -639,46 +660,29 @@ func marryIDs(
 	golden types.ATXID,
 	num int,
 ) (marriage *wire.ActivationTxV2, other []*wire.ActivationTxV2) {
-	var (
-		marriedIds      []marriedId
-		equivocationSet = []types.NodeID{sig.NodeID()}
-	)
-	for range num {
-		signer, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		atx := atxHandler.createAndProcessInitial(t, signer)
-		marriedIds = append(marriedIds, marriedId{signer, atx})
-	}
-
-	var atxs []*wire.ActivationTxV2
 	mATX := newInitialATXv2(t, golden)
 	mATX.Marriages = []wire.MarriageCertificate{{
 		Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 	}}
-	for _, id := range marriedIds {
+
+	for range num {
+		signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		atx := atxHandler.createAndProcessInitial(t, signer)
+		other = append(other, atx)
 		mATX.Marriages = append(mATX.Marriages, wire.MarriageCertificate{
-			ReferenceAtx: id.refAtx.ID(),
-			Signature:    id.signer.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+			ReferenceAtx: atx.ID(),
+			Signature:    signer.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 		})
-		equivocationSet = append(equivocationSet, id.signer.NodeID())
 	}
+
 	mATX.Sign(sig)
 	atxHandler.expectInitialAtxV2(mATX)
 	p, err := atxHandler.processATX(context.Background(), "", mATX, codec.MustEncode(mATX), time.Now())
 	require.NoError(t, err)
 	require.Nil(t, p)
 
-	// Other IDs publish their first ATXs.
-	for _, id := range marriedIds {
-		atx := newInitialATXv2(t, golden)
-		atx.Sign(id.signer)
-		atxHandler.expectInitialAtxV2(atx)
-		_, err := atxHandler.processATX(context.Background(), "", atx, codec.MustEncode(atx), time.Now())
-		require.NoError(t, err)
-		atxs = append(atxs, atx)
-	}
-
-	return mATX, atxs
+	return mATX, other
 }
 
 func TestHandlerV2_ProcessMergedATX(t *testing.T) {
@@ -717,7 +721,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.PreviousATXs = previousATXs
 		merged.Sign(sig)
 
-		atxHandler.expectMergedAtxV2(merged, equivocationSet)
+		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{poetLeaves})
 		p, err := atxHandler.processATX(context.Background(), "", merged, codec.MustEncode(merged), time.Now())
 		require.NoError(t, err)
 		require.Nil(t, p)
@@ -726,6 +730,81 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, totalNumUnits, atx.NumUnits)
 		require.Equal(t, sig.NodeID(), atx.SmesherID)
+		require.EqualValues(t, totalNumUnits*poetLeaves/tickSize, atx.Weight)
+	})
+	t.Run("merged IDs on 2 poets", func(t *testing.T) {
+		const tickSize = 33
+		atxHandler := newV2TestHandler(t, golden)
+		atxHandler.tickSize = tickSize
+
+		// Marry IDs
+		mATX, otherATXs := marryIDs(t, atxHandler, sig, golden, 4)
+		previousATXs := []types.ATXID{mATX.ID()}
+		equivocationSet := []types.NodeID{sig.NodeID()}
+		for _, atx := range otherATXs {
+			previousATXs = append(previousATXs, atx.ID())
+			equivocationSet = append(equivocationSet, atx.SmesherID)
+		}
+
+		// Process a merged ATX
+		merged := &wire.ActivationTxV2{
+			PublishEpoch:   mATX.PublishEpoch + 2,
+			PreviousATXs:   previousATXs,
+			PositioningATX: mATX.ID(),
+			Coinbase:       types.GenerateAddress([]byte("aaaa")),
+			VRFNonce:       uint64(999),
+			NiPosts:        make([]wire.NiPostsV2, 2),
+		}
+		atxsPerPoet := [][]*wire.ActivationTxV2{
+			append([]*wire.ActivationTxV2{mATX}, otherATXs[:2]...),
+			otherATXs[2:],
+		}
+		var totalNumUnits uint32
+		unitsPerPoet := make([]uint32, 2)
+		var idx uint32
+		for nipostId := range 2 {
+			for _, atx := range atxsPerPoet[nipostId] {
+				post := wire.SubPostV2{
+					MarriageIndex: idx,
+					NumUnits:      atx.TotalNumUnits(),
+					PrevATXIndex:  idx,
+				}
+				unitsPerPoet[nipostId] += post.NumUnits
+				totalNumUnits += post.NumUnits
+				merged.NiPosts[nipostId].Posts = append(merged.NiPosts[nipostId].Posts, post)
+				idx++
+			}
+		}
+
+		mATXID := mATX.ID()
+		merged.MarriageATX = &mATXID
+
+		merged.PreviousATXs = previousATXs
+		merged.Sign(sig)
+
+		poetLeaves := []uint64{100, 500}
+		minPoetLeaves := slices.Min(poetLeaves)
+
+		atxHandler.expectMergedAtxV2(merged, equivocationSet, poetLeaves)
+		p, err := atxHandler.processATX(context.Background(), "", merged, codec.MustEncode(merged), time.Now())
+		require.NoError(t, err)
+		require.Nil(t, p)
+
+		marriageATX, err := atxs.Get(atxHandler.cdb, mATX.ID())
+		require.NoError(t, err)
+		atx, err := atxs.Get(atxHandler.cdb, merged.ID())
+		require.NoError(t, err)
+		require.Equal(t, totalNumUnits, atx.NumUnits)
+		require.Equal(t, sig.NodeID(), atx.SmesherID)
+		require.Equal(t, minPoetLeaves/tickSize, atx.TickCount)
+		require.Equal(t, marriageATX.TickHeight()+atx.TickCount, atx.TickHeight())
+		// the total weight is summed weight on each poet
+		var weight uint64
+		for i := range unitsPerPoet {
+			ticks := poetLeaves[i] / tickSize
+			weight += uint64(unitsPerPoet[i]) * ticks
+		}
+		require.EqualValues(t, weight, atx.Weight)
 	})
 	t.Run("signer must be included merged ATX", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
@@ -758,7 +837,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 
 		atxHandler.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
 		atxHandler.expectFetchDeps(merged)
-		atxHandler.expectVerifyNIPoSTs(merged, equivocationSet)
+		atxHandler.expectVerifyNIPoSTs(merged, equivocationSet, []uint64{200})
 
 		p, err := atxHandler.processATX(context.Background(), "", merged, codec.MustEncode(merged), time.Now())
 		require.ErrorContains(t, err, "ATX signer not present in merged ATX")
@@ -1651,6 +1730,57 @@ func Test_MarryingMalicious(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_CalculatingUnits(t *testing.T) {
+	t.Parallel()
+	t.Run("units on 1 nipost must not overflow", func(t *testing.T) {
+		t.Parallel()
+		ns := nipostSize{}
+		require.NoError(t, ns.addUnits(1))
+		require.EqualValues(t, 1, ns.units)
+		require.Error(t, ns.addUnits(math.MaxUint32))
+	})
+	t.Run("total units on all niposts must not overflow", func(t *testing.T) {
+		t.Parallel()
+		ns := make(nipostSizes, 0)
+		ns = append(ns, &nipostSize{units: 11}, &nipostSize{units: math.MaxUint32 - 10})
+		_, _, err := ns.sumUp()
+		require.Error(t, err)
+	})
+	t.Run("units = sum of units on every nipost", func(t *testing.T) {
+		t.Parallel()
+		ns := make(nipostSizes, 0)
+		ns = append(ns, &nipostSize{units: 1}, &nipostSize{units: 10})
+		u, _, err := ns.sumUp()
+		require.NoError(t, err)
+		require.EqualValues(t, 1+10, u)
+	})
+}
+
+func Test_CalculatingWeight(t *testing.T) {
+	t.Parallel()
+	t.Run("total weight must not overflow uint64", func(t *testing.T) {
+		t.Parallel()
+		ns := make(nipostSizes, 0)
+		ns = append(ns, &nipostSize{units: 1, ticks: 100}, &nipostSize{units: 10, ticks: math.MaxUint64})
+		_, _, err := ns.sumUp()
+		require.Error(t, err)
+	})
+	t.Run("weight = sum of weight on every nipost", func(t *testing.T) {
+		t.Parallel()
+		ns := make(nipostSizes, 0)
+		ns = append(ns, &nipostSize{units: 1, ticks: 100}, &nipostSize{units: 10, ticks: 1000})
+		_, w, err := ns.sumUp()
+		require.NoError(t, err)
+		require.EqualValues(t, 1*100+10*1000, w)
+	})
+}
+
+func Test_CalculatingTicks(t *testing.T) {
+	ns := make(nipostSizes, 0)
+	ns = append(ns, &nipostSize{units: 1, ticks: 100}, &nipostSize{units: 10, ticks: 1000})
+	require.EqualValues(t, 100, ns.minTicks())
 }
 
 func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {

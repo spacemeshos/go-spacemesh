@@ -154,14 +154,15 @@ func createModifiedATXs(
 		signer, err := signing.NewEdSigner()
 		require.NoError(tb, err)
 		signers = append(signers, signer)
-		address := types.GenerateAddress(signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(
-			types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
-			address,
-			numUnit,
-		)
+		atx := &types.ActivationTx{
+			PublishEpoch: lid.GetEpoch(),
+			Coinbase:     types.GenerateAddress(signer.PublicKey().Bytes()),
+			NumUnits:     numUnit,
+			SmesherID:    signer.NodeID(),
+			TickCount:    1,
+			Weight:       uint64(numUnit),
+		}
 		atx.SetReceived(time.Now())
-		atx.SmesherID = signer.NodeID()
 		atx.SetID(types.RandomATXID())
 		onAtx(atx)
 		data.AddFromAtx(atx, false)

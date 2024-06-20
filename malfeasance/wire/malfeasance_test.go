@@ -25,14 +25,11 @@ func TestMain(m *testing.M) {
 func TestCodec_MultipleATXs(t *testing.T) {
 	epoch := types.EpochID(11)
 
-	a1 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{1, 2, 3}, 10)
-	a2 := types.NewActivationTx(types.NIPostChallenge{PublishEpoch: epoch}, types.Address{3, 2, 1}, 11)
-
 	var atxProof wire.AtxProof
-	for i, a := range []*types.ActivationTx{a1, a2} {
+	for i := range atxProof.Messages {
 		atxProof.Messages[i] = wire.AtxProofMsg{
 			InnerMsg: types.ATXMetadata{
-				PublishEpoch: a.PublishEpoch,
+				PublishEpoch: epoch,
 				MsgHash:      types.RandomHash(),
 			},
 			SmesherID: types.RandomNodeID(),
