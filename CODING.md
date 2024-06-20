@@ -22,6 +22,8 @@ For every goroutine that is created, one must define how and when it terminates.
 
 Every channel must have an owning goroutine. That goroutine is the only one that can send to the channel, close it or transfer ownership to another goroutine. Wherever is possible a readonly or writeonly channels should be used.
 
+Usage of the `errgroup` library is highly encouraged instead of `sync.WaitGroup`, both for error propagation and for a cleaner group initialization.
+
 ## Error propagation, annotation and handling
 
 Errors must be propagated by the caller function. Error should not be logged and passed at the same time. It is up to the next caller function to decide what should be done in case of an error (e.g. execute specific logic, log, or continue bubbling the error up the stack).
@@ -30,11 +32,19 @@ Any returned error from any function or method should be annotated either with `
 
 Explicit `error` values that are constructed with `errors.New` may have a message prefixed with the package name and a colon character, if it would improve the message clarity.
 
+Comparison of error message should always use the `errors.Is` or `errors.As` methods as applicable. In case multiple error paths are possible, a `switch` may be used to reduce nesting.
+
 ## Logging Guidelines
 
-This part of the document describes the basic principles of logging which should be followed when working with the code base. 
+This part of the document describes the basic principles of logging which should be followed when working with the code base.
 
 Following these principles will not only make the logging output more coherent, but can significantly reduce time spent searching for bugs and make it easier for node operators to navigate the state of their actively running node.
+
+### Logging libraries
+
+In the codebase one can find usage of the `zap` library as well as usage of the `log` package which can be found at the root of the project. 
+
+Currently, use of the own `log` package is discouraged in favor of the usage of `zap` library.
 
 ### Log Levels
 
@@ -67,7 +77,7 @@ In general, the goal for developers is to create log messages that are easy to u
 
 That is, the same problem event can have two log lines, but with different severity. This is the case for a combination of `Error/Debug` or `Warning/Debug`, where `Error` or `Warning` is for the node operator and `Debug` is for the developer to help them investigate the problem.
 
-> The `Error` level should be used with caution when it comes to node operators. It is recommended to log application code errors at the `Error` level if they require node operator intervention or if the node cannot continue its normal operation (unrecoverable errors). Otherwise, recoverable (application code) errors should be logged at the `Debug` level. The `Debug` level should not be used to monitor the node, but metrics should be used for this purpose.
+> The `Error` level should be used with caution when it comes to node operators. It is recommended to log application code errors at the `Error` level if they require node operator intervention or if the node cannot continue its normal operation (unrecoverable errors, from which the application should initiate a shutdown sequence). Otherwise, recoverable (application code) errors should be logged at the `Debug` level. The `Debug` level should not be used to monitor the node, but metrics should be used for this purpose.
 
 Log lines should not contain the following attributes (remove, mask, sanitize, hash, or encrypt the following):
 
