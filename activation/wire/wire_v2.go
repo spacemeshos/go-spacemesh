@@ -229,7 +229,7 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 	}
 	tree.AddLeaf(prevATXs[sp.PrevATXIndex].Bytes())
 
-	var leafIndex [8]byte
+	var leafIndex types.Hash32
 	binary.LittleEndian.PutUint64(leafIndex[:], sp.MembershipLeafIndex)
 	tree.AddLeaf(leafIndex[:])
 

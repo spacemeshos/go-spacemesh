@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
@@ -121,8 +122,8 @@ func (h *handlerMocks) expectVerifyNIPoSTs(
 }
 
 func (h *handlerMocks) expectStoreAtxV2(atx *wire.ActivationTxV2) {
-	h.mbeacon.EXPECT().OnAtx(gomock.Any())
-	h.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+	h.mbeacon.EXPECT().OnAtx(fixture.MatchId(atx.ID()))
+	h.mtortoise.EXPECT().OnAtx(atx.PublishEpoch+1, atx.ID(), gomock.Any())
 	h.mValidator.EXPECT().IsVerifyingFullPost().Return(false)
 }
 
@@ -183,14 +184,21 @@ func (h *v2TestHandler) createAndProcessInitial(t *testing.T, sig *signing.EdSig
 	t.Helper()
 	atx := newInitialATXv2(t, h.handlerMocks.goldenATXID)
 	atx.Sign(sig)
-	p, err := h.processInitial(atx)
+	p, err := h.processInitial(t, atx)
 	require.NoError(t, err)
 	require.Nil(t, p)
 	return atx
 }
 
-func (h *v2TestHandler) processInitial(atx *wire.ActivationTxV2) (*mwire.MalfeasanceProof, error) {
+func (h *v2TestHandler) processInitial(t *testing.T, atx *wire.ActivationTxV2) (*mwire.MalfeasanceProof, error) {
+	t.Helper()
 	h.expectInitialAtxV2(atx)
+	return h.processATX(context.Background(), peer.ID("peer"), atx, codec.MustEncode(atx), time.Now())
+}
+
+func (h *v2TestHandler) processSoloAtx(t *testing.T, atx *wire.ActivationTxV2) (*mwire.MalfeasanceProof, error) {
+	t.Helper()
+	h.expectAtxV2(atx)
 	return h.processATX(context.Background(), peer.ID("peer"), atx, codec.MustEncode(atx), time.Now())
 }
 
@@ -1234,7 +1242,7 @@ func Test_ValidateMarriages(t *testing.T) {
 		}
 		marriage.Sign(sig)
 
-		p, err := atxHandler.processInitial(marriage)
+		p, err := atxHandler.processInitial(t, marriage)
 		require.NoError(t, err)
 		require.Nil(t, p)
 
@@ -1569,10 +1577,9 @@ func Test_Marriages(t *testing.T) {
 				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 			},
 		}
-
 		atx.Sign(sig)
 
-		p, err := atxHandler.processInitial(atx)
+		p, err := atxHandler.processInitial(t, atx)
 		require.NoError(t, err)
 		require.Nil(t, p)
 
@@ -1588,7 +1595,39 @@ func Test_Marriages(t *testing.T) {
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, set)
 	})
-	t.Run("can't marry twice", func(t *testing.T) {
+	t.Run("can't marry twice in the same marriage ATX", func(t *testing.T) {
+		t.Parallel()
+		atxHandler := newV2TestHandler(t, golden)
+
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
+
+		othersSecondAtx := newSoloATXv2(t, othersAtx.PublishEpoch+1, othersAtx.ID(), othersAtx.ID())
+		othersSecondAtx.Sign(otherSig)
+		_, err = atxHandler.processSoloAtx(t, othersSecondAtx)
+		require.NoError(t, err)
+
+		atx := newInitialATXv2(t, golden)
+		atx.Marriages = []wire.MarriageCertificate{
+			{
+				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+			},
+			{
+				ReferenceAtx: othersAtx.ID(),
+				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+			},
+			{
+				ReferenceAtx: othersSecondAtx.ID(),
+				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+			},
+		}
+		atx.Sign(sig)
+
+		_, err = atxHandler.validateMarriages(atx)
+		require.ErrorContains(t, err, "more than 1 marriage certificate for ID")
+	})
+	t.Run("can't marry twice (separate marriages)", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
 

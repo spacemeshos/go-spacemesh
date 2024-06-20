@@ -66,17 +66,18 @@ type nipostData struct {
 
 func buildNipost(
 	nb *activation.NIPostBuilder,
-	sig *signing.EdSigner,
+	signer *signing.EdSigner,
 	publish types.EpochID,
 	previous, positioning types.ATXID,
 ) (nipostData, error) {
-	challenge := wire.NIPostChallengeV2{
-		PublishEpoch:     publish,
-		PrevATXID:        previous,
-		PositioningATXID: positioning,
+	postChallenge := &types.NIPostChallenge{
+		PublishEpoch:   publish,
+		PrevATXID:      previous,
+		PositioningATX: positioning,
 	}
-	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge.PublishEpoch, challenge.Hash())
-	nb.ResetState(sig.NodeID())
+	challenge := wire.NIPostChallengeToWireV2(postChallenge).Hash()
+	nipost, err := nb.BuildNIPost(context.Background(), signer, challenge, postChallenge)
+	nb.ResetState(signer.NodeID())
 	return nipostData{previous, nipost}, err
 }
 
@@ -304,6 +305,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
+		validator,
 		activation.WithPoetClients(poetClient),
 	)
 	require.NoError(t, err)
@@ -338,17 +340,18 @@ func Test_MarryAndMerge(t *testing.T) {
 	eg = errgroup.Group{}
 	for i, signer := range signers {
 		eg.Go(func() error {
-			post, postInfo, err := nb.Proof(context.Background(), signer.NodeID(), types.EmptyHash32[:])
+			post, postInfo, err := nb.Proof(context.Background(), signer.NodeID(), types.EmptyHash32[:], nil)
 			if err != nil {
 				return err
 			}
 
-			challenge := wire.NIPostChallengeV2{
-				PublishEpoch:     publish,
-				PositioningATXID: goldenATX,
-				InitialPost:      wire.PostToWireV1(post),
+			postChallenge := &types.NIPostChallenge{
+				PublishEpoch:   publish,
+				PositioningATX: goldenATX,
+				InitialPost:    post,
 			}
-			nipost, err := nb.BuildNIPost(context.Background(), signer, challenge.PublishEpoch, challenge.Hash())
+			challenge := wire.NIPostChallengeToWireV2(postChallenge).Hash()
+			nipost, err := nb.BuildNIPost(context.Background(), signer, challenge, postChallenge)
 			if err != nil {
 				return err
 			}

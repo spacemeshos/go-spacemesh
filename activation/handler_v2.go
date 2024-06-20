@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/bits"
 	"slices"
 	"time"
@@ -435,7 +436,8 @@ func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]types.NodeID,
 	if len(atx.Marriages) == 0 {
 		return nil, nil
 	}
-	var marryingIDs []types.NodeID
+	marryingIDsSet := make(map[types.NodeID]struct{}, len(atx.Marriages))
+	var marryingIDs []types.NodeID // for deterministic order
 	for i, m := range atx.Marriages {
 		var id types.NodeID
 		if m.ReferenceAtx == types.EmptyATXID {
@@ -451,6 +453,10 @@ func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]types.NodeID,
 		if !h.edVerifier.Verify(signing.MARRIAGE, id, atx.SmesherID.Bytes(), m.Signature) {
 			return nil, fmt.Errorf("invalid marriage[%d] signature", i)
 		}
+		if _, ok := marryingIDsSet[id]; ok {
+			return nil, fmt.Errorf("more than 1 marriage certificate for ID %s", id)
+		}
+		marryingIDsSet[id] = struct{}{}
 		marryingIDs = append(marryingIDs, id)
 	}
 	return marryingIDs, nil
@@ -515,14 +521,10 @@ func (n nipostSizes) minTicks() uint64 {
 }
 
 func (n nipostSizes) sumUp() (units uint32, weight uint64, err error) {
-	var totalEffectiveNumUnits uint32
+	var totalUnits uint64
 	var totalWeight uint64
 	for _, ns := range n {
-		sum, carry := bits.Add32(totalEffectiveNumUnits, ns.units, 0)
-		if carry != 0 {
-			return 0, 0, fmt.Errorf("total units overflow (%d + %d)", totalEffectiveNumUnits, ns.units)
-		}
-		totalEffectiveNumUnits = sum
+		totalUnits += uint64(ns.units)
 
 		hi, weight := bits.Mul64(uint64(ns.units), ns.ticks)
 		if hi != 0 {
@@ -530,7 +532,10 @@ func (n nipostSizes) sumUp() (units uint32, weight uint64, err error) {
 		}
 		totalWeight += weight
 	}
-	return totalEffectiveNumUnits, totalWeight, nil
+	if totalUnits > math.MaxUint32 {
+		return 0, 0, fmt.Errorf("total units overflow: %d", totalUnits)
+	}
+	return uint32(totalUnits), totalWeight, nil
 }
 
 func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error {
@@ -595,7 +600,6 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				}
 			}
 			nipostSizes[i].addUnits(effectiveNumUnits)
-
 		}
 	}
 
@@ -708,7 +712,6 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 }
 
 func (h *HandlerV2) checkMalicious(
-	ctx context.Context,
 	tx *sql.Tx,
 	watx *wire.ActivationTxV2,
 	marrying []types.NodeID,
@@ -721,7 +724,7 @@ func (h *HandlerV2) checkMalicious(
 		return true, nil, nil
 	}
 
-	proof, err := h.checkDoubleMarry(tx, watx, marrying)
+	proof, err := h.checkDoubleMarry(tx, marrying)
 	if err != nil {
 		return false, nil, fmt.Errorf("checking double marry: %w", err)
 	}
@@ -739,11 +742,7 @@ func (h *HandlerV2) checkMalicious(
 	return false, nil, nil
 }
 
-func (h *HandlerV2) checkDoubleMarry(
-	tx *sql.Tx,
-	watx *wire.ActivationTxV2,
-	marrying []types.NodeID,
-) (*mwire.MalfeasanceProof, error) {
+func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []types.NodeID) (*mwire.MalfeasanceProof, error) {
 	for _, id := range marrying {
 		married, err := identities.Married(tx, id)
 		if err != nil {
@@ -776,7 +775,7 @@ func (h *HandlerV2) storeAtx(
 	)
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
-		malicious, proof, err = h.checkMalicious(ctx, tx, watx, marrying)
+		malicious, proof, err = h.checkMalicious(tx, watx, marrying)
 		if err != nil {
 			return fmt.Errorf("check malicious: %w", err)
 		}
