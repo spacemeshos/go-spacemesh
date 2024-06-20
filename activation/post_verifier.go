@@ -28,10 +28,6 @@ type verifyPostJob struct {
 	result   chan error
 }
 
-type prioritizedVerifyCallKey int
-
-const prioritizedVerifyCall prioritizedVerifyCallKey = 1
-
 type postStatesGetter interface {
 	Get() map[types.NodeID]types.PostState
 }
@@ -155,10 +151,12 @@ func (v *postVerifier) Verify(
 	_ context.Context,
 	p *shared.Proof,
 	m *shared.ProofMetadata,
-	opts ...verifying.OptionFunc,
+	opts ...postVerifierOptionFunc,
 ) error {
+	opt := applyOptions(opts...)
+
 	v.logger.Debug("verifying post", zap.Stringer("proof_node_id", types.BytesToNodeID(m.NodeId)))
-	return v.ProofVerifier.Verify(p, m, v.cfg, v.logger, opts...)
+	return v.ProofVerifier.Verify(p, m, v.cfg, v.logger, opt.verifierOptions...)
 }
 
 type postVerifierOpts struct {
@@ -306,13 +304,15 @@ func (v *offloadingPostVerifier) Verify(
 	ctx context.Context,
 	p *shared.Proof,
 	m *shared.ProofMetadata,
-	opts ...verifying.OptionFunc,
+	opts ...postVerifierOptionFunc,
 ) error {
+	opt := applyOptions(opts...)
+
 	job := &verifyPostJob{
 		ctx:      ctx,
 		proof:    p,
 		metadata: m,
-		opts:     opts,
+		opts:     opt.verifierOptions,
 		result:   make(chan error, 1),
 	}
 
@@ -320,13 +320,12 @@ func (v *offloadingPostVerifier) Verify(
 	defer metrics.PostVerificationQueue.Dec()
 
 	jobChannel := v.jobs
-
-	if ctx.Value(prioritizedVerifyCall) == true { // TODO (make as an functional option?)
+	if opt.prioritised {
 		v.log.Debug("prioritizing post verification call")
 		jobChannel = v.prioritized
 	} else {
 		nodeID := types.BytesToNodeID(m.NodeId)
-		if _, prioritizedID := v.prioritizedIds[nodeID]; prioritizedID {
+		if _, prioritized := v.prioritizedIds[nodeID]; prioritized {
 			v.log.Debug("prioritizing post verification by Node ID", zap.Stringer("proof_node_id", nodeID))
 			jobChannel = v.prioritized
 		}
@@ -374,7 +373,7 @@ func (w *postVerifierWorker) start() {
 		// First try to process a prioritized job.
 		select {
 		case job := <-w.prioritized:
-			job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, job.opts...)
+			job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, WithVerifierOptions(job.opts...))
 		default:
 			select {
 			case <-w.shutdown:
@@ -382,9 +381,9 @@ func (w *postVerifierWorker) start() {
 			case <-w.stop:
 				return
 			case job := <-w.prioritized:
-				job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, job.opts...)
+				job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, WithVerifierOptions(job.opts...))
 			case job := <-w.jobs:
-				job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, job.opts...)
+				job.result <- w.verifier.Verify(job.ctx, job.proof, job.metadata, WithVerifierOptions(job.opts...))
 			}
 		}
 	}
@@ -396,7 +395,7 @@ func (v *noopPostVerifier) Verify(
 	_ context.Context,
 	_ *shared.Proof,
 	_ *shared.ProofMetadata,
-	_ ...verifying.OptionFunc,
+	_ ...postVerifierOptionFunc,
 ) error {
 	return nil
 }

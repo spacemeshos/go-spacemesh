@@ -882,7 +882,7 @@ func (b *Builder) searchPositioningAtx(
 	// positioning ATX publish epoch must be lower than the publish epoch of built ATX
 	positioningAtxPublished := min(latestPublished, publish-1)
 	id, err := findFullyValidHighTickAtx(
-		context.WithValue(ctx, prioritizedVerifyCall, true),
+		ctx,
 		b.atxsdata,
 		positioningAtxPublished,
 		b.conf.GoldenATXID,
@@ -891,6 +891,7 @@ func (b *Builder) searchPositioningAtx(
 		VerifyChainOpts.AssumeValidBefore(time.Now().Add(-b.postValidityDelay)),
 		VerifyChainOpts.WithTrustedID(nodeID),
 		VerifyChainOpts.WithLogger(b.logger),
+		VerifyChainOpts.PrioritizeCall(),
 	)
 	if err != nil {
 		if previous != nil {
