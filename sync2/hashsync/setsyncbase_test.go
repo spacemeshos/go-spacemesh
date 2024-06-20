@@ -240,8 +240,11 @@ func TestSetSyncBase(t *testing.T) {
 		ss.(ItemStore).Add(context.Background(), hs[2])
 		ss.(ItemStore).Add(context.Background(), hs[3])
 		// syncer's cloned ItemStore has new key immediately
-		require.True(t, ss.(ItemStore).Has(hs[2]))
-		require.True(t, ss.(ItemStore).Has(hs[3]))
+		has, err := ss.(ItemStore).Has(hs[2])
+		require.NoError(t, err)
+		require.True(t, has)
+		has, err = ss.(ItemStore).Has(hs[3])
+		require.True(t, has)
 		handlerErr := errors.New("fail")
 		st.getWaitCh(hs[2]) <- handlerErr
 		close(st.getWaitCh(hs[3]))
@@ -249,7 +252,9 @@ func TestSetSyncBase(t *testing.T) {
 		require.ErrorIs(t, err, handlerErr)
 		require.ElementsMatch(t, hs[2:], handledKeys)
 		// only successfully handled key propagate the syncBase
-		require.False(t, is.Has(hs[2]))
-		require.True(t, is.Has(hs[3]))
+		has, err = is.Has(hs[2])
+		require.False(t, has)
+		has, err = is.Has(hs[3])
+		require.True(t, has)
 	})
 }

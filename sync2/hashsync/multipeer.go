@@ -179,17 +179,21 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 				zap.Int("count", pr.Count))
 		}
 
-		if (1-pr.Sim)*float64(mpr.syncBase.Count()) < float64(mpr.maxFullDiff) {
+		c, err := mpr.syncBase.Count()
+		if err != nil {
+			return s, err
+		}
+		if (1-pr.Sim)*float64(c) < float64(mpr.maxFullDiff) {
 			mpr.logger.Debug("nearFull peer",
 				zap.Stringer("peer", p),
 				zap.Float64("sim", pr.Sim),
-				zap.Int("localCount", mpr.syncBase.Count()))
+				zap.Int("localCount", c))
 			s.nearFullCount++
 		} else {
 			mpr.logger.Debug("nearFull peer",
 				zap.Stringer("peer", p),
 				zap.Float64("sim", pr.Sim),
-				zap.Int("localCount", mpr.syncBase.Count()))
+				zap.Int("localCount", c))
 		}
 	}
 	return s, nil

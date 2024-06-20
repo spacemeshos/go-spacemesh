@@ -188,7 +188,10 @@ func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding Iterator, x,
 	// fmt.Fprintf(os.Stderr, "QQQQQ: preceding=%q\n",
 	// 	qqqqRmmeK(preceding))
 	// TODO: don't re-request range info for the first part of range after stop
-	info := rsr.is.GetRangeInfo(preceding, x, y, -1)
+	info, err := rsr.is.GetRangeInfo(preceding, x, y, -1)
+	if err != nil {
+		return nil, err
+	}
 	// fmt.Fprintf(os.Stderr, "QQQQQ: start=%q end=%q info.Start=%q info.End=%q info.FP=%q x=%q y=%q\n",
 	// 	qqqqRmmeK(start), qqqqRmmeK(end), qqqqRmmeK(info.Start), qqqqRmmeK(info.End), info.Fingerprint, x, y)
 	switch {
@@ -229,11 +232,17 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 	if msg.Type() == MessageTypeEmptySet || (msg.Type() == MessageTypeProbe && x == nil && y == nil) {
 		// The peer has no items at all so didn't
 		// even send X & Y (SendEmptySet)
-		it := rsr.is.Min()
+		it, err := rsr.is.Min()
+		if err != nil {
+			return nil, false, err
+		}
 		if it == nil {
 			// We don't have any items at all, too
 			if msg.Type() == MessageTypeProbe {
-				info := rsr.is.GetRangeInfo(preceding, nil, nil, -1)
+				info, err := rsr.is.GetRangeInfo(preceding, nil, nil, -1)
+				if err != nil {
+					return nil, false, err
+				}
 				if err := c.SendProbeResponse(x, y, info.Fingerprint, info.Count, 0, it); err != nil {
 					return nil, false, err
 				}
@@ -245,7 +254,10 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 	} else if x == nil || y == nil {
 		return nil, false, errors.New("bad X or Y")
 	}
-	info := rsr.is.GetRangeInfo(preceding, x, y, -1)
+	info, err := rsr.is.GetRangeInfo(preceding, x, y, -1)
+	if err != nil {
+		return nil, false, err
+	}
 	// fmt.Fprintf(os.Stderr, "QQQQQ msg %s %#v fp %v start %#v end %#v count %d\n", msg.Type(), msg, info.Fingerprint, info.Start, info.End, info.Count)
 	switch {
 	case msg.Type() == MessageTypeEmptyRange ||
@@ -311,7 +323,10 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 		// Note that there's no special handling for rollover ranges with x >= y
 		// These need to be handled by ItemStore.GetRangeInfo()
 		count := (info.Count + 1) / 2
-		part := rsr.is.GetRangeInfo(preceding, x, y, count)
+		part, err := rsr.is.GetRangeInfo(preceding, x, y, count)
+		if err != nil {
+			return nil, false, err
+		}
 		if part.End == nil {
 			panic("BUG: can't split range with count > 1")
 		}
@@ -333,7 +348,10 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 }
 
 func (rsr *RangeSetReconciler) Initiate(c Conduit) error {
-	it := rsr.is.Min()
+	it, err := rsr.is.Min()
+	if err != nil {
+		return err
+	}
 	var x Ordered
 	if it != nil {
 		x = it.Key()
@@ -347,7 +365,10 @@ func (rsr *RangeSetReconciler) InitiateBounded(c Conduit, x, y Ordered) error {
 			return err
 		}
 	} else {
-		info := rsr.is.GetRangeInfo(nil, x, y, -1)
+		info, err := rsr.is.GetRangeInfo(nil, x, y, -1)
+		if err != nil {
+			return err
+		}
 		switch {
 		case info.Count == 0:
 			panic("empty full min-min range")
@@ -396,7 +417,10 @@ func (rsr *RangeSetReconciler) InitiateProbe(c Conduit) (RangeInfo, error) {
 }
 
 func (rsr *RangeSetReconciler) InitiateBoundedProbe(c Conduit, x, y Ordered) (RangeInfo, error) {
-	info := rsr.is.GetRangeInfo(nil, x, y, -1)
+	info, err := rsr.is.GetRangeInfo(nil, x, y, -1)
+	if err != nil {
+		return RangeInfo{}, err
+	}
 	// fmt.Fprintf(os.Stderr, "QQQQQ: x %#v y %#v count %d\n", x, y, info.Count)
 	if err := c.SendProbe(x, y, info.Fingerprint, rsr.sampleSize); err != nil {
 		return RangeInfo{}, err
@@ -407,12 +431,12 @@ func (rsr *RangeSetReconciler) InitiateBoundedProbe(c Conduit, x, y Ordered) (Ra
 	return info, nil
 }
 
-func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample []Ordered, fp any) float64 {
+func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample []Ordered, fp any) (float64, error) {
 	if fingerprintEqual(info.Fingerprint, fp) {
-		return 1
+		return 1, nil
 	}
 	if info.Start == nil {
-		return 0
+		return 0, nil
 	}
 	sampleSize := min(info.Count, rsr.sampleSize)
 	localSample := make([]Ordered, sampleSize)
@@ -424,7 +448,9 @@ func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample [
 			panic("BUG: no key")
 		}
 		localSample[n] = c.ShortenKey(it.Key())
-		it.Next()
+		if err := it.Next(); err != nil {
+			return 0, err
+		}
 	}
 	slices.SortFunc(remoteSample, func(a, b Ordered) int { return a.Compare(b) })
 	slices.SortFunc(localSample, func(a, b Ordered) int { return a.Compare(b) })
@@ -448,7 +474,7 @@ func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample [
 	}
 	maxSampleSize := max(sampleSize, len(remoteSample))
 	// fmt.Fprintf(os.Stderr, "QQQQQ: numEq %d maxSampleSize %d\n", numEq, maxSampleSize)
-	return float64(numEq) / float64(maxSampleSize)
+	return float64(numEq) / float64(maxSampleSize), nil
 }
 
 func (rsr *RangeSetReconciler) HandleProbeResponse(c Conduit, info RangeInfo) (pr ProbeResult, err error) {
@@ -480,7 +506,11 @@ func (rsr *RangeSetReconciler) HandleProbeResponse(c Conduit, info RangeInfo) (p
 				}
 				pr.FP = msg.Fingerprint()
 				pr.Count = msg.Count()
-				pr.Sim = rsr.calcSim(c, info, msg.Keys(), msg.Fingerprint())
+				sim, err := rsr.calcSim(c, info, msg.Keys(), msg.Fingerprint())
+				if err != nil {
+					return ProbeResult{}, fmt.Errorf("database error: %w", err)
+				}
+				pr.Sim = sim
 				gotRange = true
 			case MessageTypeEmptySet, MessageTypeEmptyRange:
 				if gotRange {

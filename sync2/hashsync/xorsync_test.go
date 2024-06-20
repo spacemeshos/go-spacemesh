@@ -31,14 +31,22 @@ func TestHash32To12Xor(t *testing.T) {
 }
 
 func collectStoreItems[K Ordered](is ItemStore) (r []K) {
-	it := is.Min()
+	it, err := is.Min()
+	if err != nil {
+		panic("store min error")
+	}
 	if it == nil {
 		return nil
 	}
-	endAt := is.Min()
+	endAt, err := is.Min()
+	if err != nil {
+		panic("store min error")
+	}
 	for {
 		r = append(r, it.Key().(K))
-		it.Next()
+		if err := it.Next(); err != nil {
+			panic("iterator error")
+		}
 		if it.Equal(endAt) {
 			return r
 		}

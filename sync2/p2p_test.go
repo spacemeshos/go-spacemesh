@@ -70,11 +70,14 @@ func TestP2P(t *testing.T) {
 		for _, hsync := range hs {
 			// use a snapshot to avoid races
 			is := hsync.ItemStore().Copy()
-			it := is.Min()
+			it, err := is.Min()
+			require.NoError(t, err)
 			if it == nil {
 				return false
 			}
-			if is.GetRangeInfo(nil, it.Key(), it.Key(), -1).Count < numHashes {
+			info, err := is.GetRangeInfo(nil, it.Key(), it.Key(), -1)
+			require.NoError(t, err)
+			if info.Count < numHashes {
 				return false
 			}
 		}
@@ -83,14 +86,16 @@ func TestP2P(t *testing.T) {
 
 	for _, hsync := range hs {
 		hsync.Stop()
-		min := hsync.ItemStore().Min()
-		it := hsync.ItemStore().Min()
+		min, err := hsync.ItemStore().Min()
+		require.NoError(t, err)
+		it, err := hsync.ItemStore().Min()
+		require.NoError(t, err)
 		require.NotNil(t, it)
 		var actualItems []types.Hash32
 		for {
 			k := it.Key().(types.Hash32)
 			actualItems = append(actualItems, k)
-			it.Next()
+			require.NoError(t, it.Next())
 			if it.Equal(min) {
 				break
 			}

@@ -120,9 +120,11 @@ func (c *MockIteratorKeyCall) DoAndReturn(f func() Ordered) *MockIteratorKeyCall
 }
 
 // Next mocks base method.
-func (m *MockIterator) Next() {
+func (m *MockIterator) Next() error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Next")
+	ret := m.ctrl.Call(m, "Next")
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Next indicates an expected call of Next.
@@ -138,19 +140,19 @@ type MockIteratorNextCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockIteratorNextCall) Return() *MockIteratorNextCall {
-	c.Call = c.Call.Return()
+func (c *MockIteratorNextCall) Return(arg0 error) *MockIteratorNextCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockIteratorNextCall) Do(f func()) *MockIteratorNextCall {
+func (c *MockIteratorNextCall) Do(f func() error) *MockIteratorNextCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockIteratorNextCall) DoAndReturn(f func()) *MockIteratorNextCall {
+func (c *MockIteratorNextCall) DoAndReturn(f func() error) *MockIteratorNextCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -255,11 +257,12 @@ func (c *MockItemStoreCopyCall) DoAndReturn(f func() ItemStore) *MockItemStoreCo
 }
 
 // GetRangeInfo mocks base method.
-func (m *MockItemStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) RangeInfo {
+func (m *MockItemStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetRangeInfo", preceding, x, y, count)
 	ret0, _ := ret[0].(RangeInfo)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetRangeInfo indicates an expected call of GetRangeInfo.
@@ -275,29 +278,30 @@ type MockItemStoreGetRangeInfoCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockItemStoreGetRangeInfoCall) Return(arg0 RangeInfo) *MockItemStoreGetRangeInfoCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockItemStoreGetRangeInfoCall) Return(arg0 RangeInfo, arg1 error) *MockItemStoreGetRangeInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockItemStoreGetRangeInfoCall) Do(f func(Iterator, Ordered, Ordered, int) RangeInfo) *MockItemStoreGetRangeInfoCall {
+func (c *MockItemStoreGetRangeInfoCall) Do(f func(Iterator, Ordered, Ordered, int) (RangeInfo, error)) *MockItemStoreGetRangeInfoCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreGetRangeInfoCall) DoAndReturn(f func(Iterator, Ordered, Ordered, int) RangeInfo) *MockItemStoreGetRangeInfoCall {
+func (c *MockItemStoreGetRangeInfoCall) DoAndReturn(f func(Iterator, Ordered, Ordered, int) (RangeInfo, error)) *MockItemStoreGetRangeInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Has mocks base method.
-func (m *MockItemStore) Has(k Ordered) bool {
+func (m *MockItemStore) Has(k Ordered) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Has", k)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Has indicates an expected call of Has.
@@ -313,29 +317,30 @@ type MockItemStoreHasCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockItemStoreHasCall) Return(arg0 bool) *MockItemStoreHasCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockItemStoreHasCall) Return(arg0 bool, arg1 error) *MockItemStoreHasCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockItemStoreHasCall) Do(f func(Ordered) bool) *MockItemStoreHasCall {
+func (c *MockItemStoreHasCall) Do(f func(Ordered) (bool, error)) *MockItemStoreHasCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreHasCall) DoAndReturn(f func(Ordered) bool) *MockItemStoreHasCall {
+func (c *MockItemStoreHasCall) DoAndReturn(f func(Ordered) (bool, error)) *MockItemStoreHasCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Max mocks base method.
-func (m *MockItemStore) Max() Iterator {
+func (m *MockItemStore) Max() (Iterator, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Max")
 	ret0, _ := ret[0].(Iterator)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Max indicates an expected call of Max.
@@ -351,29 +356,30 @@ type MockItemStoreMaxCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockItemStoreMaxCall) Return(arg0 Iterator) *MockItemStoreMaxCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockItemStoreMaxCall) Return(arg0 Iterator, arg1 error) *MockItemStoreMaxCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockItemStoreMaxCall) Do(f func() Iterator) *MockItemStoreMaxCall {
+func (c *MockItemStoreMaxCall) Do(f func() (Iterator, error)) *MockItemStoreMaxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreMaxCall) DoAndReturn(f func() Iterator) *MockItemStoreMaxCall {
+func (c *MockItemStoreMaxCall) DoAndReturn(f func() (Iterator, error)) *MockItemStoreMaxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Min mocks base method.
-func (m *MockItemStore) Min() Iterator {
+func (m *MockItemStore) Min() (Iterator, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Min")
 	ret0, _ := ret[0].(Iterator)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Min indicates an expected call of Min.
@@ -389,19 +395,19 @@ type MockItemStoreMinCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockItemStoreMinCall) Return(arg0 Iterator) *MockItemStoreMinCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockItemStoreMinCall) Return(arg0 Iterator, arg1 error) *MockItemStoreMinCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockItemStoreMinCall) Do(f func() Iterator) *MockItemStoreMinCall {
+func (c *MockItemStoreMinCall) Do(f func() (Iterator, error)) *MockItemStoreMinCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreMinCall) DoAndReturn(f func() Iterator) *MockItemStoreMinCall {
+func (c *MockItemStoreMinCall) DoAndReturn(f func() (Iterator, error)) *MockItemStoreMinCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -534,11 +540,12 @@ func (m *MockSyncBase) EXPECT() *MockSyncBaseMockRecorder {
 }
 
 // Count mocks base method.
-func (m *MockSyncBase) Count() int {
+func (m *MockSyncBase) Count() (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Count")
 	ret0, _ := ret[0].(int)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Count indicates an expected call of Count.
@@ -554,19 +561,19 @@ type MockSyncBaseCountCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockSyncBaseCountCall) Return(arg0 int) *MockSyncBaseCountCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockSyncBaseCountCall) Return(arg0 int, arg1 error) *MockSyncBaseCountCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncBaseCountCall) Do(f func() int) *MockSyncBaseCountCall {
+func (c *MockSyncBaseCountCall) Do(f func() (int, error)) *MockSyncBaseCountCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncBaseCountCall) DoAndReturn(f func() int) *MockSyncBaseCountCall {
+func (c *MockSyncBaseCountCall) DoAndReturn(f func() (int, error)) *MockSyncBaseCountCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

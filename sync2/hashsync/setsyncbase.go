@@ -35,15 +35,20 @@ func NewSetSyncBase(ps PairwiseSyncer, is ItemStore, handler SyncKeyHandler) *Se
 }
 
 // Count implements syncBase.
-func (ssb *SetSyncBase) Count() int {
+func (ssb *SetSyncBase) Count() (int, error) {
+	// TODO: don't lock on db-bound operations
 	ssb.Lock()
 	defer ssb.Unlock()
-	it := ssb.is.Min()
-	if it == nil {
-		return 0
+	it, err := ssb.is.Min()
+	if it == nil || err != nil {
+		return 0, err
 	}
 	x := it.Key()
-	return ssb.is.GetRangeInfo(nil, x, x, -1).Count
+	info, err := ssb.is.GetRangeInfo(nil, x, x, -1)
+	if err != nil {
+		return 0, err
+	}
+	return info.Count, nil
 }
 
 // Derive implements syncBase.
@@ -67,11 +72,15 @@ func (ssb *SetSyncBase) Probe(ctx context.Context, p p2p.Peer) (ProbeResult, err
 	return ssb.ps.Probe(ctx, p, is, nil, nil)
 }
 
-func (ssb *SetSyncBase) acceptKey(ctx context.Context, k Ordered, p p2p.Peer) {
+func (ssb *SetSyncBase) acceptKey(ctx context.Context, k Ordered, p p2p.Peer) error {
 	ssb.Lock()
 	defer ssb.Unlock()
 	key := k.(fmt.Stringer).String()
-	if !ssb.is.Has(k) {
+	has, err := ssb.is.Has(k)
+	if err != nil {
+		return err
+	}
+	if !has {
 		ssb.waiting = append(ssb.waiting,
 			ssb.g.DoChan(key, func() (any, error) {
 				err := ssb.handler(ctx, k, p)
@@ -83,6 +92,7 @@ func (ssb *SetSyncBase) acceptKey(ctx context.Context, k Ordered, p p2p.Peer) {
 				return key, err
 			}))
 	}
+	return nil
 }
 
 func (ssb *SetSyncBase) Wait() error {
@@ -131,6 +141,8 @@ func (ss *setSyncer) Serve(ctx context.Context, req []byte, stream io.ReadWriter
 
 // Add implements ItemStore.
 func (ss *setSyncer) Add(ctx context.Context, k Ordered) error {
-	ss.acceptKey(ctx, k, ss.p)
+	if err := ss.acceptKey(ctx, k, ss.p); err != nil {
+		return err
+	}
 	return ss.ItemStore.Add(ctx, k)
 }
