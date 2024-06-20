@@ -61,7 +61,7 @@ func (rc *rcPool[T, I]) release(idx I) {
 	}
 }
 
-func (rc *rcPool[T, I]) ref(idx nodeIndex) {
+func (rc *rcPool[T, I]) ref(idx I) {
 	rc.mtx.Lock()
 	rc.entries[idx].refCount++
 	rc.mtx.Unlock()

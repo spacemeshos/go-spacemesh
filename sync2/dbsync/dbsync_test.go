@@ -16,51 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
-func TestNodePool(t *testing.T) {
-	// TODO: convert to TestRCPool
-	var np nodePool
-	idx1 := np.add(fingerprint{1, 2, 3}, 1, noIndex, noIndex)
-	node1 := np.node(idx1)
-	idx2 := np.add(fingerprint{2, 3, 4}, 2, idx1, noIndex)
-	node2 := np.node(idx2)
-	require.Equal(t, fingerprint{1, 2, 3}, node1.fp)
-	require.Equal(t, uint32(1), node1.c)
-	require.Equal(t, noIndex, node1.left)
-	require.Equal(t, noIndex, node1.right)
-	require.Equal(t, fingerprint{2, 3, 4}, node2.fp)
-	require.Equal(t, uint32(2), node2.c)
-	require.Equal(t, idx1, node2.left)
-	require.Equal(t, noIndex, node2.right)
-	idx3 := np.add(fingerprint{2, 3, 5}, 1, noIndex, noIndex)
-	idx4 := np.add(fingerprint{2, 3, 6}, 1, idx2, idx3)
-	require.Equal(t, nodeIndex(3), idx4)
-	np.ref(idx4)
-
-	np.release(idx4)
-	// not yet released due to an extra ref
-	require.Equal(t, nodeIndex(4), np.add(fingerprint{2, 3, 7}, 1, noIndex, noIndex))
-
-	np.release(idx4)
-	// idx4 was freed
-	require.Equal(t, idx4, np.add(fingerprint{2, 3, 8}, 1, noIndex, noIndex))
-
-	// free item used just once
-	require.Equal(t, nodeIndex(5), np.add(fingerprint{2, 3, 9}, 1, noIndex, noIndex))
-
-	// form a free list
-	np.release(idx3)
-	np.release(idx2)
-	np.release(idx1)
-
-	// the free list is LIFO
-	require.Equal(t, idx1, np.add(fingerprint{2, 3, 10}, 1, noIndex, noIndex))
-	require.Equal(t, idx2, np.add(fingerprint{2, 3, 11}, 1, noIndex, noIndex))
-	require.Equal(t, idx3, np.add(fingerprint{2, 3, 12}, 1, noIndex, noIndex))
-
-	// the free list is exhausted
-	require.Equal(t, nodeIndex(6), np.add(fingerprint{2, 3, 13}, 1, noIndex, noIndex))
-}
-
 func TestPrefix(t *testing.T) {
 	for _, tc := range []struct {
 		p     prefix
