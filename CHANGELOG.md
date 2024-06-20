@@ -2,6 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.5.8
+
+### Improvements
+
+* [#6055](https://github.com/spacemeshos/go-spacemesh/pull/6055) Increased limits to support up to 7.0 Mio ATXs per epoch.
+
 ## Release v1.5.7
 
 ### Improvements
