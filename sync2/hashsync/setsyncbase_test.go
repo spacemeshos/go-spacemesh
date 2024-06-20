@@ -56,14 +56,15 @@ func (st *setSyncBaseTester) getWaitCh(k Ordered) chan error {
 	return ch
 }
 
-func (st *setSyncBaseTester) expectCopy(ctx context.Context, addedKeys ...types.Hash32) {
+func (st *setSyncBaseTester) expectCopy(ctx context.Context, addedKeys ...types.Hash32) *MockItemStore {
+	copy := NewMockItemStore(st.ctrl)
 	st.is.EXPECT().Copy().DoAndReturn(func() ItemStore {
-		copy := NewMockItemStore(st.ctrl)
 		for _, k := range addedKeys {
 			copy.EXPECT().Add(ctx, k)
 		}
 		return copy
 	})
+	return copy
 }
 
 func (st *setSyncBaseTester) expectSyncStore(
@@ -117,7 +118,8 @@ func TestSetSyncBase(t *testing.T) {
 			Count: 42,
 			Sim:   0.99,
 		}
-		st.ps.EXPECT().Probe(ctx, p2p.Peer("p1"), st.is, nil, nil).Return(expPr, nil)
+		store := st.expectCopy(ctx)
+		st.ps.EXPECT().Probe(ctx, p2p.Peer("p1"), store, nil, nil).Return(expPr, nil)
 		pr, err := st.ssb.Probe(ctx, p2p.Peer("p1"))
 		require.NoError(t, err)
 		require.Equal(t, expPr, pr)
