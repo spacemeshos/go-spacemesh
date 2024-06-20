@@ -131,7 +131,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt.addPeers(10)
 		// Advance by peer wait time. After that, 6 peers will be selected
 		// randomly and probed
-		mt.syncBase.EXPECT().Count().Return(50).AnyTimes()
+		mt.syncBase.EXPECT().Count().Return(50, nil).AnyTimes()
 		for i := 0; i < numSyncs; i++ {
 			mt.expectProbe(6, ProbeResult{
 				FP:    "foo",
@@ -159,7 +159,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt := newMultiPeerSyncTester(t)
 		ctx := mt.start()
 		mt.addPeers(10)
-		mt.syncBase.EXPECT().Count().Return(100).AnyTimes()
+		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
 		for i := 0; i < numSyncs; i++ {
 			mt.expectProbe(6, ProbeResult{
 				FP:    "foo",
@@ -179,7 +179,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt := newMultiPeerSyncTester(t)
 		ctx := mt.start()
 		mt.addPeers(1)
-		mt.syncBase.EXPECT().Count().Return(50).AnyTimes()
+		mt.syncBase.EXPECT().Count().Return(50, nil).AnyTimes()
 		for i := 0; i < numSyncs; i++ {
 			mt.expectProbe(1, ProbeResult{
 				FP:    "foo",
@@ -199,7 +199,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt := newMultiPeerSyncTester(t)
 		ctx := mt.start()
 		mt.addPeers(10)
-		mt.syncBase.EXPECT().Count().Return(100).AnyTimes()
+		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
 		mt.syncBase.EXPECT().Probe(gomock.Any(), gomock.Any()).
 			Return(ProbeResult{}, errors.New("probe failed"))
 		mt.expectProbe(5, ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
@@ -214,7 +214,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt := newMultiPeerSyncTester(t)
 		ctx := mt.start()
 		mt.addPeers(10)
-		mt.syncBase.EXPECT().Count().Return(100).AnyTimes()
+		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
 		for i := 0; i < numSyncs; i++ {
 			mt.expectProbe(6, ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
 			mt.expectFullSync(6, 3)
@@ -230,7 +230,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt := newMultiPeerSyncTester(t)
 		ctx := mt.start()
 		mt.addPeers(10)
-		mt.syncBase.EXPECT().Count().Return(100).AnyTimes()
+		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
 		for i := 0; i < numSyncs; i++ {
 			mt.expectProbe(6, ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
 			mt.expectFullSync(6, 0)
@@ -246,7 +246,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt := newMultiPeerSyncTester(t)
 		ctx := mt.start()
 		mt.addPeers(10)
-		mt.syncBase.EXPECT().Count().Return(100).AnyTimes()
+		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
 		mt.expectProbe(6, ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
 		mt.syncRunner.EXPECT().fullSync(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, peers []p2p.Peer) error {

@@ -21,11 +21,12 @@ func (it *syncTreeIterator) Key() Ordered {
 	return it.ptr.Key()
 }
 
-func (it *syncTreeIterator) Next() {
+func (it *syncTreeIterator) Next() error {
 	it.ptr.Next()
 	if it.ptr.Key() == nil {
 		it.ptr = it.st.Min()
 	}
+	return nil
 }
 
 type SyncTreeStore struct {
@@ -59,13 +60,16 @@ func (sts *SyncTreeStore) iter(ptr SyncTreePointer) Iterator {
 }
 
 // GetRangeInfo implements ItemStore.
-func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) RangeInfo {
+func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error) {
 	if x == nil && y == nil {
-		it := sts.Min()
+		it, err := sts.Min()
+		if err != nil {
+			return RangeInfo{}, err
+		}
 		if it == nil {
 			return RangeInfo{
 				Fingerprint: sts.identity,
-			}
+			}, nil
 		} else {
 			x = it.Key()
 			y = x
@@ -94,17 +98,17 @@ func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x, y Ordered, count i
 		Count:       cfp.Second.(int),
 		Start:       sts.iter(startPtr),
 		End:         sts.iter(endPtr),
-	}
+	}, nil
 }
 
 // Min implements ItemStore.
-func (sts *SyncTreeStore) Min() Iterator {
-	return sts.iter(sts.st.Min())
+func (sts *SyncTreeStore) Min() (Iterator, error) {
+	return sts.iter(sts.st.Min()), nil
 }
 
 // Max implements ItemStore.
-func (sts *SyncTreeStore) Max() Iterator {
-	return sts.iter(sts.st.Max())
+func (sts *SyncTreeStore) Max() (Iterator, error) {
+	return sts.iter(sts.st.Max()), nil
 }
 
 // Copy implements ItemStore.
@@ -116,7 +120,7 @@ func (sts *SyncTreeStore) Copy() ItemStore {
 }
 
 // Has implements ItemStore.
-func (sts *SyncTreeStore) Has(k Ordered) bool {
+func (sts *SyncTreeStore) Has(k Ordered) (bool, error) {
 	_, found := sts.st.Lookup(k)
-	return found
+	return found, nil
 }

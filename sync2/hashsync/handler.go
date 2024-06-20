@@ -164,7 +164,9 @@ func (c *wireConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 				panic("fakeConduit.SendItems: went got to the end of the tree")
 			}
 			msg.ContentKeys = append(msg.ContentKeys, it.Key().(types.Hash32))
-			it.Next()
+			if err := it.Next(); err != nil {
+				return err
+			}
 			n--
 		}
 		if err := c.send(&msg); err != nil {
@@ -209,7 +211,9 @@ func (c *wireConduit) SendProbeResponse(x, y Ordered, fingerprint any, count, sa
 	for n := 0; n < sampleSize; n++ {
 		m.Sample[n] = MinhashSampleItemFromHash32(it.Key().(types.Hash32))
 		// fmt.Fprintf(os.Stderr, "QQQQQ: m.Sample[%d] = %s\n", n, m.Sample[n])
-		it.Next()
+		if err := it.Next(); err != nil {
+			return err
+		}
 	}
 	// fmt.Fprintf(os.Stderr, "QQQQQ: end sending items\n")
 	if x == nil && y == nil {

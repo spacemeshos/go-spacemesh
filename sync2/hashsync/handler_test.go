@@ -125,10 +125,11 @@ func (it *sliceIterator) Key() Ordered {
 	return nil
 }
 
-func (it *sliceIterator) Next() {
+func (it *sliceIterator) Next() error {
 	if len(it.s) != 0 {
 		it.s = it.s[1:]
 	}
+	return nil
 }
 
 type fakeSend struct {
@@ -466,16 +467,20 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) Requester {
 			storeA, getRequester, opts,
 			func(ctx context.Context, client Requester, srvPeerID p2p.Peer) {
 				pss := NewPairwiseStoreSyncer(client, opts)
-				minA := storeA.Min().Key()
-				infoA := storeA.GetRangeInfo(nil, minA, minA, -1)
+				minA, err := storeA.Min()
+				require.NoError(t, err)
+				infoA, err := storeA.GetRangeInfo(nil, minA.Key(), minA.Key(), -1)
+				require.NoError(t, err)
 				prA, err := pss.Probe(ctx, srvPeerID, storeB, nil, nil)
 				require.NoError(t, err)
 				require.Equal(t, infoA.Fingerprint, prA.FP)
 				require.Equal(t, infoA.Count, prA.Count)
 				require.InDelta(t, 0.98, prA.Sim, 0.05, "sim")
 
-				minA = storeA.Min().Key()
-				partInfoA := storeA.GetRangeInfo(nil, minA, minA, infoA.Count/2)
+				minA, err = storeA.Min()
+				require.NoError(t, err)
+				partInfoA, err := storeA.GetRangeInfo(nil, minA.Key(), minA.Key(), infoA.Count/2)
+				require.NoError(t, err)
 				x := partInfoA.Start.Key().(types.Hash32)
 				y := partInfoA.End.Key().(types.Hash32)
 				// partInfoA = storeA.GetRangeInfo(nil, x, y, -1)
