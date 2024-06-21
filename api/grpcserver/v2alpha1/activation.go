@@ -146,11 +146,12 @@ func (s *ActivationStreamService) Stream(
 func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
 	return &spacemeshv2alpha1.Activation{
 		Id:           atx.ID().Bytes(),
+		SmesherId:    atx.SmesherID.Bytes(),
 		PublishEpoch: atx.PublishEpoch.Uint32(),
-		PreviousAtx:  atx.PrevATXID[:],
 		Coinbase:     atx.Coinbase.String(),
 		Weight:       atx.GetWeight(),
 		Height:       atx.TickHeight(),
+		NumUnits:     atx.TotalNumUnits(),
 	}
 }
 
@@ -232,7 +233,7 @@ func (s *ActivationService) ActivationsCount(
 
 func toAtxRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {
 	return &spacemeshv2alpha1.ActivationRequest{
-		NodeId:     filter.NodeId,
+		SmesherId:  filter.SmesherId,
 		Id:         filter.Id,
 		Coinbase:   filter.Coinbase,
 		StartEpoch: filter.StartEpoch,
@@ -245,17 +246,17 @@ func toAtxOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Opera
 	if filter == nil {
 		return ops, nil
 	}
-	if filter.NodeId != nil {
+	if filter.SmesherId != nil {
 		ops.Filter = append(ops.Filter, builder.Op{
 			Field: builder.Smesher,
-			Token: builder.Eq,
-			Value: filter.NodeId,
+			Token: builder.In,
+			Value: filter.SmesherId,
 		})
 	}
 	if filter.Id != nil {
 		ops.Filter = append(ops.Filter, builder.Op{
 			Field: builder.Id,
-			Token: builder.Eq,
+			Token: builder.In,
 			Value: filter.Id,
 		})
 	}
@@ -312,20 +313,28 @@ type atxsMatcher struct {
 }
 
 func (m *atxsMatcher) match(t *events.ActivationTx) bool {
-	if len(m.NodeId) > 0 {
-		var nodeId types.NodeID
-		copy(nodeId[:], m.NodeId)
-
-		if t.SmesherID != nodeId {
+	if len(m.SmesherId) > 0 {
+		found := false
+		for _, id := range m.SmesherId {
+			nodeId := types.BytesToNodeID(id)
+			if t.SmesherID == nodeId {
+				found = true
+			}
+		}
+		if !found {
 			return false
 		}
 	}
 
 	if len(m.Id) > 0 {
-		var atxId types.ATXID
-		copy(atxId[:], m.Id)
-
-		if t.ID() != atxId {
+		found := false
+		for _, id := range m.Id {
+			atxId := types.BytesToATXID(id)
+			if t.ID() == atxId {
+				found = true
+			}
+		}
+		if !found {
 			return false
 		}
 	}
