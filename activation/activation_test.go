@@ -1499,12 +1499,12 @@ func TestGetPositioningAtx(t *testing.T) {
 		tab.posAtxFinder.found = nil
 
 		// timeout set up, prev ATX do not exists
-		// ctx, cancel = context.WithCancel(context.Background())
-		// cancel()
+		ctx, cancel = context.WithCancel(context.Background())
+		cancel()
 
-		// selected, err = tab.getPositioningAtx(ctx, types.EmptyNodeID, 99, nil)
-		// require.NoError(t, err)
-		// require.Equal(t, tab.goldenATXID, selected)
+		selected, err = tab.getPositioningAtx(ctx, types.EmptyNodeID, 99, nil)
+		require.NoError(t, err)
+		require.Equal(t, tab.goldenATXID, selected)
 	})
 }
 

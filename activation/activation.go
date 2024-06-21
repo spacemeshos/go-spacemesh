@@ -921,13 +921,18 @@ func (b *Builder) getPositioningAtx(
 		return types.EmptyATXID, err
 	}
 
-	if previous != nil && id != previous.ID() {
-		if candidate, err := atxs.Get(b.db, id); err == nil {
-			if previous.TickHeight() >= candidate.TickHeight() {
-				id = previous.ID()
-			} else {
-				b.logger.Error("couldn't get candidate ATX from db", zap.Error(err))
-			}
+	if previous != nil && id == previous.ID() {
+		b.logger.Info("selected previous as positioning atx",
+			log.ZShortStringer("id", id),
+			log.ZShortStringer("smesherID", nodeID),
+		)
+		return id, nil
+	}
+
+	candidate, err := atxs.Get(b.db, id)
+	if err == nil {
+		if previous != nil && previous.TickHeight() >= candidate.TickHeight() {
+			id = previous.ID()
 		}
 	}
 
