@@ -1,9 +1,11 @@
 package v2alpha1
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -253,7 +255,7 @@ func toAtxOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Opera
 			Value: filter.SmesherId,
 		})
 	}
-	if filter.Id != nil {
+	if len(filter.Id) > 0 {
 		ops.Filter = append(ops.Filter, builder.Op{
 			Field: builder.Id,
 			Token: builder.In,
