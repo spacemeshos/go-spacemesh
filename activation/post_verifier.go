@@ -320,7 +320,7 @@ func (v *offloadingPostVerifier) Verify(
 	defer metrics.PostVerificationQueue.Dec()
 
 	jobChannel := v.jobs
-	if opt.prioritised {
+	if opt.prioritized {
 		v.log.Debug("prioritizing post verification call")
 		jobChannel = v.prioritized
 	} else {
@@ -333,6 +333,7 @@ func (v *offloadingPostVerifier) Verify(
 
 	select {
 	case jobChannel <- job:
+		fmt.Printf("job is written")
 	case <-v.stop:
 		return errors.New("verifier is closed")
 	case <-ctx.Done():

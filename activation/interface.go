@@ -32,7 +32,7 @@ type scaler interface {
 }
 
 type postVerifierCallOption struct {
-	prioritised     bool
+	prioritized     bool
 	verifierOptions []verifying.OptionFunc
 }
 
@@ -46,9 +46,9 @@ func applyOptions(options ...postVerifierOptionFunc) postVerifierCallOption {
 	return opts
 }
 
-func PrioritisedCall() postVerifierOptionFunc {
+func PrioritizedCall() postVerifierOptionFunc {
 	return func(o *postVerifierCallOption) {
-		o.prioritised = true
+		o.prioritized = true
 	}
 }
 

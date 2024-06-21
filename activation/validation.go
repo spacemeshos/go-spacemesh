@@ -210,7 +210,7 @@ func (v *Validator) Post(
 
 	callOpts := []postVerifierOptionFunc{WithVerifierOptions(verifyOpts...)}
 	if options.prioritized {
-		callOpts = append(callOpts, PrioritisedCall())
+		callOpts = append(callOpts, PrioritizedCall())
 	}
 
 	start := time.Now()

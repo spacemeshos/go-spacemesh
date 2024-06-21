@@ -612,7 +612,6 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
 	default:
-
 		posAtx, err := b.getPositioningAtx(ctx, nodeID, publish, prevAtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
@@ -890,13 +889,14 @@ func (b *Builder) searchPositioningAtx(
 		VerifyChainOpts.WithLogger(b.logger),
 		VerifyChainOpts.PrioritizeCall(),
 	)
-
-	if err != nil && previous != nil {
-		id = previous.ID()
-		logger.Info("search failed - using previous atx as positioning atx", zap.Error(err))
-	} else {
-		id = b.conf.GoldenATXID
-		logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
+	if err != nil {
+		if previous != nil {
+			id = previous.ID()
+			logger.Info("search failed - using previous atx as positioning atx", zap.Error(err))
+		} else {
+			id = b.conf.GoldenATXID
+			logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
+		}
 	}
 
 	b.posAtxFinder.found = &struct {
@@ -926,7 +926,7 @@ func (b *Builder) getPositioningAtx(
 			if previous.TickHeight() >= candidate.TickHeight() {
 				id = previous.ID()
 			} else {
-				b.logger.Error("couldn't get candidate ATX from db", zap.Error(err))		
+				b.logger.Error("couldn't get candidate ATX from db", zap.Error(err))
 			}
 		}
 	}
@@ -986,10 +986,6 @@ func findFullyValidHighTickAtx(
 	atxdata.IterateHighTicksInEpoch(publish+1, func(id types.ATXID) (contSearch bool) {
 		logger.Info("found candidate for high-tick atx", log.ZShortStringer("id", id))
 
-		if ctx.Err() != nil {
-			return false
-		}
-
 		// verify ATX-candidate by getting their dependencies (previous Atx, positioning ATX etc.)
 		// and verifying PoST for every dependency
 		if err := validator.VerifyChain(ctx, id, goldenATXID, opts...); err != nil {
@@ -999,10 +995,6 @@ func findFullyValidHighTickAtx(
 		found = &id
 		return false
 	})
-
-	if ctx.Err() != nil {
-		return types.ATXID{}, ctx.Err()
-	}
 
 	if found == nil {
 		return types.ATXID{}, ErrNotFound
