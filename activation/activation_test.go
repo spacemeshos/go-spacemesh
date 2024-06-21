@@ -1330,25 +1330,23 @@ func TestWaitPositioningAtx(t *testing.T) {
 
 func TestWaitingToBuildNipostChallengeWithJitter(t *testing.T) {
 	t.Run("before grace period", func(t *testing.T) {
-		//          ┌──grace period──┐
-		//          │                │
-		// ───▲─────|──────|─────────|----> time
-		//    │     └jitter|         └round start
+		//          ┌──grace period─┐
+		//          │               │
+		// ───▲─────|───────────────|----> time
+		//    │     └               └round start
 		//   now
 		deadline := buildNipostChallengeStartDeadline(time.Now().Add(2*time.Hour), time.Hour)
-		require.Greater(t, deadline, time.Now().Add(time.Hour))
-		require.LessOrEqual(t, deadline, time.Now().Add(time.Hour+time.Second*36))
+		require.LessOrEqual(t, deadline, time.Now().Add(time.Hour))
 	})
-	t.Run("after grace period, within max jitter value", func(t *testing.T) {
-		//          ┌──grace period──┐
-		//          │                │
-		// ─────────|──▲────|────────|----> time
-		//          └ji│tter|        └round start
+	t.Run("after grace period", func(t *testing.T) {
+		//          ┌──grace period─┐
+		//          │               │
+		// ─────────|──▲────────────|----> time
+		//             │            └round start
 		//            now
+
 		deadline := buildNipostChallengeStartDeadline(time.Now().Add(time.Hour-time.Second*10), time.Hour)
-		require.GreaterOrEqual(t, deadline, time.Now().Add(-time.Second*10))
-		// jitter is 1% = 36s for 1h grace period
-		require.LessOrEqual(t, deadline, time.Now().Add(time.Second*(36-10)))
+		require.LessOrEqual(t, deadline, time.Now().Add(-time.Second*10))
 	})
 	t.Run("after jitter max value", func(t *testing.T) {
 		//          ┌──grace period──┐

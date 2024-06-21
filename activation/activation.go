@@ -57,12 +57,6 @@ func DefaultPoetConfig() PoetConfig {
 
 const (
 	defaultPoetRetryInterval = 5 * time.Second
-
-	// Jitter added to the wait time before building a nipost challenge.
-	// It is expressed as % of poet grace period which translates to:
-	//  mainnet (grace period 1h) -> 36s
-	//  systest (grace period 10s) -> 0.1s
-	maxNipostChallengeBuildJitter = 1.0
 )
 
 // Config defines configuration for Builder.
@@ -549,8 +543,11 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		until = time.Until(b.poetRoundStart(current))
 	}
 	publish := current + 1
+
+	poetStartsAt := b.poetRoundStart(current)
+
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
-	wait := buildNipostChallengeStartDeadline(b.poetRoundStart(current), b.poetCfg.GracePeriod)
+	wait := buildNipostChallengeStartDeadline(poetStartsAt, b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
 		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better posATX",
 			zap.Duration("till poet round", until),
@@ -565,7 +562,6 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		}
 	}
 
-	poetStartsAt := b.poetRoundStart(current)
 	if b.poetCfg.PositioningATXSelectionTimeout > 0 {
 		var cancel context.CancelFunc
 
@@ -616,6 +612,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
 	default:
+
 		posAtx, err := b.getPositioningAtx(ctx, nodeID, publish, prevAtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get positioning ATX: %w", err)
@@ -893,14 +890,13 @@ func (b *Builder) searchPositioningAtx(
 		VerifyChainOpts.WithLogger(b.logger),
 		VerifyChainOpts.PrioritizeCall(),
 	)
-	if err != nil {
-		if previous != nil {
-			id = previous.ID()
-			logger.Info("search failed - using previous atx as positioning atx", zap.Error(err))
-		} else {
-			id = b.conf.GoldenATXID
-			logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
-		}
+
+	if err != nil && previous != nil {
+		id = previous.ID()
+		logger.Info("search failed - using previous atx as positioning atx", zap.Error(err))
+	} else {
+		id = b.conf.GoldenATXID
+		logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
 	}
 
 	b.posAtxFinder.found = &struct {
@@ -929,6 +925,8 @@ func (b *Builder) getPositioningAtx(
 		if candidate, err := atxs.Get(b.db, id); err == nil {
 			if previous.TickHeight() >= candidate.TickHeight() {
 				id = previous.ID()
+			} else {
+				b.logger.Error("couldn't get candidate ATX from db", zap.Error(err))		
 			}
 		}
 	}

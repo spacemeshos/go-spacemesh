@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/post/verifying"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
