@@ -246,7 +246,7 @@ func toAtxOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Opera
 	if filter == nil {
 		return ops, nil
 	}
-	if filter.SmesherId != nil {
+	if len(filter.SmesherId) > 0 {
 		ops.Filter = append(ops.Filter, builder.Op{
 			Field: builder.Smesher,
 			Token: builder.In,
@@ -314,27 +314,15 @@ type atxsMatcher struct {
 
 func (m *atxsMatcher) match(t *events.ActivationTx) bool {
 	if len(m.SmesherId) > 0 {
-		found := false
-		for _, id := range m.SmesherId {
-			nodeId := types.BytesToNodeID(id)
-			if t.SmesherID == nodeId {
-				found = true
-			}
-		}
-		if !found {
+		idx := slices.IndexFunc(m.SmesherId, func(id []byte) bool { return bytes.Equal(id, t.SmesherID.Bytes()) })
+		if idx == -1 {
 			return false
 		}
 	}
 
 	if len(m.Id) > 0 {
-		found := false
-		for _, id := range m.Id {
-			atxId := types.BytesToATXID(id)
-			if t.ID() == atxId {
-				found = true
-			}
-		}
-		if !found {
+		idx := slices.IndexFunc(m.Id, func(id []byte) bool { return bytes.Equal(id, t.ID().Bytes()) })
+		if idx == -1 {
 			return false
 		}
 	}
