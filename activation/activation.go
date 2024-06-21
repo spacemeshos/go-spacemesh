@@ -985,7 +985,9 @@ func findFullyValidHighTickAtx(
 	// iterate trough epochs, to get first valid, not malicious ATX with the biggest height
 	atxdata.IterateHighTicksInEpoch(publish+1, func(id types.ATXID) (contSearch bool) {
 		logger.Info("found candidate for high-tick atx", log.ZShortStringer("id", id))
-
+		if ctx.Err() != nil {
+			return false
+		}
 		// verify ATX-candidate by getting their dependencies (previous Atx, positioning ATX etc.)
 		// and verifying PoST for every dependency
 		if err := validator.VerifyChain(ctx, id, goldenATXID, opts...); err != nil {
@@ -995,6 +997,10 @@ func findFullyValidHighTickAtx(
 		found = &id
 		return false
 	})
+
+	if ctx.Err() != nil {
+		return types.ATXID{}, ErrNotFound
+	}
 
 	if found == nil {
 		return types.ATXID{}, ErrNotFound
