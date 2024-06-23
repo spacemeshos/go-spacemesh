@@ -258,7 +258,7 @@ func toRewardOperations(filter *spacemeshv2alpha1.RewardRequest) (builder.Operat
 
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
-		Value: "layer asc",
+		Value: "layer " + filter.SortOrder.String(),
 	})
 
 	if filter.Limit != 0 {
