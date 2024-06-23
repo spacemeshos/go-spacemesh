@@ -710,6 +710,10 @@ linters-settings:
     #   - suite-thelper
     #   - useless-assert
 
+  unused:
+    exported-fields-are-used: false
+    local-variables-are-used: false
+
 issues:
   # List of regexps of issue texts to exclude.
   #
