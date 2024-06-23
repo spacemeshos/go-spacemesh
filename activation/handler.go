@@ -320,7 +320,8 @@ func (h *Handler) handleAtx(
 	case *wire.ActivationTxV1:
 		proof, err = h.v1.processATX(ctx, peer, atx, msg, receivedTime)
 	case *wire.ActivationTxV2:
-		proof, err = h.v2.processATX(ctx, peer, atx, msg, receivedTime)
+		// TODO(mafa): handle proof
+		_, err = h.v2.processATX(ctx, peer, atx, msg, receivedTime)
 	default:
 		panic("unreachable")
 	}

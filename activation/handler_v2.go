@@ -72,7 +72,7 @@ func (h *HandlerV2) processATX(
 	watx *wire.ActivationTxV2,
 	blob []byte,
 	received time.Time,
-) (*mwire.MalfeasanceProof, error) {
+) (*mwire.MalfeasanceProofV2, error) {
 	exists, err := atxs.Has(h.cdb, watx.ID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if atx exists: %w", err)
@@ -449,7 +449,7 @@ type atxParts struct {
 func (h *HandlerV2) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV2,
-) (*atxParts, *mwire.MalfeasanceProof, error) {
+) (*atxParts, *mwire.MalfeasanceProofV2, error) {
 	if atx.Initial != nil {
 		if err := h.validateCommitmentAtx(h.goldenATXID, atx.Initial.CommitmentATX, atx.PublishEpoch); err != nil {
 			return nil, nil, fmt.Errorf("verifying commitment ATX: %w", err)
@@ -575,7 +575,7 @@ func (h *HandlerV2) checkMalicious(
 	tx *sql.Tx,
 	watx *wire.ActivationTxV2,
 	marrying []types.NodeID,
-) (bool, *mwire.MalfeasanceProof, error) {
+) (bool, *mwire.MalfeasanceProofV2, error) {
 	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
 	if err != nil {
 		return false, nil, fmt.Errorf("checking if node is malicious: %w", err)
@@ -606,20 +606,28 @@ func (h *HandlerV2) checkDoubleMarry(
 	tx *sql.Tx,
 	watx *wire.ActivationTxV2,
 	marrying []types.NodeID,
-) (*mwire.MalfeasanceProof, error) {
+) (*mwire.MalfeasanceProofV2, error) {
 	for _, id := range marrying {
 		married, err := identities.Married(tx, id)
 		if err != nil {
 			return nil, fmt.Errorf("checking if ID is married: %w", err)
 		}
 		if married {
-			proof := &mwire.MalfeasanceProof{
-				Proof: mwire.Proof{
-					Type: mwire.DoubleMarry,
-					Data: &mwire.DoubleMarryProof{},
-				},
+			// TODO(mafa): lookup other ATX with the same marriage certificate
+			proof, err := wire.NewDoubleMarryProof(tx, watx, watx, id)
+			if err != nil {
+				return nil, fmt.Errorf("creating double marry proof: %w", err)
 			}
-			return proof, nil
+			atxProof := &wire.ATXProof{
+				ProofType:    wire.DoubleMarry,
+				Certificates: []wire.ProofCertificate{}, // TODO(mafa): lookup certificates of other married identities
+				Proof:        codec.MustEncode(proof),
+			}
+			return &mwire.MalfeasanceProofV2{
+				Layer:     h.clock.CurrentLayer(),
+				ProofType: mwire.InvalidActivation,
+				Proof:     codec.MustEncode(atxProof),
+			}, nil
 		}
 	}
 	return nil, nil
@@ -632,10 +640,10 @@ func (h *HandlerV2) storeAtx(
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV2,
 	marrying []types.NodeID,
-) (*mwire.MalfeasanceProof, error) {
+) (*mwire.MalfeasanceProofV2, error) {
 	var (
 		malicious bool
-		proof     *mwire.MalfeasanceProof
+		proof     *mwire.MalfeasanceProofV2
 	)
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
@@ -696,7 +704,8 @@ func (h *HandlerV2) storeAtx(
 			if err := identities.SetMalicious(h.cdb, id, encoded, atx.Received()); err != nil {
 				return nil, fmt.Errorf("setting malfeasance proof: %w", err)
 			}
-			h.cdb.CacheMalfeasanceProof(id, proof)
+			// TODO(mafa): cache malfeasance proof in v2
+			// h.cdb.CacheMalfeasanceProof(id, proof)
 		}
 	}
 

@@ -135,7 +135,7 @@ func (h *v2TestHandler) createAndProcessInitial(t *testing.T, sig *signing.EdSig
 	return atx
 }
 
-func (h *v2TestHandler) processInitial(atx *wire.ActivationTxV2) (*mwire.MalfeasanceProof, error) {
+func (h *v2TestHandler) processInitial(atx *wire.ActivationTxV2) (*mwire.MalfeasanceProofV2, error) {
 	h.expectInitialAtxV2(atx)
 	return h.processATX(context.Background(), peer.ID("peer"), atx, codec.MustEncode(atx), time.Now())
 }
