@@ -1295,10 +1295,10 @@ func TestWaitPositioningAtx(t *testing.T) {
 
 			closed := make(chan struct{})
 			close(closed)
-			
+
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(1).FirstLayer()).Return(closed).AnyTimes()
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(2).FirstLayer()).Return(closed).AnyTimes()
-			
+
 			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ string, got []byte) error {
 					var atx wire.ActivationTxV1
@@ -1426,7 +1426,7 @@ func TestGetPositioningAtx(t *testing.T) {
 		prev.SetID(types.RandomATXID())
 
 		tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atxInDb.ID(), tab.goldenATXID, gomock.Any())
-		found, err := tab.searchPositioningAtx(context.Background(), types.EmptyNodeID, 99, prev)
+		found, err := tab.searchPositioningAtx(context.Background(), types.EmptyNodeID, 99)
 		require.NoError(t, err)
 		require.Equal(t, atxInDb.ID(), found)
 

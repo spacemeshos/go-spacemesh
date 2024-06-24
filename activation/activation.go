@@ -547,7 +547,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	poetStartsAt := b.poetRoundStart(current)
 
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
-	
+
 	wait := poetStartsAt.Add(-b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
 		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better posATX",
@@ -857,7 +857,6 @@ func (b *Builder) searchPositioningAtx(
 	ctx context.Context,
 	nodeID types.NodeID,
 	publish types.EpochID,
-	previous *types.ActivationTx,
 ) (types.ATXID, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID), zap.Uint32("publish epoch", publish.Uint32()))
 
@@ -891,13 +890,8 @@ func (b *Builder) searchPositioningAtx(
 		VerifyChainOpts.PrioritizeCall(),
 	)
 	if err != nil {
-		if previous != nil {
-			id = previous.ID()
-			logger.Info("search failed - using previous atx as positioning atx", zap.Error(err))
-		} else {
-			id = b.conf.GoldenATXID
-			logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
-		}
+		logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
+		id = b.conf.GoldenATXID
 	}
 
 	b.posAtxFinder.found = &struct {
@@ -917,7 +911,7 @@ func (b *Builder) getPositioningAtx(
 	publish types.EpochID,
 	previous *types.ActivationTx,
 ) (types.ATXID, error) {
-	id, err := b.searchPositioningAtx(ctx, nodeID, publish, previous)
+	id, err := b.searchPositioningAtx(ctx, nodeID, publish)
 	if err != nil {
 		return types.EmptyATXID, err
 	}
@@ -926,14 +920,6 @@ func (b *Builder) getPositioningAtx(
 		log.ZShortStringer("id", id),
 		log.ZShortStringer("smesherID", nodeID),
 	)
-
-	if previous != nil && id == previous.ID() {
-		b.logger.Info("selected previous as positioning atx",
-			log.ZShortStringer("id", id),
-			log.ZShortStringer("smesherID", nodeID),
-		)
-		return id, nil
-	}
 
 	if previous == nil && id == b.conf.GoldenATXID {
 		b.logger.Info("selected golden atx as positioning atx", log.ZShortStringer("smesherID", nodeID))
