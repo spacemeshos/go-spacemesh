@@ -547,7 +547,8 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	poetStartsAt := b.poetRoundStart(current)
 
 	metrics.PublishOntimeWindowLatency.Observe(until.Seconds())
-	wait := buildNipostChallengeStartDeadline(poetStartsAt, b.poetCfg.GracePeriod)
+	
+	wait := poetStartsAt.Add(-b.poetCfg.GracePeriod)
 	if time.Until(wait) > 0 {
 		logger.Info("paused building NiPoST challenge. Waiting until closer to poet start to get a better posATX",
 			zap.Duration("till poet round", until),
@@ -921,6 +922,11 @@ func (b *Builder) getPositioningAtx(
 		return types.EmptyATXID, err
 	}
 
+	b.logger.Info("found candidate positioning atx",
+		log.ZShortStringer("id", id),
+		log.ZShortStringer("smesherID", nodeID),
+	)
+
 	if previous != nil && id == previous.ID() {
 		b.logger.Info("selected previous as positioning atx",
 			log.ZShortStringer("id", id),
@@ -929,11 +935,32 @@ func (b *Builder) getPositioningAtx(
 		return id, nil
 	}
 
+	if previous == nil && id == b.conf.GoldenATXID {
+		b.logger.Info("selected golden atx as positioning atx", log.ZShortStringer("smesherID", nodeID))
+		return id, nil
+	}
+
+	if previous != nil && id == b.conf.GoldenATXID {
+		id = previous.ID()
+		b.logger.Info("selected previous as positioning atx",
+			log.ZShortStringer("id", id),
+			log.ZShortStringer("smesherID", nodeID),
+		)
+		return id, nil
+	}
+
 	candidate, err := atxs.Get(b.db, id)
-	if err == nil {
-		if previous != nil && previous.TickHeight() >= candidate.TickHeight() {
-			id = previous.ID()
-		}
+	if err != nil {
+		return types.EmptyATXID, fmt.Errorf("get candidate pos ATX %s: %w", id.ShortString(), err)
+	}
+
+	if previous != nil && previous.TickHeight() >= candidate.TickHeight() {
+		id = previous.ID()
+		b.logger.Info("selected previous as positioning atx",
+			log.ZShortStringer("id", id),
+			log.ZShortStringer("smesherID", nodeID),
+		)
+		return id, nil
 	}
 
 	b.logger.Info("selected positioning atx", log.ZShortStringer("id", id), log.ZShortStringer("smesherID", nodeID))
@@ -960,10 +987,6 @@ func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	}
 	b.logger.Debug("re-gossipped atx", log.ZShortStringer("smesherID", nodeID), log.ZShortStringer("atx", atx))
 	return nil
-}
-
-func buildNipostChallengeStartDeadline(roundStart time.Time, gracePeriod time.Duration) time.Time {
-	return roundStart.Add(-gracePeriod)
 }
 
 func (b *Builder) version(publish types.EpochID) types.AtxVersion {

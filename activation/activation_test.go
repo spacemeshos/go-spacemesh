@@ -1292,10 +1292,13 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mnipost.EXPECT().
 				BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&nipost.NIPostState{}, nil)
+
 			closed := make(chan struct{})
 			close(closed)
+			
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(1).FirstLayer()).Return(closed).AnyTimes()
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(2).FirstLayer()).Return(closed).AnyTimes()
+			
 			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ string, got []byte) error {
 					var atx wire.ActivationTxV1
@@ -1326,37 +1329,6 @@ func TestWaitPositioningAtx(t *testing.T) {
 			require.NoError(t, tab.PublishActivationTx(context.Background(), sig))
 		})
 	}
-}
-
-func TestWaitingToBuildNipostChallengeWithJitter(t *testing.T) {
-	t.Run("before grace period", func(t *testing.T) {
-		//          ┌──grace period─┐
-		//          │               │
-		// ───▲─────|───────────────|----> time
-		//    │     └               └round start
-		//   now
-		deadline := buildNipostChallengeStartDeadline(time.Now().Add(2*time.Hour), time.Hour)
-		require.LessOrEqual(t, deadline, time.Now().Add(time.Hour))
-	})
-	t.Run("after grace period", func(t *testing.T) {
-		//          ┌──grace period─┐
-		//          │               │
-		// ─────────|──▲────────────|----> time
-		//             │            └round start
-		//            now
-
-		deadline := buildNipostChallengeStartDeadline(time.Now().Add(time.Hour-time.Second*10), time.Hour)
-		require.LessOrEqual(t, deadline, time.Now().Add(-time.Second*10))
-	})
-	t.Run("after jitter max value", func(t *testing.T) {
-		//          ┌──grace period──┐
-		//          │                │
-		// ─────────|──────|──▲──────|----> time
-		//          └jitter|  │       └round start
-		//                   now
-		deadline := buildNipostChallengeStartDeadline(time.Now().Add(time.Hour-time.Second*37), time.Hour)
-		require.Less(t, deadline, time.Now())
-	})
 }
 
 // Test if GetPositioningAtx disregards ATXs with invalid POST in their chain.
