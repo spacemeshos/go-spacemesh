@@ -269,7 +269,7 @@ func (fh *Host) Connected(p Peer) bool {
 		return false
 	}
 	for _, c := range fh.Host.Network().ConnsToPeer(p) {
-		if !c.Stat().Transient {
+		if !c.Stat().Limited {
 			return true
 		}
 	}
