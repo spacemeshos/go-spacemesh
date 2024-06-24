@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -61,6 +62,7 @@ func MainnetConfig() Config {
 	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
 	logging.AtxHandlerLevel = zapcore.WarnLevel.String()
 	logging.ProposalListenerLevel = zapcore.WarnLevel.String()
+	forkLayer := types.LayerID(111_111_111) // TODO THIS NEEDS A NUMBER
 	hare3conf := hare3.DefaultConfig()
 	hare3conf.Committee = 400
 	hare3conf.Enable = true
@@ -69,6 +71,12 @@ func MainnetConfig() Config {
 		Layer: 105_720, // July 15, 2024, 10:00:00 AM UTC
 		Size:  50,
 	}
+	hare3conf.DisableLayer = forkLayer
+
+	hare4conf := hare4.DefaultConfig()
+	hare4conf.Committee = 50
+	hare4conf.Enable = true
+	hare4conf.EnableLayer = forkLayer
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
@@ -137,6 +145,7 @@ func MainnetConfig() Config {
 			},
 		},
 		HARE3: hare3conf,
+		HARE4: hare4conf,
 		HareEligibility: eligibility.Config{
 			ConfidenceParam: 200,
 		},

@@ -33,12 +33,21 @@ func fastnet() config.Config {
 	conf.ATXGradeDelay = 1 * time.Second
 
 	conf.HARE3.Enable = true
-	conf.HARE3.DisableLayer = types.LayerID(math.MaxUint32)
+	conf.HARE3.DisableLayer = 22
 	conf.HARE3.Committee = 800
 	conf.HARE3.Leaders = 10
 	conf.HARE3.PreroundDelay = 3 * time.Second
 	conf.HARE3.RoundDuration = 700 * time.Millisecond
 	conf.HARE3.IterationsLimit = 2
+
+	conf.HARE4.Enable = true
+	conf.HARE4.EnableLayer = types.LayerID(22)
+	conf.HARE4.DisableLayer = types.LayerID(math.MaxUint32)
+	conf.HARE4.Committee = 800
+	conf.HARE4.Leaders = 10
+	conf.HARE4.PreroundDelay = 3 * time.Second
+	conf.HARE4.RoundDuration = 700 * time.Millisecond
+	conf.HARE4.IterationsLimit = 2
 
 	conf.P2P.MinPeers = 10
 

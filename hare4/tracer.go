@@ -1,4 +1,4 @@
-package hare3
+package hare4
 
 import "github.com/spacemeshos/go-spacemesh/common/types"
 
@@ -8,6 +8,8 @@ type Tracer interface {
 	OnActive([]*types.HareEligibility)
 	OnMessageSent(*Message)
 	OnMessageReceived(*Message)
+	OnCompactIdRequest(*CompactIdRequest)
+	OnCompactIdResponse(*CompactIdResponse)
 }
 
 var _ Tracer = noopTracer{}
@@ -23,3 +25,7 @@ func (noopTracer) OnActive([]*types.HareEligibility) {}
 func (noopTracer) OnMessageSent(*Message) {}
 
 func (noopTracer) OnMessageReceived(*Message) {}
+
+func (noopTracer) OnCompactIdRequest(*CompactIdRequest) {}
+
+func (noopTracer) OnCompactIdResponse(*CompactIdResponse) {}

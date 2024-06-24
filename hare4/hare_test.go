@@ -1,11 +1,14 @@
-package hare3
+package hare4
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
 	"os"
 	"runtime/pprof"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -14,17 +17,21 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare4/eligibility"
+	hmock "github.com/spacemeshos/go-spacemesh/hare4/mocks"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -36,6 +43,8 @@ import (
 )
 
 const layersPerEpoch = 4
+
+var wait = 10 * time.Second
 
 func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
@@ -121,12 +130,14 @@ type node struct {
 	atxsdata   *atxsdata.Data
 	proposals  *store.Store
 
-	ctrl       *gomock.Controller
-	mpublisher *pmocks.MockPublishSubsciber
-	msyncer    *smocks.MockSyncStateProvider
-	patrol     *layerpatrol.LayerPatrol
-	tracer     *testTracer
-	hare       *Hare
+	ctrl                *gomock.Controller
+	mpublisher          *pmocks.MockPublishSubsciber
+	msyncer             *smocks.MockSyncStateProvider
+	mverifier           *hmock.Mockverifier
+	mockStreamRequester *hmock.MockstreamRequester
+	patrol              *layerpatrol.LayerPatrol
+	tracer              *testTracer
+	hare                *Hare
 }
 
 func (n *node) withClock() *node {
@@ -188,6 +199,11 @@ func (n *node) withSyncer() *node {
 	return n
 }
 
+func (n *node) withVerifier() *node {
+	n.mverifier = hmock.NewMockverifier(n.ctrl)
+	return n
+}
+
 func (n *node) withOracle() *node {
 	beaconget := smocks.NewMockBeaconGetter(n.ctrl)
 	beaconget.EXPECT().GetBeacon(gomock.Any()).DoAndReturn(func(epoch types.EpochID) (types.Beacon, error) {
@@ -209,9 +225,13 @@ func (n *node) withPublisher() *node {
 	return n
 }
 
+func (n *node) withStreamRequester() *node {
+	n.mockStreamRequester = hmock.NewMockstreamRequester(n.ctrl)
+	return n
+}
+
 func (n *node) withHare() *node {
 	logger := logtest.New(n.t).Named(fmt.Sprintf("hare=%d", n.i))
-
 	n.nclock = &testNodeClock{
 		genesis:       n.t.start,
 		layerDuration: n.t.layerDuration,
@@ -219,20 +239,30 @@ func (n *node) withHare() *node {
 	tracer := newTestTracer(n.t)
 	n.tracer = tracer
 	n.patrol = layerpatrol.New()
+	var verify verifier
+	if n.mverifier != nil {
+		verify = n.mverifier
+	} else {
+		verify = signing.NewEdVerifier()
+	}
+	z, _ := zap.NewDevelopment()
 	n.hare = New(
 		n.nclock,
 		n.mpublisher,
 		n.db,
 		n.atxsdata,
 		n.proposals,
-		signing.NewEdVerifier(),
+		verify,
 		n.oracle,
 		n.msyncer,
 		n.patrol,
+		nil,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),
 		WithTracer(tracer),
+		WithServer(n.mockStreamRequester),
+		WithLogger(z),
 	)
 	n.register(n.signer)
 	return n
@@ -259,12 +289,28 @@ func (n *node) storeAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
+func (n *node) peerId() p2p.Peer {
+	return p2p.Peer(strconv.Itoa(n.i))
+}
+
 type clusterOpt func(*lockstepCluster)
 
 func withUnits(min, max int) clusterOpt {
 	return func(cluster *lockstepCluster) {
 		cluster.units.min = min
 		cluster.units.max = max
+	}
+}
+
+func withMockVerifier() clusterOpt {
+	return func(cluster *lockstepCluster) {
+		cluster.mockVerify = true
+	}
+}
+
+func withMockCompactFn(f func([]byte) []byte) clusterOpt {
+	return func(cluster *lockstepCluster) {
+		cluster.mockCompactFn = f
 	}
 }
 
@@ -284,6 +330,7 @@ func withSigners(n int) clusterOpt {
 }
 
 func newLockstepCluster(t *tester, opts ...clusterOpt) *lockstepCluster {
+	t.Helper()
 	cluster := &lockstepCluster{t: t}
 	cluster.units.min = 10
 	cluster.units.max = 10
@@ -302,7 +349,9 @@ type lockstepCluster struct {
 	nodes   []*node
 	signers []*node // nodes that active on consensus but don't run hare instance
 
-	units struct {
+	mockVerify    bool
+	mockCompactFn func([]byte) []byte
+	units         struct {
 		min, max int
 	}
 	proposals struct {
@@ -340,10 +389,17 @@ func (cl *lockstepCluster) addSigner(n int) *lockstepCluster {
 func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 	last := len(cl.nodes)
 	for i := last; i < last+n; i++ {
-		cl.addNode((&node{t: cl.t, i: i}).
+		nn := (&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
 			withClock().withDb().withSigner().withAtx(cl.units.min, cl.units.max).
-			withOracle().withHare())
+			withStreamRequester().withOracle().withHare()
+		if cl.mockVerify {
+			nn = nn.withVerifier()
+		}
+		if cl.mockCompactFn != nil {
+			nn.hare.compactFn = cl.mockCompactFn
+		}
+		cl.addNode(nn)
 	}
 	return cl
 }
@@ -354,7 +410,7 @@ func (cl *lockstepCluster) addInactive(n int) *lockstepCluster {
 		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
 			withClock().withDb().withSigner().
-			withOracle().withHare())
+			withStreamRequester().withOracle().withHare())
 	}
 	return cl
 }
@@ -367,7 +423,7 @@ func (cl *lockstepCluster) addEquivocators(n int) *lockstepCluster {
 			reuseSigner(cl.nodes[i-last].signer).
 			withController().withSyncer().withPublisher().
 			withClock().withDb().withAtx(cl.units.min, cl.units.max).
-			withOracle().withHare())
+			withStreamRequester().withOracle().withHare())
 	}
 	return cl
 }
@@ -395,11 +451,40 @@ func (cl *lockstepCluster) activeSet() types.ATXIDList {
 	return ids
 }
 
-func (cl *lockstepCluster) genProposals(lid types.LayerID) {
+func (cl *lockstepCluster) genProposalNode(lid types.LayerID, node int) {
+	active := cl.activeSet()
+	n := cl.nodes[node]
+	if n.atx == nil {
+		panic("shouldnt happen")
+	}
+	proposal := &types.Proposal{}
+	proposal.Layer = lid
+	proposal.EpochData = &types.EpochData{
+		Beacon:        cl.t.beacon,
+		ActiveSetHash: active.Hash(),
+	}
+	proposal.AtxID = n.atx.ID()
+	proposal.SmesherID = n.signer.NodeID()
+	id := types.ProposalID{}
+	cl.t.rng.Read(id[:])
+	bid := types.BallotID{}
+	cl.t.rng.Read(bid[:])
+	proposal.SetID(id)
+	proposal.Ballot.SetID(bid)
+	var vrf types.VrfSignature
+	cl.t.rng.Read(vrf[:])
+	proposal.Ballot.EligibilityProofs = append(proposal.Ballot.EligibilityProofs, types.VotingEligibility{Sig: vrf})
+
+	proposal.SetBeacon(proposal.EpochData.Beacon)
+	require.NoError(cl.t, ballots.Add(n.db, &proposal.Ballot))
+	n.hare.OnProposal(proposal)
+}
+
+func (cl *lockstepCluster) genProposals(lid types.LayerID, skipNodes ...int) {
 	active := cl.activeSet()
 	all := []*types.Proposal{}
-	for _, n := range append(cl.nodes, cl.signers...) {
-		if n.atx == nil {
+	for i, n := range append(cl.nodes, cl.signers...) {
+		if n.atx == nil || slices.Contains(skipNodes, i) {
 			continue
 		}
 		proposal := &types.Proposal{}
@@ -416,6 +501,10 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID) {
 		cl.t.rng.Read(bid[:])
 		proposal.SetID(id)
 		proposal.Ballot.SetID(bid)
+		var vrf types.VrfSignature
+		cl.t.rng.Read(vrf[:])
+		proposal.Ballot.EligibilityProofs = append(proposal.Ballot.EligibilityProofs, types.VotingEligibility{Sig: vrf})
+
 		proposal.SetBeacon(proposal.EpochData.Beacon)
 		all = append(all, proposal)
 	}
@@ -449,11 +538,24 @@ func (cl *lockstepCluster) setup() {
 			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 			Do(func(ctx context.Context, _ string, msg []byte) error {
 				for _, other := range cl.nodes {
-					other.hare.Handler(ctx, "self", msg)
+					other.hare.Handler(ctx, n.peerId(), msg)
 				}
 				return nil
 			}).
 			AnyTimes()
+		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
+			func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
+				for _, other := range cl.nodes {
+					if other.peerId() == p {
+						b := make([]byte, 0, 1024)
+						buf := bytes.NewBuffer(b)
+						other.hare.handleProposalsStream(ctx, msg, buf)
+						cb(ctx, buf)
+					}
+				}
+				return nil
+			},
+		).AnyTimes()
 	}
 }
 
@@ -492,12 +594,29 @@ func (cl *lockstepCluster) waitStopped() {
 	}
 }
 
+// drainInteractiveMessages will make sure that the channels that signal
+// that interactive messages came in on the tracer are read from.
+func (cl *lockstepCluster) drainInteractiveMessages() {
+	for _, n := range cl.nodes {
+		go func() {
+			for {
+				select {
+				case <-n.tracer.compactReq:
+				case <-n.tracer.compactResp:
+				}
+			}
+		}()
+	}
+}
+
 func newTestTracer(tb testing.TB) *testTracer {
 	return &testTracer{
 		TB:          tb,
 		stopped:     make(chan types.LayerID, 100),
 		eligibility: make(chan []*types.HareEligibility),
 		sent:        make(chan *Message),
+		compactReq:  make(chan struct{}),
+		compactResp: make(chan struct{}),
 	}
 }
 
@@ -506,6 +625,8 @@ type testTracer struct {
 	stopped     chan types.LayerID
 	eligibility chan []*types.HareEligibility
 	sent        chan *Message
+	compactReq  chan struct{}
+	compactResp chan struct{}
 }
 
 func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
@@ -531,15 +652,15 @@ func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Dur
 }
 
 func (t *testTracer) waitStopped() types.LayerID {
-	return waitForChan(t.TB, t.stopped, 10*time.Second, "didn't stop")
+	return waitForChan(t.TB, t.stopped, wait, "didn't stop")
 }
 
 func (t *testTracer) waitEligibility() []*types.HareEligibility {
-	return waitForChan(t.TB, t.eligibility, 10*time.Second, "no eligibility")
+	return waitForChan(t.TB, t.eligibility, wait, "no eligibility")
 }
 
 func (t *testTracer) waitSent() *Message {
-	return waitForChan(t.TB, t.sent, 10*time.Second, "no message")
+	return waitForChan(t.TB, t.sent, wait, "no message")
 }
 
 func (*testTracer) OnStart(types.LayerID) {}
@@ -552,16 +673,25 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
-	sendWithTimeout(t.TB, el, t.eligibility, 10*time.Second, "eligibility can't be sent")
+	sendWithTimeout(t.TB, el, t.eligibility, wait, "eligibility can't be sent")
 }
 
 func (t *testTracer) OnMessageSent(m *Message) {
-	sendWithTimeout(t.TB, m, t.sent, 10*time.Second, "message can't be sent")
+	sendWithTimeout(t.TB, m, t.sent, wait, "message can't be sent")
 }
 
 func (*testTracer) OnMessageReceived(*Message) {}
 
+func (t *testTracer) OnCompactIdRequest(*CompactIdRequest) {
+	sendWithTimeout(t.TB, struct{}{}, t.compactReq, wait, "compact req can't be sent")
+}
+
+func (t *testTracer) OnCompactIdResponse(*CompactIdResponse) {
+	sendWithTimeout(t.TB, struct{}{}, t.compactResp, wait, "compact resp can't be sent")
+}
+
 func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterOpt) {
+	t.Helper()
 	cfg := DefaultConfig()
 	cfg.LogStats = true
 	tst := &tester{
@@ -581,6 +711,7 @@ func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterO
 		cluster = cluster.addSigner(cluster.signersCount)
 		cluster.partitionSigners()
 	}
+	cluster.drainInteractiveMessages()
 
 	layer := tst.genesis + 1
 	cluster.setup()
@@ -707,6 +838,7 @@ func TestHandler(t *testing.T) {
 	})
 	t.Run("invalid signature", func(t *testing.T) {
 		msg := &Message{}
+		msg.Body.IterRound.Round = propose
 		msg.Layer = layer
 		msg.Sender = n.signer.NodeID()
 		msg.Signature = n.signer.Sign(signing.HARE+1, msg.ToMetadata().ToBytes())
@@ -719,6 +851,7 @@ func TestHandler(t *testing.T) {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		msg := &Message{}
+		msg.Body.IterRound.Round = propose
 		msg.Layer = layer
 		msg.Sender = signer.NodeID()
 		msg.Signature = signer.Sign(signing.HARE, msg.ToMetadata().ToBytes())
@@ -726,19 +859,57 @@ func TestHandler(t *testing.T) {
 			"zero grade")
 	})
 	t.Run("equivocation", func(t *testing.T) {
+		b := types.RandomBallot()
+		b.InnerBallot.Layer = layer
+		b.Layer = layer
+		p1 := &types.Proposal{
+			InnerProposal: types.InnerProposal{
+				Ballot: *b,
+				TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
+			},
+		}
+		b2 := types.RandomBallot()
+
+		b2.InnerBallot.Layer = layer
+		b.Layer = layer
+		p2 := &types.Proposal{
+			InnerProposal: types.InnerProposal{
+				Ballot: *b2,
+				TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
+			},
+		}
+
+		p1.Initialize()
+		p2.Initialize()
+
+		if err := n.hare.OnProposal(p1); err != nil {
+			panic(err)
+		}
+
+		if err := n.hare.OnProposal(p2); err != nil {
+			panic(err)
+		}
 		msg1 := &Message{}
 		msg1.Layer = layer
-		msg1.Value.Proposals = []types.ProposalID{{1}}
+		msg1.Value.Proposals = []types.ProposalID{p1.ID()}
 		msg1.Eligibility = *elig
 		msg1.Sender = n.signer.NodeID()
 		msg1.Signature = n.signer.Sign(signing.HARE, msg1.ToMetadata().ToBytes())
+		msg1.Value.Proposals = nil
+		msg1.Value.CompactProposals = []types.CompactProposalID{
+			compactVrf(compactTruncate, p1.Ballot.EligibilityProofs[0].Sig),
+		}
 
 		msg2 := &Message{}
 		msg2.Layer = layer
-		msg2.Value.Proposals = []types.ProposalID{{2}}
+		msg2.Value.Proposals = []types.ProposalID{p2.ID()}
 		msg2.Eligibility = *elig
 		msg2.Sender = n.signer.NodeID()
 		msg2.Signature = n.signer.Sign(signing.HARE, msg2.ToMetadata().ToBytes())
+		msg2.Value.Proposals = nil
+		msg2.Value.CompactProposals = []types.CompactProposalID{
+			compactVrf(compactTruncate, p2.Ballot.EligibilityProofs[0].Sig),
+		}
 
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg1)))
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg2)))
@@ -901,10 +1072,11 @@ func TestProposals(t *testing.T) {
 				db,
 				atxsdata,
 				proposals,
-				nil,
+				signing.NewEdVerifier(),
 				nil,
 				nil,
 				layerpatrol.New(),
+				nil,
 				WithLogger(zaptest.NewLogger(t)),
 			)
 			for _, atx := range tc.atxs {
@@ -912,7 +1084,9 @@ func TestProposals(t *testing.T) {
 				atxsdata.AddFromAtx(&atx, false)
 			}
 			for _, proposal := range tc.proposals {
-				proposals.Add(proposal)
+				if err := proposals.Add(proposal); err != nil {
+					panic(err)
+				}
 			}
 			for _, id := range tc.malicious {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
@@ -930,7 +1104,7 @@ func TestProposals(t *testing.T) {
 func TestHare_AddProposal(t *testing.T) {
 	t.Parallel()
 	proposals := store.New()
-	hare := New(nil, nil, nil, nil, proposals, nil, nil, nil, nil)
+	hare := New(nil, nil, nil, nil, proposals, nil, nil, nil, nil, nil)
 
 	p := gproposal(
 		types.RandomProposalID(),
@@ -947,26 +1121,281 @@ func TestHare_AddProposal(t *testing.T) {
 	require.ErrorIs(t, hare.OnProposal(p), store.ErrProposalExists)
 }
 
-func TestHareConfig_CommitteeUpgrade(t *testing.T) {
-	t.Parallel()
-	t.Run("no upgrade", func(t *testing.T) {
-		cfg := Config{
-			Committee: 400,
+func TestProposalIDSort(t *testing.T) {
+	var (
+		a = types.ProposalID{0, 3, 2, 3, 5}
+		b = types.ProposalID{0, 1, 2, 3, 4}
+		c = types.ProposalID{11, 4, 6, 254, 0}
+		d = types.ProposalID{0, 1, 2, 3, 5}
+	)
+	srt := []types.ProposalID{c, b, a, d}
+	slices.SortFunc(srt, sortProposalIds)
+	require.Equal(t, []types.ProposalID{b, d, a, c}, srt)
+}
+
+// TestHare_ReconstructForward tests that a message
+// could be reconstructed on a downstream peer that
+// receives a gossipsub message from a forwarding node
+// without needing a direct connection to the original sender.
+func TestHare_ReconstructForward(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.LogStats = true
+	tst := &tester{
+		TB:            t,
+		rng:           rand.New(rand.NewSource(1001)),
+		start:         time.Now(),
+		cfg:           cfg,
+		layerDuration: 5 * time.Minute,
+		beacon:        types.Beacon{1, 1, 1, 1},
+		genesis:       types.GetEffectiveGenesis(),
+	}
+	cluster := newLockstepCluster(tst).
+		addActive(3)
+	if cluster.signersCount > 0 {
+		cluster = cluster.addSigner(cluster.signersCount)
+		cluster.partitionSigners()
+	}
+	cluster.drainInteractiveMessages()
+	layer := tst.genesis + 1
+
+	// cluster setup
+	active := cluster.activeSet()
+	for i, n := range cluster.nodes {
+		require.NoError(cluster.t, beacons.Add(n.db, cluster.t.genesis.GetEpoch()+1, cluster.t.beacon))
+		for _, other := range append(cluster.nodes, cluster.signers...) {
+			if other.atx == nil {
+				continue
+			}
+			require.NoError(cluster.t, n.storeAtx(other.atx))
 		}
-		require.Equal(t, cfg.Committee, cfg.CommitteeFor(0))
-		require.Equal(t, cfg.Committee, cfg.CommitteeFor(100))
-	})
-	t.Run("upgrade", func(t *testing.T) {
-		cfg := Config{
-			Committee: 400,
-			CommitteeUpgrade: &CommitteeUpgrade{
-				Layer: 16,
-				Size:  50,
+		n.oracle.UpdateActiveSet(cluster.t.genesis.GetEpoch()+1, active)
+		n.mpublisher.EXPECT().
+			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
+			Do(func(ctx context.Context, proto string, msg []byte) error {
+				// here we wanna call the handler on the second node
+				// but then call the handler on the third with the incoming peer id
+				// of the second node, this way we know the peers could resolve between
+				// themselves without having the connection to the original sender
+				// 1st publish call is for the preround, so we will hijack that and
+				// leave the rest to broadcast
+				m := &Message{}
+				codec.MustDecode(msg, m)
+				if m.Body.IterRound.Round == preround {
+					other := [2]int{0, 0}
+					switch i {
+					case 0:
+						other[0] = 1
+						other[1] = 2
+					case 1:
+						other[0] = 0
+						other[1] = 2
+					case 2:
+						other[0] = 1
+						other[1] = 0
+					default:
+						panic("bad")
+					}
+					if err := cluster.nodes[other[0]].hare.
+						Handler(ctx, cluster.nodes[i].peerId(), msg); err != nil {
+						panic(err)
+					}
+					if err := cluster.nodes[other[1]].hare.
+						Handler(ctx, cluster.nodes[other[0]].peerId(), msg); err != nil {
+						panic(err)
+					}
+					return nil
+				}
+
+				for _, other := range cluster.nodes {
+					if err := other.hare.Handler(ctx, n.peerId(), msg); err != nil {
+						panic(err)
+					}
+				}
+				return nil
+			}).
+			AnyTimes()
+		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
+			func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
+				for _, other := range cluster.nodes {
+					if other.peerId() == p {
+						b := make([]byte, 0, 1024)
+						buf := bytes.NewBuffer(b)
+						if err := other.hare.handleProposalsStream(ctx, msg, buf); err != nil {
+							return fmt.Errorf("exec handleProposalStream: %w", err)
+						}
+						if err := cb(ctx, buf); err != nil {
+							return fmt.Errorf("exec callback: %w", err)
+						}
+					}
+				}
+				return nil
 			},
+		).AnyTimes()
+	}
+
+	cluster.genProposals(layer, 2)
+	cluster.genProposalNode(layer, 2)
+	cluster.movePreround(layer)
+	for i := 0; i < 2*int(notify); i++ {
+		cluster.moveRound()
+	}
+	var consistent []types.ProposalID
+	cluster.waitStopped()
+	for _, n := range cluster.nodes {
+		select {
+		case coin := <-n.hare.Coins():
+			require.Equal(t, coin.Layer, layer)
+		default:
+			require.FailNow(t, "no coin")
 		}
-		require.EqualValues(t, cfg.Committee, cfg.CommitteeFor(0))
-		require.EqualValues(t, cfg.Committee, cfg.CommitteeFor(15))
-		require.EqualValues(t, 50, cfg.CommitteeFor(16))
-		require.EqualValues(t, 50, cfg.CommitteeFor(100))
-	})
+		select {
+		case rst := <-n.hare.Results():
+			require.Equal(t, rst.Layer, layer)
+			require.NotEmpty(t, rst.Proposals)
+			if consistent == nil {
+				consistent = rst.Proposals
+			} else {
+				require.Equal(t, consistent, rst.Proposals)
+			}
+		default:
+			require.FailNow(t, "no result")
+		}
+		require.Empty(t, n.hare.Running())
+	}
+}
+
+// TestHare_ReconstructAll tests that the nodes go into a
+// full message exchange in the case that a signature fails
+// although all compact hashes and proposals match.
+func TestHare_ReconstructAll(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.LogStats = true
+	tst := &tester{
+		TB:            t,
+		rng:           rand.New(rand.NewSource(1001)),
+		start:         time.Now(),
+		cfg:           cfg,
+		layerDuration: 5 * time.Minute,
+		beacon:        types.Beacon{1, 1, 1, 1},
+		genesis:       types.GetEffectiveGenesis(),
+	}
+	cluster := newLockstepCluster(tst, withMockVerifier()).
+		addActive(3)
+	if cluster.signersCount > 0 {
+		cluster = cluster.addSigner(cluster.signersCount)
+		cluster.partitionSigners()
+	}
+	layer := tst.genesis + 1
+
+	cluster.drainInteractiveMessages()
+	// cluster setup
+	calls := [3]int{}
+	for i, n := range cluster.nodes {
+		n.mverifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ signing.Domain, _ types.NodeID, _ []byte, _ types.EdSignature) bool {
+				calls[i] = calls[i] + 1
+				// when first call return false, other
+				return !(calls[i] == 1)
+			}).AnyTimes()
+	}
+	cluster.setup()
+	cluster.genProposals(layer)
+	cluster.movePreround(layer)
+	for i := 0; i < 2*int(notify); i++ {
+		cluster.moveRound()
+	}
+	var consistent []types.ProposalID
+	cluster.waitStopped()
+	for _, n := range cluster.nodes {
+		select {
+		case coin := <-n.hare.Coins():
+			require.Equal(t, coin.Layer, layer)
+		default:
+			require.FailNow(t, "no coin")
+		}
+		select {
+		case rst := <-n.hare.Results():
+			require.Equal(t, rst.Layer, layer)
+			require.NotEmpty(t, rst.Proposals)
+			if consistent == nil {
+				consistent = rst.Proposals
+			} else {
+				require.Equal(t, consistent, rst.Proposals)
+			}
+		default:
+			t.Fatal("no result")
+		}
+		require.Empty(t, n.hare.Running())
+	}
+}
+
+// TestHare_ReconstructCollision tests that the nodes go into a
+// full message exchange in the case that there's a siphash collision.
+func TestHare_ReconstructCollision(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.LogStats = true
+	tst := &tester{
+		TB:            t,
+		rng:           rand.New(rand.NewSource(1000)),
+		start:         time.Now(),
+		cfg:           cfg,
+		layerDuration: 5 * time.Minute,
+		beacon:        types.Beacon{1, 1, 1, 1},
+		genesis:       types.GetEffectiveGenesis(),
+	}
+
+	fn := func(_ []byte) []byte {
+		return []byte{0xab, 0xab, 0xab, 0xab}
+	}
+	cluster := newLockstepCluster(tst, withMockCompactFn(fn), withProposals(1)).
+		addActive(2)
+	if cluster.signersCount > 0 {
+		cluster = cluster.addSigner(cluster.signersCount)
+		cluster.partitionSigners()
+	}
+	layer := tst.genesis + 1
+
+	// scenario:
+	// node 1 has generated 1 proposal that (mocked) hash into 0xab as prefix - both nodes know the proposal
+	// node 2 has generated 1 proposal that hash into 0xab (but node 1 doesn't know about it)
+	// so the two proposals collide and then we check that the nodes actually go into a round of
+	// exchanging the missing/colliding hashes and then the signature verification (not mocked)
+	// should pass and that a full exchange of all hashes is not triggered (disambiguates case of
+	// failed signature vs. hashes colliding - there's a difference in number of single prefixes
+	// that are sent, but the response should be the same)
+
+	go func() { <-cluster.nodes[1].tracer.compactReq }()  // node 2 gets the request
+	go func() { <-cluster.nodes[0].tracer.compactResp }() // node 1 gets the response
+
+	cluster.setup()
+
+	cluster.genProposals(layer, 1)
+	cluster.genProposalNode(layer, 1)
+	cluster.movePreround(layer)
+	for i := 0; i < 2*int(notify); i++ {
+		cluster.moveRound()
+	}
+	var consistent []types.ProposalID
+	cluster.waitStopped()
+	for _, n := range cluster.nodes {
+		select {
+		case coin := <-n.hare.Coins():
+			require.Equal(t, coin.Layer, layer)
+		default:
+			require.FailNow(t, "no coin")
+		}
+		select {
+		case rst := <-n.hare.Results():
+			require.Equal(t, rst.Layer, layer)
+			require.NotEmpty(t, rst.Proposals)
+			if consistent == nil {
+				consistent = rst.Proposals
+			} else {
+				require.Equal(t, consistent, rst.Proposals)
+			}
+		default:
+			t.Fatal("no result")
+		}
+		require.Empty(t, n.hare.Running())
+	}
 }

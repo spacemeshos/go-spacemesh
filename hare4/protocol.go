@@ -1,4 +1,4 @@
-package hare3
+package hare4
 
 import (
 	"bytes"
@@ -111,6 +111,7 @@ type protocol struct {
 }
 
 func (p *protocol) OnInitial(proposals []types.ProposalID) {
+	slices.SortFunc(proposals, sortProposalIds)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.initial = proposals

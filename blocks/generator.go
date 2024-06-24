@@ -13,8 +13,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -39,7 +39,7 @@ type Generator struct {
 	cert      certifier
 	patrol    layerPatrol
 
-	hareCh           <-chan hare3.ConsensusOutput
+	hareCh           <-chan hare4.ConsensusOutput
 	optimisticOutput map[types.LayerID]*proposalMetadata
 }
 
@@ -76,7 +76,7 @@ func WithGeneratorLogger(logger *zap.Logger) GeneratorOpt {
 }
 
 // WithHareOutputChan sets the chan to listen to hare output.
-func WithHareOutputChan(ch <-chan hare3.ConsensusOutput) GeneratorOpt {
+func WithHareOutputChan(ch <-chan hare4.ConsensusOutput) GeneratorOpt {
 	return func(g *Generator) {
 		g.hareCh = ch
 	}
@@ -178,7 +178,7 @@ func (g *Generator) run(ctx context.Context) error {
 	}
 }
 
-func (g *Generator) processHareOutput(ctx context.Context, out hare3.ConsensusOutput) (*types.Block, error) {
+func (g *Generator) processHareOutput(ctx context.Context, out hare4.ConsensusOutput) (*types.Block, error) {
 	var md *proposalMetadata
 	if len(out.Proposals) > 0 {
 		getMetadata := func() error {

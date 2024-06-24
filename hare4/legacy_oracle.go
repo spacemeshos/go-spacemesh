@@ -1,4 +1,4 @@
-package hare3
+package hare4
 
 import (
 	"context"
@@ -26,7 +26,7 @@ func (lg *legacyOracle) validate(msg *Message) grade {
 	if msg.Eligibility.Count == 0 {
 		return grade0
 	}
-	committee := int(lg.config.CommitteeFor(msg.Layer))
+	committee := int(lg.config.Committee)
 	if msg.Round == propose {
 		committee = int(lg.config.Leaders)
 	}
@@ -50,7 +50,7 @@ func (lg *legacyOracle) active(
 	ir IterRound,
 ) *types.HareEligibility {
 	vrf := eligibility.GenVRF(context.Background(), signer.VRFSigner(), beacon, layer, ir.Absolute())
-	committee := int(lg.config.CommitteeFor(layer))
+	committee := int(lg.config.Committee)
 	if ir.Round == propose {
 		committee = int(lg.config.Leaders)
 	}

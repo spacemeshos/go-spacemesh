@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -154,6 +155,14 @@ func WithTracer(tracer Tracer) Opt {
 	}
 }
 
+// WithResultsChan overrides the default result channel with a different one.
+// This is only needed for the migration period between hare3 and hare4.
+func WithResultsChan(c chan hare4.ConsensusOutput) Opt {
+	return func(hr *Hare) {
+		hr.results = c
+	}
+}
+
 type nodeclock interface {
 	AwaitLayer(types.LayerID) <-chan struct{}
 	CurrentLayer() types.LayerID
@@ -176,8 +185,8 @@ func New(
 	hr := &Hare{
 		ctx:      ctx,
 		cancel:   cancel,
-		results:  make(chan ConsensusOutput, 32),
-		coins:    make(chan WeakCoinOutput, 32),
+		results:  make(chan hare4.ConsensusOutput, 32),
+		coins:    make(chan hare4.WeakCoinOutput, 32),
 		signers:  map[string]*signing.EdSigner{},
 		sessions: map[types.LayerID]*protocol{},
 
@@ -211,8 +220,8 @@ type Hare struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	eg       errgroup.Group
-	results  chan ConsensusOutput
-	coins    chan WeakCoinOutput
+	results  chan hare4.ConsensusOutput
+	coins    chan hare4.WeakCoinOutput
 	mu       sync.Mutex
 	signers  map[string]*signing.EdSigner
 	sessions map[types.LayerID]*protocol
@@ -242,11 +251,11 @@ func (h *Hare) Register(sig *signing.EdSigner) {
 	h.signers[string(sig.NodeID().Bytes())] = sig
 }
 
-func (h *Hare) Results() <-chan ConsensusOutput {
+func (h *Hare) Results() <-chan hare4.ConsensusOutput {
 	return h.results
 }
 
-func (h *Hare) Coins() <-chan WeakCoinOutput {
+func (h *Hare) Coins() <-chan hare4.WeakCoinOutput {
 	return h.coins
 }
 
@@ -508,7 +517,7 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 		select {
 		case <-h.ctx.Done():
 			return h.ctx.Err()
-		case h.coins <- WeakCoinOutput{Layer: session.lid, Coin: *out.coin}:
+		case h.coins <- hare4.WeakCoinOutput{Layer: session.lid, Coin: *out.coin}:
 		}
 		sessionCoin.Inc()
 	}
@@ -516,7 +525,7 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 		select {
 		case <-h.ctx.Done():
 			return h.ctx.Err()
-		case h.results <- ConsensusOutput{Layer: session.lid, Proposals: out.result}:
+		case h.results <- hare4.ConsensusOutput{Layer: session.lid, Proposals: out.result}:
 		}
 		sessionResult.Inc()
 	}
@@ -618,7 +627,6 @@ func (h *Hare) OnProposal(p *types.Proposal) error {
 func (h *Hare) Stop() {
 	h.cancel()
 	h.eg.Wait()
-	close(h.results)
 	close(h.coins)
 	h.log.Info("stopped")
 }

@@ -1,4 +1,4 @@
-package hare3
+package hare4
 
 import (
 	"testing"
