@@ -15,7 +15,8 @@ import (
 func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received time.Time) error {
 	_, err := db.Exec(`insert into identities (pubkey, proof, received)
 	values (?1, ?2, ?3)
-	on conflict do nothing;`,
+	ON CONFLICT(pubkey) DO UPDATE SET proof = excluded.proof
+	WHERE proof IS NULL;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 			stmt.BindBytes(2, proof)
@@ -30,7 +31,12 @@ func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received t
 
 // IsMalicious returns true if identity is known to be malicious.
 func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
-	rows, err := db.Exec("select 1 from identities where pubkey = ?1;",
+	rows, err := db.Exec(`
+	SELECT 1 FROM identities
+	WHERE (marriage_atx = (
+		SELECT marriage_atx FROM identities WHERE pubkey = ?1 AND marriage_atx IS NOT NULL) AND proof IS NOT NULL
+	)
+	OR (pubkey = ?1 AND marriage_atx IS NULL AND proof IS NOT NULL);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 		}, nil)
@@ -46,7 +52,7 @@ func GetMalfeasanceProof(db sql.Executor, nodeID types.NodeID) (*wire.Malfeasanc
 		data     []byte
 		received time.Time
 	)
-	rows, err := db.Exec("select proof, received from identities where pubkey = ?1;",
+	rows, err := db.Exec("select proof, received from identities where pubkey = ?1 AND proof IS NOT NULL;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 		}, func(stmt *sql.Statement) bool {
@@ -122,4 +128,63 @@ func GetMalicious(db sql.Executor) (nids []types.NodeID, err error) {
 		panic("BUG: bad malicious node ID count")
 	}
 	return nids, nil
+}
+
+// Married checks if id is married.
+// ID is married if it has non-null marriage_atx column.
+func Married(db sql.Executor, id types.NodeID) (bool, error) {
+	rows, err := db.Exec("select 1 from identities where pubkey = ?1 and marriage_atx is not null;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, nil)
+	if err != nil {
+		return false, fmt.Errorf("married %v: %w", id, err)
+	}
+	return rows > 0, nil
+}
+
+// Set marriage inserts marriage ATX for given identity.
+// If identitty doesn't exist - create it.
+func SetMarriage(db sql.Executor, id types.NodeID, atx types.ATXID) error {
+	_, err := db.Exec(`
+	INSERT INTO identities (pubkey, marriage_atx)
+	values (?1, ?2)
+	ON CONFLICT(pubkey) DO UPDATE SET marriage_atx = excluded.marriage_atx
+	WHERE marriage_atx IS NULL;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+			stmt.BindBytes(2, atx.Bytes())
+		}, nil,
+	)
+	if err != nil {
+		return fmt.Errorf("setting marriage %v: %w", id, err)
+	}
+	return nil
+}
+
+// EquivocationSet returns all node IDs that are married to the given node ID
+// including itself.
+func EquivocationSet(db sql.Executor, id types.NodeID) ([]types.NodeID, error) {
+	var ids []types.NodeID
+
+	rows, err := db.Exec(`
+	SELECT pubkey FROM identities
+	WHERE marriage_atx = (SELECT marriage_atx FROM identities WHERE pubkey = ?1) AND marriage_atx IS NOT NULL;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		},
+		func(stmt *sql.Statement) bool {
+			var nid types.NodeID
+			stmt.ColumnBytes(0, nid[:])
+			ids = append(ids, nid)
+			return true
+		})
+	if err != nil {
+		return nil, fmt.Errorf("getting marriage for %v: %w", id, err)
+	}
+	if rows == 0 {
+		return []types.NodeID{id}, nil
+	}
+
+	return ids, nil
 }
