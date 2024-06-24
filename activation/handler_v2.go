@@ -652,14 +652,15 @@ func (h *HandlerV2) storeAtx(
 			return fmt.Errorf("check malicious: %w", err)
 		}
 
-		if len(marrying) != 0 {
+		if len(marrying) > 0 {
 			for _, id := range marrying {
 				if err := identities.SetMarriage(tx, id, atx.ID()); err != nil {
 					return err
 				}
 			}
+			// TODO(mafa): I don't get this part, why do we need to check for malfeasance again?
 			if !malicious && proof == nil {
-				// We check for malfeasance again becase the marriage increased the equivocation set.
+				// We check for malfeasance again because the marriage increased the equivocation set.
 				malicious, err = identities.IsMalicious(tx, atx.SmesherID)
 				if err != nil {
 					return fmt.Errorf("re-checking if smesherID is malicious: %w", err)
@@ -704,11 +705,17 @@ func (h *HandlerV2) storeAtx(
 			if err := identities.SetMalicious(h.cdb, id, encoded, atx.Received()); err != nil {
 				return nil, fmt.Errorf("setting malfeasance proof: %w", err)
 			}
-			// TODO(mafa): cache malfeasance proof in v2
+			// TODO(mafa): why do we need to cache the proof here? shouldn't this be done after publishing it?
+			// if we want to avoid spamming during sync we could add a "no-op" publisher that only validates,
+			// persists and caches the proof without gossiping it during sync.
+			//
+			// better however would be to sync malfeasant identities first and then sync ATXs.
+			//
 			// h.cdb.CacheMalfeasanceProof(id, proof)
 		}
 	}
 
+	// TODO(mafa): same here, why isn't this done in the handler for malfeasance proofs?
 	for id := range allMalicious {
 		h.tortoise.OnMalfeasance(id)
 	}
