@@ -75,3 +75,11 @@ func ReportMessageLatency(protocol, msgType string, latency time.Duration) {
 	}
 	receivedMessagesLatency.WithLabelValues(protocol, msgType, sign).Observe(seconds)
 }
+
+func NewCounterOpts(ns, name, help string) prometheus.CounterOpts {
+	return prometheus.CounterOpts{
+		Namespace: ns,
+		Name:      name,
+		Help:      help,
+	}
+}

@@ -5,6 +5,7 @@ go 1.22.3
 require (
 	cloud.google.com/go/storage v1.42.0
 	github.com/ALTree/bigfloat v0.2.0
+	github.com/aead/siphash v1.0.1
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240623075305-82f2d100a2a0
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.3
@@ -73,7 +74,6 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.2 // indirect
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	cloud.google.com/go/iam v1.1.8 // indirect
-	github.com/aead/siphash v1.0.1 // indirect
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
 	github.com/anacrolix/chansync v0.3.0 // indirect
 	github.com/anacrolix/missinggo v1.2.1 // indirect
