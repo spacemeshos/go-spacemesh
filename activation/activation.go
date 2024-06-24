@@ -1004,7 +1004,7 @@ func findFullyValidHighTickAtx(
 	})
 
 	if ctx.Err() != nil {
-		return types.ATXID{}, ErrNotFound
+		return types.ATXID{}, ctx.Err()
 	}
 
 	if found == nil {
