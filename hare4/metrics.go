@@ -1,4 +1,4 @@
-package hare3
+package hare4
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
-const namespace = "hare"
+const namespace = "hare4" // todo change this back to `hare`
 
 var (
 	processCounter = metrics.NewCounter(
@@ -63,4 +63,41 @@ var (
 	)
 	proposalsLatency = protocolLatency.WithLabelValues("proposals")
 	activeLatency    = protocolLatency.WithLabelValues("active")
+
+	requestCompactCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+		namespace,
+		"request_compact_count",
+		"number of times we needed to go into a clarifying round",
+	))
+	requestCompactErrorCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+		namespace,
+		"request_compact_error_count",
+		"number of errors got when requesting compact proposals from peer",
+	))
+	requestCompactHandlerCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+		namespace,
+		"request_compact_handler_count",
+		"number of requests handled on the compact stream handler",
+	))
+	messageCacheMiss = prometheus.NewCounter(metrics.NewCounterOpts(
+		namespace,
+		"message_cache_miss",
+		"number of message cache misses",
+	))
+	messageCompactsCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+		namespace,
+		"message_compacts_count",
+		"number of compact proposals that arrived to be checked in a message",
+	))
+
+	messageCompactFetchCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+		namespace,
+		"message_compact_fetch_count",
+		"how many compact prefixes need to be fetched because they cannot be matched locally",
+	))
+	preroundSigFailCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+		namespace,
+		"preround_signature_fail_count",
+		"counter for signature fails on preround with compact message",
+	))
 )

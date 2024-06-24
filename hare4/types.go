@@ -1,4 +1,4 @@
-package hare3
+package hare4
 
 import (
 	"errors"
@@ -92,6 +92,9 @@ type Value struct {
 	Proposals []types.ProposalID `scale:"max=2050"`
 	// Reference is set in messages for commit and notify rounds.
 	Reference *types.Hash32
+	// CompactProposals is the array of two-byte SipHash(vrf,proposal_id) and is only used in the preround
+	// phase of the protocol.
+	CompactProposals []types.CompactProposalID `scale:"max=2050"`
 }
 
 type Body struct {
@@ -169,4 +172,14 @@ func (m *Message) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	}
 	encoder.AddUint16("vrf_count", m.Eligibility.Count)
 	return nil
+}
+
+type CompactIdRequest struct {
+	MsgId types.Hash32
+	// Vrf types.VrfSignature
+	Ids []types.CompactProposalID `scale:"max=2050"`
+}
+
+type CompactIdResponse struct {
+	Ids []types.ProposalID `scale:"max=2050"`
 }
