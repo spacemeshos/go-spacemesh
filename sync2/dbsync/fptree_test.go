@@ -1,9 +1,9 @@
 package dbsync
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -188,36 +188,42 @@ func TestCommonPrefix(t *testing.T) {
 	}
 }
 
-type fakeATXStore struct {
-	db sql.StateDatabase
+type fakeIDDBStore struct {
+	db sql.Database
 	*sqlIDStore
 }
 
-func newFakeATXIDStore(db sql.StateDatabase) *fakeATXStore {
-	return &fakeATXStore{db: db, sqlIDStore: newSQLIDStore(db)}
+var _ idStore = &fakeIDDBStore{}
+
+const fakeIDQuery = "select id from foo where id between ? and ? order by id"
+
+func newFakeATXIDStore(db sql.Database, maxDepth int) *fakeIDDBStore {
+	return &fakeIDDBStore{db: db, sqlIDStore: newSQLIDStore(db, fakeIDQuery, 32, maxDepth)}
 }
 
-func (s *fakeATXStore) registerHash(h []byte, maxDepth int) error {
-	if err := s.sqlIDStore.registerHash(h, maxDepth); err != nil {
+func (s *fakeIDDBStore) registerHash(h KeyBytes) error {
+	if err := s.sqlIDStore.registerHash(h); err != nil {
 		return err
 	}
-	_, err := s.db.Exec(`
-		insert into atxs (id, epoch, effective_num_units, received)
-                values (?, 1, 1, 0)`,
+	_, err := s.db.Exec("insert into foo (id) values (?)",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, h)
 		}, nil)
 	return err
 }
 
-func testFPTree(t *testing.T, idStore idStore) {
+type idStoreFunc func(maxDepth int) idStore
+
+func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 	for _, tc := range []struct {
-		name    string
-		ids     []string
-		results map[[2]int]fpResult
+		name     string
+		maxDepth int
+		ids      []string
+		results  map[[3]int]fpResult
 	}{
 		{
-			name: "ids1",
+			name:     "ids1",
+			maxDepth: 24,
 			ids: []string{
 				"0000000000000000000000000000000000000000000000000000000000000000",
 				"123456789abcdef0000000000000000000000000000000000000000000000000",
@@ -225,68 +231,156 @@ func testFPTree(t *testing.T, idStore idStore) {
 				"8888888888888888888888888888888888888888888888888888888888888888",
 				"abcdef1234567890000000000000000000000000000000000000000000000000",
 			},
-			results: map[[2]int]fpResult{
-				{0, 0}: {
+			results: map[[3]int]fpResult{
+				{0, 0, -1}: {
 					fp:    hexToFingerprint("642464b773377bbddddddddd"),
 					count: 5,
+					itype: 0,
 				},
-				{4, 4}: {
+				{0, 0, 3}: {
+					fp:    hexToFingerprint("4761032dcfe98ba555555555"),
+					count: 3,
+					itype: 0,
+				},
+				{4, 4, -1}: {
 					fp:    hexToFingerprint("642464b773377bbddddddddd"),
 					count: 5,
+					itype: 0,
 				},
-				{0, 1}: {
+				{0, 1, -1}: {
 					fp:    hexToFingerprint("000000000000000000000000"),
 					count: 1,
+					itype: -1,
 				},
-				{1, 4}: {
+				{0, 3, -1}: {
+					fp:    hexToFingerprint("4761032dcfe98ba555555555"),
+					count: 3,
+					itype: -1,
+				},
+				{0, 4, 3}: {
+					fp:    hexToFingerprint("4761032dcfe98ba555555555"),
+					count: 3,
+					itype: -1,
+				},
+				{1, 4, -1}: {
 					fp:    hexToFingerprint("cfe98ba54761032ddddddddd"),
 					count: 3,
+					itype: -1,
 				},
-				{1, 0}: {
+				{1, 0, -1}: {
 					fp:    hexToFingerprint("642464b773377bbddddddddd"),
 					count: 4,
+					itype: 1,
 				},
-				{2, 0}: {
+				{2, 0, -1}: {
 					fp:    hexToFingerprint("761032cfe98ba54ddddddddd"),
 					count: 3,
+					itype: 1,
 				},
-				{3, 1}: {
+				{3, 1, -1}: {
 					fp:    hexToFingerprint("2345679abcdef01888888888"),
 					count: 3,
+					itype: 1,
 				},
-				{3, 2}: {
+				{3, 2, -1}: {
 					fp:    hexToFingerprint("317131e226622ee888888888"),
 					count: 4,
+					itype: 1,
+				},
+				{3, 2, 3}: {
+					fp:    hexToFingerprint("2345679abcdef01888888888"),
+					count: 3,
+					itype: 1,
 				},
 			},
 		},
 		{
-			name: "ids2",
+			name:     "ids2",
+			maxDepth: 24,
 			ids: []string{
 				"6e476ca729c3840d0118785496e488124ee7dade1aef0c87c6edc78f72e4904f",
 				"829977b444c8408dcddc1210536f3b3bdc7fd97777426264b9ac8f70b97a7fd1",
 				"a280bcb8123393e0d4a15e5c9850aab5dddffa03d5efa92e59bc96202e8992bc",
 				"e93163f908630280c2a8bffd9930aa684be7a3085432035f5c641b0786590d1d",
 			},
-			results: map[[2]int]fpResult{
-				{0, 0}: {
+			results: map[[3]int]fpResult{
+				{0, 0, -1}: {
 					fp:    hexToFingerprint("a76fc452775b55e0dacd8be5"),
 					count: 4,
+					itype: 0,
 				},
-				{0, 3}: {
+				{0, 0, 3}: {
 					fp:    hexToFingerprint("4e5ea7ab7f38576018653418"),
 					count: 3,
+					itype: 0,
 				},
-				{3, 1}: {
+				{0, 3, -1}: {
+					fp:    hexToFingerprint("4e5ea7ab7f38576018653418"),
+					count: 3,
+					itype: -1,
+				},
+				{3, 1, -1}: {
 					fp:    hexToFingerprint("87760f5e21a0868dc3b0c7a9"),
 					count: 2,
+					itype: 1,
+				},
+				{3, 2, -1}: {
+					fp:    hexToFingerprint("05ef78ea6568c6000e6cd5b9"),
+					count: 3,
+					itype: 1,
+				},
+			},
+		},
+		{
+			name:     "ids3",
+			maxDepth: 4,
+			ids: []string{
+				"01dd08ec0c477312f0ef010789b4a7c65d664e3d07e9fde246c70ee2af71f4c7",
+				"051f49b4621dad18ab3582eeeda995bba5fdd0a23d0ae0387e312e4706c62d26",
+				"0743ede445d407d164e4139c440e6f09273d6ac088f929c5781ffd6c63806622",
+				"114991f28f34d1239d9b617ad1d0e3497fd8f7c5320c1bfc51042cddb3c4d4d1",
+				"120bf12c57659760f1b0a5cf5f85e23492f92822e714543fc4be732d4de3d284",
+				"20e8cb9ba6fba6926ed5e0101e57881094d831a9b26a68d73b04d30a2100075b",
+				"2403eb652598ee893b84d854f222fc0231ee1c3823bba9dfbe7bc8521eb10831",
+				"282ed276fe896730d856ca373837ef6f89b2109d04a0b17eac152df73fc21d90",
+				"2e6690d307c831a1e87039fcb67a0cdd44867271a8955b8003e74f4c644bd7bd",
+				"360ca30d3013940704a5a095318e022ee5d36618c4ad1b2d084e2bc797a1793d",
+				"3f52547180ba19ae700cb24b220fac01159c489e4ab127ee7ae046069165587a",
+				"4df3f9fb5b1cc7a7921dbdaf27afd16f1749f4134d611eead0a1e9cf34c51994",
+				"625df1cf9e472cd647b3e5fd065be537385889b1b913a0336787a37f12d55a02",
+				"6feaf52c2f8030e3eb21935f67d6ced8b37535387a086d46de8f31e5b67e1f71",
+				"75a5176eb4cc182302120e991f88cbe3b01e19a28dfd972a441a5bcde57f6879",
+				"768281853be35aa50156598308f6c5b12a4457615551c688712607069517714f",
+				"7686323c12f0853555450ce1ec22700861530fa67d523587bf7078f915204cc5",
+				"a6df4f61a0e351bc539b32b4262446ac27766073515ef4b5203941fef7343ebc",
+				"a740ea1cdb1c144da5bc4f96833a4c611fa7196d4ebaa89a1bd209abe519503a",
+				"ab0960667a9bf57138c1a3f7d54b242e23b6c36fd8f2a645ed9217050dd5e011",
+				"af5adcf404035e9ee88377230d26406702259ad25a04d425bd3c2cff546d32c0",
+				"afd06a52970126024887099ed40d2400b9bb9505f171fb203baf74f7199f7c7e",
+				"b520c3bb04061813e57d75db0a06f711b635b0aef1561d01859f122439437d61",
+				"b525b9ecbf8a888a3b01669c7c7d5656b6b6a7c4df3bbe5402fbe4e718bad4bb",
+				"b84d4bf077d68821ee9203aaf6eee90fe892f42faee939c974f719c29117ddb6",
+				"bf0f6ef1cee0eb3131fb24ef52e6ac8f0a22d85d32c3fe3255d921037423df1b",
+				"c72caa7c9822d6c77a254c12bc17eae8e5d637a929c94cc84aa4662d4baa508d",
+				"d4375ae1c64c3d2167bb467acc63083851d834fa24f285d4a1220c407287cd56",
+				"d552081889142b74ab0f0cb9da0de192cdd549213a2d348e0cc21061c196ed6a",
+				"e1729d5eda4d6dac38070551a0956f3bcf0d8ac34b45a0b7e5553315cc662ebe",
+				"e41d8c3a7607ec5423cc376a34d21494f2d0c625fb9bebcec09d06c188ab7f3f",
+				"e9110a384198b47be2bb63e64f094069a0ee9a013e013176bbe8189834c5e4c8",
+			},
+			results: map[[3]int]fpResult{
+				{31, 0, -1}: {
+					fp:    hexToFingerprint("e9110a384198b47be2bb63e6"),
+					count: 1,
+					itype: 1,
 				},
 			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var np nodePool
-			ft := newFPTree(&np, idStore, 24)
+			idStore := makeIDStore(tc.maxDepth)
+			ft := newFPTree(&np, idStore, tc.maxDepth)
 			var hs []types.Hash32
 			for _, hex := range tc.ids {
 				t.Logf("add: %s", hex)
@@ -299,28 +393,109 @@ func testFPTree(t *testing.T, idStore idStore) {
 			ft.dump(&sb)
 			t.Logf("tree:\n%s", sb.String())
 
-			checkTree(t, ft, 24)
+			checkTree(t, ft, tc.maxDepth)
 
 			for idRange, expResult := range tc.results {
 				x := hs[idRange[0]]
 				y := hs[idRange[1]]
-				fpr, err := ft.fingerprintInterval(x[:], y[:])
+				fpr, err := ft.fingerprintInterval(x[:], y[:], idRange[2])
 				require.NoError(t, err)
 				require.Equal(t, expResult, fpr)
 			}
+
+			ft.release()
+			require.Zero(t, np.count())
 		})
 	}
 }
 
 func TestFPTree(t *testing.T) {
-	t.Run("in-memory id store", func(t *testing.T) {
-		testFPTree(t, &memIDStore{})
-	})
+	// t.Run("in-memory id store", func(t *testing.T) {
+	// 	testFPTree(t, func(maxDepth int) idStore { return newMemIDStore(maxDepth) })
+	// })
 	t.Run("fake ATX store", func(t *testing.T) {
-		db := statesql.InMemory()
-		defer db.Close()
-		testFPTree(t, newFakeATXIDStore(db))
+		db := populateDB(t, 32, nil)
+		testFPTree(t, func(maxDepth int) idStore {
+			_, err := db.Exec("delete from foo", nil, nil)
+			require.NoError(t, err)
+			return newFakeATXIDStore(db, maxDepth)
+		})
 	})
+}
+
+func TestFPTreeClone(t *testing.T) {
+	var np nodePool
+	ft1 := newFPTree(&np, newMemIDStore(24), 24)
+	hashes := []types.Hash32{
+		types.HexToHash32("1111111111111111111111111111111111111111111111111111111111111111"),
+		types.HexToHash32("3333333333333333333333333333333333333333333333333333333333333333"),
+		types.HexToHash32("4444444444444444444444444444444444444444444444444444444444444444"),
+	}
+	ft1.addHash(hashes[0][:])
+	ft1.addHash(hashes[1][:])
+
+	fpr, err := ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
+	require.NoError(t, err)
+	require.Equal(t, fpResult{
+		fp:    hexToFingerprint("222222222222222222222222"),
+		count: 2,
+		itype: 0,
+	}, fpr)
+
+	var sb strings.Builder
+	ft1.dump(&sb)
+	t.Logf("ft1 pre-clone:\n%s", sb.String())
+
+	ft2 := ft1.clone()
+
+	sb.Reset()
+	ft1.dump(&sb)
+	t.Logf("ft1 after-clone:\n%s", sb.String())
+
+	sb.Reset()
+	ft2.dump(&sb)
+	t.Logf("ft2 after-clone:\n%s", sb.String())
+
+	// original tree unchanged --- rmme!!!!
+	fpr, err = ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
+	require.NoError(t, err)
+	require.Equal(t, fpResult{
+		fp:    hexToFingerprint("222222222222222222222222"),
+		count: 2,
+		itype: 0,
+	}, fpr)
+
+	ft2.addHash(hashes[2][:])
+
+	fpr, err = ft2.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
+	require.NoError(t, err)
+	require.Equal(t, fpResult{
+		fp:    hexToFingerprint("666666666666666666666666"),
+		count: 3,
+		itype: 0,
+	}, fpr)
+
+	// original tree unchanged
+	fpr, err = ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
+	require.NoError(t, err)
+	require.Equal(t, fpResult{
+		fp:    hexToFingerprint("222222222222222222222222"),
+		count: 2,
+		itype: 0,
+	}, fpr)
+
+	sb.Reset()
+	ft1.dump(&sb)
+	t.Logf("ft1:\n%s", sb.String())
+
+	sb.Reset()
+	ft2.dump(&sb)
+	t.Logf("ft2:\n%s", sb.String())
+
+	ft1.release()
+	ft2.release()
+
+	require.Zero(t, np.count())
 }
 
 type hashList []types.Hash32
@@ -364,13 +539,53 @@ func checkTree(t *testing.T, ft *fpTree, maxDepth int) {
 	checkNode(t, ft, ft.root, 0)
 }
 
-func testInMemFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool) {
+func repeatTestFPTreeManyItems(
+	t *testing.T,
+	makeIDStore idStoreFunc,
+	randomXY bool,
+	numItems, maxDepth int,
+) {
+	for i := 0; i < 100; i++ {
+		testFPTreeManyItems(t, makeIDStore(maxDepth), randomXY, numItems, maxDepth)
+	}
+}
+
+func dumbFP(hs hashList, x, y types.Hash32) fpResult {
+	var fpr fpResult
+	fpr.itype = x.Compare(y)
+	switch fpr.itype {
+	case -1:
+		pX := hs.findGTE(x)
+		pY := hs.findGTE(y)
+		// t.Logf("x=%s y=%s pX=%d y=%d", x.String(), y.String(), pX, pY)
+		for p := pX; p < pY; p++ {
+			// t.Logf("XOR %s", hs[p].String())
+			fpr.fp.update(hs[p][:])
+		}
+		fpr.count = uint32(pY - pX)
+	case 1:
+		pX := hs.findGTE(x)
+		pY := hs.findGTE(y)
+		for p := 0; p < pY; p++ {
+			fpr.fp.update(hs[p][:])
+		}
+		for p := pX; p < len(hs); p++ {
+			fpr.fp.update(hs[p][:])
+		}
+		fpr.count = uint32(pY + len(hs) - pX)
+	default:
+		for _, h := range hs {
+			fpr.fp.update(h[:])
+		}
+		fpr.count = uint32(len(hs))
+	}
+	return fpr
+}
+
+func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems, maxDepth int) {
 	var np nodePool
-	const (
-		numItems = 1 << 16
-		maxDepth = 24
-	)
 	ft := newFPTree(&np, idStore, maxDepth)
+	// ft.traceEnabled = true
 	hs := make(hashList, numItems)
 	var fp fingerprint
 	for i := range hs {
@@ -385,9 +600,9 @@ func testInMemFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool) {
 
 	checkTree(t, ft, maxDepth)
 
-	fpr, err := ft.fingerprintInterval(hs[0][:], hs[0][:])
+	fpr, err := ft.fingerprintInterval(hs[0][:], hs[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, fpResult{fp: fp, count: numItems}, fpr)
+	require.Equal(t, fpResult{fp: fp, count: uint32(numItems), itype: 0}, fpr)
 	for i := 0; i < 100; i++ {
 		// TBD: allow reverse order
 		var x, y types.Hash32
@@ -398,102 +613,93 @@ func testInMemFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool) {
 			x = hs[rand.Intn(numItems)]
 			y = hs[rand.Intn(numItems)]
 		}
-		var (
-			expFP fingerprint
-			expN  uint32
-		)
-		switch bytes.Compare(x[:], y[:]) {
-		case -1:
-			pX := hs.findGTE(x)
-			pY := hs.findGTE(y)
-			// t.Logf("x=%s y=%s pX=%d y=%d", x.String(), y.String(), pX, pY)
-			for p := pX; p < pY; p++ {
-				// t.Logf("XOR %s", hs[p].String())
-				expFP.update(hs[p][:])
-			}
-			expN = uint32(pY - pX)
-		case 1:
-			pX := hs.findGTE(x)
-			pY := hs.findGTE(y)
-			for p := 0; p < pY; p++ {
-				expFP.update(hs[p][:])
-			}
-			for p := pX; p < len(hs); p++ {
-				expFP.update(hs[p][:])
-			}
-			expN = uint32(pY + len(hs) - pX)
-		default:
-			expFP = fp
-			expN = numItems
-		}
-		fpr, err := ft.fingerprintInterval(x[:], y[:])
+		expFPR := dumbFP(hs, x, y)
+		fpr, err := ft.fingerprintInterval(x[:], y[:], -1)
 		require.NoError(t, err)
-		require.Equal(t, fpResult{
-			fp:    expFP,
-			count: expN,
-		}, fpr)
+
+		// QQQQQ: rm
+		if !reflect.DeepEqual(fpr, expFPR) {
+			t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
+			for _, h := range hs {
+				t.Logf("QQQQQ: hash: %s", h.String())
+			}
+			var sb strings.Builder
+			ft.dump(&sb)
+			t.Logf("QQQQQ: tree:\n%s", sb.String())
+		}
+		// QQQQQ: /rm
+
+		require.Equal(t, expFPR, fpr)
 	}
 }
 
-func TestInMemFPTreeManyItems(t *testing.T) {
+func TestFPTreeManyItems(t *testing.T) {
+	const (
+		// numItems = 1 << 16
+		// maxDepth = 24
+		numItems = 1 << 5
+		maxDepth = 4
+	)
 	t.Run("bounds from the set", func(t *testing.T) {
-		var idStore memIDStore
-		testInMemFPTreeManyItems(t, &idStore, false)
-		total := 0
-		nums := make(map[int]int)
-		for _, ids := range idStore.ids {
-			nums[len(ids)]++
-			total += len(ids)
-		}
-		t.Logf("total %d, nums %#v", total, nums)
+		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
+			return newMemIDStore(maxDepth)
+		}, false, numItems, maxDepth)
 
 	})
 	t.Run("random bounds", func(t *testing.T) {
-		testInMemFPTreeManyItems(t, &memIDStore{}, true)
+		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
+			return newMemIDStore(maxDepth)
+		}, true, numItems, maxDepth)
 	})
 	t.Run("SQL, bounds from the set", func(t *testing.T) {
-		db := statesql.InMemory()
-		defer db.Close()
-		testInMemFPTreeManyItems(t, newFakeATXIDStore(db), false)
-
+		db := populateDB(t, 32, nil)
+		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
+			_, err := db.Exec("delete from foo", nil, nil)
+			require.NoError(t, err)
+			return newFakeATXIDStore(db, maxDepth)
+		}, false, numItems, maxDepth)
 	})
 	t.Run("SQL, random bounds", func(t *testing.T) {
-		db := statesql.InMemory()
-		defer db.Close()
-		testInMemFPTreeManyItems(t, newFakeATXIDStore(db), true)
+		db := populateDB(t, 32, nil)
+		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
+			_, err := db.Exec("delete from foo", nil, nil)
+			require.NoError(t, err)
+			return newFakeATXIDStore(db, maxDepth)
+		}, true, numItems, maxDepth)
 	})
 }
 
 const dbFile = "/Users/ivan4th/Library/Application Support/Spacemesh/node-data/7c8cef2b/state.sql"
 
-func dumbAggATXs(t *testing.T, db sql.StateDatabase, x, y types.Hash32) fpResult {
-	var fp fingerprint
-	ts := time.Now()
-	nRows, err := db.Exec(
-		// BETWEEN is faster than >= and <
-		"select id from atxs where id between ? and ?",
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, x[:])
-			stmt.BindBytes(2, y[:])
-		},
-		func(stmt *sql.Statement) bool {
-			var id types.Hash32
-			stmt.ColumnBytes(0, id[:])
-			if id != y {
-				fp.update(id[:])
-			}
-			return true
-		},
-	)
-	require.NoError(t, err)
-	t.Logf("QQQQQ: %v: dumb fp between %s and %s", time.Now().Sub(ts), x.String(), y.String())
-	return fpResult{
-		fp:    fp,
-		count: uint32(nRows),
-	}
-}
+// func dumbAggATXs(t *testing.T, db sql.StateDatabase, x, y types.Hash32) fpResult {
+// 	var fp fingerprint
+// 	ts := time.Now()
+// 	nRows, err := db.Exec(
+// 		// BETWEEN is faster than >= and <
+// 		"select id from atxs where id between ? and ? order by id",
+// 		func(stmt *sql.Statement) {
+// 			stmt.BindBytes(1, x[:])
+// 			stmt.BindBytes(2, y[:])
+// 		},
+// 		func(stmt *sql.Statement) bool {
+// 			var id types.Hash32
+// 			stmt.ColumnBytes(0, id[:])
+// 			if id != y {
+// 				fp.update(id[:])
+// 			}
+// 			return true
+// 		},
+// 	)
+// 	require.NoError(t, err)
+// 	t.Logf("QQQQQ: %v: dumb fp between %s and %s", time.Now().Sub(ts), x.String(), y.String())
+// 	return fpResult{
+// 		fp:    fp,
+// 		count: uint32(nRows),
+// 		itype: x.Compare(y),
+// 	}
+// }
 
-func testFP(t *testing.T, maxDepth int) {
+func testATXFP(t *testing.T, maxDepth int) {
 	runtime.GC()
 	var stats1 runtime.MemStats
 	runtime.ReadMemStats(&stats1)
@@ -508,14 +714,16 @@ func testFP(t *testing.T, maxDepth int) {
 	// var prev uint64
 	// first := true
 	// where epoch=23
-	store := newSQLIDStore(db)
+	store := newSQLIDStore(db, "select id from atxs where id between ? and ? order by id", 32, maxDepth)
 	var np nodePool
 	ft := newFPTree(&np, store, maxDepth)
 	t.Logf("loading IDs")
+	var hs []types.Hash32
 	_, err = db.Exec("select id from atxs order by id", nil, func(stmt *sql.Statement) bool {
 		var id types.Hash32
 		stmt.ColumnBytes(0, id[:])
 		ft.addHash(id[:])
+		hs = append(hs, id)
 		// v := load64(id[:])
 		// counts[v>>40]++
 		// if first {
@@ -548,7 +756,7 @@ func testFP(t *testing.T, maxDepth int) {
 	for n := 0; n < numIter; n++ {
 		x := types.RandomHash()
 		y := types.RandomHash()
-		ft.fingerprintInterval(x[:], y[:])
+		ft.fingerprintInterval(x[:], y[:], -1)
 	}
 	elapsed := time.Now().Sub(ts)
 
@@ -563,32 +771,65 @@ func testFP(t *testing.T, maxDepth int) {
 		float64(numIter)/elapsed.Seconds(),
 		stats2.HeapInuse-stats1.HeapInuse)
 
-	// TBD: restore !!!!
-	// t.Logf("testing ranges")
-	// for n := 0; n < 10; n++ {
-	// 	x := types.RandomHash()
-	// 	y := types.RandomHash()
-	// 	// TBD: QQQQQ: dumb rev / full intervals
-	// 	if x == y {
-	// 		continue
-	// 	}
-	// 	if x.Compare(y) > 0 {
-	// 		x, y = y, x
-	// 	}
-	// 	expFPResult := dumbAggATXs(t, db, x, y)
-	// 	fpr, err := ft.fingerprintInterval(x[:], y[:])
-	// 	require.NoError(t, err)
-	// 	require.Equal(t, expFPResult, fpr)
-	// }
+	// TODO: test incomplete ranges (with limit)
+	t.Logf("testing ranges")
+	for n := 0; n < 50; n++ {
+		x := types.RandomHash()
+		y := types.RandomHash()
+		t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
+		expFPResult := dumbFP(hs, x, y)
+		//expFPResult := dumbAggATXs(t, db, x, y)
+		fpr, err := ft.fingerprintInterval(x[:], y[:], -1)
+		require.NoError(t, err)
+		require.Equal(t, expFPResult, fpr, "x=%s y=%s", x.String(), y.String())
+	}
 }
 
-func TestFP(t *testing.T) {
-	t.Skip("slow test")
+func TestATXFP(t *testing.T) {
+	// t.Skip("slow test")
 	for maxDepth := 15; maxDepth <= 23; maxDepth++ {
 		for i := 0; i < 3; i++ {
-			testFP(t, maxDepth)
+			testATXFP(t, maxDepth)
 		}
 	}
+}
+
+func TestDBBackedStore(t *testing.T) {
+	// create an in-memory-database, put some ids into it,
+	// create dbBackedStore, read the ids from the database and check them,
+	// then add some ids to the dbBackedStore but not to the database,
+	// and re-check the dbBackedStore contents using iterateIDs method
+	// use plain sql.InMemory and foo table like in TestDBRangeIterator
+	initialIDs := []KeyBytes{
+		{0, 0, 0, 1, 0, 0, 0, 0},
+		{0, 0, 0, 3, 0, 0, 0, 0},
+		{0, 0, 0, 5, 0, 0, 0, 0},
+		{0, 0, 0, 7, 0, 0, 0, 0},
+	}
+	db := populateDB(t, 8, initialIDs)
+	store := newDBBackedStore(db, fakeIDQuery, 8, 24)
+	var actualIDs []KeyBytes
+	require.NoError(t, store.iterateIDs([]tailRef{{ref: 0, limit: -1}}, func(_ tailRef, id KeyBytes) bool {
+		actualIDs = append(actualIDs, id)
+		return true
+	}))
+	require.Equal(t, initialIDs, actualIDs)
+
+	require.NoError(t, store.registerHash(KeyBytes{0, 0, 0, 2, 0, 0, 0, 0}))
+	require.NoError(t, store.registerHash(KeyBytes{0, 0, 0, 9, 0, 0, 0, 0}))
+	actualIDs = nil
+	require.NoError(t, store.iterateIDs([]tailRef{{ref: 0, limit: -1}}, func(_ tailRef, id KeyBytes) bool {
+		actualIDs = append(actualIDs, id)
+		return true
+	}))
+	require.Equal(t, []KeyBytes{
+		{0, 0, 0, 1, 0, 0, 0, 0},
+		{0, 0, 0, 2, 0, 0, 0, 0},
+		{0, 0, 0, 3, 0, 0, 0, 0},
+		{0, 0, 0, 5, 0, 0, 0, 0},
+		{0, 0, 0, 7, 0, 0, 0, 0},
+		{0, 0, 0, 9, 0, 0, 0, 0},
+	}, actualIDs)
 }
 
 // benchmarks
@@ -659,4 +900,8 @@ func TestFP(t *testing.T) {
 // maxDepth 23: 24.997µs per range, 40003.930386 ranges/s, heap diff 470040576
 // maxDepth 23: 24.741µs per range, 40418.462446 ranges/s, heap diff 470040576
 
-// TBD: ensure short prefix problem is not a bug!!!
+// TODO: maxDepth should be used when creating a store and not passed
+// to registerHash and iterateIDs
+// TODO: ensure short prefix problem is not a bug!!!
+// TODO: QQQQQ: retrieve the end of the interval w/count in fpTree.fingerprintInterval()
+// TODO: QQQQQ: test limits in TestInMemFPTreeManyItems (sep test cases SQL / non-SQL)

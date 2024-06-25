@@ -43,44 +43,6 @@ func (m *MockIterator) EXPECT() *MockIteratorMockRecorder {
 	return m.recorder
 }
 
-// Equal mocks base method.
-func (m *MockIterator) Equal(other Iterator) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Equal", other)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Equal indicates an expected call of Equal.
-func (mr *MockIteratorMockRecorder) Equal(other any) *MockIteratorEqualCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Equal", reflect.TypeOf((*MockIterator)(nil).Equal), other)
-	return &MockIteratorEqualCall{Call: call}
-}
-
-// MockIteratorEqualCall wrap *gomock.Call
-type MockIteratorEqualCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockIteratorEqualCall) Return(arg0 bool) *MockIteratorEqualCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockIteratorEqualCall) Do(f func(Iterator) bool) *MockIteratorEqualCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockIteratorEqualCall) DoAndReturn(f func(Iterator) bool) *MockIteratorEqualCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Key mocks base method.
 func (m *MockIterator) Key() Ordered {
 	m.ctrl.T.Helper()
@@ -330,45 +292,6 @@ func (c *MockItemStoreHasCall) Do(f func(Ordered) (bool, error)) *MockItemStoreH
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockItemStoreHasCall) DoAndReturn(f func(Ordered) (bool, error)) *MockItemStoreHasCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Max mocks base method.
-func (m *MockItemStore) Max() (Iterator, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Max")
-	ret0, _ := ret[0].(Iterator)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Max indicates an expected call of Max.
-func (mr *MockItemStoreMockRecorder) Max() *MockItemStoreMaxCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Max", reflect.TypeOf((*MockItemStore)(nil).Max))
-	return &MockItemStoreMaxCall{Call: call}
-}
-
-// MockItemStoreMaxCall wrap *gomock.Call
-type MockItemStoreMaxCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockItemStoreMaxCall) Return(arg0 Iterator, arg1 error) *MockItemStoreMaxCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockItemStoreMaxCall) Do(f func() (Iterator, error)) *MockItemStoreMaxCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreMaxCall) DoAndReturn(f func() (Iterator, error)) *MockItemStoreMaxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

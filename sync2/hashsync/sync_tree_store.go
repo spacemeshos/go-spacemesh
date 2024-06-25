@@ -106,11 +106,6 @@ func (sts *SyncTreeStore) Min() (Iterator, error) {
 	return sts.iter(sts.st.Min()), nil
 }
 
-// Max implements ItemStore.
-func (sts *SyncTreeStore) Max() (Iterator, error) {
-	return sts.iter(sts.st.Max()), nil
-}
-
 // Copy implements ItemStore.
 func (sts *SyncTreeStore) Copy() ItemStore {
 	return &SyncTreeStore{

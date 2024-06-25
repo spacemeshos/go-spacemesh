@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -270,7 +271,10 @@ func (ds *dumbStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (
 	} else if x == nil || y == nil {
 		panic("BUG: bad X or Y")
 	}
-	all := storeItemStr(ds)
+	all := ""
+	for _, k := range ds.keys {
+		all += string(k)
+	}
 	vx := x.(sampleID)
 	vy := y.(sampleID)
 	if preceding != nil && preceding.Key().Compare(x) > 0 {
@@ -301,16 +305,6 @@ func (ds *dumbStore) Min() (Iterator, error) {
 	}, nil
 }
 
-func (ds *dumbStore) Max() (Iterator, error) {
-	if len(ds.keys) == 0 {
-		return nil, nil
-	}
-	return &dumbStoreIterator{
-		ds: ds,
-		n:  len(ds.keys) - 1,
-	}, nil
-}
-
 func (ds *dumbStore) Copy() ItemStore {
 	return &dumbStore{keys: slices.Clone(ds.keys)}
 }
@@ -331,17 +325,6 @@ type verifiedStoreIterator struct {
 }
 
 var _ Iterator = &verifiedStoreIterator{}
-
-func (it verifiedStoreIterator) Equal(other Iterator) bool {
-	o := other.(verifiedStoreIterator)
-	eq1 := it.knownGood.Equal(o.knownGood)
-	eq2 := it.it.Equal(o.it)
-	assert.Equal(it.t, eq1, eq2, "iterators equal -- keys <%v> <%v> / <%v> <%v>",
-		it.knownGood.Key(), it.it.Key(),
-		o.knownGood.Key(), o.it.Key())
-	assert.Equal(it.t, it.knownGood.Key(), it.it.Key(), "keys of equal iterators")
-	return eq2
-}
 
 func (it verifiedStoreIterator) Key() Ordered {
 	k1 := it.knownGood.Key()
@@ -471,25 +454,6 @@ func (vs *verifiedStore) Min() (Iterator, error) {
 	}, nil
 }
 
-func (vs *verifiedStore) Max() (Iterator, error) {
-	m1, err := vs.knownGood.Max()
-	require.NoError(vs.t, err)
-	m2, err := vs.store.Max()
-	require.NoError(vs.t, err)
-	if m1 == nil {
-		require.Nil(vs.t, m2, "Max")
-		return nil, nil
-	} else {
-		require.NotNil(vs.t, m2, "Max")
-		require.Equal(vs.t, m1.Key(), m2.Key(), "Max key")
-	}
-	return verifiedStoreIterator{
-		t:         vs.t,
-		knownGood: m1,
-		it:        m2,
-	}, nil
-}
-
 func (vs *verifiedStore) Copy() ItemStore {
 	return &verifiedStore{
 		t:            vs.t,
@@ -535,27 +499,15 @@ func makeStore(t *testing.T, f storeFactory, items string) ItemStore {
 }
 
 func storeItemStr(is ItemStore) string {
-	it, err := is.Min()
+	ids, err := CollectStoreItems[sampleID](is)
 	if err != nil {
-		panic("store min error")
+		panic("store error")
 	}
-	if it == nil {
-		return ""
+	var r strings.Builder
+	for _, id := range ids {
+		r.WriteString(string(id))
 	}
-	endAt, err := is.Min()
-	if err != nil {
-		panic("store min error")
-	}
-	r := ""
-	for {
-		r += string(it.Key().(sampleID))
-		if err := it.Next(); err != nil {
-			panic("iterator error")
-		}
-		if it.Equal(endAt) {
-			return r
-		}
-	}
+	return r.String()
 }
 
 var testStores = []struct {

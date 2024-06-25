@@ -45,7 +45,6 @@ type SyncTree interface {
 	Set(k Ordered, v any)
 	Lookup(k Ordered) (any, bool)
 	Min() SyncTreePointer
-	Max() SyncTreePointer
 	RangeFingerprint(ptr SyncTreePointer, start, end Ordered, stop FingerprintPredicate) (fp any, startNode, endNode SyncTreePointer)
 	Dump() string
 }
@@ -396,20 +395,6 @@ func (st *syncTree) Min() SyncTreePointer {
 		panic("BUG: no minNode in a non-empty tree")
 	}
 	return st.cachedMinPtr.clone()
-}
-
-func (st *syncTree) Max() SyncTreePointer {
-	if st.root == nil {
-		return nil
-	}
-	if st.cachedMaxPtr == nil {
-		st.cachedMaxPtr = st.rootPtr()
-		st.cachedMaxPtr.max()
-	}
-	if st.cachedMaxPtr.node == nil {
-		panic("BUG: no maxNode in a non-empty tree")
-	}
-	return st.cachedMaxPtr.clone()
 }
 
 func (st *syncTree) Fingerprint() any {
