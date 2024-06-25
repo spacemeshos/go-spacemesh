@@ -362,7 +362,6 @@ type verifyChainOpts struct {
 	assumedValidTime time.Time
 	trustedNodeID    types.NodeID
 	logger           *zap.Logger
-	prioritizedCall  bool
 }
 
 type verifyChainOptsNs struct{}
@@ -382,12 +381,6 @@ func (verifyChainOptsNs) AssumeValidBefore(val time.Time) VerifyChainOption {
 func (verifyChainOptsNs) WithTrustedID(val types.NodeID) VerifyChainOption {
 	return func(o *verifyChainOpts) {
 		o.trustedNodeID = val
-	}
-}
-
-func (verifyChainOptsNs) PrioritizeCall() VerifyChainOption {
-	return func(o *verifyChainOpts) {
-		o.prioritizedCall = true
 	}
 }
 
@@ -550,11 +543,6 @@ func (v *Validator) verifyChainWithOpts(
 		return fmt.Errorf("getting ATX dependencies: %w", err)
 	}
 
-	var validatorOpts []validatorOption
-	if opts.prioritizedCall {
-		validatorOpts = append(validatorOpts, PrioritizeCall())
-	}
-
 	if err := v.Post(
 		ctx,
 		atx.SmesherID,
@@ -562,7 +550,7 @@ func (v *Validator) verifyChainWithOpts(
 		deps.nipost.Post,
 		deps.nipost.PostMetadata,
 		atx.NumUnits,
-		validatorOpts...,
+		[]validatorOption{PrioritizeCall()}...,
 	); err != nil {
 		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {
 			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))

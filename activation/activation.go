@@ -887,7 +887,6 @@ func (b *Builder) searchPositioningAtx(
 		VerifyChainOpts.AssumeValidBefore(time.Now().Add(-b.postValidityDelay)),
 		VerifyChainOpts.WithTrustedID(nodeID),
 		VerifyChainOpts.WithLogger(b.logger),
-		VerifyChainOpts.PrioritizeCall(),
 	)
 	if err != nil {
 		logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
@@ -921,12 +920,14 @@ func (b *Builder) getPositioningAtx(
 		log.ZShortStringer("smesherID", nodeID),
 	)
 
-	if previous == nil && id == b.conf.GoldenATXID {
-		b.logger.Info("selected golden atx as positioning atx", log.ZShortStringer("smesherID", nodeID))
+	if previous == nil {
+		b.logger.Info("selected atx as positioning atx",
+			log.ZShortStringer("id", id),
+			log.ZShortStringer("smesherID", nodeID))
 		return id, nil
 	}
 
-	if previous != nil && id == b.conf.GoldenATXID {
+	if id == b.conf.GoldenATXID {
 		id = previous.ID()
 		b.logger.Info("selected previous as positioning atx",
 			log.ZShortStringer("id", id),
@@ -940,7 +941,7 @@ func (b *Builder) getPositioningAtx(
 		return types.EmptyATXID, fmt.Errorf("get candidate pos ATX %s: %w", id.ShortString(), err)
 	}
 
-	if previous != nil && previous.TickHeight() >= candidate.TickHeight() {
+	if previous.TickHeight() >= candidate.TickHeight() {
 		id = previous.ID()
 		b.logger.Info("selected previous as positioning atx",
 			log.ZShortStringer("id", id),
