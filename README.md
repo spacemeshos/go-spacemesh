@@ -97,7 +97,7 @@ Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activat
 
 ### Setting Up Local Dev Environment
 
-Building is supported on OS X, Linux, FreeBSD, and Windows.
+Building is supported on OS X, Linux, FreeBSD, and Windows, which use GLIBC 2.34+ version
 
 Install [Go 1.22 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
@@ -111,6 +111,24 @@ Before building we need to set up the golang environment. Do this by running:
 ```bash
 make install
 ```
+
+Ensure, that environment is set correctly:
+
+```bash
+make go-env-test
+```
+
+**CGO_CFLAGS** must be set to "-I<absolute_path_to_repo>/go-spacemesh/build/ -DSQLITE_ENABLE_DBSTAT_VTAB=1"
+**CGO_LDFLAGS** must be set to "-L<absolute_path_to_repo>/go-spacemesh/build/ -Wl,-rpath,$ORIGIN -Wl,-rpath,<absolute_path_to_repo>/go-spacemesh/build/"
+
+Ensure you have installed **OpenCL** library
+
+To check if setup was configured successfully, try to run: 
+```bash
+make test
+```
+
+You should not see compilation errors, but running test will take some time. 
 
 ### How to run standalone node?
 
