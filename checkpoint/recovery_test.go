@@ -927,12 +927,11 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	data, err := hex.DecodeString("0230c5d75d42b84f98800eceb47bc9cc4d803058900a50346a09ff61d56b6582")
+	nid, err := hex.DecodeString("0230c5d75d42b84f98800eceb47bc9cc4d803058900a50346a09ff61d56b6582")
 	require.NoError(t, err)
-	nid := types.BytesToNodeID(data)
-	data, err = hex.DecodeString("98e47278c1f58acfd2b670a730f28898f74eb140482a07b91ff81f9ff0b7d9f4")
+	atxid, err := hex.DecodeString("98e47278c1f58acfd2b670a730f28898f74eb140482a07b91ff81f9ff0b7d9f4")
 	require.NoError(t, err)
-	atx := newAtx(types.ATXID(types.BytesToHash(data)), types.EmptyATXID, nil, 3, 1, 0, nid)
+	atx := newAtx(types.ATXID(atxid), types.EmptyATXID, nil, 3, 1, 0, nid)
 
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
@@ -940,7 +939,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 		DbFile:         "test.sql",
 		LocalDbFile:    "local.sql",
 		PreserveOwnAtx: true,
-		NodeIDs:        []types.NodeID{nid},
+		NodeIDs:        []types.NodeID{types.BytesToNodeID(nid)},
 		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
 		Restore:        types.LayerID(recoverLayer),
 	}
