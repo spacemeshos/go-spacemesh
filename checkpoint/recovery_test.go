@@ -27,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
@@ -167,7 +166,7 @@ func TestRecover(t *testing.T) {
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
 			localDB := localsql.InMemory()
-			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
+			preserve, err := checkpoint.RecoverWithDb(ctx, zaptest.NewLogger(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 				return
@@ -216,7 +215,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	localDB := localsql.InMemory()
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
-	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
+	preserve, err := checkpoint.RecoverWithDb(ctx, zaptest.NewLogger(t), db, localDB, fs, cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 	require.EqualValues(t, recoverLayer-1, types.GetEffectiveGenesis())
@@ -520,7 +519,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	}
 	require.NoError(t, oldDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, preserve)
 
@@ -644,7 +643,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, localDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, preserve)
 
@@ -751,7 +750,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	require.NoError(t, err)
 	require.NoError(t, localDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
@@ -833,7 +832,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	}
 	require.NoError(t, oldDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
@@ -898,7 +897,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	}
 	require.NoError(t, oldDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
@@ -952,7 +951,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	require.NoError(t, atxs.Add(oldDB, atx))
 	require.NoError(t, oldDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
