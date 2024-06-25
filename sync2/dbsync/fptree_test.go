@@ -700,9 +700,6 @@ const dbFile = "/Users/ivan4th/Library/Application Support/Spacemesh/node-data/7
 // }
 
 func testATXFP(t *testing.T, maxDepth int) {
-	runtime.GC()
-	var stats1 runtime.MemStats
-	runtime.ReadMemStats(&stats1)
 	// t.Skip("slow tmp test")
 	// counts := make(map[uint64]uint64)
 	// prefLens := make(map[int]int)
@@ -714,15 +711,12 @@ func testATXFP(t *testing.T, maxDepth int) {
 	// var prev uint64
 	// first := true
 	// where epoch=23
-	store := newSQLIDStore(db, "select id from atxs where id between ? and ? order by id", 32, maxDepth)
 	var np nodePool
-	ft := newFPTree(&np, store, maxDepth)
 	t.Logf("loading IDs")
 	var hs []types.Hash32
 	_, err = db.Exec("select id from atxs order by id", nil, func(stmt *sql.Statement) bool {
 		var id types.Hash32
 		stmt.ColumnBytes(0, id[:])
-		ft.addHash(id[:])
 		hs = append(hs, id)
 		// v := load64(id[:])
 		// counts[v>>40]++
@@ -735,6 +729,16 @@ func testATXFP(t *testing.T, maxDepth int) {
 		return true
 	})
 	require.NoError(t, err)
+
+	runtime.GC()
+	var stats1 runtime.MemStats
+	runtime.ReadMemStats(&stats1)
+	store := newSQLIDStore(db, "select id from atxs where id between ? and ? order by id", 32, maxDepth)
+	ft := newFPTree(&np, store, maxDepth)
+	for _, id := range hs {
+		ft.addHash(id[:])
+	}
+
 	// countFreq := make(map[uint64]int)
 	// for _, c := range counts {
 	// 	countFreq[c]++
@@ -900,8 +904,6 @@ func TestDBBackedStore(t *testing.T) {
 // maxDepth 23: 24.997µs per range, 40003.930386 ranges/s, heap diff 470040576
 // maxDepth 23: 24.741µs per range, 40418.462446 ranges/s, heap diff 470040576
 
-// TODO: maxDepth should be used when creating a store and not passed
-// to registerHash and iterateIDs
-// TODO: ensure short prefix problem is not a bug!!!
 // TODO: QQQQQ: retrieve the end of the interval w/count in fpTree.fingerprintInterval()
 // TODO: QQQQQ: test limits in TestInMemFPTreeManyItems (sep test cases SQL / non-SQL)
+// TODO: the returned RangeInfo.End iterators should be cyclic
