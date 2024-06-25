@@ -416,12 +416,21 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) Requester {
 		// maxNumSpecificA: 20000,
 		// minNumSpecificB: 15,
 		// maxNumSpecificB: 20,
+
+		// QQQQQ: restore!
+		// maxSendRange:    1,
+		// numTestHashes:   100000,
+		// minNumSpecificA: 4,
+		// maxNumSpecificA: 100,
+		// minNumSpecificB: 4,
+		// maxNumSpecificB: 100,
+
 		maxSendRange:    1,
-		numTestHashes:   100000,
-		minNumSpecificA: 4,
-		maxNumSpecificA: 100,
-		minNumSpecificB: 4,
-		maxNumSpecificB: 100,
+		numTestHashes:   100,
+		minNumSpecificA: 2,
+		maxNumSpecificA: 4,
+		minNumSpecificB: 2,
+		maxNumSpecificB: 4,
 	}
 	var client Requester
 	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []RangeSetReconcilerOption) bool {

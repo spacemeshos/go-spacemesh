@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -588,6 +589,36 @@ func fingerprintEqual(a, b any) bool {
 	// FIXME: use Fingerprint interface with Equal() method for fingerprints
 	// but still allow nil fingerprints
 	return reflect.DeepEqual(a, b)
+}
+
+// CollectStoreItems returns the list of items in the given store
+func CollectStoreItems[K Ordered](is ItemStore) ([]K, error) {
+	var r []K
+	it, err := is.Min()
+	if err != nil {
+		return nil, err
+	}
+	if it == nil || it.Key() == nil {
+		return nil, nil
+	}
+	info, err := is.GetRangeInfo(nil, it.Key(), it.Key(), -1)
+	if err != nil {
+		return nil, err
+	}
+	it, err = is.Min()
+	if err != nil {
+		return nil, err
+	}
+	for n := 0; n < info.Count; n++ {
+		k := it.Key()
+		if k == nil {
+			fmt.Fprintf(os.Stderr, "QQQQQ: it: %#v\n", it)
+			panic("BUG: iterator exausted before Count reached")
+		}
+		r = append(r, k.(K))
+		it.Next()
+	}
+	return r, nil
 }
 
 // TBD: test: add items to the store even in case of NextMessage() failure

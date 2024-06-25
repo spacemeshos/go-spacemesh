@@ -30,29 +30,6 @@ func TestHash32To12Xor(t *testing.T) {
 	require.Equal(t, m.Op(m.Op(fp1, fp2), fp3), m.Op(fp1, m.Op(fp2, fp3)))
 }
 
-func collectStoreItems[K Ordered](is ItemStore) (r []K) {
-	it, err := is.Min()
-	if err != nil {
-		panic("store min error")
-	}
-	if it == nil {
-		return nil
-	}
-	endAt, err := is.Min()
-	if err != nil {
-		panic("store min error")
-	}
-	for {
-		r = append(r, it.Key().(K))
-		if err := it.Next(); err != nil {
-			panic("iterator error")
-		}
-		if it.Equal(endAt) {
-			return r
-		}
-	}
-}
-
 type catchTransferTwice struct {
 	ItemStore
 	t     *testing.T
@@ -113,8 +90,10 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB
 	})
 
 	if sync(storeA, storeB, numSpecificA+numSpecificB, opts) {
-		itemsA := collectStoreItems[types.Hash32](storeA)
-		itemsB := collectStoreItems[types.Hash32](storeB)
+		itemsA, err := CollectStoreItems[types.Hash32](storeA)
+		require.NoError(t, err)
+		itemsB, err := CollectStoreItems[types.Hash32](storeB)
+		require.NoError(t, err)
 		require.Equal(t, itemsA, itemsB)
 		srcKeys := make([]types.Hash32, len(src))
 		for n, h := range src {

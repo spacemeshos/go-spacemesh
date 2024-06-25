@@ -86,20 +86,8 @@ func TestP2P(t *testing.T) {
 
 	for _, hsync := range hs {
 		hsync.Stop()
-		min, err := hsync.ItemStore().Min()
+		actualItems, err := hashsync.CollectStoreItems[types.Hash32](hsync.ItemStore())
 		require.NoError(t, err)
-		it, err := hsync.ItemStore().Min()
-		require.NoError(t, err)
-		require.NotNil(t, it)
-		var actualItems []types.Hash32
-		for {
-			k := it.Key().(types.Hash32)
-			actualItems = append(actualItems, k)
-			require.NoError(t, it.Next())
-			if it.Equal(min) {
-				break
-			}
-		}
 		require.ElementsMatch(t, initialSet, actualItems)
 	}
 }

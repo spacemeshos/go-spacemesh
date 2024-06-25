@@ -13,10 +13,10 @@ import (
 
 // Iterator points to in item in ItemStore
 type Iterator interface {
-	// Equal returns true if this iterator is equal to another Iterator
-	Equal(other Iterator) bool
 	// Key returns the key corresponding to iterator position. It returns
 	// nil if the ItemStore is empty
+	// If the iterator is returned along with a count, the return value of Key()
+	// after calling Next() count times is dependent on the implementation.
 	Key() Ordered
 	// Next advances the iterator
 	Next() error
@@ -41,9 +41,6 @@ type ItemStore interface {
 	// Min returns the iterator pointing at the minimum element
 	// in the store. If the store is empty, it returns nil
 	Min() (Iterator, error)
-	// Max returns the iterator pointing at the maximum element
-	// in the store. If the store is empty, it returns nil
-	Max() (Iterator, error)
 	// Copy makes a shallow copy of the ItemStore
 	Copy() ItemStore
 	// Has returns true if the specified key is present in ItemStore
