@@ -462,7 +462,7 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 		log.String("url", checkpointFile),
 		log.Stringer("restore", restore),
 	)
-	return checkpoint.Recover(ctx, app.log, afero.NewOsFs(), cfg)
+	return checkpoint.Recover(ctx, app.log.Zap(), afero.NewOsFs(), cfg)
 }
 
 func (app *App) Started() <-chan struct{} {

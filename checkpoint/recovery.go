@@ -11,6 +11,7 @@ import (
 	"slices"
 
 	"github.com/spf13/afero"
+	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -66,7 +67,7 @@ func RecoveryFilename(dataDir, base string, restore types.LayerID) string {
 
 func copyToLocalFile(
 	ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	fs afero.Fs,
 	dataDir, uri string,
 	restore types.LayerID,
@@ -81,19 +82,13 @@ func copyToLocalFile(
 	if bdir, err := backupRecovery(fs, RecoveryDir(dataDir)); err != nil {
 		return "", err
 	} else if bdir != "" {
-		logger.With().Info("old recovery data backed up",
-			log.Context(ctx),
-			log.String("dir", bdir),
-		)
+		logger.Info("old recovery data backed up", log.ZContext(ctx), zap.String("dir", bdir))
 	}
 	dst := RecoveryFilename(dataDir, filepath.Base(parsed.String()), restore)
 	if err = httpToLocalFile(ctx, parsed, fs, dst); err != nil {
 		return "", err
 	}
-	logger.With().Info("checkpoint data persisted",
-		log.Context(ctx),
-		log.String("file", dst),
-	)
+	logger.Info("checkpoint data persisted", log.ZContext(ctx), zap.String("file", dst))
 	return dst, nil
 }
 
@@ -110,7 +105,7 @@ type PreservedData struct {
 
 func Recover(
 	ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 ) (*PreservedData, error) {
@@ -124,7 +119,7 @@ func Recover(
 		return nil, fmt.Errorf("open old local database: %w", err)
 	}
 	defer localDB.Close()
-	logger.With().Info("clearing atx and malfeasance sync metadata from local database")
+	logger.Info("clearing atx and malfeasance sync metadata from local database")
 	if err := localDB.WithTx(ctx, func(tx sql.Transaction) error {
 		if err := atxsync.Clear(tx); err != nil {
 			return err
@@ -136,9 +131,7 @@ func Recover(
 	preserve, err := RecoverWithDb(ctx, logger, db, localDB, fs, cfg)
 	switch {
 	case errors.Is(err, ErrCheckpointNotFound):
-		logger.With().Info("no checkpoint file available. not recovering",
-			log.String("uri", cfg.Uri),
-		)
+		logger.Info("no checkpoint file available. not recovering", zap.String("uri", cfg.Uri))
 		return nil, nil
 	case err != nil:
 		return nil, err
@@ -148,7 +141,7 @@ func Recover(
 
 func RecoverWithDb(
 	ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	db sql.StateDatabase,
 	localDB sql.LocalDatabase,
 	fs afero.Fs,
@@ -165,7 +158,7 @@ func RecoverWithDb(
 	if err = fs.RemoveAll(filepath.Join(cfg.DataDir, bootstrap.DirName)); err != nil {
 		return nil, fmt.Errorf("remove old bootstrap data: %w", err)
 	}
-	logger.With().Info("recover from uri", log.String("uri", cfg.Uri))
+	logger.Info("recover from uri", zap.String("uri", cfg.Uri))
 	cpFile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore)
 	if err != nil {
 		return nil, err
@@ -180,44 +173,39 @@ type recoveryData struct {
 
 func recoverFromLocalFile(
 	ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	db sql.StateDatabase,
 	localDB sql.LocalDatabase,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 	file string,
 ) (*PreservedData, error) {
-	logger.With().Info("recovering from checkpoint file", log.String("file", file))
+	logger.Info("recovering from checkpoint file", zap.String("file", file))
 	newGenesis := cfg.Restore - 1
 	data, err := checkpointData(fs, file, newGenesis)
 	if err != nil {
 		return nil, err
 	}
-	logger.With().Info("recovery data contains",
-		log.Int("num accounts", len(data.accounts)),
-		log.Int("num atxs", len(data.atxs)),
-	)
+	logger.Info("recovery data contains", zap.Int("accounts", len(data.accounts)), zap.Int("atxs", len(data.atxs)))
 	deps := make(map[types.ATXID]*AtxDep)
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage)
 	if cfg.PreserveOwnAtx {
-		logger.With().Info("preserving own atx deps",
-			log.Context(ctx),
-			log.Int("num identities", len(cfg.NodeIDs)),
-		)
+		logger.Info("preserving own atx deps", log.ZContext(ctx), zap.Int("num identities", len(cfg.NodeIDs)))
 		for _, nodeID := range cfg.NodeIDs {
 			nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
 			if err != nil {
-				logger.With().Error("failed to collect deps for own atx",
-					nodeID,
-					log.Err(err),
+				logger.Error(
+					"failed to collect deps for own atx",
+					log.ZShortStringer("smesherID", nodeID),
+					zap.Error(err),
 				)
 				// continue to recover from checkpoint despite failure to preserve own atx
 				continue
 			}
-			logger.With().Info("collected own atx deps",
-				log.Context(ctx),
-				nodeID,
-				log.Int("own atx deps", len(nodeDeps)),
+			logger.Info("collected own atx deps",
+				log.ZContext(ctx),
+				log.ZShortStringer("smesherID", nodeID),
+				zap.Int("own atx deps", len(nodeDeps)),
 			)
 			maps.Copy(deps, nodeDeps)
 			maps.Copy(proofs, nodeProofs)
@@ -255,41 +243,38 @@ func recoverFromLocalFile(
 	if err != nil {
 		return nil, err
 	}
-	logger.With().Info("backed up old database",
-		log.Context(ctx),
-		log.String("backup dir", backupDir),
-	)
+	logger.Info("backed up old database", log.ZContext(ctx), zap.String("backup dir", backupDir))
 
 	newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db %w", err)
 	}
 	defer newDB.Close()
-	logger.With().Info("populating new database",
-		log.Context(ctx),
-		log.Int("num accounts", len(data.accounts)),
-		log.Int("num atxs", len(data.atxs)),
+	logger.Info("populating new database",
+		log.ZContext(ctx),
+		zap.Int("num accounts", len(data.accounts)),
+		zap.Int("num atxs", len(data.atxs)),
 	)
 	if err = newDB.WithTx(ctx, func(tx sql.Transaction) error {
 		for _, acct := range data.accounts {
 			if err = accounts.Update(tx, acct); err != nil {
 				return fmt.Errorf("restore account snapshot: %w", err)
 			}
-			logger.With().Info("account stored",
-				log.Context(ctx),
-				acct.Address,
-				log.Uint64("nonce", acct.NextNonce),
-				log.Uint64("balance", acct.Balance),
+			logger.Debug("account stored",
+				log.ZContext(ctx),
+				zap.Stringer("address", acct.Address),
+				zap.Uint64("nonce", acct.NextNonce),
+				zap.Uint64("balance", acct.Balance),
 			)
 		}
 		for _, cAtx := range data.atxs {
 			if err = atxs.AddCheckpointed(tx, cAtx); err != nil {
 				return fmt.Errorf("add checkpoint atx %s: %w", cAtx.ID.String(), err)
 			}
-			logger.With().Info("checkpoint atx saved",
-				log.Context(ctx),
-				cAtx.ID,
-				cAtx.SmesherID,
+			logger.Debug("checkpoint atx saved",
+				log.ZContext(ctx),
+				zap.Stringer("id", cAtx.ID),
+				log.ZShortStringer("smesherID", cAtx.SmesherID),
 			)
 		}
 		if err = recovery.SetCheckpoint(tx, cfg.Restore); err != nil {
@@ -303,9 +288,9 @@ func recoverFromLocalFile(
 		return nil, err
 	}
 	types.SetEffectiveGenesis(newGenesis.Uint32())
-	logger.With().Info("effective genesis reset for recovery",
-		log.Context(ctx),
-		types.GetEffectiveGenesis(),
+	logger.Info("effective genesis reset for recovery",
+		log.ZContext(ctx),
+		zap.Uint32("layer", types.GetEffectiveGenesis().Uint32()),
 	)
 	var preserve *PreservedData
 	if len(allDeps) > 0 {
@@ -368,7 +353,7 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 }
 
 func collectOwnAtxDeps(
-	logger log.Log,
+	logger *zap.Logger,
 	db sql.StateDatabase,
 	localDB sql.LocalDatabase,
 	nodeID types.NodeID,
@@ -383,7 +368,7 @@ func collectOwnAtxDeps(
 	var own bool
 	if atxid != types.EmptyATXID {
 		ref = atxid
-		logger.With().Debug("found own atx", log.Stringer("own atx", ref))
+		logger.Debug("found own atx", zap.Stringer("own atx", ref))
 		own = true
 	}
 
@@ -408,21 +393,15 @@ func collectOwnAtxDeps(
 		proofs map[types.PoetProofRef]*types.PoetProofMessage
 	)
 	if ref != types.EmptyATXID {
-		logger.With().Info("collecting atx and deps",
-			ref,
-			log.Bool("own", own),
-		)
+		logger.Info("collecting atx and deps", log.ZShortStringer("id", ref), zap.Bool("own", own))
 		deps, proofs, err = collectDeps(db, ref, all)
 		if err != nil {
 			return nil, nil, err
 		}
-		logger.With().Debug("collected atx and deps",
-			ref,
-			log.Int("deps", len(deps)),
-		)
+		logger.Debug("collected atx and deps", log.ZShortStringer("id", ref), zap.Int("deps", len(deps)))
 	}
 	if nipostCh != nil {
-		logger.With().Info("collecting pending atx and deps", log.Object("nipost", nipostCh))
+		logger.Info("collecting pending atx and deps", zap.Object("nipost", nipostCh))
 		// any previous atx in nipost should already be captured earlier
 		// we only care about positioning atx here
 		deps2, proofs2, err := collectDeps(db, nipostCh.PositioningATX, all)
@@ -432,7 +411,7 @@ func collectOwnAtxDeps(
 		maps.Copy(deps, deps2)
 		maps.Copy(proofs, proofs2)
 	}
-	logger.With().Debug("collected atx deps", log.Any("deps", deps))
+	logger.Debug("collected atx deps", zap.Any("deps", deps))
 	return deps, proofs, nil
 }
 

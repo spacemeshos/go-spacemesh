@@ -67,12 +67,14 @@ func TestActivationService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Activations, 25)
+		require.Equal(t, len(activations), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Equal(t, len(activations), len(list.Activations))
+		require.Equal(t, len(activations), int(list.Total))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {
@@ -84,10 +86,10 @@ func TestActivationService_List(t *testing.T) {
 		require.Equal(t, activations[3].ID().Bytes(), list.GetActivations()[0].GetId())
 	})
 
-	t.Run("nodeId", func(t *testing.T) {
+	t.Run("smesherId", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{
-			Limit:  1,
-			NodeId: activations[1].SmesherID.Bytes(),
+			Limit:     1,
+			SmesherId: [][]byte{activations[1].SmesherID.Bytes()},
 		})
 		require.NoError(t, err)
 		require.Equal(t, activations[1].ID().Bytes(), list.GetActivations()[0].GetId())
@@ -96,7 +98,7 @@ func TestActivationService_List(t *testing.T) {
 	t.Run("id", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{
 			Limit: 1,
-			Id:    activations[3].ID().Bytes(),
+			Id:    [][]byte{activations[3].ID().Bytes()},
 		})
 		require.NoError(t, err)
 		require.Equal(t, activations[3].ID().Bytes(), list.GetActivations()[0].GetId())
@@ -165,15 +167,15 @@ func TestActivationStreamService_Stream(t *testing.T) {
 			{
 				desc: "ID",
 				request: &spacemeshv2alpha1.ActivationStreamRequest{
-					Id:         streamed[3].ID().Bytes(),
+					Id:         [][]byte{streamed[3].ID().Bytes()},
 					StartEpoch: start,
 					Watch:      true,
 				},
 			},
 			{
-				desc: "NodeID",
+				desc: "SmesherId",
 				request: &spacemeshv2alpha1.ActivationStreamRequest{
-					NodeId:     streamed[3].SmesherID.Bytes(),
+					SmesherId:  [][]byte{streamed[3].SmesherID.Bytes()},
 					StartEpoch: start,
 					Watch:      true,
 				},

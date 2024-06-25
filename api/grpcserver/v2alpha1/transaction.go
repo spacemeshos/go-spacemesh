@@ -136,7 +136,13 @@ func (s *TransactionService) List(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return &spacemeshv2alpha1.TransactionList{Transactions: rst}, nil
+	ops.Modifiers = nil
+	count, err := transactions.CountTransactionsByOps(s.db, ops)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &spacemeshv2alpha1.TransactionList{Transactions: rst, Total: count}, nil
 }
 
 func (s *TransactionService) ParseTransaction(
@@ -282,7 +288,7 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
-		Value: "layer asc, id",
+		Value: fmt.Sprintf("layer %s, id", filter.SortOrder.String()),
 	})
 
 	if filter.Limit != 0 {

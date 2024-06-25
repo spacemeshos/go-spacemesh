@@ -1,4 +1,4 @@
-PRAGMA user_version = 19;
+PRAGMA user_version = 20;
 CREATE TABLE accounts
 (
     address        CHAR(24),
@@ -86,7 +86,7 @@ CREATE TABLE identities
 (
     pubkey VARCHAR PRIMARY KEY,
     proof  BLOB
-, received INT DEFAULT 0 NOT NULL) WITHOUT ROWID;
+, received INT DEFAULT 0 NOT NULL, marriage_atx CHAR(32)) WITHOUT ROWID;
 CREATE TABLE layers
 (
     id              INT PRIMARY KEY DESC,

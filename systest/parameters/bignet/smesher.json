@@ -42,5 +42,8 @@
         "client": {
             "max-retries": 10
         }
+    },
+    "logging": {
+        "log-encoder": "json"
     }
 }

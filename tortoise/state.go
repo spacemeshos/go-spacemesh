@@ -180,7 +180,8 @@ type layerInfo struct {
 }
 
 func (l *layerInfo) computeOpinion(hdist uint32, last types.LayerID) {
-	hasher := opinionhash.New()
+	hasher := opinionhash.GetHasher()
+	defer opinionhash.PutHasher(hasher)
 	if l.prevOpinion != nil {
 		hasher.WritePrevious(*l.prevOpinion)
 	}
@@ -372,7 +373,8 @@ func (l *layerVote) sortSupported() {
 }
 
 func (l *layerVote) computeOpinion() {
-	hasher := opinionhash.New()
+	hasher := opinionhash.GetHasher()
+	defer opinionhash.PutHasher(hasher)
 	if l.prev != nil {
 		hasher.WritePrevious(l.prev.opinion)
 	}

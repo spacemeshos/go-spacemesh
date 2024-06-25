@@ -2686,7 +2686,6 @@ func TestVestingData(t *testing.T) {
 
 			drained := uint64(0)
 			remaining := uint64(meta.Total)
-			fee := 0
 			// execute drain tx every 1000 layers
 			for i := constants.VestStart + 1; i < constants.VestEnd; i += 1000 {
 				before, err := vm.GetBalance(vestaddr)
@@ -2708,7 +2707,6 @@ func TestVestingData(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, types.TransactionSuccess, rst[0].TransactionResult.Status)
 				nonce++
-				fee += int(rst[0].Fee)
 				drained += drain.Uint64()
 				remaining -= drain.Uint64()
 
