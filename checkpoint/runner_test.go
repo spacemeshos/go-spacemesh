@@ -268,6 +268,7 @@ func createMesh(t *testing.T, db *sql.Database, miners []miner, accts []*types.A
 }
 
 func TestRunner_Generate(t *testing.T) {
+	t.Parallel()
 	tcs := []struct {
 		desc    string
 		miners  []miner
@@ -295,6 +296,7 @@ func TestRunner_Generate(t *testing.T) {
 	}
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
 			db := sql.InMemory()
 			snapshot := types.LayerID(5)
 			createMesh(t, db, tc.miners, tc.accts)
