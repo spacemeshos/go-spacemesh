@@ -124,7 +124,7 @@ func TestMarried(t *testing.T) {
 	t.Parallel()
 	t.Run("identity not in DB", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 
 		id := types.RandomNodeID()
 		married, err := Married(db, id)
@@ -140,7 +140,7 @@ func TestMarried(t *testing.T) {
 	})
 	t.Run("identity in DB", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 
 		id := types.RandomNodeID()
 		// add ID in the DB
@@ -162,7 +162,7 @@ func TestEquivocationSet(t *testing.T) {
 	t.Parallel()
 	t.Run("equivocation set of married IDs", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
@@ -185,7 +185,7 @@ func TestEquivocationSet(t *testing.T) {
 	})
 	t.Run("equivocation set for unmarried ID contains itself only", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		id := types.RandomNodeID()
 		set, err := EquivocationSet(db, id)
 		require.NoError(t, err)
@@ -193,7 +193,7 @@ func TestEquivocationSet(t *testing.T) {
 	})
 	t.Run("can't escape the marriage", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
 			types.RandomNodeID(),
@@ -219,7 +219,7 @@ func TestEquivocationSet(t *testing.T) {
 		}
 	})
 	t.Run("married doesn't become malicious immediately", func(t *testing.T) {
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		atx := types.RandomATXID()
 		id := types.RandomNodeID()
 		require.NoError(t, SetMarriage(db, id, atx))
@@ -238,7 +238,7 @@ func TestEquivocationSet(t *testing.T) {
 	})
 	t.Run("all IDs in equivocation set are malicious if one is", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
 			types.RandomNodeID(),
