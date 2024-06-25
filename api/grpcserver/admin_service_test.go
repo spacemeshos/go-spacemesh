@@ -133,7 +133,7 @@ func TestAdminService_PeerInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	p := NewMockpeers(ctrl)
 
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	svc := NewAdminService(db, t.TempDir(), p)
 
 	cfg, cleanup := launchServer(t, svc)
