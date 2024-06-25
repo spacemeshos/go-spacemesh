@@ -94,8 +94,8 @@ of Go [releases](https://go.dev/doc/devel/release).
 All code should be error-free when run through `golint` and `go vet`. We
 recommend setting up your editor to:
 
-- Run `goimports` on save
-- Run `golint` and `go vet` to check for errors
+- Run `gofumpt` on save
+- Run `make lint` or `golangci-lint` to check for errors
 
 You can find information in editor support for Go tools here:
 https://go.dev/wiki/IDEsAndTextEditorPlugins
