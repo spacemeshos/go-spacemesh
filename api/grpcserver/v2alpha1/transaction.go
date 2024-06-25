@@ -288,7 +288,7 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
-		Value: "layer asc, id",
+		Value: fmt.Sprintf("layer %s, id", filter.SortOrder.String()),
 	})
 
 	if filter.Limit != 0 {
