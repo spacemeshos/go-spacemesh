@@ -640,11 +640,11 @@ func IsNull(stmt *Statement, col int) bool {
 // StateDatabase is a Database used for Spacemesh state.
 type StateDatabase interface {
 	Database
-	IsStateDatabase() bool
+	IsStateDatabase()
 }
 
 // LocalDatabase is a Database used for local node data.
 type LocalDatabase interface {
 	Database
-	IsLocalDatabase() bool
+	IsLocalDatabase()
 }

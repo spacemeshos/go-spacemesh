@@ -21,7 +21,7 @@ type database struct {
 
 var _ sql.StateDatabase = &database{}
 
-func (db *database) IsStateDatabase() bool { return true }
+func (db *database) IsStateDatabase() {}
 
 // Schema returns the schema for the state database.
 func Schema() (*sql.Schema, error) {

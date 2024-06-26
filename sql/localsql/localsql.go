@@ -21,7 +21,7 @@ type database struct {
 
 var _ sql.LocalDatabase = &database{}
 
-func (d *database) IsLocalDatabase() bool { return true }
+func (d *database) IsLocalDatabase() {}
 
 // Schema returns the schema for the local database.
 func Schema() (*sql.Schema, error) {
