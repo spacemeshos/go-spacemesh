@@ -21,7 +21,6 @@ import (
 	certifier "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	nipost "github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	shared "github.com/spacemeshos/post/shared"
-	verifying "github.com/spacemeshos/post/verifying"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -146,7 +145,7 @@ func (c *MockPostVerifierCloseCall) DoAndReturn(f func() error) *MockPostVerifie
 }
 
 // Verify mocks base method.
-func (m_2 *MockPostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error {
+func (m_2 *MockPostVerifier) Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...postVerifierOptionFunc) error {
 	m_2.ctrl.T.Helper()
 	varargs := []any{ctx, p, m}
 	for _, a := range opts {
@@ -177,13 +176,13 @@ func (c *MockPostVerifierVerifyCall) Return(arg0 error) *MockPostVerifierVerifyC
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockPostVerifierVerifyCall) Do(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error) *MockPostVerifierVerifyCall {
+func (c *MockPostVerifierVerifyCall) Do(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...postVerifierOptionFunc) error) *MockPostVerifierVerifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPostVerifierVerifyCall) DoAndReturn(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...verifying.OptionFunc) error) *MockPostVerifierVerifyCall {
+func (c *MockPostVerifierVerifyCall) DoAndReturn(f func(context.Context, *shared.Proof, *shared.ProofMetadata, ...postVerifierOptionFunc) error) *MockPostVerifierVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
