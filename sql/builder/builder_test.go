@@ -23,6 +23,7 @@ func TestFilterFrom_WithSingleFilter(t *testing.T) {
 }
 
 func TestFilterFrom_WithMultipleFilters(t *testing.T) {
+	t.Parallel()
 	operations := Operations{
 		Filter: []Op{
 			{Field: Epoch, Token: Eq, Value: types.EpochID(1)},
@@ -39,6 +40,7 @@ func TestFilterFrom_WithMultipleFilters(t *testing.T) {
 }
 
 func TestFilterFrom_WithGroupFilters(t *testing.T) {
+	t.Parallel()
 	operations := Operations{
 		Filter: []Op{
 			{
@@ -60,6 +62,7 @@ func TestFilterFrom_WithGroupFilters(t *testing.T) {
 }
 
 func TestFilterFrom_WithInToken(t *testing.T) {
+	t.Parallel()
 	operations := Operations{
 		Filter: []Op{
 			{Field: Epoch, Token: In, Value: [][]byte{[]byte("1"), []byte("2")}},
@@ -75,6 +78,7 @@ func TestFilterFrom_WithInToken(t *testing.T) {
 }
 
 func TestFilterFrom_WithModifiers(t *testing.T) {
+	t.Parallel()
 	operations := Operations{
 		Filter: []Op{
 			{Field: Epoch, Token: Eq, Value: types.EpochID(1)},
