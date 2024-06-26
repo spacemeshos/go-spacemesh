@@ -253,7 +253,7 @@ func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operatio
 
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
-		Value: "l.id asc",
+		Value: "l.id " + filter.SortOrder.String(),
 	})
 
 	if filter.Limit != 0 {

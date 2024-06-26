@@ -332,7 +332,6 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	lid := types.EpochID(5).FirstLayer()
 	o.createLayerData(lid, numOfMiners)
 
-	var eligibilityCount uint16
 	var nodeIDs []types.NodeID
 	for pubkey := range createIdentities(b.N) {
 		nodeIDs = append(nodeIDs, pubkey)
@@ -346,8 +345,6 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 			r.NoError(err)
 			r.True(valid)
 		}
-
-		eligibilityCount += res
 	}
 }
 
