@@ -207,14 +207,6 @@ func (atx *ActivationTx) TargetEpoch() EpochID {
 	return atx.PublishEpoch + 1
 }
 
-func (atx *ActivationTx) Published() EpochID {
-	return atx.PublishEpoch
-}
-
-func (atx *ActivationTx) TotalNumUnits() uint32 {
-	return atx.NumUnits
-}
-
 // Golden returns true if atx is from a checkpoint snapshot.
 // a golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
 func (atx *ActivationTx) Golden() bool {

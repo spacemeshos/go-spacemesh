@@ -533,7 +533,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 
 		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
 		require.NoError(t, err)
-		require.Equal(t, atx.TotalNumUnits(), atxFromDb.TotalNumUnits())
+		require.Equal(t, atx.TotalNumUnits(), atxFromDb.NumUnits)
 	})
 	t.Run("second ATX, increases space (nonce valid)", func(t *testing.T) {
 		t.Parallel()
@@ -553,7 +553,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
 		require.NoError(t, err)
 		require.EqualValues(t, atx.VRFNonce, atxFromDb.VRFNonce)
-		require.Equal(t, min(prev.TotalNumUnits(), atx.TotalNumUnits()), atxFromDb.TotalNumUnits())
+		require.Equal(t, min(prev.TotalNumUnits(), atx.TotalNumUnits()), atxFromDb.NumUnits)
 	})
 	t.Run("second ATX, increases space (nonce invalid)", func(t *testing.T) {
 		t.Parallel()
@@ -598,7 +598,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		// verify that the ATX was added to the DB and it has the lower effective num units
 		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
 		require.NoError(t, err)
-		require.Equal(t, min(prev.TotalNumUnits(), atx.TotalNumUnits()), atxFromDb.TotalNumUnits())
+		require.Equal(t, min(prev.TotalNumUnits(), atx.TotalNumUnits()), atxFromDb.NumUnits)
 		require.EqualValues(t, atx.VRFNonce, atxFromDb.VRFNonce)
 	})
 	t.Run("can't find positioning ATX", func(t *testing.T) {
