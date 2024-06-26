@@ -1987,6 +1987,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithConnections(app.Config.DatabaseConnections),
+		sql.WithAllowSchemaDrift(app.Config.DatabaseSchemaAllowDrift),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
