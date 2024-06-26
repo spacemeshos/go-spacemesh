@@ -113,7 +113,8 @@ func FilterFrom(operations Operations) string {
 						params[j] = fmt.Sprintf("?%d", bindIndex)
 						bindIndex++
 					}
-					fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", groupOp.Prefix, groupOp.Field, groupOp.Token, strings.Join(params, ", "))
+					fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", groupOp.Prefix, groupOp.Field, groupOp.Token,
+						strings.Join(params, ", "))
 				} else {
 					fmt.Fprintf(&queryBuilder, " %s%s %s ?%d", groupOp.Prefix, groupOp.Field, groupOp.Token, bindIndex)
 					bindIndex++
