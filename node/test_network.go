@@ -51,11 +51,10 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		c.FileLock = filepath.Join(c.DataDirParent, "LOCK")
 
 		app := NewApp(t, &c, l)
-		instanceIndex := i
 		g.Go(func() error {
 			err := app.Start(grpContext)
 			if err != nil && !errors.Is(err, context.Canceled) {
-				t.Logf("failed to start instance %d: %v", instanceIndex, err)
+				t.Logf("failed to start instance %d: %v", i, err)
 			}
 			return err
 		})
@@ -63,11 +62,9 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		err := app.beaconProtocol.UpdateBeacon(bootstrapEpoch, bootstrapBeacon)
 		require.NoError(t, err, "failed to bootstrap beacon for node %q", i)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		conn, err := grpc.DialContext(ctx, app.grpcPublicServer.BoundAddress,
+		conn, err := grpc.NewClient(
+			app.grpcPublicServer.BoundAddress,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		require.NoError(t, err)
 		t.Cleanup(func() { assert.NoError(t, conn.Close()) })

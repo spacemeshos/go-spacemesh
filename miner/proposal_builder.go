@@ -165,7 +165,7 @@ type ActiveSetPreparation struct {
 	Tries int `mapstructure:"tries"`
 }
 
-func DefaultActiveSetPrepartion() ActiveSetPreparation {
+func DefaultActiveSetPreparation() ActiveSetPreparation {
 	return ActiveSetPreparation{
 		Window:        1 * time.Second,
 		RetryInterval: 1 * time.Second,
@@ -251,8 +251,8 @@ func WithSigners(signers ...*signing.EdSigner) Opt {
 	}
 }
 
-// WithActiveSetPrepation overwrites configuration for activeset preparation.
-func WithActiveSetPrepation(prep ActiveSetPreparation) Opt {
+// WithActivesetPreparation overwrites configuration for activeset preparation.
+func WithActivesetPreparation(prep ActiveSetPreparation) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.cfg.activeSet = prep
 	}
@@ -273,7 +273,7 @@ func New(
 	pb := &ProposalBuilder{
 		cfg: config{
 			workersLimit: runtime.NumCPU(),
-			activeSet:    DefaultActiveSetPrepartion(),
+			activeSet:    DefaultActiveSetPreparation(),
 		},
 		logger:    log.NewNop(),
 		clock:     clock,
@@ -566,7 +566,6 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	var eg errgroup.Group
 	eg.SetLimit(pb.cfg.workersLimit)
 	for _, ss := range signers {
-		ss := ss
 		ss.latency.start = start
 		eg.Go(func() error {
 			if err := pb.initSignerData(ctx, ss, lid); err != nil {
@@ -655,7 +654,6 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 			}
 		}
 
-		ss := ss
 		eg.Go(func() error {
 			proposal := createProposal(
 				&ss.session,

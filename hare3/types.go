@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
 type Round uint8
@@ -81,14 +82,14 @@ type Value struct {
 	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
 	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
 	//
-	// If we expect 2.7 Mio ATXs that would be a total of 2.7 Mio + 50 * 4032 = 2 901 600 slots.
+	// If we expect 7.0 Mio ATXs that would be a total of 7.0 Mio + 50 * 4032 = 7 201 600 slots.
 	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 2 901 600 / 4032 = 719.6 eligibilities in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(2 901 600 * 1/4032 * 4031/4032) = 26.8
+	// 7 201 600 / 4032 = 1786.1 eligibilities in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(7 201 600 * 1/4032 * 4031/4032) = 42.3
 	//
-	// This means that we can expect a maximum of 719.6 + 6*26.8 = 880.6 eligibilities in a layer with
+	// This means that we can expect a maximum of 1786.1 + 6*42.3 = 2039.7 eligibilities in a layer with
 	// > 99.9997% probability.
-	Proposals []types.ProposalID `scale:"max=900"`
+	Proposals []types.ProposalID `scale:"max=2050"`
 	// Reference is set in messages for commit and notify rounds.
 	Reference *types.Hash32
 }
@@ -107,23 +108,24 @@ type Message struct {
 }
 
 func (m *Message) ToHash() types.Hash32 {
-	hash := hash.New()
-	codec.MustEncodeTo(hash, &m.Body)
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
+	codec.MustEncodeTo(h, &m.Body)
 	var rst types.Hash32
-	hash.Sum(rst[:0])
+	h.Sum(rst[:0])
 	return rst
 }
 
-func (m *Message) ToMetadata() types.HareMetadata {
-	return types.HareMetadata{
+func (m *Message) ToMetadata() wire.HareMetadata {
+	return wire.HareMetadata{
 		Layer:   m.Layer,
 		Round:   m.Absolute(),
 		MsgHash: m.ToHash(),
 	}
 }
 
-func (m *Message) ToMalfeasanceProof() types.HareProofMsg {
-	return types.HareProofMsg{
+func (m *Message) ToMalfeasanceProof() wire.HareProofMsg {
+	return wire.HareProofMsg{
 		InnerMsg:  m.ToMetadata(),
 		SmesherID: m.Sender,
 		Signature: m.Signature,

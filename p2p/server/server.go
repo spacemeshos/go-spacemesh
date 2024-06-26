@@ -15,11 +15,13 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-varint"
 	dto "github.com/prometheus/client_model/go"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
 type DecayingTagSpec struct {
@@ -58,7 +60,7 @@ func WithHardTimeout(timeout time.Duration) Opt {
 }
 
 // WithLog configures logger for the server.
-func WithLog(log log.Log) Opt {
+func WithLog(log *zap.Logger) Opt {
 	return func(s *Server) {
 		s.logger = log
 	}
@@ -127,11 +129,6 @@ func NewServerError(msg string) *ServerError {
 	return &ServerError{msg: msg}
 }
 
-func (*ServerError) Is(target error) bool {
-	_, ok := target.(*ServerError)
-	return ok
-}
-
 func (err *ServerError) Error() string {
 	return fmt.Sprintf("peer error: %s", err.msg)
 }
@@ -140,13 +137,14 @@ func (err *ServerError) Error() string {
 
 // Response is a server response.
 type Response struct {
-	Data  []byte `scale:"max=104857600"` // 100 MiB - keep in line with ResponseMessage.Data in `fetch/wire_types.go`
+	// keep in line with limit of ResponseMessage.Data in `fetch/wire_types.go`
+	Data  []byte `scale:"max=209715200"` // 200 MiB > 6.0 mio ATX * 32 bytes per ID
 	Error string `scale:"max=1024"`      // TODO(mafa): make error code instead of string
 }
 
 // Server for the Handler.
 type Server struct {
-	logger              log.Log
+	logger              *zap.Logger
 	protocol            string
 	handler             StreamHandler
 	timeout             time.Duration
@@ -166,7 +164,7 @@ type Server struct {
 // New server for the handler.
 func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 	srv := &Server{
-		logger:              log.NewNop(),
+		logger:              zap.NewNop(),
 		protocol:            proto,
 		handler:             handler,
 		h:                   h,
@@ -190,7 +188,7 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 				connmgr.DecayFixed(srv.decayingTagSpec.Dec),
 				connmgr.BumpSumBounded(0, srv.decayingTagSpec.Cap))
 			if err != nil {
-				srv.logger.Error("error registering decaying tag", log.Err(err))
+				srv.logger.Error("error registering decaying tag", zap.Error(err))
 			} else {
 				srv.decayingTag = tag
 			}
@@ -215,10 +213,6 @@ func (s *Server) Run(ctx context.Context) error {
 	s.h.SetStreamHandler(protocol.ID(s.protocol), func(stream network.Stream) {
 		select {
 		case queue <- request{stream: stream, received: time.Now()}:
-			if s.metrics != nil {
-				s.metrics.queue.Set(float64(len(queue)))
-				s.metrics.accepted.Inc()
-			}
 		default:
 			if s.metrics != nil {
 				s.metrics.dropped.Inc()
@@ -228,7 +222,7 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 
 	var eg errgroup.Group
-	eg.SetLimit(s.queueSize)
+	eg.SetLimit(s.queueSize * 2)
 	for {
 		select {
 		case <-ctx.Done():
@@ -236,19 +230,36 @@ func (s *Server) Run(ctx context.Context) error {
 			return nil
 		case req := <-queue:
 			if s.metrics != nil {
+				s.metrics.queue.Set(float64(len(queue)))
+				s.metrics.accepted.Inc()
+			}
+			if s.metrics != nil {
 				s.metrics.inQueueLatency.Observe(time.Since(req.received).Seconds())
 			}
 			if err := limit.Wait(ctx); err != nil {
 				eg.Wait()
 				return nil
 			}
+			ctx, cancel := context.WithCancel(ctx)
 			eg.Go(func() error {
+				<-ctx.Done()
+				req.stream.Close()
+				return nil
+			})
+			eg.Go(func() error {
+				defer cancel()
+				conn := req.stream.Conn()
 				if s.decayingTag != nil {
-					s.decayingTag.Bump(req.stream.Conn().RemotePeer(), s.decayingTagSpec.Inc)
+					s.decayingTag.Bump(conn.RemotePeer(), s.decayingTagSpec.Inc)
 				}
 				ok := s.queueHandler(ctx, req.stream)
+				duration := time.Since(req.received)
+				if s.h.PeerInfo() != nil {
+					info := s.h.PeerInfo().EnsurePeerInfo(conn.RemotePeer())
+					info.ServerStats.RequestDone(duration, ok)
+				}
 				if s.metrics != nil {
-					s.metrics.serverLatency.Observe(time.Since(req.received).Seconds())
+					s.metrics.serverLatency.Observe(duration.Seconds())
 					if ok {
 						s.metrics.completed.Inc()
 					} else {
@@ -267,21 +278,21 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	rd := bufio.NewReader(dadj)
 	size, err := varint.ReadUvarint(rd)
 	if err != nil {
-		s.logger.With().Debug("initial read failed",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Err(err),
+		s.logger.Debug("initial read failed",
+			zap.String("protocol", s.protocol),
+			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+			zap.Error(err),
 		)
 		return false
 	}
 	if size > uint64(s.requestLimit) {
-		s.logger.With().Warning("request limit overflow",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Int("limit", s.requestLimit),
-			log.Uint64("request", size),
+		s.logger.Warn("request limit overflow",
+			zap.String("protocol", s.protocol),
+			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+			zap.Int("limit", s.requestLimit),
+			zap.Uint64("request", size),
 		)
 		stream.Conn().Close()
 		return false
@@ -289,29 +300,29 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 	buf := make([]byte, size)
 	_, err = io.ReadFull(rd, buf)
 	if err != nil {
-		s.logger.With().Debug("error reading request",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Err(err),
+		s.logger.Debug("error reading request",
+			zap.String("protocol", s.protocol),
+			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+			zap.Error(err),
 		)
 		return false
 	}
 	start := time.Now()
 	if err = s.handler(log.WithNewRequestID(ctx), buf, dadj); err != nil {
-		s.logger.With().Debug("handler reported error",
-			log.String("protocol", s.protocol),
-			log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-			log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-			log.Err(err),
+		s.logger.Debug("handler reported error",
+			zap.String("protocol", s.protocol),
+			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+			zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+			zap.Error(err),
 		)
 		return false
 	}
-	s.logger.With().Debug("protocol handler execution time",
-		log.String("protocol", s.protocol),
-		log.Stringer("remotePeer", stream.Conn().RemotePeer()),
-		log.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
-		log.Duration("duration", time.Since(start)),
+	s.logger.Debug("protocol handler execution time",
+		zap.String("protocol", s.protocol),
+		zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
+		zap.Stringer("remoteMultiaddr", stream.Conn().RemoteMultiaddr()),
+		zap.Duration("duration", time.Since(start)),
 	)
 	return true
 }
@@ -353,29 +364,41 @@ func (s *Server) StreamRequest(
 
 	ctx, cancel := context.WithTimeout(ctx, s.hardTimeout)
 	defer cancel()
-	stream, err := s.streamRequest(ctx, pid, req, extraProtocols...)
+	stream, info, err := s.streamRequest(ctx, pid, req, extraProtocols...)
 	if err == nil {
+		var eg errgroup.Group
+		eg.Go(func() error {
+			<-ctx.Done()
+			stream.Close()
+			return nil
+		})
 		err = callback(ctx, stream)
-		s.logger.WithContext(ctx).With().Debug("request execution time",
-			log.String("protocol", s.protocol),
-			log.Duration("duration", time.Since(start)),
-			log.Err(err),
+		s.logger.Debug("request execution time",
+			zap.String("protocol", s.protocol),
+			zap.Duration("duration", time.Since(start)),
+			zap.Error(err),
+			log.ZContext(ctx),
 		)
+		cancel()
+		eg.Wait()
 	}
 
-	serverError := errors.Is(err, &ServerError{})
-	took := time.Since(start).Seconds()
+	var srvError *ServerError
+	duration := time.Since(start)
+	if info != nil {
+		info.ClientStats.RequestDone(duration, err == nil)
+	}
 	switch {
 	case s.metrics == nil:
-	case serverError:
+	case errors.As(err, &srvError):
 		s.metrics.clientServerError.Inc()
-		s.metrics.clientLatency.Observe(took)
+		s.metrics.clientLatency.Observe(duration.Seconds())
 	case err != nil:
 		s.metrics.clientFailed.Inc()
-		s.metrics.clientLatencyFailure.Observe(took)
+		s.metrics.clientLatencyFailure.Observe(duration.Seconds())
 	default:
 		s.metrics.clientSucceeded.Inc()
-		s.metrics.clientLatency.Observe(took)
+		s.metrics.clientLatency.Observe(duration.Seconds())
 	}
 	return err
 }
@@ -385,7 +408,11 @@ func (s *Server) streamRequest(
 	pid peer.ID,
 	req []byte,
 	extraProtocols ...string,
-) (stm io.ReadWriteCloser, err error) {
+) (
+	stm io.ReadWriteCloser,
+	info *peerinfo.Info,
+	err error,
+) {
 	protoIDs := make([]protocol.ID, len(extraProtocols)+1)
 	for n, p := range extraProtocols {
 		protoIDs[n] = protocol.ID(p)
@@ -397,7 +424,10 @@ func (s *Server) streamRequest(
 		protoIDs...,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if s.h.PeerInfo() != nil {
+		info = s.h.PeerInfo().EnsurePeerInfo(stream.Conn().RemotePeer())
 	}
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	defer func() {
@@ -409,18 +439,18 @@ func (s *Server) streamRequest(
 	sz := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutUvarint(sz, uint64(len(req)))
 	if _, err := wr.Write(sz[:n]); err != nil {
-		return nil, fmt.Errorf("peer %s address %s: %w",
+		return nil, info, fmt.Errorf("peer %s address %s: %w",
 			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 	if _, err := wr.Write(req); err != nil {
-		return nil, fmt.Errorf("peer %s address %s: %w",
+		return nil, info, fmt.Errorf("peer %s address %s: %w",
 			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 	if err := wr.Flush(); err != nil {
-		return nil, fmt.Errorf("peer %s address %s: %w",
+		return nil, info, fmt.Errorf("peer %s address %s: %w",
 			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
-	return dadj, nil
+	return dadj, info, nil
 }
 
 // NumAcceptedRequests returns the number of accepted requests for this server.
@@ -485,13 +515,16 @@ func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) (int, er
 
 func WrapHandler(handler Handler) StreamHandler {
 	return func(ctx context.Context, req []byte, stream io.ReadWriter) error {
-		buf, err := handler(ctx, req)
+		buf, hErr := handler(ctx, req)
 		var resp Response
-		if err != nil {
-			resp.Error = err.Error()
+		if hErr != nil {
+			resp.Error = hErr.Error()
 		} else {
 			resp.Data = buf
 		}
-		return writeResponse(stream, &resp)
+		if err := writeResponse(stream, &resp); err != nil {
+			return err
+		}
+		return hErr
 	}
 }

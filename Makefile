@@ -5,7 +5,7 @@ BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 GOLANGCI_LINT_VERSION := v1.57.0
 STATICCHECK_VERSION := v0.4.7
 GOTESTSUM_VERSION := v1.11.0
-GOSCALE_VERSION := v1.1.13
+GOSCALE_VERSION := v1.2.0
 MOCKGEN_VERSION := v0.4.0
 
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
@@ -56,7 +56,13 @@ all: install build
 install:
 	git lfs install
 	go mod download
+
+ifneq ($(OS),Windows_NT)
+	# On GH windows runners this fails at the moment: https://github.com/actions/runner-images/issues/10009
+	# since we don't run the linter on windows in the CI, we can skip this step for now
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
+endif
+
 	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
@@ -154,9 +160,11 @@ list-versions:
 
 dockerbuild-go:
 	DOCKER_BUILDKIT=1 docker build \
+		--secret id=mynetrc,src=$(HOME)/.netrc \
 		--build-arg VERSION=${VERSION} \
 		-t go-spacemesh:$(SHA) \
-		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) .
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) \
+		.
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go dockerpush-only
@@ -171,7 +179,12 @@ endif
 .PHONY: dockerpush-only
 
 dockerbuild-bs:
-	DOCKER_BUILDKIT=1 docker build -t go-spacemesh-bs:$(SHA) -t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) -f ./bootstrap.Dockerfile .
+	DOCKER_BUILDKIT=1 docker build \
+		--secret id=mynetrc,src=$(HOME)/.netrc \
+		-t go-spacemesh-bs:$(SHA) \
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) \
+		-f ./bootstrap.Dockerfile \
+		.
 .PHONY: dockerbuild-bs
 
 dockerpush-bs: dockerbuild-bs dockerpush-bs-only

@@ -88,9 +88,9 @@ type Tortoise struct {
 type Opt func(t *Tortoise)
 
 // WithLogger defines logger for tortoise.
-func WithLogger(logger log.Log) Opt {
+func WithLogger(logger *zap.Logger) Opt {
 	return func(t *Tortoise) {
-		t.logger = logger.Zap()
+		t.logger = logger
 	}
 }
 

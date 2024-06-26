@@ -5,10 +5,10 @@ import (
 
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestVerifyingProcessLayer(t *testing.T) {
@@ -115,9 +115,8 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			total:     []weight{fixed.From(20), fixed.From(20)},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			logger := logtest.Zap(t)
+			logger := zaptest.NewLogger(t)
 			v := newVerifying(Config{}, newState(atxsdata.New()))
 			v.processed = start.Add(1).Add(uint32(len(tc.ballots)))
 
@@ -576,9 +575,8 @@ func TestVerifying_Verify(t *testing.T) {
 			expectedValidity: map[types.BlockID]sign{},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			logger := logtest.Zap(t)
+			logger := zaptest.NewLogger(t)
 
 			state := newState(atxsdata.New())
 			state.epochs = epochs

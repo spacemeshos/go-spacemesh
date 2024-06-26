@@ -100,15 +100,6 @@ func createP2PFetch(
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, clientHost.Stop()) })
 
-	// TODO: connect after both NewFetch calls
-	err = clientHost.Connect(ctx, peer.AddrInfo{
-		ID:    serverHost.ID(),
-		Addrs: serverHost.Addrs(),
-	})
-	require.NoError(t, err)
-
-	require.Len(t, clientHost.GetPeers(), 1)
-
 	var sqlOpts []sql.Opt
 	if sqlCache {
 		sqlOpts = []sql.Opt{sql.WithQueryCache(true)}
@@ -119,11 +110,11 @@ func createP2PFetch(
 		t:            t,
 		clientDB:     clientDB,
 		clientPDB:    store.New(store.WithLogger(lg.Zap())),
-		clientCDB:    datastore.NewCachedDB(clientDB, lg),
+		clientCDB:    datastore.NewCachedDB(clientDB, lg.Zap()),
 		serverID:     serverHost.ID(),
 		serverDB:     serverDB,
 		serverPDB:    store.New(store.WithLogger(lg.Zap())),
-		serverCDB:    datastore.NewCachedDB(serverDB, lg),
+		serverCDB:    datastore.NewCachedDB(serverDB, lg.Zap()),
 		receivedData: make(map[blobKey][]byte),
 	}
 
@@ -159,6 +150,14 @@ func createP2PFetch(
 	)
 	require.NoError(t, tpf.clientFetch.Start())
 	t.Cleanup(tpf.clientFetch.Stop)
+
+	err = clientHost.Connect(ctx, peer.AddrInfo{
+		ID:    serverHost.ID(),
+		Addrs: serverHost.Addrs(),
+	})
+	require.NoError(t, err)
+
+	require.Len(t, clientHost.GetPeers(), 1)
 
 	return tpf, ctx
 }
@@ -354,7 +353,7 @@ func TestP2PGetATXs(t *testing.T) {
 						context.Background(), []types.ATXID{atx.ID()})
 				},
 				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
-				codec.MustEncode(atx))
+				atx.AtxBlob.Blob)
 		})
 }
 

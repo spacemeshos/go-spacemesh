@@ -26,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
+	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -63,6 +64,7 @@ func testnet() config.Config {
 			MetricsPort:                  1010,
 			DatabaseConnections:          16,
 			DatabaseSizeMeteringInterval: 10 * time.Minute,
+			DatabasePruneInterval:        30 * time.Minute,
 			NetworkHRP:                   "stest",
 
 			LayerDuration:  5 * time.Minute,
@@ -77,6 +79,8 @@ func testnet() config.Config {
 			TickSize:            666514,
 			RegossipAtxInterval: time.Hour,
 			ATXGradeDelay:       30 * time.Minute,
+
+			PprofHTTPServerListener: "localhost:6060",
 		},
 		Genesis: config.GenesisConfig{
 			GenesisTime: "2023-09-13T18:00:00Z",
@@ -121,7 +125,7 @@ func testnet() config.Config {
 			LabelsPerUnit: 1024,
 			K1:            26,
 			K2:            37,
-			K3:            37,
+			K3:            1,
 			PowDifficulty: activation.DefaultPostConfig().PowDifficulty,
 		},
 		POSTService: activation.DefaultPostServiceConfig(),
@@ -144,6 +148,7 @@ func testnet() config.Config {
 			GossipDuration:           50 * time.Second,
 			OutOfSyncThresholdLayers: 10,
 			AtxSync:                  atxsync.DefaultConfig(),
+			MalSync:                  malsync.DefaultConfig(),
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),
@@ -158,5 +163,6 @@ func testnet() config.Config {
 			RetryInterval: time.Minute,
 			Tries:         5,
 		},
+		Certifier: activation.DefaultCertifierConfig(),
 	}
 }

@@ -96,9 +96,7 @@ func (s *RewardStreamService) Stream(
 	for {
 		select {
 		case rst := <-eventsOut:
-			err := stream.Send(&spacemeshv2alpha1.Reward{
-				Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&rst)},
-			})
+			err := stream.Send(toReward(&rst))
 			switch {
 			case errors.Is(err, io.EOF):
 				return nil
@@ -108,9 +106,7 @@ func (s *RewardStreamService) Stream(
 		default:
 			select {
 			case rst := <-eventsOut:
-				err := stream.Send(&spacemeshv2alpha1.Reward{
-					Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(&rst)},
-				})
+				err := stream.Send(toReward(&rst))
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil
@@ -127,11 +123,7 @@ func (s *RewardStreamService) Stream(
 					}
 					continue
 				}
-				err := stream.Send(&spacemeshv2alpha1.Reward{
-					Versioned: &spacemeshv2alpha1.Reward_V1{
-						V1: toReward(rst),
-					},
-				})
+				err := stream.Send(toReward(rst))
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil
@@ -190,12 +182,19 @@ func (s *RewardService) List(
 
 	rst := make([]*spacemeshv2alpha1.Reward, 0, request.Limit)
 	if err := rewards.IterateRewardsOps(s.db, ops, func(reward *types.Reward) bool {
-		rst = append(rst, &spacemeshv2alpha1.Reward{Versioned: &spacemeshv2alpha1.Reward_V1{V1: toReward(reward)}})
+		rst = append(rst, toReward(reward))
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return &spacemeshv2alpha1.RewardList{Rewards: rst}, nil
+
+	ops.Modifiers = nil
+	count, err := rewards.CountRewardsByOps(s.db, ops)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &spacemeshv2alpha1.RewardList{Rewards: rst, Total: count}, nil
 }
 
 func toRewardRequest(filter *spacemeshv2alpha1.RewardStreamRequest) *spacemeshv2alpha1.RewardRequest {
@@ -259,7 +258,7 @@ func toRewardOperations(filter *spacemeshv2alpha1.RewardRequest) (builder.Operat
 
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
-		Value: "layer asc",
+		Value: "layer " + filter.SortOrder.String(),
 	})
 
 	if filter.Limit != 0 {
@@ -278,8 +277,8 @@ func toRewardOperations(filter *spacemeshv2alpha1.RewardRequest) (builder.Operat
 	return ops, nil
 }
 
-func toReward(reward *types.Reward) *spacemeshv2alpha1.RewardV1 {
-	return &spacemeshv2alpha1.RewardV1{
+func toReward(reward *types.Reward) *spacemeshv2alpha1.Reward {
+	return &spacemeshv2alpha1.Reward{
 		Layer:       reward.Layer.Uint32(),
 		Total:       reward.TotalReward,
 		LayerReward: reward.LayerReward,

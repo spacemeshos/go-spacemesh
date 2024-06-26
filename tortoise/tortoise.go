@@ -251,14 +251,20 @@ func (t *turtle) encodeVotes(
 				t.logger.Debug("support after base ballot",
 					log.ZContext(ctx),
 					zap.Inline(block),
-					zap.Stringer("reason", reason))
+					zap.Stringer("reason", reason),
+				)
 				votes.Support = append(votes.Support, block.header())
 			case against:
 				t.logger.Debug("implicit against after base ballot",
-					log.ZContext(ctx), zap.Inline(block), zap.Stringer("reason", reason))
+					log.ZContext(ctx),
+					zap.Inline(block),
+					zap.Stringer("reason", reason),
+				)
 			case abstain:
 				t.logger.Error("layers that are not terminated should have been encoded earlier",
-					log.ZContext(ctx), zap.Inline(block), zap.Stringer("reason", reason),
+					log.ZContext(ctx),
+					zap.Inline(block),
+					zap.Stringer("reason", reason),
 				)
 			}
 		}

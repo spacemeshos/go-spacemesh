@@ -1,4 +1,4 @@
-FROM golang:1.21 as builder
+FROM golang:1.22 as builder
 
 WORKDIR /src
 
@@ -6,7 +6,7 @@ COPY Makefile* .
 COPY go.mod .
 COPY go.sum .
 
-RUN go mod download
+RUN --mount=type=secret,id=mynetrc,dst=/root/.netrc go mod download
 
 # copy the rest of the source code
 COPY . .

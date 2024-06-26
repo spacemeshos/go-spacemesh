@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -32,12 +33,14 @@ var errNotInitialized = errors.New("cluster: not initialized")
 const (
 	initBalance      = 100000000000000000
 	defaultExtraData = "systest"
+	certifierApp     = "certifier"
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
 	smesherApp       = "smesher"
 	postServiceApp   = "postservice"
 	bootstrapperApp  = "bootstrapper"
 	bootstrapperPort = 80
+	certifierPort    = 80
 	poetPort         = 80
 
 	poetFlags    = "poetflags"
@@ -48,6 +51,10 @@ const (
 // MakePoetEndpoint generate a poet endpoint for the ith instance.
 func MakePoetEndpoint(ith int) string {
 	return fmt.Sprintf("http://%s:%d", createPoetIdentifier(ith), poetPort)
+}
+
+func MakePoetMetricsEndpoint(testNamespace string, ith int) string {
+	return fmt.Sprintf("http://%s.%s:%d/metrics", createPoetIdentifier(ith), testNamespace, prometheusScrapePort)
 }
 
 func MakePoetGlobalEndpoint(testNamespace string, ith int) string {
@@ -170,10 +177,20 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.AddBootstrappers(cctx); err != nil {
 		return nil, err
 	}
+	pubkey, privkey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		return nil, fmt.Errorf("generating keys for certifier: %w", err)
+	}
+	if err := cl.AddCertifier(cctx, base64.StdEncoding.EncodeToString(privkey.Seed())); err != nil {
+		return nil, err
+	}
+	cl.addPoetFlag(PoetCertifierURL("http://certifier-0"))
+	cl.addPoetFlag(PoetCertifierPubkey(base64.StdEncoding.EncodeToString(pubkey)))
+
 	if err := cl.AddPoets(cctx); err != nil {
 		return nil, err
 	}
-	err := cl.AddSmeshers(cctx, smeshers, WithSmeshers(keys[cctx.BootnodeSize:cctx.BootnodeSize+smeshers]))
+	err = cl.AddSmeshers(cctx, smeshers, WithSmeshers(keys[cctx.BootnodeSize:cctx.BootnodeSize+smeshers]))
 	if err != nil {
 		return nil, err
 	}
@@ -223,6 +240,7 @@ type Cluster struct {
 	bootnodes     int
 	smeshers      int
 	clients       []*NodeClient
+	certifiers    []*NodeClient
 	poets         []*NodeClient
 	bootstrappers []*NodeClient
 	postServices  []*NodeClient
@@ -284,6 +302,16 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 	)
 	if err != nil {
 		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
+	}
+	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+		ctx,
+		corev1.ConfigMap(certifierConfigMapName, ctx.Namespace).WithData(map[string]string{
+			attachedCertifierConfig: certifierConfig.Get(ctx.Parameters),
+		}),
+		apimetav1.ApplyOptions{FieldManager: "test"},
+	)
+	if err != nil {
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, poetConfigMapName, err)
 	}
 	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
@@ -454,13 +482,29 @@ func (c *Cluster) firstFreePoetId() int {
 	}
 }
 
-// AddPoet spawns a single poet with the first available id.
-// Id is of form "poet-N", where N ∈ [0, ∞).
-func (c *Cluster) AddPoet(cctx *testcontext.Context) error {
+// AddCertifier spawns a single certifier with the first available id.
+// Id is of form "certifier-N", where N ∈ [0, ∞).
+func (c *Cluster) AddCertifier(cctx *testcontext.Context, privkey string) error {
 	if err := c.persist(cctx); err != nil {
 		return err
 	}
-	flags := maps.Values(c.poetFlags)
+	id := fmt.Sprintf("certifier-%d", len(c.certifiers))
+	cctx.Log.Debugw("deploying poet", "id", id)
+	pod, err := deployCertifier(cctx, id, privkey)
+	if err != nil {
+		return err
+	}
+	c.certifiers = append(c.certifiers, pod)
+	return nil
+}
+
+// AddPoet spawns a single poet with the first available id.
+// Id is of form "poet-N", where N ∈ [0, ∞).
+func (c *Cluster) AddPoet(cctx *testcontext.Context, flags ...DeploymentFlag) error {
+	if err := c.persist(cctx); err != nil {
+		return err
+	}
+	flags = append(maps.Values(c.poetFlags), flags...)
 
 	id := createPoetIdentifier(c.firstFreePoetId())
 	cctx.Log.Debugw("deploying poet", "id", id)
@@ -656,6 +700,11 @@ func (c *Cluster) Bootnodes() int {
 	return c.bootnodes
 }
 
+// Smeshers returns number of the smeshers in the cluster.
+func (c *Cluster) Smeshers() int {
+	return c.smeshers
+}
+
 // Total returns total number of clients.
 func (c *Cluster) Total() int {
 	return len(c.clients)
@@ -714,7 +763,6 @@ func (c *Cluster) WaitAllTimeout(timeout time.Duration) error {
 func (c *Cluster) CloseClients() {
 	var eg errgroup.Group
 	for _, client := range c.clients {
-		client := client
 		eg.Go(func() error {
 			client.Close()
 			return nil
@@ -825,20 +873,18 @@ func ExtractP2PEndpoints(tctx *testcontext.Context, nodes []*NodeClient) ([]stri
 		eg, ctx      = errgroup.WithContext(rctx)
 	)
 	defer cancel()
-	for i := range nodes {
-		i := i
-		n := nodes[i]
+	for i, node := range nodes {
 		eg.Go(func() error {
-			ip, err := n.Resolve(ctx)
+			ip, err := node.Resolve(ctx)
 			if err != nil {
 				return err
 			}
-			dbg := pb.NewDebugServiceClient(n.PrivConn())
+			dbg := pb.NewDebugServiceClient(node.PrivConn())
 			info, err := dbg.NetworkInfo(ctx, &emptypb.Empty{})
 			if err != nil {
 				return err
 			}
-			rst[i] = p2pEndpoint(n.Node, ip, info.Id)
+			rst[i] = p2pEndpoint(node.Node, ip, info.Id)
 			return nil
 		})
 	}

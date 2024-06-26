@@ -79,7 +79,6 @@ func NIPost(db sql.Executor, nodeID types.NodeID) (*NIPostState, error) {
 		nipost.NumUnits = uint32(stmt.ColumnInt64(3))
 		nipost.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(4))
 
-		nipost.Membership = types.MerkleProof{}
 		_, decodeErr = codec.DecodeFrom(stmt.ColumnReader(5), &nipost.Membership)
 
 		nipost.PostMetadata = &types.PostMetadata{

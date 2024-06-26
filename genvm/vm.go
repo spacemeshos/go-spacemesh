@@ -217,7 +217,7 @@ func (v *VM) Apply(
 	t3 := time.Now()
 	blockDurationRewards.Observe(float64(time.Since(t2)))
 
-	hasher := hash.New()
+	hasher := hash.GetHasher()
 	encoder := scale.NewEncoder(hasher)
 	total := 0
 
@@ -249,9 +249,9 @@ func (v *VM) Apply(
 	}
 	writesPerBlock.Observe(float64(total))
 
-	var hash types.Hash32
-	hasher.Sum(hash[:0])
-	if err := layers.UpdateStateHash(tx, lctx.Layer, hash); err != nil {
+	var hashSum types.Hash32
+	hasher.Sum(hashSum[:0])
+	if err := layers.UpdateStateHash(tx, lctx.Layer, hashSum); err != nil {
 		return nil, nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -264,6 +264,7 @@ func (v *VM) Apply(
 	for _, reward := range rewardsResult {
 		events.ReportRewardReceived(reward)
 	}
+	hash.PutHasher(hasher)
 
 	blockDurationPersist.Observe(float64(time.Since(t3)))
 	blockDuration.Observe(float64(time.Since(t1)))
@@ -274,7 +275,7 @@ func (v *VM) Apply(
 		log.Uint32("layer", lctx.Layer.Uint32()),
 		log.Int("count", len(txs)-len(skipped)),
 		log.Duration("duration", time.Since(t1)),
-		log.Stringer("state_hash", hash),
+		log.Stringer("state_hash", hashSum),
 	)
 	return skipped, results, nil
 }
@@ -292,19 +293,18 @@ func (v *VM) execute(
 		executed    []types.TransactionWithResult
 		limit       = v.cfg.GasLimit
 	)
-	for i := range txs {
+	for i, tx := range txs {
 		logger := v.logger.WithFields(log.Int("ith", i))
 		txCount.Inc()
 
 		t1 := time.Now()
-		tx := txs[i]
 
 		rd.Reset(tx.GetRaw().Raw)
 		req := &Request{
 			vm:      v,
 			cache:   ss,
 			lid:     lctx.Layer,
-			raw:     txs[i].GetRaw(),
+			raw:     tx.GetRaw(),
 			decoder: decoder,
 		}
 
@@ -331,7 +331,7 @@ func (v *VM) execute(
 			continue
 		}
 		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
-			logger.With().Warning("ineffective transaction. intrinstic gas not covered",
+			logger.With().Warning("ineffective transaction. intrinsic gas not covered",
 				log.Object("header", header),
 				log.Object("account", &ctx.PrincipalAccount),
 				log.Uint64("intrinsic gas", intrinsic),

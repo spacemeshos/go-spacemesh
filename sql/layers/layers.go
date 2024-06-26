@@ -3,8 +3,10 @@ package layers
 import (
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 // SetWeakCoin for the layer.
@@ -305,4 +307,115 @@ func GetAggHashes(db sql.Executor, from, to types.LayerID, by uint32) (hashes []
 		panic("BUG: bad aggregate hash count")
 	}
 	return hashes, nil
+}
+
+type Layer struct {
+	Id             types.LayerID
+	WeakCoin       bool
+	Processed      bool
+	AppliedBlock   types.BlockID
+	StateHash      types.Hash32
+	AggregatedHash types.Hash32
+	Block          *types.Block
+}
+
+func CountLayersByOps(
+	db sql.Executor,
+	operations builder.Operations,
+) (count uint32, err error) {
+	_, err = db.Exec(`select count(*) from layers l`+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			count = uint32(stmt.ColumnInt32(0))
+			return true
+		})
+	return
+}
+
+func IterateLayersWithBlockOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(layer *Layer) bool,
+) error {
+	var derr error
+	_, err := db.Exec(
+		`SELECT l.id, l.weak_coin, l.processed, l.applied_block, l.state_hash, l.aggregated_hash,
+       		b.validity, b.block FROM layers l
+       		    LEFT JOIN blocks b ON l.id = b.layer`+
+			builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			l := &Layer{
+				Id: types.LayerID(stmt.ColumnInt(0)),
+			}
+
+			l.WeakCoin = stmt.ColumnInt(1) == 0
+			l.Processed = stmt.ColumnInt(2) == 1
+			stmt.ColumnBytes(3, l.AppliedBlock[:])
+			stmt.ColumnBytes(4, l.StateHash[:])
+			stmt.ColumnBytes(5, l.AggregatedHash[:])
+
+			inner := types.InnerBlock{}
+			_, err := codec.DecodeFrom(stmt.ColumnReader(7), &inner)
+			if err != nil {
+				return fn(l)
+			}
+
+			l.Block, err = types.NewExistingBlock(l.AppliedBlock, inner), nil
+			if err != nil {
+				derr = err
+				return false
+			}
+
+			return fn(l)
+		})
+	if err != nil {
+		return err
+	}
+	return derr
+}
+
+func Get(
+	db sql.Executor,
+	lid types.LayerID,
+) (*Layer, error) {
+	var layer *Layer
+	var derr error
+	_, err := db.Exec(
+		`SELECT l.id, l.weak_coin, l.processed, l.applied_block, l.state_hash, l.aggregated_hash,
+       		b.validity, b.block FROM layers l
+       		    LEFT JOIN blocks b ON l.id = b.layer WHERE l.id = ?1`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Uint32()))
+		},
+		func(stmt *sql.Statement) bool {
+			layer = &Layer{
+				Id: types.LayerID(stmt.ColumnInt(0)),
+			}
+
+			layer.WeakCoin = stmt.ColumnInt(1) == 0
+			layer.Processed = stmt.ColumnInt(2) == 1
+			stmt.ColumnBytes(3, layer.AppliedBlock[:])
+			stmt.ColumnBytes(4, layer.StateHash[:])
+			stmt.ColumnBytes(5, layer.AggregatedHash[:])
+
+			inner := types.InnerBlock{}
+			_, err := codec.DecodeFrom(stmt.ColumnReader(7), &inner)
+			if err != nil {
+				derr = fmt.Errorf("failed to decode block %s: %w", layer.AppliedBlock, err)
+				return false
+			}
+
+			layer.Block, err = types.NewExistingBlock(layer.AppliedBlock, inner), nil
+			if err != nil {
+				derr = err
+				return false
+			}
+
+			return true
+		})
+	if err != nil {
+		return nil, err
+	}
+	return layer, derr
 }

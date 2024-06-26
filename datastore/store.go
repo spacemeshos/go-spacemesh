@@ -7,10 +7,11 @@ import (
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -41,17 +42,18 @@ type Executor interface {
 type CachedDB struct {
 	Executor
 	sql.QueryCache
-	logger log.Log
+	logger *zap.Logger
 
-	// cache is optional
+	// cache is optional in tests. It MUST be set for the 'App'
+	// for properly checking malfeasance.
 	atxsdata *atxsdata.Data
 
-	atxHdrCache   *lru.Cache[types.ATXID, *types.ActivationTxHeader]
-	vrfNonceCache *lru.Cache[VrfNonceKey, *types.VRFPostIndex]
+	atxCache      *lru.Cache[types.ATXID, *types.ActivationTx]
+	vrfNonceCache *lru.Cache[VrfNonceKey, types.VRFPostIndex]
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
-	malfeasanceCache *lru.Cache[types.NodeID, *types.MalfeasanceProof]
+	malfeasanceCache *lru.Cache[types.NodeID, *wire.MalfeasanceProof]
 }
 
 type Config struct {
@@ -89,34 +91,34 @@ func WithConsensusCache(c *atxsdata.Data) Opt {
 }
 
 // NewCachedDB create an instance of a CachedDB.
-func NewCachedDB(db Executor, lg log.Log, opts ...Opt) *CachedDB {
+func NewCachedDB(db Executor, lg *zap.Logger, opts ...Opt) *CachedDB {
 	o := cacheOpts{cfg: DefaultConfig()}
 	for _, opt := range opts {
 		opt(&o)
 	}
-	lg.With().Info("initialized datastore", log.Any("config", o.cfg))
+	lg.Info("initialized datastore", zap.Any("config", o.cfg))
 
-	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTxHeader](o.cfg.ATXSize)
+	atxHdrCache, err := lru.New[types.ATXID, *types.ActivationTx](o.cfg.ATXSize)
 	if err != nil {
-		lg.Fatal("failed to create atx cache", err)
+		lg.Fatal("failed to create atx cache", zap.Error(err))
 	}
 
-	malfeasanceCache, err := lru.New[types.NodeID, *types.MalfeasanceProof](o.cfg.MalfeasanceSize)
+	malfeasanceCache, err := lru.New[types.NodeID, *wire.MalfeasanceProof](o.cfg.MalfeasanceSize)
 	if err != nil {
-		lg.Fatal("failed to create malfeasance cache", err)
+		lg.Fatal("failed to create malfeasance cache", zap.Error(err))
 	}
 
-	vrfNonceCache, err := lru.New[VrfNonceKey, *types.VRFPostIndex](o.cfg.ATXSize)
+	vrfNonceCache, err := lru.New[VrfNonceKey, types.VRFPostIndex](o.cfg.ATXSize)
 	if err != nil {
-		lg.Fatal("failed to create vrf nonce cache", err)
+		lg.Fatal("failed to create vrf nonce cache", zap.Error(err))
 	}
 
 	return &CachedDB{
 		Executor:         db,
 		QueryCache:       db.QueryCache(),
-		atxsdata:         o.atxsdata,
 		logger:           lg,
-		atxHdrCache:      atxHdrCache,
+		atxsdata:         o.atxsdata,
+		atxCache:         atxHdrCache,
 		malfeasanceCache: malfeasanceCache,
 		vrfNonceCache:    vrfNonceCache,
 	}
@@ -129,7 +131,7 @@ func (db *CachedDB) MalfeasanceCacheSize() int {
 // IsMalicious returns true if the NodeID is malicious.
 func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
 	if id == types.EmptyNodeID {
-		db.logger.Fatal("invalid argument to IsMalicious")
+		panic("invalid argument to IsMalicious")
 	}
 
 	db.mu.Lock()
@@ -153,9 +155,9 @@ func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
 }
 
 // GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
-func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProof, error) {
+func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
 	if id == types.EmptyNodeID {
-		db.logger.Fatal("invalid argument to GetMalfeasanceProof")
+		panic("invalid argument to GetMalfeasanceProof")
 	}
 
 	db.mu.Lock()
@@ -175,9 +177,9 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*types.MalfeasanceProo
 	return proof, err
 }
 
-func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.MalfeasanceProof) {
+func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *wire.MalfeasanceProof) {
 	if id == types.EmptyNodeID {
-		db.logger.Fatal("invalid argument to CacheMalfeasanceProof")
+		panic("invalid argument to CacheMalfeasanceProof")
 	}
 	if db.atxsdata != nil {
 		db.atxsdata.SetMalicious(id)
@@ -192,7 +194,7 @@ func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *types.Malfeasa
 func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPostIndex, error) {
 	key := VrfNonceKey{id, epoch}
 	if nonce, ok := db.vrfNonceCache.Get(key); ok {
-		return *nonce, nil
+		return nonce, nil
 	}
 
 	nonce, err := atxs.VRFNonce(db, id, epoch)
@@ -200,94 +202,32 @@ func (db *CachedDB) VRFNonce(id types.NodeID, epoch types.EpochID) (types.VRFPos
 		return types.VRFPostIndex(0), err
 	}
 
-	db.vrfNonceCache.Add(key, &nonce)
+	db.vrfNonceCache.Add(key, nonce)
 	return nonce, nil
 }
 
-// GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
+// GetAtx returns the ATX by the given ID. This function is thread safe and will return an error if the ID
 // is not found in the ATX DB.
-func (db *CachedDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+func (db *CachedDB) GetAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if id == types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
-	if atxHeader, gotIt := db.atxHdrCache.Get(id); gotIt {
-		return atxHeader, nil
-	}
-
-	return db.getAndCacheHeader(id)
-}
-
-// GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
-// in all databases.
-func (db *CachedDB) GetFullAtx(id types.ATXID) (*types.VerifiedActivationTx, error) {
-	if id == types.EmptyATXID {
-		return nil, errors.New("trying to fetch empty atx id")
+	if atx, gotIt := db.atxCache.Get(id); gotIt {
+		return atx, nil
 	}
 
 	atx, err := atxs.Get(db, id)
 	if err != nil {
-		return nil, fmt.Errorf("get ATXs from DB: %w", err)
+		return nil, fmt.Errorf("get ATX from DB: %w", err)
 	}
 
-	db.atxHdrCache.Add(id, atx.ToHeader())
+	db.atxCache.Add(id, atx)
 	return atx, nil
 }
 
-// getAndCacheHeader fetches the full atx struct from the database, caches it and returns the cached header.
-func (db *CachedDB) getAndCacheHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
-	_, err := db.GetFullAtx(id)
-	if err != nil {
-		return nil, err
-	}
-
-	atxHeader, gotIt := db.atxHdrCache.Get(id)
-	if !gotIt {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
-	}
-
-	return atxHeader, nil
-}
-
-// GetEpochWeight returns the total weight of ATXs targeting the given epochID.
-func (db *CachedDB) GetEpochWeight(epoch types.EpochID) (uint64, []types.ATXID, error) {
-	var (
-		weight uint64
-		ids    []types.ATXID
-	)
-	if err := db.IterateEpochATXHeaders(epoch, func(header *types.ActivationTxHeader) error {
-		weight += header.GetWeight()
-		ids = append(ids, header.ID)
-		return nil
-	}); err != nil {
-		return 0, nil, err
-	}
-	return weight, ids, nil
-}
-
-// IterateEpochATXHeaders iterates over ActivationTxs that target an epoch.
-func (db *CachedDB) IterateEpochATXHeaders(
-	epoch types.EpochID,
-	iter func(*types.ActivationTxHeader) error,
-) error {
-	ids, err := atxs.GetIDsByEpoch(context.Background(), db, epoch-1)
-	if err != nil {
-		return err
-	}
-	for _, id := range ids {
-		header, err := db.GetAtxHeader(id)
-		if err != nil {
-			return err
-		}
-		if err := iter(header); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (db *CachedDB) IterateMalfeasanceProofs(
-	iter func(types.NodeID, *types.MalfeasanceProof) error,
+	iter func(types.NodeID, *wire.MalfeasanceProof) error,
 ) error {
 	ids, err := identities.GetMalicious(db)
 	if err != nil {
@@ -303,43 +243,6 @@ func (db *CachedDB) IterateMalfeasanceProofs(
 		}
 	}
 	return nil
-}
-
-// GetLastAtx gets the last atx header of specified node ID.
-func (db *CachedDB) GetLastAtx(nodeID types.NodeID) (*types.ActivationTxHeader, error) {
-	if atxid, err := atxs.GetLastIDByNodeID(db, nodeID); err != nil {
-		return nil, fmt.Errorf("no prev atx found: %w", err)
-	} else if atx, err := db.GetAtxHeader(atxid); err != nil {
-		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %w", err)
-	} else {
-		return atx, nil
-	}
-}
-
-// GetEpochAtx gets the atx header of specified node ID published in the specified epoch.
-func (db *CachedDB) GetEpochAtx(
-	epoch types.EpochID,
-	nodeID types.NodeID,
-) (*types.ActivationTxHeader, error) {
-	vatx, err := atxs.GetByEpochAndNodeID(db, epoch, nodeID)
-	if err != nil {
-		return nil, fmt.Errorf("no epoch atx found: %w", err)
-	}
-	header := vatx.ToHeader()
-	db.atxHdrCache.Add(vatx.ID(), header)
-	return header, nil
-}
-
-// IdentityExists returns true if this NodeID has published any ATX.
-func (db *CachedDB) IdentityExists(nodeID types.NodeID) (bool, error) {
-	_, err := atxs.GetLastIDByNodeID(db, nodeID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNotFound) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
 }
 
 func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {
@@ -379,7 +282,10 @@ type (
 )
 
 var loadBlobDispatch = map[Hint]loadBlobFunc{
-	ATXDB:       atxs.LoadBlob,
+	ATXDB: func(ctx context.Context, db sql.Executor, key []byte, blob *sql.Blob) error {
+		_, err := atxs.LoadBlob(ctx, db, key, blob)
+		return err
+	},
 	BallotDB:    ballots.LoadBlob,
 	BlockDB:     blocks.LoadBlob,
 	TXDB:        transactions.LoadBlob,

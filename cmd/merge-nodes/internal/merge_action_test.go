@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -42,7 +43,11 @@ func Test_MergeDBs_InvalidTargetScheme(t *testing.T) {
 
 func Test_MergeDBs_TargetIsSupervised(t *testing.T) {
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zap.New(observer)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
 	tmpDst := t.TempDir()
 
 	err := os.MkdirAll(filepath.Join(tmpDst, keyDir), 0o700)
@@ -98,7 +103,11 @@ func Test_MergeDBs_InvalidSourceScheme(t *testing.T) {
 
 func Test_MergeDBs_SourceIsSupervised(t *testing.T) {
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
-	logger := zap.New(observer)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
 	tmpDst := t.TempDir()
 
 	db, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
@@ -218,22 +227,23 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 
 	sig1Post := nipost.Post{
-		Nonce:    rand.Uint32(),
-		Pow:      rand.Uint64(),
-		Indices:  types.RandomBytes(32),
-		NumUnits: rand.Uint32(),
+		Nonce:     rand.Uint32(),
+		Pow:       rand.Uint64(),
+		Indices:   types.RandomBytes(32),
+		NumUnits:  rand.Uint32(),
+		Challenge: shared.ZeroChallenge,
 	}
-	err = nipost.AddInitialPost(dstDB, sig1.NodeID(), sig1Post)
+	err = nipost.AddPost(dstDB, sig1.NodeID(), sig1Post)
 	require.NoError(t, err)
 
 	sig1Poet1 := nipost.PoETRegistration{
-		ChallengeHash: sig1Ch.Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet1.spacemesh.io",
 		RoundID:       "1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	sig1Poet2 := nipost.PoETRegistration{
-		ChallengeHash: sig1Ch.Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet2.spacemesh.io",
 		RoundID:       "10",
 		RoundEnd:      time.Now().Round(time.Second),
@@ -276,22 +286,23 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 
 	sig2Post := nipost.Post{
-		Nonce:    rand.Uint32(),
-		Pow:      rand.Uint64(),
-		Indices:  types.RandomBytes(32),
-		NumUnits: rand.Uint32(),
+		Nonce:     rand.Uint32(),
+		Pow:       rand.Uint64(),
+		Indices:   types.RandomBytes(32),
+		NumUnits:  rand.Uint32(),
+		Challenge: shared.ZeroChallenge,
 	}
-	err = nipost.AddInitialPost(srcDB, sig2.NodeID(), sig2Post)
+	err = nipost.AddPost(srcDB, sig2.NodeID(), sig2Post)
 	require.NoError(t, err)
 
 	sig2Poet1 := nipost.PoETRegistration{
-		ChallengeHash: sig2Ch.Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet1.spacemesh.io",
 		RoundID:       "1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	sig2Poet2 := nipost.PoETRegistration{
-		ChallengeHash: sig2Ch.Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet2.spacemesh.io",
 		RoundID:       "10",
 		RoundEnd:      time.Now().Round(time.Second),
@@ -317,7 +328,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sig1Ch, ch)
 
-	post, err := nipost.InitialPost(dstDB, sig1.NodeID())
+	post, err := nipost.GetPost(dstDB, sig1.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, sig1Post, *post)
 
@@ -330,7 +341,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sig2Ch, ch)
 
-	post, err = nipost.InitialPost(dstDB, sig2.NodeID())
+	post, err = nipost.GetPost(dstDB, sig2.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, sig2Post, *post)
 
@@ -376,22 +387,23 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 	require.NoError(t, err)
 
 	sigPost := nipost.Post{
-		Nonce:    rand.Uint32(),
-		Pow:      rand.Uint64(),
-		Indices:  types.RandomBytes(32),
-		NumUnits: rand.Uint32(),
+		Nonce:     rand.Uint32(),
+		Pow:       rand.Uint64(),
+		Indices:   types.RandomBytes(32),
+		NumUnits:  rand.Uint32(),
+		Challenge: shared.ZeroChallenge,
 	}
-	err = nipost.AddInitialPost(srcDB, sig.NodeID(), sigPost)
+	err = nipost.AddPost(srcDB, sig.NodeID(), sigPost)
 	require.NoError(t, err)
 
 	sigPoet1 := nipost.PoETRegistration{
-		ChallengeHash: sigCh.Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet1.spacemesh.io",
 		RoundID:       "1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	sigPoet2 := nipost.PoETRegistration{
-		ChallengeHash: sigCh.Hash(),
+		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet2.spacemesh.io",
 		RoundID:       "10",
 		RoundEnd:      time.Now().Round(time.Second),
@@ -416,7 +428,7 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sigCh, ch)
 
-	post, err := nipost.InitialPost(dstDB, sig.NodeID())
+	post, err := nipost.GetPost(dstDB, sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, sigPost, *post)
 

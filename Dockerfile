@@ -26,7 +26,7 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 
-FROM golang:1.21 as builder
+FROM golang:1.22 as builder
 ARG VERSION=""
 ENV VERSION=${VERSION}
 RUN set -ex \
@@ -44,7 +44,7 @@ RUN make get-libs
 COPY go.mod .
 COPY go.sum .
 
-RUN go mod download
+RUN --mount=type=secret,id=mynetrc,dst=/root/.netrc go mod download
 
 # Here we copy the rest of the source code
 COPY . .

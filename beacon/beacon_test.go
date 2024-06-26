@@ -15,15 +15,14 @@ import (
 	"github.com/spacemeshos/fixed"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -88,7 +87,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher, miners int, id
 		mSync:     mocks.NewMockSyncStateProvider(ctrl),
 		mVerifier: NewMockvrfVerifier(ctrl),
 	}
-	lg := logtest.New(tb).Named(id)
+	lg := zaptest.NewLogger(tb).Named(id)
 
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 
@@ -118,21 +117,16 @@ func createATX(
 	nonce := types.VRFPostIndex(1)
 	atx := types.NewActivationTx(
 		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
-		types.Address{},
-		nil,
+		types.GenerateAddress(types.RandomBytes(types.AddressLength)),
 		numUnits,
-		&nonce,
 	)
-
-	atx.SetEffectiveNumUnits(numUnits)
+	atx.VRFNonce = nonce
 	atx.SetReceived(received)
-	nodeID := sig.NodeID()
-	atx.NodeID = &nodeID
-	require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
-	vAtx, err := atx.Verify(0, 1)
-	require.NoError(tb, err)
-	require.NoError(tb, atxs.Add(db, vAtx))
-	return vAtx.ID()
+	atx.SmesherID = sig.NodeID()
+	atx.SetID(types.RandomATXID())
+	atx.TickCount = 1
+	require.NoError(tb, atxs.Add(db, atx))
+	return atx.ID()
 }
 
 func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {
@@ -207,7 +201,6 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	}
 	var eg errgroup.Group
 	for _, node := range testNodes {
-		node := node
 		eg.Go(func() error {
 			return node.onNewEpoch(context.Background(), types.EpochID(2))
 		})
@@ -276,7 +269,6 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	}
 	var eg errgroup.Group
 	for _, node := range testNodes {
-		node := node
 		eg.Go(func() error {
 			return node.onNewEpoch(context.Background(), types.EpochID(2))
 		})
@@ -328,7 +320,6 @@ func TestBeacon_NoProposals(t *testing.T) {
 	}
 	var eg errgroup.Group
 	for _, node := range testNodes {
-		node := node
 		eg.Go(func() error {
 			return node.onNewEpoch(context.Background(), types.EpochID(2))
 		})
@@ -499,14 +490,15 @@ func TestBeaconWithMetrics(t *testing.T) {
 
 func TestBeacon_NoRaceOnClose(t *testing.T) {
 	mclock := NewMocklayerClock(gomock.NewController(t))
+	lg := zaptest.NewLogger(t)
 	pd := &ProtocolDriver{
-		logger:           logtest.New(t).WithName("Beacon"),
+		logger:           lg.Named("Beacon"),
 		beacons:          make(map[types.EpochID]types.Beacon),
-		cdb:              datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		cdb:              datastore.NewCachedDB(sql.InMemory(), lg),
 		clock:            mclock,
 		closed:           make(chan struct{}),
 		results:          make(chan result.Beacon, 100),
-		metricsCollector: metrics.NewBeaconMetricsCollector(nil, logtest.New(t).WithName("metrics")),
+		metricsCollector: metrics.NewBeaconMetricsCollector(nil, lg.Named("metrics")),
 	}
 	// check for a race between onResult and Close
 	var eg errgroup.Group
@@ -532,11 +524,12 @@ func TestBeacon_NoRaceOnClose(t *testing.T) {
 func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	t.Parallel()
 
+	lg := zaptest.NewLogger(t)
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
-		logger:  logtest.New(t).WithName("Beacon"),
+		logger:  lg.Named("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		cdb:     datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		cdb:     datastore.NewCachedDB(sql.InMemory(), lg),
 		clock:   mclock,
 	}
 	epoch3 := types.EpochID(3)
@@ -584,11 +577,12 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	t.Parallel()
 
+	lg := zaptest.NewLogger(t)
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
-		logger:  logtest.New(t).WithName("Beacon"),
+		logger:  lg.Named("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		cdb:     datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		cdb:     datastore.NewCachedDB(sql.InMemory(), lg),
 		clock:   mclock,
 	}
 	epoch := types.EpochID(3)
@@ -602,10 +596,11 @@ func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	t.Parallel()
 
+	lg := zaptest.NewLogger(t)
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
-		logger:         logtest.New(t).WithName("Beacon"),
-		cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		logger:         lg.Named("Beacon"),
+		cdb:            datastore.NewCachedDB(sql.InMemory(), lg),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		clock:          mclock,
@@ -613,7 +608,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 
 	epoch := types.EpochID(5)
 	mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
-	for i := 0; i < numEpochsToKeep; i++ {
+	for i := range numEpochsToKeep {
 		e := epoch + types.EpochID(i)
 		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)
@@ -674,7 +669,6 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -706,11 +700,12 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 				require.Greater(t, maxWeight.Float(), 0.0)
 			}
 
+			lg := zaptest.NewLogger(t)
 			mclock := NewMocklayerClock(gomock.NewController(t))
 			pd := &ProtocolDriver{
-				logger:         logtest.New(t).WithName("Beacon"),
+				logger:         lg.Named("Beacon"),
 				config:         UnitTestConfig(),
-				cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+				cdb:            datastore.NewCachedDB(sql.InMemory(), lg),
 				beacons:        make(map[types.EpochID]types.Beacon),
 				ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 				clock:          mclock,
@@ -741,11 +736,12 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	t.Parallel()
 
+	lg := zaptest.NewLogger(t)
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
-		logger:         logtest.New(t).WithName("Beacon"),
+		logger:         lg.Named("Beacon"),
 		config:         UnitTestConfig(),
-		cdb:            datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		cdb:            datastore.NewCachedDB(sql.InMemory(), lg),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		clock:          mclock,
@@ -781,7 +777,7 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 	beacon := types.RandomBeacon()
 	beaconFromBallots := types.RandomBeacon()
 	pd := &ProtocolDriver{
-		logger: logtest.New(t).WithName("Beacon"),
+		logger: zaptest.NewLogger(t).Named("Beacon"),
 		config: UnitTestConfig(),
 		beacons: map[types.EpochID]types.Beacon{
 			epoch: beacon,
@@ -833,7 +829,7 @@ func TestBeacon_findMajorityBeacon(t *testing.T) {
 	}
 	epoch := types.EpochID(3)
 	pd := &ProtocolDriver{
-		logger:         logtest.New(t).WithName("Beacon"),
+		logger:         zaptest.NewLogger(t).Named("Beacon"),
 		config:         UnitTestConfig(),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: map[types.EpochID]map[types.Beacon]*beaconWeight{epoch: beaconFromBallots},
@@ -869,7 +865,7 @@ func TestBeacon_findMajorityBeacon_plurality(t *testing.T) {
 	}
 	epoch := types.EpochID(3)
 	pd := &ProtocolDriver{
-		logger:         logtest.New(t).WithName("Beacon"),
+		logger:         zaptest.NewLogger(t).Named("Beacon"),
 		config:         UnitTestConfig(),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: map[types.EpochID]map[types.Beacon]*beaconWeight{epoch: beaconFromBallots},
@@ -905,7 +901,7 @@ func TestBeacon_findMajorityBeacon_NotEnoughBallots(t *testing.T) {
 	}
 	epoch := types.EpochID(3)
 	pd := &ProtocolDriver{
-		logger:         logtest.New(t).WithName("Beacon"),
+		logger:         zaptest.NewLogger(t).Named("Beacon"),
 		config:         UnitTestConfig(),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: map[types.EpochID]map[types.Beacon]*beaconWeight{epoch: beaconFromBallots},
@@ -919,7 +915,7 @@ func TestBeacon_findMajorityBeacon_NoBeacon(t *testing.T) {
 	t.Parallel()
 
 	pd := &ProtocolDriver{
-		logger:         logtest.New(t).WithName("Beacon"),
+		logger:         zaptest.NewLogger(t).Named("Beacon"),
 		config:         UnitTestConfig(),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
@@ -972,7 +968,6 @@ func TestBeacon_atxThresholdFraction(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1016,7 +1011,6 @@ func TestBeacon_atxThreshold(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1052,19 +1046,18 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			logger := logtest.New(t).WithName("proposal checker")
-			checker := createProposalChecker(logger, cfg, tc.wEarly, tc.wOntime)
+			logger := zaptest.NewLogger(t)
+			checker := createProposalChecker(logger.Named("proposal checker"), cfg, tc.wEarly, tc.wOntime)
 			var numEligible, numEligibleStrict int
 			for i := 0; i < tc.wEarly; i++ {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
 				proposal := buildSignedProposal(
 					context.Background(),
-					logtest.New(t),
+					logger,
 					signer.VRFSigner(),
 					3,
 					types.VRFPostIndex(1),
@@ -1099,11 +1092,10 @@ func TestBeacon_buildProposal(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := buildProposal(logtest.New(t), tc.epoch, types.VRFPostIndex(1))
+			result := buildProposal(tc.epoch, types.VRFPostIndex(1))
 			require.Equal(t, tc.result, string(result))
 		})
 	}
@@ -1133,13 +1125,12 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			result := buildSignedProposal(
 				context.Background(),
-				logtest.New(t),
+				zaptest.NewLogger(t),
 				edSgn.VRFSigner(),
 				tc.epoch,
 				types.VRFPostIndex(1),
@@ -1157,7 +1148,7 @@ func TestBeacon_calcBeacon(t *testing.T) {
 		Proposal{0x05}: {},
 	}
 
-	beacon := calcBeacon(logtest.New(t), set)
+	beacon := calcBeacon(zaptest.NewLogger(t), set)
 	expected := types.HexToBeacon("0xe69fd154")
 	require.EqualValues(t, expected, beacon)
 }

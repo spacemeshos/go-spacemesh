@@ -7,8 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"go.uber.org/zap/zaptest"
 )
 
 func TestBeacon_calcVotes(t *testing.T) {
@@ -73,7 +72,6 @@ func TestBeacon_calcVotes(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -82,7 +80,7 @@ func TestBeacon_calcVotes(t *testing.T) {
 				votesMargin: tc.votesMargin,
 			}
 			theta := new(big.Float).SetRat(big.NewRat(1, 1))
-			logger := logtest.New(t).WithName(tc.name)
+			logger := zaptest.NewLogger(t).Named(tc.name)
 
 			result, undecided := calcVotes(logger, theta, eh)
 			sort.Slice(undecided, func(i, j int) bool { return bytes.Compare(undecided[i][:], undecided[j][:]) == -1 })
@@ -125,7 +123,6 @@ func TestTallyUndecided(t *testing.T) {
 			coinFlip:  false,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
@@ -168,12 +165,11 @@ func TestBeacon_votingThreshold(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			pd := ProtocolDriver{
-				logger: logtest.New(t).WithName("Beacon"),
+				logger: zaptest.NewLogger(t).Named("Beacon"),
 				config: Config{},
 				theta:  new(big.Float).SetRat(tc.theta),
 			}

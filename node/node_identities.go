@@ -1,15 +1,11 @@
 package node
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-
-	"github.com/natefinch/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -20,97 +16,6 @@ const (
 	keyDir                  = "identities"
 	supervisedIDKeyFileName = "local.key"
 )
-
-// TestIdentity loads a pre-configured identity for testing purposes.
-func (app *App) TestIdentity() ([]*signing.EdSigner, error) {
-	if len(app.Config.TestConfig.SmesherKey) == 0 {
-		return nil, nil
-	}
-
-	app.log.With().Error("!!!TESTING!!! using pre-configured smesher key")
-	dst, err := hex.DecodeString(app.Config.TestConfig.SmesherKey)
-	if err != nil {
-		return nil, fmt.Errorf("decoding private key: %w", err)
-	}
-	signer, err := signing.NewEdSigner(
-		signing.WithPrivateKey(dst),
-		signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct test identity: %w", err)
-	}
-
-	app.log.With().Info("Loaded testing identity", signer.PublicKey())
-	return []*signing.EdSigner{signer}, nil
-}
-
-// MigrateExistingIdentity migrates the legacy identity file to the new location.
-//
-// The legacy identity file is expected to be located at `app.Config.SMESHING.Opts.DataDir/key.bin`.
-//
-// TODO(mafa): this can be removed in a future version when the legacy identity file is no longer expected to exist.
-func (app *App) MigrateExistingIdentity() error {
-	oldKey := filepath.Join(app.Config.SMESHING.Opts.DataDir, legacyKeyFileName)
-	app.log.Info("Looking for legacy identity file at `%v`", oldKey)
-
-	src, err := os.Open(oldKey)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		app.log.Info("Legacy identity file not found.")
-		return nil
-	case err != nil:
-		return fmt.Errorf("failed to open legacy identity file: %w", err)
-	}
-	defer src.Close()
-
-	newKey := filepath.Join(app.Config.DataDir(), keyDir, supervisedIDKeyFileName)
-	if err := os.MkdirAll(filepath.Dir(newKey), 0o700); err != nil {
-		return fmt.Errorf("failed to create directory for identity file: %w", err)
-	}
-
-	_, err = os.Stat(newKey)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		// no new key, migrate old to new
-	case err == nil:
-		// both exist, error
-		return fmt.Errorf("%w: both %s and %s exist", fs.ErrExist, newKey, oldKey)
-	case err != nil:
-		return fmt.Errorf("stat %s: %w", newKey, err)
-	}
-
-	_, err = os.Stat(oldKey + ".bak")
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		// no backup, migrate old to new
-	case err == nil:
-		// backup already exists - something is wrong
-		return fmt.Errorf("%w: backup %s already exists", fs.ErrExist, oldKey+".bak")
-	case err != nil:
-		return fmt.Errorf("stat %s: %w", oldKey+".bak", err)
-	}
-
-	dst, err := os.Create(newKey)
-	if err != nil {
-		return fmt.Errorf("failed to create new identity file: %w", err)
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
-		return fmt.Errorf("failed to copy identity file: %w", err)
-	}
-
-	if err := src.Close(); err != nil {
-		return fmt.Errorf("failed to close legacy identity file: %w", err)
-	}
-
-	if err := atomic.ReplaceFile(oldKey, oldKey+".bak"); err != nil {
-		return fmt.Errorf("failed to rename legacy identity file: %w", err)
-	}
-
-	app.log.Info("Migrated legacy identity file to `%v`", newKey)
-	return nil
-}
 
 // NewIdentity creates a new identity, saves it to `keyDir/supervisedIDKeyFileName` in the config directory and
 // initializes app.signers with that identity.

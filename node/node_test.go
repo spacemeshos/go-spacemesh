@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,7 +50,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -234,16 +232,6 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	}
 	defer app.stopServices(context.Background())
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_, err = grpc.DialContext(
-		ctx,
-		listener,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
-	r.ErrorContains(err, "context deadline exceeded")
-
 	events.CloseEventReporter()
 
 	// Test starting the server from the command line
@@ -252,13 +240,9 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(listener, app.Config.API.PublicListener)
 
-	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	r.NoError(err)
 	t.Cleanup(func() { r.NoError(conn.Close()) })
@@ -365,11 +349,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	logger := logtest.New(t)
 	// errlog is used to simulate errors in the app
 	errlog := log.NewFromLog(
-		zaptest.NewLogger(
-			t,
-			zaptest.Level(zap.ErrorLevel),
-			zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{})),
-		),
+		zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{}))),
 	)
 
 	cfg := getTestDefaultConfig(t)
@@ -419,11 +399,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	})
 
 	<-app.Started()
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		app.grpcPublicServer.BoundAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
@@ -564,11 +542,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		listener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
@@ -979,81 +955,6 @@ func TestFlock(t *testing.T) {
 	})
 }
 
-func TestMigrateLocalDB(t *testing.T) {
-	t.Run("no DB exists", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		lg := zaptest.NewLogger(t)
-		ctrl := gomock.NewController(t)
-		client := localsql.NewMockPoetClient(ctrl)
-		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
-
-		// no-op
-		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-	})
-
-	t.Run("new DB exists", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), localDbFile))
-		require.NoError(t, err)
-		require.NoError(t, db.Close())
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-
-		lg := zaptest.NewLogger(t)
-		ctrl := gomock.NewController(t)
-		client := localsql.NewMockPoetClient(ctrl)
-		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
-
-		// no-op
-		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-	})
-
-	t.Run("old DB exists", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.NoError(t, err)
-		require.NoError(t, db.Close())
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-
-		lg := zaptest.NewLogger(t)
-		ctrl := gomock.NewController(t)
-		client := localsql.NewMockPoetClient(ctrl)
-		require.NoError(t, app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client}))
-
-		// migrates existing file
-		require.NoFileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-	})
-
-	t.Run("both DBs exist", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		db, err := localsql.Open(filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-		require.NoError(t, err)
-		require.NoError(t, db.Close())
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), oldLocalDbFile))
-
-		db, err = localsql.Open(filepath.Join(app.Config.DataDir(), localDbFile))
-		require.NoError(t, err)
-		require.NoError(t, db.Close())
-		require.FileExists(t, filepath.Join(app.Config.DataDir(), localDbFile))
-
-		lg := zaptest.NewLogger(t)
-		ctrl := gomock.NewController(t)
-		client := localsql.NewMockPoetClient(ctrl)
-		err = app.MigrateLocalDB(lg, app.Config.DataDir(), []localsql.PoetClient{client})
-		require.ErrorIs(t, err, fs.ErrExist)
-	})
-}
-
 func TestEmptyExtraData(t *testing.T) {
 	cfg := getTestDefaultConfig(t)
 	cfg.Genesis.ExtraData = ""
@@ -1094,13 +995,15 @@ func TestAdminEvents(t *testing.T) {
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
-	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	conn, err := grpc.DialContext(
-		grpcCtx,
+	select {
+	case <-app.Started():
+	case <-time.After(10 * time.Second):
+		require.Fail(t, "app did not start in time")
+	}
+
+	conn, err := grpc.NewClient(
 		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
@@ -1185,13 +1088,18 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 
-	<-app.Started()
+	select {
+	case <-app.Started():
+	case <-time.After(10 * time.Second):
+		require.Fail(t, "app did not start in time")
+	}
+
 	for _, signer := range app.signers {
-		signer := signer
 		mgr, err := activation.NewPostSetupManager(
 			cfg.POST,
 			logger.Zap(),
-			app.cachedDB,
+			app.db,
+			app.atxsdata,
 			types.ATXID(app.Config.Genesis.GoldenATX()),
 			app.syncer,
 			app.validator,
@@ -1209,13 +1117,9 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 		))
 	}
 
-	grpcCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	conn, err := grpc.DialContext(
-		grpcCtx,
+	conn, err := grpc.NewClient(
 		"127.0.0.1:10093",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })

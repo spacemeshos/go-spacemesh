@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func makeNanoTX(addr types.Address, fee uint64, received time.Time) *NanoTX {
@@ -84,7 +84,7 @@ func TestPopAll(t *testing.T) {
 	mockCache := NewMockconStateCache(ctrl)
 	mockCache.EXPECT().GetMempool(gomock.Any()).Return(mempool)
 	gasLimit := uint64(3)
-	mi := newMempoolIterator(logtest.New(t), mockCache, gasLimit)
+	mi := newMempoolIterator(zaptest.NewLogger(t), mockCache, gasLimit)
 	testPopAll(t, mi, expected[:gasLimit])
 	require.NotEmpty(t, mempool)
 }
@@ -98,7 +98,7 @@ func TestPopAll_SkipSomeGasTooHigh(t *testing.T) {
 	// make the 2nd one too expensive to pick, therefore invalidated all txs from addr0
 	orderedByFee[1].MaxGas = 10
 	expected := []*NanoTX{orderedByFee[0], orderedByFee[4], orderedByFee[5]}
-	mi := newMempoolIterator(logtest.New(t), mockCache, gasLimit)
+	mi := newMempoolIterator(zaptest.NewLogger(t), mockCache, gasLimit)
 	testPopAll(t, mi, expected)
 	require.NotEmpty(t, mempool)
 }
@@ -109,7 +109,7 @@ func TestPopAll_ExhaustMempool(t *testing.T) {
 	mockCache := NewMockconStateCache(ctrl)
 	mockCache.EXPECT().GetMempool(gomock.Any()).Return(mempool)
 	gasLimit := uint64(100)
-	mi := newMempoolIterator(logtest.New(t), mockCache, gasLimit)
+	mi := newMempoolIterator(zaptest.NewLogger(t), mockCache, gasLimit)
 	testPopAll(t, mi, expected)
 	require.Empty(t, mempool)
 }

@@ -3,20 +3,24 @@ package activation_test
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"net/url"
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/poet/registration"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
 // HTTPPoetTestHarness utilizes a local self-contained poet server instance
@@ -30,6 +34,25 @@ func (h *HTTPPoetTestHarness) RestURL() *url.URL {
 		Scheme: "http",
 		Host:   h.Service.GrpcRestProxyAddr().String(),
 	}
+}
+
+func (h *HTTPPoetTestHarness) Client(
+	db *activation.PoetDb,
+	cfg activation.PoetConfig,
+	logger *zap.Logger,
+	opts ...activation.PoetClientOpt,
+) (activation.PoetClient, error) {
+	return activation.NewPoetClient(
+		db,
+		h.ServerCfg(),
+		cfg,
+		logger,
+		opts...,
+	)
+}
+
+func (h *HTTPPoetTestHarness) ServerCfg() types.PoetServer {
+	return types.PoetServer{Pubkey: types.NewBase64Enc(h.Service.PublicKey()), Address: h.RestURL().String()}
 }
 
 type HTTPPoetOpt func(*server.Config)
@@ -55,6 +78,12 @@ func WithPhaseShift(phase time.Duration) HTTPPoetOpt {
 func WithCycleGap(gap time.Duration) HTTPPoetOpt {
 	return func(cfg *server.Config) {
 		cfg.Round.CycleGap = gap
+	}
+}
+
+func WithCertifier(certifier *registration.CertifierConfig) HTTPPoetOpt {
+	return func(cfg *server.Config) {
+		cfg.Registration.Certifier = certifier
 	}
 }
 
@@ -91,7 +120,13 @@ func TestHTTPPoet(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c, err := NewHTTPPoetTestHarness(ctx, poetDir)
+
+	certPubKey, certPrivKey, err := ed25519.GenerateKey(nil)
+	r.NoError(err)
+
+	c, err := NewHTTPPoetTestHarness(ctx, poetDir, WithCertifier(&registration.CertifierConfig{
+		PubKey: registration.Base64Enc(certPubKey),
+	}))
 	r.NoError(err)
 	r.NotNil(c)
 
@@ -107,39 +142,47 @@ func TestHTTPPoet(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	resp, err := client.PowParams(context.Background())
-	r.NoError(err)
-
 	signer, err := signing.NewEdSigner(signing.WithPrefix([]byte("prefix")))
 	require.NoError(t, err)
 	ch := types.RandomHash()
 
-	nonce, err := shared.FindSubmitPowNonce(
-		context.Background(),
-		resp.Challenge,
-		ch.Bytes(),
-		signer.NodeID().Bytes(),
-		uint(resp.Difficulty),
-	)
-	r.NoError(err)
-
 	signature := signer.Sign(signing.POET, ch.Bytes())
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
 
-	poetRound, err := client.Submit(
-		context.Background(),
-		time.Time{},
-		prefix,
-		ch.Bytes(),
-		signature,
-		signer.NodeID(),
-		activation.PoetPoW{
-			Nonce:  nonce,
-			Params: *resp,
-		},
-	)
-	r.NoError(err)
-	r.NotNil(poetRound)
+	t.Run("submit with cert", func(t *testing.T) {
+		cert := shared.Cert{Pubkey: signer.NodeID().Bytes()}
+		encoded, err := shared.EncodeCert(&cert)
+		require.NoError(t, err)
+
+		poetRound, err := client.Submit(
+			context.Background(),
+			time.Time{},
+			prefix,
+			ch.Bytes(),
+			signature,
+			signer.NodeID(),
+			activation.PoetAuth{
+				PoetCert: &certifier.PoetCert{
+					Data:      encoded,
+					Signature: ed25519.Sign(certPrivKey, encoded),
+				},
+			},
+		)
+		require.NoError(t, err)
+		require.NotNil(t, poetRound)
+	})
+	t.Run("return proper error code on rejected cert", func(t *testing.T) {
+		_, err := client.Submit(
+			context.Background(),
+			time.Time{},
+			prefix,
+			ch.Bytes(),
+			signature,
+			signer.NodeID(),
+			activation.PoetAuth{PoetCert: &certifier.PoetCert{Data: []byte("oops")}},
+		)
+		require.ErrorIs(t, err, activation.ErrUnauthorized)
+	})
 }
 
 func TestSubmitTooLate(t *testing.T) {
@@ -168,21 +211,9 @@ func TestSubmitTooLate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	resp, err := client.PowParams(context.Background())
-	r.NoError(err)
-
 	signer, err := signing.NewEdSigner(signing.WithPrefix([]byte("prefix")))
 	require.NoError(t, err)
 	ch := types.RandomHash()
-
-	nonce, err := shared.FindSubmitPowNonce(
-		context.Background(),
-		resp.Challenge,
-		ch.Bytes(),
-		signer.NodeID().Bytes(),
-		uint(resp.Difficulty),
-	)
-	r.NoError(err)
 
 	signature := signer.Sign(signing.POET, ch.Bytes())
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
@@ -194,10 +225,72 @@ func TestSubmitTooLate(t *testing.T) {
 		ch.Bytes(),
 		signature,
 		signer.NodeID(),
-		activation.PoetPoW{
-			Nonce:  nonce,
-			Params: *resp,
-		},
+		activation.PoetAuth{},
 	)
 	r.ErrorIs(err, activation.ErrInvalidRequest)
+}
+
+func TestCertifierInfo(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	var eg errgroup.Group
+	poetDir := t.TempDir()
+	t.Cleanup(func() { r.NoError(eg.Wait()) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c, err := NewHTTPPoetTestHarness(ctx, poetDir, WithCertifier(&registration.CertifierConfig{
+		URL:    "http://localhost:8080",
+		PubKey: []byte("pubkey"),
+	}))
+	r.NoError(err)
+	r.NotNil(c)
+
+	eg.Go(func() error {
+		err := c.Service.Start(ctx)
+		return errors.Join(err, c.Service.Close())
+	})
+
+	client, err := activation.NewHTTPPoetClient(
+		types.PoetServer{Address: c.RestURL().String()},
+		activation.DefaultPoetConfig(),
+		activation.WithLogger(zaptest.NewLogger(t)),
+	)
+	require.NoError(t, err)
+
+	url, pubkey, err := client.CertifierInfo(context.Background())
+	r.NoError(err)
+	r.Equal("http://localhost:8080", url.String())
+	r.Equal([]byte("pubkey"), pubkey)
+}
+
+func TestNoCertifierInfo(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	var eg errgroup.Group
+	poetDir := t.TempDir()
+	t.Cleanup(func() { r.NoError(eg.Wait()) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c, err := NewHTTPPoetTestHarness(ctx, poetDir)
+	r.NoError(err)
+	r.NotNil(c)
+
+	eg.Go(func() error {
+		err := c.Service.Start(ctx)
+		return errors.Join(err, c.Service.Close())
+	})
+
+	client, err := activation.NewHTTPPoetClient(
+		types.PoetServer{Address: c.RestURL().String()},
+		activation.DefaultPoetConfig(),
+		activation.WithLogger(zaptest.NewLogger(t)),
+	)
+	require.NoError(t, err)
+
+	_, _, err = client.CertifierInfo(context.Background())
+	r.ErrorContains(err, "poet doesn't support certificates")
 }

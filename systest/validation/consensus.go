@@ -55,6 +55,7 @@ func failMinority(failures []int, groups map[string][]int) {
 		sameSize int
 	)
 	for _, group := range groups {
+		//nolint:copyloopvar
 		failed := group
 		if len(group) > len(largest) {
 			failed = largest
@@ -81,8 +82,7 @@ func Consensus(c *cluster.Cluster, tolerate, distance int) Validation {
 			eg   errgroup.Group
 			iter = cv.Next()
 		)
-		for i := 0; i < c.Total(); i++ {
-			i := i
+		for i := range c.Total() {
 			node := c.Client(i)
 			eg.Go(func() error {
 				iter.OnData(i, getConsensusData(ctx, distance, node))

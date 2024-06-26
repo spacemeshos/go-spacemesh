@@ -17,15 +17,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
@@ -44,7 +45,7 @@ var goldenAtx = types.ATXID{1}
 func atxEqual(
 	tb testing.TB,
 	sAtx types.AtxSnapshot,
-	vAtx *types.VerifiedActivationTx,
+	vAtx *types.ActivationTx,
 	commitAtx types.ATXID,
 	vrfnonce types.VRFPostIndex,
 ) {
@@ -53,8 +54,8 @@ func atxEqual(
 	require.True(tb, bytes.Equal(sAtx.CommitmentAtx, commitAtx.Bytes()))
 	require.EqualValues(tb, sAtx.VrfNonce, vrfnonce)
 	require.Equal(tb, sAtx.NumUnits, vAtx.NumUnits)
-	require.Equal(tb, sAtx.BaseTickHeight, vAtx.BaseTickHeight())
-	require.Equal(tb, sAtx.TickCount, vAtx.TickCount())
+	require.Equal(tb, sAtx.BaseTickHeight, vAtx.BaseTickHeight)
+	require.Equal(tb, sAtx.TickCount, vAtx.TickCount)
 	require.True(tb, bytes.Equal(sAtx.PublicKey, vAtx.SmesherID.Bytes()))
 	require.Equal(tb, sAtx.Sequence, vAtx.Sequence)
 	require.True(tb, bytes.Equal(sAtx.Coinbase, vAtx.Coinbase.Bytes()))
@@ -89,7 +90,7 @@ func verifyDbContent(tb testing.TB, db *sql.Database) {
 	}
 	allIds, err := atxs.All(db)
 	require.NoError(tb, err)
-	var extra []*types.VerifiedActivationTx
+	var extra []*types.ActivationTx
 	for _, id := range allIds {
 		vatx, err := atxs.Get(db, id)
 		require.NoError(tb, err)
@@ -146,7 +147,6 @@ func TestRecover(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -166,7 +166,7 @@ func TestRecover(t *testing.T) {
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := sql.InMemory()
 			localDB := localsql.InMemory()
-			preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
+			preserve, err := checkpoint.RecoverWithDb(ctx, zaptest.NewLogger(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 				return
@@ -215,7 +215,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	localDB := localsql.InMemory()
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
-	preserve, err := checkpoint.RecoverWithDb(ctx, logtest.New(t), db, localDB, fs, cfg)
+	preserve, err := checkpoint.RecoverWithDb(ctx, zaptest.NewLogger(t), db, localDB, fs, cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 	require.EqualValues(t, recoverLayer-1, types.GetEffectiveGenesis())
@@ -227,11 +227,9 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 func validateAndPreserveData(
 	tb testing.TB,
 	db *sql.Database,
-	deps []*types.VerifiedActivationTx,
-	proofs []*types.PoetProofMessage,
+	deps []*checkpoint.AtxDep,
 ) {
-	lg := logtest.New(tb)
-	poetDb := activation.NewPoetDb(db, lg)
+	lg := zaptest.NewLogger(tb)
 	ctrl := gomock.NewController(tb)
 	mclock := activation.NewMocklayerClock(ctrl)
 	mfetch := smocks.NewMockFetcher(ctrl)
@@ -247,7 +245,6 @@ func validateAndPreserveData(
 		mclock,
 		nil,
 		mfetch,
-		10,
 		goldenAtx,
 		mvalidator,
 		mreceiver,
@@ -255,42 +252,49 @@ func validateAndPreserveData(
 		lg,
 	)
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	for i, vatx := range deps {
-		encoded, err := codec.Encode(vatx)
-		require.NoError(tb, err)
+	for _, dep := range deps {
+		var atx wire.ActivationTxV1
+		require.NoError(tb, codec.Decode(dep.Blob, &atx))
+		vatx := wire.ActivationTxFromWireV1(&atx, dep.Blob...)
 		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
-		mfetch.EXPECT().GetPoetProof(gomock.Any(), vatx.GetPoetProofRef())
-		if vatx.InitialPost != nil {
+		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
+		if vatx.PrevATXID == types.EmptyATXID {
 			mvalidator.EXPECT().
-				InitialNIPostChallenge(&vatx.ActivationTx.NIPostChallenge, gomock.Any(), goldenAtx).
+				InitialNIPostChallengeV1(&atx.NIPostChallengeV1, gomock.Any(), goldenAtx).
 				AnyTimes()
 			mvalidator.EXPECT().Post(
 				gomock.Any(),
 				vatx.SmesherID,
 				*vatx.CommitmentATX,
-				vatx.InitialPost,
+				wire.PostFromWireV1(atx.InitialPost),
 				gomock.Any(),
 				vatx.NumUnits,
 				gomock.Any(),
 			)
-			mvalidator.EXPECT().
-				VRFNonce(vatx.SmesherID, *vatx.CommitmentATX, vatx.VRFNonce, gomock.Any(), vatx.NumUnits)
+			mvalidator.EXPECT().VRFNonce(
+				vatx.SmesherID,
+				*vatx.CommitmentATX,
+				(uint64)(vatx.VRFNonce),
+				atx.NIPost.PostMetadata.LabelsPerUnit,
+				vatx.NumUnits,
+			)
 		} else {
-			mvalidator.EXPECT().NIPostChallenge(&vatx.ActivationTx.NIPostChallenge, cdb, vatx.SmesherID)
+			mvalidator.EXPECT().NIPostChallengeV1(
+				&atx.NIPostChallengeV1,
+				gomock.Cond(func(prev any) bool { return prev.(*types.ActivationTx).ID() == atx.PrevATXID }),
+				vatx.SmesherID,
+			)
 		}
-		mvalidator.EXPECT().PositioningAtx(vatx.PositioningATX, cdb, goldenAtx, vatx.PublishEpoch)
+
+		mvalidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, vatx.PublishEpoch)
 		mvalidator.EXPECT().
-			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), vatx.NIPost, gomock.Any(), vatx.NumUnits, gomock.Any()).
+			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), vatx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)
 		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", encoded))
-		err = poetDb.ValidateAndStore(context.Background(), proofs[i])
-		require.ErrorContains(tb, err, fmt.Sprintf("failed to validate poet proof for poetID %s round 1337",
-			hex.EncodeToString(proofs[i].PoetServiceID[:5])),
-		)
+		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", dep.Blob))
 	}
 }
 
@@ -298,69 +302,101 @@ func newChainedAtx(
 	tb testing.TB,
 	prev, pos types.ATXID,
 	commitAtx *types.ATXID,
+	poetProofRef types.PoetProofRef,
 	epoch uint32,
 	seq, vrfNonce uint64,
 	sig *signing.EdSigner,
-) *types.VerifiedActivationTx {
-	atx := &types.ActivationTx{
-		InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch:   types.EpochID(epoch),
-				Sequence:       seq,
-				PrevATXID:      prev,
-				PositioningATX: pos,
-				CommitmentATX:  commitAtx,
+) *checkpoint.AtxDep {
+	watx := &wire.ActivationTxV1{
+		InnerActivationTxV1: wire.InnerActivationTxV1{
+			NIPostChallengeV1: wire.NIPostChallengeV1{
+				PublishEpoch:     types.EpochID(epoch),
+				Sequence:         seq,
+				PrevATXID:        prev,
+				PositioningATXID: pos,
+				CommitmentATXID:  commitAtx,
 			},
-			NIPost: &types.NIPost{
-				PostMetadata: &types.PostMetadata{
-					Challenge: types.RandomBytes(5),
+			NIPost: &wire.NIPostV1{
+				PostMetadata: &wire.PostMetadataV1{
+					Challenge: poetProofRef[:],
 				},
 			},
 			NumUnits: 2,
 			Coinbase: types.Address{1, 2, 3},
 		},
+		SmesherID: sig.NodeID(),
 	}
 	if prev == types.EmptyATXID {
-		atx.InitialPost = &types.Post{}
+		watx.InitialPost = &wire.PostV1{}
 		nodeID := sig.NodeID()
-		atx.NodeID = &nodeID
+		watx.NodeID = &nodeID
 	}
 	if vrfNonce != 0 {
-		atx.VRFNonce = (*types.VRFPostIndex)(&vrfNonce)
+		watx.VRFNonce = (*uint64)(&vrfNonce)
 	}
-	atx.SmesherID = sig.NodeID()
-	atx.SetEffectiveNumUnits(atx.NumUnits)
+	watx.Signature = sig.Sign(signing.ATX, watx.SignedBytes())
+
+	atx := wire.ActivationTxFromWireV1(watx)
 	atx.SetReceived(time.Now().Local())
-	atx.Signature = sig.Sign(signing.ATX, atx.SignedBytes())
-	return newvAtx(tb, atx)
+
+	return &checkpoint.AtxDep{
+		ID:           atx.ID(),
+		PublishEpoch: atx.PublishEpoch,
+		Blob:         codec.MustEncode(watx),
+	}
+}
+
+func randomPoetProof(tb testing.TB) (*types.PoetProofMessage, types.PoetProofRef) {
+	proof := &types.PoetProofMessage{
+		PoetProof: types.PoetProof{
+			MerkleProof: shared.MerkleProof{
+				Root:         types.RandomBytes(32),
+				ProvenLeaves: [][]byte{{1}, {2}},
+				ProofNodes:   [][]byte{{1}, {2}},
+			},
+			LeafCount: 1234,
+		},
+		PoetServiceID: types.RandomBytes(32),
+		RoundID:       "1337",
+	}
+	ref, err := proof.Ref()
+	require.NoError(tb, err)
+	return proof, ref
 }
 
 func createInterlinkedAtxChain(
 	tb testing.TB,
 	sig1 *signing.EdSigner,
 	sig2 *signing.EdSigner,
-) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage) {
-	// epoch 2
-	sig1Atx1 := newChainedAtx(tb, types.EmptyATXID, goldenAtx, &goldenAtx, 2, 0, 113, sig1)
-	// epoch 3
-	sig1Atx2 := newChainedAtx(tb, sig1Atx1.ID(), sig1Atx1.ID(), nil, 3, 1, 0, sig1)
-	// epoch 4
-	sig1Atx3 := newChainedAtx(tb, sig1Atx2.ID(), sig1Atx2.ID(), nil, 4, 2, 0, sig1)
-	commitAtxID := sig1Atx2.ID()
-	sig2Atx1 := newChainedAtx(tb, types.EmptyATXID, sig1Atx2.ID(), &commitAtxID, 4, 0, 513, sig2)
-	// epoch 5
-	sig1Atx4 := newChainedAtx(tb, sig1Atx3.ID(), sig2Atx1.ID(), nil, 5, 3, 0, sig1)
-	// epoch 6
-	sig1Atx5 := newChainedAtx(tb, sig1Atx4.ID(), sig1Atx4.ID(), nil, 6, 4, 0, sig1)
-	sig2Atx2 := newChainedAtx(tb, sig2Atx1.ID(), sig1Atx4.ID(), nil, 6, 1, 0, sig2)
-	// epoch 7
-	sig1Atx6 := newChainedAtx(tb, sig1Atx5.ID(), sig2Atx2.ID(), nil, 7, 5, 0, sig1)
-	// epoch 8
-	sig2Atx3 := newChainedAtx(tb, sig2Atx2.ID(), sig1Atx6.ID(), nil, 8, 2, 0, sig2)
-	// epoch 9
-	sig1Atx7 := newChainedAtx(tb, sig1Atx6.ID(), sig2Atx3.ID(), nil, 9, 6, 0, sig1)
+) ([]*checkpoint.AtxDep, []*types.PoetProofMessage) {
+	var proofs []*types.PoetProofMessage
+	poetRef := func() types.PoetProofRef {
+		proof, ref := randomPoetProof(tb)
+		proofs = append(proofs, proof)
+		return ref
+	}
 
-	vAtxs := []*types.VerifiedActivationTx{
+	// epoch 2
+	sig1Atx1 := newChainedAtx(tb, types.EmptyATXID, goldenAtx, &goldenAtx, poetRef(), 2, 0, 113, sig1)
+	// epoch 3
+	sig1Atx2 := newChainedAtx(tb, sig1Atx1.ID, sig1Atx1.ID, nil, poetRef(), 3, 1, 0, sig1)
+	// epoch 4
+	sig1Atx3 := newChainedAtx(tb, sig1Atx2.ID, sig1Atx2.ID, nil, poetRef(), 4, 2, 0, sig1)
+	commitAtxID := sig1Atx2.ID
+	sig2Atx1 := newChainedAtx(tb, types.EmptyATXID, sig1Atx2.ID, &commitAtxID, poetRef(), 4, 0, 513, sig2)
+	// epoch 5
+	sig1Atx4 := newChainedAtx(tb, sig1Atx3.ID, sig2Atx1.ID, nil, poetRef(), 5, 3, 0, sig1)
+	// epoch 6
+	sig1Atx5 := newChainedAtx(tb, sig1Atx4.ID, sig1Atx4.ID, nil, poetRef(), 6, 4, 0, sig1)
+	sig2Atx2 := newChainedAtx(tb, sig2Atx1.ID, sig1Atx4.ID, nil, poetRef(), 6, 1, 0, sig2)
+	// epoch 7
+	sig1Atx6 := newChainedAtx(tb, sig1Atx5.ID, sig2Atx2.ID, nil, poetRef(), 7, 5, 0, sig1)
+	// epoch 8
+	sig2Atx3 := newChainedAtx(tb, sig2Atx2.ID, sig1Atx6.ID, nil, poetRef(), 8, 2, 0, sig2)
+	// epoch 9
+	sig1Atx7 := newChainedAtx(tb, sig1Atx6.ID, sig2Atx3.ID, nil, poetRef(), 9, 6, 0, sig1)
+
+	vAtxs := []*checkpoint.AtxDep{
 		sig1Atx1,
 		sig1Atx2,
 		sig1Atx3,
@@ -372,64 +408,42 @@ func createInterlinkedAtxChain(
 		sig2Atx3,
 		sig1Atx7,
 	}
-	var proofs []*types.PoetProofMessage
-	for range vAtxs {
-		proofMessage := &types.PoetProofMessage{
-			PoetProof: types.PoetProof{
-				MerkleProof: shared.MerkleProof{
-					Root:         types.RandomBytes(32),
-					ProvenLeaves: [][]byte{{1}, {2}},
-					ProofNodes:   [][]byte{{1}, {2}},
-				},
-				LeafCount: 1234,
-			},
-			PoetServiceID: types.RandomBytes(32),
-			RoundID:       "1337",
-		}
-		proofs = append(proofs, proofMessage)
-	}
+
 	return vAtxs, proofs
 }
 
-func createAtxChain(tb testing.TB, sig *signing.EdSigner) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage) {
+func createAtxChain(tb testing.TB, sig *signing.EdSigner) ([]*checkpoint.AtxDep, []*types.PoetProofMessage) {
 	other, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	return createInterlinkedAtxChain(tb, other, sig)
 }
 
-func createAtxChainDepsOnly(tb testing.TB) ([]*types.VerifiedActivationTx, []*types.PoetProofMessage) {
+func createAtxChainDepsOnly(tb testing.TB) ([]*checkpoint.AtxDep, []*types.PoetProofMessage) {
 	other, err := signing.NewEdSigner()
 	require.NoError(tb, err)
-	// epoch 2
-	othAtx1 := newChainedAtx(tb, types.EmptyATXID, goldenAtx, &goldenAtx, 2, 0, 113, other)
-	// epoch 3
-	othAtx2 := newChainedAtx(tb, othAtx1.ID(), othAtx1.ID(), nil, 3, 1, 0, other)
-	// epoch 4
-	othAtx3 := newChainedAtx(tb, othAtx2.ID(), othAtx2.ID(), nil, 4, 2, 0, other)
-	vAtxs := []*types.VerifiedActivationTx{othAtx1, othAtx2, othAtx3}
+
 	var proofs []*types.PoetProofMessage
-	for range vAtxs {
-		proofMessage := &types.PoetProofMessage{
-			PoetProof: types.PoetProof{
-				MerkleProof: shared.MerkleProof{
-					Root:         []byte{1, 2, 3},
-					ProvenLeaves: [][]byte{{1}, {2}},
-					ProofNodes:   [][]byte{{1}, {2}},
-				},
-				LeafCount: 1234,
-			},
-			PoetServiceID: []byte("poet_id_123456"),
-			RoundID:       "1337",
-		}
-		proofs = append(proofs, proofMessage)
+	poetRef := func() types.PoetProofRef {
+		proof, ref := randomPoetProof(tb)
+		proofs = append(proofs, proof)
+		return ref
 	}
-	return vAtxs, proofs
+
+	// epoch 2
+	othAtx1 := newChainedAtx(tb, types.EmptyATXID, goldenAtx, &goldenAtx, poetRef(), 2, 0, 113, other)
+	// epoch 3
+	othAtx2 := newChainedAtx(tb, othAtx1.ID, othAtx1.ID, nil, poetRef(), 3, 1, 0, other)
+	// epoch 4
+	othAtx3 := newChainedAtx(tb, othAtx2.ID, othAtx2.ID, nil, poetRef(), 4, 2, 0, other)
+	atxDeps := []*checkpoint.AtxDep{othAtx1, othAtx2, othAtx3}
+
+	return atxDeps, proofs
 }
 
-func atxIDs(atxs []*types.VerifiedActivationTx) []types.ATXID {
+func atxIDs(atxs []*checkpoint.AtxDep) []types.ATXID {
 	ids := make([]types.ATXID, 0, len(atxs))
 	for _, atx := range atxs {
-		ids = append(ids, atx.ID())
+		ids = append(ids, atx.ID)
 	}
 	return ids
 }
@@ -485,24 +499,27 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	vAtxs3, proofs3 := createInterlinkedAtxChain(t, sig3, sig4)
 	vAtxs = append(vAtxs, vAtxs3...)
 	proofs = append(proofs, proofs3...)
-	validateAndPreserveData(t, oldDB, vAtxs, proofs)
+
+	validateAndPreserveData(t, oldDB, vAtxs)
 	// the proofs are not valid, but save them anyway for the purpose of testing
-	for i, vatx := range vAtxs {
-		encoded, err := codec.Encode(proofs[i])
+	for _, proof := range proofs {
+		encoded, err := codec.Encode(proof)
+		require.NoError(t, err)
+		ref, err := proof.Ref()
 		require.NoError(t, err)
 
 		err = poets.Add(
 			oldDB,
-			types.PoetProofRef(vatx.GetPoetProofRef()),
+			ref,
 			encoded,
-			proofs[i].PoetServiceID,
-			proofs[i].RoundID,
+			proof.PoetServiceID,
+			proof.RoundID,
 		)
 		require.NoError(t, err)
 	}
 	require.NoError(t, oldDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, preserve)
 
@@ -520,8 +537,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	require.NotNil(t, newDB)
 	t.Cleanup(func() { assert.NoError(t, newDB.Close()) })
 	verifyDbContent(t, newDB)
-	validateAndPreserveData(t, newDB, preserve.Deps, preserve.Proofs)
-	// note that poet proofs are not saved to newDB due to verification errors
+	validateAndPreserveData(t, newDB, preserve.Deps)
 
 	restore, err := recovery.CheckpointInfo(newDB)
 	require.NoError(t, err)
@@ -570,30 +586,41 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	vAtxs2, proofs2 := createInterlinkedAtxChain(t, sig2, sig3)
 	vAtxs := append(vAtxs1, vAtxs2...)
 	proofs := append(proofs1, proofs2...)
-	validateAndPreserveData(t, oldDB, vAtxs, proofs)
+	validateAndPreserveData(t, oldDB, vAtxs)
 	// the proofs are not valid, but save them anyway for the purpose of testing
-	for i, vatx := range vAtxs {
-		encoded, err := codec.Encode(proofs[i])
+	for _, proof := range proofs {
+		encoded, err := codec.Encode(proof)
 		require.NoError(t, err)
+		ref, err := proof.Ref()
+		require.NoError(t, err)
+
 		require.NoError(
 			t,
 			poets.Add(
 				oldDB,
-				types.PoetProofRef(vatx.GetPoetProofRef()),
+				ref,
 				encoded,
-				proofs[i].PoetServiceID,
-				proofs[i].RoundID,
+				proof.PoetServiceID,
+				proof.RoundID,
 			),
 		)
 	}
 	require.NoError(t, oldDB.Close())
 
 	// write pending nipost challenge to simulate a pending atx still waiting for poet proof.
-	prevAtx1 := vAtxs1[len(vAtxs1)-2]
-	posAtx1 := vAtxs1[len(vAtxs1)-1]
+	var atx wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-2].Blob, &atx))
+	prevAtx1 := wire.ActivationTxFromWireV1(&atx)
+	atx = wire.ActivationTxV1{}
+	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-1].Blob, &atx))
+	posAtx1 := wire.ActivationTxFromWireV1(&atx)
 
-	prevAtx2 := vAtxs2[len(vAtxs2)-2]
-	posAtx2 := vAtxs2[len(vAtxs2)-1]
+	atx = wire.ActivationTxV1{}
+	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-2].Blob, &atx))
+	prevAtx2 := wire.ActivationTxFromWireV1(&atx)
+	atx = wire.ActivationTxV1{}
+	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-1].Blob, &atx))
+	posAtx2 := wire.ActivationTxFromWireV1(&atx)
 
 	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
 	require.NoError(t, err)
@@ -616,7 +643,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, localDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.NotNil(t, preserve)
 
@@ -631,8 +658,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NotNil(t, newDB)
 	t.Cleanup(func() { assert.NoError(t, newDB.Close()) })
 	verifyDbContent(t, newDB)
-	validateAndPreserveData(t, newDB, preserve.Deps, preserve.Proofs)
-	// note that poet proofs are not saved to newDB due to verification errors
+	validateAndPreserveData(t, newDB, preserve.Deps)
 
 	restore, err := recovery.CheckpointInfo(newDB)
 	require.NoError(t, err)
@@ -676,19 +702,19 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	require.NotNil(t, oldDB)
 
 	vAtxs, proofs := createAtxChainDepsOnly(t)
-	validateAndPreserveData(t, oldDB, vAtxs, proofs)
+	validateAndPreserveData(t, oldDB, vAtxs)
 	// the proofs are not valid, but save them anyway for the purpose of testing
-	for i, vatx := range vAtxs {
-		encoded, err := codec.Encode(proofs[i])
+	for _, proof := range proofs {
+		encoded, err := codec.Encode(proof)
 		require.NoError(t, err)
 		require.NoError(
 			t,
 			poets.Add(
 				oldDB,
-				types.PoetProofRef(vatx.GetPoetProofRef()),
+				types.PoetProofRef(types.CalcHash32(encoded)),
 				encoded,
-				proofs[i].PoetServiceID,
-				proofs[i].RoundID,
+				proof.PoetServiceID,
+				proof.RoundID,
 			),
 		)
 	}
@@ -724,7 +750,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	require.NoError(t, err)
 	require.NoError(t, localDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
@@ -772,20 +798,20 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	require.NotNil(t, oldDB)
 	vAtxs, proofs := createAtxChain(t, sig)
 	// make the first one from the previous snapshot
-	golden := vAtxs[0]
+	var atx wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs[0].Blob, &atx))
+	golden := wire.ActivationTxFromWireV1(&atx, vAtxs[0].Blob...)
 	require.NoError(t, atxs.AddCheckpointed(oldDB, &atxs.CheckpointAtx{
-		ID:             golden.ID(),
-		Epoch:          golden.PublishEpoch,
-		CommitmentATX:  *golden.CommitmentATX,
-		VRFNonce:       *golden.VRFNonce,
-		NumUnits:       golden.NumUnits,
-		BaseTickHeight: golden.BaseTickHeight(),
-		TickCount:      golden.TickCount(),
-		SmesherID:      golden.SmesherID,
-		Sequence:       golden.Sequence,
-		Coinbase:       golden.Coinbase,
+		ID:            golden.ID(),
+		Epoch:         golden.PublishEpoch,
+		CommitmentATX: *golden.CommitmentATX,
+		VRFNonce:      golden.VRFNonce,
+		NumUnits:      golden.NumUnits,
+		SmesherID:     golden.SmesherID,
+		Sequence:      golden.Sequence,
+		Coinbase:      golden.Coinbase,
 	}))
-	validateAndPreserveData(t, oldDB, vAtxs[1:], proofs[1:])
+	validateAndPreserveData(t, oldDB, vAtxs[1:])
 	// the proofs are not valid, but save them anyway for the purpose of testing
 	for i, proof := range proofs {
 		if i == 0 {
@@ -797,7 +823,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 			t,
 			poets.Add(
 				oldDB,
-				types.PoetProofRef(vAtxs[i].GetPoetProofRef()),
+				types.PoetProofRef(types.CalcHash32(encoded)),
 				encoded,
 				proof.PoetServiceID,
 				proof.RoundID,
@@ -806,7 +832,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	}
 	require.NoError(t, oldDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
@@ -853,25 +879,25 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
 	vAtxs, proofs := createAtxChain(t, sig)
-	validateAndPreserveData(t, oldDB, vAtxs, proofs)
+	validateAndPreserveData(t, oldDB, vAtxs)
 	// the proofs are not valid, but save them anyway for the purpose of testing
-	for i, vatx := range vAtxs {
-		encoded, err := codec.Encode(proofs[i])
+	for _, proof := range proofs {
+		encoded, err := codec.Encode(proof)
 		require.NoError(t, err)
 		require.NoError(
 			t,
 			poets.Add(
 				oldDB,
-				types.PoetProofRef(vatx.GetPoetProofRef()),
+				types.PoetProofRef(types.CalcHash32(encoded)),
 				encoded,
-				proofs[i].PoetServiceID,
-				proofs[i].RoundID,
+				proof.PoetServiceID,
+				proof.RoundID,
 			),
 		)
 	}
 	require.NoError(t, oldDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
@@ -906,7 +932,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	nid := types.BytesToNodeID(data)
 	data, err = hex.DecodeString("98e47278c1f58acfd2b670a730f28898f74eb140482a07b91ff81f9ff0b7d9f4")
 	require.NoError(t, err)
-	atx := newAtx(types.ATXID(types.BytesToHash(data)), nil, 3, 1, 0, nid)
+	atx := newAtx(types.ATXID(types.BytesToHash(data)), types.EmptyATXID, nil, 3, 1, 0, nid)
 
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:      goldenAtx,
@@ -922,10 +948,10 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
-	require.NoError(t, atxs.Add(oldDB, newvAtx(t, atx)))
+	require.NoError(t, atxs.Add(oldDB, atx))
 	require.NoError(t, oldDB.Close())
 
-	preserve, err := checkpoint.Recover(ctx, logtest.New(t), afero.NewOsFs(), cfg)
+	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 

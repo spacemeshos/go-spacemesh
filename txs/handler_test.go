@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -27,7 +27,7 @@ func Test_WrongHash(t *testing.T) {
 	require.NoError(t, err)
 	id, err := peer.IDFromPublicKey(pub)
 	require.NoError(t, err)
-	th := NewTxHandler(cstate, id, logtest.New(t))
+	th := NewTxHandler(cstate, id, zaptest.NewLogger(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -83,7 +83,6 @@ func Test_HandleBlock(t *testing.T) {
 			desc: "ZeroPrice",
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			cstate := NewMockconservativeState(ctrl)
@@ -91,7 +90,7 @@ func Test_HandleBlock(t *testing.T) {
 			require.NoError(t, err)
 			id, err := peer.IDFromPublicKey(pub)
 			require.NoError(t, err)
-			th := NewTxHandler(cstate, id, logtest.New(t))
+			th := NewTxHandler(cstate, id, zaptest.NewLogger(t))
 
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -132,7 +131,7 @@ func gossipExpectations(
 	require.NoError(t, err)
 	id, err := peer.IDFromPublicKey(pub)
 	require.NoError(t, err)
-	th := NewTxHandler(cstate, id, logtest.New(t))
+	th := NewTxHandler(cstate, id, zaptest.NewLogger(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -231,7 +230,6 @@ func Test_HandleGossip(t *testing.T) {
 			expect: isErr,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			th, tx := gossipExpectations(t, tc.fee,
 				tc.hasErr, tc.parseErr, tc.addErr,
@@ -253,7 +251,7 @@ func Test_HandleOwnGossip(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	cstate := NewMockconservativeState(ctrl) // no calls on conservative state but still returns accepted
-	th := NewTxHandler(cstate, id, logtest.New(t))
+	th := NewTxHandler(cstate, id, zaptest.NewLogger(t))
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -317,7 +315,6 @@ func Test_HandleProposal(t *testing.T) {
 			fail: true,
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			th, tx := gossipExpectations(t, tc.fee,
 				tc.hasErr, tc.parseErr, tc.addErr,

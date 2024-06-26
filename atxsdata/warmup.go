@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
@@ -39,8 +38,7 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 	}
 	cache.EvictEpoch(evict)
 
-	var ierr error
-	if err := atxs.IterateAtxsData(db, cache.Evicted(), latest,
+	return atxs.IterateAtxsData(db, cache.Evicted(), latest,
 		func(
 			id types.ATXID,
 			node types.NodeID,
@@ -49,20 +47,11 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 			weight,
 			base,
 			height uint64,
+			nonce types.VRFPostIndex,
+			malicious bool,
 		) bool {
-			target := epoch + 1
-			nonce, err := atxs.VRFNonce(db, node, target)
-			if err != nil {
-				ierr = fmt.Errorf("missing nonce %w", err)
-				return false
-			}
-			malicious, err := identities.IsMalicious(db, node)
-			if err != nil {
-				ierr = err
-				return false
-			}
 			cache.Add(
-				target,
+				epoch+1,
 				node,
 				coinbase,
 				id,
@@ -73,8 +62,5 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID) error {
 				malicious,
 			)
 			return true
-		}); err != nil {
-		return err
-	}
-	return ierr
+		})
 }

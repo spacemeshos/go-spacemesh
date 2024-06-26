@@ -1,7 +1,7 @@
 package fetch
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"

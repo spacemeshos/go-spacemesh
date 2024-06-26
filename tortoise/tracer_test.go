@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
@@ -39,7 +39,7 @@ func TestTracer(t *testing.T) {
 	trt.Updates() // just trace final result
 	t.Run("live", func(t *testing.T) {
 		t.Parallel()
-		require.NoError(t, RunTrace(path, nil, WithLogger(logtest.New(t))))
+		require.NoError(t, RunTrace(path, nil, WithLogger(zaptest.NewLogger(t))))
 	})
 	t.Run("recover", func(t *testing.T) {
 		t.Parallel()
@@ -53,7 +53,7 @@ func TestTracer(t *testing.T) {
 		)
 		require.NoError(t, err)
 		trt.Updates()
-		require.NoError(t, RunTrace(path, nil, WithLogger(logtest.New(t))))
+		require.NoError(t, RunTrace(path, nil, WithLogger(zaptest.NewLogger(t))))
 	})
 	t.Run("errors", func(t *testing.T) {
 		t.Parallel()
@@ -63,7 +63,7 @@ func TestTracer(t *testing.T) {
 		ballot := &types.BallotTortoiseData{}
 		_, err = trt.DecodeBallot(ballot)
 		require.Error(t, err)
-		require.NoError(t, RunTrace(path, nil, WithLogger(logtest.New(t))))
+		require.NoError(t, RunTrace(path, nil, WithLogger(zaptest.NewLogger(t))))
 	})
 }
 
@@ -78,7 +78,6 @@ func TestData(t *testing.T) {
 	}
 	require.NoError(t, err)
 	for _, entry := range entries {
-		entry := entry
 		if strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
@@ -86,7 +85,7 @@ func TestData(t *testing.T) {
 			t.Parallel()
 			require.NoError(
 				t,
-				RunTrace(filepath.Join(data, entry.Name()), nil, WithLogger(logtest.New(t))),
+				RunTrace(filepath.Join(data, entry.Name()), nil, WithLogger(zaptest.NewLogger(t))),
 			)
 		})
 	}

@@ -1,5 +1,10 @@
 {
     "preset": "fastnet",
+    "main": {
+        "atx-versions": {
+            "2": 2
+        }
+    },
     "poet": {
         "phase-shift": "30s",
         "cycle-gap": "30s",
@@ -26,7 +31,13 @@
             "smeshing-opts-verifying-min-workers": 1000000
         }
     },
+    "certifier": {
+        "client": {
+            "max-retries": 10
+        }
+    },
     "logging": {
+        "log-encoder": "json",
         "txHandler": "debug",
         "grpc": "debug",
         "sync": "debug",

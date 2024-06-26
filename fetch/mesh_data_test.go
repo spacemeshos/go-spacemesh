@@ -7,20 +7,21 @@ import (
 	"fmt"
 	"testing"
 
+	p2phost "github.com/libp2p/go-libp2p/core/host"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -33,6 +34,16 @@ const (
 	txsForBlock    = iota
 	txsForProposal = iota
 )
+
+type hostWrapper struct {
+	p2phost.Host
+}
+
+func (hw *hostWrapper) PeerInfo() peerinfo.PeerInfo { return nil }
+
+func wrapHost(h p2phost.Host) server.Host {
+	return &hostWrapper{Host: h}
+}
 
 func (f *testFetch) withMethod(method int) *testFetch {
 	f.method = method
@@ -143,7 +154,6 @@ func testFetch_getHashes(t *testing.T, streaming bool) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -451,11 +461,10 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 		atx := types.NewActivationTx(
 			types.NIPostChallenge{},
 			types.Address{1, 2, 3},
-			&types.NIPost{},
 			i,
-			nil,
 		)
-		require.NoError(tb, activation.SignAndFinalizeAtx(sig, atx))
+		atx.SmesherID = sig.NodeID()
+		atx.SetID(types.RandomATXID())
 		atxs = append(atxs, atx)
 	}
 	return atxs
@@ -624,7 +633,6 @@ func Test_PeerEpochInfo(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -704,7 +712,6 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -773,7 +780,6 @@ func TestFetch_GetCert(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -788,26 +794,23 @@ func TestFetch_GetCert(t *testing.T) {
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
 			for i, peer := range peers {
-				p := peer
-				ith := i
 				f.mOpn2S.EXPECT().
-					Request(gomock.Any(), p, gomock.Any()).
-					DoAndReturn(
-						func(
-							_ context.Context,
-							_ p2p.Peer,
-							gotReq []byte,
-							extraProtocols ...string,
-						) ([]byte, error) {
-							require.Equal(t, reqData, gotReq)
-							if tc.results[ith] == nil {
-								data, err := codec.Encode(&expected)
-								require.NoError(t, err)
-								return data, nil
-							}
-							return nil, tc.results[ith]
-						})
-				if tc.results[ith] == nil {
+					Request(gomock.Any(), peer, gomock.Any()).
+					DoAndReturn(func(
+						_ context.Context,
+						_ p2p.Peer,
+						gotReq []byte,
+						extraProtocols ...string,
+					) ([]byte, error) {
+						require.Equal(t, reqData, gotReq)
+						if tc.results[i] == nil {
+							data, err := codec.Encode(&expected)
+							require.NoError(t, err)
+							return data, nil
+						}
+						return nil, tc.results[i]
+					})
+				if tc.results[i] == nil {
 					break
 				}
 			}
@@ -835,7 +838,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 	for _, withLimiting := range []bool{false, true} {
 		t.Run(fmt.Sprintf("with limiting: %v", withLimiting), func(t *testing.T) {
 			srv := server.New(
-				mesh.Hosts()[1],
+				wrapHost(mesh.Hosts()[1]),
 				hashProtocol,
 				server.WrapHandler(func(_ context.Context, data []byte) ([]byte, error) {
 					var requestBatch RequestBatch
@@ -876,8 +879,8 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			cfg.QueueSize = 1000
 			cfg.GetAtxsConcurrency = getAtxConcurrency
 
-			cdb := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
-			client := server.New(mesh.Hosts()[0], hashProtocol, nil)
+			cdb := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
+			client := server.New(wrapHost(mesh.Hosts()[0]), hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
 			f := NewFetch(cdb, store.New(), host,
@@ -986,7 +989,6 @@ func TestBatchErrorIgnore(t *testing.T) {
 			},
 		},
 	} {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			require.Equal(t, tc.ignored, tc.error.Ignore())
 		})

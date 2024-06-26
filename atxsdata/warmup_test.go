@@ -20,21 +20,18 @@ func gatx(
 	id types.ATXID,
 	epoch types.EpochID,
 	smesher types.NodeID,
-	nonce *types.VRFPostIndex,
-) types.VerifiedActivationTx {
-	atx := &types.ActivationTx{}
-	atx.NumUnits = 1
-	atx.PublishEpoch = epoch
-	atx.SmesherID = smesher
-	atx.SetID(id)
-	atx.SetEffectiveNumUnits(atx.NumUnits)
-	atx.SetReceived(time.Time{}.Add(1))
-	atx.VRFNonce = nonce
-	verified, err := atx.Verify(0, 100)
-	if err != nil {
-		panic(err)
+	nonce types.VRFPostIndex,
+) types.ActivationTx {
+	atx := &types.ActivationTx{
+		NumUnits:     1,
+		PublishEpoch: epoch,
+		SmesherID:    smesher,
+		VRFNonce:     nonce,
+		TickCount:    1,
 	}
-	return *verified
+	atx.SetID(id)
+	atx.SetReceived(time.Time{}.Add(1))
+	return *atx
 }
 
 func TestWarmup(t *testing.T) {
@@ -43,13 +40,13 @@ func TestWarmup(t *testing.T) {
 		db := sql.InMemory()
 		applied := types.LayerID(10)
 		nonce := types.VRFPostIndex(1)
-		data := []types.VerifiedActivationTx{
-			gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, &nonce),
-			gatx(types.ATXID{1, 2}, 1, types.NodeID{2}, &nonce),
-			gatx(types.ATXID{2, 1}, 2, types.NodeID{1}, &nonce),
-			gatx(types.ATXID{2, 2}, 2, types.NodeID{2}, &nonce),
-			gatx(types.ATXID{3, 2}, 3, types.NodeID{2}, &nonce),
-			gatx(types.ATXID{3, 3}, 3, types.NodeID{3}, &nonce),
+		data := []types.ActivationTx{
+			gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nonce),
+			gatx(types.ATXID{1, 2}, 1, types.NodeID{2}, nonce),
+			gatx(types.ATXID{2, 1}, 2, types.NodeID{1}, nonce),
+			gatx(types.ATXID{2, 2}, 2, types.NodeID{2}, nonce),
+			gatx(types.ATXID{3, 2}, 3, types.NodeID{2}, nonce),
+			gatx(types.ATXID{3, 3}, 3, types.NodeID{3}, nonce),
 		}
 		for i := range data {
 			require.NoError(t, atxs.Add(db, &data[i]))
@@ -74,18 +71,10 @@ func TestWarmup(t *testing.T) {
 		require.Error(t, err)
 		require.Nil(t, c)
 	})
-	t.Run("missing nonce", func(t *testing.T) {
-		db := sql.InMemory()
-		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nil)
-		require.NoError(t, atxs.Add(db, &data))
-		c, err := Warm(db, 1)
-		require.Error(t, err)
-		require.Nil(t, c)
-	})
 	t.Run("db failures", func(t *testing.T) {
 		db := sql.InMemory()
 		nonce := types.VRFPostIndex(1)
-		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, &nonce)
+		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nonce)
 		require.NoError(t, atxs.Add(db, &data))
 
 		exec := mocks.NewMockExecutor(gomock.NewController(t))
@@ -103,7 +92,7 @@ func TestWarmup(t *testing.T) {
 				return tx.Exec(q, enc, dec)
 			}).
 			AnyTimes()
-		for i := 0; i < 5; i++ {
+		for range 3 {
 			c := New()
 			require.Error(t, Warmup(exec, c, 1))
 			fail++

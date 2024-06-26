@@ -7,11 +7,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -32,7 +32,13 @@ func createTestHandler(t *testing.T) *testHandler {
 		mockTortoise: mocks.NewMocktortoiseProvider(ctrl),
 		mockMesh:     mocks.NewMockmeshProvider(ctrl),
 	}
-	th.Handler = NewHandler(th.mockFetcher, sql.InMemory(), th.mockTortoise, th.mockMesh, WithLogger(logtest.New(t)))
+	th.Handler = NewHandler(
+		th.mockFetcher,
+		sql.InMemory(),
+		th.mockTortoise,
+		th.mockMesh,
+		WithLogger(zaptest.NewLogger(t)),
+	)
 	return th
 }
 

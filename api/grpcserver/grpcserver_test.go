@@ -16,10 +16,9 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	ma "github.com/multiformats/go-multiaddr"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/merkle-tree"
-	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -45,6 +44,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
+	peerinfomocks "github.com/spacemeshos/go-spacemesh/p2p/peerinfo/mocks"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -88,12 +89,9 @@ var (
 	addr2           types.Address
 	rewardSmesherID = types.RandomNodeID()
 	prevAtxID       = types.ATXID(types.HexToHash32("44444"))
-	chlng           = types.HexToHash32("55555")
-	poetRef         = []byte("66666")
-	nipost          = newNIPostWithChallenge(&chlng, poetRef)
 	challenge       = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
-	globalAtx       *types.VerifiedActivationTx
-	globalAtx2      *types.VerifiedActivationTx
+	globalAtx       *types.ActivationTx
+	globalAtx2      *types.ActivationTx
 	globalTx        *types.Transaction
 	globalTx2       *types.Transaction
 	ballot1         = genLayerBallot(types.LayerID(11))
@@ -135,10 +133,9 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 
 func dialGrpc(ctx context.Context, tb testing.TB, cfg Config) *grpc.ClientConn {
 	tb.Helper()
-	conn, err := grpc.DialContext(ctx,
+	conn, err := grpc.NewClient(
 		cfg.PublicListener,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	require.NoError(tb, err)
 	tb.Cleanup(func() { require.NoError(tb, conn.Close()) })
@@ -168,31 +165,15 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	atx := types.NewActivationTx(challenge, addr1, nipost, numUnits, nil)
-	atx.SetEffectiveNumUnits(numUnits)
-	atx.SetReceived(time.Now())
-	if err := activation.SignAndFinalizeAtx(signer, atx); err != nil {
-		log.Println("failed to sign atx:", err)
-		os.Exit(1)
-	}
-	globalAtx, err = atx.Verify(0, 1)
-	if err != nil {
-		log.Println("failed to verify atx:", err)
-		os.Exit(1)
-	}
+	globalAtx = types.NewActivationTx(challenge, addr1, numUnits)
+	globalAtx.SetReceived(time.Now())
+	globalAtx.SmesherID = signer.NodeID()
+	globalAtx.TickCount = 1
 
-	atx2 := types.NewActivationTx(challenge, addr2, nipost, numUnits, nil)
-	atx2.SetEffectiveNumUnits(numUnits)
-	atx2.SetReceived(time.Now())
-	if err := activation.SignAndFinalizeAtx(signer, atx2); err != nil {
-		log.Println("failed to sign atx:", err)
-		os.Exit(1)
-	}
-	globalAtx2, err = atx2.Verify(0, 1)
-	if err != nil {
-		log.Println("failed to verify atx:", err)
-		os.Exit(1)
-	}
+	globalAtx2 = types.NewActivationTx(challenge, addr2, numUnits)
+	globalAtx2.SetReceived(time.Now())
+	globalAtx2.SmesherID = signer.NodeID()
+	globalAtx2.TickCount = 1
 
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
@@ -213,37 +194,6 @@ func TestMain(m *testing.M) {
 
 	res := m.Run()
 	os.Exit(res)
-}
-
-func newNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
-	tree, err := merkle.NewTreeBuilder().
-		WithHashFunc(shared.HashMembershipTreeNode).
-		WithLeavesToProve(map[uint64]bool{0: true}).
-		Build()
-	if err != nil {
-		panic("failed to add leaf to tree")
-	}
-	if err := tree.AddLeaf(challenge[:]); err != nil {
-		panic("failed to add leaf to tree")
-	}
-	nodes := tree.Proof()
-	nodesH32 := make([]types.Hash32, 0, len(nodes))
-	for _, n := range nodes {
-		nodesH32 = append(nodesH32, types.BytesToHash(n))
-	}
-	return &types.NIPost{
-		Membership: types.MerkleProof{
-			Nodes: nodesH32,
-		},
-		Post: &types.Post{
-			Nonce:   0,
-			Indices: []byte(nil),
-		},
-		PostMetadata: &types.PostMetadata{
-			Challenge:     poetRef,
-			LabelsPerUnit: labelsPerUnit,
-		},
-	}
 }
 
 type MeshAPIMock struct{}
@@ -310,8 +260,8 @@ func (m *MeshAPIMock) GetLayerVerified(tid types.LayerID) (*types.Block, error) 
 func (m *MeshAPIMock) GetATXs(
 	context.Context,
 	[]types.ATXID,
-) (map[types.ATXID]*types.VerifiedActivationTx, []types.ATXID) {
-	atxs := map[types.ATXID]*types.VerifiedActivationTx{
+) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+	atxs := map[types.ATXID]*types.ActivationTx{
 		globalAtx.ID():  globalAtx,
 		globalAtx2.ID(): globalAtx2,
 	}
@@ -484,7 +434,7 @@ func TestNewServersConfig(t *testing.T) {
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := New(fmt.Sprintf(":%d", port1), zaptest.NewLogger(t).Named("grpc"), DefaultTestConfig())
-	jsonService := NewJSONHTTPServer(fmt.Sprintf(":%d", port2), zaptest.NewLogger(t).Named("grpc.JSON"))
+	jsonService := NewJSONHTTPServer(zaptest.NewLogger(t).Named("grpc.JSON"), fmt.Sprintf(":%d", port2), []string{})
 
 	require.Contains(t, grpcService.listener, strconv.Itoa(port1), "Expected same port")
 	require.Contains(t, jsonService.listener, strconv.Itoa(port2), "Expected same port")
@@ -521,7 +471,11 @@ func TestNewLocalServer(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			observer, observedLogs := observer.New(zapcore.WarnLevel)
-			logger := zap.New(observer)
+			logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+				func(core zapcore.Core) zapcore.Core {
+					return zapcore.NewTee(core, observer)
+				},
+			)))
 
 			ctrl := gomock.NewController(t)
 			peerCounter := NewMockpeerCounter(ctrl)
@@ -553,15 +507,18 @@ type smesherServiceConn struct {
 
 	smeshingProvider *activation.MockSmeshingProvider
 	postSupervisor   *MockpostSupervisor
+	grpcPostService  *MockgrpcPostService
 }
 
 func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceConn, context.Context) {
 	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := NewMockpostSupervisor(ctrl)
+	grpcPostService := NewMockgrpcPostService(ctrl)
 	svc := NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
+		grpcPostService,
 		10*time.Millisecond,
 		activation.DefaultPostSetupOpts(),
 		sig,
@@ -580,6 +537,7 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 
 		smeshingProvider: smeshingProvider,
 		postSupervisor:   postSupervisor,
+		grpcPostService:  grpcPostService,
 	}, mockCtx
 }
 
@@ -633,6 +591,7 @@ func TestSmesherService(t *testing.T) {
 					return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize
 				}),
 			), sig).Return(nil)
+		c.grpcPostService.EXPECT().AllowConnections(true)
 		res, err := c.StartSmeshing(ctx, &pb.StartSmeshingRequest{
 			Opts:     opts,
 			Coinbase: coinbase,
@@ -749,7 +708,7 @@ func TestSmesherService(t *testing.T) {
 		require.NoError(t, err)
 
 		// Expecting the stream to return updates before closing.
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			_, err = stream.Recv()
 			require.NoError(t, err)
 		}
@@ -766,7 +725,7 @@ func TestMeshService(t *testing.T) {
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	db := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
 	svc := NewMeshService(
 		db,
 		meshAPIMock,
@@ -1390,7 +1349,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	defer cancel()
 	conn := dialGrpc(ctx, t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
-	for i := 0; i < numTxs; i++ {
+	for range numTxs {
 		res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{
 			Transaction: globalTx.Raw,
 		})
@@ -1620,7 +1579,7 @@ func TestTransactionService(t *testing.T) {
 
 			const subscriberCount = 10
 			streams := make([]pb.TransactionService_TransactionsStateStreamClient, 0, subscriberCount)
-			for i := 0; i < subscriberCount; i++ {
+			for range subscriberCount {
 				stream, err := c.TransactionsStateStream(ctx, req)
 				require.NoError(t, err)
 				streams = append(streams, stream)
@@ -1659,11 +1618,11 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			for i := 0; i < subscriptionChanBufSize*2; i++ {
+			for range subscriptionChanBufSize * 2 {
 				events.ReportNewTx(0, globalTx)
 			}
 
-			for i := 0; i < subscriptionChanBufSize; i++ {
+			for range subscriptionChanBufSize {
 				_, err := stream.Recv()
 				if err != nil {
 					st, ok := status.FromError(err)
@@ -1724,7 +1683,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	grpcService := NewMeshService(
-		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -1906,7 +1865,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := datastore.NewCachedDB(sql.InMemory(), logtest.New(t))
+	db := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
 
 	grpcService := NewMeshService(
 		db,
@@ -2052,7 +2011,7 @@ func TestMultiService(t *testing.T) {
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
 	svc2 := NewMeshService(
-		datastore.NewCachedDB(sql.InMemory(), logtest.New(t)),
+		datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -2169,6 +2128,18 @@ func TestDebugService(t *testing.T) {
 		netInfo.EXPECT().NATDeviceType().Return(network.NATDeviceTypeCone, network.NATDeviceTypeSymmetric)
 		netInfo.EXPECT().Reachability().Return(network.ReachabilityPrivate)
 		netInfo.EXPECT().DHTServerEnabled().Return(true)
+		peerInfo := peerinfomocks.NewMockPeerInfo(ctrl)
+		peerInfo.EXPECT().Protocols().Return([]protocol.ID{"foo"})
+		peerInfo.EXPECT().EnsureProtoStats(protocol.ID("foo")).
+			DoAndReturn(func(protocol.ID) *peerinfo.DataStats {
+				var ds peerinfo.DataStats
+				ds.RecordReceived(6000)
+				ds.RecordSent(3000)
+				ds.Tick(1)
+				ds.Tick(2)
+				return &ds
+			})
+		netInfo.EXPECT().PeerInfo().Return(peerInfo).AnyTimes()
 
 		response, err := c.NetworkInfo(context.Background(), &emptypb.Empty{})
 		require.NoError(t, err)
@@ -2182,6 +2153,14 @@ func TestDebugService(t *testing.T) {
 		require.Equal(t, pb.NetworkInfoResponse_Symmetric, response.NatTypeTcp)
 		require.Equal(t, pb.NetworkInfoResponse_Private, response.Reachability)
 		require.True(t, response.DhtServerEnabled)
+		require.Equal(t, map[string]*pb.DataStats{
+			"foo": {
+				BytesSent:     3000,
+				BytesReceived: 6000,
+				SendRate:      []uint64{300, 10},
+				RecvRate:      []uint64{600, 20},
+			},
+		}, response.Stats)
 	})
 
 	t.Run("ActiveSet", func(t *testing.T) {
@@ -2322,8 +2301,9 @@ func TestEventsReceived(t *testing.T) {
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
 
-	svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
-	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(logtest.New(t).WithName("conState")))
+	lg := logtest.New(t)
+	svm := vm.New(sql.InMemory(), vm.WithLogger(lg))
+	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(lg.Zap().Named("conState")))
 	conState.AddToCache(context.Background(), globalTx, time.Now())
 
 	weight := new(big.Rat).SetFloat64(18.7)
@@ -2503,22 +2483,18 @@ func TestVMAccountUpdates(t *testing.T) {
 	require.Equal(t, len(accounts), i)
 }
 
-func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*types.VerifiedActivationTx {
-	all := make([]*types.VerifiedActivationTx, 0, len(atxids))
+func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*types.ActivationTx {
+	all := make([]*types.ActivationTx, 0, len(atxids))
 	for _, id := range atxids {
-		atx := &types.ActivationTx{InnerActivationTx: types.InnerActivationTx{
-			NIPostChallenge: types.NIPostChallenge{
-				PublishEpoch: epoch,
-			},
-			NumUnits: 1,
-		}}
+		atx := &types.ActivationTx{
+			PublishEpoch: epoch,
+			NumUnits:     1,
+			TickCount:    1,
+			SmesherID:    types.RandomNodeID(),
+		}
 		atx.SetID(id)
-		atx.SetEffectiveNumUnits(atx.NumUnits)
 		atx.SetReceived(time.Now())
-		atx.SmesherID = types.RandomNodeID()
-		vAtx, err := atx.Verify(0, 1)
-		require.NoError(tb, err)
-		all = append(all, vAtx)
+		all = append(all, atx)
 	}
 	return all
 }
@@ -2528,7 +2504,7 @@ func TestMeshService_EpochStream(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := sql.InMemory()
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, logtest.New(t)),
+		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,

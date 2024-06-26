@@ -8,6 +8,7 @@ import (
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/libp2p/go-libp2p-pubsub/timecache"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
@@ -93,6 +94,7 @@ type Config struct {
 	PeerOutboundQueueSize int
 	QueueSize             int
 	Throttle              int
+	EvictionStrategy      timecache.Strategy
 }
 
 // New creates PubSub instance.
@@ -202,7 +204,8 @@ func DropPeerOnSyncValidationReject(handler SyncHandler, h host.Host, logger log
 }
 
 func msgID(msg *pubsubpb.Message) string {
-	hasher := hash.New()
+	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
 	if msg.Topic != nil {
 		hasher.Write([]byte(*msg.Topic))
 	}
@@ -226,6 +229,7 @@ func getOptions(cfg Config) []pubsub.Option {
 		pubsub.WithValidateQueueSize(cfg.QueueSize),
 		pubsub.WithValidateThrottle(cfg.Throttle),
 		pubsub.WithRawTracer(p2pmetrics.NewGoSIPCollector()),
+		pubsub.WithSeenMessagesStrategy(cfg.EvictionStrategy),
 		pubsub.WithPeerScore(
 			&pubsub.PeerScoreParams{
 				AppSpecificScore: func(p peer.ID) float64 {

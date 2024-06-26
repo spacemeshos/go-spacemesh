@@ -1,7 +1,7 @@
 name: CI
 
 env:
-  go-version: "1.21"
+  go-version: "1.22"
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -14,6 +14,7 @@ env:
   TD_QUEUE_ZONE: ${{ secrets.TD_QUEUE_ZONE }}
   DUMP_QUEUE_NAME: ${{ secrets.DUMP_QUEUE_NAME }}
   DUMP_QUEUE_ZONE: ${{ secrets.DUMP_QUEUE_ZONE }}
+  # If needed the variable GOPRIVATE can be set in the repository settings :: Secrets and Variables > action > Variables : GOPRIVATE
 
 # Trigger the workflow on all pull requests, and on push to specific branches
 on:
@@ -33,26 +34,30 @@ concurrency:
 jobs:
   ## stage 0: check which files were changed
   filter-changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           # this pattern matches using picomatch syntax (used by this third party Action), which is slightly
           # different than GitHub syntax: it matches any file in any path ending in '.md'. this checks if
-          # any non-markdown files were changed.
+          # any non-markdown files were changed. Additionally changing the CODEOWNERS file should not trigger
+          # a full CI run.
           filters: |
             nondoc:
               - '!**/*.md'
+              - '!.github/CODEOWNERS'
 
   ## stage 1: run unit tests and app tests as a prerequisite
   ## these run on all pushes to all pull requests, all branches
   ## note that secrets may not be accessible in this phase
   quicktests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     # should not take more than 2-3 mins
@@ -62,6 +67,14 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -75,7 +88,7 @@ jobs:
           make test-generate
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     # should not take more than 15-16 mins
@@ -85,6 +98,14 @@ jobs:
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -105,21 +126,35 @@ jobs:
       fail-fast: true
       matrix:
         os:
-          - ubuntu-latest
-          - [self-hosted, linux, arm64]
-          # - macos-12-large
-          - [go-spacemesh, m2-pro]
-          - windows-latest
+          - ubuntu-22.04
+          - ubuntu-latest-arm-8-cores
+          - macos-13
+          - [self-hosted, macOS, ARM64, go-spacemesh]
+          - windows-2022
     steps:
       - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: disable Windows Defender - Windows
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -142,21 +177,35 @@ jobs:
       fail-fast: true
       matrix:
         os:
-          - ubuntu-latest
-          - [self-hosted, linux, arm64]
-          # - macos-12-large
-          - [go-spacemesh, m2-pro]
-          - windows-latest
+          - ubuntu-22.04
+          - ubuntu-latest-arm-8-cores
+          - macos-13
+          - [self-hosted, macOS, ARM64, go-spacemesh]
+          - windows-2022
     steps:
       - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: disable Windows Defender - Windows
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -177,37 +226,49 @@ jobs:
       fail-fast: true
       matrix:
         os:
-          - ubuntu-latest
-          - [self-hosted, linux, arm64]
-          # - macos-12-large
-          - [go-spacemesh, m2-pro]
-          - windows-latest
+          - ubuntu-22.04
+          - ubuntu-latest-arm-8-cores
+          - macos-13
+          - [self-hosted, macOS, ARM64, go-spacemesh]
+          - windows-2022
     steps:
       # as we use some request to localhost, sometimes it gives us flaky tests. try to disable tcp offloading for fix it
       # https://github.com/actions/virtual-environments/issues/1187
       - name: disable TCP/UDP offload - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
           sudo ethtool -K eth0 tx off
           sudo ethtool -K eth0 rx off
-
       - name: disable TCP/UDP offload - MacOS
-        if: ${{ matrix.os == 'macos-12-large' || matrix.os == '[go-spacemesh, m2-pro]' }}
+        if: ${{ matrix.os == 'macos-13' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
         run: |
           sudo sysctl -w net.link.generic.system.hwcksum_tx=0
           sudo sysctl -w net.link.generic.system.hwcksum_rx=0
       - name: disable TCP/UDP offload - Windows
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Disable-NetAdapterChecksumOffload -Name * -TcpIPv4 -UdpIPv4 -TcpIPv6 -UdpIPv6
       - name: disable Windows Defender - Windows
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
           lfs: true
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -215,10 +276,10 @@ jobs:
           go-version: ${{ env.go-version }}
           cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: Add OpenCL support - Windows
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.os == 'windows-2022' }}
         run: choco install opencl-intel-cpu-runtime
       - name: setup env
         run: make install
@@ -227,7 +288,7 @@ jobs:
       - name: unit tests
         timeout-minutes: 35
         env:
-          GOTESTSUM_FORMAT: standard-verbose
+          GOTESTSUM_FORMAT: standard-quiet
           GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
       - name: Publish Test Report
@@ -248,7 +309,7 @@ jobs:
       - build-tools
       - build
       - unittests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       # short-circuit success if no non-doc files were modified
       # this is the easiest way to access success/failure state of previous jobs in this workflow

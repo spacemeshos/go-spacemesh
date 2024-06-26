@@ -170,22 +170,25 @@ func GetLayer(db sql.Executor, id types.BlockID) (types.LayerID, error) {
 // Layer returns full body blocks for layer.
 func Layer(db sql.Executor, lid types.LayerID) ([]*types.Block, error) {
 	var (
-		blk *types.Block
-		rst []*types.Block
-		err error
+		blk  *types.Block
+		rst  []*types.Block
+		derr error
 	)
-	if _, err = db.Exec("select id, block from blocks where layer = ?1;", func(stmt *sql.Statement) {
+	if _, err := db.Exec("select id, block from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))
 	}, func(stmt *sql.Statement) bool {
 		id := types.BlockID{}
 		stmt.ColumnBytes(0, id[:])
-		blk, err = decodeBlock(stmt.ColumnReader(1), id)
+		blk, derr = decodeBlock(stmt.ColumnReader(1), id)
+		if derr != nil {
+			return false
+		}
 		rst = append(rst, blk)
 		return true
 	}); err != nil {
 		return nil, fmt.Errorf("select blocks in layer %s: %w", lid, err)
 	}
-	return rst, nil
+	return rst, derr
 }
 
 // IDsInLayer returns list of block ids in the layer.

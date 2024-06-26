@@ -3,9 +3,10 @@ package fetch
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -179,6 +180,7 @@ func DefaultConfig() Config {
 			// 64 bytes
 			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
 		},
+		Streaming:          true,
 		GetAtxsConcurrency: 100,
 		DecayingTag: server.DecayingTagSpec{
 			Interval: time.Minute,
@@ -192,7 +194,7 @@ func DefaultConfig() Config {
 
 // randomPeer returns a random peer from current peer list.
 func randomPeer(peers []p2p.Peer) p2p.Peer {
-	return peers[rand.Intn(len(peers))]
+	return peers[rand.IntN(len(peers))]
 }
 
 // Option is a type to configure a fetcher.
@@ -292,12 +294,12 @@ func NewFetch(
 		}
 		host.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(_ network.Network, c network.Conn) {
-				if !c.Stat().Transient {
+				if !c.Stat().Limited {
 					connectedf(c.RemotePeer())
 				}
 			},
 			DisconnectedF: func(_ network.Network, c network.Conn) {
-				if !c.Stat().Transient && !host.Connected(c.RemotePeer()) {
+				if !c.Stat().Limited && !host.Connected(c.RemotePeer()) {
 					f.logger.With().Debug("remove peer", log.Stringer("id", c.RemotePeer()))
 					f.peers.Delete(c.RemotePeer())
 				}
@@ -348,7 +350,7 @@ func (f *Fetch) registerServer(
 	opts := []server.Opt{
 		server.WithTimeout(f.cfg.RequestTimeout),
 		server.WithHardTimeout(f.cfg.RequestHardTimeout),
-		server.WithLog(f.logger),
+		server.WithLog(f.logger.Zap()),
 		server.WithDecayingTag(f.cfg.DecayingTag),
 	}
 	if f.cfg.EnableServerMetrics {
@@ -406,7 +408,6 @@ func (f *Fetch) Start() error {
 			return nil
 		})
 		for _, srv := range f.servers {
-			srv := srv
 			f.eg.Go(func() error {
 				return srv.Run(f.shutdownCtx)
 			})
@@ -549,15 +550,13 @@ func (f *Fetch) receiveResponse(data []byte, batch *batchInfo) {
 		f.mu.Unlock()
 
 		if !ok {
-			f.logger.With().Warning("response received for unknown hash",
-				log.Stringer("hash", resp.Hash))
+			f.logger.With().Warning("response received for unknown hash", log.Stringer("hash", resp.Hash))
 			continue
 		}
 
-		rsp := resp
 		f.eg.Go(func() error {
 			// validation fetch data recursively. offload to another goroutine
-			f.hashValidationDone(rsp.Hash, req.validator(req.ctx, rsp.Hash, batch.peer, rsp.Data))
+			f.hashValidationDone(resp.Hash, req.validator(req.ctx, resp.Hash, batch.peer, resp.Data))
 			return nil
 		})
 		delete(batchMap, resp.Hash)
@@ -659,9 +658,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 
 	peer2batches := f.organizeRequests(requests)
 	for peer, batches := range peer2batches {
-		peer := peer
 		for _, batch := range batches {
-			batch := batch
 			go func() {
 				if f.cfg.Streaming {
 					if err := f.streamBatch(peer, batch); err != nil {
@@ -692,7 +689,9 @@ func (f *Fetch) send(requests []RequestMessage) {
 }
 
 func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][]*batchInfo {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	var seed [32]byte
+	binary.LittleEndian.PutUint64(seed[:], uint64(time.Now().UnixNano()))
+	rng := rand.New(rand.NewChaCha8(seed))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 
 	best := f.peers.SelectBest(RedundantPeers)

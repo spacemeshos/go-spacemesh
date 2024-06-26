@@ -171,6 +171,8 @@ func queryBitcoin(ctx context.Context, client *http.Client, targetUrl string) (*
 		return nil, fmt.Errorf("parse btc url: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
+	// some apis got over sensitive without UA set
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) Gecko/20100101 Firefox/125.0")
 	if err != nil {
 		return nil, fmt.Errorf("create http request: %w", err)
 	}
@@ -192,7 +194,8 @@ func queryBitcoin(ctx context.Context, client *http.Client, targetUrl string) (*
 }
 
 func getActiveSet(ctx context.Context, endpoint string, epoch types.EpochID) ([]types.ATXID, error) {
-	conn, err := grpc.DialContext(ctx, endpoint,
+	conn, err := grpc.NewClient(
+		endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {

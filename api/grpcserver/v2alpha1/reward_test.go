@@ -65,12 +65,14 @@ func TestRewardService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Rewards, 25)
+		require.Equal(t, len(rwds), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.RewardRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Len(t, rwds, len(list.Rewards))
+		require.Equal(t, len(rwds), int(list.Total))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {
@@ -81,10 +83,10 @@ func TestRewardService_List(t *testing.T) {
 			FilterBy:   &spacemeshv2alpha1.RewardRequest_Coinbase{Coinbase: rwds[3].Coinbase.String()},
 		})
 		require.NoError(t, err)
-		require.Equal(t, rwds[3].Layer.Uint32(), list.GetRewards()[0].GetV1().Layer)
-		require.Equal(t, rwds[3].LayerReward, list.GetRewards()[0].GetV1().LayerReward)
-		require.Equal(t, rwds[3].TotalReward, list.GetRewards()[0].GetV1().Total)
-		require.Equal(t, rwds[3].Coinbase.String(), list.GetRewards()[0].GetV1().Coinbase)
+		require.Equal(t, rwds[3].Layer.Uint32(), list.GetRewards()[0].Layer)
+		require.Equal(t, rwds[3].LayerReward, list.GetRewards()[0].LayerReward)
+		require.Equal(t, rwds[3].TotalReward, list.GetRewards()[0].Total)
+		require.Equal(t, rwds[3].Coinbase.String(), list.GetRewards()[0].Coinbase)
 	})
 
 	t.Run("smesher", func(t *testing.T) {
@@ -95,10 +97,10 @@ func TestRewardService_List(t *testing.T) {
 			FilterBy:   &spacemeshv2alpha1.RewardRequest_Smesher{Smesher: rwds[4].SmesherID.Bytes()},
 		})
 		require.NoError(t, err)
-		require.Equal(t, rwds[4].Layer.Uint32(), list.GetRewards()[0].GetV1().Layer)
-		require.Equal(t, rwds[4].LayerReward, list.GetRewards()[0].GetV1().LayerReward)
-		require.Equal(t, rwds[4].TotalReward, list.GetRewards()[0].GetV1().Total)
-		require.Equal(t, rwds[4].Coinbase.String(), list.GetRewards()[0].GetV1().Coinbase)
+		require.Equal(t, rwds[4].Layer.Uint32(), list.GetRewards()[0].Layer)
+		require.Equal(t, rwds[4].LayerReward, list.GetRewards()[0].LayerReward)
+		require.Equal(t, rwds[4].TotalReward, list.GetRewards()[0].Total)
+		require.Equal(t, rwds[4].Coinbase.String(), list.GetRewards()[0].Coinbase)
 	})
 }
 
@@ -182,7 +184,6 @@ func TestRewardStreamService_Stream(t *testing.T) {
 				},
 			},
 		} {
-			tc := tc
 			t.Run(tc.desc, func(t *testing.T) {
 				stream, err := client.Stream(ctx, tc.request)
 				require.NoError(t, err)
@@ -201,7 +202,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 				for _, rst := range expect {
 					received, err := stream.Recv()
 					require.NoError(t, err)
-					require.Equal(t, toReward(rst).String(), received.GetV1().String())
+					require.Equal(t, toReward(rst).String(), received.String())
 				}
 			})
 		}

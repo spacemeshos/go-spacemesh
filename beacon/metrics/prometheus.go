@@ -3,9 +3,9 @@ package metrics
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/fixed"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
@@ -29,7 +29,7 @@ type GatherCB func() ([]*BeaconStats, *BeaconStats)
 // BeaconMetricsCollector is a prometheus Collector for beacon metrics.
 type BeaconMetricsCollector struct {
 	gather GatherCB
-	logger log.Logger
+	logger *zap.Logger
 
 	registry               *prometheus.Registry
 	observedBeaconCount    *prometheus.Desc
@@ -37,8 +37,14 @@ type BeaconMetricsCollector struct {
 	calculatedBeaconWeight *prometheus.Desc
 }
 
+var nameCalculatedWeight = prometheus.BuildFQName(metrics.Namespace, subsystem, "beacon_calculated_weight")
+
+func MetricNameCalculatedWeight() string {
+	return nameCalculatedWeight
+}
+
 // NewBeaconMetricsCollector creates a prometheus Collector for beacons.
-func NewBeaconMetricsCollector(cb GatherCB, logger log.Logger) *BeaconMetricsCollector {
+func NewBeaconMetricsCollector(cb GatherCB, logger *zap.Logger) *BeaconMetricsCollector {
 	bmc := &BeaconMetricsCollector{
 		gather: cb,
 		logger: logger,
@@ -51,7 +57,7 @@ func NewBeaconMetricsCollector(cb GatherCB, logger log.Logger) *BeaconMetricsCol
 			"Weight of beacons collected from blocks for each epoch and value",
 			[]string{labelEpoch, labelBeacon}, nil),
 		calculatedBeaconWeight: prometheus.NewDesc(
-			prometheus.BuildFQName(metrics.Namespace, subsystem, "beacon_calculated_weight"),
+			nameCalculatedWeight,
 			"Weight of the beacon calculated by the node for each epoch",
 			[]string{labelEpoch, labelBeacon}, nil),
 	}
@@ -66,7 +72,7 @@ func (bmc *BeaconMetricsCollector) Start(registry *prometheus.Registry) {
 		// use Register instead of MustRegister because during app test, multiple instances
 		// will register the same set of metrics with the default registry and panic
 		if err := prometheus.Register(bmc); err != nil {
-			bmc.logger.With().Error("failed to register beacon metrics Collector", log.Err(err))
+			bmc.logger.Error("failed to register beacon metrics Collector", zap.Error(err))
 		}
 	}
 	bmc.registry = registry

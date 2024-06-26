@@ -33,5 +33,13 @@
         "smeshing-verifying-opts": {
             "smeshing-opts-verifying-min-workers": 1000000
         }
+    },
+    "certifier": {
+        "client": {
+            "max-retries": 10
+        }
+    },
+    "logging": {
+        "log-encoder": "json"
     }
 }

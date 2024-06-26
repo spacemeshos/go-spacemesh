@@ -5,9 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -89,7 +94,7 @@ func (ac *accountCache) availBalance() uint64 {
 	return ac.txsByNonce.Back().Value.(*candidate).postBalance
 }
 
-func (ac *accountCache) precheck(logger log.Log, ntx *NanoTX) (*list.Element, *candidate, error) {
+func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element, *candidate, error) {
 	if ac.txsByNonce.Len() >= maxTXsPerAcct {
 		ac.moreInDB = true
 		return nil, nil, errTooManyNonce
@@ -111,18 +116,19 @@ func (ac *accountCache) precheck(logger log.Log, ntx *NanoTX) (*list.Element, *c
 	}
 	if balance < ntx.MaxSpending() {
 		ac.moreInDB = true
-		logger.With().Debug("insufficient balance",
-			ntx.ID,
-			ntx.Principal,
-			log.Uint64("nonce", ntx.Nonce),
-			log.Uint64("cons_balance", balance),
-			log.Uint64("cons_spending", ntx.MaxSpending()))
+		logger.Debug("insufficient balance",
+			zap.Stringer("tx_id", ntx.ID),
+			zap.Stringer("address", ntx.Principal),
+			zap.Uint64("nonce", ntx.Nonce),
+			zap.Uint64("cons_balance", balance),
+			zap.Uint64("cons_spending", ntx.MaxSpending()),
+		)
 		return nil, nil, errInsufficientBalance
 	}
 	return prev, &candidate{best: ntx, postBalance: balance - ntx.MaxSpending()}, nil
 }
 
-func (ac *accountCache) accept(logger log.Log, ntx *NanoTX, blockSeed []byte) error {
+func (ac *accountCache) accept(logger *zap.Logger, ntx *NanoTX, blockSeed []byte) error {
 	var (
 		added, prev *list.Element
 		cand        *candidate
@@ -151,20 +157,24 @@ func (ac *accountCache) accept(logger log.Log, ntx *NanoTX, blockSeed []byte) er
 	ac.cachedTXs[ntx.ID] = ntx
 
 	if replaced != nil {
-		logger.With().Debug("better transaction replaced for nonce",
-			log.Stringer("better", ntx.ID),
-			log.Stringer("replaced", replaced.ID),
-			log.Uint64("nonce", ntx.Nonce),
-			log.Uint64("max_spending", ntx.MaxSpending()),
-			log.Uint64("post_balance", cand.postBalance),
-			log.Uint64("avail_balance", ac.availBalance()))
+		logger.Debug("better transaction replaced for nonce",
+			zap.Stringer("address", ac.addr),
+			zap.Stringer("better", ntx.ID),
+			zap.Stringer("replaced", replaced.ID),
+			zap.Uint64("nonce", ntx.Nonce),
+			zap.Uint64("max_spending", ntx.MaxSpending()),
+			zap.Uint64("post_balance", cand.postBalance),
+			zap.Uint64("avail_balance", ac.availBalance()),
+		)
 	} else {
-		logger.With().Debug("new nonce added",
-			ntx.ID,
-			log.Uint64("nonce", ntx.Nonce),
-			log.Uint64("max_spending", ntx.MaxSpending()),
-			log.Uint64("post_balance", cand.postBalance),
-			log.Uint64("avail_balance", ac.availBalance()))
+		logger.Debug("new nonce added",
+			zap.Stringer("address", ac.addr),
+			zap.Stringer("tx_id", ntx.ID),
+			zap.Uint64("nonce", ntx.Nonce),
+			zap.Uint64("max_spending", ntx.MaxSpending()),
+			zap.Uint64("post_balance", cand.postBalance),
+			zap.Uint64("avail_balance", ac.availBalance()),
+		)
 	}
 
 	// propagate the balance change
@@ -176,10 +186,12 @@ func (ac *accountCache) accept(logger log.Log, ntx *NanoTX, blockSeed []byte) er
 			newBalance -= nextCand.maxSpending()
 			nextCand.postBalance = newBalance
 			next = next.Next()
-			logger.With().Debug("updated next balance",
-				log.Uint64("nonce", nextCand.nonce()),
-				log.Uint64("post_balance", nextCand.postBalance),
-				log.Uint64("avail_balance", ac.availBalance()))
+			logger.Debug("updated next balance",
+				zap.Stringer("address", ac.addr),
+				zap.Uint64("nonce", nextCand.nonce()),
+				zap.Uint64("post_balance", nextCand.postBalance),
+				zap.Uint64("avail_balance", ac.availBalance()),
+			)
 			continue
 		}
 		ac.moreInDB = true
@@ -187,41 +199,21 @@ func (ac *accountCache) accept(logger log.Log, ntx *NanoTX, blockSeed []byte) er
 		next = next.Next()
 		removed := ac.txsByNonce.Remove(rm).(*candidate)
 		delete(ac.cachedTXs, removed.id())
-		logger.With().Debug("tx made infeasible by new/better transaction",
-			removed.id(),
-			log.Uint64("nonce", removed.nonce()),
-			log.Uint64("max_spending", ntx.MaxSpending()))
+		logger.Debug("tx made infeasible by new/better transaction",
+			zap.Stringer("address", ac.addr),
+			zap.Stringer("tx_id", removed.id()),
+			zap.Uint64("nonce", removed.nonce()),
+			zap.Uint64("max_spending", ntx.MaxSpending()),
+		)
 	}
 	return nil
 }
 
-func nonceMarshaller(any any) log.ArrayMarshaler {
-	return log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		var allNonce []uint64
-		noncesList, ok := any.([]uint64)
-		if ok {
-			allNonce = noncesList
-		} else if nonce2ID, ok := any.(map[uint64]types.TransactionID); ok {
-			allNonce = make([]uint64, 0, len(nonce2ID))
-			for nonce := range nonce2ID {
-				allNonce = append(allNonce, nonce)
-			}
-		} else if nonce2TXs, ok := any.(map[uint64][]*NanoTX); ok {
-			allNonce = make([]uint64, 0, len(nonce2TXs))
-			for nonce := range nonce2TXs {
-				allNonce = append(allNonce, nonce)
-			}
-		}
-		sort.Slice(allNonce, func(i, j int) bool { return allNonce[i] < allNonce[j] })
-		for _, nonce := range allNonce {
-			encoder.AppendUint64(nonce)
-		}
-		return nil
-	})
-}
-
-func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*NanoTX, blockSeed []byte) error {
-	logger.With().Debug("account has pending txs", log.Int("num_pending", len(nonce2TXs)))
+func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*NanoTX, blockSeed []byte) error {
+	logger.Debug("account has pending txs",
+		zap.Stringer("address", ac.addr),
+		zap.Int("num_pending", len(nonce2TXs)),
+	)
 	var (
 		nextNonce   = ac.nextNonce()
 		balance     = ac.availBalance()
@@ -238,16 +230,20 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*NanoTX,
 	for _, nonce := range sortedNonce {
 		best := findBest(nonce2TXs[nonce], balance, blockSeed)
 		if best == nil {
-			logger.With().Debug("no feasible transactions at nonce",
-				log.Uint64("nonce", nonce),
-				log.Uint64("balance", balance))
+			logger.Debug("no feasible transactions at nonce",
+				zap.Stringer("address", ac.addr),
+				zap.Uint64("nonce", nonce),
+				zap.Uint64("balance", balance),
+			)
 			continue
 		}
 
-		logger.With().Debug("found best in nonce txs",
-			best.ID,
-			log.Uint64("nonce", nonce),
-			log.Uint64("fee", best.Fee()))
+		logger.Debug("found best in nonce txs",
+			zap.Stringer("address", ac.addr),
+			zap.Stringer("tx_id", best.ID),
+			zap.Uint64("nonce", nonce),
+			zap.Uint64("fee", best.Fee()),
+		)
 
 		if err := ac.accept(logger, best, blockSeed); err != nil {
 			if errors.Is(err, errTooManyNonce) {
@@ -261,9 +257,28 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*NanoTX,
 
 	ac.moreInDB = len(sortedNonce) > len(added)
 	if len(added) > 0 {
-		logger.With().Debug("added batch to account pool", log.Array("batch", nonceMarshaller(added)))
+		logger.Debug("added batch to account pool",
+			zap.Stringer("address", ac.addr),
+			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+				slices.Sort(added)
+				for _, nonce := range added {
+					encoder.AppendUint64(nonce)
+				}
+				return nil
+			})),
+		)
 	} else {
-		logger.With().Debug("no feasible txs from batch", log.Array("batch", nonceMarshaller(nonce2TXs)))
+		logger.Debug("no feasible txs from batch",
+			zap.Stringer("address", ac.addr),
+			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+				nonces := maps.Keys(nonce2TXs)
+				slices.Sort(nonces)
+				for _, nonce := range nonces {
+					encoder.AppendUint64(nonce)
+				}
+				return nil
+			})),
+		)
 	}
 	return nil
 }
@@ -285,12 +300,13 @@ func findBest(ntxs []*NanoTX, balance uint64, blockSeed []byte) *NanoTX {
 //   - nonce already exists in the cache:
 //     if it is better than the best candidate in that nonce group, swap
 //   - nonce not present: add to cache.
-func (ac *accountCache) add(logger log.Log, tx *types.Transaction, received time.Time) error {
+func (ac *accountCache) add(logger *zap.Logger, tx *types.Transaction, received time.Time) error {
 	if tx.Nonce < ac.startNonce {
-		logger.With().Debug("nonce too small",
-			tx.ID,
-			log.Uint64("next_nonce", ac.startNonce),
-			log.Uint64("tx_nonce", tx.Nonce))
+		logger.Debug("nonce too small",
+			zap.Stringer("tx_id", tx.ID),
+			zap.Uint64("next_nonce", ac.startNonce),
+			zap.Uint64("tx_nonce", tx.Nonce),
+		)
 		return errBadNonce
 	}
 
@@ -315,14 +331,17 @@ func (ac *accountCache) add(logger log.Log, tx *types.Transaction, received time
 }
 
 func (ac *accountCache) addPendingFromNonce(
-	logger log.Log,
+	logger *zap.Logger,
 	db *sql.Database,
 	nonce uint64,
 	applied types.LayerID,
 ) error {
 	mtxs, err := transactions.GetAcctPendingFromNonce(db, ac.addr, nonce)
 	if err != nil {
-		logger.With().Error("failed to get more pending txs from db", log.Err(err))
+		logger.Error("failed to get more pending txs from db",
+			zap.Stringer("address", ac.addr),
+			zap.Error(err),
+		)
 		return err
 	}
 
@@ -343,21 +362,25 @@ func (ac *accountCache) addPendingFromNonce(
 			mtx.LayerID = nextLayer
 			mtx.BlockID = nextBlock
 			if nextLayer != 0 {
-				logger.With().Debug("next layer found", mtx.ID, nextLayer)
+				logger.Debug("next layer found",
+					zap.Stringer("address", ac.addr),
+					zap.Stringer("tx_id", mtx.ID),
+					zap.Uint32("layer_id", nextLayer.Uint32()),
+				)
 			}
 		}
 	}
 
 	byPrincipal := groupTXsByPrincipal(logger, mtxs)
 	if _, ok := byPrincipal[ac.addr]; !ok {
-		logger.Panic("no txs for account after grouping")
+		logger.Panic("no txs for account after grouping", zap.Stringer("address", ac.addr))
 	}
 	return ac.addBatch(logger, byPrincipal[ac.addr], nil)
 }
 
 // find the first nonce without a layer.
 // a nonce with a valid layer indicates that it's already packed in a proposal/block.
-func (ac *accountCache) getMempool(logger log.Log) []*NanoTX {
+func (ac *accountCache) getMempool(logger *zap.Logger) []*NanoTX {
 	bests := make([]*NanoTX, 0, maxTXsPerAcct)
 	offset := 0
 	found := false
@@ -366,11 +389,12 @@ func (ac *accountCache) getMempool(logger log.Log) []*NanoTX {
 		if !found && cand.layer() == 0 {
 			found = true
 		} else if found && cand.layer() != 0 {
-			logger.With().Debug("some proposals/blocks packed txs out of order",
-				cand.id(),
-				cand.layer(),
-				cand.block(),
-				log.Uint64("nonce", cand.nonce()))
+			logger.Debug("some proposals/blocks packed txs out of order",
+				zap.Stringer("tx_id", cand.id()),
+				zap.Uint32("layer_id", cand.layer().Uint32()),
+				zap.Stringer("block_id", cand.block()),
+				zap.Uint64("nonce", cand.nonce()),
+			)
 		}
 		if found {
 			bests = append(bests, cand.best)
@@ -379,16 +403,18 @@ func (ac *accountCache) getMempool(logger log.Log) []*NanoTX {
 		}
 	}
 	if len(bests) > 0 {
-		logger.With().Debug("account in mempool",
-			log.Int("offset", offset),
-			log.Int("size", ac.txsByNonce.Len()),
-			log.Int("added", len(bests)),
-			log.Uint64("from", bests[0].Nonce),
-			log.Uint64("to", bests[len(bests)-1].Nonce))
+		logger.Debug("account in mempool",
+			zap.Int("offset", offset),
+			zap.Int("size", ac.txsByNonce.Len()),
+			zap.Int("added", len(bests)),
+			zap.Uint64("from", bests[0].Nonce),
+			zap.Uint64("to", bests[len(bests)-1].Nonce),
+		)
 	} else {
-		logger.With().Debug("account has no txs for mempool",
-			log.Int("offset", offset),
-			log.Int("size", ac.txsByNonce.Len()))
+		logger.Debug("account has no txs for mempool",
+			zap.Int("offset", offset),
+			zap.Int("size", ac.txsByNonce.Len()),
+		)
 	}
 	return bests
 }
@@ -396,13 +422,15 @@ func (ac *accountCache) getMempool(logger log.Log) []*NanoTX {
 // NOTE: this is the only point in time when we reconsider those previously rejected txs,
 // because applying a layer changes the conservative balance in the cache.
 func (ac *accountCache) resetAfterApply(
-	logger log.Log,
+	logger *zap.Logger,
 	db *sql.Database,
 	nextNonce, newBalance uint64,
 	applied types.LayerID,
 ) error {
-	logger = logger.WithFields(ac.addr)
-	logger.With().Debug("resetting to nonce", log.Uint64("nonce", nextNonce))
+	logger.Debug("resetting to nonce",
+		zap.Stringer("address", ac.addr),
+		zap.Uint64("nonce", nextNonce),
+	)
 	for e := ac.txsByNonce.Front(); e != nil; e = e.Next() {
 		delete(ac.cachedTXs, e.Value.(*candidate).id())
 	}
@@ -419,7 +447,7 @@ func (ac *accountCache) shouldEvict() bool {
 type stateFunc func(types.Address) (uint64, uint64)
 
 type Cache struct {
-	logger log.Log
+	logger *zap.Logger
 	stateF stateFunc
 
 	mu        sync.Mutex
@@ -427,7 +455,7 @@ type Cache struct {
 	cachedTXs map[types.TransactionID]*NanoTX // shared with accountCache instances
 }
 
-func NewCache(s stateFunc, logger log.Log) *Cache {
+func NewCache(s stateFunc, logger *zap.Logger) *Cache {
 	return &Cache{
 		logger:    logger,
 		stateF:    s,
@@ -436,7 +464,7 @@ func NewCache(s stateFunc, logger log.Log) *Cache {
 	}
 }
 
-func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[types.Address]map[uint64][]*NanoTX {
+func groupTXsByPrincipal(logger *zap.Logger, mtxs []*types.MeshTransaction) map[types.Address]map[uint64][]*NanoTX {
 	byPrincipal := make(map[types.Address]map[uint64][]*NanoTX)
 	for _, mtx := range mtxs {
 		principal := mtx.Principal
@@ -449,11 +477,12 @@ func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[type
 		if len(byPrincipal[principal][mtx.Nonce]) < maxTXsPerNonce {
 			byPrincipal[principal][mtx.Nonce] = append(byPrincipal[principal][mtx.Nonce], NewNanoTX(mtx))
 		} else {
-			logger.With().Debug("too many txs in same nonce. ignoring tx",
-				mtx.ID,
-				principal,
-				log.Uint64("nonce", mtx.Nonce),
-				log.Uint64("fee", mtx.Fee()))
+			logger.Debug("too many txs in same nonce. ignoring tx",
+				zap.Stringer("tx_id", mtx.ID),
+				zap.Stringer("address", principal),
+				zap.Uint64("nonce", mtx.Nonce),
+				zap.Uint64("fee", mtx.Fee()),
+			)
 		}
 	}
 	return byPrincipal
@@ -511,24 +540,33 @@ func (c *Cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) err
 			return err
 		}
 		if c.pending[principal].shouldEvict() {
-			c.logger.With().Debug("account has pending txs but none feasible",
-				principal,
-				log.Array("batch", nonceMarshaller(nonce2TXs)))
+			c.logger.Debug("account has pending txs but none feasible",
+				zap.Stringer("address", principal),
+				zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+					nonces := maps.Keys(nonce2TXs)
+					slices.Sort(nonces)
+					for _, nonce := range nonces {
+						encoder.AppendUint64(nonce)
+					}
+					return nil
+				})),
+			)
 		} else {
 			acctsAdded++
 		}
 	}
-	c.logger.Debug("added pending tx for %d accounts", acctsAdded)
+	c.logger.Sugar().Debug("added pending tx for %d accounts", acctsAdded)
 	return nil
 }
 
 func (c *Cache) createAcctIfNotPresent(addr types.Address) {
 	if _, ok := c.pending[addr]; !ok {
 		nextNonce, balance := c.stateF(addr)
-		c.logger.With().Debug("created account with nonce/balance",
-			addr,
-			log.Uint64("nonce", nextNonce),
-			log.Uint64("balance", balance))
+		c.logger.Debug("created account with nonce/balance",
+			zap.Stringer("address", addr),
+			zap.Uint64("nonce", nextNonce),
+			zap.Uint64("balance", balance),
+		)
 		c.pending[addr] = &accountCache{
 			addr:         addr,
 			startNonce:   nextNonce,
@@ -578,7 +616,10 @@ func (c *Cache) Add(
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
 	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
-	logger := c.logger.WithContext(ctx).WithFields(principal)
+	logger := c.logger.With(
+		log.ZContext(ctx),
+		zap.Stringer("address", principal),
+	)
 	err := c.pending[principal].add(logger, tx, received)
 	if acceptable(err) {
 		err = nil
@@ -621,7 +662,7 @@ func (c *Cache) LinkTXsWithProposal(
 		return nil
 	}
 	if err := addToProposal(db, lid, pid, tids); err != nil {
-		c.logger.With().Error("failed to link txs to proposal in db", log.Err(err))
+		c.logger.Error("failed to link txs to proposal in db", zap.Error(err))
 		return err
 	}
 	return c.updateLayer(lid, types.EmptyBlockID, tids)
@@ -686,7 +727,11 @@ func (c *Cache) ApplyLayer(
 	results []types.TransactionWithResult,
 	ineffective []types.Transaction,
 ) error {
-	logger := c.logger.WithContext(ctx).WithFields(lid, bid)
+	logger := c.logger.With(
+		log.ZContext(ctx),
+		zap.Uint32("layer_id", lid.Uint32()),
+		zap.Stringer("block_id", bid),
+	)
 	if err := checkApplyOrder(logger, db, lid); err != nil {
 		return err
 	}
@@ -702,7 +747,7 @@ func (c *Cache) ApplyLayer(
 	toReset := make(map[types.Address]struct{})
 	byPrincipal := make(map[types.Address]struct{})
 
-	// commmit results before reporting them
+	// commit results before reporting them
 	// TODO(dshulyak) save results in vm
 	if err := db.WithTx(context.Background(), func(dbtx *sql.Tx) error {
 		for _, rst := range results {
@@ -730,7 +775,7 @@ func (c *Cache) ApplyLayer(
 
 	for _, tx := range ineffective {
 		if tx.TxHeader == nil {
-			logger.With().Warning("tx header not parsed", tx.ID)
+			logger.Warn("tx header not parsed", zap.Stringer("tx_id", tx.ID))
 			continue
 		}
 		if !c.has(tx.ID) {
@@ -754,13 +799,17 @@ func (c *Cache) ApplyLayer(
 	for principal := range byPrincipal {
 		c.createAcctIfNotPresent(principal)
 		nextNonce, balance := c.stateF(principal)
-		logger.With().Debug("new account nonce/balance",
-			principal,
-			log.Uint64("nonce", nextNonce),
-			log.Uint64("balance", balance))
+		logger.Debug("new account nonce/balance",
+			zap.Stringer("address", principal),
+			zap.Uint64("nonce", nextNonce),
+			zap.Uint64("balance", balance),
+		)
 		t0 := time.Now()
 		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
-			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
+			logger.Error("failed to reset cache for principal",
+				zap.Stringer("address", principal),
+				zap.Error(err),
+			)
 			return err
 		}
 		acctResetDuration.Observe(float64(time.Since(t0)))
@@ -778,7 +827,10 @@ func (c *Cache) ApplyLayer(
 		nextNonce, balance := c.stateF(principal)
 		t2 := time.Now()
 		if err := c.pending[principal].resetAfterApply(logger, db, nextNonce, balance, lid); err != nil {
-			logger.With().Error("failed to reset cache for principal", principal, log.Err(err))
+			logger.Error("failed to reset cache for principal",
+				zap.Stringer("address", principal),
+				zap.Error(err),
+			)
 			return err
 		}
 		acctResetDuration.Observe(float64(time.Since(t2)))
@@ -792,7 +844,7 @@ func (c *Cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
 	}
 
 	if err := c.buildFromScratch(db); err != nil {
-		c.logger.With().Error("failed to build from scratch after revert", log.Err(err))
+		c.logger.Error("failed to build from scratch after revert", zap.Error(err))
 		return err
 	}
 	return nil
@@ -811,14 +863,14 @@ func (c *Cache) GetProjection(addr types.Address) (uint64, uint64) {
 }
 
 // GetMempool returns all the transactions that eligible for a proposal/block.
-func (c *Cache) GetMempool(logger log.Log) map[types.Address][]*NanoTX {
+func (c *Cache) GetMempool(logger *zap.Logger) map[types.Address][]*NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	all := make(map[types.Address][]*NanoTX)
-	logger.With().Debug("cache has pending accounts", log.Int("num_acct", len(c.pending)))
+	logger.Debug("cache has pending accounts", zap.Int("num_acct", len(c.pending)))
 	for addr, accCache := range c.pending {
-		txs := accCache.getMempool(logger.WithFields(addr))
+		txs := accCache.getMempool(logger.With(zap.Stringer("address", addr)))
 		if len(txs) > 0 {
 			all[addr] = txs
 		}
@@ -827,16 +879,17 @@ func (c *Cache) GetMempool(logger log.Log) map[types.Address][]*NanoTX {
 }
 
 // checkApplyOrder returns an error if layers were not applied in order.
-func checkApplyOrder(logger log.Log, db *sql.Database, toApply types.LayerID) error {
+func checkApplyOrder(logger *zap.Logger, db *sql.Database, toApply types.LayerID) error {
 	lastApplied, err := layers.GetLastApplied(db)
 	if err != nil {
-		logger.With().Error("failed to get last applied layer", log.Err(err))
+		logger.Error("failed to get last applied layer", zap.Error(err))
 		return fmt.Errorf("cache get last applied %w", err)
 	}
 	if toApply != lastApplied.Add(1) {
-		logger.With().Error("layer not applied in order",
-			log.Stringer("expected", lastApplied.Add(1)),
-			log.Stringer("to_apply", toApply))
+		logger.Error("layer not applied in order",
+			zap.Stringer("expected", lastApplied.Add(1)),
+			zap.Stringer("to_apply", toApply),
+		)
 		return errLayerNotInOrder
 	}
 	return nil

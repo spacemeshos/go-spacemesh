@@ -2,7 +2,6 @@ package activation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -13,10 +12,10 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -64,7 +63,7 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 func TestPoetDbHappyFlow(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
+	poetDb := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
 
 	r.NoError(poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
 	ref, err := msg.Ref()
@@ -84,7 +83,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
+	poetDb := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
 	msg.PoetProof.Root = []byte("some other root")
 
 	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
@@ -95,14 +94,12 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 			msg.PoetServiceID[:5],
 		),
 	)
-	var pErr types.ProcessingError
-	r.False(errors.As(err, &pErr))
 }
 
 func TestPoetDbInvalidPoetStatement(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
+	poetDb := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
 	msg.Statement = types.CalcHash32([]byte("some other statement"))
 
 	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
@@ -113,14 +110,12 @@ func TestPoetDbInvalidPoetStatement(t *testing.T) {
 			msg.PoetServiceID[:5],
 		),
 	)
-	var pErr types.ProcessingError
-	r.False(errors.As(err, &pErr))
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
+	poetDb := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
 
 	_, err := poetDb.GetProofRef(msg.PoetServiceID, "0")
 	r.EqualError(
