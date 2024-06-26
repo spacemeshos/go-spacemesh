@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -109,6 +110,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1, migration2},
 		}),
+		WithIgnoreSchemaDrift(),
 	)
 	require.ErrorContains(t, err, "migration 2 failed")
 }
@@ -167,45 +169,319 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
+func execSQL(t *testing.T, db Executor, sql string, col int) (result string) {
+	_, err := db.Exec(sql, nil, func(stmt *Statement) bool {
+		if col >= 0 {
+			result = stmt.ColumnText(col)
+		}
+		return true
+	})
+	require.NoError(t, err)
+	return result
+}
+
 func TestDatabaseVacuumState(t *testing.T) {
 	dir := t.TempDir()
 	logger := zaptest.NewLogger(t)
 
 	ctrl := gomock.NewController(t)
+
+	// The first migration is done without vacuuming and thus it is performed
+	// in-place.
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Order().Return(1).AnyTimes()
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil).Times(1)
+	migration1.EXPECT().Apply(gomock.Any()).DoAndReturn(func(db Executor) error {
+		require.NotContains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
+		require.Equal(t, execSQL(t, db, "PRAGMA journal_mode", 0), "wal")
+		require.Equal(t, execSQL(t, db, "PRAGMA synchronous", 0), "1") // NORMAL
+		execSQL(t, db, "create table foo(x int)", -1)
+		return nil
+	}).Times(1)
 
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).Return(nil).Times(1)
+	migration2.EXPECT().Apply(gomock.Any()).DoAndReturn(func(db Executor) error {
+		// We must be operating on a temp database.
+		require.Contains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
+		// Journaling is off for the temp database as it is deleted in case
+		// of migration failure.
+		require.Equal(t, execSQL(t, db, "PRAGMA journal_mode", 0), "off")
+		// Synchronous is off for the temp database as it is deleted in case
+		// of migration failure.
+		require.Equal(t, execSQL(t, db, "PRAGMA synchronous", 0), "0") // OFF
+		execSQL(t, db, "create table bar(y int)", -1)
+		return nil
+	}).Times(1)
 
 	dbFile := filepath.Join(dir, "test.sql")
 	db, err := Open("file:"+dbFile,
 		WithLogger(logger),
 		WithDatabaseSchema(&Schema{
+			Script: "PRAGMA user_version = 1;\n" +
+				"CREATE TABLE foo(x int);\n",
 			Migrations: MigrationList{migration1},
 		}),
 		WithForceMigrations(true),
-		WithIgnoreSchemaDrift(),
 	)
 	require.NoError(t, err)
+	execSQL(t, db, "select * from foo", -1) // ensure table exists
 	require.NoError(t, db.Close())
 
 	db, err = Open("file:"+dbFile,
 		WithLogger(logger),
 		WithDatabaseSchema(&Schema{
+			Script: "PRAGMA user_version = 2;\n" +
+				"CREATE TABLE bar(y int);\n" +
+				"CREATE TABLE foo(x int);\n",
 			Migrations: MigrationList{migration1, migration2},
 		}),
 		WithVacuumState(2),
-		WithIgnoreSchemaDrift(),
+	)
+	require.NoError(t, err)
+	execSQL(t, db, "select * from foo, bar", -1)
+	require.NoError(t, db.Close())
+
+	// The wal file should be absent after the database is re-created
+	// with VACUUM INTO
+	_, err = os.Open(dbFile + "-wal")
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestDatabaseVacuumStateError(t *testing.T) {
+	dir := t.TempDir()
+	logger := zaptest.NewLogger(t)
+
+	ctrl := gomock.NewController(t)
+
+	migration1 := &sqlMigration{
+		order:   1,
+		name:    "0001_initial.sql",
+		content: "create table foo(x int)",
+	}
+
+	fail := true
+	migration2 := NewMockMigration(ctrl)
+	migration2.EXPECT().Name().Return("0002_test.sql").AnyTimes()
+	migration2.EXPECT().Order().Return(2).AnyTimes()
+	migration2.EXPECT().Apply(gomock.Any()).DoAndReturn(func(db Executor) error {
+		if fail {
+			return errors.New("migration failed")
+		}
+		execSQL(t, db, "create table bar(y int)", -1)
+		return nil
+	}).Times(2)
+
+	dbFile := filepath.Join(dir, "test.sql")
+	db, err := Open("file:"+dbFile,
+		WithLogger(logger),
+		WithDatabaseSchema(&Schema{
+			Script: "PRAGMA user_version = 1;\n" +
+				"CREATE TABLE foo(x int);\n",
+			Migrations: MigrationList{migration1},
+		}),
+	)
+	require.NoError(t, err)
+	execSQL(t, db, "select * from foo", -1) // ensure table exists
+	require.NoError(t, db.Close())
+
+	schema := &Schema{
+		Script: "PRAGMA user_version = 2;\n" +
+			"CREATE TABLE bar(y int);\n" +
+			"CREATE TABLE foo(x int);\n",
+		Migrations: MigrationList{migration1, migration2},
+	}
+	db, err = Open("file:"+dbFile,
+		WithLogger(logger),
+		WithDatabaseSchema(schema),
+		WithVacuumState(2),
+	)
+	require.Error(t, err)
+
+	// All temporary files need to be deleted upon migration failure.
+	tmpDBFiles, err := filepath.Glob(filepath.Join(dir, "*_migrate*"))
+	require.NoError(t, err)
+	require.Empty(t, tmpDBFiles)
+
+	// Make sure the initial DB is intact after failed migration,
+	// and the 2nd migration is applied on the second attempt.
+	fail = false
+	db, err = Open("file:"+dbFile,
+		WithLogger(logger),
+		WithDatabaseSchema(schema),
+		WithVacuumState(2),
+	)
+	require.NoError(t, err)
+	execSQL(t, db, "select * from foo, bar", -1)
+	require.NoError(t, db.Close())
+}
+
+// faultyMigration is a migration that can be configured to panic during Apply.
+// We don't use mock for this as it's not entirely clear what happens if a mocked method
+// panics.
+type faultyMigration struct {
+	panic, interceptVacuumInto bool
+	*sqlMigration
+}
+
+func (m *faultyMigration) Apply(db Executor) error {
+	if m.interceptVacuumInto {
+		db.(Database).Intercept("crashOnVacuum", func(query string) error {
+			if strings.Contains(strings.ToLower(query), "vacuum into") {
+				panic("simulated crash")
+			}
+			return nil
+		})
+	}
+	if m.panic {
+		panic("simulated crash")
+	}
+	return m.sqlMigration.Apply(db)
+}
+
+func TestDropIncompleteMigration(t *testing.T) {
+	dir := t.TempDir()
+	logger := zaptest.NewLogger(t)
+	migration1 := &sqlMigration{
+		order:   1,
+		name:    "0001_initial.sql",
+		content: "create table foo(x int)",
+	}
+	migration2 := &faultyMigration{
+		panic: true,
+		sqlMigration: &sqlMigration{
+			order:   2,
+			name:    "0002_test.sql",
+			content: "create table bar(y int)",
+		},
+	}
+
+	dbFile := filepath.Join(dir, "test.sql")
+	db, err := Open("file:"+dbFile,
+		WithLogger(logger),
+		WithDatabaseSchema(&Schema{
+			Script: "PRAGMA user_version = 1;\n" +
+				"CREATE TABLE foo(x int);\n",
+			Migrations: MigrationList{migration1},
+		}),
+		WithForceMigrations(true),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	// we run pragma wal_checkpoint(TRUNCATE) after vacuum, which drops the wal file
-	_, err = os.Open(dbFile + "-wal")
-	require.ErrorIs(t, err, os.ErrNotExist)
+	schema := &Schema{
+		Script: "PRAGMA user_version = 2;\n" +
+			"CREATE TABLE bar(y int);\n" +
+			"CREATE TABLE foo(x int);\n",
+		Migrations: MigrationList{migration1, migration2},
+	}
+
+	func() {
+		defer func() {
+			require.NotNil(t, recover())
+		}()
+		Open("file:"+dbFile,
+			WithLogger(logger),
+			WithDatabaseSchema(schema),
+			WithVacuumState(2),
+		)
+	}()
+
+	// Check that temporary database exists after the simulated crash.
+	// Note that we're checking "*_migrate" not "*_migrate*" to avoid matching
+	// any erroneously created successful migration markers.
+	tmpDBFiles, err := filepath.Glob(filepath.Join(dir, "*_migrate"))
+	require.NoError(t, err)
+	require.NotEmpty(t, tmpDBFiles)
+
+	// Retry migration. The incompletely migrated temporary database should be dropped.
+	migration2.panic = false
+	db, err = Open("file:"+dbFile,
+		WithLogger(logger),
+		WithDatabaseSchema(schema),
+		WithVacuumState(2),
+	)
+	require.NoError(t, err)
+	execSQL(t, db, "select * from foo, bar", -1)
+	require.NoError(t, db.Close())
+}
+
+func TestResumeCopyMigration(t *testing.T) {
+	dir := t.TempDir()
+	logger := zaptest.NewLogger(t)
+	migration1 := &sqlMigration{
+		order:   1,
+		name:    "0001_initial.sql",
+		content: "create table foo(x int)",
+	}
+	// This migration will panic when VACUUM INTO is attempted to copy
+	// the migrated database to the source database location.
+	migration2 := &faultyMigration{
+		interceptVacuumInto: true,
+		sqlMigration: &sqlMigration{
+			order:   2,
+			name:    "0002_test.sql",
+			content: "create table bar(y int)",
+		},
+	}
+
+	dbFile := filepath.Join(dir, "test.sql")
+	db, err := Open("file:"+dbFile,
+		WithLogger(logger),
+		WithDatabaseSchema(&Schema{
+			Script: "PRAGMA user_version = 1;\n" +
+				"CREATE TABLE foo(x int);\n",
+			Migrations: MigrationList{migration1},
+		}),
+		WithForceMigrations(true),
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	schema := &Schema{
+		Script: "PRAGMA user_version = 2;\n" +
+			"CREATE TABLE bar(y int);\n" +
+			"CREATE TABLE foo(x int);\n",
+		Migrations: MigrationList{migration1, migration2},
+	}
+
+	func() {
+		defer func() {
+			require.NotNil(t, recover())
+		}()
+		Open("file:"+dbFile,
+			WithLogger(logger),
+			WithDatabaseSchema(schema),
+			WithVacuumState(2),
+		)
+	}()
+
+	// Check that temporary database exists after the simulated crash.
+	tmpDBFiles, err := filepath.Glob(filepath.Join(dir, "*"))
+	t.Logf("tmpDBFiles: %v", tmpDBFiles)
+	require.NoError(t, err)
+	require.NotEmpty(t, tmpDBFiles)
+
+	// Retry migration. The migrated database should be copied
+	// to the source database location without invoking any further
+	// migrations. As the migration with fault injection is not called,
+	// the final VACUUM INTO must succeed.
+	db, err = Open("file:"+dbFile,
+		WithLogger(logger),
+		WithDatabaseSchema(schema),
+		WithVacuumState(2),
+	)
+	require.NoError(t, err)
+	execSQL(t, db, "select * from foo, bar", -1)
+	require.NoError(t, db.Close())
+}
+
+func TestDBClosed(t *testing.T) {
+	db := InMemory(WithLogger(zaptest.NewLogger(t)), WithIgnoreSchemaDrift())
+	require.NoError(t, db.Close())
+	_, err := db.Exec("select 1", nil, nil)
+	require.ErrorIs(t, err, ErrClosed)
+	err = db.WithTx(context.Background(), func(tx Transaction) error { return nil })
+	require.ErrorIs(t, err, ErrClosed)
 }
 
 func TestQueryCount(t *testing.T) {
@@ -302,3 +578,6 @@ func TestSchemaDrift(t *testing.T) {
 	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`,
 		observedLogs.All()[0].ContextMap()["diff"])
 }
+
+// TBD: test WAL modes for temp DB
+// TBD: remove SQLITE_OPEN_WAL from open flags and check journal mode

@@ -39,7 +39,7 @@ func TestIdempotentMigration(t *testing.T) {
 
 	require.Equal(t, 1, observedLogs.Len(), "expected 1 log messages")
 	l := observedLogs.All()[0]
-	require.Equal(t, "running migrations", l.Message)
+	require.Equal(t, "running migrations in-place", l.Message)
 	require.Equal(t, int64(0), l.ContextMap()["current version"])
 	require.Equal(t, int64(versionA), l.ContextMap()["target version"])
 

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,6 +22,8 @@ import (
 )
 
 var (
+	// ErrClosed is returned if database is closed.
+	ErrClosed = errors.New("database closed")
 	// ErrNoConnection is returned if pooled connection is not available.
 	ErrNoConnection = errors.New("database: no free connection")
 	// ErrNotFound is returned if requested record is not found.
@@ -63,26 +67,30 @@ type Decoder func(*Statement) bool
 
 func defaultConf() *conf {
 	return &conf{
-		enableMigrations: true,
-		connections:      16,
-		logger:           zap.NewNop(),
-		schema:           &Schema{},
+		enableMigrations:           true,
+		connections:                16,
+		logger:                     zap.NewNop(),
+		schema:                     &Schema{},
+		handleIncompleteMigrations: true,
 	}
 }
 
 type conf struct {
-	enableMigrations  bool
-	forceFresh        bool
-	forceMigrations   bool
-	connections       int
-	vacuumState       int
-	enableLatency     bool
-	cache             bool
-	cacheSizes        map[QueryCacheKind]int
-	logger            *zap.Logger
-	schema            *Schema
-	allowSchemaDrift  bool
-	ignoreSchemaDrift bool
+	uri                        string
+	enableMigrations           bool
+	forceFresh                 bool
+	forceMigrations            bool
+	connections                int
+	vacuumState                int
+	enableLatency              bool
+	cache                      bool
+	cacheSizes                 map[QueryCacheKind]int
+	logger                     *zap.Logger
+	schema                     *Schema
+	allowSchemaDrift           bool
+	ignoreSchemaDrift          bool
+	temp                       bool
+	handleIncompleteMigrations bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -176,6 +184,21 @@ func withForceFresh() Opt {
 	}
 }
 
+// WithTemp specifies temporary database mode.
+// For the temporary database, the migrations are always run in place, and vacuuming is
+// nover done.  PRAGMA journal_mode=OFF and PRAGMA synchronous=OFF are used.
+func WithTemp() Opt {
+	return func(c *conf) {
+		c.temp = true
+	}
+}
+
+func withDisableIncompleteMigrationHandling() Opt {
+	return func(c *conf) {
+		c.handleIncompleteMigrations = false
+	}
+}
+
 // Opt for configuring database.
 type Opt func(c *conf)
 
@@ -202,64 +225,79 @@ func InMemory(opts ...Opt) *sqliteDatabase {
 // https://www.sqlite.org/pragma.html#pragma_synchronous
 func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 	config := defaultConf()
+	config.uri = uri
 	for _, opt := range opts {
 		opt(config)
 	}
-	logger := config.logger.With(zap.String("uri", uri))
+	if !config.temp && config.handleIncompleteMigrations {
+		if err := handleIncompleteCopyMigration(config); err != nil {
+			return nil, err
+		}
+	}
+	return openDB(config)
+}
+
+func openDB(config *conf) (*sqliteDatabase, error) {
+	logger := config.logger.With(zap.String("uri", config.uri))
 	var flags sqlite.OpenFlags
 	if !config.forceFresh {
 		flags = sqlite.SQLITE_OPEN_READWRITE |
-			sqlite.SQLITE_OPEN_WAL |
 			sqlite.SQLITE_OPEN_URI |
 			sqlite.SQLITE_OPEN_NOMUTEX
+		if !config.temp {
+			// Note that SQLITE_OPEN_WAL is not handled by SQLITE api itself,
+			// but rather by the crawshaw library which executes
+			// PRAGMA journal_mode=WAL in this case.
+			// We don't want it for temporary databases as they're not
+			// using any journal
+			flags |= sqlite.SQLITE_OPEN_WAL
+		}
 	}
 	freshDB := config.forceFresh
-	pool, err := sqlitex.Open(uri, flags, config.connections)
+	pool, err := sqlitex.Open(config.uri, flags, config.connections)
 	if err != nil {
 		if config.forceFresh || sqlite.ErrCode(err) != sqlite.SQLITE_CANTOPEN {
-			return nil, fmt.Errorf("open db %s: %w", uri, err)
+			return nil, fmt.Errorf("open db %s: %w", config.uri, err)
 		}
 		flags |= sqlite.SQLITE_OPEN_CREATE
 		freshDB = true
-		pool, err = sqlitex.Open(uri, flags, config.connections)
+		pool, err = sqlitex.Open(config.uri, flags, config.connections)
 		if err != nil {
-			return nil, fmt.Errorf("create db %s: %w", uri, err)
+			return nil, fmt.Errorf("create db %s: %w", config.uri, err)
 		}
 	}
 	db := &sqliteDatabase{pool: pool}
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
+
+	if config.temp {
+		// Temporary database is used for migration and is deleted if migrations
+		// fail, so we make it faster by disabling journaling and synchronous
+		// writes.
+		if _, err := db.Exec("PRAGMA journal_mode=OFF", nil, nil); err != nil {
+			return nil, errors.Join(
+				fmt.Errorf("PRAGMA journal_mode=OFF: %w", err),
+				db.Close())
+		}
+		if _, err := db.Exec("PRAGMA synchronous=OFF", nil, nil); err != nil {
+			return nil, errors.Join(
+				fmt.Errorf("PRAGMA journal_mode=OFF: %w", err),
+				db.Close())
+		}
+	}
+
 	if freshDB && !config.forceMigrations {
 		if err := config.schema.Apply(db); err != nil {
 			return nil, errors.Join(
 				fmt.Errorf("error running schema script: %w", err),
 				db.Close())
 		}
-	} else {
-		before, after, err := config.schema.CheckDBVersion(logger, db)
-		switch {
-		case err != nil:
-			return nil, errors.Join(err, db.Close())
-		case before != after && config.enableMigrations:
-			logger.Info("running migrations",
-				zap.Int("current version", before),
-				zap.Int("target version", after),
-			)
-			if err := config.schema.Migrate(
-				logger, db, before, config.vacuumState,
-			); err != nil {
-				return nil, errors.Join(err, db.Close())
-			}
-		case before != after:
-			logger.Error("database version is too old",
-				zap.Int("current version", before),
-				zap.Int("target version", after),
-			)
-			return nil, errors.Join(
-				fmt.Errorf("%w: %d < %d", ErrOldSchema, before, after),
-				db.Close())
+	} else if db, err = ensureDBSchemaUpToDate(logger, db, config); err != nil {
+		if db != nil {
+			err = errors.Join(err, db.Close())
 		}
+		return nil, err
 	}
 
 	if !config.ignoreSchemaDrift {
@@ -274,12 +312,12 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 		case diff == "": // ok
 		case config.allowSchemaDrift:
 			logger.Warn("database schema drift detected",
-				zap.String("uri", uri),
+				zap.String("uri", config.uri),
 				zap.String("diff", diff),
 			)
 		default:
 			return nil, errors.Join(
-				fmt.Errorf("schema drift detected (uri %s):\n%s", uri, diff),
+				fmt.Errorf("schema drift detected (uri %s):\n%s", config.uri, diff),
 				db.Close())
 		}
 	}
@@ -292,15 +330,193 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 	return db, nil
 }
 
+func ensureDBSchemaUpToDate(logger *zap.Logger, db *sqliteDatabase, config *conf) (*sqliteDatabase, error) {
+	before, after, err := config.schema.CheckDBVersion(logger, db)
+	switch {
+	case err != nil:
+		return db, err
+	case before == after:
+		return db, nil
+	case before > after:
+		// TODO: this should be logged by the caller
+		logger.Error("database version is newer than expected - downgrade is not supported",
+			zap.Int("current version", before),
+			zap.Int("target version", after),
+		)
+		return db, fmt.Errorf("%w: %d > %d", ErrTooNew, before, after)
+	case !config.enableMigrations:
+		// TODO: this should be logged by the caller
+		logger.Error("database version is too old",
+			zap.Int("current version", before),
+			zap.Int("target version", after),
+		)
+		return db, fmt.Errorf("%w: %d < %d", ErrOldSchema, before, after)
+	case config.temp:
+		// Temporary database, do migrations without transactions
+		// and sync afterwards
+		return db, config.schema.MigrateTempDB(logger, db, before)
+	case config.vacuumState != 0 &&
+		before <= config.vacuumState &&
+		strings.HasPrefix(config.uri, "file:"):
+		logger.Info("running migrations",
+			zap.Int("current version", before),
+			zap.Int("target version", after),
+		)
+		return db.copyMigrateDB(config)
+	default:
+		// Do not produce extra "running migrations" log message for the
+		// temporary DB, as it was already logged
+		if !config.temp {
+			logger.Info("running migrations in-place",
+				zap.Int("current version", before),
+				zap.Int("target version", after),
+			)
+		} else {
+			logger.Info("applying migrations to temporary DB",
+				zap.Int("current version", before),
+				zap.Int("target version", after),
+			)
+		}
+		return db, config.schema.Migrate(logger, db, before, config.vacuumState)
+	}
+}
+
 func Version(uri string) (int, error) {
 	pool, err := sqlitex.Open(uri, sqlite.SQLITE_OPEN_READONLY, 1)
 	if err != nil {
 		return 0, fmt.Errorf("open db %s: %w", uri, err)
 	}
 	db := &sqliteDatabase{pool: pool}
-	defer db.Close()
-	return version(db)
+	v, err := version(db)
+	return v, errors.Join(err, db.Close())
 }
+
+// deleteDB deletes the database at the specified path by removing /path/to/DB* files.
+// If the database doesn't exist, no error is returned.
+// In addition to what DROP DATABASE does, this also removes the migration marker file.
+func deleteDB(path string) error {
+	// https://www.sqlite.org/tempfiles.html plus marker *_done
+	for _, suffix := range []string{"", "-journal", "-wal", "-shm", "_done"} {
+		file := path + suffix
+		if err := os.Remove(file); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return fmt.Errorf("remove %s: %w", file, err)
+		}
+	}
+	return nil
+}
+
+// moveMigratedDB runs "VACUUM INTO" on the database at fromPath and
+// replaces the database at toPath with the vacuumed one. The database
+// at fromPath is deleted after the operation.
+func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
+	config.logger.Warn("finalizing migration by moving the migrated DB to the original path",
+		zap.String("fromPath", fromPath),
+		zap.String("toPath", toPath))
+	// Try to open the migrated DB before deleting the original one.
+	// If the migrated DB is being copied to the original path by another
+	// process, this will fail and the original database will not be deleted.
+	// We don't use the proper database schema here because the migrated DB
+	// may have been created with a different set of migrations.
+	db, err := Open("file:"+fromPath,
+		WithLogger(config.logger),
+		WithConnections(1),
+		WithTemp(),
+		WithIgnoreSchemaDrift())
+	if err != nil {
+		return fmt.Errorf("open migrated DB %s: %w", fromPath, err)
+	}
+	if err := deleteDB(toPath); err != nil {
+		return err
+	}
+	if err := db.vacuumInto(toPath); err != nil {
+		return errors.Join(err, db.Close())
+	}
+	// Open the vacuumed DB to avoid race condition when another process
+	// also tries to vacuum the migrated DB into the original path after
+	// we close the migrated DB.
+	origDB, err := Open("file:"+toPath,
+		WithLogger(config.logger),
+		WithConnections(1),
+		WithMigrationsDisabled(),
+		WithIgnoreSchemaDrift(),
+		withDisableIncompleteMigrationHandling())
+	if err != nil {
+		return fmt.Errorf("open vacuumed DB %s: %w", toPath, err)
+	}
+	defer func() {
+		err = errors.Join(err, origDB.Close())
+	}()
+	if err := db.Close(); err != nil {
+		return fmt.Errorf("close migrated DB %s: %w", fromPath, err)
+	}
+	if err := deleteDB(fromPath); err != nil {
+		return err
+	}
+	if err := origDB.Close(); err != nil {
+		return fmt.Errorf("close vacuumed DB %s: %w", toPath, err)
+	}
+	return nil
+}
+
+func dbMigrationPaths(uri string) (dbPath, migratedPath string, err error) {
+	url, err := url.Parse(uri)
+	if err != nil {
+		return "", "", fmt.Errorf("parse uri: %w", err)
+	}
+	if url.Scheme != "file" {
+		return "", "", nil
+	}
+	path := url.Opaque
+	if path == "" {
+		path = url.Path
+	}
+	return path, path + "_migrate", nil
+}
+
+// handleIncompleteCopyMigration handles incomplete copy-based migrations.
+// It only works for 'file:' URIs, doing nothing for other URIs.
+// It first checks if there's a copy of the database with "_migrate" suffix.
+// If it's there, it checks if the migration is complete by checking if
+// DBNAME_migrate_done file exists. It it doesn't, the migration is considered
+// incomplete and the migrated database is removed. If DBNAME_migrate_done
+// file exists, the migration is finalized by running "VACUUM INTO" on the
+// migrated database and replacing the original, after which the migrated
+// database is deleted.
+func handleIncompleteCopyMigration(config *conf) error {
+	dbPath, migratedPath, err := dbMigrationPaths(config.uri)
+	if err != nil {
+		return err
+	}
+	if migratedPath == "" {
+		return nil
+	}
+	if _, err := os.Stat(migratedPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// no migration in progress
+			return nil
+		}
+		return fmt.Errorf("stat %s: %w", migratedPath, err)
+	}
+	if _, err := os.Stat(migratedPath + "_done"); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// incomplete migration, delete the migrated DB to start over
+			// after that
+			config.logger.Warn("incomplete migration detected, deleting temporary migrated DB",
+				zap.String("path", migratedPath))
+			return deleteDB(migratedPath)
+		}
+	}
+
+	// the migration is complete except for the last step
+	return moveMigratedDB(config, migratedPath, dbPath)
+}
+
+// Interceptor is invoked on every query after it's added to a database using
+// PushIntercept. The query will fail if Interceptor returns an error.
+type Interceptor func(query string) error
 
 // Database represents a database.
 type Database interface {
@@ -313,6 +529,8 @@ type Database interface {
 	WithTx(ctx context.Context, exec func(Transaction) error) error
 	TxImmediate(ctx context.Context) (Transaction, error)
 	WithTxImmediate(ctx context.Context, exec func(Transaction) error) error
+	Intercept(key string, fn Interceptor)
+	RemoveInterceptor(key string)
 }
 
 // Transaction represents a transaction.
@@ -331,6 +549,9 @@ type sqliteDatabase struct {
 
 	latency    *prometheus.HistogramVec
 	queryCount atomic.Int64
+
+	interceptMtx sync.Mutex
+	interceptors map[string]Interceptor
 }
 
 var _ Database = &sqliteDatabase{}
@@ -345,6 +566,9 @@ func (db *sqliteDatabase) getConn(ctx context.Context) *sqlite.Conn {
 }
 
 func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx, error) {
+	if db.closed {
+		return nil, ErrClosed
+	}
 	conn := db.getConn(ctx)
 	if conn == nil {
 		return nil, ErrNoConnection
@@ -356,12 +580,14 @@ func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx
 	return tx, nil
 }
 
-func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func(Transaction) error) error {
+func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func(Transaction) error) (err error) {
 	tx, err := db.getTx(ctx, initstmt)
 	if err != nil {
 		return err
 	}
-	defer tx.Release()
+	defer func() {
+		err = errors.Join(err, tx.Release())
+	}()
 	if err := exec(tx); err != nil {
 		tx.queryCache.ClearCache()
 		return err
@@ -404,6 +630,17 @@ func (db *sqliteDatabase) WithTxImmediate(
 	return db.withTx(ctx, beginImmediate, exec)
 }
 
+func (db *sqliteDatabase) runInterceptors(query string) error {
+	db.interceptMtx.Lock()
+	defer db.interceptMtx.Unlock()
+	for _, interceptFn := range db.interceptors {
+		if err := interceptFn(query); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Exec statement using one of the connection from the pool.
 //
 // If you care about atomicity of the operation (for example writing rewards to multiple accounts)
@@ -413,6 +650,13 @@ func (db *sqliteDatabase) WithTxImmediate(
 // Note that Exec will block until database is closed or statement has finished.
 // If application needs to control statement execution lifetime use one of the transaction.
 func (db *sqliteDatabase) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	if err := db.runInterceptors(query); err != nil {
+		return 0, err
+	}
+
+	if db.closed {
+		return 0, ErrClosed
+	}
 	db.queryCount.Add(1)
 	conn := db.getConn(context.Background())
 	if conn == nil {
@@ -442,6 +686,163 @@ func (db *sqliteDatabase) Close() error {
 	return nil
 }
 
+// Intercept adds an interceptor function to the database. The interceptor functions
+// are invoked upon each query. The query will fail if the interceptor returns an error.
+// The interceptor can later be removed using RemoveInterceptor with the same key.
+func (db *sqliteDatabase) Intercept(key string, fn Interceptor) {
+	db.interceptMtx.Lock()
+	defer db.interceptMtx.Unlock()
+	if db.interceptors == nil {
+		db.interceptors = make(map[string]Interceptor)
+	}
+	db.interceptors[key] = fn
+}
+
+// PopIntercept removes the interceptor function with specified key from the database.
+// If there's no such interceptor, the function does nothing.
+func (db *sqliteDatabase) RemoveInterceptor(key string) {
+	db.interceptMtx.Lock()
+	defer db.interceptMtx.Unlock()
+	delete(db.interceptors, key)
+}
+
+// vacuumInto runs VACUUM INTO on the database and saves the vacuumed
+// database at toPath
+func (db *sqliteDatabase) vacuumInto(toPath string) error {
+	if _, err := db.Exec("VACUUM INTO ?1", func(stmt *Statement) {
+		stmt.BindText(1, toPath)
+	}, nil); err != nil {
+		return fmt.Errorf("vacuum into %s: %w", toPath, err)
+	}
+	return nil
+}
+
+// copyMigrateDB performs a copy-based migration of the database.
+// The source database is always closed by this function.
+// Upon success, the migrated database is opened.
+func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, err error) {
+	defer func() {
+		err = errors.Join(err, db.Close())
+	}()
+
+	dbPath, migratedPath, err := dbMigrationPaths(config.uri)
+	if err != nil {
+		return nil, err
+	}
+	if migratedPath == "" {
+		return nil, fmt.Errorf("cannot migrate database, only file DBs are supported: %s", config.uri)
+	}
+
+	// Instead of just copying the source database to the temporary migration DB, use VACUUM INTO.
+	// This is somewhat slower but achieves two goals:
+	// 1. The lock is held on the source database while it's being copied
+	// 2. If the source database has a lot of free pages for whatever reason, those
+	// are not copied, saving disk space
+	config.logger.Info("making a temporary copy of the database",
+		zap.String("path", dbPath),
+		zap.String("target", migratedPath))
+	if err := db.vacuumInto(migratedPath); err != nil {
+		return nil, errors.Join(err, deleteDB(migratedPath))
+	}
+
+	// Opening the migrated DB runs the actual migrations on it.
+	// We disable vacuuming here because we're going to vacuum the migrated DB
+	// into the original one.
+	opts := []Opt{
+		WithLogger(config.logger),
+		WithConnections(1),
+		WithTemp(),
+		WithDatabaseSchema(config.schema),
+	}
+	if config.ignoreSchemaDrift {
+		opts = append(opts, WithIgnoreSchemaDrift())
+	}
+	migratedDB, err := Open("file:"+migratedPath, opts...)
+	if err != nil {
+		return nil, errors.Join(
+			fmt.Errorf("process migrated DB %s: %w", migratedPath, err),
+			deleteDB(migratedPath))
+	}
+	tempDBReady := false
+	defer func() {
+		err = errors.Join(err, migratedDB.Close())
+		if !tempDBReady {
+			err = errors.Join(err, deleteDB(migratedPath))
+		}
+	}()
+
+	// Make sure the migrated DB is fully synced to the disk before creating the marker file.
+	// We don't need wal_checkpoint(TRUNCATE) here as we're going to delete the migrated DB.
+	if _, err := migratedDB.Exec("PRAGMA wal_checkpoint(FULL)", nil, nil); err != nil {
+		return nil, fmt.Errorf("checkpoint migrated DB %s: %w", migratedPath, err)
+	}
+
+	// Create the marker file to indicate that the migration is complete.
+	// Make sure the file is written to the disk before closing the database.
+	// We could create a table in the temporary database instead of the marker file,
+	// but as the temporary database is opened without PRAGMA journal_mode=OFF
+	// and PRAGMA synchronous=OFF, it may become corrupt in case of a crash or power
+	// outage, so we avoid trying to open it.
+	markerPath := migratedPath + "_done"
+	if f, err := os.Create(markerPath); err != nil {
+		return nil, fmt.Errorf("create marker file %s_done: %w", migratedPath, err)
+	} else {
+		if err := f.Sync(); err != nil {
+			return nil, fmt.Errorf("sync/close marker file %s_done: %w", migratedPath,
+				errors.Join(err, f.Close()))
+		}
+		if err := f.Close(); err != nil {
+			return nil, fmt.Errorf("close marker file %s: %w", markerPath, err)
+		}
+		// The temporary database is complete and should not be deleted
+		// until we copy it to the original database location.
+		tempDBReady = true
+	}
+
+	// We only close the source database at the end of the migration process
+	// so that the lock is held. There's a possibility that right after we
+	// close the source database, another process will see the migrated database
+	// and the marker file and will try to open the migrated database. If the
+	if err := db.Close(); err != nil {
+		return nil, fmt.Errorf("close db: %w", err)
+	}
+
+	// Delete the original database. VACUUM INTO will fail if the destination
+	// database exists.
+	if err := deleteDB(dbPath); err != nil {
+		return nil, fmt.Errorf("delete original DB %s: %w", dbPath, err)
+	}
+
+	// Overwrite the original database with the migrated one.
+	// The lock is held on the migrated DB during this, preventing concurrent
+	// go-spacemesh instances to attempt the same operation.
+	config.logger.Info("moving migrated DB to original location", zap.String("path", dbPath))
+	if err := migratedDB.vacuumInto(dbPath); err != nil {
+		return nil, err
+	}
+
+	// Open the final DB before deleting the source DB, so one of the locks
+	// is always held. The migrations are already run, so we're disabling them.
+	config.enableMigrations = false
+	finalDB, err = openDB(config)
+	if err != nil {
+		return nil, fmt.Errorf("open final DB %s: %w", config.uri, err)
+	}
+
+	if err := migratedDB.Close(); err != nil {
+		finalDB.Close()
+		return nil, fmt.Errorf("close migrated DB %s: %w", migratedPath, err)
+	}
+
+	// Now we can delete the migrated DB and the marker file.
+	if err := deleteDB(migratedPath); err != nil {
+		finalDB.Close()
+		return nil, err
+	}
+
+	return finalDB, err
+}
+
 // QueryCount returns the number of queries executed, including failed
 // queries, but not counting transaction start / commit / rollback.
 func (db *sqliteDatabase) QueryCount() int {
@@ -453,7 +854,7 @@ func (db *sqliteDatabase) QueryCache() QueryCache {
 	return db.queryCache
 }
 
-func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
+func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (nRows int, err error) {
 	stmt, err := conn.Prepare(query)
 	if err != nil {
 		return 0, fmt.Errorf("prepare %s: %w", query, err)
@@ -461,7 +862,9 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 	if encoder != nil {
 		encoder(stmt)
 	}
-	defer stmt.ClearBindings()
+	defer func() {
+		err = errors.Join(err, stmt.ClearBindings())
+	}()
 
 	rows := 0
 	for {
@@ -528,6 +931,10 @@ func (tx *sqliteTx) Release() error {
 
 // Exec query.
 func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	if err := tx.db.runInterceptors(query); err != nil {
+		return 0, err
+	}
+
 	tx.db.queryCount.Add(1)
 	if tx.db.latency != nil {
 		start := time.Now()

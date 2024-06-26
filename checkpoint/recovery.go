@@ -247,7 +247,7 @@ func recoverFromLocalFile(
 
 	newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite db %w", err)
+		return nil, fmt.Errorf("open sqlite db: %w", err)
 	}
 	defer newDB.Close()
 	logger.Info("populating new database",

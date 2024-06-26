@@ -1944,7 +1944,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	sqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
 	if err != nil {
-		return fmt.Errorf("open sqlite db %w", err)
+		return fmt.Errorf("open sqlite db: %w", err)
 	}
 	app.db = sqlDB
 	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
@@ -1989,7 +1989,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)
 	if err != nil {
-		return fmt.Errorf("open sqlite db %w", err)
+		return fmt.Errorf("open sqlite db: %w", err)
 	}
 	app.localDB = localDB
 	return nil
