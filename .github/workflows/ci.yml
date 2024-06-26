@@ -143,7 +143,7 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           git config --global pack.window 1
-          git config --global pack.depth 1
+          git config --global core.compression 0
           git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
@@ -194,7 +194,7 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           git config --global pack.window 1
-          git config --global pack.depth 1
+          git config --global core.compression 0
           git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
@@ -256,7 +256,7 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           git config --global pack.window 1
-          git config --global pack.depth 1
+          git config --global core.compression 0
           git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
