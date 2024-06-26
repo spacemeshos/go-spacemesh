@@ -17,12 +17,15 @@ type AtxSnapshot struct {
 	Epoch          uint32 `json:"epoch"`
 	CommitmentAtx  []byte `json:"commitmentAtx"`
 	VrfNonce       uint64 `json:"vrfNonce"`
-	NumUnits       uint32 `json:"numUnits"`
 	BaseTickHeight uint64 `json:"baseTickHeight"`
 	TickCount      uint64 `json:"tickCount"`
 	PublicKey      []byte `json:"publicKey"`
 	Sequence       uint64 `json:"sequence"`
 	Coinbase       []byte `json:"coinbase"`
+	// total effective units
+	NumUnits uint32 `json:"numUnits"`
+	// actual units per smesher
+	Units map[NodeID]uint32 `json:"units"`
 }
 
 type AccountSnapshot struct {

@@ -131,6 +131,7 @@ func (h *HandlerV2) processATX(
 		SmesherID:      watx.SmesherID,
 		AtxBlob:        types.AtxBlob{Blob: blob, Version: types.AtxV2},
 	}
+
 	if watx.Initial == nil {
 		// FIXME: update to keep many previous ATXs to support merged ATXs
 		atx.PrevATXID = watx.PreviousATXs[0]
@@ -144,7 +145,7 @@ func (h *HandlerV2) processATX(
 	atx.SetID(watx.ID())
 	atx.SetReceived(received)
 
-	proof, err = h.storeAtx(ctx, atx, watx, marrying)
+	proof, err = h.storeAtx(ctx, atx, watx, marrying, parts.units)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
@@ -313,86 +314,22 @@ func (h *HandlerV2) collectAtxDeps(atx *wire.ActivationTxV2) ([]types.Hash32, []
 	return maps.Keys(poetRefs), maps.Keys(filtered)
 }
 
-func (h *HandlerV2) previous(ctx context.Context, id types.ATXID) (opaqueAtx, error) {
-	var blob sql.Blob
-	version, err := atxs.LoadBlob(ctx, h.cdb, id[:], &blob)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(blob.Bytes) == 0 {
-		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
-		// Fallback to fetching it from the DB to get the effective NumUnits.
-		atx, err := atxs.Get(h.cdb, id)
-		if err != nil {
-			return nil, fmt.Errorf("fetching golden previous atx: %w", err)
-		}
-		return atx, nil
-	}
-
-	switch version {
-	case types.AtxV1:
-		var prev wire.ActivationTxV1
-		if err := codec.Decode(blob.Bytes, &prev); err != nil {
-			return nil, fmt.Errorf("decoding previous atx v1: %w", err)
-		}
-		return &prev, nil
-	case types.AtxV2:
-		var prev wire.ActivationTxV2
-		if err := codec.Decode(blob.Bytes, &prev); err != nil {
-			return nil, fmt.Errorf("decoding previous atx v2: %w", err)
-		}
-		return &prev, nil
-	}
-	return nil, fmt.Errorf("unexpected previous ATX version: %d", version)
-}
-
 // Validate the previous ATX for the given PoST and return the effective numunits.
-func (h *HandlerV2) validatePreviousAtx(id types.NodeID, post *wire.SubPostV2, prevAtxs []opaqueAtx) (uint32, error) {
+func (h *HandlerV2) validatePreviousAtx(
+	id types.NodeID,
+	post *wire.SubPostV2,
+	prevAtxs []*types.ActivationTx,
+) (uint32, error) {
 	if post.PrevATXIndex >= uint32(len(prevAtxs)) {
 		return 0, fmt.Errorf("prevATXIndex out of bounds: %d > %d", post.PrevATXIndex, len(prevAtxs))
 	}
 	prev := prevAtxs[post.PrevATXIndex]
-
-	switch prev := prev.(type) {
-	case *types.ActivationTx:
-		// A golden ATX
-		// TODO: support merged golden ATX
-		if prev.SmesherID != id {
-			return 0, fmt.Errorf("prev golden ATX has different owner: %s (expected %s)", prev.SmesherID, id)
-		}
-		return min(prev.NumUnits, post.NumUnits), nil
-
-	case *wire.ActivationTxV1:
-		if prev.SmesherID != id {
-			return 0, fmt.Errorf("prev ATX V1 has different owner: %s (expected %s)", prev.SmesherID, id)
-		}
-		return min(prev.NumUnits, post.NumUnits), nil
-	case *wire.ActivationTxV2:
-		if prev.MarriageATX != nil {
-			// Previous is a merged ATX
-			// need to find out if the given ID was present in the previous ATX
-			_, idx, err := identities.MarriageInfo(h.cdb, id)
-			if err != nil {
-				return 0, fmt.Errorf("fetching marriage info for ID %s: %w", id, err)
-			}
-			for _, nipost := range prev.NiPosts {
-				for _, post := range nipost.Posts {
-					if post.MarriageIndex == uint32(idx) {
-						return min(post.NumUnits, post.NumUnits), nil
-					}
-				}
-			}
-		} else {
-			// Previous is a solo ATX
-			if prev.SmesherID == id {
-				return min(prev.NiPosts[0].Posts[0].NumUnits, post.NumUnits), nil
-			}
-		}
-
-		return 0, fmt.Errorf("previous ATX V2 doesn't contain %s", id)
+	prevUnits, err := atxs.Units(h.cdb, prev.ID(), id)
+	if err != nil {
+		return 0, fmt.Errorf("fetching previous atx %s units for ID %s: %w", prev.ID(), id, err)
 	}
-	return 0, fmt.Errorf("unexpected previous ATX type: %T", prev)
+
+	return min(prevUnits, post.NumUnits), nil
 }
 
 func (h *HandlerV2) validateCommitmentAtx(golden, commitmentAtxId types.ATXID, publish types.EpochID) error {
@@ -498,6 +435,7 @@ type atxParts struct {
 	ticks          uint64
 	weight         uint64
 	effectiveUnits uint32
+	units          map[types.NodeID]uint32
 }
 
 type nipostSize struct {
@@ -556,23 +494,26 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV2,
 ) (*atxParts, *mwire.MalfeasanceProof, error) {
+	parts := atxParts{
+		units: make(map[types.NodeID]uint32),
+	}
 	if atx.Initial != nil {
 		if err := h.validateCommitmentAtx(h.goldenATXID, atx.Initial.CommitmentATX, atx.PublishEpoch); err != nil {
 			return nil, nil, fmt.Errorf("verifying commitment ATX: %w", err)
 		}
 	}
 
-	previousAtxs := make([]opaqueAtx, len(atx.PreviousATXs))
+	prevAtxs := make([]*types.ActivationTx, len(atx.PreviousATXs))
 	for i, prev := range atx.PreviousATXs {
-		prevAtx, err := h.previous(ctx, prev)
+		prevAtx, err := atxs.Get(h.cdb, prev)
 		if err != nil {
 			return nil, nil, fmt.Errorf("fetching previous atx: %w", err)
 		}
-		if prevAtx.Published() >= atx.PublishEpoch {
-			err := fmt.Errorf("previous atx is too new (%d >= %d) (%s) ", prevAtx.Published(), atx.PublishEpoch, prev)
+		if prevAtx.PublishEpoch >= atx.PublishEpoch {
+			err := fmt.Errorf("previous atx is too new (%d >= %d) (%s) ", prevAtx.PublishEpoch, atx.PublishEpoch, prev)
 			return nil, nil, err
 		}
-		previousAtxs[i] = prevAtx
+		prevAtxs[i] = prevAtx
 	}
 
 	equivocationSet, err := h.equivocationSet(atx)
@@ -594,7 +535,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			effectiveNumUnits := post.NumUnits
 			if atx.Initial == nil {
 				var err error
-				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, previousAtxs)
+				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, prevAtxs)
 				if err != nil {
 					return nil, nil, fmt.Errorf("validating previous atx: %w", err)
 				}
@@ -644,7 +585,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		nipostSizes[i].ticks = leaves / h.tickSize
 	}
 
-	totalEffectiveNumUnits, totalWeight, err := nipostSizes.sumUp()
+	parts.effectiveUnits, parts.weight, err = nipostSizes.sumUp()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -689,13 +630,8 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			if err != nil {
 				return nil, nil, fmt.Errorf("invalid post for ID %s: %w", id, err)
 			}
+			parts.units[id] = post.NumUnits
 		}
-	}
-
-	parts := &atxParts{
-		ticks:          nipostSizes.minTicks(),
-		effectiveUnits: totalEffectiveNumUnits,
-		weight:         totalWeight,
 	}
 
 	if atx.Initial == nil {
@@ -708,7 +644,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		}
 	}
 
-	return parts, nil, nil
+	parts.ticks = nipostSizes.minTicks()
+
+	return &parts, nil, nil
 }
 
 func (h *HandlerV2) checkMalicious(
@@ -768,6 +706,7 @@ func (h *HandlerV2) storeAtx(
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV2,
 	marrying []types.NodeID,
+	units map[types.NodeID]uint32,
 ) (*mwire.MalfeasanceProof, error) {
 	var (
 		malicious bool
@@ -798,6 +737,10 @@ func (h *HandlerV2) storeAtx(
 		err = atxs.Add(tx, atx)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
+		}
+		err = atxs.SetUnits(tx, atx.ID(), units)
+		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("set atx units: %w", err)
 		}
 		return nil
 	}); err != nil {

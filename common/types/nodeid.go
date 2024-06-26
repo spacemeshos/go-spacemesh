@@ -55,7 +55,7 @@ func (id *NodeID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, id[:])
 }
 
-func (id *NodeID) MarshalText() ([]byte, error) {
+func (id NodeID) MarshalText() ([]byte, error) {
 	return util.Base64Encode(id[:]), nil
 }
 
