@@ -94,6 +94,10 @@ func TestTransactionService_List(t *testing.T) {
 		var expectedTxs []types.TransactionWithResult
 		for _, tx := range txsList {
 			found := false
+			if tx.Transaction.Principal.String() == address {
+				found = true
+			}
+
 			for _, addr := range tx.TransactionResult.Addresses {
 				if addr.String() == address {
 					found = true
