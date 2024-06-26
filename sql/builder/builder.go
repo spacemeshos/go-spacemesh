@@ -152,32 +152,34 @@ func BindingsFrom(operations Operations) sql.Encoder {
 		for _, op := range operations.Filter {
 			if len(op.Group) > 0 {
 				for _, groupOp := range op.Group {
-					bindValue(stmt, &bindIndex, groupOp.Value)
+					bindIndex = bindValue(stmt, bindIndex, groupOp.Value)
 				}
 			} else {
-				bindValue(stmt, &bindIndex, op.Value)
+				bindIndex = bindValue(stmt, bindIndex, op.Value)
 			}
 		}
 	}
 }
 
-func bindValue(stmt *sql.Statement, bindIndex *int, value any) {
+func bindValue(stmt *sql.Statement, bindIndex int, value any) int {
 	switch val := value.(type) {
 	case int64:
-		stmt.BindInt64(*bindIndex, val)
-		*bindIndex++
+		stmt.BindInt64(bindIndex, val)
+		bindIndex++
 	case []byte:
-		stmt.BindBytes(*bindIndex, val)
-		*bindIndex++
+		stmt.BindBytes(bindIndex, val)
+		bindIndex++
 	case types.EpochID:
-		stmt.BindInt64(*bindIndex, int64(val))
-		*bindIndex++
+		stmt.BindInt64(bindIndex, int64(val))
+		bindIndex++
 	case [][]byte:
 		for _, v := range val {
-			stmt.BindBytes(*bindIndex, v)
-			*bindIndex++
+			stmt.BindBytes(bindIndex, v)
+			bindIndex++
 		}
 	default:
 		panic(fmt.Sprintf("unexpected type %T", value))
 	}
+
+	return bindIndex
 }
