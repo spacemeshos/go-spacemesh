@@ -7,6 +7,7 @@ import (
 )
 
 func TestFilterFrom_WithSingleFilter(t *testing.T) {
+	t.Parallel()
 	operations := Operations{
 		Filter: []Op{
 			{Field: Epoch, Token: Eq, Value: types.EpochID(1)},
