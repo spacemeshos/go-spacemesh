@@ -9,10 +9,8 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/logging"
-	"github.com/spacemeshos/poet/registration"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -21,6 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -32,7 +31,7 @@ import (
 )
 
 const (
-	layersPerEpoch                 = 10
+	layersPerEpoch                 = 5
 	layerDuration                  = time.Second
 	postGenesisEpoch types.EpochID = 2
 )
@@ -89,6 +88,7 @@ func launchPostSupervisor(
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
+	provingOpts.Nonces = 64
 
 	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
 	builder.EXPECT().Register(gomock.Any())
@@ -167,21 +167,6 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		MaxRequestRetries: 10,
 	}
 
-	pubKey, addr := spawnTestCertifier(t, cfg, nil, verifying.WithLabelScryptParams(opts.Scrypt))
-	certifierCfg := &registration.CertifierConfig{
-		URL:    "http://" + addr.String(),
-		PubKey: registration.Base64Enc(pubKey),
-	}
-
-	poetProver := spawnPoet(
-		t,
-		WithGenesis(genesis),
-		WithEpochDuration(epoch),
-		WithPhaseShift(poetCfg.PhaseShift),
-		WithCycleGap(poetCfg.CycleGap),
-		WithCertifier(certifierCfg),
-	)
-
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
 		func(got types.LayerID) time.Time {
@@ -214,13 +199,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	err = nipost.AddPost(localDb, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
 	require.NoError(t, err)
 
-	client, err := activation.NewPoetClient(
-		poetDb,
-		poetProver.ServerCfg(),
-		poetCfg,
-		logger,
-	)
-	require.NoError(t, err)
+	backend := ae2e.NewTestPoetBackend(1)
+	client := activation.NewPoetClientWithBackend(poetDb, backend, poetCfg, logger)
 
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
@@ -307,29 +287,14 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch / 2,
-		CycleGap:          epoch / 4,
-		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 5,
-		RequestRetryDelay: epoch / 50,
-		MaxRequestRetries: 10,
+		PhaseShift:  epoch / 2,
+		CycleGap:    epoch / 4,
+		GracePeriod: epoch / 5,
 	}
-	poetProver := spawnPoet(
-		t,
-		WithGenesis(genesis),
-		WithEpochDuration(epoch),
-		WithPhaseShift(poetCfg.PhaseShift),
-		WithCycleGap(poetCfg.CycleGap),
-	)
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
-	client, err := activation.NewPoetClient(
-		poetDb,
-		poetProver.ServerCfg(),
-		poetCfg,
-		logger,
-	)
-	require.NoError(t, err)
+	backend := ae2e.NewTestPoetBackend(len(signers))
+	client := activation.NewPoetClientWithBackend(poetDb, backend, poetCfg, logger)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(

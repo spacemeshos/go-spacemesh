@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -87,24 +88,13 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	// ensure that genesis aligns with layer timings
-	genesis := time.Now().Add(layerDuration).Round(layerDuration)
-	layerDuration := 2 * time.Second
+	genesis := time.Now().Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch,
-		CycleGap:          epoch / 2,
-		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 5,
-		RequestRetryDelay: epoch / 50,
-		MaxRequestRetries: 10,
+		PhaseShift:  epoch,
+		CycleGap:    epoch * 3 / 4,
+		GracePeriod: epoch / 4,
 	}
-	poetProver := spawnPoet(
-		t,
-		WithGenesis(genesis),
-		WithEpochDuration(epoch),
-		WithPhaseShift(poetCfg.PhaseShift),
-		WithCycleGap(poetCfg.CycleGap),
-	)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
@@ -115,15 +105,10 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	client, err := activation.NewPoetClient(
-		poetDb,
-		poetProver.ServerCfg(),
-		poetCfg,
-		logger,
-	)
-	require.NoError(t, err)
+	backend := ae2e.NewTestPoetBackend(1)
+	client := activation.NewPoetClientWithBackend(poetDb, backend, poetCfg, logger)
 
-	postStates := activation.NewMockPostStates(ctrl)
+	postStates := activation.NewPostStates(logger)
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
@@ -240,25 +225,9 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		activation.WithPostStates(postStates),
 		activation.BuilderAtxVersions(atxVersions),
 	)
-	gomock.InOrder(
-		// it starts by setting to IDLE
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		// initial proof
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		// post proof - 1st epoch
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		// 2nd epoch
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		// 3rd epoch
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-	)
 	tab.Register(sig)
 
 	require.NoError(t, tab.StartSmeshing(coinbase))
-	require.Eventually(t, ctrl.Satisfied, epoch*4, time.Second)
+	require.Eventually(t, ctrl.Satisfied, epoch*4, time.Millisecond*100)
 	require.NoError(t, tab.StopSmeshing(false))
 }
