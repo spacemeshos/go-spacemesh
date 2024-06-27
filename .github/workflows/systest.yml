@@ -34,9 +34,9 @@ env:
   CI_REGION_NAME: ${{ secrets.CI_REGION_NAME }}
   USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
-concurrency:
-  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}-{1}', github.workflow, github.ref) }}
-  cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
+#concurrency: # XXX:  Check if we need this
+#  group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}-{1}', github.workflow, github.ref) }}
+#  cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
 
 jobs:
   filter-changes:
@@ -53,7 +53,7 @@ jobs:
               - '!**/*.md'
 
   systest:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest-16-cores
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
@@ -68,23 +68,6 @@ jobs:
         uses: azure/setup-kubectl@v4
         with:
           version: "v1.23.15"
-
-      - name: Setup gcloud authentication
-        uses: google-github-actions/auth@v2
-        with:
-          # GCP_CREDENTIALS is minified JSON of service account
-          credentials_json: "${{ secrets.CI_GCP_CREDENTIALS }}"
-
-      - name: Configure gcloud
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          version: "469.0.0"
-
-      - name: Configure gke authentication plugin
-        run: gcloud components install gke-gcloud-auth-plugin --quiet
-
-      - name: Configure kubectl
-        run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --region ${{ secrets.CI_REGION_NAME }} --project ${{ secrets.CI_GCP_PROJECT_ID }}
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -129,12 +112,41 @@ jobs:
           check-latest: true
           go-version-file: "go.mod"
 
+      # TODO: Make the kind accessible here
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.1
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          check-latest: true
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.8.0
+        with:
+          config: kind.yaml
+          kubectl_version: v1.25.4
+          cluster_name: gha-systest-${{ steps.vars.outputs.sha_short }}
+
+      - name: Get all pods
+        run: kubectl get pods -A
+
+      - name: Setup Cluster dependencies
+        run: |
+          kubectl create clusterrolebinding serviceaccounts-cluster-admin \
+            --clusterrole=cluster-admin --group=system:serviceaccounts
+
+          curl -sSL https://mirrors.chaos-mesh.org/v2.5.1/install.sh | bash
+
       - name: Run tests
         timeout-minutes: 60
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
-          storage: premium-rwo=10Gi
+          storage: standard-rwo=256Mi
           node_selector: cloud.google.com/gke-nodepool=gha
           size: 30
           bootstrap: 4m
