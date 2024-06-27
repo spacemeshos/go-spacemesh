@@ -125,11 +125,9 @@ jobs:
           check-latest: true
 
       - name: Create kind cluster
-        uses: helm/kind-action@v1.8.0
+        uses: helm/kind-action@v1.10.0
         with:
           config: kind.yml
-          kubectl_version: v1.25.4
-          cluster_name: gha-systest-${{ steps.vars.outputs.sha_short }}
 
       - name: Get all pods
         run: kubectl get pods -A
