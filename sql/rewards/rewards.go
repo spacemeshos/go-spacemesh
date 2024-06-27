@@ -111,19 +111,6 @@ func ListBySmesherId(db sql.Executor, smesherID types.NodeID) (rst []*types.Rewa
 	return ListByKey(db, nil, &smesherID)
 }
 
-func CountRewardsByOps(
-	db sql.Executor,
-	operations builder.Operations,
-) (count uint32, err error) {
-	_, err = db.Exec(`select count(*) from rewards`+builder.FilterFrom(operations),
-		builder.BindingsFrom(operations),
-		func(stmt *sql.Statement) bool {
-			count = uint32(stmt.ColumnInt32(0))
-			return true
-		})
-	return
-}
-
 func IterateRewardsOps(
 	db sql.Executor,
 	operations builder.Operations,

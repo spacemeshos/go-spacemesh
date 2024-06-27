@@ -171,18 +171,6 @@ func Revert(db sql.Executor, after types.LayerID) error {
 	return nil
 }
 
-func CountAccountsByOps(db sql.Executor, operations builder.Operations) (count uint32, err error) {
-	_, err = db.Exec(
-		"SELECT COUNT(DISTINCT address) FROM accounts"+builder.FilterFrom(operations),
-		builder.BindingsFrom(operations),
-		func(stmt *sql.Statement) bool {
-			count = uint32(stmt.ColumnInt32(0))
-			return true
-		},
-	)
-	return
-}
-
 func IterateAccountsOps(
 	db sql.Executor,
 	operations builder.Operations,
