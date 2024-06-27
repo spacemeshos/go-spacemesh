@@ -109,7 +109,7 @@ func Recover(
 	cfg *RecoverConfig,
 ) (*PreservedData, error) {
 	if len(cfg.Uri) == 0 {
-		return nil, nil
+		return nil, errors.New("recovery uri not set")
 	}
 	if cfg.Restore == 0 {
 		return nil, errors.New("restore layer not set")

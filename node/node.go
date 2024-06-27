@@ -2067,9 +2067,12 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		}
 	}
 
-	preserved, err := app.loadCheckpoint(ctx)
-	if err != nil {
-		return fmt.Errorf("loading checkpoint: %w", err)
+	var preserved *checkpoint.PreservedData
+	if app.Config.Recovery.Uri != "" {
+		preserved, err = app.loadCheckpoint(ctx)
+		if err != nil {
+			return fmt.Errorf("loading checkpoint: %w", err)
+		}
 	}
 
 	/* Initialize all protocol services */
@@ -2141,7 +2144,11 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	// need post verifying service to start first
-	app.preserveAfterRecovery(ctx, preserved)
+	if preserved != nil {
+		app.preserveAfterRecovery(ctx, *preserved)
+	} else {
+		app.log.Info("no need to preserve data after recovery")
+	}
 
 	if err := app.startAPIServices(ctx); err != nil {
 		return err
@@ -2157,11 +2164,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	return nil
 }
 
-func (app *App) preserveAfterRecovery(ctx context.Context, preserved *checkpoint.PreservedData) {
-	if preserved == nil {
-		app.log.Info("no need to preserve data after recovery")
-		return
-	}
+func (app *App) preserveAfterRecovery(ctx context.Context, preserved checkpoint.PreservedData) {
 	for i, poetProof := range preserved.Proofs {
 		ref, err := poetProof.Ref()
 		if err != nil {

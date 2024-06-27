@@ -147,7 +147,7 @@ var allAccounts = []*types.Account{
 	},
 }
 
-func expectedCheckpoint(t *testing.T, snapshot types.LayerID, numAtxs int, miners []miner) *types.Checkpoint {
+func expectedCheckpoint(t testing.TB, snapshot types.LayerID, numAtxs int, miners []miner) *types.Checkpoint {
 	t.Helper()
 
 	request, err := json.Marshal(&pb.CheckpointStreamRequest{
@@ -252,7 +252,8 @@ func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
 	}
 }
 
-func createMesh(t *testing.T, db *sql.Database, miners []miner, accts []*types.Account) {
+func createMesh(t testing.TB, db *sql.Database, miners []miner, accts []*types.Account) {
+	t.Helper()
 	for _, miner := range miners {
 		for _, atx := range miner.atxs {
 			require.NoError(t, atxs.Add(db, atx))

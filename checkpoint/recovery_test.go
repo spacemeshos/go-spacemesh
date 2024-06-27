@@ -226,11 +226,11 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	require.True(t, exist)
 }
 
-func TestRecover_SkipsWhenNoURI(t *testing.T) {
+func TestRecover_URIMustBeSet(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	d, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewMemMapFs(), &checkpoint.RecoverConfig{})
-	require.NoError(t, err)
+	cfg := &checkpoint.RecoverConfig{}
+	d, err := checkpoint.Recover(context.Background(), zaptest.NewLogger(t), afero.NewMemMapFs(), cfg)
+	require.ErrorContains(t, err, "uri not set")
 	require.Nil(t, d)
 }
 
