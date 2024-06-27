@@ -79,7 +79,7 @@ jobs:
         id: install
         uses: azure/setup-kubectl@v4
         with:
-          version: "v1.28.2"
+          version: "v1.30.0"
 
       #- name: Create kind cluster
       #  uses: helm/kind-action@v1.10.0
