@@ -975,7 +975,7 @@ func (app *App) initServices(ctx context.Context) error {
 		miner.WithHdist(app.Config.Tortoise.Hdist),
 		miner.WithNetworkDelay(app.Config.ATXGradeDelay),
 		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
-		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)),
+		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg).Zap()),
 		miner.WithActivesetPreparation(app.Config.ActiveSet),
 	)
 	for _, sig := range app.signers {
