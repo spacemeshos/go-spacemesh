@@ -44,7 +44,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -184,11 +183,6 @@ func GetCommand() *cobra.Command {
 
 			// Don't print usage on error from this point forward
 			c.SilenceUsage = true
-
-			app.preserve, err = app.LoadCheckpoint(ctx)
-			if err != nil {
-				return fmt.Errorf("loading checkpoint: %w", err)
-			}
 
 			// This blocks until the context is finished or until an error is produced
 			err = app.Start(ctx)
@@ -424,7 +418,6 @@ type App struct {
 	poetDb            *activation.PoetDb
 	postVerifier      activation.PostVerifier
 	postSupervisor    *activation.PostSupervisor
-	preserve          *checkpoint.PreservedData
 	errCh             chan error
 
 	host *p2p.Host
@@ -434,15 +427,7 @@ type App struct {
 	eg      *errgroup.Group
 }
 
-func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, error) {
-	checkpointFile := app.Config.Recovery.Uri
-	restore := types.LayerID(app.Config.Recovery.Restore)
-	if len(checkpointFile) == 0 {
-		return nil, nil
-	}
-	if restore == 0 {
-		return nil, errors.New("restore layer not set")
-	}
+func (app *App) loadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, error) {
 	nodeIDs := make([]types.NodeID, len(app.signers))
 	for i, sig := range app.signers {
 		nodeIDs[i] = sig.NodeID()
@@ -454,13 +439,10 @@ func (app *App) LoadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 		LocalDbFile:    localDbFile,
 		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
 		NodeIDs:        nodeIDs,
-		Uri:            checkpointFile,
-		Restore:        restore,
+		Uri:            app.Config.Recovery.Uri,
+		Restore:        types.LayerID(app.Config.Recovery.Restore),
 	}
-	app.log.WithContext(ctx).With().Info("recover from checkpoint",
-		log.String("url", checkpointFile),
-		log.Stringer("restore", restore),
-	)
+
 	return checkpoint.Recover(ctx, app.log.Zap(), afero.NewOsFs(), cfg)
 }
 
@@ -2085,6 +2067,14 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		}
 	}
 
+	var preserved *checkpoint.PreservedData
+	if app.Config.Recovery.Uri != "" {
+		preserved, err = app.loadCheckpoint(ctx)
+		if err != nil {
+			return fmt.Errorf("loading checkpoint: %w", err)
+		}
+	}
+
 	/* Initialize all protocol services */
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
@@ -2129,6 +2119,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	if err := app.setupDBs(ctx, logger); err != nil {
 		return err
 	}
+
 	if err := app.initServices(ctx); err != nil {
 		return fmt.Errorf("init services: %w", err)
 	}
@@ -2153,7 +2144,11 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	// need post verifying service to start first
-	app.preserveAfterRecovery(ctx)
+	if preserved != nil {
+		app.preserveAfterRecovery(ctx, *preserved)
+	} else {
+		app.log.Info("no need to preserve data after recovery")
+	}
 
 	if err := app.startAPIServices(ctx); err != nil {
 		return err
@@ -2169,40 +2164,28 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	return nil
 }
 
-func (app *App) preserveAfterRecovery(ctx context.Context) {
-	if app.preserve == nil {
-		app.log.Info("no need to preserve data after recovery")
-		return
-	}
-	for i, poetProof := range app.preserve.Proofs {
-		encoded, err := codec.Encode(poetProof)
-		if err != nil {
-			app.log.With().Error("failed to encode poet proof after checkpoint",
-				log.Object("poet proof", poetProof),
-				log.Err(err),
-			)
-			continue
-		}
+func (app *App) preserveAfterRecovery(ctx context.Context, preserved checkpoint.PreservedData) {
+	for i, poetProof := range preserved.Proofs {
 		ref, err := poetProof.Ref()
 		if err != nil {
-			app.log.With().Error("failed to get poet proof ref after checkpoint", log.Inline(poetProof), log.Err(err))
+			app.log.With().Error("failed to calculated poet proof ref after checkpoint", log.Inline(poetProof))
 			continue
 		}
-		hash := types.Hash32(ref)
-		if err := app.poetDb.ValidateAndStoreMsg(ctx, hash, p2p.NoPeer, encoded); err != nil {
+
+		if err := app.poetDb.ValidateAndStore(ctx, poetProof); err != nil {
 			app.log.With().Error("failed to preserve poet proof after checkpoint",
-				log.Stringer("atx id", app.preserve.Deps[i].ID),
-				log.String("poet proof ref", hash.ShortString()),
+				log.Stringer("atx id", preserved.Deps[i].ID),
+				log.Stringer("poet proof ref", &ref),
 				log.Err(err),
 			)
 			continue
 		}
 		app.log.With().Info("preserved poet proof after checkpoint",
-			log.Stringer("atx id", app.preserve.Deps[i].ID),
-			log.String("poet proof ref", hash.ShortString()),
+			log.Stringer("atx id", preserved.Deps[i].ID),
+			log.Stringer("poet proof ref", &ref),
 		)
 	}
-	for _, atx := range app.preserve.Deps {
+	for _, atx := range preserved.Deps {
 		if err := app.atxHandler.HandleSyncedAtx(ctx, atx.ID.Hash32(), p2p.NoPeer, atx.Blob); err != nil {
 			app.log.With().Error(
 				"failed to preserve atx after checkpoint",
