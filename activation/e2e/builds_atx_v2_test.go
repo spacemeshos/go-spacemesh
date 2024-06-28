@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -55,37 +54,17 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, logger)
 
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		synced := make(chan struct{})
-		close(synced)
-		return synced
-	}).AnyTimes()
-
-	svc := grpcserver.NewPostService(logger)
-	svc.AllowConnections(true)
-	grpcCfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
+	opts := testPostSetupOpts(t)
+	svc := initializeIDs(t, db, goldenATX, []*signing.EdSigner{sig}, cfg, opts)
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	opts := testPostSetupOpts(t)
+
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
 	atxsdata := atxsdata.New()
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata, goldenATX, syncer, validator)
-	require.NoError(t, err)
-
-	initPost(t, mgr, opts, sig.NodeID())
-	stop := launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts)
-	t.Cleanup(stop)
-
-	require.Eventually(t, func() bool {
-		_, err := svc.Client(sig.NodeID())
-		return err == nil
-	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Round(layerDuration)
@@ -218,7 +197,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		mpub,
 		nb,
 		clock,
-		syncer,
+		syncedSyncer(ctrl),
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),

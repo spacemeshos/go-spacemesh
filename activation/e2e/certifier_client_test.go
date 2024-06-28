@@ -12,7 +12,6 @@ import (
 	"time"
 
 	poetShared "github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/require"
@@ -21,8 +20,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -31,46 +28,26 @@ import (
 )
 
 func TestCertification(t *testing.T) {
+	ctrl := gomock.NewController(t)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	logger := zaptest.NewLogger(t)
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
 	localDb := localsql.InMemory()
 
-	syncer := activation.NewMocksyncer(gomock.NewController(t))
-	synced := make(chan struct{})
-	close(synced)
-	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
+	opts := testPostSetupOpts(t)
+	svc := initializeIDs(t, db, types.RandomATXID(), []*signing.EdSigner{sig}, cfg, opts)
 
-	validator := activation.NewMocknipostValidator(gomock.NewController(t))
+	validator := activation.NewMocknipostValidator(ctrl)
 	validator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
 	validator.EXPECT().VerifyChain(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), types.ATXID{2, 3, 4}, syncer, validator)
+	postClient, err := svc.Client(sig.NodeID())
 	require.NoError(t, err)
 
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	initPost(t, mgr, opts, sig.NodeID())
-
-	svc := grpcserver.NewPostService(logger)
-	svc.AllowConnections(true)
-	grpcCfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
-
-	var postClient activation.PostClient
-	require.Eventually(t, func() bool {
-		var err error
-		postClient, err = svc.Client(sig.NodeID())
-		return err == nil
-	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
 	require.NoError(t, err)
 

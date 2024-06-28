@@ -9,21 +9,19 @@ import (
 	"time"
 
 	"github.com/spacemeshos/poet/logging"
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -135,36 +133,18 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
-	cdb := datastore.NewCachedDB(db, logger)
 	localDb := localsql.InMemory()
 
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
-		synced := make(chan struct{})
-		close(synced)
-		return synced
-	})
-
-	validator := activation.NewMocknipostValidator(ctrl)
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata.New(), goldenATX, syncer, validator)
-	require.NoError(t, err)
-
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = t.TempDir()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
-	initPost(t, mgr, opts, sig.NodeID())
+	opts := testPostSetupOpts(t)
+	svc := initializeIDs(t, db, goldenATX, []*signing.EdSigner{sig}, cfg, opts)
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch / 2,
-		CycleGap:          epoch / 4,
-		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 5,
-		RequestRetryDelay: epoch / 50,
-		MaxRequestRetries: 10,
+		PhaseShift:  epoch / 2,
+		CycleGap:    epoch / 4,
+		GracePeriod: epoch / 5,
 	}
 
 	mclock := activation.NewMocklayerClock(ctrl)
@@ -180,19 +160,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 
-	svc := grpcserver.NewPostService(logger)
-	svc.AllowConnections(true)
-	grpcCfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
-
-	var postClient activation.PostClient
-	require.Eventually(t, func() bool {
-		var err error
-		postClient, err = svc.Client(sig.NodeID())
-		return err == nil
-	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
+	postClient, err := svc.Client(sig.NodeID())
+	require.NoError(t, err)
 
 	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
 	require.NoError(t, err)
@@ -246,42 +215,10 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	cfg := activation.DefaultPostConfig()
 	db := sql.InMemory()
 
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().AnyTimes().DoAndReturn(func() <-chan struct{} {
-		synced := make(chan struct{})
-		close(synced)
-		return synced
-	})
-
-	svc := grpcserver.NewPostService(logger)
-	svc.AllowConnections(true)
-	grpcCfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	opts := activation.DefaultPostSetupOpts()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
+	opts := testPostSetupOpts(t)
+	svc := initializeIDs(t, db, goldenATX, maps.Values(signers), cfg, opts)
 
 	validator := activation.NewMocknipostValidator(ctrl)
-	var eg errgroup.Group
-	for _, sig := range signers {
-		opts := opts
-		eg.Go(func() error {
-			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
-			require.NoError(t, err)
-
-			opts.DataDir = t.TempDir()
-			initPost(t, mgr, opts, sig.NodeID())
-			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
-
-			require.Eventually(t, func() bool {
-				_, err := svc.Client(sig.NodeID())
-				return err == nil
-			}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
-			return nil
-		})
-	}
-	require.NoError(t, eg.Wait())
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
@@ -320,6 +257,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 
 	challenge := types.RandomHash()
+	var eg errgroup.Group
 	for _, sig := range signers {
 		eg.Go(func() error {
 			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge, nil)
