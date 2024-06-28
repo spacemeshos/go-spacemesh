@@ -81,7 +81,7 @@ type Builder struct {
 	syncer            syncer
 	logger            *zap.Logger
 	parentCtx         context.Context
-	poets             []PoetClient
+	poets             []PoetService
 	poetCfg           PoetConfig
 	poetRetryInterval time.Duration
 	// delay before PoST in ATX is considered valid (counting from the time it was received)
@@ -140,7 +140,7 @@ func WithPoetConfig(c PoetConfig) BuilderOption {
 	}
 }
 
-func WithPoets(poets ...PoetClient) BuilderOption {
+func WithPoets(poets ...PoetService) BuilderOption {
 	return func(b *Builder) {
 		b.poets = poets
 	}

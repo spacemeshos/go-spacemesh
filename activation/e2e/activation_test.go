@@ -92,9 +92,9 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// ensure that genesis aligns with layer timings
-	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	layerDuration := 3 * time.Second
-	epoch := layersPerEpoch * layerDuration
+	epoch := layerDuration * layersPerEpoch
+	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch,
 		CycleGap:          epoch / 2,
@@ -160,7 +160,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		clock,
 		validator,
 		activation.NipostbuilderWithPostStates(postStates),
-		activation.WithPoetClients(client),
+		activation.WithPoetServices(client),
 	)
 	require.NoError(t, err)
 
