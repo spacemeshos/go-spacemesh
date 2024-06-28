@@ -34,10 +34,6 @@ func NewTestPoetBackend(expectedMembers int) *TestPoet {
 	}
 }
 
-func (p *TestPoet) RoundId() string {
-	return strconv.Itoa(p.round)
-}
-
 func (p *TestPoet) Id() []byte {
 	return []byte(p.Address())
 }
@@ -63,9 +59,9 @@ func (p *TestPoet) Submit(
 		return nil, errors.New("invalid challenge length")
 	}
 	p.mu.Lock()
-	p.registrations <- challenge
 	round := p.round
 	p.mu.Unlock()
+	p.registrations <- challenge
 
 	return &types.PoetRound{ID: strconv.Itoa(round), End: time.Now()}, nil
 }
@@ -74,6 +70,11 @@ func (p *TestPoet) CertifierInfo(ctx context.Context) (*url.URL, []byte, error) 
 	return nil, nil, errors.New("not supported")
 }
 
+// Build a proof.
+//
+// Waits for the expected number of registrations to be submitted
+// before starting to build the proof.
+//
 // NOT safe to be called concurrently.
 func (p *TestPoet) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
 	currentRoundId := strconv.Itoa(p.round)
