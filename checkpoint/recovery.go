@@ -46,14 +46,13 @@ func DefaultConfig() Config {
 }
 
 type RecoverConfig struct {
-	GoldenAtx      types.ATXID
-	DataDir        string
-	DbFile         string
-	LocalDbFile    string
-	PreserveOwnAtx bool
-	NodeIDs        []types.NodeID
-	Uri            string
-	Restore        types.LayerID
+	GoldenAtx   types.ATXID
+	DataDir     string
+	DbFile      string
+	LocalDbFile string
+	NodeIDs     []types.NodeID // IDs to preserve own ATXs
+	Uri         string
+	Restore     types.LayerID
 }
 
 func RecoveryDir(dataDir string) string {
@@ -195,27 +194,26 @@ func recoverFromLocalFile(
 	logger.Info("recovery data contains", zap.Int("accounts", len(data.accounts)), zap.Int("atxs", len(data.atxs)))
 	deps := make(map[types.ATXID]*AtxDep)
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage)
-	if cfg.PreserveOwnAtx {
-		logger.Info("preserving own atx deps", log.ZContext(ctx), zap.Int("num identities", len(cfg.NodeIDs)))
-		for _, nodeID := range cfg.NodeIDs {
-			nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
-			if err != nil {
-				logger.Error(
-					"failed to collect deps for own atx",
-					log.ZShortStringer("smesherID", nodeID),
-					zap.Error(err),
-				)
-				// continue to recover from checkpoint despite failure to preserve own atx
-				continue
-			}
-			logger.Info("collected own atx deps",
-				log.ZContext(ctx),
+	logger.Info("preserving own atx deps", log.ZContext(ctx), zap.Int("num identities", len(cfg.NodeIDs)))
+	for _, nodeID := range cfg.NodeIDs {
+		nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
+		if err != nil {
+			logger.Error(
+				"failed to collect deps for own atx",
 				log.ZShortStringer("smesherID", nodeID),
-				zap.Int("own atx deps", len(nodeDeps)),
+				zap.Error(err),
 			)
-			maps.Copy(deps, nodeDeps)
-			maps.Copy(proofs, nodeProofs)
+			// continue to recover from checkpoint despite failure to preserve own atx
+			continue
 		}
+		logger.Info("collected own atx deps",
+			log.ZContext(ctx),
+			log.ZShortStringer("smesherID", nodeID),
+			zap.Int("own atx deps", len(nodeDeps)),
+			zap.Int("own poet deps", len(nodeProofs)),
+		)
+		maps.Copy(deps, nodeDeps)
+		maps.Copy(proofs, nodeProofs)
 	}
 
 	allDeps := maps.Values(deps)
