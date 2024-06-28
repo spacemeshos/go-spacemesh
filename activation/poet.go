@@ -360,13 +360,13 @@ func NewPoetService(
 	logger *zap.Logger,
 	opts ...PoetClientOpt,
 ) (*poetService, error) {
-	backend, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
+	client, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP poet client %s: %w", server.Address, err)
 	}
 	return NewPoetServiceWithClient(
 		db,
-		backend,
+		client,
 		cfg,
 		logger,
 		opts...,
@@ -375,7 +375,7 @@ func NewPoetService(
 
 func NewPoetServiceWithClient(
 	db poetDbAPI,
-	backend PoetClient,
+	client PoetClient,
 	cfg PoetConfig,
 	logger *zap.Logger,
 	opts ...PoetClientOpt,
@@ -383,7 +383,7 @@ func NewPoetServiceWithClient(
 	poetClient := &poetService{
 		db:             db,
 		logger:         logger,
-		client:         backend,
+		client:         client,
 		requestTimeout: cfg.RequestTimeout,
 		proofMembers:   make(map[string][]types.Hash32, 1),
 	}

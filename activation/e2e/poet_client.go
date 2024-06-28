@@ -52,7 +52,7 @@ func (p *TestPoet) Submit(
 	_ time.Time,
 	_, challenge []byte,
 	_ types.EdSignature,
-	nodeID types.NodeID,
+	_ types.NodeID,
 	_ activation.PoetAuth,
 ) (*types.PoetRound, error) {
 	if len(challenge) != 32 {
