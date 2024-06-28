@@ -453,16 +453,19 @@ func Add(db sql.Executor, atx *types.ActivationTx) error {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
 
-	enc = func(stmt *sql.Statement) {
-		stmt.BindBytes(1, atx.ID().Bytes())
-		stmt.BindBytes(2, atx.Blob)
-		stmt.BindInt64(3, int64(atx.Version))
-	}
-	_, err = db.Exec("insert into atx_blobs (id, atx, version) values (?1, ?2, ?3)", enc, nil)
-	if err != nil {
-		return fmt.Errorf("insert ATX blob %v: %w", atx.ID(), err)
-	}
+	return AddBlob(db, atx.ID(), atx.Blob, atx.Version)
+}
 
+func AddBlob(db sql.Executor, id types.ATXID, blob []byte, version types.AtxVersion) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+		stmt.BindBytes(2, blob)
+		stmt.BindInt64(3, int64(version))
+	}
+	_, err := db.Exec("insert into atx_blobs (id, atx, version) values (?1, ?2, ?3)", enc, nil)
+	if err != nil {
+		return fmt.Errorf("insert ATX blob %v: %w", id, err)
+	}
 	return nil
 }
 
