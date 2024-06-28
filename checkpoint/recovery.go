@@ -168,7 +168,19 @@ func RecoverWithDb(
 	if err != nil {
 		return nil, err
 	}
-	return recoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpFile)
+	var newDB *sql.Database
+	createDb := func() (*sql.Database, error) {
+		var err error
+		newDB, err = sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+		return newDB, err
+	}
+	defer func() {
+		if newDB != nil {
+			newDB.Close()
+		}
+	}()
+
+	return RecoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpFile, createDb)
 }
 
 type recoveryData struct {
@@ -176,7 +188,7 @@ type recoveryData struct {
 	atxs     []*atxs.CheckpointAtx
 }
 
-func recoverFromLocalFile(
+func RecoverFromLocalFile(
 	ctx context.Context,
 	logger *zap.Logger,
 	db *sql.Database,
@@ -184,6 +196,7 @@ func recoverFromLocalFile(
 	fs afero.Fs,
 	cfg *RecoverConfig,
 	file string,
+	createDb func() (*sql.Database, error),
 ) (*PreservedData, error) {
 	logger.Info("recovering from checkpoint file", zap.String("file", file))
 	newGenesis := cfg.Restore - 1
@@ -249,11 +262,10 @@ func recoverFromLocalFile(
 	}
 	logger.Info("backed up old database", log.ZContext(ctx), zap.String("backup dir", backupDir))
 
-	newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	newDB, err := createDb()
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite db %w", err)
+		return nil, fmt.Errorf("creating new DB: %w", err)
 	}
-	defer newDB.Close()
 	logger.Info("populating new database",
 		log.ZContext(ctx),
 		zap.Int("num accounts", len(data.accounts)),
