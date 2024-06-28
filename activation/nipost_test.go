@@ -557,7 +557,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	ctrl := gomock.NewController(t)
 	mclock := defaultLayerClockMock(ctrl)
 
-	poets := make([]PoetClient, 0, 2)
+	poets := make([]PoetService, 0, 2)
 	{
 		poet := NewMockPoetClient(ctrl)
 		poet.EXPECT().
@@ -634,7 +634,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mclock := defaultLayerClockMock(ctrl)
 
-	poets := make([]PoetClient, 0, 2)
+	poets := make([]PoetService, 0, 2)
 	{
 		poet := NewMockPoetClient(ctrl)
 		poet.EXPECT().
@@ -1072,7 +1072,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 
 			challenge := types.RandomHash()
 			ctrl := gomock.NewController(t)
-			poets := make([]PoetClient, 0, 2)
+			poets := make([]PoetService, 0, 2)
 			{
 				poetProvider := NewMockPoetClient(ctrl)
 				poetProvider.EXPECT().Address().Return(tc.from)

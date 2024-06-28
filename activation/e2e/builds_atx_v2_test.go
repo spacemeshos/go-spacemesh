@@ -106,7 +106,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	t.Cleanup(clock.Close)
 
 	backend := ae2e.NewTestPoetBackend(1)
-	client := activation.NewPoetClientWithBackend(poetDb, backend, poetCfg, logger)
+	client := activation.NewPoetServiceWithClient(poetDb, backend, poetCfg, logger)
 
 	postStates := activation.NewPostStates(logger)
 	localDB := localsql.InMemory()

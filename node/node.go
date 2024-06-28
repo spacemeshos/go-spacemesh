@@ -1010,9 +1010,9 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
 
-	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoetServers))
+	poetClients := make([]activation.PoetService, 0, len(app.Config.PoetServers))
 	for _, server := range app.Config.PoetServers {
-		client, err := activation.NewPoetClient(
+		client, err := activation.NewPoetService(
 			poetDb,
 			server,
 			app.Config.POET,

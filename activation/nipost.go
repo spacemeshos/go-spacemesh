@@ -49,7 +49,7 @@ var ErrInvalidInitialPost = errors.New("invalid initial post")
 type NIPostBuilder struct {
 	localDB *localsql.Database
 
-	poetProvers map[string]PoetClient
+	poetProvers map[string]PoetService
 	postService postService
 	logger      *zap.Logger
 	poetCfg     PoetConfig
@@ -60,9 +60,9 @@ type NIPostBuilder struct {
 
 type NIPostBuilderOption func(*NIPostBuilder)
 
-func WithPoetClients(clients ...PoetClient) NIPostBuilderOption {
+func WithPoetClients(clients ...PoetService) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
-		nb.poetProvers = make(map[string]PoetClient, len(clients))
+		nb.poetProvers = make(map[string]PoetService, len(clients))
 		for _, client := range clients {
 			nb.poetProvers[client.Address()] = client
 		}
@@ -360,7 +360,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	ctx context.Context,
 	nodeID types.NodeID,
 	deadline time.Time,
-	client PoetClient,
+	client PoetService,
 	prefix, challenge []byte,
 	signature types.EdSignature,
 ) error {
@@ -428,7 +428,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	return nil
 }
 
-func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) PoetClient {
+func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) PoetService {
 	for _, client := range nb.poetProvers {
 		if address == client.Address() {
 			return client

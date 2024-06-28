@@ -45,7 +45,7 @@ type PoetAuth struct {
 	*certifier.PoetCert
 }
 
-type PoetBackend interface {
+type PoetClient interface {
 	Id() []byte
 	Address() string
 
@@ -329,12 +329,12 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	return nil
 }
 
-// poetClient is a higher-level interface to communicate with a PoET service.
+// poetService is a higher-level interface to communicate with a PoET service.
 // It wraps the HTTP client, adding additional functionality.
-type poetClient struct {
+type poetService struct {
 	db             poetDbAPI
 	logger         *zap.Logger
-	backend        PoetBackend
+	client         PoetClient
 	requestTimeout time.Duration
 
 	// Used to avoid concurrent requests for proof.
@@ -345,26 +345,26 @@ type poetClient struct {
 	certifier certifierService
 }
 
-type PoetClientOpt func(*poetClient)
+type PoetClientOpt func(*poetService)
 
 func WithCertifier(certifier certifierService) PoetClientOpt {
-	return func(c *poetClient) {
+	return func(c *poetService) {
 		c.certifier = certifier
 	}
 }
 
-func NewPoetClient(
+func NewPoetService(
 	db poetDbAPI,
 	server types.PoetServer,
 	cfg PoetConfig,
 	logger *zap.Logger,
 	opts ...PoetClientOpt,
-) (*poetClient, error) {
+) (*poetService, error) {
 	backend, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP poet client %s: %w", server.Address, err)
 	}
-	return NewPoetClientWithBackend(
+	return NewPoetServiceWithClient(
 		db,
 		backend,
 		cfg,
@@ -373,17 +373,17 @@ func NewPoetClient(
 	), nil
 }
 
-func NewPoetClientWithBackend(
+func NewPoetServiceWithClient(
 	db poetDbAPI,
-	backend PoetBackend,
+	backend PoetClient,
 	cfg PoetConfig,
 	logger *zap.Logger,
 	opts ...PoetClientOpt,
-) *poetClient {
-	poetClient := &poetClient{
+) *poetService {
+	poetClient := &poetService{
 		db:             db,
 		logger:         logger,
-		backend:        backend,
+		client:         backend,
 		requestTimeout: cfg.RequestTimeout,
 		proofMembers:   make(map[string][]types.Hash32, 1),
 	}
@@ -395,11 +395,11 @@ func NewPoetClientWithBackend(
 	return poetClient
 }
 
-func (c *poetClient) Address() string {
-	return c.backend.Address()
+func (c *poetService) Address() string {
+	return c.client.Address()
 }
 
-func (c *poetClient) authorize(
+func (c *poetService) authorize(
 	ctx context.Context,
 	nodeID types.NodeID,
 	challenge []byte,
@@ -421,7 +421,7 @@ func (c *poetClient) authorize(
 	logger.Debug("querying for poet pow parameters")
 	powCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
-	powParams, err := c.backend.PowParams(powCtx)
+	powParams, err := c.client.PowParams(powCtx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
 	}
@@ -446,7 +446,7 @@ func (c *poetClient) authorize(
 	}}, nil
 }
 
-func (c *poetClient) Submit(
+func (c *poetService) Submit(
 	ctx context.Context,
 	deadline time.Time,
 	prefix, challenge []byte,
@@ -469,7 +469,7 @@ func (c *poetClient) Submit(
 
 	submitCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
-	round, err := c.backend.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
+	round, err := c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
 	switch {
 	case err == nil:
 		return round, nil
@@ -479,12 +479,12 @@ func (c *poetClient) Submit(
 		if err != nil {
 			return nil, fmt.Errorf("recertifying: %w", err)
 		}
-		return c.backend.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
+		return c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
 	}
 	return nil, fmt.Errorf("submitting challenge: %w", err)
 }
 
-func (c *poetClient) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
+func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
 	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
 
@@ -492,7 +492,7 @@ func (c *poetClient) Proof(ctx context.Context, roundID string) (*types.PoetProo
 	defer c.gettingProof.Unlock()
 
 	if members, ok := c.proofMembers[roundID]; ok {
-		proof, err := c.db.ProofForRound(c.backend.Id(), roundID)
+		proof, err := c.db.ProofForRound(c.client.Id(), roundID)
 		if err == nil {
 			c.logger.Debug("returning cached proof", zap.String("round_id", roundID))
 			return proof, members, nil
@@ -500,7 +500,7 @@ func (c *poetClient) Proof(ctx context.Context, roundID string) (*types.PoetProo
 		c.logger.Warn("cached members found but proof not found in db", zap.String("round_id", roundID), zap.Error(err))
 	}
 
-	proof, members, err := c.backend.Proof(getProofsCtx, roundID)
+	proof, members, err := c.client.Proof(getProofsCtx, roundID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
@@ -515,22 +515,22 @@ func (c *poetClient) Proof(ctx context.Context, roundID string) (*types.PoetProo
 	return &proof.PoetProof, members, nil
 }
 
-func (c *poetClient) Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
+func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
 	if c.certifier == nil {
 		return nil, errors.New("certifier not configured")
 	}
-	url, pubkey, err := c.backend.CertifierInfo(ctx)
+	url, pubkey, err := c.client.CertifierInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting certifier info: %w", err)
 	}
 	return c.certifier.Certificate(ctx, id, url, pubkey)
 }
 
-func (c *poetClient) recertify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
+func (c *poetService) recertify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
 	if c.certifier == nil {
 		return nil, errors.New("certifier not configured")
 	}
-	url, pubkey, err := c.backend.CertifierInfo(ctx)
+	url, pubkey, err := c.client.CertifierInfo(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting certifier info: %w", err)
 	}
