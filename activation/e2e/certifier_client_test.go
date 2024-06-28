@@ -155,7 +155,10 @@ func (c *testCertifier) certify(w http.ResponseWriter, r *http.Request) {
 		NumUnits:        req.Metadata.NumUnits,
 		LabelsPerUnit:   c.cfg.LabelsPerUnit,
 	}
-	if err := c.postVerifier.Verify(context.Background(), proof, metadata, c.opts...); err != nil {
+	if err := c.postVerifier.Verify(
+		context.Background(),
+		proof, metadata,
+		activation.WithVerifierOptions(c.opts...)); err != nil {
 		http.Error(w, fmt.Sprintf("verifying POST: %v", err), http.StatusBadRequest)
 		return
 	}

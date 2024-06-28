@@ -109,6 +109,13 @@ func Recover(
 	fs afero.Fs,
 	cfg *RecoverConfig,
 ) (*PreservedData, error) {
+	if len(cfg.Uri) == 0 {
+		return nil, errors.New("recovery uri not set")
+	}
+	if cfg.Restore == 0 {
+		return nil, errors.New("restore layer not set")
+	}
+	logger.Info("recovering from checkpoint", zap.String("url", cfg.Uri), zap.Stringer("restore", cfg.Restore))
 	db, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	if err != nil {
 		return nil, fmt.Errorf("open old database: %w", err)

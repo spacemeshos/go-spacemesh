@@ -256,9 +256,19 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 			return builder.Operations{}, err
 		}
 		ops.Filter = append(ops.Filter, builder.Op{
-			Field: builder.Address,
-			Token: builder.Eq,
-			Value: addr.Bytes(),
+			Group: []builder.Op{
+				{
+					Field: builder.Address,
+					Token: builder.Eq,
+					Value: addr.Bytes(),
+				},
+				{
+					Field: builder.Principal,
+					Token: builder.Eq,
+					Value: addr.Bytes(),
+				},
+			},
+			GroupOperator: builder.Or,
 		})
 	}
 
