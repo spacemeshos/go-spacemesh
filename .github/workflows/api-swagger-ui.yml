@@ -17,7 +17,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        ref: 'refs/tags/${{ github.event.release.tag_name }}'
+        ref: 'refs/tags/v1.6.0'
     
     - name: Extract dependency version
       id: go-sm-api-version
