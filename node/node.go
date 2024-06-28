@@ -992,9 +992,9 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
 
-	poetClients := make([]activation.PoetClient, 0, len(app.Config.PoetServers))
+	poetClients := make([]activation.PoetService, 0, len(app.Config.PoetServers))
 	for _, server := range app.Config.PoetServers {
-		client, err := activation.NewPoetClient(
+		client, err := activation.NewPoetService(
 			poetDb,
 			server,
 			app.Config.POET,
@@ -1015,7 +1015,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.validator,
 		activation.NipostbuilderWithPostStates(postStates),
-		activation.WithPoetClients(poetClients...),
+		activation.WithPoetServices(poetClients...),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
