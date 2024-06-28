@@ -35,8 +35,9 @@ func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received t
 func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
 	rows, err := db.Exec(`
 	SELECT 1 FROM identities
-	WHERE (marriage_atx = (
-		SELECT marriage_atx FROM identities WHERE pubkey = ?1 AND marriage_atx IS NOT NULL) AND proof IS NOT NULL
+	WHERE (
+		marriage_atx = (SELECT marriage_atx FROM identities WHERE pubkey = ?1 AND marriage_atx IS NOT NULL)
+		AND proof IS NOT NULL
 	)
 	OR (pubkey = ?1 AND marriage_atx IS NULL AND proof IS NOT NULL);`,
 		func(stmt *sql.Statement) {
@@ -146,9 +147,9 @@ func Married(db sql.Executor, id types.NodeID) (bool, error) {
 }
 
 // MarriageInfo obtains the marriage ATX and index for given ID.
-func MarriageInfo(db sql.Executor, id types.NodeID) (*types.ATXID, int, error) {
+func MarriageInfo(db sql.Executor, id types.NodeID) (types.ATXID, int, error) {
 	var (
-		atx   *types.ATXID
+		atx   types.ATXID
 		index int
 	)
 	rows, err := db.Exec("select marriage_atx, marriage_idx from identities where pubkey = ?1;",
@@ -156,18 +157,16 @@ func MarriageInfo(db sql.Executor, id types.NodeID) (*types.ATXID, int, error) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
 			if stmt.ColumnType(0) != sqlite.SQLITE_NULL {
-				atx = new(types.ATXID)
 				stmt.ColumnBytes(0, atx[:])
-
 				index = int(stmt.ColumnInt64(1))
 			}
 			return false
 		})
 	if err != nil {
-		return nil, 0, fmt.Errorf("getting marriage ATX for %v: %w", id, err)
+		return atx, 0, fmt.Errorf("getting marriage ATX for %v: %w", id, err)
 	}
 	if rows == 0 {
-		return nil, 0, sql.ErrNotFound
+		return atx, 0, sql.ErrNotFound
 	}
 	return atx, index, nil
 }

@@ -176,7 +176,7 @@ func TestMarriageATX(t *testing.T) {
 		require.NoError(t, SetMarriage(db, id, atx, 5))
 		got, idx, err := MarriageInfo(db, id)
 		require.NoError(t, err)
-		require.Equal(t, atx, *got)
+		require.Equal(t, atx, got)
 		require.Equal(t, 5, idx)
 	})
 }

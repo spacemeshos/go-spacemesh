@@ -469,14 +469,14 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 	}
 	marriageAtxID, _, err := identities.MarriageInfo(h.cdb, atx.SmesherID)
 	switch {
-	case errors.Is(err, sql.ErrNotFound) || marriageAtxID == nil:
+	case errors.Is(err, sql.ErrNotFound):
 		return nil, errors.New("smesher is not married")
 	case err != nil:
 		return nil, fmt.Errorf("fetching smesher's marriage atx ID: %w", err)
 	}
 
-	if *atx.MarriageATX != *marriageAtxID {
-		return nil, fmt.Errorf("smesher's marriage ATX ID mismatch: %s != %s", *atx.MarriageATX, *marriageAtxID)
+	if *atx.MarriageATX != marriageAtxID {
+		return nil, fmt.Errorf("smesher's marriage ATX ID mismatch: %s != %s", *atx.MarriageATX, marriageAtxID)
 	}
 
 	marriageAtx, err := atxs.Get(h.cdb, *atx.MarriageATX)

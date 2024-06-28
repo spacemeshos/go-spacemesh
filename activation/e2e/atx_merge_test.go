@@ -3,7 +3,6 @@ package activation_test
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"net/url"
 	"slices"
 	"testing"
@@ -138,6 +137,7 @@ func createSoloAtx(publish types.EpochID, prev, pos types.ATXID, nipost *nipost.
 }
 
 func createMerged(
+	t testing.TB,
 	niposts []nipostData,
 	publish types.EpochID,
 	marriage, positioning types.ATXID,
@@ -159,9 +159,7 @@ func createMerged(
 	// Append PoSTs for all IDs
 	for i, nipost := range niposts {
 		idx := slices.IndexFunc(previous, func(a types.ATXID) bool { return a == nipost.previous })
-		if idx == -1 {
-			panic(fmt.Sprintf("previous ATX %s not found in %s", nipost.previous, previous))
-		}
+		require.NotEqual(t, -1, idx)
 		atx.NiPosts[0].Posts = append(atx.NiPosts[0].Posts, wire.SubPostV2{
 			MarriageIndex:       uint32(i),
 			PrevATXIndex:        uint32(idx),
@@ -405,7 +403,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		marriage, idx, err := identities.MarriageInfo(db, signer.NodeID())
 		require.NoError(t, err)
 		require.NotNil(t, marriage)
-		require.Equal(t, marriageATX.ID(), *marriage)
+		require.Equal(t, marriageATX.ID(), marriage)
 		require.Equal(t, i, idx)
 	}
 
@@ -438,6 +436,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	membershipProof := constructMerkleProof(t, members, map[uint64]bool{0: true, 1: true})
 
 	mergedATX := createMerged(
+		t,
 		niposts[:],
 		publish,
 		marriageATX.ID(),
@@ -490,6 +489,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	membershipProof = constructMerkleProof(t, members, map[uint64]bool{0: true})
 
 	mergedATX2 := createMerged(
+		t,
 		niposts[:],
 		publish,
 		marriageATX.ID(),
