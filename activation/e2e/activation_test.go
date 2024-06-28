@@ -160,7 +160,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		clock,
 		validator,
 		activation.NipostbuilderWithPostStates(postStates),
-		activation.WithPoetClients(client),
+		activation.WithPoetServices(client),
 	)
 	require.NoError(t, err)
 

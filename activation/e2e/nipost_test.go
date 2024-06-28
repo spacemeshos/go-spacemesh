@@ -199,8 +199,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	err = nipost.AddPost(localDb, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
 	require.NoError(t, err)
 
-	backend := ae2e.NewTestPoetBackend(1)
-	client := activation.NewPoetServiceWithClient(poetDb, backend, poetCfg, logger)
+	client := ae2e.NewTestPoetClient(1)
+	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
@@ -210,7 +210,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		poetCfg,
 		mclock,
 		nil,
-		activation.WithPoetClients(client),
+		activation.WithPoetServices(poetService),
 	)
 	require.NoError(t, err)
 
@@ -293,8 +293,8 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	}
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
-	backend := ae2e.NewTestPoetBackend(len(signers))
-	client := activation.NewPoetServiceWithClient(poetDb, backend, poetCfg, logger)
+	client := ae2e.NewTestPoetClient(len(signers))
+	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
@@ -315,7 +315,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		poetCfg,
 		mclock,
 		validator,
-		activation.WithPoetClients(client),
+		activation.WithPoetServices(poetService),
 	)
 	require.NoError(t, err)
 

@@ -60,8 +60,8 @@ func TestValidator_Validate(t *testing.T) {
 	}
 
 	poetDb := activation.NewPoetDb(sql.InMemory(), logger.Named("poetDb"))
-	backend := ae2e.NewTestPoetBackend(1)
-	client := activation.NewPoetServiceWithClient(poetDb, backend, poetCfg, logger)
+	client := ae2e.NewTestPoetClient(1)
+	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
@@ -93,7 +93,7 @@ func TestValidator_Validate(t *testing.T) {
 		poetCfg,
 		mclock,
 		validator,
-		activation.WithPoetClients(client),
+		activation.WithPoetServices(poetService),
 	)
 	require.NoError(t, err)
 

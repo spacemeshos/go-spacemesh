@@ -27,7 +27,7 @@ type TestPoet struct {
 	registrations   chan []byte
 }
 
-func NewTestPoetBackend(expectedMembers int) *TestPoet {
+func NewTestPoetClient(expectedMembers int) *TestPoet {
 	return &TestPoet{
 		expectedMembers: expectedMembers,
 		registrations:   make(chan []byte, expectedMembers),

@@ -60,7 +60,7 @@ type NIPostBuilder struct {
 
 type NIPostBuilderOption func(*NIPostBuilder)
 
-func WithPoetClients(clients ...PoetService) NIPostBuilderOption {
+func WithPoetServices(clients ...PoetService) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
 		nb.poetProvers = make(map[string]PoetService, len(clients))
 		for _, client := range clients {
@@ -428,10 +428,10 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	return nil
 }
 
-func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) PoetService {
-	for _, client := range nb.poetProvers {
-		if address == client.Address() {
-			return client
+func (nb *NIPostBuilder) getPoetService(ctx context.Context, address string) PoetService {
+	for _, service := range nb.poetProvers {
+		if address == service.Address() {
+			return service
 		}
 	}
 	return nil
@@ -471,7 +471,7 @@ func (nb *NIPostBuilder) getBestProof(
 			zap.String("poet_address", r.Address),
 			zap.String("round", r.RoundID),
 		)
-		client := nb.getPoetClient(ctx, r.Address)
+		client := nb.getPoetService(ctx, r.Address)
 		if client == nil {
 			logger.Warn("poet client not found")
 			continue

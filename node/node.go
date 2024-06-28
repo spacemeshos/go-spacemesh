@@ -1033,7 +1033,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.validator,
 		activation.NipostbuilderWithPostStates(postStates),
-		activation.WithPoetClients(poetClients...),
+		activation.WithPoetServices(poetClients...),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
