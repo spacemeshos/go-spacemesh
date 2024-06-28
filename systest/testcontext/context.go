@@ -341,7 +341,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		ns = "test-" + rngName()
 	}
 	clSize := clusterSize.Get(p)
-	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.IncreaseLevel(logLevel), zap.AddCaller()))
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.IncreaseLevel(logLevel), zap.AddCaller(), zap.AddStacktrace(zap.FatalLevel)))
 	cctx := &Context{
 		Context:           ctx,
 		Parameters:        p,
