@@ -22,7 +22,7 @@ jobs:
     - name: Extract dependency version
       id: go-sm-api-version
       run: |
-        version=$(grep -E 'github.com/spacemeshos/api/release/go' go-spacemesh/go.mod | awk '{print $2}')
+        version=$(grep -E 'github.com/spacemeshos/api/release/go' go.mod | awk '{print $2}')
         echo "GO_SM_API_VERSION=$version" > $GITHUB_OUTPUT
 
   build-deploy:
