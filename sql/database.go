@@ -707,7 +707,7 @@ func (db *sqliteDatabase) RemoveInterceptor(key string) {
 }
 
 // vacuumInto runs VACUUM INTO on the database and saves the vacuumed
-// database at toPath
+// database at toPath.
 func (db *sqliteDatabase) vacuumInto(toPath string) error {
 	if _, err := db.Exec("VACUUM INTO ?1", func(stmt *Statement) {
 		stmt.BindText(1, toPath)

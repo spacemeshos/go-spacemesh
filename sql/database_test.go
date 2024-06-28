@@ -192,8 +192,8 @@ func TestDatabaseVacuumState(t *testing.T) {
 	migration1.EXPECT().Order().Return(1).AnyTimes()
 	migration1.EXPECT().Apply(gomock.Any()).DoAndReturn(func(db Executor) error {
 		require.NotContains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
-		require.Equal(t, execSQL(t, db, "PRAGMA journal_mode", 0), "wal")
-		require.Equal(t, execSQL(t, db, "PRAGMA synchronous", 0), "1") // NORMAL
+		require.Equal(t, "wal", execSQL(t, db, "PRAGMA journal_mode", 0))
+		require.Equal(t, "1", execSQL(t, db, "PRAGMA synchronous", 0)) // NORMAL
 		execSQL(t, db, "create table foo(x int)", -1)
 		return nil
 	}).Times(1)
@@ -205,10 +205,10 @@ func TestDatabaseVacuumState(t *testing.T) {
 		require.Contains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
 		// Journaling is off for the temp database as it is deleted in case
 		// of migration failure.
-		require.Equal(t, execSQL(t, db, "PRAGMA journal_mode", 0), "off")
+		require.Equal(t, "off", execSQL(t, db, "PRAGMA journal_mode", 0))
 		// Synchronous is off for the temp database as it is deleted in case
 		// of migration failure.
-		require.Equal(t, execSQL(t, db, "PRAGMA synchronous", 0), "0") // OFF
+		require.Equal(t, "0", execSQL(t, db, "PRAGMA synchronous", 0)) // OFF
 		execSQL(t, db, "create table bar(y int)", -1)
 		return nil
 	}).Times(1)
@@ -290,7 +290,7 @@ func TestDatabaseVacuumStateError(t *testing.T) {
 			"CREATE TABLE foo(x int);\n",
 		Migrations: MigrationList{migration1, migration2},
 	}
-	db, err = Open("file:"+dbFile,
+	_, err = Open("file:"+dbFile,
 		WithLogger(logger),
 		WithDatabaseSchema(schema),
 		WithVacuumState(2),
