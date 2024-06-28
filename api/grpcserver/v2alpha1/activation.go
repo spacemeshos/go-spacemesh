@@ -203,13 +203,7 @@ func (s *ActivationService) List(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	ops.Modifiers = nil
-	count, err := atxs.CountAtxsByOps(s.db, ops)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	return &spacemeshv2alpha1.ActivationList{Activations: rst, Total: count}, nil
+	return &spacemeshv2alpha1.ActivationList{Activations: rst}, nil
 }
 
 func (s *ActivationService) ActivationsCount(
