@@ -294,6 +294,10 @@ func openDB(config *conf) (*sqliteDatabase, error) {
 				db.Close())
 		}
 	} else if db, err = ensureDBSchemaUpToDate(logger, db, config); err != nil {
+		// ensureDBSchemaUpToDate may replace the original database and open the new one,
+		// in which case the original db is already closed but we must close the new one.
+		// If there are migrations to be done in place without vacuuming,
+		// the original db is returned and we must close it if there's an error.
 		if db != nil {
 			err = errors.Join(err, db.Close())
 		}
@@ -412,13 +416,13 @@ func deleteDB(path string) error {
 // replaces the database at toPath with the vacuumed one. The database
 // at fromPath is deleted after the operation.
 func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
-	config.logger.Warn("finalizing migration by moving the migrated DB to the original path",
+	config.logger.Warn("finalizing migration by moving the temporary DB to the original path",
 		zap.String("fromPath", fromPath),
 		zap.String("toPath", toPath))
-	// Try to open the migrated DB before deleting the original one.
-	// If the migrated DB is being copied to the original path by another
+	// Try to open the temporary migrated DB before deleting the original one.
+	// If the temporary DB is being copied to the original path by another
 	// process, this will fail and the original database will not be deleted.
-	// We don't use the proper database schema here because the migrated DB
+	// We don't use the proper database schema here because the temporary DB
 	// may have been created with a different set of migrations.
 	db, err := Open("file:"+fromPath,
 		WithLogger(config.logger),
@@ -426,7 +430,7 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 		WithTemp(),
 		WithIgnoreSchemaDrift())
 	if err != nil {
-		return fmt.Errorf("open migrated DB %s: %w", fromPath, err)
+		return fmt.Errorf("open temporary DB %s: %w", fromPath, err)
 	}
 	if err := deleteDB(toPath); err != nil {
 		return err
@@ -434,9 +438,9 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 	if err := db.vacuumInto(toPath); err != nil {
 		return errors.Join(err, db.Close())
 	}
-	// Open the vacuumed DB to avoid race condition when another process
-	// also tries to vacuum the migrated DB into the original path after
-	// we close the migrated DB.
+	// Open the freshly vacuumed DB to avoid race condition when another process
+	// also tries to vacuum the temporary DB into the original path after
+	// we close the temporary DB.
 	origDB, err := Open("file:"+toPath,
 		WithLogger(config.logger),
 		WithConnections(1),
@@ -447,16 +451,15 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 		return fmt.Errorf("open vacuumed DB %s: %w", toPath, err)
 	}
 	defer func() {
-		err = errors.Join(err, origDB.Close())
+		if closeErr := origDB.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close DB %s after migration: %w", toPath, closeErr))
+		}
 	}()
 	if err := db.Close(); err != nil {
-		return fmt.Errorf("close migrated DB %s: %w", fromPath, err)
+		return fmt.Errorf("close temporary DB %s: %w", fromPath, err)
 	}
 	if err := deleteDB(fromPath); err != nil {
 		return err
-	}
-	if err := origDB.Close(); err != nil {
-		return fmt.Errorf("close vacuumed DB %s: %w", toPath, err)
 	}
 	return nil
 }
@@ -502,9 +505,9 @@ func handleIncompleteCopyMigration(config *conf) error {
 	}
 	if _, err := os.Stat(migratedPath + "_done"); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			// incomplete migration, delete the migrated DB to start over
+			// incomplete migration, delete the temporary DB to start over
 			// after that
-			config.logger.Warn("incomplete migration detected, deleting temporary migrated DB",
+			config.logger.Warn("incomplete migration detected, deleting the temporary DB",
 				zap.String("path", migratedPath))
 			return deleteDB(migratedPath)
 		}
@@ -745,8 +748,8 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		return nil, errors.Join(err, deleteDB(migratedPath))
 	}
 
-	// Opening the migrated DB runs the actual migrations on it.
-	// We disable vacuuming here because we're going to vacuum the migrated DB
+	// Opening the temporary migrated DB runs the actual migrations on it.
+	// We disable vacuuming here because we're going to vacuum the temporary DB
 	// into the original one.
 	opts := []Opt{
 		WithLogger(config.logger),
@@ -760,7 +763,7 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	migratedDB, err := Open("file:"+migratedPath, opts...)
 	if err != nil {
 		return nil, errors.Join(
-			fmt.Errorf("process migrated DB %s: %w", migratedPath, err),
+			fmt.Errorf("process temporary DB %s: %w", migratedPath, err),
 			deleteDB(migratedPath))
 	}
 	tempDBReady := false
@@ -771,10 +774,10 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		}
 	}()
 
-	// Make sure the migrated DB is fully synced to the disk before creating the marker file.
-	// We don't need wal_checkpoint(TRUNCATE) here as we're going to delete the migrated DB.
+	// Make sure the temporary DB is fully synced to the disk before creating the marker file.
+	// We don't need wal_checkpoint(TRUNCATE) here as we're going to delete the temporary DB.
 	if _, err := migratedDB.Exec("PRAGMA wal_checkpoint(FULL)", nil, nil); err != nil {
-		return nil, fmt.Errorf("checkpoint migrated DB %s: %w", migratedPath, err)
+		return nil, fmt.Errorf("checkpoint temporary DB %s: %w", migratedPath, err)
 	}
 
 	// Create the marker file to indicate that the migration is complete.
@@ -814,9 +817,9 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	}
 
 	// Overwrite the original database with the migrated one.
-	// The lock is held on the migrated DB during this, preventing concurrent
+	// The lock is held on the temporary DB during this, preventing concurrent
 	// go-spacemesh instances to attempt the same operation.
-	config.logger.Info("moving migrated DB to original location", zap.String("path", dbPath))
+	config.logger.Info("moving the temporary DB to original location", zap.String("path", dbPath))
 	if err := migratedDB.vacuumInto(dbPath); err != nil {
 		return nil, err
 	}
@@ -831,10 +834,10 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 
 	if err := migratedDB.Close(); err != nil {
 		finalDB.Close()
-		return nil, fmt.Errorf("close migrated DB %s: %w", migratedPath, err)
+		return nil, fmt.Errorf("close temporary DB %s: %w", migratedPath, err)
 	}
 
-	// Now we can delete the migrated DB and the marker file.
+	// Now we can delete the temporary DB and the marker file.
 	if err := deleteDB(migratedPath); err != nil {
 		finalDB.Close()
 		return nil, err

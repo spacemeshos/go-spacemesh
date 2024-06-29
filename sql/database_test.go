@@ -375,16 +375,13 @@ func TestDropIncompleteMigration(t *testing.T) {
 		Migrations: MigrationList{migration1, migration2},
 	}
 
-	func() {
-		defer func() {
-			require.NotNil(t, recover())
-		}()
+	require.Panics(t, func() {
 		Open("file:"+dbFile,
 			WithLogger(logger),
 			WithDatabaseSchema(schema),
 			WithVacuumState(2),
 		)
-	}()
+	})
 
 	// Check that temporary database exists after the simulated crash.
 	// Note that we're checking "*_migrate" not "*_migrate*" to avoid matching
@@ -444,16 +441,13 @@ func TestResumeCopyMigration(t *testing.T) {
 		Migrations: MigrationList{migration1, migration2},
 	}
 
-	func() {
-		defer func() {
-			require.NotNil(t, recover())
-		}()
+	require.Panics(t, func() {
 		Open("file:"+dbFile,
 			WithLogger(logger),
 			WithDatabaseSchema(schema),
 			WithVacuumState(2),
 		)
-	}()
+	})
 
 	// Check that temporary database exists after the simulated crash.
 	tmpDBFiles, err := filepath.Glob(filepath.Join(dir, "*"))
