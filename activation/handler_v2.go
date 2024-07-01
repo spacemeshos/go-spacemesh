@@ -420,7 +420,7 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 	if err != nil {
 		return nil, fmt.Errorf("fetching marriage atx: %w", err)
 	}
-	if !(marriageAtx.PublishEpoch <= atx.PublishEpoch-2) {
+	if marriageAtx.PublishEpoch+2 > atx.PublishEpoch {
 		return nil, fmt.Errorf(
 			"marriage atx must be published at least 2 epochs before %v (is %v)",
 			atx.PublishEpoch,

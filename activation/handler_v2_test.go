@@ -799,7 +799,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.PreviousATXs = previousATXs
 		merged.Sign(sig)
 
-		atxHandler.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
+		atxHandler.mclock.EXPECT().CurrentLayer().Return(merged.PublishEpoch.FirstLayer())
 		atxHandler.expectFetchDeps(merged)
 		atxHandler.expectVerifyNIPoSTs(merged, equivocationSet, []uint64{200})
 
@@ -836,7 +836,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.PreviousATXs = previousATXs
 		merged.Sign(sig)
 
-		atxHandler.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
+		atxHandler.mclock.EXPECT().CurrentLayer().Return(merged.PublishEpoch.FirstLayer())
 		p, err := atxHandler.processATX(context.Background(), "", merged, codec.MustEncode(merged), time.Now())
 		require.ErrorContains(t, err, "ID present twice (duplicated marriage index)")
 		require.Nil(t, p)
@@ -868,7 +868,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.PreviousATXs = previousATXs
 		merged.Sign(sig)
 
-		atxHandler.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
+		atxHandler.mclock.EXPECT().CurrentLayer().Return(merged.PublishEpoch.FirstLayer())
 		atxHandler.expectFetchDeps(merged)
 		p, err := atxHandler.processATX(context.Background(), "", merged, codec.MustEncode(merged), time.Now())
 		require.Error(t, err)
@@ -885,6 +885,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		}
 
 		prev := atxs.CheckpointAtx{
+			Epoch:         mATX.PublishEpoch + 1,
 			ID:            types.RandomATXID(),
 			CommitmentATX: types.RandomATXID(),
 			SmesherID:     sig.NodeID(),
@@ -937,7 +938,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.MarriageATX = &mATXID
 		merged.Sign(sig)
 
-		atxHandler.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.FirstLayer())
+		atxHandler.mclock.EXPECT().CurrentLayer().Return(merged.PublishEpoch.FirstLayer())
 		atxHandler.expectFetchDeps(merged)
 		p, err = atxHandler.processATX(context.Background(), "", merged, codec.MustEncode(merged), time.Now())
 		require.Error(t, err)
