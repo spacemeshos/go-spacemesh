@@ -160,7 +160,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
 	poetDb := activation.NewPoetDb(db, zap.NewNop())
-	poetClient, err := activation.NewPoetClient(
+	poetService, err := activation.NewPoetService(
 		poetDb,
 		types.PoetServer{
 			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
@@ -190,7 +190,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		cfg.POET,
 		clock,
 		validator,
-		activation.WithPoetClients(poetClient),
+		activation.WithPoetServices(poetService),
 	)
 	require.NoError(t, err)
 

@@ -17,6 +17,7 @@ import (
 var checkpointData string
 
 func TestValidateSchema(t *testing.T) {
+	t.Parallel()
 	tcs := []struct {
 		desc string
 		fail bool
@@ -79,6 +80,7 @@ func TestValidateSchema(t *testing.T) {
 }
 
 func TestRecoveryFile(t *testing.T) {
+	t.Parallel()
 	tcs := []struct {
 		desc   string
 		fname  string
@@ -118,6 +120,7 @@ func TestRecoveryFile(t *testing.T) {
 }
 
 func TestRecoveryFile_Copy(t *testing.T) {
+	t.Parallel()
 	fs := afero.NewMemMapFs()
 	rf, err := checkpoint.NewRecoveryFile(fs, filepath.Join(t.TempDir(), "test"))
 	require.NoError(t, err)
@@ -125,6 +128,7 @@ func TestRecoveryFile_Copy(t *testing.T) {
 }
 
 func TestCopyFile(t *testing.T) {
+	t.Parallel()
 	aferoFS := afero.NewMemMapFs()
 	dir := t.TempDir()
 	src := filepath.Join(dir, "test_src")
