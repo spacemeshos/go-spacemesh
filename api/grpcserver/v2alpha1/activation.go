@@ -153,7 +153,7 @@ func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
 		Coinbase:     atx.Coinbase.String(),
 		Weight:       atx.Weight,
 		Height:       atx.TickHeight(),
-		NumUnits:     atx.TotalNumUnits(),
+		NumUnits:     atx.NumUnits,
 	}
 }
 

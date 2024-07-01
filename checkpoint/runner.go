@@ -88,6 +88,7 @@ func checkpointDB(
 			PublicKey:      catx.SmesherID.Bytes(),
 			Sequence:       catx.Sequence,
 			Coinbase:       catx.Coinbase.Bytes(),
+			Units:          catx.Units,
 		})
 	}
 
