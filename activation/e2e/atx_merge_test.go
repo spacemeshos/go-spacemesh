@@ -3,16 +3,13 @@ package activation_test
 import (
 	"context"
 	"encoding/hex"
-	"net/url"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spacemeshos/merkle-tree"
-	"github.com/spacemeshos/poet/registration"
 	"github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -21,6 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -259,34 +257,16 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// ensure that genesis aligns with layer timings
-	genesis := time.Now().Add(layerDuration).Round(layerDuration)
-	layerDuration := 2 * time.Second
+	genesis := time.Now().Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch,
-		CycleGap:          epoch / 2,
-		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 5,
-		RequestRetryDelay: epoch / 50,
-		MaxRequestRetries: 10,
+		PhaseShift:  epoch,
+		CycleGap:    epoch / 2,
+		GracePeriod: epoch / 5,
 	}
 
-	pubkey, address := spawnTestCertifier(t, cfg, nil, verifying.WithLabelScryptParams(opts.Scrypt))
-	certClient := activation.NewCertifierClient(db, localDB, logger.Named("certifier"))
-	certifier := activation.NewCertifier(localDB, logger, certClient)
-	poet := spawnPoet(
-		t,
-		WithGenesis(genesis),
-		WithEpochDuration(epoch),
-		WithPhaseShift(poetCfg.PhaseShift),
-		WithCycleGap(poetCfg.CycleGap),
-		WithCertifier(&registration.CertifierConfig{
-			URL:    (&url.URL{Scheme: "http", Host: address.String()}).String(),
-			PubKey: registration.Base64Enc(pubkey),
-		}),
-	)
-	poetClient, err := poet.Client(poetDb, poetCfg, logger, activation.WithCertifier(certifier))
-	require.NoError(t, err)
+	client := ae2e.NewTestPoetClient(2)
+	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
@@ -304,7 +284,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		poetCfg,
 		clock,
 		validator,
-		activation.WithPoetClients(poetClient),
+		activation.WithPoetServices(poetSvc),
 	)
 	require.NoError(t, err)
 
@@ -431,7 +411,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// 2.3 Construct a multi-ID poet membership merkle proof for both IDs
-	poetProof, members, err := poetClient.Proof(context.Background(), "1")
+	poetProof, members, err := poetSvc.Proof(context.Background(), "1")
 	require.NoError(t, err)
 	membershipProof := constructMerkleProof(t, members, map[uint64]bool{0: true, 1: true})
 
@@ -449,6 +429,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	mergedATX.Sign(mainID)
 
 	// 2.4 Publish
+	<-clock.AwaitLayer(mergedATX.PublishEpoch.FirstLayer())
 	logger.Info("publishing merged ATX", zap.Inline(mergedATX))
 
 	mFetch.EXPECT().RegisterPeerHashes(peer.ID(""), gomock.Any())
@@ -484,7 +465,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		})
 	}
 	require.NoError(t, eg.Wait())
-	poetProof, members, err = poetClient.Proof(context.Background(), "2")
+	poetProof, members, err = poetSvc.Proof(context.Background(), "2")
 	require.NoError(t, err)
 	membershipProof = constructMerkleProof(t, members, map[uint64]bool{0: true})
 
@@ -501,6 +482,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	mergedATX2.VRFNonce = nonces[1]
 	mergedATX2.Sign(signers[1])
 
+	<-clock.AwaitLayer(mergedATX2.PublishEpoch.FirstLayer())
 	logger.Info("publishing second merged ATX", zap.Inline(mergedATX2))
 	mFetch.EXPECT().RegisterPeerHashes(peer.ID(""), gomock.Any())
 	mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
@@ -534,6 +516,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	}
 	require.NoError(t, eg.Wait())
 
+	<-clock.AwaitLayer(publish.FirstLayer())
 	for i, signer := range signers {
 		atx := createSoloAtx(publish, mergedATX2.ID(), mergedATX2.ID(), niposts[i].NIPostState)
 		atx.Sign(signer)
