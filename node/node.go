@@ -1903,7 +1903,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 	dbLog := app.addLogger(StateDbLogger, lg)
-	m21 := migrations.New0021Migration(dbLog.Zap(), 100_000)
+	m21 := migrations.New0021Migration(dbLog.Zap(), 1_000_000)
 	migrations, err := sql.StateMigrations()
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
