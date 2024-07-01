@@ -49,9 +49,6 @@
               "vrfNonce": {
                 "type": "integer"
               },
-              "numUnits": {
-                "type": "integer"
-              },
               "baseTickHeight": {
                 "type": "integer"
               },
@@ -66,8 +63,18 @@
               },
               "coinbase": {
                 "type": "string"
+              },
+              "numUnits": {
+                "type": "integer"
+              },
+              "units": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
               }
-            }
+            },
+            "required": ["id", "epoch", "commitmentAtx", "vrfNonce", "baseTickHeight", "tickCount", "publicKey", "sequence", "coinbase", "numUnits", "units"]
           },
           "accounts": {
             "description": "accounts snapshot",
@@ -99,4 +106,3 @@
     }
   }
 }
-
