@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -53,28 +54,14 @@ func TestValidator_Validate(t *testing.T) {
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch / 2,
-		CycleGap:          epoch / 4,
-		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 5,
-		RequestRetryDelay: epoch / 50,
-		MaxRequestRetries: 10,
+		PhaseShift:  epoch / 2,
+		CycleGap:    epoch / 4,
+		GracePeriod: epoch / 5,
 	}
-	poetProver := spawnPoet(
-		t,
-		WithGenesis(genesis),
-		WithEpochDuration(epoch),
-		WithPhaseShift(poetCfg.PhaseShift),
-		WithCycleGap(poetCfg.CycleGap),
-	)
+
 	poetDb := activation.NewPoetDb(sql.InMemory(), logger.Named("poetDb"))
-	client, err := activation.NewPoetClient(
-		poetDb,
-		types.PoetServer{Address: poetProver.RestURL().String()},
-		poetCfg,
-		logger,
-	)
-	require.NoError(t, err)
+	client := ae2e.NewTestPoetClient(1)
+	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
@@ -106,7 +93,7 @@ func TestValidator_Validate(t *testing.T) {
 		poetCfg,
 		mclock,
 		validator,
-		activation.WithPoetClients(client),
+		activation.WithPoetServices(poetService),
 	)
 	require.NoError(t, err)
 

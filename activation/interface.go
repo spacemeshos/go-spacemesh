@@ -115,9 +115,9 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 }
 
-// PoetClient servers as an interface to communicate with a PoET server.
+// PoetService servers as an interface to communicate with a PoET server.
 // It is used to submit challenges and fetch proofs.
-type PoetClient interface {
+type PoetService interface {
 	Address() string
 
 	// Submit registers a challenge in the proving service current open round.

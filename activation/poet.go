@@ -45,8 +45,26 @@ type PoetAuth struct {
 	*certifier.PoetCert
 }
 
+type PoetClient interface {
+	Id() []byte
+	Address() string
+
+	PowParams(ctx context.Context) (*PoetPowParams, error)
+	CertifierInfo(ctx context.Context) (*url.URL, []byte, error)
+	Submit(
+		ctx context.Context,
+		deadline time.Time,
+		prefix, challenge []byte,
+		signature types.EdSignature,
+		nodeID types.NodeID,
+		auth PoetAuth,
+	) (*types.PoetRound, error)
+	Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error)
+}
+
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
+	id      []byte
 	baseURL *url.URL
 	client  *retryablehttp.Client
 	logger  *zap.Logger
@@ -122,6 +140,7 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 	}
 
 	poetClient := &HTTPPoetClient{
+		id:      server.Pubkey.Bytes(),
 		baseURL: baseURL,
 		client:  client,
 		logger:  zap.NewNop(),
@@ -140,6 +159,10 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 	)
 
 	return poetClient, nil
+}
+
+func (c *HTTPPoetClient) Id() []byte {
+	return c.id
 }
 
 func (c *HTTPPoetClient) Address() string {
@@ -306,13 +329,12 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	return nil
 }
 
-// poetClient is a higher-level interface to communicate with a PoET service.
+// poetService is a higher-level interface to communicate with a PoET service.
 // It wraps the HTTP client, adding additional functionality.
-type poetClient struct {
+type poetService struct {
 	db             poetDbAPI
-	id             []byte
 	logger         *zap.Logger
-	client         HTTPPoetClient
+	client         PoetClient
 	requestTimeout time.Duration
 
 	// Used to avoid concurrent requests for proof.
@@ -323,30 +345,45 @@ type poetClient struct {
 	certifier certifierService
 }
 
-type PoetClientOpt func(*poetClient)
+type PoetClientOpt func(*poetService)
 
 func WithCertifier(certifier certifierService) PoetClientOpt {
-	return func(c *poetClient) {
+	return func(c *poetService) {
 		c.certifier = certifier
 	}
 }
 
-func NewPoetClient(
+func NewPoetService(
 	db poetDbAPI,
 	server types.PoetServer,
 	cfg PoetConfig,
 	logger *zap.Logger,
 	opts ...PoetClientOpt,
-) (*poetClient, error) {
+) (*poetService, error) {
 	client, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
 	if err != nil {
-		return nil, fmt.Errorf("creating HTTP poet client: %w", err)
+		return nil, fmt.Errorf("creating HTTP poet client %s: %w", server.Address, err)
 	}
-	poetClient := &poetClient{
+	return NewPoetServiceWithClient(
+		db,
+		client,
+		cfg,
+		logger,
+		opts...,
+	), nil
+}
+
+func NewPoetServiceWithClient(
+	db poetDbAPI,
+	client PoetClient,
+	cfg PoetConfig,
+	logger *zap.Logger,
+	opts ...PoetClientOpt,
+) *poetService {
+	poetClient := &poetService{
 		db:             db,
-		id:             server.Pubkey.Bytes(),
 		logger:         logger,
-		client:         *client,
+		client:         client,
 		requestTimeout: cfg.RequestTimeout,
 		proofMembers:   make(map[string][]types.Hash32, 1),
 	}
@@ -355,14 +392,14 @@ func NewPoetClient(
 		opt(poetClient)
 	}
 
-	return poetClient, nil
+	return poetClient
 }
 
-func (c *poetClient) Address() string {
+func (c *poetService) Address() string {
 	return c.client.Address()
 }
 
-func (c *poetClient) authorize(
+func (c *poetService) authorize(
 	ctx context.Context,
 	nodeID types.NodeID,
 	challenge []byte,
@@ -409,7 +446,7 @@ func (c *poetClient) authorize(
 	}}, nil
 }
 
-func (c *poetClient) Submit(
+func (c *poetService) Submit(
 	ctx context.Context,
 	deadline time.Time,
 	prefix, challenge []byte,
@@ -447,7 +484,7 @@ func (c *poetClient) Submit(
 	return nil, fmt.Errorf("submitting challenge: %w", err)
 }
 
-func (c *poetClient) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
+func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
 	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
 
@@ -455,7 +492,7 @@ func (c *poetClient) Proof(ctx context.Context, roundID string) (*types.PoetProo
 	defer c.gettingProof.Unlock()
 
 	if members, ok := c.proofMembers[roundID]; ok {
-		proof, err := c.db.ProofForRound(c.id, roundID)
+		proof, err := c.db.ProofForRound(c.client.Id(), roundID)
 		if err == nil {
 			c.logger.Debug("returning cached proof", zap.String("round_id", roundID))
 			return proof, members, nil
@@ -478,7 +515,7 @@ func (c *poetClient) Proof(ctx context.Context, roundID string) (*types.PoetProo
 	return &proof.PoetProof, members, nil
 }
 
-func (c *poetClient) Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
+func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
 	if c.certifier == nil {
 		return nil, errors.New("certifier not configured")
 	}
@@ -489,7 +526,7 @@ func (c *poetClient) Certify(ctx context.Context, id types.NodeID) (*certifier.P
 	return c.certifier.Certificate(ctx, id, url, pubkey)
 }
 
-func (c *poetClient) recertify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
+func (c *poetService) recertify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
 	if c.certifier == nil {
 		return nil, errors.New("certifier not configured")
 	}
