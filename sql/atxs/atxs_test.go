@@ -1136,7 +1136,7 @@ func TestUnits(t *testing.T) {
 		db := sql.InMemory()
 		atxID := types.RandomATXID()
 		require.NoError(t, atxs.SetUnits(db, atxID, map[types.NodeID]uint32{{1, 2, 3}: 10}))
-		_, err := atxs.Units(db, types.RandomATXID(), types.RandomNodeID())
+		_, err := atxs.Units(db, atxID, types.RandomNodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 	t.Run("returns units for given smesher in given ATX", func(t *testing.T) {

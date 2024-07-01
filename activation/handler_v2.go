@@ -503,7 +503,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		}
 	}
 
-	prevAtxs := make([]*types.ActivationTx, len(atx.PreviousATXs))
+	previousAtxs := make([]*types.ActivationTx, len(atx.PreviousATXs))
 	for i, prev := range atx.PreviousATXs {
 		prevAtx, err := atxs.Get(h.cdb, prev)
 		if err != nil {
@@ -513,12 +513,12 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			err := fmt.Errorf("previous atx is too new (%d >= %d) (%s) ", prevAtx.PublishEpoch, atx.PublishEpoch, prev)
 			return nil, nil, err
 		}
-		prevAtxs[i] = prevAtx
+		previousAtxs[i] = prevAtx
 	}
 
 	equivocationSet, err := h.equivocationSet(atx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("validating marriages: %w", err)
+		return nil, nil, fmt.Errorf("calculating equivocation set: %w", err)
 	}
 
 	// validate previous ATXs
@@ -535,7 +535,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			effectiveNumUnits := post.NumUnits
 			if atx.Initial == nil {
 				var err error
-				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, prevAtxs)
+				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, previousAtxs)
 				if err != nil {
 					return nil, nil, fmt.Errorf("validating previous atx: %w", err)
 				}
