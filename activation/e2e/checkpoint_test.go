@@ -183,6 +183,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 
 	newDB, err := sql.Open("file:" + recoveryCfg.DbPath())
 	require.NoError(t, err)
+	defer newDB.Close()
 
 	// 3. Spawn new ATX handler and builder using the new DB
 	poetDb = activation.NewPoetDb(newDB, logger.Named("poetDb"))
