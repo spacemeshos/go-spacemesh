@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -49,8 +50,13 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	cdb := datastore.NewCachedDB(db, logger)
 
 	opts := testPostSetupOpts(t)
-	svc := initializeIDs(t, db, goldenATX, []*signing.EdSigner{sig}, cfg, opts)
-	syncer := syncedSyncer(ctrl)
+	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
+	grpcCfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
+	syncer := syncedSyncer(t)
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
@@ -165,21 +171,18 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	recoveryCfg := checkpoint.RecoverConfig{
 		GoldenAtx: goldenATX,
 		DataDir:   t.TempDir(),
+		DbFile:    "db.sql",
 		NodeIDs:   []types.NodeID{sig.NodeID()},
 		Restore:   snapshot,
 	}
 	filename := checkpoint.SelfCheckpointFilename(dir, snapshot)
 
-	var newDB *sql.Database
-	createDb := func() (*sql.Database, error) {
-		newDB = sql.InMemory()
-		return newDB, nil
-	}
-
-	data, err := checkpoint.RecoverFromLocalFile(ctx, logger, db, localDB, fs, &recoveryCfg, filename, createDb)
+	data, err := checkpoint.RecoverFromLocalFile(ctx, logger, db, localDB, fs, &recoveryCfg, filename)
 	require.NoError(t, err)
-	require.NotNil(t, newDB)
 	require.Nil(t, data)
+
+	newDB, err := sql.Open("file:" + recoveryCfg.DbPath())
+	require.NoError(t, err)
 
 	// 3. Spawn new ATX handler and builder using the new DB
 	poetDb = activation.NewPoetDb(newDB, logger.Named("poetDb"))

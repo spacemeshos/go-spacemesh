@@ -16,7 +16,6 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -34,55 +33,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-func syncedSyncer(ctrl *gomock.Controller) *activation.Mocksyncer {
-	syncer := activation.NewMocksyncer(ctrl)
+func syncedSyncer(t testing.TB) *activation.Mocksyncer {
+	syncer := activation.NewMocksyncer(gomock.NewController(t))
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		synced := make(chan struct{})
 		close(synced)
 		return synced
 	}).AnyTimes()
 	return syncer
-}
-
-func initializeIDs(
-	t testing.TB,
-	db sql.Executor,
-	golden types.ATXID,
-	signers []*signing.EdSigner,
-	cfg activation.PostConfig,
-	opts activation.PostSetupOpts,
-) *grpcserver.PostService {
-	t.Helper()
-	ctrl := gomock.NewController(t)
-	logger := zaptest.NewLogger(t)
-	syncer := syncedSyncer(ctrl)
-	svc := grpcserver.NewPostService(logger)
-	svc.AllowConnections(true)
-	grpcCfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	var eg errgroup.Group
-	for i, sig := range signers {
-		opts := opts
-		opts.DataDir = t.TempDir()
-		opts.NumUnits = min(opts.NumUnits+2*uint32(i)*opts.NumUnits, cfg.MaxNumUnits)
-		eg.Go(func() error {
-			validator := activation.NewMocknipostValidator(ctrl)
-			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), golden, syncer, validator)
-			require.NoError(t, err)
-
-			initPost(t, mgr, opts, sig.NodeID())
-			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
-
-			require.Eventually(t, func() bool {
-				_, err := svc.Client(sig.NodeID())
-				return err == nil
-			}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
-			return nil
-		})
-	}
-	require.NoError(t, eg.Wait())
-	return svc
 }
 
 func Test_BuilderWithMultipleClients(t *testing.T) {
@@ -92,12 +50,12 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	const numSigners = 3
 	const totalAtxs = numEpochs * numSigners
 
-	signers := make(map[types.NodeID]*signing.EdSigner, numSigners)
-	for range numSigners {
+	signers := make([]*signing.EdSigner, numSigners)
+	for i := range numSigners {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		signers[sig.NodeID()] = sig
+		signers[i] = sig
 	}
 
 	logger := zaptest.NewLogger(t)
@@ -106,8 +64,20 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	db := sql.InMemory()
 	localDB := localsql.InMemory()
 
-	opts := testPostSetupOpts(t)
-	svc := initializeIDs(t, db, goldenATX, maps.Values(signers), cfg, opts)
+	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
+	grpcCfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+	var eg errgroup.Group
+	for i, sig := range signers {
+		opts := testPostSetupOpts(t)
+		opts.NumUnits = min(opts.NumUnits+2*uint32(i)*opts.NumUnits, cfg.MaxNumUnits)
+		eg.Go(func() error {
+			initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
+			return nil
+		})
+	}
+	require.NoError(t, eg.Wait())
 
 	// ensure that genesis aligns with layer timings
 	layerDuration := 3 * time.Second
@@ -122,6 +92,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		MaxRequestRetries: 10,
 	}
 
+	scrypt := testPostSetupOpts(t).Scrypt
 	pubkey, address := spawnTestCertifier(
 		t,
 		cfg,
@@ -129,7 +100,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			exp := time.Now().Add(epoch)
 			return &poetShared.Cert{Pubkey: id, Expiration: &exp}
 		},
-		verifying.WithLabelScryptParams(opts.Scrypt),
+		verifying.WithLabelScryptParams(scrypt),
 	)
 
 	poetProver := spawnPoet(
@@ -165,7 +136,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		db,
 		poetDb,
 		cfg,
-		opts.Scrypt,
+		scrypt,
 		verifier,
 	)
 
@@ -226,7 +197,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		mpub,
 		nb,
 		clock,
-		syncedSyncer(ctrl),
+		syncedSyncer(t),
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),

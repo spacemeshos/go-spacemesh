@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -55,7 +56,12 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	cdb := datastore.NewCachedDB(db, logger)
 
 	opts := testPostSetupOpts(t)
-	svc := initializeIDs(t, db, goldenATX, []*signing.EdSigner{sig}, cfg, opts)
+	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
+	grpcCfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
@@ -195,7 +201,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		mpub,
 		nb,
 		clock,
-		syncedSyncer(ctrl),
+		syncedSyncer(t),
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),

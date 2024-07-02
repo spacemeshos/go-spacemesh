@@ -15,12 +15,12 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -114,13 +114,34 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 	return cfg, func() { assert.NoError(tb, server.Close()) }
 }
 
-func initPost(tb testing.TB, mgr *activation.PostSetupManager, opts activation.PostSetupOpts, id types.NodeID) {
+func initPost(
+	tb testing.TB,
+	cfg activation.PostConfig,
+	opts activation.PostSetupOpts,
+	sig *signing.EdSigner,
+	golden types.ATXID,
+	grpcCfg grpcserver.Config,
+	svc *grpcserver.PostService,
+) {
 	tb.Helper()
 
+	logger := zaptest.NewLogger(tb)
+	syncer := syncedSyncer(tb)
+	db := sql.InMemory()
+	mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), golden, syncer, nil)
+	require.NoError(tb, err)
+
 	// Create data.
-	require.NoError(tb, mgr.PrepareInitializer(context.Background(), opts, id))
-	require.NoError(tb, mgr.StartSession(context.Background(), id))
+	require.NoError(tb, mgr.PrepareInitializer(context.Background(), opts, sig.NodeID()))
+	require.NoError(tb, mgr.StartSession(context.Background(), sig.NodeID()))
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
+
+	stop := launchPostSupervisor(tb, logger, mgr, sig, grpcCfg, opts)
+	tb.Cleanup(stop)
+	require.Eventually(tb, func() bool {
+		_, err := svc.Client(sig.NodeID())
+		return err == nil
+	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 }
 
 func TestNIPostBuilderWithClients(t *testing.T) {
@@ -136,7 +157,12 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	localDb := localsql.InMemory()
 
 	opts := testPostSetupOpts(t)
-	svc := initializeIDs(t, db, goldenATX, []*signing.EdSigner{sig}, cfg, opts)
+	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
+	grpcCfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
@@ -202,12 +228,12 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	signers := make(map[types.NodeID]*signing.EdSigner, 3)
-	for range 3 {
+	signers := make([]*signing.EdSigner, 3)
+	for i := range 3 {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		signers[sig.NodeID()] = sig
+		signers[i] = sig
 	}
 
 	logger := zaptest.NewLogger(t)
@@ -216,8 +242,20 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	db := sql.InMemory()
 
 	opts := testPostSetupOpts(t)
-	svc := initializeIDs(t, db, goldenATX, maps.Values(signers), cfg, opts)
-
+	svc := grpcserver.NewPostService(logger)
+	svc.AllowConnections(true)
+	grpcCfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+	var eg errgroup.Group
+	for i, sig := range signers {
+		opts := testPostSetupOpts(t)
+		opts.NumUnits = min(opts.NumUnits+2*uint32(i)*opts.NumUnits, cfg.MaxNumUnits)
+		eg.Go(func() error {
+			initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
+			return nil
+		})
+	}
+	require.NoError(t, eg.Wait())
 	validator := activation.NewMocknipostValidator(ctrl)
 
 	// ensure that genesis aligns with layer timings
@@ -257,7 +295,6 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 
 	challenge := types.RandomHash()
-	var eg errgroup.Group
 	for _, sig := range signers {
 		eg.Go(func() error {
 			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge, nil)

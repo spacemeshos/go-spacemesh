@@ -55,6 +55,10 @@ type RecoverConfig struct {
 	Restore     types.LayerID
 }
 
+func (c *RecoverConfig) DbPath() string {
+	return filepath.Join(c.DataDir, c.DbFile)
+}
+
 func RecoveryDir(dataDir string) string {
 	return filepath.Join(dataDir, recoveryDir)
 }
@@ -114,7 +118,7 @@ func Recover(
 		return nil, errors.New("restore layer not set")
 	}
 	logger.Info("recovering from checkpoint", zap.String("url", cfg.Uri), zap.Stringer("restore", cfg.Restore))
-	db, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	db, err := sql.Open("file:" + cfg.DbPath())
 	if err != nil {
 		return nil, fmt.Errorf("open old database: %w", err)
 	}
@@ -168,19 +172,8 @@ func RecoverWithDb(
 	if err != nil {
 		return nil, err
 	}
-	var newDB *sql.Database
-	createDb := func() (*sql.Database, error) {
-		var err error
-		newDB, err = sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
-		return newDB, err
-	}
-	defer func() {
-		if newDB != nil {
-			newDB.Close()
-		}
-	}()
 
-	return RecoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpFile, createDb)
+	return RecoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpFile)
 }
 
 type recoveryData struct {
@@ -196,7 +189,6 @@ func RecoverFromLocalFile(
 	fs afero.Fs,
 	cfg *RecoverConfig,
 	file string,
-	createDb func() (*sql.Database, error),
 ) (*PreservedData, error) {
 	logger.Info("recovering from checkpoint file", zap.String("file", file))
 	newGenesis := cfg.Restore - 1
@@ -262,10 +254,12 @@ func RecoverFromLocalFile(
 	}
 	logger.Info("backed up old database", log.ZContext(ctx), zap.String("backup dir", backupDir))
 
-	newDB, err := createDb()
+	var newDB *sql.Database
+	newDB, err = sql.Open("file:" + cfg.DbPath())
 	if err != nil {
 		return nil, fmt.Errorf("creating new DB: %w", err)
 	}
+	defer newDB.Close()
 	logger.Info("populating new database",
 		log.ZContext(ctx),
 		zap.Int("num accounts", len(data.accounts)),

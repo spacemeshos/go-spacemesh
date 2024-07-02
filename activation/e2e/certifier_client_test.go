@@ -20,6 +20,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -37,7 +38,12 @@ func TestCertification(t *testing.T) {
 	localDb := localsql.InMemory()
 
 	opts := testPostSetupOpts(t)
-	svc := initializeIDs(t, db, types.RandomATXID(), []*signing.EdSigner{sig}, cfg, opts)
+	svc := grpcserver.NewPostService(zaptest.NewLogger(t))
+	svc.AllowConnections(true)
+	grpcCfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	initPost(t, cfg, opts, sig, types.RandomATXID(), grpcCfg, svc)
 
 	validator := activation.NewMocknipostValidator(ctrl)
 	validator.EXPECT().
