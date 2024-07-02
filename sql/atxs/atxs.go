@@ -640,8 +640,10 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 		return fmt.Errorf("insert checkpoint ATX blob %v: %w", catx.ID, err)
 	}
 
-	if err := SetUnits(db, catx.ID, catx.Units); err != nil {
-		return fmt.Errorf("insert checkpoint ATX units %v: %w", catx.ID, err)
+	for id, units := range catx.Units {
+		if err := SetUnits(db, catx.ID, id, units); err != nil {
+			return fmt.Errorf("insert checkpoint ATX units %v: %w", catx.ID, err)
+		}
 	}
 
 	return nil
@@ -896,20 +898,15 @@ func Units(db sql.Executor, atxID types.ATXID, nodeID types.NodeID) (uint32, err
 	return units, err
 }
 
-func SetUnits(db sql.Executor, atxID types.ATXID, units map[types.NodeID]uint32) error {
-	for nodeID, u := range units {
-		_, err := db.Exec(`
-			INSERT INTO posts (atxid, pubkey, units) VALUES (?1, ?2, ?3);`,
-			func(stmt *sql.Statement) {
-				stmt.BindBytes(1, atxID.Bytes())
-				stmt.BindBytes(2, nodeID.Bytes())
-				stmt.BindInt64(3, int64(u))
-			}, nil,
-		)
-		if err != nil {
-			return fmt.Errorf("set units for ID %s in ATX %s: %w", nodeID, atxID, err)
-		}
-	}
-
-	return nil
+func SetUnits(db sql.Executor, atxID types.ATXID, id types.NodeID, units uint32) error {
+	_, err := db.Exec(
+		`INSERT INTO posts (atxid, pubkey, units) VALUES (?1, ?2, ?3);`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, atxID.Bytes())
+			stmt.BindBytes(2, id.Bytes())
+			stmt.BindInt64(3, int64(units))
+		},
+		nil,
+	)
+	return err
 }

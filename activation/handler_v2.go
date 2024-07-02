@@ -726,7 +726,7 @@ func (h *HandlerV2) storeAtx(
 				}
 			}
 			if !malicious && proof == nil {
-				// We check for malfeasance again becase the marriage increased the equivocation set.
+				// We check for malfeasance again because the marriage increased the equivocation set.
 				malicious, err = identities.IsMalicious(tx, atx.SmesherID)
 				if err != nil {
 					return fmt.Errorf("re-checking if smesherID is malicious: %w", err)
@@ -738,9 +738,11 @@ func (h *HandlerV2) storeAtx(
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
-		err = atxs.SetUnits(tx, atx.ID(), units)
-		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return fmt.Errorf("set atx units: %w", err)
+		for id, units := range units {
+			err = atxs.SetUnits(tx, atx.ID(), id, units)
+			if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+				return fmt.Errorf("setting atx units for ID %s: %w", id, err)
+			}
 		}
 		return nil
 	}); err != nil {

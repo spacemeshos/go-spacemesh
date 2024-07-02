@@ -134,13 +134,17 @@ func (m *migration0021) processBatch(db sql.Executor, offset, size int) (int, er
 }
 
 func (m *migration0021) applyPendingUpdates(db sql.Executor, updates map[types.ATXID]*update) error {
-	for id, upd := range updates {
-		atxs.SetUnits(db, id, map[types.NodeID]uint32{upd.id: upd.units})
+	for atxID, upd := range updates {
+		if err := atxs.SetUnits(db, atxID, upd.id, upd.units); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func processATX(blob types.AtxBlob) (*update, error) {
+	// The migration adding the version column does not set it to 1 for existing ATXs.
+	// Thus, both values 0 and 1 mean V1.
 	switch blob.Version {
 	case 0:
 		fallthrough

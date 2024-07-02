@@ -37,7 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-func constructMerkleProof(t *testing.T, members []types.Hash32, ids map[uint64]bool) wire.MerkleProofV2 {
+func constructMerkleProof(t testing.TB, members []types.Hash32, ids map[uint64]bool) wire.MerkleProofV2 {
 	t.Helper()
 
 	tree, err := merkle.NewTreeBuilder().
@@ -169,18 +169,14 @@ func createMerged(
 	return atx
 }
 
-func signers(t *testing.T, keysHex []string) []*signing.EdSigner {
+func signers(t testing.TB, keysHex []string) []*signing.EdSigner {
 	t.Helper()
 
-	var keys [][]byte
+	signers := make([]*signing.EdSigner, 0, len(keysHex))
 	for _, k := range keysHex {
 		key, err := hex.DecodeString(k)
 		require.NoError(t, err)
-		keys = append(keys, key)
-	}
 
-	signers := []*signing.EdSigner{}
-	for _, key := range keys {
 		sig, err := signing.NewEdSigner(signing.WithPrivateKey(key))
 		require.NoError(t, err)
 		signers = append(signers, sig)
@@ -315,7 +311,6 @@ func Test_MarryAndMerge(t *testing.T) {
 	publish := types.EpochID(1)
 	var niposts [2]nipostData
 	var initialPosts [2]*types.Post
-	eg = errgroup.Group{}
 	for i, signer := range signers {
 		eg.Go(func() error {
 			post, postInfo, err := nb.Proof(context.Background(), signer.NodeID(), types.EmptyHash32[:], nil)
@@ -389,12 +384,10 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	// Step 2. Publish merged ATX together
 	publish = marriageATX.PublishEpoch + 2
-	eg = errgroup.Group{}
-
 	// 2.1. NiPOST for main ID (the publisher)
 	eg.Go(func() error {
 		n, err := buildNipost(nb, mainID, publish, marriageATX.ID(), marriageATX.ID())
-		logger.Info("built NiPoST", zap.Any("post", niposts[0]))
+		logger.Info("built NiPoST", zap.Any("post", n))
 		niposts[0] = n
 		return err
 	})
@@ -455,7 +448,6 @@ func Test_MarryAndMerge(t *testing.T) {
 	// Step 4. Publish merged using the same previous now
 	// Publish by the other signer this time.
 	publish = mergedATX.PublishEpoch + 1
-	eg = errgroup.Group{}
 	for i, sig := range signers {
 		eg.Go(func() error {
 			n, err := buildNipost(nb, sig, publish, mergedATX.ID(), mergedATX.ID())
@@ -505,7 +497,6 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	// Step 5. Make an emergency split and publish separately
 	publish = mergedATX2.PublishEpoch + 1
-	eg = errgroup.Group{}
 	for i, sig := range signers {
 		eg.Go(func() error {
 			n, err := buildNipost(nb, sig, publish, mergedATX2.ID(), mergedATX2.ID())

@@ -173,7 +173,7 @@ func TestLatestN(t *testing.T) {
 
 	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5, atx6} {
 		require.NoError(t, atxs.Add(db, atx))
-		require.NoError(t, atxs.SetUnits(db, atx.ID(), map[types.NodeID]uint32{atx.SmesherID: atx.NumUnits}))
+		require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, atx.NumUnits))
 	}
 
 	for _, tc := range []struct {
@@ -1135,7 +1135,7 @@ func TestUnits(t *testing.T) {
 		t.Parallel()
 		db := sql.InMemory()
 		atxID := types.RandomATXID()
-		require.NoError(t, atxs.SetUnits(db, atxID, map[types.NodeID]uint32{{1, 2, 3}: 10}))
+		require.NoError(t, atxs.SetUnits(db, atxID, types.RandomNodeID(), 10))
 		_, err := atxs.Units(db, atxID, types.RandomNodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
@@ -1147,7 +1147,9 @@ func TestUnits(t *testing.T) {
 			{1, 2, 3}: 10,
 			{4, 5, 6}: 20,
 		}
-		require.NoError(t, atxs.SetUnits(db, atxID, units))
+		for id, units := range units {
+			require.NoError(t, atxs.SetUnits(db, atxID, id, units))
+		}
 
 		nodeID := types.NodeID{1, 2, 3}
 		got, err := atxs.Units(db, atxID, nodeID)

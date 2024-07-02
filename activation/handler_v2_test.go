@@ -179,7 +179,7 @@ func (h *handlerMocks) expectMergedAtxV2(
 	h.expectStoreAtxV2(atx)
 }
 
-func (h *v2TestHandler) createAndProcessInitial(t *testing.T, sig *signing.EdSigner) *wire.ActivationTxV2 {
+func (h *v2TestHandler) createAndProcessInitial(t testing.TB, sig *signing.EdSigner) *wire.ActivationTxV2 {
 	t.Helper()
 	atx := newInitialATXv2(t, h.handlerMocks.goldenATXID)
 	atx.Sign(sig)
@@ -189,13 +189,13 @@ func (h *v2TestHandler) createAndProcessInitial(t *testing.T, sig *signing.EdSig
 	return atx
 }
 
-func (h *v2TestHandler) processInitial(t *testing.T, atx *wire.ActivationTxV2) (*mwire.MalfeasanceProof, error) {
+func (h *v2TestHandler) processInitial(t testing.TB, atx *wire.ActivationTxV2) (*mwire.MalfeasanceProof, error) {
 	t.Helper()
 	h.expectInitialAtxV2(atx)
 	return h.processATX(context.Background(), peer.ID("peer"), atx, codec.MustEncode(atx), time.Now())
 }
 
-func (h *v2TestHandler) processSoloAtx(t *testing.T, atx *wire.ActivationTxV2) (*mwire.MalfeasanceProof, error) {
+func (h *v2TestHandler) processSoloAtx(t testing.TB, atx *wire.ActivationTxV2) (*mwire.MalfeasanceProof, error) {
 	t.Helper()
 	h.expectAtxV2(atx)
 	return h.processATX(context.Background(), peer.ID("peer"), atx, codec.MustEncode(atx), time.Now())
@@ -618,7 +618,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 }
 
 func marryIDs(
-	t *testing.T,
+	t testing.TB,
 	atxHandler *v2TestHandler,
 	sig *signing.EdSigner,
 	golden types.ATXID,
@@ -1337,7 +1337,7 @@ func Test_ValidatePreviousATX(t *testing.T) {
 		t.Parallel()
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), map[types.NodeID]uint32{types.RandomNodeID(): 13}))
+		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), types.RandomNodeID(), 13))
 
 		_, err := atxHandler.validatePreviousAtx(types.RandomNodeID(), &wire.SubPostV2{}, []*types.ActivationTx{prev})
 		require.Error(t, err)
@@ -1348,7 +1348,8 @@ func Test_ValidatePreviousATX(t *testing.T) {
 		other := types.RandomNodeID()
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), map[types.NodeID]uint32{id: 7, other: 13}))
+		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), id, 7))
+		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), other, 13))
 
 		units, err := atxHandler.validatePreviousAtx(id, &wire.SubPostV2{NumUnits: 100}, []*types.ActivationTx{prev})
 		require.NoError(t, err)
@@ -1368,7 +1369,7 @@ func Test_ValidatePreviousATX(t *testing.T) {
 		other := types.RandomNodeID()
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), map[types.NodeID]uint32{other: 13}))
+		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), other, 13))
 
 		_, err := atxHandler.validatePreviousAtx(id, &wire.SubPostV2{NumUnits: 100}, []*types.ActivationTx{prev})
 		require.Error(t, err)

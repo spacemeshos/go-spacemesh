@@ -554,7 +554,7 @@ func (h *HandlerV1) storeAtx(
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
-		err = atxs.SetUnits(tx, atx.ID(), map[types.NodeID]uint32{atx.SmesherID: watx.NumUnits})
+		err = atxs.SetUnits(tx, atx.ID(), atx.SmesherID, watx.NumUnits)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("set atx units: %w", err)
 		}
