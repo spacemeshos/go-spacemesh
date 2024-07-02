@@ -86,8 +86,7 @@ func NewNIPostBuilder(
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
 	b := &NIPostBuilder{
-		localDB: db,
-
+		localDB:     db,
 		postService: postService,
 		logger:      lg,
 		poetCfg:     poetCfg,
@@ -230,11 +229,20 @@ func (nb *NIPostBuilder) BuildNIPost(
 	)
 
 	// Phase 0: Submit challenge to PoET services.
-	count, err := nipost.PoetRegistrationCount(nb.localDB, signer.NodeID())
+	addresses := make([]string, 0)
+	for _, client := range nb.poetProvers {
+		addresses = append(addresses, client.Address())
+	}
+
+	// check, if already registered for some PoET services with given addresses
+	count, err := nipost.PoetRegistrationCount(nb.localDB, signer.NodeID(), addresses...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get poet registration count: %w", err)
 	}
+
 	if count == 0 {
+		// no registrations
+
 		now := time.Now()
 		// Deadline: start of PoET round for publish epoch. PoET won't accept registrations after that.
 		if poetRoundStart.Before(now) {
@@ -252,7 +260,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if err != nil {
 			return nil, fmt.Errorf("submitting to poets: %w", err)
 		}
-		count, err := nipost.PoetRegistrationCount(nb.localDB, signer.NodeID())
+		count, err := nipost.PoetRegistrationCount(nb.localDB, signer.NodeID(), addresses...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get poet registration count: %w", err)
 		}
