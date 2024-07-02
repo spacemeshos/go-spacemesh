@@ -550,6 +550,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		indexedChallenges := make(map[uint64][]byte)
 
 		for _, post := range niposts.Posts {
+			if _, ok := indexedChallenges[post.MembershipLeafIndex]; ok {
+				continue
+			}
 			nipostChallenge := wire.NIPostChallengeV2{
 				PublishEpoch:     atx.PublishEpoch,
 				PositioningATXID: atx.PositioningATX,
@@ -559,17 +562,12 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			} else {
 				nipostChallenge.PrevATXID = atx.PreviousATXs[post.PrevATXIndex]
 			}
-			if _, ok := indexedChallenges[post.MembershipLeafIndex]; !ok {
-				indexedChallenges[post.MembershipLeafIndex] = nipostChallenge.Hash().Bytes()
-			}
+			indexedChallenges[post.MembershipLeafIndex] = nipostChallenge.Hash().Bytes()
 		}
 
-		leafIndicies := make([]uint64, 0, len(indexedChallenges))
-		for i := range indexedChallenges {
-			leafIndicies = append(leafIndicies, i)
-		}
+		leafIndicies := maps.Keys(indexedChallenges)
 		slices.Sort(leafIndicies)
-		poetChallenges := make([][]byte, 0, len(indexedChallenges))
+		poetChallenges := make([][]byte, 0, len(leafIndicies))
 		for _, i := range leafIndicies {
 			poetChallenges = append(poetChallenges, indexedChallenges[i])
 		}
