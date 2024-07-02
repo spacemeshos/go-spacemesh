@@ -151,7 +151,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	require.NoError(t, tab.BuildInitialPost(ctx, sig.NodeID()))
 	require.NoError(t, tab.PublishActivationTx(ctx, sig))
 
-	// Execute checpoint-recovery
+	// Execute checkpoint-recovery
 	// 1. Generate checkpoint
 	require.NoError(t, accounts.Update(db, &types.Account{}))
 	snapshot := clock.CurrentLayer()
