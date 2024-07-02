@@ -140,7 +140,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		verifier,
 	)
 
-	postStates := activation.NewMockPostStates(ctrl)
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -148,7 +147,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		poetCfg,
 		clock,
 		validator,
-		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetServices(client),
 	)
 	require.NoError(t, err)
@@ -201,26 +199,9 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),
-		activation.WithPostStates(postStates),
 		activation.WithPoets(client),
 	)
 	for _, sig := range signers {
-		gomock.InOrder(
-			// it starts by setting to IDLE
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// initial proof
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// post proof - 1st epoch
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// 2nd epoch
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// 3rd epoch
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		)
 		tab.Register(sig)
 	}
 
