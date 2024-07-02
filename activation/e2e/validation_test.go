@@ -28,7 +28,7 @@ func TestValidator_Validate(t *testing.T) {
 
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := sql.InMemory()
 
 	validator := activation.NewMocknipostValidator(gomock.NewController(t))

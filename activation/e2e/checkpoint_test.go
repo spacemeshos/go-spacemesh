@@ -45,7 +45,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, logger)
 

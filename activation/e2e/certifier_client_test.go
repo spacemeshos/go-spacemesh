@@ -33,7 +33,7 @@ func TestCertification(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := sql.InMemory()
 	localDb := localsql.InMemory()
 

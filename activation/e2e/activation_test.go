@@ -60,7 +60,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := sql.InMemory()
 	localDB := localsql.InMemory()
 
@@ -71,7 +71,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	var eg errgroup.Group
 	for i, sig := range signers {
 		opts := testPostSetupOpts(t)
-		opts.NumUnits = min(opts.NumUnits+2*uint32(i)*opts.NumUnits, cfg.MaxNumUnits)
+		opts.NumUnits = min(opts.NumUnits+2*uint32(i), cfg.MaxNumUnits)
 		eg.Go(func() error {
 			initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 			return nil

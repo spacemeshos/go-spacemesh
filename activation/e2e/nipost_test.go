@@ -73,20 +73,29 @@ func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
 	return poetProver
 }
 
+func testPostConfig() activation.PostConfig {
+	cfg := activation.DefaultPostConfig()
+	// simplify PoST parameters for faster proving
+	cfg.K1 = 12
+	cfg.K2 = 10
+	cfg.K3 = 10
+	cfg.LabelsPerUnit = 64
+	return cfg
+}
+
 func launchPostSupervisor(
 	tb testing.TB,
 	log *zap.Logger,
 	mgr *activation.PostSetupManager,
 	sig *signing.EdSigner,
 	cfg grpcserver.Config,
+	postCfg activation.PostConfig,
 	postOpts activation.PostSetupOpts,
 ) func() {
 	cmdCfg := activation.DefaultTestPostServiceConfig()
 	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
-	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
-	provingOpts.Nonces = 64
 
 	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
 	builder.EXPECT().Register(gomock.Any())
@@ -136,7 +145,7 @@ func initPost(
 	require.NoError(tb, mgr.StartSession(context.Background(), sig.NodeID()))
 	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
 
-	stop := launchPostSupervisor(tb, logger, mgr, sig, grpcCfg, opts)
+	stop := launchPostSupervisor(tb, logger, mgr, sig, grpcCfg, cfg, opts)
 	tb.Cleanup(stop)
 	require.Eventually(tb, func() bool {
 		_, err := svc.Client(sig.NodeID())
@@ -152,7 +161,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := sql.InMemory()
 	localDb := localsql.InMemory()
 
@@ -238,7 +247,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := sql.InMemory()
 
 	opts := testPostSetupOpts(t)
