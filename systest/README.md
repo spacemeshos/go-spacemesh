@@ -13,7 +13,9 @@ This testing setup can run on top of any k8s installation. The instructions belo
     sudo install minikube-linux-amd64 /usr/local/bin/minikube
     ```
 
-2. Grant permissions for default `serviceaccount` so that it will be allowed to create namespaces by client that runs in-cluster. NOTE: this step is optional, do it only if you're experiencing RBAC related problems with a throwaway cluster. Never perform it on a real cluster!
+2. Grant permissions for default `serviceaccount` so that it will be allowed to create namespaces by client that runs
+   in-cluster. NOTE: this step is optional, do it only if you're experiencing RBAC related problems with a throwaway
+   cluster. Never perform it on a real cluster!
 
     ```bash
     kubectl create clusterrolebinding serviceaccounts-cluster-admin \

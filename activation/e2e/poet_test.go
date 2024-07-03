@@ -41,8 +41,8 @@ func (h *HTTPPoetTestHarness) Client(
 	cfg activation.PoetConfig,
 	logger *zap.Logger,
 	opts ...activation.PoetClientOpt,
-) (activation.PoetClient, error) {
-	return activation.NewPoetClient(
+) (activation.PoetService, error) {
+	return activation.NewPoetService(
 		db,
 		h.ServerCfg(),
 		cfg,
