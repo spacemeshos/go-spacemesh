@@ -157,9 +157,10 @@ type Server struct {
 	decayingTagSpec     *DecayingTagSpec
 	decayingTag         connmgr.DecayingTag
 
-	limit *rate.Limiter
-	sem   *semaphore.Weighted
-	queue chan request
+	limit   *rate.Limiter
+	sem     *semaphore.Weighted
+	queue   chan request
+	started chan struct{}
 
 	metrics *tracker // metrics can be nil
 
@@ -180,7 +181,8 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 		requestsPerInterval: 100,
 		interval:            time.Second,
 
-		queue: make(chan request),
+		queue:   make(chan request),
+		started: make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(srv)
@@ -211,10 +213,6 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 		srv.metrics.targetQueue.Set(float64(srv.queueSize))
 		srv.metrics.targetRps.Set(float64(srv.limit.Limit()))
 	}
-	srv.h.SetStreamHandler(protocol.ID(srv.protocol), func(stream network.Stream) {
-		srv.queue <- request{stream: stream, received: time.Now()}
-	})
-
 	return srv
 }
 
@@ -223,7 +221,27 @@ type request struct {
 	received time.Time
 }
 
+func (s *Server) Ready() <-chan struct{} {
+	return s.started
+}
+
 func (s *Server) Run(ctx context.Context) error {
+	s.h.SetStreamHandler(protocol.ID(s.protocol), func(stream network.Stream) {
+		if !s.sem.TryAcquire(1) {
+			if s.metrics != nil {
+				s.metrics.dropped.Inc()
+			}
+			stream.Close()
+			return
+		}
+		select {
+		case <-ctx.Done():
+		case s.queue <- request{stream: stream, received: time.Now()}:
+			// at most s.queueSize requests block here, the others are dropped with the semaphore
+		}
+	})
+	close(s.started)
+
 	var eg errgroup.Group
 	for {
 		select {
@@ -231,13 +249,6 @@ func (s *Server) Run(ctx context.Context) error {
 			eg.Wait()
 			return nil
 		case req := <-s.queue:
-			if !s.sem.TryAcquire(1) {
-				if s.metrics != nil {
-					s.metrics.dropped.Inc()
-				}
-				req.stream.Close()
-				continue
-			}
 			if s.metrics != nil {
 				s.metrics.queue.Set(float64(s.queueSize))
 				s.metrics.accepted.Inc()
