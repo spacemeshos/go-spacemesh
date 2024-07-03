@@ -819,6 +819,12 @@ func withPrevATXID(id types.ATXID) createAtxOpt {
 	}
 }
 
+func withCoinbase(addr types.Address) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.Coinbase = addr
+	}
+}
+
 func newAtx(t testing.TB, signer *signing.EdSigner, opts ...createAtxOpt) (*types.ActivationTx, types.AtxBlob) {
 	nonce := uint64(123)
 	watx := &wire.ActivationTxV1{
@@ -1081,7 +1087,7 @@ func TestCoinbase(t *testing.T) {
 		db := sql.InMemory()
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx, blob := newAtx(t, sig, func(a *types.ActivationTx) { a.Coinbase = types.Address{1, 2, 3} })
+		atx, blob := newAtx(t, sig, withCoinbase(types.Address{1, 2, 3}))
 		require.NoError(t, atxs.Add(db, atx, blob))
 		cb, err := atxs.Coinbase(db, sig.NodeID())
 		require.NoError(t, err)
@@ -1092,8 +1098,8 @@ func TestCoinbase(t *testing.T) {
 		db := sql.InMemory()
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx1, blob1 := newAtx(t, sig, withPublishEpoch(1), func(a *types.ActivationTx) { a.Coinbase = types.Address{1, 2, 3} })
-		atx2, blob2 := newAtx(t, sig, withPublishEpoch(2), func(a *types.ActivationTx) { a.Coinbase = types.Address{4, 5, 6} })
+		atx1, blob1 := newAtx(t, sig, withPublishEpoch(1), withCoinbase(types.Address{1, 2, 3}))
+		atx2, blob2 := newAtx(t, sig, withPublishEpoch(2), withCoinbase(types.Address{4, 5, 6}))
 		require.NoError(t, atxs.Add(db, atx1, blob1))
 		require.NoError(t, atxs.Add(db, atx2, blob2))
 		cb, err := atxs.Coinbase(db, sig.NodeID())
