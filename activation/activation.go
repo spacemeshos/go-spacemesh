@@ -334,7 +334,7 @@ func (b *Builder) SmesherIDs() []types.NodeID {
 	return maps.Keys(b.signers)
 }
 
-func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) error {
+func (b *Builder) BuildInitialPost(ctx context.Context, nodeID types.NodeID) error {
 	// Generate the initial POST if we don't have an ATX...
 	if _, err := atxs.GetLastIDByNodeID(b.db, nodeID); err == nil {
 		return nil
@@ -391,7 +391,7 @@ func (b *Builder) buildInitialPost(ctx context.Context, nodeID types.NodeID) err
 
 func (b *Builder) buildPost(ctx context.Context, nodeID types.NodeID) error {
 	for {
-		err := b.buildInitialPost(ctx, nodeID)
+		err := b.BuildInitialPost(ctx, nodeID)
 		if err == nil {
 			return nil
 		}
