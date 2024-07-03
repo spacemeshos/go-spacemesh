@@ -44,10 +44,10 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          # this pattern matches using picomatch syntax (used by this third party Action), which is slightly
-          # different than GitHub syntax: it matches any file in any path ending in '.md'. this checks if
-          # any non-markdown files were changed. Additionally changing the CODEOWNERS file should not trigger
-          # a full CI run.
+          # All patterns have to match for it to be considered a non-doc change.
+          # If only markdown files or CODEOWNERS are changed non-doc will be considered true and not trigger
+          # building the code and executing the tests.
+          predicate-quantifier: 'every'
           filters: |
             nondoc:
               - '!**/*.md'
