@@ -206,17 +206,10 @@ func Test_MarryAndMerge(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	coinbase := types.Address{1, 2, 3, 4, 5, 6, 7}
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, logger)
 	localDB := localsql.InMemory()
-
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		synced := make(chan struct{})
-		close(synced)
-		return synced
-	}).AnyTimes()
 
 	svc := grpcserver.NewPostService(logger)
 	svc.AllowConnections(true)
@@ -239,15 +232,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		totalNumUnits += units[i]
 
 		eg.Go(func() error {
-			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
-			require.NoError(t, err)
-
-			t.Cleanup(launchPostSupervisor(t, zap.NewNop(), mgr, sig, grpcCfg, opts))
-
-			require.Eventually(t, func() bool {
-				_, err := svc.Client(sig.NodeID())
-				return err == nil
-			}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
+			initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 			return nil
 		})
 	}
