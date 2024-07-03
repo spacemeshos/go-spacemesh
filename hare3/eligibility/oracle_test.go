@@ -156,7 +156,7 @@ func (t *testOracle) createActiveSet(
 
 func (t *testOracle) addAtx(atx *types.ActivationTx) {
 	t.tb.Helper()
-	require.NoError(t.tb, atxs.Add(t.db, atx))
+	require.NoError(t.tb, atxs.Add(t.db, atx, types.AtxBlob{}))
 	t.atxsdata.AddFromAtx(atx, false)
 }
 
@@ -906,7 +906,7 @@ func TestActiveSetMatrix(t *testing.T) {
 				require.NoError(t, ballots.Add(oracle.db, &ballot))
 			}
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(oracle.db, atx))
+				require.NoError(t, atxs.Add(oracle.db, atx, types.AtxBlob{}))
 				oracle.atxsdata.AddFromAtx(atx, false)
 			}
 			if tc.beacon != types.EmptyBeacon {

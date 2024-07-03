@@ -90,7 +90,7 @@ func TestSyncer(t *testing.T) {
 			GetAtxs(gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, ids []types.ATXID, _ ...system.GetAtxOpt) error {
 				for _, id := range ids {
-					require.NoError(t, atxs.Add(tester.db, atx(id)))
+					require.NoError(t, atxs.Add(tester.db, atx(id), types.AtxBlob{}))
 				}
 				return nil
 			}).AnyTimes()
@@ -153,7 +153,7 @@ func TestSyncer(t *testing.T) {
 			GetAtxs(gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ context.Context, ids []types.ATXID, _ ...system.GetAtxOpt) error {
 				for _, id := range ids {
-					require.NoError(t, atxs.Add(tester.db, atx(id)))
+					require.NoError(t, atxs.Add(tester.db, atx(id), types.AtxBlob{}))
 				}
 				return nil
 			}).AnyTimes()
@@ -185,7 +185,7 @@ func TestSyncer(t *testing.T) {
 				for _, id := range ids {
 					for _, good := range good.AtxIDs {
 						if good == id {
-							require.NoError(t, atxs.Add(tester.db, atx(id)))
+							require.NoError(t, atxs.Add(tester.db, atx(id), types.AtxBlob{}))
 						}
 					}
 					for _, bad := range bad.AtxIDs {

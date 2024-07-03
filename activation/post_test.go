@@ -282,7 +282,7 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	atx.SetReceived(time.Now())
 	atx.TickCount = 1
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(mgr.db, atx))
+	require.NoError(t, atxs.Add(mgr.db, atx, types.AtxBlob{}))
 	mgr.atxsdata.AddFromAtx(atx, false)
 
 	commitmentAtx, err := mgr.findCommitmentAtx(context.Background())
@@ -329,7 +329,7 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 	atx.SetID(types.RandomATXID())
 	atx.SetReceived(time.Now())
 	atx.TickCount = 1
-	require.NoError(t, atxs.Add(mgr.cdb, atx))
+	require.NoError(t, atxs.Add(mgr.cdb, atx, types.AtxBlob{}))
 
 	atxid, err := mgr.commitmentAtx(context.Background(), mgr.opts.DataDir, signer.NodeID())
 	require.NoError(t, err)

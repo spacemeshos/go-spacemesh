@@ -168,7 +168,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	_, err = getBytes(ctx, bs, datastore.ATXDB, atx.ID())
 	require.ErrorIs(t, err, datastore.ErrNotFound)
 
-	require.NoError(t, atxs.Add(db, vAtx))
+	require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 	has, err = bs.Has(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)

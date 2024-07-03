@@ -131,6 +131,13 @@ func (atx *ActivationTxV1) SignedBytes() []byte {
 	return data
 }
 
+func (atx *ActivationTxV1) Blob() types.AtxBlob {
+	return types.AtxBlob{
+		Blob:    codec.MustEncode(atx),
+		Version: types.AtxV1,
+	}
+}
+
 func (atx *ActivationTxV1) HashInnerBytes() (result types.Hash32) {
 	h := hash.GetHasher()
 	defer hash.PutHasher(h)
@@ -179,7 +186,7 @@ func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 	}
 }
 
-func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.ActivationTx {
+func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
 	result := &types.ActivationTx{
 		PublishEpoch:  atx.PublishEpoch,
 		Sequence:      atx.Sequence,
@@ -188,13 +195,6 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 		Coinbase:      atx.Coinbase,
 		NumUnits:      atx.NumUnits,
 		SmesherID:     atx.SmesherID,
-		AtxBlob: types.AtxBlob{
-			Version: types.AtxV1,
-			Blob:    blob,
-		},
-	}
-	if len(blob) == 0 {
-		result.AtxBlob.Blob = codec.MustEncode(atx)
 	}
 	result.SetID(atx.ID())
 

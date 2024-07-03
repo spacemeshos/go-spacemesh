@@ -417,7 +417,7 @@ func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err e
 	return nonce, err
 }
 
-func Add(db sql.Executor, atx *types.ActivationTx) error {
+func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PublishEpoch))
@@ -453,8 +453,8 @@ func Add(db sql.Executor, atx *types.ActivationTx) error {
 
 	enc = func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
-		stmt.BindBytes(2, atx.Blob)
-		stmt.BindInt64(3, int64(atx.Version))
+		stmt.BindBytes(2, blob.Blob)
+		stmt.BindInt64(3, int64(blob.Version))
 	}
 	_, err = db.Exec("insert into atx_blobs (id, atx, version) values (?1, ?2, ?3)", enc, nil)
 	if err != nil {

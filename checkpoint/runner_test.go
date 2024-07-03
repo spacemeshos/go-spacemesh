@@ -256,7 +256,7 @@ func createMesh(t testing.TB, db *sql.Database, miners []miner, accts []*types.A
 	t.Helper()
 	for _, miner := range miners {
 		for _, atx := range miner.atxs {
-			require.NoError(t, atxs.Add(db, atx))
+			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 		}
 		if proof := miner.malfeasanceProof; len(proof) > 0 {
 			require.NoError(t, identities.SetMalicious(db, miner.atxs[0].SmesherID, proof, time.Now()))

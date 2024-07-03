@@ -37,7 +37,7 @@ func newAtx(tb testing.TB, db *sql.Database) {
 	atx.SetID(types.RandomATXID())
 	atx.SmesherID = types.BytesToNodeID(types.RandomBytes(20))
 	atx.SetReceived(time.Now().Local())
-	require.NoError(tb, atxs.Add(db, atx))
+	require.NoError(tb, atxs.Add(db, atx, types.AtxBlob{}))
 }
 
 func createMesh(tb testing.TB, db *sql.Database) {

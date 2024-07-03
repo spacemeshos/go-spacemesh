@@ -2522,7 +2522,7 @@ func TestMeshService_EpochStream(t *testing.T) {
 	all := createAtxs(t, epoch, atxids)
 	var expected, got []types.ATXID
 	for i, vatx := range all {
-		require.NoError(t, atxs.Add(db, vatx))
+		require.NoError(t, atxs.Add(db, vatx, types.AtxBlob{}))
 		if i%2 == 0 {
 			require.NoError(t, identities.SetMalicious(db, vatx.SmesherID, []byte("bad"), time.Now()))
 		} else {

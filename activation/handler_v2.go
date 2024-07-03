@@ -126,7 +126,6 @@ func (h *HandlerV2) processATX(
 		TickCount:      parts.leaves / h.tickSize,
 		VRFNonce:       types.VRFPostIndex(watx.VRFNonce),
 		SmesherID:      watx.SmesherID,
-		AtxBlob:        types.AtxBlob{Blob: blob, Version: types.AtxV2},
 	}
 	if watx.Initial == nil {
 		// FIXME: update to keep many previous ATXs to support merged ATXs
@@ -141,7 +140,7 @@ func (h *HandlerV2) processATX(
 	atx.SetID(watx.ID())
 	atx.SetReceived(received)
 
-	proof, err = h.storeAtx(ctx, atx, watx, marrying)
+	proof, err = h.storeAtx(ctx, atx, watx, blob, marrying)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
@@ -631,6 +630,7 @@ func (h *HandlerV2) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV2,
+	blob []byte,
 	marrying []types.NodeID,
 ) (*mwire.MalfeasanceProof, error) {
 	var (
@@ -659,7 +659,7 @@ func (h *HandlerV2) storeAtx(
 			}
 		}
 
-		err = atxs.Add(tx, atx)
+		err = atxs.Add(tx, atx, types.AtxBlob{Blob: blob, Version: types.AtxV2})
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}

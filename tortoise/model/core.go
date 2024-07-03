@@ -173,7 +173,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageAtx:
 		ev.Atx.BaseTickHeight = 1
 		ev.Atx.TickCount = 2
-		atxs.Add(c.cdb, ev.Atx)
+		atxs.Add(c.cdb, ev.Atx, types.AtxBlob{})
 		malicious, err := c.cdb.IsMalicious(ev.Atx.SmesherID)
 		if err != nil {
 			c.logger.Fatal("failed is malicious lookup", zap.Error(err))

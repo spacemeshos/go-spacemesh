@@ -79,7 +79,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
-	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx), prevAtx.Blob()))
 
 	posEpoch := prevAtx.PublishEpoch
 	layer := posEpoch.FirstLayer()

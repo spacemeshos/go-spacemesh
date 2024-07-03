@@ -186,8 +186,6 @@ type ActivationTx struct {
 	VRFNonce       VRFPostIndex
 	SmesherID      NodeID
 
-	AtxBlob
-
 	golden   bool
 	id       ATXID     // non-exported cache of the ATXID
 	received time.Time // time received by node, gossiped or synced

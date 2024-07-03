@@ -205,7 +205,7 @@ func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*ty
 		prev.VRFNonce = (*uint64)(&nonce)
 	}
 
-	return wire.ActivationTxFromWireV1(&prev, blob.Bytes...), nil
+	return wire.ActivationTxFromWireV1(&prev), nil
 }
 
 func (h *HandlerV1) syntacticallyValidateDeps(
@@ -577,6 +577,7 @@ func (h *HandlerV1) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV1,
+	blob []byte,
 ) (*mwire.MalfeasanceProof, error) {
 	var proof *mwire.MalfeasanceProof
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
@@ -586,7 +587,7 @@ func (h *HandlerV1) storeAtx(
 			return fmt.Errorf("check malicious: %w", err)
 		}
 
-		err = atxs.Add(tx, atx)
+		err = atxs.Add(tx, atx, types.AtxBlob{Blob: blob, Version: types.AtxV1})
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
@@ -675,7 +676,7 @@ func (h *HandlerV1) processATX(
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	atx := wire.ActivationTxFromWireV1(watx, blob...)
+	atx := wire.ActivationTxFromWireV1(watx)
 	if h.nipostValidator.IsVerifyingFullPost() {
 		atx.SetValidity(types.Valid)
 	}
@@ -684,7 +685,7 @@ func (h *HandlerV1) processATX(
 	atx.BaseTickHeight = baseTickHeight
 	atx.TickCount = leaves / h.tickSize
 
-	proof, err = h.storeAtx(ctx, atx, watx)
+	proof, err = h.storeAtx(ctx, atx, watx, blob)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}

@@ -79,7 +79,7 @@ func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.A
 	atx.SmesherID = sig.NodeID()
 	atx.SetID(types.RandomATXID())
 	atx.TickCount = 1
-	require.NoError(t.tb, atxs.Add(t.db, atx))
+	require.NoError(t.tb, atxs.Add(t.db, atx, types.AtxBlob{}))
 	t.atxsdata.AddFromAtx(atx, false)
 	return atx.ID(), sig.NodeID()
 }

@@ -174,7 +174,7 @@ func TestReferenceHeight(t *testing.T) {
 				}
 				atx.SetID(types.ATXID{byte(i + 1)})
 				atx.SetReceived(time.Now())
-				require.NoError(t, atxs.Add(db, atx))
+				require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			}
 			_, height, err := extractAtxsData(db, types.EpochID(tc.epoch))
 			require.NoError(t, err)

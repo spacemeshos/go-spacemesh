@@ -49,6 +49,13 @@ func (atx *ActivationTxV2) SignedBytes() []byte {
 	return atx.ID().Bytes()
 }
 
+func (atx *ActivationTxV2) Blob() types.AtxBlob {
+	return types.AtxBlob{
+		Blob:    codec.MustEncode(atx),
+		Version: types.AtxV2,
+	}
+}
+
 func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	publishEpoch := make([]byte, 4)
 	binary.LittleEndian.PutUint32(publishEpoch, atx.PublishEpoch.Uint32())

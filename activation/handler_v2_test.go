@@ -426,7 +426,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 
 		prev := newInitialATXv1(t, golden)
 		prev.Sign(sig)
-		atxs.Add(atxHandler.cdb, toAtx(t, prev))
+		atxs.Add(atxHandler.cdb, toAtx(t, prev), prev.Blob())
 
 		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), golden)
 		atx.Sign(sig)
@@ -553,7 +553,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 			CommitmentATX: &golden,
 		}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.Add(atxHandler.cdb, prev))
+		require.NoError(t, atxs.Add(atxHandler.cdb, prev, types.AtxBlob{}))
 
 		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), golden)
 		atx.VRFNonce = uint64(123)
@@ -754,7 +754,7 @@ func Test_ValidatePositioningAtx(t *testing.T) {
 			BaseTickHeight: 100,
 		}
 		positioningAtx.SetID(types.RandomATXID())
-		atxs.Add(atxHandler.cdb, positioningAtx)
+		atxs.Add(atxHandler.cdb, positioningAtx, types.AtxBlob{})
 
 		height, err := atxHandler.validatePositioningAtx(1, golden, positioningAtx.ID())
 		require.NoError(t, err)
@@ -768,7 +768,7 @@ func Test_ValidatePositioningAtx(t *testing.T) {
 			PublishEpoch: 1,
 		}
 		positioningAtx.SetID(types.RandomATXID())
-		atxs.Add(atxHandler.cdb, positioningAtx)
+		atxs.Add(atxHandler.cdb, positioningAtx, types.AtxBlob{})
 
 		_, err := atxHandler.validatePositioningAtx(1, golden, positioningAtx.ID())
 		require.Error(t, err)
@@ -781,7 +781,7 @@ func Test_ValidatePositioningAtx(t *testing.T) {
 			PublishEpoch: 2,
 		}
 		positioningAtx.SetID(types.RandomATXID())
-		atxs.Add(atxHandler.cdb, positioningAtx)
+		atxs.Add(atxHandler.cdb, positioningAtx, types.AtxBlob{})
 
 		_, err := atxHandler.validatePositioningAtx(1, golden, positioningAtx.ID())
 		require.Error(t, err)
@@ -809,7 +809,7 @@ func Test_LoadPreviousATX(t *testing.T) {
 		atxHandler := newV2TestHandler(t, types.RandomATXID())
 		golden := &types.ActivationTx{}
 		golden.SetID(types.RandomATXID())
-		require.NoError(t, atxs.Add(atxHandler.cdb, golden))
+		require.NoError(t, atxs.Add(atxHandler.cdb, golden, types.AtxBlob{}))
 		atx, err := atxHandler.previous(context.Background(), golden.ID())
 		require.NoError(t, err)
 		require.Equal(t, golden.ID(), atx.ID())
@@ -819,7 +819,7 @@ func Test_LoadPreviousATX(t *testing.T) {
 		atxHandler := newV2TestHandler(t, types.RandomATXID())
 		prevWire := newInitialATXv1(t, types.RandomATXID())
 		prev := toAtx(t, prevWire)
-		require.NoError(t, atxs.Add(atxHandler.cdb, prev))
+		require.NoError(t, atxs.Add(atxHandler.cdb, prev, prevWire.Blob()))
 		atx, err := atxHandler.previous(context.Background(), prev.ID())
 		require.NoError(t, err)
 		require.Equal(t, prev.ID(), atx.ID())
@@ -828,14 +828,9 @@ func Test_LoadPreviousATX(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, types.RandomATXID())
 		prevWire := newInitialATXv2(t, types.RandomATXID())
-		prev := &types.ActivationTx{
-			AtxBlob: types.AtxBlob{
-				Blob:    codec.MustEncode(prevWire),
-				Version: types.AtxV2,
-			},
-		}
+		prev := &types.ActivationTx{}
 		prev.SetID(prevWire.ID())
-		require.NoError(t, atxs.Add(atxHandler.cdb, prev))
+		require.NoError(t, atxs.Add(atxHandler.cdb, prev, prevWire.Blob()))
 		atx, err := atxHandler.previous(context.Background(), prev.ID())
 		require.NoError(t, err)
 		require.Equal(t, prev.ID(), atx.ID())
@@ -857,7 +852,7 @@ func Test_ValidateCommitmentAtx(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
 		commitment := &types.ActivationTx{PublishEpoch: 3}
 		commitment.SetID(types.RandomATXID())
-		require.NoError(t, atxs.Add(atxHandler.cdb, commitment))
+		require.NoError(t, atxs.Add(atxHandler.cdb, commitment, types.AtxBlob{}))
 		err := atxHandler.validateCommitmentAtx(golden, commitment.ID(), 4)
 		require.NoError(t, err)
 	})
@@ -866,7 +861,7 @@ func Test_ValidateCommitmentAtx(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
 		commitment := &types.ActivationTx{PublishEpoch: 3}
 		commitment.SetID(types.RandomATXID())
-		require.NoError(t, atxs.Add(atxHandler.cdb, commitment))
+		require.NoError(t, atxs.Add(atxHandler.cdb, commitment, types.AtxBlob{}))
 		err := atxHandler.validateCommitmentAtx(golden, commitment.ID(), 3)
 		require.ErrorContains(t, err, "must be after commitment atx")
 		err = atxHandler.validateCommitmentAtx(golden, commitment.ID(), 2)
@@ -988,7 +983,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.Add(atxHandler.cdb, prev))
+		require.NoError(t, atxs.Add(atxHandler.cdb, prev, types.AtxBlob{}))
 
 		atx := newSoloATXv2(t, 0, prev.ID(), golden)
 		atx.Sign(sig)
@@ -1004,7 +999,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 			SmesherID: types.RandomNodeID(),
 		}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.Add(atxHandler.cdb, prev))
+		require.NoError(t, atxs.Add(atxHandler.cdb, prev, types.AtxBlob{}))
 
 		atx := newSoloATXv2(t, 2, prev.ID(), golden)
 		atx.Sign(sig)

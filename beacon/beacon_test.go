@@ -125,7 +125,7 @@ func createATX(
 	atx.SmesherID = sig.NodeID()
 	atx.SetID(types.RandomATXID())
 	atx.TickCount = 1
-	require.NoError(tb, atxs.Add(db, atx))
+	require.NoError(tb, atxs.Add(db, atx, types.AtxBlob{}))
 	return atx.ID()
 }
 

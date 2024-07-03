@@ -776,7 +776,7 @@ func TestBuild(t *testing.T) {
 						)
 					}
 					for _, atx := range step.atxs {
-						require.NoError(t, atxs.Add(db, atx))
+						require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 						atxsdata.AddFromAtx(atx, false)
 					}
 					for _, ballot := range step.ballots {
