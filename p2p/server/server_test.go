@@ -188,7 +188,7 @@ func Test_Queued(t *testing.T) {
 	srv := New(
 		wrapHost(t, mesh.Hosts()[1]),
 		proto,
-		WrapHandler(func(ctx context.Context, msg []byte) ([]byte, error) {
+		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
 			wg.Done()
 			<-stop
 			return msg, nil
