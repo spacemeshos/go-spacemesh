@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"errors"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 
@@ -172,25 +172,28 @@ func TestServer(t *testing.T) {
 	})
 }
 
-func TestQueued(t *testing.T) {
+func Test_Queued(t *testing.T) {
 	mesh, err := mocknet.FullMeshConnected(2)
 	require.NoError(t, err)
 
 	var (
-		total            = 100
-		proto            = "test"
-		success, failure atomic.Int64
-		wait             = make(chan struct{}, total)
+		queueSize = 10
+		proto     = "test"
+		stop      = make(chan struct{})
+		wg        sync.WaitGroup
 	)
 
+	wg.Add(queueSize)
 	client := New(wrapHost(t, mesh.Hosts()[0]), proto, nil)
 	srv := New(
 		wrapHost(t, mesh.Hosts()[1]),
 		proto,
-		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
+		WrapHandler(func(ctx context.Context, msg []byte) ([]byte, error) {
+			wg.Done()
+			<-stop
 			return msg, nil
 		}),
-		WithQueueSize(total/3),
+		WithQueueSize(queueSize),
 		WithRequestsPerInterval(50, time.Second),
 		WithMetrics(),
 	)
@@ -205,23 +208,24 @@ func TestQueued(t *testing.T) {
 	t.Cleanup(func() {
 		assert.NoError(t, eg.Wait())
 	})
-	for i := 0; i < total; i++ {
-		eg.Go(func() error {
-			if _, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping")); err != nil {
-				failure.Add(1)
-			} else {
-				success.Add(1)
-			}
-			wait <- struct{}{}
+	var reqEq errgroup.Group
+	for i := 0; i < queueSize; i++ { // fill the queue with requests
+		reqEq.Go(func() error {
+			resp, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
+			require.NoError(t, err)
+			require.Equal(t, []byte("ping"), resp)
 			return nil
 		})
 	}
-	for i := 0; i < total; i++ {
-		<-wait
+	wg.Wait()
+
+	for i := 0; i < queueSize; i++ { // queue is full, requests fail
+		_, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
+		require.Error(t, err)
 	}
-	require.NotZero(t, failure.Load())
-	require.Greater(t, int(success.Load()), total/2)
-	t.Log(success.Load())
+
+	close(stop)
+	require.NoError(t, reqEq.Wait())
 }
 
 func FuzzResponseConsistency(f *testing.F) {
