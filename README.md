@@ -97,8 +97,12 @@ Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activat
 
 ### Setting Up Local Dev Environment
 
-Building is supported on OS X, Linux, FreeBSD, and Windows
-In the case of Linux, GLIBC 2.34+ is required.
+Building is supported on: 
+- Linux, GLIBC 2.34+ is required
+- MacOS 13 (Intel) and MacOS 14 (Arm) and newer
+- Windows 10 and newer
+
+FreeBSD is not officially supported.
 
 Install [Go 1.22 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
