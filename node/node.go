@@ -428,19 +428,20 @@ type App struct {
 }
 
 func (app *App) loadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, error) {
-	nodeIDs := make([]types.NodeID, len(app.signers))
-	for i, sig := range app.signers {
-		nodeIDs[i] = sig.NodeID()
+	var nodeIDs []types.NodeID
+	if app.Config.Recovery.PreserveOwnAtx {
+		for _, sig := range app.signers {
+			nodeIDs = append(nodeIDs, sig.NodeID())
+		}
 	}
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
-		DataDir:        app.Config.DataDir(),
-		DbFile:         dbFile,
-		LocalDbFile:    localDbFile,
-		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
-		NodeIDs:        nodeIDs,
-		Uri:            app.Config.Recovery.Uri,
-		Restore:        types.LayerID(app.Config.Recovery.Restore),
+		GoldenAtx:   types.ATXID(app.Config.Genesis.GoldenATX()),
+		DataDir:     app.Config.DataDir(),
+		DbFile:      dbFile,
+		LocalDbFile: localDbFile,
+		NodeIDs:     nodeIDs,
+		Uri:         app.Config.Recovery.Uri,
+		Restore:     types.LayerID(app.Config.Recovery.Restore),
 	}
 
 	return checkpoint.Recover(ctx, app.log.Zap(), afero.NewOsFs(), cfg)
