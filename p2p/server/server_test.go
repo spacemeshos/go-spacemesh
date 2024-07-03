@@ -194,8 +194,6 @@ func Test_Queued(t *testing.T) {
 			return msg, nil
 		}),
 		WithQueueSize(queueSize),
-		WithRequestsPerInterval(50, time.Second),
-		WithMetrics(),
 	)
 	var (
 		eg          errgroup.Group
@@ -226,6 +224,49 @@ func Test_Queued(t *testing.T) {
 
 	close(stop)
 	require.NoError(t, reqEq.Wait())
+}
+
+func Test_RequestInterval(t *testing.T) {
+	mesh, err := mocknet.FullMeshConnected(2)
+	require.NoError(t, err)
+
+	var (
+		maxReqPerMin = 10
+		proto        = "test"
+	)
+
+	client := New(wrapHost(t, mesh.Hosts()[0]), proto, nil)
+	srv := New(
+		wrapHost(t, mesh.Hosts()[1]),
+		proto,
+		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
+			return msg, nil
+		}),
+		WithRequestsPerInterval(maxReqPerMin, time.Minute),
+	)
+	var (
+		eg          errgroup.Group
+		ctx, cancel = context.WithCancel(context.Background())
+	)
+	defer cancel()
+	eg.Go(func() error {
+		return srv.Run(ctx)
+	})
+	t.Cleanup(func() {
+		assert.NoError(t, eg.Wait())
+	})
+
+	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	for i := 0; i < maxReqPerMin; i++ {
+		resp, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
+		require.NoError(t, err)
+		require.Equal(t, []byte("ping"), resp)
+	}
+
+	_, err = client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func FuzzResponseConsistency(f *testing.F) {

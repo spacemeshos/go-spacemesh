@@ -343,6 +343,10 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, extraProt
 	if err := s.StreamRequest(ctx, pid, req, func(ctx context.Context, stream io.ReadWriter) error {
 		rd := bufio.NewReader(stream)
 		if _, err := codec.DecodeFrom(rd, &r); err != nil {
+			if errors.Is(err, io.ErrClosedPipe) && ctx.Err() != nil {
+				// ensure that a canceled context is returned as the right error
+				return ctx.Err()
+			}
 			return fmt.Errorf("peer %s: %w", pid, err)
 		}
 		if r.Error != "" {
