@@ -1173,9 +1173,9 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 	tab.mValidator.EXPECT().
 		PostV2(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
 
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
 }
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
@@ -1205,10 +1205,10 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 	tab.mValidator.EXPECT().
 		PostV2(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits)
 
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
 
 	// postClient.Proof() should not be called again
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
 }
 
 func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
@@ -1235,7 +1235,7 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 	)
 	tab.mValidator.EXPECT().
 		PostV2(gomock.Any(), sig.NodeID(), commitmentATX, initialPost, shared.ZeroChallenge, numUnits)
-	err := tab.buildInitialPost(context.Background(), sig.NodeID())
+	err := tab.BuildInitialPost(context.Background(), sig.NodeID())
 	require.ErrorIs(t, err, errNilVrfNonce)
 
 	observedLogs := tab.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
@@ -1258,7 +1258,7 @@ func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
 		},
 		nil,
 	)
-	require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+	require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
 }
 
 func TestWaitPositioningAtx(t *testing.T) {
@@ -1292,10 +1292,13 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mnipost.EXPECT().
 				BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&nipost.NIPostState{}, nil)
+
 			closed := make(chan struct{})
 			close(closed)
+
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(1).FirstLayer()).Return(closed).AnyTimes()
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(2).FirstLayer()).Return(closed).AnyTimes()
+
 			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, _ string, got []byte) error {
 					var atx wire.ActivationTxV1
@@ -1326,39 +1329,6 @@ func TestWaitPositioningAtx(t *testing.T) {
 			require.NoError(t, tab.PublishActivationTx(context.Background(), sig))
 		})
 	}
-}
-
-func TestWaitingToBuildNipostChallengeWithJitter(t *testing.T) {
-	t.Run("before grace period", func(t *testing.T) {
-		//          ┌──grace period──┐
-		//          │                │
-		// ───▲─────|──────|─────────|----> time
-		//    │     └jitter|         └round start
-		//   now
-		deadline := buildNipostChallengeStartDeadline(time.Now().Add(2*time.Hour), time.Hour)
-		require.Greater(t, deadline, time.Now().Add(time.Hour))
-		require.LessOrEqual(t, deadline, time.Now().Add(time.Hour+time.Second*36))
-	})
-	t.Run("after grace period, within max jitter value", func(t *testing.T) {
-		//          ┌──grace period──┐
-		//          │                │
-		// ─────────|──▲────|────────|----> time
-		//          └ji│tter|        └round start
-		//            now
-		deadline := buildNipostChallengeStartDeadline(time.Now().Add(time.Hour-time.Second*10), time.Hour)
-		require.GreaterOrEqual(t, deadline, time.Now().Add(-time.Second*10))
-		// jitter is 1% = 36s for 1h grace period
-		require.LessOrEqual(t, deadline, time.Now().Add(time.Second*(36-10)))
-	})
-	t.Run("after jitter max value", func(t *testing.T) {
-		//          ┌──grace period──┐
-		//          │                │
-		// ─────────|──────|──▲──────|----> time
-		//          └jitter|  │       └round start
-		//                   now
-		deadline := buildNipostChallengeStartDeadline(time.Now().Add(time.Hour-time.Second*37), time.Hour)
-		require.Less(t, deadline, time.Now())
-	})
 }
 
 // Test if GetPositioningAtx disregards ATXs with invalid POST in their chain.
@@ -1470,6 +1440,43 @@ func TestGetPositioningAtx(t *testing.T) {
 		selected, err = tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, prev)
 		require.NoError(t, err)
 		require.Equal(t, prev.ID(), selected)
+	})
+	t.Run("prefers own previous or golded when positioning ATX selection timout expired", func(t *testing.T) {
+		tab := newTestBuilder(t, 1)
+
+		atxInDb := &types.ActivationTx{TickCount: 100}
+		atxInDb.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(tab.db, atxInDb))
+		tab.atxsdata.AddFromAtx(atxInDb, false)
+
+		prev := &types.ActivationTx{TickCount: 90}
+		prev.SetID(types.RandomATXID())
+
+		// no timeout set up
+		tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atxInDb.ID(), tab.goldenATXID, gomock.Any())
+		found, err := tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, prev)
+		require.NoError(t, err)
+		require.Equal(t, atxInDb.ID(), found)
+
+		tab.posAtxFinder.found = nil
+
+		// timeout set up, prev ATX exists
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		selected, err := tab.getPositioningAtx(ctx, types.EmptyNodeID, 99, prev)
+		require.NoError(t, err)
+		require.Equal(t, prev.ID(), selected)
+
+		tab.posAtxFinder.found = nil
+
+		// timeout set up, prev ATX do not exists
+		ctx, cancel = context.WithCancel(context.Background())
+		cancel()
+
+		selected, err = tab.getPositioningAtx(ctx, types.EmptyNodeID, 99, nil)
+		require.NoError(t, err)
+		require.Equal(t, tab.goldenATXID, selected)
 	})
 }
 

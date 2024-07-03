@@ -24,11 +24,38 @@ type AtxReceiver interface {
 
 type PostVerifier interface {
 	io.Closer
-	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
+	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...postVerifierOptionFunc) error
 }
 
 type scaler interface {
 	scale(int)
+}
+
+type postVerifierCallOption struct {
+	prioritized     bool
+	verifierOptions []verifying.OptionFunc
+}
+
+type postVerifierOptionFunc func(*postVerifierCallOption)
+
+func applyOptions(options ...postVerifierOptionFunc) postVerifierCallOption {
+	opts := postVerifierCallOption{}
+	for _, opt := range options {
+		opt(&opts)
+	}
+	return opts
+}
+
+func PrioritizedCall() postVerifierOptionFunc {
+	return func(o *postVerifierCallOption) {
+		o.prioritized = true
+	}
+}
+
+func WithVerifierOptions(ops ...verifying.OptionFunc) postVerifierOptionFunc {
+	return func(o *postVerifierCallOption) {
+		o.verifierOptions = ops
+	}
 }
 
 // validatorOption is a functional option type for the validator.
@@ -88,9 +115,9 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 }
 
-// PoetClient servers as an interface to communicate with a PoET server.
+// PoetService servers as an interface to communicate with a PoET server.
 // It is used to submit challenges and fetch proofs.
-type PoetClient interface {
+type PoetService interface {
 	Address() string
 
 	// Submit registers a challenge in the proving service current open round.

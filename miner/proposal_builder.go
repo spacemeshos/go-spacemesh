@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -55,7 +57,7 @@ type layerClock interface {
 
 // ProposalBuilder builds Proposals for a miner.
 type ProposalBuilder struct {
-	logger log.Log
+	logger *zap.Logger
 	cfg    config
 
 	db        sql.Executor
@@ -77,7 +79,7 @@ type ProposalBuilder struct {
 
 type signerSession struct {
 	signer  *signing.EdSigner
-	log     log.Log
+	log     *zap.Logger
 	session session
 	latency latencyTracker
 }
@@ -108,7 +110,7 @@ type session struct {
 	}
 }
 
-func (s *session) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (s *session) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("epoch", s.epoch.Uint32())
 	encoder.AddString("beacon", s.beacon.String())
 	encoder.AddString("atx", s.atx.ShortString())
@@ -122,13 +124,13 @@ func (s *session) MarshalLogObject(encoder log.ObjectEncoder) error {
 		encoder.AddInt("eligible", len(s.eligibilities.proofs))
 		encoder.AddArray(
 			"eligible by layer",
-			log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				// Sort the layer map to log the layer data in order
 				keys := maps.Keys(s.eligibilities.proofs)
 				slices.Sort(keys)
 				for _, lyr := range keys {
 					encoder.AppendObject(
-						log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+						zapcore.ObjectMarshalerFunc(func(encoder zapcore.ObjectEncoder) error {
 							encoder.AddUint32("layer", lyr.Uint32())
 							encoder.AddInt("slots", len(s.eligibilities.proofs[lyr]))
 							return nil
@@ -173,7 +175,7 @@ func DefaultActiveSetPreparation() ActiveSetPreparation {
 	}
 }
 
-func (c *config) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (c *config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("layer size", c.layerSize)
 	encoder.AddUint32("epoch size", c.layersPerEpoch)
 	encoder.AddUint32("hdist", c.hdist)
@@ -217,7 +219,7 @@ func WithMinimalActiveSetWeight(weight []types.EpochMinimalActiveWeight) Opt {
 }
 
 // WithLogger defines the logger.
-func WithLogger(logger log.Log) Opt {
+func WithLogger(logger *zap.Logger) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.logger = logger
 	}
@@ -275,7 +277,7 @@ func New(
 			workersLimit: runtime.NumCPU(),
 			activeSet:    DefaultActiveSetPreparation(),
 		},
-		logger:    log.NewNop(),
+		logger:    zap.NewNop(),
 		clock:     clock,
 		db:        db,
 		localdb:   localdb,
@@ -294,7 +296,7 @@ func New(
 	for _, opt := range opts {
 		opt(pb)
 	}
-	pb.activeGen = newActiveSetGenerator(pb.cfg, pb.logger.Zap(), pb.db, pb.localdb, pb.atxsdata, pb.clock)
+	pb.activeGen = newActiveSetGenerator(pb.cfg, pb.logger, pb.db, pb.localdb, pb.atxsdata, pb.clock)
 	return pb
 }
 
@@ -303,10 +305,10 @@ func (pb *ProposalBuilder) Register(sig *signing.EdSigner) {
 	defer pb.signers.mu.Unlock()
 	_, exist := pb.signers.signers[sig.NodeID()]
 	if !exist {
-		pb.logger.With().Info("registered signing key", log.ShortStringer("id", sig.NodeID()))
+		pb.logger.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 		pb.signers.signers[sig.NodeID()] = &signerSession{
 			signer: sig,
-			log:    pb.logger.WithFields(log.String("signer", sig.NodeID().ShortString())),
+			log:    pb.logger.With(zap.String("signer", sig.NodeID().ShortString())),
 		}
 	}
 }
@@ -315,11 +317,11 @@ func (pb *ProposalBuilder) Register(sig *signing.EdSigner) {
 func (pb *ProposalBuilder) Run(ctx context.Context) error {
 	current := pb.clock.CurrentLayer()
 	next := current + 1
-	pb.logger.With().Info("started", log.Inline(&pb.cfg), log.Uint32("next", next.Uint32()))
+	pb.logger.Info("started", zap.Inline(&pb.cfg), zap.Uint32("next", next.Uint32()))
 	var eg errgroup.Group
 	prepareDisabled := pb.cfg.activeSet.Tries == 0 || pb.cfg.activeSet.RetryInterval == 0
 	if prepareDisabled {
-		pb.logger.With().Warning("activeset will not be prepared in advance")
+		pb.logger.Warn("activeset will not be prepared in advance")
 	}
 	for {
 		select {
@@ -329,9 +331,9 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 		case <-pb.clock.AwaitLayer(next):
 			current := pb.clock.CurrentLayer()
 			if current.Before(next) {
-				pb.logger.With().Info("time sync detected, realigning ProposalBuilder",
-					log.Uint32("current", current.Uint32()),
-					log.Uint32("next", next.Uint32()),
+				pb.logger.Info("time sync detected, realigning ProposalBuilder",
+					zap.Uint32("current", current.Uint32()),
+					zap.Uint32("next", next.Uint32()),
 				)
 				continue
 			}
@@ -350,14 +352,16 @@ func (pb *ProposalBuilder) Run(ctx context.Context) error {
 			}
 			if err := pb.build(ctx, current); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
-					pb.logger.With().Debug("signer is not active in epoch",
-						log.Context(ctx),
-						log.Uint32("lid", current.Uint32()),
-						log.Err(err),
+					pb.logger.Debug("signer is not active in epoch",
+						log.ZContext(ctx),
+						zap.Uint32("lid", current.Uint32()),
+						zap.Error(err),
 					)
 				} else {
-					pb.logger.With().Warning("failed to build proposal",
-						log.Context(ctx), log.Uint32("lid", current.Uint32()), log.Err(err),
+					pb.logger.Warn("failed to build proposal",
+						log.ZContext(ctx),
+						zap.Uint32("lid", current.Uint32()),
+						zap.Error(err),
 					)
 				}
 			}
@@ -395,45 +399,46 @@ func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.Lay
 	}
 	verified := pb.tortoise.LatestComplete()
 	if minVerified.After(verified) {
-		pb.logger.With().Warning("layers outside hdist not verified",
-			log.Context(ctx),
-			current,
-			log.Stringer("min verified", minVerified),
-			log.Stringer("latest verified", verified))
+		pb.logger.Warn("layers outside hdist not verified",
+			log.ZContext(ctx),
+			zap.Uint32("layer_id", current.Uint32()),
+			zap.Stringer("min verified", minVerified),
+			zap.Stringer("latest verified", verified),
+		)
 		return types.EmptyLayerHash
 	}
-	pb.logger.With().Debug("verified layer meets optimistic filtering threshold",
-		log.Context(ctx),
-		current,
-		log.Stringer("min verified", minVerified),
-		log.Stringer("latest verified", verified),
+	pb.logger.Debug("verified layer meets optimistic filtering threshold",
+		log.ZContext(ctx),
+		zap.Uint32("layer_id", current.Uint32()),
+		zap.Stringer("min verified", minVerified),
+		zap.Stringer("latest verified", verified),
 	)
 
 	for lid := minVerified.Add(1); lid.Before(current); lid = lid.Add(1) {
 		_, err := certificates.GetHareOutput(pb.db, lid)
 		if err != nil {
-			pb.logger.With().Warning("missing hare output for layer within hdist",
-				log.Context(ctx),
-				current,
-				log.Stringer("missing_layer", lid),
-				log.Err(err),
+			pb.logger.Warn("missing hare output for layer within hdist",
+				log.ZContext(ctx),
+				zap.Uint32("layer_id", current.Uint32()),
+				zap.Stringer("missing_layer", lid),
+				zap.Error(err),
 			)
 			return types.EmptyLayerHash
 		}
 	}
-	pb.logger.With().Debug("hare outputs meet optimistic filtering threshold",
-		log.Context(ctx),
-		current,
-		log.Stringer("from", minVerified.Add(1)),
-		log.Stringer("to", current.Sub(1)),
+	pb.logger.Debug("hare outputs meet optimistic filtering threshold",
+		log.ZContext(ctx),
+		zap.Uint32("layer_id", current.Uint32()),
+		zap.Stringer("from", minVerified.Add(1)),
+		zap.Stringer("to", current.Sub(1)),
 	)
 
 	mesh, err := layers.GetAggregatedHash(pb.db, current.Sub(1))
 	if err != nil {
-		pb.logger.With().Warning("failed to get mesh hash",
-			log.Context(ctx),
-			current,
-			log.Err(err),
+		pb.logger.Warn("failed to get mesh hash",
+			log.ZContext(ctx),
+			zap.Uint32("layer_id", current.Uint32()),
+			zap.Error(err),
 		)
 		return types.EmptyLayerHash
 	}
@@ -462,11 +467,11 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 	if err != nil {
 		return err
 	}
-	pb.logger.With().Info("loaded prepared active set",
-		pb.shared.epoch,
-		log.ShortStringer("id", id),
-		log.Int("size", len(set)),
-		log.Uint64("weight", weight),
+	pb.logger.Info("loaded prepared active set",
+		zap.Uint32("epoch_id", pb.shared.epoch.Uint32()),
+		log.ZShortStringer("id", id),
+		zap.Int("size", len(set)),
+		zap.Uint64("weight", weight),
 	)
 	pb.shared.active.id = id
 	pb.shared.active.set = set
@@ -539,7 +544,7 @@ func (pb *ProposalBuilder) initSignerData(
 			ss.session.eligibilities.slots,
 			pb.cfg.layersPerEpoch,
 		)
-		ss.log.With().Info("proposal eligibilities for an epoch", log.Inline(&ss.session))
+		ss.log.Info("proposal eligibilities for an epoch", zap.Inline(&ss.session))
 		events.EmitEligibilities(
 			ss.signer.NodeID(),
 			ss.session.epoch,
@@ -570,8 +575,9 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		eg.Go(func() error {
 			if err := pb.initSignerData(ctx, ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
-					ss.log.With().Debug("smesher doesn't have atx that targets this epoch",
-						log.Context(ctx), ss.session.epoch.Field(),
+					ss.log.Debug("smesher doesn't have atx that targets this epoch",
+						log.ZContext(ctx),
+						zap.Uint32("epoch_id", ss.session.epoch.Uint32()),
 					)
 				} else {
 					return err
@@ -596,14 +602,17 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	any := false
 	for _, ss := range signers {
 		if n := len(ss.session.eligibilities.proofs[lid]); n == 0 {
-			ss.log.With().Debug("not eligible for proposal in layer",
-				log.Context(ctx),
-				lid.Field(), lid.GetEpoch().Field())
+			ss.log.Debug("not eligible for proposal in layer",
+				log.ZContext(ctx),
+				zap.Uint32("layer_id", lid.Uint32()),
+				zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+			)
 			continue
 		} else {
-			ss.log.With().Debug("eligible for proposals in layer",
-				log.Context(ctx),
-				lid.Field(), log.Int("num proposals", n),
+			ss.log.Debug("eligible for proposals in layer",
+				log.ZContext(ctx),
+				zap.Uint32("layer_id", lid.Uint32()),
+				zap.Int("num proposals", n),
 			)
 			any = true
 		}
@@ -631,14 +640,17 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	for _, ss := range signers {
 		proofs := ss.session.eligibilities.proofs[lid]
 		if len(proofs) == 0 {
-			ss.log.With().Debug("not eligible for proposal in layer",
-				log.Context(ctx),
-				lid.Field(), lid.GetEpoch().Field())
+			ss.log.Debug("not eligible for proposal in layer",
+				log.ZContext(ctx),
+				zap.Uint32("layer_id", lid.Uint32()),
+				zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+			)
 			continue
 		}
-		ss.log.With().Debug("eligible for proposals in layer",
-			log.Context(ctx),
-			lid.Field(), log.Int("num proposals", len(proofs)),
+		ss.log.Debug("eligible for proposals in layer",
+			log.ZContext(ctx),
+			zap.Uint32("layer_id", lid.Uint32()),
+			zap.Int("num proposals", len(proofs)),
 		)
 
 		txs := pb.conState.SelectProposalTXs(lid, len(proofs))
@@ -668,17 +680,17 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 			)
 			if err := pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
 				ss.log.Error("failed to publish proposal",
-					log.Context(ctx),
-					log.Uint32("lid", proposal.Layer.Uint32()),
-					log.Stringer("id", proposal.ID()),
-					log.Err(err),
+					log.ZContext(ctx),
+					zap.Uint32("lid", proposal.Layer.Uint32()),
+					zap.Stringer("id", proposal.ID()),
+					zap.Error(err),
 				)
 			} else {
 				ss.latency.publish = time.Now()
-				ss.log.With().Info("proposal created",
-					log.Context(ctx),
-					log.Inline(proposal),
-					log.Object("latency", &ss.latency),
+				ss.log.Info("proposal created",
+					log.ZContext(ctx),
+					zap.Inline(proposal),
+					zap.Object("latency", &ss.latency),
 				)
 				proposalBuild.Observe(ss.latency.total().Seconds())
 				events.EmitProposal(ss.signer.NodeID(), lid, proposal.ID())

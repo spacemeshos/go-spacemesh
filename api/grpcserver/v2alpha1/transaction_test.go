@@ -79,14 +79,12 @@ func TestTransactionService_List(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{Limit: 25, Offset: 50})
 		require.NoError(t, err)
 		require.Len(t, list.Transactions, 25)
-		require.Equal(t, len(txsList), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Len(t, list.Transactions, len(txsList))
-		require.Equal(t, len(txsList), int(list.Total))
 	})
 
 	t.Run("address", func(t *testing.T) {
@@ -94,6 +92,10 @@ func TestTransactionService_List(t *testing.T) {
 		var expectedTxs []types.TransactionWithResult
 		for _, tx := range txsList {
 			found := false
+			if tx.Transaction.Principal.String() == address {
+				found = true
+			}
+
 			for _, addr := range tx.TransactionResult.Addresses {
 				if addr.String() == address {
 					found = true

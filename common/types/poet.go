@@ -20,6 +20,10 @@ type PoetServer struct {
 
 type PoetProofRef Hash32
 
+func (r *PoetProofRef) String() string {
+	return hex.EncodeToString(r[:])
+}
+
 // EmptyPoetProofRef is an empty PoET proof reference.
 var EmptyPoetProofRef = PoetProofRef{}
 

@@ -139,7 +139,7 @@ func (mh *InvalidPostIndexHandler) Validate(ctx context.Context, data wire.Proof
 		ctx,
 		post,
 		meta,
-		verifying.SelectedIndex(int(proof.InvalidIdx)),
+		WithVerifierOptions(verifying.SelectedIndex(int(proof.InvalidIdx))),
 	); err != nil {
 		return atx.SmesherID, nil
 	}

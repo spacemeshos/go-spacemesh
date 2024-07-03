@@ -70,7 +70,6 @@ func TestLayerService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Layers, 25)
-		require.Equal(t, len(lrs), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
@@ -81,7 +80,6 @@ func TestLayerService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, lrs, len(ls.Layers))
-		require.Equal(t, len(lrs), int(ls.Total))
 	})
 }
 

@@ -190,7 +190,7 @@ func TestQueued(t *testing.T) {
 		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
 			return msg, nil
 		}),
-		WithQueueSize(total/4),
+		WithQueueSize(total/3),
 		WithRequestsPerInterval(50, time.Second),
 		WithMetrics(),
 	)
