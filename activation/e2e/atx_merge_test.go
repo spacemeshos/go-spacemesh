@@ -62,6 +62,7 @@ type nipostData struct {
 }
 
 func buildNipost(
+	ctx context.Context,
 	nb *activation.NIPostBuilder,
 	signer *signing.EdSigner,
 	publish types.EpochID,
@@ -73,7 +74,7 @@ func buildNipost(
 		PositioningATX: positioning,
 	}
 	challenge := wire.NIPostChallengeToWireV2(postChallenge).Hash()
-	nipost, err := nb.BuildNIPost(context.Background(), signer, challenge, postChallenge)
+	nipost, err := nb.BuildNIPost(ctx, signer, challenge, postChallenge)
 	nb.ResetState(signer.NodeID())
 	return nipostData{previous, nipost}, err
 }
@@ -230,7 +231,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
-	var eg errgroup.Group
+	eg, ctx := errgroup.WithContext(context.Background())
 	for i, sig := range signers {
 		opts := opts
 		opts.DataDir = t.TempDir()
@@ -311,6 +312,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	publish := types.EpochID(1)
 	var niposts [2]nipostData
 	var initialPosts [2]*types.Post
+	eg, ctx = errgroup.WithContext(context.Background())
 	for i, signer := range signers {
 		eg.Go(func() error {
 			post, postInfo, err := nb.Proof(context.Background(), signer.NodeID(), types.EmptyHash32[:], nil)
@@ -384,9 +386,10 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	// Step 2. Publish merged ATX together
 	publish = marriageATX.PublishEpoch + 2
+	eg, ctx = errgroup.WithContext(context.Background())
 	// 2.1. NiPOST for main ID (the publisher)
 	eg.Go(func() error {
-		n, err := buildNipost(nb, mainID, publish, marriageATX.ID(), marriageATX.ID())
+		n, err := buildNipost(ctx, nb, mainID, publish, marriageATX.ID(), marriageATX.ID())
 		logger.Info("built NiPoST", zap.Any("post", n))
 		niposts[0] = n
 		return err
@@ -396,7 +399,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	prevATXID, err := atxs.GetLastIDByNodeID(db, mergedID.NodeID())
 	require.NoError(t, err)
 	eg.Go(func() error {
-		n, err := buildNipost(nb, mergedID, publish, prevATXID, marriageATX.ID())
+		n, err := buildNipost(ctx, nb, mergedID, publish, prevATXID, marriageATX.ID())
 		logger.Info("built NiPoST", zap.Any("post", n))
 		niposts[1] = n
 		return err
@@ -447,10 +450,11 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	// Step 4. Publish merged using the same previous now
 	// Publish by the other signer this time.
+	eg, ctx = errgroup.WithContext(context.Background())
 	publish = mergedATX.PublishEpoch + 1
 	for i, sig := range signers {
 		eg.Go(func() error {
-			n, err := buildNipost(nb, sig, publish, mergedATX.ID(), mergedATX.ID())
+			n, err := buildNipost(ctx, nb, sig, publish, mergedATX.ID(), mergedATX.ID())
 			logger.Info("built NiPoST", zap.Any("post", n))
 			niposts[i] = n
 			return err
@@ -497,9 +501,10 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	// Step 5. Make an emergency split and publish separately
 	publish = mergedATX2.PublishEpoch + 1
+	eg, ctx = errgroup.WithContext(context.Background())
 	for i, sig := range signers {
 		eg.Go(func() error {
-			n, err := buildNipost(nb, sig, publish, mergedATX2.ID(), mergedATX2.ID())
+			n, err := buildNipost(ctx, nb, sig, publish, mergedATX2.ID(), mergedATX2.ID())
 			logger.Info("built NiPoST", zap.Any("post", n))
 			niposts[i] = n
 			return err

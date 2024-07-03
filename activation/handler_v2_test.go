@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
@@ -121,7 +120,7 @@ func (h *handlerMocks) expectVerifyNIPoSTs(
 }
 
 func (h *handlerMocks) expectStoreAtxV2(atx *wire.ActivationTxV2) {
-	h.mbeacon.EXPECT().OnAtx(fixture.MatchId(atx.ID()))
+	h.mbeacon.EXPECT().OnAtx(gomock.Cond(func(a any) bool { return a.(*types.ActivationTx).ID() == atx.ID() }))
 	h.mtortoise.EXPECT().OnAtx(atx.PublishEpoch+1, atx.ID(), gomock.Any())
 	h.mValidator.EXPECT().IsVerifyingFullPost().Return(false)
 }

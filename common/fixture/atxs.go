@@ -77,21 +77,3 @@ func ToAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 	atx.TickCount = 1
 	return atx
 }
-
-type idMatcher types.ATXID
-
-func MatchId(id types.ATXID) idMatcher {
-	return idMatcher(id)
-}
-
-func (m idMatcher) Matches(x any) bool {
-	type hasID interface {
-		ID() types.ATXID
-	}
-	v, ok := x.(hasID)
-	return ok && v.ID() == types.ATXID(m)
-}
-
-func (m idMatcher) String() string {
-	return "is ATX ID " + types.ATXID(m).String()
-}
