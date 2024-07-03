@@ -231,8 +231,9 @@ func Test_RequestInterval(t *testing.T) {
 	require.NoError(t, err)
 
 	var (
-		maxReqPerMin = 10
-		proto        = "test"
+		maxReq     = 10
+		maxReqTime = time.Minute
+		proto      = "test"
 	)
 
 	client := New(wrapHost(t, mesh.Hosts()[0]), proto, nil)
@@ -242,7 +243,7 @@ func Test_RequestInterval(t *testing.T) {
 		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
 			return msg, nil
 		}),
-		WithRequestsPerInterval(maxReqPerMin, time.Minute),
+		WithRequestsPerInterval(maxReq, maxReqTime),
 	)
 	var (
 		eg          errgroup.Group
@@ -256,17 +257,20 @@ func Test_RequestInterval(t *testing.T) {
 		assert.NoError(t, eg.Wait())
 	})
 
-	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	for i := 0; i < maxReqPerMin; i++ {
+	start := time.Now()
+	for i := 0; i < maxReq; i++ { // fill the interval with requests (bursts up to maxReq are allowed)
 		resp, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
 		require.NoError(t, err)
 		require.Equal(t, []byte("ping"), resp)
 	}
 
-	_, err = client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
-	require.ErrorIs(t, err, context.DeadlineExceeded)
+	// new request will be delayed by the interval
+	resp, err := client.Request(context.Background(), mesh.Hosts()[1].ID(), []byte("ping"))
+	require.NoError(t, err)
+	require.Equal(t, []byte("ping"), resp)
+
+	interval := maxReqTime / time.Duration(maxReq)
+	require.GreaterOrEqual(t, time.Since(start), interval)
 }
 
 func FuzzResponseConsistency(f *testing.F) {
