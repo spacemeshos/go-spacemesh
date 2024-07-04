@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
@@ -177,8 +178,9 @@ func RecoverWithDb(
 }
 
 type recoveryData struct {
-	accounts []*types.Account
-	atxs     []*atxs.CheckpointAtx
+	accounts  []*types.Account
+	atxs      []*atxs.CheckpointAtx
+	marriages map[types.NodeID]*identities.MarriageData
 }
 
 func RecoverFromLocalFile(
@@ -281,12 +283,18 @@ func RecoverFromLocalFile(
 			if err = atxs.AddCheckpointed(tx, cAtx); err != nil {
 				return fmt.Errorf("add checkpoint atx %s: %w", cAtx.ID.String(), err)
 			}
-			logger.Debug("checkpoint atx saved",
+			logger.Warn("checkpoint atx saved",
 				log.ZContext(ctx),
 				zap.Stringer("id", cAtx.ID),
 				log.ZShortStringer("smesherID", cAtx.SmesherID),
 			)
 		}
+		for id, marriage := range data.marriages {
+			if err = identities.SetMarriage(tx, id, marriage); err != nil {
+				return fmt.Errorf("add marriage for %s: %w", id.String(), err)
+			}
+		}
+
 		if err = recovery.SetCheckpoint(tx, cfg.Restore); err != nil {
 			return fmt.Errorf("save checkpoint info: %w", err)
 		}
@@ -357,9 +365,23 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		cAtx.Units = atx.Units
 		allAtxs = append(allAtxs, &cAtx)
 	}
+	marriages := make(map[types.NodeID]*identities.MarriageData, len(checkpoint.Data.Marriages))
+	for atx, ms := range checkpoint.Data.Marriages {
+		for _, m := range ms {
+			marriage := identities.MarriageData{
+				ATX:       atx,
+				Index:     m.Index,
+				Signature: types.EdSignature(m.Signature),
+				Target:    types.BytesToNodeID(m.MarriedTo),
+			}
+			marriages[types.BytesToNodeID(m.Signer)] = &marriage
+		}
+	}
+
 	return &recoveryData{
-		accounts: allAccts,
-		atxs:     allAtxs,
+		accounts:  allAccts,
+		atxs:      allAtxs,
+		marriages: marriages,
 	}, nil
 }
 

@@ -45,6 +45,7 @@ func checkpointDB(
 		Version: SchemaVersion,
 		Data: types.InnerData{
 			CheckpointId: fmt.Sprintf("snapshot-%d", snapshot),
+			Marriages:    make(map[types.ATXID][]types.MarriageSnaphot),
 		},
 	}
 
@@ -63,7 +64,7 @@ func checkpointDB(
 		if _, ok := malicious[catx.SmesherID]; !ok {
 			mal, err := identities.IsMalicious(tx, catx.SmesherID)
 			if err != nil {
-				return nil, fmt.Errorf("atxs snapshot check identitiy: %w", err)
+				return nil, fmt.Errorf("atxs snapshot check identity: %w", err)
 			}
 			malicious[catx.SmesherID] = mal
 		}
@@ -109,6 +110,18 @@ func checkpointDB(
 			a.State = acct.State
 		}
 		checkpoint.Data.Accounts = append(checkpoint.Data.Accounts, a)
+	}
+	err = identities.IterateMarriages(tx, func(id types.NodeID, data *identities.MarriageData) bool {
+		checkpoint.Data.Marriages[data.ATX] = append(checkpoint.Data.Marriages[data.ATX], types.MarriageSnaphot{
+			Index:     data.Index,
+			Signer:    id.Bytes(),
+			MarriedTo: data.Target.Bytes(),
+			Signature: data.Signature.Bytes(),
+		})
+		return true
+	})
+	if err != nil {
+		return nil, fmt.Errorf("collecting marriages: %w", err)
 	}
 	return checkpoint, nil
 }

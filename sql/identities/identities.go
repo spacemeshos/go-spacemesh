@@ -146,49 +146,101 @@ func Married(db sql.Executor, id types.NodeID) (bool, error) {
 	return rows > 0, nil
 }
 
-// MarriageInfo obtains the marriage ATX and index for given ID.
-func MarriageInfo(db sql.Executor, id types.NodeID) (types.ATXID, int, error) {
-	var (
-		atx   types.ATXID
-		index int
-	)
-	rows, err := db.Exec("select marriage_atx, marriage_idx from identities where pubkey = ?1;",
+// MarriageATX obtains the marriage ATX for given ID.
+func MarriageATX(db sql.Executor, id types.NodeID) (types.ATXID, error) {
+	var atx types.ATXID
+	rows, err := db.Exec("SELECT marriage_atx FROM identities WHERE pubkey = ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
 			if stmt.ColumnType(0) != sqlite.SQLITE_NULL {
 				stmt.ColumnBytes(0, atx[:])
-				index = int(stmt.ColumnInt64(1))
 			}
 			return false
 		})
 	if err != nil {
-		return atx, 0, fmt.Errorf("getting marriage ATX for %v: %w", id, err)
+		return atx, fmt.Errorf("getting marriage ATX for %v: %w", id, err)
 	}
 	if rows == 0 {
-		return atx, 0, sql.ErrNotFound
+		return atx, sql.ErrNotFound
 	}
-	return atx, index, nil
+	return atx, nil
 }
 
-// Set marriage inserts marriage ATX for given identity.
+type MarriageData struct {
+	ATX       types.ATXID
+	Index     int
+	Target    types.NodeID // ID that was married to
+	Signature types.EdSignature
+}
+
+func Marriage(db sql.Executor, id types.NodeID) (*MarriageData, error) {
+	var data MarriageData
+	rows, err := db.Exec(`
+	SELECT marriage_atx, marriage_idx, marriage_target, marriage_signature
+	FROM identities WHERE pubkey = ?1 AND marriage_atx IS NOT NULL;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, data.ATX[:])
+			data.Index = int(stmt.ColumnInt64(1))
+			stmt.ColumnBytes(2, data.Target[:])
+			stmt.ColumnBytes(3, data.Signature[:])
+			return false
+		})
+	if err != nil {
+		return nil, fmt.Errorf("marriage %v: %w", id, err)
+	}
+	if rows == 0 {
+		return nil, sql.ErrNotFound
+	}
+	return &data, nil
+}
+
+// Set marriage inserts marriage data for given identity.
 // If identitty doesn't exist - create it.
-func SetMarriage(db sql.Executor, id types.NodeID, atx types.ATXID, marriageIndex int) error {
+func SetMarriage(db sql.Executor, id types.NodeID, m *MarriageData) error {
 	_, err := db.Exec(`
-	INSERT INTO identities (pubkey, marriage_atx, marriage_idx)
-	values (?1, ?2, ?3)
-	ON CONFLICT(pubkey) DO UPDATE SET marriage_atx = excluded.marriage_atx, marriage_idx = excluded.marriage_idx
+	INSERT INTO identities (pubkey, marriage_atx, marriage_idx, marriage_target, marriage_signature)
+	values (?1, ?2, ?3, ?4, ?5)
+	ON CONFLICT(pubkey) DO UPDATE SET
+		marriage_atx = excluded.marriage_atx,
+		marriage_idx = excluded.marriage_idx,
+		marriage_target = excluded.marriage_target,
+		marriage_signature = excluded.marriage_signature
 	WHERE marriage_atx IS NULL;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
-			stmt.BindBytes(2, atx.Bytes())
-			stmt.BindInt64(3, int64(marriageIndex))
+			stmt.BindBytes(2, m.ATX.Bytes())
+			stmt.BindInt64(3, int64(m.Index))
+			stmt.BindBytes(4, m.Target.Bytes())
+			stmt.BindBytes(5, m.Signature.Bytes())
 		}, nil,
 	)
 	if err != nil {
 		return fmt.Errorf("setting marriage %v: %w", id, err)
 	}
 	return nil
+}
+
+func IterateMarriages(db sql.Executor, cb func(id types.NodeID, data *MarriageData) bool) error {
+	_, err := db.Exec(`
+	SELECT pubkey, marriage_atx, marriage_idx, marriage_target, marriage_signature
+	FROM identities
+	WHERE marriage_atx IS NOT NULL;`,
+		nil,
+		func(stmt *sql.Statement) bool {
+			var id types.NodeID
+			var data MarriageData
+			stmt.ColumnBytes(0, id[:])
+			stmt.ColumnBytes(1, data.ATX[:])
+			data.Index = int(stmt.ColumnInt64(2))
+			stmt.ColumnBytes(3, data.Target[:])
+			stmt.ColumnBytes(4, data.Signature[:])
+			return cb(id, &data)
+		},
+	)
+	return err
 }
 
 // EquivocationSet returns all node IDs that are married to the given node ID

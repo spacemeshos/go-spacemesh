@@ -7,9 +7,10 @@ type Checkpoint struct {
 }
 
 type InnerData struct {
-	CheckpointId string            `json:"id"`
-	Atxs         []AtxSnapshot     `json:"atxs"`
-	Accounts     []AccountSnapshot `json:"accounts"`
+	CheckpointId string                      `json:"id"`
+	Atxs         []AtxSnapshot               `json:"atxs"`
+	Accounts     []AccountSnapshot           `json:"accounts"`
+	Marriages    map[ATXID][]MarriageSnaphot `json:"marriages"`
 }
 
 type AtxSnapshot struct {
@@ -34,4 +35,11 @@ type AccountSnapshot struct {
 	Nonce    uint64 `json:"nonce"`
 	Template []byte `json:"template"`
 	State    []byte `json:"state"`
+}
+
+type MarriageSnaphot struct {
+	Index     int    `json:"index"`
+	MarriedTo []byte `json:"marriedTo"`
+	Signer    []byte `json:"signer"`
+	Signature []byte `json:"signature"`
 }

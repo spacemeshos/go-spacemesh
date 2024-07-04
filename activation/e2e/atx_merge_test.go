@@ -361,11 +361,11 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	// Verify marriage
 	for i, signer := range signers {
-		marriage, idx, err := identities.MarriageInfo(db, signer.NodeID())
+		marriage, err := identities.Marriage(db, signer.NodeID())
 		require.NoError(t, err)
 		require.NotNil(t, marriage)
-		require.Equal(t, marriageATX.ID(), marriage)
-		require.Equal(t, i, idx)
+		require.Equal(t, marriageATX.ID(), marriage.ATX)
+		require.Equal(t, i, marriage.Index)
 	}
 
 	// Step 2. Publish merged ATX together
