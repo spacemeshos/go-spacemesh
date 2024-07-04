@@ -178,7 +178,8 @@ func Marriage(db sql.Executor, id types.NodeID) (*MarriageData, error) {
 	var data MarriageData
 	rows, err := db.Exec(`
 	SELECT marriage_atx, marriage_idx, marriage_target, marriage_signature
-	FROM identities WHERE pubkey = ?1 AND marriage_atx IS NOT NULL;`,
+	FROM identities
+	WHERE pubkey = ?1 AND marriage_atx IS NOT NULL;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {

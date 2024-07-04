@@ -284,7 +284,7 @@ func RecoverFromLocalFile(
 			if err = atxs.AddCheckpointed(tx, cAtx); err != nil {
 				return fmt.Errorf("add checkpoint atx %s: %w", cAtx.ID.String(), err)
 			}
-			logger.Warn("checkpoint atx saved",
+			logger.Debug("checkpoint atx saved",
 				log.ZContext(ctx),
 				zap.Stringer("id", cAtx.ID),
 				log.ZShortStringer("smesherID", cAtx.SmesherID),

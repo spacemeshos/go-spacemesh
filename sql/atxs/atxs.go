@@ -893,16 +893,18 @@ func Units(db sql.Executor, atxID types.ATXID, nodeID types.NodeID) (uint32, err
 
 func AllUnits(db sql.Executor, id types.ATXID) (map[types.NodeID]uint32, error) {
 	units := make(map[types.NodeID]uint32)
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, id.Bytes())
-	}
-	rows, err := db.Exec(`
-			SELECT pubkey, units FROM posts WHERE atxid = ?1;`, enc, func(stmt *sql.Statement) bool {
-		var nid types.NodeID
-		stmt.ColumnBytes(0, nid[:])
-		units[nid] = uint32(stmt.ColumnInt64(1))
-		return true
-	})
+	rows, err := db.Exec(
+		`SELECT pubkey, units FROM posts WHERE atxid = ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		},
+		func(stmt *sql.Statement) bool {
+			var nid types.NodeID
+			stmt.ColumnBytes(0, nid[:])
+			units[nid] = uint32(stmt.ColumnInt64(1))
+			return true
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
