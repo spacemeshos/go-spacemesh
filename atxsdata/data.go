@@ -76,7 +76,7 @@ func (d *Data) AddFromAtx(atx *types.ActivationTx, malicious bool) *ATX {
 		atx.SmesherID,
 		atx.Coinbase,
 		atx.ID(),
-		atx.GetWeight(),
+		atx.Weight,
 		atx.BaseTickHeight,
 		atx.TickHeight(),
 		atx.VRFNonce,

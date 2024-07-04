@@ -809,14 +809,14 @@ func (b *Builder) createAtx(
 			NiPosts: []wire.NiPostsV2{
 				{
 					Membership: wire.MerkleProofV2{
-						Nodes:       nipostState.Membership.Nodes,
-						LeafIndices: []uint64{nipostState.Membership.LeafIndex},
+						Nodes: nipostState.Membership.Nodes,
 					},
 					Challenge: types.Hash32(nipostState.NIPost.PostMetadata.Challenge),
 					Posts: []wire.SubPostV2{
 						{
-							Post:     *wire.PostToWireV1(nipostState.Post),
-							NumUnits: nipostState.NumUnits,
+							Post:                *wire.PostToWireV1(nipostState.Post),
+							NumUnits:            nipostState.NumUnits,
+							MembershipLeafIndex: nipostState.Membership.LeafIndex,
 						},
 					},
 				},

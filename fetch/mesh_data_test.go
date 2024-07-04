@@ -458,11 +458,11 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 	require.NoError(tb, err)
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := uint32(0); i < num; i++ {
-		atx := types.NewActivationTx(
-			types.NIPostChallenge{},
-			types.Address{1, 2, 3},
-			i,
-		)
+		atx := &types.ActivationTx{
+			Coinbase: types.Address{1, 2, 3},
+			NumUnits: i,
+			Weight:   uint64(i),
+		}
 		atx.SmesherID = sig.NodeID()
 		atx.SetID(types.RandomATXID())
 		atxs = append(atxs, atx)

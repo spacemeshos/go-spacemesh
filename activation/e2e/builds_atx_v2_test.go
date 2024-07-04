@@ -184,7 +184,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 				require.NotZero(t, atx.BaseTickHeight)
 				require.NotZero(t, atx.TickCount)
-				require.NotZero(t, atx.GetWeight())
+				require.NotZero(t, atx.Weight)
 				require.NotZero(t, atx.TickHeight())
 				require.Equal(t, opts.NumUnits, atx.NumUnits)
 				previous = atx

@@ -75,6 +75,7 @@ func gatx(
 		PublishEpoch: epoch,
 		TickCount:    ticks,
 		SmesherID:    smesher,
+		Weight:       uint64(units) * ticks,
 	}
 	atx.SetID(id)
 	atx.SetReceived(time.Time{}.Add(1))

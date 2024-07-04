@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/bits"
 	"sync"
 	"time"
 
@@ -167,47 +168,6 @@ func (h *HandlerV1) commitment(atx *wire.ActivationTxV1) (types.ATXID, error) {
 	return atxs.CommitmentATX(h.cdb, atx.SmesherID)
 }
 
-// Obtain the previous ATX for the given ATX.
-// We need to decode it from the blob because we are interested in the true NumUnits value
-// that was declared by the previous ATX and the `atxs` table only holds the effective NumUnits.
-// However, in case of a golden ATX, the blob is not available and we fallback to fetching the ATX from the DB
-// to use the effective num units.
-func (h *HandlerV1) previous(ctx context.Context, atx *wire.ActivationTxV1) (*types.ActivationTx, error) {
-	var blob sql.Blob
-	v, err := atxs.LoadBlob(ctx, h.cdb, atx.PrevATXID[:], &blob)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(blob.Bytes) == 0 {
-		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
-		// Fallback to fetching it from the DB to get the effective NumUnits.
-		atx, err := atxs.Get(h.cdb, atx.PrevATXID)
-		if err != nil {
-			return nil, fmt.Errorf("fetching golden previous atx: %w", err)
-		}
-		return atx, nil
-	}
-	if v != types.AtxV1 {
-		return nil, fmt.Errorf("previous atx %s is not of version 1", atx.PrevATXID)
-	}
-
-	var prev wire.ActivationTxV1
-	if err := codec.Decode(blob.Bytes, &prev); err != nil {
-		return nil, fmt.Errorf("decoding previous atx: %w", err)
-	}
-	prev.SetID(atx.PrevATXID)
-	if prev.VRFNonce == nil {
-		nonce, err := atxs.NonceByID(h.cdb, prev.ID())
-		if err != nil {
-			return nil, fmt.Errorf("failed to get nonce of previous ATX %s: %w", prev.ID(), err)
-		}
-		prev.VRFNonce = (*uint64)(&nonce)
-	}
-
-	return wire.ActivationTxFromWireV1(&prev, blob.Bytes...), nil
-}
-
 func (h *HandlerV1) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV1,
@@ -223,14 +183,18 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 		}
 		effectiveNumUnits = atx.NumUnits
 	} else {
-		previous, err := h.previous(ctx, atx)
+		previous, err := atxs.Get(h.cdb, atx.PrevATXID)
 		if err != nil {
 			return 0, 0, nil, fmt.Errorf("fetching previous atx %s: %w", atx.PrevATXID, err)
 		}
 		if err := h.validateNonInitialAtx(ctx, atx, previous, commitmentATX); err != nil {
 			return 0, 0, nil, err
 		}
-		effectiveNumUnits = min(previous.NumUnits, atx.NumUnits)
+		prevUnits, err := atxs.Units(h.cdb, atx.PrevATXID, atx.SmesherID)
+		if err != nil {
+			return 0, 0, nil, fmt.Errorf("fetching previous atx units: %w", err)
+		}
+		effectiveNumUnits = min(prevUnits, atx.NumUnits)
 	}
 
 	err = h.nipostValidator.PositioningAtx(atx.PositioningATXID, h.cdb, h.goldenATXID, atx.PublishEpoch)
@@ -590,6 +554,11 @@ func (h *HandlerV1) storeAtx(
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
+		err = atxs.SetUnits(tx, atx.ID(), atx.SmesherID, watx.NumUnits)
+		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("set atx units: %w", err)
+		}
+
 		return nil
 	}); err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
@@ -683,6 +652,11 @@ func (h *HandlerV1) processATX(
 	atx.NumUnits = effectiveNumUnits
 	atx.BaseTickHeight = baseTickHeight
 	atx.TickCount = leaves / h.tickSize
+	hi, weight := bits.Mul64(uint64(atx.NumUnits), atx.TickCount)
+	if hi != 0 {
+		return nil, errors.New("atx weight would overflow uint64")
+	}
+	atx.Weight = weight
 
 	proof, err = h.storeAtx(ctx, atx, watx)
 	if err != nil {
