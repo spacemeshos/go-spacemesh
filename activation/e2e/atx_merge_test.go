@@ -205,7 +205,6 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
-	coinbase := types.Address{1, 2, 3, 4, 5, 6, 7}
 	cfg := testPostConfig()
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, logger)
@@ -405,7 +404,6 @@ func Test_MarryAndMerge(t *testing.T) {
 		[]types.ATXID{marriageATX.ID(), prevATXID},
 		membershipProof,
 	)
-	mergedATX.Coinbase = coinbase
 	mergedATX.VRFNonce = nonces[0]
 	mergedATX.Sign(mainID)
 
@@ -459,7 +457,6 @@ func Test_MarryAndMerge(t *testing.T) {
 		[]types.ATXID{mergedATX.ID()},
 		membershipProof,
 	)
-	mergedATX2.Coinbase = coinbase
 	mergedATX2.VRFNonce = nonces[1]
 	mergedATX2.Sign(signers[1])
 
