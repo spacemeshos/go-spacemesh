@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/cors"
+	httpMetrics "github.com/slok/go-http-metrics/metrics"
 	metricsProm "github.com/slok/go-http-metrics/metrics/prometheus"
 	"github.com/slok/go-http-metrics/middleware"
 	"github.com/slok/go-http-metrics/middleware/std"
@@ -19,6 +19,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
+
+// recorder is a global recorder for http metrics.
+var recorder *httpMetrics.Recorder
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
@@ -84,23 +87,17 @@ func (s *JSONHTTPServer) StartService(
 	// register each individual, enabled service
 	mux := runtime.NewServeMux()
 
-	// create metrics middleware
-	if metricsRecorder == nil {
-		recorder := newMetricsRecorder(metricsProm.Config{
-			Prefix:          metrics.Namespace + "_api",
-			DurationBuckets: prometheus.DefBuckets,
-			SizeBuckets:     prometheus.ExponentialBuckets(100, 10, 8),
-			Registry:        prometheus.DefaultRegisterer,
-			HandlerIDLabel:  "handler",
-			ServiceLabel:    "service",
-			MethodLabel:     "method",
-			StatusCodeLabel: "status",
+	// create the metrics middleware
+	if recorder == nil {
+		r := metricsProm.NewRecorder(metricsProm.Config{
+			Prefix: metrics.Namespace + "_api",
 		})
-		metricsRecorder = &recorder
+		recorder = &r
 	}
 
+	// mdlw is the middleware stack for the http server
 	mdlw := middleware.New(middleware.Config{
-		Recorder: *metricsRecorder,
+		Recorder: *recorder,
 	})
 
 	for _, svc := range services {
