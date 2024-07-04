@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	metrics "github.com/slok/go-http-metrics/metrics/prometheus"
+	"github.com/slok/go-http-metrics/middleware"
+	"github.com/slok/go-http-metrics/middleware/std"
 	"net"
 	"net/http"
 	"time"
@@ -78,6 +81,11 @@ func (s *JSONHTTPServer) StartService(
 	// register each individual, enabled service
 	mux := runtime.NewServeMux()
 
+	// create metrics middleware
+	mdlw := middleware.New(middleware.Config{
+		Recorder: metrics.NewRecorder(metrics.Config{}),
+	})
+
 	for _, svc := range services {
 		if err := svc.RegisterHandlerService(mux); err != nil {
 			return fmt.Errorf("registering service %s with grpc gateway failed: %w", svc, err)
@@ -99,7 +107,7 @@ func (s *JSONHTTPServer) StartService(
 		MaxHeaderBytes: 1 << 21,
 		ReadTimeout:    15 * time.Second,
 		WriteTimeout:   15 * time.Second,
-		Handler:        c.Handler(mux),
+		Handler:        c.Handler(std.Handler("", mdlw, mux)),
 	}
 	s.eg.Go(func() error {
 		if err := s.server.Serve(lis); err != nil {
