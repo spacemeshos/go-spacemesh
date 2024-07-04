@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -480,34 +481,44 @@ func collect(
 	if atx.Golden() {
 		return fmt.Errorf("atx %v belong to previous snapshot. cannot be preserved", ref)
 	}
+	var atxDeps []types.ATXID
 	if atx.CommitmentATX != nil {
-		if err = collect(db, *atx.CommitmentATX, all, deps); err != nil {
-			return err
-		}
-	} else {
-		commitment, err := atxs.CommitmentATX(db, atx.SmesherID)
-		if err != nil {
-			return fmt.Errorf("get commitment for ref atx %v: %w", ref, err)
-		}
-		if err = collect(db, commitment, all, deps); err != nil {
-			return err
-		}
-	}
-	if err = collect(db, atx.PrevATXID, all, deps); err != nil {
-		return err
+		atxDeps = append(atxDeps, *atx.CommitmentATX)
 	}
 
-	posAtx, err := positioningATX(context.Background(), db, ref)
-	if err != nil {
-		return fmt.Errorf("get positioning atx for atx %v: %w", ref, err)
-	}
-	if err = collect(db, posAtx, all, deps); err != nil {
-		return err
-	}
 	var blob sql.Blob
-	_, err = atxs.LoadBlob(context.Background(), db, ref.Bytes(), &blob)
+	version, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &blob)
 	if err != nil {
-		return fmt.Errorf("load atx blob %v: %w", ref, err)
+		return fmt.Errorf("get blob %s: %w", atx.ID(), err)
+	}
+	switch version {
+	case types.AtxV1:
+		var atx wire.ActivationTxV1
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return fmt.Errorf("decode %s: %w", atx.ID(), err)
+		}
+		atxDeps = append(atxDeps, atx.PositioningATXID)
+		if atx.PrevATXID != types.EmptyATXID {
+			atxDeps = append(atxDeps, atx.PrevATXID)
+		}
+	case types.AtxV2:
+		var atx wire.ActivationTxV2
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return fmt.Errorf("decode %s: %w", atx.ID(), err)
+		}
+		atxDeps = append(atxDeps, atx.PositioningATX)
+		atxDeps = append(atxDeps, atx.PreviousATXs...)
+		if atx.MarriageATX != nil {
+			atxDeps = append(atxDeps, *atx.MarriageATX)
+		}
+	default:
+		return fmt.Errorf("unsupported ATX version: %v", version)
+	}
+
+	for _, dep := range atxDeps {
+		if err = collect(db, dep, all, deps); err != nil {
+			return err
+		}
 	}
 
 	deps[ref] = &AtxDep{
