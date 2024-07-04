@@ -916,7 +916,6 @@ func (app *App) initServices(ctx context.Context) error {
 			app.hOracle,
 			newSyncer,
 			patrol,
-			app.host,
 			hare4.WithLogger(logger),
 			hare4.WithConfig(app.Config.HARE4),
 			hare4.WithResultsChan(app.hareResultsChan),

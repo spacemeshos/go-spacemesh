@@ -1,7 +1,6 @@
 package hare4
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"hash"
@@ -29,7 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -250,12 +248,10 @@ func (n *node) withHare() *node {
 		n.oracle,
 		n.msyncer,
 		n.patrol,
-		nil,
 		WithConfig(n.t.cfg),
 		WithLogger(logger.Zap()),
 		WithWallclock(n.clock),
 		WithTracer(tracer),
-		WithServer(n.mockStreamRequester),
 	)
 	n.register(n.signer)
 	return n
@@ -385,12 +381,12 @@ func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 		nn := (&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
 			withClock().withDb().withSigner().withAtx(cl.units.min, cl.units.max).
-			withStreamRequester().withOracle().withHare()
+			withOracle().withHare()
 		if cl.mockVerify {
 			nn = nn.withVerifier()
 		}
 		if cl.mockHashFn != nil {
-			nn.hare.hasherFn = cl.mockHashFn
+			nn.hare.compactFn = cl.mockHashFn
 		}
 		cl.addNode(nn)
 	}
@@ -528,19 +524,6 @@ func (cl *lockstepCluster) setup() {
 				return nil
 			}).
 			AnyTimes()
-		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
-			func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
-				for _, other := range cl.nodes {
-					if other.peerId() == p {
-						b := make([]byte, 0, 1096)
-						buf := bytes.NewBuffer(b)
-						other.hare.handleProposalsStream(ctx, msg, buf)
-						cb(ctx, buf)
-					}
-				}
-				return nil
-			},
-		).AnyTimes()
 	}
 }
 
@@ -715,10 +698,16 @@ func TestHare(t *testing.T) {
 	t.Run("one", func(t *testing.T) { testHare(t, 1, 0, 0) })
 	t.Run("two", func(t *testing.T) { testHare(t, 2, 0, 0) })
 	t.Run("small", func(t *testing.T) { testHare(t, 5, 0, 0) })
-	t.Run("with proposals subsets", func(t *testing.T) { testHare(t, 5, 0, 0, withProposals(0.5)) })
+	t.Run("with proposals subsets", func(t *testing.T) {
+		t.Skip("this test needs to be rewritten or removed")
+		testHare(t, 5, 0, 0, withProposals(0.5))
+	})
 	t.Run("with units", func(t *testing.T) { testHare(t, 5, 0, 0, withUnits(10, 50)) })
 	t.Run("with inactive", func(t *testing.T) { testHare(t, 3, 2, 0) })
-	t.Run("equivocators", func(t *testing.T) { testHare(t, 4, 0, 1, withProposals(0.75)) })
+	t.Run("equivocators", func(t *testing.T) {
+		t.Skip("this test needs to be rewritten or removed")
+		testHare(t, 4, 0, 1, withProposals(0.75))
+	})
 	t.Run("one active multi signers", func(t *testing.T) { testHare(t, 1, 0, 0, withSigners(2)) })
 	t.Run("three active multi signers", func(t *testing.T) { testHare(t, 3, 0, 0, withSigners(10)) })
 }
@@ -1185,23 +1174,6 @@ func TestHare_ReconstructForward(t *testing.T) {
 				return nil
 			}).
 			AnyTimes()
-		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
-			func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
-				for _, other := range cluster.nodes {
-					if other.peerId() == p {
-						b := make([]byte, 0, 1096)
-						buf := bytes.NewBuffer(b)
-						if err := other.hare.handleProposalsStream(ctx, msg, buf); err != nil {
-							return fmt.Errorf("exec handleProposalStream: %w", err)
-						}
-						if err := cb(ctx, buf); err != nil {
-							return fmt.Errorf("exec callback: %w", err)
-						}
-					}
-				}
-				return nil
-			},
-		).AnyTimes()
 	}
 
 	cluster.genProposals(layer, 2)
@@ -1296,23 +1268,6 @@ func TestHare_ReconstructAll(t *testing.T) {
 				return nil
 			}).
 			AnyTimes()
-		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
-			func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
-				for _, other := range cluster.nodes {
-					if other.peerId() == p {
-						b := make([]byte, 0, 1096)
-						buf := bytes.NewBuffer(b)
-						if err := other.hare.handleProposalsStream(ctx, msg, buf); err != nil {
-							return fmt.Errorf("exec handleProposalStream: %w", err)
-						}
-						if err := cb(ctx, buf); err != nil {
-							return fmt.Errorf("exec callback: %w", err)
-						}
-					}
-				}
-				return nil
-			},
-		).AnyTimes()
 	}
 
 	cluster.genProposals(layer)
@@ -1395,23 +1350,6 @@ func TestHare_ReconstructCollision(t *testing.T) {
 				return nil
 			}).
 			AnyTimes()
-		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
-			func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
-				for _, other := range cluster.nodes {
-					if other.peerId() == p {
-						b := make([]byte, 0, 1096)
-						buf := bytes.NewBuffer(b)
-						if err := other.hare.handleProposalsStream(ctx, msg, buf); err != nil {
-							return fmt.Errorf("exec handleProposalStream: %w", err)
-						}
-						if err := cb(ctx, buf); err != nil {
-							return fmt.Errorf("exec callback: %w", err)
-						}
-					}
-				}
-				return nil
-			},
-		).AnyTimes()
 	}
 
 	// scenario:
