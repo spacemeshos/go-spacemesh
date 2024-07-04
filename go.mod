@@ -8,7 +8,7 @@ require (
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240623075305-82f2d100a2a0
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.3
-	github.com/gofrs/flock v0.11.0
+	github.com/gofrs/flock v0.12.0
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.6.0
