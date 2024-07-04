@@ -85,8 +85,8 @@ func (s *JSONHTTPServer) StartService(
 	mux := runtime.NewServeMux()
 
 	// create metrics middleware
-	mdlw := middleware.New(middleware.Config{
-		Recorder: newMetricsRecorder(metricsProm.Config{
+	if metricsRecorder == nil {
+		recorder := newMetricsRecorder(metricsProm.Config{
 			Prefix:          metrics.Namespace + "_api",
 			DurationBuckets: prometheus.DefBuckets,
 			SizeBuckets:     prometheus.ExponentialBuckets(100, 10, 8),
@@ -95,7 +95,12 @@ func (s *JSONHTTPServer) StartService(
 			ServiceLabel:    "service",
 			MethodLabel:     "method",
 			StatusCodeLabel: "status",
-		}),
+		})
+		metricsRecorder = &recorder
+	}
+
+	mdlw := middleware.New(middleware.Config{
+		Recorder: *metricsRecorder,
 	})
 
 	for _, svc := range services {
