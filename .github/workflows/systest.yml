@@ -135,7 +135,7 @@ jobs:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
           storage: premium-rwo=10Gi
-          node_selector: cloud.google.com/gke-nodepool=gha
+          node_selector: cloud.google.com/gke-nodepool=systemtest
           size: 30
           bootstrap: 4m
           level: ${{ inputs.log_level }}
