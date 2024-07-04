@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/cors"
@@ -16,6 +18,8 @@ import (
 	"github.com/slok/go-http-metrics/middleware/std"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
@@ -84,8 +88,15 @@ func (s *JSONHTTPServer) StartService(
 
 	// create metrics middleware
 	mdlw := middleware.New(middleware.Config{
-		Recorder: metricsProm.NewRecorder(metricsProm.Config{
-			Registry: prometheus.DefaultRegisterer,
+		Recorder: newMetricsRecorder(metricsProm.Config{
+			Prefix:          metrics.Namespace + "_api",
+			DurationBuckets: prometheus.DefBuckets,
+			SizeBuckets:     prometheus.ExponentialBuckets(100, 10, 8),
+			Registry:        prometheus.DefaultRegisterer,
+			HandlerIDLabel:  "handler",
+			ServiceLabel:    "service",
+			MethodLabel:     "method",
+			StatusCodeLabel: "status",
 		}),
 	})
 
