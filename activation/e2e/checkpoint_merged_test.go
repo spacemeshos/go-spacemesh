@@ -245,7 +245,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	dir, err := afero.TempDir(fs, "", "Generate")
 	require.NoError(t, err)
-	err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
+	err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 1)
 	require.NoError(t, err)
 
 	// 3.2. Recover from checkpoint

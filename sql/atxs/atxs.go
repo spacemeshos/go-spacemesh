@@ -576,36 +576,29 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 		return true
 	}
 
-	if rows, err := db.Exec(`
+	rows, err := db.Exec(`
 		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
 		from (
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
 			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
 			from atxs
 		)
-		where RowNum <= ?1 order by pubkey;`, enc, dec); err != nil {
+		where RowNum <= ?1 order by pubkey;`, enc, dec)
+	switch {
+	case err != nil:
 		return nil, fmt.Errorf("latestN: %w", err)
-	} else if rows == 0 {
+	case rows == 0:
 		return nil, sql.ErrNotFound
-	} else if ierr != nil {
+	case ierr != nil:
 		return nil, ierr
 	}
 
 	for i := range rst {
-		enc := func(stmt *sql.Statement) {
-			stmt.BindBytes(1, rst[i].ID.Bytes())
+		units, err := AllUnits(db, rst[i].ID)
+		if err != nil {
+			return nil, fmt.Errorf("fetching units for ATX %s: %w", rst[i].ID, err)
 		}
-		if rows, err := db.Exec(`
-			SELECT pubkey, units FROM posts WHERE atxid = ?1;`, enc, func(stmt *sql.Statement) bool {
-			var nid types.NodeID
-			stmt.ColumnBytes(0, nid[:])
-			rst[i].Units[nid] = uint32(stmt.ColumnInt64(1))
-			return true
-		}); err != nil {
-			return nil, fmt.Errorf("fetching units for checkpoint ATX: %w", err)
-		} else if rows == 0 {
-			return nil, fmt.Errorf("fetching units for checkpoint ATX: %w", sql.ErrNotFound)
-		}
+		rst[i].Units = units
 	}
 
 	return rst, nil
@@ -896,6 +889,27 @@ func Units(db sql.Executor, atxID types.ATXID, nodeID types.NodeID) (uint32, err
 		return 0, sql.ErrNotFound
 	}
 	return units, err
+}
+
+func AllUnits(db sql.Executor, id types.ATXID) (map[types.NodeID]uint32, error) {
+	units := make(map[types.NodeID]uint32)
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}
+	rows, err := db.Exec(`
+			SELECT pubkey, units FROM posts WHERE atxid = ?1;`, enc, func(stmt *sql.Statement) bool {
+		var nid types.NodeID
+		stmt.ColumnBytes(0, nid[:])
+		units[nid] = uint32(stmt.ColumnInt64(1))
+		return true
+	})
+	if err != nil {
+		return nil, err
+	}
+	if rows == 0 {
+		return nil, sql.ErrNotFound
+	}
+	return units, nil
 }
 
 func SetUnits(db sql.Executor, atxID types.ATXID, id types.NodeID, units uint32) error {

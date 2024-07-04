@@ -72,7 +72,7 @@ func checkpointDB(
 		if err != nil {
 			return nil, fmt.Errorf("atxs snapshot commitment: %w", err)
 		}
-		copy(atxSnapshot[i].CommitmentATX[:], commitmentAtx[:])
+		atxSnapshot[i].CommitmentATX = commitmentAtx
 	}
 	for _, catx := range atxSnapshot {
 		if mal, ok := malicious[catx.SmesherID]; ok && mal {
@@ -123,6 +123,43 @@ func checkpointDB(
 	if err != nil {
 		return nil, fmt.Errorf("collecting marriages: %w", err)
 	}
+
+	// collect marriage ATXs
+	for id := range checkpoint.Data.Marriages {
+		atx, err := atxs.Get(tx, id)
+		if err != nil {
+			return nil, fmt.Errorf("getting marriage atx: %w", err)
+		}
+		snapshot := types.AtxSnapshot{
+			ID:             id.Bytes(),
+			Epoch:          atx.PublishEpoch.Uint32(),
+			VrfNonce:       uint64(atx.VRFNonce),
+			NumUnits:       atx.NumUnits,
+			BaseTickHeight: atx.BaseTickHeight,
+			TickCount:      atx.TickCount,
+			PublicKey:      atx.SmesherID.Bytes(),
+			Sequence:       atx.Sequence,
+			Coinbase:       atx.Coinbase.Bytes(),
+		}
+
+		snapshot.Units, err = atxs.AllUnits(tx, id)
+		if err != nil {
+			return nil, fmt.Errorf("getting units for ATX %s: %w", id, err)
+		}
+
+		if atx.CommitmentATX != nil {
+			snapshot.CommitmentAtx = atx.CommitmentATX.Bytes()
+		} else {
+			commitment, err := atxs.CommitmentATX(tx, atx.SmesherID)
+			if err != nil {
+				return nil, fmt.Errorf("getting commitment for smesher %s: %w", atx.SmesherID, err)
+			}
+			snapshot.CommitmentAtx = commitment.Bytes()
+		}
+
+		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, snapshot)
+	}
+
 	return checkpoint, nil
 }
 
