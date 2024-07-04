@@ -604,7 +604,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger *zap.Logger, target 
 	)
 	err := atxs.IterateAtxsWithMalfeasance(pd.cdb, target-1, func(atx *types.ActivationTx, malicious bool) bool {
 		if !malicious {
-			epochWeight += atx.GetWeight()
+			epochWeight += atx.Weight
 		} else {
 			logger.Debug("malicious miner get 0 weight", zap.Stringer("smesher", atx.SmesherID))
 		}

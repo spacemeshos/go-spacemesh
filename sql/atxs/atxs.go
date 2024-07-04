@@ -22,7 +22,7 @@ const (
 // filters that refer to the id column.
 const fieldsQuery = `select
 atxs.id, atxs.nonce, atxs.base_tick_height, atxs.tick_count, atxs.pubkey, atxs.effective_num_units,
-atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.prev_id, atxs.commitment_atx`
+atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.prev_id, atxs.commitment_atx, atxs.weight`
 
 const fullQuery = fieldsQuery + ` from atxs`
 
@@ -61,6 +61,7 @@ func decoder(fn decoderCallback) sql.Decoder {
 			a.CommitmentATX = new(types.ATXID)
 			stmt.ColumnBytes(12, a.CommitmentATX[:])
 		}
+		a.Weight = uint64(stmt.ColumnInt64(13))
 
 		return fn(&a)
 	}
@@ -440,27 +441,31 @@ func Add(db sql.Executor, atx *types.ActivationTx) error {
 		} else {
 			stmt.BindNull(13)
 		}
+		stmt.BindInt64(14, int64(atx.Weight))
 	}
 
 	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
 			 pubkey, received, base_tick_height, tick_count, sequence, coinbase,
-			 validity, prev_id)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`, enc, nil)
+			 validity, prev_id, weight)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
 
-	enc = func(stmt *sql.Statement) {
-		stmt.BindBytes(1, atx.ID().Bytes())
-		stmt.BindBytes(2, atx.Blob)
-		stmt.BindInt64(3, int64(atx.Version))
-	}
-	_, err = db.Exec("insert into atx_blobs (id, atx, version) values (?1, ?2, ?3)", enc, nil)
-	if err != nil {
-		return fmt.Errorf("insert ATX blob %v: %w", atx.ID(), err)
-	}
+	return AddBlob(db, atx.ID(), atx.Blob, atx.Version)
+}
 
+func AddBlob(db sql.Executor, id types.ATXID, blob []byte, version types.AtxVersion) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+		stmt.BindBytes(2, blob)
+		stmt.BindInt64(3, int64(version))
+	}
+	_, err := db.Exec("insert into atx_blobs (id, atx, version) values (?1, ?2, ?3)", enc, nil)
+	if err != nil {
+		return fmt.Errorf("insert ATX blob %v: %w", id, err)
+	}
 	return nil
 }
 
@@ -535,12 +540,15 @@ type CheckpointAtx struct {
 	Epoch          types.EpochID
 	CommitmentATX  types.ATXID
 	VRFNonce       types.VRFPostIndex
-	NumUnits       uint32
 	BaseTickHeight uint64
 	TickCount      uint64
 	SmesherID      types.NodeID
 	Sequence       uint64
 	Coinbase       types.Address
+	// total effective units
+	NumUnits uint32
+	// actual units of each included smesher
+	Units map[types.NodeID]uint32
 }
 
 // LatestN returns the latest N ATXs per smesher.
@@ -563,6 +571,7 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 		catx.Sequence = uint64(stmt.ColumnInt64(6))
 		stmt.ColumnBytes(7, catx.Coinbase[:])
 		catx.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(8))
+		catx.Units = make(map[types.NodeID]uint32)
 		rst = append(rst, catx)
 		return true
 	}
@@ -581,6 +590,24 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 	} else if ierr != nil {
 		return nil, ierr
 	}
+
+	for i := range rst {
+		enc := func(stmt *sql.Statement) {
+			stmt.BindBytes(1, rst[i].ID.Bytes())
+		}
+		if rows, err := db.Exec(`
+			SELECT pubkey, units FROM posts WHERE atxid = ?1;`, enc, func(stmt *sql.Statement) bool {
+			var nid types.NodeID
+			stmt.ColumnBytes(0, nid[:])
+			rst[i].Units[nid] = uint32(stmt.ColumnInt64(1))
+			return true
+		}); err != nil {
+			return nil, fmt.Errorf("fetching units for checkpoint ATX: %w", err)
+		} else if rows == 0 {
+			return nil, fmt.Errorf("fetching units for checkpoint ATX: %w", sql.ErrNotFound)
+		}
+	}
+
 	return rst, nil
 }
 
@@ -612,6 +639,13 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 	if err != nil {
 		return fmt.Errorf("insert checkpoint ATX blob %v: %w", catx.ID, err)
 	}
+
+	for id, units := range catx.Units {
+		if err := SetUnits(db, catx.ID, id, units); err != nil {
+			return fmt.Errorf("insert checkpoint ATX units %v: %w", catx.ID, err)
+		}
+	}
+
 	return nil
 }
 
@@ -776,7 +810,7 @@ func IterateAtxsWithMalfeasance(
 		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
 		func(s *sql.Statement) bool {
 			return decoder(func(atx *types.ActivationTx) bool {
-				return fn(atx, s.ColumnInt(13) != 0)
+				return fn(atx, s.ColumnInt(14) != 0)
 			})(s)
 		},
 	)
@@ -843,4 +877,36 @@ func PrevATXCollisions(db sql.Executor) ([]PrevATXCollision, error) {
 	}
 
 	return result, nil
+}
+
+func Units(db sql.Executor, atxID types.ATXID, nodeID types.NodeID) (uint32, error) {
+	var units uint32
+	rows, err := db.Exec(`
+		SELECT units FROM posts WHERE atxid = ?1 AND pubkey = ?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, atxID.Bytes())
+			stmt.BindBytes(2, nodeID.Bytes())
+		},
+		func(stmt *sql.Statement) bool {
+			units = uint32(stmt.ColumnInt64(0))
+			return false
+		},
+	)
+	if rows == 0 {
+		return 0, sql.ErrNotFound
+	}
+	return units, err
+}
+
+func SetUnits(db sql.Executor, atxID types.ATXID, id types.NodeID, units uint32) error {
+	_, err := db.Exec(
+		`INSERT INTO posts (atxid, pubkey, units) VALUES (?1, ?2, ?3);`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, atxID.Bytes())
+			stmt.BindBytes(2, id.Bytes())
+			stmt.BindInt64(3, int64(units))
+		},
+		nil,
+	)
+	return err
 }
