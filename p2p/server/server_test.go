@@ -203,7 +203,6 @@ func Test_Queued(t *testing.T) {
 	eg.Go(func() error {
 		return srv.Run(ctx)
 	})
-	<-srv.Ready()
 	t.Cleanup(func() {
 		assert.NoError(t, eg.Wait())
 	})
@@ -254,7 +253,6 @@ func Test_RequestInterval(t *testing.T) {
 	eg.Go(func() error {
 		return srv.Run(ctx)
 	})
-	<-srv.Ready()
 	t.Cleanup(func() {
 		assert.NoError(t, eg.Wait())
 	})
