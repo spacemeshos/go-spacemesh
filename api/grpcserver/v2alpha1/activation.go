@@ -151,9 +151,9 @@ func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
 		SmesherId:    atx.SmesherID.Bytes(),
 		PublishEpoch: atx.PublishEpoch.Uint32(),
 		Coinbase:     atx.Coinbase.String(),
-		Weight:       atx.GetWeight(),
+		Weight:       atx.Weight,
 		Height:       atx.TickHeight(),
-		NumUnits:     atx.TotalNumUnits(),
+		NumUnits:     atx.NumUnits,
 	}
 }
 

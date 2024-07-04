@@ -140,11 +140,6 @@ func initPost(
 	mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), golden, syncer, nil)
 	require.NoError(tb, err)
 
-	// Create data.
-	require.NoError(tb, mgr.PrepareInitializer(context.Background(), opts, sig.NodeID()))
-	require.NoError(tb, mgr.StartSession(context.Background(), sig.NodeID()))
-	require.Equal(tb, activation.PostSetupStateComplete, mgr.Status().State)
-
 	stop := launchPostSupervisor(tb, logger, mgr, sig, grpcCfg, cfg, opts)
 	tb.Cleanup(stop)
 	require.Eventually(tb, func() bool {

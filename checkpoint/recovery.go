@@ -354,6 +354,7 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		cAtx.TickCount = atx.TickCount
 		cAtx.Sequence = atx.Sequence
 		copy(cAtx.Coinbase[:], atx.Coinbase)
+		cAtx.Units = atx.Units
 		allAtxs = append(allAtxs, &cAtx)
 	}
 	return &recoveryData{

@@ -88,8 +88,6 @@ var (
 	addr1           types.Address
 	addr2           types.Address
 	rewardSmesherID = types.RandomNodeID()
-	prevAtxID       = types.ATXID(types.HexToHash32("44444"))
-	challenge       = newChallenge(1, prevAtxID, prevAtxID, postGenesisEpoch)
 	globalAtx       *types.ActivationTx
 	globalAtx2      *types.ActivationTx
 	globalTx        *types.Transaction
@@ -165,12 +163,28 @@ func TestMain(m *testing.M) {
 	addr1 = wallet.Address(signer1.PublicKey().Bytes())
 	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
-	globalAtx = types.NewActivationTx(challenge, addr1, numUnits)
+	globalAtx = &types.ActivationTx{
+		PublishEpoch: postGenesisEpoch,
+		Sequence:     1,
+		PrevATXID:    types.ATXID{4, 4, 4, 4},
+		Coinbase:     addr1,
+		NumUnits:     numUnits,
+		Weight:       numUnits,
+		TickCount:    1,
+		SmesherID:    signer.NodeID(),
+	}
 	globalAtx.SetReceived(time.Now())
-	globalAtx.SmesherID = signer.NodeID()
-	globalAtx.TickCount = 1
 
-	globalAtx2 = types.NewActivationTx(challenge, addr2, numUnits)
+	globalAtx2 = &types.ActivationTx{
+		PublishEpoch: postGenesisEpoch,
+		Sequence:     1,
+		PrevATXID:    types.ATXID{5, 5, 5, 5},
+		Coinbase:     addr2,
+		NumUnits:     numUnits,
+		Weight:       numUnits,
+		TickCount:    1,
+		SmesherID:    signer.NodeID(),
+	}
 	globalAtx2.SetReceived(time.Now())
 	globalAtx2.SmesherID = signer.NodeID()
 	globalAtx2.TickCount = 1
@@ -389,15 +403,6 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 		tx.MaxSpend = 1
 	}
 	return &tx
-}
-
-func newChallenge(sequence uint64, prevAtxID, posAtxID types.ATXID, epoch types.EpochID) types.NIPostChallenge {
-	return types.NIPostChallenge{
-		Sequence:       sequence,
-		PrevATXID:      prevAtxID,
-		PublishEpoch:   epoch,
-		PositioningATX: posAtxID,
-	}
 }
 
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {

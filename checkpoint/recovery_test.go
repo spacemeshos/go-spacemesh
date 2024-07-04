@@ -830,6 +830,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 		SmesherID:     golden.SmesherID,
 		Sequence:      golden.Sequence,
 		Coinbase:      golden.Coinbase,
+		Units:         map[types.NodeID]uint32{golden.SmesherID: golden.NumUnits},
 	}))
 	validateAndPreserveData(t, oldDB, vAtxs[1:])
 	// the proofs are not valid, but save them anyway for the purpose of testing

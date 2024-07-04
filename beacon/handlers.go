@@ -331,7 +331,7 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, nodeID types.Nod
 	}
 	voteWeight := new(big.Int)
 	if !malicious {
-		voteWeight.SetUint64(atx.GetWeight())
+		voteWeight.SetUint64(atx.Weight)
 	} else {
 		pd.logger.Debug("malicious miner get 0 weight", zap.Stringer("smesher", nodeID))
 	}
@@ -457,7 +457,7 @@ func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, nodeID t
 	}
 	voteWeight := new(big.Int)
 	if !malicious {
-		voteWeight.SetUint64(atx.GetWeight())
+		voteWeight.SetUint64(atx.Weight)
 	} else {
 		pd.logger.Debug("malicious miner get 0 weight", zap.Stringer("smesher", nodeID))
 	}
