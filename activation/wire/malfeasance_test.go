@@ -33,8 +33,7 @@ func newActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
 		NiPosts: []NiPostsV2{
 			{
 				Membership: MerkleProofV2{
-					Nodes:       make([]types.Hash32, 32),
-					LeafIndices: make([]uint64, 256),
+					Nodes: make([]types.Hash32, 32),
 				},
 				Challenge: types.RandomHash(),
 				Posts: []SubPostV2{
