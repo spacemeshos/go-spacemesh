@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -485,7 +486,7 @@ func (cl *lockstepCluster) moveRound() {
 
 func (cl *lockstepCluster) waitStopped() {
 	for _, n := range cl.nodes {
-		n.tracer.waitStopped()
+		<-n.tracer.stopped
 	}
 }
 
@@ -505,37 +506,12 @@ type testTracer struct {
 	sent        chan *Message
 }
 
-func (t *testTracer) waitStopped() types.LayerID {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "didn't stop", "wait %v", wait)
-	case lid := <-t.stopped:
-		return lid
-	}
-	return 0
-}
-
 func (t *testTracer) waitEligibility() []*types.HareEligibility {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "no eligibility", "wait %v", wait)
-	case el := <-t.eligibility:
-		return el
-	}
-	return nil
+	return <-t.eligibility
 }
 
 func (t *testTracer) waitSent() *Message {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "no message", "wait %v", wait)
-	case m := <-t.sent:
-		return m
-	}
-	return nil
+	return <-t.sent
 }
 
 func (*testTracer) OnStart(types.LayerID) {}
@@ -911,7 +887,7 @@ func TestProposals(t *testing.T) {
 				nil,
 				nil,
 				layerpatrol.New(),
-				WithLogger(logtest.New(t).Zap()),
+				WithLogger(zaptest.NewLogger(t)),
 			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
