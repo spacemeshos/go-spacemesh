@@ -26,6 +26,12 @@
             }
         }
     },
+    "hare3": {
+        "committeeupgrade": {
+            "layer": 16,
+            "size": 50
+        }
+    },
     "smeshing": {
         "smeshing-verifying-opts": {
             "smeshing-opts-verifying-min-workers": 1000000
