@@ -22,8 +22,9 @@ import (
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
-	listener string
-	logger   *zap.Logger
+	listener       string
+	collectMetrics bool
+	logger         *zap.Logger
 
 	// BoundAddress contains the address that the server bound to, useful if
 	// the server uses a dynamic port. It is set during startup and can be
@@ -42,11 +43,13 @@ func NewJSONHTTPServer(
 	lg *zap.Logger,
 	listener string,
 	corsAllowedOrigins []string,
+	collectMetrics bool,
 ) *JSONHTTPServer {
 	return &JSONHTTPServer{
-		logger:   lg,
-		listener: listener,
-		origins:  corsAllowedOrigins,
+		logger:         lg,
+		listener:       listener,
+		origins:        corsAllowedOrigins,
+		collectMetrics: collectMetrics,
 	}
 }
 
@@ -72,7 +75,6 @@ func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
 // StartService starts the json api server and listens for status (started, stopped).
 func (s *JSONHTTPServer) StartService(
 	ctx context.Context,
-	collectMetrics bool,
 	services ...ServiceAPI,
 ) error {
 	// At least one service must be enabled
@@ -97,7 +99,7 @@ func (s *JSONHTTPServer) StartService(
 
 	// mdlw is the middleware stack for the http server
 	handler := c.Handler(mux)
-	if collectMetrics {
+	if s.collectMetrics {
 		mdlw := middleware.New(middleware.Config{
 			Recorder: metricsProm.NewRecorder(metricsProm.Config{
 				Prefix: metrics.Namespace + "_api",
