@@ -951,3 +951,27 @@ func TestHare_AddProposal(t *testing.T) {
 	require.True(t, hare.IsKnown(p.Layer, p.ID()))
 	require.ErrorIs(t, hare.OnProposal(p), store.ErrProposalExists)
 }
+
+func TestHareConfig_CommitteeUpgrade(t *testing.T) {
+	t.Parallel()
+	t.Run("no upgrade", func(t *testing.T) {
+		cfg := Config{
+			Committee: 400,
+		}
+		require.Equal(t, cfg.Committee, cfg.CommitteeFor(0))
+		require.Equal(t, cfg.Committee, cfg.CommitteeFor(100))
+	})
+	t.Run("upgrade", func(t *testing.T) {
+		cfg := Config{
+			Committee: 400,
+			CommitteeUpgrade: &CommitteeUpgrade{
+				Layer: 16,
+				Size:  50,
+			},
+		}
+		require.EqualValues(t, cfg.Committee, cfg.CommitteeFor(0))
+		require.EqualValues(t, cfg.Committee, cfg.CommitteeFor(15))
+		require.EqualValues(t, 50, cfg.CommitteeFor(16))
+		require.EqualValues(t, 50, cfg.CommitteeFor(100))
+	})
+}
