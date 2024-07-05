@@ -3,7 +3,6 @@ package hare4
 import (
 	"context"
 	"fmt"
-	"hash"
 	"math/rand"
 	"os"
 	"slices"
@@ -12,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aead/siphash"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -297,9 +295,9 @@ func withMockVerifier() clusterOpt {
 	}
 }
 
-func withMockHashFn(f func([]byte) (hash.Hash64, error)) clusterOpt {
+func withMockCompactFn(f func([]byte) []byte) clusterOpt {
 	return func(cluster *lockstepCluster) {
-		cluster.mockHashFn = f
+		cluster.mockCompactFn = f
 	}
 }
 
@@ -338,9 +336,9 @@ type lockstepCluster struct {
 	nodes   []*node
 	signers []*node // nodes that active on consensus but don't run hare instance
 
-	mockVerify bool
-	mockHashFn func([]byte) (hash.Hash64, error)
-	units      struct {
+	mockVerify    bool
+	mockCompactFn func([]byte) []byte
+	units         struct {
 		min, max int
 	}
 	proposals struct {
@@ -385,8 +383,8 @@ func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 		if cl.mockVerify {
 			nn = nn.withVerifier()
 		}
-		if cl.mockHashFn != nil {
-			nn.hare.compactFn = cl.mockHashFn
+		if cl.mockCompactFn != nil {
+			nn.hare.compactFn = cl.mockCompactFn
 		}
 		cl.addNode(nn)
 	}
@@ -845,11 +843,6 @@ func TestHandler(t *testing.T) {
 			panic(err)
 		}
 
-		hasher, err := siphash.New64(elig.Proof[:16])
-		if err != nil {
-			panic(err)
-		}
-		workSlice := make([]byte, 8)
 		msg1 := &Message{}
 		msg1.Layer = layer
 		msg1.Value.Proposals = []types.ProposalID{p1.ID()}
@@ -857,9 +850,7 @@ func TestHandler(t *testing.T) {
 		msg1.Sender = n.signer.NodeID()
 		msg1.Signature = n.signer.Sign(signing.HARE, msg1.ToMetadata().ToBytes())
 		msg1.Value.Proposals = nil
-		msg1.Value.CompactProposals = []types.CompactProposalID{compactProposal(hasher, workSlice, p1.ID())}
-
-		hasher.Reset()
+		msg1.Value.CompactProposals = []types.CompactProposalID{compactProposal(compactTruncate, p1.ID())}
 
 		msg2 := &Message{}
 		msg2.Layer = layer
@@ -868,7 +859,7 @@ func TestHandler(t *testing.T) {
 		msg2.Sender = n.signer.NodeID()
 		msg2.Signature = n.signer.Sign(signing.HARE, msg2.ToMetadata().ToBytes())
 		msg2.Value.Proposals = nil
-		msg2.Value.CompactProposals = []types.CompactProposalID{compactProposal(hasher, workSlice, p2.ID())}
+		msg2.Value.CompactProposals = []types.CompactProposalID{compactProposal(compactTruncate, p2.ID())}
 
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg1)))
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg2)))
@@ -1036,8 +1027,7 @@ func TestProposals(t *testing.T) {
 				nil,
 				nil,
 				layerpatrol.New(),
-				nil,
-				// WithLogger(logtest.New(t).Zap()),
+				WithLogger(logtest.New(t).Zap()),
 			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx))
@@ -1064,7 +1054,7 @@ func TestProposals(t *testing.T) {
 func TestHare_AddProposal(t *testing.T) {
 	t.Parallel()
 	proposals := store.New()
-	hare := New(nil, nil, nil, nil, proposals, nil, nil, nil, nil, nil)
+	hare := New(nil, nil, nil, nil, proposals, nil, nil, nil, nil)
 
 	p := gproposal(
 		types.RandomProposalID(),
@@ -1095,9 +1085,8 @@ func TestProposalIDSort(t *testing.T) {
 
 // TestHare_ReconstructForward tests that a message
 // could be reconstructed on a downstream peer that
-// receives a gossipsub message from a forwarding node
-// without needing a direct connection to the original sender.
-func TestHare_ReconstructForward(t *testing.T) {
+// receives a gossipsub message from a node.
+func TestHare_Reconstruct(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.LogStats = true
 	tst := &tester{
@@ -1118,66 +1107,9 @@ func TestHare_ReconstructForward(t *testing.T) {
 
 	layer := tst.genesis + 1
 
-	// cluster setup
-	active := cluster.activeSet()
-	for i, n := range cluster.nodes {
-		require.NoError(cluster.t, beacons.Add(n.db, cluster.t.genesis.GetEpoch()+1, cluster.t.beacon))
-		for _, other := range append(cluster.nodes, cluster.signers...) {
-			if other.atx == nil {
-				continue
-			}
-			require.NoError(cluster.t, n.storeAtx(other.atx))
-		}
-		n.oracle.UpdateActiveSet(cluster.t.genesis.GetEpoch()+1, active)
-		n.mpublisher.EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
-			Do(func(ctx context.Context, proto string, msg []byte) error {
-				// here we wanna call the handler on the second node
-				// but then call the handler on the third with the incoming peer id
-				// of the second node, this way we know the peers could resolve between
-				// themselves without having the connection to the original sender
-				// 1st publish call is for the preround, so we will hijack that and
-				// leave the rest to broadcast
-				m := &Message{}
-				codec.MustDecode(msg, m)
-				if m.Body.IterRound.Round == preround {
-					other := [2]int{0, 0}
-					switch i {
-					case 0:
-						other[0] = 1
-						other[1] = 2
-					case 1:
-						other[0] = 0
-						other[1] = 2
-					case 2:
-						other[0] = 1
-						other[1] = 0
-					default:
-						panic("bad")
-					}
-					if err := cluster.nodes[other[0]].hare.
-						Handler(ctx, cluster.nodes[i].peerId(), msg); err != nil {
-						panic(err)
-					}
-					if err := cluster.nodes[other[1]].hare.
-						Handler(ctx, cluster.nodes[other[0]].peerId(), msg); err != nil {
-						panic(err)
-					}
-					return nil
-				}
-
-				for _, other := range cluster.nodes {
-					if err := other.hare.Handler(ctx, n.peerId(), msg); err != nil {
-						panic(err)
-					}
-				}
-				return nil
-			}).
-			AnyTimes()
-	}
+	cluster.setup()
 
 	cluster.genProposals(layer, 2)
-	cluster.genProposalNode(layer, 2)
 	cluster.genProposalNode(layer, 2)
 	cluster.movePreround(layer)
 	for i := 0; i < 2*int(notify); i++ {
@@ -1238,7 +1170,7 @@ func TestHare_ReconstructAll(t *testing.T) {
 		n.mverifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(_ signing.Domain, _ types.NodeID, _ []byte, _ types.EdSignature) bool {
 				calls[i] = calls[i] + 1
-				// when first call return false, other
+				// when first call return false, otherwise true
 				return !(calls[i] == 1)
 			}).AnyTimes()
 	}
@@ -1254,12 +1186,6 @@ func TestHare_ReconstructAll(t *testing.T) {
 		n.mpublisher.EXPECT().
 			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 			Do(func(ctx context.Context, proto string, msg []byte) error {
-				// here we wanna call the handler on the second node
-				// but then call the handler on the third with the incoming peer id
-				// of the second node, this way we know the peers could resolve between
-				// themselves without having the connection to the original sender
-				// 1st publish call is for the preround, so we will hijack that and
-				// leave the rest to broadcast
 				for _, other := range cluster.nodes {
 					if err := other.hare.Handler(ctx, n.peerId(), msg); err != nil {
 						panic(err)
@@ -1300,8 +1226,7 @@ func TestHare_ReconstructAll(t *testing.T) {
 	}
 }
 
-// TestHare_ReconstructCollision tests that the nodes go into a
-// full message exchange in the case that there's a siphash collision.
+// TestHare_ReconstructCollision tests the behavior during a collision.
 func TestHare_ReconstructCollision(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.LogStats = true
@@ -1315,42 +1240,16 @@ func TestHare_ReconstructCollision(t *testing.T) {
 		genesis:       types.GetEffectiveGenesis(),
 	}
 
-	s64fn := func() uint64 {
-		return 0x11111111
+	fn := func(_ []byte) []byte {
+		return []byte{0x11, 0x11, 0x11, 0x11}
 	}
-	fn := func(_ []byte) (hash.Hash64, error) {
-		return newMockHasher(s64fn), nil
-	}
-	cluster := newLockstepCluster(tst, withMockHashFn(fn), withProposals(1)).
+	cluster := newLockstepCluster(tst, withMockCompactFn(fn), withSigners(2), withProposals(1)).
 		addActive(2)
 	if cluster.signersCount > 0 {
 		cluster = cluster.addSigner(cluster.signersCount)
 		cluster.partitionSigners()
 	}
 	layer := tst.genesis + 1
-	// cluster setup
-	active := cluster.activeSet()
-	for _, n := range cluster.nodes {
-		require.NoError(cluster.t, beacons.Add(n.db, cluster.t.genesis.GetEpoch()+1, cluster.t.beacon))
-		for _, other := range append(cluster.nodes, cluster.signers...) {
-			if other.atx == nil {
-				continue
-			}
-			require.NoError(cluster.t, n.storeAtx(other.atx))
-		}
-		n.oracle.UpdateActiveSet(cluster.t.genesis.GetEpoch()+1, active)
-		n.mpublisher.EXPECT().
-			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
-			Do(func(ctx context.Context, proto string, msg []byte) error {
-				for _, other := range cluster.nodes {
-					if err := other.hare.Handler(ctx, n.peerId(), msg); err != nil {
-						panic(err)
-					}
-				}
-				return nil
-			}).
-			AnyTimes()
-	}
 
 	// scenario:
 	// node 1 has generated 1 proposal that (mocked) hash into 0x0 as prefix - both nodes know the proposal
@@ -1360,7 +1259,7 @@ func TestHare_ReconstructCollision(t *testing.T) {
 	// should pass and that a full exchange of all hashes is not triggered (disambiguates case of
 	// failed signature vs. hashes colliding - there's a difference in number of single prefixes
 	// that are sent, but the response should be the same)
-
+	cluster.setup()
 	cluster.genProposals(layer, 1)
 	cluster.genProposalNode(layer, 1)
 	cluster.movePreround(layer)
@@ -1390,44 +1289,4 @@ func TestHare_ReconstructCollision(t *testing.T) {
 		}
 		require.Empty(t, n.hare.Running())
 	}
-}
-
-func newMockHasher(f func() uint64) *mockHasher {
-	return &mockHasher{f}
-}
-
-type mockHasher struct {
-	sum64Fn func() uint64
-}
-
-func (h *mockHasher) Write(p []byte) (n int, err error) {
-	// panic("not implemented") // TODO: Implement
-	return 0, nil
-}
-
-// Sum appends the current hash to b and returns the resulting slice.
-// It does not change the underlying hash state.
-func (h *mockHasher) Sum(b []byte) []byte {
-	panic("not implemented") // TODO: Implement
-}
-
-// Reset resets the Hash to its initial state.
-func (h *mockHasher) Reset() {
-}
-
-// Size returns the number of bytes Sum will return.
-func (h *mockHasher) Size() int {
-	return 1
-}
-
-// BlockSize returns the hash's underlying block size.
-// The Write method must be able to accept any amount
-// of data, but it may operate more efficiently if all writes
-// are a multiple of the block size.
-func (h *mockHasher) BlockSize() int {
-	return 32
-}
-
-func (h *mockHasher) Sum64() uint64 {
-	return h.sum64Fn()
 }
