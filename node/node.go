@@ -1766,7 +1766,8 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			app.Config.API.JSONCorsAllowedOrigins,
 		)
 
-		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
+		if err := app.jsonAPIServer.StartService(ctx, app.Config.CollectMetrics,
+			maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
 		logger.With().Info("json listener started",

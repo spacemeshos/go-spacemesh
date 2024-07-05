@@ -28,7 +28,7 @@ func launchJsonServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	jsonService := NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0", []string{})
 
 	// start json server
-	require.NoError(tb, jsonService.StartService(context.Background(), services...))
+	require.NoError(tb, jsonService.StartService(context.Background(), false, services...))
 
 	// update config with bound address
 	cfg.JSONListener = jsonService.BoundAddress
