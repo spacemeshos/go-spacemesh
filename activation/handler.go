@@ -237,8 +237,6 @@ func (h *Handler) determineVersion(msg []byte) (*types.AtxVersion, error) {
 
 type opaqueAtx interface {
 	ID() types.ATXID
-	Published() types.EpochID
-	TotalNumUnits() uint32
 }
 
 func (h *Handler) decodeATX(msg []byte) (opaqueAtx, error) {

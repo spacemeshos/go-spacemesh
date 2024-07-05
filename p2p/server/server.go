@@ -17,6 +17,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 	"golang.org/x/time/rate"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -156,6 +157,11 @@ type Server struct {
 	decayingTagSpec     *DecayingTagSpec
 	decayingTag         connmgr.DecayingTag
 
+	limit   *rate.Limiter
+	sem     *semaphore.Weighted
+	queue   chan request
+	stopped chan struct{}
+
 	metrics *tracker // metrics can be nil
 
 	h Host
@@ -174,6 +180,9 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 		queueSize:           1000,
 		requestsPerInterval: 100,
 		interval:            time.Second,
+
+		queue:   make(chan request),
+		stopped: make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(srv)
@@ -195,6 +204,31 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 		}
 	}
 
+	srv.limit = rate.NewLimiter(
+		rate.Every(srv.interval/time.Duration(srv.requestsPerInterval)),
+		srv.requestsPerInterval,
+	)
+	srv.sem = semaphore.NewWeighted(int64(srv.queueSize))
+	srv.h.SetStreamHandler(protocol.ID(srv.protocol), func(stream network.Stream) {
+		if !srv.sem.TryAcquire(1) {
+			if srv.metrics != nil {
+				srv.metrics.dropped.Inc()
+			}
+			stream.Close()
+			return
+		}
+		select {
+		case <-srv.stopped:
+			srv.sem.Release(1)
+			stream.Close()
+		case srv.queue <- request{stream: stream, received: time.Now()}:
+			// at most s.queueSize requests block here, the others are dropped with the semaphore
+		}
+	})
+	if srv.metrics != nil {
+		srv.metrics.targetQueue.Set(float64(srv.queueSize))
+		srv.metrics.targetRps.Set(float64(srv.limit.Limit()))
+	}
 	return srv
 }
 
@@ -204,45 +238,29 @@ type request struct {
 }
 
 func (s *Server) Run(ctx context.Context) error {
-	limit := rate.NewLimiter(rate.Every(s.interval/time.Duration(s.requestsPerInterval)), s.requestsPerInterval)
-	queue := make(chan request, s.queueSize)
-	if s.metrics != nil {
-		s.metrics.targetQueue.Set(float64(s.queueSize))
-		s.metrics.targetRps.Set(float64(limit.Limit()))
-	}
-	s.h.SetStreamHandler(protocol.ID(s.protocol), func(stream network.Stream) {
-		select {
-		case queue <- request{stream: stream, received: time.Now()}:
-		default:
-			if s.metrics != nil {
-				s.metrics.dropped.Inc()
-			}
-			stream.Close()
-		}
-	})
-
 	var eg errgroup.Group
-	eg.SetLimit(s.queueSize * 2)
 	for {
 		select {
 		case <-ctx.Done():
+			close(s.stopped)
 			eg.Wait()
 			return nil
-		case req := <-queue:
+		case req := <-s.queue:
 			if s.metrics != nil {
-				s.metrics.queue.Set(float64(len(queue)))
+				s.metrics.queue.Set(float64(s.queueSize))
 				s.metrics.accepted.Inc()
 			}
 			if s.metrics != nil {
 				s.metrics.inQueueLatency.Observe(time.Since(req.received).Seconds())
 			}
-			if err := limit.Wait(ctx); err != nil {
+			if err := s.limit.Wait(ctx); err != nil {
 				eg.Wait()
 				return nil
 			}
 			ctx, cancel := context.WithCancel(ctx)
 			eg.Go(func() error {
 				<-ctx.Done()
+				s.sem.Release(1)
 				req.stream.Close()
 				return nil
 			})
@@ -333,6 +351,10 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, extraProt
 	if err := s.StreamRequest(ctx, pid, req, func(ctx context.Context, stream io.ReadWriter) error {
 		rd := bufio.NewReader(stream)
 		if _, err := codec.DecodeFrom(rd, &r); err != nil {
+			if errors.Is(err, io.ErrClosedPipe) && ctx.Err() != nil {
+				// ensure that a canceled context is returned as the right error
+				return ctx.Err()
+			}
 			return fmt.Errorf("peer %s: %w", pid, err)
 		}
 		if r.Error != "" {

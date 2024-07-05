@@ -42,6 +42,7 @@ func (e *ErrAtxNotFound) Is(target error) bool {
 
 type validatorOptions struct {
 	postSubsetSeed []byte
+	prioritized    bool
 }
 
 // PostSubset configures the validator to validate only a subset of the POST indices.
@@ -49,6 +50,12 @@ type validatorOptions struct {
 func PostSubset(seed []byte) validatorOption {
 	return func(o *validatorOptions) {
 		o.postSubsetSeed = seed
+	}
+}
+
+func PrioritizeCall() validatorOption {
+	return func(o *validatorOptions) {
+		o.prioritized = true
 	}
 }
 
@@ -114,7 +121,7 @@ func (v *Validator) NIPost(
 }
 
 func (v *Validator) PoetMembership(
-	ctx context.Context,
+	_ context.Context,
 	membership *types.MultiMerkleProof,
 	postChallenge types.Hash32,
 	poetChallenges [][]byte,
@@ -195,13 +202,19 @@ func (v *Validator) Post(
 	for _, opt := range opts {
 		opt(options)
 	}
+
 	verifyOpts := []verifying.OptionFunc{verifying.WithLabelScryptParams(v.scrypt)}
 	if options.postSubsetSeed != nil {
 		verifyOpts = append(verifyOpts, verifying.Subset(v.cfg.K3, options.postSubsetSeed))
 	}
 
+	callOpts := []postVerifierOptionFunc{WithVerifierOptions(verifyOpts...)}
+	if options.prioritized {
+		callOpts = append(callOpts, PrioritizedCall())
+	}
+
 	start := time.Now()
-	if err := v.postVerifier.Verify(ctx, p, m, verifyOpts...); err != nil {
+	if err := v.postVerifier.Verify(ctx, p, m, callOpts...); err != nil {
 		return fmt.Errorf("verify PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())
@@ -417,7 +430,7 @@ type atxDeps struct {
 	commitment  types.ATXID
 }
 
-func (v *Validator) getAtxDeps(ctx context.Context, db sql.Executor, id types.ATXID) (*atxDeps, error) {
+func (v *Validator) getAtxDeps(ctx context.Context, id types.ATXID) (*atxDeps, error) {
 	var blob sql.Blob
 	version, err := atxs.LoadBlob(ctx, v.db, id.Bytes(), &blob)
 	if err != nil {
@@ -525,10 +538,11 @@ func (v *Validator) verifyChainWithOpts(
 	}
 
 	// validate POST fully
-	deps, err := v.getAtxDeps(ctx, v.db, id)
+	deps, err := v.getAtxDeps(ctx, id)
 	if err != nil {
 		return fmt.Errorf("getting ATX dependencies: %w", err)
 	}
+
 	if err := v.Post(
 		ctx,
 		atx.SmesherID,
@@ -536,6 +550,7 @@ func (v *Validator) verifyChainWithOpts(
 		deps.nipost.Post,
 		deps.nipost.PostMetadata,
 		atx.NumUnits,
+		[]validatorOption{PrioritizeCall()}...,
 	); err != nil {
 		if err := atxs.SetValidity(v.db, id, types.Invalid); err != nil {
 			log.Warn("failed to persist atx validity", zap.Error(err), zap.Stringer("atx_id", id))

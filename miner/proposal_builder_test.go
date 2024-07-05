@@ -13,12 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -75,6 +75,7 @@ func gatx(
 		PublishEpoch: epoch,
 		TickCount:    ticks,
 		SmesherID:    smesher,
+		Weight:       uint64(units) * ticks,
 	}
 	atx.SetID(id)
 	atx.SetReceived(time.Time{}.Add(1))
@@ -755,7 +756,7 @@ func TestBuild(t *testing.T) {
 
 			clock.EXPECT().LayerToTime(gomock.Any()).Return(time.Unix(0, 0)).AnyTimes()
 
-			full := append(defaults, WithLogger(logtest.New(t)), WithSigners(signer))
+			full := append(defaults, WithLogger(zaptest.NewLogger(t)), WithSigners(signer))
 			full = append(full, tc.opts...)
 			builder := New(clock, db, localdb, atxsdata, publisher, tortoise, syncer, conState, full...)
 			var decoded chan *types.Proposal
@@ -949,7 +950,7 @@ func TestStartStop(t *testing.T) {
 		tortoise,
 		syncer,
 		conState,
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 		WithActivesetPreparation(ActiveSetPreparation{}),
 	)
 	builder.Register(signer)

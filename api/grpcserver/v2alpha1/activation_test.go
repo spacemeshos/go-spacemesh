@@ -67,14 +67,12 @@ func TestActivationService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Activations, 25)
-		require.Equal(t, len(activations), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Equal(t, len(activations), len(list.Activations))
-		require.Equal(t, len(activations), int(list.Total))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {

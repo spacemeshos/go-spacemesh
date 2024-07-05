@@ -36,7 +36,7 @@ ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
-command := tests -test.count=$(count) -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) \
+command := tests -test.v -test.count=$(count) -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) \
 -level=$(level) -labels=$(label) -configname=$(configname)
 
 .PHONY: docker

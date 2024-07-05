@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap/zapcore"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
@@ -30,7 +30,7 @@ func (lt *latencyTracker) total() time.Duration {
 	return lt.publish.Sub(lt.start)
 }
 
-func (lt *latencyTracker) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (lt *latencyTracker) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddDuration("data", lt.data.Sub(lt.start))
 	encoder.AddDuration("tortoise", lt.tortoise.Sub(lt.data))
 	encoder.AddDuration("hash", lt.hash.Sub(lt.tortoise))

@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"errors"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 
@@ -172,27 +172,28 @@ func TestServer(t *testing.T) {
 	})
 }
 
-func TestQueued(t *testing.T) {
+func Test_Queued(t *testing.T) {
 	mesh, err := mocknet.FullMeshConnected(2)
 	require.NoError(t, err)
 
 	var (
-		total            = 100
-		proto            = "test"
-		success, failure atomic.Int64
-		wait             = make(chan struct{}, total)
+		queueSize = 10
+		proto     = "test"
+		stop      = make(chan struct{})
+		wg        sync.WaitGroup
 	)
 
+	wg.Add(queueSize)
 	client := New(wrapHost(t, mesh.Hosts()[0]), proto, nil)
 	srv := New(
 		wrapHost(t, mesh.Hosts()[1]),
 		proto,
 		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
+			wg.Done()
+			<-stop
 			return msg, nil
 		}),
-		WithQueueSize(total/4),
-		WithRequestsPerInterval(50, time.Second),
-		WithMetrics(),
+		WithQueueSize(queueSize),
 	)
 	var (
 		eg          errgroup.Group
@@ -205,23 +206,71 @@ func TestQueued(t *testing.T) {
 	t.Cleanup(func() {
 		assert.NoError(t, eg.Wait())
 	})
-	for i := 0; i < total; i++ {
-		eg.Go(func() error {
-			if _, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping")); err != nil {
-				failure.Add(1)
-			} else {
-				success.Add(1)
-			}
-			wait <- struct{}{}
+	var reqEq errgroup.Group
+	for i := 0; i < queueSize; i++ { // fill the queue with requests
+		reqEq.Go(func() error {
+			resp, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
+			require.NoError(t, err)
+			require.Equal(t, []byte("ping"), resp)
 			return nil
 		})
 	}
-	for i := 0; i < total; i++ {
-		<-wait
+	wg.Wait()
+
+	for i := 0; i < queueSize; i++ { // queue is full, requests fail
+		_, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
+		require.Error(t, err)
 	}
-	require.NotZero(t, failure.Load())
-	require.Greater(t, int(success.Load()), total/2)
-	t.Log(success.Load())
+
+	close(stop)
+	require.NoError(t, reqEq.Wait())
+}
+
+func Test_RequestInterval(t *testing.T) {
+	mesh, err := mocknet.FullMeshConnected(2)
+	require.NoError(t, err)
+
+	var (
+		maxReq     = 10
+		maxReqTime = time.Minute
+		proto      = "test"
+	)
+
+	client := New(wrapHost(t, mesh.Hosts()[0]), proto, nil)
+	srv := New(
+		wrapHost(t, mesh.Hosts()[1]),
+		proto,
+		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
+			return msg, nil
+		}),
+		WithRequestsPerInterval(maxReq, maxReqTime),
+	)
+	var (
+		eg          errgroup.Group
+		ctx, cancel = context.WithCancel(context.Background())
+	)
+	defer cancel()
+	eg.Go(func() error {
+		return srv.Run(ctx)
+	})
+	t.Cleanup(func() {
+		assert.NoError(t, eg.Wait())
+	})
+
+	start := time.Now()
+	for i := 0; i < maxReq; i++ { // fill the interval with requests (bursts up to maxReq are allowed)
+		resp, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
+		require.NoError(t, err)
+		require.Equal(t, []byte("ping"), resp)
+	}
+
+	// new request will be delayed by the interval
+	resp, err := client.Request(context.Background(), mesh.Hosts()[1].ID(), []byte("ping"))
+	require.NoError(t, err)
+	require.Equal(t, []byte("ping"), resp)
+
+	interval := maxReqTime / time.Duration(maxReq)
+	require.GreaterOrEqual(t, time.Since(start), interval)
 }
 
 func FuzzResponseConsistency(f *testing.F) {

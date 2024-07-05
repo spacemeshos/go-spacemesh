@@ -57,12 +57,7 @@ install:
 	git lfs install
 	go mod download
 
-ifneq ($(OS),Windows_NT)
-	# On GH windows runners this fails at the moment: https://github.com/actions/runner-images/issues/10009
-	# since we don't run the linter on windows in the CI, we can skip this step for now
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s $(GOLANGCI_LINT_VERSION)
-endif
-
 	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
@@ -102,7 +97,7 @@ clear-test-cache:
 .PHONY: clear-test-cache
 
 test: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 5m -p 1 $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 8m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs

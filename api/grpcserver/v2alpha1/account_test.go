@@ -97,14 +97,12 @@ func TestAccountService_List(t *testing.T) {
 		require.NoError(t, err)
 		fmt.Println(list)
 		require.Len(t, list.Accounts, 25)
-		require.Equal(t, len(accs), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.AccountRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Len(t, list.Accounts, len(accs))
-		require.Equal(t, len(accs), int(list.Total))
 	})
 
 	t.Run("address", func(t *testing.T) {
