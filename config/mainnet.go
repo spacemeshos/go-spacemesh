@@ -66,8 +66,8 @@ func MainnetConfig() Config {
 	hare3conf.Enable = true
 	hare3conf.EnableLayer = 35117
 	hare3conf.CommiteeUpgrade = &hare3.CommiteeUpgrade{
-		Layer: 102_576,
-		Size:  40,
+		Layer: 104_567,
+		Size:  50,
 	}
 	return Config{
 		BaseConfig: BaseConfig{
