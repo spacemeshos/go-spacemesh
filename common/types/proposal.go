@@ -30,6 +30,13 @@ var EmptyProposalID = ProposalID{}
 
 type CompactProposalID [4]byte
 
+type CompactProposalHint struct {
+	// Index of the compact proposal to add information to
+	Index uint8
+	// Hint is the extra information to add to the proposal
+	Hint [4]byte
+}
+
 // EncodeScale implements scale codec interface.
 func (id *CompactProposalID) EncodeScale(e *scale.Encoder) (int, error) {
 	return scale.EncodeByteArray(e, id[:])

@@ -583,6 +583,8 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
 		if ir.Round == preround {
 			msg.Body.Value.CompactProposals = compactProposalIds(h.compactFn, out.message.Body.Value.Proposals)
+			// find colliding prefixes, then add the extra info
+			panic("next step need to add extra info in case of shared prefixes")
 			msg.Body.Value.Proposals = []types.ProposalID{}
 		}
 		if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {

@@ -92,9 +92,12 @@ type Value struct {
 	Proposals []types.ProposalID `scale:"max=2050"`
 	// Reference is set in messages for commit and notify rounds.
 	Reference *types.Hash32
-	// CompactProposals is the array of two-byte SipHash(vrf,proposal_id) and is only used in the preround
+	// CompactProposals is a compacted form of the proposal ID and is only used in the preround
 	// phase of the protocol.
 	CompactProposals []types.CompactProposalID `scale:"max=2050"`
+	// ProposalHint is an array of CompactProposalHint that helps to decorate CompactProposals
+	// with further information that can help disambiguate shared prefixes.
+	ProposalHint []types.CompactProposalHint
 }
 
 type Body struct {
