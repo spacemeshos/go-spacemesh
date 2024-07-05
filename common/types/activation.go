@@ -185,6 +185,13 @@ type ActivationTx struct {
 	TickCount      uint64
 	VRFNonce       VRFPostIndex
 	SmesherID      NodeID
+	// Weight of the ATX. The total weight of the epoch is expected to fit in a uint64.
+	// The total ATX weight is sum(NumUnits * TickCount) for identity it holds.
+	// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^6.
+	// PoETs should produce ~10k ticks at genesis, but are expected due to technological advances
+	// to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
+	// for at least the first few years.
+	Weight uint64
 
 	AtxBlob
 
@@ -194,37 +201,10 @@ type ActivationTx struct {
 	validity Validity  // whether the chain is fully verified and OK
 }
 
-// NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-// NOTE: this function is deprecated and used in a few tests only.
-// Create a new ActivationTx with ActivationTx{...}, setting the fields manually.
-func NewActivationTx(
-	challenge NIPostChallenge,
-	coinbase Address,
-	numUnits uint32,
-) *ActivationTx {
-	atx := &ActivationTx{
-		PublishEpoch:  challenge.PublishEpoch,
-		Sequence:      challenge.Sequence,
-		PrevATXID:     challenge.PrevATXID,
-		CommitmentATX: challenge.CommitmentATX,
-		Coinbase:      coinbase,
-		NumUnits:      numUnits,
-	}
-	return atx
-}
-
 // TargetEpoch returns the target epoch of the ATX. This is the epoch in which the miner is eligible
 // to participate thanks to the ATX.
 func (atx *ActivationTx) TargetEpoch() EpochID {
 	return atx.PublishEpoch + 1
-}
-
-func (atx *ActivationTx) Published() EpochID {
-	return atx.PublishEpoch
-}
-
-func (atx *ActivationTx) TotalNumUnits() uint32 {
-	return atx.NumUnits
 }
 
 // Golden returns true if atx is from a checkpoint snapshot.
@@ -236,16 +216,6 @@ func (atx *ActivationTx) Golden() bool {
 // SetGolden set atx to golden.
 func (atx *ActivationTx) SetGolden() {
 	atx.golden = true
-}
-
-// Weight of the ATX. The total weight of the epoch is expected to fit in a uint64 and is
-// sum(atx.NumUnits * atx.TickCount for each ATX in a given epoch).
-// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^6.
-// PoETs should produce ~10k ticks at genesis, but are expected due to technological advances
-// to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
-// for at least the first few years.
-func (atx *ActivationTx) GetWeight() uint64 {
-	return getWeight(uint64(atx.NumUnits), atx.TickCount)
 }
 
 // TickHeight returns a sum of base tick height and tick count.
@@ -270,7 +240,7 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint64("sequence_number", atx.Sequence)
 	encoder.AddUint64("base_tick_height", atx.BaseTickHeight)
 	encoder.AddUint64("tick_count", atx.TickCount)
-	encoder.AddUint64("weight", atx.GetWeight())
+	encoder.AddUint64("weight", atx.Weight)
 	encoder.AddUint64("height", atx.TickHeight())
 	return nil
 }
@@ -400,15 +370,3 @@ type EpochActiveSet struct {
 }
 
 var MaxEpochActiveSetSize = scale.MustGetMaxElements[EpochActiveSet]("Set")
-
-func getWeight(numUnits, tickCount uint64) uint64 {
-	return safeMul(numUnits, tickCount)
-}
-
-func safeMul(a, b uint64) uint64 {
-	c := a * b
-	if a > 1 && b > 1 && c/b != a {
-		panic("uint64 overflow")
-	}
-	return c
-}

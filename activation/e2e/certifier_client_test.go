@@ -183,6 +183,7 @@ func spawnTestCertifier(
 	postVerifier, err := activation.NewPostVerifier(
 		cfg,
 		zaptest.NewLogger(t),
+		activation.WithVerifyingOpts(activation.DefaultTestPostVerifyingOpts()),
 	)
 	require.NoError(t, err)
 	var eg errgroup.Group
