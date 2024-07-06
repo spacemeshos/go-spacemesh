@@ -1764,6 +1764,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			logger.Zap().Named("JSON"),
 			app.Config.API.JSONListener,
 			app.Config.API.JSONCorsAllowedOrigins,
+			app.Config.CollectMetrics,
 		)
 
 		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
