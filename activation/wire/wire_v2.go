@@ -143,10 +143,6 @@ func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
 	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
 }
 
-func (atx *ActivationTxV2) Published() types.EpochID {
-	return atx.PublishEpoch
-}
-
 func (atx *ActivationTxV2) TotalNumUnits() uint32 {
 	var total uint32
 	for _, post := range atx.NiPosts {
@@ -203,8 +199,7 @@ func (mc *MarriageCertificate) Root() []byte {
 // MerkleProofV2 proves membership of multiple challenges in a PoET membership merkle tree.
 type MerkleProofV2 struct {
 	// Nodes on path from leaf to root (not including leaf)
-	Nodes       []types.Hash32 `scale:"max=32"`
-	LeafIndices []uint64       `scale:"max=256"` // support merging up to 256 IDs
+	Nodes []types.Hash32 `scale:"max=32"`
 }
 
 type SubPostV2 struct {
@@ -213,8 +208,12 @@ type SubPostV2 struct {
 	// Must be 0 for non-merged ATXs.
 	MarriageIndex uint32
 	PrevATXIndex  uint32 // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
-	Post          PostV1
-	NumUnits      uint32
+	// Index of the leaf for this ID's challenge in the poet membership tree.
+	// IDs might shared the same index if their nipost challenges are equal.
+	// This happens when the IDs are continuously merged (they share the previous ATX).
+	MembershipLeafIndex uint64
+	Post                PostV1
+	NumUnits            uint32
 }
 
 func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
@@ -232,6 +231,11 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 		return nil // invalid index, root cannot be generated
 	}
 	tree.AddLeaf(prevATXs[sp.PrevATXIndex].Bytes())
+
+	var leafIndex types.Hash32
+	binary.LittleEndian.PutUint64(leafIndex[:], sp.MembershipLeafIndex)
+	tree.AddLeaf(leafIndex[:])
+
 	tree.AddLeaf(sp.Post.Root())
 
 	numUnits := make([]byte, 4)
@@ -242,7 +246,6 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 
 type NiPostsV2 struct {
 	// Single membership proof for all IDs in `Posts`.
-	// The index of ID in `Posts` is the index of the challenge in the proof (`LeafIndices`).
 	Membership MerkleProofV2
 	// The root of the PoET proof, that serves as the challenge for PoSTs.
 	Challenge types.Hash32
@@ -343,6 +346,7 @@ func (post *SubPostV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	}
 	encoder.AddUint32("MarriageIndex", post.MarriageIndex)
 	encoder.AddUint32("PrevATXIndex", post.PrevATXIndex)
+	encoder.AddUint64("MembershipLeafIndex", post.MembershipLeafIndex)
 	encoder.AddObject("Post", &post.Post)
 	encoder.AddUint32("NumUnits", post.NumUnits)
 	return nil

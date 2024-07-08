@@ -163,6 +163,7 @@ func (n *node) withAtx(min, max int) *node {
 	} else {
 		atx.NumUnits = uint32(min)
 	}
+	atx.Weight = uint64(atx.NumUnits) * atx.TickCount
 	id := types.ATXID{}
 	n.t.rng.Read(id[:])
 	atx.SetID(id)

@@ -37,16 +37,14 @@ func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
 			NiPosts: []NiPostsV2{
 				{
 					Membership: MerkleProofV2{
-						Nodes:       make([]types.Hash32, 32),
-						LeafIndices: make([]uint64, 256),
+						Nodes: make([]types.Hash32, 32),
 					},
 					Challenge: types.RandomHash(),
 					Posts:     make([]SubPostV2, 256),
 				},
 				{
 					Membership: MerkleProofV2{
-						Nodes:       make([]types.Hash32, 32),
-						LeafIndices: make([]uint64, 256),
+						Nodes: make([]types.Hash32, 32),
 					},
 					Challenge: types.RandomHash(),
 					Posts:     make([]SubPostV2, 256), // actually the sum of all posts in `NiPosts` should be 256
@@ -96,8 +94,7 @@ func Test_GenerateDoublePublishProof(t *testing.T) {
 		NiPosts: []NiPostsV2{
 			{
 				Membership: MerkleProofV2{
-					Nodes:       make([]types.Hash32, 32),
-					LeafIndices: make([]uint64, 256),
+					Nodes: make([]types.Hash32, 32),
 				},
 				Challenge: types.RandomHash(),
 				Posts: []SubPostV2{

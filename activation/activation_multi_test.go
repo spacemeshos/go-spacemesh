@@ -258,10 +258,10 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 				},
 				nil,
 			)
-			require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+			require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
 
 			// postClient.Proof() should not be called again
-			require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+			require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
 			return nil
 		})
 	}

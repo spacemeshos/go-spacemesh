@@ -154,14 +154,13 @@ func TestRecover(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			cfg := &checkpoint.RecoverConfig{
-				GoldenAtx:      goldenAtx,
-				DataDir:        t.TempDir(),
-				DbFile:         "test.sql",
-				LocalDbFile:    "local.sql",
-				PreserveOwnAtx: true,
-				NodeIDs:        []types.NodeID{types.RandomNodeID()},
-				Uri:            tc.uri,
-				Restore:        types.LayerID(recoverLayer),
+				GoldenAtx:   goldenAtx,
+				DataDir:     t.TempDir(),
+				DbFile:      "test.sql",
+				LocalDbFile: "local.sql",
+				NodeIDs:     []types.NodeID{types.RandomNodeID()},
+				Uri:         tc.uri,
+				Restore:     types.LayerID(recoverLayer),
 			}
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
@@ -203,13 +202,12 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 
 	fs := afero.NewMemMapFs()
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
-		DataDir:        t.TempDir(),
-		DbFile:         "test.sql",
-		PreserveOwnAtx: true,
-		NodeIDs:        []types.NodeID{types.RandomNodeID()},
-		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
-		Restore:        types.LayerID(recoverLayer),
+		GoldenAtx: goldenAtx,
+		DataDir:   t.TempDir(),
+		DbFile:    "test.sql",
+		NodeIDs:   []types.NodeID{types.RandomNodeID()},
+		Uri:       fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:   types.LayerID(recoverLayer),
 	}
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
@@ -495,14 +493,13 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
-		DataDir:        t.TempDir(),
-		DbFile:         "test.sql",
-		LocalDbFile:    "local.sql",
-		PreserveOwnAtx: true,
-		NodeIDs:        []types.NodeID{sig1.NodeID(), sig2.NodeID(), sig3.NodeID(), sig4.NodeID()},
-		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
-		Restore:        types.LayerID(recoverLayer),
+		GoldenAtx:   goldenAtx,
+		DataDir:     t.TempDir(),
+		DbFile:      "test.sql",
+		LocalDbFile: "local.sql",
+		NodeIDs:     []types.NodeID{sig1.NodeID(), sig2.NodeID(), sig3.NodeID(), sig4.NodeID()},
+		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:     types.LayerID(recoverLayer),
 	}
 
 	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
@@ -587,14 +584,13 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
-		DataDir:        t.TempDir(),
-		DbFile:         "test.sql",
-		LocalDbFile:    "local.sql",
-		PreserveOwnAtx: true,
-		NodeIDs:        []types.NodeID{sig1.NodeID(), sig2.NodeID(), sig3.NodeID()},
-		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
-		Restore:        types.LayerID(recoverLayer),
+		GoldenAtx:   goldenAtx,
+		DataDir:     t.TempDir(),
+		DbFile:      "test.sql",
+		LocalDbFile: "local.sql",
+		NodeIDs:     []types.NodeID{sig1.NodeID(), sig2.NodeID(), sig3.NodeID()},
+		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:     types.LayerID(recoverLayer),
 	}
 
 	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
@@ -704,14 +700,13 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	require.NoError(t, err)
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
-		DataDir:        t.TempDir(),
-		DbFile:         "test.sql",
-		LocalDbFile:    "local.sql",
-		PreserveOwnAtx: true,
-		NodeIDs:        []types.NodeID{sig1.NodeID(), sig2.NodeID()},
-		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
-		Restore:        types.LayerID(recoverLayer),
+		GoldenAtx:   goldenAtx,
+		DataDir:     t.TempDir(),
+		DbFile:      "test.sql",
+		LocalDbFile: "local.sql",
+		NodeIDs:     []types.NodeID{sig1.NodeID(), sig2.NodeID()},
+		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:     types.LayerID(recoverLayer),
 	}
 
 	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
@@ -801,14 +796,13 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
-		DataDir:        t.TempDir(),
-		DbFile:         "test.sql",
-		LocalDbFile:    "local.sql",
-		PreserveOwnAtx: true,
-		NodeIDs:        []types.NodeID{sig.NodeID()},
-		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
-		Restore:        types.LayerID(recoverLayer),
+		GoldenAtx:   goldenAtx,
+		DataDir:     t.TempDir(),
+		DbFile:      "test.sql",
+		LocalDbFile: "local.sql",
+		NodeIDs:     []types.NodeID{sig.NodeID()},
+		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:     types.LayerID(recoverLayer),
 	}
 
 	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
@@ -827,6 +821,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 		SmesherID:     golden.SmesherID,
 		Sequence:      golden.Sequence,
 		Coinbase:      golden.Coinbase,
+		Units:         map[types.NodeID]uint32{golden.SmesherID: golden.NumUnits},
 	}))
 	validateAndPreserveData(t, oldDB, vAtxs[1:])
 	// the proofs are not valid, but save them anyway for the purpose of testing
@@ -883,14 +878,13 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
-		DataDir:        t.TempDir(),
-		DbFile:         "test.sql",
-		LocalDbFile:    "local.sql",
-		PreserveOwnAtx: false,
-		NodeIDs:        []types.NodeID{sig.NodeID()},
-		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
-		Restore:        types.LayerID(recoverLayer),
+		GoldenAtx:   goldenAtx,
+		DataDir:     t.TempDir(),
+		DbFile:      "test.sql",
+		LocalDbFile: "local.sql",
+		NodeIDs:     []types.NodeID{sig.NodeID()},
+		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:     types.LayerID(recoverLayer),
 	}
 
 	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
@@ -953,14 +947,13 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	atx := newAtx(types.ATXID(atxid), types.EmptyATXID, nil, 3, 1, 0, nid)
 
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      goldenAtx,
-		DataDir:        t.TempDir(),
-		DbFile:         "test.sql",
-		LocalDbFile:    "local.sql",
-		PreserveOwnAtx: true,
-		NodeIDs:        []types.NodeID{types.BytesToNodeID(nid)},
-		Uri:            fmt.Sprintf("%s/snapshot-15", ts.URL),
-		Restore:        types.LayerID(recoverLayer),
+		GoldenAtx:   goldenAtx,
+		DataDir:     t.TempDir(),
+		DbFile:      "test.sql",
+		LocalDbFile: "local.sql",
+		NodeIDs:     []types.NodeID{types.BytesToNodeID(nid)},
+		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Restore:     types.LayerID(recoverLayer),
 	}
 
 	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))

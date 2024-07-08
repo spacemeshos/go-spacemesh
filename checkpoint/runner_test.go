@@ -249,6 +249,7 @@ func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
 		PublicKey:      v.SmesherID.Bytes(),
 		Sequence:       v.Sequence,
 		Coinbase:       v.Coinbase.Bytes(),
+		Units:          map[types.NodeID]uint32{v.SmesherID: v.NumUnits},
 	}
 }
 
@@ -257,6 +258,7 @@ func createMesh(t testing.TB, db *sql.Database, miners []miner, accts []*types.A
 	for _, miner := range miners {
 		for _, atx := range miner.atxs {
 			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+			require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, atx.NumUnits))
 		}
 		if proof := miner.malfeasanceProof; len(proof) > 0 {
 			require.NoError(t, identities.SetMalicious(db, miner.atxs[0].SmesherID, proof, time.Now()))
