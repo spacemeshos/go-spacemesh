@@ -722,7 +722,7 @@ func TestSmesherService(t *testing.T) {
 		cancel()
 		require.Eventually(t, func() bool {
 			_, err = stream.Recv()
-			return assert.ErrorContains(t, err, context.Canceled.Error())
+			return status.Code(err) == codes.Canceled
 		}, time.Second, time.Millisecond*10)
 	})
 }
