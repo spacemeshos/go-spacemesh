@@ -277,7 +277,8 @@ func (h *Handler) handleAtx(
 		return nil, fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), id.ShortString())
 	}
 
-	proof, err, _ := h.inProgress.Do(string(id.Bytes()), func() (any, error) {
+	key := string(id.Bytes())
+	proof, err, _ := h.inProgress.Do(key, func() (any, error) {
 		h.logger.Info("handling incoming atx", log.ZContext(ctx), zap.Stringer("atx_id", id), zap.Int("size", len(msg)))
 
 		switch atx := opaqueAtx.(type) {
@@ -289,6 +290,7 @@ func (h *Handler) handleAtx(
 			panic("unreachable")
 		}
 	})
+	h.inProgress.Forget(key)
 
 	return proof.(*mwire.MalfeasanceProof), err
 }
