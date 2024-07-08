@@ -3727,7 +3727,8 @@ for _, tt := range tests {
 
 Table tests can be difficult to read and maintain if the subtests contain conditional
 assertions or other branching logic. Table tests should **NOT** be used whenever
-there needs to be complex or conditional logic inside subtests (i.e. complex logic inside the `for` loop).
+there needs to be complex or conditional logic inside subtests (i.e. complex logic inside a `for` loop
+or changed behaviour of subtests due to an `if`).
 
 Large, complex table tests harm readability and maintainability because test readers may
 have difficulty debugging test failures that occur.
