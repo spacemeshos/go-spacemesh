@@ -37,7 +37,6 @@
   - [Avoid overly long lines](#avoid-overly-long-lines)
   - [Be Consistent](#be-consistent)
   - [Group Similar Declarations](#group-similar-declarations)
-  - [Import Group Ordering](#import-group-ordering)
   - [Package Names](#package-names)
   - [Function Names](#function-names)
   - [Import Aliasing](#import-aliasing)
@@ -2377,74 +2376,7 @@ violates the above concern by introducing multiple styles into the same code.
 
 ### Group Similar Declarations
 
-Go supports grouping similar declarations.
-
-<table>
-<thead><tr><th>Bad</th><th>Good</th></tr></thead>
-<tbody>
-<tr><td>
-
-```go
-import "a"
-import "b"
-```
-
-</td><td>
-
-```go
-import (
-  "a"
-  "b"
-)
-```
-
-</td></tr>
-</tbody></table>
-
-This also applies to constants, variables, and type declarations.
-
-<table>
-<thead><tr><th>Bad</th><th>Good</th></tr></thead>
-<tbody>
-<tr><td>
-
-```go
-
-const a = 1
-const b = 2
-
-
-
-var a = 1
-var b = 2
-
-
-
-type Area float64
-type Volume float64
-```
-
-</td><td>
-
-```go
-const (
-  a = 1
-  b = 2
-)
-
-var (
-  a = 1
-  b = 2
-)
-
-type (
-  Area float64
-  Volume float64
-)
-```
-
-</td></tr>
-</tbody></table>
+Go supports grouping similar declarations. This also applies to constants, variables, and type declarations.
 
 Only group related declarations. Do not group declarations that are unrelated.
 
@@ -2549,44 +2481,6 @@ func (c *client) request() {
 
   // ...
 }
-```
-
-</td></tr>
-</tbody></table>
-
-### Import Group Ordering
-
-There should be two import groups:
-
-- Standard library
-- Everything else
-
-This is the grouping applied by goimports by default.
-
-<table>
-<thead><tr><th>Bad</th><th>Good</th></tr></thead>
-<tbody>
-<tr><td>
-
-```go
-import (
-  "fmt"
-  "os"
-  "go.uber.org/atomic"
-  "golang.org/x/sync/errgroup"
-)
-```
-
-</td><td>
-
-```go
-import (
-  "fmt"
-  "os"
-
-  "go.uber.org/atomic"
-  "golang.org/x/sync/errgroup"
-)
 ```
 
 </td></tr>
