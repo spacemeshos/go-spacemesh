@@ -115,22 +115,25 @@ func createATX(
 	numUnits uint32,
 	received time.Time,
 ) types.ATXID {
-	nonce := types.VRFPostIndex(1)
-	atx := types.NewActivationTx(
-		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
-		types.GenerateAddress(types.RandomBytes(types.AddressLength)),
-		numUnits,
-	)
-	atx.VRFNonce = nonce
+	tb.Helper()
+	atx := types.ActivationTx{
+		PublishEpoch: lid.GetEpoch(),
+		Coinbase:     types.GenerateAddress(types.RandomBytes(types.AddressLength)),
+		NumUnits:     numUnits,
+		VRFNonce:     1,
+		TickCount:    1,
+		Weight:       uint64(numUnits),
+		SmesherID:    sig.NodeID(),
+	}
+
 	atx.SetReceived(received)
-	atx.SmesherID = sig.NodeID()
 	atx.SetID(types.RandomATXID())
-	atx.TickCount = 1
-	require.NoError(tb, atxs.Add(db, atx))
+	require.NoError(tb, atxs.Add(db, &atx))
 	return atx.ID()
 }
 
 func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {
+	tb.Helper()
 	for i := 0; i < num; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(tb, err)
@@ -188,12 +191,8 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, bootstrap, got)
 	}
-	for i, node := range testNodes {
-		if i == 0 {
-			// make the first node non-smeshing node
-			continue
-		}
-
+	// make the first node non-smeshing node
+	for _, node := range testNodes[1:] {
 		for _, db := range dbs {
 			for _, s := range node.signers {
 				createATX(t, db, atxPublishLid, s, 1, time.Now().Add(-1*time.Second))

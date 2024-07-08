@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.6.1
+
+### Improvements
+
+* [#6053](https://github.com/spacemeshos/go-spacemesh/pull/6053) Fixed an issue where the node could fail to select a
+  positioning ATX during the cyclegap and miss the registration window for the next PoET round.
+
 ## Release v1.6.0
 
 ### Upgrade information

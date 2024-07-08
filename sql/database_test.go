@@ -63,8 +63,8 @@ func Test_Migration_Rollback(t *testing.T) {
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
-	migration2.EXPECT().Apply(gomock.Any()).Return(errors.New("migration 2 failed"))
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
 
 	migration2.EXPECT().Rollback().Return(nil)
 
@@ -84,7 +84,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Name().Return("test").AnyTimes()
 	migration1.EXPECT().Order().Return(1).AnyTimes()
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	db, err := Open("file:"+dbFile,
@@ -101,7 +101,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).Return(errors.New("migration 2 failed"))
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
 	migration2.EXPECT().Rollback().Return(nil)
 
 	_, err = Open("file:"+dbFile,
@@ -118,7 +118,7 @@ func Test_Migration_Disabled(t *testing.T) {
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Name().Return("test").AnyTimes()
 	migration1.EXPECT().Order().Return(1).AnyTimes()
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	db, err := Open("file:"+dbFile,
@@ -151,7 +151,7 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).Return(nil)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 
 	schema := &Schema{
 		Migrations: MigrationList{migration1, migration2},
@@ -174,11 +174,11 @@ func TestDatabaseVacuumState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Order().Return(1).AnyTimes()
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil).Times(1)
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).Return(nil).Times(1)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 	dbFile := filepath.Join(dir, "test.sql")
 	db, err := Open("file:"+dbFile,

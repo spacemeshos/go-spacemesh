@@ -47,14 +47,17 @@ func DefaultConfig() Config {
 }
 
 type RecoverConfig struct {
-	GoldenAtx      types.ATXID
-	DataDir        string
-	DbFile         string
-	LocalDbFile    string
-	PreserveOwnAtx bool
-	NodeIDs        []types.NodeID
-	Uri            string
-	Restore        types.LayerID
+	GoldenAtx   types.ATXID
+	DataDir     string
+	DbFile      string
+	LocalDbFile string
+	NodeIDs     []types.NodeID // IDs to preserve own ATXs
+	Uri         string
+	Restore     types.LayerID
+}
+
+func (c *RecoverConfig) DbPath() string {
+	return filepath.Join(c.DataDir, c.DbFile)
 }
 
 func RecoveryDir(dataDir string) string {
@@ -116,7 +119,7 @@ func Recover(
 		return nil, errors.New("restore layer not set")
 	}
 	logger.Info("recovering from checkpoint", zap.String("url", cfg.Uri), zap.Stringer("restore", cfg.Restore))
-	db, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	db, err := statesql.Open("file:" + cfg.DbPath())
 	if err != nil {
 		return nil, fmt.Errorf("open old database: %w", err)
 	}
@@ -170,7 +173,8 @@ func RecoverWithDb(
 	if err != nil {
 		return nil, err
 	}
-	return recoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpFile)
+
+	return RecoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpFile)
 }
 
 type recoveryData struct {
@@ -178,7 +182,7 @@ type recoveryData struct {
 	atxs     []*atxs.CheckpointAtx
 }
 
-func recoverFromLocalFile(
+func RecoverFromLocalFile(
 	ctx context.Context,
 	logger *zap.Logger,
 	db sql.StateDatabase,
@@ -196,27 +200,26 @@ func recoverFromLocalFile(
 	logger.Info("recovery data contains", zap.Int("accounts", len(data.accounts)), zap.Int("atxs", len(data.atxs)))
 	deps := make(map[types.ATXID]*AtxDep)
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage)
-	if cfg.PreserveOwnAtx {
-		logger.Info("preserving own atx deps", log.ZContext(ctx), zap.Int("num identities", len(cfg.NodeIDs)))
-		for _, nodeID := range cfg.NodeIDs {
-			nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
-			if err != nil {
-				logger.Error(
-					"failed to collect deps for own atx",
-					log.ZShortStringer("smesherID", nodeID),
-					zap.Error(err),
-				)
-				// continue to recover from checkpoint despite failure to preserve own atx
-				continue
-			}
-			logger.Info("collected own atx deps",
-				log.ZContext(ctx),
+	logger.Info("preserving own atx deps", log.ZContext(ctx), zap.Int("num identities", len(cfg.NodeIDs)))
+	for _, nodeID := range cfg.NodeIDs {
+		nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
+		if err != nil {
+			logger.Error(
+				"failed to collect deps for own atx",
 				log.ZShortStringer("smesherID", nodeID),
-				zap.Int("own atx deps", len(nodeDeps)),
+				zap.Error(err),
 			)
-			maps.Copy(deps, nodeDeps)
-			maps.Copy(proofs, nodeProofs)
+			// continue to recover from checkpoint despite failure to preserve own atx
+			continue
 		}
+		logger.Info("collected own atx deps",
+			log.ZContext(ctx),
+			log.ZShortStringer("smesherID", nodeID),
+			zap.Int("own atx deps", len(nodeDeps)),
+			zap.Int("own poet deps", len(nodeProofs)),
+		)
+		maps.Copy(deps, nodeDeps)
+		maps.Copy(proofs, nodeProofs)
 	}
 
 	allDeps := maps.Values(deps)
@@ -252,9 +255,9 @@ func recoverFromLocalFile(
 	}
 	logger.Info("backed up old database", log.ZContext(ctx), zap.String("backup dir", backupDir))
 
-	newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	newDB, err := statesql.Open("file:" + cfg.DbPath())
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite db %w", err)
+		return nil, fmt.Errorf("creating new DB: %w", err)
 	}
 	defer newDB.Close()
 	logger.Info("populating new database",
@@ -351,6 +354,7 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		cAtx.TickCount = atx.TickCount
 		cAtx.Sequence = atx.Sequence
 		copy(cAtx.Coinbase[:], atx.Coinbase)
+		cAtx.Units = atx.Units
 		allAtxs = append(allAtxs, &cAtx)
 	}
 	return &recoveryData{

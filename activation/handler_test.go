@@ -643,7 +643,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, uint64(0), stored1.BaseTickHeight)
 	require.Equal(t, leaves/tickSize, stored1.TickCount)
 	require.Equal(t, leaves/tickSize, stored1.TickHeight())
-	require.Equal(t, (leaves/tickSize)*units, stored1.GetWeight())
+	require.Equal(t, (leaves/tickSize)*units, stored1.Weight)
 
 	atx2 := newChainedActivationTxV1(t, atx1, atx1.ID())
 	atx2.Sign(sig)
@@ -658,7 +658,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, stored1.TickHeight(), stored2.BaseTickHeight)
 	require.Equal(t, leaves/tickSize, stored2.TickCount)
 	require.Equal(t, stored1.TickHeight()+leaves/tickSize, stored2.TickHeight())
-	require.Equal(t, int(leaves/tickSize)*units, int(stored2.GetWeight()))
+	require.Equal(t, int(leaves/tickSize)*units, int(stored2.Weight))
 }
 
 func TestHandler_WrongHash(t *testing.T) {

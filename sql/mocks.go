@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
+	zap "go.uber.org/zap"
 )
 
 // MockMigration is a mock of Migration interface.
@@ -39,17 +40,17 @@ func (m *MockMigration) EXPECT() *MockMigrationMockRecorder {
 }
 
 // Apply mocks base method.
-func (m *MockMigration) Apply(db Executor) error {
+func (m *MockMigration) Apply(db Executor, logger *zap.Logger) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Apply", db)
+	ret := m.ctrl.Call(m, "Apply", db, logger)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Apply indicates an expected call of Apply.
-func (mr *MockMigrationMockRecorder) Apply(db any) *MockMigrationApplyCall {
+func (mr *MockMigrationMockRecorder) Apply(db, logger any) *MockMigrationApplyCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockMigration)(nil).Apply), db)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockMigration)(nil).Apply), db, logger)
 	return &MockMigrationApplyCall{Call: call}
 }
 
@@ -65,13 +66,13 @@ func (c *MockMigrationApplyCall) Return(arg0 error) *MockMigrationApplyCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockMigrationApplyCall) Do(f func(Executor) error) *MockMigrationApplyCall {
+func (c *MockMigrationApplyCall) Do(f func(Executor, *zap.Logger) error) *MockMigrationApplyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockMigrationApplyCall) DoAndReturn(f func(Executor) error) *MockMigrationApplyCall {
+func (c *MockMigrationApplyCall) DoAndReturn(f func(Executor, *zap.Logger) error) *MockMigrationApplyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

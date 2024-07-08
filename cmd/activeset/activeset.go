@@ -39,7 +39,7 @@ Example:
 	for _, id := range ids {
 		atx, err := atxs.Get(db, id)
 		must(err, "get id %v: %s\n", id, err)
-		weight += atx.GetWeight()
+		weight += atx.Weight
 	}
 	fmt.Printf("count = %d\nweight = %d\n", len(ids), weight)
 }

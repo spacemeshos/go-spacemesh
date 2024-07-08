@@ -33,6 +33,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+func syncedSyncer(t testing.TB) *activation.Mocksyncer {
+	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		synced := make(chan struct{})
+		close(synced)
+		return synced
+	}).AnyTimes()
+	return syncer
+}
+
 func Test_BuilderWithMultipleClients(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -40,52 +50,30 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	const numSigners = 3
 	const totalAtxs = numEpochs * numSigners
 
-	signers := make(map[types.NodeID]*signing.EdSigner, numSigners)
-	for range numSigners {
+	signers := make([]*signing.EdSigner, numSigners)
+	for i := range numSigners {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		signers[sig.NodeID()] = sig
+		signers[i] = sig
 	}
 
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := statesql.InMemory()
 	localDB := localsql.InMemory()
-
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		synced := make(chan struct{})
-		close(synced)
-		return synced
-	}).AnyTimes()
 
 	svc := grpcserver.NewPostService(logger)
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
-
 	var eg errgroup.Group
-	i := uint32(1)
-	opts := testPostSetupOpts(t)
-	for _, sig := range signers {
-		opts := opts
-		opts.DataDir = t.TempDir()
-		opts.NumUnits = min(i*2, cfg.MaxNumUnits)
-		i += 1
+	for i, sig := range signers {
+		opts := testPostSetupOpts(t)
+		opts.NumUnits = min(opts.NumUnits+2*uint32(i), cfg.MaxNumUnits)
 		eg.Go(func() error {
-			validator := activation.NewMocknipostValidator(ctrl)
-			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
-			require.NoError(t, err)
-
-			initPost(t, mgr, opts, sig.NodeID())
-			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
-
-			require.Eventually(t, func() bool {
-				_, err := svc.Client(sig.NodeID())
-				return err == nil
-			}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
+			initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 			return nil
 		})
 	}
@@ -104,6 +92,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		MaxRequestRetries: 10,
 	}
 
+	scrypt := testPostSetupOpts(t).Scrypt
 	pubkey, address := spawnTestCertifier(
 		t,
 		cfg,
@@ -111,7 +100,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			exp := time.Now().Add(epoch)
 			return &poetShared.Cert{Pubkey: id, Expiration: &exp}
 		},
-		verifying.WithLabelScryptParams(opts.Scrypt),
+		verifying.WithLabelScryptParams(scrypt),
 	)
 
 	poetProver := spawnPoet(
@@ -147,11 +136,10 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		db,
 		poetDb,
 		cfg,
-		opts.Scrypt,
+		scrypt,
 		verifier,
 	)
 
-	postStates := activation.NewMockPostStates(ctrl)
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -159,7 +147,6 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		poetCfg,
 		clock,
 		validator,
-		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetServices(client),
 	)
 	require.NoError(t, err)
@@ -208,30 +195,13 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		mpub,
 		nb,
 		clock,
-		syncer,
+		syncedSyncer(t),
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),
-		activation.WithPostStates(postStates),
 		activation.WithPoets(client),
 	)
 	for _, sig := range signers {
-		gomock.InOrder(
-			// it starts by setting to IDLE
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// initial proof
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// post proof - 1st epoch
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// 2nd epoch
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// 3rd epoch
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		)
 		tab.Register(sig)
 	}
 

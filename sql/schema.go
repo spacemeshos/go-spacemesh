@@ -105,10 +105,7 @@ func (s *Schema) CheckDBVersion(logger *zap.Logger, db Database) (before, after 
 	if err != nil {
 		return 0, 0, err
 	}
-	after = 0
-	if len(s.Migrations) > 0 {
-		after = s.Migrations.Version()
-	}
+	after = s.Migrations.Version()
 	if before > after {
 		logger.Error("database version is newer than expected - downgrade is not supported",
 			zap.Int("current version", before),
@@ -130,7 +127,7 @@ func (s *Schema) Migrate(logger *zap.Logger, db Database, before, vacuumState in
 		}
 		if err := db.WithTx(context.Background(), func(tx Transaction) error {
 			if _, ok := s.skipMigration[m.Order()]; !ok {
-				if err := m.Apply(tx); err != nil {
+				if err := m.Apply(tx, logger); err != nil {
 					for j := i; j >= 0 && s.Migrations[j].Order() > before; j-- {
 						if e := s.Migrations[j].Rollback(); e != nil {
 							err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))

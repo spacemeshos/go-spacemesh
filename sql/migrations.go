@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 // MigrationList denotes a list of migrations.
@@ -45,7 +47,7 @@ type sqlMigration struct {
 
 var sqlCommentRx = regexp.MustCompile(`(?m)--.*$`)
 
-func (m *sqlMigration) Apply(db Executor) error {
+func (m *sqlMigration) Apply(db Executor, logger *zap.Logger) error {
 	current, err := version(db)
 	if err != nil {
 		return err

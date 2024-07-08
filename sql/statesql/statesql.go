@@ -29,6 +29,7 @@ func Schema() (*sql.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
+	sqlMigrations = sqlMigrations.AddMigration(New0021Migration(1_000_000))
 	// NOTE: coded state migrations can be added here
 	// They can be a part of this localsql package
 	return &sql.Schema{

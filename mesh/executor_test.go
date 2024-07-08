@@ -70,16 +70,17 @@ func makeResults(lid types.LayerID, txs ...types.Transaction) []types.Transactio
 func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.ATXID, types.NodeID) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t.tb, err)
-	atx := types.NewActivationTx(
-		types.NIPostChallenge{PublishEpoch: epoch},
-		cb,
-		11,
-	)
-	atx.VRFNonce = 1
+	atx := &types.ActivationTx{
+		PublishEpoch: epoch,
+		Coinbase:     cb,
+		NumUnits:     11,
+		Weight:       11,
+		VRFNonce:     1,
+		TickCount:    1,
+		SmesherID:    sig.NodeID(),
+	}
 	atx.SetReceived(time.Now())
-	atx.SmesherID = sig.NodeID()
 	atx.SetID(types.RandomATXID())
-	atx.TickCount = 1
 	require.NoError(t.tb, atxs.Add(t.db, atx))
 	t.atxsdata.AddFromAtx(atx, false)
 	return atx.ID(), sig.NodeID()
