@@ -69,7 +69,7 @@ func (t *ATXID) DecodeScale(d *scale.Decoder) (int, error) {
 	return scale.DecodeByteArray(d, t[:])
 }
 
-func (t *ATXID) MarshalText() ([]byte, error) {
+func (t ATXID) MarshalText() ([]byte, error) {
 	return util.Base64Encode(t[:]), nil
 }
 

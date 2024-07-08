@@ -65,6 +65,10 @@ func MainnetConfig() Config {
 	hare3conf.Committee = 400
 	hare3conf.Enable = true
 	hare3conf.EnableLayer = 35117
+	hare3conf.CommitteeUpgrade = &hare3.CommitteeUpgrade{
+		Layer: 105_720, // July 15, 2024, 10:00:00 AM UTC
+		Size:  50,
+	}
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
