@@ -66,11 +66,6 @@ const (
 	txsPerProposal = 99
 	layersPerEpoch = uint32(5)
 
-	// for now LayersStream returns no ATXs.
-	atxPerLayer = 0
-
-	// LayersStream returns one effective block per layer.
-	blkPerLayer    = 1
 	accountBalance = 8675301
 	accountCounter = 0
 	rewardAmount   = 5551234
@@ -651,8 +646,7 @@ func TestSmesherService(t *testing.T) {
 		c, ctx := setupSmesherService(t, nil)
 		_, err := c.SetCoinbase(ctx, &pb.SetCoinbaseRequest{})
 		require.Error(t, err)
-		statusCode := status.Code(err)
-		require.Equal(t, codes.InvalidArgument, statusCode)
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
 
 	t.Run("SetCoinbase", func(t *testing.T) {
@@ -682,8 +676,7 @@ func TestSmesherService(t *testing.T) {
 		c, ctx := setupSmesherService(t, nil)
 		_, err := c.MinGas(ctx, &emptypb.Empty{})
 		require.Error(t, err)
-		statusCode := status.Code(err)
-		require.Equal(t, codes.Unimplemented, statusCode)
+		require.Equal(t, codes.Unimplemented, status.Code(err))
 	})
 
 	t.Run("SetMinGas", func(t *testing.T) {
@@ -691,8 +684,7 @@ func TestSmesherService(t *testing.T) {
 		c, ctx := setupSmesherService(t, nil)
 		_, err := c.SetMinGas(ctx, &pb.SetMinGasRequest{})
 		require.Error(t, err)
-		statusCode := status.Code(err)
-		require.Equal(t, codes.Unimplemented, statusCode)
+		require.Equal(t, codes.Unimplemented, status.Code(err))
 	})
 
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
@@ -720,8 +712,10 @@ func TestSmesherService(t *testing.T) {
 		}
 
 		cancel()
-		_, err = stream.Recv()
-		require.ErrorContains(t, err, context.Canceled.Error())
+		require.Eventually(t, func() bool {
+			_, err = stream.Recv()
+			return status.Code(err) == codes.Canceled
+		}, time.Second, time.Millisecond*10)
 	})
 }
 
@@ -809,10 +803,8 @@ func TestMeshService(t *testing.T) {
 					name: "no_inputs",
 					run: func(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{})
-						require.Error(t, err, "expected an error")
-						require.Contains(t, err.Error(), "`Filter` must be provided")
-						statusCode := status.Code(err)
-						require.Equal(t, codes.InvalidArgument, statusCode)
+						require.ErrorContains(t, err, "`Filter` must be provided")
+						require.Equal(t, codes.InvalidArgument, status.Code(err))
 					},
 				},
 				{
@@ -821,10 +813,8 @@ func TestMeshService(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MinLayer: &pb.LayerNumber{Number: layerCurrent.Add(1).Uint32()},
 						})
-						require.Error(t, err, "expected an error")
-						require.Contains(t, err.Error(), "`LatestLayer` must be less than")
-						statusCode := status.Code(err)
-						require.Equal(t, codes.InvalidArgument, statusCode)
+						require.ErrorContains(t, err, "`LatestLayer` must be less than")
+						require.Equal(t, codes.InvalidArgument, status.Code(err))
 					},
 				},
 				{
@@ -851,10 +841,8 @@ func TestMeshService(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 						})
-						require.Error(t, err, "expected an error")
-						require.Contains(t, err.Error(), "`Filter` must be provided")
-						statusCode := status.Code(err)
-						require.Equal(t, codes.InvalidArgument, statusCode)
+						require.ErrorContains(t, err, "`Filter` must be provided")
+						require.Equal(t, codes.InvalidArgument, status.Code(err))
 					},
 				},
 				{
@@ -864,10 +852,8 @@ func TestMeshService(t *testing.T) {
 							MaxResults: uint32(10),
 							Filter:     &pb.AccountMeshDataFilter{},
 						})
-						require.Error(t, err, "expected an error")
-						require.Contains(t, err.Error(), "`Filter.AccountId` must be provided")
-						statusCode := status.Code(err)
-						require.Equal(t, codes.InvalidArgument, statusCode)
+						require.ErrorContains(t, err, "`Filter.AccountId` must be provided")
+						require.Equal(t, codes.InvalidArgument, status.Code(err))
 					},
 				},
 				{
@@ -912,10 +898,8 @@ func TestMeshService(t *testing.T) {
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED),
 							},
 						})
-						require.Error(t, err, "expected an error")
-						require.Contains(t, err.Error(), "`Filter.AccountMeshDataFlags` must set at least one bitfield")
-						statusCode := status.Code(err)
-						require.Equal(t, codes.InvalidArgument, statusCode)
+						require.ErrorContains(t, err, "`Filter.AccountMeshDataFlags` must set at least one bitfield")
+						require.Equal(t, codes.InvalidArgument, status.Code(err))
 					},
 				},
 				{
@@ -1033,10 +1017,8 @@ func TestMeshService(t *testing.T) {
 
 					// sending a request should generate an error
 					_, err = stream.Recv()
-					require.Error(t, err, "expected an error")
-					require.Contains(t, err.Error(), msg, "received unexpected error")
-					statusCode := status.Code(err)
-					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
+					require.ErrorContains(t, err, msg, "received unexpected error")
+					require.Equal(t, codes.InvalidArgument, status.Code(err))
 
 					// Do we need this? It doesn't seem to cause any harm
 					stream.Context().Done()
@@ -1122,8 +1104,7 @@ func TestMeshService(t *testing.T) {
 			generateRunFnError := func(msg string, req *pb.LayersQueryRequest) func(*testing.T) {
 				return func(t *testing.T) {
 					_, err := c.LayersQuery(context.Background(), req)
-					require.Error(t, err, "expected query to produce an error")
-					require.Contains(t, err.Error(), msg, "expected error to contain string")
+					require.ErrorContains(t, err, msg, "expected error to contain string")
 				}
 			}
 			requests := []struct {
@@ -1400,17 +1381,15 @@ func TestTransactionService(t *testing.T) {
 		}},
 		{"TransactionsState_MissingTransactionId", func(t *testing.T) {
 			_, err := c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{})
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`TransactionId` must include")
+			require.Equal(t, codes.InvalidArgument, status.Code(err))
+			require.ErrorContains(t, err, "`TransactionId` must include")
 		}},
 		{"TransactionsState_TransactionIdZeroLen", func(t *testing.T) {
 			_, err := c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{
 				TransactionId: []*pb.TransactionId{},
 			})
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`TransactionId` must include")
+			require.Equal(t, codes.InvalidArgument, status.Code(err))
+			require.ErrorContains(t, err, "`TransactionId` must include")
 		}},
 		{"TransactionsState_StateOnly", func(t *testing.T) {
 			req := &pb.TransactionsStateRequest{}
@@ -1444,9 +1423,8 @@ func TestTransactionService(t *testing.T) {
 			stream, err := c.TransactionsStateStream(context.Background(), req)
 			require.NoError(t, err)
 			_, err = stream.Recv()
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`TransactionId` must include")
+			require.Equal(t, codes.InvalidArgument, status.Code(err))
+			require.ErrorContains(t, err, "`TransactionId` must include")
 		}},
 		{"TransactionsStateStream_TransactionIdZeroLen", func(t *testing.T) {
 			req := &pb.TransactionsStateStreamRequest{
@@ -1455,9 +1433,8 @@ func TestTransactionService(t *testing.T) {
 			stream, err := c.TransactionsStateStream(context.Background(), req)
 			require.NoError(t, err)
 			_, err = stream.Recv()
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`TransactionId` must include")
+			require.Equal(t, codes.InvalidArgument, status.Code(err))
+			require.ErrorContains(t, err, "`TransactionId` must include")
 		}},
 		{"TransactionsStateStream_StateOnly", func(t *testing.T) {
 			// Set up the reporter
@@ -1658,8 +1635,8 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, uint32(0), l.Number.Number, "first layer is zero")
 	require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, l.Status, "first layer is confirmed")
 
-	require.Len(t, l.Activations, atxPerLayer, "unexpected number of activations in layer")
-	require.Len(t, l.Blocks, blkPerLayer, "unexpected number of blocks in layer")
+	require.Empty(t, l.Activations, "unexpected number of activations in layer")
+	require.Len(t, l.Blocks, 1, "unexpected number of blocks in layer")
 	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
 	resBlock := l.Blocks[0]
@@ -2051,13 +2028,11 @@ func TestMultiService(t *testing.T) {
 	_, err1 = c1.Echo(ctx, &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message},
 	})
-	require.Error(t, err1)
-	require.Contains(t, err1.Error(), "rpc error: code = Unavailable")
+	require.Equal(t, codes.Unavailable, status.Code(err1))
 
 	// Make sure MeshService is off
 	_, err2 = c2.GenesisTime(ctx, &pb.GenesisTimeRequest{})
-	require.Error(t, err2)
-	require.Contains(t, err2.Error(), "rpc error: code = Unavailable")
+	require.Equal(t, codes.Unavailable, status.Code(err2))
 }
 
 func TestDebugService(t *testing.T) {
