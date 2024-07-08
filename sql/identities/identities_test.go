@@ -131,8 +131,7 @@ func TestMarried(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, married)
 
-		atx := types.RandomATXID()
-		require.NoError(t, SetMarriage(db, id, atx, 0))
+		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: types.RandomATXID()}))
 
 		married, err = Married(db, id)
 		require.NoError(t, err)
@@ -150,7 +149,7 @@ func TestMarried(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, married)
 
-		require.NoError(t, SetMarriage(db, id, types.RandomATXID(), 0))
+		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: types.RandomATXID()}))
 
 		married, err = Married(db, id)
 		require.NoError(t, err)
@@ -165,7 +164,7 @@ func TestMarriageATX(t *testing.T) {
 		db := sql.InMemory()
 
 		id := types.RandomNodeID()
-		_, _, err := MarriageInfo(db, id)
+		_, err := MarriageATX(db, id)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 	t.Run("married", func(t *testing.T) {
@@ -173,13 +172,35 @@ func TestMarriageATX(t *testing.T) {
 		db := sql.InMemory()
 
 		id := types.RandomNodeID()
-		atx := types.RandomATXID()
-		require.NoError(t, SetMarriage(db, id, atx, 5))
-		got, idx, err := MarriageInfo(db, id)
+		marriage := MarriageData{
+			ATX:       types.RandomATXID(),
+			Signature: types.RandomEdSignature(),
+			Index:     2,
+			Target:    types.RandomNodeID(),
+		}
+		require.NoError(t, SetMarriage(db, id, &marriage))
+		got, err := MarriageATX(db, id)
 		require.NoError(t, err)
-		require.Equal(t, atx, got)
-		require.Equal(t, 5, idx)
+		require.Equal(t, marriage.ATX, got)
 	})
+}
+
+func TestMarriage(t *testing.T) {
+	t.Parallel()
+
+	db := sql.InMemory()
+
+	id := types.RandomNodeID()
+	marriage := MarriageData{
+		ATX:       types.RandomATXID(),
+		Signature: types.RandomEdSignature(),
+		Index:     2,
+		Target:    types.RandomNodeID(),
+	}
+	require.NoError(t, SetMarriage(db, id, &marriage))
+	got, err := Marriage(db, id)
+	require.NoError(t, err)
+	require.Equal(t, marriage, *got)
 }
 
 func TestEquivocationSet(t *testing.T) {
@@ -195,7 +216,11 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 		}
 		for i, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx, i))
+			err := SetMarriage(db, id, &MarriageData{
+				ATX:   atx,
+				Index: i,
+			})
+			require.NoError(t, err)
 		}
 
 		for _, id := range ids {
@@ -224,7 +249,11 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 		}
 		for i, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx, i))
+			err := SetMarriage(db, id, &MarriageData{
+				ATX:   atx,
+				Index: i,
+			})
+			require.NoError(t, err)
 		}
 
 		for _, id := range ids {
@@ -235,7 +264,10 @@ func TestEquivocationSet(t *testing.T) {
 
 		// try to marry via another random ATX
 		// the set should remain intact
-		require.NoError(t, SetMarriage(db, ids[0], types.RandomATXID(), 0))
+		err := SetMarriage(db, ids[0], &MarriageData{
+			ATX: types.RandomATXID(),
+		})
+		require.NoError(t, err)
 		for _, id := range ids {
 			set, err := EquivocationSet(db, id)
 			require.NoError(t, err)
@@ -246,7 +278,7 @@ func TestEquivocationSet(t *testing.T) {
 		db := statesql.InMemory()
 		atx := types.RandomATXID()
 		id := types.RandomNodeID()
-		require.NoError(t, SetMarriage(db, id, atx, 0))
+		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx}))
 
 		malicious, err := IsMalicious(db, id)
 		require.NoError(t, err)
@@ -269,7 +301,7 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 		}
 		for i, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx, i))
+			require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx, Index: i}))
 		}
 
 		require.NoError(t, SetMalicious(db, ids[0], []byte("proof"), time.Now()))
@@ -295,7 +327,7 @@ func TestEquivocationSetByMarriageATX(t *testing.T) {
 		}
 		atx := types.RandomATXID()
 		for i, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx, i))
+			require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx, Index: i}))
 		}
 		set, err := EquivocationSetByMarriageATX(db, atx)
 		require.NoError(t, err)
