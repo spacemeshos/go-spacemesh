@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.6.2
+
+### Improvements
+
+* [#5793](https://github.com/spacemeshos/go-spacemesh/pull/5793) Reduced hare committee 8x from 400 to 50 to decrease
+  network traffic caused by Hare.
+
 ## Release v1.6.1
 
 ### Improvements
