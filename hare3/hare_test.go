@@ -250,7 +250,7 @@ func (n *node) register(signer *signing.EdSigner) {
 }
 
 func (n *node) storeAtx(atx *types.ActivationTx) error {
-	if err := atxs.Add(n.db, atx); err != nil {
+	if err := atxs.Add(n.db, atx, types.AtxBlob{}); err != nil {
 		return err
 	}
 	n.atxsdata.AddFromAtx(atx, false)
@@ -915,7 +915,7 @@ func TestProposals(t *testing.T) {
 				WithLogger(logtest.New(t).Zap()),
 			)
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(db, &atx))
+				require.NoError(t, atxs.Add(db, &atx, types.AtxBlob{}))
 				atxsdata.AddFromAtx(&atx, false)
 			}
 			for _, proposal := range tc.proposals {

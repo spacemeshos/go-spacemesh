@@ -50,7 +50,7 @@ func TestWarmup(t *testing.T) {
 			gatx(types.ATXID{3, 3}, 3, types.NodeID{3}, nonce),
 		}
 		for i := range data {
-			require.NoError(t, atxs.Add(db, &data[i]))
+			require.NoError(t, atxs.Add(db, &data[i], types.AtxBlob{}))
 		}
 		require.NoError(t, layers.SetApplied(db, applied, types.BlockID{1}))
 
@@ -76,7 +76,7 @@ func TestWarmup(t *testing.T) {
 		db := statesql.InMemory()
 		nonce := types.VRFPostIndex(1)
 		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nonce)
-		require.NoError(t, atxs.Add(db, &data))
+		require.NoError(t, atxs.Add(db, &data, types.AtxBlob{}))
 
 		exec := mocks.NewMockExecutor(gomock.NewController(t))
 		call := 0

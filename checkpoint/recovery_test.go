@@ -274,46 +274,45 @@ func validateAndPreserveData(
 	for _, dep := range deps {
 		var atx wire.ActivationTxV1
 		require.NoError(tb, codec.Decode(dep.Blob, &atx))
-		vatx := wire.ActivationTxFromWireV1(&atx, dep.Blob...)
-		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
+		mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
-		if vatx.PrevATXID == types.EmptyATXID {
+		if atx.PrevATXID == types.EmptyATXID {
 			mvalidator.EXPECT().
 				InitialNIPostChallengeV1(&atx.NIPostChallengeV1, gomock.Any(), goldenAtx).
 				AnyTimes()
 			mvalidator.EXPECT().Post(
 				gomock.Any(),
-				vatx.SmesherID,
-				*vatx.CommitmentATX,
+				atx.SmesherID,
+				*atx.CommitmentATXID,
 				wire.PostFromWireV1(atx.InitialPost),
 				gomock.Any(),
-				vatx.NumUnits,
+				atx.NumUnits,
 				gomock.Any(),
 			)
 			mvalidator.EXPECT().VRFNonce(
-				vatx.SmesherID,
-				*vatx.CommitmentATX,
-				(uint64)(vatx.VRFNonce),
+				atx.SmesherID,
+				*atx.CommitmentATXID,
+				*atx.VRFNonce,
 				atx.NIPost.PostMetadata.LabelsPerUnit,
-				vatx.NumUnits,
+				atx.NumUnits,
 			)
 		} else {
 			mvalidator.EXPECT().NIPostChallengeV1(
 				&atx.NIPostChallengeV1,
 				gomock.Cond(func(prev any) bool { return prev.(*types.ActivationTx).ID() == atx.PrevATXID }),
-				vatx.SmesherID,
+				atx.SmesherID,
 			)
 		}
 
-		mvalidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, vatx.PublishEpoch)
+		mvalidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, atx.PublishEpoch)
 		mvalidator.EXPECT().
-			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), vatx.NumUnits, gomock.Any()).
+			NIPost(gomock.Any(), atx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)
 		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", dep.Blob))
+		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), "self", dep.Blob))
 	}
 }
 
@@ -354,12 +353,9 @@ func newChainedAtx(
 	}
 	watx.Signature = sig.Sign(signing.ATX, watx.SignedBytes())
 
-	atx := wire.ActivationTxFromWireV1(watx)
-	atx.SetReceived(time.Now().Local())
-
 	return &checkpoint.AtxDep{
-		ID:           atx.ID(),
-		PublishEpoch: atx.PublishEpoch,
+		ID:           watx.ID(),
+		PublishEpoch: watx.PublishEpoch,
 		Blob:         codec.MustEncode(watx),
 	}
 }
@@ -629,19 +625,15 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NoError(t, oldDB.Close())
 
 	// write pending nipost challenge to simulate a pending atx still waiting for poet proof.
-	var atx wire.ActivationTxV1
-	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-2].Blob, &atx))
-	prevAtx1 := wire.ActivationTxFromWireV1(&atx)
-	atx = wire.ActivationTxV1{}
-	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-1].Blob, &atx))
-	posAtx1 := wire.ActivationTxFromWireV1(&atx)
+	var prevAtx1 wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-2].Blob, &prevAtx1))
+	var posAtx1 wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-1].Blob, &posAtx1))
 
-	atx = wire.ActivationTxV1{}
-	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-2].Blob, &atx))
-	prevAtx2 := wire.ActivationTxFromWireV1(&atx)
-	atx = wire.ActivationTxV1{}
-	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-1].Blob, &atx))
-	posAtx2 := wire.ActivationTxFromWireV1(&atx)
+	var prevAtx2 wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-2].Blob, &prevAtx2))
+	var posAtx2 wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-1].Blob, &posAtx2))
 
 	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
 	require.NoError(t, err)
@@ -819,14 +811,13 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	require.NotNil(t, oldDB)
 	vAtxs, proofs := createAtxChain(t, sig)
 	// make the first one from the previous snapshot
-	var atx wire.ActivationTxV1
-	require.NoError(t, codec.Decode(vAtxs[0].Blob, &atx))
-	golden := wire.ActivationTxFromWireV1(&atx, vAtxs[0].Blob...)
+	var golden wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs[0].Blob, &golden))
 	require.NoError(t, atxs.AddCheckpointed(oldDB, &atxs.CheckpointAtx{
 		ID:            golden.ID(),
 		Epoch:         golden.PublishEpoch,
-		CommitmentATX: *golden.CommitmentATX,
-		VRFNonce:      golden.VRFNonce,
+		CommitmentATX: *golden.CommitmentATXID,
+		VRFNonce:      types.VRFPostIndex(*golden.VRFNonce),
 		NumUnits:      golden.NumUnits,
 		SmesherID:     golden.SmesherID,
 		Sequence:      golden.Sequence,
@@ -969,7 +960,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
-	require.NoError(t, atxs.Add(oldDB, atx))
+	require.NoError(t, atxs.Add(oldDB, atx, types.AtxBlob{}))
 	require.NoError(t, oldDB.Close())
 
 	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)

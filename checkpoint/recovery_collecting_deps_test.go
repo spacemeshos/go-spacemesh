@@ -8,7 +8,6 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -30,7 +29,7 @@ func TestCollectingDeps(t *testing.T) {
 			},
 			SmesherID: types.RandomNodeID(),
 		}
-		require.NoError(t, atxs.Add(db, fixture.ToAtx(t, marriageATX)))
+		require.NoError(t, atxs.Add(db, fixture.ToAtx(t, marriageATX), marriageATX.Blob()))
 		mAtxID := marriageATX.ID()
 
 		watx := &wire.ActivationTxV2{
@@ -39,15 +38,11 @@ func TestCollectingDeps(t *testing.T) {
 			MarriageATX:    &mAtxID,
 		}
 		atx := &types.ActivationTx{
-			AtxBlob: types.AtxBlob{
-				Version: types.AtxV2,
-				Blob:    codec.MustEncode(watx),
-			},
 			SmesherID: watx.SmesherID,
 		}
 		atx.SetID(watx.ID())
 		atx.SetReceived(time.Now())
-		require.NoError(t, atxs.Add(db, atx))
+		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
 
 		// marry the two IDs
 		err := identities.SetMarriage(db, marriageATX.SmesherID, &identities.MarriageData{ATX: marriageATX.ID()})

@@ -253,7 +253,7 @@ func TestActiveSetGenerate(t *testing.T) {
 				config{networkDelay: tc.networkDelay, goodAtxPercent: tc.goodAtxPercent},
 			)
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(tester.db, atx))
+				require.NoError(t, atxs.Add(tester.db, atx, types.AtxBlob{}))
 				tester.atxsdata.AddFromAtx(atx, false)
 			}
 			for _, identity := range tc.malfeasent {

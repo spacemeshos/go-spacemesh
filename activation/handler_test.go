@@ -870,7 +870,7 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 
 		atx := newInitialATXv1(t, atxHdlr.goldenATXID)
-		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		decoded, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.NoError(t, err)
 		require.Equal(t, atx, decoded)
 	})
@@ -881,7 +881,7 @@ func TestHandler_DecodeATX(t *testing.T) {
 
 		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
 		atx.PublishEpoch = 10
-		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		decoded, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.NoError(t, err)
 		require.Equal(t, atx, decoded)
 	})
@@ -892,7 +892,7 @@ func TestHandler_DecodeATX(t *testing.T) {
 
 		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
 		atx.PublishEpoch = 9
-		_, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		_, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.ErrorIs(t, err, errMalformedData)
 	})
 }

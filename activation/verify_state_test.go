@@ -34,7 +34,7 @@ func Test_CheckPrevATXs(t *testing.T) {
 	})
 	atx1.Sign(sig)
 	vAtx1 := toAtx(t, atx1)
-	require.NoError(t, atxs.Add(db, vAtx1))
+	require.NoError(t, atxs.Add(db, vAtx1, atx1.Blob()))
 
 	atx2 := newInitialATXv1(t, goldenATXID, func(atx *wire.ActivationTxV1) {
 		atx.PrevATXID = prevATXID
@@ -42,7 +42,7 @@ func Test_CheckPrevATXs(t *testing.T) {
 	})
 	atx2.Sign(sig)
 	vAtx2 := toAtx(t, atx2)
-	require.NoError(t, atxs.Add(db, vAtx2))
+	require.NoError(t, atxs.Add(db, vAtx2, atx2.Blob()))
 
 	// create 100 random ATXs that are not malicious
 	for i := 0; i < 100; i++ {
@@ -55,7 +55,7 @@ func Test_CheckPrevATXs(t *testing.T) {
 		})
 		atx.Sign(otherSig)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 	}
 
 	// Act

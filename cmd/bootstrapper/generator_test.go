@@ -56,7 +56,7 @@ func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []ty
 		}
 		atx.SetID(id)
 		atx.SetReceived(time.Now())
-		require.NoError(tb, atxs.Add(db, atx))
+		require.NoError(tb, atxs.Add(db, atx, types.AtxBlob{}))
 	}
 }
 

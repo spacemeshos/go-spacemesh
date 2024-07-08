@@ -72,7 +72,6 @@ func (h *HandlerV2) processATX(
 	ctx context.Context,
 	peer p2p.Peer,
 	watx *wire.ActivationTxV2,
-	blob []byte,
 	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
 	exists, err := atxs.Has(h.cdb, watx.ID())
@@ -129,7 +128,6 @@ func (h *HandlerV2) processATX(
 		Weight:         parts.weight,
 		VRFNonce:       types.VRFPostIndex(watx.VRFNonce),
 		SmesherID:      watx.SmesherID,
-		AtxBlob:        types.AtxBlob{Blob: blob, Version: types.AtxV2},
 	}
 
 	if watx.Initial == nil {
@@ -746,7 +744,7 @@ func (h *HandlerV2) storeAtx(
 			}
 		}
 
-		err = atxs.Add(tx, atx)
+		err = atxs.Add(tx, atx, watx.Blob())
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
