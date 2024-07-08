@@ -2028,11 +2028,11 @@ func TestMultiService(t *testing.T) {
 	_, err1 = c1.Echo(ctx, &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message},
 	})
-	require.ErrorContains(t, err1, "rpc error: code = Unavailable")
+	require.Equal(t, codes.Unavailable, status.Code(err1))
 
 	// Make sure MeshService is off
 	_, err2 = c2.GenesisTime(ctx, &pb.GenesisTimeRequest{})
-	require.ErrorContains(t, err2, "rpc error: code = Unavailable")
+	require.Equal(t, codes.Unavailable, status.Code(err2))
 }
 
 func TestDebugService(t *testing.T) {
