@@ -24,6 +24,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
+//go:generate mockgen -typed -package=activation -destination=poet_mocks.go -source=./poet.go
+
 var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
@@ -329,6 +331,12 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	return nil
 }
 
+type certifierInfo struct {
+	obtained time.Time
+	url      *url.URL
+	pubkey   []byte
+}
+
 // poetService is a higher-level interface to communicate with a PoET service.
 // It wraps the HTTP client, adding additional functionality.
 type poetService struct {
@@ -343,11 +351,15 @@ type poetService struct {
 	proofMembers map[string][]types.Hash32
 
 	certifier certifierService
+
+	certifierInfoTTL   time.Duration
+	certifierInfo      certifierInfo
+	certifierInfoMutex sync.Mutex
 }
 
-type PoetClientOpt func(*poetService)
+type PoetServiceOpt func(*poetService)
 
-func WithCertifier(certifier certifierService) PoetClientOpt {
+func WithCertifier(certifier certifierService) PoetServiceOpt {
 	return func(c *poetService) {
 		c.certifier = certifier
 	}
@@ -358,7 +370,7 @@ func NewPoetService(
 	server types.PoetServer,
 	cfg PoetConfig,
 	logger *zap.Logger,
-	opts ...PoetClientOpt,
+	opts ...PoetServiceOpt,
 ) (*poetService, error) {
 	client, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
 	if err != nil {
@@ -378,14 +390,15 @@ func NewPoetServiceWithClient(
 	client PoetClient,
 	cfg PoetConfig,
 	logger *zap.Logger,
-	opts ...PoetClientOpt,
+	opts ...PoetServiceOpt,
 ) *poetService {
 	poetClient := &poetService{
-		db:             db,
-		logger:         logger,
-		client:         client,
-		requestTimeout: cfg.RequestTimeout,
-		proofMembers:   make(map[string][]types.Hash32, 1),
+		db:               db,
+		logger:           logger,
+		client:           client,
+		requestTimeout:   cfg.RequestTimeout,
+		certifierInfoTTL: cfg.CertifierInfoCacheTTL,
+		proofMembers:     make(map[string][]types.Hash32, 1),
 	}
 
 	for _, opt := range opts {
@@ -519,9 +532,9 @@ func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.
 	if c.certifier == nil {
 		return nil, errors.New("certifier not configured")
 	}
-	url, pubkey, err := c.client.CertifierInfo(ctx)
+	url, pubkey, err := c.getCertifierInfo(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting certifier info: %w", err)
+		return nil, err
 	}
 	return c.certifier.Certificate(ctx, id, url, pubkey)
 }
@@ -530,9 +543,31 @@ func (c *poetService) recertify(ctx context.Context, id types.NodeID) (*certifie
 	if c.certifier == nil {
 		return nil, errors.New("certifier not configured")
 	}
-	url, pubkey, err := c.client.CertifierInfo(ctx)
+	url, pubkey, err := c.getCertifierInfo(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting certifier info: %w", err)
+		return nil, err
 	}
 	return c.certifier.Recertify(ctx, id, url, pubkey)
+}
+
+func (c *poetService) getCertifierInfo(ctx context.Context) (*url.URL, []byte, error) {
+	c.certifierInfoMutex.Lock()
+	defer c.certifierInfoMutex.Unlock()
+	if time.Since(c.certifierInfo.obtained) <= c.certifierInfoTTL {
+		return c.certifierInfo.url, c.certifierInfo.pubkey, nil
+	}
+	url, pubkey, err := c.client.CertifierInfo(ctx)
+	if err != nil {
+		if !c.certifierInfo.obtained.IsZero() {
+			c.logger.Warn("failed to obtain new certifier info, falling back to the old value")
+			return c.certifierInfo.url, c.certifierInfo.pubkey, nil
+		}
+		return nil, nil, fmt.Errorf("getting certifier info: %w", err)
+	}
+	c.certifierInfo = certifierInfo{
+		obtained: time.Now(),
+		url:      url,
+		pubkey:   pubkey,
+	}
+	return c.certifierInfo.url, c.certifierInfo.pubkey, nil
 }
