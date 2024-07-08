@@ -1128,13 +1128,13 @@ func TestUnits(t *testing.T) {
 	t.Parallel()
 	t.Run("ATX not found", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		_, err := atxs.Units(db, types.RandomATXID(), types.RandomNodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 	t.Run("smesher has no units in ATX", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		atxID := types.RandomATXID()
 		require.NoError(t, atxs.SetUnits(db, atxID, types.RandomNodeID(), 10))
 		_, err := atxs.Units(db, atxID, types.RandomNodeID())
@@ -1142,7 +1142,7 @@ func TestUnits(t *testing.T) {
 	})
 	t.Run("returns units for given smesher in given ATX", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		atxID := types.RandomATXID()
 		units := map[types.NodeID]uint32{
 			{1, 2, 3}: 10,

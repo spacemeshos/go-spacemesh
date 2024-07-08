@@ -161,7 +161,7 @@ func TestMarriageATX(t *testing.T) {
 	t.Parallel()
 	t.Run("not married", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 
 		id := types.RandomNodeID()
 		_, err := MarriageATX(db, id)
@@ -169,7 +169,7 @@ func TestMarriageATX(t *testing.T) {
 	})
 	t.Run("married", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 
 		id := types.RandomNodeID()
 		marriage := MarriageData{
@@ -188,7 +188,7 @@ func TestMarriageATX(t *testing.T) {
 func TestMarriage(t *testing.T) {
 	t.Parallel()
 
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	id := types.RandomNodeID()
 	marriage := MarriageData{
@@ -318,7 +318,7 @@ func TestEquivocationSetByMarriageATX(t *testing.T) {
 	t.Parallel()
 
 	t.Run("married IDs", func(t *testing.T) {
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		ids := []types.NodeID{
 			types.RandomNodeID(),
 			types.RandomNodeID(),
@@ -334,7 +334,7 @@ func TestEquivocationSetByMarriageATX(t *testing.T) {
 		require.Equal(t, ids, set)
 	})
 	t.Run("empty set", func(t *testing.T) {
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		set, err := EquivocationSetByMarriageATX(db, types.RandomATXID())
 		require.NoError(t, err)
 		require.Empty(t, set)
