@@ -390,8 +390,7 @@ trips[0] = ...
 
 ```go
 func (d *Driver) SetTrips(trips []Trip) {
-  d.trips = make([]Trip, len(trips))
-  copy(d.trips, trips)
+  d.trips = slices.Clone(trips)
 }
 
 trips := ...
@@ -448,11 +447,7 @@ func (s *Stats) Snapshot() map[string]int {
   s.mu.Lock()
   defer s.mu.Unlock()
 
-  result := make(map[string]int, len(s.counters))
-  for k, v := range s.counters {
-    result[k] = v
-  }
-  return result
+  return maps.Clone(s.counters)
 }
 
 // Snapshot is now a copy.
@@ -911,8 +906,8 @@ match and extract the underlying cause.
   but you can switch to `%w` in the future if needed.
 
 When adding context to returned errors, keep the context succinct by avoiding
-phrases like "failed to", which state the obvious and pile up as the error
-percolates up through the stack:
+phrases like "failed to" (errors aren't log messages!), which state the obvious
+and pile up as the error percolates up through the stack:
 
 <table>
 <thead><tr><th>Bad</th><th>Good</th></tr></thead>
@@ -1147,6 +1142,8 @@ if !ok {
 
 </td></tr>
 </tbody></table>
+
+If it is guaranteed that the type assertion will not fail, one can use the succint form of the type assertion (i.e. without the "comma ok" idiom).
 
 <!-- TODO: There are a few situations where the single assignment form is
 fine. -->
@@ -3872,7 +3869,6 @@ tests := []struct{
 }
 
 for _, tt := range tests {
-  tt := tt // for t.Parallel
   t.Run(tt.give, func(t *testing.T) {
     t.Parallel()
     // ...
@@ -4067,3 +4063,6 @@ with recommended linters and settings.
 golangci-lint has [various linters](https://golangci-lint.run/usage/linters/) available for use. The above linters are
 recommended as a base set, and we encourage teams to add any additional linters
 that make sense for their projects.
+
+We have a .golangci-lint configuration that we use for this project. Developers should use the configuration we use when
+linting their code for a contribution using `make lint`.
