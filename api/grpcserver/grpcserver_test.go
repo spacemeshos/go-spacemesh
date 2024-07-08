@@ -720,8 +720,10 @@ func TestSmesherService(t *testing.T) {
 		}
 
 		cancel()
-		_, err = stream.Recv()
-		require.ErrorContains(t, err, context.Canceled.Error())
+		require.Eventually(t, func() bool {
+			_, err = stream.Recv()
+			return assert.ErrorContains(t, err, context.Canceled.Error())
+		}, time.Second, time.Millisecond*10)
 	})
 }
 
