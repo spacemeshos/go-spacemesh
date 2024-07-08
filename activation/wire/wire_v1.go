@@ -21,7 +21,8 @@ type ActivationTxV1 struct {
 	SmesherID types.NodeID
 	Signature types.EdSignature
 
-	id types.ATXID
+	id   types.ATXID
+	blob []byte
 }
 
 // InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
@@ -124,10 +125,23 @@ func (atx *ActivationTxV1) SignedBytes() []byte {
 }
 
 func (atx *ActivationTxV1) Blob() types.AtxBlob {
+	if len(atx.blob) == 0 {
+		atx.blob = codec.MustEncode(atx)
+	}
 	return types.AtxBlob{
-		Blob:    codec.MustEncode(atx),
+		Blob:    atx.blob,
 		Version: types.AtxV1,
 	}
+}
+
+func DecodeAtxV1(blob []byte) (*ActivationTxV1, error) {
+	atx := &ActivationTxV1{
+		blob: blob,
+	}
+	if err := codec.Decode(blob, atx); err != nil {
+		return nil, err
+	}
+	return atx, nil
 }
 
 func (atx *ActivationTxV1) HashInnerBytes() (result types.Hash32) {

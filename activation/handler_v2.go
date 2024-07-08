@@ -72,7 +72,6 @@ func (h *HandlerV2) processATX(
 	ctx context.Context,
 	peer p2p.Peer,
 	watx *wire.ActivationTxV2,
-	blob []byte,
 	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
 	exists, err := atxs.Has(h.cdb, watx.ID())
@@ -144,7 +143,7 @@ func (h *HandlerV2) processATX(
 	atx.SetID(watx.ID())
 	atx.SetReceived(received)
 
-	proof, err = h.storeAtx(ctx, atx, watx, blob, marrying, parts.units)
+	proof, err = h.storeAtx(ctx, atx, watx, marrying, parts.units)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
@@ -702,7 +701,6 @@ func (h *HandlerV2) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV2,
-	blob []byte,
 	marrying []types.NodeID,
 	units map[types.NodeID]uint32,
 ) (*mwire.MalfeasanceProof, error) {
@@ -732,7 +730,7 @@ func (h *HandlerV2) storeAtx(
 			}
 		}
 
-		err = atxs.Add(tx, atx, types.AtxBlob{Blob: blob, Version: types.AtxV2})
+		err = atxs.Add(tx, atx, watx.Blob())
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
