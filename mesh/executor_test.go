@@ -80,7 +80,7 @@ func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.A
 	}
 	atx.SetReceived(time.Now())
 	atx.SetID(types.RandomATXID())
-	require.NoError(t.tb, atxs.Add(t.db, atx))
+	require.NoError(t.tb, atxs.Add(t.db, atx, types.AtxBlob{}))
 	t.atxsdata.AddFromAtx(atx, false)
 	return atx.ID(), sig.NodeID()
 }

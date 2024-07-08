@@ -54,7 +54,7 @@ func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
 	atx.SetReceived(time.Now())
 	atx.SetID(types.RandomATXID())
 	atx.TickCount = 1
-	require.NoError(tb, atxs.Add(db, atx))
+	require.NoError(tb, atxs.Add(db, atx, types.AtxBlob{}))
 }
 
 func TestHandler_Validate(t *testing.T) {

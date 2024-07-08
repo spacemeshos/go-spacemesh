@@ -147,7 +147,7 @@ func TestObtainingPost(t *testing.T) {
 
 		atx := newInitialATXv1(t, types.RandomATXID())
 		atx.SmesherID = id
-		require.NoError(t, atxs.Add(db, toAtx(t, atx)))
+		require.NoError(t, atxs.Add(db, toAtx(t, atx), atx.Blob()))
 
 		certifier := NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		got, err := certifier.obtainPost(context.Background(), id)

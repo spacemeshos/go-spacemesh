@@ -176,7 +176,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 				require.NoError(t, err)
 			}
 			logger.Debug("persisting ATX", zap.Inline(atx))
-			require.NoError(t, atxs.Add(db, atx))
+			require.NoError(t, atxs.Add(db, atx, gotAtx.Blob()))
 			data.AddFromAtx(atx, false)
 
 			if atxsPublished.Add(1) == totalAtxs {

@@ -14,7 +14,6 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -487,13 +486,13 @@ func TestVerifyChainDeps(t *testing.T) {
 	invalidAtx.Sign(signer)
 	vInvalidAtx := toAtx(t, invalidAtx)
 	vInvalidAtx.SetValidity(types.Invalid)
-	require.NoError(t, atxs.Add(db, vInvalidAtx))
+	require.NoError(t, atxs.Add(db, vInvalidAtx, invalidAtx.Blob()))
 
 	t.Run("invalid prev ATX", func(t *testing.T) {
 		atx := newChainedActivationTxV1(t, invalidAtx, goldenATXID)
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -508,7 +507,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -525,7 +524,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx.Sign(signer)
 		atx.CommitmentATXID = &commitmentAtxID
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -539,7 +538,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -552,7 +551,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -566,7 +565,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -584,13 +583,9 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := &types.ActivationTx{
 			PublishEpoch: watx.PublishEpoch,
 			SmesherID:    watx.SmesherID,
-			AtxBlob: types.AtxBlob{
-				Blob:    codec.MustEncode(watx),
-				Version: types.AtxV2,
-			},
 		}
 		atx.SetID(watx.ID())
-		require.NoError(t, atxs.Add(db, atx))
+		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
 
 		v := NewMockPostVerifier(gomock.NewController(t))
 		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
@@ -602,20 +597,16 @@ func TestVerifyChainDeps(t *testing.T) {
 	t.Run("non-initial V2 ATX", func(t *testing.T) {
 		initialAtx := newInitialATXv1(t, goldenATXID)
 		initialAtx.Sign(signer)
-		require.NoError(t, atxs.Add(db, toAtx(t, initialAtx)))
+		require.NoError(t, atxs.Add(db, toAtx(t, initialAtx), initialAtx.Blob()))
 
 		watx := newSoloATXv2(t, initialAtx.PublishEpoch+1, initialAtx.ID(), initialAtx.ID())
 		watx.Sign(signer)
 		atx := &types.ActivationTx{
 			PublishEpoch: watx.PublishEpoch,
 			SmesherID:    watx.SmesherID,
-			AtxBlob: types.AtxBlob{
-				Blob:    codec.MustEncode(watx),
-				Version: types.AtxV2,
-			},
 		}
 		atx.SetID(watx.ID())
-		require.NoError(t, atxs.Add(db, atx))
+		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
 
 		v := NewMockPostVerifier(gomock.NewController(t))
 		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
@@ -654,7 +645,7 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 	atx := newChainedActivationTxV1(t, checkpointedAtx, checkpointedAtx.ID())
 	atx.Sign(signer)
 	vAtx := toAtx(t, atx)
-	require.NoError(t, atxs.Add(db, vAtx))
+	require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 	ctrl := gomock.NewController(t)
 	v := NewMockPostVerifier(ctrl)

@@ -136,7 +136,7 @@ func publishAtxV1(
 		func(_ context.Context, _ string, got []byte) error {
 			return codec.Decode(got, &watx)
 		})
-	require.NoError(tb, atxs.Add(tab.db, toAtx(tb, &watx)))
+	require.NoError(tb, atxs.Add(tab.db, toAtx(tb, &watx), watx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(tb, &watx), false)
 	return &watx
 }
@@ -351,7 +351,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	currLayer := posEpoch.FirstLayer()
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
-	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx), prevAtx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	// create and publish ATX
@@ -387,7 +387,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	currLayer := (postGenesisEpoch + 1).FirstLayer()
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
-	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx), prevAtx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
@@ -436,7 +436,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	currLayer := postGenesisEpoch.FirstLayer()
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
-	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx), prevAtx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	publishEpoch := posEpoch + 1
@@ -511,7 +511,7 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
 	vPrevAtx := toAtx(t, prevAtx)
-	require.NoError(t, atxs.Add(tab.db, vPrevAtx))
+	require.NoError(t, atxs.Add(tab.db, vPrevAtx, prevAtx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	publishEpoch := currLayer.GetEpoch()
@@ -588,7 +588,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
 	vPrevAtx := toAtx(t, prevAtx)
-	require.NoError(t, atxs.Add(tab.db, vPrevAtx))
+	require.NoError(t, atxs.Add(tab.db, vPrevAtx, prevAtx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	publishEpoch := posEpoch + 1
@@ -649,7 +649,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	currLayer = posEpoch.FirstLayer()
 	posAtx := newInitialATXv1(t, tab.goldenATXID, func(atx *wire.ActivationTxV1) { atx.PublishEpoch = posEpoch })
 	posAtx.Sign(sig)
-	require.NoError(t, atxs.Add(tab.db, toAtx(t, posAtx)))
+	require.NoError(t, atxs.Add(tab.db, toAtx(t, posAtx), posAtx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(t, posAtx), false)
 	tab.mclock.EXPECT().CurrentLayer().DoAndReturn(func() types.LayerID { return currLayer }).AnyTimes()
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
@@ -791,7 +791,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	posAtx.Sign(otherSigner)
 	vPosAtx := toAtx(t, posAtx)
 	vPosAtx.TickCount = 100
-	r.NoError(atxs.Add(tab.db, vPosAtx))
+	r.NoError(atxs.Add(tab.db, vPosAtx, posAtx.Blob()))
 	tab.atxsdata.AddFromAtx(vPosAtx, false)
 
 	nonce := types.VRFPostIndex(123)
@@ -800,7 +800,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	})
 	prevAtx.Sign(sig)
 	vPrevAtx := toAtx(t, prevAtx)
-	r.NoError(atxs.Add(tab.db, vPrevAtx))
+	r.NoError(atxs.Add(tab.db, vPrevAtx, prevAtx.Blob()))
 	tab.atxsdata.AddFromAtx(vPrevAtx, false)
 
 	// Act
@@ -884,7 +884,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	posEpoch := postGenesisEpoch
 	posAtx := newInitialATXv1(t, tab.goldenATXID)
 	posAtx.Sign(otherSigner)
-	r.NoError(atxs.Add(tab.db, toAtx(t, posAtx)))
+	r.NoError(atxs.Add(tab.db, toAtx(t, posAtx), posAtx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(t, posAtx), false)
 
 	// Act & Assert
@@ -977,7 +977,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	currLayer := posEpoch.FirstLayer()
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
-	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx), prevAtx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	tab.mclock.EXPECT().CurrentLayer().Return(posEpoch.FirstLayer()).AnyTimes()
@@ -1035,7 +1035,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	sig := maps.Values(tab.signers)[0]
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
-	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx), prevAtx.Blob()))
 	tab.atxsdata.AddFromAtx(toAtx(t, prevAtx), false)
 
 	currLayer := prevAtx.PublishEpoch.FirstLayer()
@@ -1345,7 +1345,7 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	vInvalidAtx := toAtx(t, invalidAtx)
 	vInvalidAtx.TickCount = 100
 	require.NoError(t, err)
-	require.NoError(t, atxs.Add(tab.db, vInvalidAtx))
+	require.NoError(t, atxs.Add(tab.db, vInvalidAtx, invalidAtx.Blob()))
 	tab.atxsdata.AddFromAtx(vInvalidAtx, false)
 
 	// Valid chain with lower height
@@ -1355,7 +1355,7 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	validAtx.NumUnits += 10
 	validAtx.Sign(sigValid)
 	vValidAtx := toAtx(t, validAtx)
-	require.NoError(t, atxs.Add(tab.db, vValidAtx))
+	require.NoError(t, atxs.Add(tab.db, vValidAtx, validAtx.Blob()))
 	tab.atxsdata.AddFromAtx(vValidAtx, false)
 
 	tab.mValidator.EXPECT().
@@ -1419,7 +1419,7 @@ func TestGetPositioningAtx(t *testing.T) {
 
 		atxInDb := &types.ActivationTx{TickCount: 10}
 		atxInDb.SetID(types.RandomATXID())
-		require.NoError(t, atxs.Add(tab.db, atxInDb))
+		require.NoError(t, atxs.Add(tab.db, atxInDb, types.AtxBlob{}))
 		tab.atxsdata.AddFromAtx(atxInDb, false)
 
 		prev := &types.ActivationTx{TickCount: 100}
@@ -1446,7 +1446,7 @@ func TestGetPositioningAtx(t *testing.T) {
 
 		atxInDb := &types.ActivationTx{TickCount: 100}
 		atxInDb.SetID(types.RandomATXID())
-		require.NoError(t, atxs.Add(tab.db, atxInDb))
+		require.NoError(t, atxs.Add(tab.db, atxInDb, types.AtxBlob{}))
 		tab.atxsdata.AddFromAtx(atxInDb, false)
 
 		prev := &types.ActivationTx{TickCount: 90}
