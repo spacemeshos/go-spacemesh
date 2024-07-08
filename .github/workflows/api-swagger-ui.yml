@@ -12,14 +12,16 @@ jobs:
     steps:
     - name: Checkout target repository on last release
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        ref: 'refs/tags/${{ github.event.release.tag_name }}'
     
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22.4'
+
     - name: Extract dependency version
       id: go-sm-api-version
       run: |
-        version=$(grep -E 'github.com/spacemeshos/api/release/go' go.mod | awk '{print $2}')
+        version=$(go list -m 'github.com/spacemeshos/api/release/go' | awk '{print $2}')
         echo "GO_SM_API_VERSION=$version" > $GITHUB_OUTPUT
 
   build-deploy:
@@ -59,7 +61,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
           SOURCE_DIR: api/release/openapi/swagger/dist
-          DEST_DIR: ''
+          DEST_DIR: '/${{ github.event.release.tag_name }}'
           AWS_S3_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
 
     - name: upload to testnet
@@ -71,6 +73,6 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
           SOURCE_DIR: api/release/openapi/swagger/dist
-          DEST_DIR: ''
+          DEST_DIR: '/${{ github.event.release.tag_name }}'
           AWS_S3_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
    
