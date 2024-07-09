@@ -275,7 +275,11 @@ func (h *Handler) handleAtx(
 
 	key := string(id.Bytes())
 	proof, err, _ := h.inProgress.Do(key, func() (any, error) {
-		h.logger.Info("handling incoming atx", log.ZContext(ctx), zap.Stringer("atx_id", id), zap.Int("size", len(msg)))
+		h.logger.Debug("handling incoming atx",
+			log.ZContext(ctx),
+			zap.Stringer("atx_id", id),
+			zap.Int("size", len(msg)),
+		)
 
 		switch atx := opaqueAtx.(type) {
 		case *wire.ActivationTxV1:
