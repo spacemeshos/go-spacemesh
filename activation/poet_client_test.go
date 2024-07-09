@@ -20,6 +20,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
@@ -379,4 +380,37 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 	require.Equal(t, 2, submitCount)
 	require.EqualValues(t, "first", <-certs)
 	require.EqualValues(t, "second", <-certs)
+}
+
+func TestPoetService_CachesCertifierInfo(t *testing.T) {
+	t.Parallel()
+	type test struct {
+		name string
+		ttl  time.Duration
+	}
+	for _, tc := range []test{
+		{name: "cache enabled", ttl: time.Hour},
+		{name: "cache disabled"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := DefaultPoetConfig()
+			cfg.CertifierInfoCacheTTL = tc.ttl
+			client := NewMockPoetClient(gomock.NewController(t))
+			db := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
+			poet := NewPoetServiceWithClient(db, client, cfg, zaptest.NewLogger(t))
+			url := &url.URL{Host: "certifier.hello"}
+			pubkey := []byte("pubkey")
+			exp := client.EXPECT().CertifierInfo(gomock.Any()).Return(url, pubkey, nil)
+			if tc.ttl == 0 {
+				exp.Times(5)
+			}
+			for range 5 {
+				gotUrl, gotPubkey, err := poet.getCertifierInfo(context.Background())
+				require.NoError(t, err)
+				require.Equal(t, url, gotUrl)
+				require.Equal(t, pubkey, gotPubkey)
+			}
+		})
+	}
 }
