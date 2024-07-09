@@ -85,8 +85,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch,
-		CycleGap:          epoch / 2,
-		GracePeriod:       epoch / 5,
+		CycleGap:          3 * epoch / 4,
+		GracePeriod:       epoch / 4,
 		RequestTimeout:    epoch / 5,
 		RequestRetryDelay: epoch / 50,
 		MaxRequestRetries: 10,

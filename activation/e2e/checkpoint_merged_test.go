@@ -35,7 +35,6 @@ import (
 )
 
 func Test_CheckpointAfterMerge(t *testing.T) {
-	t.Parallel()
 	ctrl := gomock.NewController(t)
 	signers := signers(t, singerKeys[:])
 
@@ -78,8 +77,8 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:  epoch,
-		CycleGap:    epoch / 2,
-		GracePeriod: epoch / 5,
+		CycleGap:    3 * epoch / 4,
+		GracePeriod: epoch / 4,
 	}
 
 	client := ae2e.NewTestPoetClient(2)
