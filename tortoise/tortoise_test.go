@@ -479,7 +479,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 				}
 				atx.SetID(types.RandomATXID())
 				atx.SetReceived(time.Now())
-				require.NoError(t, atxs.Add(db, atx))
+				require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(db, lid.GetEpoch())

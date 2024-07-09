@@ -72,7 +72,6 @@ func (h *HandlerV2) processATX(
 	ctx context.Context,
 	peer p2p.Peer,
 	watx *wire.ActivationTxV2,
-	blob []byte,
 	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
 	exists, err := atxs.Has(h.cdb, watx.ID())
@@ -129,7 +128,6 @@ func (h *HandlerV2) processATX(
 		Weight:         parts.weight,
 		VRFNonce:       types.VRFPostIndex(watx.VRFNonce),
 		SmesherID:      watx.SmesherID,
-		AtxBlob:        types.AtxBlob{Blob: blob, Version: types.AtxV2},
 	}
 
 	if watx.Initial == nil {
@@ -366,15 +364,20 @@ func (h *HandlerV2) validatePositioningAtx(publish types.EpochID, golden, positi
 	return posAtx.TickHeight(), nil
 }
 
+type marriage struct {
+	id        types.NodeID
+	signature types.EdSignature
+}
+
 // Validate marriages and return married IDs.
 // Note: The order of returned IDs is important and must match the order of the marriage certificates.
 // The MarriageIndex in PoST proof matches the index in this marriage slice.
-func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]types.NodeID, error) {
+func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]marriage, error) {
 	if len(atx.Marriages) == 0 {
 		return nil, nil
 	}
 	marryingIDsSet := make(map[types.NodeID]struct{}, len(atx.Marriages))
-	var marryingIDs []types.NodeID // for deterministic order
+	var marryingIDs []marriage // for deterministic order
 	for i, m := range atx.Marriages {
 		var id types.NodeID
 		if m.ReferenceAtx == types.EmptyATXID {
@@ -394,7 +397,10 @@ func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]types.NodeID,
 			return nil, fmt.Errorf("more than 1 marriage certificate for ID %s", id)
 		}
 		marryingIDsSet[id] = struct{}{}
-		marryingIDs = append(marryingIDs, id)
+		marryingIDs = append(marryingIDs, marriage{
+			id:        id,
+			signature: m.Signature,
+		})
 	}
 	return marryingIDs, nil
 }
@@ -404,7 +410,7 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 	if atx.MarriageATX == nil {
 		return []types.NodeID{atx.SmesherID}, nil
 	}
-	marriageAtxID, _, err := identities.MarriageInfo(h.cdb, atx.SmesherID)
+	marriageAtxID, err := identities.MarriageATX(h.cdb, atx.SmesherID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		return nil, errors.New("smesher is not married")
@@ -650,7 +656,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 func (h *HandlerV2) checkMalicious(
 	tx *sql.Tx,
 	watx *wire.ActivationTxV2,
-	marrying []types.NodeID,
+	marrying []marriage,
 ) (bool, *mwire.MalfeasanceProof, error) {
 	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
 	if err != nil {
@@ -678,9 +684,9 @@ func (h *HandlerV2) checkMalicious(
 	return false, nil, nil
 }
 
-func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []types.NodeID) (*mwire.MalfeasanceProof, error) {
-	for _, id := range marrying {
-		married, err := identities.Married(tx, id)
+func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []marriage) (*mwire.MalfeasanceProof, error) {
+	for _, m := range marrying {
+		married, err := identities.Married(tx, m.id)
 		if err != nil {
 			return nil, fmt.Errorf("checking if ID is married: %w", err)
 		}
@@ -703,7 +709,7 @@ func (h *HandlerV2) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV2,
-	marrying []types.NodeID,
+	marrying []marriage,
 	units map[types.NodeID]uint32,
 ) (*mwire.MalfeasanceProof, error) {
 	var (
@@ -718,8 +724,14 @@ func (h *HandlerV2) storeAtx(
 		}
 
 		if len(marrying) != 0 {
-			for i, id := range marrying {
-				if err := identities.SetMarriage(tx, id, atx.ID(), i); err != nil {
+			marriageData := identities.MarriageData{
+				ATX:    atx.ID(),
+				Target: atx.SmesherID,
+			}
+			for i, m := range marrying {
+				marriageData.Signature = m.signature
+				marriageData.Index = i
+				if err := identities.SetMarriage(tx, m.id, &marriageData); err != nil {
 					return err
 				}
 			}
@@ -732,7 +744,7 @@ func (h *HandlerV2) storeAtx(
 			}
 		}
 
-		err = atxs.Add(tx, atx)
+		err = atxs.Add(tx, atx, watx.Blob())
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
@@ -761,8 +773,8 @@ func (h *HandlerV2) storeAtx(
 		for _, id := range set {
 			allMalicious[id] = struct{}{}
 		}
-		for _, id := range marrying {
-			allMalicious[id] = struct{}{}
+		for _, m := range marrying {
+			allMalicious[m.id] = struct{}{}
 		}
 	}
 	if proof != nil {

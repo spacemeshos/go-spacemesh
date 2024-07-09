@@ -127,7 +127,7 @@ func createATX(
 
 	atx.SetReceived(received)
 	atx.SetID(types.RandomATXID())
-	require.NoError(tb, atxs.Add(db, &atx))
+	require.NoError(tb, atxs.Add(db, &atx, types.AtxBlob{}))
 	return atx.ID()
 }
 
