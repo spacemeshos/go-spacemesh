@@ -77,8 +77,8 @@ func testPostConfig() activation.PostConfig {
 	cfg := activation.DefaultPostConfig()
 	// simplify PoST parameters for faster proving
 	cfg.K1 = 12
-	cfg.K2 = 10
-	cfg.K3 = 10
+	cfg.K2 = 8
+	cfg.K3 = 8
 	cfg.LabelsPerUnit = 64
 	return cfg
 }
@@ -173,8 +173,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:  epoch / 2,
-		CycleGap:    epoch / 4,
-		GracePeriod: epoch / 5,
+		CycleGap:    3 * epoch / 4,
+		GracePeriod: epoch / 4,
 	}
 
 	mclock := activation.NewMocklayerClock(ctrl)
@@ -267,8 +267,8 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:  epoch / 2,
-		CycleGap:    epoch / 4,
-		GracePeriod: epoch / 5,
+		CycleGap:    3 * epoch / 4,
+		GracePeriod: epoch / 4,
 	}
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))

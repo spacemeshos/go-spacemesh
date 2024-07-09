@@ -21,12 +21,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
+	t.Parallel()
 	cfg := server.DefaultRoundConfig()
 
 	t.Run("add http if missing", func(t *testing.T) {
+		t.Parallel()
 		client, err := NewHTTPPoetClient(types.PoetServer{Address: "bla"}, PoetConfig{
 			PhaseShift: cfg.PhaseShift,
 			CycleGap:   cfg.CycleGap,
@@ -36,6 +39,7 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 	})
 
 	t.Run("do not change scheme if present", func(t *testing.T) {
+		t.Parallel()
 		client, err := NewHTTPPoetClient(types.PoetServer{Address: "https://bla"}, PoetConfig{
 			PhaseShift: cfg.PhaseShift,
 			CycleGap:   cfg.CycleGap,
@@ -46,16 +50,17 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Submit(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		w.WriteHeader(http.StatusOK)
-
+	t.Parallel()
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
 		resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
-		require.NoError(t, err)
-
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.Write(resp)
-		require.Equal(t, "/v1/submit", r.URL.Path)
-	}))
+	})
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
 	cfg := server.DefaultRoundConfig()
@@ -78,29 +83,25 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Address(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-
-		w.WriteHeader(http.StatusOK)
-		resp, err := protojson.Marshal(&rpcapi.InfoResponse{})
+	t.Parallel()
+	t.Run("with scheme", func(t *testing.T) {
+		t.Parallel()
+		client, err := NewHTTPPoetClient(types.PoetServer{Address: "https://poet-address"}, PoetConfig{})
 		require.NoError(t, err)
-		w.Write(resp)
 
-		require.Equal(t, "/v1/info", r.URL.Path)
-	}))
-	defer ts.Close()
+		require.Equal(t, "https://poet-address", client.Address())
+	})
+	t.Run("appends 'http://' scheme if not present", func(t *testing.T) {
+		t.Parallel()
+		client, err := NewHTTPPoetClient(types.PoetServer{Address: "poet-address"}, PoetConfig{})
+		require.NoError(t, err)
 
-	cfg := server.DefaultRoundConfig()
-	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
-		PhaseShift: cfg.PhaseShift,
-		CycleGap:   cfg.CycleGap,
-	}, withCustomHttpClient(ts.Client()))
-	require.NoError(t, err)
-
-	require.Equal(t, ts.URL, client.Address())
+		require.Equal(t, "http://poet-address", client.Address())
+	})
 }
 
 func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
+	t.Parallel()
 	poetCfg := server.DefaultRoundConfig()
 
 	poETServers := []string{
@@ -123,16 +124,17 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Proof(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-
-		w.WriteHeader(http.StatusOK)
+	t.Parallel()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/proofs/1", func(w http.ResponseWriter, r *http.Request) {
 		resp, err := protojson.Marshal(&rpcapi.ProofResponse{})
-		require.NoError(t, err)
-
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.Write(resp)
-		require.Equal(t, "/v1/proofs/1", r.URL.Path)
-	}))
+	})
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
 	cfg := server.DefaultRoundConfig()
@@ -150,18 +152,17 @@ func TestPoetClient_CachesProof(t *testing.T) {
 	t.Parallel()
 
 	var proofsCalled atomic.Uint64
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/proofs/", func(w http.ResponseWriter, r *http.Request) {
 		proofsCalled.Add(1)
-		require.Equal(t, http.MethodGet, r.Method)
-		require.Contains(t, r.URL.Path, "/v1/proofs/")
-
-		resp, err := protojson.Marshal(&rpcapi.ProofResponse{
-			Proof: &rpcapi.PoetProof{},
-		})
-		require.NoError(t, err)
-		w.WriteHeader(http.StatusOK)
+		resp, err := protojson.Marshal(&rpcapi.ProofResponse{})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.Write(resp)
-	}))
+	})
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
 	server := types.PoetServer{
@@ -235,20 +236,17 @@ func TestPoetClient_Certify(t *testing.T) {
 
 	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
 	certifierPubKey := []byte("certifier-pubkey")
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v1/info":
-			resp, err := protojson.Marshal(&rpcapi.InfoResponse{
-				ServicePubkey: []byte("pubkey"),
-				Certifier: &rpcapi.InfoResponse_Cerifier{
-					Url:    certifierAddress.String(),
-					Pubkey: certifierPubKey,
-				},
-			})
-			require.NoError(t, err)
-			w.Write(resp)
-		}
-	}))
+	mux := http.NewServeMux()
+	infoResp, err := protojson.Marshal(&rpcapi.InfoResponse{
+		ServicePubkey: []byte("pubkey"),
+		Certifier: &rpcapi.InfoResponse_Cerifier{
+			Url:    certifierAddress.String(),
+			Pubkey: certifierPubKey,
+		},
+	})
+	require.NoError(t, err)
+	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
 	server := types.PoetServer{
@@ -280,25 +278,21 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 
 	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
 	certifierPubKey := []byte("certifier-pubkey")
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v1/info":
-			resp, err := protojson.Marshal(&rpcapi.InfoResponse{
-				ServicePubkey: []byte("pubkey"),
-				Certifier: &rpcapi.InfoResponse_Cerifier{
-					Url:    certifierAddress.String(),
-					Pubkey: certifierPubKey,
-				},
-			})
-			require.NoError(t, err)
-			w.Write(resp)
-		case "/v1/submit":
-			resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
-			require.NoError(t, err)
-			w.Write(resp)
-		}
-	}))
+	mux := http.NewServeMux()
+	infoResp, err := protojson.Marshal(&rpcapi.InfoResponse{
+		ServicePubkey: []byte("pubkey"),
+		Certifier: &rpcapi.InfoResponse_Cerifier{
+			Url:    certifierAddress.String(),
+			Pubkey: certifierPubKey,
+		},
+	})
+	require.NoError(t, err)
+	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
 
+	submitResp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
+	require.NoError(t, err)
+	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) { w.Write(submitResp) })
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
 	server := types.PoetServer{
@@ -330,36 +324,34 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
 	certifierPubKey := []byte("certifier-pubkey")
 	submitCount := 0
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v1/info":
-			resp, err := protojson.Marshal(&rpcapi.InfoResponse{
-				ServicePubkey: []byte("pubkey"),
-				Certifier: &rpcapi.InfoResponse_Cerifier{
-					Url:    certifierAddress.String(),
-					Pubkey: certifierPubKey,
-				},
-			})
-			require.NoError(t, err)
-			w.Write(resp)
-		case "/v1/submit":
-			req := rpcapi.SubmitRequest{}
-			body, err := io.ReadAll(r.Body)
-			require.NoError(t, err)
-			require.NoError(t, protojson.Unmarshal(body, &req))
-			if submitCount == 0 {
-				require.EqualValues(t, "first", req.Certificate.Data)
-				w.WriteHeader(http.StatusUnauthorized)
-			} else {
-				require.EqualValues(t, "second", req.Certificate.Data)
-				resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
-				require.NoError(t, err)
-				w.Write(resp)
-			}
-			submitCount++
-		}
-	}))
+	certs := make(chan []byte, 2)
 
+	mux := http.NewServeMux()
+	infoResp, err := protojson.Marshal(&rpcapi.InfoResponse{
+		ServicePubkey: []byte("pubkey"),
+		Certifier: &rpcapi.InfoResponse_Cerifier{
+			Url:    certifierAddress.String(),
+			Pubkey: certifierPubKey,
+		},
+	})
+	require.NoError(t, err)
+	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
+
+	submitResp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
+	require.NoError(t, err)
+	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
+		req := rpcapi.SubmitRequest{}
+		body, _ := io.ReadAll(r.Body)
+		protojson.Unmarshal(body, &req)
+		certs <- req.Certificate.Data
+		if submitCount == 0 {
+			w.WriteHeader(http.StatusUnauthorized)
+		} else {
+			w.Write(submitResp)
+		}
+		submitCount++
+	})
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
 	server := types.PoetServer{
@@ -386,4 +378,39 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, 2, submitCount)
+	require.EqualValues(t, "first", <-certs)
+	require.EqualValues(t, "second", <-certs)
+}
+
+func TestPoetService_CachesCertifierInfo(t *testing.T) {
+	t.Parallel()
+	type test struct {
+		name string
+		ttl  time.Duration
+	}
+	for _, tc := range []test{
+		{name: "cache enabled", ttl: time.Hour},
+		{name: "cache disabled"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := DefaultPoetConfig()
+			cfg.CertifierInfoCacheTTL = tc.ttl
+			client := NewMockPoetClient(gomock.NewController(t))
+			db := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+			poet := NewPoetServiceWithClient(db, client, cfg, zaptest.NewLogger(t))
+			url := &url.URL{Host: "certifier.hello"}
+			pubkey := []byte("pubkey")
+			exp := client.EXPECT().CertifierInfo(gomock.Any()).Return(url, pubkey, nil)
+			if tc.ttl == 0 {
+				exp.Times(5)
+			}
+			for range 5 {
+				gotUrl, gotPubkey, err := poet.getCertifierInfo(context.Background())
+				require.NoError(t, err)
+				require.Equal(t, url, gotUrl)
+				require.Equal(t, pubkey, gotPubkey)
+			}
+		})
+	}
 }
