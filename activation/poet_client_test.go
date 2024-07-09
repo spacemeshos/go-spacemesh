@@ -2,7 +2,6 @@ package activation
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -421,35 +420,4 @@ func TestPoetService_CachesCertifierInfo(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestPoetService_CachesCertifierInfo_FallbacksToOld(t *testing.T) {
-	t.Parallel()
-	cfg := DefaultPoetConfig()
-	cfg.CertifierInfoCacheTTL = 0
-	db := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
-	t.Run("fallback available", func(t *testing.T) {
-		t.Parallel()
-		client := NewMockPoetClient(gomock.NewController(t))
-		poet := NewPoetServiceWithClient(db, client, cfg, zaptest.NewLogger(t))
-		client.EXPECT().CertifierInfo(gomock.Any()).Return(&url.URL{Host: "certifier.hello"}, []byte("pubkey"), nil)
-		client.EXPECT().CertifierInfo(gomock.Any()).Return(nil, nil, errors.New("oops"))
-
-		gotUrl, gotPubkey, err := poet.getCertifierInfo(context.Background())
-		require.NoError(t, err)
-		gotUrl2, gotPubkey2, err := poet.getCertifierInfo(context.Background())
-		require.NoError(t, err)
-
-		require.Equal(t, gotUrl, gotUrl2)
-		require.Equal(t, gotPubkey, gotPubkey2)
-	})
-	t.Run("fallback unavailable", func(t *testing.T) {
-		t.Parallel()
-		client := NewMockPoetClient(gomock.NewController(t))
-		poet := NewPoetServiceWithClient(db, client, cfg, zaptest.NewLogger(t))
-		client.EXPECT().CertifierInfo(gomock.Any()).Return(nil, nil, errors.New("oops"))
-
-		_, _, err := poet.getCertifierInfo(context.Background())
-		require.Error(t, err)
-	})
 }

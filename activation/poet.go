@@ -558,10 +558,6 @@ func (c *poetService) getCertifierInfo(ctx context.Context) (*url.URL, []byte, e
 	}
 	url, pubkey, err := c.client.CertifierInfo(ctx)
 	if err != nil {
-		if !c.certifierInfo.obtained.IsZero() {
-			c.logger.Warn("failed to obtain new certifier info, falling back to the old value")
-			return c.certifierInfo.url, c.certifierInfo.pubkey, nil
-		}
 		return nil, nil, fmt.Errorf("getting certifier info: %w", err)
 	}
 	c.certifierInfo = certifierInfo{
