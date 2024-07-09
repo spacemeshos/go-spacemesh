@@ -13,7 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
@@ -67,7 +66,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		prevAtx.NumUnits = 100
 		prevAtx.Sign(sig)
 		atxHdlr.expectAtxV1(prevAtx, sig.NodeID())
-		_, err := atxHdlr.processATX(context.Background(), "", prevAtx, codec.MustEncode(prevAtx), time.Now())
+		_, err := atxHdlr.processATX(context.Background(), "", prevAtx, time.Now())
 		require.NoError(t, err)
 
 		otherSig, err := signing.NewEdSigner()
@@ -76,7 +75,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		posAtx := newInitialATXv1(t, goldenATXID)
 		posAtx.Sign(otherSig)
 		atxHdlr.expectAtxV1(posAtx, otherSig.NodeID())
-		_, err = atxHdlr.processATX(context.Background(), "", posAtx, codec.MustEncode(posAtx), time.Now())
+		_, err = atxHdlr.processATX(context.Background(), "", posAtx, time.Now())
 		require.NoError(t, err)
 		return atxHdlr, prevAtx, posAtx
 	}
@@ -488,14 +487,14 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		atx0 := newInitialATXv1(t, goldenATXID)
 		atx0.Sign(sig)
 		atxHdlr.expectAtxV1(atx0, sig.NodeID())
-		_, err := atxHdlr.processATX(context.Background(), "", atx0, codec.MustEncode(atx0), time.Now())
+		_, err := atxHdlr.processATX(context.Background(), "", atx0, time.Now())
 		require.NoError(t, err)
 
 		atx1 := newChainedActivationTxV1(t, atx0, goldenATXID)
 		atx1.Sign(sig)
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
 		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
-		_, err = atxHdlr.processATX(context.Background(), "", atx1, codec.MustEncode(atx1), time.Now())
+		_, err = atxHdlr.processATX(context.Background(), "", atx1, time.Now())
 		require.NoError(t, err)
 
 		atxInvalidPrevious := newChainedActivationTxV1(t, atx0, goldenATXID)
@@ -515,13 +514,13 @@ func TestHandler_ContextuallyValidateAtx(t *testing.T) {
 		atx0 := newInitialATXv1(t, goldenATXID)
 		atx0.Sign(otherSig)
 		atxHdlr.expectAtxV1(atx0, otherSig.NodeID())
-		_, err = atxHdlr.processATX(context.Background(), "", atx0, codec.MustEncode(atx0), time.Now())
+		_, err = atxHdlr.processATX(context.Background(), "", atx0, time.Now())
 		require.NoError(t, err)
 
 		atx1 := newInitialATXv1(t, goldenATXID)
 		atx1.Sign(sig)
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
-		_, err = atxHdlr.processATX(context.Background(), "", atx1, codec.MustEncode(atx1), time.Now())
+		_, err = atxHdlr.processATX(context.Background(), "", atx1, time.Now())
 		require.NoError(t, err)
 
 		atxInvalidPrevious := newChainedActivationTxV1(t, atx0, goldenATXID)
@@ -555,7 +554,6 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		atxFromDb, err := atxs.Get(atxHdlr.cdb, atx.ID())
 		require.NoError(t, err)
 		atx.SetReceived(time.Unix(0, atx.Received().UnixNano()))
-		atx.AtxBlob = types.AtxBlob{}
 		require.Equal(t, atx, atxFromDb)
 	})
 
@@ -605,7 +603,6 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		atxFromDb, err := atxs.Get(atxHdlr.cdb, atx.ID())
 		require.NoError(t, err)
 		atx.SetReceived(time.Unix(0, atx.Received().UnixNano()))
-		atx.AtxBlob = types.AtxBlob{}
 		require.Equal(t, atx, atxFromDb)
 	})
 

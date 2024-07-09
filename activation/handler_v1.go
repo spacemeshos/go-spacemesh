@@ -550,7 +550,7 @@ func (h *HandlerV1) storeAtx(
 			return fmt.Errorf("check malicious: %w", err)
 		}
 
-		err = atxs.Add(tx, atx)
+		err = atxs.Add(tx, atx, watx.Blob())
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
@@ -587,7 +587,6 @@ func (h *HandlerV1) processATX(
 	ctx context.Context,
 	peer p2p.Peer,
 	watx *wire.ActivationTxV1,
-	blob []byte,
 	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
 	if !h.edVerifier.Verify(signing.ATX, watx.SmesherID, watx.SignedBytes(), watx.Signature) {
@@ -644,7 +643,7 @@ func (h *HandlerV1) processATX(
 		baseTickHeight = posAtx.TickHeight()
 	}
 
-	atx := wire.ActivationTxFromWireV1(watx, blob...)
+	atx := wire.ActivationTxFromWireV1(watx)
 	if h.nipostValidator.IsVerifyingFullPost() {
 		atx.SetValidity(types.Valid)
 	}

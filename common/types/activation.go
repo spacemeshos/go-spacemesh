@@ -193,8 +193,6 @@ type ActivationTx struct {
 	// for at least the first few years.
 	Weight uint64
 
-	AtxBlob
-
 	golden   bool
 	id       ATXID     // non-exported cache of the ATXID
 	received time.Time // time received by node, gossiped or synced

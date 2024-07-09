@@ -165,8 +165,8 @@ func createP2PFetch(
 func (tpf *testP2PFetch) createATXs(epoch types.EpochID) []types.ATXID {
 	atxIDs := make([]types.ATXID, 10)
 	for i := range atxIDs {
-		atx := newAtx(tpf.t, epoch)
-		require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx))
+		atx, blob := newAtx(tpf.t, epoch)
+		require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, blob))
 		atxIDs[i] = atx.ID()
 	}
 	return atxIDs
@@ -345,15 +345,15 @@ func TestP2PGetATXs(t *testing.T) {
 		t, "database: no free connection",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
-			atx := newAtx(tpf.t, epoch)
-			require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx))
+			atx, blob := newAtx(tpf.t, epoch)
+			require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, blob))
 			tpf.verifyGetHash(
 				func() error {
 					return tpf.clientFetch.GetAtxs(
 						context.Background(), []types.ATXID{atx.ID()})
 				},
 				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
-				atx.AtxBlob.Blob)
+				blob.Blob)
 		})
 }
 

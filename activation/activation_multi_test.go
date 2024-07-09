@@ -197,7 +197,7 @@ func TestRegossip(t *testing.T) {
 			atx.PublishEpoch = layer.GetEpoch()
 			atx.Sign(sig)
 			vAtx := toAtx(t, atx)
-			require.NoError(t, atxs.Add(tab.db, vAtx))
+			require.NoError(t, atxs.Add(tab.db, vAtx, atx.Blob()))
 
 			if refAtx == nil {
 				refAtx = vAtx

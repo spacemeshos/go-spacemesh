@@ -46,8 +46,8 @@ func TestValidator_Validate(t *testing.T) {
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:  epoch / 2,
-		CycleGap:    epoch / 4,
-		GracePeriod: epoch / 5,
+		CycleGap:    3 * epoch / 4,
+		GracePeriod: epoch / 4,
 	}
 
 	poetDb := activation.NewPoetDb(sql.InMemory(), logger.Named("poetDb"))

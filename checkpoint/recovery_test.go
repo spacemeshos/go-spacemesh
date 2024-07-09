@@ -119,15 +119,19 @@ func verifyDbContent(tb testing.TB, db *sql.Database) {
 	require.Empty(tb, extra)
 }
 
+func checkpointServer(t testing.TB) string {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /snapshot-15", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(checkpointData))
+	})
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+	return ts.URL
+}
+
 func TestRecover(t *testing.T) {
 	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
+	url := checkpointServer(t)
 
 	tt := []struct {
 		name   string
@@ -136,7 +140,7 @@ func TestRecover(t *testing.T) {
 	}{
 		{
 			name: "http",
-			uri:  fmt.Sprintf("%s/snapshot-15", ts.URL),
+			uri:  fmt.Sprintf("%s/snapshot-15", url),
 		},
 		{
 			name:   "url unreachable",
@@ -190,13 +194,7 @@ func TestRecover(t *testing.T) {
 
 func TestRecover_SameRecoveryInfo(t *testing.T) {
 	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
+	url := checkpointServer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -206,7 +204,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 		DataDir:   t.TempDir(),
 		DbFile:    "test.sql",
 		NodeIDs:   []types.NodeID{types.RandomNodeID()},
-		Uri:       fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Uri:       fmt.Sprintf("%s/snapshot-15", url),
 		Restore:   types.LayerID(recoverLayer),
 	}
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
@@ -273,46 +271,45 @@ func validateAndPreserveData(
 	for _, dep := range deps {
 		var atx wire.ActivationTxV1
 		require.NoError(tb, codec.Decode(dep.Blob, &atx))
-		vatx := wire.ActivationTxFromWireV1(&atx, dep.Blob...)
-		mclock.EXPECT().CurrentLayer().Return(vatx.PublishEpoch.FirstLayer())
+		mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
-		if vatx.PrevATXID == types.EmptyATXID {
+		if atx.PrevATXID == types.EmptyATXID {
 			mvalidator.EXPECT().
 				InitialNIPostChallengeV1(&atx.NIPostChallengeV1, gomock.Any(), goldenAtx).
 				AnyTimes()
 			mvalidator.EXPECT().Post(
 				gomock.Any(),
-				vatx.SmesherID,
-				*vatx.CommitmentATX,
+				atx.SmesherID,
+				*atx.CommitmentATXID,
 				wire.PostFromWireV1(atx.InitialPost),
 				gomock.Any(),
-				vatx.NumUnits,
+				atx.NumUnits,
 				gomock.Any(),
 			)
 			mvalidator.EXPECT().VRFNonce(
-				vatx.SmesherID,
-				*vatx.CommitmentATX,
-				(uint64)(vatx.VRFNonce),
+				atx.SmesherID,
+				*atx.CommitmentATXID,
+				*atx.VRFNonce,
 				atx.NIPost.PostMetadata.LabelsPerUnit,
-				vatx.NumUnits,
+				atx.NumUnits,
 			)
 		} else {
 			mvalidator.EXPECT().NIPostChallengeV1(
 				&atx.NIPostChallengeV1,
 				gomock.Cond(func(prev any) bool { return prev.(*types.ActivationTx).ID() == atx.PrevATXID }),
-				vatx.SmesherID,
+				atx.SmesherID,
 			)
 		}
 
-		mvalidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, vatx.PublishEpoch)
+		mvalidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, atx.PublishEpoch)
 		mvalidator.EXPECT().
-			NIPost(gomock.Any(), vatx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), vatx.NumUnits, gomock.Any()).
+			NIPost(gomock.Any(), atx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)
 		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mreceiver.EXPECT().OnAtx(gomock.Any())
 		mtrtl.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), vatx.ID().Hash32(), "self", dep.Blob))
+		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), "self", dep.Blob))
 	}
 }
 
@@ -353,17 +350,15 @@ func newChainedAtx(
 	}
 	watx.Signature = sig.Sign(signing.ATX, watx.SignedBytes())
 
-	atx := wire.ActivationTxFromWireV1(watx)
-	atx.SetReceived(time.Now().Local())
-
 	return &checkpoint.AtxDep{
-		ID:           atx.ID(),
-		PublishEpoch: atx.PublishEpoch,
+		ID:           watx.ID(),
+		PublishEpoch: watx.PublishEpoch,
 		Blob:         codec.MustEncode(watx),
 	}
 }
 
 func randomPoetProof(tb testing.TB) (*types.PoetProofMessage, types.PoetProofRef) {
+	tb.Helper()
 	proof := &types.PoetProofMessage{
 		PoetProof: types.PoetProof{
 			MerkleProof: shared.MerkleProof{
@@ -477,13 +472,8 @@ func proofRefs(proofs []*types.PoetProofMessage) []types.PoetProofRef {
 }
 
 func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
+	t.Parallel()
+	url := checkpointServer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -502,7 +492,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 		DbFile:      "test.sql",
 		LocalDbFile: "local.sql",
 		NodeIDs:     []types.NodeID{sig1.NodeID(), sig2.NodeID(), sig3.NodeID(), sig4.NodeID()},
-		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Uri:         fmt.Sprintf("%s/snapshot-15", url),
 		Restore:     types.LayerID(recoverLayer),
 	}
 
@@ -570,13 +560,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 
 func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
+	url := checkpointServer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -593,7 +577,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 		DbFile:      "test.sql",
 		LocalDbFile: "local.sql",
 		NodeIDs:     []types.NodeID{sig1.NodeID(), sig2.NodeID(), sig3.NodeID()},
-		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Uri:         fmt.Sprintf("%s/snapshot-15", url),
 		Restore:     types.LayerID(recoverLayer),
 	}
 
@@ -628,19 +612,15 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.NoError(t, oldDB.Close())
 
 	// write pending nipost challenge to simulate a pending atx still waiting for poet proof.
-	var atx wire.ActivationTxV1
-	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-2].Blob, &atx))
-	prevAtx1 := wire.ActivationTxFromWireV1(&atx)
-	atx = wire.ActivationTxV1{}
-	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-1].Blob, &atx))
-	posAtx1 := wire.ActivationTxFromWireV1(&atx)
+	var prevAtx1 wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-2].Blob, &prevAtx1))
+	var posAtx1 wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs1[len(vAtxs1)-1].Blob, &posAtx1))
 
-	atx = wire.ActivationTxV1{}
-	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-2].Blob, &atx))
-	prevAtx2 := wire.ActivationTxFromWireV1(&atx)
-	atx = wire.ActivationTxV1{}
-	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-1].Blob, &atx))
-	posAtx2 := wire.ActivationTxFromWireV1(&atx)
+	var prevAtx2 wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-2].Blob, &prevAtx2))
+	var posAtx2 wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs2[len(vAtxs1)-1].Blob, &posAtx2))
 
 	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
 	require.NoError(t, err)
@@ -692,13 +672,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 
 func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T) {
 	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
+	url := checkpointServer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -713,7 +687,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 		DbFile:      "test.sql",
 		LocalDbFile: "local.sql",
 		NodeIDs:     []types.NodeID{sig1.NodeID(), sig2.NodeID()},
-		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Uri:         fmt.Sprintf("%s/snapshot-15", url),
 		Restore:     types.LayerID(recoverLayer),
 	}
 
@@ -791,13 +765,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 
 func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
+	url := checkpointServer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -809,7 +777,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 		DbFile:      "test.sql",
 		LocalDbFile: "local.sql",
 		NodeIDs:     []types.NodeID{sig.NodeID()},
-		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Uri:         fmt.Sprintf("%s/snapshot-15", url),
 		Restore:     types.LayerID(recoverLayer),
 	}
 
@@ -818,14 +786,13 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	require.NotNil(t, oldDB)
 	vAtxs, proofs := createAtxChain(t, sig)
 	// make the first one from the previous snapshot
-	var atx wire.ActivationTxV1
-	require.NoError(t, codec.Decode(vAtxs[0].Blob, &atx))
-	golden := wire.ActivationTxFromWireV1(&atx, vAtxs[0].Blob...)
+	var golden wire.ActivationTxV1
+	require.NoError(t, codec.Decode(vAtxs[0].Blob, &golden))
 	require.NoError(t, atxs.AddCheckpointed(oldDB, &atxs.CheckpointAtx{
 		ID:            golden.ID(),
 		Epoch:         golden.PublishEpoch,
-		CommitmentATX: *golden.CommitmentATX,
-		VRFNonce:      golden.VRFNonce,
+		CommitmentATX: *golden.CommitmentATXID,
+		VRFNonce:      types.VRFPostIndex(*golden.VRFNonce),
 		NumUnits:      golden.NumUnits,
 		SmesherID:     golden.SmesherID,
 		Sequence:      golden.Sequence,
@@ -874,13 +841,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 
 func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
+	url := checkpointServer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -892,7 +853,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 		DbFile:      "test.sql",
 		LocalDbFile: "local.sql",
 		NodeIDs:     []types.NodeID{sig.NodeID()},
-		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Uri:         fmt.Sprintf("%s/snapshot-15", url),
 		Restore:     types.LayerID(recoverLayer),
 	}
 
@@ -939,13 +900,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 
 func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodGet, r.Method)
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(checkpointData))
-		require.NoError(t, err)
-	}))
-	defer ts.Close()
+	url := checkpointServer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -961,14 +916,14 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 		DbFile:      "test.sql",
 		LocalDbFile: "local.sql",
 		NodeIDs:     []types.NodeID{types.BytesToNodeID(nid)},
-		Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+		Uri:         fmt.Sprintf("%s/snapshot-15", url),
 		Restore:     types.LayerID(recoverLayer),
 	}
 
 	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
-	require.NoError(t, atxs.Add(oldDB, atx))
+	require.NoError(t, atxs.Add(oldDB, atx, types.AtxBlob{}))
 	require.NoError(t, oldDB.Close())
 
 	preserve, err := checkpoint.Recover(ctx, zaptest.NewLogger(t), afero.NewOsFs(), cfg)

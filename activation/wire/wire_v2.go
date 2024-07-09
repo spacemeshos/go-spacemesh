@@ -42,11 +42,32 @@ type ActivationTxV2 struct {
 	Signature types.EdSignature
 
 	// cached fields to avoid repeated calculations
-	id types.ATXID
+	id   types.ATXID
+	blob []byte
 }
 
 func (atx *ActivationTxV2) SignedBytes() []byte {
 	return atx.ID().Bytes()
+}
+
+func (atx *ActivationTxV2) Blob() types.AtxBlob {
+	if len(atx.blob) == 0 {
+		atx.blob = codec.MustEncode(atx)
+	}
+	return types.AtxBlob{
+		Blob:    atx.blob,
+		Version: types.AtxV2,
+	}
+}
+
+func DecodeAtxV2(blob []byte) (*ActivationTxV2, error) {
+	atx := &ActivationTxV2{
+		blob: blob,
+	}
+	if err := codec.Decode(blob, atx); err != nil {
+		return nil, err
+	}
+	return atx, nil
 }
 
 func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {

@@ -163,7 +163,7 @@ func TestFirstInEpoch(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	atx := newAtx(sig, lid)
-	require.NoError(t, atxs.Add(db, atx))
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 
 	got, err := FirstInEpoch(db, atx.ID(), 2)
 	require.ErrorIs(t, err, sql.ErrNotFound)
