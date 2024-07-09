@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -86,15 +87,32 @@ func TestTransactionService_List(t *testing.T) {
 		require.Len(t, list.Transactions, len(txsList))
 	})
 
-	t.Run("principal", func(t *testing.T) {
-		principal := txsList[0].TxHeader.Principal.String()
+	t.Run("address", func(t *testing.T) {
+		address := txsList[0].Principal.String()
+		var expectedTxs []types.TransactionWithResult
+		for _, tx := range txsList {
+			found := false
+			if tx.Transaction.Principal.String() == address {
+				found = true
+			}
+
+			for _, addr := range tx.TransactionResult.Addresses {
+				if addr.String() == address {
+					found = true
+					break
+				}
+			}
+			if found {
+				expectedTxs = append(expectedTxs, tx)
+			}
+		}
+
 		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
-			Principal: &principal,
-			Limit:     1,
+			Address: &address,
+			Limit:   100,
 		})
 		require.NoError(t, err)
-		require.Len(t, list.Transactions, 1)
-		require.Equal(t, list.Transactions[0].Tx.Principal, principal)
+		require.Len(t, list.Transactions, len(expectedTxs))
 	})
 
 	t.Run("tx id", func(t *testing.T) {
@@ -131,6 +149,25 @@ func TestTransactionService_List(t *testing.T) {
 		require.Equal(t, txsList[0].ID[:], list.Transactions[0].Tx.Id)
 		require.Equal(t, spacemeshv2alpha1.TransactionResult_TRANSACTION_STATUS_SUCCESS,
 			list.Transactions[0].TxResult.Status)
+	})
+
+	t.Run("start layer & end layer", func(t *testing.T) {
+		layer := txsList[0].Layer.Uint32()
+
+		var expectedTxs []types.TransactionWithResult
+		for _, tx := range txsList {
+			if tx.Layer.Uint32() == layer {
+				expectedTxs = append(expectedTxs, tx)
+			}
+		}
+
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
+			StartLayer: &layer,
+			EndLayer:   &layer,
+			Limit:      100,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, len(expectedTxs))
 	})
 }
 
@@ -278,6 +315,29 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, s.Code())
 		assert.Contains(t, s.Message(), "signature is invalid")
+	})
+	t.Run("verify transaction contents for spend tx", func(t *testing.T) {
+		addr := accounts[3].Address
+		amount := uint64(100)
+		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
+			Transaction: wallet.Spend(keys[0], addr, amount, 0),
+			Verify:      true,
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, resp.Tx.Contents.GetSend().Amount, amount)
+		require.Equal(t, resp.Tx.Contents.GetSend().Destination, addr.String())
+	})
+
+	t.Run("transaction contents for spawn tx", func(t *testing.T) {
+		var publicKey core.PublicKey
+		copy(publicKey[:], signing.Public(keys[0]))
+		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
+			Transaction: wallet.SelfSpawn(keys[0], 0),
+			Verify:      true,
+		})
+		require.NoError(t, err)
+		require.Equal(t, resp.Tx.Contents.GetSingleSigSpawn().Pubkey, publicKey.String())
 	})
 }
 

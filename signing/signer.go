@@ -24,6 +24,7 @@ const (
 	BALLOT   = 2
 	HARE     = 3
 	POET     = 4
+	MARRIAGE = 5
 
 	BEACON_FIRST_MSG    = 10
 	BEACON_FOLLOWUP_MSG = 11

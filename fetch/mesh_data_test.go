@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"testing"
 
+	p2phost "github.com/libp2p/go-libp2p/core/host"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -32,6 +34,16 @@ const (
 	txsForBlock    = iota
 	txsForProposal = iota
 )
+
+type hostWrapper struct {
+	p2phost.Host
+}
+
+func (hw *hostWrapper) PeerInfo() peerinfo.PeerInfo { return nil }
+
+func wrapHost(h p2phost.Host) server.Host {
+	return &hostWrapper{Host: h}
+}
 
 func (f *testFetch) withMethod(method int) *testFetch {
 	f.method = method
@@ -446,11 +458,11 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 	require.NoError(tb, err)
 	atxs := make([]*types.ActivationTx, 0, num)
 	for i := uint32(0); i < num; i++ {
-		atx := types.NewActivationTx(
-			types.NIPostChallenge{},
-			types.Address{1, 2, 3},
-			i,
-		)
+		atx := &types.ActivationTx{
+			Coinbase: types.Address{1, 2, 3},
+			NumUnits: i,
+			Weight:   uint64(i),
+		}
 		atx.SmesherID = sig.NodeID()
 		atx.SetID(types.RandomATXID())
 		atxs = append(atxs, atx)
@@ -826,7 +838,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 	for _, withLimiting := range []bool{false, true} {
 		t.Run(fmt.Sprintf("with limiting: %v", withLimiting), func(t *testing.T) {
 			srv := server.New(
-				mesh.Hosts()[1],
+				wrapHost(mesh.Hosts()[1]),
 				hashProtocol,
 				server.WrapHandler(func(_ context.Context, data []byte) ([]byte, error) {
 					var requestBatch RequestBatch
@@ -868,7 +880,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			cfg.GetAtxsConcurrency = getAtxConcurrency
 
 			cdb := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
-			client := server.New(mesh.Hosts()[0], hashProtocol, nil)
+			client := server.New(wrapHost(mesh.Hosts()[0]), hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
 			f := NewFetch(cdb, store.New(), host,

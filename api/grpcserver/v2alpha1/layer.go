@@ -194,11 +194,6 @@ func (s *LayerService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.LayerRequest,
 ) (*spacemeshv2alpha1.LayerList, error) {
-	ops, err := toLayerOperations(request)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
 	switch {
 	case request.Limit > 100:
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
@@ -206,16 +201,17 @@ func (s *LayerService) List(
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 
+	ops, err := toLayerOperations(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
 	rst := make([]*spacemeshv2alpha1.Layer, 0, request.Limit)
-	var derr error
 	if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
 		rst = append(rst, toLayer(layer))
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
-	}
-	if derr != nil {
-		return nil, derr
 	}
 
 	return &spacemeshv2alpha1.LayerList{Layers: rst}, nil
@@ -247,7 +243,7 @@ func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operatio
 
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
-		Value: "l.id asc",
+		Value: "l.id " + filter.SortOrder.String(),
 	})
 
 	if filter.Limit != 0 {

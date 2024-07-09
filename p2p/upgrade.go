@@ -22,6 +22,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	discovery "github.com/spacemeshos/go-spacemesh/p2p/dhtdiscovery"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -75,6 +76,12 @@ func WithRelayCandidateChannel(relayCh chan<- peer.AddrInfo) Opt {
 	}
 }
 
+func WithPeerInfo(pi peerinfo.PeerInfo) Opt {
+	return func(fh *Host) {
+		fh.peerInfo = pi
+	}
+}
+
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -91,6 +98,7 @@ type Host struct {
 	}
 
 	host.Host
+	peerInfo peerinfo.PeerInfo
 	pubsub.PubSub
 
 	nodeReporter func()
@@ -255,7 +263,7 @@ func (fh *Host) GetPeers() []Peer {
 }
 
 // Connected returns true if the specified peer is connected.
-// Peers that only have limited connections to them aren't considered connected.
+// Peers that only have transient connections to them aren't considered connected.
 func (fh *Host) Connected(p Peer) bool {
 	if fh.Host.Network().Connectedness(p) != network.Connected {
 		return false
@@ -271,6 +279,9 @@ func (fh *Host) Connected(p Peer) bool {
 // ConnectedPeerInfo retrieves a peer info object for the given peer.ID, if the
 // given peer is not connected then nil is returned.
 func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
+	if fh.peerInfo == nil {
+		panic("no PeerInfo")
+	}
 	conns := fh.Network().ConnsToPeer(id)
 	// there's no sync between  Peers() and ConnsToPeer() so by the time we
 	// try to get the conns they may not exist.
@@ -278,12 +289,14 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 		return nil
 	}
 
+	pi := fh.PeerInfo().EnsurePeerInfo(id)
 	var connections []ConnectionInfo
 	for _, c := range conns {
 		connections = append(connections, ConnectionInfo{
 			Address:  c.RemoteMultiaddr(),
 			Uptime:   time.Since(c.Stat().Opened),
 			Outbound: c.Stat().Direction == network.DirOutbound,
+			Kind:     pi.Kind(c),
 		})
 	}
 	var tags []string
@@ -297,8 +310,31 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 	return &PeerInfo{
 		ID:          id,
 		Connections: connections,
-		Tags:        tags,
+		ClientStats: grabPeerConnStats(&pi.ClientStats),
+		ServerStats: grabPeerConnStats(&pi.ServerStats),
+		DataStats: DataStats{
+			BytesSent:     pi.BytesSent(),
+			BytesReceived: pi.BytesReceived(),
+			SendRate: [2]int64{
+				pi.SendRate(1),
+				pi.SendRate(2),
+			},
+			RecvRate: [2]int64{
+				pi.RecvRate(1),
+				pi.RecvRate(2),
+			},
+		},
+		Tags: tags,
 	}
+}
+
+// ProtocolDataStats returns per-protocol data stats.
+func (fh *Host) ProtocolDataStats() map[protocol.ID]*peerinfo.DataStats {
+	r := make(map[protocol.ID]*peerinfo.DataStats)
+	for _, proto := range fh.peerInfo.Protocols() {
+		r[proto] = fh.peerInfo.EnsureProtoStats(proto)
+	}
+	return r
 }
 
 // ListenAddresses returns the addresses on which this host listens.
@@ -467,4 +503,8 @@ func (fh *Host) trackNetEvents() error {
 			return fh.ctx.Err()
 		}
 	}
+}
+
+func (fh *Host) PeerInfo() peerinfo.PeerInfo {
+	return fh.peerInfo
 }

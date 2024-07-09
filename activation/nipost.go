@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
+	postshared "github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -42,23 +43,26 @@ const (
 	maxPoetGetProofJitter = 0.04
 )
 
+var ErrInvalidInitialPost = errors.New("invalid initial post")
+
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
 	localDB *localsql.Database
 
-	poetProvers map[string]PoetClient
+	poetProvers map[string]PoetService
 	postService postService
 	logger      *zap.Logger
 	poetCfg     PoetConfig
 	layerClock  layerClock
 	postStates  PostStates
+	validator   nipostValidator
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
 
-func WithPoetClients(clients ...PoetClient) NIPostBuilderOption {
+func WithPoetServices(clients ...PoetService) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
-		nb.poetProvers = make(map[string]PoetClient, len(clients))
+		nb.poetProvers = make(map[string]PoetService, len(clients))
 		for _, client := range clients {
 			nb.poetProvers[client.Address()] = client
 		}
@@ -78,6 +82,7 @@ func NewNIPostBuilder(
 	lg *zap.Logger,
 	poetCfg PoetConfig,
 	layerClock layerClock,
+	validator nipostValidator,
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
 	b := &NIPostBuilder{
@@ -88,6 +93,7 @@ func NewNIPostBuilder(
 		poetCfg:     poetCfg,
 		layerClock:  layerClock,
 		postStates:  NewPostStates(lg),
+		validator:   validator,
 	}
 
 	for _, opt := range opts {
@@ -110,6 +116,7 @@ func (nb *NIPostBuilder) Proof(
 	ctx context.Context,
 	nodeID types.NodeID,
 	challenge []byte,
+	postChallenge *types.NIPostChallenge,
 ) (*types.Post, *types.PostInfo, error) {
 	nb.postStates.Set(nodeID, types.PostStateProving)
 	started := false
@@ -141,6 +148,27 @@ func (nb *NIPostBuilder) Proof(
 		}
 
 		retries = 0
+		// we check whether an initial post is included in the challenge
+		// if so, we verify it to still be valid before creating the post
+		// e.g. the PoST size might have changed
+		if postChallenge != nil && postChallenge.InitialPost != nil {
+			info, err := client.Info(ctx)
+			if errors.Is(err, ErrPostClientClosed) {
+				continue
+			} else if err != nil {
+				events.EmitPostFailure(nodeID)
+				return nil, nil, fmt.Errorf("failed to get post info: %w", err)
+			}
+			if err := nb.validator.PostV2(ctx,
+				nodeID,
+				info.CommitmentATX,
+				postChallenge.InitialPost,
+				postshared.ZeroChallenge,
+				info.NumUnits,
+			); err != nil {
+				return nil, nil, ErrInvalidInitialPost
+			}
+		}
 		post, postInfo, err := client.Proof(ctx, challenge)
 		switch {
 		case errors.Is(err, ErrPostClientClosed):
@@ -163,8 +191,8 @@ func (nb *NIPostBuilder) Proof(
 func (nb *NIPostBuilder) BuildNIPost(
 	ctx context.Context,
 	signer *signing.EdSigner,
-	publishEpoch types.EpochID,
 	challenge types.Hash32,
+	postChallenge *types.NIPostChallenge,
 ) (*nipost.NIPostState, error) {
 	logger := nb.logger.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
 	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
@@ -180,13 +208,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 	//  WE ARE HERE            PROOF BECOMES         ATX PUBLICATION
 	//                           AVAILABLE               DEADLINE
 
-	poetRoundStart := nb.layerClock.LayerToTime((publishEpoch - 1).FirstLayer()).Add(nb.poetCfg.PhaseShift)
-	poetRoundEnd := nb.layerClock.LayerToTime(publishEpoch.FirstLayer()).
+	poetRoundStart := nb.layerClock.LayerToTime((postChallenge.PublishEpoch - 1).FirstLayer()).
+		Add(nb.poetCfg.PhaseShift)
+	poetRoundEnd := nb.layerClock.LayerToTime(postChallenge.PublishEpoch.FirstLayer()).
 		Add(nb.poetCfg.PhaseShift).
 		Add(-nb.poetCfg.CycleGap)
 
 	// we want to publish before the publish epoch ends or we won't receive rewards
-	publishEpochEnd := nb.layerClock.LayerToTime((publishEpoch + 1).FirstLayer())
+	publishEpochEnd := nb.layerClock.LayerToTime((postChallenge.PublishEpoch + 1).FirstLayer())
 
 	// we want to fetch the PoET proof latest 1 CycleGap before the publish epoch ends
 	// so that a node that is setup correctly (i.e. can generate a PoST proof within the cycle gap)
@@ -197,7 +226,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		zap.Time("poet round start", poetRoundStart),
 		zap.Time("poet round end", poetRoundEnd),
 		zap.Time("publish epoch end", publishEpochEnd),
-		zap.Uint32("publish epoch", publishEpoch.Uint32()),
+		zap.Uint32("publish epoch", postChallenge.PublishEpoch.Uint32()),
 	)
 
 	// Phase 0: Submit challenge to PoET services.
@@ -245,14 +274,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 			return nil, fmt.Errorf(
 				"%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)",
 				ErrATXChallengeExpired,
-				publishEpoch,
+				postChallenge.PublishEpoch,
 				poetProofDeadline,
 				now,
 			)
 		}
 
-		events.EmitPoetWaitProof(signer.NodeID(), publishEpoch, poetRoundEnd)
-		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, publishEpoch)
+		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, poetRoundEnd)
+		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, postChallenge.PublishEpoch)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
@@ -277,7 +306,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 			return nil, fmt.Errorf(
 				"%w: deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)",
 				ErrATXChallengeExpired,
-				publishEpoch,
+				postChallenge.PublishEpoch,
 				publishEpochEnd,
 				now,
 			)
@@ -287,7 +316,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
 		startTime := time.Now()
-		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:])
+		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], postChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
@@ -331,7 +360,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	ctx context.Context,
 	nodeID types.NodeID,
 	deadline time.Time,
-	client PoetClient,
+	client PoetService,
 	prefix, challenge []byte,
 	signature types.EdSignature,
 ) error {
@@ -399,10 +428,10 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	return nil
 }
 
-func (nb *NIPostBuilder) getPoetClient(ctx context.Context, address string) PoetClient {
-	for _, client := range nb.poetProvers {
-		if address == client.Address() {
-			return client
+func (nb *NIPostBuilder) getPoetService(ctx context.Context, address string) PoetService {
+	for _, service := range nb.poetProvers {
+		if address == service.Address() {
+			return service
 		}
 	}
 	return nil
@@ -442,7 +471,7 @@ func (nb *NIPostBuilder) getBestProof(
 			zap.String("poet_address", r.Address),
 			zap.String("round", r.RoundID),
 		)
-		client := nb.getPoetClient(ctx, r.Address)
+		client := nb.getPoetService(ctx, r.Address)
 		if client == nil {
 			logger.Warn("poet client not found")
 			continue

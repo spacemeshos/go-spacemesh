@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.6.1
+
+### Improvements
+
+* [#6053](https://github.com/spacemeshos/go-spacemesh/pull/6053) Fixed an issue where the node could fail to select a
+  positioning ATX during the cyclegap and miss the registration window for the next PoET round.
+
 ## Release v1.6.0
 
 ### Upgrade information
@@ -41,6 +48,9 @@ operating your own PoET and want to use certificate authentication please refer 
 
 ### Features
 
+* [#5792](https://github.com/spacemeshos/go-spacemesh/pull/5792) Add hole punching info and data transfer stats
+   to the API.
+
 ### Improvements
 
 * [#5863](https://github.com/spacemeshos/go-spacemesh/pull/5863) Identity files are now created with 0600 permissions,
@@ -75,6 +85,15 @@ operating your own PoET and want to use certificate authentication please refer 
 * [#5927](https://github.com/spacemeshos/go-spacemesh/pull/5927) Fixed vulnerability in the way a node handles incoming
   ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
   eligible for them.
+
+* [#6031](https://github.com/spacemeshos/go-spacemesh/pull/6031) Fixed an edge case where the storage units might have
+  changed after the initial PoST was generated but before the first ATX has been emitted, invalidating the initial PoST.
+  The node will now try to verify the initial PoST and regenerate it if necessary.
+
+* [#6044](https://github.com/spacemeshos/go-spacemesh/pull/6044) The node will now reuse `blake3` hashers in a pool which
+  reduces stress on the garbage collector.
+
+* [#6055](https://github.com/spacemeshos/go-spacemesh/pull/6055) Increased limits to support up to 7.0 Mio ATXs per epoch.
 
 ## Release v1.5.7
 

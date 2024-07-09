@@ -163,6 +163,7 @@ func (n *node) withAtx(min, max int) *node {
 	} else {
 		atx.NumUnits = uint32(min)
 	}
+	atx.Weight = uint64(atx.NumUnits) * atx.TickCount
 	id := types.ATXID{}
 	n.t.rng.Read(id[:])
 	atx.SetID(id)
@@ -248,7 +249,7 @@ func (n *node) register(signer *signing.EdSigner) {
 }
 
 func (n *node) storeAtx(atx *types.ActivationTx) error {
-	if err := atxs.Add(n.db, atx); err != nil {
+	if err := atxs.Add(n.db, atx, types.AtxBlob{}); err != nil {
 		return err
 	}
 	n.atxsdata.AddFromAtx(atx, false)
@@ -913,7 +914,7 @@ func TestProposals(t *testing.T) {
 				WithLogger(logtest.New(t).Zap()),
 			)
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(db, &atx))
+				require.NoError(t, atxs.Add(db, &atx, types.AtxBlob{}))
 				atxsdata.AddFromAtx(&atx, false)
 			}
 			for _, proposal := range tc.proposals {
@@ -950,4 +951,28 @@ func TestHare_AddProposal(t *testing.T) {
 
 	require.True(t, hare.IsKnown(p.Layer, p.ID()))
 	require.ErrorIs(t, hare.OnProposal(p), store.ErrProposalExists)
+}
+
+func TestHareConfig_CommitteeUpgrade(t *testing.T) {
+	t.Parallel()
+	t.Run("no upgrade", func(t *testing.T) {
+		cfg := Config{
+			Committee: 400,
+		}
+		require.Equal(t, cfg.Committee, cfg.CommitteeFor(0))
+		require.Equal(t, cfg.Committee, cfg.CommitteeFor(100))
+	})
+	t.Run("upgrade", func(t *testing.T) {
+		cfg := Config{
+			Committee: 400,
+			CommitteeUpgrade: &CommitteeUpgrade{
+				Layer: 16,
+				Size:  50,
+			},
+		}
+		require.EqualValues(t, cfg.Committee, cfg.CommitteeFor(0))
+		require.EqualValues(t, cfg.Committee, cfg.CommitteeFor(15))
+		require.EqualValues(t, 50, cfg.CommitteeFor(16))
+		require.EqualValues(t, 50, cfg.CommitteeFor(100))
+	})
 }

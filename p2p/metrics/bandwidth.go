@@ -6,6 +6,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 
 	prometheusMetrics "github.com/spacemeshos/go-spacemesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
 const (
@@ -34,11 +35,13 @@ var (
 
 // BandwidthCollector implement metrics.Reporter
 // that keeps track of the number of messages sent and received per protocol.
-type BandwidthCollector struct{}
+type BandwidthCollector struct {
+	pi peerinfo.PeerInfo
+}
 
 // NewBandwidthCollector creates a new BandwidthCollector.
-func NewBandwidthCollector() *BandwidthCollector {
-	return &BandwidthCollector{}
+func NewBandwidthCollector(pi peerinfo.PeerInfo) *BandwidthCollector {
+	return &BandwidthCollector{pi: pi}
 }
 
 // LogSentMessageStream logs the message node sent to the peer.
@@ -46,6 +49,7 @@ func (b *BandwidthCollector) LogSentMessageStream(size int64, proto protocol.ID,
 	totalOut.WithLabelValues().Add(float64(size))
 	trafficPerProtocol.WithLabelValues(string(proto), outgoing).Add(float64(size))
 	messagesPerProtocol.WithLabelValues(string(proto), outgoing).Inc()
+	b.pi.RecordSent(size, proto, p)
 }
 
 // LogRecvMessageStream logs the message that node received from the peer.
@@ -53,6 +57,7 @@ func (b *BandwidthCollector) LogRecvMessageStream(size int64, proto protocol.ID,
 	totalIn.WithLabelValues().Add(float64(size))
 	trafficPerProtocol.WithLabelValues(string(proto), incoming).Add(float64(size))
 	messagesPerProtocol.WithLabelValues(string(proto), incoming).Inc()
+	b.pi.RecordReceived(size, proto, p)
 }
 
 // LogSentMessage  logs the message sent to the peer.

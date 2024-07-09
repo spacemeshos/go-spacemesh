@@ -420,8 +420,7 @@ func IterateTransactionsOps(
 	var derr error
 	_, err := db.Exec(`select distinct tx, header, layer, block, timestamp, id, result 
 		from transactions
-		left join transactions_results_addresses on id=tid
-		where result is not null`+builder.FilterFrom(operations),
+		left join transactions_results_addresses on id=tid`+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
 		func(stmt *sql.Statement) bool {
 			var txId types.TransactionID
@@ -431,13 +430,17 @@ func IterateTransactionsOps(
 			if derr != nil {
 				return false
 			}
-			var txResult types.TransactionResult
-			_, derr = codec.DecodeFrom(stmt.ColumnReader(6), &txResult)
-			if derr != nil {
-				return false
+			var txResult *types.TransactionResult
+			r := stmt.ColumnReader(6)
+			if r.Len() > 0 {
+				txResult = &types.TransactionResult{}
+				_, derr = codec.DecodeFrom(r, txResult)
+				if derr != nil {
+					return false
+				}
 			}
 
-			return fn(meshTx, &txResult)
+			return fn(meshTx, txResult)
 		})
 	if err == nil {
 		return err

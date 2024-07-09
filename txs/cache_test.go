@@ -1011,7 +1011,6 @@ func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
 func TestCache_BuildFromScratch(t *testing.T) {
 	tc, accounts := createCache(t, 1000)
 	mtxs := make(map[types.Address][]*types.MeshTransaction)
-	totalNumTXs := 0
 	for principal, ta := range accounts {
 		numTXs := rand.Uint64() % 100
 		if numTXs == 0 {
@@ -1022,7 +1021,6 @@ func TestCache_BuildFromScratch(t *testing.T) {
 			ta.balance = minBalance
 		}
 		mtxs[principal] = genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+numTXs-1, time.Now())
-		totalNumTXs += int(numTXs)
 	}
 	buildCache(t, tc, accounts, mtxs)
 }

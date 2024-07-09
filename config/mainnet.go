@@ -65,6 +65,10 @@ func MainnetConfig() Config {
 	hare3conf.Committee = 400
 	hare3conf.Enable = true
 	hare3conf.EnableLayer = 35117
+	hare3conf.CommitteeUpgrade = &hare3.CommitteeUpgrade{
+		Layer: 105_720, // July 15, 2024, 10:00:00 AM UTC
+		Size:  50,
+	}
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
@@ -156,10 +160,12 @@ func MainnetConfig() Config {
 			BeaconSyncWeightUnits:    800,
 		},
 		POET: activation.PoetConfig{
-			PhaseShift:        240 * time.Hour,
-			CycleGap:          12 * time.Hour,
-			GracePeriod:       1 * time.Hour,
-			RequestTimeout:    1100 * time.Second, // RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+			PhaseShift:                     240 * time.Hour,
+			CycleGap:                       12 * time.Hour,
+			GracePeriod:                    1 * time.Hour,
+			PositioningATXSelectionTimeout: 50 * time.Minute,
+			// RequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+			RequestTimeout:    1100 * time.Second,
 			RequestRetryDelay: 10 * time.Second,
 			MaxRequestRetries: 10,
 		},

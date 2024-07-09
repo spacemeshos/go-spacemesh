@@ -9,13 +9,12 @@ on:
 jobs:
   build-and-upload:
     runs-on: ${{ matrix.os }}
-
     strategy:
       matrix:
         include:
           - os: ubuntu-22.04
             outname_sufix: "linux-amd64"
-          - os: [self-hosted, linux, arm64]
+          - os: ubuntu-latest-arm-8-cores
             outname_sufix: "linux-arm64"
           - os: macos-13
             outname_sufix: "mac-amd64"
@@ -26,26 +25,27 @@ jobs:
     steps:
       - shell: bash
         run: echo "OUTNAME=go-spacemesh-${{ github.ref_name }}-${{ matrix.outname_sufix }}" >> $GITHUB_ENV
-
+      - name: Add OpenCL support - Ubuntu
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
+        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: Install dependencies in windows
         if: ${{ matrix.os == 'windows-2022' }}
         run: choco install make wget zip
-
-      - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
-
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
-
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: Check out Git repository
         uses: actions/checkout@v4
         with:
           lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-
       - uses: extractions/netrc@v2
         with:
           machine: github.com
@@ -67,7 +67,6 @@ jobs:
         shell: bash
         run: |
           make merge-nodes VERSION=${{ github.ref_name }}
-
       - name: Create release archive
         shell: bash
         env:
@@ -77,38 +76,31 @@ jobs:
           mv ./build/* $OUTNAME
           rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
-
       - name: Setup gcloud authentication
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
-
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           version: "469.0.0"
-
       - name: Upload zip
         uses: google-github-actions/upload-cloud-storage@v2
         with:
           path: ${{ env.OUTNAME }}.zip
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
-
       - name: Install coreutils
         if: ${{ matrix.os == 'macos-13' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
         run: brew install coreutils
-
       - name: Calculate the hashsum of the zip file
         if: ${{ matrix.os != 'windows-2022' }}
         shell: bash
         run: |
           sha256sum ${{ env.OUTNAME }}.zip | awk '{ print $1 }' > sha256-${{ matrix.outname_sufix }}.txt
-
       - name: Calculate the hashsum of the zip file (Windows)
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           (Get-FileHash ${{ env.OUTNAME }}.zip -Algorithm SHA256).Hash > sha256-${{ matrix.outname_sufix }}.txt
-
       - uses: actions/upload-artifact@v4
         with:
           name: sha256-${{ matrix.outname_sufix }}
@@ -122,7 +114,6 @@ jobs:
     steps:
       - name: Download the artifacts
         uses: actions/download-artifact@v4
-
       - name: Generate the env variables
         shell: bash
         run: |
@@ -148,18 +139,15 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
-
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           version: "469.0.0"
-
       - name: Upload sha256sums
         uses: google-github-actions/upload-cloud-storage@v2
         with:
           path: sha256sum.yaml
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         id: create_release

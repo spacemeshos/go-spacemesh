@@ -21,7 +21,8 @@ type ActivationTxV1 struct {
 	SmesherID types.NodeID
 	Signature types.EdSignature
 
-	id types.ATXID
+	id   types.ATXID
+	blob []byte
 }
 
 // InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
@@ -106,14 +107,6 @@ func (atx *ActivationTxV1) SetID(id types.ATXID) {
 	atx.id = id
 }
 
-func (atx *ActivationTxV1) Published() types.EpochID {
-	return atx.PublishEpoch
-}
-
-func (atx *ActivationTxV1) TotalNumUnits() uint32 {
-	return atx.NumUnits
-}
-
 func (atx *ActivationTxV1) Sign(signer *signing.EdSigner) {
 	if atx.PrevATXID == types.EmptyATXID {
 		nodeID := signer.NodeID()
@@ -131,14 +124,35 @@ func (atx *ActivationTxV1) SignedBytes() []byte {
 	return data
 }
 
+func (atx *ActivationTxV1) Blob() types.AtxBlob {
+	if len(atx.blob) == 0 {
+		atx.blob = codec.MustEncode(atx)
+	}
+	return types.AtxBlob{
+		Blob:    atx.blob,
+		Version: types.AtxV1,
+	}
+}
+
+func DecodeAtxV1(blob []byte) (*ActivationTxV1, error) {
+	atx := &ActivationTxV1{
+		blob: blob,
+	}
+	if err := codec.Decode(blob, atx); err != nil {
+		return nil, err
+	}
+	return atx, nil
+}
+
 func (atx *ActivationTxV1) HashInnerBytes() (result types.Hash32) {
-	h := hash.New()
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
 	codec.MustEncodeTo(h, &atx.InnerActivationTxV1)
 	h.Sum(result[:0])
 	return result
 }
 
-func postToWireV1(p *types.Post) *PostV1 {
+func PostToWireV1(p *types.Post) *PostV1 {
 	if p == nil {
 		return nil
 	}
@@ -159,7 +173,7 @@ func NiPostToWireV1(n *types.NIPost) *NIPostV1 {
 			Nodes:     n.Membership.Nodes,
 			LeafIndex: n.Membership.LeafIndex,
 		},
-		Post: postToWireV1(n.Post),
+		Post: PostToWireV1(n.Post),
 		PostMetadata: &PostMetadataV1{
 			Challenge:     n.PostMetadata.Challenge,
 			LabelsPerUnit: n.PostMetadata.LabelsPerUnit,
@@ -174,11 +188,11 @@ func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 		PrevATXID:        c.PrevATXID,
 		PositioningATXID: c.PositioningATX,
 		CommitmentATXID:  c.CommitmentATX,
-		InitialPost:      postToWireV1(c.InitialPost),
+		InitialPost:      PostToWireV1(c.InitialPost),
 	}
 }
 
-func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.ActivationTx {
+func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
 	result := &types.ActivationTx{
 		PublishEpoch:  atx.PublishEpoch,
 		Sequence:      atx.Sequence,
@@ -187,13 +201,6 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 		Coinbase:      atx.Coinbase,
 		NumUnits:      atx.NumUnits,
 		SmesherID:     atx.SmesherID,
-		AtxBlob: types.AtxBlob{
-			Version: types.AtxV1,
-			Blob:    blob,
-		},
-	}
-	if len(blob) == 0 {
-		result.AtxBlob.Blob = codec.MustEncode(atx)
 	}
 	result.SetID(atx.ID())
 

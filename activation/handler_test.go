@@ -111,6 +111,7 @@ func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 	t.Helper()
 	atx := wire.ActivationTxFromWireV1(watx)
 	atx.SetReceived(time.Now())
+	atx.BaseTickHeight = uint64(atx.PublishEpoch)
 	atx.TickCount = 1
 	return atx
 }
@@ -641,7 +642,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, uint64(0), stored1.BaseTickHeight)
 	require.Equal(t, leaves/tickSize, stored1.TickCount)
 	require.Equal(t, leaves/tickSize, stored1.TickHeight())
-	require.Equal(t, (leaves/tickSize)*units, stored1.GetWeight())
+	require.Equal(t, (leaves/tickSize)*units, stored1.Weight)
 
 	atx2 := newChainedActivationTxV1(t, atx1, atx1.ID())
 	atx2.Sign(sig)
@@ -656,7 +657,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, stored1.TickHeight(), stored2.BaseTickHeight)
 	require.Equal(t, leaves/tickSize, stored2.TickCount)
 	require.Equal(t, stored1.TickHeight()+leaves/tickSize, stored2.TickHeight())
-	require.Equal(t, int(leaves/tickSize)*units, int(stored2.GetWeight()))
+	require.Equal(t, int(leaves/tickSize)*units, int(stored2.Weight))
 }
 
 func TestHandler_WrongHash(t *testing.T) {
@@ -868,7 +869,7 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 
 		atx := newInitialATXv1(t, atxHdlr.goldenATXID)
-		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		decoded, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.NoError(t, err)
 		require.Equal(t, atx, decoded)
 	})
@@ -879,7 +880,7 @@ func TestHandler_DecodeATX(t *testing.T) {
 
 		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
 		atx.PublishEpoch = 10
-		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		decoded, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.NoError(t, err)
 		require.Equal(t, atx, decoded)
 	})
@@ -890,7 +891,7 @@ func TestHandler_DecodeATX(t *testing.T) {
 
 		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
 		atx.PublishEpoch = 9
-		_, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		_, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.ErrorIs(t, err, errMalformedData)
 	})
 }

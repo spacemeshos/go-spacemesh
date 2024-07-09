@@ -48,7 +48,7 @@ func (t *IterRound) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *Value) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Proposals, 1775)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Proposals, 2050)
 		if err != nil {
 			return total, err
 		}
@@ -66,7 +66,7 @@ func (t *Value) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *Value) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.ProposalID](dec, 1775)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.ProposalID](dec, 2050)
 		if err != nil {
 			return total, err
 		}

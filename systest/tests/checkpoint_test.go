@@ -182,7 +182,6 @@ func TestCheckpoint(t *testing.T) {
 
 func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, stop uint32) {
 	numSmeshers := cl.Total() - cl.Bootnodes()
-	var got int
 	createdCh := make(chan *pb.Proposal, numSmeshers)
 	eg, _ := errgroup.WithContext(tctx)
 	for i := cl.Bootnodes(); i < cl.Total(); i++ {
@@ -200,7 +199,6 @@ func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster
 					"eligibilities", len(proposal.Eligibilities),
 					"status", pb.Proposal_Status_name[int32(proposal.Status)],
 				)
-				got++
 				createdCh <- proposal
 				return false, nil
 			}

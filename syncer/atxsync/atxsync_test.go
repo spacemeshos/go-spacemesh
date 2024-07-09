@@ -101,16 +101,15 @@ func TestDownload(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			fetcher := mocks.NewMockAtxFetcher(ctrl)
 			for _, atx := range tc.existing {
-				require.NoError(t, atxs.Add(db, atx))
+				require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			}
 			for i := range tc.fetched {
 				req := tc.fetched[i]
 				fetcher.EXPECT().
 					GetAtxs(tc.ctx, req.request, gomock.Any()).
-					Times(1).
 					DoAndReturn(func(_ context.Context, _ []types.ATXID, _ ...system.GetAtxOpt) error {
 						for _, atx := range req.result {
-							require.NoError(t, atxs.Add(db, atx))
+							require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 						}
 						return req.error
 					})

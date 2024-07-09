@@ -53,6 +53,7 @@ func TestPostState_OnProof(t *testing.T) {
 		zaptest.NewLogger(t),
 		PoetConfig{},
 		nil,
+		nil,
 		NipostbuilderWithPostStates(mpostStates),
 	)
 	require.NoError(t, err)
@@ -66,6 +67,6 @@ func TestPostState_OnProof(t *testing.T) {
 		mpostStates.EXPECT().Set(id, types.PostStateIdle),
 	)
 
-	_, _, err = nb.Proof(context.Background(), id, []byte("abc"))
+	_, _, err = nb.Proof(context.Background(), id, []byte("abc"), nil)
 	require.NoError(t, err)
 }

@@ -166,9 +166,9 @@ func TestPoetClient_CachesProof(t *testing.T) {
 	db.EXPECT().ValidateAndStore(ctx, gomock.Any())
 	db.EXPECT().ProofForRound(server.Pubkey.Bytes(), "1").Times(19)
 
-	poet, err := NewPoetClient(db, server, DefaultPoetConfig(), zaptest.NewLogger(t))
+	client, err := NewHTTPPoetClient(server, DefaultPoetConfig(), withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
-	poet.client.client.HTTPClient = ts.Client()
+	poet := NewPoetServiceWithClient(db, client, DefaultPoetConfig(), zaptest.NewLogger(t))
 
 	eg := errgroup.Group{}
 	for range 20 {
@@ -205,9 +205,9 @@ func TestPoetClient_QueryProofTimeout(t *testing.T) {
 	cfg := PoetConfig{
 		RequestTimeout: time.Millisecond * 100,
 	}
-	poet, err := NewPoetClient(nil, server, cfg, zaptest.NewLogger(t))
+	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
-	poet.client.client.HTTPClient = ts.Client()
+	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
 
 	start := time.Now()
 	eg := errgroup.Group{}
@@ -257,9 +257,9 @@ func TestPoetClient_Certify(t *testing.T) {
 		Certificate(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
 		Return(&cert, nil)
 
-	poet, err := NewPoetClient(nil, server, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
-	poet.client.client.HTTPClient = ts.Client()
+	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
 
 	got, err := poet.Certify(context.Background(), sig.NodeID())
 	require.NoError(t, err)
@@ -305,9 +305,9 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 		Certificate(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
 		Return(&cert, nil)
 
-	poet, err := NewPoetClient(nil, server, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
-	poet.client.client.HTTPClient = ts.Client()
+	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
 
 	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
@@ -368,9 +368,9 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 			Return(&certifier.PoetCert{Data: []byte("second")}, nil),
 	)
 
-	poet, err := NewPoetClient(nil, server, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
-	poet.client.client.HTTPClient = ts.Client()
+	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
 
 	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)

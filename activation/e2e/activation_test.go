@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/poet/registration"
 	poetShared "github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,6 +33,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+func syncedSyncer(t testing.TB) *activation.Mocksyncer {
+	syncer := activation.NewMocksyncer(gomock.NewController(t))
+	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+		synced := make(chan struct{})
+		close(synced)
+		return synced
+	}).AnyTimes()
+	return syncer
+}
+
 func Test_BuilderWithMultipleClients(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -41,64 +50,39 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	const numSigners = 3
 	const totalAtxs = numEpochs * numSigners
 
-	signers := make(map[types.NodeID]*signing.EdSigner, numSigners)
-	for range numSigners {
+	signers := make([]*signing.EdSigner, numSigners)
+	for i := range numSigners {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		signers[sig.NodeID()] = sig
+		signers[i] = sig
 	}
 
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := sql.InMemory()
 	localDB := localsql.InMemory()
-
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		synced := make(chan struct{})
-		close(synced)
-		return synced
-	}).AnyTimes()
 
 	svc := grpcserver.NewPostService(logger)
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
-
-	opts := activation.DefaultPostSetupOpts()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
-
 	var eg errgroup.Group
-	i := uint32(1)
-	for _, sig := range signers {
-		opts := opts
-		opts.DataDir = t.TempDir()
-		opts.NumUnits = min(i*2, cfg.MaxNumUnits)
-		i += 1
+	for i, sig := range signers {
+		opts := testPostSetupOpts(t)
+		opts.NumUnits = min(opts.NumUnits+2*uint32(i), cfg.MaxNumUnits)
 		eg.Go(func() error {
-			validator := activation.NewMocknipostValidator(ctrl)
-			mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), goldenATX, syncer, validator)
-			require.NoError(t, err)
-
-			initPost(t, mgr, opts, sig.NodeID())
-			t.Cleanup(launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts))
-
-			require.Eventually(t, func() bool {
-				_, err := svc.Client(sig.NodeID())
-				return err == nil
-			}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
+			initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 			return nil
 		})
 	}
 	require.NoError(t, eg.Wait())
 
 	// ensure that genesis aligns with layer timings
-	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	layerDuration := 3 * time.Second
-	epoch := layersPerEpoch * layerDuration
+	epoch := layerDuration * layersPerEpoch
+	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	poetCfg := activation.PoetConfig{
 		PhaseShift:        epoch,
 		CycleGap:          epoch / 2,
@@ -108,6 +92,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		MaxRequestRetries: 10,
 	}
 
+	scrypt := testPostSetupOpts(t).Scrypt
 	pubkey, address := spawnTestCertifier(
 		t,
 		cfg,
@@ -115,7 +100,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			exp := time.Now().Add(epoch)
 			return &poetShared.Cert{Pubkey: id, Expiration: &exp}
 		},
-		verifying.WithLabelScryptParams(opts.Scrypt),
+		verifying.WithLabelScryptParams(scrypt),
 	)
 
 	poetProver := spawnPoet(
@@ -144,15 +129,25 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	postStates := activation.NewMockPostStates(ctrl)
+	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
+	require.NoError(t, err)
+
+	validator := activation.NewValidator(
+		db,
+		poetDb,
+		cfg,
+		scrypt,
+		verifier,
+	)
+
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
 		logger.Named("nipostBuilder"),
 		poetCfg,
 		clock,
-		activation.NipostbuilderWithPostStates(postStates),
-		activation.WithPoetClients(client),
+		validator,
+		activation.WithPoetServices(client),
 	)
 	require.NoError(t, err)
 
@@ -181,7 +176,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 				require.NoError(t, err)
 			}
 			logger.Debug("persisting ATX", zap.Inline(atx))
-			require.NoError(t, atxs.Add(db, atx))
+			require.NoError(t, atxs.Add(db, atx, gotAtx.Blob()))
 			data.AddFromAtx(atx, false)
 
 			if atxsPublished.Add(1) == totalAtxs {
@@ -191,10 +186,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		},
 	).Times(totalAtxs)
 
-	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
-	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	v := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 	tab := activation.NewBuilder(
 		conf,
 		db,
@@ -203,30 +195,13 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		mpub,
 		nb,
 		clock,
-		syncer,
+		syncedSyncer(t),
 		logger,
 		activation.WithPoetConfig(poetCfg),
-		activation.WithValidator(v),
-		activation.WithPostStates(postStates),
+		activation.WithValidator(validator),
 		activation.WithPoets(client),
 	)
 	for _, sig := range signers {
-		gomock.InOrder(
-			// it starts by setting to IDLE
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// initial proof
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// post proof - 1st epoch
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// 2nd epoch
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-			// 3rd epoch
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-			postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		)
 		tab.Register(sig)
 	}
 
@@ -245,7 +220,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 				require.Equal(t, sig.NodeID(), *atx.NodeID)
 				require.Equal(t, goldenATX, atx.PositioningATXID)
 				require.NotNil(t, atx.VRFNonce)
-				err := v.VRFNonce(
+				err := validator.VRFNonce(
 					sig.NodeID(),
 					commitment,
 					uint64(*atx.VRFNonce),
@@ -257,7 +232,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 				require.Nil(t, atx.VRFNonce)
 				require.Equal(t, previous, atx.PositioningATXID)
 			}
-			_, err = v.NIPost(
+			_, err = validator.NIPost(
 				context.Background(),
 				sig.NodeID(),
 				commitment,

@@ -44,12 +44,14 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          # this pattern matches using picomatch syntax (used by this third party Action), which is slightly
-          # different than GitHub syntax: it matches any file in any path ending in '.md'. this checks if
-          # any non-markdown files were changed.
+          # All patterns have to match for it to be considered a non-doc change.
+          # If only markdown files or CODEOWNERS are changed non-doc will be considered true and not trigger
+          # building the code and executing the tests.
+          predicate-quantifier: 'every'
           filters: |
             nondoc:
               - '!**/*.md'
+              - '!.github/CODEOWNERS'
 
   ## stage 1: run unit tests and app tests as a prerequisite
   ## these run on all pushes to all pull requests, all branches
@@ -67,7 +69,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-
       - uses: extractions/netrc@v2
         with:
           machine: github.com
@@ -99,7 +100,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-
       - uses: extractions/netrc@v2
         with:
           machine: github.com
@@ -127,23 +127,28 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - [self-hosted, linux, arm64]
+          - ubuntu-latest-arm-8-cores
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-2022
     steps:
       - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-
       - uses: extractions/netrc@v2
         with:
           machine: github.com
@@ -173,23 +178,28 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - [self-hosted, linux, arm64]
+          - ubuntu-latest-arm-8-cores
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-2022
     steps:
       - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-
       - uses: extractions/netrc@v2
         with:
           machine: github.com
@@ -217,7 +227,7 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - [self-hosted, linux, arm64]
+          - ubuntu-latest-arm-8-cores
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-2022
@@ -229,7 +239,6 @@ jobs:
         run: |
           sudo ethtool -K eth0 tx off
           sudo ethtool -K eth0 rx off
-
       - name: disable TCP/UDP offload - MacOS
         if: ${{ matrix.os == 'macos-13' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
         run: |
@@ -243,12 +252,17 @@ jobs:
         if: ${{ matrix.os == 'windows-2022' }}
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true
+      - name: Set new git config - Windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          git config --global pack.window 1
+          git config --global core.compression 0
+          git config --global http.postBuffer 524288000
       - name: checkout
         uses: actions/checkout@v4
         with:
           lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-
       - uses: extractions/netrc@v2
         with:
           machine: github.com
@@ -262,7 +276,7 @@ jobs:
           go-version: ${{ env.go-version }}
           cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-22.04' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: Add OpenCL support - Windows
         if: ${{ matrix.os == 'windows-2022' }}

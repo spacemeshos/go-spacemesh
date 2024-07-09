@@ -16,11 +16,12 @@ func SigningBody(genesis, tx []byte) []byte {
 
 // ComputePrincipal address as the last 20 bytes from blake3(scale(template || args)).
 func ComputePrincipal(template Address, args scale.Encodable) Address {
-	hasher := hash.New()
+	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
 	encoder := scale.NewEncoder(hasher)
 	template.EncodeScale(encoder)
 	args.EncodeScale(encoder)
-	hash := hasher.Sum(nil)
-	rst := types.GenerateAddress(hash[12:])
+	sum := hasher.Sum(nil)
+	rst := types.GenerateAddress(sum[12:])
 	return rst
 }

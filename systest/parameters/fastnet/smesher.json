@@ -1,9 +1,15 @@
 {
     "preset": "fastnet",
+    "main": {
+        "atx-versions": {
+            "2": 2
+        }
+    },
     "poet": {
         "phase-shift": "30s",
         "cycle-gap": "30s",
-        "grace-period": "10s"
+        "grace-period": "10s",
+        "positioning-atx-selection-timeout":"7s"
     },
     "api": {
         "grpc-public-listener": "0.0.0.0:9092",
@@ -21,6 +27,12 @@
             }
         }
     },
+    "hare3": {
+        "committeeupgrade": {
+            "layer": 16,
+            "size": 15
+        }
+    },
     "smeshing": {
         "smeshing-verifying-opts": {
             "smeshing-opts-verifying-min-workers": 1000000
@@ -32,6 +44,7 @@
         }
     },
     "logging": {
+        "log-encoder": "json",
         "txHandler": "debug",
         "grpc": "debug",
         "sync": "debug",

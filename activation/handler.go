@@ -237,11 +237,9 @@ func (h *Handler) determineVersion(msg []byte) (*types.AtxVersion, error) {
 
 type opaqueAtx interface {
 	ID() types.ATXID
-	Published() types.EpochID
-	TotalNumUnits() uint32
 }
 
-func (h *Handler) decodeATX(msg []byte) (opaqueAtx, error) {
+func (h *Handler) decodeATX(msg []byte) (atx opaqueAtx, err error) {
 	version, err := h.determineVersion(msg)
 	if err != nil {
 		return nil, fmt.Errorf("determining ATX version: %w", err)
@@ -249,20 +247,16 @@ func (h *Handler) decodeATX(msg []byte) (opaqueAtx, error) {
 
 	switch *version {
 	case types.AtxV1:
-		var atx wire.ActivationTxV1
-		if err := codec.Decode(msg, &atx); err != nil {
-			return nil, fmt.Errorf("%w: %w", errMalformedData, err)
-		}
-		return &atx, nil
+		atx, err = wire.DecodeAtxV1(msg)
 	case types.AtxV2:
-		var atx wire.ActivationTxV2
-		if err := codec.Decode(msg, &atx); err != nil {
-			return nil, fmt.Errorf("%w: %w", errMalformedData, err)
-		}
-		return &atx, nil
+		atx, err = wire.DecodeAtxV2(msg)
+	default:
+		return nil, fmt.Errorf("unsupported ATX version: %v", *version)
 	}
-
-	return nil, fmt.Errorf("unsupported ATX version: %v", *version)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errMalformedData, err)
+	}
+	return atx, nil
 }
 
 func (h *Handler) handleAtx(
@@ -318,9 +312,9 @@ func (h *Handler) handleAtx(
 
 	switch atx := opaqueAtx.(type) {
 	case *wire.ActivationTxV1:
-		proof, err = h.v1.processATX(ctx, peer, atx, msg, receivedTime)
+		proof, err = h.v1.processATX(ctx, peer, atx, receivedTime)
 	case *wire.ActivationTxV2:
-		proof, err = h.v2.processATX(ctx, peer, atx, msg, receivedTime)
+		proof, err = h.v2.processATX(ctx, peer, atx, receivedTime)
 	default:
 		panic("unreachable")
 	}
