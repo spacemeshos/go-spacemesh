@@ -21,7 +21,8 @@ type ActivationTxV1 struct {
 	SmesherID types.NodeID
 	Signature types.EdSignature
 
-	id types.ATXID
+	id   types.ATXID
+	blob []byte
 }
 
 // InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
@@ -106,14 +107,6 @@ func (atx *ActivationTxV1) SetID(id types.ATXID) {
 	atx.id = id
 }
 
-func (atx *ActivationTxV1) Published() types.EpochID {
-	return atx.PublishEpoch
-}
-
-func (atx *ActivationTxV1) TotalNumUnits() uint32 {
-	return atx.NumUnits
-}
-
 func (atx *ActivationTxV1) Sign(signer *signing.EdSigner) {
 	if atx.PrevATXID == types.EmptyATXID {
 		nodeID := signer.NodeID()
@@ -129,6 +122,26 @@ func (atx *ActivationTxV1) SignedBytes() []byte {
 		MsgHash: atx.HashInnerBytes(),
 	})
 	return data
+}
+
+func (atx *ActivationTxV1) Blob() types.AtxBlob {
+	if len(atx.blob) == 0 {
+		atx.blob = codec.MustEncode(atx)
+	}
+	return types.AtxBlob{
+		Blob:    atx.blob,
+		Version: types.AtxV1,
+	}
+}
+
+func DecodeAtxV1(blob []byte) (*ActivationTxV1, error) {
+	atx := &ActivationTxV1{
+		blob: blob,
+	}
+	if err := codec.Decode(blob, atx); err != nil {
+		return nil, err
+	}
+	return atx, nil
 }
 
 func (atx *ActivationTxV1) HashInnerBytes() (result types.Hash32) {
@@ -179,7 +192,7 @@ func NIPostChallengeToWireV1(c *types.NIPostChallenge) *NIPostChallengeV1 {
 	}
 }
 
-func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.ActivationTx {
+func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
 	result := &types.ActivationTx{
 		PublishEpoch:  atx.PublishEpoch,
 		Sequence:      atx.Sequence,
@@ -188,13 +201,6 @@ func ActivationTxFromWireV1(atx *ActivationTxV1, blob ...byte) *types.Activation
 		Coinbase:      atx.Coinbase,
 		NumUnits:      atx.NumUnits,
 		SmesherID:     atx.SmesherID,
-		AtxBlob: types.AtxBlob{
-			Version: types.AtxV1,
-			Blob:    blob,
-		},
-	}
-	if len(blob) == 0 {
-		result.AtxBlob.Blob = codec.MustEncode(atx)
 	}
 	result.SetID(atx.ID())
 

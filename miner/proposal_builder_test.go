@@ -75,6 +75,7 @@ func gatx(
 		PublishEpoch: epoch,
 		TickCount:    ticks,
 		SmesherID:    smesher,
+		Weight:       uint64(units) * ticks,
 	}
 	atx.SetID(id)
 	atx.SetReceived(time.Time{}.Add(1))
@@ -776,7 +777,7 @@ func TestBuild(t *testing.T) {
 						)
 					}
 					for _, atx := range step.atxs {
-						require.NoError(t, atxs.Add(db, atx))
+						require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 						atxsdata.AddFromAtx(atx, false)
 					}
 					for _, ballot := range step.ballots {

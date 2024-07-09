@@ -51,41 +51,26 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := sql.InMemory()
 	cdb := datastore.NewCachedDB(db, logger)
 
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		synced := make(chan struct{})
-		close(synced)
-		return synced
-	}).AnyTimes()
-
+	opts := testPostSetupOpts(t)
 	svc := grpcserver.NewPostService(logger)
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
+	initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
+
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	opts := testPostSetupOpts(t)
+
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
 	atxsdata := atxsdata.New()
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata, goldenATX, syncer, validator)
-	require.NoError(t, err)
-
-	initPost(t, mgr, opts, sig.NodeID())
-	stop := launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts)
-	t.Cleanup(stop)
-
-	require.Eventually(t, func() bool {
-		_, err := svc.Client(sig.NodeID())
-		return err == nil
-	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Round(layerDuration)
@@ -108,7 +93,6 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	client := ae2e.NewTestPoetClient(1)
 	poetClient := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
-	postStates := activation.NewPostStates(logger)
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
@@ -117,7 +101,6 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		poetCfg,
 		clock,
 		validator,
-		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetServices(poetClient),
 	)
 	require.NoError(t, err)
@@ -201,7 +184,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 				require.NotZero(t, atx.BaseTickHeight)
 				require.NotZero(t, atx.TickCount)
-				require.NotZero(t, atx.GetWeight())
+				require.NotZero(t, atx.Weight)
 				require.NotZero(t, atx.TickHeight())
 				require.Equal(t, opts.NumUnits, atx.NumUnits)
 				previous = atx
@@ -218,11 +201,10 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		mpub,
 		nb,
 		clock,
-		syncer,
+		syncedSyncer(t),
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),
-		activation.WithPostStates(postStates),
 		activation.BuilderAtxVersions(atxVersions),
 	)
 	tab.Register(sig)

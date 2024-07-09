@@ -229,23 +229,24 @@ func (g *Generator) generateAtxs() {
 		if err != nil {
 			panic(err)
 		}
-		address := types.GenerateAddress(sig.PublicKey().Bytes())
 
-		nipost := types.NIPostChallenge{
-			PublishEpoch: g.nextLayer.Sub(1).GetEpoch(),
-		}
-		atx := types.NewActivationTx(nipost, address, units)
 		var ticks uint64
 		if g.ticks != nil {
 			ticks = g.ticks[i]
 		} else {
 			ticks = uint64(intInRange(g.rng, g.ticksRange))
 		}
-		atx.SmesherID = sig.NodeID()
+		atx := &types.ActivationTx{
+			PublishEpoch:   g.nextLayer.Sub(1).GetEpoch(),
+			Coinbase:       types.GenerateAddress(sig.PublicKey().Bytes()),
+			NumUnits:       units,
+			SmesherID:      sig.NodeID(),
+			BaseTickHeight: g.prevHeight[i],
+			TickCount:      ticks,
+			Weight:         uint64(units) * ticks,
+		}
 		atx.SetID(types.RandomATXID())
 		atx.SetReceived(time.Now())
-		atx.BaseTickHeight = g.prevHeight[i]
-		atx.TickCount = ticks
 		g.prevHeight[i] += ticks
 		g.activations[i] = atx
 		for _, state := range g.states {

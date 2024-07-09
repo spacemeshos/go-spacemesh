@@ -130,8 +130,7 @@ func TestMarried(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, married)
 
-		atx := types.RandomATXID()
-		require.NoError(t, SetMarriage(db, id, atx))
+		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: types.RandomATXID()}))
 
 		married, err = Married(db, id)
 		require.NoError(t, err)
@@ -149,12 +148,58 @@ func TestMarried(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, married)
 
-		require.NoError(t, SetMarriage(db, id, types.RandomATXID()))
+		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: types.RandomATXID()}))
 
 		married, err = Married(db, id)
 		require.NoError(t, err)
 		require.True(t, married)
 	})
+}
+
+func TestMarriageATX(t *testing.T) {
+	t.Parallel()
+	t.Run("not married", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+
+		id := types.RandomNodeID()
+		_, err := MarriageATX(db, id)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("married", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+
+		id := types.RandomNodeID()
+		marriage := MarriageData{
+			ATX:       types.RandomATXID(),
+			Signature: types.RandomEdSignature(),
+			Index:     2,
+			Target:    types.RandomNodeID(),
+		}
+		require.NoError(t, SetMarriage(db, id, &marriage))
+		got, err := MarriageATX(db, id)
+		require.NoError(t, err)
+		require.Equal(t, marriage.ATX, got)
+	})
+}
+
+func TestMarriage(t *testing.T) {
+	t.Parallel()
+
+	db := sql.InMemory()
+
+	id := types.RandomNodeID()
+	marriage := MarriageData{
+		ATX:       types.RandomATXID(),
+		Signature: types.RandomEdSignature(),
+		Index:     2,
+		Target:    types.RandomNodeID(),
+	}
+	require.NoError(t, SetMarriage(db, id, &marriage))
+	got, err := Marriage(db, id)
+	require.NoError(t, err)
+	require.Equal(t, marriage, *got)
 }
 
 func TestEquivocationSet(t *testing.T) {
@@ -169,8 +214,12 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 			types.RandomNodeID(),
 		}
-		for _, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx))
+		for i, id := range ids {
+			err := SetMarriage(db, id, &MarriageData{
+				ATX:   atx,
+				Index: i,
+			})
+			require.NoError(t, err)
 		}
 
 		for _, id := range ids {
@@ -198,8 +247,12 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 			types.RandomNodeID(),
 		}
-		for _, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx))
+		for i, id := range ids {
+			err := SetMarriage(db, id, &MarriageData{
+				ATX:   atx,
+				Index: i,
+			})
+			require.NoError(t, err)
 		}
 
 		for _, id := range ids {
@@ -210,7 +263,10 @@ func TestEquivocationSet(t *testing.T) {
 
 		// try to marry via another random ATX
 		// the set should remain intact
-		require.NoError(t, SetMarriage(db, ids[0], types.RandomATXID()))
+		err := SetMarriage(db, ids[0], &MarriageData{
+			ATX: types.RandomATXID(),
+		})
+		require.NoError(t, err)
 		for _, id := range ids {
 			set, err := EquivocationSet(db, id)
 			require.NoError(t, err)
@@ -221,7 +277,7 @@ func TestEquivocationSet(t *testing.T) {
 		db := sql.InMemory()
 		atx := types.RandomATXID()
 		id := types.RandomNodeID()
-		require.NoError(t, SetMarriage(db, id, atx))
+		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx}))
 
 		malicious, err := IsMalicious(db, id)
 		require.NoError(t, err)
@@ -243,8 +299,8 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 			types.RandomNodeID(),
 		}
-		for _, id := range ids {
-			require.NoError(t, SetMarriage(db, id, atx))
+		for i, id := range ids {
+			require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx, Index: i}))
 		}
 
 		require.NoError(t, SetMalicious(db, ids[0], []byte("proof"), time.Now()))
@@ -254,5 +310,32 @@ func TestEquivocationSet(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, malicious)
 		}
+	})
+}
+
+func TestEquivocationSetByMarriageATX(t *testing.T) {
+	t.Parallel()
+
+	t.Run("married IDs", func(t *testing.T) {
+		db := sql.InMemory()
+		ids := []types.NodeID{
+			types.RandomNodeID(),
+			types.RandomNodeID(),
+			types.RandomNodeID(),
+			types.RandomNodeID(),
+		}
+		atx := types.RandomATXID()
+		for i, id := range ids {
+			require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx, Index: i}))
+		}
+		set, err := EquivocationSetByMarriageATX(db, atx)
+		require.NoError(t, err)
+		require.Equal(t, ids, set)
+	})
+	t.Run("empty set", func(t *testing.T) {
+		db := sql.InMemory()
+		set, err := EquivocationSetByMarriageATX(db, types.RandomATXID())
+		require.NoError(t, err)
+		require.Empty(t, set)
 	})
 }

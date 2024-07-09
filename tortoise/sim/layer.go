@@ -159,7 +159,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	}
 	var total uint64
 	for _, atx := range g.activations {
-		total += atx.GetWeight()
+		total += atx.Weight
 	}
 
 	miners := make([]uint32, len(g.activations))
@@ -182,7 +182,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		if err != nil {
 			g.logger.Panic("failed to get a beacon", zap.Error(err))
 		}
-		n, err := util.GetNumEligibleSlots(atx.GetWeight(), 0, total, g.conf.LayerSize, g.conf.LayersPerEpoch)
+		n, err := util.GetNumEligibleSlots(atx.Weight, 0, total, g.conf.LayerSize, g.conf.LayersPerEpoch)
 		if err != nil {
 			g.logger.Panic("eligible slots", zap.Error(err))
 		}

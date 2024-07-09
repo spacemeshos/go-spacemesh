@@ -76,6 +76,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
+	"github.com/spacemeshos/go-spacemesh/sql/migrations"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -428,19 +429,20 @@ type App struct {
 }
 
 func (app *App) loadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, error) {
-	nodeIDs := make([]types.NodeID, len(app.signers))
-	for i, sig := range app.signers {
-		nodeIDs[i] = sig.NodeID()
+	var nodeIDs []types.NodeID
+	if app.Config.Recovery.PreserveOwnAtx {
+		for _, sig := range app.signers {
+			nodeIDs = append(nodeIDs, sig.NodeID())
+		}
 	}
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:      types.ATXID(app.Config.Genesis.GoldenATX()),
-		DataDir:        app.Config.DataDir(),
-		DbFile:         dbFile,
-		LocalDbFile:    localDbFile,
-		PreserveOwnAtx: app.Config.Recovery.PreserveOwnAtx,
-		NodeIDs:        nodeIDs,
-		Uri:            app.Config.Recovery.Uri,
-		Restore:        types.LayerID(app.Config.Recovery.Restore),
+		GoldenAtx:   types.ATXID(app.Config.Genesis.GoldenATX()),
+		DataDir:     app.Config.DataDir(),
+		DbFile:      dbFile,
+		LocalDbFile: localDbFile,
+		NodeIDs:     nodeIDs,
+		Uri:         app.Config.Recovery.Uri,
+		Restore:     types.LayerID(app.Config.Recovery.Restore),
 	}
 
 	return checkpoint.Recover(ctx, app.log.Zap(), afero.NewOsFs(), cfg)
@@ -1763,6 +1765,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			logger.Zap().Named("JSON"),
 			app.Config.API.JSONListener,
 			app.Config.API.JSONCorsAllowedOrigins,
+			app.Config.CollectMetrics,
 		)
 
 		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
@@ -1901,14 +1904,16 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
+	dbLog := app.addLogger(StateDbLogger, lg)
+	m21 := migrations.New0021Migration(dbLog.Zap(), 1_000_000)
 	migrations, err := sql.StateMigrations()
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
-	dbLog := app.addLogger(StateDbLogger, lg)
 	dbopts := []sql.Opt{
 		sql.WithLogger(dbLog.Zap()),
 		sql.WithMigrations(migrations),
+		sql.WithMigration(m21),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),

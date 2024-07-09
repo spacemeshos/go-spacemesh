@@ -245,7 +245,7 @@ func createAtx(t *testing.T, db *sql.Database, epoch types.EpochID, atxID types.
 	}
 	atx.SetID(atxID)
 	atx.SetReceived(time.Now())
-	require.NoError(t, atxs.Add(db, atx))
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 }
 
 func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {

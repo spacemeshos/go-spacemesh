@@ -55,14 +55,15 @@ func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []ty
 		}
 		atx.SetID(id)
 		atx.SetReceived(time.Now())
-		require.NoError(tb, atxs.Add(db, atx))
+		require.NoError(tb, atxs.Add(db, atx, types.AtxBlob{}))
 	}
 }
 
 func launchServer(tb testing.TB, cdb *datastore.CachedDB) (grpcserver.Config, func()) {
 	cfg := grpcserver.DefaultTestConfig()
 	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
-	jsonService := grpcserver.NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0", []string{})
+	jsonService := grpcserver.NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0",
+		[]string{}, false)
 	s := grpcserver.NewMeshService(cdb, grpcserver.NewMockmeshAPI(gomock.NewController(tb)), nil, nil,
 		0, types.Hash20{}, 0, 0, 0)
 
@@ -100,6 +101,7 @@ func verifyUpdate(tb testing.TB, data []byte, epoch types.EpochID, expBeacon str
 }
 
 func TestGenerator_Generate(t *testing.T) {
+	t.Parallel()
 	targetEpoch := types.EpochID(3)
 	db := sql.InMemory()
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
@@ -125,18 +127,16 @@ func TestGenerator_Generate(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				require.Equal(t, http.MethodGet, r.Method)
-				w.WriteHeader(http.StatusOK)
-				var content string
+			t.Parallel()
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasSuffix(r.URL.String(), "/blocks/782685") {
-					content = bitcoinResponse2
+					w.Write([]byte(bitcoinResponse2))
 				} else {
-					content = bitcoinResponse1
+					w.Write([]byte(bitcoinResponse1))
 				}
-				_, err := w.Write([]byte(content))
-				require.NoError(t, err)
-			}))
+			})
+			ts := httptest.NewServer(mux)
 			defer ts.Close()
 
 			fs := afero.NewMemMapFs()
@@ -167,6 +167,7 @@ func TestGenerator_Generate(t *testing.T) {
 }
 
 func TestGenerator_CheckAPI(t *testing.T) {
+	t.Parallel()
 	targetEpoch := types.EpochID(3)
 	db := sql.InMemory()
 	lg := logtest.New(t)

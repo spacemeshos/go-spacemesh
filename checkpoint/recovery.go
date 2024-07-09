@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
@@ -46,14 +48,17 @@ func DefaultConfig() Config {
 }
 
 type RecoverConfig struct {
-	GoldenAtx      types.ATXID
-	DataDir        string
-	DbFile         string
-	LocalDbFile    string
-	PreserveOwnAtx bool
-	NodeIDs        []types.NodeID
-	Uri            string
-	Restore        types.LayerID
+	GoldenAtx   types.ATXID
+	DataDir     string
+	DbFile      string
+	LocalDbFile string
+	NodeIDs     []types.NodeID // IDs to preserve own ATXs
+	Uri         string
+	Restore     types.LayerID
+}
+
+func (c *RecoverConfig) DbPath() string {
+	return filepath.Join(c.DataDir, c.DbFile)
 }
 
 func RecoveryDir(dataDir string) string {
@@ -115,7 +120,7 @@ func Recover(
 		return nil, errors.New("restore layer not set")
 	}
 	logger.Info("recovering from checkpoint", zap.String("url", cfg.Uri), zap.Stringer("restore", cfg.Restore))
-	db, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	db, err := sql.Open("file:" + cfg.DbPath())
 	if err != nil {
 		return nil, fmt.Errorf("open old database: %w", err)
 	}
@@ -169,15 +174,17 @@ func RecoverWithDb(
 	if err != nil {
 		return nil, err
 	}
-	return recoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpFile)
+
+	return RecoverFromLocalFile(ctx, logger, db, localDB, fs, cfg, cpFile)
 }
 
 type recoveryData struct {
-	accounts []*types.Account
-	atxs     []*atxs.CheckpointAtx
+	accounts  []*types.Account
+	atxs      []*atxs.CheckpointAtx
+	marriages map[types.NodeID]*identities.MarriageData
 }
 
-func recoverFromLocalFile(
+func RecoverFromLocalFile(
 	ctx context.Context,
 	logger *zap.Logger,
 	db *sql.Database,
@@ -195,27 +202,26 @@ func recoverFromLocalFile(
 	logger.Info("recovery data contains", zap.Int("accounts", len(data.accounts)), zap.Int("atxs", len(data.atxs)))
 	deps := make(map[types.ATXID]*AtxDep)
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage)
-	if cfg.PreserveOwnAtx {
-		logger.Info("preserving own atx deps", log.ZContext(ctx), zap.Int("num identities", len(cfg.NodeIDs)))
-		for _, nodeID := range cfg.NodeIDs {
-			nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
-			if err != nil {
-				logger.Error(
-					"failed to collect deps for own atx",
-					log.ZShortStringer("smesherID", nodeID),
-					zap.Error(err),
-				)
-				// continue to recover from checkpoint despite failure to preserve own atx
-				continue
-			}
-			logger.Info("collected own atx deps",
-				log.ZContext(ctx),
+	logger.Info("preserving own atx deps", log.ZContext(ctx), zap.Int("num identities", len(cfg.NodeIDs)))
+	for _, nodeID := range cfg.NodeIDs {
+		nodeDeps, nodeProofs, err := collectOwnAtxDeps(logger, db, localDB, nodeID, cfg.GoldenAtx, data)
+		if err != nil {
+			logger.Error(
+				"failed to collect deps for own atx",
 				log.ZShortStringer("smesherID", nodeID),
-				zap.Int("own atx deps", len(nodeDeps)),
+				zap.Error(err),
 			)
-			maps.Copy(deps, nodeDeps)
-			maps.Copy(proofs, nodeProofs)
+			// continue to recover from checkpoint despite failure to preserve own atx
+			continue
 		}
+		logger.Info("collected own atx deps",
+			log.ZContext(ctx),
+			log.ZShortStringer("smesherID", nodeID),
+			zap.Int("own atx deps", len(nodeDeps)),
+			zap.Int("own poet deps", len(nodeProofs)),
+		)
+		maps.Copy(deps, nodeDeps)
+		maps.Copy(proofs, nodeProofs)
 	}
 
 	allDeps := maps.Values(deps)
@@ -251,9 +257,10 @@ func recoverFromLocalFile(
 	}
 	logger.Info("backed up old database", log.ZContext(ctx), zap.String("backup dir", backupDir))
 
-	newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	var newDB *sql.Database
+	newDB, err = sql.Open("file:" + cfg.DbPath())
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite db %w", err)
+		return nil, fmt.Errorf("creating new DB: %w", err)
 	}
 	defer newDB.Close()
 	logger.Info("populating new database",
@@ -283,6 +290,12 @@ func recoverFromLocalFile(
 				log.ZShortStringer("smesherID", cAtx.SmesherID),
 			)
 		}
+		for id, marriage := range data.marriages {
+			if err = identities.SetMarriage(tx, id, marriage); err != nil {
+				return fmt.Errorf("add marriage for %s: %w", id.String(), err)
+			}
+		}
+
 		if err = recovery.SetCheckpoint(tx, cfg.Restore); err != nil {
 			return fmt.Errorf("save checkpoint info: %w", err)
 		}
@@ -350,11 +363,26 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		cAtx.TickCount = atx.TickCount
 		cAtx.Sequence = atx.Sequence
 		copy(cAtx.Coinbase[:], atx.Coinbase)
+		cAtx.Units = atx.Units
 		allAtxs = append(allAtxs, &cAtx)
 	}
+	marriages := make(map[types.NodeID]*identities.MarriageData, len(checkpoint.Data.Marriages))
+	for atx, ms := range checkpoint.Data.Marriages {
+		for _, m := range ms {
+			marriage := identities.MarriageData{
+				ATX:       atx,
+				Index:     m.Index,
+				Signature: types.EdSignature(m.Signature),
+				Target:    types.BytesToNodeID(m.MarriedTo),
+			}
+			marriages[types.BytesToNodeID(m.Signer)] = &marriage
+		}
+	}
+
 	return &recoveryData{
-		accounts: allAccts,
-		atxs:     allAtxs,
+		accounts:  allAccts,
+		atxs:      allAtxs,
+		marriages: marriages,
 	}, nil
 }
 
@@ -453,34 +481,44 @@ func collect(
 	if atx.Golden() {
 		return fmt.Errorf("atx %v belong to previous snapshot. cannot be preserved", ref)
 	}
+	var atxDeps []types.ATXID
 	if atx.CommitmentATX != nil {
-		if err = collect(db, *atx.CommitmentATX, all, deps); err != nil {
-			return err
-		}
-	} else {
-		commitment, err := atxs.CommitmentATX(db, atx.SmesherID)
-		if err != nil {
-			return fmt.Errorf("get commitment for ref atx %v: %w", ref, err)
-		}
-		if err = collect(db, commitment, all, deps); err != nil {
-			return err
-		}
-	}
-	if err = collect(db, atx.PrevATXID, all, deps); err != nil {
-		return err
+		atxDeps = append(atxDeps, *atx.CommitmentATX)
 	}
 
-	posAtx, err := positioningATX(context.Background(), db, ref)
-	if err != nil {
-		return fmt.Errorf("get positioning atx for atx %v: %w", ref, err)
-	}
-	if err = collect(db, posAtx, all, deps); err != nil {
-		return err
-	}
 	var blob sql.Blob
-	_, err = atxs.LoadBlob(context.Background(), db, ref.Bytes(), &blob)
+	version, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &blob)
 	if err != nil {
-		return fmt.Errorf("load atx blob %v: %w", ref, err)
+		return fmt.Errorf("get blob %s: %w", atx.ID(), err)
+	}
+	switch version {
+	case types.AtxV1:
+		var atx wire.ActivationTxV1
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return fmt.Errorf("decode %s: %w", atx.ID(), err)
+		}
+		atxDeps = append(atxDeps, atx.PositioningATXID)
+		if atx.PrevATXID != types.EmptyATXID {
+			atxDeps = append(atxDeps, atx.PrevATXID)
+		}
+	case types.AtxV2:
+		var atx wire.ActivationTxV2
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return fmt.Errorf("decode %s: %w", atx.ID(), err)
+		}
+		atxDeps = append(atxDeps, atx.PositioningATX)
+		atxDeps = append(atxDeps, atx.PreviousATXs...)
+		if atx.MarriageATX != nil {
+			atxDeps = append(atxDeps, *atx.MarriageATX)
+		}
+	default:
+		return fmt.Errorf("unsupported ATX version: %v", version)
+	}
+
+	for _, dep := range atxDeps {
+		if err = collect(db, dep, all, deps); err != nil {
+			return err
+		}
 	}
 
 	deps[ref] = &AtxDep{

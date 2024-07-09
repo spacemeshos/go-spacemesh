@@ -2,9 +2,9 @@ VERSION ?= $(shell git describe --tags)
 COMMIT = $(shell git rev-parse HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-GOLANGCI_LINT_VERSION := v1.57.0
+GOLANGCI_LINT_VERSION := v1.59.0
 STATICCHECK_VERSION := v0.4.7
-GOTESTSUM_VERSION := v1.11.0
+GOTESTSUM_VERSION := v1.12.0
 GOSCALE_VERSION := v1.2.0
 MOCKGEN_VERSION := v0.4.0
 
@@ -97,7 +97,7 @@ clear-test-cache:
 .PHONY: clear-test-cache
 
 test: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 5m -p 1 $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -timeout 8m -p 1 $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs

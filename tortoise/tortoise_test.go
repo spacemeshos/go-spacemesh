@@ -475,12 +475,11 @@ func TestComputeExpectedWeight(t *testing.T) {
 				eid := first + types.EpochID(i)
 				atx := &types.ActivationTx{
 					PublishEpoch: eid - 1,
-					NumUnits:     uint32(weight),
-					TickCount:    1,
+					Weight:       weight,
 				}
 				atx.SetID(types.RandomATXID())
 				atx.SetReceived(time.Now())
-				require.NoError(t, atxs.Add(db, atx))
+				require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(db, lid.GetEpoch())
@@ -500,7 +499,7 @@ func extractAtxsData(db sql.Executor, target types.EpochID) (uint64, uint64, err
 		heights []uint64
 	)
 	if err := atxs.IterateAtxsOps(db, builder.FilterEpochOnly(target-1), func(atx *types.ActivationTx) bool {
-		weight += atx.GetWeight()
+		weight += atx.Weight
 		heights = append(heights, atx.TickHeight())
 		return true
 	}); err != nil {

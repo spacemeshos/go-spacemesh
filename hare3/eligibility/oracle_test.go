@@ -143,8 +143,7 @@ func (t *testOracle) createActiveSet(
 		miners = append(miners, nodeID)
 		atx := &types.ActivationTx{
 			PublishEpoch: lid.GetEpoch(),
-			NumUnits:     uint32(i + 1),
-			TickCount:    1,
+			Weight:       uint64(i + 1),
 			SmesherID:    nodeID,
 		}
 		atx.SetID(id)
@@ -156,7 +155,7 @@ func (t *testOracle) createActiveSet(
 
 func (t *testOracle) addAtx(atx *types.ActivationTx) {
 	t.tb.Helper()
-	require.NoError(t.tb, atxs.Add(t.db, atx))
+	require.NoError(t.tb, atxs.Add(t.db, atx, types.AtxBlob{}))
 	t.atxsdata.AddFromAtx(atx, false)
 }
 
@@ -368,8 +367,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	activeSet := types.RandomActiveSet(numMiners)
 	atx1 := &types.ActivationTx{
 		PublishEpoch: prevEpoch,
-		NumUnits:     1 * 1024,
-		TickCount:    1,
+		Weight:       1 * 1024,
 		SmesherID:    signer.NodeID(),
 	}
 	atx1.SetID(activeSet[0])
@@ -381,9 +379,8 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	atx2 := &types.ActivationTx{
 		PublishEpoch: prevEpoch,
-		NumUnits:     9 * 1024,
+		Weight:       9 * 1024,
 		SmesherID:    signer2.NodeID(),
-		TickCount:    1,
 	}
 	atx2.SetID(activeSet[1])
 	atx2.SetReceived(time.Now())
@@ -906,7 +903,7 @@ func TestActiveSetMatrix(t *testing.T) {
 				require.NoError(t, ballots.Add(oracle.db, &ballot))
 			}
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(oracle.db, atx))
+				require.NoError(t, atxs.Add(oracle.db, atx, types.AtxBlob{}))
 				oracle.atxsdata.AddFromAtx(atx, false)
 			}
 			if tc.beacon != types.EmptyBeacon {
