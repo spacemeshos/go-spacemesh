@@ -139,7 +139,7 @@ jobs:
           size: 30
           bootstrap: 4m
           level: ${{ inputs.log_level }}
-          clusters: 4
+          clusters: 2
           norbac: 1
         run: make -C systest run test_name=${{ inputs.test_name }}
 
