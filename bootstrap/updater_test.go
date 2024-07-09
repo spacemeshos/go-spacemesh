@@ -152,6 +152,7 @@ func checkUpdate4(t *testing.T, got *bootstrap.VerifiedUpdate) {
 type checkFunc func(*testing.T, *bootstrap.VerifiedUpdate)
 
 func TestLoad(t *testing.T) {
+	t.Parallel()
 	tcs := []struct {
 		desc        string
 		resultFuncs []checkFunc
@@ -217,6 +218,7 @@ func TestLoad(t *testing.T) {
 }
 
 func TestLoadedNotDownloadedAgain(t *testing.T) {
+	t.Parallel()
 	var queried atomic.Pointer[string]
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.String()
@@ -263,6 +265,7 @@ func TestLoadedNotDownloadedAgain(t *testing.T) {
 }
 
 func TestStartClose(t *testing.T) {
+	t.Parallel()
 	cfg := bootstrap.DefaultConfig()
 	fs := afero.NewMemMapFs()
 	persisted := bootstrap.PersistFilename(cfg.DataDir, current, "bs")
@@ -295,6 +298,7 @@ func TestStartClose(t *testing.T) {
 }
 
 func TestPrune(t *testing.T) {
+	t.Parallel()
 	cfg := bootstrap.DefaultConfig()
 	fs := afero.NewMemMapFs()
 	bsDir := filepath.Join(cfg.DataDir, bootstrap.DirName)
@@ -306,12 +310,11 @@ func TestPrune(t *testing.T) {
 	files, err := afero.ReadDir(fs, bsDir)
 	require.NoError(t, err)
 	require.Len(t, files, 4)
-	var method string
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		method = r.Method
-		w.WriteHeader(http.StatusOK)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /epoch-2-update-bs", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(update3))
-	}))
+	})
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
 	cfg.URL = ts.URL
 	mc := bootstrap.NewMocklayerClock(gomock.NewController(t))
@@ -327,10 +330,10 @@ func TestPrune(t *testing.T) {
 	files, err = afero.ReadDir(fs, bsDir)
 	require.NoError(t, err)
 	require.Len(t, files, 3)
-	require.Equal(t, http.MethodGet, method)
 }
 
 func TestDoIt(t *testing.T) {
+	t.Parallel()
 	tcs := []struct {
 		desc     string
 		updates  map[string]string // map server url to contents
@@ -370,7 +373,6 @@ func TestDoIt(t *testing.T) {
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
-				w.WriteHeader(http.StatusOK)
 				w.Write([]byte(contents))
 			}))
 			defer ts.Close()
@@ -404,6 +406,7 @@ func TestDoIt(t *testing.T) {
 }
 
 func TestEmptyResponse(t *testing.T) {
+	t.Parallel()
 	fs := afero.NewMemMapFs()
 	numQ := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -431,6 +434,7 @@ func TestEmptyResponse(t *testing.T) {
 }
 
 func TestGetInvalidUpdate(t *testing.T) {
+	t.Parallel()
 	tcs := []struct {
 		desc   string
 		err    error
@@ -477,7 +481,6 @@ func TestGetInvalidUpdate(t *testing.T) {
 			t.Parallel()
 
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
 				w.Write([]byte(tc.update))
 			}))
 			cfg := bootstrap.DefaultConfig()
@@ -503,6 +506,7 @@ func TestGetInvalidUpdate(t *testing.T) {
 }
 
 func TestNoNewUpdate(t *testing.T) {
+	t.Parallel()
 	fs := afero.NewMemMapFs()
 	numQ := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -546,6 +550,7 @@ func TestNoNewUpdate(t *testing.T) {
 }
 
 func TestRequiredEpochs(t *testing.T) {
+	t.Parallel()
 	require.Greater(t, types.GetLayersPerEpoch(), uint32(1))
 	tcs := []struct {
 		desc                string
@@ -696,6 +701,7 @@ func TestIntegration(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
+	t.Parallel()
 	cfg := bootstrap.DefaultConfig()
 	fs := afero.NewMemMapFs()
 
