@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -326,7 +325,7 @@ func TestFetch_RegisterPeerHashes(t *testing.T) {
 }
 
 func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	cfg := Config{
@@ -343,13 +342,13 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	p2pconf.IP4Blocklist = nil
 
 	// Good host
-	h, err := p2p.AutoStart(ctx, lg.Zap(), p2pconf, []byte{}, []byte{})
+	h, err := p2p.AutoStart(ctx, lg, p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, h.Stop()) })
 
 	// Bad host, will send a message that results in validation reject
 	p2pconf.DataDir = t.TempDir()
-	badPeerHost, err := p2p.AutoStart(ctx, lg.Zap(), p2pconf, []byte{}, []byte{})
+	badPeerHost, err := p2p.AutoStart(ctx, lg, p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, badPeerHost.Stop()) })
 
@@ -385,10 +384,10 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	defer eg.Wait()
 
-	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg.Zap()), store.New(), h,
+	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), store.New(), h,
 		WithContext(ctx),
 		WithConfig(cfg),
-		WithLogger(lg.Zap()),
+		WithLogger(lg),
 	)
 	t.Cleanup(fetcher.Stop)
 
@@ -417,7 +416,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 
 	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
 	fetcher.SetValidators(
-		ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg.Zap())),
+		ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)),
 		nil,
 		nil,
 		nil,
