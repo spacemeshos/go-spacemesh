@@ -130,7 +130,7 @@ jobs:
           go-version-file: "go.mod"
 
       - name: Run tests
-        timeout-minutes: 60
+        timeout-minutes: 240
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
@@ -139,7 +139,7 @@ jobs:
           size: 30
           bootstrap: 4m
           level: ${{ inputs.log_level }}
-          clusters: 2
+          clusters: 1
           norbac: 1
         run: make -C systest run test_name=${{ inputs.test_name }}
 
