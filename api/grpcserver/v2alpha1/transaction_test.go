@@ -517,7 +517,7 @@ func TestToTxContents(t *testing.T) {
 		var pubs []ed25519.PublicKey
 		pks := make([]ed25519.PrivateKey, 0, 3)
 		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano())))
+			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano() + int64(i))))
 			require.NoError(t, err)
 			pubs = append(pubs, pub)
 			pks = append(pks, pk)
@@ -551,7 +551,7 @@ func TestToTxContents(t *testing.T) {
 		var pubs []ed25519.PublicKey
 		pks := make([]ed25519.PrivateKey, 0, 3)
 		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano())))
+			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano() + int64(i))))
 			require.NoError(t, err)
 			pubs = append(pubs, pub)
 			pks = append(pks, pk)
@@ -587,7 +587,7 @@ func TestToTxContents(t *testing.T) {
 		var pubs []ed25519.PublicKey
 		pks := make([]ed25519.PrivateKey, 0, 3)
 		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano())))
+			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano() + int64(i))))
 			require.NoError(t, err)
 			pubs = append(pubs, pub)
 			pks = append(pks, pk)
@@ -636,7 +636,7 @@ func TestToTxContents(t *testing.T) {
 		var pubs [][]byte
 		pks := make([]ed25519.PrivateKey, 0, 3)
 		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano())))
+			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano() + int64(i))))
 			require.NoError(t, err)
 			pubs = append(pubs, pub)
 			pks = append(pks, pk)
@@ -672,13 +672,13 @@ func TestToTxContents(t *testing.T) {
 		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DRAIN_VAULT, txType)
 	})
 
-	t.Run("multisig spawn", func(t *testing.T) {
+	t.Run("multisig vesting spawn", func(t *testing.T) {
 		t.Parallel()
 
 		var pubs []ed25519.PublicKey
 		pks := make([]ed25519.PrivateKey, 0, 3)
 		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano())))
+			pub, pk, err := ed25519.GenerateKey(rand.New(rand.NewSource(time.Now().UnixNano() + int64(i))))
 			require.NoError(t, err)
 			pubs = append(pubs, pub)
 			pks = append(pks, pk)
