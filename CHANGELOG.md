@@ -8,6 +8,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#5793](https://github.com/spacemeshos/go-spacemesh/pull/5793) Reduced hare committee 8x from 400 to 50 to decrease
   network traffic caused by Hare.
+* [#6099](https://github.com/spacemeshos/go-spacemesh/pull/6099) Adds new metrics to the API to provide insights into
+  the performance and behavior of the node's APIs.
 
 ## Release v1.6.1
 
