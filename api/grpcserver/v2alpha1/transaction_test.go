@@ -3,11 +3,6 @@ package v2alpha1
 import (
 	"context"
 	"errors"
-	multisig2 "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/vesting"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
-	vesting2 "github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	"math/rand"
 	"testing"
 	"time"
@@ -27,7 +22,12 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
+	multisig2 "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/vesting"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
+	vesting2 "github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -622,6 +622,11 @@ func TestToTxContents(t *testing.T) {
 		require.Nil(t, contents.GetVestingSpawn())
 		require.Nil(t, contents.GetSend())
 		require.Nil(t, contents.GetDrainVault())
+		require.Equal(t, vaultArgs.Owner.String(), contents.GetVaultSpawn().Owner)
+		require.Equal(t, vaultArgs.InitialUnlockAmount, contents.GetVaultSpawn().InitialUnlockAmount)
+		require.Equal(t, vaultArgs.TotalAmount, contents.GetVaultSpawn().TotalAmount)
+		require.Equal(t, vaultArgs.VestingStart.Uint32(), contents.GetVaultSpawn().VestingStart)
+		require.Equal(t, vaultArgs.VestingEnd.Uint32(), contents.GetVaultSpawn().VestingEnd)
 		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_VAULT_SPAWN, txType)
 	})
 
@@ -663,6 +668,7 @@ func TestToTxContents(t *testing.T) {
 		require.Nil(t, contents.GetVestingSpawn())
 		require.Nil(t, contents.GetSend())
 		require.Nil(t, contents.GetVaultSpawn())
+		require.Equal(t, vaultAddr.String(), contents.GetDrainVault().Vault)
 		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DRAIN_VAULT, txType)
 	})
 
