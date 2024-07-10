@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -35,8 +36,11 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.G
 		opt(&options)
 	}
 
-	f.logger.WithContext(ctx).With().
-		Debug("requesting atxs from peer", log.Int("num_atxs", len(ids)), log.Bool("limiting", !options.LimitingOff))
+	f.logger.Debug("requesting atxs from peer",
+		log.ZContext(ctx),
+		zap.Int("num_atxs", len(ids)),
+		zap.Bool("limiting", !options.LimitingOff),
+	)
 	hashes := types.ATXIDsToHashes(ids)
 	if options.LimitingOff {
 		return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
@@ -105,9 +109,9 @@ func (f *Fetch) getHashes(
 				pendingMetric.Add(-1)
 				if p.err != nil {
 					f.logger.With().Debug("failed to get hash",
-						log.String("hint", string(hint)),
-						log.Stringer("hash", hash),
-						log.Err(p.err),
+						zap.String("hint", string(hint)),
+						zap.Stringer("hash", hash),
+						zap.Error(p.err),
 					)
 
 					mu.Lock()
@@ -128,7 +132,7 @@ func (f *Fetch) getHashes(
 
 // GetActiveSet downloads activeset.
 func (f *Fetch) GetActiveSet(ctx context.Context, set types.Hash32) error {
-	f.logger.WithContext(ctx).With().Debug("request active set", log.ShortStringer("id", set))
+	f.logger.Debug("request active set", log.ZContext(ctx), log.ZShortStringer("id", set))
 	return f.getHashes(ctx, []types.Hash32{set}, datastore.ActiveSet, f.validators.activeset.HandleMessage)
 }
 
@@ -137,7 +141,7 @@ func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) er
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Debug("requesting malfeasance proofs from peer", log.Int("num_proofs", len(ids)))
+	f.logger.Debug("requesting malfeasance proofs from peer", log.ZContext(ctx), zap.Int("num_proofs", len(ids)))
 	hashes := types.NodeIDsToHashes(ids)
 	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleMessage)
 }
@@ -147,7 +151,7 @@ func (f *Fetch) GetBallots(ctx context.Context, ids []types.BallotID) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Debug("requesting ballots from peer", log.Int("num_ballots", len(ids)))
+	f.logger.Debug("requesting ballots from peer", log.ZContext(ctx), zap.Int("num_ballots", len(ids)))
 	hashes := types.BallotIDsToHashes(ids)
 	return f.getHashes(ctx, hashes, datastore.BallotDB, f.validators.ballot.HandleMessage)
 }
@@ -157,7 +161,7 @@ func (f *Fetch) GetProposals(ctx context.Context, ids []types.ProposalID) error 
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Debug("requesting proposals from peer", log.Int("num_proposals", len(ids)))
+	f.logger.Debug("requesting proposals from peer", log.ZContext(ctx), zap.Int("num_proposals", len(ids)))
 	hashes := types.ProposalIDsToHashes(ids)
 	return f.getHashes(ctx, hashes, datastore.ProposalDB, f.validators.proposal.HandleMessage)
 }
@@ -167,7 +171,7 @@ func (f *Fetch) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
+	f.logger.Debug("requesting blocks from peer", log.ZContext(ctx), zap.Int("num_blocks", len(ids)))
 	hashes := types.BlockIDsToHashes(ids)
 	return f.getHashes(ctx, hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 }
@@ -187,14 +191,14 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.WithContext(ctx).With().Debug("requesting txs from peer", log.Int("num_txs", len(ids)))
+	f.logger.Debug("requesting txs from peer", log.ZContext(ctx), zap.Int("num_txs", len(ids)))
 	hashes := types.TransactionIDsToHashes(ids)
 	return f.getHashes(ctx, hashes, datastore.TXDB, receiver)
 }
 
 // GetPoetProof gets poet proof from remote peer.
 func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
-	f.logger.WithContext(ctx).With().Debug("getting poet proof", log.Stringer("hash", id))
+	f.logger.Debug("getting poet proof", log.ZContext(ctx), zap.Stringer("hash", id))
 	pm, err := f.getHash(ctx, id, datastore.POETDB, f.validators.poet.HandleMessage)
 	if err != nil {
 		return err
@@ -218,10 +222,11 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 		// was fetching.
 		return nil
 	default:
-		f.logger.WithContext(ctx).With().Warning("failed to get hash",
-			log.String("hint", string(datastore.POETDB)),
-			log.Stringer("hash", id),
-			log.Err(pm.err))
+		f.logger.Warn("failed to get hash",
+			log.ZContext(ctx),
+			zap.String("hint", string(datastore.POETDB)),
+			zap.Stringer("hash", id),
+			zap.Error(pm.err))
 		return pm.err
 	}
 }
@@ -278,9 +283,10 @@ func (f *Fetch) peerEpochInfoStreamed(ctx context.Context, peer p2p.Peer, epochB
 
 // PeerEpochInfo get the epoch info published in the given epoch from the specified peer.
 func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.EpochID) (*EpochData, error) {
-	f.logger.WithContext(ctx).With().Debug("requesting epoch info from peer",
-		log.Stringer("peer", peer),
-		log.Stringer("epoch", epoch))
+	f.logger.Debug("requesting epoch info from peer",
+		log.ZContext(ctx),
+		zap.Stringer("peer", peer),
+		zap.Stringer("epoch", epoch))
 	epochBytes := codec.MustEncode(epoch)
 
 	var (
@@ -320,14 +326,15 @@ func (f *Fetch) peerMeshHashesStreamed(ctx context.Context, peer p2p.Peer, reqBy
 }
 
 func (f *Fetch) PeerMeshHashes(ctx context.Context, peer p2p.Peer, req *MeshHashRequest) (*MeshHashes, error) {
-	f.logger.WithContext(ctx).With().Debug("requesting mesh hashes from peer",
-		log.Stringer("peer", peer),
-		log.Object("req", req),
+	f.logger.Debug("requesting mesh hashes from peer",
+		log.ZContext(ctx),
+		zap.Stringer("peer", peer),
+		zap.Object("req", req),
 	)
 
 	reqData, err := codec.Encode(req)
 	if err != nil {
-		f.logger.With().Fatal("failed to encode mesh hash request", log.Err(err))
+		f.logger.With().Fatal("failed to encode mesh hash request", zap.Error(err))
 	}
 
 	if f.cfg.Streaming {
@@ -353,8 +360,12 @@ func (f *Fetch) GetCert(
 	bid types.BlockID,
 	peers []p2p.Peer,
 ) (*types.Certificate, error) {
-	f.logger.WithContext(ctx).With().Debug("requesting block certificate from peers",
-		lid, bid, log.Int("num peer", len(peers)))
+	f.logger.Debug("requesting block certificate from peers",
+		log.ZContext(ctx),
+		zap.Uint32("layer", lid.Uint32()),
+		zap.Stringer("block", bid),
+		zap.Int("num peer", len(peers)),
+	)
 	req := &OpinionRequest{
 		Layer: lid,
 		Block: &bid,
@@ -364,12 +375,12 @@ func (f *Fetch) GetCert(
 	for _, peer := range peers {
 		data, err := f.meteredRequest(ctx, OpnProtocol, peer, reqData)
 		if err != nil {
-			f.logger.With().Debug("failed to get cert", log.Stringer("peer", peer), log.Err(err))
+			f.logger.With().Debug("failed to get cert", zap.Stringer("peer", peer), zap.Error(err))
 			continue
 		}
 		var peerCert types.Certificate
 		if err = codec.Decode(data, &peerCert); err != nil {
-			f.logger.With().Debug("failed to decode cert", log.Stringer("peer", peer), log.Err(err))
+			f.logger.With().Debug("failed to decode cert", zap.Stringer("peer", peer), zap.Error(err))
 			continue
 		}
 		// for generic data fetches by hash (ID for atx/block/proposal/ballot/tx), the check on whether the returned
@@ -380,9 +391,9 @@ func (f *Fetch) GetCert(
 		if peerCert.BlockID != bid {
 			f.logger.With().Debug(
 				"peer served wrong cert",
-				log.Stringer("want", bid),
-				log.Stringer("got", peerCert.BlockID),
-				log.Stringer("peer", peer),
+				zap.Stringer("want", bid),
+				zap.Stringer("got", peerCert.BlockID),
+				zap.Stringer("peer", peer),
 			)
 		}
 		return &peerCert, nil
