@@ -76,7 +76,10 @@ const (
 	// BeaconFollowingVotesProtocol is the protocol id for beacon following votes.
 	BeaconFollowingVotesProtocol = "bo1"
 
+	// MalfeasanceProof is the protocol id for malfeasance proofs. (soon to be deprecated)
 	MalfeasanceProof = "mp1"
+	// MalfeasanceProof2 is the protocol id for V2 malfeasance proofs.
+	MalfeasanceProof2 = "mp2"
 )
 
 // DefaultConfig for PubSub.
@@ -133,8 +136,8 @@ var (
 	WithValidatorConcurrency = pubsub.WithValidatorConcurrency
 )
 
-// PublishSubsciber common interface for publisher and subscribing.
-type PublishSubsciber interface {
+// PublishSubscriber common interface for publisher and subscribing.
+type PublishSubscriber interface {
 	Publisher
 	Subscriber
 }
