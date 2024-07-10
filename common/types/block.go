@@ -177,7 +177,7 @@ func (id BlockID) Field() log.Field {
 
 // String implements the Stringer interface.
 func (id BlockID) String() string {
-	return id.AsHash32().ShortString()
+	return Hash20(id).ShortString()
 }
 
 // Compare returns true if other (the given BlockID) is less than this BlockID, by lexicographic comparison.

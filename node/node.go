@@ -852,7 +852,7 @@ func (app *App) initServices(ctx context.Context) error {
 			malsync.WithPeerErrMetric(syncer.MalPeerError),
 		),
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.syncLogger),
+		syncer.WithLogger(app.syncLogger.Zap()),
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
