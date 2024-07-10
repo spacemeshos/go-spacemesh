@@ -10,11 +10,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -88,7 +88,7 @@ func createP2PFetch(
 	sqlCache bool,
 	opts ...Option,
 ) (*testP2PFetch, context.Context) {
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	t.Cleanup(cancel)
 
@@ -109,19 +109,19 @@ func createP2PFetch(
 	tpf := &testP2PFetch{
 		t:            t,
 		clientDB:     clientDB,
-		clientPDB:    store.New(store.WithLogger(lg.Zap())),
-		clientCDB:    datastore.NewCachedDB(clientDB, lg.Zap()),
+		clientPDB:    store.New(store.WithLogger(lg)),
+		clientCDB:    datastore.NewCachedDB(clientDB, lg),
 		serverID:     serverHost.ID(),
 		serverDB:     serverDB,
-		serverPDB:    store.New(store.WithLogger(lg.Zap())),
-		serverCDB:    datastore.NewCachedDB(serverDB, lg.Zap()),
+		serverPDB:    store.New(store.WithLogger(lg)),
+		serverCDB:    datastore.NewCachedDB(serverDB, lg),
 		receivedData: make(map[blobKey][]byte),
 	}
 
 	tpf.serverFetch = NewFetch(tpf.serverCDB, tpf.serverPDB, serverHost,
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(serverStreaming)),
-		WithLogger(lg.Zap()))
+		WithLogger(lg))
 	vf := ValidatorFunc(
 		func(context.Context, types.Hash32, peer.ID, []byte) error { return nil },
 	)
@@ -136,7 +136,7 @@ func createP2PFetch(
 	tpf.clientFetch = NewFetch(tpf.clientCDB, tpf.clientPDB, clientHost,
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(clientStreaming)),
-		WithLogger(lg.Zap()))
+		WithLogger(lg))
 	tpf.clientFetch.SetValidators(
 		mkFakeValidator(tpf, "atx"),
 		mkFakeValidator(tpf, "poet"),

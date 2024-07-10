@@ -9,10 +9,10 @@ import (
 	"syscall"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
@@ -35,7 +35,10 @@ func runRelay(ctx context.Context, cfg *config.Config) error {
 	}
 
 	p2pCfg.LogLevel = lvl.Level()
-	p2pLog := log.NewWithLevel("node", lvl).WithName(P2PLogger)
+	logger, err := zap.NewProduction(zap.IncreaseLevel(lvl))
+	if err != nil {
+		return fmt.Errorf("failed to create logger: %w", err)
+	}
 
 	if cfg.CollectMetrics {
 		metrics.StartMetricsServer(cfg.MetricsPort)
@@ -53,7 +56,7 @@ func runRelay(ctx context.Context, cfg *config.Config) error {
 	if !onMainNet(cfg) {
 		nc = handshake.NetworkCookie(prologue)
 	}
-	host, err := p2p.New(ctx, p2pLog, p2pCfg, []byte(prologue), nc)
+	host, err := p2p.New(logger.Named(P2PLogger), p2pCfg, []byte(prologue), nc)
 	if err != nil {
 		return fmt.Errorf("initialize p2p host: %w", err)
 	}

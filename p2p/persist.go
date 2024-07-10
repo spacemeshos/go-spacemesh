@@ -15,13 +15,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/natefinch/atomic"
-
-	"github.com/spacemeshos/go-spacemesh/log"
+	"go.uber.org/zap"
 )
 
 const connectedFile = "connected.txt"
 
-func persist(ctx context.Context, logger log.Log, h host.Host, dir string, period time.Duration) {
+func persist(ctx context.Context, logger *zap.Logger, h host.Host, dir string, period time.Duration) {
 	ticker := time.NewTicker(period)
 	defer ticker.Stop()
 	for {
@@ -30,9 +29,9 @@ func persist(ctx context.Context, logger log.Log, h host.Host, dir string, perio
 			return
 		case <-ticker.C:
 			if err := writePeers(h, dir); err != nil {
-				logger.With().Warning("failed to write connected peers to file",
-					log.String("directory", dir),
-					log.Err(err),
+				logger.Warn("failed to write connected peers to file",
+					zap.String("directory", dir),
+					zap.Error(err),
 				)
 			}
 		}
