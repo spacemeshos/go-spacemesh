@@ -32,6 +32,7 @@ func TestPrologue(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
+			logger := zaptest.NewLogger(t)
 			cfg1 := DefaultConfig()
 			cfg1.DataDir = t.TempDir()
 			cfg1.Listen = tc.listen
@@ -49,18 +50,18 @@ func TestPrologue(t *testing.T) {
 			cfg3.IP4Blocklist = nil
 
 			nc1 := []byte("red")
-			h1, err := New(context.Background(), zaptest.NewLogger(t), cfg1, nc1, nc1)
+			h1, err := New(context.Background(), logger.Named("host-1"), cfg1, nc1, nc1)
 			require.NoError(t, err)
 			t.Cleanup(func() { h1.Stop() })
 
 			nc2 := []byte("blue")
-			h2, err := New(context.Background(), zaptest.NewLogger(t), cfg2, nc2, nc2)
+			h2, err := New(context.Background(), logger.Named("host-2"), cfg2, nc2, nc2)
 			require.NoError(t, err)
 			require.NoError(t, h2.Start())
 			t.Cleanup(func() { h2.Stop() })
 
 			nc3 := []byte("red")
-			h3, err := New(context.Background(), zaptest.NewLogger(t), cfg3, nc3, nc3)
+			h3, err := New(context.Background(), logger.Named("host-3"), cfg3, nc3, nc3)
 			require.NoError(t, err)
 			require.NoError(t, h3.Start())
 			t.Cleanup(func() { h3.Stop() })
@@ -128,6 +129,7 @@ func TestBlocklist(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.desc, func(t *testing.T) {
+			logger := zaptest.NewLogger(t)
 			if tc.requireIPv6 && !ipv6Available {
 				t.Skip("IPv6 not available")
 			}
@@ -139,7 +141,7 @@ func TestBlocklist(t *testing.T) {
 				cfg1.IP4Blocklist = nil
 				cfg1.IP6Blocklist = nil
 			}
-			h1, err := New(context.Background(), zaptest.NewLogger(t), cfg1, nil, nil)
+			h1, err := New(context.Background(), logger.Named("host-1"), cfg1, nil, nil)
 			require.NoError(t, err)
 			t.Cleanup(func() { h1.Stop() })
 
@@ -150,7 +152,7 @@ func TestBlocklist(t *testing.T) {
 				cfg2.IP4Blocklist = nil
 				cfg2.IP6Blocklist = nil
 			}
-			h2, err := New(context.Background(), zaptest.NewLogger(t), cfg2, nil, nil)
+			h2, err := New(context.Background(), logger.Named("host-2"), cfg2, nil, nil)
 			require.NoError(t, err)
 			require.NoError(t, h2.Start())
 			t.Cleanup(func() { h2.Stop() })

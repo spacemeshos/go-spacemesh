@@ -31,8 +31,8 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
@@ -121,7 +121,7 @@ const (
 // Config for all things related to p2p layer.
 type Config struct {
 	DataDir            string
-	LogLevel           log.Level
+	LogLevel           zapcore.Level
 	GracePeersShutdown time.Duration `mapstructure:"gracepeersshutdown"`
 	MaxMessageSize     int           `mapstructure:"maxmessagesize"`
 

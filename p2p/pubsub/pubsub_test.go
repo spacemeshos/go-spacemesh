@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -23,7 +24,8 @@ func TestGossip(t *testing.T) {
 	received := make(chan []byte, count)
 
 	logger := zaptest.NewLogger(t)
-	for _, h := range mesh.Hosts() {
+	for i, h := range mesh.Hosts() {
+		logger := logger.Named(fmt.Sprintf("host-%d", i))
 		ps, err := New(ctx, logger, h, Config{Flood: true, IsBootnode: true, QueueSize: 1000, Throttle: 1000})
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)

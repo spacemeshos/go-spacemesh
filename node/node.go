@@ -565,14 +565,6 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 	return logger.WithName(name)
 }
 
-func (app *App) getLevel(name string) log.Level {
-	alvl, exist := app.loggers[name]
-	if !exist {
-		return 0
-	}
-	return alvl.Level()
-}
-
 // SetLogLevel updates the log level of an existing logger.
 func (app *App) SetLogLevel(name, loglevel string) error {
 	lvl, ok := app.loggers[name]
@@ -2101,8 +2093,11 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
 	p2plog := app.addLogger(P2PLogger, logger)
-	// if addLogger won't add a level we will use a default 0 (info).
-	cfg.LogLevel = app.getLevel(P2PLogger)
+	if lvl, exist := app.loggers[P2PLogger]; exist {
+		cfg.LogLevel = lvl.Level()
+	} else {
+		cfg.LogLevel = zapcore.InfoLevel
+	}
 	prologue := fmt.Sprintf("%x-%v",
 		app.Config.Genesis.GenesisID(),
 		types.GetEffectiveGenesis(),
@@ -2224,7 +2219,7 @@ func decodeLoggerLevel(cfg *config.Config, name string) (zap.AtomicLevel, error)
 			return zap.AtomicLevel{}, fmt.Errorf("cannot parse logging for %v: %w", name, err)
 		}
 	} else {
-		lvl.SetLevel(log.DefaultLevel())
+		lvl.SetLevel(zapcore.InfoLevel)
 	}
 
 	return lvl, nil
