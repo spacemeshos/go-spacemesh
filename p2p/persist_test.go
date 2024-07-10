@@ -9,9 +9,8 @@ import (
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestConnectedPersist(t *testing.T) {
@@ -22,7 +21,7 @@ func TestConnectedPersist(t *testing.T) {
 	require.NoError(t, err)
 	var eg errgroup.Group
 	eg.Go(func() error {
-		persist(ctx, logtest.New(t), mock.Hosts()[0], dir, 100*time.Millisecond)
+		persist(ctx, zaptest.NewLogger(t), mock.Hosts()[0], dir, 100*time.Millisecond)
 		return nil
 	})
 	require.Eventually(t, func() bool {
@@ -51,7 +50,7 @@ func TestConnectedBrokenCRC(t *testing.T) {
 	require.NoError(t, err)
 	var eg errgroup.Group
 	eg.Go(func() error {
-		persist(ctx, logtest.New(t), mock.Hosts()[0], dir, 100*time.Microsecond)
+		persist(ctx, zaptest.NewLogger(t), mock.Hosts()[0], dir, 100*time.Microsecond)
 		return nil
 	})
 	require.Eventually(t, func() bool {

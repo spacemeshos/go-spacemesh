@@ -1117,50 +1117,50 @@ func (app *App) initServices(ctx context.Context) error {
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg),
+			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg),
+			pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				proposalListener.HandleSyncedBallot,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg),
+			pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg),
+			pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				proposalListener.HandleSyncedProposal,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				app.txHandler.HandleBlockTransaction,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				app.txHandler.HandleProposalTransaction,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				malfeasanceHandler.HandleSyncedMalfeasanceProof,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 	)
@@ -2114,7 +2114,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	if !onMainNet(app.Config) {
 		nc = handshake.NetworkCookie(prologue)
 	}
-	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue), nc,
+	app.host, err = p2p.New(ctx, p2plog.Zap(), cfg, []byte(prologue), nc,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {

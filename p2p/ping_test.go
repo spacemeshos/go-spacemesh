@@ -7,8 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"go.uber.org/zap/zaptest"
 )
 
 func TestPing(t *testing.T) {
@@ -38,7 +37,7 @@ func TestPing(t *testing.T) {
 			cfg1.EnableQUICTransport = tc.enableQUIC
 			cfg1.IP4Blocklist = nil
 			nc := []byte("foobar")
-			h1, err := New(context.Background(), logtest.New(t), cfg1, nc, nc)
+			h1, err := New(context.Background(), zaptest.NewLogger(t), cfg1, nc, nc)
 			require.NoError(t, err)
 			require.NoError(t, h1.Start())
 			t.Cleanup(func() { h1.Stop() })
@@ -49,7 +48,7 @@ func TestPing(t *testing.T) {
 			cfg2.EnableQUICTransport = tc.enableQUIC
 			cfg2.PingPeers = []string{h1.ID().String()}
 			cfg2.IP4Blocklist = nil
-			h2, err := New(context.Background(), logtest.New(t), cfg2, nc, nc)
+			h2, err := New(context.Background(), zaptest.NewLogger(t), cfg2, nc, nc)
 			require.NoError(t, err)
 			require.NoError(t, h2.discovery.Start())
 			t.Cleanup(func() { h2.Stop() })

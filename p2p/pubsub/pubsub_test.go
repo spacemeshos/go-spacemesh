@@ -8,8 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"go.uber.org/zap/zaptest"
 )
 
 func TestGossip(t *testing.T) {
@@ -23,8 +22,9 @@ func TestGossip(t *testing.T) {
 	count := n * n
 	received := make(chan []byte, count)
 
+	logger := zaptest.NewLogger(t)
 	for _, h := range mesh.Hosts() {
-		ps, err := New(ctx, logtest.New(t), h, Config{Flood: true, IsBootnode: true, QueueSize: 1000, Throttle: 1000})
+		ps, err := New(ctx, logger, h, Config{Flood: true, IsBootnode: true, QueueSize: 1000, Throttle: 1000})
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)
 		ps.Register(topic, func(ctx context.Context, pid peer.ID, msg []byte) error {

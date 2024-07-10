@@ -10,9 +10,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	relayclient "github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/client"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -62,7 +62,7 @@ func TestRelay(t *testing.T) {
 	p2pCfg.ForceReachability = "private"
 	// mainnet Noise prologue
 	prologue := []byte("9eebff023abb17ccb775c602daade8ed708f0a50-8063")
-	host, err := p2p.New(context.Background(), logtest.New(t), p2pCfg, prologue, nil)
+	host, err := p2p.New(context.Background(), zaptest.NewLogger(t), p2pCfg, prologue, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { host.Stop() })
 

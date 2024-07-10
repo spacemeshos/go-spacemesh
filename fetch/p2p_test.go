@@ -92,11 +92,11 @@ func createP2PFetch(
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	t.Cleanup(cancel)
 
-	serverHost, err := p2p.AutoStart(ctx, lg, p2pCfg(t), []byte{}, []byte{})
+	serverHost, err := p2p.AutoStart(ctx, lg.Zap(), p2pCfg(t), []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, serverHost.Stop()) })
 
-	clientHost, err := p2p.AutoStart(ctx, lg, p2pCfg(t), []byte{}, []byte{})
+	clientHost, err := p2p.AutoStart(ctx, lg.Zap(), p2pCfg(t), []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, clientHost.Stop()) })
 

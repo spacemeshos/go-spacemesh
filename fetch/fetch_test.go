@@ -342,13 +342,13 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	p2pconf.IP4Blocklist = nil
 
 	// Good host
-	h, err := p2p.AutoStart(ctx, lg, p2pconf, []byte{}, []byte{})
+	h, err := p2p.AutoStart(ctx, lg.Zap(), p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, h.Stop()) })
 
 	// Bad host, will send a message that results in validation reject
 	p2pconf.DataDir = t.TempDir()
-	badPeerHost, err := p2p.AutoStart(ctx, lg, p2pconf, []byte{}, []byte{})
+	badPeerHost, err := p2p.AutoStart(ctx, lg.Zap(), p2pconf, []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, badPeerHost.Stop()) })
 
@@ -416,7 +416,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 
 	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
 	fetcher.SetValidators(
-		ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)),
+		ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg.Zap())),
 		nil,
 		nil,
 		nil,
