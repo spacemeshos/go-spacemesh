@@ -816,7 +816,7 @@ func (app *App) initServices(ctx context.Context) error {
 	fetcher := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
-		fetch.WithLogger(flog),
+		fetch.WithLogger(flog.Zap()),
 	)
 	fetcherWrapped.Fetcher = fetcher
 	app.eg.Go(func() error {

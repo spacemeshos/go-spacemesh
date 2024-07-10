@@ -121,7 +121,7 @@ func createP2PFetch(
 	tpf.serverFetch = NewFetch(tpf.serverCDB, tpf.serverPDB, serverHost,
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(serverStreaming)),
-		WithLogger(lg))
+		WithLogger(lg.Zap()))
 	vf := ValidatorFunc(
 		func(context.Context, types.Hash32, peer.ID, []byte) error { return nil },
 	)
@@ -136,7 +136,7 @@ func createP2PFetch(
 	tpf.clientFetch = NewFetch(tpf.clientCDB, tpf.clientPDB, clientHost,
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(clientStreaming)),
-		WithLogger(lg))
+		WithLogger(lg.Zap()))
 	tpf.clientFetch.SetValidators(
 		mkFakeValidator(tpf, "atx"),
 		mkFakeValidator(tpf, "poet"),
@@ -263,7 +263,7 @@ func forStreamingCachedUncached(
 
 func TestP2PPeerEpochInfo(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "peer error: exec epoch 11: database: no free connection",
+		t, "peer error: getting ATX IDs: exec epoch 11: database: no free connection",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
 			atxIDs := tpf.createATXs(epoch)
