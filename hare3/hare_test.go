@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime/pprof"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -486,7 +488,7 @@ func (cl *lockstepCluster) moveRound() {
 
 func (cl *lockstepCluster) waitStopped() {
 	for _, n := range cl.nodes {
-		<-n.tracer.stopped
+		n.tracer.waitStopped()
 	}
 }
 
@@ -506,12 +508,38 @@ type testTracer struct {
 	sent        chan *Message
 }
 
+func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
+	var value T
+	select {
+	case <-time.After(timeout):
+		builder := strings.Builder{}
+		pprof.Lookup("goroutine").WriteTo(&builder, 2)
+		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+	case value = <-ch:
+	}
+	return value
+}
+
+func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
+	select {
+	case <-time.After(timeout):
+		builder := strings.Builder{}
+		pprof.Lookup("goroutine").WriteTo(&builder, 2)
+		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+	case ch <- value:
+	}
+}
+
+func (t *testTracer) waitStopped() types.LayerID {
+	return waitForChan(t.TB, t.stopped, 10*time.Second, "didn't stop")
+}
+
 func (t *testTracer) waitEligibility() []*types.HareEligibility {
-	return <-t.eligibility
+	return waitForChan(t.TB, t.eligibility, 10*time.Second, "no eligibility")
 }
 
 func (t *testTracer) waitSent() *Message {
-	return <-t.sent
+	return waitForChan(t.TB, t.sent, 10*time.Second, "no message")
 }
 
 func (*testTracer) OnStart(types.LayerID) {}
@@ -524,21 +552,11 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "eligibility can't be sent", "wait %v", wait)
-	case t.eligibility <- el:
-	}
+	sendWithTimeout(t.TB, el, t.eligibility, 10*time.Second, "eligibility can't be sent")
 }
 
 func (t *testTracer) OnMessageSent(m *Message) {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "message can't be sent", "wait %v", wait)
-	case t.sent <- m:
-	}
+	sendWithTimeout(t.TB, m, t.sent, 10*time.Second, "message can't be sent")
 }
 
 func (*testTracer) OnMessageReceived(*Message) {}
