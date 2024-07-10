@@ -11,6 +11,10 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#6099](https://github.com/spacemeshos/go-spacemesh/pull/6099) Adds new metrics to the API to provide insights into
   the performance and behavior of the node's APIs.
 
+### Features
+* [#6112](https://github.com/spacemeshos/go-spacemesh/pull/6112) Adds vesting, vault, and drain vault contents to the
+  v2alpha2 Transaction API. Fixes the 'unspecified' transaction type.
+
 ## Release v1.6.1
 
 ### Improvements
