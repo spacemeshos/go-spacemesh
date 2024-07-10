@@ -446,7 +446,9 @@ func decodeTxArgs(decoder *scale.Decoder) (uint8, *core.Address, scale.Encodable
 	return method, templateAddress, args, nil
 }
 
-func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents, spacemeshv2alpha1.Transaction_TransactionType, error) {
+func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents,
+	spacemeshv2alpha1.Transaction_TransactionType, error,
+) {
 	res := &spacemeshv2alpha1.TransactionContents{}
 	txType := spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_UNSPECIFIED
 
