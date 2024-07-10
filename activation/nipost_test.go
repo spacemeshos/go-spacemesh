@@ -807,6 +807,344 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 	})
 }
 
+// TestNIPoSTBuilder_PoETConfigChange checks if
+// it properly detects added/deleted PoET services and re-registers if needed.
+func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
+	t.Parallel()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	challenge := types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+	}
+
+	const (
+		poetProverAddr  = "http://localhost:9999"
+		poetProverAddr2 = "http://localhost:9988"
+	)
+
+	t.Run("1 poet deleted BEFORE round started -> continue get proof from known poets", func(t *testing.T) {
+		db := localsql.InMemory()
+
+		require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
+		challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
+
+		ctrl := gomock.NewController(t)
+		poetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr)
+		poetProver.EXPECT().Proof(gomock.Any(), "1").AnyTimes().Return(
+			&types.PoetProof{}, []types.Hash32{
+				challengeHash,
+				types.RandomHash(),
+				types.RandomHash(),
+			}, nil,
+		)
+
+		mclock := defaultLayerClockMock(ctrl)
+
+		postClient := NewMockPostClient(ctrl)
+		nonce := types.VRFPostIndex(1)
+		postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(
+			&types.Post{
+				Indices: []byte{1, 2, 3},
+			}, &types.PostInfo{
+				Nonce: &nonce,
+			}, nil,
+		)
+
+		postService := NewMockpostService(ctrl)
+		postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil).AnyTimes()
+
+		// successfully registered to 2 poets
+		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
+			ChallengeHash: challengeHash,
+			Address:       poetProverAddr,
+			RoundID:       "1",
+			RoundEnd:      time.Now().Add(10 * time.Second),
+		})
+		require.NoError(t, err)
+
+		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
+			ChallengeHash: challengeHash,
+			Address:       poetProverAddr2,
+			RoundID:       "1",
+			RoundEnd:      time.Now().Add(10 * time.Second),
+		})
+
+		// successful post exec
+		nb, err := NewNIPostBuilder(
+			db,
+			postService,
+			zaptest.NewLogger(t),
+			PoetConfig{},
+			mclock,
+			nil,
+			WithPoetServices(poetProver), // add only 1 poet prover
+		)
+		require.NoError(t, err)
+
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challengeHash, &types.NIPostChallenge{PublishEpoch: 7})
+		require.NoError(t, err)
+		require.NotNil(t, nipost)
+	})
+
+	t.Run("1 poet added BEFORE round started -> register to missing poet, get proof from both", func(t *testing.T) {
+		db := localsql.InMemory()
+
+		require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
+		challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
+
+		ctrl := gomock.NewController(t)
+		poetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr)
+		poetProver.EXPECT().Proof(gomock.Any(), "1").AnyTimes().Return(
+			&types.PoetProof{}, []types.Hash32{
+				challengeHash,
+				types.RandomHash(),
+				types.RandomHash(),
+			}, nil,
+		)
+
+		addedPoetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr2)
+		addedPoetProver.EXPECT().Proof(gomock.Any(), "").AnyTimes().Return(
+			&types.PoetProof{}, []types.Hash32{
+				challengeHash,
+				types.RandomHash(),
+				types.RandomHash(),
+			}, nil,
+		)
+		mclock := defaultLayerClockMock(ctrl)
+
+		postClient := NewMockPostClient(ctrl)
+		nonce := types.VRFPostIndex(1)
+		postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(
+			&types.Post{
+				Indices: []byte{1, 2, 3},
+			}, &types.PostInfo{
+				Nonce: &nonce,
+			}, nil,
+		)
+
+		postService := NewMockpostService(ctrl)
+		postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil).AnyTimes()
+
+		// successfully registered to 1 poet
+		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
+			ChallengeHash: challengeHash,
+			Address:       poetProverAddr,
+			RoundID:       "1",
+			RoundEnd:      time.Now().Add(10 * time.Second),
+		})
+		require.NoError(t, err)
+
+		// successful post exec
+		nb, err := NewNIPostBuilder(
+			db,
+			postService,
+			zaptest.NewLogger(t),
+			PoetConfig{},
+			mclock,
+			nil,
+			WithPoetServices(poetProver, addedPoetProver), // add both poet provers
+		)
+		require.NoError(t, err)
+
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challengeHash, &types.NIPostChallenge{PublishEpoch: 7})
+		require.NoError(t, err)
+		require.NotNil(t, nipost)
+	})
+
+	t.Run("completely changed poet service BEFORE round started -> register new poet", func(t *testing.T) {
+		db := localsql.InMemory()
+
+		require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
+		challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
+
+		ctrl := gomock.NewController(t)
+		addedPoetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr2)
+		addedPoetProver.EXPECT().Proof(gomock.Any(), "").AnyTimes().Return(
+			&types.PoetProof{}, []types.Hash32{
+				challengeHash,
+				types.RandomHash(),
+				types.RandomHash(),
+			}, nil,
+		)
+		mclock := defaultLayerClockMock(ctrl)
+
+		postClient := NewMockPostClient(ctrl)
+		nonce := types.VRFPostIndex(1)
+		postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(
+			&types.Post{
+				Indices: []byte{1, 2, 3},
+			}, &types.PostInfo{
+				Nonce: &nonce,
+			}, nil,
+		)
+
+		postService := NewMockpostService(ctrl)
+		postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil).AnyTimes()
+
+		// successfully registered to removed poet
+		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
+			ChallengeHash: challengeHash,
+			Address:       poetProverAddr,
+			RoundID:       "1",
+			RoundEnd:      time.Now().Add(10 * time.Second),
+		})
+		require.NoError(t, err)
+
+		// successful post exec
+		nb, err := NewNIPostBuilder(
+			db,
+			postService,
+			zaptest.NewLogger(t),
+			PoetConfig{},
+			mclock,
+			nil,
+			WithPoetServices(addedPoetProver), // add new poet
+		)
+		require.NoError(t, err)
+
+		nipost, err := nb.BuildNIPost(context.Background(), sig, challengeHash, &types.NIPostChallenge{PublishEpoch: 7})
+		require.NoError(t, err)
+		require.NotNil(t, nipost)
+	})
+
+	t.Run("1 poet added AFTER round started -> too late to register to added poet, get proof from known",
+		func(t *testing.T) {
+			db := localsql.InMemory()
+			const publishEpoch = 5
+			challenge := types.NIPostChallenge{
+				PublishEpoch: publishEpoch,
+			}
+			challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
+
+			ctrl := gomock.NewController(t)
+
+			currLayer := types.EpochID(publishEpoch - 1).FirstLayer()
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+
+			require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
+
+			poetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr)
+			poetProver.EXPECT().Proof(gomock.Any(), "1").AnyTimes().Return(
+				&types.PoetProof{}, []types.Hash32{
+					challengeHash,
+					types.RandomHash(),
+					types.RandomHash(),
+				}, nil,
+			)
+
+			mclock := defaultLayerClockMock(ctrl)
+			mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+				func(got types.LayerID) time.Time {
+					return genesis.Add(layerDuration * time.Duration(got))
+				},
+			).AnyTimes()
+
+			postClient := NewMockPostClient(ctrl)
+			nonce := types.VRFPostIndex(1)
+			postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(
+				&types.Post{
+					Indices: []byte{1, 2, 3},
+				}, &types.PostInfo{
+					Nonce: &nonce,
+				}, nil,
+			)
+
+			postService := NewMockpostService(ctrl)
+			postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil).AnyTimes()
+
+			// successfully registered to 2 poets
+			err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
+				ChallengeHash: challengeHash,
+				Address:       poetProverAddr,
+				RoundID:       "1",
+				RoundEnd:      time.Now().Add(10 * time.Second),
+			})
+			require.NoError(t, err)
+
+			err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
+				ChallengeHash: challengeHash,
+				Address:       poetProverAddr2,
+				RoundID:       "1",
+				RoundEnd:      time.Now().Add(10 * time.Second),
+			})
+			require.NoError(t, err)
+
+			// successful post exec
+			nb, err := NewNIPostBuilder(
+				db,
+				postService,
+				zaptest.NewLogger(t),
+				PoetConfig{},
+				mclock,
+				nil,
+				WithPoetServices(poetProver),
+			)
+			require.NoError(t, err)
+
+			nipost, err := nb.BuildNIPost(context.Background(), sig, challengeHash,
+				&types.NIPostChallenge{PublishEpoch: publishEpoch})
+			require.NoError(t, err)
+			require.NotNil(t, nipost)
+		})
+
+	t.Run("completely changed poet service AFTER round started -> fail, too late to register again",
+		func(t *testing.T) {
+			const publishEpoch = 5
+			challenge := types.NIPostChallenge{
+				PublishEpoch: publishEpoch,
+			}
+
+			ctrl := gomock.NewController(t)
+			currLayer := types.EpochID(publishEpoch - 1).FirstLayer()
+			genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+
+			poetProver := NewMockPoetService(ctrl)
+			poetProver.EXPECT().Address().Return(poetProverAddr).AnyTimes()
+
+			mclock := NewMocklayerClock(ctrl)
+			mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
+				func(got types.LayerID) time.Time {
+					return genesis.Add(layerDuration * time.Duration(got))
+				},
+			).AnyTimes()
+
+			db := localsql.InMemory()
+
+			require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
+			challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
+
+			// successfully registered to removed poet
+			err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
+				ChallengeHash: challengeHash,
+				Address:       poetProverAddr2,
+				RoundID:       "1",
+				RoundEnd:      time.Now().Add(10 * time.Second),
+			})
+
+			require.NoError(t, err)
+			postService := NewMockpostService(ctrl)
+
+			nb, err := NewNIPostBuilder(
+				localsql.InMemory(),
+				postService,
+				zaptest.NewLogger(t),
+				PoetConfig{},
+				mclock,
+				nil,
+				WithPoetServices(poetProver),
+			)
+			require.NoError(t, err)
+
+			nipost, err := nb.BuildNIPost(context.Background(), sig, types.RandomHash(),
+				&types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()})
+			require.ErrorIs(t, err, ErrATXChallengeExpired)
+			require.ErrorContains(t, err, "poet round has already started")
+			require.Nil(t, nipost)
+		})
+}
+
 // TestNIPoSTBuilder_StaleChallenge checks if
 // it properly detects that the challenge is stale and the poet round has already started.
 func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
@@ -818,12 +1156,14 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
+	const poetAddr = "http://localhost:9999"
+
 	// Act & Verify
 	t.Run("no requests, poet round started", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mclock := NewMocklayerClock(ctrl)
 		poetProver := NewMockPoetService(ctrl)
-		poetProver.EXPECT().Address().Return("http://localhost:9999")
+		poetProver.EXPECT().Address().Return(poetAddr).AnyTimes()
 		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 			func(got types.LayerID) time.Time {
 				return genesis.Add(layerDuration * time.Duration(got))
@@ -852,7 +1192,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mclock := NewMocklayerClock(ctrl)
 		poetProver := NewMockPoetService(ctrl)
-		poetProver.EXPECT().Address().Return("http://localhost:9999")
+		poetProver.EXPECT().Address().Return(poetAddr).AnyTimes()
 		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 			func(got types.LayerID) time.Time {
 				return genesis.Add(layerDuration * time.Duration(got))
@@ -879,7 +1219,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		// successfully registered to at least one poet
 		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
 			ChallengeHash: challengeHash,
-			Address:       "http://poet1.com",
+			Address:       poetAddr,
 			RoundID:       "1",
 			RoundEnd:      time.Now().Add(10 * time.Second),
 		})
@@ -894,7 +1234,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mclock := NewMocklayerClock(ctrl)
 		poetProver := NewMockPoetService(ctrl)
-		poetProver.EXPECT().Address().Return("http://localhost:9999")
+		poetProver.EXPECT().Address().Return(poetAddr).AnyTimes()
 		mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
 			func(got types.LayerID) time.Time {
 				return genesis.Add(layerDuration * time.Duration(got))
@@ -921,7 +1261,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		// successfully registered to at least one poet
 		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
 			ChallengeHash: challengeHash,
-			Address:       "http://poet1.com",
+			Address:       poetAddr,
 			RoundID:       "1",
 			RoundEnd:      time.Now().Add(10 * time.Second),
 		})

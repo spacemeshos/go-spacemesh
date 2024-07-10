@@ -38,23 +38,6 @@ func AddPoetRegistration(
 	return nil
 }
 
-/*func PoetRegistrationCount(db sql.Executor, nodeID types.NodeID) (int, error) {
-	var count int
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-	}
-	dec := func(stmt *sql.Statement) bool {
-		count = int(stmt.ColumnInt64(0))
-		return true
-	}
-	query := `select count(*) from poet_registration where id = ?1;`
-	_, err := db.Exec(query, enc, dec)
-	if err != nil {
-		return 0, fmt.Errorf("get poet registration count for node id %s: %w", nodeID.ShortString(), err)
-	}
-	return count, nil
-}*/
-
 func PoetRegistrationCount(db sql.Executor, nodeID types.NodeID, addresses ...string) (int, error) {
 	var (
 		count int
@@ -75,7 +58,8 @@ func PoetRegistrationCount(db sql.Executor, nodeID types.NodeID, addresses ...st
 			placeholders[i] = fmt.Sprintf("?%d", i+2) // Generate placeholders starting from ?2
 		}
 		// Construct the query with IN clause for addresses
-		query = fmt.Sprintf(`select count(*) from poet_registration where id = ?1 and address IN (%s);`, strings.Join(placeholders, ", "))
+		query = fmt.Sprintf(`select count(*) from poet_registration where id = ?1 and address IN (%s);`,
+			strings.Join(placeholders, ", "))
 
 	} else {
 		enc = func(stmt *sql.Statement) {
@@ -93,7 +77,8 @@ func PoetRegistrationCount(db sql.Executor, nodeID types.NodeID, addresses ...st
 	_, err := db.Exec(query, enc, dec)
 	if err != nil {
 		if len(addresses) > 0 {
-			return 0, fmt.Errorf("get poet registration count for node id %s and addresses %v: %w", nodeID.ShortString(), addresses, err)
+			return 0, fmt.Errorf("get poet registration count for node id %s and addresses %v: %w",
+				nodeID.ShortString(), addresses, err)
 		}
 		return 0, fmt.Errorf("get poet registration count for node id %s: %w", nodeID.ShortString(), err)
 	}
@@ -110,11 +95,18 @@ func ClearPoetRegistrations(db sql.Executor, nodeID types.NodeID) error {
 	return nil
 }
 
-func PoetRegistrations(db sql.Executor, nodeID types.NodeID) ([]PoETRegistration, error) {
+func PoetRegistrations(db sql.Executor, nodeID types.NodeID, addresses ...string) ([]PoETRegistration, error) {
 	var registrations []PoETRegistration
+
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
+		if len(addresses) > 0 {
+			for i, address := range addresses {
+				stmt.BindText(i+2, address)
+			}
+		}
 	}
+
 	dec := func(stmt *sql.Statement) bool {
 		registration := PoETRegistration{
 			Address:  stmt.ColumnText(1),
@@ -125,10 +117,29 @@ func PoetRegistrations(db sql.Executor, nodeID types.NodeID) ([]PoETRegistration
 		registrations = append(registrations, registration)
 		return true
 	}
-	query := `select hash, address, round_id, round_end from poet_registration where id = ?1;`
+
+	var query string
+	if len(addresses) > 0 {
+		placeholders := make([]string, len(addresses))
+		for i := range addresses {
+			placeholders[i] = fmt.Sprintf("?%d", i+2)
+		}
+		query = fmt.Sprintf(`
+            SELECT hash, address, round_id, round_end 
+            FROM poet_registration 
+            WHERE id = ?1 AND address IN (%s);`,
+			strings.Join(placeholders, ", "))
+	} else {
+		query = `
+            SELECT hash, address, round_id, round_end 
+            FROM poet_registration 
+            WHERE id = ?1;`
+	}
+
 	_, err := db.Exec(query, enc, dec)
 	if err != nil {
 		return nil, fmt.Errorf("get poet registrations for node id %s: %w", nodeID.ShortString(), err)
 	}
+
 	return registrations, nil
 }
