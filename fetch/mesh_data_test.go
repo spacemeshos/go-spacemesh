@@ -158,6 +158,7 @@ func testFetch_getHashes(t *testing.T, streaming bool) {
 			t.Parallel()
 
 			f := createFetch(t)
+			t.Cleanup(f.Stop)
 			f.cfg.QueueSize = 3
 			f.cfg.BatchSize = 2
 			f.cfg.MaxRetriesForRequest = 0
