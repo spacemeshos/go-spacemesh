@@ -86,7 +86,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	prologue := fmt.Sprintf("%x-%v", cl.GenesisID(), cfg.LayersPerEpoch*2-1)
 	host, err := p2p.New(
-		ctx,
 		logger.Named("p2p"),
 		cfg.P2P,
 		[]byte(prologue),

@@ -56,7 +56,7 @@ func runRelay(ctx context.Context, cfg *config.Config) error {
 	if !onMainNet(cfg) {
 		nc = handshake.NetworkCookie(prologue)
 	}
-	host, err := p2p.New(ctx, logger.Named(P2PLogger), p2pCfg, []byte(prologue), nc)
+	host, err := p2p.New(logger.Named(P2PLogger), p2pCfg, []byte(prologue), nc)
 	if err != nil {
 		return fmt.Errorf("initialize p2p host: %w", err)
 	}

@@ -234,7 +234,6 @@ func (cfg *Config) Validate() error {
 
 // New initializes libp2p host configured for spacemesh.
 func New(
-	_ context.Context,
 	logger *zap.Logger,
 	cfg Config,
 	prologue []byte,
@@ -433,7 +432,7 @@ func AutoStart(ctx context.Context,
 	quicNetCookie handshake.NetworkCookie,
 	opts ...Opt,
 ) (*Host, error) {
-	host, err := New(ctx, logger, cfg, prologue, quicNetCookie, opts...)
+	host, err := New(logger, cfg, prologue, quicNetCookie, opts...)
 	if err != nil {
 		return nil, err
 	}

@@ -38,7 +38,7 @@ func TestPing(t *testing.T) {
 			cfg1.EnableQUICTransport = tc.enableQUIC
 			cfg1.IP4Blocklist = nil
 			nc := []byte("foobar")
-			h1, err := New(context.Background(), logger.Named("host-1"), cfg1, nc, nc)
+			h1, err := New(logger.Named("host-1"), cfg1, nc, nc)
 			require.NoError(t, err)
 			require.NoError(t, h1.Start())
 			t.Cleanup(func() { h1.Stop() })
@@ -49,7 +49,7 @@ func TestPing(t *testing.T) {
 			cfg2.EnableQUICTransport = tc.enableQUIC
 			cfg2.PingPeers = []string{h1.ID().String()}
 			cfg2.IP4Blocklist = nil
-			h2, err := New(context.Background(), logger.Named("host-2"), cfg2, nc, nc)
+			h2, err := New(logger.Named("host-2"), cfg2, nc, nc)
 			require.NoError(t, err)
 			require.NoError(t, h2.discovery.Start())
 			t.Cleanup(func() { h2.Stop() })
