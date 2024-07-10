@@ -657,6 +657,7 @@ func (h *HandlerV2) checkMalicious(
 	tx *sql.Tx,
 	watx *wire.ActivationTxV2,
 	marrying []marriage,
+	ids []types.NodeID,
 ) (bool, *mwire.MalfeasanceProof, error) {
 	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
 	if err != nil {
@@ -669,6 +670,14 @@ func (h *HandlerV2) checkMalicious(
 	proof, err := h.checkDoubleMarry(tx, marrying)
 	if err != nil {
 		return false, nil, fmt.Errorf("checking double marry: %w", err)
+	}
+	if proof != nil {
+		return true, proof, nil
+	}
+
+	proof, err = h.checkDoublePost(tx, watx, ids)
+	if err != nil {
+		return false, nil, fmt.Errorf("checking double post: %w", err)
 	}
 	if proof != nil {
 		return true, proof, nil
@@ -703,6 +712,32 @@ func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []marriage) (*mwire.Ma
 	return nil, nil
 }
 
+func (h *HandlerV2) checkDoublePost(tx *sql.Tx, atx *wire.ActivationTxV2, ids []types.NodeID) (*mwire.MalfeasanceProof, error) {
+	for _, id := range ids {
+		atxid, err := atxs.ContributedToAtxInEpoch(tx, id, atx.PublishEpoch)
+		switch {
+		case errors.Is(err, sql.ErrNotFound):
+			continue
+		case err != nil:
+			return nil, fmt.Errorf("checking if ID contributed to ATX in epoch: %w", err)
+		}
+		h.logger.Debug(
+			"found ID that has already contributed to PoST in epoch",
+			zap.Stringer("id", id),
+			zap.Stringer("atx_id", atxid),
+			zap.Uint32("epoch", atx.PublishEpoch.Uint32()),
+		)
+		// FIXME: implement the proof
+		return &mwire.MalfeasanceProof{
+			Proof: mwire.Proof{
+				Type: mwire.DoubleMarry,
+				Data: &mwire.DoubleMarryProof{},
+			},
+		}, nil
+	}
+	return nil, nil
+}
+
 // Store an ATX in the DB.
 // TODO: detect malfeasance and create proofs.
 func (h *HandlerV2) storeAtx(
@@ -718,7 +753,8 @@ func (h *HandlerV2) storeAtx(
 	)
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
-		malicious, proof, err = h.checkMalicious(tx, watx, marrying)
+		// TODO: order of ids might be important for the proof
+		malicious, proof, err = h.checkMalicious(tx, watx, marrying, maps.Keys(units))
 		if err != nil {
 			return fmt.Errorf("check malicious: %w", err)
 		}

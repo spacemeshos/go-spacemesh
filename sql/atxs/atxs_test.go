@@ -1148,3 +1148,58 @@ func TestUnits(t *testing.T) {
 		require.Equal(t, units[nodeID], got)
 	})
 }
+
+func TestContributedToAtx(t *testing.T) {
+	t.Parallel()
+	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		_, err := atxs.ContributedToAtxInEpoch(db, types.RandomNodeID(), 0)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+
+	t.Run("contributed", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx, blob := newAtx(t, sig, withPublishEpoch(1))
+		require.NoError(t, atxs.Add(db, atx, blob))
+		require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, 10))
+
+		// different epoch - not found
+		_, err = atxs.ContributedToAtxInEpoch(db, types.RandomNodeID(), 7)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+
+		// same epoch
+		got, err := atxs.ContributedToAtxInEpoch(db, atx.SmesherID, atx.PublishEpoch)
+		require.NoError(t, err)
+		require.Equal(t, atx.ID(), got)
+	})
+	t.Run("picks the right ATX from many", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		allAtxs := make(map[types.NodeID][]*types.ActivationTx)
+
+		for range 10 {
+			sig, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			for epoch := range types.EpochID(7) {
+				atx, blob := newAtx(t, sig, withPublishEpoch(epoch))
+				require.NoError(t, atxs.Add(db, atx, blob))
+				require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, atx.NumUnits))
+				allAtxs[sig.NodeID()] = append(allAtxs[sig.NodeID()], atx)
+			}
+		}
+
+		for nodeID, smesherAtxs := range allAtxs {
+			for _, atx := range smesherAtxs {
+				got, err := atxs.ContributedToAtxInEpoch(db, nodeID, atx.PublishEpoch)
+				require.NoError(t, err)
+				require.Equal(t, atx.ID(), got)
+			}
+		}
+	})
+}
