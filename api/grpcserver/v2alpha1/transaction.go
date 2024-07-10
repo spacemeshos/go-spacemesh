@@ -414,14 +414,15 @@ func decodeTxArgs(decoder *scale.Decoder) (uint8, *core.Address, scale.Encodable
 
 	var templateAddress *core.Address
 	var handler core.Handler
-	if method == core.MethodSpawn {
+	switch method {
+	case core.MethodSpawn:
 		templateAddress = &core.Address{}
 		if _, err := templateAddress.DecodeScale(decoder); err != nil {
 			return 0, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
 		}
-	} else if method == vesting.MethodDrainVault {
+	case vesting.MethodDrainVault:
 		templateAddress = &vesting.TemplateAddress
-	} else {
+	default:
 		templateAddress = &wallet.TemplateAddress
 	}
 
