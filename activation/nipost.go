@@ -235,7 +235,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 		signer,
 		poetProofDeadline,
 		curPoetRoundStart, challenge.Bytes())
-
 	if err != nil {
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}

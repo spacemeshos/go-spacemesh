@@ -49,7 +49,7 @@ func Test_AddPoetRegistration(t *testing.T) {
 
 	registrations, err = PoetRegistrationsByNodeId(db, nodeID)
 	require.NoError(t, err)
-	require.Len(t, registrations, 0)
+	require.Empty(t, registrations)
 }
 
 func Test_PoetRegistrations_and_PoetRegistrationCount(t *testing.T) {

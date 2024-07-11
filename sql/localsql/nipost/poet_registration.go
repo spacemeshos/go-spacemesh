@@ -1,6 +1,7 @@
 package nipost
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -76,11 +77,14 @@ func PoetRegistrationsByNodeId(db sql.Executor, nodeID types.NodeID) ([]PoETRegi
 	return registrations, nil
 }
 
-func PoetRegistrationsByNodeIdAndAddresses(db sql.Executor, nodeID types.NodeID, addresses []string) ([]PoETRegistration, error) {
+func PoetRegistrationsByNodeIdAndAddresses(
+	db sql.Executor,
+	nodeID types.NodeID,
+	addresses []string) ([]PoETRegistration, error) {
 	var registrations []PoETRegistration
 
 	if len(addresses) == 0 {
-		return nil, fmt.Errorf("addresses list is empty")
+		return nil, errors.New("addresses list is empty")
 	}
 
 	enc := func(stmt *sql.Statement) {
@@ -115,7 +119,8 @@ func PoetRegistrationsByNodeIdAndAddresses(db sql.Executor, nodeID types.NodeID,
 
 	_, err := db.Exec(query, enc, dec)
 	if err != nil {
-		return nil, fmt.Errorf("get poet registrations for node id %s and addresses %v: %w", nodeID.ShortString(), addresses, err)
+		return nil, fmt.Errorf("get poet registrations for node id %s and addresses %v: %w",
+			nodeID.ShortString(), addresses, err)
 	}
 
 	return registrations, nil
