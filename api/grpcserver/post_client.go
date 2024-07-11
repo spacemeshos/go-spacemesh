@@ -19,15 +19,17 @@ import (
 // Additionally if instructed it will start the post service and connect it to
 // the node.
 type postClient struct {
-	con chan<- postCommand
+	con           chan<- postCommand
+	queryInterval time.Duration
 
 	closed chan struct{}
 }
 
-func newPostClient(con chan<- postCommand) *postClient {
+func newPostClient(con chan<- postCommand, queryInterval time.Duration) *postClient {
 	return &postClient{
-		con:    con,
-		closed: make(chan struct{}),
+		con:           con,
+		queryInterval: queryInterval,
+		closed:        make(chan struct{}),
 	}
 }
 
@@ -102,8 +104,7 @@ func (pc *postClient) Proof(ctx context.Context, challenge []byte) (*types.Post,
 		select {
 		case <-ctx.Done():
 			return nil, nil, ctx.Err()
-		case <-time.After(2 * time.Second):
-			// TODO(mafa): make polling interval configurable
+		case <-time.After(pc.queryInterval):
 			continue
 		}
 	}
