@@ -99,7 +99,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 			},
 		)
 		handler.EXPECT().ReportInvalidProof(gomock.Any())
-		h.RegisterHandlerV1(MultipleATXs, handler)
+		h.RegisterHandler(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
 			MalfeasanceProof: wire.MalfeasanceProof{
@@ -128,7 +128,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 			},
 		)
 		handler.EXPECT().ReportProof(gomock.Any())
-		h.RegisterHandlerV1(MultipleATXs, handler)
+		h.RegisterHandler(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
 			MalfeasanceProof: wire.MalfeasanceProof{
@@ -170,7 +170,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 				return nodeID, nil
 			},
 		)
-		h.RegisterHandlerV1(MultipleATXs, handler)
+		h.RegisterHandler(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
 			MalfeasanceProof: wire.MalfeasanceProof{
@@ -240,7 +240,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			},
 		)
 		handler.EXPECT().ReportProof(gomock.Any())
-		h.RegisterHandlerV1(MultipleATXs, handler)
+		h.RegisterHandler(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
 			Layer: types.LayerID(22),
@@ -274,7 +274,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			},
 		)
 		handler.EXPECT().ReportInvalidProof(gomock.Any())
-		h.RegisterHandlerV1(MultipleATXs, handler)
+		h.RegisterHandler(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
 			Layer: types.LayerID(22),
@@ -306,7 +306,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			},
 		)
 		handler.EXPECT().ReportProof(gomock.Any())
-		h.RegisterHandlerV1(MultipleATXs, handler)
+		h.RegisterHandler(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
 			Layer: types.LayerID(22),
@@ -351,7 +351,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				return nodeID, nil
 			},
 		)
-		h.RegisterHandlerV1(MultipleATXs, handler)
+		h.RegisterHandler(MultipleATXs, handler)
 
 		newProof := &wire.MalfeasanceProof{
 			Layer: types.LayerID(22),

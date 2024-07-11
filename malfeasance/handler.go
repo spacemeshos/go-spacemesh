@@ -41,10 +41,9 @@ const (
 
 	// V2 types
 	// TODO(mafa): for future use.
-	InvalidActivation MalfeasanceType = iota + 10
-	InvalidBallot
-	InvalidHareMsg
-	DoubleMarry = MalfeasanceType(wire.DoubleMarry)
+	InvalidActivation MalfeasanceType = MalfeasanceType(wire.InvalidActivation)
+	InvalidBallot                     = MalfeasanceType(wire.InvalidBallot)
+	InvalidHareMsg                    = MalfeasanceType(wire.InvalidHareMsg)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
@@ -52,8 +51,7 @@ type Handler struct {
 	logger *zap.Logger
 	cdb    *datastore.CachedDB
 
-	handlersV1 map[MalfeasanceType]HandlerV1
-	handlersV2 map[MalfeasanceType]HandlerV2
+	handlers map[MalfeasanceType]HandlerV1
 
 	self     p2p.Peer
 	nodeIDs  []types.NodeID
@@ -74,17 +72,12 @@ func NewHandler(
 		nodeIDs:  nodeID,
 		tortoise: tortoise,
 
-		handlersV1: make(map[MalfeasanceType]HandlerV1),
-		handlersV2: make(map[MalfeasanceType]HandlerV2),
+		handlers: make(map[MalfeasanceType]HandlerV1),
 	}
 }
 
-func (h *Handler) RegisterHandlerV1(malfeasanceType MalfeasanceType, handler HandlerV1) {
-	h.handlersV1[malfeasanceType] = handler
-}
-
-func (h *Handler) RegisterHandlerV2(malfeasanceType MalfeasanceType, handler HandlerV2) {
-	h.handlersV2[malfeasanceType] = handler
+func (h *Handler) RegisterHandler(malfeasanceType MalfeasanceType, handler HandlerV1) {
+	h.handlers[malfeasanceType] = handler
 }
 
 func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *wire.MalfeasanceProof) {
@@ -96,11 +89,11 @@ func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *wire.MalfeasancePr
 }
 
 func (h *Handler) countProof(mp *wire.MalfeasanceProof) {
-	h.handlersV1[MalfeasanceType(mp.Proof.Type)].ReportProof(numProofs)
+	h.handlers[MalfeasanceType(mp.Proof.Type)].ReportProof(numProofs)
 }
 
 func (h *Handler) countInvalidProof(p *wire.MalfeasanceProof) {
-	h.handlersV1[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
+	h.handlers[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
 }
 
 // HandleSyncedMalfeasanceProof is the sync validator for MalfeasanceProof.
@@ -207,7 +200,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 }
 
 func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, error) {
-	mh, ok := h.handlersV1[MalfeasanceType(p.Proof.Type)]
+	mh, ok := h.handlers[MalfeasanceType(p.Proof.Type)]
 	if !ok {
 		return types.EmptyNodeID, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
 	}

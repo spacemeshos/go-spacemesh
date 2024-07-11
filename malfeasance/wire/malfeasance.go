@@ -15,7 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata,InvalidPostIndexProof,InvalidPrevATXProof,DoubleMarryProof
+//go:generate scalegen -types MalfeasanceProof,MalfeasanceGossip,AtxProof,BallotProof,HareProof,AtxProofMsg,BallotProofMsg,HareProofMsg,HareMetadata,InvalidPostIndexProof,InvalidPrevATXProof
 
 const (
 	MultipleATXs byte = iota + 1
@@ -23,7 +23,6 @@ const (
 	HareEquivocation
 	InvalidPostIndex
 	InvalidPrevATX
-	DoubleMarry
 )
 
 type MalfeasanceProof struct {
@@ -324,12 +323,6 @@ type InvalidPrevATXProof struct {
 }
 
 func (p *InvalidPrevATXProof) isProof() {}
-
-type DoubleMarryProof struct {
-	// TODO: implement
-}
-
-func (p *DoubleMarryProof) isProof() {}
 
 func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 	var b strings.Builder

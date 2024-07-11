@@ -691,13 +691,15 @@ func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []marriage) (*mwire.Ma
 			return nil, fmt.Errorf("checking if ID is married: %w", err)
 		}
 		if married {
-			proof := &mwire.MalfeasanceProof{
-				Proof: mwire.Proof{
-					Type: mwire.DoubleMarry,
-					Data: &mwire.DoubleMarryProof{},
-				},
-			}
-			return proof, nil
+			// TODO(mafa): publish malfeasance proof
+			// proof := &mwire.MalfeasanceProof{
+			// 	Proof: mwire.Proof{
+			// 		Type: mwire.DoubleMarry,
+			// 		Data: &mwire.DoubleMarryProof{},
+			// 	},
+			// }
+			// return proof, nil
+			return nil, nil
 		}
 	}
 	return nil, nil

@@ -20,7 +20,3 @@ type HandlerV1 interface {
 	ReportProof(vec *prometheus.CounterVec)
 	ReportInvalidProof(vec *prometheus.CounterVec)
 }
-
-type HandlerV2 interface {
-	Validate(ctx context.Context, data []byte) (types.NodeID, error)
-}

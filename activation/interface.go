@@ -89,6 +89,11 @@ type nipostBuilder interface {
 
 type syncer interface {
 	RegisterForATXSynced() <-chan struct{}
+	ListenToATXGossip() bool
+}
+
+type malfeasancePublisher interface {
+	Publish(ctx context.Context, data []byte) error
 }
 
 type atxProvider interface {

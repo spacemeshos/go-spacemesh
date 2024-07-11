@@ -1101,11 +1101,11 @@ func (app *App) initServices(ctx context.Context) error {
 		nodeIDs,
 		trtl,
 	)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleATXs, activationMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleBallots, meshMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.HareEquivocation, hareMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPostIndex, invalidPostMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPrevATX, invalidPrevMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.MultipleATXs, activationMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.MultipleBallots, meshMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.HareEquivocation, hareMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.InvalidPostIndex, invalidPostMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
@@ -1157,13 +1157,13 @@ func (app *App) initServices(ctx context.Context) error {
 		),
 	)
 
-	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
+	checkSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToGossip() {
 			return nil
 		}
 		return errors.New("not synced for gossip")
 	}
-	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
+	checkAtxSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToATXGossip() {
 			return nil
 		}
@@ -1173,45 +1173,45 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.Beacon.RoundsNumber > 0 {
 		app.host.Register(
 			pubsub.BeaconWeakCoinProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleWeakCoinProposal),
 			pubsub.WithValidatorInline(true),
 		)
 		app.host.Register(
 			pubsub.BeaconProposalProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleProposal),
 			pubsub.WithValidatorInline(true),
 		)
 		app.host.Register(
 			pubsub.BeaconFirstVotesProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFirstVotes),
 			pubsub.WithValidatorInline(true),
 		)
 		app.host.Register(
 			pubsub.BeaconFollowingVotesProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFollowingVotes),
 			pubsub.WithValidatorInline(true),
 		)
 	}
 	app.host.Register(
 		pubsub.ProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal),
+		pubsub.ChainGossipHandler(checkSynced, proposalListener.HandleProposal),
 	)
 	app.host.Register(
 		pubsub.AtxProtocol,
-		pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx),
+		pubsub.ChainGossipHandler(checkAtxSynced, atxHandler.HandleGossipAtx),
 		pubsub.WithValidatorConcurrency(app.Config.P2P.GossipAtxValidationThrottle),
 	)
 	app.host.Register(
 		pubsub.TxProtocol,
-		pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction),
+		pubsub.ChainGossipHandler(checkSynced, app.txHandler.HandleGossipTransaction),
 	)
 	app.host.Register(
 		pubsub.BlockCertify,
-		pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage),
+		pubsub.ChainGossipHandler(checkSynced, app.certifier.HandleCertifyMessage),
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
-		pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof),
+		pubsub.ChainGossipHandler(checkAtxSynced, malfeasanceHandler.HandleMalfeasanceProof),
 	)
 
 	app.proposalBuilder = proposalBuilder
