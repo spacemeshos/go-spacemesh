@@ -31,5 +31,5 @@ RUN set -ex \
    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/build/tests.test /bin/tests
 COPY --from=build /src/build/libpost.so /bin/libpost.so
-COPY --from=build /src/build/service /bin/service
+COPY --from=build /src/build/post-service /bin/service
 ENV LD_LIBRARY_PATH="/bin/"
