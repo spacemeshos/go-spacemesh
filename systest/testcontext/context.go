@@ -138,6 +138,9 @@ var (
 	LayersPerEpoch = parameters.Int(
 		ParamLayersPerEpoch, "number of layers in an epoch", 4,
 	)
+	profilerURL = parameters.String(
+		"profiler-url", "profiler url", "",
+	)
 )
 
 const nsfile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
@@ -183,6 +186,8 @@ type Context struct {
 	}
 	NodeSelector map[string]string
 	Log          *zap.SugaredLogger
+	TestName     string
+	ProfilerURL  string
 }
 
 func cleanup(tb testing.TB, f func()) {
@@ -365,6 +370,8 @@ func New(t *testing.T, opts ...Opt) *Context {
 		PostInitImage:     postInitImage.Get(p),
 		NodeSelector:      nodeSelector.Get(p),
 		Log:               logger.Sugar().Named(t.Name()),
+		TestName:          t.Name(),
+		ProfilerURL:       profilerURL.Get(p),
 	}
 	cctx.Storage.Class = class
 	cctx.Storage.Size = size

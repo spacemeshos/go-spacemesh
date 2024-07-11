@@ -24,6 +24,7 @@ node_selector ?=
 namespace ?=
 label ?=
 count ?= 1
+profiler_url ?=
 
 configname ?= $(test_job_name)
 smesher_config ?= parameters/fastnet/smesher.json
@@ -69,6 +70,7 @@ template:
 	@echo post-init-image=$(post_init_image) >> $(tmpfile)
 	@echo keep=$(keep) >> $(tmpfile)
 	@echo testid=$(test_id) >> $(tmpfile)
+	@echo profiler-url=$(profiler_url) >>$(tmpfile)
 
 .PHONY: config
 config: template
