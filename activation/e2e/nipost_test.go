@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	layersPerEpoch                 = 5
+	layersPerEpoch                 = 10
 	layerDuration                  = time.Second
 	postGenesisEpoch types.EpochID = 2
 )
