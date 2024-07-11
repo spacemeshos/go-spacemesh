@@ -115,7 +115,7 @@ func (e *Executor) ExecuteOptimistic(
 	if err != nil {
 		return nil, fmt.Errorf("get state hash: %w", err)
 	}
-	e.logger.With().Info("optimistically executed block",
+	e.logger.With().Debug("optimistically executed block",
 		log.Context(ctx),
 		log.Uint32("lid", lid.Uint32()),
 		log.Stringer("block", b.ID()),

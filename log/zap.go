@@ -340,3 +340,20 @@ func DebugField(logger *zap.Logger, field zap.Field) zap.Field {
 	}
 	return zap.Skip()
 }
+
+type trimmedErrorAdapter struct {
+	len int
+	err error
+}
+
+func (a trimmedErrorAdapter) String() string {
+	s := a.err.Error()
+	if len(s) > a.len {
+		return s[:a.len] + "..."
+	}
+	return s
+}
+
+func TrimmedError(err error, len int) zap.Field {
+	return zap.Stringer("error", trimmedErrorAdapter{err: err, len: len})
+}
