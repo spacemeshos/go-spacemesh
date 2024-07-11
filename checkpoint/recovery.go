@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/spf13/afero"
 	"go.uber.org/zap"
@@ -39,22 +40,29 @@ type Config struct {
 
 	// set to false if atxs are not compatible before and after the checkpoint recovery.
 	PreserveOwnAtx bool `mapstructure:"preserve-own-atx"`
+
+	RetryCount    int           `mapstructure:"retry-count"`
+	RetryInterval time.Duration `mapstructure:"retry-interval"`
 }
 
 func DefaultConfig() Config {
 	return Config{
 		PreserveOwnAtx: true,
+		RetryCount:     5,
+		RetryInterval:  3 * time.Second,
 	}
 }
 
 type RecoverConfig struct {
-	GoldenAtx   types.ATXID
-	DataDir     string
-	DbFile      string
-	LocalDbFile string
-	NodeIDs     []types.NodeID // IDs to preserve own ATXs
-	Uri         string
-	Restore     types.LayerID
+	GoldenAtx     types.ATXID
+	DataDir       string
+	DbFile        string
+	LocalDbFile   string
+	NodeIDs       []types.NodeID // IDs to preserve own ATXs
+	Uri           string
+	Restore       types.LayerID
+	RetryCount    int
+	RetryInterval time.Duration
 }
 
 func (c *RecoverConfig) DbPath() string {
@@ -75,6 +83,8 @@ func copyToLocalFile(
 	fs afero.Fs,
 	dataDir, uri string,
 	restore types.LayerID,
+	retryCount int,
+	retryInterval time.Duration,
 ) (string, error) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
@@ -89,11 +99,23 @@ func copyToLocalFile(
 		logger.Info("old recovery data backed up", log.ZContext(ctx), zap.String("dir", bdir))
 	}
 	dst := RecoveryFilename(dataDir, filepath.Base(parsed.String()), restore)
-	if err = httpToLocalFile(ctx, parsed, fs, dst); err != nil {
-		return "", err
+	for range retryCount + 1 {
+		err = httpToLocalFile(ctx, parsed, fs, dst)
+		switch {
+		case errors.Is(err, ErrTransient):
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(retryInterval):
+			}
+		case err != nil:
+			return "", err
+		default:
+			logger.Info("checkpoint data persisted", log.ZContext(ctx), zap.String("file", dst))
+			return dst, nil
+		}
 	}
-	logger.Info("checkpoint data persisted", log.ZContext(ctx), zap.String("file", dst))
-	return dst, nil
+	return "", ErrCheckpointRequestFailed
 }
 
 type AtxDep struct {
@@ -170,7 +192,10 @@ func RecoverWithDb(
 		return nil, fmt.Errorf("remove old bootstrap data: %w", err)
 	}
 	logger.Info("recover from uri", zap.String("uri", cfg.Uri))
-	cpFile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore)
+	cpFile, err := copyToLocalFile(
+		ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore,
+		cfg.RetryCount, cfg.RetryInterval,
+	)
 	if err != nil {
 		return nil, err
 	}

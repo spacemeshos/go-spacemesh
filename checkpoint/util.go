@@ -24,8 +24,10 @@ import (
 )
 
 var (
-	ErrCheckpointNotFound    = errors.New("checkpoint not found")
-	ErrUrlSchemeNotSupported = errors.New("url scheme not supported")
+	ErrTransient               = errors.New("transient error")
+	ErrCheckpointNotFound      = errors.New("checkpoint not found")
+	ErrCheckpointRequestFailed = errors.New("checkpoint request failed")
+	ErrUrlSchemeNotSupported   = errors.New("url scheme not supported")
 )
 
 type RecoveryFile struct {
@@ -118,13 +120,27 @@ func httpToLocalFile(ctx context.Context, resource *url.URL, fs afero.Fs, dst st
 	urlErr := &url.Error{}
 	switch {
 	case errors.As(err, &urlErr):
-		return ErrCheckpointNotFound
+		// It makes sense to retry on network errors.
+		return ErrTransient
 	case err != nil:
+		// This shouldn't really happen. According to net/http docs for Do:
+		// "Any returned error will be of type *url.Error."
 		return fmt.Errorf("http get recovery file: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	switch {
+	case resp.StatusCode == http.StatusOK:
+		// Continue
+	case resp.StatusCode == http.StatusNotFound:
+		// The checkpoint is not found. This is not considered a fatal error.
 		return ErrCheckpointNotFound
+	case resp.StatusCode%100 == 4:
+		// Can't load the checkoint but it maybe due to an unexpected server problem
+		// that is not likely to be resolved by retrying.
+		return ErrCheckpointRequestFailed
+	default:
+		// It makes sense to retry on other server errors.
+		return ErrTransient
 	}
 	rf, err := NewRecoveryFile(fs, dst)
 	if err != nil {
