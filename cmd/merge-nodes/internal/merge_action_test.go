@@ -332,7 +332,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sig1Post, *post)
 
-	poet1, err := nipost.PoetRegistrations(dstDB, sig1.NodeID())
+	poet1, err := nipost.PoetRegistrationsByNodeId(dstDB, sig1.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, poet1[0], sig1Poet1)
 	require.Equal(t, poet1[1], sig1Poet2)
@@ -345,7 +345,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sig2Post, *post)
 
-	poet2, err := nipost.PoetRegistrations(dstDB, sig2.NodeID())
+	poet2, err := nipost.PoetRegistrationsByNodeId(dstDB, sig2.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, poet2[0], sig2Poet1)
 	require.Equal(t, poet2[1], sig2Poet2)
@@ -432,7 +432,7 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sigPost, *post)
 
-	poet, err := nipost.PoetRegistrations(dstDB, sig.NodeID())
+	poet, err := nipost.PoetRegistrationsByNodeId(dstDB, sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, poet[0], sigPoet1)
 	require.Equal(t, poet[1], sigPoet2)

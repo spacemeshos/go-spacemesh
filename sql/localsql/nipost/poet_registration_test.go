@@ -31,18 +31,14 @@ func Test_AddPoetRegistration(t *testing.T) {
 	err := AddPoetRegistration(db, nodeID, reg1)
 	require.NoError(t, err)
 
-	count, err := PoetRegistrationCount(db, nodeID)
+	registrations, err := PoetRegistrationsByNodeId(db, nodeID)
 	require.NoError(t, err)
-	require.Equal(t, 1, count)
+	require.Len(t, registrations, 1)
 
 	err = AddPoetRegistration(db, nodeID, reg2)
 	require.NoError(t, err)
 
-	count, err = PoetRegistrationCount(db, nodeID)
-	require.NoError(t, err)
-	require.Equal(t, 2, count)
-
-	registrations, err := PoetRegistrations(db, nodeID)
+	registrations, err = PoetRegistrationsByNodeId(db, nodeID)
 	require.NoError(t, err)
 	require.Len(t, registrations, 2)
 	require.Equal(t, reg1, registrations[0])
@@ -51,12 +47,14 @@ func Test_AddPoetRegistration(t *testing.T) {
 	err = ClearPoetRegistrations(db, nodeID)
 	require.NoError(t, err)
 
-	count, err = PoetRegistrationCount(db, nodeID)
+	registrations, err = PoetRegistrationsByNodeId(db, nodeID)
 	require.NoError(t, err)
-	require.Equal(t, 0, count)
+	require.Len(t, registrations, 0)
 }
 
 func Test_PoetRegistrations_and_PoetRegistrationCount(t *testing.T) {
+	t.Parallel()
+
 	db := localsql.InMemory()
 
 	nodeID := types.RandomNodeID()
@@ -79,35 +77,23 @@ func Test_PoetRegistrations_and_PoetRegistrationCount(t *testing.T) {
 	err = AddPoetRegistration(db, nodeID, reg2)
 	require.NoError(t, err)
 
-	count, err := PoetRegistrationCount(db, nodeID)
-	require.NoError(t, err)
-	require.Equal(t, 2, count)
-
-	count, err = PoetRegistrationCount(db, nodeID, "address2")
-	require.NoError(t, err)
-	require.Equal(t, 1, count)
-
-	count, err = PoetRegistrationCount(db, nodeID, "address2", "address1")
-	require.NoError(t, err)
-	require.Equal(t, 2, count)
-
-	registrations, err := PoetRegistrations(db, nodeID)
+	registrations, err := PoetRegistrationsByNodeId(db, nodeID)
 	require.NoError(t, err)
 	require.Len(t, registrations, 2)
 	require.Equal(t, reg1, registrations[0])
 	require.Equal(t, reg2, registrations[1])
 
-	registrations, err = PoetRegistrations(db, nodeID, "address1")
+	registrations, err = PoetRegistrationsByNodeIdAndAddresses(db, nodeID, []string{"address1"})
 	require.NoError(t, err)
 	require.Len(t, registrations, 1)
 	require.Equal(t, reg1, registrations[0])
 
-	registrations, err = PoetRegistrations(db, nodeID, "address2")
+	registrations, err = PoetRegistrationsByNodeIdAndAddresses(db, nodeID, []string{"address2"})
 	require.NoError(t, err)
 	require.Len(t, registrations, 1)
 	require.Equal(t, reg2, registrations[0])
 
-	registrations, err = PoetRegistrations(db, nodeID, "address2", "address1")
+	registrations, err = PoetRegistrationsByNodeIdAndAddresses(db, nodeID, []string{"address2", "address1"})
 	require.NoError(t, err)
 	require.Len(t, registrations, 2)
 	require.Equal(t, reg1, registrations[0])
@@ -128,14 +114,14 @@ func Test_AddPoetRegistration_NoDuplicates(t *testing.T) {
 	err := AddPoetRegistration(db, nodeID, reg)
 	require.NoError(t, err)
 
-	count, err := PoetRegistrationCount(db, nodeID)
+	registrations, err := PoetRegistrationsByNodeId(db, nodeID)
 	require.NoError(t, err)
-	require.Equal(t, 1, count)
+	require.Len(t, registrations, 1)
 
 	err = AddPoetRegistration(db, nodeID, reg)
 	require.ErrorIs(t, err, sql.ErrObjectExists)
 
-	count, err = PoetRegistrationCount(db, nodeID)
+	registrations, err = PoetRegistrationsByNodeId(db, nodeID)
 	require.NoError(t, err)
-	require.Equal(t, 1, count)
+	require.Len(t, registrations, 1)
 }
