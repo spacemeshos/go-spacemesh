@@ -80,7 +80,8 @@ func PoetRegistrationsByNodeId(db sql.Executor, nodeID types.NodeID) ([]PoETRegi
 func PoetRegistrationsByNodeIdAndAddresses(
 	db sql.Executor,
 	nodeID types.NodeID,
-	addresses []string) ([]PoETRegistration, error) {
+	addresses []string,
+) ([]PoETRegistration, error) {
 	var registrations []PoETRegistration
 
 	if len(addresses) == 0 {
