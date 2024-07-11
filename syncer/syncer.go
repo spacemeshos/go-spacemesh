@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -100,7 +101,7 @@ func WithConfig(c Config) Option {
 }
 
 // WithLogger ...
-func WithLogger(l log.Log) Option {
+func WithLogger(l *zap.Logger) Option {
 	return func(s *Syncer) {
 		s.logger = l
 	}
@@ -120,8 +121,7 @@ func withForkFinder(f forkFinder) Option {
 
 // Syncer is responsible to keep the node in sync with the network.
 type Syncer struct {
-	logger log.Log
-
+	logger       *zap.Logger
 	cfg          Config
 	cdb          *datastore.CachedDB
 	atxsyncer    atxSyncer
@@ -179,7 +179,7 @@ func NewSyncer(
 	opts ...Option,
 ) *Syncer {
 	s := &Syncer{
-		logger:           log.NewNop(),
+		logger:           zap.NewNop(),
 		cfg:              DefaultConfig(),
 		cdb:              cdb,
 		atxsyncer:        atxSyncer,
@@ -216,9 +216,9 @@ func (s *Syncer) Close() {
 		return // not started yet
 	}
 	s.stop()
-	s.logger.With().Info("waiting for syncer goroutines to finish")
+	s.logger.Info("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()
-	s.logger.With().Info("all syncer goroutines finished", log.Err(err))
+	s.logger.Info("all syncer goroutines finished", zap.Error(err))
 }
 
 // RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
@@ -251,7 +251,7 @@ func (s *Syncer) Start() {
 	s.syncOnce.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		s.stop = cancel
-		s.logger.WithContext(ctx).Info("starting syncer loop")
+		s.logger.Info("starting syncer loop", log.ZContext(ctx))
 		s.eg.Go(func() error {
 			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 				s.setSyncState(ctx, synced)
@@ -259,7 +259,7 @@ func (s *Syncer) Start() {
 			for {
 				select {
 				case <-ctx.Done():
-					s.logger.WithContext(ctx).Info("stopping sync to shutdown")
+					s.logger.Info("stopping sync to shutdown", log.ZContext(ctx))
 					return fmt.Errorf("shutdown context done: %w", ctx.Err())
 				case <-time.After(s.cfg.Interval):
 					ok := s.synchronize(ctx)
@@ -271,7 +271,7 @@ func (s *Syncer) Start() {
 				}
 			}
 		})
-		s.logger.WithContext(ctx).Info("starting syncer layer processing loop")
+		s.logger.Info("starting syncer layer processing loop", log.ZContext(ctx))
 		s.eg.Go(func() error {
 			for {
 				select {
@@ -312,13 +312,14 @@ func (s *Syncer) getSyncState() syncState {
 func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 	oldState := s.syncState.Swap(newState).(syncState)
 	if oldState != newState {
-		s.logger.WithContext(ctx).With().Info("sync state change",
-			log.String("from state", oldState.String()),
-			log.String("to state", newState.String()),
-			log.Stringer("current", s.ticker.CurrentLayer()),
-			log.Stringer("last synced", s.getLastSyncedLayer()),
-			log.Stringer("latest", s.mesh.LatestLayer()),
-			log.Stringer("processed", s.mesh.ProcessedLayer()))
+		s.logger.Info("sync state change",
+			log.ZContext(ctx),
+			zap.Stringer("from state", oldState),
+			zap.Stringer("to state", newState),
+			zap.Stringer("current", s.ticker.CurrentLayer()),
+			zap.Stringer("last synced", s.getLastSyncedLayer()),
+			zap.Stringer("latest", s.mesh.LatestLayer()),
+			zap.Stringer("processed", s.mesh.ProcessedLayer()))
 		events.ReportNodeStatusUpdate()
 	}
 	switch newState {
@@ -371,13 +372,13 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	select {
 	case <-ctx.Done():
-		s.logger.WithContext(ctx).Warning("attempting to sync while shutting down")
+		s.logger.Warn("attempting to sync while shutting down", log.ZContext(ctx))
 		return false
 	default:
 	}
 	// at most one synchronize process can run at any time
 	if !s.setSyncerBusy() {
-		s.logger.WithContext(ctx).Info("sync is already running, giving up")
+		s.logger.Info("sync is already running, giving up", log.ZContext(ctx))
 		return false
 	}
 	defer s.setSyncerIdle()
@@ -388,13 +389,14 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	}
 
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
-	s.logger.WithContext(ctx).With().Debug("starting sync run",
-		log.Stringer("sync_state", s.getSyncState()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()),
-		log.Stringer("current", s.ticker.CurrentLayer()),
-		log.Stringer("latest", s.mesh.LatestLayer()),
-		log.Stringer("in_state", s.mesh.LatestLayerInState()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()),
+	s.logger.Debug("starting sync run",
+		log.ZContext(ctx),
+		zap.Stringer("sync_state", s.getSyncState()),
+		zap.Stringer("last_synced", s.getLastSyncedLayer()),
+		zap.Stringer("current", s.ticker.CurrentLayer()),
+		zap.Stringer("latest", s.mesh.LatestLayer()),
+		zap.Stringer("in_state", s.mesh.LatestLayerInState()),
+		zap.Stringer("processed", s.mesh.ProcessedLayer()),
 	)
 	// TODO
 	// https://github.com/spacemeshos/go-spacemesh/issues/3987
@@ -411,7 +413,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 		if err := s.syncAtx(ctx); err != nil {
 			if !errors.Is(err, context.Canceled) {
-				s.logger.With().Error("failed to sync atxs", log.Context(ctx), log.Err(err))
+				s.logger.Error("failed to sync atxs", log.ZContext(ctx), zap.Error(err))
 			}
 			return false
 		}
@@ -424,36 +426,45 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			if err := s.syncLayer(ctx, layer); err != nil {
 				batchError := &fetch.BatchError{}
 				if errors.As(err, &batchError) && batchError.Ignore() {
-					s.logger.With().
-						Info("remaining ballots are rejected in the layer", log.Context(ctx), log.Err(err), layer)
+					s.logger.Info(
+						"remaining ballots are rejected in the layer",
+						log.ZContext(ctx),
+						zap.Error(err),
+						zap.Uint32("layer", layer.Uint32()),
+					)
 				} else {
 					if !errors.Is(err, context.Canceled) {
 						// BatchError spams too much, in case of no progress enable debug mode for sync
-						s.logger.With().
-							Debug("failed to sync layer", log.Context(ctx), log.Err(err), layer)
+						s.logger.Debug("failed to sync layer",
+							log.ZContext(ctx),
+							zap.Error(err),
+							zap.Uint32("layer", layer.Uint32()),
+						)
 					}
 					return false
 				}
 			}
 			s.setLastSyncedLayer(layer)
 		}
-		s.logger.WithContext(ctx).With().Debug("data is synced",
-			log.Stringer("current", s.ticker.CurrentLayer()),
-			log.Stringer("latest", s.mesh.LatestLayer()),
-			log.Stringer("last_synced", s.getLastSyncedLayer()))
+		s.logger.Debug("data is synced",
+			log.ZContext(ctx),
+			zap.Stringer("current", s.ticker.CurrentLayer()),
+			zap.Stringer("latest", s.mesh.LatestLayer()),
+			zap.Stringer("last_synced", s.getLastSyncedLayer()))
 		return true
 	}
 
 	success := syncFunc()
 	s.setStateAfterSync(ctx, success)
-	s.logger.WithContext(ctx).With().Debug("finished sync run",
-		log.Bool("success", success),
-		log.Stringer("sync_state", s.getSyncState()),
-		log.Stringer("last_synced", s.getLastSyncedLayer()),
-		log.Stringer("current", s.ticker.CurrentLayer()),
-		log.Stringer("latest", s.mesh.LatestLayer()),
-		log.Stringer("in_state", s.mesh.LatestLayerInState()),
-		log.Stringer("processed", s.mesh.ProcessedLayer()),
+	s.logger.Debug("finished sync run",
+		log.ZContext(ctx),
+		zap.Bool("success", success),
+		zap.Stringer("sync_state", s.getSyncState()),
+		zap.Stringer("last_synced", s.getLastSyncedLayer()),
+		zap.Stringer("current", s.ticker.CurrentLayer()),
+		zap.Stringer("latest", s.mesh.LatestLayer()),
+		zap.Stringer("in_state", s.mesh.LatestLayerInState()),
+		zap.Stringer("processed", s.mesh.ProcessedLayer()),
 	)
 	return success
 }
@@ -462,20 +473,24 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 	current := s.ticker.CurrentLayer()
 	// on startup always download all activations that were published before current epoch
 	if !s.ListenToATXGossip() {
-		s.logger.With().Debug("syncing atx from genesis", log.Context(ctx), current, s.lastAtxEpoch())
+		s.logger.Debug("syncing atx from genesis",
+			log.ZContext(ctx),
+			zap.Stringer("current layer", current),
+			zap.Stringer("last epoch", s.lastAtxEpoch()),
+		)
 		for epoch := s.lastAtxEpoch() + 1; epoch < current.GetEpoch(); epoch++ {
 			if err := s.fetchATXsForEpoch(ctx, epoch, false); err != nil {
 				return err
 			}
 		}
-		s.logger.With().Debug("atxs synced to epoch", log.Context(ctx), s.lastAtxEpoch())
+		s.logger.Debug("atxs synced to epoch", log.ZContext(ctx), zap.Stringer("last epoch", s.lastAtxEpoch()))
 
 		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/3987
-		s.logger.With().Info("syncing malicious proofs", log.Context(ctx))
+		s.logger.Info("syncing malicious proofs", log.ZContext(ctx))
 		if err := s.syncMalfeasance(ctx, current.GetEpoch()); err != nil {
 			return err
 		}
-		s.logger.With().Info("malicious IDs synced", log.Context(ctx))
+		s.logger.Info("malicious IDs synced", log.ZContext(ctx))
 		s.setATXSynced()
 	}
 
@@ -494,7 +509,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		s.backgroundSync.epoch.Store(0)
 	}
 	if s.backgroundSync.epoch.Load() == 0 && publish.Uint32() != 0 {
-		s.logger.With().Debug("download atx for epoch in background", publish, log.Context(ctx))
+		s.logger.Debug("download atx for epoch in background", zap.Stringer("publish", publish), log.ZContext(ctx))
 		s.backgroundSync.epoch.Store(publish.Uint32())
 		ctx, cancel := context.WithCancel(ctx)
 		s.backgroundSync.cancel = cancel
@@ -504,10 +519,13 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 				return nil
 			}
 			if !errors.Is(err, context.Canceled) {
-				s.logger.With().
-					Warning("background atx sync failed", log.Context(ctx), publish.Field(), log.Err(err))
+				s.logger.Warn("background atx sync failed",
+					log.ZContext(ctx),
+					zap.Stringer("publish", publish),
+					zap.Error(err),
+				)
 			} else {
-				s.logger.With().Debug("background atx sync stopped", log.Context(ctx), publish.Field())
+				s.logger.Debug("background atx sync stopped", log.ZContext(ctx), zap.Stringer("publish", publish))
 			}
 			s.backgroundSync.epoch.Store(0)
 			return err
@@ -522,7 +540,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			case <-s.awaitATXSyncedCh:
 				err := s.malsyncer.DownloadLoop(ctx)
 				if err != nil && !errors.Is(err, context.Canceled) {
-					s.logger.WithContext(ctx).Error("malfeasance sync failed", log.Err(err))
+					s.logger.Error("malfeasance sync failed", log.ZContext(ctx), zap.Error(err))
 				}
 				return nil
 			}
@@ -533,15 +551,16 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 
 func isTooFarBehind(
 	ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	current, lastSynced types.LayerID,
 	outOfSyncThreshold uint32,
 ) bool {
 	if current.After(lastSynced) && current.Difference(lastSynced) >= outOfSyncThreshold {
-		logger.WithContext(ctx).With().Info("node is too far behind",
-			log.Stringer("current", current),
-			log.Stringer("last synced", lastSynced),
-			log.Uint32("behind threshold", outOfSyncThreshold))
+		logger.Info("node is too far behind",
+			log.ZContext(ctx),
+			zap.Stringer("current", current),
+			zap.Stringer("last synced", lastSynced),
+			zap.Uint32("behind threshold", outOfSyncThreshold))
 		return true
 	}
 	return false
@@ -596,10 +615,10 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 		if !success || !s.dataSynced() || !s.stateSynced() {
 			// push out the target synced layer
 			s.syncedTargetTime = time.Now().Add(s.cfg.GossipDuration)
-			s.logger.With().Info("extending gossip sync",
-				log.Bool("success", success),
-				log.Bool("data", s.dataSynced()),
-				log.Bool("state", s.stateSynced()),
+			s.logger.Info("extending gossip sync",
+				zap.Bool("success", success),
+				zap.Bool("data", s.dataSynced()),
+				zap.Bool("state", s.stateSynced()),
 			)
 			break
 		}
