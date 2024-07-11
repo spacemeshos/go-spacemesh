@@ -859,6 +859,9 @@ func deployNode(
 		"--metrics",
 		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
 	}
+	if ctx.ProfilerURL != "" {
+		cmd = append(cmd, "--profiler-url", ctx.ProfilerURL, "--profiler-name", ctx.TestName)
+	}
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())
 	}
