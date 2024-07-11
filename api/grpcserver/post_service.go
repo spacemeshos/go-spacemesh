@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -26,6 +27,7 @@ type PostService struct {
 	clientMtx        sync.Mutex
 	allowConnections bool
 	client           map[types.NodeID]*postClient
+	queryInterval    time.Duration
 }
 
 type postCommand struct {
@@ -47,12 +49,33 @@ func (s *PostService) String() string {
 	return "PostService"
 }
 
-// NewPostService creates a new instance of the post grpc service.
-func NewPostService(log *zap.Logger) *PostService {
-	return &PostService{
-		log:    log,
-		client: make(map[types.NodeID]*postClient),
+type PostServiceOpt func(*PostService)
+
+type PostServiceOpts struct{}
+
+func (PostServiceOpts) AllowConnections() PostServiceOpt {
+	return func(s *PostService) {
+		s.allowConnections = true
 	}
+}
+
+func (PostServiceOpts) QueryInterval(interval time.Duration) PostServiceOpt {
+	return func(s *PostService) {
+		s.queryInterval = interval
+	}
+}
+
+// NewPostService creates a new instance of the post grpc service.
+func NewPostService(log *zap.Logger, opts ...PostServiceOpt) *PostService {
+	s := &PostService{
+		log:           log,
+		client:        make(map[types.NodeID]*postClient),
+		queryInterval: 2 * time.Second,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // AllowConnections sets if the grpc service accepts new incoming connections from post services.
@@ -132,7 +155,7 @@ func (s *PostService) setConnection(nodeId types.NodeID, con chan postCommand) e
 	if _, ok := s.client[nodeId]; ok {
 		return errors.New("post service already registered")
 	}
-	s.client[nodeId] = newPostClient(con)
+	s.client[nodeId] = newPostClient(con, s.queryInterval)
 	s.log.Info("post service registered", zap.Stringer("node_id", nodeId))
 	return nil
 }

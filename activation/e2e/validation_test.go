@@ -34,8 +34,8 @@ func TestValidator_Validate(t *testing.T) {
 	validator := activation.NewMocknipostValidator(gomock.NewController(t))
 
 	opts := testPostSetupOpts(t)
-	svc := grpcserver.NewPostService(zaptest.NewLogger(t))
-	svc.AllowConnections(true)
+	psOpts := grpcserver.PostServiceOpts{}
+	svc := grpcserver.NewPostService(logger, psOpts.AllowConnections(), psOpts.QueryInterval(100*time.Millisecond))
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 

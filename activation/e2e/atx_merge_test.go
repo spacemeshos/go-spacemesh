@@ -209,8 +209,9 @@ func Test_MarryAndMerge(t *testing.T) {
 	cdb := datastore.NewCachedDB(db, logger)
 	localDB := localsql.InMemory()
 
-	svc := grpcserver.NewPostService(logger)
-	svc.AllowConnections(true)
+	psOpts := grpcserver.PostServiceOpts{}
+	svc := grpcserver.NewPostService(logger, psOpts.AllowConnections(), psOpts.QueryInterval(100*time.Millisecond))
+
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 

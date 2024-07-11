@@ -140,8 +140,11 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
-	grpcPostService.AllowConnections(true)
+	grpcPostService := grpcserver.NewPostService(
+		logger.Named("grpc-post-service"),
+		grpcserver.PostServiceOpts{}.AllowConnections(),
+		grpcserver.PostServiceOpts{}.QueryInterval(500*time.Millisecond),
+	)
 
 	grpcPrivateServer, err := grpcserver.NewWithServices(
 		cfg.API.PostListener,
