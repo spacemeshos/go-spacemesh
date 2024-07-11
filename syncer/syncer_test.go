@@ -155,7 +155,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		ts.mAtxSyncer,
 		ts.mMalSyncer,
 		WithConfig(cfg),
-		WithLogger(lg),
+		WithLogger(lg.Zap()),
 		withDataFetcher(ts.mDataFetcher),
 		withForkFinder(ts.mForkFinder),
 	)

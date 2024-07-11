@@ -13,8 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/transport"
 	"github.com/libp2p/go-msgio"
 	ma "github.com/multiformats/go-multiaddr"
-
-	"github.com/spacemeshos/go-spacemesh/log"
+	"go.uber.org/zap"
 )
 
 const (
@@ -56,7 +55,7 @@ func (nc NetworkCookie) Equal(other NetworkCookie) bool {
 type Option func(w *transportWrapper)
 
 // WithLog specifies a logger for handshake.
-func WithLog(logger log.Log) Option {
+func WithLog(logger *zap.Logger) Option {
 	return func(w *transportWrapper) {
 		w.logger = logger
 	}
@@ -86,7 +85,7 @@ func WithAttempts(n int) Option {
 type transportWrapper struct {
 	transport.Transport
 	nc            NetworkCookie
-	logger        log.Log
+	logger        *zap.Logger
 	timeout       time.Duration
 	retryInterval time.Duration
 	attempts      int
@@ -107,7 +106,7 @@ func MaybeWrapTransport(t transport.Transport, nc NetworkCookie, opts ...Option)
 	tr := &transportWrapper{
 		Transport:     t,
 		nc:            nc,
-		logger:        log.NewNop(),
+		logger:        zap.NewNop(),
 		timeout:       handshakeTimeout,
 		retryInterval: handshakeRetryInterval,
 		attempts:      handshakeAttempts,
@@ -131,10 +130,10 @@ func (tr *transportWrapper) Dial(ctx context.Context, raddr ma.Multiaddr, p peer
 		case err == nil:
 			return c, nil
 		case retry:
-			tr.logger.With().Error("transport wrapper handshake error",
-				log.Int("attempt", i+1),
-				log.Int("handshakeAttempts", tr.attempts),
-				log.Err(err))
+			tr.logger.Error("transport wrapper handshake error",
+				zap.Int("attempt", i+1),
+				zap.Int("handshakeAttempts", tr.attempts),
+				zap.Error(err))
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -200,7 +199,7 @@ func (tr *transportWrapper) Close() error {
 type listenerWrapper struct {
 	transport.Listener
 	nc       NetworkCookie
-	logger   log.Log
+	logger   *zap.Logger
 	timeout  time.Duration
 	attempts int
 }
@@ -219,12 +218,12 @@ func (l *listenerWrapper) Accept() (transport.CapableConn, error) {
 			case err == nil:
 				return c, nil
 			case retry:
-				l.logger.With().Error("transport wrapper handshake error",
-					log.Int("attempt", i+1),
-					log.Int("handshakeAttempts", l.attempts),
-					log.Err(err))
+				l.logger.Error("transport wrapper handshake error",
+					zap.Int("attempt", i+1),
+					zap.Int("handshakeAttempts", l.attempts),
+					zap.Error(err))
 			default:
-				l.logger.With().Error("handshake failed", log.Err(err))
+				l.logger.Error("handshake failed", zap.Error(err))
 			}
 		}
 	}

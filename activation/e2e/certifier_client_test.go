@@ -38,8 +38,10 @@ func TestCertification(t *testing.T) {
 	localDb := localsql.InMemory()
 
 	opts := testPostSetupOpts(t)
-	svc := grpcserver.NewPostService(zaptest.NewLogger(t))
+	logger := zaptest.NewLogger(t)
+	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
+
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 

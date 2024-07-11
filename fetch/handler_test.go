@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -34,9 +34,9 @@ type testHandler struct {
 }
 
 func createTestHandler(t testing.TB, opts ...sql.Opt) *testHandler {
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	db := statesql.InMemory(opts...)
-	cdb := datastore.NewCachedDB(db, lg.Zap())
+	cdb := datastore.NewCachedDB(db, lg)
 	return &testHandler{
 		handler: newHandler(cdb, datastore.NewBlobStore(cdb, store.New()), lg),
 		db:      db,

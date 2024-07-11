@@ -77,14 +77,14 @@ type InnerBlock struct {
 	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
 	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
 	//
-	// If we expect 7.0 Mio ATXs that would be a total of 7.0 Mio + 50 * 4032 = 7 201 600 slots.
+	// If we expect 8.0 Mio ATXs that would be a total of 8.0 Mio + 50 * 4032 = 8 201 600 slots.
 	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 7 201 600 / 4032 = 1786.1 rewards in a block with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(7 201 600 * 1/4032 * 4031/4032) = 42.3
+	// 8 201 600 / 4032 = 2034.1 rewards in a block with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(8 201 600 * 1/4032 * 4031/4032) = 45.1
 	//
-	// This means that we can expect a maximum of 1786.1 + 6*42.3 = 2039.7 rewards per block with
+	// This means that we can expect a maximum of 2034.1 + 6*45.1 = 2304.7 rewards per block with
 	// > 99.9997% probability.
-	Rewards []AnyReward     `scale:"max=2050"`
+	Rewards []AnyReward     `scale:"max=2350"`
 	TxIDs   []TransactionID `scale:"max=100000"`
 }
 
@@ -177,7 +177,7 @@ func (id BlockID) Field() log.Field {
 
 // String implements the Stringer interface.
 func (id BlockID) String() string {
-	return id.AsHash32().ShortString()
+	return Hash20(id).ShortString()
 }
 
 // Compare returns true if other (the given BlockID) is less than this BlockID, by lexicographic comparison.

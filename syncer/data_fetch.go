@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -23,7 +24,7 @@ var errNoPeers = errors.New("no peers")
 type DataFetch struct {
 	fetcher
 
-	logger   log.Log
+	logger   *zap.Logger
 	msh      meshProvider
 	tortoise system.Tortoise
 }
@@ -33,7 +34,7 @@ func NewDataFetch(
 	msh meshProvider,
 	fetch fetcher,
 	tortoise system.Tortoise,
-	lg log.Log,
+	lg *zap.Logger,
 ) *DataFetch {
 	return &DataFetch{
 		fetcher:  fetch,
@@ -63,7 +64,7 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 		}
 	}
 
-	logger := d.logger.WithContext(ctx).WithFields(lid)
+	logger := d.logger.With(zap.Uint32("layer", lid.Uint32()), log.ZContext(ctx))
 	layerData := make(chan fetch.LayerData, len(peers))
 	var eg errgroup.Group
 	fetchErr := threadSafeErr{}
@@ -72,17 +73,17 @@ func (d *DataFetch) PollLayerData(ctx context.Context, lid types.LayerID, peers 
 			data, err := d.fetcher.GetLayerData(ctx, peer, lid)
 			if err != nil {
 				layerPeerError.Inc()
-				logger.With().Debug("failed to get layer data", log.Err(err), log.Stringer("peer", peer))
+				logger.With().Debug("failed to get layer data", zap.Error(err), zap.Stringer("peer", peer))
 				fetchErr.join(err)
 				return nil
 			}
 			var ld fetch.LayerData
 			if err := codec.Decode(data, &ld); err != nil {
-				logger.With().Debug("failed to decode", log.Err(err))
+				logger.With().Debug("failed to decode", zap.Error(err))
 				fetchErr.join(err)
 				return nil
 			}
-			logger.With().Debug("received layer data from peer", log.Stringer("peer", peer))
+			logger.With().Debug("received layer data from peer", zap.Stringer("peer", peer))
 			registerLayerHashes(d.fetcher, peer, &ld)
 			layerData <- ld
 			return nil
@@ -127,7 +128,7 @@ func (d *DataFetch) PollLayerOpinions(
 	needCert bool,
 	peers []p2p.Peer,
 ) ([]*fetch.LayerOpinion, []*types.Certificate, error) {
-	logger := d.logger.WithContext(ctx).WithFields(lid)
+	logger := d.logger.With(zap.Uint32("layer", lid.Uint32()), log.ZContext(ctx))
 	opinions := make(chan *fetch.LayerOpinion, len(peers))
 	var eg errgroup.Group
 	fetchErr := threadSafeErr{}
@@ -136,17 +137,18 @@ func (d *DataFetch) PollLayerOpinions(
 			data, err := d.fetcher.GetLayerOpinions(ctx, peer, lid)
 			if err != nil {
 				opnsPeerError.Inc()
-				logger.With().Debug("received peer error for layer opinions", log.Err(err), log.Stringer("peer", peer))
+				logger.With().
+					Debug("received peer error for layer opinions", zap.Error(err), zap.Stringer("peer", peer))
 				fetchErr.join(err)
 				return nil
 			}
 			var lo fetch.LayerOpinion
 			if err := codec.Decode(data, &lo); err != nil {
-				logger.With().Debug("failed to decode layer opinion", log.Err(err))
+				logger.With().Debug("failed to decode layer opinion", zap.Error(err))
 				fetchErr.join(err)
 				return nil
 			}
-			logger.With().Debug("received layer opinion", log.Stringer("peer", peer))
+			logger.With().Debug("received layer opinion", zap.Stringer("peer", peer))
 			lo.SetPeer(peer)
 			opinions <- &lo
 			return nil

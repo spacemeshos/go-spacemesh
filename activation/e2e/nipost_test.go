@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	layersPerEpoch                 = 5
+	layersPerEpoch                 = 10
 	layerDuration                  = time.Second
 	postGenesisEpoch types.EpochID = 2
 )
@@ -161,7 +161,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	localDb := localsql.InMemory()
 
 	opts := testPostSetupOpts(t)
-	svc := grpcserver.NewPostService(logger)
+	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
@@ -246,7 +246,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	db := statesql.InMemory()
 
 	opts := testPostSetupOpts(t)
-	svc := grpcserver.NewPostService(logger)
+	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)

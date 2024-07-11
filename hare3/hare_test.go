@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime/pprof"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -506,37 +509,38 @@ type testTracer struct {
 	sent        chan *Message
 }
 
-func (t *testTracer) waitStopped() types.LayerID {
-	wait := 10 * time.Second
+func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
+	var value T
 	select {
-	case <-time.After(wait):
-		require.FailNow(t, "didn't stop", "wait %v", wait)
-	case lid := <-t.stopped:
-		return lid
+	case <-time.After(timeout):
+		builder := strings.Builder{}
+		pprof.Lookup("goroutine").WriteTo(&builder, 2)
+		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+	case value = <-ch:
 	}
-	return 0
+	return value
+}
+
+func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
+	select {
+	case <-time.After(timeout):
+		builder := strings.Builder{}
+		pprof.Lookup("goroutine").WriteTo(&builder, 2)
+		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+	case ch <- value:
+	}
+}
+
+func (t *testTracer) waitStopped() types.LayerID {
+	return waitForChan(t.TB, t.stopped, 10*time.Second, "didn't stop")
 }
 
 func (t *testTracer) waitEligibility() []*types.HareEligibility {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "no eligibility", "wait %v", wait)
-	case el := <-t.eligibility:
-		return el
-	}
-	return nil
+	return waitForChan(t.TB, t.eligibility, 10*time.Second, "no eligibility")
 }
 
 func (t *testTracer) waitSent() *Message {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "no message", "wait %v", wait)
-	case m := <-t.sent:
-		return m
-	}
-	return nil
+	return waitForChan(t.TB, t.sent, 10*time.Second, "no message")
 }
 
 func (*testTracer) OnStart(types.LayerID) {}
@@ -549,21 +553,11 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "eligibility can't be sent", "wait %v", wait)
-	case t.eligibility <- el:
-	}
+	sendWithTimeout(t.TB, el, t.eligibility, 10*time.Second, "eligibility can't be sent")
 }
 
 func (t *testTracer) OnMessageSent(m *Message) {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "message can't be sent", "wait %v", wait)
-	case t.sent <- m:
-	}
+	sendWithTimeout(t.TB, m, t.sent, 10*time.Second, "message can't be sent")
 }
 
 func (*testTracer) OnMessageReceived(*Message) {}
@@ -912,7 +906,7 @@ func TestProposals(t *testing.T) {
 				nil,
 				nil,
 				layerpatrol.New(),
-				WithLogger(logtest.New(t).Zap()),
+				WithLogger(zaptest.NewLogger(t)),
 			)
 			for _, atx := range tc.atxs {
 				require.NoError(t, atxs.Add(db, &atx, types.AtxBlob{}))

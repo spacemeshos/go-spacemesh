@@ -31,8 +31,8 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
@@ -121,7 +121,7 @@ const (
 // Config for all things related to p2p layer.
 type Config struct {
 	DataDir            string
-	LogLevel           log.Level
+	LogLevel           zapcore.Level
 	GracePeersShutdown time.Duration `mapstructure:"gracepeersshutdown"`
 	MaxMessageSize     int           `mapstructure:"maxmessagesize"`
 
@@ -234,8 +234,7 @@ func (cfg *Config) Validate() error {
 
 // New initializes libp2p host configured for spacemesh.
 func New(
-	_ context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	cfg Config,
 	prologue []byte,
 	quicNetCookie handshake.NetworkCookie,
@@ -245,7 +244,7 @@ func New(
 		return nil, err
 	}
 
-	logger.Zap().Info("starting libp2p host", zap.Any("config", &cfg))
+	logger.Info("starting libp2p host", zap.Any("config", &cfg))
 	key, err := EnsureIdentity(cfg.DataDir)
 	if err != nil {
 		return nil, err
@@ -411,7 +410,7 @@ func New(
 	h.Network().Notify(p2pmetrics.NewConnectionsMeeter())
 	pt.Start(h.Network())
 
-	logger.Zap().Info("local node identity", zap.Stringer("identity", h.ID()))
+	logger.Info("local node identity", zap.Stringer("identity", h.ID()))
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
 	// both New and Upgrade should use options.
 	opts = append(
@@ -427,13 +426,13 @@ func New(
 
 // AutoStart initializes a new host and starts it.
 func AutoStart(ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	cfg Config,
 	prologue []byte,
 	quicNetCookie handshake.NetworkCookie,
 	opts ...Opt,
 ) (*Host, error) {
-	host, err := New(ctx, logger, cfg, prologue, quicNetCookie, opts...)
+	host, err := New(logger, cfg, prologue, quicNetCookie, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +503,7 @@ func parseIntoAddr(nodes []string) ([]peer.AddrInfo, error) {
 	return addrs, nil
 }
 
-func relayPeerSource(logger log.Logger) (autorelay.PeerSource, chan<- peer.AddrInfo) {
+func relayPeerSource(logger *zap.Logger) (autorelay.PeerSource, chan<- peer.AddrInfo) {
 	relayCandidateCh := make(chan peer.AddrInfo)
 	return func(ctx context.Context, num int) <-chan peer.AddrInfo {
 		r := make(chan peer.AddrInfo)
@@ -518,8 +517,8 @@ func relayPeerSource(logger log.Logger) (autorelay.PeerSource, chan<- peer.AddrI
 					}
 					select {
 					case r <- addrInfo:
-						logger.With().Debug("discovered relay candidate",
-							log.Stringer("addrInfo", addrInfo))
+						logger.Debug("discovered relay candidate",
+							zap.Stringer("addrInfo", addrInfo))
 					case <-ctx.Done():
 						return
 					}

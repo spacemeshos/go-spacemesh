@@ -18,10 +18,9 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	quicgo "github.com/quic-go/quic-go"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func createPeer(t *testing.T) (peer.ID, crypto.PrivKey) {
@@ -40,7 +39,7 @@ func newConnManager(t *testing.T, opts ...quicreuse.Option) *quicreuse.ConnManag
 	return cm
 }
 
-func wrapTransport(t transport.Transport, nc NetworkCookie, logger log.Log) transport.Transport {
+func wrapTransport(t transport.Transport, nc NetworkCookie, logger *zap.Logger) transport.Transport {
 	return MaybeWrapTransport(t, nc, WithLog(logger), WithTimeout(300*time.Millisecond), WithAttempts(2))
 }
 
@@ -85,7 +84,7 @@ func TestTransportWrapper(t *testing.T) {
 			serverID, serverKey := createPeer(t)
 			_, clientKey := createPeer(t)
 
-			logger := logtest.New(t)
+			logger := zaptest.NewLogger(t)
 
 			serverTransport, err := quic.NewTransport(serverKey, newConnManager(t), nil, nil, nil)
 			serverTransport = wrapTransport(serverTransport, tc.serverCookie, logger)
