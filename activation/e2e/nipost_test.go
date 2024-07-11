@@ -161,8 +161,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	localDb := localsql.InMemory()
 
 	opts := testPostSetupOpts(t)
-	psOpts := grpcserver.PostServiceOpts{}
-	svc := grpcserver.NewPostService(logger, psOpts.AllowConnections(), psOpts.QueryInterval(100*time.Millisecond))
+	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -246,8 +246,8 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	db := sql.InMemory()
 
 	opts := testPostSetupOpts(t)
-	psOpts := grpcserver.PostServiceOpts{}
-	svc := grpcserver.NewPostService(logger, psOpts.AllowConnections(), psOpts.QueryInterval(100*time.Millisecond))
+	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
+	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 	var eg errgroup.Group

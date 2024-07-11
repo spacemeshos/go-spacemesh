@@ -64,8 +64,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	db := sql.InMemory()
 	localDB := localsql.InMemory()
 
-	psOpts := grpcserver.PostServiceOpts{}
-	svc := grpcserver.NewPostService(logger, psOpts.AllowConnections(), psOpts.QueryInterval(100*time.Millisecond))
+	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
+	svc.AllowConnections(true)
 
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)

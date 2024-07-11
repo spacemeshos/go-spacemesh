@@ -51,15 +51,7 @@ func (s *PostService) String() string {
 
 type PostServiceOpt func(*PostService)
 
-type PostServiceOpts struct{}
-
-func (PostServiceOpts) AllowConnections() PostServiceOpt {
-	return func(s *PostService) {
-		s.allowConnections = true
-	}
-}
-
-func (PostServiceOpts) QueryInterval(interval time.Duration) PostServiceOpt {
+func PostServiceQueryInterval(interval time.Duration) PostServiceOpt {
 	return func(s *PostService) {
 		s.queryInterval = interval
 	}
