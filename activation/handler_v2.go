@@ -155,7 +155,7 @@ func (h *HandlerV2) processATX(
 
 // Syntactically validate an ATX.
 func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.ActivationTxV2) error {
-	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature) {
+	if !h.edVerifier.Verify(signing.ATX, atx.SmesherID, atx.ID().Bytes(), atx.Signature) {
 		return fmt.Errorf("invalid atx signature: %w", errMalformedData)
 	}
 	if atx.PositioningATX == types.EmptyATXID {

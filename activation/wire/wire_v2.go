@@ -46,10 +46,6 @@ type ActivationTxV2 struct {
 	blob []byte
 }
 
-func (atx *ActivationTxV2) SignedBytes() []byte {
-	return atx.ID().Bytes()
-}
-
 func (atx *ActivationTxV2) Blob() types.AtxBlob {
 	if len(atx.blob) == 0 {
 		atx.blob = codec.MustEncode(atx)
@@ -154,7 +150,7 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 
 func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
 	atx.SmesherID = signer.NodeID()
-	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
+	atx.Signature = signer.Sign(signing.ATX, atx.ID().Bytes())
 }
 
 func (atx *ActivationTxV2) TotalNumUnits() uint32 {
