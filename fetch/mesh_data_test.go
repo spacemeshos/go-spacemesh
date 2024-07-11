@@ -118,7 +118,7 @@ func generateLayerContent(t *testing.T) []byte {
 	return out
 }
 
-func testFetch_getHashes(t *testing.T, streaming bool) {
+func TestFetch_getHashes(t *testing.T) {
 	blks := []*types.Block{
 		genLayerBlock(types.LayerID(10), types.RandomTXSet(10)),
 		genLayerBlock(types.LayerID(11), types.RandomTXSet(10)),
@@ -126,135 +126,254 @@ func testFetch_getHashes(t *testing.T, streaming bool) {
 	}
 	blockIDs := types.ToBlockIDs(blks)
 	hashes := types.BlockIDsToHashes(blockIDs)
-	tt := []struct {
-		name      string
-		fetchErrs map[types.Hash32]struct{}
-		hdlrErr   error
-		reqErr    error
-	}{
-		{
-			name: "all hashes fetched",
-		},
-		{
-			name:      "all hashes failed",
-			fetchErrs: map[types.Hash32]struct{}{hashes[0]: {}, hashes[1]: {}, hashes[2]: {}},
-		},
-		{
-			name:   "hash request failed",
-			reqErr: errors.New("request failed"),
-		},
-		{
-			name:      "some hashes failed",
-			fetchErrs: map[types.Hash32]struct{}{hashes[1]: {}},
-		},
-		{
-			name:    "handler failed",
-			hdlrErr: errors.New("unknown"),
-		},
+	peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
+
+	newFetcher := func(t testing.TB) *testFetch {
+		f := createFetch(t)
+		f.cfg.QueueSize = 3
+		f.cfg.BatchSize = 2
+		f.cfg.MaxRetriesForRequest = 0
+		f.cfg.Streaming = false
+		f.Start()
+		t.Cleanup(f.Stop)
+		for _, peer := range peers {
+			f.peers.Add(peer)
+		}
+		f.mh.EXPECT().ID().Return("self").AnyTimes()
+		f.RegisterPeerHashes(peers[0], hashes[:2])
+		f.RegisterPeerHashes(peers[1], hashes[2:])
+		return f
 	}
 
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			f := createFetch(t)
-			t.Cleanup(f.Stop)
-			f.cfg.QueueSize = 3
-			f.cfg.BatchSize = 2
-			f.cfg.MaxRetriesForRequest = 0
-			f.cfg.Streaming = streaming
-			peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
-			for _, peer := range peers {
-				f.peers.Add(peer)
+	t.Run("all hashes fetched", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		requestFn := func(_ context.Context, p p2p.Peer, req []byte, _ ...string) ([]byte, error) {
+			var rb RequestBatch
+			codec.MustDecode(req, &rb)
+			resBatch := ResponseBatch{ID: rb.ID}
+			for _, r := range rb.Requests {
+				res := ResponseMessage{Hash: r.Hash, Data: []byte("a")}
+				resBatch.Responses = append(resBatch.Responses, res)
+				f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), res.Hash, p, res.Data)
 			}
-			f.mh.EXPECT().ID().Return("self").AnyTimes()
-			f.RegisterPeerHashes(peers[0], hashes[:2])
-			f.RegisterPeerHashes(peers[1], hashes[2:])
+			return codec.MustEncode(&resBatch), nil
+		}
+		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(requestFn).Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.NoError(t, err)
+	})
 
-			responses := make(map[types.Hash32]ResponseMessage)
-			for _, h := range hashes {
-				res := ResponseMessage{
-					Hash: h,
-					Data: []byte("a"),
+	t.Run("all hashes failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		requestFn := func(_ context.Context, _ p2p.Peer, req []byte, _ ...string) ([]byte, error) {
+			var rb RequestBatch
+			codec.MustDecode(req, &rb)
+			resBatch := ResponseBatch{ID: rb.ID}
+			return codec.MustEncode(&resBatch), nil
+		}
+		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(requestFn).Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.Error(t, err)
+	})
+
+	t.Run("hash request failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil, errors.New("request failed")).
+			Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.Error(t, err)
+	})
+
+	t.Run("some hashes failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		requestFn := func(_ context.Context, p p2p.Peer, req []byte, _ ...string) ([]byte, error) {
+			var rb RequestBatch
+			codec.MustDecode(req, &rb)
+			resBatch := ResponseBatch{ID: rb.ID}
+			for _, r := range rb.Requests {
+				if r.Hash == hashes[1] {
+					continue
 				}
-				responses[h] = res
+				res := ResponseMessage{Hash: r.Hash, Data: []byte("a")}
+				resBatch.Responses = append(resBatch.Responses, res)
+				f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), res.Hash, p, res.Data).Return(nil)
 			}
-			requestFn := func(
-				_ context.Context,
-				p p2p.Peer,
-				req []byte,
-				extraProtocols ...string,
-			) ([]byte, error) {
-				if tc.reqErr != nil {
-					return nil, tc.reqErr
-				}
-				var rb RequestBatch
-				err := codec.Decode(req, &rb)
-				require.NoError(t, err)
+			return codec.MustEncode(&resBatch), nil
+		}
+		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(requestFn).Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.Error(t, err)
+	})
 
-				resBatch := ResponseBatch{
-					ID: rb.ID,
-				}
-				for _, r := range rb.Requests {
-					if _, ok := tc.fetchErrs[r.Hash]; ok {
-						continue
-					}
-					res := responses[r.Hash]
-					resBatch.Responses = append(resBatch.Responses, res)
-					f.mBlocksH.EXPECT().
-						HandleMessage(gomock.Any(), res.Hash, p, res.Data).
-						Return(tc.hdlrErr)
-				}
-				bts, err := codec.Encode(&resBatch)
-				require.NoError(t, err)
-
-				return bts, nil
+	t.Run("handler failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		requestFn := func(_ context.Context, p p2p.Peer, req []byte, _ ...string) ([]byte, error) {
+			var rb RequestBatch
+			codec.MustDecode(req, &rb)
+			resBatch := ResponseBatch{ID: rb.ID}
+			for _, r := range rb.Requests {
+				res := ResponseMessage{Hash: r.Hash, Data: []byte("a")}
+				resBatch.Responses = append(resBatch.Responses, res)
+				f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), res.Hash, p, res.Data).Return(errors.New("unknown"))
 			}
-			if streaming {
-				f.mHashS.EXPECT().
-					StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(
-						func(
-							ctx context.Context,
-							p p2p.Peer,
-							req []byte,
-							cbk server.StreamRequestCallback,
-							extraProtocols ...string,
-						) error {
-							b, err := requestFn(ctx, p, req)
-							if err != nil {
-								return err
-							}
-							resp := &server.Response{Data: b}
-							buf := bytes.NewBuffer(codec.MustEncode(resp))
-							return cbk(ctx, buf)
-						}).
-					Times(len(peers))
-			} else {
-				f.mHashS.EXPECT().
-					Request(gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(requestFn).
-					Times(len(peers))
-			}
-
-			err := f.getHashes(
-				context.Background(),
-				hashes,
-				datastore.BlockDB,
-				f.validators.block.HandleMessage,
-			)
-			if len(tc.fetchErrs) > 0 || tc.hdlrErr != nil || tc.reqErr != nil {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
+			return codec.MustEncode(&resBatch), nil
+		}
+		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(requestFn).Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.Error(t, err)
+	})
 }
 
-func TestFetch_getHashes(t *testing.T) {
-	t.Run("no streaming", func(t *testing.T) { testFetch_getHashes(t, false) })
-	t.Run("streaming", func(t *testing.T) { testFetch_getHashes(t, true) })
+func TestFetch_getHashesStreaming(t *testing.T) {
+	blks := []*types.Block{
+		genLayerBlock(types.LayerID(10), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(11), types.RandomTXSet(10)),
+		genLayerBlock(types.LayerID(20), types.RandomTXSet(10)),
+	}
+	blockIDs := types.ToBlockIDs(blks)
+	hashes := types.BlockIDsToHashes(blockIDs)
+	peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
+
+	newFetcher := func(t testing.TB) *testFetch {
+		f := createFetch(t)
+		f.cfg.QueueSize = 3
+		f.cfg.BatchSize = 2
+		f.cfg.MaxRetriesForRequest = 0
+		f.cfg.Streaming = true
+		f.Start()
+		t.Cleanup(f.Stop)
+		for _, peer := range peers {
+			f.peers.Add(peer)
+		}
+		f.mh.EXPECT().ID().Return("self").AnyTimes()
+		f.RegisterPeerHashes(peers[0], hashes[:2])
+		f.RegisterPeerHashes(peers[1], hashes[2:])
+		return f
+	}
+
+	t.Run("all hashes fetched", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		streamFn := func(
+			ctx context.Context,
+			p p2p.Peer,
+			req []byte,
+			cbk server.StreamRequestCallback,
+			_ ...string,
+		) error {
+			var rb RequestBatch
+			codec.MustDecode(req, &rb)
+			resBatch := ResponseBatch{ID: rb.ID}
+			for _, r := range rb.Requests {
+				res := ResponseMessage{Hash: r.Hash, Data: []byte("a")}
+				resBatch.Responses = append(resBatch.Responses, res)
+				f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), res.Hash, p, res.Data)
+			}
+			buf := bytes.NewBuffer(codec.MustEncode(&server.Response{Data: codec.MustEncode(&resBatch)}))
+			return cbk(ctx, buf)
+		}
+		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(streamFn).
+			Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.NoError(t, err)
+	})
+
+	t.Run("all hashes failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		streamFn := func(
+			ctx context.Context,
+			_ p2p.Peer,
+			req []byte,
+			cbk server.StreamRequestCallback,
+			_ ...string,
+		) error {
+			var rb RequestBatch
+			codec.MustDecode(req, &rb)
+			resBatch := ResponseBatch{ID: rb.ID}
+			buf := bytes.NewBuffer(codec.MustEncode(&server.Response{Data: codec.MustEncode(&resBatch)}))
+			return cbk(ctx, buf)
+		}
+		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(streamFn).
+			Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.Error(t, err)
+	})
+
+	t.Run("hash request failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(errors.New("request failed")).
+			Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.Error(t, err)
+	})
+
+	t.Run("some hashes failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		streamFn := func(ctx context.Context,
+			p p2p.Peer,
+			req []byte,
+			cbk server.StreamRequestCallback,
+			_ ...string,
+		) error {
+			var rb RequestBatch
+			codec.MustDecode(req, &rb)
+			resBatch := ResponseBatch{ID: rb.ID}
+			for _, r := range rb.Requests {
+				if r.Hash == hashes[1] {
+					continue
+				}
+				res := ResponseMessage{Hash: r.Hash, Data: []byte("a")}
+				resBatch.Responses = append(resBatch.Responses, res)
+				f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), res.Hash, p, res.Data)
+			}
+			buf := bytes.NewBuffer(codec.MustEncode(&server.Response{Data: codec.MustEncode(&resBatch)}))
+			return cbk(ctx, buf)
+		}
+		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(streamFn).
+			Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.Error(t, err)
+	})
+
+	t.Run("handler failed", func(t *testing.T) {
+		t.Parallel()
+		f := newFetcher(t)
+		streamFn := func(ctx context.Context,
+			p p2p.Peer,
+			req []byte,
+			cbk server.StreamRequestCallback,
+			_ ...string,
+		) error {
+			var rb RequestBatch
+			codec.MustDecode(req, &rb)
+			resBatch := ResponseBatch{ID: rb.ID}
+			for _, r := range rb.Requests {
+				res := ResponseMessage{Hash: r.Hash, Data: []byte("a")}
+				resBatch.Responses = append(resBatch.Responses, res)
+				f.mBlocksH.EXPECT().HandleMessage(gomock.Any(), res.Hash, p, res.Data).Return(errors.New("unknown"))
+			}
+			buf := bytes.NewBuffer(codec.MustEncode(&server.Response{Data: codec.MustEncode(&resBatch)}))
+			return cbk(ctx, buf)
+		}
+		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(streamFn).
+			Times(len(peers))
+		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		require.Error(t, err)
+	})
 }
 
 func TestFetch_GetMalfeasanceProofs(t *testing.T) {
