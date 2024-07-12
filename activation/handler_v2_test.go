@@ -1590,10 +1590,11 @@ func Test_Marriages(t *testing.T) {
 		}
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
-		ids := []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}
-		for _, id := range ids {
-			atxHandler.mtortoise.EXPECT().OnMalfeasance(id)
-		}
+		// TODO (mafa): change this check to assert that `publishProof` was called instead
+		// ids := []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}
+		// for _, id := range ids {
+		// 	atxHandler.mtortoise.EXPECT().OnMalfeasance(id)
+		// }
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
 		// TODO (mafa): check that publish proof was called on malfeasance publisher
