@@ -51,7 +51,7 @@ func Download(
 		logger.Info("downloaded atxs",
 			zap.Int("total", total),
 			zap.Int("downloaded", downloaded),
-			zap.Float64("progress [%]", float64(downloaded)/float64(total)*100),
+			zap.Int("progress [%]", 100*downloaded/total),
 			log.DebugField(
 				logger,
 				zap.Array("missing", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
