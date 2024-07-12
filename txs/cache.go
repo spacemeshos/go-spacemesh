@@ -662,7 +662,7 @@ func (c *Cache) LinkTXsWithProposal(
 		return nil
 	}
 	if err := addToProposal(db, lid, pid, tids); err != nil {
-		return fmt.Errorf("linking txs to proposal: %w, err")
+		return fmt.Errorf("linking txs to proposal: %w", err)
 	}
 	return c.updateLayer(lid, types.EmptyBlockID, tids)
 }

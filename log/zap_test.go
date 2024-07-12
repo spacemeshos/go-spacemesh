@@ -4,9 +4,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 func Test_TrimmedErrorField(t *testing.T) {
