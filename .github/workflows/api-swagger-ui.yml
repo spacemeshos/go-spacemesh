@@ -1,0 +1,72 @@
+name: Build and Push Swagger-UI to R2 testnet-api-docs.spacemesh.network
+
+env:
+  go-version: "1.22"
+
+on:
+  release:
+    types: [published]
+    
+jobs:
+  check-version:
+    runs-on: ubuntu-22.04
+    outputs:
+      go-sm-api-version: ${{ steps.go-sm-api-version.outputs.GO_SM_API_VERSION }}
+    steps:
+    - name: Checkout target repository on last release
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        check-latest: true
+        go-version: ${{ env.go-version }}
+
+    - name: Extract dependency version
+      id: go-sm-api-version
+      run: |
+        version=$(go list -m 'github.com/spacemeshos/api/release/go' | awk '{print $2}')
+        echo "GO_SM_API_VERSION=$version" > $GITHUB_OUTPUT
+
+  deploy:
+    runs-on: ubuntu-22.04
+    needs: check-version
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        repository: spacemeshos/api
+        path: api
+        fetch-depth: 0
+        ref: 'refs/tags/${{ needs.check-version.outputs.go-sm-api-version }}'
+
+    - name: upload to testnet
+      uses: jakejarvis/s3-sync-action@master
+      with:
+        args: --acl public-read --follow-symlinks --delete
+      env:
+          AWS_S3_BUCKET: ${{ secrets.CLOUDFLARE_TESTNET_API_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+          SOURCE_DIR: api/release/openapi/swagger/src
+          DEST_DIR: '/${{ github.event.release.tag_name }}'
+          AWS_S3_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+    - name: update url json file for testnet
+      working-directory: api/release/openapi/swagger/src
+      run: |
+        curl -o spec_urls.json https://testnet-api-docs.spacemesh.network/spec_urls.json
+        new_url="{\"url\":\"https://testnet-api-docs.spacemesh.network/${{ github.event.release.tag_name }}/api.swagger.json\",\"name\":\"${{ github.event.release.tag_name }}\"}"
+        jq ". += [$new_url]" spec_urls.json > tmp.json && mv tmp.json spec_urls.json
+   
+    - name: upload new testnet json file
+      uses: jakejarvis/s3-sync-action@master
+      with:
+        args: --acl public-read --follow-symlinks --delete
+      env:
+          AWS_S3_BUCKET: ${{ secrets.CLOUDFLARE_TESTNET_API_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+          SOURCE_DIR: api/release/openapi/swagger/src/spec_urls.json
+          DEST_DIR: ''
+          AWS_S3_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+   

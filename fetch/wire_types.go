@@ -37,7 +37,7 @@ type RequestMessage struct {
 type ResponseMessage struct {
 	Hash types.Hash32
 	// keep in line with limit of Response.Data in `p2p/server/server.go`
-	Data []byte `scale:"max=235929600"` // 225 MiB > 7.0 mio ATX * 32 bytes per ID
+	Data []byte `scale:"max=272629760"` // 260 MiB > 8.0 mio ATX * 32 bytes per ID
 }
 
 // RequestBatch is a batch of requests and a hash of all requests as ID.
@@ -116,7 +116,7 @@ type MeshHashes struct {
 }
 
 type MaliciousIDs struct {
-	NodeIDs []types.NodeID `scale:"max=7000000"` // to be in line with `EpochData.AtxIDs` below
+	NodeIDs []types.NodeID `scale:"max=8000000"` // to be in line with `EpochData.AtxIDs` below
 }
 
 type EpochData struct {
@@ -128,7 +128,7 @@ type EpochData struct {
 	// - the size of `Rewards` in the type `InnerBlock` in common/types/block.go
 	// - the size of `Ballots` in the type `LayerData` below
 	// - the size of `Proposals` in the type `Value` in hare3/types.go
-	AtxIDs []types.ATXID `scale:"max=7000000"`
+	AtxIDs []types.ATXID `scale:"max=8000000"`
 }
 
 // LayerData is the data response for a given layer ID.
@@ -139,14 +139,14 @@ type LayerData struct {
 	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
 	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
 	//
-	// If we expect 7.0 Mio ATXs that would be a total of 7.0 Mio + 50 * 4032 = 7 201 600 slots.
+	// If we expect 8.0 Mio ATXs that would be a total of 8.0 Mio + 50 * 4032 = 8 201 600 slots.
 	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 7 201 600 / 4032 = 1786.1 ballots in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(7 201 600 * 1/4032 * 4031/4032) = 42.3
+	// 8 201 600 / 4032 = 2034.1 ballots in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(8 201 600 * 1/4032 * 4031/4032) = 45.1
 	//
-	// This means that we can expect a maximum of 1786.1 + 6*42.3 = 2039.7 ballots per layer with
+	// This means that we can expect a maximum of 2034.1 + 6*45.1 = 2304.7 ballots per layer with
 	// > 99.9997% probability.
-	Ballots []types.BallotID `scale:"max=2050"`
+	Ballots []types.BallotID `scale:"max=2350"`
 }
 
 type OpinionRequest struct {

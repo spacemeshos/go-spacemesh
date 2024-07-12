@@ -10,9 +10,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 type discHost struct {
@@ -46,12 +45,12 @@ func TestSanity(t *testing.T) {
 	// it for routing discovery as all the nodes know about
 	// their bootnode, too.
 	boot := makeDiscHost(mock.Hosts()[0], false, false)
-	logger := logtest.New(t).Zap()
+	logger := zaptest.NewLogger(t)
 	bootdisc, err := New(boot,
 		WithPeriod(100*time.Microsecond),
 		EnableRoutingDiscovery(),
 		Private(),
-		WithLogger(logger),
+		WithLogger(logger.Named("host-0")),
 		WithMode(dht.ModeServer),
 		WithFindPeersRetryDelay(1*time.Second),
 	)
@@ -102,7 +101,7 @@ func TestSanity(t *testing.T) {
 	for i, h := range mock.Hosts()[1:] {
 		opts := []Opt{
 			Private(),
-			WithLogger(logger),
+			WithLogger(logger.Named(fmt.Sprintf("host-%d", i+1))),
 			WithBootnodes([]peer.AddrInfo{{ID: boot.ID(), Addrs: boot.Addrs()}}),
 			EnableRoutingDiscovery(),
 			AdvertiseForPeerDiscovery(),
@@ -156,13 +155,12 @@ func TestSanity(t *testing.T) {
 func TestShutdownNoStart(t *testing.T) {
 	mock, err := mocknet.FullMeshLinked(2)
 	require.NoError(t, err)
-	logger := logtest.New(t).Zap()
 	boot := makeDiscHost(mock.Hosts()[0], false, false)
 	disc, err := New(boot,
 		WithPeriod(100*time.Microsecond),
 		EnableRoutingDiscovery(),
 		Private(),
-		WithLogger(logger),
+		WithLogger(zaptest.NewLogger(t)),
 		WithMode(dht.ModeServer),
 		WithFindPeersRetryDelay(1*time.Second),
 	)

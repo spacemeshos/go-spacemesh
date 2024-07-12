@@ -565,14 +565,6 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 	return logger.WithName(name)
 }
 
-func (app *App) getLevel(name string) log.Level {
-	alvl, exist := app.loggers[name]
-	if !exist {
-		return 0
-	}
-	return alvl.Level()
-}
-
 // SetLogLevel updates the log level of an existing logger.
 func (app *App) SetLogLevel(name, loglevel string) error {
 	lvl, ok := app.loggers[name]
@@ -860,7 +852,7 @@ func (app *App) initServices(ctx context.Context) error {
 			malsync.WithPeerErrMetric(syncer.MalPeerError),
 		),
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.syncLogger),
+		syncer.WithLogger(app.syncLogger.Zap()),
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
@@ -1117,50 +1109,50 @@ func (app *App) initServices(ctx context.Context) error {
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg),
+			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg),
+			pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				proposalListener.HandleSyncedBallot,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg),
+			pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg),
+			pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				proposalListener.HandleSyncedProposal,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				app.txHandler.HandleBlockTransaction,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				app.txHandler.HandleProposalTransaction,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
 				malfeasanceHandler.HandleSyncedMalfeasanceProof,
 				app.host,
-				lg,
+				lg.Zap(),
 			),
 		),
 	)
@@ -2101,8 +2093,11 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
 	p2plog := app.addLogger(P2PLogger, logger)
-	// if addLogger won't add a level we will use a default 0 (info).
-	cfg.LogLevel = app.getLevel(P2PLogger)
+	if lvl, exist := app.loggers[P2PLogger]; exist {
+		cfg.LogLevel = lvl.Level()
+	} else {
+		cfg.LogLevel = zapcore.InfoLevel
+	}
 	prologue := fmt.Sprintf("%x-%v",
 		app.Config.Genesis.GenesisID(),
 		types.GetEffectiveGenesis(),
@@ -2114,7 +2109,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	if !onMainNet(app.Config) {
 		nc = handshake.NetworkCookie(prologue)
 	}
-	app.host, err = p2p.New(ctx, p2plog, cfg, []byte(prologue), nc,
+	app.host, err = p2p.New(p2plog.Zap(), cfg, []byte(prologue), nc,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
@@ -2224,7 +2219,7 @@ func decodeLoggerLevel(cfg *config.Config, name string) (zap.AtomicLevel, error)
 			return zap.AtomicLevel{}, fmt.Errorf("cannot parse logging for %v: %w", name, err)
 		}
 	} else {
-		lvl.SetLevel(log.DefaultLevel())
+		lvl.SetLevel(zapcore.InfoLevel)
 	}
 
 	return lvl, nil

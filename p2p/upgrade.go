@@ -17,10 +17,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
 	ma "github.com/multiformats/go-multiaddr"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	discovery "github.com/spacemeshos/go-spacemesh/p2p/dhtdiscovery"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -30,7 +30,7 @@ import (
 type Opt func(fh *Host)
 
 // WithLog configures logger for Host.
-func WithLog(logger log.Log) Opt {
+func WithLog(logger *zap.Logger) Opt {
 	return func(fh *Host) {
 		fh.logger = logger
 	}
@@ -90,7 +90,7 @@ type Host struct {
 	cancel context.CancelFunc
 
 	cfg    Config
-	logger log.Log
+	logger *zap.Logger
 
 	closed struct {
 		sync.Mutex
@@ -129,7 +129,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		ctx:    ctx,
 		cancel: cancel,
 		cfg:    DefaultConfig(),
-		logger: log.NewNop(),
+		logger: zap.NewNop(),
 		Host:   h,
 	}
 	for _, opt := range opts {
@@ -170,7 +170,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		discovery.WithHighPeers(cfg.HighPeers),
 		discovery.WithDir(cfg.DataDir),
 		discovery.WithBootnodes(bootnodes),
-		discovery.WithLogger(fh.logger.Zap()),
+		discovery.WithLogger(fh.logger),
 		discovery.WithAdvertiseDelay(fh.cfg.DiscoveryTimings.AdvertiseDelay),
 		discovery.WithAdvertiseInterval(fh.cfg.DiscoveryTimings.AdvertiseInterval),
 		discovery.WithAdvertiseIntervalSpread(fh.cfg.DiscoveryTimings.AdvertiseIntervalSpread),
@@ -199,7 +199,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		dopts = append(dopts, discovery.WithMode(dht.ModeAutoServer))
 		backup, err := loadPeers(cfg.DataDir)
 		if err != nil {
-			fh.logger.With().Warning("failed to to load backup peers", log.Err(err))
+			fh.logger.Warn("failed to to load backup peers", zap.Error(err))
 		} else if len(backup) > 0 {
 			dopts = append(dopts, discovery.WithBackup(backup))
 		}
@@ -234,13 +234,13 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	for _, p := range cfg.PingPeers {
 		peerID, err := peer.Decode(p)
 		if err != nil {
-			fh.logger.With().Warning("ignoring invalid ping peer", log.Err(err))
+			fh.logger.Warn("ignoring invalid ping peer", zap.Error(err))
 			continue
 		}
 		peers = append(peers, peerID)
 	}
 	if len(peers) != 0 {
-		fh.ping = NewPing(fh.logger.Zap(), fh, peers, fh.discovery, WithPingInterval(fh.cfg.PingInterval))
+		fh.ping = NewPing(fh.logger, fh, peers, fh.discovery, WithPingInterval(fh.cfg.PingInterval))
 	}
 
 	fh.natTypeSub, err = fh.EventBus().Subscribe(new(event.EvtNATDeviceTypeChanged),
@@ -478,9 +478,9 @@ func (fh *Host) trackNetEvents() error {
 				return nil
 			}
 			natEv := ev.(event.EvtNATDeviceTypeChanged)
-			fh.logger.With().Info("NAT type changed",
-				log.Stringer("transportProtocol", natEv.TransportProtocol),
-				log.Stringer("type", natEv.NatDeviceType))
+			fh.logger.Info("NAT type changed",
+				zap.Stringer("transportProtocol", natEv.TransportProtocol),
+				zap.Stringer("type", natEv.NatDeviceType))
 			fh.natType.Lock()
 			switch natEv.TransportProtocol {
 			case network.NATTransportUDP:
@@ -494,8 +494,8 @@ func (fh *Host) trackNetEvents() error {
 				return nil
 			}
 			reachEv := ev.(event.EvtLocalReachabilityChanged)
-			fh.logger.With().Info("local reachability changed",
-				log.Stringer("reachability", reachEv.Reachability))
+			fh.logger.Info("local reachability changed",
+				zap.Stringer("reachability", reachEv.Reachability))
 			fh.reachability.Lock()
 			fh.reachability.value = reachEv.Reachability
 			fh.reachability.Unlock()

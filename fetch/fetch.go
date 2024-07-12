@@ -658,7 +658,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 	peer2batches := f.organizeRequests(requests)
 	for peer, batches := range peer2batches {
 		for _, batch := range batches {
-			go func() {
+			f.eg.Go(func() error {
 				if f.cfg.Streaming {
 					if err := f.streamBatch(peer, batch); err != nil {
 						f.logger.Debug(
@@ -668,7 +668,7 @@ func (f *Fetch) send(requests []RequestMessage) {
 							zap.Error(err),
 						)
 					}
-					return
+					return nil
 				}
 				data, err := f.sendBatch(peer, batch)
 				if err != nil {
@@ -682,7 +682,8 @@ func (f *Fetch) send(requests []RequestMessage) {
 				} else {
 					f.receiveResponse(data, batch)
 				}
-			}()
+				return nil
+			})
 		}
 	}
 }
