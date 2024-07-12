@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/spf13/afero"
 	"go.uber.org/zap"
@@ -40,22 +41,31 @@ type Config struct {
 
 	// set to false if atxs are not compatible before and after the checkpoint recovery.
 	PreserveOwnAtx bool `mapstructure:"preserve-own-atx"`
+
+	RetryMax                  int           `mapstructure:"retry-max"`
+	RetryDelay                time.Duration `mapstructure:"retry-delay"`
+	IgnoreCheckpointReqErrors bool          `mapstructure:"ignore-checkpoint-req-errors"`
 }
 
 func DefaultConfig() Config {
 	return Config{
 		PreserveOwnAtx: true,
+		RetryMax:       5,
+		RetryDelay:     3 * time.Second,
 	}
 }
 
 type RecoverConfig struct {
-	GoldenAtx   types.ATXID
-	DataDir     string
-	DbFile      string
-	LocalDbFile string
-	NodeIDs     []types.NodeID // IDs to preserve own ATXs
-	Uri         string
-	Restore     types.LayerID
+	GoldenAtx                 types.ATXID
+	DataDir                   string
+	DbFile                    string
+	LocalDbFile               string
+	NodeIDs                   []types.NodeID // IDs to preserve own ATXs
+	Uri                       string
+	Restore                   types.LayerID
+	RetryMax                  int
+	RetryDelay                time.Duration
+	IgnoreCheckpointReqErrors bool
 }
 
 func (c *RecoverConfig) DbPath() string {
@@ -76,6 +86,8 @@ func copyToLocalFile(
 	fs afero.Fs,
 	dataDir, uri string,
 	restore types.LayerID,
+	retryMax int,
+	retryDelay time.Duration,
 ) (string, error) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
@@ -90,9 +102,10 @@ func copyToLocalFile(
 		logger.Info("old recovery data backed up", log.ZContext(ctx), zap.String("dir", bdir))
 	}
 	dst := RecoveryFilename(dataDir, filepath.Base(parsed.String()), restore)
-	if err = httpToLocalFile(ctx, parsed, fs, dst); err != nil {
+	if err = httpToLocalFile(ctx, parsed, fs, dst, retryMax, retryDelay); err != nil {
 		return "", err
 	}
+
 	logger.Info("checkpoint data persisted", log.ZContext(ctx), zap.String("file", dst))
 	return dst, nil
 }
@@ -145,10 +158,14 @@ func Recover(
 	case errors.Is(err, ErrCheckpointNotFound):
 		logger.Info("no checkpoint file available. not recovering", zap.String("uri", cfg.Uri))
 		return nil, nil
-	case err != nil:
+	case err == nil:
+		return preserve, nil
+	case cfg.IgnoreCheckpointReqErrors && errors.Is(err, ErrCheckpointRequestFailed):
+		logger.Error("ignoring checkpoint request error", zap.Error(err))
+		return nil, nil
+	default:
 		return nil, err
 	}
-	return preserve, nil
 }
 
 func RecoverWithDb(
@@ -171,7 +188,10 @@ func RecoverWithDb(
 		return nil, fmt.Errorf("remove old bootstrap data: %w", err)
 	}
 	logger.Info("recover from uri", zap.String("uri", cfg.Uri))
-	cpFile, err := copyToLocalFile(ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore)
+	cpFile, err := copyToLocalFile(
+		ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore,
+		cfg.RetryMax, cfg.RetryDelay,
+	)
 	if err != nil {
 		return nil, err
 	}

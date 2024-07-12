@@ -899,7 +899,8 @@ func deployNode(
 			WithStartupProbe(
 				corev1.Probe().WithTCPSocket(
 					corev1.TCPSocketAction().WithPort(intstr.FromInt32(9092)),
-				).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
+				).WithInitialDelaySeconds(10).WithPeriodSeconds(10).
+					WithFailureThreshold(10),
 			).
 			WithEnv(
 				corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
@@ -1221,6 +1222,10 @@ func BootstrapperUrl(endpoint string) DeploymentFlag {
 
 func CheckpointUrl(endpoint string) DeploymentFlag {
 	return DeploymentFlag{Name: "--recovery-uri", Value: endpoint}
+}
+
+func IgnoreCheckpointReqErrors() DeploymentFlag {
+	return DeploymentFlag{Name: "--ignore-checkpoint-req-errors", Value: strconv.FormatBool(true)}
 }
 
 func CheckpointLayer(restoreLayer uint32) DeploymentFlag {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -120,33 +121,57 @@ func verifyDbContent(tb testing.TB, db sql.StateDatabase) {
 	require.Empty(tb, extra)
 }
 
-func checkpointServer(t testing.TB) string {
+func checkpointServerWithFaultInjection(t testing.TB, succeed func() bool) string {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /snapshot-15", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(checkpointData))
+		if succeed == nil || succeed() {
+			w.Write([]byte(checkpointData))
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("service unavailable"))
+		}
 	})
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return ts.URL
 }
 
+func checkpointServer(t testing.TB) string {
+	return checkpointServerWithFaultInjection(t, nil)
+}
+
 func TestRecover(t *testing.T) {
 	t.Parallel()
-	url := checkpointServer(t)
+	var fail atomic.Bool
+	url := checkpointServerWithFaultInjection(t, func() bool {
+		// 2nd attempt will always succeed
+		return !fail.Swap(false)
+	})
 
 	tt := []struct {
-		name   string
-		uri    string
-		expErr error
+		name    string
+		uri     string
+		expErr  error
+		reqFail bool
 	}{
 		{
 			name: "http",
 			uri:  fmt.Sprintf("%s/snapshot-15", url),
 		},
 		{
+			name:    "http+retry",
+			uri:     fmt.Sprintf("%s/snapshot-15", url),
+			reqFail: true,
+		},
+		{
+			name:   "not found",
+			uri:    fmt.Sprintf("%s/snapshot-42", url),
+			expErr: checkpoint.ErrCheckpointNotFound,
+		},
+		{
 			name:   "url unreachable",
 			uri:    "http://nowhere/snapshot-15",
-			expErr: checkpoint.ErrCheckpointNotFound,
+			expErr: checkpoint.ErrCheckpointRequestFailed,
 		},
 		{
 			name:   "ftp",
@@ -157,6 +182,7 @@ func TestRecover(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			fail.Store(tc.reqFail)
 			fs := afero.NewMemMapFs()
 			cfg := &checkpoint.RecoverConfig{
 				GoldenAtx:   goldenAtx,
@@ -166,6 +192,8 @@ func TestRecover(t *testing.T) {
 				NodeIDs:     []types.NodeID{types.RandomNodeID()},
 				Uri:         tc.uri,
 				Restore:     types.LayerID(recoverLayer),
+				RetryMax:    5,
+				RetryDelay:  100 * time.Millisecond,
 			}
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
