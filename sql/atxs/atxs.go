@@ -898,13 +898,10 @@ func Units(db sql.Executor, atxID types.ATXID, nodeID types.NodeID) (uint32, err
 func ContributedToAtxInEpoch(db sql.Executor, nodeID types.NodeID, epoch types.EpochID) (types.ATXID, error) {
 	var id types.ATXID
 	rows, err := db.Exec(`
-		SELECT atxid
-		FROM posts
-		WHERE pubkey = ?1 AND atxid IN (
-			SELECT id
-			FROM atxs
-			WHERE epoch = ?2
-		);`,
+		SELECT p.atxid
+		FROM posts p
+		INNER JOIN atxs a ON p.atxid = a.id
+		WHERE p.pubkey = ?1 AND a.epoch = ?2;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 			stmt.BindInt64(2, int64(epoch))
