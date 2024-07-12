@@ -121,6 +121,7 @@ func (h *HandlerV2) processATX(
 
 	atx := &types.ActivationTx{
 		PublishEpoch:   watx.PublishEpoch,
+		MarriageATX:    watx.MarriageATX,
 		Coinbase:       watx.Coinbase,
 		BaseTickHeight: baseTickHeight,
 		NumUnits:       parts.effectiveUnits,
@@ -674,6 +675,14 @@ func (h *HandlerV2) checkMalicious(
 		return true, proof, nil
 	}
 
+	proof, err = h.checkDoubleMerge(tx, watx)
+	if err != nil {
+		return false, nil, fmt.Errorf("checking double merge: %w", err)
+	}
+	if proof != nil {
+		return true, proof, nil
+	}
+
 	// TODO: contextual validation:
 	// 1. check double-publish
 	// 2. check previous ATX
@@ -701,6 +710,35 @@ func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []marriage) (*mwire.Ma
 		}
 	}
 	return nil, nil
+}
+
+func (h *HandlerV2) checkDoubleMerge(tx *sql.Tx, watx *wire.ActivationTxV2) (*mwire.MalfeasanceProof, error) {
+	if watx.MarriageATX == nil {
+		return nil, nil
+	}
+	id, err := atxs.AtxWithMarriage(tx, *watx.MarriageATX, watx.PublishEpoch)
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("checking for ATXs with the same marriage ATX: %w", err)
+	}
+
+	h.logger.Debug("second merged ATX for single marriage - creating malfeasance proof",
+		zap.Stringer("marriage_atx", *watx.MarriageATX),
+		zap.Stringer("atx", watx.ID()),
+		zap.Stringer("other atx", id),
+		zap.Stringer("smesher_id", watx.SmesherID),
+	)
+
+	// FIXME: implement the proof
+	proof := &mwire.MalfeasanceProof{
+		Proof: mwire.Proof{
+			Type: mwire.DoubleMarry,
+			Data: &mwire.DoubleMarryProof{},
+		},
+	}
+	return proof, nil
 }
 
 // Store an ATX in the DB.
