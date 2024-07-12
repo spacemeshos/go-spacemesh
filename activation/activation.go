@@ -586,7 +586,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			PositioningATX: posAtx,
 		}
 	}
-	logger.Info("persisting the new NiPOST challenge", zap.Object("challenge", challenge))
+	logger.Debug("persisting the new NiPOST challenge", zap.Object("challenge", challenge))
 	if err := nipost.AddChallenge(b.localDB, nodeID, challenge); err != nil {
 		return nil, fmt.Errorf("add nipost challenge: %w", err)
 	}
@@ -626,7 +626,7 @@ func (b *Builder) getExistingChallenge(
 	}
 
 	// challenge is fresh
-	logger.Info("loaded NiPoST challenge from local state",
+	logger.Debug("loaded NiPoST challenge from local state",
 		zap.Uint32("current_epoch", currentEpochId.Uint32()),
 		zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
 	)
@@ -729,7 +729,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		return fmt.Errorf("wait for publication epoch: %w", ctx.Err())
 	case <-b.layerClock.AwaitLayer(challenge.PublishEpoch.FirstLayer()):
 	}
-	b.logger.Debug("publication epoch has arrived!", log.ZShortStringer("smesherID", sig.NodeID()))
 
 	for {
 		b.logger.Info(
@@ -965,7 +964,7 @@ func (b *Builder) getPositioningAtx(
 	)
 
 	if previous == nil {
-		b.logger.Info("selected atx as positioning atx",
+		b.logger.Info("selected positioning atx",
 			log.ZShortStringer("id", id),
 			log.ZShortStringer("smesherID", nodeID))
 		return id, nil
