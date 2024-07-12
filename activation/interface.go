@@ -93,7 +93,7 @@ type syncer interface {
 }
 
 type malfeasancePublisher interface {
-	Publish(ctx context.Context, data []byte) error
+	Publish(ctx context.Context, id types.NodeID, data []byte) error
 }
 
 type atxProvider interface {

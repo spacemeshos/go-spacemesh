@@ -3,14 +3,12 @@ package activation
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -42,6 +40,7 @@ func NewMalfeasanceHandlerV2(
 }
 
 // TODO(mafa): call this validate in the handler for publish/gossip.
+// TODO(mafa): extend this validate to return nil if `peer` == self.
 func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) ([]types.NodeID, error) {
 	var decoded wire.ATXProof
 	if err := codec.Decode(data, &decoded); err != nil {
@@ -88,44 +87,56 @@ func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) ([]ty
 	return validIDs, nil
 }
 
-func (mh *MalfeasanceHandlerV2) publishATXProof(ctx context.Context, nodeID types.NodeID, proof *wire.ATXProof) error {
-	// Combine IDs from the present equivocation set for atx.SmesherID and IDs in atx.Marriages.
-	set, err := identities.EquivocationSet(mh.cdb, nodeID)
-	if err != nil {
-		return fmt.Errorf("getting equivocation set: %w", err)
-	}
-
-	encoded := codec.MustEncode(proof)
-
-	for _, id := range set {
-		if err := identities.SetMalicious(mh.cdb, id, encoded, time.Now()); err != nil {
-			return fmt.Errorf("setting malfeasance proof: %w", err)
-		}
-
-		// TODO(mafa): update malfeasance proof caching
-		// mh.cdb.CacheMalfeasanceProof(id, proof)
-
-		mh.tortoise.OnMalfeasance(id)
-	}
-
-	return mh.publisher.Publish(ctx, codec.MustEncode(proof))
-}
-
-func (mp *MalfeasanceHandlerV2) PublishDoublePublishProof(ctx context.Context, atx1, atx2 *wire.ActivationTxV2) error {
+func (mh *MalfeasanceHandlerV2) PublishDoublePublishProof(ctx context.Context, atx1, atx2 *wire.ActivationTxV2) error {
 	proof, err := wire.NewDoublePublishProof(atx1, atx2)
 	if err != nil {
 		return fmt.Errorf("create double publish proof: %w", err)
 	}
 
-	if !mp.syncer.ListenToATXGossip() {
+	if !mh.syncer.ListenToATXGossip() {
 		// we are not gossiping proofs when we are not listening to ATX gossip
 		return nil
 	}
 
 	atxProof := &wire.ATXProof{
-		Layer:     mp.clock.CurrentLayer(),
+		Layer:     mh.clock.CurrentLayer(),
 		ProofType: wire.DoublePublish,
 		Proof:     codec.MustEncode(proof),
 	}
-	return mp.publishATXProof(ctx, atx1.SmesherID, atxProof)
+
+	return mh.publisher.Publish(ctx, atx1.SmesherID, codec.MustEncode(atxProof))
 }
+
+// TODO(mafa): this roughly how the general publisher looks like
+//
+// func Publish(ctx context.Context, smesherID types.NodeID, data []byte) error {
+// 	// Combine IDs from the present equivocation set for atx.SmesherID and IDs in atx.Marriages.
+// 	set, err := identities.EquivocationSet(mh.cdb, nodeID)
+// 	if err != nil {
+// 		return fmt.Errorf("getting equivocation set: %w", err)
+// 	}
+// 	for _, id := range set {
+// 		if err := identities.SetMalicious(mh.cdb, id, encoded, time.Now()); err != nil {
+// 			return fmt.Errorf("adding malfeasance proof: %w", err)
+// 		}
+
+// 		mh.cdb.CacheMalfeasanceProof(id, proof)
+// 		mh.tortoise.OnMalfeasance(id)
+// 	}
+
+// 	if !mh.syncer.ListenToATXGossip() {
+// 		return nil
+// 	}
+
+// 	gossip := mwire.MalfeasanceProofV2{
+// 		Layer:     mh.clock.CurrentLayer(),
+// 		ProofType: mwire.InvalidActivation,
+// 		Proof:     data,
+// 	}
+
+// 	if err := mh.publisher.Publish(ctx, pubsub.MalfeasanceProof, codec.MustEncode(&gossip)); err != nil {
+// 		mh.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
+// 		return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
+// 	}
+// 	return nil
+// }
