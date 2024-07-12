@@ -959,7 +959,7 @@ func (b *Builder) getPositioningAtx(
 		return types.EmptyATXID, err
 	}
 
-	b.logger.Info("found candidate positioning atx",
+	b.logger.Debug("found candidate positioning atx",
 		log.ZShortStringer("id", id),
 		log.ZShortStringer("smesherID", nodeID),
 	)
@@ -1043,14 +1043,14 @@ func findFullyValidHighTickAtx(
 
 	// iterate trough epochs, to get first valid, not malicious ATX with the biggest height
 	atxdata.IterateHighTicksInEpoch(publish+1, func(id types.ATXID) (contSearch bool) {
-		logger.Info("found candidate for high-tick atx", log.ZShortStringer("id", id))
+		logger.Debug("found candidate for high-tick atx", log.ZShortStringer("id", id))
 		if ctx.Err() != nil {
 			return false
 		}
 		// verify ATX-candidate by getting their dependencies (previous Atx, positioning ATX etc.)
 		// and verifying PoST for every dependency
 		if err := validator.VerifyChain(ctx, id, goldenATXID, opts...); err != nil {
-			logger.Info("rejecting candidate for high-tick atx", zap.Error(err), log.ZShortStringer("id", id))
+			logger.Debug("rejecting candidate for high-tick atx", zap.Error(err), log.ZShortStringer("id", id))
 			return true
 		}
 		found = &id

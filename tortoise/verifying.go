@@ -120,7 +120,7 @@ func (v *verifying) verify(logger *zap.Logger, lid types.LayerID) (bool, bool) {
 		},
 	)
 	if changes {
-		logger.Info("candidate layer is verified",
+		logger.Debug("candidate layer is verified",
 			zapBlocks(layer.blocks),
 			zap.String("verifier", "verifying"),
 			zap.Uint32("candidate layer", lid.Uint32()),

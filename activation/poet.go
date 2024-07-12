@@ -114,7 +114,7 @@ func WithLogger(logger *zap.Logger) PoetClientOpts {
 		c.logger = logger
 		c.client.Logger = &retryableHttpLogger{inner: logger}
 		c.client.ResponseLogHook = func(logger retryablehttp.Logger, resp *http.Response) {
-			c.logger.Info(
+			c.logger.Debug(
 				"response received",
 				zap.Stringer("url", resp.Request.URL),
 				zap.Int("status", resp.StatusCode),
@@ -308,7 +308,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 
 	if res.StatusCode != http.StatusOK {
-		c.logger.Info("got poet response != 200 OK", zap.String("status", res.Status), zap.String("body", string(data)))
+		c.logger.Warn("got poet response != 200 OK", zap.String("status", res.Status), zap.String("body", string(data)))
 	}
 
 	switch res.StatusCode {

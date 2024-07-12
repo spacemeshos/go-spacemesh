@@ -164,7 +164,7 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	e.logger.With().Info("executed block",
+	e.logger.With().Debug("executed block",
 		log.Context(ctx),
 		log.Uint32("lid", lid.Uint32()),
 		log.Stringer("block", block.ID()),

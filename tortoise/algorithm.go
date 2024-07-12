@@ -147,7 +147,7 @@ func New(atxdata *atxsdata.Data, opts ...Opt) (*Tortoise, error) {
 		})
 	}
 	if t.cfg.CollectDetails > 0 {
-		t.logger.Info("tortoise will collect details",
+		t.logger.Debug("tortoise will collect details",
 			zap.Uint32("tortoise-collect-details", t.cfg.CollectDetails),
 		)
 		enableCollector(t)

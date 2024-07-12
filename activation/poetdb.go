@@ -114,7 +114,7 @@ func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofM
 		)
 	}
 
-	db.logger.Info("stored poet proof",
+	db.logger.Debug("stored poet proof",
 		log.ZContext(ctx),
 		log.ZShortStringer("poet_proof_id", types.Hash32(ref)),
 		zap.String("round_id", proofMessage.RoundID),

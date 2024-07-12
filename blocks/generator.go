@@ -154,7 +154,7 @@ func (g *Generator) run(ctx context.Context) error {
 			_, err := g.processHareOutput(ctx, out)
 			if err != nil {
 				if errors.Is(err, errNodeHasBadMeshHash) {
-					g.logger.Info("node has different mesh hash from majority, will download block instead",
+					g.logger.Debug("node has different mesh hash from majority, will download block instead",
 						log.ZContext(ctx),
 						zap.Uint32("layer_id", out.Layer.Uint32()),
 						log.TrimmedError(err, 100),
