@@ -150,7 +150,7 @@ func (f *full) verify(logger *zap.Logger, lid types.LayerID) (bool, bool) {
 		},
 	)
 	if changes {
-		logger.Debug("candidate layer is verified",
+		logger.Info("candidate layer is verified",
 			zapBlocks(layer.blocks),
 			zap.String("verifier", "full"),
 			zap.Uint32("counted layer", f.counted.Uint32()),
