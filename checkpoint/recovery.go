@@ -41,8 +41,9 @@ type Config struct {
 	// set to false if atxs are not compatible before and after the checkpoint recovery.
 	PreserveOwnAtx bool `mapstructure:"preserve-own-atx"`
 
-	RetryMax   int           `mapstructure:"retry-max"`
-	RetryDelay time.Duration `mapstructure:"retry-delay"`
+	RetryMax                  int           `mapstructure:"retry-max"`
+	RetryDelay                time.Duration `mapstructure:"retry-delay"`
+	IgnoreCheckpointReqErrors bool          `mapstructure:"ignore-checkpoint-req-errors"`
 }
 
 func DefaultConfig() Config {
@@ -54,15 +55,16 @@ func DefaultConfig() Config {
 }
 
 type RecoverConfig struct {
-	GoldenAtx   types.ATXID
-	DataDir     string
-	DbFile      string
-	LocalDbFile string
-	NodeIDs     []types.NodeID // IDs to preserve own ATXs
-	Uri         string
-	Restore     types.LayerID
-	RetryMax    int
-	RetryDelay  time.Duration
+	GoldenAtx                 types.ATXID
+	DataDir                   string
+	DbFile                    string
+	LocalDbFile               string
+	NodeIDs                   []types.NodeID // IDs to preserve own ATXs
+	Uri                       string
+	Restore                   types.LayerID
+	RetryMax                  int
+	RetryDelay                time.Duration
+	IgnoreCheckpointReqErrors bool
 }
 
 func (c *RecoverConfig) DbPath() string {
@@ -155,10 +157,14 @@ func Recover(
 	case errors.Is(err, ErrCheckpointNotFound):
 		logger.Info("no checkpoint file available. not recovering", zap.String("uri", cfg.Uri))
 		return nil, nil
-	case err != nil:
+	case err == nil:
+		return preserve, nil
+	case cfg.IgnoreCheckpointReqErrors && errors.Is(err, ErrCheckpointRequestFailed):
+		logger.Error("ignoring checkpoint request error", zap.Error(err))
+		return nil, nil
+	default:
 		return nil, err
 	}
-	return preserve, nil
 }
 
 func RecoverWithDb(

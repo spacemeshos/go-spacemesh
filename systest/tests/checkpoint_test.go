@@ -29,6 +29,7 @@ func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Clus
 		cluster.WithBootstrapEpochs([]int{2, 4, 5}),
 		cluster.WithSmesherFlag(cluster.CheckpointUrl(fmt.Sprintf("%s/checkpoint", cluster.BootstrapperEndpoint(0)))),
 		cluster.WithSmesherFlag(cluster.CheckpointLayer(restoreLayer)),
+		cluster.WithSmesherFlag(cluster.IgnoreCheckpointReqErrors()),
 	)
 }
 
