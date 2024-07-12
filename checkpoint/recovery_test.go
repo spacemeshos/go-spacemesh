@@ -184,15 +184,15 @@ func TestRecover(t *testing.T) {
 			fail.Store(tc.reqFail)
 			fs := afero.NewMemMapFs()
 			cfg := &checkpoint.RecoverConfig{
-				GoldenAtx:     goldenAtx,
-				DataDir:       t.TempDir(),
-				DbFile:        "test.sql",
-				LocalDbFile:   "local.sql",
-				NodeIDs:       []types.NodeID{types.RandomNodeID()},
-				Uri:           tc.uri,
-				Restore:       types.LayerID(recoverLayer),
-				RetryCount:    5,
-				RetryInterval: 100 * time.Millisecond,
+				GoldenAtx:   goldenAtx,
+				DataDir:     t.TempDir(),
+				DbFile:      "test.sql",
+				LocalDbFile: "local.sql",
+				NodeIDs:     []types.NodeID{types.RandomNodeID()},
+				Uri:         tc.uri,
+				Restore:     types.LayerID(recoverLayer),
+				RetryMax:    5,
+				RetryDelay:  100 * time.Millisecond,
 			}
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))

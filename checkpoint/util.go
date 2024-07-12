@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/spf13/afero"
 
@@ -24,7 +25,6 @@ import (
 )
 
 var (
-	ErrTransient               = errors.New("transient error")
 	ErrCheckpointNotFound      = errors.New("checkpoint not found")
 	ErrCheckpointRequestFailed = errors.New("checkpoint request failed")
 	ErrUrlSchemeNotSupported   = errors.New("url scheme not supported")
@@ -111,36 +111,38 @@ func CopyFile(fs afero.Fs, src, dst string) error {
 	return rf.Copy(fs, srcf)
 }
 
-func httpToLocalFile(ctx context.Context, resource *url.URL, fs afero.Fs, dst string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
+func httpToLocalFile(
+	ctx context.Context,
+	resource *url.URL,
+	fs afero.Fs,
+	dst string,
+	retryMax int,
+	retryDelay time.Duration,
+) error {
+	c := retryablehttp.NewClient()
+	c.RetryMax = retryMax
+	c.RetryWaitMin = retryDelay
+	c.RetryWaitMax = retryDelay * 2
+	c.Backoff = retryablehttp.LinearJitterBackoff
+
+	req, err := retryablehttp.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
 	if err != nil {
 		return fmt.Errorf("create http request: %w", err)
 	}
-	resp, err := (&http.Client{}).Do(req)
-	urlErr := &url.Error{}
-	switch {
-	case errors.As(err, &urlErr):
-		// It makes sense to retry on network errors.
-		return ErrTransient
-	case err != nil:
+
+	resp, err := c.Do(req)
+	if err != nil {
 		// This shouldn't really happen. According to net/http docs for Do:
 		// "Any returned error will be of type *url.Error."
-		return fmt.Errorf("http get recovery file: %w", err)
+		return fmt.Errorf("%w: %w", ErrCheckpointRequestFailed, err)
 	}
 	defer resp.Body.Close()
-	switch {
-	case resp.StatusCode == http.StatusOK:
-		// Continue
-	case resp.StatusCode == http.StatusNotFound:
-		// The checkpoint is not found. This is not considered a fatal error.
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
 		return ErrCheckpointNotFound
-	case resp.StatusCode%100 == 4:
-		// Can't load the checkoint but it maybe due to an unexpected server problem
-		// that is not likely to be resolved by retrying.
-		return ErrCheckpointRequestFailed
 	default:
-		// It makes sense to retry on other server errors.
-		return ErrTransient
+		return fmt.Errorf("%w: status code %d", ErrCheckpointRequestFailed, resp.StatusCode)
 	}
 	rf, err := NewRecoveryFile(fs, dst)
 	if err != nil {
