@@ -74,7 +74,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	atxsdata := atxsdata.New()
 
 	// ensure that genesis aligns with layer timings
-	genesis := time.Now().Round(layerDuration)
+	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:  epoch,
@@ -85,7 +85,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
 		timesync.WithLayerDuration(layerDuration),
-		timesync.WithTickInterval(100*time.Millisecond),
+		timesync.WithTickInterval(10*time.Millisecond),
 		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)
