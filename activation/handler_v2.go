@@ -712,7 +712,11 @@ func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []marriage) (*mwire.Ma
 	return nil, nil
 }
 
-func (h *HandlerV2) checkDoublePost(tx *sql.Tx, atx *wire.ActivationTxV2, ids []types.NodeID) (*mwire.MalfeasanceProof, error) {
+func (h *HandlerV2) checkDoublePost(
+	tx *sql.Tx,
+	atx *wire.ActivationTxV2,
+	ids []types.NodeID,
+) (*mwire.MalfeasanceProof, error) {
 	for _, id := range ids {
 		atxid, err := atxs.ContributedToAtxInEpoch(tx, id, atx.PublishEpoch)
 		switch {
