@@ -93,17 +93,11 @@ func (mh *MalfeasanceHandlerV2) PublishDoublePublishProof(ctx context.Context, a
 		return fmt.Errorf("create double publish proof: %w", err)
 	}
 
-	if !mh.syncer.ListenToATXGossip() {
-		// we are not gossiping proofs when we are not listening to ATX gossip
-		return nil
-	}
-
 	atxProof := &wire.ATXProof{
 		Layer:     mh.clock.CurrentLayer(),
 		ProofType: wire.DoublePublish,
 		Proof:     codec.MustEncode(proof),
 	}
-
 	return mh.publisher.Publish(ctx, atx1.SmesherID, codec.MustEncode(atxProof))
 }
 
@@ -125,6 +119,7 @@ func (mh *MalfeasanceHandlerV2) PublishDoublePublishProof(ctx context.Context, a
 // 	}
 
 // 	if !mh.syncer.ListenToATXGossip() {
+//      // we are not gossiping proofs when we are not listening to ATX gossip
 // 		return nil
 // 	}
 

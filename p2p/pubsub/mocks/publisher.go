@@ -142,31 +142,31 @@ func (c *MockSubscriberRegisterCall) DoAndReturn(f func(string, pubsub.GossipHan
 	return c
 }
 
-// MockPublishSubsciber is a mock of PublishSubsciber interface.
-type MockPublishSubsciber struct {
+// MockPublishSubscriber is a mock of PublishSubscriber interface.
+type MockPublishSubscriber struct {
 	ctrl     *gomock.Controller
-	recorder *MockPublishSubsciberMockRecorder
+	recorder *MockPublishSubscriberMockRecorder
 }
 
-// MockPublishSubsciberMockRecorder is the mock recorder for MockPublishSubsciber.
-type MockPublishSubsciberMockRecorder struct {
-	mock *MockPublishSubsciber
+// MockPublishSubscriberMockRecorder is the mock recorder for MockPublishSubscriber.
+type MockPublishSubscriberMockRecorder struct {
+	mock *MockPublishSubscriber
 }
 
-// NewMockPublishSubsciber creates a new mock instance.
-func NewMockPublishSubsciber(ctrl *gomock.Controller) *MockPublishSubsciber {
-	mock := &MockPublishSubsciber{ctrl: ctrl}
-	mock.recorder = &MockPublishSubsciberMockRecorder{mock}
+// NewMockPublishSubscriber creates a new mock instance.
+func NewMockPublishSubscriber(ctrl *gomock.Controller) *MockPublishSubscriber {
+	mock := &MockPublishSubscriber{ctrl: ctrl}
+	mock.recorder = &MockPublishSubscriberMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockPublishSubsciber) EXPECT() *MockPublishSubsciberMockRecorder {
+func (m *MockPublishSubscriber) EXPECT() *MockPublishSubscriberMockRecorder {
 	return m.recorder
 }
 
 // Publish mocks base method.
-func (m *MockPublishSubsciber) Publish(arg0 context.Context, arg1 string, arg2 []byte) error {
+func (m *MockPublishSubscriber) Publish(arg0 context.Context, arg1 string, arg2 []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Publish", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -174,37 +174,37 @@ func (m *MockPublishSubsciber) Publish(arg0 context.Context, arg1 string, arg2 [
 }
 
 // Publish indicates an expected call of Publish.
-func (mr *MockPublishSubsciberMockRecorder) Publish(arg0, arg1, arg2 any) *MockPublishSubsciberPublishCall {
+func (mr *MockPublishSubscriberMockRecorder) Publish(arg0, arg1, arg2 any) *MockPublishSubscriberPublishCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockPublishSubsciber)(nil).Publish), arg0, arg1, arg2)
-	return &MockPublishSubsciberPublishCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockPublishSubscriber)(nil).Publish), arg0, arg1, arg2)
+	return &MockPublishSubscriberPublishCall{Call: call}
 }
 
-// MockPublishSubsciberPublishCall wrap *gomock.Call
-type MockPublishSubsciberPublishCall struct {
+// MockPublishSubscriberPublishCall wrap *gomock.Call
+type MockPublishSubscriberPublishCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockPublishSubsciberPublishCall) Return(arg0 error) *MockPublishSubsciberPublishCall {
+func (c *MockPublishSubscriberPublishCall) Return(arg0 error) *MockPublishSubscriberPublishCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockPublishSubsciberPublishCall) Do(f func(context.Context, string, []byte) error) *MockPublishSubsciberPublishCall {
+func (c *MockPublishSubscriberPublishCall) Do(f func(context.Context, string, []byte) error) *MockPublishSubscriberPublishCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPublishSubsciberPublishCall) DoAndReturn(f func(context.Context, string, []byte) error) *MockPublishSubsciberPublishCall {
+func (c *MockPublishSubscriberPublishCall) DoAndReturn(f func(context.Context, string, []byte) error) *MockPublishSubscriberPublishCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Register mocks base method.
-func (m *MockPublishSubsciber) Register(arg0 string, arg1 pubsub.GossipHandler, arg2 ...pubsub.ValidatorOpt) {
+func (m *MockPublishSubscriber) Register(arg0 string, arg1 pubsub.GossipHandler, arg2 ...pubsub.ValidatorOpt) {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0, arg1}
 	for _, a := range arg2 {
@@ -214,32 +214,32 @@ func (m *MockPublishSubsciber) Register(arg0 string, arg1 pubsub.GossipHandler, 
 }
 
 // Register indicates an expected call of Register.
-func (mr *MockPublishSubsciberMockRecorder) Register(arg0, arg1 any, arg2 ...any) *MockPublishSubsciberRegisterCall {
+func (mr *MockPublishSubscriberMockRecorder) Register(arg0, arg1 any, arg2 ...any) *MockPublishSubscriberRegisterCall {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0, arg1}, arg2...)
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockPublishSubsciber)(nil).Register), varargs...)
-	return &MockPublishSubsciberRegisterCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockPublishSubscriber)(nil).Register), varargs...)
+	return &MockPublishSubscriberRegisterCall{Call: call}
 }
 
-// MockPublishSubsciberRegisterCall wrap *gomock.Call
-type MockPublishSubsciberRegisterCall struct {
+// MockPublishSubscriberRegisterCall wrap *gomock.Call
+type MockPublishSubscriberRegisterCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockPublishSubsciberRegisterCall) Return() *MockPublishSubsciberRegisterCall {
+func (c *MockPublishSubscriberRegisterCall) Return() *MockPublishSubscriberRegisterCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockPublishSubsciberRegisterCall) Do(f func(string, pubsub.GossipHandler, ...pubsub.ValidatorOpt)) *MockPublishSubsciberRegisterCall {
+func (c *MockPublishSubscriberRegisterCall) Do(f func(string, pubsub.GossipHandler, ...pubsub.ValidatorOpt)) *MockPublishSubscriberRegisterCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPublishSubsciberRegisterCall) DoAndReturn(f func(string, pubsub.GossipHandler, ...pubsub.ValidatorOpt)) *MockPublishSubsciberRegisterCall {
+func (c *MockPublishSubscriberRegisterCall) DoAndReturn(f func(string, pubsub.GossipHandler, ...pubsub.ValidatorOpt)) *MockPublishSubscriberRegisterCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -1047,44 +1047,6 @@ func (m *Mocksyncer) EXPECT() *MocksyncerMockRecorder {
 	return m.recorder
 }
 
-// ListenToATXGossip mocks base method.
-func (m *Mocksyncer) ListenToATXGossip() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListenToATXGossip")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// ListenToATXGossip indicates an expected call of ListenToATXGossip.
-func (mr *MocksyncerMockRecorder) ListenToATXGossip() *MocksyncerListenToATXGossipCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenToATXGossip", reflect.TypeOf((*Mocksyncer)(nil).ListenToATXGossip))
-	return &MocksyncerListenToATXGossipCall{Call: call}
-}
-
-// MocksyncerListenToATXGossipCall wrap *gomock.Call
-type MocksyncerListenToATXGossipCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MocksyncerListenToATXGossipCall) Return(arg0 bool) *MocksyncerListenToATXGossipCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MocksyncerListenToATXGossipCall) Do(f func() bool) *MocksyncerListenToATXGossipCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocksyncerListenToATXGossipCall) DoAndReturn(f func() bool) *MocksyncerListenToATXGossipCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // RegisterForATXSynced mocks base method.
 func (m *Mocksyncer) RegisterForATXSynced() <-chan struct{} {
 	m.ctrl.T.Helper()
@@ -1147,17 +1109,17 @@ func (m *MockmalfeasancePublisher) EXPECT() *MockmalfeasancePublisherMockRecorde
 }
 
 // Publish mocks base method.
-func (m *MockmalfeasancePublisher) Publish(ctx context.Context, data []byte) error {
+func (m *MockmalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, data []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Publish", ctx, data)
+	ret := m.ctrl.Call(m, "Publish", ctx, id, data)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Publish indicates an expected call of Publish.
-func (mr *MockmalfeasancePublisherMockRecorder) Publish(ctx, data any) *MockmalfeasancePublisherPublishCall {
+func (mr *MockmalfeasancePublisherMockRecorder) Publish(ctx, id, data any) *MockmalfeasancePublisherPublishCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockmalfeasancePublisher)(nil).Publish), ctx, data)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockmalfeasancePublisher)(nil).Publish), ctx, id, data)
 	return &MockmalfeasancePublisherPublishCall{Call: call}
 }
 
@@ -1173,13 +1135,13 @@ func (c *MockmalfeasancePublisherPublishCall) Return(arg0 error) *Mockmalfeasanc
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockmalfeasancePublisherPublishCall) Do(f func(context.Context, []byte) error) *MockmalfeasancePublisherPublishCall {
+func (c *MockmalfeasancePublisherPublishCall) Do(f func(context.Context, types.NodeID, []byte) error) *MockmalfeasancePublisherPublishCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context, []byte) error) *MockmalfeasancePublisherPublishCall {
+func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context, types.NodeID, []byte) error) *MockmalfeasancePublisherPublishCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
