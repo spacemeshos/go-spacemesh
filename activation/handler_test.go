@@ -360,7 +360,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.Hash32(second.NIPost.PostMetadata.Challenge))
 	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{second.PrevATXID}, gomock.Any())
 	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second))
-	require.ErrorContains(t, err, "syntactically invalid based on deps")
+	require.ErrorContains(t, err, "database: not found")
 
 	// valid first comes in
 	atxHdlr.expectAtxV1(first, sig.NodeID())
