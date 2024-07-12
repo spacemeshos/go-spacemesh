@@ -18,7 +18,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -73,13 +72,13 @@ func (h *HandlerV2) processATX(
 	peer p2p.Peer,
 	watx *wire.ActivationTxV2,
 	received time.Time,
-) (*mwire.MalfeasanceProof, error) {
+) error {
 	exists, err := atxs.Has(h.cdb, watx.ID())
 	if err != nil {
-		return nil, fmt.Errorf("failed to check if atx exists: %w", err)
+		return fmt.Errorf("failed to check if atx exists: %w", err)
 	}
 	if exists {
-		return nil, nil
+		return nil
 	}
 
 	h.logger.Debug(
@@ -91,32 +90,28 @@ func (h *HandlerV2) processATX(
 	)
 
 	if err := h.syntacticallyValidate(ctx, watx); err != nil {
-		return nil, fmt.Errorf("atx %s syntactically invalid: %w", watx.ID(), err)
+		return fmt.Errorf("atx %s syntactically invalid: %w", watx.ID(), err)
 	}
 
 	poetRef, atxIDs := h.collectAtxDeps(watx)
 	h.registerHashes(peer, poetRef, atxIDs)
 	if err := h.fetchReferences(ctx, poetRef, atxIDs); err != nil {
-		return nil, fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
+		return fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
 	}
 
 	baseTickHeight, err := h.validatePositioningAtx(watx.PublishEpoch, h.goldenATXID, watx.PositioningATX)
 	if err != nil {
-		return nil, fmt.Errorf("validating positioning atx: %w", err)
+		return fmt.Errorf("validating positioning atx: %w", err)
 	}
 
 	marrying, err := h.validateMarriages(watx)
 	if err != nil {
-		return nil, fmt.Errorf("validating marriages: %w", err)
+		return fmt.Errorf("validating marriages: %w", err)
 	}
 
-	parts, proof, err := h.syntacticallyValidateDeps(ctx, watx)
+	parts, _, err := h.syntacticallyValidateDeps(ctx, watx)
 	if err != nil {
-		return nil, fmt.Errorf("atx %s syntactically invalid based on deps: %w", watx.ID(), err)
-	}
-
-	if proof != nil {
-		return proof, err
+		return fmt.Errorf("atx %s syntactically invalid based on deps: %w", watx.ID(), err)
 	}
 
 	atx := &types.ActivationTx{
@@ -143,14 +138,13 @@ func (h *HandlerV2) processATX(
 	atx.SetID(watx.ID())
 	atx.SetReceived(received)
 
-	proof, err = h.storeAtx(ctx, atx, watx, marrying, parts.units)
-	if err != nil {
-		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
+	if err := h.storeAtx(ctx, atx, watx, marrying, parts.units); err != nil {
+		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
 	events.ReportNewActivation(atx)
-	h.logger.Info("new atx", log.ZContext(ctx), zap.Inline(atx), zap.Bool("malicious", proof != nil))
-	return proof, err
+	h.logger.Info("new atx", log.ZContext(ctx), zap.Inline(atx))
+	return err
 }
 
 // Syntactically validate an ATX.
@@ -377,7 +371,7 @@ func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]marriage, err
 		return nil, nil
 	}
 	marryingIDsSet := make(map[types.NodeID]struct{}, len(atx.Marriages))
-	var marryingIDs []marriage // for deterministic order
+	var marryingIDs []marriage
 	for i, m := range atx.Marriages {
 		var id types.NodeID
 		if m.ReferenceAtx == types.EmptyATXID {
@@ -629,7 +623,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 					zap.Stringer("id", atx.ID()),
 					zap.Int("index", invalidIdx.Index),
 				)
-				// TODO generate malfeasance proof
+				// TODO(mafa): generate malfeasance proof
 			}
 			if err != nil {
 				return nil, nil, fmt.Errorf("invalid post for ID %s: %w", id, err)
@@ -653,25 +647,17 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	return &parts, nil, nil
 }
 
-func (h *HandlerV2) checkMalicious(
-	tx *sql.Tx,
-	watx *wire.ActivationTxV2,
-	marrying []marriage,
-) (bool, *mwire.MalfeasanceProof, error) {
+func (h *HandlerV2) checkMalicious(tx *sql.Tx, watx *wire.ActivationTxV2, marrying []marriage) error {
 	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
 	if err != nil {
-		return false, nil, fmt.Errorf("checking if node is malicious: %w", err)
+		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	if malicious {
-		return true, nil, nil
+		return nil
 	}
 
-	proof, err := h.checkDoubleMarry(tx, marrying)
-	if err != nil {
-		return false, nil, fmt.Errorf("checking double marry: %w", err)
-	}
-	if proof != nil {
-		return true, proof, nil
+	if err := h.checkDoubleMarry(tx, marrying); err != nil {
+		return fmt.Errorf("checking double marry: %w", err)
 	}
 
 	// TODO: contextual validation:
@@ -681,14 +667,14 @@ func (h *HandlerV2) checkMalicious(
 	// 4. two ATXs referencing the same marriage certificate in the same epoch
 	// 5. ID participated in two ATXs (merged and solo) in the same epoch
 
-	return false, nil, nil
+	return nil
 }
 
-func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []marriage) (*mwire.MalfeasanceProof, error) {
+func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []marriage) error {
 	for _, m := range marrying {
 		married, err := identities.Married(tx, m.id)
 		if err != nil {
-			return nil, fmt.Errorf("checking if ID is married: %w", err)
+			return fmt.Errorf("checking if ID is married: %w", err)
 		}
 		if married {
 			// TODO(mafa): publish malfeasance proof
@@ -699,32 +685,21 @@ func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []marriage) (*mwire.Ma
 			// 	},
 			// }
 			// return proof, nil
-			return nil, nil
+			return nil
 		}
 	}
-	return nil, nil
+	return nil
 }
 
 // Store an ATX in the DB.
-// TODO: detect malfeasance and create proofs.
 func (h *HandlerV2) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV2,
 	marrying []marriage,
 	units map[types.NodeID]uint32,
-) (*mwire.MalfeasanceProof, error) {
-	var (
-		malicious bool
-		proof     *mwire.MalfeasanceProof
-	)
+) error {
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
-		var err error
-		malicious, proof, err = h.checkMalicious(tx, watx, marrying)
-		if err != nil {
-			return fmt.Errorf("check malicious: %w", err)
-		}
-
 		if len(marrying) != 0 {
 			marriageData := identities.MarriageData{
 				ATX:    atx.ID(),
@@ -737,16 +712,9 @@ func (h *HandlerV2) storeAtx(
 					return err
 				}
 			}
-			if !malicious && proof == nil {
-				// We check for malfeasance again because the marriage increased the equivocation set.
-				malicious, err = identities.IsMalicious(tx, atx.SmesherID)
-				if err != nil {
-					return fmt.Errorf("re-checking if smesherID is malicious: %w", err)
-				}
-			}
 		}
 
-		err = atxs.Add(tx, atx, watx.Blob())
+		err := atxs.Add(tx, atx, watx.Blob())
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
@@ -758,47 +726,31 @@ func (h *HandlerV2) storeAtx(
 		}
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("store atx: %w", err)
+		return fmt.Errorf("store atx: %w", err)
 	}
 
 	atxs.AtxAdded(h.cdb, atx)
 
-	var allMalicious map[types.NodeID]struct{}
-	if malicious || proof != nil {
-		// Combine IDs from the present equivocation set for atx.SmesherID and IDs in atx.Marriages.
-		allMalicious = make(map[types.NodeID]struct{})
-
-		set, err := identities.EquivocationSet(h.cdb, atx.SmesherID)
+	var malicious bool
+	err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+		// malfeasance check happens after storing the ATX because storing updates the marriage set
+		// that is needed for the malfeasance proof
+		err := h.checkMalicious(tx, watx, marrying)
 		if err != nil {
-			return nil, fmt.Errorf("getting equivocation set: %w", err)
+			return fmt.Errorf("check malicious: %w", err)
 		}
-		for _, id := range set {
-			allMalicious[id] = struct{}{}
-		}
-		for _, m := range marrying {
-			allMalicious[m.id] = struct{}{}
-		}
-	}
-	if proof != nil {
-		encoded, err := codec.Encode(proof)
+		malicious, err = identities.IsMalicious(tx, watx.SmesherID)
 		if err != nil {
-			return nil, fmt.Errorf("encoding malfeasance proof: %w", err)
+			return fmt.Errorf("checking if identity is malicious: %w", err)
 		}
-
-		for id := range allMalicious {
-			if err := identities.SetMalicious(h.cdb, id, encoded, atx.Received()); err != nil {
-				return nil, fmt.Errorf("setting malfeasance proof: %w", err)
-			}
-			h.cdb.CacheMalfeasanceProof(id, proof)
-		}
-	}
-
-	for id := range allMalicious {
-		h.tortoise.OnMalfeasance(id)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("check malicious: %w", err)
 	}
 
 	h.beacon.OnAtx(atx)
-	if added := h.atxsdata.AddFromAtx(atx, malicious || proof != nil); added != nil {
+	if added := h.atxsdata.AddFromAtx(atx, malicious); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 
@@ -808,5 +760,5 @@ func (h *HandlerV2) storeAtx(
 		zap.Uint32("publish", atx.PublishEpoch.Uint32()),
 	)
 
-	return proof, nil
+	return nil
 }
