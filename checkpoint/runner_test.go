@@ -1,4 +1,4 @@
-package checkpoint_test
+package checkpoint
 
 import (
 	"bytes"
@@ -15,7 +15,6 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
@@ -157,7 +156,7 @@ func expectedCheckpoint(t testing.TB, snapshot types.LayerID, numAtxs int, miner
 	require.NoError(t, err)
 
 	result := &types.Checkpoint{
-		Command: fmt.Sprintf(checkpoint.CommandString, request),
+		Command: fmt.Sprintf(CommandString, request),
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
 		Data: types.InnerData{
 			CheckpointId: "snapshot-5",
@@ -238,10 +237,15 @@ func newAtx(
 }
 
 func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
+	var marriageATX []byte
+	if v.MarriageATX != nil {
+		marriageATX = v.MarriageATX.Bytes()
+	}
 	return types.AtxSnapshot{
 		ID:             v.ID().Bytes(),
 		Epoch:          v.PublishEpoch.Uint32(),
 		CommitmentAtx:  cmt.Bytes(),
+		MarriageAtx:    marriageATX,
 		VrfNonce:       uint64(v.VRFNonce),
 		NumUnits:       v.NumUnits,
 		BaseTickHeight: v.BaseTickHeight,
@@ -309,12 +313,12 @@ func TestRunner_Generate(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, tc.numAtxs)
+			err = Generate(ctx, fs, db, dir, snapshot, tc.numAtxs)
 			require.NoError(t, err)
-			fname := checkpoint.SelfCheckpointFilename(dir, snapshot)
+			fname := SelfCheckpointFilename(dir, snapshot)
 			persisted, err := afero.ReadFile(fs, fname)
 			require.NoError(t, err)
-			require.NoError(t, checkpoint.ValidateSchema(persisted))
+			require.NoError(t, ValidateSchema(persisted))
 			var got types.Checkpoint
 			expected := expectedCheckpoint(t, snapshot, tc.numAtxs, tc.miners)
 			require.NoError(t, json.Unmarshal(persisted, &got))
@@ -345,7 +349,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 		fs := afero.NewMemMapFs()
 		dir, err := afero.TempDir(fs, "", "Generate")
 		require.NoError(t, err)
-		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
+		err = Generate(context.Background(), fs, db, dir, snapshot, 2)
 		require.ErrorContains(t, err, "atxs snapshot commitment")
 	})
 	t.Run("no atxs", func(t *testing.T) {
@@ -358,7 +362,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 		dir, err := afero.TempDir(fs, "", "Generate")
 		require.NoError(t, err)
 
-		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
+		err = Generate(context.Background(), fs, db, dir, snapshot, 2)
 		require.Error(t, err)
 	})
 	t.Run("no accounts", func(t *testing.T) {
@@ -371,7 +375,28 @@ func TestRunner_Generate_Error(t *testing.T) {
 		dir, err := afero.TempDir(fs, "", "Generate")
 		require.NoError(t, err)
 
-		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
+		err = Generate(context.Background(), fs, db, dir, snapshot, 2)
 		require.Error(t, err)
 	})
+}
+
+func TestRunner_Generate_PreservesMarriageATX(t *testing.T) {
+	t.Parallel()
+	db := sql.InMemory()
+
+	require.NoError(t, accounts.Update(db, &types.Account{Address: types.Address{1, 1}}))
+
+	atx := &types.ActivationTx{
+		CommitmentATX: &types.ATXID{1, 2, 3, 4, 5},
+		MarriageATX:   &types.ATXID{6, 7, 8, 9},
+		SmesherID:     types.RandomNodeID(),
+		NumUnits:      4,
+	}
+	atx.SetID(types.RandomATXID())
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+	require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, atx.NumUnits))
+
+	checkpoint, err := checkpointDB(context.Background(), db, 0, 1)
+	require.NoError(t, err)
+	require.Equal(t, atx.MarriageATX.Bytes(), checkpoint.Data.Atxs[0].MarriageAtx)
 }

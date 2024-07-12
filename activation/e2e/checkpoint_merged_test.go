@@ -273,6 +273,12 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		require.Equal(t, i, marriage.Index)
 	}
 
+	checkpointedMerged, err := atxs.Get(newDB, mergedATX.ID())
+	require.NoError(t, err)
+	require.True(t, checkpointedMerged.Golden())
+	require.NotNil(t, checkpointedMerged.MarriageATX)
+	require.Equal(t, marriageATX.ID(), *checkpointedMerged.MarriageATX)
+
 	// 4. Spawn new ATX handler and builder using the new DB
 	poetDb = activation.NewPoetDb(newDB, logger.Named("poetDb"))
 	cdb = datastore.NewCachedDB(newDB, logger)

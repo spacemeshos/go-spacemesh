@@ -991,6 +991,46 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, p)
 	})
+	t.Run("publishing two merged ATXs (one checkpointed)", func(t *testing.T) {
+		atxHandler := newV2TestHandler(t, golden)
+
+		mATX, otherATXs := marryIDs(t, atxHandler, signers, golden)
+		mATXID := mATX.ID()
+
+		// Insert checkpointed merged ATX
+		checkpointedATX := &atxs.CheckpointAtx{
+			Epoch:       mATX.PublishEpoch + 2,
+			ID:          types.RandomATXID(),
+			SmesherID:   signers[0].NodeID(),
+			MarriageATX: &mATXID,
+		}
+		require.NoError(t, atxs.AddCheckpointed(atxHandler.cdb, checkpointedATX))
+
+		// create and process another merged ATX
+		merged := newSoloATXv2(t, checkpointedATX.Epoch, mATX.ID(), golden)
+		merged.NiPosts[0].Posts = []wire.SubPostV2{}
+		for i := range equivocationSet[2:] {
+			post := wire.SubPostV2{
+				MarriageIndex: uint32(i + 2),
+				PrevATXIndex:  uint32(i),
+				NumUnits:      4,
+			}
+			merged.NiPosts[0].Posts = append(merged.NiPosts[0].Posts, post)
+		}
+
+		merged.MarriageATX = &mATXID
+		merged.PreviousATXs = []types.ATXID{otherATXs[1].ID(), otherATXs[2].ID()}
+		merged.Sign(signers[2])
+		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
+		for _, id := range equivocationSet {
+			atxHandler.mtortoise.EXPECT().OnMalfeasance(id)
+		}
+		// TODO: this could be syntactically validated as all nodes in the network
+		// should already have the checkpointed merged ATX.
+		p, err := atxHandler.processATX(context.Background(), "", merged, time.Now())
+		require.NoError(t, err)
+		require.NotNil(t, p)
+	})
 }
 
 func TestCollectDeps_AtxV2(t *testing.T) {

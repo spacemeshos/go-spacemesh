@@ -549,6 +549,7 @@ type CheckpointAtx struct {
 	ID             types.ATXID
 	Epoch          types.EpochID
 	CommitmentATX  types.ATXID
+	MarriageATX    *types.ATXID
 	VRFNonce       types.VRFPostIndex
 	BaseTickHeight uint64
 	TickCount      uint64
@@ -581,16 +582,21 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 		catx.Sequence = uint64(stmt.ColumnInt64(6))
 		stmt.ColumnBytes(7, catx.Coinbase[:])
 		catx.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(8))
-		catx.Units = make(map[types.NodeID]uint32)
+		if stmt.ColumnType(9) != sqlite.SQLITE_NULL {
+			catx.MarriageATX = new(types.ATXID)
+			stmt.ColumnBytes(9, catx.MarriageATX[:])
+		}
 		rst = append(rst, catx)
 		return true
 	}
 
 	rows, err := db.Exec(`
-		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
+		select
+		id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce, marriage_atx
 		from (
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
-			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
+			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce,
+			marriage_atx
 			from atxs
 		)
 		where RowNum <= ?1 order by pubkey;`, enc, dec)
@@ -626,12 +632,17 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 		stmt.BindInt64(8, int64(catx.Sequence))
 		stmt.BindBytes(9, catx.SmesherID.Bytes())
 		stmt.BindBytes(10, catx.Coinbase.Bytes())
+		if catx.MarriageATX != nil {
+			stmt.BindBytes(11, catx.MarriageATX.Bytes())
+		} else {
+			stmt.BindNull(11)
+		}
 	}
 
 	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
-			base_tick_height, tick_count, sequence, pubkey, coinbase, received)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0)`, enc, nil)
+			base_tick_height, tick_count, sequence, pubkey, coinbase, marriage_atx, received)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert checkpoint ATX %v: %w", catx.ID, err)
 	}

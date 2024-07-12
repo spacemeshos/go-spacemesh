@@ -17,6 +17,7 @@ type AtxSnapshot struct {
 	ID             []byte `json:"id"`
 	Epoch          uint32 `json:"epoch"`
 	CommitmentAtx  []byte `json:"commitmentAtx"`
+	MarriageAtx    []byte `json:"marriageAtx"`
 	VrfNonce       uint64 `json:"vrfNonce"`
 	BaseTickHeight uint64 `json:"baseTickHeight"`
 	TickCount      uint64 `json:"tickCount"`
