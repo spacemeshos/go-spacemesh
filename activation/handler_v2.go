@@ -661,11 +661,10 @@ func (h *HandlerV2) checkMalicious(tx *sql.Tx, watx *wire.ActivationTxV2, marryi
 	}
 
 	// TODO: contextual validation:
-	// 1. check double-publish
+	// 1. check double-publish = ID contributed post to two ATXs in the same epoch
 	// 2. check previous ATX
 	// 3  ID already married (same node ID in multiple marriage certificates)
 	// 4. two ATXs referencing the same marriage certificate in the same epoch
-	// 5. ID participated in two ATXs (merged and solo) in the same epoch
 
 	return nil
 }
