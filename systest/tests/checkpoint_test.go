@@ -258,7 +258,9 @@ func snapshotNode(ctx *testcontext.Context, client *cluster.NodeClient, snapshot
 	smshr := pb.NewAdminServiceClient(client.PrivConn())
 	stream, err := smshr.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
 	if err != nil {
-		return nil, fmt.Errorf("stream checkpoint %v: %w", client.Name, err)
+		return nil, fmt.Errorf("stream checkpoint %v -- podNS %s -- podName %s -- podIP %s -- ctxNS %s: %w",
+			client.Name, client.PodNS, client.PodName, client.PodIP, ctx.Namespace,
+			err)
 	}
 	var (
 		result bytes.Buffer

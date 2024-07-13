@@ -152,6 +152,9 @@ type NodeClient struct {
 	mu       sync.Mutex
 	pubConn  *grpc.ClientConn
 	privConn *grpc.ClientConn
+	PodIP    string
+	PodNS    string
+	PodName  string
 }
 
 func (n *NodeClient) Close() {
@@ -179,6 +182,9 @@ func (n *NodeClient) ensurePubConn(ctx context.Context) (*grpc.ClientConn, error
 	if err != nil {
 		return nil, err
 	}
+	n.PodIP = pod.Status.PodIP
+	n.PodNS = pod.Namespace
+	n.PodName = pod.Name
 	conn, err := grpc.NewClient(
 		fmt.Sprintf("%s:%d", pod.Status.PodIP, n.GRPC_PUB),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -639,6 +645,8 @@ func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
 				continue
 			}
 			if pod.Status.Phase == apiv1.PodRunning && areContainersReady(pod) {
+				ctx.Log.Debugw("QQQQQ: found pod", "pod", pod.Name, "namespace", pod.Namespace,
+					"ctxNS", ctx.Namespace, "podIP", pod.Status.PodIP)
 				return pod, nil
 			}
 		}
