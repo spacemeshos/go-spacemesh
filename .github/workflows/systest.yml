@@ -141,7 +141,7 @@ jobs:
           level: ${{ inputs.log_level }}
           clusters: 4
           norbac: 1
-          profiler_url: ${{ secrets.PROFILER_URL }}
+          # profiler_url: ${{ secrets.PROFILER_URL }}
         run: make -C systest run test_name=${{ inputs.test_name }}
 
       - name: Delete pod
