@@ -410,9 +410,9 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 }
 
 func TestFPTree(t *testing.T) {
-	// t.Run("in-memory id store", func(t *testing.T) {
-	// 	testFPTree(t, func(maxDepth int) idStore { return newMemIDStore(maxDepth) })
-	// })
+	t.Run("in-memory id store", func(t *testing.T) {
+		testFPTree(t, func(maxDepth int) idStore { return newMemIDStore(maxDepth) })
+	})
 	t.Run("fake ATX store", func(t *testing.T) {
 		db := populateDB(t, 32, nil)
 		testFPTree(t, func(maxDepth int) idStore {
@@ -790,7 +790,7 @@ func testATXFP(t *testing.T, maxDepth int) {
 }
 
 func TestATXFP(t *testing.T) {
-	// t.Skip("slow test")
+	t.Skip("slow test")
 	for maxDepth := 15; maxDepth <= 23; maxDepth++ {
 		for i := 0; i < 3; i++ {
 			testATXFP(t, maxDepth)
