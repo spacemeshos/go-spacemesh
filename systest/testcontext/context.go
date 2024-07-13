@@ -379,6 +379,11 @@ func New(t *testing.T, opts ...Opt) *Context {
 	require.NoError(t, err)
 	if !cctx.Keep {
 		cleanup(t, func() {
+			if t.Failed() {
+				t.Logf("QQQQQ: FAIL: pausing failed test! test: %s namespace: %s",
+					t.Name(), cctx.Namespace)
+				time.Sleep(3 * time.Hour)
+			}
 			if err := deleteNamespace(cctx); err != nil {
 				cctx.Log.Errorw("cleanup failed", "error", err)
 				return

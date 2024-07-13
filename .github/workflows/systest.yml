@@ -130,7 +130,7 @@ jobs:
           go-version-file: "go.mod"
 
       - name: Run tests
-        timeout-minutes: 75
+        timeout-minutes: 150
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
