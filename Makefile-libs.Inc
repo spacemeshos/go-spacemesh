@@ -50,21 +50,21 @@ else
 	endif
 endif
 
-POSTRS_SETUP_REV = 0.7.8
+POSTRS_SETUP_REV = 0.7.11
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
 
 POSTRS_PROFILER_ZIP = profiler-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_PROFILER_ZIP)
 
-POSTRS_SERVICE_ZIP = service-$(platform)-v$(POSTRS_SETUP_REV).zip
+POSTRS_SERVICE_ZIP = post-service-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
 ifeq ($(platform), windows)
 	POSTRS_SETUP_LIBS = post.h post.dll
 
 	POSTRS_PROFILER_BIN = profiler.exe
-	POSTRS_SERVICE_BIN = service.exe
+	POSTRS_SERVICE_BIN = post-service.exe
 else
 	ifeq ($(platform), $(filter $(platform), macos macos-m1))
 		POSTRS_SETUP_LIBS = post.h libpost.dylib
@@ -73,7 +73,7 @@ else
 	endif
 
 	POSTRS_PROFILER_BIN = profiler
-	POSTRS_SERVICE_BIN = service
+	POSTRS_SERVICE_BIN = post-service
 endif
 
 BINDIR_POSTRS_SETUP_LIBS = $(foreach X,$(POSTRS_SETUP_LIBS),$(BIN_DIR)$(X))

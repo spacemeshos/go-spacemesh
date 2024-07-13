@@ -144,7 +144,7 @@ func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 		if err := h.nipostValidator.Post(
 			ctx, atx.SmesherID, *atx.CommitmentATXID, post, &initialPostMetadata, atx.NumUnits,
 		); err != nil {
-			return fmt.Errorf("invalid initial post: %w", err)
+			return fmt.Errorf("validating initial post: %w", err)
 		}
 	default:
 		if atx.NodeID != nil {
@@ -244,7 +244,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 		return 0, 0, proof, nil
 	}
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("invalid nipost: %w", err)
+		return 0, 0, nil, fmt.Errorf("validating nipost: %w", err)
 	}
 
 	return leaves, effectiveNumUnits, nil, err
@@ -606,7 +606,7 @@ func (h *HandlerV1) processATX(
 	)
 
 	if err := h.syntacticallyValidate(ctx, watx); err != nil {
-		return nil, fmt.Errorf("atx %s syntactically invalid: %w", watx.ID(), err)
+		return nil, fmt.Errorf("validating atx %s: %w", watx.ID(), err)
 	}
 
 	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, watx)
@@ -617,7 +617,7 @@ func (h *HandlerV1) processATX(
 
 	leaves, effectiveNumUnits, proof, err := h.syntacticallyValidateDeps(ctx, watx)
 	if err != nil {
-		return nil, fmt.Errorf("atx %s syntactically invalid based on deps: %w", watx.ID(), err)
+		return nil, fmt.Errorf("validating atx %s (deps): %w", watx.ID(), err)
 	}
 	if proof != nil {
 		return proof, nil

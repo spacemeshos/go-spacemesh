@@ -238,7 +238,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// ensure that genesis aligns with layer timings
-	genesis := time.Now().Round(layerDuration)
+	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:  epoch,
@@ -252,7 +252,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
 		timesync.WithLayerDuration(layerDuration),
-		timesync.WithTickInterval(100*time.Millisecond),
+		timesync.WithTickInterval(10*time.Millisecond),
 		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)
