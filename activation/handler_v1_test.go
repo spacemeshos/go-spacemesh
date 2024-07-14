@@ -297,7 +297,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 			NIPost(gomock.Any(), atx.SmesherID, goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			Return(0, errors.New("bad nipost"))
 		_, _, _, err := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
-		require.EqualError(t, err, "invalid nipost: bad nipost")
+		require.EqualError(t, err, "validating nipost: bad nipost")
 	})
 	t.Run("missing NodeID in initial atx", func(t *testing.T) {
 		t.Parallel()

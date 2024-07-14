@@ -64,8 +64,9 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	db := sql.InMemory()
 	localDB := localsql.InMemory()
 
-	svc := grpcserver.NewPostService(logger)
+	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
+
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 	var eg errgroup.Group
@@ -123,7 +124,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
 		timesync.WithLayerDuration(layerDuration),
-		timesync.WithTickInterval(100*time.Millisecond),
+		timesync.WithTickInterval(10*time.Millisecond),
 		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)

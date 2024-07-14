@@ -34,7 +34,7 @@ func TestValidator_Validate(t *testing.T) {
 	validator := activation.NewMocknipostValidator(gomock.NewController(t))
 
 	opts := testPostSetupOpts(t)
-	svc := grpcserver.NewPostService(zaptest.NewLogger(t))
+	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
@@ -98,7 +98,7 @@ func TestValidator_Validate(t *testing.T) {
 	newNIPost := *nipost.NIPost
 	newNIPost.Post = &types.Post{}
 	_, err = v.NIPost(context.Background(), sig.NodeID(), goldenATX, &newNIPost, challenge, nipost.NumUnits)
-	require.ErrorContains(t, err, "invalid Post")
+	require.ErrorContains(t, err, "validating Post: verifying PoST: proof indices are empty")
 
 	newPostCfg := cfg
 	newPostCfg.MinNumUnits = nipost.NumUnits + 1

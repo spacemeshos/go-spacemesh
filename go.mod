@@ -39,13 +39,13 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.12.0
-	github.com/spacemeshos/api/release/go v1.49.0
+	github.com/spacemeshos/api/release/go v1.50.0
 	github.com/spacemeshos/economics v0.1.3
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.2.0
 	github.com/spacemeshos/merkle-tree v0.2.3
 	github.com/spacemeshos/poet v0.10.4
-	github.com/spacemeshos/post v0.12.7
+	github.com/spacemeshos/post v0.12.8
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
