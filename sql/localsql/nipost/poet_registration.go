@@ -1,9 +1,7 @@
 package nipost
 
 import (
-	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -49,7 +47,7 @@ func ClearPoetRegistrations(db sql.Executor, nodeID types.NodeID) error {
 	return nil
 }
 
-func PoetRegistrationsByNodeId(db sql.Executor, nodeID types.NodeID) ([]PoETRegistration, error) {
+func PoetRegistrations(db sql.Executor, nodeID types.NodeID) ([]PoETRegistration, error) {
 	var registrations []PoETRegistration
 
 	enc := func(stmt *sql.Statement) {
@@ -72,56 +70,6 @@ func PoetRegistrationsByNodeId(db sql.Executor, nodeID types.NodeID) ([]PoETRegi
 	_, err := db.Exec(query, enc, dec)
 	if err != nil {
 		return nil, fmt.Errorf("get poet registrations for node id %s: %w", nodeID.ShortString(), err)
-	}
-
-	return registrations, nil
-}
-
-func PoetRegistrationsByNodeIdAndAddresses(
-	db sql.Executor,
-	nodeID types.NodeID,
-	addresses []string,
-) ([]PoETRegistration, error) {
-	var registrations []PoETRegistration
-
-	if len(addresses) == 0 {
-		return nil, errors.New("addresses list is empty")
-	}
-
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-		for i, address := range addresses {
-			stmt.BindText(i+2, address)
-		}
-	}
-
-	dec := func(stmt *sql.Statement) bool {
-		registration := PoETRegistration{
-			Address:  stmt.ColumnText(1),
-			RoundID:  stmt.ColumnText(2),
-			RoundEnd: time.Unix(stmt.ColumnInt64(3), 0),
-		}
-		stmt.ColumnBytes(0, registration.ChallengeHash[:])
-		registrations = append(registrations, registration)
-		return true
-	}
-
-	placeholders := make([]string, len(addresses))
-	for i := range addresses {
-		placeholders[i] = fmt.Sprintf("?%d", i+2)
-	}
-
-	query := fmt.Sprintf(
-		`SELECT hash, address, round_id, round_end 
-         FROM poet_registration 
-         WHERE id = ?1 AND address IN (%s);`,
-		strings.Join(placeholders, ", "),
-	)
-
-	_, err := db.Exec(query, enc, dec)
-	if err != nil {
-		return nil, fmt.Errorf("get poet registrations for node id %s and addresses %v: %w",
-			nodeID.ShortString(), addresses, err)
 	}
 
 	return registrations, nil

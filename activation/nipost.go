@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/exp/maps"
 	"math/rand/v2"
 	"time"
 
@@ -207,7 +208,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	//  WE ARE HERE            PROOF BECOMES         ATX PUBLICATION
 	//                           AVAILABLE               DEADLINE
 
-	curPoetRoundStart := nb.layerClock.LayerToTime((postChallenge.PublishEpoch - 1).FirstLayer()).
+	poetRoundStart := nb.layerClock.LayerToTime((postChallenge.PublishEpoch - 1).FirstLayer()).
 		Add(nb.poetCfg.PhaseShift)
 	curPoetRoundEnd := nb.layerClock.LayerToTime(postChallenge.PublishEpoch.FirstLayer()).
 		Add(nb.poetCfg.PhaseShift).
@@ -222,7 +223,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	poetProofDeadline := publishEpochEnd.Add(-nb.poetCfg.CycleGap)
 
 	logger.Info("building nipost",
-		zap.Time("poet round start", curPoetRoundStart),
+		zap.Time("poet round start", poetRoundStart),
 		zap.Time("poet round end", curPoetRoundEnd),
 		zap.Time("publish epoch end", publishEpochEnd),
 		zap.Uint32("publish epoch", postChallenge.PublishEpoch.Uint32()),
@@ -234,7 +235,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		ctx,
 		signer,
 		poetProofDeadline,
-		curPoetRoundStart, challenge.Bytes())
+		poetRoundStart, challenge.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
@@ -341,7 +342,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	client PoetService,
 	prefix, challenge []byte,
 	signature types.EdSignature,
-) error {
+) (nipost.PoETRegistration, error) {
 	logger := nb.logger.With(
 		log.ZContext(ctx),
 		zap.String("poet", client.Address()),
@@ -355,18 +356,26 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID)
 	if err != nil {
-		return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
+		return nipost.PoETRegistration{}, &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
-	return nipost.AddPoetRegistration(nb.localDB, nodeID, nipost.PoETRegistration{
+
+	registration := nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
 		Address:       client.Address(),
 		RoundID:       round.ID,
 		RoundEnd:      round.End,
-	})
+	}
+
+	if err := nipost.AddPoetRegistration(nb.localDB, nodeID, registration); err != nil {
+		return nipost.PoETRegistration{}, err
+	}
+
+	return registration, err
 }
 
-// Submit the challenge to registered PoETs with given addresses.
+// submitPoetChallenges submit the challenge to registered PoETs
+// if some registrations are missing and PoET round didn't start.
 func (nb *NIPostBuilder) submitPoetChallenges(
 	ctx context.Context,
 	signer *signing.EdSigner,
@@ -374,41 +383,50 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	curPoetRoundStartDeadline time.Time,
 	challenge []byte,
 ) ([]nipost.PoETRegistration, error) {
-	// check if some registrations missing
-	existingRegistrations, err := nipost.PoetRegistrationsByNodeId(nb.localDB, signer.NodeID())
+	// check if some registrations missing or were removed
+	nodeID := signer.NodeID()
+	registrations, err := nipost.PoetRegistrations(nb.localDB, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get poet registrations from db: %w", err)
 	}
 
-	var i int
-	addresses := make([]string, len(nb.poetProvers))
-	for _, client := range nb.poetProvers {
-		addresses[i] = client.Address()
-		i++
+	registrationsMap := make(map[string]nipost.PoETRegistration)
+	for _, reg := range registrations {
+		registrationsMap[reg.Address] = reg
 	}
 
-	existingRegistrationsMap := make(map[string]struct{})
-	for _, er := range existingRegistrations {
-		existingRegistrationsMap[er.Address] = struct{}{}
-	}
-
+	existingRegistrationsMap := make(map[string]nipost.PoETRegistration)
 	missingRegistrationsPoETAddresses := make(map[string]struct{})
-	for _, addr := range addresses {
-		if _, ok := existingRegistrationsMap[addr]; !ok {
+
+	for addr := range nb.poetProvers {
+		if val, ok := registrationsMap[addr]; ok {
+			existingRegistrationsMap[addr] = val
+		} else {
 			missingRegistrationsPoETAddresses[addr] = struct{}{}
 		}
 	}
 
+	existingRegistrations := maps.Values(existingRegistrationsMap)
 	if len(missingRegistrationsPoETAddresses) == 0 {
 		return existingRegistrations, nil
 	}
 
 	now := time.Now()
+
 	if curPoetRoundStartDeadline.Before(now) {
-		if len(missingRegistrationsPoETAddresses) == len(addresses) {
+		if len(existingRegistrations) == 0 {
+			if len(registrations) == 0 {
+				// no existing registration at all, drop current registration challenge
+				err = ErrATXChallengeExpired
+			} else {
+				// no existing registration for given poets set
+				err = ErrNoRegistrationForGivenPoetFound
+				nb.logger.Warn("revert poet configuration to previous is needed immediately",
+					zap.Error(err), log.ZShortStringer("smesherID", nodeID))
+			}
 			return nil, fmt.Errorf(
 				"%w: poet round has already started at %s (now: %s)",
-				ErrATXChallengeExpired, // no existing registration, drop current registration challenge
+				err,
 				curPoetRoundStartDeadline,
 				now,
 			)
@@ -419,18 +437,22 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	// send registrations to missing addresses
 	signature := signer.Sign(signing.POET, challenge)
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
-	nodeID := signer.NodeID()
 
 	submitCtx, cancel := context.WithDeadline(ctx, curPoetRoundStartDeadline)
 	defer cancel()
 
 	g, ctx := errgroup.WithContext(submitCtx)
 	errChan := make(chan error, len(missingRegistrationsPoETAddresses))
+	submittedRegistrations := make([]nipost.PoETRegistration, 0)
 
 	for _, client := range nb.poetProvers {
 		if _, ok := missingRegistrationsPoETAddresses[client.Address()]; ok {
 			g.Go(func() error {
-				errChan <- nb.submitPoetChallenge(ctx, nodeID, poetProofDeadline, client, prefix, challenge, signature)
+				registration, err := nb.submitPoetChallenge(ctx, nodeID, poetProofDeadline, client, prefix, challenge, signature)
+				if err == nil {
+					submittedRegistrations = append(submittedRegistrations, registration)
+				}
+				errChan <- err
 				return nil
 			})
 		}
@@ -455,11 +477,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 		return nil, ErrATXChallengeExpired
 	}
 
-	existingRegistrations, err = nipost.PoetRegistrationsByNodeIdAndAddresses(nb.localDB, signer.NodeID(), addresses)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get poet registration count: %w", err)
-	}
-
+	existingRegistrations = append(existingRegistrations, submittedRegistrations...)
 	if len(existingRegistrations) == 0 {
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
 	}
