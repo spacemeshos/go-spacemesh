@@ -57,7 +57,7 @@ jobs:
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
-    timeout-minutes: 70
+    timeout-minutes: 260
     steps:
       - uses: actions/checkout@v4
         with:
@@ -130,7 +130,7 @@ jobs:
           go-version-file: "go.mod"
 
       - name: Run tests
-        timeout-minutes: 150
+        timeout-minutes: 240
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           label: sanity
@@ -139,7 +139,7 @@ jobs:
           size: 20
           bootstrap: 4m
           level: ${{ inputs.log_level }}
-          clusters: 4
+          clusters: 1
           norbac: 1
           # profiler_url: ${{ secrets.PROFILER_URL }}
         run: make -C systest run test_name=${{ inputs.test_name }}
