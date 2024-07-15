@@ -40,7 +40,8 @@ func (d *DBItemStore) Add(ctx context.Context, k hashsync.Ordered) error {
 }
 
 func (d *DBItemStore) iter(min, max KeyBytes) (hashsync.Iterator, error) {
-	return newDBRangeIterator(d.db, d.query, min, max, d.chunkSize)
+	panic("TBD")
+	// return newDBRangeIterator(d.db, d.query, min, max, d.chunkSize)
 }
 
 // GetRangeInfo implements hashsync.ItemStore.
@@ -56,6 +57,7 @@ func (d *DBItemStore) GetRangeInfo(
 
 // Min implements hashsync.ItemStore.
 func (d *DBItemStore) Min() (hashsync.Iterator, error) {
+	// INCORRECT !!! should return nil if the store is empty
 	it1 := make(KeyBytes, d.keyLen)
 	it2 := make(KeyBytes, d.keyLen)
 	for i := range it2 {
