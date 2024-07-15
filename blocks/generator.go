@@ -157,15 +157,13 @@ func (g *Generator) run(ctx context.Context) error {
 					g.logger.Debug("node has different mesh hash from majority, will download block instead",
 						log.ZContext(ctx),
 						zap.Uint32("layer_id", out.Layer.Uint32()),
-						log.TrimmedError(err, 100),
-						log.DebugField(g.logger, zap.Error(err)),
+						zap.Error(err),
 					)
 				} else {
 					g.logger.Error("failed to process hare output",
 						log.ZContext(ctx),
 						zap.Uint32("layer_id", out.Layer.Uint32()),
-						log.TrimmedError(err, 100),
-						log.DebugField(g.logger, zap.Error(err)),
+						zap.Error(err),
 					)
 				}
 			}
@@ -273,8 +271,7 @@ func (g *Generator) processOptimisticLayers(max types.LayerID) {
 			g.logger.Warn("failed to process optimistic layer",
 				log.ZContext(md.ctx),
 				zap.Uint32("layer_id", lid.Uint32()),
-				log.TrimmedError(err, 100),
-				log.DebugField(g.logger, zap.Error(err)),
+				zap.Error(err),
 			)
 			return
 		}

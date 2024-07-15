@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
+	"sync/atomic"
 
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
@@ -77,8 +77,7 @@ func (f *Fetch) getHashes(
 
 	var (
 		eg       errgroup.Group
-		mu       sync.Mutex
-		bfailure = BatchError{Errors: map[types.Hash32]error{}}
+		failures atomic.Uint32
 	)
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
@@ -114,18 +113,15 @@ func (f *Fetch) getHashes(
 						zap.Error(p.err),
 					)
 
-					mu.Lock()
-					bfailure.Add(hash, p.err)
-					mu.Unlock()
+					failures.Add(1)
 				}
-				return nil
+				return p.err
 			}
 		})
 	}
 
-	eg.Wait()
-	if !bfailure.Empty() {
-		return &bfailure
+	if err := eg.Wait(); err != nil {
+		return fmt.Errorf("getting hash failed: %w (total failed: %d/%d)", err, failures.Load(), len(hashes))
 	}
 	return nil
 }
