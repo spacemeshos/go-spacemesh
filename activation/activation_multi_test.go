@@ -234,7 +234,7 @@ func TestRegossip(t *testing.T) {
 func Test_Builder_Multi_InitialPost(t *testing.T) {
 	tab := newTestBuilder(t, 5, WithPoetConfig(
 		PoetConfig{
-			RegistrationConfig: RegistrationConfig{PhaseShift: layerDuration * 4},
+			PhaseShift: layerDuration * 4,
 		}))
 
 	var eg errgroup.Group
@@ -276,10 +276,8 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 	layerDuration := 2 * time.Second
 	tab := newTestBuilder(t, 3, WithPoetConfig(
 		PoetConfig{
-			RegistrationConfig: RegistrationConfig{
-				PhaseShift: layerDuration * 4,
-				CycleGap:   layerDuration,
-			},
+			PhaseShift: layerDuration * 4,
+			CycleGap:   layerDuration,
 		}))
 
 	// step 1: build initial posts

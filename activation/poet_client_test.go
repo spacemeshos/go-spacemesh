@@ -32,10 +32,9 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 		t.Parallel()
 		client, err := NewHTTPPoetClient(types.PoetServer{Address: "bla"},
 			PoetConfig{
-				RegistrationConfig: RegistrationConfig{
-					PhaseShift: cfg.PhaseShift,
-					CycleGap:   cfg.CycleGap,
-				},
+
+				PhaseShift: cfg.PhaseShift,
+				CycleGap:   cfg.CycleGap,
 			})
 		require.NoError(t, err)
 		require.Equal(t, "http://bla", client.baseURL.String())
@@ -45,10 +44,8 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 		t.Parallel()
 		client, err := NewHTTPPoetClient(types.PoetServer{Address: "https://bla"},
 			PoetConfig{
-				RegistrationConfig: RegistrationConfig{
-					PhaseShift: cfg.PhaseShift,
-					CycleGap:   cfg.CycleGap,
-				},
+				PhaseShift: cfg.PhaseShift,
+				CycleGap:   cfg.CycleGap,
 			})
 		require.NoError(t, err)
 		require.Equal(t, "https://bla", client.baseURL.String())
@@ -71,10 +68,8 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 
 	cfg := server.DefaultRoundConfig()
 	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
-		RegistrationConfig: RegistrationConfig{
-			PhaseShift: cfg.PhaseShift,
-			CycleGap:   cfg.CycleGap,
-		},
+		PhaseShift: cfg.PhaseShift,
+		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
@@ -123,10 +118,8 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 		t.Run(url, func(t *testing.T) {
 			client, err := NewHTTPPoetClient(types.PoetServer{Address: url},
 				PoetConfig{
-					RegistrationConfig: RegistrationConfig{
-						PhaseShift: poetCfg.PhaseShift,
-						CycleGap:   poetCfg.CycleGap,
-					},
+					PhaseShift: poetCfg.PhaseShift,
+					CycleGap:   poetCfg.CycleGap,
 				})
 			require.NoError(t, err)
 			require.Equal(t, url, client.Address())
@@ -150,10 +143,8 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 
 	cfg := server.DefaultRoundConfig()
 	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
-		RegistrationConfig: RegistrationConfig{
-			PhaseShift: cfg.PhaseShift,
-			CycleGap:   cfg.CycleGap,
-		},
+		PhaseShift: cfg.PhaseShift,
+		CycleGap:   cfg.CycleGap,
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
@@ -222,9 +213,7 @@ func TestPoetClient_QueryProofTimeout(t *testing.T) {
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
 	cfg := PoetConfig{
-		ClientConfig: ClientConfig{
-			DefaultRequestTimeout: time.Millisecond * 100,
-		},
+		DefaultRequestTimeout: time.Millisecond * 100,
 	}
 	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
@@ -268,7 +257,7 @@ func TestPoetClient_Certify(t *testing.T) {
 		Address: ts.URL,
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
-	cfg := PoetConfig{ClientConfig: ClientConfig{DefaultRequestTimeout: time.Millisecond * 100}}
+	cfg := PoetConfig{DefaultRequestTimeout: time.Millisecond * 100}
 	cert := certifier.PoetCert{Data: []byte("abc")}
 	ctrl := gomock.NewController(t)
 	mCertifier := NewMockcertifierService(ctrl)
@@ -314,7 +303,7 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 		Address: ts.URL,
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
-	cfg := PoetConfig{ClientConfig: ClientConfig{DefaultRequestTimeout: time.Millisecond * 100}}
+	cfg := PoetConfig{DefaultRequestTimeout: time.Millisecond * 100}
 	cert := certifier.PoetCert{Data: []byte("abc")}
 	ctrl := gomock.NewController(t)
 	mCertifier := NewMockcertifierService(ctrl)
@@ -373,7 +362,7 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 		Address: ts.URL,
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
-	cfg := PoetConfig{ClientConfig: ClientConfig{DefaultRequestTimeout: time.Millisecond * 100}}
+	cfg := PoetConfig{DefaultRequestTimeout: time.Millisecond * 100}
 
 	ctrl := gomock.NewController(t)
 	mCertifier := NewMockcertifierService(ctrl)

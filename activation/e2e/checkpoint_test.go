@@ -67,11 +67,9 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 
 	epoch := layerDuration * time.Duration(layersPerEpoch)
 	poetCfg := activation.PoetConfig{
-		RegistrationConfig: activation.RegistrationConfig{
-			PhaseShift:  epoch,
-			CycleGap:    3 * epoch / 4,
-			GracePeriod: epoch / 4,
-		},
+		PhaseShift:  epoch,
+		CycleGap:    3 * epoch / 4,
+		GracePeriod: epoch / 4,
 	}
 	client := ae2e.NewTestPoetClient(1)
 	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)

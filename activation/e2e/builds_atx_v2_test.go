@@ -78,11 +78,9 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		RegistrationConfig: activation.RegistrationConfig{
-			PhaseShift:  epoch,
-			CycleGap:    epoch * 3 / 4,
-			GracePeriod: epoch / 4,
-		},
+		PhaseShift:  epoch,
+		CycleGap:    epoch * 3 / 4,
+		GracePeriod: epoch / 4,
 	}
 
 	clock, err := timesync.NewClock(

@@ -39,19 +39,10 @@ var (
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
-	ClientConfig
-	RegistrationConfig
-}
-
-type ClientConfig struct {
 	DefaultRequestTimeout time.Duration `mapstructure:"poet-client-default-request-timeout"`
 	RequestRetryDelay     time.Duration `mapstructure:"poet-client-retry-delay"`
 	CertifierInfoCacheTTL time.Duration `mapstructure:"poet-client-certifier-info-cache-ttl"`
 	MaxRequestRetries     int           `mapstructure:"poet-client-retry-max"`
-}
-
-// RegistrationConfig sets up settings for successful registration to new PoET round.
-type RegistrationConfig struct {
 	// Start of new PoET round
 	PhaseShift time.Duration `mapstructure:"phase-shift"`
 	// A gap between end of old PoET round and start of new one
@@ -68,11 +59,9 @@ type RegistrationConfig struct {
 
 func DefaultPoetConfig() PoetConfig {
 	return PoetConfig{
-		ClientConfig: ClientConfig{
-			RequestRetryDelay:     400 * time.Millisecond,
-			MaxRequestRetries:     10,
-			CertifierInfoCacheTTL: 5 * time.Minute,
-		},
+		RequestRetryDelay:     400 * time.Millisecond,
+		MaxRequestRetries:     10,
+		CertifierInfoCacheTTL: 5 * time.Minute,
 	}
 }
 

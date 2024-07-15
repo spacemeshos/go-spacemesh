@@ -172,11 +172,9 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		RegistrationConfig: activation.RegistrationConfig{
-			PhaseShift:  epoch / 2,
-			CycleGap:    3 * epoch / 4,
-			GracePeriod: epoch / 4,
-		},
+		PhaseShift:  epoch / 2,
+		CycleGap:    3 * epoch / 4,
+		GracePeriod: epoch / 4,
 	}
 
 	mclock := activation.NewMocklayerClock(ctrl)
@@ -268,11 +266,9 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		RegistrationConfig: activation.RegistrationConfig{
-			PhaseShift:  epoch / 2,
-			CycleGap:    3 * epoch / 4,
-			GracePeriod: epoch / 4,
-		},
+		PhaseShift:  epoch / 2,
+		CycleGap:    3 * epoch / 4,
+		GracePeriod: epoch / 4,
 	}
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))

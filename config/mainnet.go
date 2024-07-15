@@ -160,21 +160,18 @@ func MainnetConfig() Config {
 			BeaconSyncWeightUnits:    800,
 		},
 		POET: activation.PoetConfig{
-			ClientConfig: activation.ClientConfig{
-				// DefaultRequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
-				DefaultRequestTimeout: 1100 * time.Second,
-				RequestRetryDelay:     10 * time.Second,
-				MaxRequestRetries:     10,
-			},
-			RegistrationConfig: activation.RegistrationConfig{
-				PhaseShift:                     240 * time.Hour,
-				CycleGap:                       12 * time.Hour,
-				GracePeriod:                    1 * time.Hour,
-				SubmitChallengeTimeout:         1 * time.Hour,
-				PositioningATXSelectionTimeout: 50 * time.Minute,
-				// GetProofTimeout = DefaultRequestTimeout
-				GetProofTimeout: 1100 * time.Second, // ~ 18 min
-			},
+			// DefaultRequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+			DefaultRequestTimeout: 1100 * time.Second,
+			RequestRetryDelay:     10 * time.Second,
+			MaxRequestRetries:     10,
+			PhaseShift:            240 * time.Hour,
+			CycleGap:              12 * time.Hour,
+			GracePeriod:           1 * time.Hour,
+			// SubmitChallengeTimeout = GracePeriod
+			SubmitChallengeTimeout:         1 * time.Hour,
+			PositioningATXSelectionTimeout: 50 * time.Minute,
+			// GetProofTimeout = DefaultRequestTimeout
+			GetProofTimeout: 1100 * time.Second, // ~ 18 min
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   4,

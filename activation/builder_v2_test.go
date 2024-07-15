@@ -19,7 +19,7 @@ import (
 
 func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 	tab := newTestBuilder(t, 1,
-		WithPoetConfig(PoetConfig{RegistrationConfig: RegistrationConfig{PhaseShift: layerDuration}}),
+		WithPoetConfig(PoetConfig{PhaseShift: layerDuration}),
 		BuilderAtxVersions(AtxVersions{1: types.AtxV2}))
 
 	tab.SetCoinbase(types.Address{1, 2, 3, 4})
@@ -73,7 +73,7 @@ func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 
 func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	tab := newTestBuilder(t, 1,
-		WithPoetConfig(PoetConfig{RegistrationConfig: RegistrationConfig{PhaseShift: layerDuration}}),
+		WithPoetConfig(PoetConfig{PhaseShift: layerDuration}),
 		BuilderAtxVersions(AtxVersions{4: types.AtxV2}))
 	sig := maps.Values(tab.signers)[0]
 
