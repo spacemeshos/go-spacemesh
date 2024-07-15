@@ -384,7 +384,8 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	// Arrange
 	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{
-		PhaseShift: layerDuration}))
+		PhaseShift: layerDuration,
+	}))
 	sig := maps.Values(tab.signers)[0]
 
 	// current layer is too late to be able to build a nipost on time

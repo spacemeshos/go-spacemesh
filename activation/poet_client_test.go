@@ -32,7 +32,6 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 		t.Parallel()
 		client, err := NewHTTPPoetClient(types.PoetServer{Address: "bla"},
 			PoetConfig{
-
 				PhaseShift: cfg.PhaseShift,
 				CycleGap:   cfg.CycleGap,
 			})
