@@ -588,7 +588,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	}
 
 	poetCfg := PoetConfig{
-		RegistrationConfig: RegistrationConfig{PhaseShift: layerDuration * layersPerEpoch / 2},
+		PhaseShift: layerDuration * layersPerEpoch / 2,
 	}
 
 	sig, err := signing.NewEdSigner()
@@ -686,7 +686,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 	t.Parallel()
 	challenge := types.RandomHash()
 	poetCfg := PoetConfig{
-		RegistrationConfig: RegistrationConfig{PhaseShift: layerDuration},
+		PhaseShift: layerDuration,
 	}
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -971,7 +971,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 
 	poetCfg := PoetConfig{
-		RegistrationConfig: RegistrationConfig{PhaseShift: layerDuration * layersPerEpoch / 2},
+		PhaseShift: layerDuration * layersPerEpoch / 2,
 	}
 
 	postClient := NewMockPostClient(ctrl)
@@ -1107,7 +1107,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			)
 
 			poetCfg := PoetConfig{
-				RegistrationConfig: RegistrationConfig{PhaseShift: layerDuration * layersPerEpoch / 2},
+				PhaseShift: layerDuration * layersPerEpoch / 2,
 			}
 
 			sig, err := signing.NewEdSigner()
