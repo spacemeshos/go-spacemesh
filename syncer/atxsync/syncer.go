@@ -314,10 +314,10 @@ func (s *Syncer) downloadAtxs(
 						if _, exists := state[types.ATXID(hash)]; !exists {
 							continue
 						}
-						if errors.Is(err, fetch.ErrExceedMaxRetries) {
-							state[types.ATXID(hash)]++
-						} else if errors.Is(err, pubsub.ErrValidationReject) {
+						if errors.Is(err, pubsub.ErrValidationReject) {
 							state[types.ATXID(hash)] = s.cfg.RequestsLimit
+						} else {
+							state[types.ATXID(hash)]++
 						}
 					}
 				}
