@@ -34,7 +34,8 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 			PoetConfig{
 				RegistrationConfig: RegistrationConfig{
 					PhaseShift: cfg.PhaseShift,
-					CycleGap:   cfg.CycleGap},
+					CycleGap:   cfg.CycleGap,
+				},
 			})
 		require.NoError(t, err)
 		require.Equal(t, "http://bla", client.baseURL.String())

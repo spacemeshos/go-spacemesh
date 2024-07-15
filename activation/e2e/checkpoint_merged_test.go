@@ -76,9 +76,11 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:  epoch,
-		CycleGap:    3 * epoch / 4,
-		GracePeriod: epoch / 4,
+		RegistrationConfig: activation.RegistrationConfig{
+			PhaseShift:  epoch,
+			CycleGap:    3 * epoch / 4,
+			GracePeriod: epoch / 4,
+		},
 	}
 
 	client := ae2e.NewTestPoetClient(2)

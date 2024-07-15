@@ -50,7 +50,7 @@ type ClientConfig struct {
 	MaxRequestRetries     int           `mapstructure:"poet-client-retry-max"`
 }
 
-// RegistrationConfig sets up settings for successful registration to new PoET round
+// RegistrationConfig sets up settings for successful registration to new PoET round.
 type RegistrationConfig struct {
 	// Start of new PoET round
 	PhaseShift time.Duration `mapstructure:"phase-shift"`
