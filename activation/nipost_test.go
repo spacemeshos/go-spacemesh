@@ -807,6 +807,90 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 	})
 }
 
+func TestPoetTimeoutsParameters(t *testing.T) {
+	t.Parallel()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	challenge := &types.NIPostChallenge{
+		PublishEpoch: postGenesisEpoch + 2,
+	}
+
+	t.Run("submit challenge timeout is too short -> fail", func(t *testing.T) {
+		db := localsql.InMemory()
+
+		require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), challenge))
+		challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
+
+		ctrl := gomock.NewController(t)
+		mclock := defaultLayerClockMock(ctrl)
+
+		poetProver := NewMockPoetService(ctrl)
+		poetProver.EXPECT().
+			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), sig.NodeID()).
+			Return(nil, context.DeadlineExceeded)
+		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
+
+		postService := NewMockpostService(ctrl)
+
+		nb, err := NewNIPostBuilder(
+			db,
+			postService,
+			zaptest.NewLogger(t),
+			PoetConfig{SubmitChallengeTimeout: 1 * time.Microsecond},
+			mclock,
+			nil,
+			WithPoetServices(poetProver),
+		)
+		require.NoError(t, err)
+
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challengeHash, challenge)
+		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		require.Nil(t, nipst)
+	})
+
+	t.Run("get proof timeout is too short -> fail", func(t *testing.T) {
+		db := localsql.InMemory()
+
+		require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), challenge))
+		challengeHash := wire.NIPostChallengeToWireV1(challenge).Hash()
+
+		ctrl := gomock.NewController(t)
+		mclock := defaultLayerClockMock(ctrl)
+
+		poetProver := NewMockPoetService(ctrl)
+		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
+		poetProver.EXPECT().Proof(gomock.Any(), "1").Return(nil, nil, context.DeadlineExceeded)
+		postService := NewMockpostService(ctrl)
+
+		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
+			ChallengeHash: challengeHash,
+			Address:       "http://localhost:9999",
+			RoundID:       "1",
+			RoundEnd:      time.Now().Add(1 * time.Second),
+		})
+		require.NoError(t, err)
+
+		nb, err := NewNIPostBuilder(
+			db,
+			postService,
+			zaptest.NewLogger(t),
+			PoetConfig{
+				GetProofTimeout: 1 * time.Microsecond,
+			},
+			mclock,
+			nil,
+			WithPoetServices(poetProver),
+		)
+		require.NoError(t, err)
+
+		nipst, err := nb.BuildNIPost(context.Background(), sig, challengeHash, challenge)
+		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		require.Nil(t, nipst)
+	})
+}
+
 // TestNIPoSTBuilder_StaleChallenge checks if
 // it properly detects that the challenge is stale and the poet round has already started.
 func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {

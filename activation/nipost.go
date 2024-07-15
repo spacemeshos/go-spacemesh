@@ -372,10 +372,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.SubmitChallengeTimeout)
-	defer cancel()
-
-	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID)
+	round, err := client.Submit(ctx, deadline, prefix, challenge, signature, nodeID)
 	if err != nil {
 		return &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
