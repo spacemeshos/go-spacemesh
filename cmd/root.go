@@ -320,7 +320,7 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	/**======================== PoET Flags ========================== **/
 
 	flagSet.DurationVar(&cfg.POET.PhaseShift, "phase-shift",
-		cfg.POET.PhaseShift, "phase shift of poet server: time, when poet round starts")
+		cfg.POET.PhaseShift, "phase shift of poet server: duration after epoch start, at which poet round starts")
 	flagSet.DurationVar(&cfg.POET.CycleGap, "cycle-gap",
 		cfg.POET.CycleGap, "cycle gap of poet server: gap between poet rounds")
 	flagSet.DurationVar(&cfg.POET.GracePeriod, "grace-period",
