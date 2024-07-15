@@ -693,7 +693,7 @@ func (h *HandlerV1) fetchReferences(ctx context.Context, poetRef types.Hash32, a
 	}
 
 	if err := h.fetcher.GetAtxs(ctx, atxIDs, system.WithoutLimiting()); err != nil {
-		return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
+		return fmt.Errorf("missing atxs %s: %w", atxIDs, err)
 	}
 
 	h.logger.Debug("done fetching references",
