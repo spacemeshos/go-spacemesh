@@ -190,7 +190,7 @@ func TestSyncer(t *testing.T) {
 					}
 					for _, bad := range bad.AtxIDs {
 						if bad == id {
-							berr.Add(bad.Hash32(), fmt.Errorf("%w: test", fetch.ErrExceedMaxRetries))
+							berr.Add(bad.Hash32(), fmt.Errorf("%w: test", errors.New("oh no failed")))
 						}
 					}
 				}
