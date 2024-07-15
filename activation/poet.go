@@ -340,10 +340,13 @@ type certifierInfo struct {
 // poetService is a higher-level interface to communicate with a PoET service.
 // It wraps the HTTP client, adding additional functionality.
 type poetService struct {
-	db             poetDbAPI
-	logger         *zap.Logger
-	client         PoetClient
-	requestTimeout time.Duration
+	db     poetDbAPI
+	logger *zap.Logger
+	client PoetClient
+
+	defaultRequestTimeout         time.Duration
+	submitChallengeRequestTimeout time.Duration
+	getProofRequestTimeout        time.Duration
 
 	// Used to avoid concurrent requests for proof.
 	gettingProof sync.Mutex
@@ -393,12 +396,14 @@ func NewPoetServiceWithClient(
 	opts ...PoetServiceOpt,
 ) *poetService {
 	poetClient := &poetService{
-		db:               db,
-		logger:           logger,
-		client:           client,
-		requestTimeout:   cfg.RequestTimeout,
-		certifierInfoTTL: cfg.CertifierInfoCacheTTL,
-		proofMembers:     make(map[string][]types.Hash32, 1),
+		db:                            db,
+		logger:                        logger,
+		client:                        client,
+		defaultRequestTimeout:         cfg.DefaultRequestTimeout,
+		submitChallengeRequestTimeout: cfg.SubmitChallengeTimeout,
+		getProofRequestTimeout:        cfg.GetProofTimeout,
+		certifierInfoTTL:              cfg.CertifierInfoCacheTTL,
+		proofMembers:                  make(map[string][]types.Hash32, 1),
 	}
 
 	for _, opt := range opts {
@@ -432,7 +437,7 @@ func (c *poetService) authorize(
 	// TODO: remove this fallback once we migrate to certificates fully.
 
 	logger.Debug("querying for poet pow parameters")
-	powCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
+	powCtx, cancel := withConditionalTimeout(ctx, c.defaultRequestTimeout)
 	defer cancel()
 	powParams, err := c.client.PowParams(powCtx)
 	if err != nil {
@@ -480,7 +485,7 @@ func (c *poetService) Submit(
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	submitCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
+	submitCtx, cancel := withConditionalTimeout(ctx, c.submitChallengeRequestTimeout)
 	defer cancel()
 	round, err := c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
 	switch {
@@ -498,7 +503,7 @@ func (c *poetService) Submit(
 }
 
 func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
-	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
+	getProofsCtx, cancel := withConditionalTimeout(ctx, c.getProofRequestTimeout)
 	defer cancel()
 
 	c.gettingProof.Lock()

@@ -281,7 +281,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		}
 
 		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, poetRoundEnd)
-		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, postChallenge.PublishEpoch)
+		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
@@ -372,7 +372,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
+	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.SubmitChallengeTimeout)
 	defer cancel()
 
 	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID)
@@ -451,7 +451,6 @@ func (nb *NIPostBuilder) getBestProof(
 	ctx context.Context,
 	nodeID types.NodeID,
 	challenge types.Hash32,
-	publishEpoch types.EpochID,
 ) (types.PoetProofRef, *types.MerkleProof, error) {
 	type poetProof struct {
 		poet       *types.PoetProof

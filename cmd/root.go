@@ -320,13 +320,17 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	/**======================== PoET Flags ========================== **/
 
 	flagSet.DurationVar(&cfg.POET.PhaseShift, "phase-shift",
-		cfg.POET.PhaseShift, "phase shift of poet server")
+		cfg.POET.PhaseShift, "phase shift of poet server: time, when poet round starts")
 	flagSet.DurationVar(&cfg.POET.CycleGap, "cycle-gap",
-		cfg.POET.CycleGap, "cycle gap of poet server")
+		cfg.POET.CycleGap, "cycle gap of poet server: gap between poet rounds")
 	flagSet.DurationVar(&cfg.POET.GracePeriod, "grace-period",
-		cfg.POET.GracePeriod, "time before PoET round starts when the node builds and submits a challenge")
-	flagSet.DurationVar(&cfg.POET.RequestTimeout, "poet-request-timeout",
-		cfg.POET.RequestTimeout, "timeout for poet requests")
+		cfg.POET.GracePeriod, "time before poet round starts, when the node builds and submits a challenge")
+	flagSet.DurationVar(&cfg.POET.SubmitChallengeTimeout, "submit-challenge-timeout",
+		cfg.POET.SubmitChallengeTimeout, "time within grace period, when post challenge must be submitted to poet server")
+	flagSet.DurationVar(&cfg.POET.GetProofTimeout, "get-proof-timeout",
+		cfg.POET.GetProofTimeout, "time period when ready poet proof must be fetched")
+	flagSet.DurationVar(&cfg.POET.DefaultRequestTimeout, "poet-default-request-timeout",
+		cfg.POET.DefaultRequestTimeout, "default timeout for poet requests")
 
 	/**======================== bootstrap data updater Flags ========================== **/
 

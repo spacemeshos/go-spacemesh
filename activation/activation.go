@@ -39,21 +39,40 @@ var (
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
-	PhaseShift                     time.Duration `mapstructure:"phase-shift"`
-	CycleGap                       time.Duration `mapstructure:"cycle-gap"`
-	GracePeriod                    time.Duration `mapstructure:"grace-period"`
-	RequestTimeout                 time.Duration `mapstructure:"poet-request-timeout"`
-	RequestRetryDelay              time.Duration `mapstructure:"retry-delay"`
+	ClientConfig
+	RegistrationConfig
+}
+
+type ClientConfig struct {
+	DefaultRequestTimeout time.Duration `mapstructure:"poet-client-default-request-timeout"`
+	RequestRetryDelay     time.Duration `mapstructure:"poet-client-retry-delay"`
+	CertifierInfoCacheTTL time.Duration `mapstructure:"poet-client-certifier-info-cache-ttl"`
+	MaxRequestRetries     int           `mapstructure:"poet-client-retry-max"`
+}
+
+// RegistrationConfig sets up settings for successful registration to new PoET round
+type RegistrationConfig struct {
+	// Start of new PoET round
+	PhaseShift time.Duration `mapstructure:"phase-shift"`
+	// A gap between end of old PoET round and start of new one
+	CycleGap time.Duration `mapstructure:"cycle-gap"`
+	// Time in the end of cycle gap, when PoST challenge must be build and send to PoET server
+	GracePeriod time.Duration `mapstructure:"grace-period"`
+	// Period to find positioning ATX. Must be less, than GracePeriod
 	PositioningATXSelectionTimeout time.Duration `mapstructure:"positioning-atx-selection-timeout"`
-	CertifierInfoCacheTTL          time.Duration `mapstructure:"certifier-info-cache-ttl"`
-	MaxRequestRetries              int           `mapstructure:"retry-max"`
+	// Period to submit PoST challenge to PoET server. Must be not greater than GracePeriod
+	SubmitChallengeTimeout time.Duration `mapstructure:"submit-challenge-timeout"`
+	// Period to get PoET proof
+	GetProofTimeout time.Duration `mapstructure:"get-proof-timeout"`
 }
 
 func DefaultPoetConfig() PoetConfig {
 	return PoetConfig{
-		RequestRetryDelay:     400 * time.Millisecond,
-		MaxRequestRetries:     10,
-		CertifierInfoCacheTTL: 5 * time.Minute,
+		ClientConfig: ClientConfig{
+			RequestRetryDelay:     400 * time.Millisecond,
+			MaxRequestRetries:     10,
+			CertifierInfoCacheTTL: 5 * time.Minute,
+		},
 	}
 }
 
@@ -547,7 +566,6 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		case <-time.After(time.Until(wait)):
 		}
 	}
-
 	if b.poetCfg.PositioningATXSelectionTimeout > 0 {
 		var cancel context.CancelFunc
 
