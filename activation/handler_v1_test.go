@@ -15,8 +15,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -853,5 +855,19 @@ func TestHandlerV1_FetchesReferences(t *testing.T) {
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poet)
 		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxs, gomock.Any()).Return(errors.New("oh"))
 		require.Error(t, atxHdlr.fetchReferences(context.Background(), poet, atxs))
+	})
+	t.Run("reject ATX when dependency ATX is rejected", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newV1TestHandler(t, goldenATXID)
+
+		poet := types.RandomHash()
+		atxs := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
+		var batchErr fetch.BatchError
+		batchErr.Add(atxs[0].Hash32(), pubsub.ErrValidationReject)
+
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poet)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxs, gomock.Any()).Return(&batchErr)
+
+		require.ErrorIs(t, atxHdlr.fetchReferences(context.Background(), poet, atxs), pubsub.ErrValidationReject)
 	})
 }
