@@ -112,14 +112,14 @@ func testnet() config.Config {
 			BeaconSyncWeightUnits:    800,
 		},
 		POET: activation.PoetConfig{
-			// DefaultRequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
-			DefaultRequestTimeout:  550 * time.Second,
+			// RequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+			RequestTimeout:         550 * time.Second,
 			RequestRetryDelay:      5 * time.Second,
 			MaxRequestRetries:      10,
 			PhaseShift:             12 * time.Hour,
 			CycleGap:               2 * time.Hour,
 			GracePeriod:            10 * time.Minute,
-			GetProofTimeout:        550 * time.Second,
+			FetchProofTimeout:      550 * time.Second,
 			SubmitChallengeTimeout: 10 * time.Minute,
 		},
 		POST: activation.PostConfig{

@@ -212,7 +212,7 @@ func TestPoetClient_QueryProofTimeout(t *testing.T) {
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
 	cfg := PoetConfig{
-		DefaultRequestTimeout: time.Millisecond * 100,
+		RequestTimeout: time.Millisecond * 100,
 	}
 	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestPoetClient_QueryProofTimeout(t *testing.T) {
 		})
 	}
 	eg.Wait()
-	require.WithinDuration(t, start.Add(cfg.DefaultRequestTimeout), time.Now(), time.Millisecond*300)
+	require.WithinDuration(t, start.Add(cfg.RequestTimeout), time.Now(), time.Millisecond*300)
 }
 
 func TestPoetClient_Certify(t *testing.T) {
@@ -256,7 +256,7 @@ func TestPoetClient_Certify(t *testing.T) {
 		Address: ts.URL,
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
-	cfg := PoetConfig{DefaultRequestTimeout: time.Millisecond * 100}
+	cfg := PoetConfig{RequestTimeout: time.Millisecond * 100}
 	cert := certifier.PoetCert{Data: []byte("abc")}
 	ctrl := gomock.NewController(t)
 	mCertifier := NewMockcertifierService(ctrl)
@@ -302,7 +302,7 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 		Address: ts.URL,
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
-	cfg := PoetConfig{DefaultRequestTimeout: time.Millisecond * 100}
+	cfg := PoetConfig{RequestTimeout: time.Millisecond * 100}
 	cert := certifier.PoetCert{Data: []byte("abc")}
 	ctrl := gomock.NewController(t)
 	mCertifier := NewMockcertifierService(ctrl)
@@ -361,7 +361,7 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 		Address: ts.URL,
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
-	cfg := PoetConfig{DefaultRequestTimeout: time.Millisecond * 100}
+	cfg := PoetConfig{RequestTimeout: time.Millisecond * 100}
 
 	ctrl := gomock.NewController(t)
 	mCertifier := NewMockcertifierService(ctrl)

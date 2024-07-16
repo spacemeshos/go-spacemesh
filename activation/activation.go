@@ -39,10 +39,10 @@ var (
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
-	DefaultRequestTimeout time.Duration `mapstructure:"poet-client-default-request-timeout"`
-	RequestRetryDelay     time.Duration `mapstructure:"poet-client-retry-delay"`
-	CertifierInfoCacheTTL time.Duration `mapstructure:"poet-client-certifier-info-cache-ttl"`
-	MaxRequestRetries     int           `mapstructure:"poet-client-retry-max"`
+	RequestTimeout        time.Duration `mapstructure:"poet-request-timeout"`
+	RequestRetryDelay     time.Duration `mapstructure:"retry-delay"`
+	CertifierInfoCacheTTL time.Duration `mapstructure:"certifier-info-cache-ttl"`
+	MaxRequestRetries     int           `mapstructure:"retry-max"`
 	// Start of new PoET round
 	PhaseShift time.Duration `mapstructure:"phase-shift"`
 	// A gap between end of old PoET round and start of new one
@@ -53,8 +53,8 @@ type PoetConfig struct {
 	PositioningATXSelectionTimeout time.Duration `mapstructure:"positioning-atx-selection-timeout"`
 	// Period to submit PoST challenge to PoET server. Must be not greater than GracePeriod
 	SubmitChallengeTimeout time.Duration `mapstructure:"submit-challenge-timeout"`
-	// Period to get PoET proof
-	GetProofTimeout time.Duration `mapstructure:"get-proof-timeout"`
+	// Period to fetch PoET proof
+	FetchProofTimeout time.Duration `mapstructure:"fetch-proof-timeout"`
 }
 
 func DefaultPoetConfig() PoetConfig {

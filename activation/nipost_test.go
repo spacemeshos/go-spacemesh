@@ -877,7 +877,7 @@ func TestPoetTimeoutsParameters(t *testing.T) {
 			postService,
 			zaptest.NewLogger(t),
 			PoetConfig{
-				GetProofTimeout: 1 * time.Microsecond,
+				FetchProofTimeout: 1 * time.Microsecond,
 			},
 			mclock,
 			nil,

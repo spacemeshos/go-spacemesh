@@ -2,6 +2,15 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+### Improvements
+* [#6035](https://github.com/spacemeshos/go-spacemesh/issues/6035) 
+  Added poet config parameters to establish submit registration challenge and fetch poet proof timeouts.
+  - `submit-challenge-timeout`: Timeout duration for submitting registration challenges to the PoET service. 
+    Optional parameter, if not set, submitting will be continued till end of cyclegap 
+  - `fetch-proof-timeout`: Timeout duration for fetching proofs from PoET service. 
+    Optional parameter, if not set, fetching proof will be continued till beginning of cyclegap in publish epoch
+
 ## Release v1.6.1
 
 ### Improvements

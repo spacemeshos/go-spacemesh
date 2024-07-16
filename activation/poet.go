@@ -346,7 +346,7 @@ type poetService struct {
 
 	defaultRequestTimeout         time.Duration
 	submitChallengeRequestTimeout time.Duration
-	getProofRequestTimeout        time.Duration
+	fetchProofRequestTimeout      time.Duration
 
 	// Used to avoid concurrent requests for proof.
 	gettingProof sync.Mutex
@@ -399,9 +399,9 @@ func NewPoetServiceWithClient(
 		db:                            db,
 		logger:                        logger,
 		client:                        client,
-		defaultRequestTimeout:         cfg.DefaultRequestTimeout,
+		defaultRequestTimeout:         cfg.RequestTimeout,
 		submitChallengeRequestTimeout: cfg.SubmitChallengeTimeout,
-		getProofRequestTimeout:        cfg.GetProofTimeout,
+		fetchProofRequestTimeout:      cfg.FetchProofTimeout,
 		certifierInfoTTL:              cfg.CertifierInfoCacheTTL,
 		proofMembers:                  make(map[string][]types.Hash32, 1),
 	}
@@ -505,7 +505,7 @@ func (c *poetService) Submit(
 }
 
 func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
-	getProofsCtx, cancel := withConditionalTimeout(ctx, c.getProofRequestTimeout)
+	getProofsCtx, cancel := withConditionalTimeout(ctx, c.fetchProofRequestTimeout)
 	defer cancel()
 
 	c.gettingProof.Lock()

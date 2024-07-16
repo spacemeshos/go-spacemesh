@@ -384,7 +384,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	// Arrange
 	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{
-		PhaseShift: layerDuration,
+		PhaseShift: layerDuration * 4,
 	}))
 	sig := maps.Values(tab.signers)[0]
 
@@ -435,7 +435,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 
 func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{
-		PhaseShift: layerDuration,
+		PhaseShift: layerDuration * 4,
 	}))
 	sig := maps.Values(tab.signers)[0]
 
@@ -508,9 +508,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testing.T) {
-	poetCfg := PoetConfig{
-		PhaseShift: layerDuration,
-	}
+	poetCfg := PoetConfig{PhaseShift: layerDuration * 4}
 	tab := newTestBuilder(t, 1, WithPoetConfig(poetCfg))
 	sig := maps.Values(tab.signers)[0]
 
@@ -672,7 +670,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
@@ -709,7 +707,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserved(t *testing.T) {
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
@@ -786,9 +784,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	r := require.New(t)
 
 	// Arrange
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{
-		PhaseShift: layerDuration,
-	}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	otherSigner, err := signing.NewEdSigner()
@@ -882,7 +878,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	r := require.New(t)
 
 	// Arrange
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	otherSigner, err := signing.NewEdSigner()
@@ -979,7 +975,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
@@ -1221,7 +1217,7 @@ func TestBuilder_InitialPostIsPersisted(t *testing.T) {
 }
 
 func TestBuilder_InitialPostLogErrorMissingVRFNonce(t *testing.T) {
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	commitmentATX := types.RandomATXID()
