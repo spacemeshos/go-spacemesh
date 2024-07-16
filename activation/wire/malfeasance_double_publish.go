@@ -89,8 +89,8 @@ func publishEpochProof(atx *ActivationTxV2) ([]types.Hash32, error) {
 	return proofHashes, nil
 }
 
-// Valid returns true if the proof is valid. It verifies that the two proofs have the same publish epoch, smesher ID,
-// and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
+// Valid returns no error if the proof is valid. It verifies that the two proofs have the same publish epoch,
+// smesher ID, and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
 func (p ProofDoublePublish) Valid(edVerifier *signing.EdVerifier) (types.NodeID, error) {
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
 		return types.EmptyNodeID, errors.New("proofs have the same ATX ID")
@@ -127,7 +127,8 @@ type PublishProof struct {
 	Signature types.EdSignature
 }
 
-// Valid returns true if the proof is valid. It verifies that the signature is valid and that the merkle proof is valid.
+// Valid returns no error if the proof is valid. It verifies that the signature is valid and that the merkle proof is
+// valid.
 func (p PublishProof) Valid(edVerifier *signing.EdVerifier) error {
 	if !edVerifier.Verify(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
 		return errors.New("invalid signature")

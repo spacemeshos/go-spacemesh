@@ -22,6 +22,21 @@ const (
 	MarriageATXIndex
 )
 
+type InitialPostTreeIndex uint64
+
+const (
+	CommitmentATXIndex InitialPostTreeIndex = iota
+	InitialPostRootIndex
+)
+
+type NiPostTreeIndex uint64
+
+const (
+	MembershipIndex NiPostTreeIndex = iota
+	ChallengeIndex
+	PostsRootIndex
+)
+
 // ProofType is an identifier for the type of proof that is encoded in the ATXProof.
 type ProofType byte
 

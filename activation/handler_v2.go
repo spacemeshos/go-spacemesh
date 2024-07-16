@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -109,7 +108,7 @@ func (h *HandlerV2) processATX(
 		return fmt.Errorf("validating marriages: %w", err)
 	}
 
-	parts, _, err := h.syntacticallyValidateDeps(ctx, watx)
+	parts, err := h.syntacticallyValidateDeps(ctx, watx)
 	if err != nil {
 		return fmt.Errorf("validating atx %s (deps): %w", watx.ID(), err)
 	}
@@ -493,13 +492,13 @@ func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error 
 func (h *HandlerV2) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV2,
-) (*atxParts, *mwire.MalfeasanceProof, error) {
+) (*atxParts, error) {
 	parts := atxParts{
 		units: make(map[types.NodeID]uint32),
 	}
 	if atx.Initial != nil {
 		if err := h.validateCommitmentAtx(h.goldenATXID, atx.Initial.CommitmentATX, atx.PublishEpoch); err != nil {
-			return nil, nil, fmt.Errorf("verifying commitment ATX: %w", err)
+			return nil, fmt.Errorf("verifying commitment ATX: %w", err)
 		}
 	}
 
@@ -507,18 +506,19 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	for i, prev := range atx.PreviousATXs {
 		prevAtx, err := atxs.Get(h.cdb, prev)
 		if err != nil {
-			return nil, nil, fmt.Errorf("fetching previous atx: %w", err)
+			return nil, fmt.Errorf("fetching previous atx: %w", err)
 		}
 		if prevAtx.PublishEpoch >= atx.PublishEpoch {
-			err := fmt.Errorf("previous atx is too new (%d >= %d) (%s) ", prevAtx.PublishEpoch, atx.PublishEpoch, prev)
-			return nil, nil, err
+			return nil, fmt.Errorf("previous atx (%s) is too new (%d >= %d)",
+				prev, prevAtx.PublishEpoch, atx.PublishEpoch,
+			)
 		}
 		previousAtxs[i] = prevAtx
 	}
 
 	equivocationSet, err := h.equivocationSet(atx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("calculating equivocation set: %w", err)
+		return nil, fmt.Errorf("calculating equivocation set: %w", err)
 	}
 
 	// validate previous ATXs
@@ -527,8 +527,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		nipostSizes[i] = new(nipostSize)
 		for _, post := range niposts.Posts {
 			if post.MarriageIndex >= uint32(len(equivocationSet)) {
-				err := fmt.Errorf("marriage index out of bounds: %d > %d", post.MarriageIndex, len(equivocationSet)-1)
-				return nil, nil, err
+				return nil, fmt.Errorf("marriage index out of bounds: %d > %d",
+					post.MarriageIndex, len(equivocationSet)-1,
+				)
 			}
 
 			id := equivocationSet[post.MarriageIndex]
@@ -537,7 +538,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				var err error
 				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, previousAtxs)
 				if err != nil {
-					return nil, nil, fmt.Errorf("validating previous atx: %w", err)
+					return nil, fmt.Errorf("validating previous atx: %w", err)
 				}
 			}
 			nipostSizes[i].addUnits(effectiveNumUnits)
@@ -565,27 +566,27 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			indexedChallenges[post.MembershipLeafIndex] = nipostChallenge.Hash().Bytes()
 		}
 
-		leafIndicies := maps.Keys(indexedChallenges)
-		slices.Sort(leafIndicies)
-		poetChallenges := make([][]byte, 0, len(leafIndicies))
-		for _, i := range leafIndicies {
+		leafIndices := maps.Keys(indexedChallenges)
+		slices.Sort(leafIndices)
+		poetChallenges := make([][]byte, 0, len(leafIndices))
+		for _, i := range leafIndices {
 			poetChallenges = append(poetChallenges, indexedChallenges[i])
 		}
 
 		membership := types.MultiMerkleProof{
 			Nodes:       niposts.Membership.Nodes,
-			LeafIndices: leafIndicies,
+			LeafIndices: leafIndices,
 		}
 		leaves, err := h.nipostValidator.PoetMembership(ctx, &membership, niposts.Challenge, poetChallenges)
 		if err != nil {
-			return nil, nil, fmt.Errorf("validating poet membership: %w", err)
+			return nil, fmt.Errorf("validating poet membership: %w", err)
 		}
 		nipostSizes[i].ticks = leaves / h.tickSize
 	}
 
 	parts.effectiveUnits, parts.weight, err = nipostSizes.sumUp()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// validate all niposts
@@ -600,7 +601,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				var err error
 				commitment, err = atxs.CommitmentATX(h.cdb, id)
 				if err != nil {
-					return nil, nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
+					return nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
 				}
 				if id == atx.SmesherID {
 					smesherCommitment = &commitment
@@ -626,7 +627,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				// TODO(mafa): generate malfeasance proof
 			}
 			if err != nil {
-				return nil, nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
+				return nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
 			}
 			parts.units[id] = post.NumUnits
 		}
@@ -634,17 +635,17 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 
 	if atx.Initial == nil {
 		if smesherCommitment == nil {
-			return nil, nil, errors.New("ATX signer not present in merged ATX")
+			return nil, errors.New("ATX signer not present in merged ATX")
 		}
 		err := h.nipostValidator.VRFNonceV2(atx.SmesherID, *smesherCommitment, atx.VRFNonce, atx.TotalNumUnits())
 		if err != nil {
-			return nil, nil, fmt.Errorf("validating VRF nonce: %w", err)
+			return nil, fmt.Errorf("validating VRF nonce: %w", err)
 		}
 	}
 
 	parts.ticks = nipostSizes.minTicks()
 
-	return &parts, nil, nil
+	return &parts, nil
 }
 
 func (h *HandlerV2) checkMalicious(tx *sql.Tx, watx *wire.ActivationTxV2, marrying []marriage) error {
