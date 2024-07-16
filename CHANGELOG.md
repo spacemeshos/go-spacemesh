@@ -2,6 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.6.3
+
+### Improvements
+
+* [#6137](https://github.com/spacemeshos/go-spacemesh/pull/6137) Fix hanging ATX sync.
+
 ## Release v1.6.2
 
 ### Improvements
