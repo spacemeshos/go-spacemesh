@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -590,7 +591,7 @@ func (h *HandlerV1) processATX(
 	received time.Time,
 ) (*mwire.MalfeasanceProof, error) {
 	if !h.edVerifier.Verify(signing.ATX, watx.SmesherID, watx.SignedBytes(), watx.Signature) {
-		return nil, fmt.Errorf("invalid atx signature: %w", errMalformedData)
+		return nil, fmt.Errorf("%w: invalid atx signature: %w", pubsub.ErrValidationReject, errMalformedData)
 	}
 
 	existing, _ := h.cdb.GetAtx(watx.ID())
@@ -606,7 +607,7 @@ func (h *HandlerV1) processATX(
 	)
 
 	if err := h.syntacticallyValidate(ctx, watx); err != nil {
-		return nil, fmt.Errorf("validating atx %s: %w", watx.ID(), err)
+		return nil, fmt.Errorf("%w: validating atx %s: %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
 
 	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, watx)
@@ -617,7 +618,7 @@ func (h *HandlerV1) processATX(
 
 	leaves, effectiveNumUnits, proof, err := h.syntacticallyValidateDeps(ctx, watx)
 	if err != nil {
-		return nil, fmt.Errorf("validating atx %s (deps): %w", watx.ID(), err)
+		return nil, fmt.Errorf("%w: validating atx %s (deps): %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
 	if proof != nil {
 		return proof, nil
@@ -685,7 +686,7 @@ func (h *HandlerV1) registerHashes(peer p2p.Peer, poetRef types.Hash32, atxIDs [
 // fetchReferences makes sure that the referenced poet proof and ATXs are available.
 func (h *HandlerV1) fetchReferences(ctx context.Context, poetRef types.Hash32, atxIDs []types.ATXID) error {
 	if err := h.fetcher.GetPoetProof(ctx, poetRef); err != nil {
-		return fmt.Errorf("missing poet proof (%s): %w", poetRef.ShortString(), err)
+		return fmt.Errorf("fetching poet proof (%s): %w", poetRef.ShortString(), err)
 	}
 
 	if len(atxIDs) == 0 {
