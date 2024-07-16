@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -90,7 +91,7 @@ func (h *HandlerV2) processATX(
 	)
 
 	if err := h.syntacticallyValidate(ctx, watx); err != nil {
-		return nil, fmt.Errorf("atx %s syntactically invalid: %w", watx.ID(), err)
+		return nil, fmt.Errorf("%w: validating atx %s: %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
 
 	poetRef, atxIDs := h.collectAtxDeps(watx)
@@ -101,17 +102,17 @@ func (h *HandlerV2) processATX(
 
 	baseTickHeight, err := h.validatePositioningAtx(watx.PublishEpoch, h.goldenATXID, watx.PositioningATX)
 	if err != nil {
-		return nil, fmt.Errorf("validating positioning atx: %w", err)
+		return nil, fmt.Errorf("%w: validating positioning atx: %w", pubsub.ErrValidationReject, err)
 	}
 
 	marrying, err := h.validateMarriages(watx)
 	if err != nil {
-		return nil, fmt.Errorf("validating marriages: %w", err)
+		return nil, fmt.Errorf("%w: validating marriages: %w", pubsub.ErrValidationReject, err)
 	}
 
 	parts, proof, err := h.syntacticallyValidateDeps(ctx, watx)
 	if err != nil {
-		return nil, fmt.Errorf("atx %s syntactically invalid based on deps: %w", watx.ID(), err)
+		return nil, fmt.Errorf("%w: validating atx %s (deps): %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
 
 	if proof != nil {
