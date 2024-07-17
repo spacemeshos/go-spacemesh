@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
@@ -15,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -49,13 +49,13 @@ type testMesh struct {
 func createTestMesh(t *testing.T) *testMesh {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	db := sql.InMemory()
 	atxsdata := atxsdata.New()
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
 		db:           db,
-		cdb:          datastore.NewCachedDB(db, lg.Zap()),
+		cdb:          datastore.NewCachedDB(db, lg),
 		atxsdata:     atxsdata,
 		mockClock:    mocks.NewMocklayerClock(ctrl),
 		mockVM:       mocks.NewMockvmState(ctrl),
@@ -204,7 +204,7 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 		tm.mockTortoise,
 		tm.executor,
 		tm.mockState,
-		logtest.New(t),
+		zaptest.NewLogger(t),
 	)
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
@@ -242,7 +242,7 @@ func TestMesh_WakeUp(t *testing.T) {
 		tm.mockTortoise,
 		tm.executor,
 		tm.mockState,
-		logtest.New(t),
+		zaptest.NewLogger(t),
 	)
 	require.NoError(t, err)
 	gotL := msh.LatestLayer()
@@ -389,7 +389,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.NotNil(t, malProof)
 	require.True(t, blts[1].IsMalicious())
 
-	mh := NewMalfeasanceHandler(tm.cdb, signing.NewEdVerifier(), WithMalfeasanceLogger(tm.logger.Zap()))
+	mh := NewMalfeasanceHandler(tm.cdb, signing.NewEdVerifier(), WithMalfeasanceLogger(tm.logger))
 	nodeID, err := mh.Validate(context.Background(), malProof.Proof.Data)
 	require.NoError(t, err)
 	require.Equal(t, sig.NodeID(), nodeID)
