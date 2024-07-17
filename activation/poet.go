@@ -511,7 +511,10 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 		c.logger.Warn("cached members found but proof not found in db", zap.String("round_id", roundID), zap.Error(err))
 	}
 
-	proof, members, err := c.client.Proof(ctx, roundID)
+	proofCtx, cacnel := withConditionalTimeout(ctx, c.requestTimeout)
+	defer cacnel()
+
+	proof, members, err := c.client.Proof(proofCtx, roundID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}

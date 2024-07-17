@@ -1145,7 +1145,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 }
 
 func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	post := nipost.Post{
@@ -1184,7 +1184,7 @@ func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
 }
 
 func TestBuilder_InitialPostIsPersisted(t *testing.T) {
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	commitmentATX := types.RandomATXID()
