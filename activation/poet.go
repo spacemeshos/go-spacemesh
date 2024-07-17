@@ -344,9 +344,7 @@ type poetService struct {
 	logger *zap.Logger
 	client PoetClient
 
-	defaultRequestTimeout         time.Duration
-	submitChallengeRequestTimeout time.Duration
-	fetchProofRequestTimeout      time.Duration
+	requestTimeout time.Duration
 
 	// Used to avoid concurrent requests for proof.
 	gettingProof sync.Mutex
@@ -396,14 +394,12 @@ func NewPoetServiceWithClient(
 	opts ...PoetServiceOpt,
 ) *poetService {
 	poetClient := &poetService{
-		db:                            db,
-		logger:                        logger,
-		client:                        client,
-		defaultRequestTimeout:         cfg.RequestTimeout,
-		submitChallengeRequestTimeout: cfg.SubmitChallengeTimeout,
-		fetchProofRequestTimeout:      cfg.FetchProofTimeout,
-		certifierInfoTTL:              cfg.CertifierInfoCacheTTL,
-		proofMembers:                  make(map[string][]types.Hash32, 1),
+		db:               db,
+		logger:           logger,
+		client:           client,
+		requestTimeout:   cfg.RequestTimeout,
+		certifierInfoTTL: cfg.CertifierInfoCacheTTL,
+		proofMembers:     make(map[string][]types.Hash32, 1),
 	}
 
 	for _, opt := range opts {
@@ -437,7 +433,7 @@ func (c *poetService) authorize(
 	// TODO: remove this fallback once we migrate to certificates fully.
 
 	logger.Debug("querying for poet pow parameters")
-	powCtx, cancel := withConditionalTimeout(ctx, c.defaultRequestTimeout)
+	powCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
 	powParams, err := c.client.PowParams(powCtx)
 	if err != nil {
@@ -485,9 +481,7 @@ func (c *poetService) Submit(
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	submitCtx, cancel := withConditionalTimeout(ctx, c.submitChallengeRequestTimeout)
-	defer cancel()
-	round, err := c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
+	round, err := c.client.Submit(ctx, deadline, prefix, challenge, signature, nodeID, *auth)
 	switch {
 	case err == nil:
 		return round, nil
@@ -497,7 +491,7 @@ func (c *poetService) Submit(
 		if err != nil {
 			return nil, fmt.Errorf("recertifying: %w", err)
 		}
-		return c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
+		return c.client.Submit(ctx, deadline, prefix, challenge, signature, nodeID, *auth)
 	case errors.Is(err, context.DeadlineExceeded):
 		logger.Warn("failed to submit challenge: probably submit challenge timeout is too short", zap.Error(err))
 	}
@@ -505,9 +499,6 @@ func (c *poetService) Submit(
 }
 
 func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
-	getProofsCtx, cancel := withConditionalTimeout(ctx, c.fetchProofRequestTimeout)
-	defer cancel()
-
 	c.gettingProof.Lock()
 	defer c.gettingProof.Unlock()
 
@@ -520,7 +511,7 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 		c.logger.Warn("cached members found but proof not found in db", zap.String("round_id", roundID), zap.Error(err))
 	}
 
-	proof, members, err := c.client.Proof(getProofsCtx, roundID)
+	proof, members, err := c.client.Proof(ctx, roundID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}

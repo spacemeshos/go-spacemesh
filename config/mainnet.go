@@ -167,11 +167,6 @@ func MainnetConfig() Config {
 			PhaseShift:        240 * time.Hour,
 			CycleGap:          12 * time.Hour,
 			GracePeriod:       1 * time.Hour,
-			// SubmitChallengeTimeout = GracePeriod
-			SubmitChallengeTimeout:         1 * time.Hour,
-			PositioningATXSelectionTimeout: 50 * time.Minute,
-			// FetchProofTimeout = RequestTimeout
-			FetchProofTimeout: 1100 * time.Second, // ~ 18 min
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   4,

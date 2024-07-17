@@ -51,10 +51,6 @@ type PoetConfig struct {
 	GracePeriod time.Duration `mapstructure:"grace-period"`
 	// Period to find positioning ATX. Must be less, than GracePeriod
 	PositioningATXSelectionTimeout time.Duration `mapstructure:"positioning-atx-selection-timeout"`
-	// Period to submit PoST challenge to PoET server. Must be not greater than GracePeriod
-	SubmitChallengeTimeout time.Duration `mapstructure:"submit-challenge-timeout"`
-	// Period to fetch PoET proof
-	FetchProofTimeout time.Duration `mapstructure:"fetch-proof-timeout"`
 }
 
 func DefaultPoetConfig() PoetConfig {
