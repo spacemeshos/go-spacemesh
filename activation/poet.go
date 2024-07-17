@@ -309,7 +309,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 
 	if res.StatusCode != http.StatusOK {
-		c.logger.Warn("got poet response != 200 OK", zap.String("status", res.Status), zap.String("body", string(data)))
+		c.logger.Debug("poet request failed", zap.String("status", res.Status), zap.String("body", string(data)))
 	}
 
 	switch res.StatusCode {
