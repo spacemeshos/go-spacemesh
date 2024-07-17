@@ -50,14 +50,15 @@ func (k KeyBytes) isZero() bool {
 var errEmptySet = errors.New("empty range")
 
 type dbRangeIterator struct {
-	db          sql.Database
-	from        KeyBytes
-	query       string
-	chunkSize   int
-	chunk       []KeyBytes
-	pos         int
-	keyLen      int
-	singleChunk bool
+	db           sql.Database
+	from         KeyBytes
+	query        string
+	chunkSize    int
+	maxChunkSize int
+	chunk        []KeyBytes
+	pos          int
+	keyLen       int
+	singleChunk  bool
 }
 
 var _ hashsync.Iterator = &dbRangeIterator{}
@@ -68,22 +69,23 @@ func newDBRangeIterator(
 	db sql.Database,
 	query string,
 	from KeyBytes,
-	chunkSize int,
+	maxChunkSize int,
 ) (hashsync.Iterator, error) {
 	if from == nil {
 		panic("BUG: makeDBIterator: nil from")
 	}
-	if chunkSize <= 0 {
+	if maxChunkSize <= 0 {
 		panic("BUG: makeDBIterator: chunkSize must be > 0")
 	}
 	it := &dbRangeIterator{
-		db:          db,
-		from:        from.Clone(),
-		query:       query,
-		chunkSize:   chunkSize,
-		keyLen:      len(from),
-		chunk:       make([]KeyBytes, chunkSize),
-		singleChunk: false,
+		db:           db,
+		from:         from.Clone(),
+		query:        query,
+		chunkSize:    1,
+		maxChunkSize: maxChunkSize,
+		keyLen:       len(from),
+		chunk:        make([]KeyBytes, maxChunkSize),
+		singleChunk:  false,
 	}
 	if err := it.load(); err != nil {
 		return nil, err
@@ -102,7 +104,11 @@ func (it *dbRangeIterator) load() error {
 	n := 0
 	// if the chunk size was reduced due to a short chunk before wraparound, we need
 	// to extend it back
-	it.chunk = it.chunk[:it.chunkSize]
+	if cap(it.chunk) < it.chunkSize {
+		it.chunk = make([]KeyBytes, it.chunkSize)
+	} else {
+		it.chunk = it.chunk[:it.chunkSize]
+	}
 	var ierr error
 	_, err := it.db.Exec(
 		it.query, func(stmt *sql.Statement) {
@@ -125,6 +131,7 @@ func (it *dbRangeIterator) load() error {
 			return true
 		})
 	fromZero := it.from.isZero()
+	it.chunkSize = min(it.chunkSize*2, it.maxChunkSize)
 	switch {
 	case err != nil || ierr != nil:
 		return errors.Join(ierr, err)
