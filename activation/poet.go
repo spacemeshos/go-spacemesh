@@ -499,6 +499,9 @@ func (c *poetService) Submit(
 }
 
 func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
+	getProofsCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
+	defer cancel()
+
 	c.gettingProof.Lock()
 	defer c.gettingProof.Unlock()
 
@@ -511,10 +514,7 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 		c.logger.Warn("cached members found but proof not found in db", zap.String("round_id", roundID), zap.Error(err))
 	}
 
-	proofCtx, cacnel := withConditionalTimeout(ctx, c.requestTimeout)
-	defer cacnel()
-
-	proof, members, err := c.client.Proof(proofCtx, roundID)
+	proof, members, err := c.client.Proof(getProofsCtx, roundID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
