@@ -285,8 +285,8 @@ func TestDBRangeIterator(t *testing.T) {
 	} {
 		deleteDBItems(t, db)
 		insertDBItems(t, db, tc.items)
-		for chunkSize := 1; chunkSize < 12; chunkSize++ {
-			it, err := newDBRangeIterator(db, testQuery, tc.from, chunkSize)
+		for maxChunkSize := 1; maxChunkSize < 12; maxChunkSize++ {
+			it, err := newDBRangeIterator(db, testQuery, tc.from, maxChunkSize)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 				continue
@@ -302,8 +302,8 @@ func TestDBRangeIterator(t *testing.T) {
 				require.NoError(t, it.Next())
 			}
 			expected := slices.Concat(tc.items[tc.fromN:], tc.items[:tc.fromN])
-			require.Equal(t, expected, collected, "count=%d from=%s chunkSize=%d",
-				len(tc.items), hex.EncodeToString(tc.from), chunkSize)
+			require.Equal(t, expected, collected, "count=%d from=%s maxChunkSize=%d",
+				len(tc.items), hex.EncodeToString(tc.from), maxChunkSize)
 			for range 2 {
 				for i := 0; i < len(tc.items); i++ {
 					k := it.Key()
