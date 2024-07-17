@@ -413,12 +413,12 @@ func (h *HandlerV1) checkWrongPrevAtx(
 	tx sql.Executor,
 	atx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	prevID, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, atx.PublishEpoch)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return nil, fmt.Errorf("get last atx by node id: %w", err)
-	}
-	if prevID == atx.PrevATXID {
+	atx2ID, err := atxs.AtxWithPrevious(tx, atx.PrevATXID, atx.ID(), atx.SmesherID)
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
 		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("fetching atx with previous %s: %w", atx.PrevATXID, err)
 	}
 
 	if _, ok := h.signers[atx.SmesherID]; ok {
@@ -428,55 +428,9 @@ func (h *HandlerV1) checkWrongPrevAtx(
 				"registering at PoET",
 			log.ZContext(ctx),
 			zap.Stringer("smesher", atx.SmesherID),
-			log.ZShortStringer("expected", prevID),
 			log.ZShortStringer("actual", atx.PrevATXID),
 		)
 		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
-	}
-
-	var atx2ID types.ATXID
-	if atx.PrevATXID == types.EmptyATXID {
-		// if the ATX references an empty previous ATX, we can just take the initial ATX and create a proof
-		// that the node referenced the wrong previous ATX
-		id, err := atxs.GetFirstIDByNodeID(tx, atx.SmesherID)
-		if err != nil {
-			return nil, fmt.Errorf("get initial atx id: %w", err)
-		}
-
-		atx2ID = id
-	} else {
-		prev, err := atxs.Get(tx, atx.PrevATXID)
-		if err != nil {
-			return nil, fmt.Errorf("get prev atx: %w", err)
-		}
-
-		// if atx references a previous ATX that is not the last ATX by the same node, there must be at least one
-		// atx published between prevATX and the current epoch
-		pubEpoch := h.clock.CurrentLayer().GetEpoch()
-		for pubEpoch > prev.PublishEpoch {
-			id, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, pubEpoch)
-			if err != nil {
-				return nil, fmt.Errorf("get prev atx id by node id: %w", err)
-			}
-
-			atx2, err := atxs.Get(tx, id)
-			if err != nil {
-				return nil, fmt.Errorf("get prev atx: %w", err)
-			}
-			if atx.ID() != atx2.ID() && atx.PrevATXID == atx2.PrevATXID {
-				// found an ATX that points to the same previous ATX
-				atx2ID = id
-				break
-			}
-			pubEpoch = atx2.PublishEpoch
-		}
-	}
-
-	if atx2ID == types.EmptyATXID {
-		// something went wrong, we couldn't find an ATX that points to the same previous ATX
-		// this should never happen since we are checking in other places that all ATXs from the same node
-		// form a chain
-		return nil, errors.New("failed double previous check: could not find an ATX with same previous ATX")
 	}
 
 	var blob sql.Blob
@@ -512,7 +466,6 @@ func (h *HandlerV1) checkWrongPrevAtx(
 	h.logger.Warn("smesher referenced the wrong previous in published ATX",
 		log.ZContext(ctx),
 		zap.Stringer("smesher", atx.SmesherID),
-		log.ZShortStringer("expected", prevID),
 		log.ZShortStringer("actual", atx.PrevATXID),
 	)
 	return proof, nil

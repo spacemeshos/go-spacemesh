@@ -1148,3 +1148,90 @@ func TestUnits(t *testing.T) {
 		require.Equal(t, units[nodeID], got)
 	})
 }
+
+func Test_AtxWithPrevious(t *testing.T) {
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	prev := types.RandomATXID()
+
+	t.Run("no atxs", func(t *testing.T) {
+		db := sql.InMemory()
+		_, err := atxs.AtxWithPrevious(db, prev, types.RandomATXID(), sig.NodeID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("finds other ATX with same previous", func(t *testing.T) {
+		db := sql.InMemory()
+
+		atx, blob := newAtx(t, sig)
+		require.NoError(t, atxs.Add(db, atx, blob))
+
+		id, err := atxs.AtxWithPrevious(db, atx.PrevATXID, types.RandomATXID(), sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.ID(), id)
+	})
+	t.Run("finds other ATX with same previous (empty)", func(t *testing.T) {
+		db := sql.InMemory()
+
+		atx, blob := newAtx(t, sig, withPrevATXID(types.EmptyATXID))
+		require.NoError(t, atxs.Add(db, atx, blob))
+
+		id, err := atxs.AtxWithPrevious(db, atx.PrevATXID, types.RandomATXID(), sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.ID(), id)
+	})
+	t.Run("filters out by ATX ID", func(t *testing.T) {
+		db := sql.InMemory()
+
+		atx, blob := newAtx(t, sig)
+		require.NoError(t, atxs.Add(db, atx, blob))
+
+		atx2, blob := newAtx(t, sig, withPrevATXID(atx.PrevATXID))
+		require.NoError(t, atxs.Add(db, atx2, blob))
+
+		id, err := atxs.AtxWithPrevious(db, atx.PrevATXID, atx.ID(), sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx2.ID(), id)
+
+		id, err = atxs.AtxWithPrevious(db, atx.PrevATXID, atx2.ID(), sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.ID(), id)
+	})
+	t.Run("filters out by ATX ID (empty)", func(t *testing.T) {
+		db := sql.InMemory()
+
+		atx, blob := newAtx(t, sig, withPrevATXID(types.EmptyATXID))
+		require.NoError(t, atxs.Add(db, atx, blob))
+
+		atx2, blob := newAtx(t, sig, withPrevATXID(types.EmptyATXID))
+		require.NoError(t, atxs.Add(db, atx2, blob))
+
+		id, err := atxs.AtxWithPrevious(db, atx.PrevATXID, atx.ID(), sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx2.ID(), id)
+
+		id, err = atxs.AtxWithPrevious(db, atx.PrevATXID, atx2.ID(), sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.ID(), id)
+	})
+	t.Run("filters out by node ID", func(t *testing.T) {
+		db := sql.InMemory()
+
+		sig2, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx, blob := newAtx(t, sig, withPrevATXID(types.EmptyATXID))
+		require.NoError(t, atxs.Add(db, atx, blob))
+
+		atx2, blob := newAtx(t, sig2, withPrevATXID(types.EmptyATXID))
+		require.NoError(t, atxs.Add(db, atx2, blob))
+
+		id, err := atxs.AtxWithPrevious(db, atx.PrevATXID, types.RandomATXID(), sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.ID(), id)
+
+		id, err = atxs.AtxWithPrevious(db, atx.PrevATXID, types.RandomATXID(), sig2.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx2.ID(), id)
+	})
+}

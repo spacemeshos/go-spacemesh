@@ -732,7 +732,6 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx3.PublishEpoch+1, watx3.ID(), gomock.Any())
 		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
-		atxHdlr.mclock.EXPECT().CurrentLayer().Return(watx3.PublishEpoch.FirstLayer())
 		proof, err = atxHdlr.storeAtx(context.Background(), atx3, watx3)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
