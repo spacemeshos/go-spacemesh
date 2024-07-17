@@ -103,7 +103,7 @@ func (v *Validator) NIPost(
 
 	err := v.Post(ctx, nodeId, commitmentAtxId, nipost.Post, nipost.PostMetadata, numUnits, opts...)
 	if err != nil {
-		return 0, fmt.Errorf("invalid Post: %w", err)
+		return 0, fmt.Errorf("validating Post: %w", err)
 	}
 
 	var ref types.PoetProofRef
@@ -215,7 +215,7 @@ func (v *Validator) Post(
 
 	start := time.Now()
 	if err := v.postVerifier.Verify(ctx, p, m, callOpts...); err != nil {
-		return fmt.Errorf("verify PoST: %w", err)
+		return fmt.Errorf("verifying PoST: %w", err)
 	}
 	metrics.PostVerificationLatency.Observe(time.Since(start).Seconds())
 	return nil

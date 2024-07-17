@@ -13,3 +13,7 @@ init_cfg:
     n: 2
     r: 1
     p: 1
+limits:
+  max_concurrent_requests: 2
+  max_pending_requests: 100
+  max_body_size: 4096

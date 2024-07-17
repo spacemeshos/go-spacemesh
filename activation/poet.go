@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
@@ -518,7 +519,7 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 
-	if err := c.db.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
+	if err := c.db.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		c.logger.Warn("failed to validate and store proof", zap.Error(err), zap.Object("proof", proof))
 		return nil, nil, fmt.Errorf("validating and storing proof: %w", err)
 	}

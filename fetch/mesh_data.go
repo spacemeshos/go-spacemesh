@@ -12,7 +12,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -20,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -211,7 +211,7 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	switch {
 	case pm.err == nil:
 		return nil
-	case errors.Is(pm.err, activation.ErrObjectExists):
+	case errors.Is(pm.err, sql.ErrObjectExists):
 		// PoET proofs are concurrently stored in DB in two places:
 		// fetcher and nipost builder. Hence, it might happen that
 		// a proof had been inserted into the DB while the fetcher
@@ -405,6 +405,15 @@ type BatchError struct {
 
 func (b *BatchError) Empty() bool {
 	return len(b.Errors) == 0
+}
+
+func (b *BatchError) Is(target error) bool {
+	for _, err := range b.Errors {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *BatchError) Add(id types.Hash32, err error) {
