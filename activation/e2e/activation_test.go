@@ -85,12 +85,12 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	epoch := layerDuration * layersPerEpoch
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	poetCfg := activation.PoetConfig{
-		RequestTimeout:    epoch / 5,
-		RequestRetryDelay: epoch / 50,
-		MaxRequestRetries: 10,
 		PhaseShift:        epoch,
 		CycleGap:          3 * epoch / 4,
 		GracePeriod:       epoch / 4,
+		RequestTimeout:    epoch / 5,
+		RequestRetryDelay: epoch / 50,
+		MaxRequestRetries: 10,
 	}
 
 	scrypt := testPostSetupOpts(t).Scrypt

@@ -344,10 +344,7 @@ func TestBuilder_StopSmeshing_failsWhenNotStarted(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
-	tab := newTestBuilder(t, 1, WithPoetConfig(
-		PoetConfig{
-			PhaseShift: layerDuration,
-		}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration}))
 	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
@@ -383,9 +380,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 // failing with ErrATXChallengeExpired.
 func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 	// Arrange
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{
-		PhaseShift: layerDuration * 4,
-	}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	// current layer is too late to be able to build a nipost on time
@@ -434,9 +429,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{
-		PhaseShift: layerDuration * 4,
-	}))
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
@@ -508,7 +501,9 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testing.T) {
-	poetCfg := PoetConfig{PhaseShift: layerDuration * 4}
+	poetCfg := PoetConfig{
+		PhaseShift: layerDuration * 4,
+	}
 	tab := newTestBuilder(t, 1, WithPoetConfig(poetCfg))
 	sig := maps.Values(tab.signers)[0]
 

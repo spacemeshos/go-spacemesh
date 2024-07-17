@@ -30,22 +30,20 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 
 	t.Run("add http if missing", func(t *testing.T) {
 		t.Parallel()
-		client, err := NewHTTPPoetClient(types.PoetServer{Address: "bla"},
-			PoetConfig{
-				PhaseShift: cfg.PhaseShift,
-				CycleGap:   cfg.CycleGap,
-			})
+		client, err := NewHTTPPoetClient(types.PoetServer{Address: "bla"}, PoetConfig{
+			PhaseShift: cfg.PhaseShift,
+			CycleGap:   cfg.CycleGap,
+		})
 		require.NoError(t, err)
 		require.Equal(t, "http://bla", client.baseURL.String())
 	})
 
 	t.Run("do not change scheme if present", func(t *testing.T) {
 		t.Parallel()
-		client, err := NewHTTPPoetClient(types.PoetServer{Address: "https://bla"},
-			PoetConfig{
-				PhaseShift: cfg.PhaseShift,
-				CycleGap:   cfg.CycleGap,
-			})
+		client, err := NewHTTPPoetClient(types.PoetServer{Address: "https://bla"}, PoetConfig{
+			PhaseShift: cfg.PhaseShift,
+			CycleGap:   cfg.CycleGap,
+		})
 		require.NoError(t, err)
 		require.Equal(t, "https://bla", client.baseURL.String())
 	})
@@ -115,11 +113,10 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 
 	for _, url := range poETServers {
 		t.Run(url, func(t *testing.T) {
-			client, err := NewHTTPPoetClient(types.PoetServer{Address: url},
-				PoetConfig{
-					PhaseShift: poetCfg.PhaseShift,
-					CycleGap:   poetCfg.CycleGap,
-				})
+			client, err := NewHTTPPoetClient(types.PoetServer{Address: url}, PoetConfig{
+				PhaseShift: poetCfg.PhaseShift,
+				CycleGap:   poetCfg.CycleGap,
+			})
 			require.NoError(t, err)
 			require.Equal(t, url, client.Address())
 		})
