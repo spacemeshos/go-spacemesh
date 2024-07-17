@@ -65,8 +65,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, os.Mkdir(cfg.P2P.DataDir, os.ModePerm))
 
 	cfg.POET.RequestTimeout = time.Minute
-	cfg.POET.FetchProofTimeout = time.Minute
-	cfg.POET.SubmitChallengeTimeout = time.Minute
 	cfg.POET.MaxRequestRetries = 10
 
 	var bootnodes []*cluster.NodeClient
