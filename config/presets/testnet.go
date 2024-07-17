@@ -113,12 +113,13 @@ func testnet() config.Config {
 		},
 		POET: activation.PoetConfig{
 			// RequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
-			RequestTimeout:    550 * time.Second,
-			RequestRetryDelay: 5 * time.Second,
-			MaxRequestRetries: 10,
-			PhaseShift:        12 * time.Hour,
-			CycleGap:          2 * time.Hour,
-			GracePeriod:       10 * time.Minute,
+			RequestTimeout:                 550 * time.Second,
+			RequestRetryDelay:              5 * time.Second,
+			MaxRequestRetries:              10,
+			PositioningATXSelectionTimeout: 8 * time.Minute,
+			PhaseShift:                     12 * time.Hour,
+			CycleGap:                       2 * time.Hour,
+			GracePeriod:                    10 * time.Minute,
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   2,
