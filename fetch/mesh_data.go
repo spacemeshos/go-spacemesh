@@ -5,8 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
-	"sync/atomic"
+	"sync"
 
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
@@ -77,7 +76,8 @@ func (f *Fetch) getHashes(
 
 	var (
 		eg       errgroup.Group
-		failures atomic.Uint32
+		mu       sync.Mutex
+		bfailure = BatchError{Errors: map[types.Hash32]error{}}
 	)
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
@@ -113,15 +113,18 @@ func (f *Fetch) getHashes(
 						zap.Error(p.err),
 					)
 
-					failures.Add(1)
+					mu.Lock()
+					bfailure.Add(hash, p.err)
+					mu.Unlock()
 				}
-				return p.err
+				return nil
 			}
 		})
 	}
 
-	if err := eg.Wait(); err != nil {
-		return fmt.Errorf("getting hash failed: %w (total failed: %d/%d)", err, failures.Load(), len(hashes))
+	eg.Wait()
+	if !bfailure.Empty() {
+		return &bfailure
 	}
 	return nil
 }
@@ -401,6 +404,7 @@ var ErrIgnore = errors.New("fetch: ignore")
 
 type BatchError struct {
 	Errors map[types.Hash32]error
+	first  types.Hash32
 }
 
 func (b *BatchError) Empty() bool {
@@ -420,18 +424,17 @@ func (b *BatchError) Add(id types.Hash32, err error) {
 	if b.Errors == nil {
 		b.Errors = map[types.Hash32]error{}
 	}
+	if b.Empty() {
+		b.first = id
+	}
 	b.Errors[id] = err
 }
 
 func (b *BatchError) Error() string {
-	var builder strings.Builder
-	builder.WriteString("batch failure: ")
-	for hash, err := range b.Errors {
-		builder.WriteString(hash.ShortString())
-		builder.WriteString("=")
-		builder.WriteString(err.Error())
+	if len(b.Errors) == 0 {
+		return ""
 	}
-	return builder.String()
+	return fmt.Sprintf("batch failed, first failure: %s: %v", b.first.ShortString(), b.Errors[b.first])
 }
 
 func (b *BatchError) Ignore() bool {
