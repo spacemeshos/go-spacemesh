@@ -417,7 +417,13 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	for _, poet := range b.poets {
 		eg.Go(func() error {
 			_, err := poet.Certify(ctx, sig.NodeID())
-			if err != nil {
+			switch {
+			case errors.Is(err, ErrCertificatesNotSupported):
+				b.logger.Debug("not certifying (not supported in poet)",
+					log.ZShortStringer("smesherID", sig.NodeID()),
+					zap.String("poet", poet.Address()),
+				)
+			case err != nil:
 				b.logger.Warn("failed to certify poet", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
 			}
 			return nil

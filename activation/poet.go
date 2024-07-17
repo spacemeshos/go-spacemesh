@@ -30,7 +30,7 @@ import (
 var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
-	errCertificatesNotSupported = errors.New("poet doesn't support certificates")
+	ErrCertificatesNotSupported = errors.New("poet doesn't support certificates")
 )
 
 type PoetPowParams struct {
@@ -191,7 +191,7 @@ func (c *HTTPPoetClient) CertifierInfo(ctx context.Context) (*url.URL, []byte, e
 	}
 	certifierInfo := info.GetCertifier()
 	if certifierInfo == nil {
-		return nil, nil, errCertificatesNotSupported
+		return nil, nil, ErrCertificatesNotSupported
 	}
 	url, err := url.Parse(certifierInfo.Url)
 	if err != nil {
@@ -424,7 +424,7 @@ func (c *poetService) authorize(
 	switch {
 	case err == nil:
 		return &PoetAuth{PoetCert: cert}, nil
-	case errors.Is(err, errCertificatesNotSupported):
+	case errors.Is(err, ErrCertificatesNotSupported):
 		logger.Debug("poet doesn't support certificates")
 	default:
 		logger.Warn("failed to certify", zap.Error(err))
