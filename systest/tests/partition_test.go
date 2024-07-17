@@ -178,7 +178,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 func TestPartition_30_70(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	if tctx.ClusterSize > 30 {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
@@ -192,7 +192,7 @@ func TestPartition_30_70(t *testing.T) {
 func TestPartition_50_50(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	if tctx.ClusterSize > 30 {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
