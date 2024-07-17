@@ -325,7 +325,7 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.POET.CycleGap, "cycle gap of poet server: gap between poet rounds")
 	flagSet.DurationVar(&cfg.POET.GracePeriod, "grace-period",
 		cfg.POET.GracePeriod, "time before poet round starts, when the node builds and submits a challenge")
-	flagSet.DurationVar(&cfg.POET.RequestTimeout, "poet-default-request-timeout",
+	flagSet.DurationVar(&cfg.POET.RequestTimeout, "poet-request-timeout",
 		cfg.POET.RequestTimeout, "default timeout for poet requests")
 
 	/**======================== bootstrap data updater Flags ========================== **/
