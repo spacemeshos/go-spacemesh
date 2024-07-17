@@ -39,6 +39,14 @@ This testing setup can run on top of any k8s installation. The instructions belo
     helm repo update
     helm upgrade --install loki grafana/loki-stack  --set grafana.enabled=true,prometheus.enabled=true,prometheus.alertmanager.persistentVolume.enabled=false,prometheus.server.persistentVolume.enabled=false,loki.persistence.enabled=true,loki.persistence.storageClassName=standard,loki.persistence.size=20Gi
     ```
+5. Install `gomplate`
+
+    In linux amd64 use:
+    ```bash
+    curl -o /usr/local/bin/gomplate -sSL https://github.com/hairyhenderson/gomplate/releases/download/v4.1.0/gomplate_linux-amd64 
+    chmod 755 /usr/local/bin/gomplate
+    ```
+    For other OS, please refer to the [releases](https://github.com/hairyhenderson/gomplate/releases) page.
 
 ### Using Grafana and Loki
 
@@ -70,14 +78,20 @@ kubectl port-forward service/loki-grafana 9000:80
 
     note the image tag. e.g. `go-spacemesh-dev:develop-dirty`
 
-3. Build test image for `tests` module with `make docker`.
+3. Build bootstrapper image. Under the root directory of go-spacemesh:
+
+    ```bash
+    make dockerbuild-bs
+    ```
+
+4. Build test image for `tests` module with `make docker`.
 
     ```bash
     cd systest
     make docker
     ```
 
-4. Run tests.
+5. Run tests.
 
 ```bash
 make run test_name=TestSmeshing smesher_image=<image built with `make dockerbuild-go`> e.g. `smesher_image=go-spacemesh-dev:develop-dirty`
@@ -160,6 +174,7 @@ This is related to minikube setup though and shouldn't be an issue for Kubernete
 
 * If you are switching between remote and local k8s, you have to run `minikube start` before running the tests locally.
 * If you did `make clean`, you will have to install `loki` again for grafana to be installed.
+* If the code changes in the codebase and you'd like to test the changed code, you must rebuild all images again. E.g. `make dockerbuild-go && make dockerbuild-bs && cd systest && make docker`
 
 ## Parametrizable tests
 
