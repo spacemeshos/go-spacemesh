@@ -215,11 +215,20 @@ func (s *fakeIDDBStore) registerHash(h KeyBytes) error {
 type idStoreFunc func(maxDepth int) idStore
 
 func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
+	type rangeTestCase struct {
+		xIdx, yIdx int
+		x, y       string
+		limit      int
+		fp         fingerprint
+		count      uint32
+		itype      int
+	}
 	for _, tc := range []struct {
 		name     string
 		maxDepth int
 		ids      []string
-		results  map[[3]int]fpResult
+		ranges   []rangeTestCase
+		x, y     string
 	}{
 		{
 			name:     "ids1",
@@ -231,63 +240,99 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 				"8888888888888888888888888888888888888888888888888888888888888888",
 				"abcdef1234567890000000000000000000000000000000000000000000000000",
 			},
-			results: map[[3]int]fpResult{
-				{0, 0, -1}: {
+			ranges: []rangeTestCase{
+				{
+					xIdx:  0,
+					yIdx:  0,
+					limit: -1,
 					fp:    hexToFingerprint("642464b773377bbddddddddd"),
 					count: 5,
 					itype: 0,
 				},
-				{0, 0, 3}: {
+				{
+					xIdx:  0,
+					yIdx:  0,
+					limit: 3,
 					fp:    hexToFingerprint("4761032dcfe98ba555555555"),
 					count: 3,
 					itype: 0,
 				},
-				{4, 4, -1}: {
+				{
+					xIdx:  4,
+					yIdx:  4,
+					limit: -1,
 					fp:    hexToFingerprint("642464b773377bbddddddddd"),
 					count: 5,
 					itype: 0,
 				},
-				{0, 1, -1}: {
+				{
+					xIdx:  0,
+					yIdx:  1,
+					limit: -1,
 					fp:    hexToFingerprint("000000000000000000000000"),
 					count: 1,
 					itype: -1,
 				},
-				{0, 3, -1}: {
+				{
+					xIdx:  0,
+					yIdx:  3,
+					limit: -1,
 					fp:    hexToFingerprint("4761032dcfe98ba555555555"),
 					count: 3,
 					itype: -1,
 				},
-				{0, 4, 3}: {
+				{
+					xIdx:  0,
+					yIdx:  4,
+					limit: 3,
 					fp:    hexToFingerprint("4761032dcfe98ba555555555"),
 					count: 3,
 					itype: -1,
 				},
-				{1, 4, -1}: {
+				{
+					xIdx:  1,
+					yIdx:  4,
+					limit: -1,
 					fp:    hexToFingerprint("cfe98ba54761032ddddddddd"),
 					count: 3,
 					itype: -1,
 				},
-				{1, 0, -1}: {
+				{
+					xIdx:  1,
+					yIdx:  0,
+					limit: -1,
 					fp:    hexToFingerprint("642464b773377bbddddddddd"),
 					count: 4,
 					itype: 1,
 				},
-				{2, 0, -1}: {
+				{
+					xIdx:  2,
+					yIdx:  0,
+					limit: -1,
 					fp:    hexToFingerprint("761032cfe98ba54ddddddddd"),
 					count: 3,
 					itype: 1,
 				},
-				{3, 1, -1}: {
+				{
+					xIdx:  3,
+					yIdx:  1,
+					limit: -1,
 					fp:    hexToFingerprint("2345679abcdef01888888888"),
 					count: 3,
 					itype: 1,
 				},
-				{3, 2, -1}: {
+				{
+					xIdx:  3,
+					yIdx:  2,
+					limit: -1,
 					fp:    hexToFingerprint("317131e226622ee888888888"),
 					count: 4,
 					itype: 1,
 				},
-				{3, 2, 3}: {
+				{
+					xIdx:  3,
+					yIdx:  2,
+					limit: 3,
 					fp:    hexToFingerprint("2345679abcdef01888888888"),
 					count: 3,
 					itype: 1,
@@ -303,28 +348,43 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 				"a280bcb8123393e0d4a15e5c9850aab5dddffa03d5efa92e59bc96202e8992bc",
 				"e93163f908630280c2a8bffd9930aa684be7a3085432035f5c641b0786590d1d",
 			},
-			results: map[[3]int]fpResult{
-				{0, 0, -1}: {
+			ranges: []rangeTestCase{
+				{
+					xIdx:  0,
+					yIdx:  0,
+					limit: -1,
 					fp:    hexToFingerprint("a76fc452775b55e0dacd8be5"),
 					count: 4,
 					itype: 0,
 				},
-				{0, 0, 3}: {
+				{
+					xIdx:  0,
+					yIdx:  0,
+					limit: 3,
 					fp:    hexToFingerprint("4e5ea7ab7f38576018653418"),
 					count: 3,
 					itype: 0,
 				},
-				{0, 3, -1}: {
+				{
+					xIdx:  0,
+					yIdx:  3,
+					limit: -1,
 					fp:    hexToFingerprint("4e5ea7ab7f38576018653418"),
 					count: 3,
 					itype: -1,
 				},
-				{3, 1, -1}: {
+				{
+					xIdx:  3,
+					yIdx:  1,
+					limit: -1,
 					fp:    hexToFingerprint("87760f5e21a0868dc3b0c7a9"),
 					count: 2,
 					itype: 1,
 				},
-				{3, 2, -1}: {
+				{
+					xIdx:  3,
+					yIdx:  2,
+					limit: -1,
 					fp:    hexToFingerprint("05ef78ea6568c6000e6cd5b9"),
 					count: 3,
 					itype: 1,
@@ -368,11 +428,62 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 				"e41d8c3a7607ec5423cc376a34d21494f2d0c625fb9bebcec09d06c188ab7f3f",
 				"e9110a384198b47be2bb63e64f094069a0ee9a013e013176bbe8189834c5e4c8",
 			},
-			results: map[[3]int]fpResult{
-				{31, 0, -1}: {
+			ranges: []rangeTestCase{
+				{
+					xIdx:  31,
+					yIdx:  0,
+					limit: -1,
 					fp:    hexToFingerprint("e9110a384198b47be2bb63e6"),
 					count: 1,
 					itype: 1,
+				},
+			},
+		},
+		{
+			name:     "ids4",
+			maxDepth: 24,
+			ids: []string{
+				"0451cd036aff0367b07590032da827b516b63a4c1b36ea9a253dcf9a7e084980",
+				"0e75d10a8e98a4307dd9d0427dc1d2ebf9e45b602d159ef62c5da95197159844",
+				"18040e78f834b879a9585fba90f6f5e7394dc3bb27f20829baf6bfc9e1bfe44b",
+				"1a9b743abdabe7970041ba2006c0e8bb51a27b1dbfd1a8c70ef5e7703ddeaa55",
+				"1b49b5a17161995cc288523637bd63af5bed99f4f7188effb702da8a7a4beee1",
+				"2023eee75bec75da61ad7644bd43f02b9397a72cf489565cb53a4337975a290b",
+				"24b31a6acc8cd13b119dd5aa81a6c3803250a8a79eb32231f16b09e0971f1b23",
+				"2664e267650ee22dee7d8c987b5cf44ba5596c78df3db5b99fb0ce79cc649d69",
+				"33940245f4aace670c84f471ff4e862d1d82ce0ada9b98a753038b4f9e60e330",
+				"366d9e7adb3932e52e0a92a0afc75a2875995e7de8e0c4159e22eb97526a3547",
+				"66883aa35d2c8d293f07c5c5c40c63416317423418fe5c7fd17b5fb68b3e976e",
+				"80fce3e9654459cff3441e1a96413f0872e0b6f093879609696042fcfe1c8115",
+				"8b2025fbe0bbebea4baee48bac9a63a4013a2ec898d7b0a518eccdb99bdb368e",
+				"8e3e609653adfddcdcb6ddda7461db3a2fc822c3f96874a002f715b80865e575",
+				"9b25e39d6cc3beac3ecc12140f46a699880ac8303555c694fd40ba8e61bb8b47",
+				"a3c8628a1b28d1ba6f3d8beb4a29315c02789c5b53a095fa7865c9b3041502d6",
+				"a98fdcab5e351a1bfd25ddcf9973e9c56a4b688d78743a8a03fa3b1d53da4949",
+				"ac9c015dd51defacfc14bd4c9c8eedb89aad884bef493553a189a2915c828e95",
+				"ba745196493a8368ef091860f2692978b381f67566d3413e85167672d672c8ac",
+				"c26353d8bc9a1eea8e79fd693c1a1e58dacded75ceda84ed6c356bcf02b6d0f1",
+				"c3f126a37c2e33b6258c87fd043026dacf0b8dd4df7a9afd7cdc293b075e1878",
+				"cefd0cc8b32929df07b6ebb5b6e433f28d5460f143814f3f651330ea15e5d6e7",
+				"d9390718256e71edfe671334edbfcbed8b4de3221db55805ebf606c73fe969f1",
+				"db7ee147da05a5cbec3f59b020cbdba88e40ab6b212ae93c98d5a210d83a4a7b",
+				"deab906f979a647eff85f3a54e5edd665f2536e0005812aee2e5e411ae71855e",
+				"e0b6ab7f483527771faadbee8b4ed99ae96167d054ae5c513faf00c78aa36bdd",
+				"e4ed6f5dcf179a4f10521d58d65d423098af5f6f18c42f3125a5917d338b7477",
+				"e53de3ec53ba88029a2a0459a3ab82cdb3726c8aeccabf38a04e048b9add92ef",
+				"f2aff99498615c44d94266060e948c11bb275ec37d0d3c651bb3ba0039a11a64",
+				"f7f81332b63b79718f0321660a5cd8f6970474ff873afcdebb0d3436a2ad12ac",
+				"fb42c36089a4883bc7ceaae9a57924d78557edb63ede3d5a2cf2d1f08db799d0",
+				"fe494ce48f5826c00f6bc6af74258ec6e47b92365850deed95b5bfcaeccc6be8",
+			},
+			ranges: []rangeTestCase{
+				{
+					x:     "582485793d71c3e8429b9b2c8df360c2ea7bf90080d5bf375fe4618b00f59c0b",
+					y:     "7eff517d2f11ed32f935be3001499ac779160a4891a496f88da0ceb33e3496cc",
+					limit: -1,
+					fp:    hexToFingerprint("66883aa35d2c8d293f07c5c5"),
+					count: 1,
+					itype: -1,
 				},
 			},
 		},
@@ -395,12 +506,22 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 
 			checkTree(t, ft, tc.maxDepth)
 
-			for idRange, expResult := range tc.results {
-				x := hs[idRange[0]]
-				y := hs[idRange[1]]
-				fpr, err := ft.fingerprintInterval(x[:], y[:], idRange[2])
+			for _, rtc := range tc.ranges {
+				var x, y types.Hash32
+				if rtc.x != "" {
+					x = types.HexToHash32(rtc.x)
+					y = types.HexToHash32(rtc.y)
+				} else {
+					x = hs[rtc.xIdx]
+					y = hs[rtc.yIdx]
+				}
+				fpr, err := ft.fingerprintInterval(x[:], y[:], rtc.limit)
 				require.NoError(t, err)
-				require.Equal(t, expResult, fpr)
+				require.Equal(t, fpResult{
+					fp:    rtc.fp,
+					count: rtc.count,
+					itype: rtc.itype,
+				}, fpr)
 			}
 
 			ft.release()
