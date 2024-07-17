@@ -288,8 +288,6 @@ type fpResult struct {
 }
 
 type tailRef struct {
-	// node from which this tailRef has been derived
-	idx nodeIndex
 	// maxDepth bits of the key
 	ref uint64
 	// max count to get from this tail ref, -1 for unlimited
@@ -297,13 +295,68 @@ type tailRef struct {
 }
 
 type aggResult struct {
-	tailRefs    []tailRef
-	fp          fingerprint
-	count       uint32
-	itype       int
-	limit       int
-	lastVisited nodeIndex
-	lastPrefix  prefix
+	startTail, endTail *tailRef
+	fp                 fingerprint
+	count              uint32
+	itype              int
+	limit              int
+	lastVisited        nodeIndex
+	lastPrefix         prefix
+}
+
+func (r *aggResult) setStartTail(tail *tailRef) {
+	if r.startTail != nil {
+		panic("BUG: left tail already set")
+	}
+	r.startTail = tail
+}
+
+func (r *aggResult) setEndTail(tail *tailRef) {
+	if r.endTail != nil {
+		panic("BUG: right tail already set")
+	}
+	r.endTail = tail
+}
+
+func (r *aggResult) setTails(tail *tailRef, x, y KeyBytes, maxDepth int) {
+	if r.itype == 0 {
+		// Doesn't matter which tail as the IDs aren't filtered based on
+		// the interval, only based on the limit
+		r.setStartTail(tail)
+		return
+	}
+	xRef := load64(x) >> (64 - maxDepth)
+	yRef := load64(y) >> (64 - maxDepth)
+	switch {
+	case xRef == yRef:
+		// Same ref for x and y.
+		// In this case, this tail may only contain relevant entries
+		// if it's ref is the same as xRef and yRef, and it needs
+		// to be used for both tails.
+		if tail.ref == xRef {
+			r.setStartTail(tail)
+			r.setEndTail(tail)
+		}
+	case r.itype < 0:
+		// Normal interval.
+		// The tail can cover the start in case if it's at or below xRef,
+		// and the end in case if it's at or below yRef, but after xRef.
+		if tail.ref <= xRef {
+			r.setStartTail(tail)
+		} else if tail.ref <= yRef {
+			r.setEndTail(tail)
+		}
+	default:
+		// Inverse interval.
+		// The tail can cover the start in case if it's at or below xRef,
+		// but also after yRef.
+		// It can cover the end in case if it's at or below yRef.
+		if tail.ref <= yRef {
+			r.setEndTail(tail)
+		} else if tail.ref <= xRef {
+			r.setStartTail(tail)
+		}
+	}
 }
 
 func (r *aggResult) takeAtMost(count int) int {
@@ -498,16 +551,16 @@ func (ft *fpTree) tailRefFromPrefix(idx nodeIndex, p prefix, limit int) tailRef 
 	if p.len() != ft.maxDepth {
 		panic("BUG: tail from short prefix")
 	}
-	return tailRef{idx: idx, ref: p.bits(), limit: limit}
+	return tailRef{ref: p.bits(), limit: limit}
 }
 
 func (ft *fpTree) tailRefFromFingerprint(idx nodeIndex, fp fingerprint, limit int) tailRef {
 	v := load64(fp[:])
 	if ft.maxDepth >= 64 {
-		return tailRef{idx: idx, ref: v, limit: limit}
+		return tailRef{ref: v, limit: limit}
 	}
 	// // fmt.Fprintf(os.Stderr, "QQQQQ: AAAAA: v %016x maxDepth %d shift %d\n", v, ft.maxDepth, (64 - ft.maxDepth))
-	return tailRef{idx: idx, ref: v >> (64 - ft.maxDepth), limit: limit}
+	return tailRef{ref: v >> (64 - ft.maxDepth), limit: limit}
 }
 
 func (ft *fpTree) tailRefFromNodeAndPrefix(idx nodeIndex, n node, p prefix, limit int) tailRef {
@@ -569,70 +622,89 @@ func (ft *fpTree) visitNode(idx nodeIndex, p prefix, r *aggResult) (node, bool) 
 	return ft.np.node(idx), true
 }
 
-func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, r *aggResult) {
+func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, r *aggResult) (tailRef *tailRef, cont bool) {
 	ft.enter("aggregateUpToLimit: idx %d p %s limit %d cur_fp %s cur_count %d", idx, p, r.limit,
 		r.fp.String(), r.count)
 	defer func() {
 		ft.leave(r.fp, r.count)
 	}()
-	node, ok := ft.visitNode(idx, p, r)
-	switch {
-	case !ok || r.limit == 0:
-		// for r.limit == 0, it's important that we still visit the node
-		// so that we can get the item immediately following the included items
-		ft.log("stop: ok %v r.limit %d", ok, r.limit)
-	case r.limit < 0:
-		// no limit
-		ft.log("no limit")
-		r.update(node)
-	case node.c <= uint32(r.limit):
-		// node is fully included
-		ft.log("included fully")
-		r.update(node)
-		r.limit -= int(node.c)
-	case node.leaf():
-		tail := ft.tailRefFromPrefix(idx, p, r.takeAtMost(int(node.c)))
-		r.tailRefs = append(r.tailRefs, tail)
-		ft.log("add prefix to the tails: %016x => limit %d", tail.ref, r.limit)
-	default:
-		pLeft := p.left()
-		left, haveLeft := ft.visitNode(node.left, pLeft, r)
-		if haveLeft {
-			if int(left.c) <= r.limit {
-				// left node is fully included
-				ft.log("include left in full")
-				r.update(left)
-				r.limit -= int(left.c)
-			} else {
-				// we must stop somewhere in the left subtree
-				ft.log("descend to the left")
-				ft.aggregateUpToLimit(node.left, pLeft, r)
-				return
+	for {
+		node, ok := ft.visitNode(idx, p, r)
+		switch {
+		case !ok:
+			ft.log("stop: no node")
+			return nil, true
+		case r.limit == 0:
+			// for r.limit == 0, it's important that we still visit the node
+			// so that we can get the item immediately following the included items
+			ft.log("stop: limit exhausted")
+			return nil, false
+		case r.limit < 0:
+			// no limit
+			ft.log("no limit")
+			r.update(node)
+			return nil, true
+		case node.c <= uint32(r.limit):
+			// node is fully included
+			ft.log("included fully")
+			r.update(node)
+			r.limit -= int(node.c)
+			return nil, true
+		case node.leaf():
+			// reached the limit on this node, do not need to continue after
+			// done with it
+			tail := ft.tailRefFromPrefix(idx, p, r.takeAtMost(int(node.c)))
+			ft.log("add prefix to the tails: %016x => limit %d", tail.ref, r.limit)
+			return &tail, false
+		default:
+			pLeft := p.left()
+			left, haveLeft := ft.visitNode(node.left, pLeft, r)
+			if haveLeft {
+				if int(left.c) <= r.limit {
+					// left node is fully included, after which
+					// we need to stop somewhere in the right subtree
+					ft.log("include left in full")
+					r.update(left)
+					r.limit -= int(left.c)
+				} else {
+					// we must stop somewhere in the left subtree,
+					// and the right subtree is irrelevant
+					ft.log("descend to the left")
+					idx = node.left
+					p = pLeft
+					continue
+				}
 			}
+			ft.log("descend to the right")
+			idx = node.right
+			p = p.right()
 		}
-		ft.log("descend to the right")
-		ft.aggregateUpToLimit(node.right, p.right(), r)
 	}
 }
 
-func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, r *aggResult) {
+func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, r *aggResult) (cont bool) {
 	ft.enter("aggregateLeft: idx %d v %016x p %s limit %d", idx, v, p, r.limit)
 	defer func() {
-		ft.leave(r.fp, r.count, r.tailRefs)
+		ft.leave(r.fp, r.count, r.startTail, r.endTail)
 	}()
 	node, ok := ft.visitNode(idx, p, r)
 	switch {
-	case !ok || r.limit == 0:
+	case !ok:
 		// for r.limit == 0, it's important that we still visit the node
 		// so that we can get the item immediately following the included items
-		ft.log("stop: ok %v r.limit %d", ok, r.limit)
+		ft.log("stop: no node")
+		return true
+	case r.limit == 0:
+		ft.log("stop: limit exhausted")
+		return false
 	case p.len() == ft.maxDepth:
 		if node.left != noIndex || node.right != noIndex {
 			panic("BUG: node @ maxDepth has children")
 		}
 		tail := ft.tailRefFromPrefix(idx, p, r.takeAtMost(int(node.c)))
-		r.tailRefs = append(r.tailRefs, tail)
+		r.setStartTail(&tail)
 		ft.log("add prefix to the tails: %016x => limit %d", tail.ref, r.limit)
+		return true
 	case node.leaf(): // TBD: combine with prev
 		// For leaf 1-nodes, we can use the fingerprint to get tailRef
 		// by which the actual IDs will be selected
@@ -640,38 +712,51 @@ func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, r *aggResult)
 			panic("BUG: leaf non-1 node below maxDepth")
 		}
 		tail := ft.tailRefFromFingerprint(idx, node.fp, r.takeAtMost(1))
-		r.tailRefs = append(r.tailRefs, tail)
+		r.setStartTail(&tail)
 		ft.log("add prefix to the tails (1-leaf): %016x (fp %s) => limit %d", tail.ref, node.fp, r.limit)
+		return true
 	case v&bit63 == 0:
 		ft.log("incl right node %d + go left to node %d", node.right, node.left)
-		if node.right != noIndex {
-			ft.aggregateUpToLimit(node.right, p.right(), r)
+		if !ft.aggregateLeft(node.left, v<<1, p.left(), r) {
+			return false
 		}
-		ft.aggregateLeft(node.left, v<<1, p.left(), r)
+		if node.right != noIndex {
+			tail, cont := ft.aggregateUpToLimit(node.right, p.right(), r)
+			if tail != nil {
+				r.setStartTail(tail)
+			}
+			return cont
+		}
+		return true
 	default:
 		ft.log("go right to node %d", node.right)
-		ft.aggregateLeft(node.right, v<<1, p.right(), r)
+		return ft.aggregateLeft(node.right, v<<1, p.right(), r)
 	}
 }
 
-func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, r *aggResult) {
+func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, r *aggResult) (cont bool) {
 	ft.enter("aggregateRight: idx %d v %016x p %s limit %d", idx, v, p, r.limit)
 	defer func() {
-		ft.leave(r.fp, r.count, r.tailRefs)
+		ft.leave(r.fp, r.count, r.startTail, r.endTail)
 	}()
 	node, ok := ft.visitNode(idx, p, r)
 	switch {
-	case !ok || r.limit == 0:
+	case !ok:
 		// for r.limit == 0, it's important that we still visit the node
 		// so that we can get the item immediately following the included items
-		ft.log("stop: ok %v r.limit %d", ok, r.limit)
+		ft.log("stop: no node")
+		return true
+	case r.limit == 0:
+		ft.log("stop: limit exhausted")
+		return false
 	case p.len() == ft.maxDepth:
 		if node.left != noIndex || node.right != noIndex {
 			panic("BUG: node @ maxDepth has children")
 		}
 		tail := ft.tailRefFromPrefix(idx, p, r.takeAtMost(int(node.c)))
-		r.tailRefs = append(r.tailRefs, tail)
+		r.setEndTail(&tail)
 		ft.log("add prefix to the tails: %016x => limit %d", tail.ref, r.limit)
+		return true
 	case node.leaf():
 		// For leaf 1-nodes, we can use the fingerprint to get tailRef
 		// by which the actual IDs will be selected
@@ -679,17 +764,24 @@ func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, r *aggResult
 			panic("BUG: leaf non-1 node below maxDepth")
 		}
 		tail := ft.tailRefFromFingerprint(idx, node.fp, r.takeAtMost(1))
-		r.tailRefs = append(r.tailRefs, tail)
+		r.setEndTail(&tail)
 		ft.log("add prefix to the tails (1-leaf): %016x (fp %s) => limit %d", tail.ref, node.fp, r.limit)
+		return true
 	case v&bit63 == 0:
 		ft.log("go left to node %d", node.left)
-		ft.aggregateRight(node.left, v<<1, p.left(), r)
+		return ft.aggregateRight(node.left, v<<1, p.left(), r)
 	default:
 		ft.log("incl left node %d + go right to node %d", node.left, node.right)
 		if node.left != noIndex {
-			ft.aggregateUpToLimit(node.left, p.left(), r)
+			tail, cont := ft.aggregateUpToLimit(node.left, p.left(), r)
+			if tail != nil {
+				r.setEndTail(tail)
+			}
+			if !cont {
+				return false
+			}
 		}
-		ft.aggregateRight(node.right, v<<1, p.right(), r)
+		return ft.aggregateRight(node.right, v<<1, p.right(), r)
 	}
 }
 
@@ -707,7 +799,8 @@ func (ft *fpTree) aggregateInterval(x, y KeyBytes, limit int) (r aggResult) {
 		// the whole set
 		if ft.root != noIndex {
 			ft.log("whole set")
-			ft.aggregateUpToLimit(ft.root, 0, &r)
+			tail, _ := ft.aggregateUpToLimit(ft.root, 0, &r)
+			r.setTails(tail, x, y, ft.maxDepth)
 		} else {
 			ft.log("empty set (no root)")
 		}
@@ -735,13 +828,14 @@ func (ft *fpTree) aggregateInterval(x, y KeyBytes, limit int) (r aggResult) {
 			// through the IDs
 			if lcaNode.leaf() {
 				ft.visitNode(lcaIdx, followedPrefix, &r)
-				r.tailRefs = append(r.tailRefs,
-					ft.tailRefFromNodeAndPrefix(
-						lcaIdx, lcaNode, followedPrefix, r.takeAtMost(limit)))
+				tail := ft.tailRefFromNodeAndPrefix(
+					lcaIdx, lcaNode, followedPrefix, r.takeAtMost(limit))
+				r.setTails(&tail, x, y, ft.maxDepth)
 			}
 		}
 	default:
 		// inverse interval: [min; y); [x; max]
+		// first, we handle [x; max] part
 		pf0 := preFirst0(x)
 		idx0, followedPrefix, found := ft.followPrefix(ft.root, pf0, 0)
 		var pf0Node node
@@ -759,10 +853,12 @@ func (ft *fpTree) aggregateInterval(x, y KeyBytes, limit int) (r aggResult) {
 			if pf0Node.leaf() {
 				ft.visitNode(idx0, followedPrefix, &r)
 				rightLimit := r.takeAtMost(int(pf0Node.c))
-				r.tailRefs = append(r.tailRefs, ft.tailRefFromNodeAndPrefix(idx0, pf0Node, followedPrefix, rightLimit))
+				tail := ft.tailRefFromNodeAndPrefix(idx0, pf0Node, followedPrefix, rightLimit)
+				r.setStartTail(&tail)
 			}
 		}
 
+		// then we handle [min, y) part
 		pf1 := preFirst1(y)
 		idx1, followedPrefix, found := ft.followPrefix(ft.root, pf1, 0)
 		var pf1Node node
@@ -780,7 +876,8 @@ func (ft *fpTree) aggregateInterval(x, y KeyBytes, limit int) (r aggResult) {
 			if pf1Node.leaf() {
 				ft.visitNode(idx1, followedPrefix, &r)
 				leftLimit := r.takeAtMost(int(pf1Node.c))
-				r.tailRefs = append(r.tailRefs, ft.tailRefFromNodeAndPrefix(idx1, pf1Node, followedPrefix, leftLimit))
+				tail := ft.tailRefFromNodeAndPrefix(idx1, pf1Node, followedPrefix, leftLimit)
+				r.setEndTail(&tail)
 			}
 		}
 	}
@@ -794,17 +891,30 @@ func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, e
 	}()
 	r := ft.aggregateInterval(x, y, limit)
 	wasWithinRange := false
-	ft.log("tailRefs: %#v count: %d", r.tailRefs, r.count)
-	// Check for edge case: the fingerprinting has looped back to the same tail,
-	// so we have the tail repeated twice and no other tails.
-	// We can't hit any tails in between.
-	noStop := false
-	if len(r.tailRefs) == 2 && r.tailRefs[0].ref == r.tailRefs[1].ref {
-		ft.log("edge case: tailRef loopback")
-		r.tailRefs = r.tailRefs[:1]
-		noStop = true
+	ft.log("startTail: %#v endTail: %#v count: %d", r.startTail, r.endTail, r.count)
+	// QQQQQ: TBD: scan tails separately using the iterators
+	var tailRefs []tailRef
+	if r.startTail != nil {
+		tailRefs = append(tailRefs, *r.startTail)
 	}
-	if err := ft.idStore.iterateIDs(r.tailRefs, func(tailRef tailRef, id KeyBytes) bool {
+	if r.endTail != nil && (r.startTail == nil || r.startTail.ref != r.endTail.ref) {
+		tailRefs = append(tailRefs, *r.endTail)
+	}
+	noStop := true //len(tailRefs) == 1
+	// panic("TBD: limit; problem: single-tailRef wraparound, need to start from x in any case, but we're starting from the beginning of the tailRef")
+	// QQQQQ: should not use iterateIDs. No need for nextLeaf, etc.
+	// The store should return iterator for each tailRef
+	// There should be *always* two tailRefs (they may be the same)
+	// For 1st tailRef we call Next() on the iterator till Key() is >= x, it'll be RangeInfo.Start,
+	// then we clone the iterator (it should be cloneable!) and use it to include the IDs
+	// in the fingerprint
+	// For 2nd tailRef we call Next() on the iterator till Key() is >= y, including IDs
+	// in the fingerprint, then return it as RangeInfo.End (outside the range)
+	// DOWNSIDE: too much needs to be fetched in case of bigger chunks
+	// Possible optimization [DONE]: specify max chunk size for db iterator,
+	// start from 1, increase it 2x on each iteration but not over max chunk size
+	// QQQQQ: TBD: need to restore combinedIterator
+	if err := ft.idStore.iterateIDs(tailRefs, func(tailRef tailRef, id KeyBytes) bool {
 		if idWithinInterval(id, x, y, r.itype) {
 			r.fp.update(id)
 			r.count++
@@ -816,7 +926,7 @@ func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, e
 		} else {
 			// if we were within the range but now we're out of it,
 			// this means we're at or beyond y and can stop
-			// return !wasWithinRange
+			// return !wasWithinRange || noStop
 			// QQQQQ: rmme
 			if wasWithinRange {
 				ft.log("tailRef %v: id %s outside range after id(s) within range => terminating",
@@ -847,7 +957,7 @@ func (ft *fpTree) dumpNode(w io.Writer, idx nodeIndex, indent, dir string) {
 	leaf := node.leaf()
 	countStr := strconv.Itoa(int(node.c))
 	if leaf {
-		countStr = "LEAF-" + countStr
+		countStr = "LEAF:" + countStr
 	}
 	fmt.Fprintf(w, "%s%sidx=%d %s %s [%d]\n", indent, dir, idx, node.fp, countStr, ft.np.refCount(idx))
 	if !leaf {
