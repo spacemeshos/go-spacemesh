@@ -928,35 +928,31 @@ func SetUnits(db sql.Executor, atxID types.ATXID, id types.NodeID, units uint32)
 }
 
 // AtxWithPrevious returns the ATX ID that has the given ATX ID as its previous ATX.
-func AtxWithPrevious(db sql.Executor, prev, not types.ATXID, id types.NodeID) (types.ATXID, error) {
+func AtxWithPrevious(db sql.Executor, prev types.ATXID, id types.NodeID) (types.ATXID, error) {
 	var (
 		atxid types.ATXID
 		rows  int
 		err   error
 	)
+	decode := func(s *sql.Statement) bool {
+		s.ColumnBytes(0, atxid[:])
+		return false
+	}
 	if prev == types.EmptyATXID {
-		rows, err = db.Exec("SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id IS NULL AND id != ?2;",
+		rows, err = db.Exec("SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id IS NULL;",
 			func(s *sql.Statement) {
 				s.BindBytes(1, id.Bytes())
-				s.BindBytes(2, not.Bytes())
 			},
-			func(s *sql.Statement) bool {
-				s.ColumnBytes(0, atxid[:])
-				return false
-			},
+			decode,
 		)
 	} else {
 		rows, err = db.Exec(`
-		SELECT id FROM atxs WHERE pubkey = ?1 AND id != ?2 AND prev_id = ?3;`,
+		SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id = ?2;`,
 			func(s *sql.Statement) {
 				s.BindBytes(1, id.Bytes())
-				s.BindBytes(2, not.Bytes())
-				s.BindBytes(3, prev.Bytes())
+				s.BindBytes(2, prev.Bytes())
 			},
-			func(s *sql.Statement) bool {
-				s.ColumnBytes(0, atxid[:])
-				return false
-			},
+			decode,
 		)
 	}
 	if err != nil {

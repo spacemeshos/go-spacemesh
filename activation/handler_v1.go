@@ -413,12 +413,12 @@ func (h *HandlerV1) checkWrongPrevAtx(
 	tx sql.Executor,
 	atx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	atx2ID, err := atxs.AtxWithPrevious(tx, atx.PrevATXID, atx.ID(), atx.SmesherID)
-	switch {
-	case errors.Is(err, sql.ErrNotFound):
+	expectedPrevID, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, atx.PublishEpoch)
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return nil, fmt.Errorf("get last atx by node id: %w", err)
+	}
+	if expectedPrevID == atx.PrevATXID {
 		return nil, nil
-	case err != nil:
-		return nil, fmt.Errorf("fetching atx with previous %s: %w", atx.PrevATXID, err)
 	}
 
 	if _, ok := h.signers[atx.SmesherID]; ok {
@@ -428,9 +428,24 @@ func (h *HandlerV1) checkWrongPrevAtx(
 				"registering at PoET",
 			log.ZContext(ctx),
 			zap.Stringer("smesher", atx.SmesherID),
+			log.ZShortStringer("expected", expectedPrevID),
 			log.ZShortStringer("actual", atx.PrevATXID),
 		)
 		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
+	}
+
+	atx2ID, err := atxs.AtxWithPrevious(tx, atx.PrevATXID, atx.SmesherID)
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fmt.Errorf("fetching atx with previous %s: %w", atx.PrevATXID, err)
+	case atx2ID == atx.ID():
+		// We retrieved the same ATX, which means this ATX is already in the DB.
+		// We don't need to look for a different ATX with the same previous ATX
+		// because if there are already 2 with the same previous ATX, the
+		// malfeasance proof was already generated.
+		return nil, nil
 	}
 
 	var blob sql.Blob
@@ -467,6 +482,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		log.ZContext(ctx),
 		zap.Stringer("smesher", atx.SmesherID),
 		log.ZShortStringer("actual", atx.PrevATXID),
+		log.ZShortStringer("expected", expectedPrevID),
 	)
 	return proof, nil
 }
