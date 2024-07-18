@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -25,13 +26,30 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/validation"
 )
 
+const ENV_STEP_TESTS = "STEP_TESTS"
+
+// checkAllowed checks if the tests are allowed to run.
+// To prevent the CI from running these test, they require
+// an environment variable to be set. If you need to manually
+// run the tests locally, just comment out the check or define the
+// environment variable.
+func checkAllowed(t *testing.T) {
+	t.Helper()
+	val := os.Getenv(ENV_STEP_TESTS)
+	if val == "" || val == "false" || val == "0" {
+		t.Skip("test skipped. please define STEP_TESTS env var to run this test")
+	}
+}
+
 func TestStepCreate(t *testing.T) {
+	checkAllowed(t)
 	ctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	_, err := cluster.Reuse(ctx, cluster.WithKeys(ctx.ClusterSize))
 	require.NoError(t, err)
 }
 
 func TestStepShortDisconnect(t *testing.T) {
+	checkAllowed(t)
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
@@ -73,6 +91,7 @@ func TestStepShortDisconnect(t *testing.T) {
 }
 
 func TestStepTransactions(t *testing.T) {
+	checkAllowed(t)
 	const (
 		batch       = 10
 		amountLimit = 100_000
@@ -164,6 +183,7 @@ func TestStepTransactions(t *testing.T) {
 }
 
 func TestStepReplaceNodes(t *testing.T) {
+	checkAllowed(t)
 	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, err)
@@ -191,6 +211,7 @@ func TestStepReplaceNodes(t *testing.T) {
 }
 
 func TestStepVerifyConsistency(t *testing.T) {
+	checkAllowed(t)
 	cctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, err)
@@ -309,6 +330,7 @@ func (r *runner) concurrent(period time.Duration, fn func() bool) {
 }
 
 func TestScheduleBasic(t *testing.T) {
+	checkAllowed(t)
 	TestStepCreate(t)
 	rn := newRunner()
 	rn.concurrent(30*time.Second, func() bool {
@@ -324,6 +346,7 @@ func TestScheduleBasic(t *testing.T) {
 }
 
 func TestScheduleTransactions(t *testing.T) {
+	checkAllowed(t)
 	TestStepCreate(t)
 	rn := newRunner()
 	rn.concurrent(10*time.Second, func() bool {
@@ -333,6 +356,7 @@ func TestScheduleTransactions(t *testing.T) {
 }
 
 func TestStepValidation(t *testing.T) {
+	checkAllowed(t)
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	c, err := cluster.Reuse(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
