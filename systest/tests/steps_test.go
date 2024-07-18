@@ -26,7 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/validation"
 )
 
-const ENV_STEP_TESTS = "STEP_TESTS"
+const ENV_LONGEVITY_TESTS = "LONGEVITY_TESTS"
 
 // checkAllowed checks if the tests are allowed to run.
 // To prevent the CI from running these test, they require
@@ -35,9 +35,9 @@ const ENV_STEP_TESTS = "STEP_TESTS"
 // environment variable.
 func checkAllowed(t *testing.T) {
 	t.Helper()
-	val := os.Getenv(ENV_STEP_TESTS)
+	val := os.Getenv(ENV_LONGEVITY_TESTS)
 	if val == "" || val == "false" || val == "0" {
-		t.Skip("test skipped. please define STEP_TESTS env var to run this test")
+		t.Skip("test skipped. please define LONGEVITY_TESTS env var to run this test")
 	}
 }
 

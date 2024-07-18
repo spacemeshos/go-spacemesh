@@ -207,9 +207,9 @@ make run properties=properties.env test_name=TestStepCreate
 
 These tests test the clusters over a long period of time. They are therefore disabled by default so that the CI doesn't run them.
 
-In order to run them, please define the `STEP_TESTS` environment variable, otherwise they will be skipped:
+In order to run them, please define the `LONGEVITY_TEST` environment variable, otherwise they will be skipped:
 ```bash
-export STEP_TESTS=1
+export LONGEVITY_TESTS=1
 ```
 
 ### Manual mode
