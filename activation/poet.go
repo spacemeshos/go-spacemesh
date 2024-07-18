@@ -492,8 +492,6 @@ func (c *poetService) Submit(
 			return nil, fmt.Errorf("recertifying: %w", err)
 		}
 		return c.client.Submit(ctx, deadline, prefix, challenge, signature, nodeID, *auth)
-	case errors.Is(err, context.DeadlineExceeded):
-		logger.Warn("failed to submit challenge: probably submit challenge timeout is too short", zap.Error(err))
 	}
 	return nil, fmt.Errorf("submitting challenge: %w", err)
 }
