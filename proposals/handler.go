@@ -162,8 +162,6 @@ func NewHandler(
 
 // HandleSyncedBallot handles Ballot data from sync.
 func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
-	logger := h.logger.With(log.ZContext(ctx))
-
 	var b types.Ballot
 	t0 := time.Now()
 	if err := codec.Decode(data, &b); err != nil {
@@ -206,8 +204,7 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, 
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(b))
 	ballotDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t1)))
 
-	logger = logger.With(zap.Stringer("id", b.ID()), b.Layer.Field().Zap())
-	if _, err := h.processBallot(ctx, logger, &b); err != nil {
+	if _, err := h.processBallot(ctx, &b); err != nil {
 		if errors.Is(err, errKnownBallot) {
 			return nil
 		}
@@ -292,8 +289,6 @@ func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte
 
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
-	logger := h.logger.With(log.ZContext(ctx))
-
 	t0 := time.Now()
 	var p types.Proposal
 	if err := codec.Decode(data, &p); err != nil {
@@ -340,7 +335,12 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	}
 	proposalDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
-	logger = logger.With(zap.Stringer("proposal", p.ID()), zap.Stringer("ballot", p.Ballot.ID()), p.Layer.Field().Zap())
+	logger := h.logger.With(
+		log.ZContext(ctx),
+		zap.Stringer("proposal", p.ID()),
+		zap.Stringer("ballot", p.Ballot.ID()),
+		zap.Uint32("layer", p.Layer.Uint32()),
+	)
 	if h.proposals.IsKnown(p.Layer, p.ID()) {
 		known.Inc()
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
@@ -352,7 +352,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
 
 	t3 := time.Now()
-	proof, err := h.processBallot(ctx, logger, &p.Ballot)
+	proof, err := h.processBallot(ctx, &p.Ballot)
 	if err != nil && !errors.Is(err, errKnownBallot) && !errors.Is(err, errMaliciousBallot) {
 		return err
 	}
@@ -433,23 +433,20 @@ func (h *Handler) setProposalBeacon(p *types.Proposal) error {
 	return nil
 }
 
-func (h *Handler) processBallot(
-	ctx context.Context,
-	logger *zap.Logger,
-	b *types.Ballot,
-) (*wire.MalfeasanceProof, error) {
+func (h *Handler) processBallot(ctx context.Context, b *types.Ballot) (*wire.MalfeasanceProof, error) {
 	if data := h.tortoise.GetBallot(b.ID()); data != nil {
 		known.Inc()
 		return nil, fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())
 	}
 
-	logger.Info("new ballot", zap.Inline(b))
+	h.logger.Info("new ballot", log.ZContext(ctx), zap.Inline(b))
 
-	decoded, err := h.checkBallotSyntacticValidity(ctx, logger, b)
+	decoded, err := h.checkBallotSyntacticValidity(ctx, b)
 	if err != nil {
 		return nil, err
 	}
 	b.ActiveSet = nil // the active set is not needed anymore
+	h.logger.Debug("ballot is syntactically valid", log.ZContext(ctx), zap.Stringer("id", b.ID()))
 
 	t1 := time.Now()
 	proof, err := h.mesh.AddBallot(ctx, b)
@@ -471,11 +468,7 @@ func (h *Handler) processBallot(
 	return proof, nil
 }
 
-func (h *Handler) checkBallotSyntacticValidity(
-	ctx context.Context,
-	logger *zap.Logger,
-	b *types.Ballot,
-) (*tortoise.DecodedBallot, error) {
+func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Ballot) (*tortoise.DecodedBallot, error) {
 	t0 := time.Now()
 	ref, err := h.checkBallotDataIntegrity(ctx, b)
 	if err != nil {
@@ -524,7 +517,6 @@ func (h *Handler) checkBallotSyntacticValidity(
 	}
 	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t4)))
 
-	logger.Debug("ballot is syntactically valid")
 	return decoded, nil
 }
 
@@ -650,7 +642,7 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 				h.logger.Warn("ballot doubly voted within hdist, set smesher malicious",
 					log.ZContext(ctx),
 					zap.Stringer("ballot", b.ID()),
-					b.Layer.Field().Zap(),
+					zap.Uint32("layer", b.Layer.Uint32()),
 					zap.Stringer("smesherID", b.SmesherID),
 					zap.Stringer("voted_bid", voted),
 					zap.Stringer("voted_bid", vote.ID),
