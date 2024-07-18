@@ -530,7 +530,7 @@ func (c *Cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) err
 	for _, tx := range rst {
 		toCleanup[tx.Principal] = struct{}{}
 	}
-	defer c.cleanupAccounts(toCleanup)
+	defer c.cleanupAccounts(maps.Keys(toCleanup)...)
 
 	byPrincipal := groupTXsByPrincipal(c.logger, rst)
 	acctsAdded := 0
@@ -585,8 +585,8 @@ func (c *Cache) MoreInDB(addr types.Address) bool {
 	return acct.moreInDB
 }
 
-func (c *Cache) cleanupAccounts(accounts map[types.Address]struct{}) {
-	for addr := range accounts {
+func (c *Cache) cleanupAccounts(accounts ...types.Address) {
+	for _, addr := range accounts {
 		if _, ok := c.pending[addr]; ok && c.pending[addr].shouldEvict() {
 			delete(c.pending, addr)
 		}
@@ -615,7 +615,7 @@ func (c *Cache) Add(
 	defer c.mu.Unlock()
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
-	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
+	defer c.cleanupAccounts(principal)
 	logger := c.logger.With(
 		log.ZContext(ctx),
 		zap.Stringer("address", principal),
@@ -794,7 +794,7 @@ func (c *Cache) ApplyLayer(
 		}
 		toReset[tx.Principal] = struct{}{}
 	}
-	defer c.cleanupAccounts(toCleanup)
+	defer c.cleanupAccounts(maps.Keys(toCleanup)...)
 
 	for principal := range byPrincipal {
 		c.createAcctIfNotPresent(principal)
