@@ -57,6 +57,7 @@ type request struct {
 }
 
 type promise struct {
+	once      sync.Once
 	completed chan struct{}
 	err       error
 }
@@ -434,10 +435,10 @@ func (f *Fetch) Stop() {
 	f.cancel()
 	f.mu.Lock()
 	for _, req := range f.unprocessed {
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
 	}
 	for _, req := range f.ongoing {
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
 	}
 	f.mu.Unlock()
 
@@ -589,7 +590,7 @@ func (f *Fetch) hashValidationDone(hash types.Hash32, err error) {
 		f.logger.WithContext(req.ctx).With().Debug("hash request done",
 			log.Stringer("hash", hash))
 	}
-	close(req.promise.completed)
+	req.promise.once.Do(func() { close(req.promise.completed) })
 	delete(f.ongoing, hash)
 }
 
@@ -605,7 +606,7 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 
 	// first check if we have it locally from gossips
 	if has, err := f.bs.Has(req.hint, hash.Bytes()); err == nil && has {
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
 		delete(f.ongoing, hash)
 		return
 	}
@@ -617,7 +618,8 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 			log.Int("retries", req.retries),
 		)
 		req.promise.err = ErrExceedMaxRetries
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
+
 	} else {
 		// put the request back to the unprocessed list
 		f.unprocessed[req.hash] = req
@@ -703,7 +705,7 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][]*batc
 		for _, msg := range requests {
 			if req, ok := f.ongoing[msg.Hash]; ok {
 				req.promise.err = errNoPeer
-				close(req.promise.completed)
+				req.promise.once.Do(func() { close(req.promise.completed) })
 				delete(f.ongoing, req.hash)
 			} else {
 				f.logger.With().Error("ongoing request missing",
@@ -920,7 +922,7 @@ func (f *Fetch) handleHashError(batch *batchInfo, err error) {
 			Debug("hash request failed", log.Stringer("hash", req.hash), log.Err(err))
 		req.promise.err = err
 		peerErrors.WithLabelValues(string(req.hint)).Inc()
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
 		delete(f.ongoing, req.hash)
 	}
 }
@@ -958,7 +960,7 @@ func (f *Fetch) getHash(
 			hint:      h,
 			validator: receiver,
 			promise: &promise{
-				completed: make(chan struct{}, 1),
+				completed: make(chan struct{}),
 			},
 		}
 		f.logger.WithContext(ctx).With().Debug("hash request added to queue",
