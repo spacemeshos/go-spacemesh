@@ -8,8 +8,6 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"golang.org/x/exp/maps"
-
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/shared"
 	postshared "github.com/spacemeshos/post/shared"
@@ -358,7 +356,8 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	round, err := client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID)
 	if err != nil {
-		return nipost.PoETRegistration{}, &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
+		return nipost.PoETRegistration{},
+			&PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
 
@@ -398,13 +397,13 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	}
 
 	existingRegistrationsMap := make(map[string]nipost.PoETRegistration)
-	missingRegistrationsPoETAddresses := make(map[string]struct{})
+	missingRegistrationsPoETAddresses := make([]string, 0)
 
 	for addr := range nb.poetProvers {
 		if val, ok := registrationsMap[addr]; ok {
 			existingRegistrationsMap[addr] = val
 		} else {
-			missingRegistrationsPoETAddresses[addr] = struct{}{}
+			missingRegistrationsPoETAddresses = append(missingRegistrationsPoETAddresses, addr)
 		}
 	}
 
@@ -444,43 +443,43 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	defer cancel()
 
 	g, ctx := errgroup.WithContext(submitCtx)
-	errChan := make(chan error, len(missingRegistrationsPoETAddresses))
-	submittedRegistrations := make([]nipost.PoETRegistration, 0)
+	submittedRegistrationsChan := make(chan nipost.PoETRegistration, len(missingRegistrationsPoETAddresses))
 
-	for _, client := range nb.poetProvers {
-		if _, ok := missingRegistrationsPoETAddresses[client.Address()]; ok {
+	for _, addr := range missingRegistrationsPoETAddresses {
+		if client, ok := nb.poetProvers[addr]; ok {
 			g.Go(func() error {
-				registration, err := nb.submitPoetChallenge(ctx, nodeID, poetProofDeadline, client, prefix, challenge, signature)
-				if err == nil {
-					submittedRegistrations = append(submittedRegistrations, registration)
+				registration, err := nb.submitPoetChallenge(
+					ctx, nodeID,
+					poetProofDeadline,
+					client, prefix, challenge, signature)
+				if err != nil {
+					nb.logger.Warn("failed to submit challenge to poet",
+						zap.Error(err),
+						log.ZShortStringer("smesherID", nodeID))
+				} else {
+					submittedRegistrationsChan <- registration
 				}
-				errChan <- err
 				return nil
 			})
+		} else {
+			nb.logger.Warn("poet service not found",
+				log.ZShortStringer("smesherID", nodeID),
+				zap.String("poetAddr", addr))
 		}
 	}
 	g.Wait()
-	close(errChan)
+	close(submittedRegistrationsChan)
 
-	allInvalid := true
-	for err := range errChan {
-		if err == nil {
-			allInvalid = false
-			continue
-		}
-
-		nb.logger.Warn("failed to submit challenge to poet", zap.Error(err), log.ZShortStringer("smesherID", nodeID))
-		if !errors.Is(err, ErrInvalidRequest) {
-			allInvalid = false
-		}
-	}
-	if allInvalid {
-		nb.logger.Warn("all poet submits were too late. ATX challenge expires", log.ZShortStringer("smesherID", nodeID))
-		return nil, ErrATXChallengeExpired
+	for registration := range submittedRegistrationsChan {
+		existingRegistrations = append(existingRegistrations, registration)
 	}
 
-	existingRegistrations = append(existingRegistrations, submittedRegistrations...)
 	if len(existingRegistrations) == 0 {
+		if curPoetRoundStartDeadline.Before(time.Now()) {
+			nb.logger.Warn("all poet submits were too late. ATX challenge expires",
+				log.ZShortStringer("smesherID", nodeID))
+			return nil, ErrATXChallengeExpired
+		}
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
 	}
 
