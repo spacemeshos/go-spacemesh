@@ -910,7 +910,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 		vrfVerifier,
 		app.clock,
-		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
+		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg).Zap()),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:              layerSize,
 			LayersPerEpoch:         layersPerEpoch,
