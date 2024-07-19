@@ -712,15 +712,15 @@ func (app *App) initServices(ctx context.Context) error {
 		app.atxsdata,
 		state,
 		app.conState,
-		app.addLogger(ExecutorLogger, lg),
+		app.addLogger(ExecutorLogger, lg).Zap(),
 	)
-	mlog := app.addLogger(MeshLogger, lg)
+	mlog := app.addLogger(MeshLogger, lg).Zap()
 	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
 
-	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog.Zap()))
+	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog))
 	if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
 		return fmt.Errorf("pruner %w", err)
 	}
