@@ -1289,14 +1289,17 @@ func TestHare_ReconstructAll(t *testing.T) {
 
 	cluster.drainInteractiveMessages()
 	// cluster setup
-	calls := [3]int{}
-	for i, n := range cluster.nodes {
-		n.mverifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(_ signing.Domain, _ types.NodeID, _ []byte, _ types.EdSignature) bool {
-				calls[i] = calls[i] + 1
-				// when first call return false, other
-				return !(calls[i] == 1)
-			}).AnyTimes()
+	for _, n := range cluster.nodes {
+		gomock.InOrder(
+			n.mverifier.EXPECT().
+				Verify(signing.PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(false).
+				MaxTimes(1),
+			n.mverifier.EXPECT().
+				Verify(signing.PROPOSAL, gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(true).
+				AnyTimes(),
+		)
 	}
 	cluster.setup()
 	cluster.genProposals(layer)

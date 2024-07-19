@@ -2306,14 +2306,14 @@ type proposalConsumerHare struct {
 }
 
 func (p *proposalConsumerHare) IsKnown(layer types.LayerID, proposal types.ProposalID) bool {
-	if p.clock.CurrentLayer() < p.h3DisableLayer {
+	if layer < p.h3DisableLayer {
 		return p.hare3.IsKnown(layer, proposal)
 	}
 	return p.hare4.IsKnown(layer, proposal)
 }
 
 func (p *proposalConsumerHare) OnProposal(proposal *types.Proposal) error {
-	if p.clock.CurrentLayer() < p.h3DisableLayer {
+	if proposal.Layer < p.h3DisableLayer {
 		return p.hare3.OnProposal(proposal)
 	}
 	return p.hare4.OnProposal(proposal)

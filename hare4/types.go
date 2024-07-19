@@ -94,7 +94,7 @@ type Value struct {
 	Reference *types.Hash32
 	// CompactProposals is the array of two-byte SipHash(vrf,proposal_id) and is only used in the preround
 	// phase of the protocol.
-	CompactProposals []types.CompactProposalID `scale:"max=2050"`
+	CompactProposals []types.CompactProposalID `scale:"max=2350"`
 }
 
 type Body struct {

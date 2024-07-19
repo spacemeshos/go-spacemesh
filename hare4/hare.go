@@ -291,7 +291,7 @@ func (h *Hare) Start() {
 		for next := enabled; next < disabled; next++ {
 			select {
 			case <-h.nodeclock.AwaitLayer(next):
-				h.log.Debug("notified", zap.Uint32("layer id", next.Uint32()))
+				h.log.Debug("notified", zap.Uint32("layer", next.Uint32()))
 				h.onLayer(next)
 				h.cleanMessageCache(next - 1)
 			case <-h.ctx.Done():
@@ -327,13 +327,8 @@ func (h *Hare) fetchFull(ctx context.Context, peer p2p.Peer, msgId types.Hash32)
 		if respLen >= MAX_EXCHANGE_SIZE {
 			return errResponseTooBig
 		}
-		buff := make([]byte, respLen)
-		_, err = io.ReadFull(rw, buff)
-		if err != nil {
-			return fmt.Errorf("read response buffer: %w", err)
-		}
-		err = codec.Decode(buff, resp)
-		if err != nil {
+		b, err := codec.DecodeFrom(rw, resp)
+		if err != nil || b != int(respLen) {
 			return fmt.Errorf("decode response: %w", err)
 		}
 		return nil
