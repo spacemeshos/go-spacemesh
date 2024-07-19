@@ -939,7 +939,7 @@ func AtxWithPrevious(db sql.Executor, prev types.ATXID, id types.NodeID) (types.
 		return false
 	}
 	if prev == types.EmptyATXID {
-		rows, err = db.Exec("SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id IS NULL;",
+		rows, err = db.Exec("SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id IS NULL ORDER BY received ASC;",
 			func(s *sql.Statement) {
 				s.BindBytes(1, id.Bytes())
 			},
@@ -947,7 +947,7 @@ func AtxWithPrevious(db sql.Executor, prev types.ATXID, id types.NodeID) (types.
 		)
 	} else {
 		rows, err = db.Exec(`
-		SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id = ?2;`,
+		SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id = ?2 ORDER BY received ASC;`,
 			func(s *sql.Statement) {
 				s.BindBytes(1, id.Bytes())
 				s.BindBytes(2, prev.Bytes())
