@@ -1121,18 +1121,6 @@ func TestHare_AddProposal(t *testing.T) {
 	require.ErrorIs(t, hare.OnProposal(p), store.ErrProposalExists)
 }
 
-func TestProposalIDSort(t *testing.T) {
-	var (
-		a = types.ProposalID{0, 3, 2, 3, 5}
-		b = types.ProposalID{0, 1, 2, 3, 4}
-		c = types.ProposalID{11, 4, 6, 254, 0}
-		d = types.ProposalID{0, 1, 2, 3, 5}
-	)
-	srt := []types.ProposalID{c, b, a, d}
-	slices.SortFunc(srt, sortProposalIds)
-	require.Equal(t, []types.ProposalID{b, d, a, c}, srt)
-}
-
 // TestHare_ReconstructForward tests that a message
 // could be reconstructed on a downstream peer that
 // receives a gossipsub message from a forwarding node

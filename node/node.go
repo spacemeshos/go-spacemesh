@@ -931,7 +931,6 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	propHare := &proposalConsumerHare{
-		clock:          app.clock,
 		hare3:          app.hare3,
 		h3DisableLayer: app.Config.HARE3.DisableLayer,
 		hare4:          app.hare4,

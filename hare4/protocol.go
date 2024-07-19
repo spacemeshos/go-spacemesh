@@ -111,7 +111,7 @@ type protocol struct {
 }
 
 func (p *protocol) OnInitial(proposals []types.ProposalID) {
-	slices.SortFunc(proposals, sortProposalIds)
+	slices.SortFunc(proposals, func(i, j types.ProposalID) int { return bytes.Compare(i[:], j[:]) })
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.initial = proposals

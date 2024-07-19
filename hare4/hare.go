@@ -385,8 +385,7 @@ func (h *Hare) reconstructProposals(ctx context.Context, peer p2p.Peer, msgId ty
 	for i := range proposals {
 		proposalIds[i] = proposalTuple{id: proposals[i].ID(), compact: compacted[i]}
 	}
-	slices.SortFunc(proposalIds, sortProposalsTuple)
-
+	slices.SortFunc(proposalIds, func(i, j proposalTuple) int { return bytes.Compare(i.id[:], j.id[:]) })
 	taken := make([]bool, len(proposals))
 	findProp := func(id types.CompactProposalID) (bool, types.ProposalID) {
 		for i := 0; i < len(proposalIds); i++ {
@@ -427,7 +426,7 @@ func (h *Hare) reconstructProposals(ctx context.Context, peer p2p.Peer, msgId ty
 	// sort the found proposals and unset the compact proposals
 	// field before trying to check the signature
 	// since it would add unnecessary data to the hasher
-	slices.SortFunc(msg.Value.Proposals, sortProposalIds)
+	slices.SortFunc(msg.Value.Proposals, func(i, j types.ProposalID) int { return bytes.Compare(i[:], j[:]) })
 	msg.Value.CompactProposals = []types.CompactProposalID{}
 	return nil
 }
@@ -469,7 +468,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 			if err != nil {
 				return fmt.Errorf("fetch full: %w", err)
 			}
-			slices.SortFunc(msg.Value.Proposals, sortProposalIds)
+			slices.SortFunc(msg.Value.Proposals, func(i, j types.ProposalID) int { return bytes.Compare(i[:], j[:]) })
 			msg.Value.CompactProposals = []types.CompactProposalID{}
 			fetched = true
 		case err != nil:
@@ -919,12 +918,4 @@ func (h *Hare) compactProposalIds(compacter compactFunc, layer types.LayerID,
 type proposalTuple struct {
 	id      types.ProposalID
 	compact types.CompactProposalID
-}
-
-func sortProposalsTuple(i, j proposalTuple) int {
-	return sortProposalIds(i.id, j.id)
-}
-
-func sortProposalIds(i, j types.ProposalID) int {
-	return bytes.Compare(i[:], j[:])
 }
