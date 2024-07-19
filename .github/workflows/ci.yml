@@ -228,7 +228,8 @@ jobs:
         os:
           - ubuntu-22.04
           - ubuntu-latest-arm-8-cores
-          - macos-13
+          # FIXME: reenable the macos runner
+          # - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-2022
     steps:
