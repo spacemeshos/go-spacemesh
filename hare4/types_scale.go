@@ -62,7 +62,7 @@ func (t *Value) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.CompactProposals, 2050)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.CompactProposals, 2350)
 		if err != nil {
 			return total, err
 		}
@@ -89,7 +89,7 @@ func (t *Value) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.Reference = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.CompactProposalID](dec, 2050)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.CompactProposalID](dec, 2350)
 		if err != nil {
 			return total, err
 		}
