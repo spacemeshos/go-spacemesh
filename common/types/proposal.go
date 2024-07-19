@@ -170,11 +170,6 @@ func (id ProposalID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
 }
 
-// Field returns a log field. Implements the LoggableField interface.
-func (id ProposalID) Field() log.Field {
-	return log.String("proposal_id", id.String())
-}
-
 // Compare returns true if other (the given ProposalID) is less than this ProposalID, by lexicographic comparison.
 func (id ProposalID) Compare(other ProposalID) bool {
 	return bytes.Compare(id.Bytes(), other.Bytes()) < 0

@@ -92,7 +92,7 @@ func TestMain(m *testing.M) {
 
 func checkUpdate1(t *testing.T, got *bootstrap.VerifiedUpdate) {
 	require.EqualValues(t, 1, got.Data.Epoch)
-	require.EqualValues(t, "0x6fe7c971", got.Data.Beacon.String())
+	require.EqualValues(t, "6fe7c971", got.Data.Beacon.String())
 	require.Len(t, got.Data.ActiveSet, 2)
 	require.Equal(
 		t,
@@ -124,7 +124,7 @@ func checkUpdate2(t *testing.T, got *bootstrap.VerifiedUpdate) {
 
 func checkUpdate3(t *testing.T, got *bootstrap.VerifiedUpdate) {
 	require.EqualValues(t, 3, got.Data.Epoch)
-	require.EqualValues(t, "0xf70cf90b", got.Data.Beacon.String())
+	require.EqualValues(t, "f70cf90b", got.Data.Beacon.String())
 	require.Nil(t, got.Data.ActiveSet)
 }
 

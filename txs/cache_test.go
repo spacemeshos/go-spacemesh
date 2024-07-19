@@ -124,7 +124,7 @@ func checkNoTX(t *testing.T, c *Cache, tid types.TransactionID) {
 
 func checkMempool(t *testing.T, c *Cache, expected map[types.Address][]*types.MeshTransaction) {
 	t.Helper()
-	mempool := c.GetMempool(c.logger)
+	mempool := c.GetMempool()
 	require.Len(t, mempool, len(expected))
 	for addr := range mempool {
 		var (
@@ -1078,7 +1078,7 @@ func buildSmallCache(
 
 func checkMempoolSize(t *testing.T, c *Cache, expected int) {
 	t.Helper()
-	mempool := c.GetMempool(c.logger)
+	mempool := c.GetMempool()
 	numTXs := 0
 	for _, ntxs := range mempool {
 		numTXs += len(ntxs)
