@@ -704,6 +704,34 @@ func TestCache_Account_Add_RandomOrder(t *testing.T) {
 	checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
 }
 
+func TestCache_Account_ReplaceByFee(t *testing.T) {
+	tc, ta := createSingleAccountTestCache(t)
+	ta.balance = uint64(1000000)
+	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
+
+	now := time.Now()
+	mtx := newMeshTX(t, ta.nonce, ta.signer, defaultAmount, now.Add(time.Second*time.Duration(10)))
+	mtx.GasPrice = defaultFee
+	mtx.MaxGas = 1
+	require.NoError(t, transactions.Add(tc.db, &mtx.Transaction, mtx.Received))
+	require.NoError(t, tc.buildFromScratch(tc.db))
+	checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+
+	rbfTx := newMeshTX(t, ta.nonce, ta.signer, defaultAmount+500, now.Add(time.Second*time.Duration(10)))
+	rbfTx.GasPrice = defaultFee + 1
+	rbfTx.MaxGas = 1
+	if err := tc.Cache.Add(context.Background(), tc.db, &rbfTx.Transaction,
+		now.Add(time.Second*time.Duration(20)), false); err != nil {
+		t.Fatal(err)
+	}
+
+	checkTX(t, tc.Cache, rbfTx.ID, 0, types.EmptyBlockID)
+	checkNoTX(t, tc.Cache, mtx.ID)
+	checkProjection(t, tc.Cache, ta.principal, ta.nonce+1, ta.balance-rbfTx.Spending())
+	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {rbfTx}}
+	checkMempool(t, tc.Cache, expectedMempool)
+}
+
 func TestCache_Account_Add_InsufficientBalance_ResetAfterApply(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	buildSingleAccountCache(t, tc, ta, nil)
