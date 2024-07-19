@@ -131,7 +131,10 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 
 	if applied.After(types.GetEffectiveGenesis()) {
 		if err = msh.executor.Revert(context.Background(), applied); err != nil {
-			msh.logger.Fatal("failed to load state for layer", msh.LatestLayerInState().Field().Zap(), zap.Error(err))
+			msh.logger.Fatal("failed to load state for layer",
+				zap.Error(err),
+				zap.Uint32("layer", msh.LatestLayerInState().Uint32()),
+			)
 		}
 	}
 	msh.logger.Info("recovered mesh from disk",
