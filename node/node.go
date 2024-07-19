@@ -2301,7 +2301,6 @@ func onMainNet(conf *config.Config) bool {
 type proposalConsumerHare struct {
 	hare3          *hare3.Hare
 	h3DisableLayer types.LayerID
-	clock          *timesync.NodeClock
 	hare4          *hare4.Hare
 }
 
