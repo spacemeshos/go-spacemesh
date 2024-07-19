@@ -821,8 +821,8 @@ func (h *Hare) selectProposals(session *session) []types.ProposalID {
 			h.log.Warn("proposal has different beacon value",
 				zap.Uint32("lid", session.lid.Uint32()),
 				zap.Stringer("id", p.ID()),
-				zap.String("proposal_beacon", p.Beacon().ShortString()),
-				zap.String("epoch_beacon", session.beacon.ShortString()),
+				zap.Stringer("proposal_beacon", p.Beacon()),
+				zap.Stringer("epoch_beacon", session.beacon),
 			)
 		}
 	}
