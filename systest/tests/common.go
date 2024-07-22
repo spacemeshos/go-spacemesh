@@ -28,6 +28,8 @@ const (
 	attempts = 3
 )
 
+var retryBackoff = 10 * time.Second
+
 func sendTransactions(
 	ctx context.Context,
 	eg *errgroup.Group,
@@ -135,6 +137,8 @@ func stateHashStream(
 	logger *zap.Logger,
 	collector func(*pb.GlobalStateStreamResponse) (bool, error),
 ) error {
+	retries := 0
+BACKOFF:
 	stateapi := pb.NewGlobalStateServiceClient(node.PubConn())
 	states, err := stateapi.GlobalStateStream(ctx,
 		&pb.GlobalStateStreamRequest{
@@ -153,7 +157,12 @@ func stateHashStream(
 				zap.Any("status", s),
 			)
 			if s.Code() == codes.Unavailable {
-				return nil
+				if retries == attempts {
+					return errors.New("state stream unavailable")
+				}
+				retries++
+				time.Sleep(retryBackoff)
+				goto BACKOFF
 			}
 		}
 		if err != nil {
