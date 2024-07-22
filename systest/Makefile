@@ -23,6 +23,7 @@ storage ?= standard=1Gi
 node_selector ?=
 namespace ?=
 count ?= 1
+failfast ?= true
 
 configname ?= $(test_job_name)
 smesher_config ?= parameters/fastnet/smesher.json
@@ -35,8 +36,12 @@ ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
-command := tests -test.v -test.count=$(count) -test.failfast -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) \
+command := tests -test.v -test.count=$(count) -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) \
 -level=$(level) -configname=$(configname)
+
+ifeq ($(failfast),true)
+	command := $(command) -test.failfast
+endif
 
 .PHONY: docker
 docker:
