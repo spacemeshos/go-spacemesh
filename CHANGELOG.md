@@ -12,6 +12,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#6152](https://github.com/spacemeshos/go-spacemesh/pull/6152) Fixed a bug where in rare cases the node would panic
   due to the closing of a closed channel in the fetcher.
 
+* [#6142](https://github.com/spacemeshos/go-spacemesh/pull/6142) Fix node not dropping peers that are broadcasting
+  invalid ATXs.
+
 ## Release v1.6.3
 
 ### Improvements

@@ -360,7 +360,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.Hash32(second.NIPost.PostMetadata.Challenge))
 	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{second.PrevATXID}, gomock.Any())
 	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second))
-	require.ErrorContains(t, err, "syntactically invalid based on deps")
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	// valid first comes in
 	atxHdlr.expectAtxV1(first, sig.NodeID())
@@ -514,6 +514,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		err := atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf)
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorContains(t, err, "invalid atx signature")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("atx V2", func(t *testing.T) {
 		t.Parallel()
@@ -857,12 +858,14 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 		_, err := atxHdlr.decodeATX(nil)
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("malformed atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 		_, err := atxHdlr.decodeATX([]byte("malformed"))
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("v1", func(t *testing.T) {
 		t.Parallel()
@@ -893,5 +896,6 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atx.PublishEpoch = 9
 		_, err := atxHdlr.decodeATX(codec.MustEncode(atx))
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 }

@@ -275,7 +275,7 @@ func (h *Handler) handleAtx(
 
 	opaqueAtx, err := h.decodeATX(msg)
 	if err != nil {
-		return nil, fmt.Errorf("decoding ATX: %w", err)
+		return nil, fmt.Errorf("%w: decoding ATX: %w", pubsub.ErrValidationReject, err)
 	}
 	id := opaqueAtx.ID()
 
