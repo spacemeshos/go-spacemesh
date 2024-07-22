@@ -81,28 +81,32 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	tctx.Log.Debug("listening to state hashes...")
 	for i := range cl.Total() {
 		client := cl.Client(i)
-		watchStateHashes(ctx, eg, client, tctx.Log.Desugar(), func(state *pb.GlobalStateStreamResponse) (bool, error) {
-			data := state.Datum.Datum
-			require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
 
-			resp := data.(*pb.GlobalStateData_GlobalState)
-			layer := resp.GlobalState.Layer.Number
-			if layer > stop {
-				return false, nil
-			}
+		eg.Go(func() error {
+			return stateHashStream(ctx, node, logger, func(state *pb.GlobalStateStreamResponse) (bool, error) {
+				data := state.Datum.Datum
+				require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
 
-			stateHash := types.BytesToHash(resp.GlobalState.RootHash)
-			tctx.Log.Debugw("state hash collected",
-				"client", client.Name,
-				"layer", layer,
-				"state", stateHash.ShortString())
-			stateCh <- &stateUpdate{
-				layer:  layer,
-				hash:   stateHash,
-				client: client.Name,
-			}
-			return true, nil
+				resp := data.(*pb.GlobalStateData_GlobalState)
+				layer := resp.GlobalState.Layer.Number
+				if layer > stop {
+					return false, nil
+				}
+
+				stateHash := types.BytesToHash(resp.GlobalState.RootHash)
+				tctx.Log.Debugw("state hash collected",
+					"client", client.Name,
+					"layer", layer,
+					"state", stateHash.ShortString())
+				stateCh <- &stateUpdate{
+					layer:  layer,
+					hash:   stateHash,
+					client: client.Name,
+				}
+				return true, nil
+			})
 		})
+
 	}
 
 	finalErr := eg.Wait()

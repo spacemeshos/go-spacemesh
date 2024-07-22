@@ -119,18 +119,6 @@ func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient)
 	return response.Txstate.Id.Id, nil
 }
 
-func watchStateHashes(
-	ctx context.Context,
-	eg *errgroup.Group,
-	node *cluster.NodeClient,
-	logger *zap.Logger,
-	collector func(*pb.GlobalStateStreamResponse) (bool, error),
-) {
-	eg.Go(func() error {
-		return stateHashStream(ctx, node, logger, collector)
-	})
-}
-
 func stateHashStream(
 	ctx context.Context,
 	node *cluster.NodeClient,
@@ -194,6 +182,9 @@ func layersStream(
 	logger *zap.Logger,
 	collector layerCollector,
 ) error {
+	retries := 0
+BACKOFF:
+
 	meshapi := pb.NewMeshServiceClient(node.PubConn())
 	layers, err := meshapi.LayerStream(ctx, &pb.LayerStreamRequest{})
 	if err != nil {
@@ -205,7 +196,12 @@ func layersStream(
 		if ok && s.Code() != codes.OK {
 			logger.Warn("layers stream error", zap.String("client", node.Name), zap.Error(err), zap.Any("status", s))
 			if s.Code() == codes.Unavailable {
-				return nil
+				if retries == attempts {
+					return errors.New("layer stream unavailable")
+				}
+				retries++
+				time.Sleep(retryBackoff)
+				goto BACKOFF
 			}
 		}
 		if err != nil {
@@ -223,6 +219,9 @@ func malfeasanceStream(
 	logger *zap.Logger,
 	collector func(*pb.MalfeasanceStreamResponse) (bool, error),
 ) error {
+	retries := 0
+BACKOFF:
+
 	meshapi := pb.NewMeshServiceClient(node.PubConn())
 	layers, err := meshapi.MalfeasanceStream(ctx, &pb.MalfeasanceStreamRequest{IncludeProof: true})
 	if err != nil {
@@ -238,7 +237,13 @@ func malfeasanceStream(
 				zap.Any("status", s),
 			)
 			if s.Code() == codes.Unavailable {
-				return nil
+				if retries == attempts {
+					return errors.New("layer stream unavailable")
+				}
+				retries++
+				time.Sleep(retryBackoff)
+				goto BACKOFF
+
 			}
 		}
 		if err != nil {
