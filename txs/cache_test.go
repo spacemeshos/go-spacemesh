@@ -720,10 +720,8 @@ func TestCache_Account_ReplaceByFee(t *testing.T) {
 	rbfTx := newMeshTX(t, ta.nonce, ta.signer, defaultAmount+500, now.Add(time.Second*time.Duration(10)))
 	rbfTx.GasPrice = defaultFee + 1
 	rbfTx.MaxGas = 1
-	if err := tc.Cache.Add(context.Background(), tc.db, &rbfTx.Transaction,
-		now.Add(time.Second*time.Duration(20)), false); err != nil {
-		t.Fatal(err)
-	}
+	err := tc.Cache.Add(context.Background(), tc.db, &rbfTx.Transaction, now.Add(time.Second*time.Duration(20)), false)
+	require.NoError(t, err)
 
 	checkTX(t, tc.Cache, rbfTx.ID, 0, types.EmptyBlockID)
 	checkNoTX(t, tc.Cache, mtx.ID)
