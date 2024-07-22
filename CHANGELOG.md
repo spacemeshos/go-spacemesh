@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.6.4
+
+### Improvements
+
+* [#6107](https://github.com/spacemeshos/go-spacemesh/pull/6107) Cache PoET queries between multiple identities on the
+  same node. This will reduce the number of requests the node makes to the PoET server during the cyclegap.
+
 ## Release v1.6.3
 
 ### Improvements
