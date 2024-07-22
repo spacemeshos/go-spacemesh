@@ -9,6 +9,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#6107](https://github.com/spacemeshos/go-spacemesh/pull/6107) Cache PoET queries between multiple identities on the
   same node. This will reduce the number of requests the node makes to the PoET server during the cyclegap.
 
+* [#6152](https://github.com/spacemeshos/go-spacemesh/pull/6152) Fixed a bug where in rare cases the node would panic
+  due to the closing of a closed channel in the fetcher.
+
 ## Release v1.6.3
 
 ### Improvements
