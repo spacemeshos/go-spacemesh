@@ -217,8 +217,7 @@ func parseOk() parseExpectation {
 
 func TestParseTransactions(t *testing.T) {
 	db := sql.InMemory()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	t.Cleanup(cancel)
+
 	vminst := vm.New(db)
 	cfg, cleanup := launchServer(t, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil))
 	t.Cleanup(cleanup)
@@ -232,7 +231,7 @@ func TestParseTransactions(t *testing.T) {
 	for i := range keys {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
-		keys[i] = signing.PrivateKey(priv)
+		keys[i] = priv
 		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))

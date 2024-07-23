@@ -1673,8 +1673,6 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewMeshServiceClient(conn)
 
@@ -1688,7 +1686,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		},
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	stream, err := c.AccountMeshDataStream(ctx, req)
 	require.NoError(t, err, "stream request returned unexpected error")
@@ -1723,8 +1721,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
@@ -1739,7 +1735,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		},
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	stream, err := c.AccountDataStream(ctx, req)
 	require.NoError(t, err, "stream request returned unexpected error")
@@ -1783,8 +1779,6 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
@@ -1795,6 +1789,9 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH |
 				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD),
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	stream, err := c.GlobalStateStream(ctx, req)
 	require.NoError(t, err, "stream request returned unexpected error")
@@ -1858,12 +1855,13 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	conn := dialGrpc(t, cfg)
 
 	// set up the grpc listener stream
 	c := pb.NewMeshServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	stream, err := c.LayerStream(ctx, &pb.LayerStreamRequest{})
 	require.NoError(t, err, "stream request returned unexpected error")
 	// Give the server-side time to subscribe to events
