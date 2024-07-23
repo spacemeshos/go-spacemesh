@@ -74,9 +74,7 @@ func MainnetConfig() Config {
 	hare3conf.DisableLayer = forkLayer
 
 	hare4conf := hare4.DefaultConfig()
-	hare4conf.Committee = 50
-	hare4conf.Enable = true
-	hare4conf.EnableLayer = forkLayer
+	hare4conf.Enable = false
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,

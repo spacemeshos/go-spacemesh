@@ -193,7 +193,7 @@ func DefaultConfig() Config {
 		P2P:             p2p.DefaultConfig(),
 		API:             grpcserver.DefaultConfig(),
 		HARE3:           hare3.DefaultConfig(),
-		HARE4:           hare4.DefaultConfig(),
+		HARE4:           hare4.DefaultConfig(), // DEFAULT HARE4 IS DISABLED
 		HareEligibility: eligibility.DefaultConfig(),
 		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
