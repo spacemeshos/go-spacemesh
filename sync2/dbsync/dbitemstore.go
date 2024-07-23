@@ -2,6 +2,7 @@ package dbsync
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 )
@@ -26,7 +27,7 @@ func NewDBItemStore(
 	dbStore := newDBBackedStore(db, query, keyLen, maxDepth)
 	return &DBItemStore{
 		db:        db,
-		ft:        newFPTree(np, dbStore, maxDepth),
+		ft:        newFPTree(np, dbStore, keyLen, maxDepth),
 		query:     query,
 		keyLen:    keyLen,
 		maxDepth:  maxDepth,
@@ -80,20 +81,12 @@ func (d *DBItemStore) Copy() hashsync.ItemStore {
 
 // Has implements hashsync.ItemStore.
 func (d *DBItemStore) Has(k hashsync.Ordered) (bool, error) {
-	id := k.(KeyBytes)
-	if len(id) < d.keyLen {
-		panic("BUG: short key passed")
+	it, err := d.ft.iter(k.(KeyBytes))
+	if err == nil {
+		return k.Compare(it.Key()) == 0, nil
 	}
-	tailRefs := []tailRef{
-		{ref: load64(id) >> (64 - d.maxDepth), limit: -1},
-	}
-	found := false
-	if err := d.ft.iterateIDs(tailRefs, func(_ tailRef, cur KeyBytes) bool {
-		c := id.Compare(cur)
-		found = c == 0
-		return c > 0
-	}); err != nil {
+	if err != errEmptySet {
 		return false, err
 	}
-	return found, nil
+	return false, nil
 }

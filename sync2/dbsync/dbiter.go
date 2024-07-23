@@ -2,6 +2,7 @@ package dbsync
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"slices"
 
@@ -12,6 +13,10 @@ import (
 type KeyBytes []byte
 
 var _ hashsync.Ordered = KeyBytes(nil)
+
+func (k KeyBytes) String() string {
+	return hex.EncodeToString(k)
+}
 
 func (k KeyBytes) Clone() KeyBytes {
 	return slices.Clone(k)
@@ -61,7 +66,7 @@ type dbRangeIterator struct {
 	singleChunk  bool
 }
 
-var _ hashsync.Iterator = &dbRangeIterator{}
+var _ iterator = &dbRangeIterator{}
 
 // makeDBIterator creates a dbRangeIterator and initializes it from the database.
 // If query returns no rows even after starting from zero ID, errEmptySet error is returned.
@@ -70,7 +75,7 @@ func newDBRangeIterator(
 	query string,
 	from KeyBytes,
 	maxChunkSize int,
-) (hashsync.Iterator, error) {
+) (iterator, error) {
 	if from == nil {
 		panic("BUG: makeDBIterator: nil from")
 	}
@@ -168,9 +173,7 @@ func (it *dbRangeIterator) load() error {
 
 func (it *dbRangeIterator) Key() hashsync.Ordered {
 	if it.pos < len(it.chunk) {
-		key := make(KeyBytes, it.keyLen)
-		copy(key, it.chunk[it.pos])
-		return key
+		return slices.Clone(it.chunk[it.pos])
 	}
 	return nil
 }
@@ -184,4 +187,82 @@ func (it *dbRangeIterator) Next() error {
 		return nil
 	}
 	return it.load()
+}
+
+func (it *dbRangeIterator) clone() iterator {
+	cloned := *it
+	cloned.from = slices.Clone(it.from)
+	cloned.chunk = make([]KeyBytes, len(it.chunk))
+	for i, k := range it.chunk {
+		cloned.chunk[i] = slices.Clone(k)
+	}
+	return &cloned
+}
+
+type combinedIterator struct {
+	iters    []iterator
+	wrapped  []iterator
+	ahead    iterator
+	aheadIdx int
+}
+
+// combineIterators combines multiple iterators into one, returning the smallest current
+// key among all iterators at each step.
+func combineIterators(iters ...iterator) iterator {
+	return &combinedIterator{iters: iters}
+}
+
+func (c *combinedIterator) aheadIterator() iterator {
+	if c.ahead == nil {
+		if len(c.iters) == 0 {
+			if len(c.wrapped) == 0 {
+				return nil
+			}
+			c.iters = c.wrapped
+			c.wrapped = nil
+		}
+		c.ahead = c.iters[0]
+		c.aheadIdx = 0
+		for i := 1; i < len(c.iters); i++ {
+			if c.iters[i].Key() != nil {
+				if c.ahead.Key() == nil || c.iters[i].Key().Compare(c.ahead.Key()) < 0 {
+					c.ahead = c.iters[i]
+					c.aheadIdx = i
+				}
+			}
+		}
+	}
+	return c.ahead
+}
+
+func (c *combinedIterator) Key() hashsync.Ordered {
+	// return c.aheadIterator().Key()
+	it := c.aheadIterator()
+	return it.Key()
+}
+
+func (c *combinedIterator) Next() error {
+	it := c.aheadIterator()
+	oldKey := it.Key()
+	if err := it.Next(); err != nil {
+		return err
+	}
+	c.ahead = nil
+	if oldKey.Compare(it.Key()) >= 0 {
+		// the iterator has wrapped around, move it to the wrapped list
+		// which will be used after all the iterators have wrapped around
+		c.wrapped = append(c.wrapped, it)
+		c.iters = append(c.iters[:c.aheadIdx], c.iters[c.aheadIdx+1:]...)
+	}
+	return nil
+}
+
+func (c *combinedIterator) clone() iterator {
+	cloned := &combinedIterator{
+		iters: make([]iterator, len(c.iters)),
+	}
+	for i, it := range c.iters {
+		cloned.iters[i] = it.clone()
+	}
+	return cloned
 }

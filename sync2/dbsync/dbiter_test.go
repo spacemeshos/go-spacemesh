@@ -2,11 +2,13 @@ package dbsync
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 	"github.com/stretchr/testify/require"
 )
 
@@ -294,23 +296,123 @@ func TestDBRangeIterator(t *testing.T) {
 			require.NoError(t, err)
 			// when there are no items, errEmptySet is returned
 			require.NotEmpty(t, tc.items)
+			clonedIt := it.clone()
 			var collected []KeyBytes
 			for i := 0; i < len(tc.items); i++ {
 				k := it.Key()
 				require.NotNil(t, k)
 				collected = append(collected, k.(KeyBytes))
+				require.Equal(t, k, clonedIt.Key())
 				require.NoError(t, it.Next())
+				// calling Next on the original iterator
+				// shouldn't affect the cloned one
+				require.Equal(t, k, clonedIt.Key())
+				require.NoError(t, clonedIt.Next())
 			}
 			expected := slices.Concat(tc.items[tc.fromN:], tc.items[:tc.fromN])
 			require.Equal(t, expected, collected, "count=%d from=%s maxChunkSize=%d",
 				len(tc.items), hex.EncodeToString(tc.from), maxChunkSize)
+			clonedIt = it.clone()
 			for range 2 {
 				for i := 0; i < len(tc.items); i++ {
 					k := it.Key()
 					require.Equal(t, collected[i], k.(KeyBytes))
+					require.Equal(t, k, clonedIt.Key())
 					require.NoError(t, it.Next())
+					require.Equal(t, k, clonedIt.Key())
+					require.NoError(t, clonedIt.Next())
 				}
 			}
 		}
 	}
+}
+
+type fakeIterator struct {
+	items, allItems []KeyBytes
+}
+
+var _ hashsync.Iterator = &fakeIterator{}
+
+func (it *fakeIterator) Key() hashsync.Ordered {
+	if len(it.allItems) == 0 {
+		panic("no items")
+	}
+	if len(it.items) == 0 {
+		it.items = it.allItems
+	}
+	return KeyBytes(it.items[0])
+}
+
+func (it *fakeIterator) Next() error {
+	if len(it.items) == 0 {
+		it.items = it.allItems
+	}
+	it.items = it.items[1:]
+	if len(it.items) != 0 && string(it.items[0]) == "error" {
+		return errors.New("iterator error")
+	}
+	return nil
+}
+
+func (it *fakeIterator) clone() iterator {
+	cloned := &fakeIterator{
+		allItems: make([]KeyBytes, len(it.allItems)),
+	}
+	for i, k := range it.allItems {
+		cloned.allItems[i] = slices.Clone(k)
+	}
+	cloned.items = cloned.allItems[len(it.allItems)-len(it.items):]
+	return cloned
+}
+
+func TestCombineIterators(t *testing.T) {
+	it1 := &fakeIterator{
+		allItems: []KeyBytes{
+			{0x00, 0x00, 0x00, 0x01},
+			{0x0a, 0x05, 0x00, 0x00},
+		},
+	}
+	it2 := &fakeIterator{
+		allItems: []KeyBytes{
+			{0x00, 0x00, 0x00, 0x03},
+			{0xff, 0xff, 0xff, 0xff},
+		},
+	}
+
+	it := combineIterators(it1, it2)
+	clonedIt := it.clone()
+	for range 3 {
+		var collected []KeyBytes
+		for i := 0; i < 4; i++ {
+			k := it.Key()
+			collected = append(collected, k.(KeyBytes))
+			require.Equal(t, k, clonedIt.Key())
+			require.NoError(t, it.Next())
+			require.Equal(t, k, clonedIt.Key())
+			require.NoError(t, clonedIt.Next())
+		}
+		require.Equal(t, []KeyBytes{
+			{0x00, 0x00, 0x00, 0x01},
+			{0x00, 0x00, 0x00, 0x03},
+			{0x0a, 0x05, 0x00, 0x00},
+			{0xff, 0xff, 0xff, 0xff},
+		}, collected)
+		require.Equal(t, KeyBytes{0x00, 0x00, 0x00, 0x01}, it.Key())
+	}
+
+	it1 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 0}, KeyBytes("error")}}
+	it2 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 1}}}
+
+	it = combineIterators(it1, it2)
+	require.Equal(t, KeyBytes{0, 0, 0, 0}, it.Key())
+	require.Error(t, it.Next())
+
+	it1 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 0}}}
+	it2 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 1}, KeyBytes("error")}}
+
+	it = combineIterators(it1, it2)
+	require.Equal(t, KeyBytes{0, 0, 0, 0}, it.Key())
+	require.NoError(t, it.Next())
+	require.Equal(t, KeyBytes{0, 0, 0, 1}, it.Key())
+	require.Error(t, it.Next())
 }
