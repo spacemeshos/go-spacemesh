@@ -926,3 +926,40 @@ func SetUnits(db sql.Executor, atxID types.ATXID, id types.NodeID, units uint32)
 	)
 	return err
 }
+
+// AtxWithPrevious returns the ATX ID that has the given ATX ID as its previous ATX.
+func AtxWithPrevious(db sql.Executor, prev types.ATXID, id types.NodeID) (types.ATXID, error) {
+	var (
+		atxid types.ATXID
+		rows  int
+		err   error
+	)
+	decode := func(s *sql.Statement) bool {
+		s.ColumnBytes(0, atxid[:])
+		return false
+	}
+	if prev == types.EmptyATXID {
+		rows, err = db.Exec("SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id IS NULL ORDER BY received ASC;",
+			func(s *sql.Statement) {
+				s.BindBytes(1, id.Bytes())
+			},
+			decode,
+		)
+	} else {
+		rows, err = db.Exec(`
+		SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id = ?2 ORDER BY received ASC;`,
+			func(s *sql.Statement) {
+				s.BindBytes(1, id.Bytes())
+				s.BindBytes(2, prev.Bytes())
+			},
+			decode,
+		)
+	}
+	if err != nil {
+		return types.EmptyATXID, err
+	}
+	if rows == 0 {
+		return types.EmptyATXID, sql.ErrNotFound
+	}
+	return atxid, nil
+}
