@@ -1540,13 +1540,6 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewAccountService(app.db, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
-	case v2alpha1.NodeIdentities:
-		configuredPetServices := make(map[string]struct{})
-		for _, server := range app.Config.PoetServers {
-			configuredPetServices[server.Address] = struct{}{}
-		}
-		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPetServices)
-		app.grpcServices[svc] = service
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
