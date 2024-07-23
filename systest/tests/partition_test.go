@@ -83,28 +83,29 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		node := cl.Client(i)
 
 		eg.Go(func() error {
-			return stateHashStream(ctx, node, tctx.Log.Desugar(), func(state *pb.GlobalStateStreamResponse) (bool, error) {
-				data := state.Datum.Datum
-				require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
+			return stateHashStream(ctx, node, tctx.Log.Desugar(),
+				func(state *pb.GlobalStateStreamResponse) (bool, error) {
+					data := state.Datum.Datum
+					require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
 
-				resp := data.(*pb.GlobalStateData_GlobalState)
-				layer := resp.GlobalState.Layer.Number
-				if layer > stop {
-					return false, nil
-				}
+					resp := data.(*pb.GlobalStateData_GlobalState)
+					layer := resp.GlobalState.Layer.Number
+					if layer > stop {
+						return false, nil
+					}
 
-				stateHash := types.BytesToHash(resp.GlobalState.RootHash)
-				tctx.Log.Debugw("state hash collected",
-					"client", client.Name,
-					"layer", layer,
-					"state", stateHash.ShortString())
-				stateCh <- &stateUpdate{
-					layer:  layer,
-					hash:   stateHash,
-					client: client.Name,
-				}
-				return true, nil
-			})
+					stateHash := types.BytesToHash(resp.GlobalState.RootHash)
+					tctx.Log.Debugw("state hash collected",
+						"client", node.Name,
+						"layer", layer,
+						"state", stateHash.ShortString())
+					stateCh <- &stateUpdate{
+						layer:  layer,
+						hash:   stateHash,
+						client: node.Name,
+					}
+					return true, nil
+				})
 		})
 	}
 
