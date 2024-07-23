@@ -397,18 +397,17 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	}
 
 	existingRegistrationsMap := make(map[string]nipost.PoETRegistration)
-	missingRegistrationsPoETAddresses := make([]string, 0)
-
-	for addr := range nb.poetProvers {
+	var missingRegistrations []PoetService
+	for addr, poet := range nb.poetProvers {
 		if val, ok := registrationsMap[addr]; ok {
 			existingRegistrationsMap[addr] = val
 		} else {
-			missingRegistrationsPoETAddresses = append(missingRegistrationsPoETAddresses, addr)
+			missingRegistrations = append(missingRegistrations, poet)
 		}
 	}
 
 	existingRegistrations := maps.Values(existingRegistrationsMap)
-	if len(missingRegistrationsPoETAddresses) == 0 {
+	if len(missingRegistrations) == 0 {
 		return existingRegistrations, nil
 	}
 
@@ -443,30 +442,27 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	defer cancel()
 
 	g, ctx := errgroup.WithContext(submitCtx)
-	submittedRegistrationsChan := make(chan nipost.PoETRegistration, len(missingRegistrationsPoETAddresses))
+	submittedRegistrationsChan := make(chan nipost.PoETRegistration, len(missingRegistrations))
 
-	for _, addr := range missingRegistrationsPoETAddresses {
-		if client, ok := nb.poetProvers[addr]; ok {
-			g.Go(func() error {
-				registration, err := nb.submitPoetChallenge(
-					ctx, nodeID,
-					poetProofDeadline,
-					client, prefix, challenge, signature)
-				if err != nil {
-					nb.logger.Warn("failed to submit challenge to poet",
-						zap.Error(err),
-						log.ZShortStringer("smesherID", nodeID))
-				} else {
-					submittedRegistrationsChan <- registration
-				}
-				return nil
-			})
-		} else {
-			nb.logger.Warn("poet service not found",
-				log.ZShortStringer("smesherID", nodeID),
-				zap.String("poetAddr", addr))
-		}
+	for _, client := range missingRegistrations {
+		g.Go(func() error {
+			registration, err := nb.submitPoetChallenge(
+				ctx, nodeID,
+				poetProofDeadline,
+				client, prefix, challenge, signature,
+			)
+			if err != nil {
+				nb.logger.Warn("failed to submit challenge to poet",
+					zap.Error(err),
+					log.ZShortStringer("smesherID", nodeID),
+				)
+			} else {
+				submittedRegistrationsChan <- registration
+			}
+			return nil
+		})
 	}
+
 	g.Wait()
 	close(submittedRegistrationsChan)
 
@@ -476,7 +472,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 
 	if len(existingRegistrations) == 0 {
 		if curPoetRoundStartDeadline.Before(time.Now()) {
-			nb.logger.Warn("all poet submits were too late. ATX challenge expires",
+			nb.logger.Warn("failed to register in poets on time. ATX challenge expires",
 				log.ZShortStringer("smesherID", nodeID))
 			return nil, ErrATXChallengeExpired
 		}

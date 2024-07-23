@@ -890,16 +890,20 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 		challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
 
 		ctrl := gomock.NewController(t)
-		poetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr)
+
+		poetProver := NewMockPoetService(ctrl)
+		poetProver.EXPECT().Address().Return(poetProverAddr).AnyTimes()
 		poetProver.EXPECT().Proof(gomock.Any(), "1").Return(
 			&types.PoetProof{}, []types.Hash32{challengeHash}, nil,
 		)
-
-		addedPoetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr2)
+		addedPoetProver := NewMockPoetService(ctrl)
+		addedPoetProver.EXPECT().
+			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(&types.PoetRound{}, nil)
+		addedPoetProver.EXPECT().Address().Return(poetProverAddr2).AnyTimes()
 		addedPoetProver.EXPECT().Proof(gomock.Any(), "").Return(
 			&types.PoetProof{}, []types.Hash32{challengeHash}, nil,
 		)
-
 		mclock := defaultLayerClockMock(ctrl)
 
 		postClient := NewMockPostClient(ctrl)
@@ -948,10 +952,15 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 		challengeHash := wire.NIPostChallengeToWireV1(&challenge).Hash()
 
 		ctrl := gomock.NewController(t)
-		addedPoetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr2)
+		addedPoetProver := NewMockPoetService(ctrl)
+		addedPoetProver.EXPECT().
+			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(&types.PoetRound{}, nil)
+
 		addedPoetProver.EXPECT().Proof(gomock.Any(), "").Return(
 			&types.PoetProof{}, []types.Hash32{challengeHash}, nil,
 		)
+		addedPoetProver.EXPECT().Address().Return(poetProverAddr2).AnyTimes()
 
 		mclock := defaultLayerClockMock(ctrl)
 
@@ -1010,12 +1019,15 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 
 			require.NoError(t, nipost.AddChallenge(db, sig.NodeID(), &challenge))
 
-			poetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr)
+			poetProver := NewMockPoetService(ctrl)
+			poetProver.EXPECT().Address().AnyTimes().Return(poetProverAddr).AnyTimes()
 			poetProver.EXPECT().Proof(gomock.Any(), "1").Return(
 				&types.PoetProof{}, []types.Hash32{challengeHash}, nil,
 			)
 
-			addedPoetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr2)
+			// addedPoetProver := defaultPoetServiceMock(t, ctrl, poetProverAddr2)
+			addedPoetProver := NewMockPoetService(ctrl)
+			addedPoetProver.EXPECT().Address().AnyTimes().Return(poetProverAddr2).AnyTimes()
 
 			mclock := NewMocklayerClock(ctrl)
 			mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(
@@ -1064,7 +1076,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			require.NotNil(t, nipost)
 		})
 
-	t.Run("1 poet removed AFTER round started -> too late to register to added poet, get proof from known",
+	t.Run("1 poet removed AFTER round started -> too late to register to added poet, get proof from the remaining one",
 		func(t *testing.T) {
 			db := localsql.InMemory()
 			const publishEpoch = 5
