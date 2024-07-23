@@ -184,7 +184,6 @@ func layersStream(
 ) error {
 	retries := 0
 BACKOFF:
-
 	meshapi := pb.NewMeshServiceClient(node.PubConn())
 	layers, err := meshapi.LayerStream(ctx, &pb.LayerStreamRequest{})
 	if err != nil {
@@ -323,6 +322,9 @@ func watchTransactionResults(ctx context.Context,
 	collector func(*pb.TransactionResult) (bool, error),
 ) {
 	eg.Go(func() error {
+		retries := 0
+	BACKOFF:
+
 		api := pb.NewTransactionServiceClient(client.PubConn())
 		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
 		if err != nil {
@@ -338,7 +340,12 @@ func watchTransactionResults(ctx context.Context,
 					zap.Any("status", s),
 				)
 				if s.Code() == codes.Unavailable {
-					return nil
+					if retries == attempts {
+						return errors.New("transaction results unavailable")
+					}
+					retries++
+					time.Sleep(retryBackoff)
+					goto BACKOFF
 				}
 			}
 			if err != nil {
@@ -359,6 +366,8 @@ func watchProposals(
 	collector func(*pb.Proposal) (bool, error),
 ) {
 	eg.Go(func() error {
+		retries := 0
+	BACKOFF:
 		dbg := pb.NewDebugServiceClient(client.PrivConn())
 		proposals, err := dbg.ProposalsStream(ctx, &emptypb.Empty{})
 		if err != nil {
@@ -374,7 +383,12 @@ func watchProposals(
 					zap.Any("status", s),
 				)
 				if s.Code() == codes.Unavailable {
-					return nil
+					if retries == attempts {
+						return errors.New("watch proposals unavailable")
+					}
+					retries++
+					time.Sleep(retryBackoff)
+					goto BACKOFF
 				}
 			}
 			if err != nil {
