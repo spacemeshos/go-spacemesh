@@ -13,6 +13,11 @@ type poolEntry[T any, I ~uint32] struct {
 	content  T
 }
 
+// rcPool is a reference-counted pool of items. It is safe for concurrent use.
+// The zero value is a valid, empty rcPool.
+// Unlike sync.Pool, rcPool does not shrink, but uint32 indices can be used
+// to reference items instead of larger 64-bit pointers, and the items
+// can be shared between
 type rcPool[T any, I ~uint32] struct {
 	mtx     sync.Mutex
 	entries []poolEntry[T, I]

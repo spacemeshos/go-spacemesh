@@ -4,17 +4,17 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/bits"
 	"os"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 )
 
 type trace struct {
@@ -210,10 +210,6 @@ func (p prefix) highBit() bool {
 	return p.bits()>>(p.len()-1) != 0
 }
 
-func (p prefix) lowBit() bool {
-	return p&(1<<prefixLenBits) != 0
-}
-
 func (p prefix) minID(b KeyBytes) {
 	if len(b) < 8 {
 		panic("BUG: id slice too small")
@@ -225,17 +221,18 @@ func (p prefix) minID(b KeyBytes) {
 	}
 }
 
-func (p prefix) maxID(b KeyBytes) {
-	if len(b) < 8 {
-		panic("BUG: id slice too small")
-	}
-	s := uint64(64 - p.len())
-	v := (p.bits() << s) | ((1 << s) - 1)
-	binary.BigEndian.PutUint64(b, v)
-	for n := 8; n < len(b); n++ {
-		b[n] = 0xff
-	}
-}
+// QQQQQ: rm ?
+// func (p prefix) maxID(b KeyBytes) {
+// 	if len(b) < 8 {
+// 		panic("BUG: id slice too small")
+// 	}
+// 	s := uint64(64 - p.len())
+// 	v := (p.bits() << s) | ((1 << s) - 1)
+// 	binary.BigEndian.PutUint64(b, v)
+// 	for n := 8; n < len(b); n++ {
+// 		b[n] = 0xff
+// 	}
+// }
 
 // shift removes the highest bit from the prefix
 func (p prefix) shift() prefix {
@@ -250,20 +247,13 @@ func (p prefix) shift() prefix {
 	}
 }
 
+func (p prefix) match(b KeyBytes) bool {
+	return load64(b)>>(64-p.len()) == p.bits()
+}
+
 func load64(h KeyBytes) uint64 {
 	return binary.BigEndian.Uint64(h[:8])
 }
-
-// func hashPrefix(h KeyBytes, nbits int) prefix {
-// 	if nbits < 0 || nbits > maxPrefixLen {
-// 		panic("BUG: bad prefix length")
-// 	}
-// 	if nbits == 0 {
-// 		return 0
-// 	}
-// 	v := load64(h)
-// 	return prefix((v>>(64-nbits-prefixLenBits))&prefixBitMask + uint64(nbits))
-// }
 
 func preFirst0(h KeyBytes) prefix {
 	l := min(maxPrefixLen, bits.LeadingZeros64(^load64(h)))
@@ -287,101 +277,55 @@ type fpResult struct {
 	itype int
 }
 
-type tailRef struct {
-	// maxDepth bits of the key
-	ref uint64
-	// max count to get from this tail ref, -1 for unlimited
+type aggContext struct {
+	x, y  KeyBytes
+	fp    fingerprint
+	count uint32
+	itype int
 	limit int
+	total uint32
 }
 
-type aggResult struct {
-	startTail, endTail *tailRef
-	fp                 fingerprint
-	count              uint32
-	itype              int
-	limit              int
-	lastVisited        nodeIndex
-	lastPrefix         prefix
-}
-
-func (r *aggResult) setStartTail(tail *tailRef) {
-	if r.startTail != nil {
-		panic("BUG: left tail already set")
+func (ac *aggContext) prefixWithinRange(p prefix) bool {
+	if ac.itype == 0 {
+		return true
 	}
-	r.startTail = tail
+	x := load64(ac.x)
+	y := load64(ac.y)
+	v := p.bits() << (64 - p.len())
+	maxV := v + (1 << (64 - p.len())) - 1
+	if ac.itype < 0 {
+		// normal interval
+		// fmt.Fprintf(os.Stderr, "QQQQQ: (0) itype %d x %016x y %016x v %016x maxV %016x result %v\n", ac.itype, x, y, v, maxV, v >= x && maxV < y)
+		return v >= x && maxV < y
+	}
+	// inverted interval
+	// fmt.Fprintf(os.Stderr, "QQQQQ: (1) itype %d x %016x y %016x v %016x maxV %016x result %v\n", ac.itype, x, y, v, maxV, v >= x || v < y)
+	return v >= x || maxV < y
 }
 
-func (r *aggResult) setEndTail(tail *tailRef) {
-	if r.endTail != nil {
-		panic("BUG: right tail already set")
-	}
-	r.endTail = tail
-}
-
-func (r *aggResult) setTails(tail *tailRef, x, y KeyBytes, maxDepth int) {
-	if r.itype == 0 {
-		// Doesn't matter which tail as the IDs aren't filtered based on
-		// the interval, only based on the limit
-		r.setStartTail(tail)
-		return
-	}
-	xRef := load64(x) >> (64 - maxDepth)
-	yRef := load64(y) >> (64 - maxDepth)
+func (ac *aggContext) maybeIncludeNode(node node) bool {
 	switch {
-	case xRef == yRef:
-		// Same ref for x and y.
-		// In this case, this tail may only contain relevant entries
-		// if it's ref is the same as xRef and yRef, and it needs
-		// to be used for both tails.
-		if tail.ref == xRef {
-			r.setStartTail(tail)
-			r.setEndTail(tail)
-		}
-	case r.itype < 0:
-		// Normal interval.
-		// The tail can cover the start in case if it's at or below xRef,
-		// and the end in case if it's at or below yRef, but after xRef.
-		if tail.ref <= xRef {
-			r.setStartTail(tail)
-		} else if tail.ref <= yRef {
-			r.setEndTail(tail)
-		}
+	case ac.limit < 0:
+	case uint32(ac.limit) < node.c:
+		return false
 	default:
-		// Inverse interval.
-		// The tail can cover the start in case if it's at or below xRef,
-		// but also after yRef.
-		// It can cover the end in case if it's at or below yRef.
-		if tail.ref <= yRef {
-			r.setEndTail(tail)
-		} else if tail.ref <= xRef {
-			r.setStartTail(tail)
-		}
+		ac.limit -= int(node.c)
 	}
+	ac.fp.update(node.fp[:])
+	ac.count += node.c
+	return true
 }
 
-func (r *aggResult) takeAtMost(count int) int {
-	switch {
-	case r.limit < 0:
-		return -1
-	case count <= r.limit:
-		r.limit -= count
-	default:
-		count = r.limit
-		r.limit = 0
-	}
-	return count
-}
-
-func (r *aggResult) update(node node) {
-	r.fp.update(node.fp[:])
-	r.count += node.c
-	// // fmt.Fprintf(os.Stderr, "QQQQQ: r.count <= %d r.fp <= %s\n", r.count, r.fp)
+type iterator interface {
+	hashsync.Iterator
+	clone() iterator
 }
 
 type idStore interface {
 	clone() idStore
 	registerHash(h KeyBytes) error
-	iterateIDs(tailRefs []tailRef, toCall func(tailRef, KeyBytes) bool) error
+	iter(from KeyBytes) (iterator, error)
 }
 
 type fpTree struct {
@@ -390,11 +334,18 @@ type fpTree struct {
 	np       *nodePool
 	rootMtx  sync.Mutex
 	root     nodeIndex
+	keyLen   int
 	maxDepth int
 }
 
-func newFPTree(np *nodePool, idStore idStore, maxDepth int) *fpTree {
-	ft := &fpTree{np: np, idStore: idStore, root: noIndex, maxDepth: maxDepth}
+func newFPTree(np *nodePool, idStore idStore, keyLen, maxDepth int) *fpTree {
+	ft := &fpTree{
+		np:       np,
+		idStore:  idStore,
+		root:     noIndex,
+		keyLen:   keyLen,
+		maxDepth: maxDepth,
+	}
 	runtime.SetFinalizer(ft, (*fpTree).release)
 	return ft
 }
@@ -531,6 +482,7 @@ func (ft *fpTree) followPrefix(from nodeIndex, p, followed prefix) (idx nodeInde
 	ft.enter("followPrefix: from %d p %s highBit %v", from, p, p.highBit())
 	defer func() { ft.leave(idx, rp, found) }()
 
+	// QQQQQ: refactor into a loop
 	switch {
 	case from == noIndex:
 		return noIndex, followed, false
@@ -545,127 +497,115 @@ func (ft *fpTree) followPrefix(from nodeIndex, p, followed prefix) (idx nodeInde
 	}
 }
 
-func (ft *fpTree) tailRefFromPrefix(idx nodeIndex, p prefix, limit int) tailRef {
-	// TODO: QQQQ: FIXME: this may happen with reverse intervals,
-	// but should we even be checking the prefixes in this case?
-	if p.len() != ft.maxDepth {
-		panic("BUG: tail from short prefix")
+// aggregateEdge aggregates an edge of the interval, which can be bounded by x, y, both x
+// and y or none of x and y, have a common prefix and optionally bounded by a limit of N of
+// aggregated items.
+// It returns a boolean indicating whether the limit or the right edge (y) was reached and
+// an error, if any.
+func (ft *fpTree) aggregateEdge(x, y KeyBytes, p prefix, ac *aggContext) (cont bool, err error) {
+	ft.log("aggregateEdge: x %s y %s p %s limit %d count %d", x.String(), y.String(), p, ac.limit, ac.count)
+	defer func() {
+		ft.log("aggregateEdge ==> limit %d count %d\n", ac.limit, ac.count)
+	}()
+	if ac.limit == 0 {
+		ft.log("aggregateEdge: limit is 0")
+		return false, nil
 	}
-	return tailRef{ref: p.bits(), limit: limit}
-}
-
-func (ft *fpTree) tailRefFromFingerprint(idx nodeIndex, fp fingerprint, limit int) tailRef {
-	v := load64(fp[:])
-	if ft.maxDepth >= 64 {
-		return tailRef{ref: v, limit: limit}
-	}
-	// // fmt.Fprintf(os.Stderr, "QQQQQ: AAAAA: v %016x maxDepth %d shift %d\n", v, ft.maxDepth, (64 - ft.maxDepth))
-	return tailRef{ref: v >> (64 - ft.maxDepth), limit: limit}
-}
-
-func (ft *fpTree) tailRefFromNodeAndPrefix(idx nodeIndex, n node, p prefix, limit int) tailRef {
-	if n.c == 1 {
-		return ft.tailRefFromFingerprint(idx, n.fp, limit)
+	var startFrom KeyBytes
+	if x == nil {
+		startFrom = make(KeyBytes, ft.keyLen)
+		p.minID(startFrom)
 	} else {
-		return ft.tailRefFromPrefix(idx, p, limit)
+		startFrom = x
 	}
+	ft.log("aggregateEdge: startFrom %s", startFrom.String())
+	it, err := ft.iter(startFrom)
+	if err != nil {
+		if errors.Is(err, errEmptySet) {
+			ft.log("aggregateEdge: empty set")
+			return false, nil
+		}
+		ft.log("aggregateEdge: error: %v", err)
+		return false, err
+	}
+
+	for range ft.np.node(ft.root).c {
+		id := it.Key().(KeyBytes)
+		ft.log("aggregateEdge: ID %s", id.String())
+		if y != nil && id.Compare(y) >= 0 {
+			ft.log("aggregateEdge: ID is over Y: %s", id.String())
+			return false, nil
+		}
+		if !p.match(id) {
+			ft.log("aggregateEdge: ID doesn't match the prefix: %s", id.String())
+			// Got to the end of the tailRef without exhausting the limit
+			return true, nil
+		}
+		ac.fp.update(id)
+		ac.count++
+		if ac.limit > 0 {
+			ac.limit--
+			if ac.limit == 0 {
+				ft.log("aggregateEdge: limit exhausted")
+				return false, nil
+			}
+		}
+		if err := it.Next(); err != nil {
+			ft.log("aggregateEdge: next error: %v", err)
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
-func (ft *fpTree) descendToLeftmostLeaf(idx nodeIndex, p prefix) (nodeIndex, prefix) {
-	switch {
-	case idx == noIndex:
-		return noIndex, p
-	case ft.np.node(idx).leaf():
-		return idx, p
-	default:
-		return ft.descendToLeftmostLeaf(ft.np.node(idx).left, p.left())
-	}
-}
-
-// func (ft *fpTree) descendToNextLeaf(idx nodeIndex, p, rem prefix) (nodeIndex, prefix) {
-// 	switch {
-// 	case idx == noIndex:
-// 		panic("BUG: descendToNextLeaf: no node")
-// 	case rem == 0:
-// 		return noIndex, p
-// 	case rem.highBit():
-// 		// Descending to the right branch by following p:
-// 		// the next leaf, if there's any, is further down the right branch.
-// 		newIdx, newP := ft.descendToNextLeaf(ft.np.node(idx).right, p.right(), rem.shift())
-// 		return newIdx, newP
-// 	default:
-// 		// Descending to the left branch by following p:
-// 		// if the leaf is not found in the left branch, it's the leftmost leaf
-// 		// on the right branch
-// 		newIdx, newP := ft.descendToNextLeaf(ft.np.node(idx).left, p.left(), rem.shift())
-// 		if newIdx != noIndex {
-// 			return newIdx, newP
-// 		}
-// 		return ft.descendToLeftmostLeaf(ft.np.node(idx).right, p.right())
-// 	}
-// }
-
-// func (ft *fpTree) nextLeaf(p prefix) (nodeIndex, prefix) {
-// 	if ft.root == noIndex {
-// 		return noIndex, 0
-// 	}
-// 	return ft.descendToNextLeaf(ft.root, 0, p)
-// }
-
-func (ft *fpTree) visitNode(idx nodeIndex, p prefix, r *aggResult) (node, bool) {
+func (ft *fpTree) node(idx nodeIndex) (node, bool) {
 	if idx == noIndex {
 		return node{}, false
 	}
-	ft.log("visitNode: idx %d p %s", idx, p)
-	r.lastVisited = idx
-	r.lastPrefix = p
 	return ft.np.node(idx), true
 }
 
-func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, r *aggResult) (tailRef *tailRef, cont bool) {
-	ft.enter("aggregateUpToLimit: idx %d p %s limit %d cur_fp %s cur_count %d", idx, p, r.limit,
-		r.fp.String(), r.count)
+func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, ac *aggContext) (cont bool, err error) {
+	ft.enter("aggregateUpToLimit: idx %d p %s limit %d cur_fp %s cur_count %d", idx, p, ac.limit,
+		ac.fp.String(), ac.count)
 	defer func() {
-		ft.leave(r.fp, r.count)
+		ft.leave(ac.fp, ac.count)
 	}()
 	for {
-		node, ok := ft.visitNode(idx, p, r)
+		node, ok := ft.node(idx)
 		switch {
 		case !ok:
 			ft.log("stop: no node")
-			return nil, true
-		case r.limit == 0:
-			// for r.limit == 0, it's important that we still visit the node
+			return true, nil
+		case ac.limit == 0:
+			// for ac.limit == 0, it's important that we still visit the node
 			// so that we can get the item immediately following the included items
 			ft.log("stop: limit exhausted")
-			return nil, false
-		case r.limit < 0:
-			// no limit
-			ft.log("no limit")
-			r.update(node)
-			return nil, true
-		case node.c <= uint32(r.limit):
+			return false, nil
+		case ac.maybeIncludeNode(node):
 			// node is fully included
 			ft.log("included fully")
-			r.update(node)
-			r.limit -= int(node.c)
-			return nil, true
+			return true, nil
 		case node.leaf():
 			// reached the limit on this node, do not need to continue after
 			// done with it
-			tail := ft.tailRefFromPrefix(idx, p, r.takeAtMost(int(node.c)))
-			ft.log("add prefix to the tails: %016x => limit %d", tail.ref, r.limit)
-			return &tail, false
+			cont, err := ft.aggregateEdge(nil, nil, p, ac)
+			if err != nil {
+				return false, err
+			}
+			if cont {
+				panic("BUG: expected limit not reached")
+			}
+			return false, nil
 		default:
 			pLeft := p.left()
-			left, haveLeft := ft.visitNode(node.left, pLeft, r)
+			left, haveLeft := ft.node(node.left)
 			if haveLeft {
-				if int(left.c) <= r.limit {
+				if ac.maybeIncludeNode(left) {
 					// left node is fully included, after which
 					// we need to stop somewhere in the right subtree
 					ft.log("include left in full")
-					r.update(left)
-					r.limit -= int(left.c)
 				} else {
 					// we must stop somewhere in the left subtree,
 					// and the right subtree is irrelevant
@@ -682,161 +622,135 @@ func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, r *aggResult) (tai
 	}
 }
 
-func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, r *aggResult) (cont bool) {
-	ft.enter("aggregateLeft: idx %d v %016x p %s limit %d", idx, v, p, r.limit)
+func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, ac *aggContext) (cont bool, err error) {
+	ft.enter("aggregateLeft: idx %d v %016x p %s limit %d", idx, v, p, ac.limit)
 	defer func() {
-		ft.leave(r.fp, r.count, r.startTail, r.endTail)
+		ft.leave(ac.fp, ac.count)
 	}()
-	node, ok := ft.visitNode(idx, p, r)
+	node, ok := ft.node(idx)
 	switch {
 	case !ok:
-		// for r.limit == 0, it's important that we still visit the node
+		// for ac.limit == 0, it's important that we still visit the node
 		// so that we can get the item immediately following the included items
 		ft.log("stop: no node")
-		return true
-	case r.limit == 0:
+		return true, nil
+	case ac.limit == 0:
 		ft.log("stop: limit exhausted")
-		return false
-	case p.len() == ft.maxDepth:
+		return false, nil
+	case ac.prefixWithinRange(p) && ac.maybeIncludeNode(node):
+		ft.log("including node in full: %s limit %d", p, ac.limit)
+		return ac.limit != 0, nil
+	case p.len() == ft.maxDepth || node.leaf():
 		if node.left != noIndex || node.right != noIndex {
 			panic("BUG: node @ maxDepth has children")
 		}
-		tail := ft.tailRefFromPrefix(idx, p, r.takeAtMost(int(node.c)))
-		r.setStartTail(&tail)
-		ft.log("add prefix to the tails: %016x => limit %d", tail.ref, r.limit)
-		return true
-	case node.leaf(): // TBD: combine with prev
-		// For leaf 1-nodes, we can use the fingerprint to get tailRef
-		// by which the actual IDs will be selected
-		if node.c != 1 {
-			panic("BUG: leaf non-1 node below maxDepth")
-		}
-		tail := ft.tailRefFromFingerprint(idx, node.fp, r.takeAtMost(1))
-		r.setStartTail(&tail)
-		ft.log("add prefix to the tails (1-leaf): %016x (fp %s) => limit %d", tail.ref, node.fp, r.limit)
-		return true
+		return ft.aggregateEdge(ac.x, nil, p, ac)
 	case v&bit63 == 0:
 		ft.log("incl right node %d + go left to node %d", node.right, node.left)
-		if !ft.aggregateLeft(node.left, v<<1, p.left(), r) {
-			return false
+		cont, err := ft.aggregateLeft(node.left, v<<1, p.left(), ac)
+		if !cont || err != nil {
+			return false, err
 		}
 		if node.right != noIndex {
-			tail, cont := ft.aggregateUpToLimit(node.right, p.right(), r)
-			if tail != nil {
-				r.setStartTail(tail)
-			}
-			return cont
+			return ft.aggregateUpToLimit(node.right, p.right(), ac)
 		}
-		return true
+		return true, nil
 	default:
 		ft.log("go right to node %d", node.right)
-		return ft.aggregateLeft(node.right, v<<1, p.right(), r)
+		return ft.aggregateLeft(node.right, v<<1, p.right(), ac)
 	}
 }
 
-func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, r *aggResult) (cont bool) {
-	ft.enter("aggregateRight: idx %d v %016x p %s limit %d", idx, v, p, r.limit)
+func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, ac *aggContext) (cont bool, err error) {
+	ft.enter("aggregateRight: idx %d v %016x p %s limit %d", idx, v, p, ac.limit)
 	defer func() {
-		ft.leave(r.fp, r.count, r.startTail, r.endTail)
+		ft.leave(ac.fp, ac.count)
 	}()
-	node, ok := ft.visitNode(idx, p, r)
+	node, ok := ft.node(idx)
 	switch {
 	case !ok:
-		// for r.limit == 0, it's important that we still visit the node
+		// for ac.limit == 0, it's important that we still visit the node
 		// so that we can get the item immediately following the included items
 		ft.log("stop: no node")
-		return true
-	case r.limit == 0:
+		return true, nil
+	case ac.limit == 0:
 		ft.log("stop: limit exhausted")
-		return false
-	case p.len() == ft.maxDepth:
+		return false, nil
+	case ac.prefixWithinRange(p) && ac.maybeIncludeNode(node):
+		ft.log("including node in full: %s limit %d", p, ac.limit)
+		return ac.limit != 0, nil
+	case p.len() == ft.maxDepth || node.leaf():
 		if node.left != noIndex || node.right != noIndex {
 			panic("BUG: node @ maxDepth has children")
 		}
-		tail := ft.tailRefFromPrefix(idx, p, r.takeAtMost(int(node.c)))
-		r.setEndTail(&tail)
-		ft.log("add prefix to the tails: %016x => limit %d", tail.ref, r.limit)
-		return true
-	case node.leaf():
-		// For leaf 1-nodes, we can use the fingerprint to get tailRef
-		// by which the actual IDs will be selected
-		if node.c != 1 {
-			panic("BUG: leaf non-1 node below maxDepth")
-		}
-		tail := ft.tailRefFromFingerprint(idx, node.fp, r.takeAtMost(1))
-		r.setEndTail(&tail)
-		ft.log("add prefix to the tails (1-leaf): %016x (fp %s) => limit %d", tail.ref, node.fp, r.limit)
-		return true
+		return ft.aggregateEdge(nil, ac.y, p, ac)
 	case v&bit63 == 0:
 		ft.log("go left to node %d", node.left)
-		return ft.aggregateRight(node.left, v<<1, p.left(), r)
+		return ft.aggregateRight(node.left, v<<1, p.left(), ac)
 	default:
 		ft.log("incl left node %d + go right to node %d", node.left, node.right)
 		if node.left != noIndex {
-			tail, cont := ft.aggregateUpToLimit(node.left, p.left(), r)
-			if tail != nil {
-				r.setEndTail(tail)
-			}
-			if !cont {
-				return false
+			cont, err := ft.aggregateUpToLimit(node.left, p.left(), ac)
+			if !cont || err != nil {
+				return false, err
 			}
 		}
-		return ft.aggregateRight(node.right, v<<1, p.right(), r)
+		return ft.aggregateRight(node.right, v<<1, p.right(), ac)
 	}
 }
 
-func (ft *fpTree) aggregateInterval(x, y KeyBytes, limit int) (r aggResult) {
+func (ft *fpTree) aggregateInterval(ac *aggContext) error {
 	ft.rootMtx.Lock()
 	defer ft.rootMtx.Unlock()
-	ft.enter("aggregateInterval: x %s y %s limit %d", hex.EncodeToString(x), hex.EncodeToString(y), limit)
+	ft.enter("aggregateInterval: x %s y %s limit %d", ac.x.String(), ac.y.String(), ac.limit)
 	defer func() {
-		ft.leave(r)
+		ft.leave(ac)
 	}()
-	r = aggResult{limit: limit, lastVisited: noIndex}
-	r.itype = bytes.Compare(x, y)
+	if ft.root == noIndex {
+		return nil
+	}
+	ac.total = ft.np.node(ft.root).c
+	ac.itype = bytes.Compare(ac.x, ac.y)
 	switch {
-	case r.itype == 0:
+	case ac.itype == 0:
 		// the whole set
 		if ft.root != noIndex {
 			ft.log("whole set")
-			tail, _ := ft.aggregateUpToLimit(ft.root, 0, &r)
-			r.setTails(tail, x, y, ft.maxDepth)
+			_, err := ft.aggregateUpToLimit(ft.root, 0, ac)
+			return err
 		} else {
 			ft.log("empty set (no root)")
 		}
-	case r.itype < 0:
+
+	case ac.itype < 0:
 		// "proper" interval: [x; lca); (lca; y)
-		p := commonPrefix(x, y)
-		lcaIdx, followedPrefix, found := ft.followPrefix(ft.root, p, 0)
-		var lcaNode node
+		p := commonPrefix(ac.x, ac.y)
+		lcaIdx, lcaPrefix, fullPrefixFound := ft.followPrefix(ft.root, p, 0)
+		var lca node
 		if lcaIdx != noIndex {
-			lcaNode = ft.np.node(lcaIdx)
+			// QQQQQ: TBD: perhaps just return if lcaIdx == noIndex
+			lca = ft.np.node(lcaIdx)
 		}
-		ft.log("commonPrefix %s lca %d found %v", p, lcaIdx, found)
+		ft.log("commonPrefix %s lca %d found %v", p, lcaIdx, fullPrefixFound)
 		switch {
-		case found && !lcaNode.leaf():
-			if followedPrefix != p {
+		case fullPrefixFound && !lca.leaf():
+			if lcaPrefix != p {
 				panic("BUG: bad followedPrefix")
 			}
-			ft.visitNode(lcaIdx, followedPrefix, &r)
-			ft.aggregateLeft(lcaNode.left, load64(x)<<(p.len()+1), p.left(), &r)
-			ft.aggregateRight(lcaNode.right, load64(y)<<(p.len()+1), p.right(), &r)
-		case lcaIdx != noIndex:
-			ft.log("commonPrefix %s NOT found but have lca %d", p, lcaIdx)
-			// Didn't reach LCA in the tree b/c ended up
-			// at a leaf, just use the prefix to go
-			// through the IDs
-			if lcaNode.leaf() {
-				ft.visitNode(lcaIdx, followedPrefix, &r)
-				tail := ft.tailRefFromNodeAndPrefix(
-					lcaIdx, lcaNode, followedPrefix, r.takeAtMost(limit))
-				r.setTails(&tail, x, y, ft.maxDepth)
-			}
+			ft.aggregateLeft(lca.left, load64(ac.x)<<(p.len()+1), p.left(), ac)
+			ft.aggregateRight(lca.right, load64(ac.y)<<(p.len()+1), p.right(), ac)
+		case lcaIdx == noIndex || !lca.leaf():
+			ft.log("commonPrefix %s NOT found b/c no items have it", p)
+		default:
+			ft.log("commonPrefix %s -- lca %d", p, lcaIdx)
+			_, err := ft.aggregateEdge(ac.x, ac.y, lcaPrefix, ac)
+			return err
 		}
+
 	default:
 		// inverse interval: [min; y); [x; max]
 		// first, we handle [x; max] part
-		pf0 := preFirst0(x)
+		pf0 := preFirst0(ac.x)
 		idx0, followedPrefix, found := ft.followPrefix(ft.root, pf0, 0)
 		var pf0Node node
 		if idx0 != noIndex {
@@ -848,18 +762,24 @@ func (ft *fpTree) aggregateInterval(x, y KeyBytes, limit int) (r aggResult) {
 			if followedPrefix != pf0 {
 				panic("BUG: bad followedPrefix")
 			}
-			ft.aggregateLeft(idx0, load64(x)<<pf0.len(), pf0, &r)
-		case idx0 != noIndex:
-			if pf0Node.leaf() {
-				ft.visitNode(idx0, followedPrefix, &r)
-				rightLimit := r.takeAtMost(int(pf0Node.c))
-				tail := ft.tailRefFromNodeAndPrefix(idx0, pf0Node, followedPrefix, rightLimit)
-				r.setStartTail(&tail)
+			ft.aggregateLeft(idx0, load64(ac.x)<<pf0.len(), pf0, ac)
+		case idx0 == noIndex || !pf0Node.leaf():
+			// nothing to do
+		case ac.prefixWithinRange(followedPrefix) && ac.maybeIncludeNode(pf0Node):
+			// node is fully included
+		default:
+			_, err := ft.aggregateEdge(ac.x, nil, followedPrefix, ac)
+			if err != nil {
+				return err
 			}
 		}
 
+		if ac.limit == 0 {
+			return nil
+		}
+
 		// then we handle [min, y) part
-		pf1 := preFirst1(y)
+		pf1 := preFirst1(ac.y)
 		idx1, followedPrefix, found := ft.followPrefix(ft.root, pf1, 0)
 		var pf1Node node
 		if idx1 != noIndex {
@@ -871,81 +791,32 @@ func (ft *fpTree) aggregateInterval(x, y KeyBytes, limit int) (r aggResult) {
 			if followedPrefix != pf1 {
 				panic("BUG: bad followedPrefix")
 			}
-			ft.aggregateRight(idx1, load64(y)<<pf1.len(), pf1, &r)
-		case idx1 != noIndex:
-			if pf1Node.leaf() {
-				ft.visitNode(idx1, followedPrefix, &r)
-				leftLimit := r.takeAtMost(int(pf1Node.c))
-				tail := ft.tailRefFromNodeAndPrefix(idx1, pf1Node, followedPrefix, leftLimit)
-				r.setEndTail(&tail)
+			ft.aggregateRight(idx1, load64(ac.y)<<pf1.len(), pf1, ac)
+		case idx1 == noIndex || !pf1Node.leaf():
+			// nothing to do
+		case ac.prefixWithinRange(followedPrefix) && ac.maybeIncludeNode(pf1Node):
+			// node is fully included
+		default:
+			_, err := ft.aggregateEdge(nil, ac.y, followedPrefix, ac)
+			if err != nil {
+				return err
 			}
 		}
 	}
-	return r
+
+	return nil
 }
 
 func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, err error) {
-	ft.enter("fingerprintInterval: x %s y %s limit %d", hex.EncodeToString(x), hex.EncodeToString(y), limit)
+	ft.enter("fingerprintInterval: x %s y %s limit %d", x.String(), y.String(), limit)
 	defer func() {
 		ft.leave(fpr, err)
 	}()
-	r := ft.aggregateInterval(x, y, limit)
-	wasWithinRange := false
-	ft.log("startTail: %#v endTail: %#v count: %d", r.startTail, r.endTail, r.count)
-	// QQQQQ: TBD: scan tails separately using the iterators
-	var tailRefs []tailRef
-	if r.startTail != nil {
-		tailRefs = append(tailRefs, *r.startTail)
-	}
-	if r.endTail != nil && (r.startTail == nil || r.startTail.ref != r.endTail.ref) {
-		tailRefs = append(tailRefs, *r.endTail)
-	}
-	noStop := true //len(tailRefs) == 1
-	// panic("TBD: limit; problem: single-tailRef wraparound, need to start from x in any case, but we're starting from the beginning of the tailRef")
-	// QQQQQ: should not use iterateIDs. No need for nextLeaf, etc.
-	// The store should return iterator for each tailRef
-	// There should be *always* two tailRefs (they may be the same)
-	// For 1st tailRef we call Next() on the iterator till Key() is >= x, it'll be RangeInfo.Start,
-	// then we clone the iterator (it should be cloneable!) and use it to include the IDs
-	// in the fingerprint
-	// For 2nd tailRef we call Next() on the iterator till Key() is >= y, including IDs
-	// in the fingerprint, then return it as RangeInfo.End (outside the range)
-	// DOWNSIDE: too much needs to be fetched in case of bigger chunks
-	// Possible optimization [DONE]: specify max chunk size for db iterator,
-	// start from 1, increase it 2x on each iteration but not over max chunk size
-	// QQQQQ: TBD: need to restore combinedIterator
-	if err := ft.idStore.iterateIDs(tailRefs, func(tailRef tailRef, id KeyBytes) bool {
-		if idWithinInterval(id, x, y, r.itype) {
-			r.fp.update(id)
-			r.count++
-			ft.log("tailRef %v: id %s within range => fp %s count %d",
-				tailRef,
-				hex.EncodeToString(id),
-				r.fp.String(), r.count)
-			wasWithinRange = true
-		} else {
-			// if we were within the range but now we're out of it,
-			// this means we're at or beyond y and can stop
-			// return !wasWithinRange || noStop
-			// QQQQQ: rmme
-			if wasWithinRange {
-				ft.log("tailRef %v: id %s outside range after id(s) within range => terminating",
-					tailRef,
-					hex.EncodeToString(id))
-				// TBD: QQQQQ: terminate only for this tailRef
-				return noStop
-			} else {
-				ft.log("tailRef %v: id %s outside range => continuing",
-					tailRef,
-					hex.EncodeToString(id))
-				return true
-			}
-		}
-		return true
-	}); err != nil {
+	ac := aggContext{x: x, y: y, limit: limit}
+	if err := ft.aggregateInterval(&ac); err != nil {
 		return fpResult{}, err
 	}
-	return fpResult{fp: r.fp, count: r.count, itype: r.itype}, nil
+	return fpResult{fp: ac.fp, count: ac.count, itype: ac.itype}, nil
 }
 
 func (ft *fpTree) dumpNode(w io.Writer, idx nodeIndex, indent, dir string) {
@@ -975,237 +846,6 @@ func (ft *fpTree) dump(w io.Writer) {
 	}
 }
 
-type memIDStore struct {
-	mtx      sync.Mutex
-	ids      map[uint64][]KeyBytes
-	maxDepth int
-}
-
-var _ idStore = &memIDStore{}
-
-func newMemIDStore(maxDepth int) *memIDStore {
-	return &memIDStore{maxDepth: maxDepth}
-}
-
-func (m *memIDStore) clone() idStore {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-	s := newMemIDStore(m.maxDepth)
-	if m.ids != nil {
-		s.ids = make(map[uint64][]KeyBytes, len(m.ids))
-		for k, v := range m.ids {
-			s.ids[k] = slices.Clone(v)
-		}
-	}
-	return s
-}
-
-func (m *memIDStore) registerHash(h KeyBytes) error {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-	if m.ids == nil {
-		m.ids = make(map[uint64][]KeyBytes, 1<<m.maxDepth)
-	}
-	idx := load64(h) >> (64 - m.maxDepth)
-	s := m.ids[idx]
-	n := slices.IndexFunc(s, func(cur KeyBytes) bool {
-		return bytes.Compare(cur, h) > 0
-	})
-	if n < 0 {
-		m.ids[idx] = append(s, h)
-	} else {
-		m.ids[idx] = slices.Insert(s, n, h)
-	}
-	return nil
-}
-
-func (m *memIDStore) iterateIDs(tailRefs []tailRef, toCall func(tailRef, KeyBytes) bool) error {
-	m.mtx.Lock()
-	defer m.mtx.Unlock()
-	if m.ids == nil {
-		return nil
-	}
-	// fmt.Fprintf(os.Stderr, "QQQQQ: memIDStore: iterateIDs: maxDepth %d tailRefs %v\n", m.maxDepth, tailRefs)
-	// fmt.Fprintf(os.Stderr, "QQQQQ: memIDStore: iterateIDs: ids %#v\n", m.ids)
-	for _, t := range tailRefs {
-		count := t.limit
-		if count == 0 {
-			// fmt.Fprintf(os.Stderr, "QQQQQ: memIDStore: iterateIDs: t %v: count == 0\n", t)
-			continue
-		}
-		for _, id := range m.ids[t.ref] {
-			if count == 0 {
-				// fmt.Fprintf(os.Stderr, "QQQQQ: memIDStore: iterateIDs: t %v id %s: count == 0\n", t, hex.EncodeToString(id))
-				break
-			}
-			if count > 0 {
-				// fmt.Fprintf(os.Stderr, "QQQQQ: memIDStore: iterateIDs: t %v id %s: dec count\n", t, hex.EncodeToString(id))
-				count--
-			}
-			// fmt.Fprintf(os.Stderr, "QQQQQ: memIDStore: iterateIDs: t %v id %s: call\n", t, hex.EncodeToString(id))
-			if !toCall(t, id) {
-				// fmt.Fprintf(os.Stderr, "QQQQQ: memIDStore: iterateIDs: t %v id %s: stop\n", t, hex.EncodeToString(id))
-				return nil
-			}
-		}
-	}
-	return nil
-}
-
-type sqlIDStore struct {
-	db       sql.Database
-	query    string
-	keyLen   int
-	maxDepth int
-}
-
-var _ idStore = &sqlIDStore{}
-
-func newSQLIDStore(db sql.Database, query string, keyLen, maxDepth int) *sqlIDStore {
-	return &sqlIDStore{db: db, query: query, keyLen: keyLen, maxDepth: maxDepth}
-}
-
-func (s *sqlIDStore) clone() idStore {
-	return newSQLIDStore(s.db, s.query, s.keyLen, s.maxDepth)
-}
-
-func (s *sqlIDStore) registerHash(h KeyBytes) error {
-	// should be registered by the handler code
-	return nil
-}
-
-func (s *sqlIDStore) iterateIDs(tailRefs []tailRef, toCall func(tailRef, KeyBytes) bool) error {
-	cont := true
-	for _, t := range tailRefs {
-		if t.limit == 0 {
-			continue
-		}
-		p := mkprefix(t.ref, s.maxDepth)
-		minID := make([]byte, s.keyLen)
-		maxID := make([]byte, s.keyLen)
-		p.minID(minID[:])
-		p.maxID(maxID[:])
-		// start := time.Now()
-		query := s.query
-		if t.limit > 0 {
-			query += " LIMIT " + strconv.Itoa(t.limit)
-		}
-		if _, err := s.db.Exec(
-			query,
-			func(stmt *sql.Statement) {
-				stmt.BindBytes(1, minID)
-				stmt.BindBytes(2, maxID)
-			},
-			func(stmt *sql.Statement) bool {
-				id := make(KeyBytes, s.keyLen)
-				stmt.ColumnBytes(0, id)
-				cont = toCall(t, id)
-				return cont
-			},
-		); err != nil {
-			return err
-		}
-		// fmt.Fprintf(os.Stderr, "QQQQQ: %v: sel atxs between %s and %s\n", time.Now().Sub(start), minID.String(), maxID.String())
-		if !cont {
-			break
-		}
-	}
-	return nil
-}
-
-type dbBackedStore struct {
-	*sqlIDStore
-	*memIDStore
-	maxDepth int
-}
-
-var _ idStore = &dbBackedStore{}
-
-func newDBBackedStore(db sql.Database, query string, keyLen, maxDepth int) *dbBackedStore {
-	return &dbBackedStore{
-		sqlIDStore: newSQLIDStore(db, query, keyLen, maxDepth),
-		memIDStore: newMemIDStore(maxDepth),
-		maxDepth:   maxDepth,
-	}
-}
-
-func (s *dbBackedStore) clone() idStore {
-	return &dbBackedStore{
-		sqlIDStore: s.sqlIDStore.clone().(*sqlIDStore),
-		memIDStore: s.memIDStore.clone().(*memIDStore),
-		maxDepth:   s.maxDepth,
-	}
-}
-
-func (s *dbBackedStore) registerHash(h KeyBytes) error {
-	return s.memIDStore.registerHash(h)
-}
-
-func (s *dbBackedStore) iterateIDs(tailRefs []tailRef, toCall func(tailRef, KeyBytes) bool) error {
-	type memItem struct {
-		tailRef tailRef
-		id      KeyBytes
-	}
-	var memItems []memItem
-	s.memIDStore.iterateIDs(tailRefs, func(tailRef tailRef, id KeyBytes) bool {
-		memItems = append(memItems, memItem{tailRef: tailRef, id: id})
-		return true
-	})
-	cont := true
-	limits := make(map[uint64]int, len(tailRefs))
-	for _, t := range tailRefs {
-		if t.limit >= 0 {
-			limits[t.ref] += t.limit
-		}
-	}
-	if err := s.sqlIDStore.iterateIDs(tailRefs, func(tailRef tailRef, id KeyBytes) bool {
-		ref := load64(id) >> (64 - s.maxDepth)
-		limit, haveLimit := limits[ref]
-		for len(memItems) > 0 && bytes.Compare(memItems[0].id, id) < 0 {
-			if haveLimit && limit == 0 {
-				return false
-			}
-			cont = toCall(memItems[0].tailRef, memItems[0].id)
-			if !cont {
-				return false
-			}
-			limits[ref] = limit - 1
-			memItems = memItems[1:]
-		}
-		if haveLimit && limit == 0 {
-			return false
-		}
-		cont = toCall(tailRef, id)
-		limits[ref] = limit - 1
-		return cont
-	}); err != nil {
-		return err
-	}
-	if cont {
-		for _, mi := range memItems {
-			ref := load64(mi.id) >> (64 - s.maxDepth)
-			limit, haveLimit := limits[ref]
-			if haveLimit && limit == 0 {
-				break
-			}
-			if !toCall(mi.tailRef, mi.id) {
-				break
-			}
-			limits[ref] = limit - 1
-		}
-	}
-	return nil
-}
-
-func idWithinInterval(id, x, y KeyBytes, itype int) bool {
-	switch itype {
-	case 0:
-		return true
-	case -1:
-		return bytes.Compare(id, x) >= 0 && bytes.Compare(id, y) < 0
-	default:
-		return bytes.Compare(id, y) < 0 || bytes.Compare(id, x) >= 0
-	}
-}
-
 // TBD: optimize, get rid of binary.BigEndian.*
+// TBD: QQQQQ: detect unbalancedness when a ref gets too many items
+// TBD: QQQQQ: ItemStore.Close(): close db conns, also free fpTree instead of using finalizer!
