@@ -186,7 +186,7 @@ func (n *NodeClient) ensurePubConn(ctx context.Context) (*grpc.ClientConn, error
 	if err != nil {
 		return nil, err
 	}
-	if err := n.waitForConnectionReady(context.Background(), conn); err != nil {
+	if err := n.waitForConnectionReady(ctx, conn); err != nil {
 		return nil, err
 	}
 	n.pubConn = conn
