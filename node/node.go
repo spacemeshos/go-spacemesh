@@ -900,7 +900,6 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	if app.Config.HARE4.Enable {
-		panic("hare4 still not enabled")
 		app.hare4 = hare4.New(
 			app.clock,
 			app.host,
@@ -929,6 +928,7 @@ func (app *App) initServices(ctx context.Context) error {
 			)
 			return nil
 		})
+		panic("hare4 still not enabled")
 	}
 
 	propHare := &proposalConsumerHare{
