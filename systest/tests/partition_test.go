@@ -80,10 +80,10 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	stateCh := make(chan *stateUpdate, uint32(cl.Total())*numLayers*10)
 	tctx.Log.Debug("listening to state hashes...")
 	for i := range cl.Total() {
-		client := cl.Client(i)
+		node := cl.Client(i)
 
 		eg.Go(func() error {
-			return stateHashStream(ctx, node, logger, func(state *pb.GlobalStateStreamResponse) (bool, error) {
+			return stateHashStream(ctx, node, tctx.Log.Desugar(), func(state *pb.GlobalStateStreamResponse) (bool, error) {
 				data := state.Datum.Datum
 				require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
 
@@ -106,7 +106,6 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 				return true, nil
 			})
 		})
-
 	}
 
 	finalErr := eg.Wait()
