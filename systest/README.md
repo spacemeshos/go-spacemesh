@@ -205,6 +205,13 @@ make run properties=properties.env test_name=TestStepCreate
 
 ## Longevity testing
 
+These tests test the clusters over a long period of time. They are therefore disabled by default so that the CI doesn't run them.
+
+In order to run them, please define the `LONGEVITY_TEST` environment variable, otherwise they will be skipped:
+```bash
+export LONGEVITY_TESTS=1
+```
+
 ### Manual mode
 
 Manual mode allows to setup a cluster as a separate step and apply tests on that cluster continuously.

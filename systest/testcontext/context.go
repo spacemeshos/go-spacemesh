@@ -49,15 +49,10 @@ var (
 	)
 	logLevel    = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
 	testTimeout = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
-	labels      = stringSet{}
 
 	tokens     chan struct{}
 	initTokens sync.Once
 )
-
-func init() {
-	flag.Var(labels, "labels", "test will be executed only if it matches all labels")
-}
 
 var (
 	testid = parameters.String(
@@ -260,15 +255,6 @@ func updateContext(ctx *Context) error {
 	return nil
 }
 
-// Labels sets list of labels for the test.
-func Labels(labels ...string) Opt {
-	return func(c *cfg) {
-		for _, label := range labels {
-			c.labels[label] = struct{}{}
-		}
-	}
-}
-
 // SkipClusterLimits will not block if there are no available tokens.
 func SkipClusterLimits() Opt {
 	return func(c *cfg) {
@@ -280,13 +266,10 @@ func SkipClusterLimits() Opt {
 type Opt func(*cfg)
 
 func newCfg() *cfg {
-	return &cfg{
-		labels: map[string]struct{}{},
-	}
+	return &cfg{}
 }
 
 type cfg struct {
-	labels     map[string]struct{}
 	skipLimits bool
 }
 
@@ -299,11 +282,6 @@ func New(t *testing.T, opts ...Opt) *Context {
 	c := newCfg()
 	for _, opt := range opts {
 		opt(c)
-	}
-	for label := range labels {
-		if _, exist := c.labels[label]; !exist {
-			t.Skipf("not labeled with '%s'", label)
-		}
 	}
 	if !c.skipLimits {
 		tokens <- struct{}{}
