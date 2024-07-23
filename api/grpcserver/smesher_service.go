@@ -36,16 +36,16 @@ type SmesherService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s SmesherService) RegisterService(server *grpc.Server) {
+func (s *SmesherService) RegisterService(server *grpc.Server) {
 	pb.RegisterSmesherServiceServer(server, s)
 }
 
-func (s SmesherService) RegisterHandlerService(mux *runtime.ServeMux) error {
+func (s *SmesherService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterSmesherServiceHandlerServer(context.Background(), mux, s)
 }
 
 // String returns the name of this service.
-func (s SmesherService) String() string {
+func (s *SmesherService) String() string {
 	return "SmesherService"
 }
 
@@ -74,7 +74,7 @@ func (s *SmesherService) SetPostServiceConfig(cfg activation.PostSupervisorConfi
 }
 
 // IsSmeshing reports whether the node is smeshing.
-func (s SmesherService) IsSmeshing(context.Context, *emptypb.Empty) (*pb.IsSmeshingResponse, error) {
+func (s *SmesherService) IsSmeshing(context.Context, *emptypb.Empty) (*pb.IsSmeshingResponse, error) {
 	if s.sig == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "node is not configured for supervised smeshing")
 	}
@@ -82,7 +82,7 @@ func (s SmesherService) IsSmeshing(context.Context, *emptypb.Empty) (*pb.IsSmesh
 }
 
 // StartSmeshing requests that the node begin smeshing.
-func (s SmesherService) StartSmeshing(
+func (s *SmesherService) StartSmeshing(
 	ctx context.Context,
 	in *pb.StartSmeshingRequest,
 ) (*pb.StartSmeshingResponse, error) {
@@ -119,7 +119,7 @@ func (s SmesherService) StartSmeshing(
 	}, nil
 }
 
-func (s SmesherService) postSetupOpts(in *pb.PostSetupOpts) (activation.PostSetupOpts, error) {
+func (s *SmesherService) postSetupOpts(in *pb.PostSetupOpts) (activation.PostSetupOpts, error) {
 	if in == nil {
 		return activation.PostSetupOpts{}, errors.New("`Opts` must be provided")
 	}
@@ -146,7 +146,7 @@ func (s SmesherService) postSetupOpts(in *pb.PostSetupOpts) (activation.PostSetu
 }
 
 // StopSmeshing requests that the node stop smeshing.
-func (s SmesherService) StopSmeshing(
+func (s *SmesherService) StopSmeshing(
 	ctx context.Context,
 	in *pb.StopSmeshingRequest,
 ) (*pb.StopSmeshingResponse, error) {
@@ -164,11 +164,11 @@ func (s SmesherService) StopSmeshing(
 }
 
 // SmesherID returns the smesher ID of this node.
-func (s SmesherService) SmesherID(context.Context, *emptypb.Empty) (*pb.SmesherIDResponse, error) {
+func (s *SmesherService) SmesherID(context.Context, *emptypb.Empty) (*pb.SmesherIDResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint has been deprecated, use `SmesherIDs` instead")
 }
 
-func (s SmesherService) SmesherIDs(context.Context, *emptypb.Empty) (*pb.SmesherIDsResponse, error) {
+func (s *SmesherService) SmesherIDs(context.Context, *emptypb.Empty) (*pb.SmesherIDsResponse, error) {
 	ids := s.smeshingProvider.SmesherIDs()
 	res := &pb.SmesherIDsResponse{}
 	for _, id := range ids {
@@ -178,12 +178,12 @@ func (s SmesherService) SmesherIDs(context.Context, *emptypb.Empty) (*pb.Smesher
 }
 
 // Coinbase returns the current coinbase setting of this node.
-func (s SmesherService) Coinbase(context.Context, *emptypb.Empty) (*pb.CoinbaseResponse, error) {
+func (s *SmesherService) Coinbase(context.Context, *emptypb.Empty) (*pb.CoinbaseResponse, error) {
 	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: s.smeshingProvider.Coinbase().String()}}, nil
 }
 
 // SetCoinbase sets the current coinbase setting of this node.
-func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest) (*pb.SetCoinbaseResponse, error) {
+func (s *SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest) (*pb.SetCoinbaseResponse, error) {
 	if in.Id == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Id` must be provided")
 	}
@@ -200,17 +200,17 @@ func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest
 }
 
 // MinGas returns the current mingas setting of this node.
-func (s SmesherService) MinGas(context.Context, *emptypb.Empty) (*pb.MinGasResponse, error) {
+func (s *SmesherService) MinGas(context.Context, *emptypb.Empty) (*pb.MinGasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
 // SetMinGas sets the mingas setting of this node.
-func (s SmesherService) SetMinGas(context.Context, *pb.SetMinGasRequest) (*pb.SetMinGasResponse, error) {
+func (s *SmesherService) SetMinGas(context.Context, *pb.SetMinGasRequest) (*pb.SetMinGasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
 // EstimatedRewards returns estimated smeshing rewards over the next epoch.
-func (s SmesherService) EstimatedRewards(
+func (s *SmesherService) EstimatedRewards(
 	context.Context,
 	*pb.EstimatedRewardsRequest,
 ) (*pb.EstimatedRewardsResponse, error) {
@@ -218,13 +218,13 @@ func (s SmesherService) EstimatedRewards(
 }
 
 // PostSetupStatus returns post data status.
-func (s SmesherService) PostSetupStatus(ctx context.Context, _ *emptypb.Empty) (*pb.PostSetupStatusResponse, error) {
+func (s *SmesherService) PostSetupStatus(ctx context.Context, _ *emptypb.Empty) (*pb.PostSetupStatusResponse, error) {
 	status := s.postSupervisor.Status()
 	return &pb.PostSetupStatusResponse{Status: statusToPbStatus(status)}, nil
 }
 
 // PostSetupStatusStream exposes a stream of status updates during post setup.
-func (s SmesherService) PostSetupStatusStream(
+func (s *SmesherService) PostSetupStatusStream(
 	_ *emptypb.Empty,
 	stream pb.SmesherService_PostSetupStatusStreamServer,
 ) error {
@@ -244,8 +244,8 @@ func (s SmesherService) PostSetupStatusStream(
 	}
 }
 
-// PostSetupComputeProviders returns a list of available Post setup compute providers.
-func (s SmesherService) PostSetupProviders(
+// PostSetupProviders returns a list of available Post setup compute providers.
+func (s *SmesherService) PostSetupProviders(
 	ctx context.Context,
 	in *pb.PostSetupProvidersRequest,
 ) (*pb.PostSetupProvidersResponse, error) {
@@ -279,7 +279,7 @@ func (s SmesherService) PostSetupProviders(
 }
 
 // PostConfig returns the Post protocol config.
-func (s SmesherService) PostConfig(context.Context, *emptypb.Empty) (*pb.PostConfigResponse, error) {
+func (s *SmesherService) PostConfig(context.Context, *emptypb.Empty) (*pb.PostConfigResponse, error) {
 	cfg := s.postSupervisor.Config()
 
 	return &pb.PostConfigResponse{
@@ -302,7 +302,7 @@ func statusToPbStatus(status *activation.PostSetupStatus) *pb.PostSetupStatus {
 		var providerID *uint32
 		if status.LastOpts.ProviderID.Value() != nil {
 			providerID = new(uint32)
-			*providerID = uint32(*status.LastOpts.ProviderID.Value())
+			*providerID = *status.LastOpts.ProviderID.Value()
 		}
 
 		pbStatus.Opts = &pb.PostSetupOpts{

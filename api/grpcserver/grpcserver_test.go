@@ -124,7 +124,7 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 	return b
 }
 
-func dialGrpc(ctx context.Context, tb testing.TB, cfg Config) *grpc.ClientConn {
+func dialGrpc(tb testing.TB, cfg Config) *grpc.ClientConn {
 	tb.Helper()
 	conn, err := grpc.NewClient(
 		cfg.PublicListener,
@@ -528,9 +528,7 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := pb.NewSmesherServiceClient(conn)
 
 	return &smesherServiceConn{
@@ -748,9 +746,7 @@ func TestMeshService(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewMeshServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1262,7 +1258,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := codec.Encode(globalTx)
@@ -1301,7 +1297,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := codec.Encode(globalTx)
@@ -1334,7 +1330,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 	for range numTxs {
 		res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{
@@ -1360,9 +1356,7 @@ func TestTransactionService(t *testing.T) {
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1681,7 +1675,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewMeshServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -1731,7 +1725,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -1791,7 +1785,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -1866,7 +1860,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 
 	// set up the grpc listener stream
 	c := pb.NewMeshServiceClient(conn)
@@ -2007,8 +2001,8 @@ func TestMultiService(t *testing.T) {
 	cfg, shutDown := launchServer(t, svc1, svc2)
 	t.Cleanup(shutDown)
 
-	c1 := pb.NewNodeServiceClient(dialGrpc(ctx, t, cfg))
-	c2 := pb.NewMeshServiceClient(dialGrpc(ctx, t, cfg))
+	c1 := pb.NewNodeServiceClient(dialGrpc(t, cfg))
+	c2 := pb.NewMeshServiceClient(dialGrpc(t, cfg))
 
 	// call endpoints and validate results
 	const message = "Hello World"
@@ -2050,9 +2044,7 @@ func TestDebugService(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewDebugServiceClient(conn)
 
 	t.Run("Accounts", func(t *testing.T) {
@@ -2241,8 +2233,8 @@ func TestEventsReceived(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn1 := dialGrpc(ctx, t, cfg)
-	conn2 := dialGrpc(ctx, t, cfg)
+	conn1 := dialGrpc(t, cfg)
+	conn2 := dialGrpc(t, cfg)
 
 	txClient := pb.NewTransactionServiceClient(conn1)
 	accountClient := pb.NewGlobalStateServiceClient(conn2)
@@ -2329,7 +2321,7 @@ func TestTransactionsRewards(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 
 	address := wallet.Address(types.RandomNodeID().Bytes())
 	weight := new(big.Rat).SetFloat64(18.7)
@@ -2419,7 +2411,7 @@ func TestVMAccountUpdates(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 	eg, ctx := errgroup.WithContext(ctx)
 	states := make(chan *pb.AccountState, len(accounts))
 	for _, account := range accounts {
@@ -2512,7 +2504,7 @@ func TestMeshService_EpochStream(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := pb.NewMeshServiceClient(conn)
 
 	stream, err := client.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: epoch.Uint32()})

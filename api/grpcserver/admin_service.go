@@ -124,7 +124,7 @@ func (a AdminService) Recover(ctx context.Context, _ *pb.RecoverRequest) (*empty
 	return &emptypb.Empty{}, nil
 }
 
-func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
+func (a AdminService) EventsStream(_ *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
 	sub, buf, err := events.SubscribeUserEvents(events.WithBuffer(1000))
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, err.Error())

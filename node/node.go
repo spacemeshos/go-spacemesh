@@ -1540,6 +1540,13 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewAccountService(app.db, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.NodeIdentities:
+		configuredPetServices := make(map[string]struct{})
+		for _, server := range app.Config.PoetServers {
+			configuredPetServices[server.Address] = struct{}{}
+		}
+		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPetServices)
+		app.grpcServices[svc] = service
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
@@ -1760,7 +1767,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			app.Config.CollectMetrics,
 		)
 
-		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
+		if err := app.jsonAPIServer.StartService(maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
 		logger.With().Info("json listener started",
