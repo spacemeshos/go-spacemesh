@@ -52,6 +52,7 @@ func (db *PoetDb) ValidateAndStore(ctx context.Context, proofMessage *types.Poet
 		proofMessage.PoetProof,
 		proofMessage.PoetServiceID,
 		proofMessage.RoundID,
+		proofMessage.Signature,
 	); err != nil {
 		return err
 	}
@@ -86,6 +87,7 @@ func (db *PoetDb) Validate(
 	proof types.PoetProof,
 	poetID []byte,
 	roundID string,
+	signature types.EdSignature,
 ) error {
 	shortID := poetID[:min(5, len(poetID))]
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
