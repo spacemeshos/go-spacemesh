@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 // SetMalicious records identity as malicious.
@@ -76,6 +77,31 @@ func GetMalfeasanceProof(db sql.Executor, nodeID types.NodeID) (*wire.Malfeasanc
 	}
 	proof.SetReceived(received.Local())
 	return &proof, nil
+}
+
+func IterateProofsOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(types.NodeID, *wire.MalfeasanceProof) bool,
+) error {
+	_, err := db.Exec(
+		`SELECT  pubkey, proof, received from identities WHERE proof IS NOT NULL`+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			var nodeId types.NodeID
+			stmt.ColumnBytes(0, nodeId[:])
+			data := make([]byte, stmt.ColumnLen(1))
+			stmt.ColumnBytes(1, data[:])
+			received := time.Unix(0, stmt.ColumnInt64(2)).Local()
+			var proof wire.MalfeasanceProof
+			if err := codec.Decode(data, &proof); err != nil {
+				return false
+			}
+			proof.SetReceived(received)
+			return fn(nodeId, &proof)
+		},
+	)
+	return err
 }
 
 // GetBlobSizes returns the sizes of the blobs corresponding to malfeasance proofs for the
