@@ -43,6 +43,8 @@ ifeq ($(failfast),true)
 	command := $(command) -test.failfast
 endif
 
+
+
 .PHONY: docker
 docker:
 	@DOCKER_BUILDKIT=1 docker build \
@@ -89,7 +91,7 @@ gomplate:
 .PHONY: run
 run: gomplate $(run_deps)
 	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
-	@ns=$$(kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null); \
+	ns=$$(kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null); \
 	export ns="$${ns:-default}"; \
 	if [ -z "$${norbac}" ]; then \
 	  testid=$(test_id) job_name=$(test_job_name) image=$(image_name) command="$(command)" rbac=1 \
