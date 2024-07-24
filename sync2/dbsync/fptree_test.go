@@ -221,7 +221,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 		xIdx, yIdx       int
 		x, y             string
 		limit            int
-		fp               fingerprint
+		fp               string
 		count            uint32
 		itype            int
 		startIdx, endIdx int
@@ -242,7 +242,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					x:        "123456789abcdef0000000000000000000000000000000000000000000000000",
 					y:        "123456789abcdef0000000000000000000000000000000000000000000000000",
 					limit:    -1,
-					fp:       hexToFingerprint("000000000000000000000000"),
+					fp:       "000000000000000000000000",
 					count:    0,
 					itype:    0,
 					startIdx: -1,
@@ -252,7 +252,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					x:        "123456789abcdef0000000000000000000000000000000000000000000000000",
 					y:        "123456789abcdef0000000000000000000000000000000000000000000000000",
 					limit:    1,
-					fp:       hexToFingerprint("000000000000000000000000"),
+					fp:       "000000000000000000000000",
 					count:    0,
 					itype:    0,
 					startIdx: -1,
@@ -262,7 +262,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					x:        "123456789abcdef0000000000000000000000000000000000000000000000000",
 					y:        "223456789abcdef0000000000000000000000000000000000000000000000000",
 					limit:    1,
-					fp:       hexToFingerprint("000000000000000000000000"),
+					fp:       "000000000000000000000000",
 					count:    0,
 					itype:    -1,
 					startIdx: -1,
@@ -272,7 +272,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					x:        "223456789abcdef0000000000000000000000000000000000000000000000000",
 					y:        "123456789abcdef0000000000000000000000000000000000000000000000000",
 					limit:    1,
-					fp:       hexToFingerprint("000000000000000000000000"),
+					fp:       "000000000000000000000000",
 					count:    0,
 					itype:    1,
 					startIdx: -1,
@@ -292,10 +292,11 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 			},
 			ranges: []rangeTestCase{
 				{
-					xIdx:     0,
-					yIdx:     0,
-					limit:    -1,
-					fp:       hexToFingerprint("642464b773377bbddddddddd"),
+					xIdx:  0,
+					yIdx:  0,
+					limit: -1,
+					// QQQQQ: use string instead of fingerprint in tcs
+					fp:       "642464b773377bbddddddddd",
 					count:    5,
 					itype:    0,
 					startIdx: 0,
@@ -305,7 +306,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     0,
 					yIdx:     0,
 					limit:    0,
-					fp:       hexToFingerprint("000000000000000000000000"),
+					fp:       "000000000000000000000000",
 					count:    0,
 					itype:    0,
 					startIdx: 0,
@@ -315,7 +316,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     0,
 					yIdx:     0,
 					limit:    3,
-					fp:       hexToFingerprint("4761032dcfe98ba555555555"),
+					fp:       "4761032dcfe98ba555555555",
 					count:    3,
 					itype:    0,
 					startIdx: 0,
@@ -325,7 +326,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     4,
 					yIdx:     4,
 					limit:    -1,
-					fp:       hexToFingerprint("642464b773377bbddddddddd"),
+					fp:       "642464b773377bbddddddddd",
 					count:    5,
 					itype:    0,
 					startIdx: 4,
@@ -335,7 +336,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     4,
 					yIdx:     4,
 					limit:    1,
-					fp:       hexToFingerprint("abcdef123456789000000000"),
+					fp:       "abcdef123456789000000000",
 					count:    1,
 					itype:    0,
 					startIdx: 4,
@@ -345,7 +346,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     0,
 					yIdx:     1,
 					limit:    -1,
-					fp:       hexToFingerprint("000000000000000000000000"),
+					fp:       "000000000000000000000000",
 					count:    1,
 					itype:    -1,
 					startIdx: 0,
@@ -355,7 +356,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     0,
 					yIdx:     3,
 					limit:    -1,
-					fp:       hexToFingerprint("4761032dcfe98ba555555555"),
+					fp:       "4761032dcfe98ba555555555",
 					count:    3,
 					itype:    -1,
 					startIdx: 0,
@@ -365,7 +366,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     0,
 					yIdx:     4,
 					limit:    3,
-					fp:       hexToFingerprint("4761032dcfe98ba555555555"),
+					fp:       "4761032dcfe98ba555555555",
 					count:    3,
 					itype:    -1,
 					startIdx: 0,
@@ -375,7 +376,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     0,
 					yIdx:     4,
 					limit:    0,
-					fp:       hexToFingerprint("000000000000000000000000"),
+					fp:       "000000000000000000000000",
 					count:    0,
 					itype:    -1,
 					startIdx: 0,
@@ -385,7 +386,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     1,
 					yIdx:     4,
 					limit:    -1,
-					fp:       hexToFingerprint("cfe98ba54761032ddddddddd"),
+					fp:       "cfe98ba54761032ddddddddd",
 					count:    3,
 					itype:    -1,
 					startIdx: 1,
@@ -395,7 +396,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     1,
 					yIdx:     0,
 					limit:    -1,
-					fp:       hexToFingerprint("642464b773377bbddddddddd"),
+					fp:       "642464b773377bbddddddddd",
 					count:    4,
 					itype:    1,
 					startIdx: 1,
@@ -405,7 +406,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     2,
 					yIdx:     0,
 					limit:    -1,
-					fp:       hexToFingerprint("761032cfe98ba54ddddddddd"),
+					fp:       "761032cfe98ba54ddddddddd",
 					count:    3,
 					itype:    1,
 					startIdx: 2,
@@ -415,7 +416,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     2,
 					yIdx:     0,
 					limit:    0,
-					fp:       hexToFingerprint("000000000000000000000000"),
+					fp:       "000000000000000000000000",
 					count:    0,
 					itype:    1,
 					startIdx: 2,
@@ -425,7 +426,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     3,
 					yIdx:     1,
 					limit:    -1,
-					fp:       hexToFingerprint("2345679abcdef01888888888"),
+					fp:       "2345679abcdef01888888888",
 					count:    3,
 					itype:    1,
 					startIdx: 3,
@@ -435,7 +436,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     3,
 					yIdx:     2,
 					limit:    -1,
-					fp:       hexToFingerprint("317131e226622ee888888888"),
+					fp:       "317131e226622ee888888888",
 					count:    4,
 					itype:    1,
 					startIdx: 3,
@@ -445,7 +446,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     3,
 					yIdx:     2,
 					limit:    3,
-					fp:       hexToFingerprint("2345679abcdef01888888888"),
+					fp:       "2345679abcdef01888888888",
 					count:    3,
 					itype:    1,
 					startIdx: 3,
@@ -455,7 +456,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					x:        "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0",
 					y:        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 					limit:    -1,
-					fp:       hexToFingerprint("000000000000000000000000"),
+					fp:       "000000000000000000000000",
 					count:    0,
 					itype:    -1,
 					startIdx: 0,
@@ -477,7 +478,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     0,
 					yIdx:     0,
 					limit:    -1,
-					fp:       hexToFingerprint("a76fc452775b55e0dacd8be5"),
+					fp:       "a76fc452775b55e0dacd8be5",
 					count:    4,
 					itype:    0,
 					startIdx: 0,
@@ -487,7 +488,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     0,
 					yIdx:     0,
 					limit:    3,
-					fp:       hexToFingerprint("4e5ea7ab7f38576018653418"),
+					fp:       "4e5ea7ab7f38576018653418",
 					count:    3,
 					itype:    0,
 					startIdx: 0,
@@ -497,7 +498,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     0,
 					yIdx:     3,
 					limit:    -1,
-					fp:       hexToFingerprint("4e5ea7ab7f38576018653418"),
+					fp:       "4e5ea7ab7f38576018653418",
 					count:    3,
 					itype:    -1,
 					startIdx: 0,
@@ -507,7 +508,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     3,
 					yIdx:     1,
 					limit:    -1,
-					fp:       hexToFingerprint("87760f5e21a0868dc3b0c7a9"),
+					fp:       "87760f5e21a0868dc3b0c7a9",
 					count:    2,
 					itype:    1,
 					startIdx: 3,
@@ -517,7 +518,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     3,
 					yIdx:     2,
 					limit:    -1,
-					fp:       hexToFingerprint("05ef78ea6568c6000e6cd5b9"),
+					fp:       "05ef78ea6568c6000e6cd5b9",
 					count:    3,
 					itype:    1,
 					startIdx: 3,
@@ -567,7 +568,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     31,
 					yIdx:     0,
 					limit:    -1,
-					fp:       hexToFingerprint("e9110a384198b47be2bb63e6"),
+					fp:       "e9110a384198b47be2bb63e6",
 					count:    1,
 					itype:    1,
 					startIdx: 31,
@@ -617,7 +618,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					x:        "582485793d71c3e8429b9b2c8df360c2ea7bf90080d5bf375fe4618b00f59c0b",
 					y:        "7eff517d2f11ed32f935be3001499ac779160a4891a496f88da0ceb33e3496cc",
 					limit:    -1,
-					fp:       hexToFingerprint("66883aa35d2c8d293f07c5c5"),
+					fp:       "66883aa35d2c8d293f07c5c5",
 					count:    1,
 					itype:    -1,
 					startIdx: 10,
@@ -639,7 +640,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     2,
 					yIdx:     0,
 					limit:    1,
-					fp:       hexToFingerprint("b5527010e990254702f77ffc"),
+					fp:       "b5527010e990254702f77ffc",
 					count:    1,
 					itype:    1,
 					startIdx: 2,
@@ -661,7 +662,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					xIdx:     3,
 					yIdx:     3,
 					limit:    2,
-					fp:       hexToFingerprint("9fbedabb68b3dd688767f8e9"),
+					fp:       "9fbedabb68b3dd688767f8e9",
 					count:    2,
 					itype:    0,
 					startIdx: 3,
@@ -684,7 +685,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					y:     "cb93566c2037bc8353162e9988974e4585c14f656bf6aed8fa51d00e1ae594de",
 					limit: -1,
 					// fingerprint: 0xb5, 0xc0, 0x6e, 0x5b, 0x55, 0x30, 0x61, 0xbf, 0xa1, 0xc7, 0xe, 0x75
-					fp:       hexToFingerprint("b5c06e5b553061bfa1c70e75"),
+					fp:       "b5c06e5b553061bfa1c70e75",
 					count:    3,
 					itype:    -1,
 					startIdx: 1,
@@ -727,7 +728,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 				t.Run(name, func(t *testing.T) {
 					fpr, err := ft.fingerprintInterval(x[:], y[:], rtc.limit)
 					require.NoError(t, err)
-					require.Equal(t, rtc.fp, fpr.fp, "fp")
+					require.Equal(t, rtc.fp, fpr.fp.String(), "fp")
 					require.Equal(t, rtc.count, fpr.count, "count")
 					require.Equal(t, rtc.itype, fpr.itype, "itype")
 
@@ -784,7 +785,7 @@ func TestFPTreeClone(t *testing.T) {
 
 	fpr, err := ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, hexToFingerprint("222222222222222222222222"), fpr.fp, "fp")
+	require.Equal(t, "222222222222222222222222", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(2), fpr.count, "count")
 	require.Equal(t, 0, fpr.itype, "itype")
 
@@ -805,7 +806,7 @@ func TestFPTreeClone(t *testing.T) {
 	// original tree unchanged --- rmme!!!!
 	fpr, err = ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, hexToFingerprint("222222222222222222222222"), fpr.fp, "fp")
+	require.Equal(t, "222222222222222222222222", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(2), fpr.count, "count")
 	require.Equal(t, 0, fpr.itype, "itype")
 
@@ -813,14 +814,14 @@ func TestFPTreeClone(t *testing.T) {
 
 	fpr, err = ft2.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, hexToFingerprint("666666666666666666666666"), fpr.fp, "fp")
+	require.Equal(t, "666666666666666666666666", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(3), fpr.count, "count")
 	require.Equal(t, 0, fpr.itype, "itype")
 
 	// original tree unchanged
 	fpr, err = ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, hexToFingerprint("222222222222222222222222"), fpr.fp, "fp")
+	require.Equal(t, "222222222222222222222222", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(2), fpr.count, "count")
 	require.Equal(t, 0, fpr.itype, "itype")
 
@@ -1201,20 +1202,21 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	var np nodePool
 	if *hs == nil {
 		t.Logf("loading IDs")
-		_, err = db.Exec("select id from atxs where epoch = 26 order by id", nil, func(stmt *sql.Statement) bool {
-			var id types.Hash32
-			stmt.ColumnBytes(0, id[:])
-			*hs = append(*hs, id)
-			// v := load64(id[:])
-			// counts[v>>40]++
-			// if first {
-			// 	first = false
-			// } else {
-			// 	prefLens[bits.LeadingZeros64(prev^v)]++
-			// }
-			// prev = v
-			return true
-		})
+		_, err = db.Exec("select id from atxs where epoch = 26 order by id",
+			nil, func(stmt *sql.Statement) bool {
+				var id types.Hash32
+				stmt.ColumnBytes(0, id[:])
+				*hs = append(*hs, id)
+				// v := load64(id[:])
+				// counts[v>>40]++
+				// if first {
+				// 	first = false
+				// } else {
+				// 	prefLens[bits.LeadingZeros64(prev^v)]++
+				// }
+				// prev = v
+				return true
+			})
 		require.NoError(t, err)
 	}
 
@@ -1309,7 +1311,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 }
 
 func TestATXFP(t *testing.T) {
-	// t.Skip("slow test")
+	t.Skip("slow test")
 	var hs []types.Hash32
 	for maxDepth := 15; maxDepth <= 23; maxDepth++ {
 		for i := 0; i < 3; i++ {
