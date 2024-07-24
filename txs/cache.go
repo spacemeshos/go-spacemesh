@@ -116,13 +116,6 @@ func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element
 	}
 	if balance < ntx.MaxSpending() {
 		ac.moreInDB = true
-		logger.Debug("insufficient balance",
-			zap.Stringer("tx_id", ntx.ID),
-			zap.Stringer("address", ntx.Principal),
-			zap.Uint64("nonce", ntx.Nonce),
-			zap.Uint64("cons_balance", balance),
-			zap.Uint64("cons_spending", ntx.MaxSpending()),
-		)
 		return nil, nil, errInsufficientBalance
 	}
 	return prev, &candidate{best: ntx, postBalance: balance - ntx.MaxSpending()}, nil
@@ -256,30 +249,6 @@ func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*Nan
 	}
 
 	ac.moreInDB = len(sortedNonce) > len(added)
-	if len(added) > 0 {
-		logger.Debug("added batch to account pool",
-			zap.Stringer("address", ac.addr),
-			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				slices.Sort(added)
-				for _, nonce := range added {
-					encoder.AppendUint64(nonce)
-				}
-				return nil
-			})),
-		)
-	} else {
-		logger.Debug("no feasible txs from batch",
-			zap.Stringer("address", ac.addr),
-			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				nonces := maps.Keys(nonce2TXs)
-				slices.Sort(nonces)
-				for _, nonce := range nonces {
-					encoder.AppendUint64(nonce)
-				}
-				return nil
-			})),
-		)
-	}
 	return nil
 }
 
@@ -302,11 +271,6 @@ func findBest(ntxs []*NanoTX, balance uint64, blockSeed []byte) *NanoTX {
 //   - nonce not present: add to cache.
 func (ac *accountCache) add(logger *zap.Logger, tx *types.Transaction, received time.Time) error {
 	if tx.Nonce < ac.startNonce {
-		logger.Debug("nonce too small",
-			zap.Stringer("tx_id", tx.ID),
-			zap.Uint64("next_nonce", ac.startNonce),
-			zap.Uint64("tx_nonce", tx.Nonce),
-		)
 		return errBadNonce
 	}
 
@@ -338,11 +302,7 @@ func (ac *accountCache) addPendingFromNonce(
 ) error {
 	mtxs, err := transactions.GetAcctPendingFromNonce(db, ac.addr, nonce)
 	if err != nil {
-		logger.Error("failed to get more pending txs from db",
-			zap.Stringer("address", ac.addr),
-			zap.Error(err),
-		)
-		return err
+		return fmt.Errorf("account pending txs: %w", err)
 	}
 
 	if len(mtxs) == 0 {
@@ -357,7 +317,7 @@ func (ac *accountCache) addPendingFromNonce(
 			}
 			nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
 			if err != nil {
-				return err
+				return fmt.Errorf("get next included: %w", err)
 			}
 			mtx.LayerID = nextLayer
 			mtx.BlockID = nextBlock
@@ -512,7 +472,7 @@ func (c *Cache) buildFromScratch(db *sql.Database) error {
 		}
 		nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
 		if err != nil {
-			return err
+			return fmt.Errorf("get next included: %w", err)
 		}
 		mtx.LayerID = nextLayer
 		mtx.BlockID = nextBlock
@@ -662,8 +622,7 @@ func (c *Cache) LinkTXsWithProposal(
 		return nil
 	}
 	if err := addToProposal(db, lid, pid, tids); err != nil {
-		c.logger.Error("failed to link txs to proposal in db", zap.Error(err))
-		return err
+		return fmt.Errorf("add tx to proposal: %w", err)
 	}
 	return c.updateLayer(lid, types.EmptyBlockID, tids)
 }
