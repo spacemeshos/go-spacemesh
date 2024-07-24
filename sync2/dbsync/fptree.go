@@ -162,6 +162,7 @@ const (
 	maxPrefixLen  = 64 - prefixLenBits
 )
 
+// TODO: use uint32 for prefix
 type prefix uint64
 
 func mkprefix(bits uint64, l int) prefix {
