@@ -428,10 +428,10 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 					switch {
 					case !sst.has(nodeID):
 						continue
-					case errors.Is(err, fetch.ErrExceedMaxRetries):
-						sst.failed(nodeID)
 					case errors.Is(err, pubsub.ErrValidationReject):
 						sst.rejected(nodeID)
+					default:
+						sst.failed(nodeID)
 					}
 				}
 			}
