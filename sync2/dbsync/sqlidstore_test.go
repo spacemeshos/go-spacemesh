@@ -30,6 +30,13 @@ func TestDBBackedStore(t *testing.T) {
 		{0, 0, 0, 1, 0, 0, 0, 0}, // wrapped around
 	}, actualIDs)
 
+	it, err = store.start()
+	require.NoError(t, err)
+	for n := range 5 {
+		require.Equal(t, actualIDs[n], it.Key().(KeyBytes))
+		require.NoError(t, it.Next())
+	}
+
 	require.NoError(t, store.registerHash(KeyBytes{0, 0, 0, 2, 0, 0, 0, 0}))
 	require.NoError(t, store.registerHash(KeyBytes{0, 0, 0, 9, 0, 0, 0, 0}))
 	actualIDs = nil

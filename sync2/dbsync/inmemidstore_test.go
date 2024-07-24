@@ -10,9 +10,16 @@ import (
 )
 
 func TestInMemIDStore(t *testing.T) {
+	var (
+		it  iterator
+		err error
+	)
 	s := newInMemIDStore(32, 24)
 
-	_, err := s.iter(util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"))
+	_, err = s.start()
+	require.ErrorIs(t, err, errEmptySet)
+
+	_, err = s.iter(util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"))
 	require.ErrorIs(t, err, errEmptySet)
 
 	for _, h := range []string{
@@ -27,9 +34,13 @@ func TestInMemIDStore(t *testing.T) {
 		s.registerHash(util.FromHex(h))
 	}
 
-	for range 2 {
-		it, err := s.iter(
-			util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"))
+	for i := range 6 {
+		if i%2 == 0 {
+			it, err = s.start()
+		} else {
+			it, err = s.iter(
+				util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"))
+		}
 		require.NoError(t, err)
 		var items []string
 		for range 7 {
