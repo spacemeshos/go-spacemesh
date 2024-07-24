@@ -718,7 +718,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		require.ErrorIs(t, err, ErrPoetServiceUnstable)
 		require.Nil(t, nipst)
 	})
-	t.Run("Submit hangs", func(t *testing.T) {
+	t.Run("Submit hangs, no registrations submitted", func(t *testing.T) {
 		t.Parallel()
 		ctrl := gomock.NewController(t)
 		mclock := defaultLayerClockMock(ctrl)
@@ -752,7 +752,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 
 		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
 			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
-		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.Nil(t, nipst)
 	})
 	t.Run("GetProof fails", func(t *testing.T) {
@@ -872,7 +872,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			challengeHash.Bytes())
 
 		require.NoError(t, err)
-		require.Equal(t, 1, len(existingRegistrations))
+		require.Len(t, existingRegistrations, 1)
 		require.Equal(t, poetProverAddr, existingRegistrations[0].Address)
 	})
 
@@ -918,10 +918,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			challengeHash.Bytes())
 
 		require.NoError(t, err)
-		require.Equal(t, 2, len(existingRegistrations))
+		require.Len(t, existingRegistrations, 2)
 		require.Equal(t, poetProverAddr, existingRegistrations[0].Address)
 		require.Equal(t, poetProverAddr2, existingRegistrations[1].Address)
-
 	})
 
 	t.Run("completely changed poet service BEFORE round started -> register new poet", func(t *testing.T) {
@@ -962,7 +961,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			challengeHash.Bytes())
 
 		require.NoError(t, err)
-		require.Equal(t, 1, len(existingRegistrations))
+		require.Len(t, existingRegistrations, 1)
 		require.Equal(t, poetProverAddr2, existingRegistrations[0].Address)
 	})
 
@@ -1006,7 +1005,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 				challengeHash.Bytes())
 
 			require.NoError(t, err)
-			require.Equal(t, 1, len(existingRegistrations))
+			require.Len(t, existingRegistrations, 1)
 			require.Equal(t, poetProverAddr, existingRegistrations[0].Address)
 		})
 
@@ -1056,7 +1055,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 				challengeHash.Bytes())
 
 			require.NoError(t, err)
-			require.Equal(t, 1, len(existingRegistrations))
+			require.Len(t, existingRegistrations, 1)
 			require.Equal(t, poetProverAddr, existingRegistrations[0].Address)
 		})
 
@@ -1097,7 +1096,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 
 			require.ErrorIs(t, err, ErrNoRegistrationForGivenPoetFound)
 			require.ErrorContains(t, err, "poet round has already started")
-			require.Equal(t, 0, len(existingRegistrations))
+			require.Empty(t, existingRegistrations)
 		})
 }
 
