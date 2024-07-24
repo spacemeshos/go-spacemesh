@@ -25,7 +25,7 @@ func NewDBItemStore(
 	query string,
 	keyLen, maxDepth, chunkSize int,
 ) *DBItemStore {
-	dbStore := newDBBackedStore(db, query, keyLen, maxDepth)
+	dbStore := newDBBackedStore(db, query, keyLen)
 	return &DBItemStore{
 		db:        db,
 		ft:        newFPTree(np, dbStore, keyLen, maxDepth),

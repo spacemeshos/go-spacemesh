@@ -6,24 +6,22 @@ import (
 )
 
 type inMemIDStore struct {
-	sl       *skiplist.SkipList
-	keyLen   int
-	maxDepth int
-	len      int
+	sl     *skiplist.SkipList
+	keyLen int
+	len    int
 }
 
 var _ idStore = &inMemIDStore{}
 
-func newInMemIDStore(keyLen, maxDepth int) *inMemIDStore {
+func newInMemIDStore(keyLen int) *inMemIDStore {
 	return &inMemIDStore{
-		sl:       skiplist.New(keyLen),
-		keyLen:   keyLen,
-		maxDepth: maxDepth,
+		sl:     skiplist.New(keyLen),
+		keyLen: keyLen,
 	}
 }
 
 func (s *inMemIDStore) clone() idStore {
-	newStore := newInMemIDStore(s.keyLen, s.maxDepth)
+	newStore := newInMemIDStore(s.keyLen)
 	for node := s.sl.First(); node != nil; node = node.Next() {
 		newStore.sl.Add(node.Key())
 	}

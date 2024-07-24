@@ -14,7 +14,7 @@ func TestDBBackedStore(t *testing.T) {
 		{0, 0, 0, 7, 0, 0, 0, 0},
 	}
 	db := populateDB(t, 8, initialIDs)
-	store := newDBBackedStore(db, fakeIDQuery, 8, 24)
+	store := newDBBackedStore(db, fakeIDQuery, 8)
 	var actualIDs []KeyBytes
 	it, err := store.iter(KeyBytes{0, 0, 0, 0, 0, 0, 0, 0})
 	require.NoError(t, err)
