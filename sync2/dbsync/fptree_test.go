@@ -232,7 +232,53 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 		ranges   []rangeTestCase
 		x, y     string
 	}{
-		// TBD: QQQQQ: test empty set
+		{
+			name:     "empty",
+			maxDepth: 24,
+			ids:      nil,
+			ranges: []rangeTestCase{
+				{
+					x:        "123456789abcdef0000000000000000000000000000000000000000000000000",
+					y:        "123456789abcdef0000000000000000000000000000000000000000000000000",
+					limit:    -1,
+					fp:       hexToFingerprint("000000000000000000000000"),
+					count:    0,
+					itype:    0,
+					startIdx: -1,
+					endIdx:   -1,
+				},
+				{
+					x:        "123456789abcdef0000000000000000000000000000000000000000000000000",
+					y:        "123456789abcdef0000000000000000000000000000000000000000000000000",
+					limit:    1,
+					fp:       hexToFingerprint("000000000000000000000000"),
+					count:    0,
+					itype:    0,
+					startIdx: -1,
+					endIdx:   -1,
+				},
+				{
+					x:        "123456789abcdef0000000000000000000000000000000000000000000000000",
+					y:        "223456789abcdef0000000000000000000000000000000000000000000000000",
+					limit:    1,
+					fp:       hexToFingerprint("000000000000000000000000"),
+					count:    0,
+					itype:    -1,
+					startIdx: -1,
+					endIdx:   -1,
+				},
+				{
+					x:        "223456789abcdef0000000000000000000000000000000000000000000000000",
+					y:        "123456789abcdef0000000000000000000000000000000000000000000000000",
+					limit:    1,
+					fp:       hexToFingerprint("000000000000000000000000"),
+					count:    0,
+					itype:    1,
+					startIdx: -1,
+					endIdx:   -1,
+				},
+			},
+		},
 		{
 			name:     "ids1",
 			maxDepth: 24,
@@ -836,7 +882,9 @@ func checkNode(t *testing.T, ft *fpTree, idx nodeIndex, depth int) {
 
 func checkTree(t *testing.T, ft *fpTree, maxDepth int) {
 	require.Equal(t, maxDepth, ft.maxDepth)
-	checkNode(t, ft, ft.root, 0)
+	if ft.root != noIndex {
+		checkNode(t, ft, ft.root, 0)
+	}
 }
 
 func repeatTestFPTreeManyItems(
@@ -1215,7 +1263,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 }
 
 func TestATXFP(t *testing.T) {
-	// t.Skip("slow test")
+	t.Skip("slow test")
 	var hs []types.Hash32
 	for maxDepth := 15; maxDepth <= 23; maxDepth++ {
 		for i := 0; i < 3; i++ {

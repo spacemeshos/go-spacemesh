@@ -849,11 +849,11 @@ func (ft *fpTree) aggregateInterval(ac *aggContext) error {
 	defer func() {
 		ft.leave(ac)
 	}()
+	ac.itype = bytes.Compare(ac.x, ac.y)
 	if ft.root == noIndex {
 		return nil
 	}
 	ac.total = ft.np.node(ft.root).c
-	ac.itype = bytes.Compare(ac.x, ac.y)
 	switch ac.itype {
 	case 0:
 		return ft.aggregateXX(ac)
