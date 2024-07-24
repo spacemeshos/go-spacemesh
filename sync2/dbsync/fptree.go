@@ -221,6 +221,18 @@ func (p prefix) minID(b KeyBytes) {
 	}
 }
 
+func (p prefix) idAfter(b KeyBytes) {
+	if len(b) < 8 {
+		panic("BUG: id slice too small")
+	}
+	s := uint64(64 - p.len())
+	v := (p.bits() + 1) << s
+	binary.BigEndian.PutUint64(b, v)
+	for n := 8; n < len(b); n++ {
+		b[n] = 0xff
+	}
+}
+
 // QQQQQ: rm ?
 // func (p prefix) maxID(b KeyBytes) {
 // 	if len(b) < 8 {
@@ -272,39 +284,32 @@ func commonPrefix(a, b KeyBytes) prefix {
 }
 
 type fpResult struct {
-	fp    fingerprint
-	count uint32
-	itype int
+	fp         fingerprint
+	count      uint32
+	itype      int
+	start, end iterator
 }
 
 type aggContext struct {
-	x, y  KeyBytes
-	fp    fingerprint
-	count uint32
-	itype int
-	limit int
-	total uint32
+	x, y       KeyBytes
+	fp         fingerprint
+	count      uint32
+	itype      int
+	limit      int
+	total      uint32
+	start, end iterator
+	lastPrefix *prefix
 }
 
-func (ac *aggContext) prefixWithinRange(p prefix) bool {
-	if ac.itype == 0 {
-		return true
-	}
-	x := load64(ac.x)
-	y := load64(ac.y)
-	v := p.bits() << (64 - p.len())
-	maxV := v + (1 << (64 - p.len())) - 1
-	if ac.itype < 0 {
-		// normal interval
-		// fmt.Fprintf(os.Stderr, "QQQQQ: (0) itype %d x %016x y %016x v %016x maxV %016x result %v\n", ac.itype, x, y, v, maxV, v >= x && maxV < y)
-		return v >= x && maxV < y
-	}
-	// inverted interval
-	// fmt.Fprintf(os.Stderr, "QQQQQ: (1) itype %d x %016x y %016x v %016x maxV %016x result %v\n", ac.itype, x, y, v, maxV, v >= x || v < y)
-	return v >= x || maxV < y
+func (ac *aggContext) prefixAtOrAfterX(p prefix) bool {
+	return p.bits()<<(64-p.len()) >= load64(ac.x)
 }
 
-func (ac *aggContext) maybeIncludeNode(node node) bool {
+func (ac *aggContext) prefixBelowY(p prefix) bool {
+	return (p.bits()+1)<<(64-p.len())-1 < load64(ac.y)
+}
+
+func (ac *aggContext) maybeIncludeNode(node node, p prefix) bool {
 	switch {
 	case ac.limit < 0:
 	case uint32(ac.limit) < node.c:
@@ -314,6 +319,7 @@ func (ac *aggContext) maybeIncludeNode(node node) bool {
 	}
 	ac.fp.update(node.fp[:])
 	ac.count += node.c
+	ac.lastPrefix = &p
 	return true
 }
 
@@ -386,7 +392,7 @@ func (ft *fpTree) clone() *fpTree {
 }
 
 func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) nodeIndex {
-	// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: fpA %s fpB %s p %s\n", fpA.String(), fpB.String(), p)
+	// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: fpA %s fpB %s p %s\n", fpA.(fmt.Stringer), fpB.(fmt.Stringer), p)
 	fpCombined := fpA
 	fpCombined.update(fpB[:])
 	if ft.maxDepth != 0 && p.len() == ft.maxDepth {
@@ -428,7 +434,7 @@ func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) node
 func (ft *fpTree) addValue(fp fingerprint, p prefix, idx nodeIndex) nodeIndex {
 	if idx == noIndex {
 		r := ft.np.add(fp, 1, noIndex, noIndex)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: addNew fp %s p %s => %d\n", fp.String(), p.String(), r)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: addNew fp %s p %s => %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), r)
 		return r
 	}
 	node := ft.np.node(idx)
@@ -437,30 +443,30 @@ func (ft *fpTree) addValue(fp fingerprint, p prefix, idx nodeIndex) nodeIndex {
 		// we're at a leaf node, need to push down the old fingerprint, or,
 		// if we've reached the max depth, just update the current node
 		r := ft.pushDown(fp, node.fp, p, node.c)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: pushDown fp %s p %s oldIdx %d => %d\n", fp.String(), p.String(), idx, r)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: pushDown fp %s p %s oldIdx %d => %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx, r)
 		return r
 	}
 	fpCombined := fp
 	fpCombined.update(node.fp[:])
 	if fp.bitFromLeft(p.len()) {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceRight fp %s p %s oldIdx %d\n", fp.String(), p.String(), idx)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceRight fp %s p %s oldIdx %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx)
 		if node.left != noIndex {
 			ft.np.ref(node.left)
 			// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: ref left %d -- refCount %d\n", node.left, ft.np.entry(node.left).refCount)
 		}
 		newRight := ft.addValue(fp, p.right(), node.right)
 		r := ft.np.add(fpCombined, node.c+1, node.left, newRight)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceRight fp %s p %s oldIdx %d => %d node.left %d newRight %d\n", fp.String(), p.String(), idx, r, node.left, newRight)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceRight fp %s p %s oldIdx %d => %d node.left %d newRight %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx, r, node.left, newRight)
 		return r
 	} else {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceLeft fp %s p %s oldIdx %d\n", fp.String(), p.String(), idx)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceLeft fp %s p %s oldIdx %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx)
 		if node.right != noIndex {
 			// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: ref right %d -- refCount %d\n", node.right, ft.np.entry(node.right).refCount)
 			ft.np.ref(node.right)
 		}
 		newLeft := ft.addValue(fp, p.left(), node.left)
 		r := ft.np.add(fpCombined, node.c+1, newLeft, node.right)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceLeft fp %s p %s oldIdx %d => %d newLeft %d node.right %d\n", fp.String(), p.String(), idx, r, newLeft, node.right)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceLeft fp %s p %s oldIdx %d => %d newLeft %d node.right %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx, r, newLeft, node.right)
 		return r
 	}
 }
@@ -482,19 +488,24 @@ func (ft *fpTree) followPrefix(from nodeIndex, p, followed prefix) (idx nodeInde
 	ft.enter("followPrefix: from %d p %s highBit %v", from, p, p.highBit())
 	defer func() { ft.leave(idx, rp, found) }()
 
-	// QQQQQ: refactor into a loop
-	switch {
-	case from == noIndex:
-		return noIndex, followed, false
-	case p == 0:
-		return from, followed, true
-	case ft.np.node(from).leaf():
-		return from, followed, false
-	case p.highBit():
-		return ft.followPrefix(ft.np.node(from).right, p.shift(), followed.right())
-	default:
-		return ft.followPrefix(ft.np.node(from).left, p.shift(), followed.left())
+	for from != noIndex {
+		switch {
+		case p == 0:
+			return from, followed, true
+		case ft.np.node(from).leaf():
+			return from, followed, false
+		case p.highBit():
+			from = ft.np.node(from).right
+			p = p.shift()
+			followed = followed.right()
+		default:
+			from = ft.np.node(from).left
+			p = p.shift()
+			followed = followed.left()
+		}
 	}
+
+	return noIndex, followed, false
 }
 
 // aggregateEdge aggregates an edge of the interval, which can be bounded by x, y, both x
@@ -503,12 +514,12 @@ func (ft *fpTree) followPrefix(from nodeIndex, p, followed prefix) (idx nodeInde
 // It returns a boolean indicating whether the limit or the right edge (y) was reached and
 // an error, if any.
 func (ft *fpTree) aggregateEdge(x, y KeyBytes, p prefix, ac *aggContext) (cont bool, err error) {
-	ft.log("aggregateEdge: x %s y %s p %s limit %d count %d", x.String(), y.String(), p, ac.limit, ac.count)
+	ft.log("aggregateEdge: x %s y %s p %s limit %d count %d", x, y, p, ac.limit, ac.count)
 	defer func() {
 		ft.log("aggregateEdge ==> limit %d count %d\n", ac.limit, ac.count)
 	}()
-	if ac.limit == 0 {
-		ft.log("aggregateEdge: limit is 0")
+	if ac.limit == 0 && ac.end != nil {
+		ft.log("aggregateEdge: limit is 0 and end already set")
 		return false, nil
 	}
 	var startFrom KeyBytes
@@ -518,7 +529,7 @@ func (ft *fpTree) aggregateEdge(x, y KeyBytes, p prefix, ac *aggContext) (cont b
 	} else {
 		startFrom = x
 	}
-	ft.log("aggregateEdge: startFrom %s", startFrom.String())
+	ft.log("aggregateEdge: startFrom %s", startFrom)
 	it, err := ft.iter(startFrom)
 	if err != nil {
 		if errors.Is(err, errEmptySet) {
@@ -528,31 +539,44 @@ func (ft *fpTree) aggregateEdge(x, y KeyBytes, p prefix, ac *aggContext) (cont b
 		ft.log("aggregateEdge: error: %v", err)
 		return false, err
 	}
+	if ac.limit == 0 {
+		ac.end = it.clone()
+		if x != nil {
+			ac.start = ac.end
+		}
+		ft.log("aggregateEdge: limit is 0 at %s", ac.end.Key().(fmt.Stringer))
+		return false, nil
+	}
+	if x != nil {
+		ac.start = it.clone()
+	}
 
 	for range ft.np.node(ft.root).c {
 		id := it.Key().(KeyBytes)
-		ft.log("aggregateEdge: ID %s", id.String())
+		ft.log("aggregateEdge: ID %s", id)
 		if y != nil && id.Compare(y) >= 0 {
-			ft.log("aggregateEdge: ID is over Y: %s", id.String())
+			ac.end = it
+			ft.log("aggregateEdge: ID is over Y: %s", id)
 			return false, nil
 		}
 		if !p.match(id) {
-			ft.log("aggregateEdge: ID doesn't match the prefix: %s", id.String())
-			// Got to the end of the tailRef without exhausting the limit
+			ft.log("aggregateEdge: ID doesn't match the prefix: %s", id)
+			ac.lastPrefix = &p
 			return true, nil
 		}
 		ac.fp.update(id)
 		ac.count++
 		if ac.limit > 0 {
 			ac.limit--
-			if ac.limit == 0 {
-				ft.log("aggregateEdge: limit exhausted")
-				return false, nil
-			}
 		}
 		if err := it.Next(); err != nil {
-			ft.log("aggregateEdge: next error: %v", err)
+			ft.log("aggregateEdge: Next failed: %v", err)
 			return false, err
+		}
+		if ac.limit == 0 {
+			ac.end = it
+			ft.log("aggregateEdge: limit exhausted")
+			return false, nil
 		}
 	}
 
@@ -566,9 +590,25 @@ func (ft *fpTree) node(idx nodeIndex) (node, bool) {
 	return ft.np.node(idx), true
 }
 
+// QQQQQ: rm
+// func (ft *fpTree) markEnd(p prefix, ac *aggContext) error {
+// 	if ac.end != nil {
+// 		return nil
+// 	}
+// 	k := make(KeyBytes, ft.keyLen)
+// 	p.minID(k)
+// 	it, err := ft.iter(k)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	ac.end = it
+// 	ft.log("markEnd: p %s k %s => %s", p, k, it.Key().(fmt.Stringer))
+// 	return nil
+// }
+
 func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, ac *aggContext) (cont bool, err error) {
 	ft.enter("aggregateUpToLimit: idx %d p %s limit %d cur_fp %s cur_count %d", idx, p, ac.limit,
-		ac.fp.String(), ac.count)
+		ac.fp, ac.count)
 	defer func() {
 		ft.leave(ac.fp, ac.count)
 	}()
@@ -578,12 +618,12 @@ func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, ac *aggContext) (c
 		case !ok:
 			ft.log("stop: no node")
 			return true, nil
-		case ac.limit == 0:
-			// for ac.limit == 0, it's important that we still visit the node
-			// so that we can get the item immediately following the included items
-			ft.log("stop: limit exhausted")
-			return false, nil
-		case ac.maybeIncludeNode(node):
+		// case ac.limit == 0:
+		// 	// for ac.limit == 0, it's important that we still visit the node
+		// 	// so that we can get the item immediately following the included items
+		// 	ft.log("stop: limit exhausted")
+		// 	return false, ft.markEnd(p, ac)
+		case ac.maybeIncludeNode(node, p):
 			// node is fully included
 			ft.log("included fully")
 			return true, nil
@@ -602,7 +642,7 @@ func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, ac *aggContext) (c
 			pLeft := p.left()
 			left, haveLeft := ft.node(node.left)
 			if haveLeft {
-				if ac.maybeIncludeNode(left) {
+				if ac.maybeIncludeNode(left, pLeft) {
 					// left node is fully included, after which
 					// we need to stop somewhere in the right subtree
 					ft.log("include left in full")
@@ -633,11 +673,12 @@ func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, ac *aggContex
 		// for ac.limit == 0, it's important that we still visit the node
 		// so that we can get the item immediately following the included items
 		ft.log("stop: no node")
-		return true, nil
-	case ac.limit == 0:
-		ft.log("stop: limit exhausted")
-		return false, nil
-	case ac.prefixWithinRange(p) && ac.maybeIncludeNode(node):
+		// QQQQQ: no mark end....
+		return true, nil //ft.markEnd(p, ac)
+	// case ac.limit == 0:
+	// 	ft.log("stop: limit exhausted")
+	// 	return false, ft.markEnd(p, ac)
+	case ac.prefixAtOrAfterX(p) && ac.maybeIncludeNode(node, p):
 		ft.log("including node in full: %s limit %d", p, ac.limit)
 		return ac.limit != 0, nil
 	case p.len() == ft.maxDepth || node.leaf():
@@ -669,14 +710,12 @@ func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, ac *aggConte
 	node, ok := ft.node(idx)
 	switch {
 	case !ok:
-		// for ac.limit == 0, it's important that we still visit the node
-		// so that we can get the item immediately following the included items
 		ft.log("stop: no node")
 		return true, nil
-	case ac.limit == 0:
-		ft.log("stop: limit exhausted")
-		return false, nil
-	case ac.prefixWithinRange(p) && ac.maybeIncludeNode(node):
+	// case ac.limit == 0:
+	// 	ft.log("stop: limit exhausted")
+	// 	return false, ft.markEnd(p, ac)
+	case ac.prefixBelowY(p) && ac.maybeIncludeNode(node, p):
 		ft.log("including node in full: %s limit %d", p, ac.limit)
 		return ac.limit != 0, nil
 	case p.len() == ft.maxDepth || node.leaf():
@@ -699,10 +738,114 @@ func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, ac *aggConte
 	}
 }
 
+func (ft *fpTree) aggregateXX(ac *aggContext) error {
+	// [x; x) interval which denotes the whole set unless
+	// the limit is specified, in which case we need to start aggregating
+	// with x and wrap around if necessary
+	if ft.root == noIndex {
+		ft.log("empty set (no root)")
+	} else if ac.maybeIncludeNode(ft.np.node(ft.root), 0) {
+		ft.log("whole set")
+	} else {
+		// We need to aggregate up to ac.limit number of items starting
+		// from x and wrapping around if necessary
+		return ft.aggregateInverse(ac)
+	}
+	return nil
+}
+
+func (ft *fpTree) aggregateSimple(ac *aggContext) error {
+	// "proper" interval: [x; lca); (lca; y)
+	p := commonPrefix(ac.x, ac.y)
+	lcaIdx, lcaPrefix, fullPrefixFound := ft.followPrefix(ft.root, p, 0)
+	var lca node
+	if lcaIdx != noIndex {
+		// QQQQQ: TBD: perhaps just return if lcaIdx == noIndex
+		lca = ft.np.node(lcaIdx)
+	}
+	ft.log("commonPrefix %s lca %d found %v", p, lcaIdx, fullPrefixFound)
+	switch {
+	case fullPrefixFound && !lca.leaf():
+		if lcaPrefix != p {
+			panic("BUG: bad followedPrefix")
+		}
+		ft.aggregateLeft(lca.left, load64(ac.x)<<(p.len()+1), p.left(), ac)
+		ft.aggregateRight(lca.right, load64(ac.y)<<(p.len()+1), p.right(), ac)
+	case lcaIdx == noIndex || !lca.leaf():
+		ft.log("commonPrefix %s NOT found b/c no items have it", p)
+	default:
+		ft.log("commonPrefix %s -- lca %d", p, lcaIdx)
+		_, err := ft.aggregateEdge(ac.x, ac.y, lcaPrefix, ac)
+		return err
+	}
+	return nil
+}
+
+func (ft *fpTree) aggregateInverse(ac *aggContext) error {
+	// inverse interval: [min; y); [x; max]
+	// first, we handle [x; max] part
+	pf0 := preFirst0(ac.x)
+	idx0, followedPrefix, found := ft.followPrefix(ft.root, pf0, 0)
+	var pf0Node node
+	if idx0 != noIndex {
+		pf0Node = ft.np.node(idx0)
+	}
+	ft.log("pf0 %s idx0 %d found %v", pf0, idx0, found)
+	switch {
+	case found && !pf0Node.leaf():
+		if followedPrefix != pf0 {
+			panic("BUG: bad followedPrefix")
+		}
+		ft.aggregateLeft(idx0, load64(ac.x)<<pf0.len(), pf0, ac)
+	case idx0 == noIndex || !pf0Node.leaf():
+		// nothing to do
+	case ac.prefixAtOrAfterX(followedPrefix) && ac.maybeIncludeNode(pf0Node, pf0):
+		// node is fully included
+	default:
+		_, err := ft.aggregateEdge(ac.x, nil, followedPrefix, ac)
+		if err != nil {
+			return err
+		}
+	}
+
+	if ac.limit == 0 {
+		return nil
+	}
+
+	// then we handle [min, y) part
+	pf1 := preFirst1(ac.y)
+	idx1, followedPrefix, found := ft.followPrefix(ft.root, pf1, 0)
+	var pf1Node node
+	if idx1 != noIndex {
+		pf1Node = ft.np.node(idx1)
+	}
+	ft.log("pf1 %s idx1 %d found %v", pf1, idx1, found)
+	switch {
+	case found && !pf1Node.leaf():
+		if followedPrefix != pf1 {
+			panic("BUG: bad followedPrefix")
+		}
+		ft.aggregateRight(idx1, load64(ac.y)<<pf1.len(), pf1, ac)
+	case idx1 == noIndex || !pf1Node.leaf():
+		// nothing to do
+	case ac.prefixBelowY(followedPrefix) && ac.maybeIncludeNode(pf1Node, pf1):
+		// node is fully included
+	default:
+		_, err := ft.aggregateEdge(nil, ac.y, followedPrefix, ac)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (ft *fpTree) aggregateInterval(ac *aggContext) error {
+	// Lock rootMtx to make cloning fpTree thread-safe.
+	// Note that fpTree methods other than clone are not thread-safe.
 	ft.rootMtx.Lock()
 	defer ft.rootMtx.Unlock()
-	ft.enter("aggregateInterval: x %s y %s limit %d", ac.x.String(), ac.y.String(), ac.limit)
+	ft.enter("aggregateInterval: x %s y %s limit %d", ac.x, ac.y, ac.limit)
 	defer func() {
 		ft.leave(ac)
 	}()
@@ -711,112 +854,68 @@ func (ft *fpTree) aggregateInterval(ac *aggContext) error {
 	}
 	ac.total = ft.np.node(ft.root).c
 	ac.itype = bytes.Compare(ac.x, ac.y)
-	switch {
-	case ac.itype == 0:
-		// the whole set
-		if ft.root != noIndex {
-			ft.log("whole set")
-			_, err := ft.aggregateUpToLimit(ft.root, 0, ac)
-			return err
-		} else {
-			ft.log("empty set (no root)")
-		}
-
-	case ac.itype < 0:
-		// "proper" interval: [x; lca); (lca; y)
-		p := commonPrefix(ac.x, ac.y)
-		lcaIdx, lcaPrefix, fullPrefixFound := ft.followPrefix(ft.root, p, 0)
-		var lca node
-		if lcaIdx != noIndex {
-			// QQQQQ: TBD: perhaps just return if lcaIdx == noIndex
-			lca = ft.np.node(lcaIdx)
-		}
-		ft.log("commonPrefix %s lca %d found %v", p, lcaIdx, fullPrefixFound)
-		switch {
-		case fullPrefixFound && !lca.leaf():
-			if lcaPrefix != p {
-				panic("BUG: bad followedPrefix")
-			}
-			ft.aggregateLeft(lca.left, load64(ac.x)<<(p.len()+1), p.left(), ac)
-			ft.aggregateRight(lca.right, load64(ac.y)<<(p.len()+1), p.right(), ac)
-		case lcaIdx == noIndex || !lca.leaf():
-			ft.log("commonPrefix %s NOT found b/c no items have it", p)
-		default:
-			ft.log("commonPrefix %s -- lca %d", p, lcaIdx)
-			_, err := ft.aggregateEdge(ac.x, ac.y, lcaPrefix, ac)
-			return err
-		}
-
+	switch ac.itype {
+	case 0:
+		return ft.aggregateXX(ac)
+	case -1:
+		return ft.aggregateSimple(ac)
 	default:
-		// inverse interval: [min; y); [x; max]
-		// first, we handle [x; max] part
-		pf0 := preFirst0(ac.x)
-		idx0, followedPrefix, found := ft.followPrefix(ft.root, pf0, 0)
-		var pf0Node node
-		if idx0 != noIndex {
-			pf0Node = ft.np.node(idx0)
-		}
-		ft.log("pf0 %s idx0 %d found %v", pf0, idx0, found)
-		switch {
-		case found && !pf0Node.leaf():
-			if followedPrefix != pf0 {
-				panic("BUG: bad followedPrefix")
-			}
-			ft.aggregateLeft(idx0, load64(ac.x)<<pf0.len(), pf0, ac)
-		case idx0 == noIndex || !pf0Node.leaf():
-			// nothing to do
-		case ac.prefixWithinRange(followedPrefix) && ac.maybeIncludeNode(pf0Node):
-			// node is fully included
-		default:
-			_, err := ft.aggregateEdge(ac.x, nil, followedPrefix, ac)
-			if err != nil {
-				return err
-			}
-		}
-
-		if ac.limit == 0 {
-			return nil
-		}
-
-		// then we handle [min, y) part
-		pf1 := preFirst1(ac.y)
-		idx1, followedPrefix, found := ft.followPrefix(ft.root, pf1, 0)
-		var pf1Node node
-		if idx1 != noIndex {
-			pf1Node = ft.np.node(idx1)
-		}
-		ft.log("pf1 %s idx1 %d found %v", pf1, idx1, found)
-		switch {
-		case found && !pf1Node.leaf():
-			if followedPrefix != pf1 {
-				panic("BUG: bad followedPrefix")
-			}
-			ft.aggregateRight(idx1, load64(ac.y)<<pf1.len(), pf1, ac)
-		case idx1 == noIndex || !pf1Node.leaf():
-			// nothing to do
-		case ac.prefixWithinRange(followedPrefix) && ac.maybeIncludeNode(pf1Node):
-			// node is fully included
-		default:
-			_, err := ft.aggregateEdge(nil, ac.y, followedPrefix, ac)
-			if err != nil {
-				return err
-			}
-		}
+		return ft.aggregateInverse(ac)
 	}
-
-	return nil
 }
 
 func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, err error) {
-	ft.enter("fingerprintInterval: x %s y %s limit %d", x.String(), y.String(), limit)
+	ft.enter("fingerprintInterval: x %s y %s limit %d", x, y, limit)
 	defer func() {
-		ft.leave(fpr, err)
+		if fpr.start != nil && fpr.end != nil {
+			ft.leave(fpr.fp, fpr.count, fpr.itype, fpr.start.Key(), fpr.end.Key())
+		} else {
+			ft.leave(fpr.fp, fpr.count, fpr.itype)
+		}
 	}()
 	ac := aggContext{x: x, y: y, limit: limit}
 	if err := ft.aggregateInterval(&ac); err != nil {
 		return fpResult{}, err
 	}
-	return fpResult{fp: ac.fp, count: ac.count, itype: ac.itype}, nil
+	fpr = fpResult{
+		fp:    ac.fp,
+		count: ac.count,
+		itype: ac.itype,
+	}
+
+	if ac.total == 0 {
+		return fpr, nil
+	}
+
+	if ac.start != nil {
+		ft.log("fingerprintInterval: start %s", ac.start.Key().(fmt.Stringer))
+		fpr.start = ac.start
+	} else if fpr.start, err = ft.iter(x); err != nil {
+		return fpResult{}, err
+	} else {
+		ft.log("fingerprintInterval: start from x: %s", fpr.start.Key().(fmt.Stringer))
+	}
+
+	if ac.end != nil {
+		ft.log("fingerprintInterval: end %s", ac.end.Key().(fmt.Stringer))
+		fpr.end = ac.end
+	} else if (fpr.itype == 0 && limit < 0) || fpr.count == 0 {
+		fpr.end = fpr.start
+		ft.log("fingerprintInterval: end at start %s", fpr.end.Key().(fmt.Stringer))
+	} else if ac.lastPrefix != nil {
+		k := make(KeyBytes, ft.keyLen)
+		ac.lastPrefix.idAfter(k)
+		if fpr.end, err = ft.iter(k); err != nil {
+			return fpResult{}, err
+		}
+		ft.log("fingerprintInterval: end at lastPrefix %s", fpr.end.Key().(fmt.Stringer))
+	} else if fpr.end, err = ft.iter(y); err != nil {
+		return fpResult{}, err
+	} else {
+		ft.log("fingerprintInterval: end at y: %s", fpr.end.Key().(fmt.Stringer))
+	}
+
+	return fpr, nil
 }
 
 func (ft *fpTree) dumpNode(w io.Writer, idx nodeIndex, indent, dir string) {
