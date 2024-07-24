@@ -2,6 +2,7 @@ package dbsync
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"reflect"
 	"runtime"
@@ -1147,6 +1148,43 @@ const dbFile = "/Users/ivan4th/Library/Application Support/Spacemesh/node-data/7
 // 	}
 // }
 
+func treeStats(t *testing.T, ft *fpTree) {
+	numNodes := 0
+	numCompactable := 0
+	numLeafs := 0
+	numEarlyLeafs := 0
+	minLeafSize := uint32(math.MaxUint32)
+	maxLeafSize := uint32(0)
+	totalLeafSize := uint32(0)
+	var scanNode func(nodeIndex, int) bool
+	scanNode = func(idx nodeIndex, depth int) bool {
+		if idx == noIndex {
+			return false
+		}
+		numNodes++
+		node := ft.np.node(idx)
+		if node.leaf() {
+			minLeafSize = min(minLeafSize, node.c)
+			maxLeafSize = max(maxLeafSize, node.c)
+			totalLeafSize += node.c
+			numLeafs++
+			if depth < ft.maxDepth {
+				numEarlyLeafs++
+			}
+		} else {
+			haveLeft := scanNode(node.left, depth+1)
+			if !scanNode(node.right, depth+1) || !haveLeft {
+				numCompactable++
+			}
+		}
+		return true
+	}
+	scanNode(ft.root, 0)
+	avgLeafSize := float64(totalLeafSize) / float64(numLeafs)
+	t.Logf("tree stats: numNodes=%d numLeafs=%d numEarlyLeafs=%d numCompactable=%d minLeafSize=%d maxLeafSize=%d avgLeafSize=%f",
+		numNodes, numLeafs, numEarlyLeafs, numCompactable, minLeafSize, maxLeafSize, avgLeafSize)
+}
+
 func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	// t.Skip("slow tmp test")
 	// counts := make(map[uint64]uint64)
@@ -1163,7 +1201,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	var np nodePool
 	if *hs == nil {
 		t.Logf("loading IDs")
-		_, err = db.Exec("select id from atxs order by id", nil, func(stmt *sql.Statement) bool {
+		_, err = db.Exec("select id from atxs where epoch = 26 order by id", nil, func(stmt *sql.Statement) bool {
 			var id types.Hash32
 			stmt.ColumnBytes(0, id[:])
 			*hs = append(*hs, id)
@@ -1181,14 +1219,19 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	}
 
 	// TODO: use testing.B and b.ReportAllocs()
-	runtime.GC()
+	for i := 0; i < 3; i++ {
+		runtime.GC()
+		time.Sleep(100 * time.Millisecond)
+	}
 	var stats1 runtime.MemStats
 	runtime.ReadMemStats(&stats1)
-	store := newSQLIDStore(db, "select id from atxs where id >= ? order by id limit ?", 32, maxDepth)
+	// TODO: pass extra bind params to the SQL query
+	store := newSQLIDStore(db, "select id from atxs where id >= ? and epoch = 26 order by id limit ?", 32, maxDepth)
 	ft := newFPTree(&np, store, 32, maxDepth)
 	for _, id := range *hs {
 		ft.addHash(id[:])
 	}
+	treeStats(t, ft)
 
 	// countFreq := make(map[uint64]int)
 	// for _, c := range counts {
@@ -1215,7 +1258,10 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	}
 	elapsed := time.Now().Sub(ts)
 
-	runtime.GC()
+	for i := 0; i < 3; i++ {
+		runtime.GC()
+		time.Sleep(100 * time.Millisecond)
+	}
 	var stats2 runtime.MemStats
 	runtime.ReadMemStats(&stats2)
 	t.Logf("range benchmark for maxDepth %d: %v per range, %f ranges/s, heap diff %d",
@@ -1231,7 +1277,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	for n := 0; n < 50; n++ {
 		x := types.RandomHash()
 		y := types.RandomHash()
-		t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
+		// t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
 		expFPResult := dumbFP(*hs, x, y, -1)
 		//expFPResult := dumbAggATXs(t, db, x, y)
 		fpr, err := ft.fingerprintInterval(x[:], y[:], -1)
@@ -1243,7 +1289,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 		if fpr.count != 0 {
 			limit = rand.Intn(int(fpr.count))
 		}
-		t.Logf("QQQQQ: x=%s y=%s limit=%d", x.String(), y.String(), limit)
+		// t.Logf("QQQQQ: x=%s y=%s limit=%d", x.String(), y.String(), limit)
 		expFPResult = dumbFP(*hs, x, y, limit)
 		fpr, err = ft.fingerprintInterval(x[:], y[:], limit)
 		require.NoError(t, err)
