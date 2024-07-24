@@ -331,6 +331,7 @@ type iterator interface {
 type idStore interface {
 	clone() idStore
 	registerHash(h KeyBytes) error
+	start() (iterator, error)
 	iter(from KeyBytes) (iterator, error)
 }
 

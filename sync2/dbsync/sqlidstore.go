@@ -13,7 +13,7 @@ type sqlIDStore struct {
 	db       sql.Database
 	query    string
 	keyLen   int
-	maxDepth int
+	maxDepth int // TBD: remove
 }
 
 var _ idStore = &sqlIDStore{}
@@ -29,6 +29,10 @@ func (s *sqlIDStore) clone() idStore {
 func (s *sqlIDStore) registerHash(h KeyBytes) error {
 	// should be registered by the handler code
 	return nil
+}
+
+func (s *sqlIDStore) start() (iterator, error) {
+	return s.iter(make(KeyBytes, s.keyLen))
 }
 
 func (s *sqlIDStore) iter(from KeyBytes) (iterator, error) {
@@ -64,6 +68,23 @@ func (s *dbBackedStore) clone() idStore {
 
 func (s *dbBackedStore) registerHash(h KeyBytes) error {
 	return s.inMemIDStore.registerHash(h)
+}
+
+func (s *dbBackedStore) start() (iterator, error) {
+	dbIt, err := s.sqlIDStore.start()
+	if err != nil {
+		if errors.Is(err, errEmptySet) {
+			return s.inMemIDStore.start()
+		}
+		return nil, err
+	}
+	memIt, err := s.inMemIDStore.start()
+	if err == nil {
+		return combineIterators(dbIt, memIt), nil
+	} else if errors.Is(err, errEmptySet) {
+		return dbIt, nil
+	}
+	return nil, err
 }
 
 func (s *dbBackedStore) iter(from KeyBytes) (iterator, error) {

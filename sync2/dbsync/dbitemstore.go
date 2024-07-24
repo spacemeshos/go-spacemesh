@@ -2,6 +2,7 @@ package dbsync
 
 import (
 	"context"
+	"errors"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
@@ -40,31 +41,35 @@ func (d *DBItemStore) Add(ctx context.Context, k hashsync.Ordered) error {
 	return d.ft.addHash(k.(KeyBytes))
 }
 
-func (d *DBItemStore) iter(min, max KeyBytes) (hashsync.Iterator, error) {
-	panic("TBD")
-	// return newDBRangeIterator(d.db, d.query, min, max, d.chunkSize)
-}
-
 // GetRangeInfo implements hashsync.ItemStore.
 func (d *DBItemStore) GetRangeInfo(
 	preceding hashsync.Iterator,
 	x, y hashsync.Ordered,
 	count int,
 ) (hashsync.RangeInfo, error) {
-	// QQQQQ: note: iter's max is inclusive!!!!
-	// TBD: QQQQQ: need count limiting in ft.fingerprintInterval
-	panic("unimplemented")
+	fpr, err := d.ft.fingerprintInterval(x.(KeyBytes), y.(KeyBytes), count)
+	if err != nil {
+		return hashsync.RangeInfo{}, err
+	}
+	return hashsync.RangeInfo{
+		Fingerprint: fpr.fp,
+		Count:       count,
+		Start:       fpr.start,
+		End:         fpr.end,
+	}, nil
 }
 
 // Min implements hashsync.ItemStore.
 func (d *DBItemStore) Min() (hashsync.Iterator, error) {
-	// INCORRECT !!! should return nil if the store is empty
-	it1 := make(KeyBytes, d.keyLen)
-	it2 := make(KeyBytes, d.keyLen)
-	for i := range it2 {
-		it2[i] = 0xff
+	it, err := d.ft.start()
+	switch {
+	case err == nil:
+		return it, nil
+	case errors.Is(err, errEmptySet):
+		return nil, nil
+	default:
+		return nil, err
 	}
-	return d.iter(it1, it2)
 }
 
 // Copy implements hashsync.ItemStore.

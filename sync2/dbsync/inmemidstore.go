@@ -36,6 +36,14 @@ func (s *inMemIDStore) registerHash(h KeyBytes) error {
 	return nil
 }
 
+func (s *inMemIDStore) start() (iterator, error) {
+	node := s.sl.First()
+	if node == nil {
+		return nil, errEmptySet
+	}
+	return &inMemIDStoreIterator{sl: s.sl, node: node}, nil
+}
+
 func (s *inMemIDStore) iter(from KeyBytes) (iterator, error) {
 	node := s.sl.FindGTENode(from)
 	if node == nil {
