@@ -83,25 +83,22 @@ func copyToLocalFile(
 	ctx context.Context,
 	logger *zap.Logger,
 	fs afero.Fs,
-	dataDir, uri string,
-	restore types.LayerID,
-	retryMax int,
-	retryDelay time.Duration,
+	cfg *RecoverConfig,
 ) (string, error) {
-	parsed, err := url.Parse(uri)
+	parsed, err := url.Parse(cfg.Uri)
 	if err != nil {
-		return "", fmt.Errorf("%w: parse recovery URI %v", err, uri)
+		return "", fmt.Errorf("%w: parse recovery URI %v", err, cfg.Uri)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", fmt.Errorf("%w: %s", ErrUrlSchemeNotSupported, uri)
+		return "", fmt.Errorf("%w: %s", ErrUrlSchemeNotSupported, cfg.Uri)
 	}
-	if bdir, err := backupRecovery(fs, RecoveryDir(dataDir)); err != nil {
+	if bdir, err := backupRecovery(fs, RecoveryDir(cfg.DataDir)); err != nil {
 		return "", err
 	} else if bdir != "" {
 		logger.Info("old recovery data backed up", log.ZContext(ctx), zap.String("dir", bdir))
 	}
-	dst := RecoveryFilename(dataDir, filepath.Base(parsed.String()), restore)
-	if err = httpToLocalFile(ctx, parsed, fs, dst, retryMax, retryDelay); err != nil {
+	dst := RecoveryFilename(cfg.DataDir, filepath.Base(parsed.String()), cfg.Restore)
+	if err = httpToLocalFile(ctx, parsed, fs, dst, cfg.RetryMax, cfg.RetryDelay); err != nil {
 		return "", err
 	}
 
@@ -187,10 +184,7 @@ func RecoverWithDb(
 		return nil, fmt.Errorf("remove old bootstrap data: %w", err)
 	}
 	logger.Info("recover from uri", zap.String("uri", cfg.Uri))
-	cpFile, err := copyToLocalFile(
-		ctx, logger, fs, cfg.DataDir, cfg.Uri, cfg.Restore,
-		cfg.RetryMax, cfg.RetryDelay,
-	)
+	cpFile, err := copyToLocalFile(ctx, logger, fs, cfg)
 	if err != nil {
 		return nil, err
 	}

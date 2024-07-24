@@ -132,8 +132,6 @@ func httpToLocalFile(
 
 	resp, err := c.Do(req)
 	if err != nil {
-		// This shouldn't really happen. According to net/http docs for Do:
-		// "Any returned error will be of type *url.Error."
 		return fmt.Errorf("%w: %w", ErrCheckpointRequestFailed, err)
 	}
 	defer resp.Body.Close()

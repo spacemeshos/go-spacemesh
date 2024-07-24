@@ -29,6 +29,14 @@ func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Clus
 		cluster.WithBootstrapEpochs([]int{2, 4, 5}),
 		cluster.WithSmesherFlag(cluster.CheckpointUrl(fmt.Sprintf("%s/checkpoint", cluster.BootstrapperEndpoint(0)))),
 		cluster.WithSmesherFlag(cluster.CheckpointLayer(restoreLayer)),
+		// The --ignore-checkpoint-req-errors flag is needed b/c in the context of
+		// TestRecovery systest, all the nodes are created with --recovery-uri
+		// flag passed, including the bootnodes.
+		// This way, they can't successfully start unless the bootstrapper is
+		// already running.
+		// But at the same time the bootstrapper requires an working go-spacemesh
+		// node to start up, thus we get a circulardependency.
+		// TODO: use a smarter go-spacemesh cluster restart mechanism
 		cluster.WithSmesherFlag(cluster.IgnoreCheckpointReqErrors()),
 	)
 }
