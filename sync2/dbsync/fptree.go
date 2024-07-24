@@ -389,16 +389,17 @@ func (ft *fpTree) clone() *fpTree {
 		np:       ft.np,
 		idStore:  ft.idStore.clone(),
 		root:     ft.root,
+		keyLen:   ft.keyLen,
 		maxDepth: ft.maxDepth,
 	}
 }
 
 func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) nodeIndex {
-	// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: fpA %s fpB %s p %s\n", fpA.(fmt.Stringer), fpB.(fmt.Stringer), p)
+	// ft.log("QQQQQ: pushDown: fpA %s fpB %s p %s", fpA, fpB, p)
 	fpCombined := fpA
 	fpCombined.update(fpB[:])
 	if ft.maxDepth != 0 && p.len() == ft.maxDepth {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: add at maxDepth\n")
+		// ft.log("QQQQQ: pushDown: add at maxDepth")
 		return ft.np.add(fpCombined, curCount+1, noIndex, noIndex)
 	}
 	if curCount != 1 {
@@ -406,16 +407,16 @@ func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) node
 	}
 	dirA := fpA.bitFromLeft(p.len())
 	dirB := fpB.bitFromLeft(p.len())
-	// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: bitFromLeft %d: dirA %v dirB %v\n", p.len(), dirA, dirB)
+	// ft.log("QQQQQ: pushDown: bitFromLeft %d: dirA %v dirB %v", p.len(), dirA, dirB)
 	if dirA == dirB {
 		childIdx := ft.pushDown(fpA, fpB, p.dir(dirA), 1)
 		if dirA {
 			r := ft.np.add(fpCombined, 2, noIndex, childIdx)
-			// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: sameDir: left => %d\n", r)
+			// ft.log("QQQQQ: pushDown: sameDir: left => %d", r)
 			return r
 		} else {
 			r := ft.np.add(fpCombined, 2, childIdx, noIndex)
-			// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: sameDir: right => %d\n", r)
+			// ft.log("QQQQQ: pushDown: sameDir: right => %d", r)
 			return r
 		}
 	}
@@ -424,11 +425,11 @@ func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) node
 	idxB := ft.np.add(fpB, curCount, noIndex, noIndex)
 	if dirA {
 		r := ft.np.add(fpCombined, 2, idxB, idxA)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: add A-B => %d\n", r)
+		// ft.log("QQQQQ: pushDown: add A-B => %d", r)
 		return r
 	} else {
 		r := ft.np.add(fpCombined, 2, idxA, idxB)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: pushDown: add B-A => %d\n", r)
+		// ft.log("QQQQQ: pushDown: add B-A => %d", r)
 		return r
 	}
 }
@@ -436,7 +437,7 @@ func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) node
 func (ft *fpTree) addValue(fp fingerprint, p prefix, idx nodeIndex) nodeIndex {
 	if idx == noIndex {
 		r := ft.np.add(fp, 1, noIndex, noIndex)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: addNew fp %s p %s => %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), r)
+		// ft.log("QQQQQ: addValue: addNew fp %s p %s => %d", fp, p, r)
 		return r
 	}
 	node := ft.np.node(idx)
@@ -445,45 +446,52 @@ func (ft *fpTree) addValue(fp fingerprint, p prefix, idx nodeIndex) nodeIndex {
 		// we're at a leaf node, need to push down the old fingerprint, or,
 		// if we've reached the max depth, just update the current node
 		r := ft.pushDown(fp, node.fp, p, node.c)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: pushDown fp %s p %s oldIdx %d => %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx, r)
+		// ft.log("QQQQQ: addValue: pushDown fp %s p %s oldIdx %d => %d", fp, p, idx, r)
 		return r
 	}
 	fpCombined := fp
 	fpCombined.update(node.fp[:])
 	if fp.bitFromLeft(p.len()) {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceRight fp %s p %s oldIdx %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx)
+		// ft.log("QQQQQ: addValue: replaceRight fp %s p %s oldIdx %d", fp, p, idx)
 		if node.left != noIndex {
 			ft.np.ref(node.left)
-			// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: ref left %d -- refCount %d\n", node.left, ft.np.entry(node.left).refCount)
+			// ft.log("QQQQQ: addValue: ref left %d -- refCount %d", node.left, ft.np.entry(node.left).refCount)
 		}
 		newRight := ft.addValue(fp, p.right(), node.right)
 		r := ft.np.add(fpCombined, node.c+1, node.left, newRight)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceRight fp %s p %s oldIdx %d => %d node.left %d newRight %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx, r, node.left, newRight)
+		// ft.log("QQQQQ: addValue: replaceRight fp %s p %s oldIdx %d => %d node.left %d newRight %d", fp, p, idx, r, node.left, newRight)
 		return r
 	} else {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceLeft fp %s p %s oldIdx %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx)
+		// ft.log("QQQQQ: addValue: replaceLeft fp %s p %s oldIdx %d", fp, p, idx)
 		if node.right != noIndex {
-			// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: ref right %d -- refCount %d\n", node.right, ft.np.entry(node.right).refCount)
+			// ft.log("QQQQQ: addValue: ref right %d -- refCount %d", node.right, ft.np.entry(node.right).refCount)
 			ft.np.ref(node.right)
 		}
 		newLeft := ft.addValue(fp, p.left(), node.left)
 		r := ft.np.add(fpCombined, node.c+1, newLeft, node.right)
-		// fmt.Fprintf(os.Stderr, "QQQQQ: addValue: replaceLeft fp %s p %s oldIdx %d => %d newLeft %d node.right %d\n", fp.(fmt.Stringer), p.(fmt.Stringer), idx, r, newLeft, node.right)
+		// ft.log("QQQQQ: addValue: replaceLeft fp %s p %s oldIdx %d => %d newLeft %d node.right %d", fp, p, idx, r, newLeft, node.right)
 		return r
 	}
 }
 
-func (ft *fpTree) addHash(h KeyBytes) error {
-	// fmt.Fprintf(os.Stderr, "QQQQQ: addHash: %s\n", hex.EncodeToString(h))
+func (ft *fpTree) addStoredHash(h KeyBytes) {
 	var fp fingerprint
 	fp.update(h)
 	ft.rootMtx.Lock()
 	defer ft.rootMtx.Unlock()
+	ft.log("addStoredHash: h %s fp %s", h, fp)
 	oldRoot := ft.root
 	ft.root = ft.addValue(fp, 0, ft.root)
 	ft.releaseNode(oldRoot)
-	// fmt.Fprintf(os.Stderr, "QQQQQ: addHash: new root %d\n", ft.root)
-	return ft.idStore.registerHash(h)
+}
+
+func (ft *fpTree) addHash(h KeyBytes) error {
+	ft.log("addHash: h %s", h)
+	if err := ft.idStore.registerHash(h); err != nil {
+		return err
+	}
+	ft.addStoredHash(h)
+	return nil
 }
 
 func (ft *fpTree) followPrefix(from nodeIndex, p, followed prefix) (idx nodeIndex, rp prefix, found bool) {
