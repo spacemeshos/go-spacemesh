@@ -217,12 +217,13 @@ type idStoreFunc func(maxDepth int) idStore
 
 func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 	type rangeTestCase struct {
-		xIdx, yIdx int
-		x, y       string
-		limit      int
-		fp         fingerprint
-		count      uint32
-		itype      int
+		xIdx, yIdx       int
+		x, y             string
+		limit            int
+		fp               fingerprint
+		count            uint32
+		itype            int
+		startIdx, endIdx int
 	}
 	for _, tc := range []struct {
 		name     string
@@ -231,6 +232,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 		ranges   []rangeTestCase
 		x, y     string
 	}{
+		// TBD: QQQQQ: test empty set
 		{
 			name:     "ids1",
 			maxDepth: 24,
@@ -243,124 +245,174 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 			},
 			ranges: []rangeTestCase{
 				{
-					xIdx:  0,
-					yIdx:  0,
-					limit: -1,
-					fp:    hexToFingerprint("642464b773377bbddddddddd"),
-					count: 5,
-					itype: 0,
+					xIdx:     0,
+					yIdx:     0,
+					limit:    -1,
+					fp:       hexToFingerprint("642464b773377bbddddddddd"),
+					count:    5,
+					itype:    0,
+					startIdx: 0,
+					endIdx:   0,
 				},
 				{
-					xIdx:  0,
-					yIdx:  0,
-					limit: 0,
-					fp:    hexToFingerprint("000000000000000000000000"),
-					count: 0,
-					itype: 0,
+					xIdx:     0,
+					yIdx:     0,
+					limit:    0,
+					fp:       hexToFingerprint("000000000000000000000000"),
+					count:    0,
+					itype:    0,
+					startIdx: 0,
+					endIdx:   0,
 				},
 				{
-					xIdx:  0,
-					yIdx:  0,
-					limit: 3,
-					fp:    hexToFingerprint("4761032dcfe98ba555555555"),
-					count: 3,
-					itype: 0,
+					xIdx:     0,
+					yIdx:     0,
+					limit:    3,
+					fp:       hexToFingerprint("4761032dcfe98ba555555555"),
+					count:    3,
+					itype:    0,
+					startIdx: 0,
+					endIdx:   3,
 				},
 				{
-					xIdx:  4,
-					yIdx:  4,
-					limit: -1,
-					fp:    hexToFingerprint("642464b773377bbddddddddd"),
-					count: 5,
-					itype: 0,
+					xIdx:     4,
+					yIdx:     4,
+					limit:    -1,
+					fp:       hexToFingerprint("642464b773377bbddddddddd"),
+					count:    5,
+					itype:    0,
+					startIdx: 4,
+					endIdx:   4,
 				},
 				{
-					xIdx:  0,
-					yIdx:  1,
-					limit: -1,
-					fp:    hexToFingerprint("000000000000000000000000"),
-					count: 1,
-					itype: -1,
+					xIdx:     4,
+					yIdx:     4,
+					limit:    1,
+					fp:       hexToFingerprint("abcdef123456789000000000"),
+					count:    1,
+					itype:    0,
+					startIdx: 4,
+					endIdx:   0,
 				},
 				{
-					xIdx:  0,
-					yIdx:  3,
-					limit: -1,
-					fp:    hexToFingerprint("4761032dcfe98ba555555555"),
-					count: 3,
-					itype: -1,
+					xIdx:     0,
+					yIdx:     1,
+					limit:    -1,
+					fp:       hexToFingerprint("000000000000000000000000"),
+					count:    1,
+					itype:    -1,
+					startIdx: 0,
+					endIdx:   1,
 				},
 				{
-					xIdx:  0,
-					yIdx:  4,
-					limit: 3,
-					fp:    hexToFingerprint("4761032dcfe98ba555555555"),
-					count: 3,
-					itype: -1,
+					xIdx:     0,
+					yIdx:     3,
+					limit:    -1,
+					fp:       hexToFingerprint("4761032dcfe98ba555555555"),
+					count:    3,
+					itype:    -1,
+					startIdx: 0,
+					endIdx:   3,
 				},
 				{
-					xIdx:  0,
-					yIdx:  4,
-					limit: 0,
-					fp:    hexToFingerprint("000000000000000000000000"),
-					count: 0,
-					itype: -1,
+					xIdx:     0,
+					yIdx:     4,
+					limit:    3,
+					fp:       hexToFingerprint("4761032dcfe98ba555555555"),
+					count:    3,
+					itype:    -1,
+					startIdx: 0,
+					endIdx:   3,
 				},
 				{
-					xIdx:  1,
-					yIdx:  4,
-					limit: -1,
-					fp:    hexToFingerprint("cfe98ba54761032ddddddddd"),
-					count: 3,
-					itype: -1,
+					xIdx:     0,
+					yIdx:     4,
+					limit:    0,
+					fp:       hexToFingerprint("000000000000000000000000"),
+					count:    0,
+					itype:    -1,
+					startIdx: 0,
+					endIdx:   0,
 				},
 				{
-					xIdx:  1,
-					yIdx:  0,
-					limit: -1,
-					fp:    hexToFingerprint("642464b773377bbddddddddd"),
-					count: 4,
-					itype: 1,
+					xIdx:     1,
+					yIdx:     4,
+					limit:    -1,
+					fp:       hexToFingerprint("cfe98ba54761032ddddddddd"),
+					count:    3,
+					itype:    -1,
+					startIdx: 1,
+					endIdx:   4,
 				},
 				{
-					xIdx:  2,
-					yIdx:  0,
-					limit: -1,
-					fp:    hexToFingerprint("761032cfe98ba54ddddddddd"),
-					count: 3,
-					itype: 1,
+					xIdx:     1,
+					yIdx:     0,
+					limit:    -1,
+					fp:       hexToFingerprint("642464b773377bbddddddddd"),
+					count:    4,
+					itype:    1,
+					startIdx: 1,
+					endIdx:   0,
 				},
 				{
-					xIdx:  2,
-					yIdx:  0,
-					limit: 0,
-					fp:    hexToFingerprint("000000000000000000000000"),
-					count: 0,
-					itype: 1,
+					xIdx:     2,
+					yIdx:     0,
+					limit:    -1,
+					fp:       hexToFingerprint("761032cfe98ba54ddddddddd"),
+					count:    3,
+					itype:    1,
+					startIdx: 2,
+					endIdx:   0,
 				},
 				{
-					xIdx:  3,
-					yIdx:  1,
-					limit: -1,
-					fp:    hexToFingerprint("2345679abcdef01888888888"),
-					count: 3,
-					itype: 1,
+					xIdx:     2,
+					yIdx:     0,
+					limit:    0,
+					fp:       hexToFingerprint("000000000000000000000000"),
+					count:    0,
+					itype:    1,
+					startIdx: 2,
+					endIdx:   2,
 				},
 				{
-					xIdx:  3,
-					yIdx:  2,
-					limit: -1,
-					fp:    hexToFingerprint("317131e226622ee888888888"),
-					count: 4,
-					itype: 1,
+					xIdx:     3,
+					yIdx:     1,
+					limit:    -1,
+					fp:       hexToFingerprint("2345679abcdef01888888888"),
+					count:    3,
+					itype:    1,
+					startIdx: 3,
+					endIdx:   1,
 				},
 				{
-					xIdx:  3,
-					yIdx:  2,
-					limit: 3,
-					fp:    hexToFingerprint("2345679abcdef01888888888"),
-					count: 3,
-					itype: 1,
+					xIdx:     3,
+					yIdx:     2,
+					limit:    -1,
+					fp:       hexToFingerprint("317131e226622ee888888888"),
+					count:    4,
+					itype:    1,
+					startIdx: 3,
+					endIdx:   2,
+				},
+				{
+					xIdx:     3,
+					yIdx:     2,
+					limit:    3,
+					fp:       hexToFingerprint("2345679abcdef01888888888"),
+					count:    3,
+					itype:    1,
+					startIdx: 3,
+					endIdx:   1,
+				},
+				{
+					x:        "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0",
+					y:        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+					limit:    -1,
+					fp:       hexToFingerprint("000000000000000000000000"),
+					count:    0,
+					itype:    -1,
+					startIdx: 0,
+					endIdx:   0,
 				},
 			},
 		},
@@ -375,44 +427,54 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 			},
 			ranges: []rangeTestCase{
 				{
-					xIdx:  0,
-					yIdx:  0,
-					limit: -1,
-					fp:    hexToFingerprint("a76fc452775b55e0dacd8be5"),
-					count: 4,
-					itype: 0,
+					xIdx:     0,
+					yIdx:     0,
+					limit:    -1,
+					fp:       hexToFingerprint("a76fc452775b55e0dacd8be5"),
+					count:    4,
+					itype:    0,
+					startIdx: 0,
+					endIdx:   0,
 				},
 				{
-					xIdx:  0,
-					yIdx:  0,
-					limit: 3,
-					fp:    hexToFingerprint("4e5ea7ab7f38576018653418"),
-					count: 3,
-					itype: 0,
+					xIdx:     0,
+					yIdx:     0,
+					limit:    3,
+					fp:       hexToFingerprint("4e5ea7ab7f38576018653418"),
+					count:    3,
+					itype:    0,
+					startIdx: 0,
+					endIdx:   3,
 				},
 				{
-					xIdx:  0,
-					yIdx:  3,
-					limit: -1,
-					fp:    hexToFingerprint("4e5ea7ab7f38576018653418"),
-					count: 3,
-					itype: -1,
+					xIdx:     0,
+					yIdx:     3,
+					limit:    -1,
+					fp:       hexToFingerprint("4e5ea7ab7f38576018653418"),
+					count:    3,
+					itype:    -1,
+					startIdx: 0,
+					endIdx:   3,
 				},
 				{
-					xIdx:  3,
-					yIdx:  1,
-					limit: -1,
-					fp:    hexToFingerprint("87760f5e21a0868dc3b0c7a9"),
-					count: 2,
-					itype: 1,
+					xIdx:     3,
+					yIdx:     1,
+					limit:    -1,
+					fp:       hexToFingerprint("87760f5e21a0868dc3b0c7a9"),
+					count:    2,
+					itype:    1,
+					startIdx: 3,
+					endIdx:   1,
 				},
 				{
-					xIdx:  3,
-					yIdx:  2,
-					limit: -1,
-					fp:    hexToFingerprint("05ef78ea6568c6000e6cd5b9"),
-					count: 3,
-					itype: 1,
+					xIdx:     3,
+					yIdx:     2,
+					limit:    -1,
+					fp:       hexToFingerprint("05ef78ea6568c6000e6cd5b9"),
+					count:    3,
+					itype:    1,
+					startIdx: 3,
+					endIdx:   2,
 				},
 			},
 		},
@@ -455,12 +517,14 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 			},
 			ranges: []rangeTestCase{
 				{
-					xIdx:  31,
-					yIdx:  0,
-					limit: -1,
-					fp:    hexToFingerprint("e9110a384198b47be2bb63e6"),
-					count: 1,
-					itype: 1,
+					xIdx:     31,
+					yIdx:     0,
+					limit:    -1,
+					fp:       hexToFingerprint("e9110a384198b47be2bb63e6"),
+					count:    1,
+					itype:    1,
+					startIdx: 31,
+					endIdx:   0,
 				},
 			},
 		},
@@ -503,12 +567,81 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 			},
 			ranges: []rangeTestCase{
 				{
-					x:     "582485793d71c3e8429b9b2c8df360c2ea7bf90080d5bf375fe4618b00f59c0b",
-					y:     "7eff517d2f11ed32f935be3001499ac779160a4891a496f88da0ceb33e3496cc",
+					x:        "582485793d71c3e8429b9b2c8df360c2ea7bf90080d5bf375fe4618b00f59c0b",
+					y:        "7eff517d2f11ed32f935be3001499ac779160a4891a496f88da0ceb33e3496cc",
+					limit:    -1,
+					fp:       hexToFingerprint("66883aa35d2c8d293f07c5c5"),
+					count:    1,
+					itype:    -1,
+					startIdx: 10,
+					endIdx:   11,
+				},
+			},
+		},
+		{
+			name:     "ids5",
+			maxDepth: 24,
+			ids: []string{
+				"06a1f93f0dd88b60473d73127196631134382d59b7cd9b3e6bd6b4f25dd1c782",
+				"488da52a035df8674aa658d30ff58de82c9dc2ae9c474e004d585c52979eacbb",
+				"b5527010e990254702f77ffc8a6d6b499040bc3dc61b169a56fbc690e970c046",
+				"e10fc3141c5e3a00861a4dddb495a33736f845bff62fd295985b7dfa6bcbfc91",
+			},
+			ranges: []rangeTestCase{
+				{
+					xIdx:     2,
+					yIdx:     0,
+					limit:    1,
+					fp:       hexToFingerprint("b5527010e990254702f77ffc"),
+					count:    1,
+					itype:    1,
+					startIdx: 2,
+					endIdx:   3,
+				},
+			},
+		},
+		{
+			name:     "ids6",
+			maxDepth: 24,
+			ids: []string{
+				"2727d39a2150ef91ef09fa0b60950a189d73e53fd73c1fc7a74e0a393582e51e",
+				"96a3a7cfdc9ec9101fd4a8bdf831c54053c2cd0b06a6914772edb68a0153fdec",
+				"b80318c43da5e4b56aa3b7f408a8f86c98418e5b364ef67a37db6017097c2ebc",
+				"b899092149e332f9686e02e2878e63b7ac85694eeadfe02c94f4f15627f41bcc",
+			},
+			ranges: []rangeTestCase{
+				{
+					xIdx:     3,
+					yIdx:     3,
+					limit:    2,
+					fp:       hexToFingerprint("9fbedabb68b3dd688767f8e9"),
+					count:    2,
+					itype:    0,
+					startIdx: 3,
+					endIdx:   1,
+				},
+			},
+		},
+		{
+			name:     "ids7",
+			maxDepth: 24,
+			ids: []string{
+				"3595ec355452c94143c6bdae281b162e5b0997e6392dd1a345146861b8fb4586",
+				"68d02e8f0c69b0b16dc73dda147a231a09b32d709b9b4028f13ee7ffa2e820c8",
+				"7079bb2d00f961b4dc42911e2009411ceb7b8c950492a627111b60773a31c2ce",
+				"ad69fbf959a0b0ba1042a2b13d1b2c9a17f8507c642e55dd93277fe8dab378a6",
+			},
+			ranges: []rangeTestCase{
+				{
+					x:     "4844a20cd5a83c101cc522fa37539412d0aac4c76a48b940e1845c3f2fe79c85",
+					y:     "cb93566c2037bc8353162e9988974e4585c14f656bf6aed8fa51d00e1ae594de",
 					limit: -1,
-					fp:    hexToFingerprint("66883aa35d2c8d293f07c5c5"),
-					count: 1,
-					itype: -1,
+					// fingerprint: 0xb5, 0xc0, 0x6e, 0x5b, 0x55, 0x30, 0x61, 0xbf, 0xa1, 0xc7, 0xe, 0x75
+					fp:       hexToFingerprint("b5c06e5b553061bfa1c70e75"),
+					count:    3,
+					itype:    -1,
+					startIdx: 1,
+					endIdx:   0,
 				},
 			},
 		},
@@ -534,20 +667,39 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 
 			for _, rtc := range tc.ranges {
 				var x, y types.Hash32
+				var name string
 				if rtc.x != "" {
 					x = types.HexToHash32(rtc.x)
 					y = types.HexToHash32(rtc.y)
+					name = fmt.Sprintf("%s-%s_%d", rtc.x, rtc.y, rtc.limit)
 				} else {
 					x = hs[rtc.xIdx]
 					y = hs[rtc.yIdx]
+					name = fmt.Sprintf("%d-%d_%d", rtc.xIdx, rtc.yIdx, rtc.limit)
 				}
-				fpr, err := ft.fingerprintInterval(x[:], y[:], rtc.limit)
-				require.NoError(t, err)
-				require.Equal(t, fpResult{
-					fp:    rtc.fp,
-					count: rtc.count,
-					itype: rtc.itype,
-				}, fpr, "range: x %s y %s", x.String(), y.String())
+				t.Run(name, func(t *testing.T) {
+					fpr, err := ft.fingerprintInterval(x[:], y[:], rtc.limit)
+					require.NoError(t, err)
+					require.Equal(t, rtc.fp, fpr.fp, "fp")
+					require.Equal(t, rtc.count, fpr.count, "count")
+					require.Equal(t, rtc.itype, fpr.itype, "itype")
+
+					if rtc.startIdx == -1 {
+						require.Nil(t, fpr.start, "start")
+					} else {
+						require.NotNil(t, fpr.start, "start")
+						expK := KeyBytes(hs[rtc.startIdx][:])
+						require.Equal(t, expK, fpr.start.Key(), "start")
+					}
+
+					if rtc.endIdx == -1 {
+						require.Nil(t, fpr.end, "end")
+					} else {
+						require.NotNil(t, fpr.end, "end")
+						expK := KeyBytes(hs[rtc.endIdx][:])
+						require.Equal(t, expK, fpr.end.Key(), "end")
+					}
+				})
 			}
 
 			ft.release()
@@ -585,11 +737,9 @@ func TestFPTreeClone(t *testing.T) {
 
 	fpr, err := ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, fpResult{
-		fp:    hexToFingerprint("222222222222222222222222"),
-		count: 2,
-		itype: 0,
-	}, fpr)
+	require.Equal(t, hexToFingerprint("222222222222222222222222"), fpr.fp, "fp")
+	require.Equal(t, uint32(2), fpr.count, "count")
+	require.Equal(t, 0, fpr.itype, "itype")
 
 	var sb strings.Builder
 	ft1.dump(&sb)
@@ -608,30 +758,24 @@ func TestFPTreeClone(t *testing.T) {
 	// original tree unchanged --- rmme!!!!
 	fpr, err = ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, fpResult{
-		fp:    hexToFingerprint("222222222222222222222222"),
-		count: 2,
-		itype: 0,
-	}, fpr)
+	require.Equal(t, hexToFingerprint("222222222222222222222222"), fpr.fp, "fp")
+	require.Equal(t, uint32(2), fpr.count, "count")
+	require.Equal(t, 0, fpr.itype, "itype")
 
 	ft2.addHash(hashes[2][:])
 
 	fpr, err = ft2.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, fpResult{
-		fp:    hexToFingerprint("666666666666666666666666"),
-		count: 3,
-		itype: 0,
-	}, fpr)
+	require.Equal(t, hexToFingerprint("666666666666666666666666"), fpr.fp, "fp")
+	require.Equal(t, uint32(3), fpr.count, "count")
+	require.Equal(t, 0, fpr.itype, "itype")
 
 	// original tree unchanged
 	fpr, err = ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, fpResult{
-		fp:    hexToFingerprint("222222222222222222222222"),
-		count: 2,
-		itype: 0,
-	}, fpr)
+	require.Equal(t, hexToFingerprint("222222222222222222222222"), fpr.fp, "fp")
+	require.Equal(t, uint32(2), fpr.count, "count")
+	require.Equal(t, 0, fpr.itype, "itype")
 
 	sb.Reset()
 	ft1.dump(&sb)
@@ -654,6 +798,13 @@ func (l hashList) findGTE(h types.Hash32) int {
 		return a.Compare(b)
 	})
 	return p
+}
+
+func (l hashList) keyAt(p int) KeyBytes {
+	if p == len(l) {
+		p = 0
+	}
+	return KeyBytes(l[p][:])
 }
 
 func checkNode(t *testing.T, ft *fpTree, idx nodeIndex, depth int) {
@@ -693,52 +844,111 @@ func repeatTestFPTreeManyItems(
 	makeIDStore idStoreFunc,
 	randomXY bool,
 	numItems, maxDepth int,
+	repeatOuter, repeatInner int,
 ) {
-	for i := 0; i < 100; i++ {
-		testFPTreeManyItems(t, makeIDStore(maxDepth), randomXY, numItems, maxDepth)
+	for i := 0; i < repeatOuter; i++ {
+		testFPTreeManyItems(t, makeIDStore(maxDepth), randomXY, numItems, maxDepth, repeatInner)
 	}
 }
 
-func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResult {
-	var fpr fpResult
+type fpResultWithBounds struct {
+	fp    fingerprint
+	count uint32
+	itype int
+	start KeyBytes
+	end   KeyBytes
+}
+
+func toFPResultWithBounds(fpr fpResult) fpResultWithBounds {
+	r := fpResultWithBounds{
+		fp:    fpr.fp,
+		count: fpr.count,
+		itype: fpr.itype,
+	}
+	if fpr.start != nil {
+		r.start = fpr.start.Key().(KeyBytes)
+	}
+	if fpr.end != nil {
+		r.end = fpr.end.Key().(KeyBytes)
+	}
+	return r
+}
+
+func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResultWithBounds {
+	var fpr fpResultWithBounds
+	l := len(hs)
+	if l == 0 {
+		return fpr
+	}
 	fpr.itype = x.Compare(y)
 	switch fpr.itype {
 	case -1:
-		pX := hs.findGTE(x)
+		p := hs.findGTE(x)
 		pY := hs.findGTE(y)
 		// t.Logf("x=%s y=%s pX=%d y=%d", x.String(), y.String(), pX, pY)
-		for p := pX; p < pY && limit != 0; p++ {
-			// t.Logf("XOR %s", hs[p].String())
-			fpr.fp.update(hs[p][:])
-			limit--
-			fpr.count++
-		}
-	case 1:
-		pX := hs.findGTE(x)
-		pY := hs.findGTE(y)
-		for p := pX; p < len(hs) && limit != 0; p++ {
-			fpr.fp.update(hs[p][:])
-			limit--
-			fpr.count++
-		}
-		for p := 0; p < pY && limit != 0; p++ {
-			fpr.fp.update(hs[p][:])
-			limit--
-			fpr.count++
-		}
-	default:
-		for n, h := range hs {
-			if limit >= 0 && n >= limit {
+		fpr.start = hs.keyAt(p)
+		for {
+			if p >= pY || limit == 0 {
+				fpr.end = hs.keyAt(p)
 				break
 			}
-			fpr.fp.update(h[:])
+			// t.Logf("XOR %s", hs[p].String())
+			fpr.fp.update(hs.keyAt(p))
+			limit--
 			fpr.count++
+			p++
+		}
+	case 1:
+		p := hs.findGTE(x)
+		fpr.start = hs.keyAt(p)
+		for {
+			if p >= len(hs) || limit == 0 {
+				fpr.end = hs.keyAt(p)
+				break
+			}
+			fpr.fp.update(hs.keyAt(p))
+			limit--
+			fpr.count++
+			p++
+		}
+		if limit == 0 {
+			return fpr
+		}
+		pY := hs.findGTE(y)
+		p = 0
+		for {
+			if p == pY || limit == 0 {
+				fpr.end = hs.keyAt(p)
+				break
+			}
+			fpr.fp.update(hs.keyAt(p))
+			limit--
+			fpr.count++
+			p++
+		}
+	default:
+		pX := hs.findGTE(x)
+		p := pX
+		fpr.start = hs.keyAt(p)
+		fpr.end = fpr.start
+		for {
+			if limit == 0 {
+				fpr.end = hs.keyAt(p)
+				break
+			}
+			fpr.fp.update(hs.keyAt(p))
+			limit--
+			fpr.count++
+			p = (p + 1) % l
+			if p == pX {
+				break
+			}
 		}
 	}
 	return fpr
 }
 
-func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems, maxDepth int) {
+func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems, maxDepth, repeat int) {
 	var np nodePool
 	ft := newFPTree(&np, idStore, 32, maxDepth)
 	// ft.traceEnabled = true
@@ -758,8 +968,10 @@ func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems,
 
 	fpr, err := ft.fingerprintInterval(hs[0][:], hs[0][:], -1)
 	require.NoError(t, err)
-	require.Equal(t, fpResult{fp: fp, count: uint32(numItems), itype: 0}, fpr)
-	for i := 0; i < 100; i++ {
+	require.Equal(t, fp, fpr.fp, "fp")
+	require.Equal(t, uint32(numItems), fpr.count, "count")
+	require.Equal(t, 0, fpr.itype, "itype")
+	for i := 0; i < repeat; i++ {
 		// TBD: allow reverse order
 		var x, y types.Hash32
 		if randomXY {
@@ -774,7 +986,7 @@ func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems,
 		require.NoError(t, err)
 
 		// QQQQQ: rm
-		if !reflect.DeepEqual(fpr, expFPR) {
+		if !reflect.DeepEqual(toFPResultWithBounds(fpr), expFPR) {
 			t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
 			for _, h := range hs {
 				t.Logf("QQQQQ: hash: %s", h.String())
@@ -785,7 +997,8 @@ func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems,
 		}
 		// QQQQQ: /rm
 
-		require.Equal(t, expFPR, fpr)
+		require.Equal(t, expFPR, toFPResultWithBounds(fpr),
+			"x=%s y=%s", x.String(), y.String())
 
 		limit := 0
 		if fpr.count != 0 {
@@ -796,7 +1009,7 @@ func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems,
 		require.NoError(t, err)
 
 		// QQQQQ: rm
-		if !reflect.DeepEqual(fpr, expFPR) {
+		if !reflect.DeepEqual(toFPResultWithBounds(fpr), expFPR) {
 			t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
 			for _, h := range hs {
 				t.Logf("QQQQQ: hash: %s", h.String())
@@ -807,43 +1020,50 @@ func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems,
 		}
 		// QQQQQ: /rm
 
-		require.Equal(t, expFPR, fpr, "x=%s y=%s limit=%d", x.String(), y.String(), limit)
+		require.Equal(t, expFPR, toFPResultWithBounds(fpr),
+			"x=%s y=%s limit=%d", x.String(), y.String(), limit)
 	}
 }
 
 func TestFPTreeManyItems(t *testing.T) {
 	const (
-		// numItems = 1 << 16
-		// maxDepth = 24
-		numItems = 1 << 2 // 1 << 5
-		maxDepth = 4
+		repeatOuter = 30
+		repeatInner = 20
+		numItems    = 1 << 13
+		maxDepth    = 12
+		// numItems = 1 << 5
+		// maxDepth = 4
 	)
 	t.Run("bounds from the set", func(t *testing.T) {
+		t.Parallel()
 		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
 			return newInMemIDStore(32, maxDepth)
-		}, false, numItems, maxDepth)
+		}, false, numItems, maxDepth, repeatOuter, repeatInner)
 
 	})
 	t.Run("random bounds", func(t *testing.T) {
+		t.Parallel()
 		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
 			return newInMemIDStore(32, maxDepth)
-		}, true, numItems, maxDepth)
+		}, true, numItems, maxDepth, repeatOuter, repeatInner)
 	})
 	t.Run("SQL, bounds from the set", func(t *testing.T) {
+		t.Parallel()
 		db := populateDB(t, 32, nil)
 		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
 			_, err := db.Exec("delete from foo", nil, nil)
 			require.NoError(t, err)
 			return newFakeATXIDStore(db, maxDepth)
-		}, false, numItems, maxDepth)
+		}, false, numItems, maxDepth, repeatOuter, repeatInner)
 	})
 	t.Run("SQL, random bounds", func(t *testing.T) {
+		t.Parallel()
 		db := populateDB(t, 32, nil)
 		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
 			_, err := db.Exec("delete from foo", nil, nil)
 			require.NoError(t, err)
 			return newFakeATXIDStore(db, maxDepth)
-		}, true, numItems, maxDepth)
+		}, true, numItems, maxDepth, repeatOuter, repeatInner)
 	})
 	// TBD: test limits with both random and non-random bounds
 	// TBD: test start/end iterators
@@ -968,7 +1188,8 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 		//expFPResult := dumbAggATXs(t, db, x, y)
 		fpr, err := ft.fingerprintInterval(x[:], y[:], -1)
 		require.NoError(t, err)
-		require.Equal(t, expFPResult, fpr, "x=%s y=%s", x.String(), y.String())
+		require.Equal(t, expFPResult, toFPResultWithBounds(fpr),
+			"x=%s y=%s", x.String(), y.String())
 
 		limit := 0
 		if fpr.count != 0 {
@@ -978,13 +1199,14 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 		expFPResult = dumbFP(*hs, x, y, limit)
 		fpr, err = ft.fingerprintInterval(x[:], y[:], limit)
 		require.NoError(t, err)
-		require.Equal(t, expFPResult, fpr, "x=%s y=%s limit=%d", x.String(), y.String(), limit)
+		require.Equal(t, expFPResult, toFPResultWithBounds(fpr),
+			"x=%s y=%s limit=%d", x.String(), y.String(), limit)
 	}
 
-	// x := types.HexToHash32("ab27e01be51af3775fa20299767aef712128a021ffdca7617b31c9ca811376d2")
-	// y := types.HexToHash32("20c64bc7ea2114babe08380be6cc379aebc715f3820aca52f44fe10748d792a3")
-	// t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
-	// expFPResult := dumbFP(hs, x, y)
+	// x := types.HexToHash32("930a069661bf21b52aa79a4b5149ecc1190282f1386b6b8ae6b738153a7a802d")
+	// y := types.HexToHash32("6c966fc65c07c92e869b7796b2346a33e01c4fe38c25094a480cdcd2e7df1f56")
+	// t.Logf("QQQQQ: maxDepth=%d x=%s y=%s", maxDepth, x.String(), y.String())
+	// expFPResult := dumbFP(*hs, x, y, -1)
 	// //expFPResult := dumbAggATXs(t, db, x, y)
 	// ft.traceEnabled = true
 	// fpr, err := ft.fingerprintInterval(x[:], y[:], -1)
@@ -1073,3 +1295,17 @@ func TestATXFP(t *testing.T) {
 // TODO: QQQQQ: retrieve the end of the interval w/count in fpTree.fingerprintInterval()
 // TODO: QQQQQ: test limits in TestInMemFPTreeManyItems (sep test cases SQL / non-SQL)
 // TODO: the returned RangeInfo.End iterators should be cyclic
+
+// TBD: random off-by-1 failure?
+//             	--- Expected
+//             	+++ Actual
+//             	@@ -2,5 +2,5 @@
+//             	  fp: (dbsync.fingerprint) (len=12) {
+//             	-  00000000  30 d4 db 9d b9 15 dd ad  75 1e 67 fd              |0.......u.g.|
+//             	+  00000000  a3 de 4b 89 7b 93 fc 76  24 88 82 b2              |..K.{..v$...|
+//             	  },
+//             	- count: (uint32) 41784134,
+//             	+ count: (uint32) 41784135,
+//             	  itype: (int) 1
+// Test:       	TestATXFP
+// Messages:   	x=930a069661bf21b52aa79a4b5149ecc1190282f1386b6b8ae6b738153a7a802d y=6c966fc65c07c92e869b7796b2346a33e01c4fe38c25094a480cdcd2e7df1f56

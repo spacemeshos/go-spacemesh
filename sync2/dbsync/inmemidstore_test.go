@@ -74,5 +74,12 @@ func TestInMemIDStore(t *testing.T) {
 		require.Equal(t,
 			"0000000000000000000000000000000000000000000000000000000000000000",
 			hex.EncodeToString(it.Key().(KeyBytes)))
+
+		it, err = s1.iter(
+			util.FromHex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"))
+		require.NoError(t, err)
+		require.Equal(t,
+			"0000000000000000000000000000000000000000000000000000000000000000",
+			hex.EncodeToString(it.Key().(KeyBytes)))
 	}
 }
