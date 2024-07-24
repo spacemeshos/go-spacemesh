@@ -200,7 +200,7 @@ var _ idStore = &fakeIDDBStore{}
 const fakeIDQuery = "select id from foo where id >= ? order by id limit ?"
 
 func newFakeATXIDStore(db sql.Database, maxDepth int) *fakeIDDBStore {
-	return &fakeIDDBStore{db: db, sqlIDStore: newSQLIDStore(db, fakeIDQuery, 32, maxDepth)}
+	return &fakeIDDBStore{db: db, sqlIDStore: newSQLIDStore(db, fakeIDQuery, 32)}
 }
 
 func (s *fakeIDDBStore) registerHash(h KeyBytes) error {
@@ -758,7 +758,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 func TestFPTree(t *testing.T) {
 	t.Run("in-memory id store", func(t *testing.T) {
 		testFPTree(t, func(maxDepth int) idStore {
-			return newInMemIDStore(32, maxDepth)
+			return newInMemIDStore(32)
 		})
 	})
 	t.Run("fake ATX store", func(t *testing.T) {
@@ -773,7 +773,7 @@ func TestFPTree(t *testing.T) {
 
 func TestFPTreeClone(t *testing.T) {
 	var np nodePool
-	ft1 := newFPTree(&np, newInMemIDStore(32, 24), 32, 24)
+	ft1 := newFPTree(&np, newInMemIDStore(32), 32, 24)
 	hashes := []types.Hash32{
 		types.HexToHash32("1111111111111111111111111111111111111111111111111111111111111111"),
 		types.HexToHash32("3333333333333333333333333333333333333333333333333333333333333333"),
@@ -1086,14 +1086,14 @@ func TestFPTreeManyItems(t *testing.T) {
 	t.Run("bounds from the set", func(t *testing.T) {
 		t.Parallel()
 		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
-			return newInMemIDStore(32, maxDepth)
+			return newInMemIDStore(32)
 		}, false, numItems, maxDepth, repeatOuter, repeatInner)
 
 	})
 	t.Run("random bounds", func(t *testing.T) {
 		t.Parallel()
 		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
-			return newInMemIDStore(32, maxDepth)
+			return newInMemIDStore(32)
 		}, true, numItems, maxDepth, repeatOuter, repeatInner)
 	})
 	t.Run("SQL, bounds from the set", func(t *testing.T) {
@@ -1226,7 +1226,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	var stats1 runtime.MemStats
 	runtime.ReadMemStats(&stats1)
 	// TODO: pass extra bind params to the SQL query
-	store := newSQLIDStore(db, "select id from atxs where id >= ? and epoch = 26 order by id limit ?", 32, maxDepth)
+	store := newSQLIDStore(db, "select id from atxs where id >= ? and epoch = 26 order by id limit ?", 32)
 	ft := newFPTree(&np, store, 32, maxDepth)
 	for _, id := range *hs {
 		ft.addHash(id[:])
@@ -1309,7 +1309,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 }
 
 func TestATXFP(t *testing.T) {
-	t.Skip("slow test")
+	// t.Skip("slow test")
 	var hs []types.Hash32
 	for maxDepth := 15; maxDepth <= 23; maxDepth++ {
 		for i := 0; i < 3; i++ {

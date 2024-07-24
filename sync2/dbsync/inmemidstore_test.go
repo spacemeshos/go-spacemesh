@@ -14,7 +14,7 @@ func TestInMemIDStore(t *testing.T) {
 		it  iterator
 		err error
 	)
-	s := newInMemIDStore(32, 24)
+	s := newInMemIDStore(32)
 
 	_, err = s.start()
 	require.ErrorIs(t, err, errEmptySet)

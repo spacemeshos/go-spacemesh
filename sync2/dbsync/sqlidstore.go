@@ -10,20 +10,19 @@ import (
 const sqlMaxChunkSize = 1024
 
 type sqlIDStore struct {
-	db       sql.Database
-	query    string
-	keyLen   int
-	maxDepth int // TBD: remove
+	db     sql.Database
+	query  string
+	keyLen int
 }
 
 var _ idStore = &sqlIDStore{}
 
-func newSQLIDStore(db sql.Database, query string, keyLen, maxDepth int) *sqlIDStore {
-	return &sqlIDStore{db: db, query: query, keyLen: keyLen, maxDepth: maxDepth}
+func newSQLIDStore(db sql.Database, query string, keyLen int) *sqlIDStore {
+	return &sqlIDStore{db: db, query: query, keyLen: keyLen}
 }
 
 func (s *sqlIDStore) clone() idStore {
-	return newSQLIDStore(s.db, s.query, s.keyLen, s.maxDepth)
+	return newSQLIDStore(s.db, s.query, s.keyLen)
 }
 
 func (s *sqlIDStore) registerHash(h KeyBytes) error {
@@ -32,6 +31,7 @@ func (s *sqlIDStore) registerHash(h KeyBytes) error {
 }
 
 func (s *sqlIDStore) start() (iterator, error) {
+	// TODO: should probably use a different query to get the first key
 	return s.iter(make(KeyBytes, s.keyLen))
 }
 
@@ -45,16 +45,14 @@ func (s *sqlIDStore) iter(from KeyBytes) (iterator, error) {
 type dbBackedStore struct {
 	*sqlIDStore
 	*inMemIDStore
-	maxDepth int
 }
 
 var _ idStore = &dbBackedStore{}
 
-func newDBBackedStore(db sql.Database, query string, keyLen, maxDepth int) *dbBackedStore {
+func newDBBackedStore(db sql.Database, query string, keyLen int) *dbBackedStore {
 	return &dbBackedStore{
-		sqlIDStore:   newSQLIDStore(db, query, keyLen, maxDepth),
-		inMemIDStore: newInMemIDStore(keyLen, maxDepth),
-		maxDepth:     maxDepth,
+		sqlIDStore:   newSQLIDStore(db, query, keyLen),
+		inMemIDStore: newInMemIDStore(keyLen),
 	}
 }
 
@@ -62,7 +60,6 @@ func (s *dbBackedStore) clone() idStore {
 	return &dbBackedStore{
 		sqlIDStore:   s.sqlIDStore.clone().(*sqlIDStore),
 		inMemIDStore: s.inMemIDStore.clone().(*inMemIDStore),
-		maxDepth:     s.maxDepth,
 	}
 }
 
