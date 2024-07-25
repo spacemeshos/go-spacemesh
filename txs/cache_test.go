@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -187,7 +188,7 @@ func createSingleAccountTestCache(tb testing.TB) (*testCache, *testAcct) {
 	states := map[types.Address]*testAcct{principal: ta}
 	db := sql.InMemory()
 	return &testCache{
-		Cache: NewCache(getStateFunc(states), zaptest.NewLogger(tb)),
+		Cache: NewCache(getStateFunc(states), zap.NewNop()),
 		db:    db,
 	}, ta
 }
@@ -909,10 +910,10 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	largeAmount := defaultBalance
 	for _, p := range pending {
 		p.MaxSpend = largeAmount
-		require.NoError(t, tc.Add(context.Background(), tc.db, &p.Transaction, p.Received, false))
+		require.Error(t, tc.Add(context.Background(), tc.db, &p.Transaction, p.Received, false), errInsufficientBalance)
 		checkNoTX(t, tc.Cache, p.ID)
+		checkTXNotInDB(t, tc.db, p.ID)
 	}
-	checkTXStateFromDB(t, tc.db, pending, types.MEMPOOL)
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {mtx}}
 	checkMempool(t, tc.Cache, expectedMempool)
