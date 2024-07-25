@@ -289,7 +289,9 @@ func New(t *testing.T, opts ...Opt) *Context {
 		t.Cleanup(func() { <-tokens })
 	}
 	config, err := rest.InClusterConfig()
-	config.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(20, 50) // The default rate limiter is too slow 5qps and 10 burst, This will prevent the client from being throttled
+
+	// The default rate limiter is too slow 5qps and 10 burst, This will prevent the client from being throttled
+	config.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(20, 50)
 	require.NoError(t, err)
 
 	clientset, err := kubernetes.NewForConfig(config)
