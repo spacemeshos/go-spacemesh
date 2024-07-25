@@ -303,8 +303,6 @@ func New(t *testing.T, opts ...Opt) *Context {
 	// The default rate limiter is too slow 5qps and 10 burst, This will prevent the client from being throttled
 	config.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(20, 50)
 	require.NoError(t, err)
-	config.Burst = 20
-	config.QPS = 10.0
 
 	clientset, err := kubernetes.NewForConfig(config)
 	require.NoError(t, err)
