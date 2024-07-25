@@ -96,6 +96,7 @@ func saveTXs(t *testing.T, db *sql.Database, mtxs []*types.MeshTransaction) {
 }
 
 func checkTXStateFromDB(t *testing.T, db *sql.Database, txs []*types.MeshTransaction, state types.TXState) {
+	t.Helper()
 	for _, mtx := range txs {
 		got, err := transactions.Get(db, mtx.ID)
 		require.NoError(t, err)
@@ -104,6 +105,7 @@ func checkTXStateFromDB(t *testing.T, db *sql.Database, txs []*types.MeshTransac
 }
 
 func checkTXNotInDB(t *testing.T, db *sql.Database, tid types.TransactionID) {
+	t.Helper()
 	_, err := transactions.Get(db, tid)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
@@ -733,17 +735,16 @@ func TestCache_Account_ReplaceByFee(t *testing.T) {
 func TestCache_Account_Add_InsufficientBalance_ResetAfterApply(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	buildSingleAccountCache(t, tc, ta, nil)
-
 	mtx := &types.MeshTransaction{
 		Transaction: *newTx(t, ta.nonce, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.Background(), tc.db, &mtx.Transaction, mtx.Received, false))
+	require.Error(t, tc.Add(context.Background(), tc.db, &mtx.Transaction, mtx.Received, false), errInsufficientBalance)
 	checkNoTX(t, tc.Cache, mtx.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.Cache, nil)
-	require.True(t, tc.MoreInDB(ta.principal))
-	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx}, types.MEMPOOL)
+	require.False(t, tc.MoreInDB(ta.principal))
+	checkTXNotInDB(t, tc.db, mtx.ID)
 
 	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
@@ -751,11 +752,9 @@ func TestCache_Account_Add_InsufficientBalance_ResetAfterApply(t *testing.T) {
 	ta.balance += ta.balance
 	require.NoError(t, tc.Cache.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
 
-	checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
-	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {mtx}}
-	checkMempool(t, tc.Cache, expectedMempool)
+	checkMempool(t, tc.Cache, nil)
 	require.False(t, tc.MoreInDB(ta.principal))
-	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx}, types.MEMPOOL)
+	checkTXNotInDB(t, tc.db, mtx.ID)
 }
 
 func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testing.T) {
