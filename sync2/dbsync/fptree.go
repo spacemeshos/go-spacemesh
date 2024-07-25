@@ -780,7 +780,9 @@ func (ft *fpTree) aggregateSimple(ac *aggContext) error {
 			panic("BUG: bad followedPrefix")
 		}
 		ft.aggregateLeft(lca.left, load64(ac.x)<<(p.len()+1), p.left(), ac)
-		ft.aggregateRight(lca.right, load64(ac.y)<<(p.len()+1), p.right(), ac)
+		if ac.limit != 0 {
+			ft.aggregateRight(lca.right, load64(ac.y)<<(p.len()+1), p.right(), ac)
+		}
 	case lcaIdx == noIndex || !lca.leaf():
 		ft.log("commonPrefix %s NOT found b/c no items have it", p)
 	default:
@@ -800,7 +802,7 @@ func (ft *fpTree) aggregateInverse(ac *aggContext) error {
 	if idx0 != noIndex {
 		pf0Node = ft.np.node(idx0)
 	}
-	ft.log("pf0 %s idx0 %d found %v", pf0, idx0, found)
+	ft.log("pf0 %s idx0 %d found %v followedPrefix %s", pf0, idx0, found, followedPrefix)
 	switch {
 	case found && !pf0Node.leaf():
 		if followedPrefix != pf0 {

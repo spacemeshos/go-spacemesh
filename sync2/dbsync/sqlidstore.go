@@ -77,7 +77,7 @@ func (s *dbBackedStore) start() (iterator, error) {
 	}
 	memIt, err := s.inMemIDStore.start()
 	if err == nil {
-		return combineIterators(dbIt, memIt), nil
+		return combineIterators(nil, dbIt, memIt), nil
 	} else if errors.Is(err, errEmptySet) {
 		return dbIt, nil
 	}
@@ -94,7 +94,7 @@ func (s *dbBackedStore) iter(from KeyBytes) (iterator, error) {
 	}
 	memIt, err := s.inMemIDStore.iter(from)
 	if err == nil {
-		return combineIterators(dbIt, memIt), nil
+		return combineIterators(from, dbIt, memIt), nil
 	} else if errors.Is(err, errEmptySet) {
 		return dbIt, nil
 	}

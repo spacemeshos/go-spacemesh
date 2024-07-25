@@ -208,8 +208,28 @@ type combinedIterator struct {
 
 // combineIterators combines multiple iterators into one, returning the smallest current
 // key among all iterators at each step.
-func combineIterators(iters ...iterator) iterator {
-	return &combinedIterator{iters: iters}
+func combineIterators(startingPoint hashsync.Ordered, iters ...iterator) iterator {
+	var c combinedIterator
+	// Some of the iterators may already be wrapped around.
+	// This corresponds to the case when we ask an idStore for iterator
+	// with a starting point beyond the last key in the store.
+	if startingPoint == nil {
+		c.iters = iters
+	} else {
+		for _, it := range iters {
+			if it.Key().Compare(startingPoint) < 0 {
+				c.wrapped = append(c.wrapped, it)
+			} else {
+				c.iters = append(c.iters, it)
+			}
+		}
+		if len(c.iters) == 0 {
+			// all iterators wrapped around
+			c.iters = c.wrapped
+			c.wrapped = nil
+		}
+	}
+	return &c
 }
 
 func (c *combinedIterator) aheadIterator() iterator {
@@ -236,9 +256,7 @@ func (c *combinedIterator) aheadIterator() iterator {
 }
 
 func (c *combinedIterator) Key() hashsync.Ordered {
-	// return c.aheadIterator().Key()
-	it := c.aheadIterator()
-	return it.Key()
+	return c.aheadIterator().Key()
 }
 
 func (c *combinedIterator) Next() error {

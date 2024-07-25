@@ -10,7 +10,7 @@ import (
 )
 
 func TestDBItemStoreEmpty(t *testing.T) {
-	db := populateDB(t, 8, nil)
+	db := populateDB(t, 32, nil)
 	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
 	it, err := s.Min()
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestDBItemStore(t *testing.T) {
 		util.FromHex("8888888888888888888888888888888888888888888888888888888888888888"),
 		util.FromHex("abcdef1234567890000000000000000000000000000000000000000000000000"),
 	}
-	db := populateDB(t, 8, ids)
+	db := populateDB(t, 32, ids)
 	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
 	it, err := s.Min()
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestDBItemStoreAdd(t *testing.T) {
 		util.FromHex("5555555555555555555555555555555555555555555555555555555555555555"),
 		util.FromHex("8888888888888888888888888888888888888888888888888888888888888888"),
 	}
-	db := populateDB(t, 8, ids)
+	db := populateDB(t, 32, ids)
 	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
 	it, err := s.Min()
 	require.NoError(t, err)
@@ -165,7 +165,7 @@ func TestDBItemStoreCopy(t *testing.T) {
 		util.FromHex("5555555555555555555555555555555555555555555555555555555555555555"),
 		util.FromHex("8888888888888888888888888888888888888888888888888888888888888888"),
 	}
-	db := populateDB(t, 8, ids)
+	db := populateDB(t, 32, ids)
 	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
 	it, err := s.Min()
 	require.NoError(t, err)

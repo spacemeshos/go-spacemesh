@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 const (
@@ -64,19 +66,19 @@ func SyncMessageToString(m SyncMessage) string {
 	sb.WriteString("<" + m.Type().String())
 
 	if x := m.X(); x != nil {
-		sb.WriteString(" X=" + x.(fmt.Stringer).String())
+		sb.WriteString(" X=" + x.(fmt.Stringer).String()[:10])
 	}
 	if y := m.Y(); y != nil {
-		sb.WriteString(" Y=" + y.(fmt.Stringer).String())
+		sb.WriteString(" Y=" + y.(fmt.Stringer).String()[:10])
 	}
 	if count := m.Count(); count != 0 {
 		fmt.Fprintf(&sb, " Count=%d", count)
 	}
 	if fp := m.Fingerprint(); fp != nil {
-		sb.WriteString(" FP=" + fp.(fmt.Stringer).String())
+		sb.WriteString(" FP=" + fp.(fmt.Stringer).String()[:10])
 	}
 	for _, k := range m.Keys() {
-		fmt.Fprintf(&sb, " item=%s", k.(fmt.Stringer).String())
+		fmt.Fprintf(&sb, " item=%s", k.(fmt.Stringer).String()[:10])
 	}
 	sb.WriteString(">")
 	return sb.String()
@@ -143,6 +145,14 @@ func WithSampleSize(s int) RangeSetReconcilerOption {
 	}
 }
 
+// TODO: RangeSetReconciler should sit in a separate package
+// and WithRangeSyncLogger should be named WithLogger
+func WithRangeSyncLogger(log *zap.Logger) RangeSetReconcilerOption {
+	return func(r *RangeSetReconciler) {
+		r.log = log
+	}
+}
+
 type ProbeResult struct {
 	FP    any
 	Count int
@@ -154,6 +164,7 @@ type RangeSetReconciler struct {
 	maxSendRange  int
 	itemChunkSize int
 	sampleSize    int
+	log           *zap.Logger
 }
 
 func NewRangeSetReconciler(is ItemStore, opts ...RangeSetReconcilerOption) *RangeSetReconciler {
@@ -162,6 +173,7 @@ func NewRangeSetReconciler(is ItemStore, opts ...RangeSetReconcilerOption) *Rang
 		maxSendRange:  DefaultMaxSendRange,
 		itemChunkSize: DefaultItemChunkSize,
 		sampleSize:    DefaultSampleSize,
+		log:           zap.NewNop(),
 	}
 	for _, opt := range opts {
 		opt(rsr)
@@ -189,6 +201,7 @@ func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding Iterator, x,
 	// fmt.Fprintf(os.Stderr, "QQQQQ: preceding=%q\n",
 	// 	qqqqRmmeK(preceding))
 	// TODO: don't re-request range info for the first part of range after stop
+	rsr.log.Debug("processSubrange", IteratorField("preceding", preceding), HexField("x", x), HexField("y", y))
 	info, err := rsr.is.GetRangeInfo(preceding, x, y, -1)
 	if err != nil {
 		return nil, err
@@ -212,12 +225,15 @@ func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding Iterator, x,
 	case info.Count == 0:
 		// We have no more items in this subrange.
 		// Ask peer to send any items it has in the range
+		rsr.log.Debug("processSubrange: send empty range", HexField("x", x), HexField("y", y))
 		if err := c.SendEmptyRange(x, y); err != nil {
 			return nil, err
 		}
 	default:
 		// The range is non-empty and large enough.
 		// Send fingerprint so that the peer can further subdivide it.
+		rsr.log.Debug("processSubrange: send fingerprint", HexField("x", x), HexField("y", y),
+			zap.Int("count", info.Count))
 		if err := c.SendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
 			return nil, err
 		}
@@ -227,6 +243,8 @@ func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding Iterator, x,
 }
 
 func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg SyncMessage) (it Iterator, done bool, err error) {
+	rsr.log.Debug("handleMessage", IteratorField("preceding", preceding),
+		zap.String("msg", SyncMessageToString(msg)))
 	x := msg.X()
 	y := msg.Y()
 	done = true
@@ -244,6 +262,10 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 				if err != nil {
 					return nil, false, err
 				}
+				rsr.log.Debug("handleMessage: send probe response",
+					HexField("fingerpint", info.Fingerprint),
+					zap.Int("count", info.Count),
+					IteratorField("it", it))
 				if err := c.SendProbeResponse(x, y, info.Fingerprint, info.Count, 0, it); err != nil {
 					return nil, false, err
 				}
@@ -259,6 +281,13 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 	if err != nil {
 		return nil, false, err
 	}
+	rsr.log.Debug("handleMessage: range info",
+		HexField("x", x), HexField("y", y),
+		IteratorField("start", info.Start),
+		IteratorField("end", info.End),
+		zap.Int("count", info.Count),
+		HexField("fingerprint", info.Fingerprint))
+
 	// fmt.Fprintf(os.Stderr, "QQQQQ msg %s %#v fp %v start %#v end %#v count %d\n", msg.Type(), msg, info.Fingerprint, info.Start, info.End, info.Count)
 	switch {
 	case msg.Type() == MessageTypeEmptyRange ||
@@ -271,9 +300,13 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 		// the range doesn't need any further handling by the peer.
 		if info.Count != 0 {
 			done = false
+			rsr.log.Debug("handleMessage: send items", zap.Int("count", info.Count),
+				IteratorField("start", info.Start))
 			if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
 				return nil, false, err
 			}
+		} else {
+			rsr.log.Debug("handleMessage: local range is empty")
 		}
 	case msg.Type() == MessageTypeProbe:
 		sampleSize := msg.Count()
@@ -306,6 +339,8 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 		// empty on our side
 		done = false
 		if info.Count != 0 {
+			rsr.log.Debug("handleMessage: send small range",
+				HexField("x", x), HexField("y", y), zap.Int("count", info.Count))
 			// fmt.Fprintf(os.Stderr, "small incoming range: %s -> SendItems\n", msg)
 			if err := c.SendRangeContents(x, y, info.Count); err != nil {
 				return nil, false, err
@@ -314,6 +349,8 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 				return nil, false, err
 			}
 		} else {
+			rsr.log.Debug("handleMessage: empty incoming range",
+				HexField("x", x), HexField("y", y))
 			// fmt.Fprintf(os.Stderr, "small incoming range: %s -> empty range msg\n", msg)
 			if err := c.SendEmptyRange(x, y); err != nil {
 				return nil, false, err
@@ -323,7 +360,12 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 		// Need to split the range.
 		// Note that there's no special handling for rollover ranges with x >= y
 		// These need to be handled by ItemStore.GetRangeInfo()
+		// TODO: instead of count-based split, use split between X and Y with
+		// lower bits set to zero to avoid SQL queries on the edges
 		count := (info.Count + 1) / 2
+		rsr.log.Debug("handleMessage: PRE split range",
+			HexField("x", x), HexField("y", y),
+			zap.Int("countArg", count))
 		part, err := rsr.is.GetRangeInfo(preceding, x, y, count)
 		if err != nil {
 			return nil, false, err
@@ -331,6 +373,13 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 		if part.End == nil {
 			panic("BUG: can't split range with count > 1")
 		}
+		rsr.log.Debug("handleMessage: split range",
+			HexField("x", x), HexField("y", y),
+			zap.Int("countArg", count),
+			zap.Int("count", part.Count),
+			HexField("fingerprint", part.Fingerprint),
+			IteratorField("start", part.Start),
+			IteratorField("middle", part.End))
 		middle := part.End.Key()
 		next, err := rsr.processSubrange(c, info.Start, x, middle)
 		if err != nil {
@@ -361,7 +410,9 @@ func (rsr *RangeSetReconciler) Initiate(c Conduit) error {
 }
 
 func (rsr *RangeSetReconciler) InitiateBounded(c Conduit, x, y Ordered) error {
+	rsr.log.Debug("inititate", HexField("x", x), HexField("y", y))
 	if x == nil {
+		rsr.log.Debug("initiate: send empty set")
 		if err := c.SendEmptySet(); err != nil {
 			return err
 		}
@@ -374,6 +425,7 @@ func (rsr *RangeSetReconciler) InitiateBounded(c Conduit, x, y Ordered) error {
 		case info.Count == 0:
 			panic("empty full min-min range")
 		case info.Count < rsr.maxSendRange:
+			rsr.log.Debug("initiate: send whole range", zap.Int("count", info.Count))
 			if err := c.SendRangeContents(x, y, info.Count); err != nil {
 				return err
 			}
@@ -381,6 +433,7 @@ func (rsr *RangeSetReconciler) InitiateBounded(c Conduit, x, y Ordered) error {
 				return err
 			}
 		default:
+			rsr.log.Debug("initiate: send fingerprint", zap.Int("count", info.Count))
 			if err := c.SendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
 				return err
 			}
@@ -546,6 +599,7 @@ func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done boo
 	for _, msg := range msgs {
 		if msg.Type() == MessageTypeItemBatch {
 			for _, k := range msg.Keys() {
+				rsr.log.Debug("Process: add item", HexField("item", k))
 				if err := rsr.is.Add(ctx, k); err != nil {
 					return false, fmt.Errorf("error adding an item to the store: %w", err)
 				}

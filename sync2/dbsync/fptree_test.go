@@ -701,7 +701,6 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 			// ft.traceEnabled = true
 			var hs []types.Hash32
 			for _, hex := range tc.ids {
-				t.Logf("add: %s", hex)
 				h := types.HexToHash32(hex)
 				hs = append(hs, h)
 				ft.addHash(h[:])
@@ -998,6 +997,48 @@ func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResultWithBounds {
 	return fpr
 }
 
+func verifyInterval(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32, limit int) fpResult {
+	expFPR := dumbFP(hs, x, y, limit)
+	fpr, err := ft.fingerprintInterval(x[:], y[:], limit)
+	require.NoError(t, err)
+	require.Equal(t, expFPR, toFPResultWithBounds(fpr),
+		"x=%s y=%s limit=%d", x.String(), y.String(), limit)
+
+	// QQQQQ: rm
+	if !reflect.DeepEqual(toFPResultWithBounds(fpr), expFPR) {
+		t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
+		for _, h := range hs {
+			t.Logf("QQQQQ: hash: %s", h.String())
+		}
+		var sb strings.Builder
+		ft.dump(&sb)
+		t.Logf("QQQQQ: tree:\n%s", sb.String())
+	}
+	// QQQQQ: /rm
+
+	require.Equal(t, expFPR, toFPResultWithBounds(fpr),
+		"x=%s y=%s limit=%d", x.String(), y.String(), limit)
+
+	return fpr
+}
+
+func verifySubIntervals(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32, limit, d int) fpResult {
+	fpr := verifyInterval(t, hs, ft, x, y, limit)
+	// t.Logf("verifySubIntervals: x=%s y=%s limit=%d => count %d", x.String(), y.String(), limit, fpr.count)
+	if fpr.count > 1 {
+		c := int((fpr.count + 1) / 2)
+		if limit >= 0 {
+			require.Less(t, c, limit)
+		}
+		part := verifyInterval(t, hs, ft, x, y, c)
+		var m types.Hash32
+		copy(m[:], part.end.Key().(KeyBytes))
+		verifySubIntervals(t, hs, ft, x, m, -1, d+1)
+		verifySubIntervals(t, hs, ft, m, y, -1, d+1)
+	}
+	return fpr
+}
+
 func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems, maxDepth, repeat int) {
 	var np nodePool
 	ft := newFPTree(&np, idStore, 32, maxDepth)
@@ -1031,55 +1072,15 @@ func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems,
 			x = hs[rand.Intn(numItems)]
 			y = hs[rand.Intn(numItems)]
 		}
-		expFPR := dumbFP(hs, x, y, -1)
-		fpr, err := ft.fingerprintInterval(x[:], y[:], -1)
-		require.NoError(t, err)
-
-		// QQQQQ: rm
-		if !reflect.DeepEqual(toFPResultWithBounds(fpr), expFPR) {
-			t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
-			for _, h := range hs {
-				t.Logf("QQQQQ: hash: %s", h.String())
-			}
-			var sb strings.Builder
-			ft.dump(&sb)
-			t.Logf("QQQQQ: tree:\n%s", sb.String())
-		}
-		// QQQQQ: /rm
-
-		require.Equal(t, expFPR, toFPResultWithBounds(fpr),
-			"x=%s y=%s", x.String(), y.String())
-
-		limit := 0
-		if fpr.count != 0 {
-			limit = rand.Intn(int(fpr.count))
-		}
-		expFPR = dumbFP(hs, x, y, limit)
-		fpr, err = ft.fingerprintInterval(x[:], y[:], limit)
-		require.NoError(t, err)
-
-		// QQQQQ: rm
-		if !reflect.DeepEqual(toFPResultWithBounds(fpr), expFPR) {
-			t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
-			for _, h := range hs {
-				t.Logf("QQQQQ: hash: %s", h.String())
-			}
-			var sb strings.Builder
-			ft.dump(&sb)
-			t.Logf("QQQQQ: tree:\n%s", sb.String())
-		}
-		// QQQQQ: /rm
-
-		require.Equal(t, expFPR, toFPResultWithBounds(fpr),
-			"x=%s y=%s limit=%d", x.String(), y.String(), limit)
+		verifySubIntervals(t, hs, ft, x, y, -1, 0)
 	}
 }
 
 func TestFPTreeManyItems(t *testing.T) {
 	const (
-		repeatOuter = 30
-		repeatInner = 20
-		numItems    = 1 << 13
+		repeatOuter = 3
+		repeatInner = 5
+		numItems    = 1 << 10
 		maxDepth    = 12
 		// numItems = 1 << 5
 		// maxDepth = 4

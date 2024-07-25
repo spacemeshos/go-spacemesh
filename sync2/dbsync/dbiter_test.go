@@ -45,7 +45,7 @@ func createDB(t *testing.T, keyLen int) sql.Database {
 	t.Cleanup(func() {
 		require.NoError(t, db.Close())
 	})
-	_, err := db.Exec(fmt.Sprintf("create table foo(id char(%d))", keyLen), nil, nil)
+	_, err := db.Exec(fmt.Sprintf("create table foo(id char(%d) not null primary key)", keyLen), nil, nil)
 	require.NoError(t, err)
 	return db
 }
@@ -379,11 +379,11 @@ func TestCombineIterators(t *testing.T) {
 		},
 	}
 
-	it := combineIterators(it1, it2)
+	it := combineIterators(nil, it1, it2)
 	clonedIt := it.clone()
 	for range 3 {
 		var collected []KeyBytes
-		for i := 0; i < 4; i++ {
+		for range 4 {
 			k := it.Key()
 			collected = append(collected, k.(KeyBytes))
 			require.Equal(t, k, clonedIt.Key())
@@ -403,16 +403,46 @@ func TestCombineIterators(t *testing.T) {
 	it1 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 0}, KeyBytes("error")}}
 	it2 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 1}}}
 
-	it = combineIterators(it1, it2)
+	it = combineIterators(nil, it1, it2)
 	require.Equal(t, KeyBytes{0, 0, 0, 0}, it.Key())
 	require.Error(t, it.Next())
 
 	it1 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 0}}}
 	it2 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 1}, KeyBytes("error")}}
 
-	it = combineIterators(it1, it2)
+	it = combineIterators(nil, it1, it2)
 	require.Equal(t, KeyBytes{0, 0, 0, 0}, it.Key())
 	require.NoError(t, it.Next())
 	require.Equal(t, KeyBytes{0, 0, 0, 1}, it.Key())
 	require.Error(t, it.Next())
+}
+
+func TestCombineIteratorsInitiallyWrapped(t *testing.T) {
+	it1 := &fakeIterator{
+		allItems: []KeyBytes{
+			{0x00, 0x00, 0x00, 0x01},
+			{0x0a, 0x05, 0x00, 0x00},
+		},
+	}
+	it2 := &fakeIterator{
+		allItems: []KeyBytes{
+			{0x00, 0x00, 0x00, 0x03},
+			{0xff, 0x00, 0x00, 0x55},
+		},
+	}
+	require.NoError(t, it2.Next())
+	it := combineIterators(KeyBytes{0xff, 0x00, 0x00, 0x55}, it1, it2)
+	var collected []KeyBytes
+	for range 4 {
+		k := it.Key()
+		collected = append(collected, k.(KeyBytes))
+		require.NoError(t, it.Next())
+	}
+	require.Equal(t, []KeyBytes{
+		{0xff, 0x00, 0x00, 0x55},
+		{0x00, 0x00, 0x00, 0x01},
+		{0x00, 0x00, 0x00, 0x03},
+		{0x0a, 0x05, 0x00, 0x00},
+	}, collected)
+	require.Equal(t, KeyBytes{0xff, 0x00, 0x00, 0x55}, it.Key())
 }

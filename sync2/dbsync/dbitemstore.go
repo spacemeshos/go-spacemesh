@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 )
@@ -132,4 +133,83 @@ func (d *DBItemStore) Has(k hashsync.Ordered) (bool, error) {
 		return false, err
 	}
 	return false, nil
+}
+
+// TODO: get rid of ItemStoreAdapter, it shouldn't be needed
+type ItemStoreAdapter struct {
+	s *DBItemStore
+}
+
+var _ hashsync.ItemStore = &ItemStoreAdapter{}
+
+func NewItemStoreAdapter(s *DBItemStore) *ItemStoreAdapter {
+	return &ItemStoreAdapter{s: s}
+}
+
+func (a *ItemStoreAdapter) wrapIterator(it hashsync.Iterator) hashsync.Iterator {
+	if it == nil {
+		return nil
+	}
+	return &iteratorAdapter{it: it}
+}
+
+// Add implements hashsync.ItemStore.
+func (a *ItemStoreAdapter) Add(ctx context.Context, k hashsync.Ordered) error {
+	h := k.(types.Hash32)
+	return a.s.Add(ctx, KeyBytes(h[:]))
+}
+
+// Copy implements hashsync.ItemStore.
+func (a *ItemStoreAdapter) Copy() hashsync.ItemStore {
+	return &ItemStoreAdapter{s: a.s.Copy().(*DBItemStore)}
+}
+
+// GetRangeInfo implements hashsync.ItemStore.
+func (a *ItemStoreAdapter) GetRangeInfo(preceding hashsync.Iterator, x hashsync.Ordered, y hashsync.Ordered, count int) (hashsync.RangeInfo, error) {
+	hx := x.(types.Hash32)
+	hy := y.(types.Hash32)
+	info, err := a.s.GetRangeInfo(preceding, KeyBytes(hx[:]), KeyBytes(hy[:]), count)
+	if err != nil {
+		return hashsync.RangeInfo{}, err
+	}
+	var fp types.Hash12
+	src := info.Fingerprint.(fingerprint)
+	copy(fp[:], src[:])
+	return hashsync.RangeInfo{
+		Fingerprint: fp,
+		Count:       info.Count,
+		Start:       a.wrapIterator(info.Start),
+		End:         a.wrapIterator(info.End),
+	}, nil
+}
+
+// Has implements hashsync.ItemStore.
+func (a *ItemStoreAdapter) Has(k hashsync.Ordered) (bool, error) {
+	h := k.(types.Hash32)
+	return a.s.Has(KeyBytes(h[:]))
+}
+
+// Min implements hashsync.ItemStore.
+func (a *ItemStoreAdapter) Min() (hashsync.Iterator, error) {
+	it, err := a.s.Min()
+	if err != nil {
+		return nil, err
+	}
+	return a.wrapIterator(it), nil
+}
+
+type iteratorAdapter struct {
+	it hashsync.Iterator
+}
+
+var _ hashsync.Iterator = &iteratorAdapter{}
+
+func (ia *iteratorAdapter) Key() hashsync.Ordered {
+	var h types.Hash32
+	copy(h[:], ia.it.Key().(KeyBytes))
+	return h
+}
+
+func (ia *iteratorAdapter) Next() error {
+	return ia.it.Next()
 }
