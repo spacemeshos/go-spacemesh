@@ -35,7 +35,7 @@ func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Clus
 		// This way, they can't successfully start unless the bootstrapper is
 		// already running.
 		// But at the same time the bootstrapper requires an working go-spacemesh
-		// node to start up, thus we get a circulardependency.
+		// node to start up, thus we get a circular dependency.
 		// TODO: use a smarter go-spacemesh cluster restart mechanism
 		cluster.WithSmesherFlag(cluster.IgnoreCheckpointReqErrors()),
 	)
