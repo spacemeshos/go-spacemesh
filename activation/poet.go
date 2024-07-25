@@ -488,7 +488,7 @@ func (c *poetService) Submit(
 	case err == nil:
 		return round, nil
 	case errors.Is(err, ErrUnauthorized):
-		logger.Warn("failed to submit challenge as unathorized - recertifying", zap.Error(err))
+		logger.Warn("failed to submit challenge as unauthorized - recertifying", zap.Error(err))
 		auth.PoetCert, err = c.recertify(ctx, nodeID)
 		if err != nil {
 			return nil, fmt.Errorf("recertifying: %w", err)
