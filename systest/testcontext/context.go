@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/flowcontrol"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -288,6 +289,9 @@ func New(t *testing.T, opts ...Opt) *Context {
 		t.Cleanup(func() { <-tokens })
 	}
 	config, err := rest.InClusterConfig()
+
+	// The default rate limiter is too slow 5qps and 10 burst, This will prevent the client from being throttled
+	config.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(20, 50)
 	require.NoError(t, err)
 
 	clientset, err := kubernetes.NewForConfig(config)

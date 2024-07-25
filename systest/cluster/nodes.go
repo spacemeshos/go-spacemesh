@@ -62,12 +62,12 @@ var (
 		"requests and limits for smesher container",
 		&apiv1.ResourceRequirements{
 			Requests: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("0.4"),
-				apiv1.ResourceMemory: resource.MustParse("400Mi"),
+				apiv1.ResourceCPU:    resource.MustParse("1.3"),
+				apiv1.ResourceMemory: resource.MustParse("800Mi"),
 			},
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("2"),
-				apiv1.ResourceMemory: resource.MustParse("1Gi"),
+				apiv1.ResourceCPU:    resource.MustParse("1.3"),
+				apiv1.ResourceMemory: resource.MustParse("800Mi"),
 			},
 		},
 		toResources,
@@ -92,11 +92,11 @@ var (
 		"requests and limits for poet container",
 		&apiv1.ResourceRequirements{
 			Requests: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("0.5"),
+				apiv1.ResourceCPU:    resource.MustParse("0.4"),
 				apiv1.ResourceMemory: resource.MustParse("1Gi"),
 			},
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("0.5"),
+				apiv1.ResourceCPU:    resource.MustParse("0.4"),
 				apiv1.ResourceMemory: resource.MustParse("1Gi"),
 			},
 		},
