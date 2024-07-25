@@ -2,6 +2,7 @@ package testcontext
 
 import (
 	"context"
+	goerr "errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -380,7 +381,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 func (c *Context) CheckFail() error {
 	select {
 	case <-failed:
-		return errors.New("test suite failed. aborting test execution")
+		return goerr.New("test suite failed. aborting test execution")
 	default:
 	}
 	return nil
