@@ -294,9 +294,9 @@ func New(t *testing.T, opts ...Opt) *Context {
 
 	t.Cleanup(func() {
 		if t.Failed() {
-			failOnce.Do(func() { close(failed) }())
+			failOnce.Do(func() { close(failed) })
 		}
-	}())
+	})
 	config, err := rest.InClusterConfig()
 
 	// The default rate limiter is too slow 5qps and 10 burst, This will prevent the client from being throttled
