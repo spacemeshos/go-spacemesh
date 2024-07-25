@@ -62,11 +62,11 @@ var (
 		"requests and limits for smesher container",
 		&apiv1.ResourceRequirements{
 			Requests: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("1.2"),
+				apiv1.ResourceCPU:    resource.MustParse("1.3"),
 				apiv1.ResourceMemory: resource.MustParse("800Mi"),
 			},
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("1.2"),
+				apiv1.ResourceCPU:    resource.MustParse("1.3"),
 				apiv1.ResourceMemory: resource.MustParse("800Mi"),
 			},
 		},
