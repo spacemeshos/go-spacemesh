@@ -769,27 +769,24 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 		Transaction: *newTx(t, ta.nonce+10, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.Background(), tc.db, &mtx0.Transaction, mtx0.Received, false))
-	require.NoError(t, tc.Add(context.Background(), tc.db, &mtx1.Transaction, mtx1.Received, false))
+	require.Error(t, tc.Add(context.Background(), tc.db, &mtx0.Transaction, mtx0.Received, false), errInsufficientBalance)
+	require.Error(t, tc.Add(context.Background(), tc.db, &mtx1.Transaction, mtx1.Received, false), errInsufficientBalance)
 	checkNoTX(t, tc.Cache, mtx0.ID)
 	checkNoTX(t, tc.Cache, mtx1.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.Cache, nil)
-	require.True(t, tc.MoreInDB(ta.principal))
-	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx0, mtx1}, types.MEMPOOL)
+	require.False(t, tc.MoreInDB(ta.principal))
+	checkTXNotInDB(t, tc.db, mtx0.ID)
+	checkTXNotInDB(t, tc.db, mtx1.ID)
 
 	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
-	// the account receive enough funds in layer 97 (via rewards or incoming transfer) for mtx1
-	ta.balance = mtx1.Spending()
 	require.NoError(t, tc.Cache.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
 	checkNoTX(t, tc.Cache, mtx0.ID)
-	checkTX(t, tc.Cache, mtx1.ID, 0, types.EmptyBlockID)
-	checkProjection(t, tc.Cache, ta.principal, mtx1.Nonce+1, 0)
-	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {mtx1}}
-	checkMempool(t, tc.Cache, expectedMempool)
-	require.True(t, tc.MoreInDB(ta.principal))
-	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx0, mtx1}, types.MEMPOOL)
+	checkNoTX(t, tc.Cache, mtx1.ID)
+	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
+	checkMempool(t, tc.Cache, nil)
+	require.False(t, tc.MoreInDB(ta.principal))
 
 	lid = lid.Add(1)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
@@ -797,13 +794,11 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 	// but the account receive enough funds in layer 98 (via rewards or incoming transfer) for both mtx0 and mtx1
 	ta.balance = mtx0.Spending() + mtx1.Spending()
 	require.NoError(t, tc.Cache.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{2, 3, 4}, nil, nil))
-	checkTX(t, tc.Cache, mtx0.ID, 0, types.EmptyBlockID)
-	checkTX(t, tc.Cache, mtx1.ID, 0, types.EmptyBlockID)
-	checkProjection(t, tc.Cache, ta.principal, mtx1.Nonce+1, 0)
-	expectedMempool = map[types.Address][]*types.MeshTransaction{ta.principal: {mtx0, mtx1}}
-	checkMempool(t, tc.Cache, expectedMempool)
+	checkNoTX(t, tc.Cache, mtx0.ID)
+	checkNoTX(t, tc.Cache, mtx1.ID)
+	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
+	checkMempool(t, tc.Cache, nil)
 	require.False(t, tc.MoreInDB(ta.principal))
-	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx0, mtx1}, types.MEMPOOL)
 }
 
 func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
@@ -814,12 +809,12 @@ func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, defaultBalance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.Background(), tc.db, &mtx.Transaction, mtx.Received, false))
+	require.Error(t, tc.Add(context.Background(), tc.db, &mtx.Transaction, mtx.Received, false), errInsufficientBalance)
 	checkNoTX(t, tc.Cache, mtx.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.Cache, nil)
-	require.True(t, tc.MoreInDB(ta.principal))
-	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx}, types.MEMPOOL)
+	require.False(t, tc.MoreInDB(ta.principal))
+	checkTXNotInDB(t, tc.db, mtx.ID)
 }
 
 func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
@@ -835,12 +830,12 @@ func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.Background(), tc.db, &spender.Transaction, spender.Received, false))
+	require.Error(t, tc.Add(context.Background(), tc.db, &spender.Transaction, spender.Received, false), errInsufficientBalance)
 	checkNoTX(t, tc.Cache, spender.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce+1, ta.balance-mtx.Spending())
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {mtx}}
 	checkMempool(t, tc.Cache, expectedMempool)
-	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx, spender}, types.MEMPOOL)
+	checkTXNotInDB(t, tc.db, spender.ID)
 }
 
 func TestCache_Account_AppliedTXsNotInCache(t *testing.T) {
