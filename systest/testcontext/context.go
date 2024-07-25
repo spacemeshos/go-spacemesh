@@ -291,7 +291,11 @@ func New(t *testing.T, opts ...Opt) *Context {
 	config, err := rest.InClusterConfig()
 
 	// The default rate limiter is too slow 5qps and 10 burst, This will prevent the client from being throttled
-	config.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(20, 50)
+	// Change the limits to the same of kubectl and argo
+	// That's were those number come from
+	// https://github.com/kubernetes/kubernetes/pull/105520
+	// https://github.com/argoproj/argo-workflows/pull/11603/files
+	config.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(50, 300)
 	require.NoError(t, err)
 
 	clientset, err := kubernetes.NewForConfig(config)
