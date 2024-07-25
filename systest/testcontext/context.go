@@ -376,3 +376,12 @@ func New(t *testing.T, opts ...Opt) *Context {
 	cctx.Log.Infow("using", "namespace", cctx.Namespace)
 	return cctx
 }
+
+func (c *Context) CheckFail() error {
+	select {
+	case <-failed:
+		return errors.New("test suite failed. aborting test execution")
+	default:
+	}
+	return nil
+}
