@@ -404,7 +404,7 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
 	require.Error(t, tcs.AddToCache(context.Background(), tx, time.Now()), errInsufficientBalance)
 	checkNoTX(t, tcs.cache, tx.ID)
-	require.True(t, tcs.cache.MoreInDB(addr))
+	require.False(t, tcs.cache.MoreInDB(addr))
 	checkTXNotInDB(t, tcs.db, tx.ID)
 }
 

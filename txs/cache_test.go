@@ -923,28 +923,24 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	// transactions in `pending` feasible now
 	income := defaultBalance * 100
 	ta.nonce++
-	ta.balance = ta.balance - mtx.Spending() + income
+	ta.balance = ta.balance + income - mtx.Spending()
 	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)
 	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{}))
 	// all pending txs are added to cache now
-	newNextNonce = ta.nonce + uint64(len(pending))
+	newNextNonce = ta.nonce
 	newBalance = ta.balance
-	for _, p := range pending {
-		newBalance -= p.Spending()
-	}
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
-	expectedMempool = map[types.Address][]*types.MeshTransaction{ta.principal: pending}
-	checkMempool(t, tc.Cache, expectedMempool)
+	checkMempool(t, tc.Cache, nil)
 	checkTXStateFromDB(t, tc.db, []*types.MeshTransaction{mtx}, types.APPLIED)
-	checkTXStateFromDB(t, tc.db, pending, types.MEMPOOL)
 }
 
 func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	tc, ta := createSingleAccountTestCache(t)
 	mtxs := genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+4, time.Now())
+
 	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs)
 
 	higherFee := defaultFee + 1
@@ -954,29 +950,26 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 		Received:    time.Now(),
 	}
 
-	require.NoError(t, tc.Add(context.Background(), tc.db, &better.Transaction, better.Received, false))
+	require.Error(t, tc.Add(context.Background(), tc.db, &better.Transaction, better.Received, false), errInsufficientBalance)
 	checkNoTX(t, tc.Cache, better.ID)
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: mtxs}
 	checkMempool(t, tc.Cache, expectedMempool)
-	checkTXStateFromDB(t, tc.db, append(mtxs, better), types.MEMPOOL)
+	checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
+	checkTXNotInDB(t, tc.db, better.ID)
 
 	// apply lid
 	// there is also an incoming fund of `income` to the principal's account
 	// the income is just enough to allow `better` to be feasible
-	income := mtxs[0].Spending()
-	ta.nonce++
-	ta.balance = ta.balance - mtxs[0].Spending() + income
 	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtxs[0].Transaction)
 	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{}))
-	checkProjection(t, tc.Cache, ta.principal, ta.nonce+1, 0)
-	expectedMempool = map[types.Address][]*types.MeshTransaction{ta.principal: {better}}
+	expectedMempool = map[types.Address][]*types.MeshTransaction{ta.principal: mtxs[1:]}
 	checkMempool(t, tc.Cache, expectedMempool)
 	checkTXStateFromDB(t, tc.db, mtxs[:1], types.APPLIED)
-	checkTXStateFromDB(t, tc.db, append(mtxs[1:], better), types.MEMPOOL)
+	checkTXStateFromDB(t, tc.db, mtxs[1:], types.MEMPOOL)
 }
 
 func TestCache_Account_EvictedAfterApply(t *testing.T) {
