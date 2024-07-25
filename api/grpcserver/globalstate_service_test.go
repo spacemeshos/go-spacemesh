@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"testing"
-	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
@@ -30,9 +29,7 @@ func setupGlobalStateService(t *testing.T) (*globalStateServiceConn, context.Con
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	grpcCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(grpcCtx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := pb.NewGlobalStateServiceClient(conn)
 
 	return &globalStateServiceConn{

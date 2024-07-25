@@ -41,7 +41,7 @@ func TestPostInfoService(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := pb.NewPostInfoServiceClient(conn)
 
 	existingStates := map[types.IdentityDescriptor]types.PostState{

@@ -94,7 +94,6 @@ func (db *PoetDb) Validate(
 		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %w", shortID, roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
-
 	return nil
 }
 

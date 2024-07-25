@@ -37,16 +37,16 @@ type TransactionService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s TransactionService) RegisterService(server *grpc.Server) {
+func (s *TransactionService) RegisterService(server *grpc.Server) {
 	pb.RegisterTransactionServiceServer(server, s)
 }
 
-func (s TransactionService) RegisterHandlerService(mux *runtime.ServeMux) error {
+func (s *TransactionService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterTransactionServiceHandlerServer(context.Background(), mux, s)
 }
 
 // String returns the name of this service.
-func (s TransactionService) String() string {
+func (s *TransactionService) String() string {
 	return "TransactionService"
 }
 
@@ -69,7 +69,7 @@ func NewTransactionService(
 	}
 }
 
-func (s TransactionService) ParseTransaction(
+func (s *TransactionService) ParseTransaction(
 	ctx context.Context,
 	in *pb.ParseTransactionRequest,
 ) (*pb.ParseTransactionResponse, error) {
@@ -94,7 +94,7 @@ func (s TransactionService) ParseTransaction(
 }
 
 // SubmitTransaction allows a new tx to be submitted.
-func (s TransactionService) SubmitTransaction(
+func (s *TransactionService) SubmitTransaction(
 	ctx context.Context,
 	in *pb.SubmitTransactionRequest,
 ) (*pb.SubmitTransactionResponse, error) {
@@ -129,7 +129,7 @@ func (s TransactionService) SubmitTransaction(
 
 // Get transaction and status for a given txid. It's not an error if we cannot find the tx,
 // we just return all nils.
-func (s TransactionService) getTransactionAndStatus(
+func (s *TransactionService) getTransactionAndStatus(
 	txID types.TransactionID,
 ) (*types.Transaction, pb.TransactionState_TransactionState) {
 	var state pb.TransactionState_TransactionState
@@ -149,7 +149,7 @@ func (s TransactionService) getTransactionAndStatus(
 }
 
 // TransactionsState returns current tx data for one or more txs.
-func (s TransactionService) TransactionsState(
+func (s *TransactionService) TransactionsState(
 	_ context.Context,
 	in *pb.TransactionsStateRequest,
 ) (*pb.TransactionsStateResponse, error) {
@@ -186,7 +186,7 @@ func (s TransactionService) TransactionsState(
 // STREAMS
 
 // TransactionsStateStream exposes a stream of tx data.
-func (s TransactionService) TransactionsStateStream(
+func (s *TransactionService) TransactionsStateStream(
 	in *pb.TransactionsStateStreamRequest,
 	stream pb.TransactionService_TransactionsStateStreamServer,
 ) error {
@@ -338,7 +338,7 @@ func (s TransactionService) TransactionsStateStream(
 }
 
 // StreamResults allows to query historical results and subscribe to live data using the same filter.
-func (s TransactionService) StreamResults(
+func (s *TransactionService) StreamResults(
 	in *pb.TransactionResultsRequest,
 	stream pb.TransactionService_StreamResultsServer,
 ) error {
