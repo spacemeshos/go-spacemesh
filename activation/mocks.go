@@ -24,61 +24,61 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockAtxReceiver is a mock of AtxReceiver interface.
-type MockAtxReceiver struct {
+// MockatxReceiver is a mock of atxReceiver interface.
+type MockatxReceiver struct {
 	ctrl     *gomock.Controller
-	recorder *MockAtxReceiverMockRecorder
+	recorder *MockatxReceiverMockRecorder
 }
 
-// MockAtxReceiverMockRecorder is the mock recorder for MockAtxReceiver.
-type MockAtxReceiverMockRecorder struct {
-	mock *MockAtxReceiver
+// MockatxReceiverMockRecorder is the mock recorder for MockatxReceiver.
+type MockatxReceiverMockRecorder struct {
+	mock *MockatxReceiver
 }
 
-// NewMockAtxReceiver creates a new mock instance.
-func NewMockAtxReceiver(ctrl *gomock.Controller) *MockAtxReceiver {
-	mock := &MockAtxReceiver{ctrl: ctrl}
-	mock.recorder = &MockAtxReceiverMockRecorder{mock}
+// NewMockatxReceiver creates a new mock instance.
+func NewMockatxReceiver(ctrl *gomock.Controller) *MockatxReceiver {
+	mock := &MockatxReceiver{ctrl: ctrl}
+	mock.recorder = &MockatxReceiverMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockAtxReceiver) EXPECT() *MockAtxReceiverMockRecorder {
+func (m *MockatxReceiver) EXPECT() *MockatxReceiverMockRecorder {
 	return m.recorder
 }
 
 // OnAtx mocks base method.
-func (m *MockAtxReceiver) OnAtx(arg0 *types.ActivationTx) {
+func (m *MockatxReceiver) OnAtx(arg0 *types.ActivationTx) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnAtx", arg0)
 }
 
 // OnAtx indicates an expected call of OnAtx.
-func (mr *MockAtxReceiverMockRecorder) OnAtx(arg0 any) *MockAtxReceiverOnAtxCall {
+func (mr *MockatxReceiverMockRecorder) OnAtx(arg0 any) *MockatxReceiverOnAtxCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockAtxReceiver)(nil).OnAtx), arg0)
-	return &MockAtxReceiverOnAtxCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockatxReceiver)(nil).OnAtx), arg0)
+	return &MockatxReceiverOnAtxCall{Call: call}
 }
 
-// MockAtxReceiverOnAtxCall wrap *gomock.Call
-type MockAtxReceiverOnAtxCall struct {
+// MockatxReceiverOnAtxCall wrap *gomock.Call
+type MockatxReceiverOnAtxCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockAtxReceiverOnAtxCall) Return() *MockAtxReceiverOnAtxCall {
+func (c *MockatxReceiverOnAtxCall) Return() *MockatxReceiverOnAtxCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockAtxReceiverOnAtxCall) Do(f func(*types.ActivationTx)) *MockAtxReceiverOnAtxCall {
+func (c *MockatxReceiverOnAtxCall) Do(f func(*types.ActivationTx)) *MockatxReceiverOnAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockAtxReceiverOnAtxCall) DoAndReturn(f func(*types.ActivationTx)) *MockAtxReceiverOnAtxCall {
+func (c *MockatxReceiverOnAtxCall) DoAndReturn(f func(*types.ActivationTx)) *MockatxReceiverOnAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
