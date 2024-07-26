@@ -13,9 +13,11 @@ import (
 var version string
 
 func init() {
-	rootCmd.Flags().StringP("from", "f", "", "The `data` folder to read identities from and merge into `to`")
+	rootCmd.Flags().StringP("from", "f", "",
+		"The `data` folder to read identities from and merge into `to`")
 	rootCmd.MarkFlagRequired("from")
-	rootCmd.Flags().StringP("to", "t", "", "The `data` folder to write the merged node to. Can be an existing remote node or empty.")
+	rootCmd.Flags().StringP("to", "t", "",
+		"The `data` folder to write the merged node to. Can be an existing remote node or empty.")
 	rootCmd.MarkFlagRequired("to")
 }
 
@@ -41,7 +43,7 @@ var rootCmd = &cobra.Command{
 		cfg.Encoding = "console"
 		dbLog, err := cfg.Build()
 		if err != nil {
-			log.Fatalf("create logger:", err)
+			log.Fatalf("create logger: %v", err)
 		}
 		defer dbLog.Sync()
 
