@@ -39,34 +39,45 @@ else
 		ULIMIT := ulimit -n 9999;
 	else
 		ifeq ($(GOARCH),arm64)
-				platform := linux-arm64
+				platform := linux
+				arch := arm64
+				libpost_arch := -arm64
 		else
 				platform := linux
+				arch := amd64
 		endif
 		CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$$ORIGIN
 	endif
 endif
 
 POSTRS_SETUP_REV = 0.7.11
-POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
+POSTRS_SETUP_ZIP = libpost-$(platform)$(libpost_arch)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
 
-POSTRS_PROFILER_ZIP = profiler-$(platform)-v$(POSTRS_SETUP_REV).zip
+POSTRS_PROFILER_ZIP = profiler-$(platform)$(libpost_arch)-v$(POSTRS_SETUP_REV).zip
 POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_PROFILER_ZIP)
 
-POSTRS_SERVICE_ZIP = post-service-$(platform)-v$(POSTRS_SETUP_REV).zip
+POSTRS_SERVICE_ZIP = post-service-$(platform)$(libpost_arch)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
+
+ATHENA_SETUP_REV = 0.3.0
+ATHENA_SETUP_ARTIFACT = athena_vmlib_v$(ATHENA_SETUP_REV)_$(platform)_$(arch).tar.gz
+ATHENA_SETUP_ARTIFACT_URL ?= https://github.com/athenavm/athena/releases/download/v$(ATHENA_SETUP_REV)/$(ATHENA_SETUP_ARTIFACT)
 
 ifeq ($(platform), windows)
 	POSTRS_SETUP_LIBS = post.h post.dll
 
 	POSTRS_PROFILER_BIN = profiler.exe
 	POSTRS_SERVICE_BIN = post-service.exe
+
+	ATHENA_SETUP_LIBS = libathena_vmlib.dll lib/loader/loader.c include/athcon/helpers.h include/athcon/athcon.h include/athcon/loader.h
 else
 	ifeq ($(platform), $(filter $(platform), macos macos-m1))
 		POSTRS_SETUP_LIBS = post.h libpost.dylib
+		ATHENA_SETUP_LIBS = libathena_vmlib.dylib lib/loader/loader.c include/athcon/helpers.h include/athcon/athcon.h include/athcon/loader.h
 	else
 		POSTRS_SETUP_LIBS = post.h libpost.so
+		ATHENA_SETUP_LIBS = libathena_vmlib.so lib/loader/loader.c include/athcon/helpers.h include/athcon/athcon.h include/athcon/loader.h
 	endif
 
 	POSTRS_PROFILER_BIN = profiler
@@ -90,6 +101,19 @@ CURL_VERSION = $(shell curl --version 2>/dev/null | head -n 1 | cut -d' ' -f2)
 ifeq ($(shell expr "$(CURL_VERSION)" \>= 7.71.0),1)
 	CURL_OPTIONS := $(CURL_OPTIONS) --retry-all-errors
 endif
+
+$(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT):
+	curl -sSL $(CURL_OPTIONS) $(ATHENA_SETUP_ARTIFACT_URL) -o $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT)
+
+# file marking athena version
+$(BIN_DIR).athena.version.$(ATHENA_SETUP_REV): $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT)
+	rm -f $(BIN_DIR).athena.version.*
+	mkdir -p $(dir $@)
+	touch $@
+
+$(ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
+	mkdir -p $(BIN_DIR)$(dir $@)
+	tar xzf $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT) -C $(BIN_DIR)$(dir $@) $@
 
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
@@ -123,6 +147,7 @@ $(BIN_DIR)$(POSTRS_SERVICE_BIN): $(BIN_DIR).service.version.$(POSTRS_SETUP_REV)
 get-postrs-lib: $(BINDIR_POSTRS_SETUP_LIBS)
 get-postrs-profiler: $(BIN_DIR)$(POSTRS_PROFILER_BIN)
 get-postrs-service: $(BIN_DIR)$(POSTRS_SERVICE_BIN)
+get-athena-lib: $(ATHENA_SETUP_LIBS)
 
 go-env: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
