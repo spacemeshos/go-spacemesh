@@ -199,7 +199,7 @@ func Marriage(db sql.Executor, id types.NodeID) (*MarriageData, error) {
 }
 
 // Set marriage inserts marriage data for given identity.
-// If identitty doesn't exist - create it.
+// If identity doesn't exist - create it.
 func SetMarriage(db sql.Executor, id types.NodeID, m *MarriageData) error {
 	_, err := db.Exec(`
 	INSERT INTO identities (pubkey, marriage_atx, marriage_idx, marriage_target, marriage_signature)
