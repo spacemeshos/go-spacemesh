@@ -165,7 +165,7 @@ func (s *RewardService) String() string {
 }
 
 func (s *RewardService) List(
-	ctx context.Context,
+	_ context.Context,
 	request *spacemeshv2alpha1.RewardRequest,
 ) (*spacemeshv2alpha1.RewardList, error) {
 	ops, err := toRewardOperations(request)
