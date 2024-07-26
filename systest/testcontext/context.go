@@ -2,7 +2,7 @@ package testcontext
 
 import (
 	"context"
-	goerr "errors"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
@@ -231,7 +231,7 @@ func updateContext(ctx *Context) error {
 	ns, err := ctx.Client.CoreV1().Namespaces().Get(ctx, ctx.Namespace,
 		apimetav1.GetOptions{})
 	if err != nil || ns == nil {
-		if errors.IsNotFound(err) {
+		if k8serr.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -379,7 +379,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 func (c *Context) CheckFail() error {
 	select {
 	case <-failed:
-		return goerr.New("test suite failed. aborting test execution")
+		return errors.New("test suite failed. aborting test execution")
 	default:
 	}
 	return nil
