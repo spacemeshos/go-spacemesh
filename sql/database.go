@@ -203,6 +203,10 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON;", nil, nil); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("enable foreign keys: %w", err)
+	}
 	//nolint:nestif
 	if config.migrations != nil {
 		before, err := version(db)

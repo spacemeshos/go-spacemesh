@@ -15,8 +15,9 @@ func Add(db sql.Executor, nodeID types.NodeID, domain byte, proof []byte, receiv
 		VALUES (?1, ?2, ?3, ?4);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
-			stmt.BindBytes(2, proof)
-			stmt.BindInt64(3, received.UnixNano())
+			stmt.BindInt64(2, received.UnixNano())
+			stmt.BindInt64(3, int64(domain))
+			stmt.BindBytes(4, proof)
 		}, nil,
 	)
 	if err != nil {
@@ -26,28 +27,13 @@ func Add(db sql.Executor, nodeID types.NodeID, domain byte, proof []byte, receiv
 }
 
 func AddMarried(db sql.Executor, nodeID, marriedTo types.NodeID, received time.Time) error {
-	// check if marriedTo has a proof
-	rows, err := db.Exec(`
-		SELECT 1 FROM malfeasance
-		WHERE pubkey = ?1 AND proof IS NOT NULL;`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, marriedTo.Bytes())
-		}, nil,
-	)
-	if err != nil {
-		return fmt.Errorf("add married %s: %w", nodeID, err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("add married %s: parent has no proof", nodeID)
-	}
-
-	_, err = db.Exec(`
+	_, err := db.Exec(`
 		INSERT INTO malfeasance (pubkey, received, married_to)
 		VALUES (?1, ?2, ?3);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
-			stmt.BindBytes(2, marriedTo.Bytes())
-			stmt.BindInt64(3, received.UnixNano())
+			stmt.BindInt64(2, received.UnixNano())
+			stmt.BindBytes(3, marriedTo.Bytes())
 		}, nil,
 	)
 	if err != nil {
