@@ -100,10 +100,10 @@ func (m *MockMalfeasanceHandler) EXPECT() *MockMalfeasanceHandlerMockRecorder {
 }
 
 // Validate mocks base method.
-func (m *MockMalfeasanceHandler) Validate(ctx context.Context, data []byte) (types.NodeID, error) {
+func (m *MockMalfeasanceHandler) Validate(ctx context.Context, data []byte) ([]types.NodeID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validate", ctx, data)
-	ret0, _ := ret[0].(types.NodeID)
+	ret0, _ := ret[0].([]types.NodeID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -121,19 +121,19 @@ type MockMalfeasanceHandlerValidateCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockMalfeasanceHandlerValidateCall) Return(arg0 types.NodeID, arg1 error) *MockMalfeasanceHandlerValidateCall {
+func (c *MockMalfeasanceHandlerValidateCall) Return(arg0 []types.NodeID, arg1 error) *MockMalfeasanceHandlerValidateCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockMalfeasanceHandlerValidateCall) Do(f func(context.Context, []byte) (types.NodeID, error)) *MockMalfeasanceHandlerValidateCall {
+func (c *MockMalfeasanceHandlerValidateCall) Do(f func(context.Context, []byte) ([]types.NodeID, error)) *MockMalfeasanceHandlerValidateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockMalfeasanceHandlerValidateCall) DoAndReturn(f func(context.Context, []byte) (types.NodeID, error)) *MockMalfeasanceHandlerValidateCall {
+func (c *MockMalfeasanceHandlerValidateCall) DoAndReturn(f func(context.Context, []byte) ([]types.NodeID, error)) *MockMalfeasanceHandlerValidateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

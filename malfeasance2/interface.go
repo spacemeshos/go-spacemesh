@@ -13,5 +13,5 @@ type tortoise interface {
 }
 
 type MalfeasanceHandler interface {
-	Validate(ctx context.Context, data []byte) (types.NodeID, error)
+	Validate(ctx context.Context, data []byte) ([]types.NodeID, error)
 }

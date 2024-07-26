@@ -7,17 +7,23 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-var errWrongHash = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
+var (
+	ErrMalformedData  = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
+	ErrWrongHash      = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
+	ErrUnknownVersion = fmt.Errorf("%w: unknown version", pubsub.ErrValidationReject)
+	ErrUnknownDomain  = fmt.Errorf("%w: unknown domain", pubsub.ErrValidationReject)
+)
 
 type Handler struct {
 	logger   *zap.Logger
-	cdb      *datastore.CachedDB
+	db       sql.Executor
 	self     p2p.Peer
 	tortoise tortoise
 
@@ -25,13 +31,13 @@ type Handler struct {
 }
 
 func NewHandler(
-	cdb *datastore.CachedDB,
+	db sql.Executor,
 	lg *zap.Logger,
 	self p2p.Peer,
 	tortoise tortoise,
 ) *Handler {
 	return &Handler{
-		cdb:      cdb,
+		db:       db,
 		logger:   lg,
 		self:     self,
 		tortoise: tortoise,
@@ -45,7 +51,16 @@ func (h *Handler) RegisterHandler(malfeasanceType ProofDomain, handler Malfeasan
 }
 
 func (h *Handler) HandleSynced(ctx context.Context, expHash types.Hash32, _ p2p.Peer, msg []byte) error {
-	nodeIDs, err := h.handleProof(ctx, msg)
+	var proof MalfeasanceProof
+	if err := codec.Decode(msg, &proof); err != nil {
+		h.logger.Warn("failed to decode malfeasance proof",
+			zap.Stringer("exp_hash", expHash),
+			zap.Error(err),
+		)
+		return ErrMalformedData
+	}
+
+	nodeIDs, err := h.handleProof(ctx, proof)
 	if err != nil {
 		h.logger.Warn("failed to handle synced malfeasance proof",
 			zap.Stringer("exp_hash", expHash),
@@ -58,10 +73,10 @@ func (h *Handler) HandleSynced(ctx context.Context, expHash types.Hash32, _ p2p.
 		h.logger.Warn("synced malfeasance proof invalid for requested nodeID",
 			zap.Stringer("exp_hash", expHash),
 		)
-		return errWrongHash
+		return ErrWrongHash
 	}
 
-	if err := h.storeProof(ctx, InvalidActivation, msg); err != nil {
+	if err := h.storeProof(ctx, proof.Domain, msg); err != nil {
 		h.logger.Warn("failed to store synced malfeasance proof",
 			zap.Stringer("exp_hash", expHash),
 			zap.Error(err),
@@ -77,11 +92,47 @@ func (h *Handler) HandleGossip(ctx context.Context, peer p2p.Peer, msg []byte) e
 		return nil
 	}
 
+	var proof MalfeasanceProof
+	if err := codec.Decode(msg, &proof); err != nil {
+		h.logger.Warn("failed to decode malfeasance proof",
+			zap.Stringer("peer", peer),
+			zap.Error(err),
+		)
+		return ErrMalformedData
+	}
+
+	_, err := h.handleProof(ctx, proof)
+	if err != nil {
+		h.logger.Warn("failed to handle gossiped malfeasance proof",
+			zap.Stringer("peer", peer),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	if err := h.storeProof(ctx, proof.Domain, msg); err != nil {
+		h.logger.Warn("failed to store synced malfeasance proof",
+			zap.Error(err),
+		)
+		return err
+	}
+
 	return nil
 }
 
-func (h *Handler) handleProof(ctx context.Context, data []byte) ([]types.NodeID, error) {
-	return nil, nil
+func (h *Handler) handleProof(ctx context.Context, proof MalfeasanceProof) ([]types.NodeID, error) {
+	if proof.Version != 0 {
+		// unsupported proof version
+		return nil, ErrUnknownVersion
+	}
+
+	handler, ok := h.handlers[proof.Domain]
+	if !ok {
+		// unknown proof domain
+		return nil, fmt.Errorf("%w: %d", ErrUnknownDomain, proof.Domain)
+	}
+
+	return handler.Validate(ctx, proof.Proof)
 }
 
 func (h *Handler) storeProof(ctx context.Context, domain ProofDomain, proof []byte) error {
