@@ -56,28 +56,32 @@ func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
 	return rows > 0, nil
 }
 
-func Proof(db sql.Executor, nodeID types.NodeID) ([]byte, error) {
+// Proof returns a proof for the given node ID. It will not necessarily return the proof for the given node ID,
+// but might return the proof for the node ID the given node ID is married to.
+func Proof(db sql.Executor, nodeID types.NodeID) (types.NodeID, byte, []byte, error) {
+	var domain byte
 	var proof []byte
 	_, err := db.Exec(`
-		SELECT proof FROM malfeasance
+		SELECT domain, proof FROM malfeasance
 		WHERE pubkey = ?1;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 		}, func(stmt *sql.Statement) bool {
-			proof = make([]byte, stmt.ColumnLen(0))
-			stmt.ColumnBytes(0, proof)
+			domain = byte(stmt.ColumnInt(0))
+			proof = make([]byte, stmt.ColumnLen(1))
+			stmt.ColumnBytes(1, proof)
 			return true
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("proof %v: %w", nodeID, err)
+		return types.EmptyNodeID, 0, nil, fmt.Errorf("proof %v: %w", nodeID, err)
 	}
-	if proof != nil {
-		return proof, nil
+	if len(proof) > 0 {
+		return nodeID, domain, proof, nil
 	}
 
 	_, err = db.Exec(`
-		SELECT proof FROM malfeasance
+		SELECT pubkey, domain, proof FROM malfeasance
 		WHERE pubkey = (
 			SELECT married_to FROM malfeasance
 			WHERE pubkey = ?1
@@ -85,16 +89,21 @@ func Proof(db sql.Executor, nodeID types.NodeID) ([]byte, error) {
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 		}, func(stmt *sql.Statement) bool {
-			proof = make([]byte, stmt.ColumnLen(0))
-			stmt.ColumnBytes(0, proof)
+			stmt.ColumnBytes(0, nodeID[:])
+			domain = byte(stmt.ColumnInt(1))
+			proof = make([]byte, stmt.ColumnLen(2))
+			stmt.ColumnBytes(2, proof)
 			return true
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("proof %v: %w", nodeID, err)
+		return types.EmptyNodeID, 0, nil, fmt.Errorf("proof %v: %w", nodeID, err)
+	}
+	if proof == nil {
+		return types.EmptyNodeID, 0, nil, fmt.Errorf("proof %v: %w", nodeID, sql.ErrNotFound)
 	}
 
-	return proof, nil
+	return nodeID, domain, proof, nil
 }
 
 // TODO(mafa): it seems that this is again needed by the fetcher.
