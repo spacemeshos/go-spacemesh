@@ -37,11 +37,7 @@ ifeq ($(configname),$(test_job_name))
 endif
 
 command := tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
-					 -clusters=$(clusters) -level=$(level) -configname=$(configname)
-
-ifeq ($(failfast),true)
-	command := $(command) -test.failfast
-endif
+	-test.failfast=$(failfast) -clusters=$(clusters) -level=$(level) -configname=$(configname)
 
 
 
