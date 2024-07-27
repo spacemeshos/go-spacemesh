@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"sync"
@@ -30,6 +31,12 @@ var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
 	errCertificatesNotSupported = errors.New("poet doesn't support certificates")
+)
+
+const (
+	submitPath = "/v1/submit"
+	infoPath   = "/v1/info"
+	proofPath  = "/v1/proofs"
 )
 
 type PoetPowParams struct {
@@ -66,10 +73,11 @@ type PoetClient interface {
 
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
-	id      []byte
-	baseURL *url.URL
-	client  *retryablehttp.Client
-	logger  *zap.Logger
+	id                    []byte
+	baseURL               *url.URL
+	client                *retryablehttp.Client
+	submitChallengeClient *retryablehttp.Client
+	logger                *zap.Logger
 }
 
 func checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
@@ -133,6 +141,14 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 		CheckRetry:   checkRetry,
 	}
 
+	submitChallengeClient := &retryablehttp.Client{
+		RetryMax:     math.MaxInt,
+		RetryWaitMin: cfg.RequestRetryDelay,
+		RetryWaitMax: 2 * cfg.RequestRetryDelay,
+		Backoff:      retryablehttp.LinearJitterBackoff,
+		CheckRetry:   checkRetry,
+	}
+
 	baseURL, err := url.Parse(server.Address)
 	if err != nil {
 		return nil, fmt.Errorf("parsing address: %w", err)
@@ -142,10 +158,11 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 	}
 
 	poetClient := &HTTPPoetClient{
-		id:      server.Pubkey.Bytes(),
-		baseURL: baseURL,
-		client:  client,
-		logger:  zap.NewNop(),
+		id:                    server.Pubkey.Bytes(),
+		baseURL:               baseURL,
+		client:                client,
+		submitChallengeClient: submitChallengeClient,
+		logger:                zap.NewNop(),
 	}
 	for _, opt := range opts {
 		opt(poetClient)
@@ -155,11 +172,11 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 		"created poet client",
 		zap.Stringer("url", baseURL),
 		zap.Binary("pubkey", server.Pubkey.Bytes()),
-		zap.Int("max retries", client.RetryMax),
+		zap.Int("default max retries", client.RetryMax),
+		zap.Int("submit challenge max retries", submitChallengeClient.RetryMax),
 		zap.Duration("min retry wait", client.RetryWaitMin),
 		zap.Duration("max retry wait", client.RetryWaitMax),
 	)
-
 	return poetClient, nil
 }
 
@@ -230,7 +247,7 @@ func (c *HTTPPoetClient) Submit(
 	}
 
 	resBody := rpcapi.SubmitResponse{}
-	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodPost, submitPath, &request, &resBody); err != nil {
 		return nil, fmt.Errorf("submitting challenge: %w", err)
 	}
 	roundEnd := time.Time{}
@@ -243,7 +260,7 @@ func (c *HTTPPoetClient) Submit(
 
 func (c *HTTPPoetClient) info(ctx context.Context) (*rpcapi.InfoResponse, error) {
 	resBody := rpcapi.InfoResponse{}
-	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, infoPath, nil, &resBody); err != nil {
 		return nil, fmt.Errorf("getting poet info: %w", err)
 	}
 	return &resBody, nil
@@ -252,7 +269,7 @@ func (c *HTTPPoetClient) info(ctx context.Context) (*rpcapi.InfoResponse, error)
 // Proof implements PoetProvingServiceClient.
 func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
 	resBody := rpcapi.ProofResponse{}
-	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, fmt.Sprintf(proofPath+"/%s", roundID), nil, &resBody); err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 
@@ -296,7 +313,13 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := c.client.Do(req)
+	var res *http.Response
+
+	if path == submitPath {
+		res, err = c.submitChallengeClient.Do(req)
+	} else {
+		res, err = c.client.Do(req)
+	}
 	if err != nil {
 		return fmt.Errorf("doing request: %w", err)
 	}

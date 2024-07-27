@@ -82,6 +82,57 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func Test_HTTPPoetClient_SubmitTillCtxDeadlineReached(t *testing.T) {
+	t.Parallel()
+
+	ctxWithDeadline, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	defer cancel()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
+		now := time.Now()
+		deadline, _ := ctxWithDeadline.Deadline()
+		remain := deadline.Sub(now)
+
+		if remain.Seconds() <= time.Second.Seconds() {
+			resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			} else {
+				w.Write(resp)
+			}
+			return
+		}
+		http.Error(w, "some_error", http.StatusInternalServerError)
+	})
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	cfg := server.DefaultRoundConfig()
+	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
+		PhaseShift:        cfg.PhaseShift,
+		CycleGap:          cfg.CycleGap,
+		MaxRequestRetries: 1,
+	}, withCustomHttpClient(ts.Client()))
+	require.NoError(t, err)
+
+	startTime := time.Now()
+	_, err = client.Submit(
+		ctxWithDeadline,
+		time.Time{},
+		nil,
+		nil,
+		types.EmptyEdSignature,
+		types.NodeID{},
+		PoetAuth{},
+	)
+	duration := time.Since(startTime)
+
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, duration.Seconds(), float64(4))
+}
+
 func Test_HTTPPoetClient_Address(t *testing.T) {
 	t.Parallel()
 	t.Run("with scheme", func(t *testing.T) {
