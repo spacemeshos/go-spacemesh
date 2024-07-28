@@ -784,8 +784,9 @@ func (b *Builder) createAtx(
 	sig *signing.EdSigner,
 	challenge *types.NIPostChallenge,
 ) (builtAtx, error) {
-	version := b.version(challenge.PublishEpoch)
 	var challengeHash types.Hash32
+
+	version := b.version(challenge.PublishEpoch)
 	switch version {
 	case types.AtxV1:
 		challengeHash = wire.NIPostChallengeToWireV1(challenge).Hash()
@@ -795,6 +796,7 @@ func (b *Builder) createAtx(
 		return nil, fmt.Errorf("unknown ATX version: %v", version)
 	}
 	b.logger.Info("building ATX", zap.Stringer("smesherID", sig.NodeID()), zap.Stringer("version", version))
+
 	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challengeHash, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)

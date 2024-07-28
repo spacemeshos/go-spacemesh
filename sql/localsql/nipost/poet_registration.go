@@ -1,7 +1,9 @@
 package nipost
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -9,6 +11,7 @@ import (
 )
 
 type PoETRegistration struct {
+	NodeId        types.NodeID
 	ChallengeHash types.Hash32
 	Address       string
 	RoundID       string
@@ -47,29 +50,46 @@ func ClearPoetRegistrations(db sql.Executor, nodeID types.NodeID) error {
 	return nil
 }
 
-func PoetRegistrations(db sql.Executor, nodeID types.NodeID) ([]PoETRegistration, error) {
+func PoetRegistrations(db sql.Executor, nodeIDs ...types.NodeID) ([]PoETRegistration, error) {
+	if len(nodeIDs) == 0 {
+		return nil, errors.New("no node IDs provided")
+	}
+
 	var registrations []PoETRegistration
 
 	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
+		for i, nodeID := range nodeIDs {
+			stmt.BindBytes(i+1, nodeID.Bytes())
+		}
 	}
 
 	dec := func(stmt *sql.Statement) bool {
 		registration := PoETRegistration{
-			Address:  stmt.ColumnText(1),
-			RoundID:  stmt.ColumnText(2),
-			RoundEnd: time.Unix(stmt.ColumnInt64(3), 0),
+			Address:  stmt.ColumnText(2),
+			RoundID:  stmt.ColumnText(3),
+			RoundEnd: time.Unix(stmt.ColumnInt64(4), 0),
 		}
-		stmt.ColumnBytes(0, registration.ChallengeHash[:])
+		stmt.ColumnBytes(0, registration.NodeId.Bytes())
+		stmt.ColumnBytes(1, registration.ChallengeHash[:])
 		registrations = append(registrations, registration)
 		return true
 	}
 
-	query := `SELECT hash, address, round_id, round_end FROM poet_registration WHERE id = ?1;`
+	placeholders := make([]string, len(nodeIDs))
+	for i := range placeholders {
+		placeholders[i] = fmt.Sprintf("?%d", i+1)
+	}
+	placeholderStr := strings.Join(placeholders, ", ")
+
+	query := fmt.Sprintf(`SELECT id, hash, address, round_id, round_end FROM poet_registration WHERE id IN (%s);`, placeholderStr)
 
 	_, err := db.Exec(query, enc, dec)
 	if err != nil {
-		return nil, fmt.Errorf("get poet registrations for node id %s: %w", nodeID.ShortString(), err)
+		nodeIDStrings := make([]string, len(nodeIDs))
+		for i, nodeID := range nodeIDs {
+			nodeIDStrings[i] = nodeID.ShortString()
+		}
+		return nil, fmt.Errorf("get poet registrations for node ids %s: %w", strings.Join(nodeIDStrings, ", "), err)
 	}
 
 	return registrations, nil

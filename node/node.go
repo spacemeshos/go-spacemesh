@@ -1540,11 +1540,24 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewAccountService(app.db, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.SmeshingIdentities:
+		nodeIds := make([]types.NodeID, len(app.signers))
+		for i, signer := range app.signers {
+			nodeIds[i] = signer.NodeID()
+		}
+
+		configuredPoets := make(map[string]struct{})
+		for _, server := range app.Config.PoetServers {
+			configuredPoets[server.Address] = struct{}{}
+		}
+
+		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, nodeIds)
+		app.grpcServices[svc] = service
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
 
-func (app *App) startAPIServices(ctx context.Context) error {
+func (app *App) startAPIServices() error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
 
@@ -2150,7 +2163,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		app.log.Info("no need to preserve data after recovery")
 	}
 
-	if err := app.startAPIServices(ctx); err != nil {
+	if err := app.startAPIServices(); err != nil {
 		return err
 	}
 
