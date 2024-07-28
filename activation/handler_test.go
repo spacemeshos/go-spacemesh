@@ -514,6 +514,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		err := atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf)
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorContains(t, err, "invalid atx signature")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("atx V2", func(t *testing.T) {
 		t.Parallel()
@@ -857,12 +858,14 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 		_, err := atxHdlr.decodeATX(nil)
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("malformed atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 		_, err := atxHdlr.decodeATX([]byte("malformed"))
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("v1", func(t *testing.T) {
 		t.Parallel()
@@ -893,5 +896,6 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atx.PublishEpoch = 9
 		_, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 }

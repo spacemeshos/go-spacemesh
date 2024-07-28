@@ -32,16 +32,16 @@ type DebugService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (d DebugService) RegisterService(server *grpc.Server) {
+func (d *DebugService) RegisterService(server *grpc.Server) {
 	pb.RegisterDebugServiceServer(server, d)
 }
 
-func (s DebugService) RegisterHandlerService(mux *runtime.ServeMux) error {
-	return pb.RegisterDebugServiceHandlerServer(context.Background(), mux, s)
+func (d *DebugService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterDebugServiceHandlerServer(context.Background(), mux, d)
 }
 
 // String returns the name of this service.
-func (d DebugService) String() string {
+func (d *DebugService) String() string {
 	return "DebugService"
 }
 
@@ -59,7 +59,7 @@ func NewDebugService(db *sql.Database, conState conservativeState, host networkI
 }
 
 // Accounts returns current counter and balance for all accounts.
-func (d DebugService) Accounts(ctx context.Context, in *pb.AccountsRequest) (*pb.AccountsResponse, error) {
+func (d *DebugService) Accounts(ctx context.Context, in *pb.AccountsRequest) (*pb.AccountsResponse, error) {
 	var (
 		accts []*types.Account
 		err   error
@@ -96,7 +96,7 @@ func (d DebugService) Accounts(ctx context.Context, in *pb.AccountsRequest) (*pb
 }
 
 // NetworkInfo query provides NetworkInfoResponse.
-func (d DebugService) NetworkInfo(ctx context.Context, _ *emptypb.Empty) (*pb.NetworkInfoResponse, error) {
+func (d *DebugService) NetworkInfo(ctx context.Context, _ *emptypb.Empty) (*pb.NetworkInfoResponse, error) {
 	resp := &pb.NetworkInfoResponse{Id: d.netInfo.ID().String()}
 	for _, a := range d.netInfo.ListenAddresses() {
 		resp.ListenAddresses = append(resp.ListenAddresses, a.String())
@@ -139,7 +139,7 @@ func (d DebugService) NetworkInfo(ctx context.Context, _ *emptypb.Empty) (*pb.Ne
 }
 
 // ActiveSet query provides hare active set for the specified epoch.
-func (d DebugService) ActiveSet(ctx context.Context, req *pb.ActiveSetRequest) (*pb.ActiveSetResponse, error) {
+func (d *DebugService) ActiveSet(ctx context.Context, req *pb.ActiveSetRequest) (*pb.ActiveSetResponse, error) {
 	actives, err := d.oracle.ActiveSet(ctx, types.EpochID(req.Epoch))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, fmt.Sprintf("active set for epoch %d: %s", req.Epoch, err.Error()))
@@ -152,7 +152,7 @@ func (d DebugService) ActiveSet(ctx context.Context, req *pb.ActiveSetRequest) (
 }
 
 // ProposalsStream streams all proposals confirmed by hare.
-func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_ProposalsStreamServer) error {
+func (d *DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_ProposalsStreamServer) error {
 	sub := events.SubscribeProposals()
 	if sub == nil {
 		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
@@ -177,7 +177,7 @@ func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_P
 	}
 }
 
-func (d DebugService) ChangeLogLevel(ctx context.Context, req *pb.ChangeLogLevelRequest) (*emptypb.Empty, error) {
+func (d *DebugService) ChangeLogLevel(ctx context.Context, req *pb.ChangeLogLevelRequest) (*emptypb.Empty, error) {
 	level, err := zap.ParseAtomicLevel(req.GetLevel())
 	if err != nil {
 		return nil, fmt.Errorf("parse level: %w", err)

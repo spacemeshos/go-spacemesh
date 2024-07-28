@@ -40,7 +40,7 @@ func TestLayerService_List(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewLayerServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -116,7 +116,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewLayerStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {

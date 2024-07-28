@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -133,11 +133,7 @@ func (b *Block) Initialize() {
 
 // Bytes returns the serialization of the InnerBlock.
 func (b *Block) Bytes() []byte {
-	data, err := codec.Encode(&b.InnerBlock)
-	if err != nil {
-		log.Panic("failed to serialize block: %v", err)
-	}
-	return data
+	return codec.MustEncode(&b.InnerBlock)
 }
 
 // ID returns the BlockID.
@@ -151,7 +147,7 @@ func (b *Block) ToVote() Vote {
 }
 
 // MarshalLogObject implements logging encoder for Block.
-func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (b *Block) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("block_id", b.ID().String())
 	encoder.AddUint32("layer_id", b.LayerIndex.Uint32())
 	encoder.AddUint64("tick_height", b.TickHeight)
@@ -168,11 +164,6 @@ func (id BlockID) Bytes() []byte {
 // AsHash32 returns a Hash32 whose first 20 bytes are the bytes of this BlockID, it is right-padded with zeros.
 func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (id BlockID) Field() log.Field {
-	return log.String("block_id", id.String())
 }
 
 // String implements the Stringer interface.
@@ -196,7 +187,7 @@ func BlockIDsToHashes(ids []BlockID) []Hash32 {
 
 type blockIDs []BlockID
 
-func (ids blockIDs) MarshalLogArray(encoder log.ArrayEncoder) error {
+func (ids blockIDs) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
 	for i := range ids {
 		encoder.AppendString(ids[i].String())
 	}
@@ -251,9 +242,5 @@ type CertifyContent struct {
 
 // Bytes returns the actual data being signed in a CertifyMessage.
 func (cm *CertifyMessage) Bytes() []byte {
-	data, err := codec.Encode(&cm.CertifyContent)
-	if err != nil {
-		log.Panic("failed to serialize certify msg: %v", err)
-	}
-	return data
+	return codec.MustEncode(&cm.CertifyContent)
 }
