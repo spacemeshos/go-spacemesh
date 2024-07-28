@@ -36,7 +36,7 @@ func TestCheckpoint(t *testing.T) {
 	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	addedLater := 2
 	size := min(tctx.ClusterSize, 30)
 	oldSize := size - addedLater

@@ -326,7 +326,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", b.AtxID.String())
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddString("active set hash", activeHash.ShortString())
-	encoder.AddString("beacon", beacon.ShortString())
+	encoder.AddString("beacon", beacon.String())
 	encoder.AddObject("votes", &b.Votes)
 	return nil
 }
@@ -377,11 +377,6 @@ func (id BallotID) Bytes() []byte {
 // AsHash32 returns a Hash32 whose first 20 bytes are the bytes of this BallotID, it is right-padded with zeros.
 func (id BallotID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (id BallotID) Field() log.Field {
-	return log.String("ballot_id", id.String())
 }
 
 // Compare returns true if other (the given BallotID) is less than this BallotID, by lexicographic comparison.
