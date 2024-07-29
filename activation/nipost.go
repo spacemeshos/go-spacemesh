@@ -441,11 +441,11 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	submitCtx, cancel := context.WithDeadline(ctx, curPoetRoundStartDeadline)
 	defer cancel()
 
-	g, ctx := errgroup.WithContext(submitCtx)
+	eg, ctx := errgroup.WithContext(submitCtx)
 	submittedRegistrationsChan := make(chan nipost.PoETRegistration, len(missingRegistrations))
 
 	for _, client := range missingRegistrations {
-		g.Go(func() error {
+		eg.Go(func() error {
 			registration, err := nb.submitPoetChallenge(
 				ctx, nodeID,
 				poetProofDeadline,
@@ -463,7 +463,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 		})
 	}
 
-	g.Wait()
+	eg.Wait()
 	close(submittedRegistrationsChan)
 
 	for registration := range submittedRegistrationsChan {

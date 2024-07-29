@@ -835,7 +835,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			AnyTimes().
 			Return(&types.PoetRound{}, nil)
-		poet.EXPECT().Address().AnyTimes().Return(poetProverAddr).AnyTimes()
+		poet.EXPECT().Address().Return(poetProverAddr).AnyTimes()
 
 		// successfully registered to 2 poets
 		err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
@@ -971,10 +971,10 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
 			poetProver := NewMockPoetService(ctrl)
-			poetProver.EXPECT().Address().AnyTimes().Return(poetProverAddr).AnyTimes()
+			poetProver.EXPECT().Address().Return(poetProverAddr).AnyTimes()
 
 			addedPoetProver := NewMockPoetService(ctrl)
-			addedPoetProver.EXPECT().Address().AnyTimes().Return(poetProverAddr2).AnyTimes()
+			addedPoetProver.EXPECT().Address().Return(poetProverAddr2).AnyTimes()
 
 			// successfully registered to 1 poet
 			err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
@@ -1015,10 +1015,10 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
 			poetProver := NewMockPoetService(ctrl)
-			poetProver.EXPECT().Address().AnyTimes().Return(poetProverAddr).AnyTimes()
+			poetProver.EXPECT().Address().Return(poetProverAddr).AnyTimes()
 
 			addedPoetProver := NewMockPoetService(ctrl)
-			addedPoetProver.EXPECT().Address().AnyTimes().Return(poetProverAddr2).AnyTimes()
+			addedPoetProver.EXPECT().Address().Return(poetProverAddr2).AnyTimes()
 
 			// successfully registered to 2 poets
 			err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
@@ -1065,7 +1065,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
 			poetProver := NewMockPoetService(ctrl)
-			poetProver.EXPECT().Address().AnyTimes().Return(poetProverAddr).AnyTimes()
+			poetProver.EXPECT().Address().Return(poetProverAddr).AnyTimes()
 
 			// successfully registered to removed poet
 			err = nipost.AddPoetRegistration(db, sig.NodeID(), nipost.PoETRegistration{
