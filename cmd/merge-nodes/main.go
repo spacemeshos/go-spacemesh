@@ -32,11 +32,11 @@ var rootCmd = &cobra.Command{
 	Use:   "merge-nodes -f <dir> -t <dir>",
 	Short: "Spacemesh Node Merger",
 	Long: `Merge identities of two Spacemesh nodes into one.
-			The 'from' node will be merged into the 'to' node, leaving the 'from' node untouched.
-			The 'to' node can be an existing node or an empty folder.
-			Be sure to backup the 'to' node before running this command.
-			NOTE: both 'from' and 'to' nodes must be upgraded to the latest version before running this command.
-			NOTE: after upgrading and starting the nodes at least once, convert them to remote nodes before merging.`,
+The 'from' node will be merged into the 'to' node, leaving the 'from' node untouched.
+The 'to' node can be an existing node or an empty folder.
+Be sure to backup the 'to' node before running this command.
+NOTE: both 'from' and 'to' nodes must be upgraded to the latest version before running this command.
+NOTE: after upgrading and starting the nodes at least once, convert them to remote nodes before merging.`,
 	Version: version,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg := zap.NewProductionConfig()
