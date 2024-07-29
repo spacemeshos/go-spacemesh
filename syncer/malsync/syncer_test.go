@@ -338,7 +338,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectPeers(tester.peers)
 		tester.expectGetMaliciousIDs()
 		tester.expectGetProofs(map[types.NodeID]error{
-			nid("2"): fetch.ErrExceedMaxRetries,
+			nid("2"): errors.New("fail"),
 		})
 		epochStart := tester.clock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)

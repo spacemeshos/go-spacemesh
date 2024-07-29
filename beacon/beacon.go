@@ -245,7 +245,7 @@ func (pd *ProtocolDriver) UpdateBeacon(epoch types.EpochID, beacon types.Beacon)
 	pd.beacons[epoch] = beacon
 	pd.logger.Info("using fallback beacon",
 		zap.Uint32("epoch", epoch.Uint32()),
-		log.ZShortStringer("beacon", beacon),
+		zap.Stringer("beacon", beacon),
 	)
 	pd.onResult(epoch, beacon)
 	return nil
@@ -410,7 +410,7 @@ func (pd *ProtocolDriver) recordBeacon(
 		pd.logger.Debug("added beacon from ballot",
 			zap.Uint32("epoch", epochID.Uint32()),
 			zap.Stringer("ballotID", ballot.ID()),
-			log.ZShortStringer("beacon", beacon),
+			zap.Stringer("beacon", beacon),
 			zap.Stringer("weight_per", weightPer),
 			zap.Int("num_eligibility", numEligibility),
 			zap.Stringer("weight", ballotWeight),
@@ -433,7 +433,7 @@ func (pd *ProtocolDriver) recordBeacon(
 	pd.logger.Debug("added beacon from ballot",
 		zap.Uint32("epoch", epochID.Uint32()),
 		zap.Stringer("ballotID", ballot.ID()),
-		log.ZShortStringer("beacon", beacon),
+		zap.Stringer("beacon", beacon),
 		zap.Stringer("weight_per", weightPer),
 		zap.Int("num_eligibility", numEligibility),
 		zap.Stringer("weight", ballotWeight),
@@ -469,7 +469,7 @@ func (pd *ProtocolDriver) findMajorityBeacon(epoch types.EpochID) types.Beacon {
 	for beacon, bw := range epochBeacons {
 		if bw.totalWeight.GreaterThan(majorityWeight) {
 			logger.Info("beacon determined for epoch",
-				log.ZShortStringer("beacon", beacon),
+				zap.Stringer("beacon", beacon),
 				zap.Int("total_weight_unit", totalEligibility),
 				zap.Stringer("total_weight", totalWeight),
 				zap.Stringer("beacon_weight", bw.totalWeight),
@@ -482,7 +482,7 @@ func (pd *ProtocolDriver) findMajorityBeacon(epoch types.EpochID) types.Beacon {
 		}
 	}
 	logger.Warn("beacon determined for epoch by plurality, not majority",
-		log.ZShortStringer("beacon", bPlurality),
+		zap.Stringer("beacon", bPlurality),
 		zap.Int("total_weight_unit", totalEligibility),
 		zap.Stringer("total_weight", totalWeight),
 		zap.Stringer("beacon_weight", maxWeight),
@@ -539,7 +539,7 @@ func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beac
 	if err := beacons.Add(pd.cdb, targetEpoch, beacon); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		pd.logger.Error("failed to persist beacon",
 			zap.Uint32("target_epoch", targetEpoch.Uint32()),
-			log.ZShortStringer("beacon", beacon),
+			zap.Stringer("beacon", beacon),
 			zap.Error(err),
 		)
 		return fmt.Errorf("persist beacon: %w", err)
@@ -834,7 +834,7 @@ func (pd *ProtocolDriver) runProtocol(ctx context.Context, epoch types.EpochID, 
 		return
 	}
 
-	logger.Info("beacon set for epoch", log.ZShortStringer("beacon", beacon))
+	logger.Info("beacon set for epoch", zap.Stringer("beacon", beacon))
 }
 
 func calcBeacon(logger *zap.Logger, set proposalSet) types.Beacon {
@@ -844,7 +844,7 @@ func calcBeacon(logger *zap.Logger, set proposalSet) types.Beacon {
 	// to the same size as the proposal
 	beacon := types.BytesToBeacon(allProposals.hash().Bytes())
 	logger.Info("calculated beacon",
-		log.ZShortStringer("beacon", beacon),
+		zap.Stringer("beacon", beacon),
 		zap.Int("num_hashes", len(allProposals)),
 		zap.Array("proposals", allProposals),
 	)
@@ -1250,7 +1250,7 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 		for beacon, stats := range epochBeacons {
 			stat := &metrics.BeaconStats{
 				Epoch:      epoch,
-				Beacon:     beacon.ShortString(),
+				Beacon:     beacon.String(),
 				Weight:     stats.totalWeight,
 				WeightUnit: stats.numEligibility,
 			}
@@ -1262,7 +1262,7 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 	if beacon, ok := pd.beacons[epoch+1]; ok {
 		calculated = &metrics.BeaconStats{
 			Epoch:  epoch + 1,
-			Beacon: beacon.ShortString(),
+			Beacon: beacon.String(),
 		}
 	}
 

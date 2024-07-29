@@ -322,7 +322,7 @@ func (o *Oracle) Validate(
 	if !fixed.BinCDF(n, p, x-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
-	o.log.WithContext(ctx).With().Warning("eligibility: node did not pass vrf eligibility threshold",
+	o.log.WithContext(ctx).With().Info("eligibility: node did not pass vrf eligibility threshold",
 		layer,
 		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize),

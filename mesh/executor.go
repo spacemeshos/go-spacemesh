@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
@@ -25,7 +27,7 @@ var (
 )
 
 type Executor struct {
-	logger   log.Log
+	logger   *zap.Logger
 	db       sql.Executor
 	atxsdata *atxsdata.Data
 	vm       vmState
@@ -34,7 +36,7 @@ type Executor struct {
 	mu sync.Mutex
 }
 
-func NewExecutor(db sql.Executor, atxsdata *atxsdata.Data, vm vmState, cs conservativeState, lg log.Log) *Executor {
+func NewExecutor(db sql.Executor, atxsdata *atxsdata.Data, vm vmState, cs conservativeState, lg *zap.Logger) *Executor {
 	return &Executor{
 		logger:   lg,
 		db:       db,
@@ -59,10 +61,10 @@ func (e *Executor) Revert(ctx context.Context, revertTo types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	e.logger.With().Info("reverted state",
-		log.Context(ctx),
-		log.Stringer("state_hash", root),
-		log.Uint32("revert_to", revertTo.Uint32()),
+	e.logger.Info("reverted state",
+		log.ZContext(ctx),
+		zap.Stringer("state_hash", root),
+		zap.Uint32("revert_to", revertTo.Uint32()),
 	)
 	return nil
 }
@@ -115,15 +117,15 @@ func (e *Executor) ExecuteOptimistic(
 	if err != nil {
 		return nil, fmt.Errorf("get state hash: %w", err)
 	}
-	e.logger.With().Debug("optimistically executed block",
-		log.Context(ctx),
-		log.Uint32("lid", lid.Uint32()),
-		log.Stringer("block", b.ID()),
-		log.Stringer("state_hash", state),
-		log.Duration("duration", time.Since(start)),
-		log.Int("count", len(executed)),
-		log.Int("skipped", len(ineffective)),
-		log.Int("rewards", len(b.Rewards)),
+	e.logger.Debug("optimistically executed block",
+		log.ZContext(ctx),
+		zap.Uint32("lid", lid.Uint32()),
+		zap.Stringer("block", b.ID()),
+		zap.Stringer("state_hash", state),
+		zap.Duration("duration", time.Since(start)),
+		zap.Int("count", len(executed)),
+		zap.Int("skipped", len(ineffective)),
+		zap.Int("rewards", len(b.Rewards)),
 	)
 	return b, nil
 }
@@ -164,14 +166,14 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	e.logger.With().Debug("executed block",
-		log.Context(ctx),
-		log.Uint32("lid", lid.Uint32()),
-		log.Stringer("block", block.ID()),
-		log.Stringer("state_hash", state),
-		log.Duration("duration", time.Since(start)),
-		log.Int("count", len(executed)),
-		log.Int("rewards", len(rewards)),
+	e.logger.Debug("executed block",
+		log.ZContext(ctx),
+		zap.Uint32("lid", lid.Uint32()),
+		zap.Stringer("block", block.ID()),
+		zap.Stringer("state_hash", state),
+		zap.Duration("duration", time.Since(start)),
+		zap.Int("count", len(executed)),
+		zap.Int("rewards", len(rewards)),
 	)
 	return nil
 }
@@ -207,11 +209,11 @@ func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	e.logger.With().Info("executed empty layer",
-		log.Context(ctx),
-		log.Uint32("lid", lid.Uint32()),
-		log.Stringer("state_hash", state),
-		log.Duration("duration", time.Since(start)),
+	e.logger.Info("executed empty layer",
+		log.ZContext(ctx),
+		zap.Uint32("lid", lid.Uint32()),
+		zap.Stringer("state_hash", state),
+		zap.Duration("duration", time.Since(start)),
 	)
 	return nil
 }

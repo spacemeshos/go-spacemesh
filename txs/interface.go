@@ -4,8 +4,6 @@ import (
 	"context"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -31,5 +29,5 @@ type vmState interface {
 }
 
 type conStateCache interface {
-	GetMempool(*zap.Logger) map[types.Address][]*NanoTX
+	GetMempool() map[types.Address][]*NanoTX
 }

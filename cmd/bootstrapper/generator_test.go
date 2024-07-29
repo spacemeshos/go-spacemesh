@@ -71,7 +71,7 @@ func launchServer(tb testing.TB, cdb *datastore.CachedDB) (grpcserver.Config, fu
 	// start gRPC and json servers
 	err := grpcService.Start()
 	require.NoError(tb, err)
-	err = jsonService.StartService(context.Background(), s)
+	err = jsonService.StartService(s)
 	require.NoError(tb, err)
 
 	// update config with bound addresses

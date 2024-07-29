@@ -31,16 +31,16 @@ type NodeService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s NodeService) RegisterService(server *grpc.Server) {
+func (s *NodeService) RegisterService(server *grpc.Server) {
 	pb.RegisterNodeServiceServer(server, s)
 }
 
-func (s NodeService) RegisterHandlerService(mux *runtime.ServeMux) error {
+func (s *NodeService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterNodeServiceHandlerServer(context.Background(), mux, s)
 }
 
 // String returns the name of this service.
-func (s NodeService) String() string {
+func (s *NodeService) String() string {
 	return "NodeService"
 }
 
@@ -64,7 +64,7 @@ func NewNodeService(
 }
 
 // Echo returns the response for an echo api request. It's used for E2E tests.
-func (s NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s *NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	if in.Msg != nil {
 		return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
 	}
@@ -72,14 +72,14 @@ func (s NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoRespon
 }
 
 // Version returns the version of the node software as a semver string.
-func (s NodeService) Version(context.Context, *emptypb.Empty) (*pb.VersionResponse, error) {
+func (s *NodeService) Version(context.Context, *emptypb.Empty) (*pb.VersionResponse, error) {
 	return &pb.VersionResponse{
 		VersionString: &pb.SimpleString{Value: s.appVersion},
 	}, nil
 }
 
 // Build returns the build of the node software.
-func (s NodeService) Build(context.Context, *emptypb.Empty) (*pb.BuildResponse, error) {
+func (s *NodeService) Build(context.Context, *emptypb.Empty) (*pb.BuildResponse, error) {
 	return &pb.BuildResponse{
 		BuildString: &pb.SimpleString{Value: s.appCommit},
 	}, nil
@@ -87,7 +87,7 @@ func (s NodeService) Build(context.Context, *emptypb.Empty) (*pb.BuildResponse, 
 
 // Status returns a status object providing information about the connected peers, sync status,
 // current and verified layer.
-func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.StatusResponse, error) {
+func (s *NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.StatusResponse, error) {
 	curLayer, latestLayer, verifiedLayer := s.getLayers()
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
@@ -100,7 +100,7 @@ func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.Statu
 	}, nil
 }
 
-func (s NodeService) NodeInfo(context.Context, *emptypb.Empty) (*pb.NodeInfoResponse, error) {
+func (s *NodeService) NodeInfo(context.Context, *emptypb.Empty) (*pb.NodeInfoResponse, error) {
 	return &pb.NodeInfoResponse{
 		Hrp:              types.NetworkHRP(),
 		FirstGenesis:     types.FirstEffectiveGenesis().Uint32(),
@@ -109,7 +109,7 @@ func (s NodeService) NodeInfo(context.Context, *emptypb.Empty) (*pb.NodeInfoResp
 	}, nil
 }
 
-func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
+func (s *NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
 	// epochs, so just return the current layer instead
 	curLayerObj := s.genTime.CurrentLayer()
@@ -127,7 +127,7 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 // STREAMS
 
 // StatusStream exposes a stream of node status updates.
-func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
+func (s *NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	var (
 		statusCh      <-chan events.Status
 		statusBufFull <-chan struct{}
@@ -174,7 +174,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 }
 
 // ErrorStream exposes a stream of node errors.
-func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
+func (s *NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	var (
 		errorsCh      <-chan events.NodeError
 		errorsBufFull <-chan struct{}
