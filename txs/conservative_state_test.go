@@ -402,7 +402,7 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
-	require.Error(t, tcs.AddToCache(context.Background(), tx, time.Now()), errInsufficientBalance)
+	require.ErrorIs(t, tcs.AddToCache(context.Background(), tx, time.Now()), errInsufficientBalance)
 	checkNoTX(t, tcs.cache, tx.ID)
 	require.False(t, tcs.cache.MoreInDB(addr))
 	checkTXNotInDB(t, tcs.db, tx.ID)
