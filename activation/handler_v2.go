@@ -110,19 +110,20 @@ func (h *HandlerV2) processATX(
 		return fmt.Errorf("%w: validating marriages: %w", pubsub.ErrValidationReject, err)
 	}
 
-	parts, err := h.syntacticallyValidateDeps(ctx, watx)
+	atxData, err := h.syntacticallyValidateDeps(ctx, watx)
 	if err != nil {
 		return fmt.Errorf("%w: validating atx %s (deps): %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
+	atxData.marriages = marrying
 
 	atx := &types.ActivationTx{
 		PublishEpoch:   watx.PublishEpoch,
 		MarriageATX:    watx.MarriageATX,
 		Coinbase:       watx.Coinbase,
 		BaseTickHeight: baseTickHeight,
-		NumUnits:       parts.effectiveUnits,
-		TickCount:      parts.ticks,
-		Weight:         parts.weight,
+		NumUnits:       atxData.effectiveUnits,
+		TickCount:      atxData.ticks,
+		Weight:         atxData.weight,
 		VRFNonce:       types.VRFPostIndex(watx.VRFNonce),
 		SmesherID:      watx.SmesherID,
 	}
@@ -140,7 +141,7 @@ func (h *HandlerV2) processATX(
 	atx.SetID(watx.ID())
 	atx.SetReceived(received)
 
-	if err := h.storeAtx(ctx, atx, watx, marrying, parts.units); err != nil {
+	if err := h.storeAtx(ctx, atx, atxData); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
@@ -433,11 +434,18 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 	return identities.EquivocationSetByMarriageATX(h.cdb, *atx.MarriageATX)
 }
 
-type atxParts struct {
+type idData struct {
+	previous types.ATXID
+	units    uint32
+}
+
+type activationTx struct {
+	*wire.ActivationTxV2
 	ticks          uint64
 	weight         uint64
 	effectiveUnits uint32
-	units          map[types.NodeID]uint32
+	ids            map[types.NodeID]idData
+	marriages      []marriage
 }
 
 type nipostSize struct {
@@ -495,9 +503,10 @@ func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error 
 func (h *HandlerV2) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV2,
-) (*atxParts, error) {
-	parts := atxParts{
-		units: make(map[types.NodeID]uint32),
+) (*activationTx, error) {
+	result := activationTx{
+		ActivationTxV2: atx,
+		ids:            make(map[types.NodeID]idData),
 	}
 	if atx.Initial != nil {
 		if err := h.validateCommitmentAtx(h.goldenATXID, atx.Initial.CommitmentATX, atx.PublishEpoch); err != nil {
@@ -585,7 +594,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		nipostSizes[i].ticks = leaves / h.tickSize
 	}
 
-	parts.effectiveUnits, parts.weight, err = nipostSizes.sumUp()
+	result.effectiveUnits, result.weight, err = nipostSizes.sumUp()
 	if err != nil {
 		return nil, err
 	}
@@ -593,9 +602,10 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	// validate all niposts
 	var smesherCommitment *types.ATXID
 	for _, niposts := range atx.NiPosts {
-		for _, post := range niposts.Posts {
-			id := equivocationSet[post.MarriageIndex]
+		for _, p := range niposts.Posts {
+			id := equivocationSet[p.MarriageIndex]
 			var commitment types.ATXID
+			var previous types.ATXID
 			if atx.Initial != nil {
 				commitment = atx.Initial.CommitmentATX
 			} else {
@@ -607,15 +617,16 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				if id == atx.SmesherID {
 					smesherCommitment = &commitment
 				}
+				previous = previousAtxs[p.PrevATXIndex].ID()
 			}
 
 			err := h.nipostValidator.PostV2(
 				ctx,
 				id,
 				commitment,
-				wire.PostFromWireV1(&post.Post),
+				wire.PostFromWireV1(&p.Post),
 				niposts.Challenge[:],
-				post.NumUnits,
+				p.NumUnits,
 				PostSubset([]byte(h.local)),
 			)
 			invalidIdx := &verifying.ErrInvalidIndex{}
@@ -636,7 +647,10 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			if err != nil {
 				return nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
 			}
-			parts.units[id] = post.NumUnits
+			result.ids[id] = idData{
+				previous: previous,
+				units:    p.NumUnits,
+			}
 		}
 	}
 
@@ -650,18 +664,12 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		}
 	}
 
-	parts.ticks = nipostSizes.minTicks()
-	return &parts, nil
+	result.ticks = nipostSizes.minTicks()
+	return &result, nil
 }
 
-func (h *HandlerV2) checkMalicious(
-	ctx context.Context,
-	tx *sql.Tx,
-	watx *wire.ActivationTxV2,
-	marrying []marriage,
-	ids []types.NodeID,
-) error {
-	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
+func (h *HandlerV2) checkMalicious(ctx context.Context, tx *sql.Tx, atx *activationTx) error {
+	malicious, err := identities.IsMalicious(tx, atx.SmesherID)
 	if err != nil {
 		return fmt.Errorf("checking if node is malicious: %w", err)
 	}
@@ -669,7 +677,7 @@ func (h *HandlerV2) checkMalicious(
 		return nil
 	}
 
-	malicious, err = h.checkDoubleMarry(ctx, tx, watx.ID(), marrying)
+	malicious, err = h.checkDoubleMarry(ctx, tx, atx.ID(), atx.marriages)
 	if err != nil {
 		return fmt.Errorf("checking double marry: %w", err)
 	}
@@ -677,7 +685,7 @@ func (h *HandlerV2) checkMalicious(
 		return nil
 	}
 
-	malicious, err = h.checkDoublePost(ctx, tx, watx, ids)
+	malicious, err = h.checkDoublePost(ctx, tx, atx)
 	if err != nil {
 		return fmt.Errorf("checking double post: %w", err)
 	}
@@ -685,9 +693,17 @@ func (h *HandlerV2) checkMalicious(
 		return nil
 	}
 
-	malicious, err = h.checkDoubleMerge(ctx, tx, watx)
+	malicious, err = h.checkDoubleMerge(ctx, tx, atx)
 	if err != nil {
 		return fmt.Errorf("checking double merge: %w", err)
+	}
+	if malicious {
+		return nil
+	}
+
+	malicious, err = h.checkPrevAtx(ctx, tx, atx)
+	if err != nil {
+		return fmt.Errorf("checking previous ATX: %w", err)
 	}
 	if malicious {
 		return nil
@@ -726,10 +742,9 @@ func (h *HandlerV2) checkDoubleMarry(
 func (h *HandlerV2) checkDoublePost(
 	ctx context.Context,
 	tx *sql.Tx,
-	atx *wire.ActivationTxV2,
-	ids []types.NodeID,
+	atx *activationTx,
 ) (bool, error) {
-	for _, id := range ids {
+	for id := range atx.ids {
 		atxids, err := atxs.FindDoublePublish(tx, id, atx.PublishEpoch)
 		switch {
 		case errors.Is(err, sql.ErrNotFound):
@@ -755,49 +770,72 @@ func (h *HandlerV2) checkDoublePost(
 	return false, nil
 }
 
-func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, watx *wire.ActivationTxV2) (bool, error) {
-	if watx.MarriageATX == nil {
+func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+	if atx.MarriageATX == nil {
 		return false, nil
 	}
-	ids, err := atxs.MergeConflict(tx, *watx.MarriageATX, watx.PublishEpoch)
+	ids, err := atxs.MergeConflict(tx, *atx.MarriageATX, atx.PublishEpoch)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		return false, nil
 	case err != nil:
 		return false, fmt.Errorf("searching for ATXs with the same marriage ATX: %w", err)
 	}
-	otherIndex := slices.IndexFunc(ids, func(id types.ATXID) bool { return id != watx.ID() })
+	otherIndex := slices.IndexFunc(ids, func(id types.ATXID) bool { return id != atx.ID() })
 	other := ids[otherIndex]
 
 	h.logger.Debug("second merged ATX for single marriage - creating malfeasance proof",
-		zap.Stringer("marriage_atx", *watx.MarriageATX),
-		zap.Stringer("atx", watx.ID()),
+		zap.Stringer("marriage_atx", *atx.MarriageATX),
+		zap.Stringer("atx", atx.ID()),
 		zap.Stringer("other_atx", other),
-		zap.Stringer("smesher_id", watx.SmesherID),
+		zap.Stringer("smesher_id", atx.SmesherID),
 	)
 
 	// TODO(mafa): finish proof
 	proof := &wire.ATXProof{
 		ProofType: wire.DoubleMerge,
 	}
-	return true, h.malPublisher.Publish(ctx, watx.SmesherID, proof)
+	return true, h.malPublisher.Publish(ctx, atx.SmesherID, proof)
+}
+
+func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+	for id, data := range atx.ids {
+		prevID, err := atxs.PrevIDByNodeID(tx, id, atx.PublishEpoch)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return false, fmt.Errorf("get last atx by node id: %w", err)
+		}
+		if prevID == data.previous {
+			continue
+		}
+
+		h.logger.Debug("atx references a wrong previous ATX",
+			log.ZShortStringer("smesherID", id),
+			log.ZShortStringer("actual", data.previous),
+			log.ZShortStringer("expected", prevID),
+		)
+
+		// TODO(mafa): finish proof
+		proof := &wire.ATXProof{
+			ProofType: wire.InvalidPrevious,
+		}
+		return true, h.malPublisher.Publish(ctx, id, proof)
+	}
+	return false, nil
 }
 
 // Store an ATX in the DB.
 func (h *HandlerV2) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
-	watx *wire.ActivationTxV2,
-	marrying []marriage,
-	units map[types.NodeID]uint32,
+	watx *activationTx,
 ) error {
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
-		if len(marrying) != 0 {
+		if len(watx.marriages) != 0 {
 			marriageData := identities.MarriageData{
 				ATX:    atx.ID(),
 				Target: atx.SmesherID,
 			}
-			for i, m := range marrying {
+			for i, m := range watx.marriages {
 				marriageData.Signature = m.signature
 				marriageData.Index = i
 				if err := identities.SetMarriage(tx, m.id, &marriageData); err != nil {
@@ -810,8 +848,8 @@ func (h *HandlerV2) storeAtx(
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
-		for id, units := range units {
-			err = atxs.SetUnits(tx, atx.ID(), id, units)
+		for id, p := range watx.ids {
+			err = atxs.SetUnits(tx, atx.ID(), id, p.units)
 			if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 				return fmt.Errorf("setting atx units for ID %s: %w", id, err)
 			}
@@ -830,7 +868,7 @@ func (h *HandlerV2) storeAtx(
 		// TODO(mafa): don't store own ATX if it would mark the node as malicious
 		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
 		//    the gossip handler (not sync!)
-		err := h.checkMalicious(ctx, tx, watx, marrying, maps.Keys(units))
+		err := h.checkMalicious(ctx, tx, watx)
 		if err != nil {
 			return fmt.Errorf("check malicious: %w", err)
 		}

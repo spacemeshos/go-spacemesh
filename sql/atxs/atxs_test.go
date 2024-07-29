@@ -1330,3 +1330,56 @@ func Test_MergeConflict(t *testing.T) {
 		require.Len(t, ids, 2)
 	})
 }
+
+func TestPrevIDByNodeID(t *testing.T) {
+	t.Run("no previous ATXs", func(t *testing.T) {
+		db := sql.InMemory()
+		_, err := atxs.PrevIDByNodeID(db, types.RandomNodeID(), 0)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("filters by epoch", func(t *testing.T) {
+		db := sql.InMemory()
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx1, blob1 := newAtx(t, sig, withPublishEpoch(1))
+		require.NoError(t, atxs.Add(db, atx1, blob1))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), sig.NodeID(), 4))
+
+		atx2, blob2 := newAtx(t, sig, withPublishEpoch(2))
+		require.NoError(t, atxs.Add(db, atx2, blob2))
+		require.NoError(t, atxs.SetUnits(db, atx2.ID(), sig.NodeID(), 4))
+
+		_, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 1)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+
+		prevID, err := atxs.PrevIDByNodeID(db, sig.NodeID(), 2)
+		require.NoError(t, err)
+		require.Equal(t, atx1.ID(), prevID)
+
+		prevID, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 3)
+		require.NoError(t, err)
+		require.Equal(t, atx2.ID(), prevID)
+	})
+	t.Run("the previous is merged and ID is not the signer", func(t *testing.T) {
+		db := sql.InMemory()
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		id := types.RandomNodeID()
+
+		atx1, blob1 := newAtx(t, sig, withPublishEpoch(1))
+		require.NoError(t, atxs.Add(db, atx1, blob1))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), sig.NodeID(), 4))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), id, 8))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), types.RandomNodeID(), 12))
+
+		atx2, blob2 := newAtx(t, sig, withPublishEpoch(2))
+		require.NoError(t, atxs.Add(db, atx2, blob2))
+		require.NoError(t, atxs.SetUnits(db, atx2.ID(), sig.NodeID(), 4))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), types.RandomNodeID(), 12))
+
+		prevID, err := atxs.PrevIDByNodeID(db, id, 3)
+		require.NoError(t, err)
+		require.Equal(t, atx1.ID(), prevID)
+	})
+}

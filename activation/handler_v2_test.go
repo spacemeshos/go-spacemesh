@@ -1898,6 +1898,52 @@ func Test_CalculatingUnits(t *testing.T) {
 	})
 }
 
+func TestContextual_PreviousATX(t *testing.T) {
+	golden := types.RandomATXID()
+	atxHndlr := newV2TestHandler(t, golden)
+	var (
+		signers []*signing.EdSigner
+		eqSet   []types.NodeID
+	)
+	for range 3 {
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		signers = append(signers, sig)
+		eqSet = append(eqSet, sig.NodeID())
+	}
+
+	mATX, otherAtxs := marryIDs(t, atxHndlr, signers, golden)
+
+	// signer 1 creates a solo ATX
+	soloAtx := newSoloATXv2(t, mATX.PublishEpoch+1, otherAtxs[0].ID(), mATX.ID())
+	soloAtx.Sign(signers[1])
+	atxHndlr.expectAtxV2(soloAtx)
+	err := atxHndlr.processATX(context.Background(), "", soloAtx, time.Now())
+	require.NoError(t, err)
+
+	// create a MergedATX for all IDs
+	merged := newSoloATXv2(t, mATX.PublishEpoch+2, mATX.ID(), mATX.ID())
+	post := wire.SubPostV2{
+		MarriageIndex: 1,
+		PrevATXIndex:  1,
+		NumUnits:      soloAtx.TotalNumUnits(),
+	}
+	merged.NiPosts[0].Posts = append(merged.NiPosts[0].Posts, post)
+	// Pass a wrong previous ATX for signer 1. It's already been used for soloATX
+	// (which should be used for the previous ATX for signer 1).
+	merged.PreviousATXs = append(merged.PreviousATXs, otherAtxs[0].ID())
+	matxID := mATX.ID()
+	merged.MarriageATX = &matxID
+	merged.Sign(signers[0])
+
+	atxHndlr.expectMergedAtxV2(merged, eqSet, []uint64{100})
+	atxHndlr.mMalPublish.EXPECT().Publish(gomock.Any(), signers[1].NodeID(), gomock.Cond(func(data any) bool {
+		return data.(*wire.ATXProof).ProofType == wire.InvalidPrevious
+	}))
+	err = atxHndlr.processATX(context.Background(), "", merged, time.Now())
+	require.NoError(t, err)
+}
+
 func Test_CalculatingWeight(t *testing.T) {
 	t.Parallel()
 	t.Run("total weight must not overflow uint64", func(t *testing.T) {

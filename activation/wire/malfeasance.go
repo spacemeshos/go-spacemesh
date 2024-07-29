@@ -13,6 +13,7 @@ const (
 	DoublePublish ProofType = iota + 1
 	DoubleMarry
 	DoubleMerge
+	InvalidPrevious
 	InvalidPost
 )
 
