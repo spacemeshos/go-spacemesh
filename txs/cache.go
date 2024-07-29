@@ -96,7 +96,6 @@ func (ac *accountCache) availBalance() uint64 {
 
 func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element, *candidate, error) {
 	if ac.txsByNonce.Len() >= maxTXsPerAcct {
-
 		ac.moreInDB = true
 		return nil, nil, fmt.Errorf("%w: len %d", errTooManyNonce, ac.txsByNonce.Len())
 	}
@@ -581,7 +580,6 @@ func (c *Cache) Add(
 		mempoolTxCount.WithLabelValues(accepted).Inc()
 	}
 	if err == nil || mustPersist {
-		// panic(fmt.Sprintf("err %s, mp %t", err, mustPersist))
 		if dbErr := transactions.Add(db, tx, received); dbErr != nil {
 			return dbErr
 		}
