@@ -138,12 +138,13 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 					errs    = 0
 					maxErrs = 10
 					timer   *time.Timer
+					timeC   <-chan time.Time
 					backoff = 10 * time.Second
 				)
 				for epoch := last; ; epoch++ {
 					wait := time.Until(params.updateActiveSetTime(epoch))
 					select {
-					case <-timer.C:
+					case <-timeC:
 						if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
 							errs++
 							timer.Reset(backoff)
@@ -153,9 +154,11 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 						if !timer.Stop() {
 							<-timer.C
 						}
+						timeC = nil
 					case <-time.After(wait):
 						if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
 							timer = time.NewTimer(backoff)
+							timeC = timer.C
 							if errs >= maxErrs {
 								errCh <- err
 								return err
