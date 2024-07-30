@@ -146,7 +146,7 @@ func TestContextualLogging(t *testing.T) {
 
 	// test basic context first: try to set and read context, roundtrip
 	ctx := context.Background()
-	ctx = WithRequestID(ctx, reqID)
+	ctx = withRequestID(ctx, reqID)
 	if reqID2, ok := ExtractRequestID(ctx); ok {
 		r.Equal(reqID, reqID2)
 	} else {
@@ -161,7 +161,7 @@ func TestContextualLogging(t *testing.T) {
 
 	// try again in reverse order
 	ctx = context.Background()
-	ctx = WithRequestID(WithSessionID(ctx, sesID), reqID)
+	ctx = withRequestID(WithSessionID(ctx, sesID), reqID)
 	if reqID2, ok := ExtractRequestID(ctx); ok {
 		r.Equal(reqID, reqID2)
 	} else {
@@ -175,7 +175,7 @@ func TestContextualLogging(t *testing.T) {
 	}
 
 	// try re-setting (in reverse)
-	ctx = WithRequestID(WithSessionID(ctx, reqID), sesID)
+	ctx = withRequestID(WithSessionID(ctx, reqID), sesID)
 	if reqID2, ok := ExtractRequestID(ctx); ok {
 		r.Equal(sesID, reqID2)
 	} else {
@@ -202,7 +202,7 @@ func TestContextualLogging(t *testing.T) {
 	AppLog = NewDefault(mainLoggerName)
 
 	// make sure we can set and read context
-	ctx = WithRequestID(context.Background(), reqID)
+	ctx = withRequestID(context.Background(), reqID)
 	contextualLogger := AppLog.WithContext(ctx)
 	contextualLogger.Info(teststr)
 	type entry struct {

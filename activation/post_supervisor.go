@@ -277,7 +277,7 @@ func (ps *PostSupervisor) runCmd(
 		ps.logger.Error("start post service", zap.Error(err))
 		return nil
 	}
-	ps.logger.Info(
+	ps.logger.Debug(
 		"post service started",
 		zap.Int("pid", cmd.Process.Pid),
 		zap.String("cmd", cmd.String()),

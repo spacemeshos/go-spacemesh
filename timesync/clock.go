@@ -91,7 +91,7 @@ func (t *NodeClock) startClock() error {
 		select {
 		case <-ticker.Chan():
 		case <-t.stop:
-			t.log.Info("stopping global clock")
+			t.log.Debug("stopping global clock")
 			ticker.Stop()
 			return nil
 		}
@@ -108,12 +108,12 @@ func (t *NodeClock) GenesisTime() time.Time {
 // Close closes the clock ticker.
 func (t *NodeClock) Close() {
 	t.once.Do(func() {
-		t.log.Info("stopping clock")
+		t.log.Debug("stopping clock")
 		close(t.stop)
 		if err := t.eg.Wait(); err != nil {
 			t.log.Error("failed to stop clock", zap.Error(err))
 		}
-		t.log.Info("clock stopped")
+		t.log.Debug("clock stopped")
 	})
 }
 
@@ -130,7 +130,7 @@ func (t *NodeClock) tick() {
 	layer := t.TimeToLayer(t.clock.Now())
 	switch {
 	case layer.Before(t.lastTicked):
-		t.log.Info("clock ticked back in time",
+		t.log.Warn("clock ticked back in time",
 			zap.Stringer("layer", layer),
 			zap.Stringer("last_ticked_layer", t.lastTicked),
 		)

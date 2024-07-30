@@ -345,7 +345,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		known.Inc()
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
-	logger.Info("new proposal", log.ZShortStringer("exp hash", expHash), zap.Int("num_txs", len(p.TxIDs)))
+	logger.Debug("new proposal", log.ZShortStringer("exp hash", expHash), zap.Int("num_txs", len(p.TxIDs)))
 
 	t2 := time.Now()
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(p))
@@ -439,7 +439,7 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot) (*wire.Mal
 		return nil, fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())
 	}
 
-	h.logger.Info("new ballot", log.ZContext(ctx), zap.Inline(b))
+	h.logger.Debug("new ballot", log.ZContext(ctx), zap.Inline(b))
 
 	decoded, err := h.checkBallotSyntacticValidity(ctx, b)
 	if err != nil {
