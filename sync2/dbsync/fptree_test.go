@@ -738,7 +738,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					} else {
 						require.NotNil(t, fpr.start, "start")
 						expK := KeyBytes(hs[rtc.startIdx][:])
-						assert.Equal(t, expK, fpr.start.Key(), "start")
+						assert.Equal(t, expK, itKey(t, fpr.start), "start")
 					}
 
 					if rtc.endIdx == -1 {
@@ -746,7 +746,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					} else {
 						require.NotNil(t, fpr.end, "end")
 						expK := KeyBytes(hs[rtc.endIdx][:])
-						assert.Equal(t, expK, fpr.end.Key(), "end")
+						assert.Equal(t, expK, itKey(t, fpr.end), "end")
 					}
 				})
 			}
@@ -785,19 +785,19 @@ func (noIDStore) registerHash(h KeyBytes) error {
 	return nil
 }
 
-func (noIDStore) start() (iterator, error) {
+func (noIDStore) start() iterator {
 	panic("no ID store")
 
 }
 
-func (noIDStore) iter(from KeyBytes) (iterator, error) {
-	return noIter{}, nil
+func (noIDStore) iter(from KeyBytes) iterator {
+	return noIter{}
 }
 
 type noIter struct{}
 
-func (noIter) Key() hashsync.Ordered {
-	return make(KeyBytes, 32)
+func (noIter) Key() (hashsync.Ordered, error) {
+	return make(KeyBytes, 32), nil
 }
 
 func (noIter) Next() error {
@@ -999,17 +999,17 @@ type fpResultWithBounds struct {
 	end   KeyBytes
 }
 
-func toFPResultWithBounds(fpr fpResult) fpResultWithBounds {
+func toFPResultWithBounds(t *testing.T, fpr fpResult) fpResultWithBounds {
 	r := fpResultWithBounds{
 		fp:    fpr.fp,
 		count: fpr.count,
 		itype: fpr.itype,
 	}
 	if fpr.start != nil {
-		r.start = fpr.start.Key().(KeyBytes)
+		r.start = itKey(t, fpr.start)
 	}
 	if fpr.end != nil {
-		r.end = fpr.end.Key().(KeyBytes)
+		r.end = itKey(t, fpr.end)
 	}
 	return r
 }
@@ -1092,11 +1092,11 @@ func verifyInterval(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32, li
 	expFPR := dumbFP(hs, x, y, limit)
 	fpr, err := ft.fingerprintInterval(x[:], y[:], limit)
 	require.NoError(t, err)
-	require.Equal(t, expFPR, toFPResultWithBounds(fpr),
+	require.Equal(t, expFPR, toFPResultWithBounds(t, fpr),
 		"x=%s y=%s limit=%d", x.String(), y.String(), limit)
 
 	// QQQQQ: rm
-	if !reflect.DeepEqual(toFPResultWithBounds(fpr), expFPR) {
+	if !reflect.DeepEqual(toFPResultWithBounds(t, fpr), expFPR) {
 		t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
 		for _, h := range hs {
 			t.Logf("QQQQQ: hash: %s", h.String())
@@ -1107,7 +1107,7 @@ func verifyInterval(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32, li
 	}
 	// QQQQQ: /rm
 
-	require.Equal(t, expFPR, toFPResultWithBounds(fpr),
+	require.Equal(t, expFPR, toFPResultWithBounds(t, fpr),
 		"x=%s y=%s limit=%d", x.String(), y.String(), limit)
 
 	return fpr
@@ -1123,7 +1123,7 @@ func verifySubIntervals(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32
 		}
 		part := verifyInterval(t, hs, ft, x, y, c)
 		var m types.Hash32
-		copy(m[:], part.end.Key().(KeyBytes))
+		copy(m[:], itKey(t, part.end))
 		verifySubIntervals(t, hs, ft, x, m, -1, d+1)
 		verifySubIntervals(t, hs, ft, m, y, -1, d+1)
 	}
@@ -1376,7 +1376,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 		//expFPResult := dumbAggATXs(t, db, x, y)
 		fpr, err := ft.fingerprintInterval(x[:], y[:], -1)
 		require.NoError(t, err)
-		require.Equal(t, expFPResult, toFPResultWithBounds(fpr),
+		require.Equal(t, expFPResult, toFPResultWithBounds(t, fpr),
 			"x=%s y=%s", x.String(), y.String())
 
 		limit := 0
@@ -1387,7 +1387,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 		expFPResult = dumbFP(*hs, x, y, limit)
 		fpr, err = ft.fingerprintInterval(x[:], y[:], limit)
 		require.NoError(t, err)
-		require.Equal(t, expFPResult, toFPResultWithBounds(fpr),
+		require.Equal(t, expFPResult, toFPResultWithBounds(t, fpr),
 			"x=%s y=%s limit=%d", x.String(), y.String(), limit)
 	}
 

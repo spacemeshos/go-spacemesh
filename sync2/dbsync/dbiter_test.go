@@ -288,25 +288,25 @@ func TestDBRangeIterator(t *testing.T) {
 		deleteDBItems(t, db)
 		insertDBItems(t, db, tc.items)
 		for maxChunkSize := 1; maxChunkSize < 12; maxChunkSize++ {
-			it, err := newDBRangeIterator(db, testQuery, tc.from, maxChunkSize)
+			it := newDBRangeIterator(db, testQuery, tc.from, maxChunkSize)
 			if tc.expErr != nil {
+				_, err := it.Key()
 				require.ErrorIs(t, err, tc.expErr)
 				continue
 			}
-			require.NoError(t, err)
 			// when there are no items, errEmptySet is returned
 			require.NotEmpty(t, tc.items)
 			clonedIt := it.clone()
 			var collected []KeyBytes
 			for i := 0; i < len(tc.items); i++ {
-				k := it.Key()
+				k := itKey(t, it)
 				require.NotNil(t, k)
-				collected = append(collected, k.(KeyBytes))
-				require.Equal(t, k, clonedIt.Key())
+				collected = append(collected, k)
+				require.Equal(t, k, itKey(t, clonedIt))
 				require.NoError(t, it.Next())
 				// calling Next on the original iterator
 				// shouldn't affect the cloned one
-				require.Equal(t, k, clonedIt.Key())
+				require.Equal(t, k, itKey(t, clonedIt))
 				require.NoError(t, clonedIt.Next())
 			}
 			expected := slices.Concat(tc.items[tc.fromN:], tc.items[:tc.fromN])
@@ -315,11 +315,11 @@ func TestDBRangeIterator(t *testing.T) {
 			clonedIt = it.clone()
 			for range 2 {
 				for i := 0; i < len(tc.items); i++ {
-					k := it.Key()
-					require.Equal(t, collected[i], k.(KeyBytes))
-					require.Equal(t, k, clonedIt.Key())
+					k := itKey(t, it)
+					require.Equal(t, collected[i], k)
+					require.Equal(t, k, itKey(t, clonedIt))
 					require.NoError(t, it.Next())
-					require.Equal(t, k, clonedIt.Key())
+					require.Equal(t, k, itKey(t, clonedIt))
 					require.NoError(t, clonedIt.Next())
 				}
 			}
@@ -333,14 +333,14 @@ type fakeIterator struct {
 
 var _ hashsync.Iterator = &fakeIterator{}
 
-func (it *fakeIterator) Key() hashsync.Ordered {
+func (it *fakeIterator) Key() (hashsync.Ordered, error) {
 	if len(it.allItems) == 0 {
-		panic("no items")
+		return nil, errEmptySet
 	}
 	if len(it.items) == 0 {
 		it.items = it.allItems
 	}
-	return KeyBytes(it.items[0])
+	return KeyBytes(it.items[0]), nil
 }
 
 func (it *fakeIterator) Next() error {
@@ -384,11 +384,11 @@ func TestCombineIterators(t *testing.T) {
 	for range 3 {
 		var collected []KeyBytes
 		for range 4 {
-			k := it.Key()
-			collected = append(collected, k.(KeyBytes))
-			require.Equal(t, k, clonedIt.Key())
+			k := itKey(t, it)
+			collected = append(collected, k)
+			require.Equal(t, k, itKey(t, clonedIt))
 			require.NoError(t, it.Next())
-			require.Equal(t, k, clonedIt.Key())
+			require.Equal(t, k, itKey(t, clonedIt))
 			require.NoError(t, clonedIt.Next())
 		}
 		require.Equal(t, []KeyBytes{
@@ -397,23 +397,23 @@ func TestCombineIterators(t *testing.T) {
 			{0x0a, 0x05, 0x00, 0x00},
 			{0xff, 0xff, 0xff, 0xff},
 		}, collected)
-		require.Equal(t, KeyBytes{0x00, 0x00, 0x00, 0x01}, it.Key())
+		require.Equal(t, KeyBytes{0x00, 0x00, 0x00, 0x01}, itKey(t, it))
 	}
 
 	it1 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 0}, KeyBytes("error")}}
 	it2 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 1}}}
 
 	it = combineIterators(nil, it1, it2)
-	require.Equal(t, KeyBytes{0, 0, 0, 0}, it.Key())
+	require.Equal(t, KeyBytes{0, 0, 0, 0}, itKey(t, it))
 	require.Error(t, it.Next())
 
 	it1 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 0}}}
 	it2 = &fakeIterator{allItems: []KeyBytes{KeyBytes{0, 0, 0, 1}, KeyBytes("error")}}
 
 	it = combineIterators(nil, it1, it2)
-	require.Equal(t, KeyBytes{0, 0, 0, 0}, it.Key())
+	require.Equal(t, KeyBytes{0, 0, 0, 0}, itKey(t, it))
 	require.NoError(t, it.Next())
-	require.Equal(t, KeyBytes{0, 0, 0, 1}, it.Key())
+	require.Equal(t, KeyBytes{0, 0, 0, 1}, itKey(t, it))
 	require.Error(t, it.Next())
 }
 
@@ -434,8 +434,8 @@ func TestCombineIteratorsInitiallyWrapped(t *testing.T) {
 	it := combineIterators(KeyBytes{0xff, 0x00, 0x00, 0x55}, it1, it2)
 	var collected []KeyBytes
 	for range 4 {
-		k := it.Key()
-		collected = append(collected, k.(KeyBytes))
+		k := itKey(t, it)
+		collected = append(collected, k)
 		require.NoError(t, it.Next())
 	}
 	require.Equal(t, []KeyBytes{
@@ -444,5 +444,12 @@ func TestCombineIteratorsInitiallyWrapped(t *testing.T) {
 		{0x00, 0x00, 0x00, 0x03},
 		{0x0a, 0x05, 0x00, 0x00},
 	}, collected)
-	require.Equal(t, KeyBytes{0xff, 0x00, 0x00, 0x55}, it.Key())
+	require.Equal(t, KeyBytes{0xff, 0x00, 0x00, 0x55}, itKey(t, it))
+}
+
+func itKey(t *testing.T, it hashsync.Iterator) KeyBytes {
+	k, err := it.Key()
+	require.NoError(t, err)
+	require.NotNil(t, k)
+	return k.(KeyBytes)
 }

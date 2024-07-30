@@ -118,11 +118,11 @@ func (it *sliceIterator) Equal(other Iterator) bool {
 	return false
 }
 
-func (it *sliceIterator) Key() Ordered {
+func (it *sliceIterator) Key() (Ordered, error) {
 	if len(it.s) != 0 {
-		return it.s[0]
+		return it.s[0], nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (it *sliceIterator) Next() error {
@@ -478,7 +478,9 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) Requester {
 				pss := NewPairwiseStoreSyncer(client, opts)
 				minA, err := storeA.Min()
 				require.NoError(t, err)
-				infoA, err := storeA.GetRangeInfo(nil, minA.Key(), minA.Key(), -1)
+				kA, err := minA.Key()
+				require.NoError(t, err)
+				infoA, err := storeA.GetRangeInfo(nil, kA, kA, -1)
 				require.NoError(t, err)
 				prA, err := pss.Probe(ctx, srvPeerID, storeB, nil, nil)
 				require.NoError(t, err)
@@ -488,10 +490,15 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) Requester {
 
 				minA, err = storeA.Min()
 				require.NoError(t, err)
-				partInfoA, err := storeA.GetRangeInfo(nil, minA.Key(), minA.Key(), infoA.Count/2)
+				kA, err = minA.Key()
 				require.NoError(t, err)
-				x := partInfoA.Start.Key().(types.Hash32)
-				y := partInfoA.End.Key().(types.Hash32)
+				partInfoA, err := storeA.GetRangeInfo(nil, kA, kA, infoA.Count/2)
+				require.NoError(t, err)
+				xK, err := partInfoA.Start.Key()
+				require.NoError(t, err)
+				x := xK.(types.Hash32)
+				yK, err := partInfoA.End.Key()
+				y := yK.(types.Hash32)
 				// partInfoA = storeA.GetRangeInfo(nil, x, y, -1)
 				prA, err = pss.Probe(ctx, srvPeerID, storeB, &x, &y)
 				require.NoError(t, err)

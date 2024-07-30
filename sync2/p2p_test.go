@@ -75,7 +75,9 @@ func TestP2P(t *testing.T) {
 			if it == nil {
 				return false
 			}
-			info, err := is.GetRangeInfo(nil, it.Key(), it.Key(), -1)
+			k, err := it.Key()
+			require.NoError(t, err)
+			info, err := is.GetRangeInfo(nil, k, k, -1)
 			require.NoError(t, err)
 			if info.Count < numHashes {
 				return false

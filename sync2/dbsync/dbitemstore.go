@@ -2,7 +2,6 @@ package dbsync
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -65,7 +64,9 @@ func (d *DBItemStore) EnsureLoaded() error {
 
 // Add implements hashsync.ItemStore.
 func (d *DBItemStore) Add(ctx context.Context, k hashsync.Ordered) error {
-	d.EnsureLoaded()
+	if err := d.EnsureLoaded(); err != nil {
+		return err
+	}
 	has, err := d.Has(k) // TODO: this check shouldn't be needed
 	if has || err != nil {
 		return err
@@ -79,7 +80,9 @@ func (d *DBItemStore) GetRangeInfo(
 	x, y hashsync.Ordered,
 	count int,
 ) (hashsync.RangeInfo, error) {
-	d.EnsureLoaded()
+	if err := d.EnsureLoaded(); err != nil {
+		return hashsync.RangeInfo{}, err
+	}
 	fpr, err := d.ft.fingerprintInterval(x.(KeyBytes), y.(KeyBytes), count)
 	if err != nil {
 		return hashsync.RangeInfo{}, err
@@ -94,16 +97,17 @@ func (d *DBItemStore) GetRangeInfo(
 
 // Min implements hashsync.ItemStore.
 func (d *DBItemStore) Min() (hashsync.Iterator, error) {
-	d.EnsureLoaded()
-	it, err := d.ft.start()
-	switch {
-	case err == nil:
-		return it, nil
-	case errors.Is(err, errEmptySet):
-		return nil, nil
-	default:
+	if err := d.EnsureLoaded(); err != nil {
 		return nil, err
 	}
+	if d.ft.count() == 0 {
+		return nil, nil
+	}
+	it := d.ft.start()
+	if _, err := it.Key(); err != nil {
+		return nil, err
+	}
+	return it, nil
 }
 
 // Copy implements hashsync.ItemStore.
@@ -122,17 +126,20 @@ func (d *DBItemStore) Copy() hashsync.ItemStore {
 
 // Has implements hashsync.ItemStore.
 func (d *DBItemStore) Has(k hashsync.Ordered) (bool, error) {
-	d.EnsureLoaded()
-	// TODO: should often be able to avoid querying the database if we check the key
-	// against the fptree
-	it, err := d.ft.iter(k.(KeyBytes))
-	if err == nil {
-		return k.Compare(it.Key()) == 0, nil
-	}
-	if err != errEmptySet {
+	if err := d.EnsureLoaded(); err != nil {
 		return false, err
 	}
-	return false, nil
+	if d.ft.count() == 0 {
+		return false, nil
+	}
+	// TODO: should often be able to avoid querying the database if we check the key
+	// against the fptree
+	it := d.ft.iter(k.(KeyBytes))
+	itK, err := it.Key()
+	if err != nil {
+		return false, err
+	}
+	return itK.Compare(k) == 0, nil
 }
 
 // TODO: get rid of ItemStoreAdapter, it shouldn't be needed
@@ -204,10 +211,14 @@ type iteratorAdapter struct {
 
 var _ hashsync.Iterator = &iteratorAdapter{}
 
-func (ia *iteratorAdapter) Key() hashsync.Ordered {
+func (ia *iteratorAdapter) Key() (hashsync.Ordered, error) {
+	k, err := ia.it.Key()
+	if err != nil {
+		return nil, err
+	}
 	var h types.Hash32
-	copy(h[:], ia.it.Key().(KeyBytes))
-	return h
+	copy(h[:], k.(KeyBytes))
+	return h, nil
 }
 
 func (ia *iteratorAdapter) Next() error {

@@ -17,8 +17,8 @@ func (it *syncTreeIterator) Equal(other Iterator) bool {
 	return it.ptr.Equal(o.ptr)
 }
 
-func (it *syncTreeIterator) Key() Ordered {
-	return it.ptr.Key()
+func (it *syncTreeIterator) Key() (Ordered, error) {
+	return it.ptr.Key(), nil
 }
 
 func (it *syncTreeIterator) Next() error {
@@ -71,7 +71,10 @@ func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x, y Ordered, count i
 				Fingerprint: sts.identity,
 			}, nil
 		} else {
-			x = it.Key()
+			x, err = it.Key()
+			if err != nil {
+				return RangeInfo{}, err
+			}
 			y = x
 		}
 	} else if x == nil || y == nil {

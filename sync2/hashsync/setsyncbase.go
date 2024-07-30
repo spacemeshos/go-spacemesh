@@ -43,7 +43,10 @@ func (ssb *SetSyncBase) Count() (int, error) {
 	if it == nil || err != nil {
 		return 0, err
 	}
-	x := it.Key()
+	x, err := it.Key()
+	if err != nil {
+		return 0, err
+	}
 	info, err := ssb.is.GetRangeInfo(nil, x, x, -1)
 	if err != nil {
 		return 0, err

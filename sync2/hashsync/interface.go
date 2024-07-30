@@ -17,7 +17,7 @@ type Iterator interface {
 	// nil if the ItemStore is empty
 	// If the iterator is returned along with a count, the return value of Key()
 	// after calling Next() count times is dependent on the implementation.
-	Key() Ordered
+	Key() (Ordered, error)
 	// Next advances the iterator
 	Next() error
 }

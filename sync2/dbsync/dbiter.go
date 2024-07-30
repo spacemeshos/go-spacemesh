@@ -64,6 +64,7 @@ type dbRangeIterator struct {
 	pos          int
 	keyLen       int
 	singleChunk  bool
+	loaded       bool
 }
 
 var _ iterator = &dbRangeIterator{}
@@ -75,14 +76,16 @@ func newDBRangeIterator(
 	query string,
 	from KeyBytes,
 	maxChunkSize int,
-) (iterator, error) {
+) iterator {
 	if from == nil {
 		panic("BUG: makeDBIterator: nil from")
 	}
 	if maxChunkSize <= 0 {
 		panic("BUG: makeDBIterator: chunkSize must be > 0")
 	}
-	it := &dbRangeIterator{
+	// panic("TBD: QQQQQ: do not preload the iterator! Key should panic upon no entries. With from > max item, iterator should work, wrapping around (TEST)!")
+	// panic("TBD: QQQQQ: Key() should return an error!")
+	return &dbRangeIterator{
 		db:           db,
 		from:         from.Clone(),
 		query:        query,
@@ -91,13 +94,8 @@ func newDBRangeIterator(
 		keyLen:       len(from),
 		chunk:        make([]KeyBytes, maxChunkSize),
 		singleChunk:  false,
+		loaded:       false,
 	}
-	// panic("TBD: QQQQQ: do not preload the iterator! Key should panic upon no entries. With from > max item, iterator should work, wrapping around (TEST)!")
-	// panic("TBD: QQQQQ: Key() should return an error!")
-	if err := it.load(); err != nil {
-		return nil, err
-	}
-	return it, nil
 }
 
 func (it *dbRangeIterator) load() error {
@@ -173,15 +171,29 @@ func (it *dbRangeIterator) load() error {
 	return nil
 }
 
-func (it *dbRangeIterator) Key() hashsync.Ordered {
-	if it.pos < len(it.chunk) {
-		return slices.Clone(it.chunk[it.pos])
+func (it *dbRangeIterator) Key() (hashsync.Ordered, error) {
+	if !it.loaded {
+		if err := it.load(); err != nil {
+			return nil, err
+		}
+		it.loaded = true
 	}
-	return nil
+	if it.pos < len(it.chunk) {
+		return slices.Clone(it.chunk[it.pos]), nil
+	}
+	return nil, errEmptySet
 }
 
 func (it *dbRangeIterator) Next() error {
-	if it.pos >= len(it.chunk) {
+	if !it.loaded {
+		if err := it.load(); err != nil {
+			return err
+		}
+		it.loaded = true
+		if len(it.chunk) == 0 || it.pos != 0 {
+			panic("BUG: load didn't report empty set or set a wrong pos")
+		}
+		it.pos++
 		return nil
 	}
 	it.pos++
@@ -202,43 +214,57 @@ func (it *dbRangeIterator) clone() iterator {
 }
 
 type combinedIterator struct {
-	iters    []iterator
-	wrapped  []iterator
-	ahead    iterator
-	aheadIdx int
+	startingPoint hashsync.Ordered
+	iters         []iterator
+	wrapped       []iterator
+	ahead         iterator
+	aheadIdx      int
 }
 
 // combineIterators combines multiple iterators into one, returning the smallest current
 // key among all iterators at each step.
 func combineIterators(startingPoint hashsync.Ordered, iters ...iterator) iterator {
-	var c combinedIterator
+	return &combinedIterator{startingPoint: startingPoint, iters: iters}
+}
+
+func (c *combinedIterator) begin() error {
 	// Some of the iterators may already be wrapped around.
 	// This corresponds to the case when we ask an idStore for iterator
 	// with a starting point beyond the last key in the store.
-	if startingPoint == nil {
-		c.iters = iters
-	} else {
-		for _, it := range iters {
-			if it.Key().Compare(startingPoint) < 0 {
-				c.wrapped = append(c.wrapped, it)
-			} else {
-				c.iters = append(c.iters, it)
+	iters := c.iters
+	c.iters = nil
+	for _, it := range iters {
+		k, err := it.Key()
+		if err != nil {
+			if errors.Is(err, errEmptySet) {
+				// ignore empty iterators
+				continue
 			}
+			return err
 		}
-		if len(c.iters) == 0 {
-			// all iterators wrapped around
-			c.iters = c.wrapped
-			c.wrapped = nil
+		if c.startingPoint != nil && k.Compare(c.startingPoint) < 0 {
+			c.wrapped = append(c.wrapped, it)
+		} else {
+			c.iters = append(c.iters, it)
 		}
 	}
-	return &c
+	if len(c.iters) == 0 {
+		// all iterators wrapped around
+		c.iters = c.wrapped
+		c.wrapped = nil
+	}
+	c.startingPoint = nil
+	return nil
 }
 
-func (c *combinedIterator) aheadIterator() iterator {
+func (c *combinedIterator) aheadIterator() (iterator, error) {
+	if err := c.begin(); err != nil {
+		return nil, err
+	}
 	if c.ahead == nil {
 		if len(c.iters) == 0 {
 			if len(c.wrapped) == 0 {
-				return nil
+				return nil, nil
 			}
 			c.iters = c.wrapped
 			c.wrapped = nil
@@ -246,29 +272,51 @@ func (c *combinedIterator) aheadIterator() iterator {
 		c.ahead = c.iters[0]
 		c.aheadIdx = 0
 		for i := 1; i < len(c.iters); i++ {
-			if c.iters[i].Key() != nil {
-				if c.ahead.Key() == nil || c.iters[i].Key().Compare(c.ahead.Key()) < 0 {
+			curK, err := c.iters[i].Key()
+			if err != nil {
+				return nil, err
+			}
+			if curK != nil {
+				aK, err := c.ahead.Key()
+				if err != nil {
+					return nil, err
+				}
+				if curK.Compare(aK) < 0 {
 					c.ahead = c.iters[i]
 					c.aheadIdx = i
 				}
 			}
 		}
 	}
-	return c.ahead
+	return c.ahead, nil
 }
 
-func (c *combinedIterator) Key() hashsync.Ordered {
-	return c.aheadIterator().Key()
+func (c *combinedIterator) Key() (hashsync.Ordered, error) {
+	it, err := c.aheadIterator()
+	if err != nil {
+		return nil, err
+	}
+	return it.Key()
 }
 
 func (c *combinedIterator) Next() error {
-	it := c.aheadIterator()
-	oldKey := it.Key()
+	it, err := c.aheadIterator()
+	if err != nil {
+		return err
+	}
+	oldKey, err := it.Key()
+	if err != nil {
+		return err
+	}
 	if err := it.Next(); err != nil {
 		return err
 	}
 	c.ahead = nil
-	if oldKey.Compare(it.Key()) >= 0 {
+	newKey, err := it.Key()
+	if err != nil {
+		return err
+	}
+	if oldKey.Compare(newKey) >= 0 {
 		// the iterator has wrapped around, move it to the wrapped list
 		// which will be used after all the iterators have wrapped around
 		c.wrapped = append(c.wrapped, it)
@@ -279,10 +327,15 @@ func (c *combinedIterator) Next() error {
 
 func (c *combinedIterator) clone() iterator {
 	cloned := &combinedIterator{
-		iters: make([]iterator, len(c.iters)),
+		iters:         make([]iterator, len(c.iters)),
+		wrapped:       make([]iterator, len(c.wrapped)),
+		startingPoint: c.startingPoint,
 	}
 	for i, it := range c.iters {
 		cloned.iters[i] = it.clone()
+	}
+	for i, it := range c.wrapped {
+		cloned.wrapped[i] = it.clone()
 	}
 	return cloned
 }

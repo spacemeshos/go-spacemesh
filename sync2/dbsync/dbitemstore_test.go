@@ -50,7 +50,7 @@ func TestDBItemStore(t *testing.T) {
 	it, err := s.Min()
 	require.NoError(t, err)
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
-		it.Key().(KeyBytes).String())
+		itKey(t, it).String())
 	has, err := s.Has(KeyBytes(util.FromHex("9876000000000000000000000000000000000000000000000000000000000000")))
 	require.NoError(t, err)
 	require.False(t, has)
@@ -115,8 +115,8 @@ func TestDBItemStore(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.count, info.Count)
 			require.Equal(t, tc.fp, info.Fingerprint.(fmt.Stringer).String())
-			require.Equal(t, ids[tc.startIdx], info.Start.Key().(KeyBytes))
-			require.Equal(t, ids[tc.endIdx], info.End.Key().(KeyBytes))
+			require.Equal(t, ids[tc.startIdx], itKey(t, info.Start))
+			require.Equal(t, ids[tc.endIdx], itKey(t, info.End))
 			has, err := s.Has(ids[tc.startIdx])
 			require.NoError(t, err)
 			require.True(t, has)
@@ -139,7 +139,7 @@ func TestDBItemStoreAdd(t *testing.T) {
 	it, err := s.Min()
 	require.NoError(t, err)
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
-		it.Key().(KeyBytes).String())
+		itKey(t, it).String())
 
 	newID := KeyBytes(util.FromHex("abcdef1234567890000000000000000000000000000000000000000000000000"))
 	require.NoError(t, s.Add(context.Background(), newID))
@@ -154,8 +154,8 @@ func TestDBItemStoreAdd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, info.Count)
 	require.Equal(t, "761032cfe98ba54ddddddddd", info.Fingerprint.(fmt.Stringer).String())
-	require.Equal(t, ids[2], info.Start.Key().(KeyBytes))
-	require.Equal(t, ids[0], info.End.Key().(KeyBytes))
+	require.Equal(t, ids[2], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
 }
 
 func TestDBItemStoreCopy(t *testing.T) {
@@ -170,7 +170,7 @@ func TestDBItemStoreCopy(t *testing.T) {
 	it, err := s.Min()
 	require.NoError(t, err)
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
-		it.Key().(KeyBytes).String())
+		itKey(t, it).String())
 
 	copy := s.Copy()
 
@@ -178,8 +178,8 @@ func TestDBItemStoreCopy(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, info.Count)
 	require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.(fmt.Stringer).String())
-	require.Equal(t, ids[2], info.Start.Key().(KeyBytes))
-	require.Equal(t, ids[0], info.End.Key().(KeyBytes))
+	require.Equal(t, ids[2], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
 
 	newID := KeyBytes(util.FromHex("abcdef1234567890000000000000000000000000000000000000000000000000"))
 	require.NoError(t, copy.Add(context.Background(), newID))
@@ -188,13 +188,13 @@ func TestDBItemStoreCopy(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, info.Count)
 	require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.(fmt.Stringer).String())
-	require.Equal(t, ids[2], info.Start.Key().(KeyBytes))
-	require.Equal(t, ids[0], info.End.Key().(KeyBytes))
+	require.Equal(t, ids[2], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
 
 	info, err = copy.GetRangeInfo(nil, ids[2], ids[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, 3, info.Count)
 	require.Equal(t, "761032cfe98ba54ddddddddd", info.Fingerprint.(fmt.Stringer).String())
-	require.Equal(t, ids[2], info.Start.Key().(KeyBytes))
-	require.Equal(t, ids[0], info.End.Key().(KeyBytes))
+	require.Equal(t, ids[2], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
 }

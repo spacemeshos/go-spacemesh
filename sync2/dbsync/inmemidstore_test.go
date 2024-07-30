@@ -16,10 +16,10 @@ func TestInMemIDStore(t *testing.T) {
 	)
 	s := newInMemIDStore(32)
 
-	_, err = s.start()
+	_, err = s.start().Key()
 	require.ErrorIs(t, err, errEmptySet)
 
-	_, err = s.iter(util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"))
+	_, err = s.iter(util.FromHex("0000000000000000000000000000000000000000000000000000000000000000")).Key()
 	require.ErrorIs(t, err, errEmptySet)
 
 	for _, h := range []string{
@@ -36,15 +36,14 @@ func TestInMemIDStore(t *testing.T) {
 
 	for i := range 6 {
 		if i%2 == 0 {
-			it, err = s.start()
+			it = s.start()
 		} else {
-			it, err = s.iter(
+			it = s.iter(
 				util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"))
 		}
-		require.NoError(t, err)
 		var items []string
 		for range 7 {
-			items = append(items, hex.EncodeToString(it.Key().(KeyBytes)))
+			items = append(items, hex.EncodeToString(itKey(t, it)))
 			require.NoError(t, it.Next())
 		}
 		require.Equal(t, []string{
@@ -58,18 +57,17 @@ func TestInMemIDStore(t *testing.T) {
 		}, items)
 		require.Equal(t,
 			"0000000000000000000000000000000000000000000000000000000000000000",
-			hex.EncodeToString(it.Key().(KeyBytes)))
+			hex.EncodeToString(itKey(t, it)))
 
 		s1 := s.clone()
 		h := types.BytesToHash(
 			util.FromHex("2000000000000000000000000000000000000000000000000000000000000000"))
 		s1.registerHash(h[:])
 		items = nil
-		it, err = s1.iter(
+		it = s1.iter(
 			util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"))
-		require.NoError(t, err)
 		for range 8 {
-			items = append(items, hex.EncodeToString(it.Key().(KeyBytes)))
+			items = append(items, hex.EncodeToString(itKey(t, it)))
 			require.NoError(t, it.Next())
 		}
 		require.Equal(t, []string{
@@ -84,13 +82,12 @@ func TestInMemIDStore(t *testing.T) {
 		}, items)
 		require.Equal(t,
 			"0000000000000000000000000000000000000000000000000000000000000000",
-			hex.EncodeToString(it.Key().(KeyBytes)))
+			hex.EncodeToString(itKey(t, it)))
 
-		it, err = s1.iter(
+		it = s1.iter(
 			util.FromHex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"))
-		require.NoError(t, err)
 		require.Equal(t,
 			"0000000000000000000000000000000000000000000000000000000000000000",
-			hex.EncodeToString(it.Key().(KeyBytes)))
+			hex.EncodeToString(itKey(t, it)))
 	}
 }

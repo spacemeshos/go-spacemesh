@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"math/bits"
@@ -30,6 +29,11 @@ func (t *trace) enter(format string, args ...any) {
 	if !t.traceEnabled {
 		return
 	}
+	for n, arg := range args {
+		if it, ok := arg.(iterator); ok {
+			args[n] = formatIter(it)
+		}
+	}
 	msg := fmt.Sprintf(format, args...)
 	t.out("ENTER: " + msg)
 	t.traceStack = append(t.traceStack, msg)
@@ -41,6 +45,11 @@ func (t *trace) leave(results ...any) {
 	}
 	if len(t.traceStack) == 0 {
 		panic("BUG: trace stack underflow")
+	}
+	for n, r := range results {
+		if it, ok := r.(iterator); ok {
+			results[n] = formatIter(it)
+		}
 	}
 	msg := t.traceStack[len(t.traceStack)-1]
 	if len(results) != 0 {
@@ -56,6 +65,11 @@ func (t *trace) leave(results ...any) {
 
 func (t *trace) log(format string, args ...any) {
 	if t.traceEnabled {
+		for n, arg := range args {
+			if it, ok := arg.(iterator); ok {
+				args[n] = formatIter(it)
+			}
+		}
 		msg := fmt.Sprintf(format, args...)
 		t.out(msg)
 	}
@@ -368,8 +382,8 @@ type iterator interface {
 type idStore interface {
 	clone() idStore
 	registerHash(h KeyBytes) error
-	start() (iterator, error)
-	iter(from KeyBytes) (iterator, error)
+	start() iterator
+	iter(from KeyBytes) iterator
 }
 
 type fpTree struct {
@@ -576,41 +590,38 @@ func (ft *fpTree) aggregateEdge(x, y KeyBytes, p prefix, ac *aggContext) (cont b
 		startFrom = x
 	}
 	ft.log("aggregateEdge: startFrom %s", startFrom)
-	it, err := ft.iter(startFrom)
-	if err != nil {
-		if errors.Is(err, errEmptySet) {
-			ft.log("aggregateEdge: empty set")
-			return false, nil
-		}
-		ft.log("aggregateEdge: error: %v", err)
-		return false, err
-	}
+	it := ft.iter(startFrom)
 	if ac.limit == 0 {
 		ac.end = it.clone()
 		if x != nil {
+			ft.log("aggregateEdge: limit 0: x is not nil, setting start to %s", ac.start)
 			ac.start = ac.end
 		}
-		ft.log("aggregateEdge: limit is 0 at %s", ac.end.Key().(fmt.Stringer))
+		ft.log("aggregateEdge: limit is 0 at %s", ac.end)
 		return false, nil
 	}
 	if x != nil {
 		ac.start = it.clone()
+		ft.log("aggregateEdge: x is not nil, setting start to %s", ac.start)
 	}
 
 	for range ft.np.node(ft.root).c {
-		id := it.Key().(KeyBytes)
+		id, err := it.Key()
+		if err != nil {
+			return false, err
+		}
 		ft.log("aggregateEdge: ID %s", id)
 		if y != nil && id.Compare(y) >= 0 {
 			ac.end = it
 			ft.log("aggregateEdge: ID is over Y: %s", id)
 			return false, nil
 		}
-		if !p.match(id) {
+		if !p.match(id.(KeyBytes)) {
 			ft.log("aggregateEdge: ID doesn't match the prefix: %s", id)
 			ac.lastPrefix = &p
 			return true, nil
 		}
-		ac.fp.update(id)
+		ac.fp.update(id.(KeyBytes))
 		ac.count++
 		if ac.limit > 0 {
 			ac.limit--
@@ -923,7 +934,7 @@ func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, e
 	ft.enter("fingerprintInterval: x %s y %s limit %d", x, y, limit)
 	defer func() {
 		if fpr.start != nil && fpr.end != nil {
-			ft.leave(fpr.fp, fpr.count, fpr.itype, fpr.start.Key(), fpr.end.Key())
+			ft.leave(fpr.fp, fpr.count, fpr.itype, fpr.start, fpr.end)
 		} else {
 			ft.leave(fpr.fp, fpr.count, fpr.itype)
 		}
@@ -943,31 +954,27 @@ func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, e
 	}
 
 	if ac.start != nil {
-		ft.log("fingerprintInterval: start %s", ac.start.Key().(fmt.Stringer))
+		ft.log("fingerprintInterval: start %s", ac.start)
 		fpr.start = ac.start
-	} else if fpr.start, err = ft.iter(x); err != nil {
-		return fpResult{}, err
 	} else {
-		ft.log("fingerprintInterval: start from x: %s", fpr.start.Key().(fmt.Stringer))
+		fpr.start = ft.iter(x)
+		ft.log("fingerprintInterval: start from x: %s", fpr.start)
 	}
 
 	if ac.end != nil {
-		ft.log("fingerprintInterval: end %s", ac.end.Key().(fmt.Stringer))
+		ft.log("fingerprintInterval: end %s", ac.end)
 		fpr.end = ac.end
 	} else if (fpr.itype == 0 && limit < 0) || fpr.count == 0 {
 		fpr.end = fpr.start
-		ft.log("fingerprintInterval: end at start %s", fpr.end.Key().(fmt.Stringer))
+		ft.log("fingerprintInterval: end at start %s", fpr.end)
 	} else if ac.lastPrefix != nil {
 		k := make(KeyBytes, ft.keyLen)
 		ac.lastPrefix.idAfter(k)
-		if fpr.end, err = ft.iter(k); err != nil {
-			return fpResult{}, err
-		}
-		ft.log("fingerprintInterval: end at lastPrefix %s", fpr.end.Key().(fmt.Stringer))
-	} else if fpr.end, err = ft.iter(y); err != nil {
-		return fpResult{}, err
+		fpr.end = ft.iter(k)
+		ft.log("fingerprintInterval: end at lastPrefix %s", fpr.end)
 	} else {
-		ft.log("fingerprintInterval: end at y: %s", fpr.end.Key().(fmt.Stringer))
+		fpr.end = ft.iter(y)
+		ft.log("fingerprintInterval: end at y: %s", fpr.end)
 	}
 
 	return fpr, nil
@@ -998,6 +1005,29 @@ func (ft *fpTree) dump(w io.Writer) {
 	} else {
 		ft.dumpNode(w, ft.root, "", "")
 	}
+}
+
+func (ft *fpTree) count() int {
+	if ft.root == noIndex {
+		return 0
+	}
+	return int(ft.np.node(ft.root).c)
+}
+
+type iterFormatter struct {
+	it iterator
+}
+
+func (f iterFormatter) String() string {
+	if k, err := f.it.Key(); err != nil {
+		return fmt.Sprintf("<error: %v>", err)
+	} else {
+		return k.(fmt.Stringer).String()
+	}
+}
+
+func formatIter(it iterator) fmt.Stringer {
+	return iterFormatter{it: it}
 }
 
 // TBD: optimize, get rid of binary.BigEndian.*

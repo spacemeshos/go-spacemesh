@@ -160,10 +160,11 @@ func (c *wireConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 		var msg ItemBatchMessage
 		n := min(itemChunkSize, count-i)
 		for n > 0 {
-			if it.Key() == nil {
-				panic("fakeConduit.SendItems: went got to the end of the tree")
+			k, err := it.Key()
+			if err != nil {
+				return err
 			}
-			msg.ContentKeys = append(msg.ContentKeys, it.Key().(types.Hash32))
+			msg.ContentKeys = append(msg.ContentKeys, k.(types.Hash32))
 			if err := it.Next(); err != nil {
 				return err
 			}
@@ -209,7 +210,11 @@ func (c *wireConduit) SendProbeResponse(x, y Ordered, fingerprint any, count, sa
 	}
 	// fmt.Fprintf(os.Stderr, "QQQQQ: begin sending items\n")
 	for n := 0; n < sampleSize; n++ {
-		m.Sample[n] = MinhashSampleItemFromHash32(it.Key().(types.Hash32))
+		k, err := it.Key()
+		if err != nil {
+			return err
+		}
+		m.Sample[n] = MinhashSampleItemFromHash32(k.(types.Hash32))
 		// fmt.Fprintf(os.Stderr, "QQQQQ: m.Sample[%d] = %s\n", n, m.Sample[n])
 		if err := it.Next(); err != nil {
 			return err

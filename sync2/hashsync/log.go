@@ -14,7 +14,11 @@ func IteratorField(name string, it Iterator) zap.Field {
 	if it == nil {
 		return zap.String(name, "<nil>")
 	}
-	return HexField(name, it.Key())
+	k, err := it.Key()
+	if err != nil {
+		return zap.String(name, fmt.Sprintf("<error: %v>", err))
+	}
+	return HexField(name, k)
 }
 
 // based on code from testify

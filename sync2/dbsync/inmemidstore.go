@@ -34,23 +34,16 @@ func (s *inMemIDStore) registerHash(h KeyBytes) error {
 	return nil
 }
 
-func (s *inMemIDStore) start() (iterator, error) {
-	node := s.sl.First()
-	if node == nil {
-		return nil, errEmptySet
-	}
-	return &inMemIDStoreIterator{sl: s.sl, node: node}, nil
+func (s *inMemIDStore) start() iterator {
+	return &inMemIDStoreIterator{sl: s.sl, node: s.sl.First()}
 }
 
-func (s *inMemIDStore) iter(from KeyBytes) (iterator, error) {
+func (s *inMemIDStore) iter(from KeyBytes) iterator {
 	node := s.sl.FindGTENode(from)
 	if node == nil {
 		node = s.sl.First()
-		if node == nil {
-			return nil, errEmptySet
-		}
 	}
-	return &inMemIDStoreIterator{sl: s.sl, node: node}, nil
+	return &inMemIDStoreIterator{sl: s.sl, node: node}
 }
 
 type inMemIDStoreIterator struct {
@@ -60,8 +53,11 @@ type inMemIDStoreIterator struct {
 
 var _ iterator = &inMemIDStoreIterator{}
 
-func (it *inMemIDStoreIterator) Key() hashsync.Ordered {
-	return KeyBytes(it.node.Key())
+func (it *inMemIDStoreIterator) Key() (hashsync.Ordered, error) {
+	if it.node == nil {
+		return nil, errEmptySet
+	}
+	return KeyBytes(it.node.Key()), nil
 }
 
 func (it *inMemIDStoreIterator) Next() error {

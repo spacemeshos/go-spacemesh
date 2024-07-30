@@ -120,10 +120,11 @@ func (fc *fakeConduit) SendItems(count, itemChunkSize int, it Iterator) error {
 		msg := rangeMessage{mtype: MessageTypeItemBatch}
 		n := min(itemChunkSize, count-i)
 		for n > 0 {
-			if it.Key() == nil {
-				panic("fakeConduit.SendItems: went got to the end of the tree")
+			k, err := it.Key()
+			if err != nil {
+				return fmt.Errorf("getting item: %w", err)
 			}
-			msg.keys = append(msg.keys, it.Key())
+			msg.keys = append(msg.keys, k)
 			if err := it.Next(); err != nil {
 				return err
 			}
@@ -165,8 +166,10 @@ func (fc *fakeConduit) SendProbeResponse(x, y Ordered, fingerprint any, count, s
 		keys:  make([]Ordered, sampleSize),
 	}
 	for n := 0; n < sampleSize; n++ {
-		require.NotNil(fc.t, it.Key())
-		msg.keys[n] = it.Key()
+		k, err := it.Key()
+		require.NoError(fc.t, err)
+		require.NotNil(fc.t, k)
+		msg.keys[n] = k
 		if err := it.Next(); err != nil {
 			return err
 		}
@@ -194,8 +197,8 @@ func (it *dumbStoreIterator) Equal(other Iterator) bool {
 	return it.n == o.n
 }
 
-func (it *dumbStoreIterator) Key() Ordered {
-	return it.ds.keys[it.n]
+func (it *dumbStoreIterator) Key() (Ordered, error) {
+	return it.ds.keys[it.n], nil
 }
 
 func (it *dumbStoreIterator) Next() error {
@@ -265,7 +268,10 @@ func (ds *dumbStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (
 				Fingerprint: "",
 			}, nil
 		} else {
-			x = it.Key()
+			x, err = it.Key()
+			if err != nil {
+				return RangeInfo{}, err
+			}
 			y = x
 		}
 	} else if x == nil || y == nil {
@@ -277,8 +283,14 @@ func (ds *dumbStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (
 	}
 	vx := x.(sampleID)
 	vy := y.(sampleID)
-	if preceding != nil && preceding.Key().Compare(x) > 0 {
-		panic("preceding info after x")
+	if preceding != nil {
+		k, err := preceding.Key()
+		if err != nil {
+			return RangeInfo{}, err
+		}
+		if k.Compare(x) > 0 {
+			panic("preceding info after x")
+		}
 	}
 	fp, startStr, endStr := naiveRange(all, string(vx), string(vy), count)
 	r := RangeInfo{
@@ -326,11 +338,16 @@ type verifiedStoreIterator struct {
 
 var _ Iterator = &verifiedStoreIterator{}
 
-func (it verifiedStoreIterator) Key() Ordered {
-	k1 := it.knownGood.Key()
-	k2 := it.it.Key()
-	assert.Equal(it.t, k1, k2, "keys")
-	return k2
+func (it verifiedStoreIterator) Key() (Ordered, error) {
+	k1, err := it.knownGood.Key()
+	if err != nil {
+		return nil, err
+	}
+	k2, err := it.it.Key()
+	if err == nil {
+		assert.Equal(it.t, k1, k2, "keys")
+	}
+	return k2, nil
 }
 
 func (it verifiedStoreIterator) Next() error {
@@ -338,7 +355,15 @@ func (it verifiedStoreIterator) Next() error {
 	err2 := it.it.Next()
 	switch {
 	case err1 == nil && err2 == nil:
-		assert.Equal(it.t, it.knownGood.Key(), it.it.Key(), "keys for Next()")
+		k1, err := it.knownGood.Key()
+		if err != nil {
+			return err
+		}
+		k2, err := it.it.Key()
+		if err != nil {
+			return err
+		}
+		assert.Equal(it.t, k1, k2, "keys for Next()")
 	case err1 != nil && err2 != nil:
 		return err2
 	default:
@@ -410,7 +435,11 @@ func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count in
 		require.Nil(vs.t, ri2.End, "range info end")
 	} else {
 		require.NotNil(vs.t, ri2.Start, "range info start")
-		require.Equal(vs.t, ri1.Start.Key(), ri2.Start.Key(), "range info start key")
+		k1, err := ri1.Start.Key()
+		require.NoError(vs.t, err)
+		k2, err := ri2.Start.Key()
+		require.NoError(vs.t, err)
+		require.Equal(vs.t, k1, k2, "range info start key")
 		require.NotNil(vs.t, ri1.End, "range info end (known good)")
 		require.NotNil(vs.t, ri2.End, "range info end")
 		ri.Start = verifiedStoreIterator{
@@ -423,7 +452,11 @@ func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count in
 		require.Nil(vs.t, ri2.End, "range info end")
 	} else {
 		require.NotNil(vs.t, ri2.End, "range info end")
-		require.Equal(vs.t, ri1.End.Key(), ri2.End.Key(), "range info end key")
+		k1, err := ri1.Start.Key()
+		require.NoError(vs.t, err)
+		k2, err := ri2.Start.Key()
+		require.NoError(vs.t, err)
+		require.Equal(vs.t, k1, k2, "range info end key")
 		ri.End = verifiedStoreIterator{
 			t:         vs.t,
 			knownGood: ri1.End,
@@ -445,7 +478,11 @@ func (vs *verifiedStore) Min() (Iterator, error) {
 		return nil, nil
 	} else {
 		require.NotNil(vs.t, m2, "Min")
-		require.Equal(vs.t, m1.Key(), m2.Key(), "Min key")
+		k1, err := m1.Key()
+		require.NoError(vs.t, err)
+		k2, err := m2.Key()
+		require.NoError(vs.t, err)
+		require.Equal(vs.t, k1, k2, "Min key")
 	}
 	return verifiedStoreIterator{
 		t:         vs.t,

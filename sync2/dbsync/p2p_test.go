@@ -110,12 +110,16 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 		assert.Nil(t, it)
 	} else {
 		for range combinedItems {
-			// t.Logf("synced itemA: %s", it.Key().(types.Hash32).String())
-			h := it.Key().(types.Hash32)
+			k, err := it.Key()
+			require.NoError(t, err)
+			h := k.(types.Hash32)
+			// t.Logf("synced itemA: %s", h.String())
 			actItemsA = append(actItemsA, h[:])
 			require.NoError(t, it.Next())
 		}
-		h := it.Key().(types.Hash32)
+		k, err := it.Key()
+		require.NoError(t, err)
+		h := k.(types.Hash32)
 		assert.Equal(t, actItemsA[0], KeyBytes(h[:]))
 	}
 
@@ -126,12 +130,16 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 		assert.Nil(t, it)
 	} else {
 		for range combinedItems {
-			// t.Logf("synced itemB: %s", it.Key().(types.Hash32).String())
-			h := it.Key().(types.Hash32)
+			k, err := it.Key()
+			require.NoError(t, err)
+			h := k.(types.Hash32)
+			// t.Logf("synced itemB: %s", h.String())
 			actItemsB = append(actItemsB, h[:])
 			require.NoError(t, it.Next())
 		}
-		h := it.Key().(types.Hash32)
+		k, err := it.Key()
+		require.NoError(t, err)
+		h := k.(types.Hash32)
 		assert.Equal(t, actItemsB[0], KeyBytes(h[:]))
 		assert.Equal(t, combinedItems, actItemsA)
 		assert.Equal(t, actItemsA, actItemsB)

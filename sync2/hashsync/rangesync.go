@@ -209,8 +209,14 @@ func NewRangeSetReconciler(is ItemStore, opts ...RangeSetReconcilerOption) *Rang
 // }
 
 func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding Iterator, x, y Ordered) (Iterator, error) {
-	if preceding != nil && preceding.Key().Compare(x) > 0 {
-		preceding = nil
+	if preceding != nil {
+		k, err := preceding.Key()
+		if err != nil {
+			return nil, err
+		}
+		if k.Compare(x) > 0 {
+			preceding = nil
+		}
 	}
 	// fmt.Fprintf(os.Stderr, "QQQQQ: preceding=%q\n",
 	// 	qqqqRmmeK(preceding))
@@ -286,7 +292,10 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 			}
 			return nil, true, nil
 		}
-		x = it.Key()
+		x, err = it.Key()
+		if err != nil {
+			return nil, false, err
+		}
 		y = x
 	} else if x == nil || y == nil {
 		return nil, false, errors.New("bad X or Y")
@@ -394,7 +403,10 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 			HexField("fingerprint", part.Fingerprint),
 			IteratorField("start", part.Start),
 			IteratorField("middle", part.End))
-		middle := part.End.Key()
+		middle, err := part.End.Key()
+		if err != nil {
+			return nil, false, err
+		}
 		next, err := rsr.processSubrange(c, info.Start, x, middle)
 		if err != nil {
 			return nil, false, err
@@ -418,7 +430,10 @@ func (rsr *RangeSetReconciler) Initiate(c Conduit) error {
 	}
 	var x Ordered
 	if it != nil {
-		x = it.Key()
+		x, err = it.Key()
+		if err != nil {
+			return err
+		}
 	}
 	return rsr.InitiateBounded(c, x, x)
 }
@@ -512,10 +527,11 @@ func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample [
 	for n := 0; n < sampleSize; n++ {
 		// fmt.Fprintf(os.Stderr, "QQQQQ: n %d sampleSize %d info.Count %d rsr.sampleSize %d %#v\n",
 		// 	n, sampleSize, info.Count, rsr.sampleSize, it.Key())
-		if it.Key() == nil {
-			panic("BUG: no key")
+		k, err := it.Key()
+		if err != nil {
+			return 0, err
 		}
-		localSample[n] = c.ShortenKey(it.Key())
+		localSample[n] = c.ShortenKey(k)
 		if err := it.Next(); err != nil {
 			return 0, err
 		}
@@ -666,10 +682,14 @@ func CollectStoreItems[K Ordered](is ItemStore) ([]K, error) {
 	if err != nil {
 		return nil, err
 	}
-	if it == nil || it.Key() == nil {
+	if it == nil {
 		return nil, nil
 	}
-	info, err := is.GetRangeInfo(nil, it.Key(), it.Key(), -1)
+	k, err := it.Key()
+	if err != nil {
+		return nil, err
+	}
+	info, err := is.GetRangeInfo(nil, k, k, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -678,7 +698,10 @@ func CollectStoreItems[K Ordered](is ItemStore) ([]K, error) {
 		return nil, err
 	}
 	for n := 0; n < info.Count; n++ {
-		k := it.Key()
+		k, err := it.Key()
+		if err != nil {
+			return nil, err
+		}
 		if k == nil {
 			fmt.Fprintf(os.Stderr, "QQQQQ: it: %#v\n", it)
 			panic("BUG: iterator exausted before Count reached")
