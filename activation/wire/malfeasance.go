@@ -24,13 +24,3 @@ type ATXProof struct {
 	// Proof is the actual proof. Its type depends on the ProofType.
 	Proof []byte `scale:"max=1048576"` // max size of proof is 1MiB
 }
-
-// ProofCertificate proofs that two identities are part of the same marriage set.
-type ProofCertificate struct {
-	// Target of the certificate, i.e. the identity that signed the ATX containing the original certificate.
-	Target types.NodeID
-	// ID is the identity that signed the certificate.
-	ID types.NodeID
-	// Signature is the signature of the certificate, i.e. ID signed with the key of SmesherID.
-	Signature types.EdSignature
-}
