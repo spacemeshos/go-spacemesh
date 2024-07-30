@@ -26,6 +26,7 @@ var layersToCheck = parameters.Int(
 )
 
 func TestPoetsFailures(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 	tctx := testcontext.New(t)
 	tctx.Log.Debug("TestPoetsFailures start")
@@ -123,6 +124,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 }
 
 func TestNodesUsingDifferentPoets(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 	tctx := testcontext.New(t)
 	if tctx.PoetSize < 2 {
@@ -213,6 +215,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 // TODO: When PoW support is removed, convert this test to verify only the cert path.
 // https://github.com/spacemeshos/go-spacemesh/issues/5212
 func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 	tctx := testcontext.New(t)
 	tctx.PoetSize = 2

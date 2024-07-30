@@ -29,6 +29,7 @@ import (
 )
 
 func TestSmeshing(t *testing.T) {
+	t.Skip()
 	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
 

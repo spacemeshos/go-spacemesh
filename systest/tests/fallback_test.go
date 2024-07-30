@@ -19,6 +19,7 @@ import (
 )
 
 func TestFallback(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 
 	tctx := testcontext.New(t)

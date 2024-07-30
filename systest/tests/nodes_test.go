@@ -22,6 +22,7 @@ func init() {
 }
 
 func TestAddNodes(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 
 	const (

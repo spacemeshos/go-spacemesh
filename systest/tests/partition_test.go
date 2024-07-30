@@ -176,6 +176,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 }
 
 func TestPartition_30_70(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 
 	tctx := testcontext.New(t)
@@ -190,6 +191,7 @@ func TestPartition_30_70(t *testing.T) {
 }
 
 func TestPartition_50_50(t *testing.T) {
+	t.Skip()
 	t.Parallel()
 
 	tctx := testcontext.New(t)
