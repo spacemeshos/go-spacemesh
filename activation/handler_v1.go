@@ -329,7 +329,7 @@ func (h *HandlerV1) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 // Returns true if the atx was cached, false otherwise.
 func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
-		malicious, err := h.cdb.IsMalicious(atx.SmesherID)
+		malicious, err := identities.IsMalicious(h.cdb, atx.SmesherID)
 		if err != nil {
 			h.logger.Error("failed is malicious read", zap.Error(err), log.ZContext(ctx))
 			return nil
