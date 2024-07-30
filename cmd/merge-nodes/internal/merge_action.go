@@ -97,10 +97,18 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	if err != nil {
 		return fmt.Errorf("read target key directory: %w", err)
 	}
+	toKeyDirFiles = slices.DeleteFunc(toKeyDirFiles, func(e fs.DirEntry) bool {
+		// skip files that are not identity files
+		return filepath.Ext(e.Name()) != ".key"
+	})
 	fromKeyDirFiles, err := os.ReadDir(fromKeyDir)
 	if err != nil {
 		return fmt.Errorf("read source key directory: %w", err)
 	}
+	fromKeyDirFiles = slices.DeleteFunc(fromKeyDirFiles, func(e fs.DirEntry) bool {
+		// skip files that are not identity files
+		return filepath.Ext(e.Name()) != ".key"
+	})
 	for _, toFile := range toKeyDirFiles {
 		for _, fromFile := range fromKeyDirFiles {
 			if toFile.Name() == fromFile.Name() {
