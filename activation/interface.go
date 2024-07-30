@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
@@ -100,7 +101,7 @@ type syncer interface {
 // Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them.
 // and mark the associated identity as malfeasant.
 type malfeasancePublisher interface {
-	Publish(ctx context.Context, id types.NodeID, data []byte) error
+	Publish(ctx context.Context, id types.NodeID, proof *wire.ATXProof) error
 }
 
 type atxProvider interface {

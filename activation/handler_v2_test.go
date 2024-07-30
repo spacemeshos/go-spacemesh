@@ -1461,12 +1461,12 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		require.ErrorContains(t, err, "post failure")
 	})
 	t.Run("invalid PoST index - generates a malfeasance proof", func(t *testing.T) {
-		t.Skip("malfeasance proof is not generated yet")
 		atxHandler := newV2TestHandler(t, golden)
 
 		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
+		atxHandler.mValidator.EXPECT().PoetMembership(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 		atxHandler.mValidator.EXPECT().
 			PostV2(
 				gomock.Any(),
@@ -1478,8 +1478,21 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 				gomock.Any(),
 			).
 			Return(verifying.ErrInvalidIndex{Index: 7})
+		atxHandler.mMalPublish.EXPECT().Publish(
+			gomock.Any(),
+			sig.NodeID(),
+			gomock.Cond(func(data any) bool {
+				proof, ok := data.(*wire.ATXProof)
+				if !ok {
+					return false
+				}
+				return proof.ProofType == wire.InvalidPost
+			}),
+		)
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
-		require.ErrorContains(t, err, "invalid post")
+		vErr := &verifying.ErrInvalidIndex{}
+		require.ErrorAs(t, err, vErr)
+		require.Equal(t, 7, vErr.Index)
 	})
 	t.Run("invalid PoET membership proof", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)

@@ -1109,17 +1109,17 @@ func (m *MockmalfeasancePublisher) EXPECT() *MockmalfeasancePublisherMockRecorde
 }
 
 // Publish mocks base method.
-func (m *MockmalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, data []byte) error {
+func (m *MockmalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof *wire.ATXProof) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Publish", ctx, id, data)
+	ret := m.ctrl.Call(m, "Publish", ctx, id, proof)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Publish indicates an expected call of Publish.
-func (mr *MockmalfeasancePublisherMockRecorder) Publish(ctx, id, data any) *MockmalfeasancePublisherPublishCall {
+func (mr *MockmalfeasancePublisherMockRecorder) Publish(ctx, id, proof any) *MockmalfeasancePublisherPublishCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockmalfeasancePublisher)(nil).Publish), ctx, id, data)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockmalfeasancePublisher)(nil).Publish), ctx, id, proof)
 	return &MockmalfeasancePublisherPublishCall{Call: call}
 }
 
@@ -1135,13 +1135,13 @@ func (c *MockmalfeasancePublisherPublishCall) Return(arg0 error) *Mockmalfeasanc
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockmalfeasancePublisherPublishCall) Do(f func(context.Context, types.NodeID, []byte) error) *MockmalfeasancePublisherPublishCall {
+func (c *MockmalfeasancePublisherPublishCall) Do(f func(context.Context, types.NodeID, *wire.ATXProof) error) *MockmalfeasancePublisherPublishCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context, types.NodeID, []byte) error) *MockmalfeasancePublisherPublishCall {
+func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context, types.NodeID, *wire.ATXProof) error) *MockmalfeasancePublisherPublishCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

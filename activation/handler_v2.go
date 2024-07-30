@@ -18,7 +18,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -618,8 +617,8 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				post.NumUnits,
 				PostSubset([]byte(h.local)),
 			)
-			var invalidIdx *verifying.ErrInvalidIndex
-			if errors.As(err, &invalidIdx) {
+			invalidIdx := &verifying.ErrInvalidIndex{}
+			if errors.As(err, invalidIdx) {
 				h.logger.Info(
 					"ATX with invalid post index",
 					zap.Stringer("id", atx.ID()),
@@ -629,7 +628,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				proof := &wire.ATXProof{
 					ProofType: wire.InvalidPost,
 				}
-				if err := h.malPublisher.Publish(ctx, id, codec.MustEncode(proof)); err != nil {
+				if err := h.malPublisher.Publish(ctx, id, proof); err != nil {
 					return nil, fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
 				}
 			}
@@ -691,7 +690,7 @@ func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx *sql.Tx, atxID type
 			proof := &wire.ATXProof{
 				ProofType: wire.DoubleMarry,
 			}
-			return h.malPublisher.Publish(ctx, m.id, codec.MustEncode(proof))
+			return h.malPublisher.Publish(ctx, m.id, proof)
 		}
 	}
 	return nil
