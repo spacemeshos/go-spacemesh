@@ -61,24 +61,38 @@ type SyncMessage interface {
 	Keys() []Ordered
 }
 
+func formatID(v any) string {
+	switch v := v.(type) {
+	case fmt.Stringer:
+		s := v.String()
+		if len(s) > 10 {
+			return s[:10]
+		}
+		return s
+	case string:
+		return v
+	default:
+		return "<unknown>"
+	}
+}
+
 func SyncMessageToString(m SyncMessage) string {
 	var sb strings.Builder
 	sb.WriteString("<" + m.Type().String())
-
 	if x := m.X(); x != nil {
-		sb.WriteString(" X=" + x.(fmt.Stringer).String()[:10])
+		sb.WriteString(" X=" + formatID(x))
 	}
 	if y := m.Y(); y != nil {
-		sb.WriteString(" Y=" + y.(fmt.Stringer).String()[:10])
+		sb.WriteString(" Y=" + formatID(y))
 	}
 	if count := m.Count(); count != 0 {
 		fmt.Fprintf(&sb, " Count=%d", count)
 	}
 	if fp := m.Fingerprint(); fp != nil {
-		sb.WriteString(" FP=" + fp.(fmt.Stringer).String()[:10])
+		sb.WriteString(" FP=" + formatID(fp))
 	}
 	for _, k := range m.Keys() {
-		fmt.Fprintf(&sb, " item=%s", k.(fmt.Stringer).String()[:10])
+		fmt.Fprintf(&sb, " item=%s", formatID(k))
 	}
 	sb.WriteString(">")
 	return sb.String()

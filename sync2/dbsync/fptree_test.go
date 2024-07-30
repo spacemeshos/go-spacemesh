@@ -11,11 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 )
 
 func TestPrefix(t *testing.T) {
@@ -292,10 +295,9 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 			},
 			ranges: []rangeTestCase{
 				{
-					xIdx:  0,
-					yIdx:  0,
-					limit: -1,
-					// QQQQQ: use string instead of fingerprint in tcs
+					xIdx:     0,
+					yIdx:     0,
+					limit:    -1,
 					fp:       "642464b773377bbddddddddd",
 					count:    5,
 					itype:    0,
@@ -727,16 +729,16 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 				t.Run(name, func(t *testing.T) {
 					fpr, err := ft.fingerprintInterval(x[:], y[:], rtc.limit)
 					require.NoError(t, err)
-					require.Equal(t, rtc.fp, fpr.fp.String(), "fp")
-					require.Equal(t, rtc.count, fpr.count, "count")
-					require.Equal(t, rtc.itype, fpr.itype, "itype")
+					assert.Equal(t, rtc.fp, fpr.fp.String(), "fp")
+					assert.Equal(t, rtc.count, fpr.count, "count")
+					assert.Equal(t, rtc.itype, fpr.itype, "itype")
 
 					if rtc.startIdx == -1 {
 						require.Nil(t, fpr.start, "start")
 					} else {
 						require.NotNil(t, fpr.start, "start")
 						expK := KeyBytes(hs[rtc.startIdx][:])
-						require.Equal(t, expK, fpr.start.Key(), "start")
+						assert.Equal(t, expK, fpr.start.Key(), "start")
 					}
 
 					if rtc.endIdx == -1 {
@@ -744,7 +746,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					} else {
 						require.NotNil(t, fpr.end, "end")
 						expK := KeyBytes(hs[rtc.endIdx][:])
-						require.Equal(t, expK, fpr.end.Key(), "end")
+						assert.Equal(t, expK, fpr.end.Key(), "end")
 					}
 				})
 			}
@@ -769,6 +771,95 @@ func TestFPTree(t *testing.T) {
 			return newFakeATXIDStore(db, maxDepth)
 		})
 	})
+}
+
+type noIDStore struct{}
+
+var _ idStore = noIDStore{}
+
+func (noIDStore) clone() idStore {
+	return &noIDStore{}
+}
+
+func (noIDStore) registerHash(h KeyBytes) error {
+	return nil
+}
+
+func (noIDStore) start() (iterator, error) {
+	panic("no ID store")
+
+}
+
+func (noIDStore) iter(from KeyBytes) (iterator, error) {
+	return noIter{}, nil
+}
+
+type noIter struct{}
+
+func (noIter) Key() hashsync.Ordered {
+	return make(KeyBytes, 32)
+}
+
+func (noIter) Next() error {
+	panic("no ID store")
+}
+
+func (noIter) clone() iterator {
+	return noIter{}
+}
+
+var _ iterator = &noIter{}
+
+// TestFPTreeNoIDStore tests that an fpTree can avoid using an idStore if X has only
+// 0 bits below max-depth and Y has only 1 bits below max-depth. It also checks that an fpTree
+// can avoid using an idStore in "relaxed count" mode for splitting ranges.
+func TestFPTreeNoIDStore(t *testing.T) {
+	var np nodePool
+	ft := newFPTree(&np, &noIDStore{}, 32, 24)
+	// ft.traceEnabled = true
+	hashes := []KeyBytes{
+		util.FromHex("1111111111111111111111111111111111111111111111111111111111111111"),
+		util.FromHex("2222222222222222222222222222222222222222222222222222222222222222"),
+		util.FromHex("4444444444444444444444444444444444444444444444444444444444444444"),
+		util.FromHex("8888888888888888888888888888888888888888888888888888888888888888"),
+	}
+	for _, h := range hashes {
+		ft.addHash(h)
+	}
+
+	for _, tc := range []struct {
+		x, y  KeyBytes
+		limit int
+		fp    string
+		count uint32
+	}{
+		{
+			x:     hashes[0],
+			y:     hashes[0],
+			limit: -1,
+			fp:    "ffffffffffffffffffffffff",
+			count: 4,
+		},
+		{
+			x:     util.FromHex("1111110000000000000000000000000000000000000000000000000000000000"),
+			y:     util.FromHex("1111120000000000000000000000000000000000000000000000000000000000"),
+			limit: -1,
+			fp:    "111111111111111111111111",
+			count: 1,
+		},
+		{
+			x:     util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"),
+			y:     util.FromHex("9000000000000000000000000000000000000000000000000000000000000000"),
+			limit: -1,
+			fp:    "ffffffffffffffffffffffff",
+			count: 4,
+		},
+	} {
+		fpr, err := ft.fingerprintInterval(tc.x, tc.y, tc.limit)
+		require.NoError(t, err)
+		require.Equal(t, tc.fp, fpr.fp.String(), "fp")
+		require.Equal(t, tc.count, fpr.count, "count")
+	}
 }
 
 func TestFPTreeClone(t *testing.T) {

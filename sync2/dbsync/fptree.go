@@ -302,12 +302,48 @@ type aggContext struct {
 	lastPrefix *prefix
 }
 
+// prefixAtOrAfterX verifies that the any key with the prefix p is at or after x.
+// It can be used for the whole interval in case of a normal interval.
+// With inverse intervals, it should only be used for the [x, max) part
+// of the interval.
 func (ac *aggContext) prefixAtOrAfterX(p prefix) bool {
 	return p.bits()<<(64-p.len()) >= load64(ac.x)
 }
 
+// prefixBelowY verifies that the any key with the prefix p is below y.
+// It can be used for the whole interval in case of a normal interval.
+// With inverse intervals, it should only be used for the [0, y) part
+// of the interval.
 func (ac *aggContext) prefixBelowY(p prefix) bool {
+	// QQQQQ: TBD: <= must work, check !!!!!
 	return (p.bits()+1)<<(64-p.len())-1 < load64(ac.y)
+}
+
+func (ac *aggContext) fingreprintAtOrAfterX(fp fingerprint) bool {
+	k := make(KeyBytes, len(ac.x))
+	copy(k, fp[:])
+	return bytes.Compare(k, ac.x) >= 0
+}
+
+func (ac *aggContext) fingreprintBelowY(fp fingerprint) bool {
+	k := make(KeyBytes, len(ac.x))
+	copy(k, fp[:])
+	k[:fingerprintBytes].inc() // 1 after max key derived from the fingerprint
+	return bytes.Compare(k, ac.y) <= 0
+}
+
+func (ac *aggContext) nodeAtOrAfterX(node node, p prefix) bool {
+	if node.c == 1 {
+		return ac.fingreprintAtOrAfterX(node.fp)
+	}
+	return ac.prefixAtOrAfterX(p)
+}
+
+func (ac *aggContext) nodeBelowY(node node, p prefix) bool {
+	if node.c == 1 {
+		return ac.fingreprintBelowY(node.fp)
+	}
+	return ac.prefixBelowY(p)
 }
 
 func (ac *aggContext) maybeIncludeNode(node node, p prefix) bool {
@@ -688,13 +724,16 @@ func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, ac *aggContex
 	// case ac.limit == 0:
 	// 	ft.log("stop: limit exhausted")
 	// 	return false, ft.markEnd(p, ac)
-	case ac.prefixAtOrAfterX(p) && ac.maybeIncludeNode(node, p):
+	case ac.nodeAtOrAfterX(node, p) && ac.maybeIncludeNode(node, p):
 		ft.log("including node in full: %s limit %d", p, ac.limit)
 		return ac.limit != 0, nil
 	case p.len() == ft.maxDepth || node.leaf():
 		if node.left != noIndex || node.right != noIndex {
 			panic("BUG: node @ maxDepth has children")
 		}
+		// if node.c == 1 {;
+		// 	fmt.Fprintf(os.Stderr, "QQQQQ: aggregateLeft: edge with x %s p %s limit %d\n", ac.x, p, ac.limit)
+		// }
 		return ft.aggregateEdge(ac.x, nil, p, ac)
 	case v&bit63 == 0:
 		ft.log("incl right node %d + go left to node %d", node.right, node.left)
@@ -725,7 +764,7 @@ func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, ac *aggConte
 	// case ac.limit == 0:
 	// 	ft.log("stop: limit exhausted")
 	// 	return false, ft.markEnd(p, ac)
-	case ac.prefixBelowY(p) && ac.maybeIncludeNode(node, p):
+	case ac.nodeBelowY(node, p) && ac.maybeIncludeNode(node, p):
 		ft.log("including node in full: %s limit %d", p, ac.limit)
 		return ac.limit != 0, nil
 	case p.len() == ft.maxDepth || node.leaf():
@@ -785,7 +824,11 @@ func (ft *fpTree) aggregateSimple(ac *aggContext) error {
 		}
 	case lcaIdx == noIndex || !lca.leaf():
 		ft.log("commonPrefix %s NOT found b/c no items have it", p)
+	case ac.nodeAtOrAfterX(lca, lcaPrefix) && ac.nodeBelowY(lca, lcaPrefix) &&
+		ac.maybeIncludeNode(lca, lcaPrefix):
+		ft.log("commonPrefix %s -- lca node %d included in full", p, lcaIdx)
 	default:
+		//ac.prefixAtOrAfterX(lcaPrefix) && ac.prefixBelowY(lcaPrefix):
 		ft.log("commonPrefix %s -- lca %d", p, lcaIdx)
 		_, err := ft.aggregateEdge(ac.x, ac.y, lcaPrefix, ac)
 		return err
@@ -811,7 +854,7 @@ func (ft *fpTree) aggregateInverse(ac *aggContext) error {
 		ft.aggregateLeft(idx0, load64(ac.x)<<pf0.len(), pf0, ac)
 	case idx0 == noIndex || !pf0Node.leaf():
 		// nothing to do
-	case ac.prefixAtOrAfterX(followedPrefix) && ac.maybeIncludeNode(pf0Node, pf0):
+	case ac.nodeAtOrAfterX(pf0Node, followedPrefix) && ac.maybeIncludeNode(pf0Node, followedPrefix):
 		// node is fully included
 	default:
 		_, err := ft.aggregateEdge(ac.x, nil, followedPrefix, ac)
@@ -840,7 +883,7 @@ func (ft *fpTree) aggregateInverse(ac *aggContext) error {
 		ft.aggregateRight(idx1, load64(ac.y)<<pf1.len(), pf1, ac)
 	case idx1 == noIndex || !pf1Node.leaf():
 		// nothing to do
-	case ac.prefixBelowY(followedPrefix) && ac.maybeIncludeNode(pf1Node, pf1):
+	case ac.nodeBelowY(pf1Node, followedPrefix) && ac.maybeIncludeNode(pf1Node, followedPrefix):
 		// node is fully included
 	default:
 		_, err := ft.aggregateEdge(nil, ac.y, followedPrefix, ac)

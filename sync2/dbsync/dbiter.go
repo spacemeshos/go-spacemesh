@@ -92,6 +92,8 @@ func newDBRangeIterator(
 		chunk:        make([]KeyBytes, maxChunkSize),
 		singleChunk:  false,
 	}
+	// panic("TBD: QQQQQ: do not preload the iterator! Key should panic upon no entries. With from > max item, iterator should work, wrapping around (TEST)!")
+	// panic("TBD: QQQQQ: Key() should return an error!")
 	if err := it.load(); err != nil {
 		return nil, err
 	}

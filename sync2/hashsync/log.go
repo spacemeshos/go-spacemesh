@@ -2,6 +2,7 @@ package hashsync
 
 import (
 	"encoding/hex"
+	"fmt"
 	"reflect"
 
 	"go.uber.org/zap"
@@ -46,10 +47,14 @@ func HexField(name string, k any) zap.Field {
 			h = h[:5]
 		}
 		return zap.String(name, hex.EncodeToString(h[:5]))
+	case string:
+		return zap.String(name, h)
+	case fmt.Stringer:
+		return zap.String(name, h.String())
 	default:
 		if isNil(k) {
 			return zap.String(name, "<nil>")
 		}
-		panic("unexpected type")
+		panic("unexpected type: " + reflect.TypeOf(k).String())
 	}
 }
