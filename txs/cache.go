@@ -97,7 +97,7 @@ func (ac *accountCache) availBalance() uint64 {
 func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element, *candidate, error) {
 	if ac.txsByNonce.Len() >= maxTXsPerAcct {
 		ac.moreInDB = true
-		return nil, nil, errTooManyNonce
+		return nil, nil, fmt.Errorf("%w: len %d", errTooManyNonce, ac.txsByNonce.Len())
 	}
 	balance := ac.startBalance
 	var prev *list.Element
@@ -115,7 +115,6 @@ func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element
 		break
 	}
 	if balance < ntx.MaxSpending() {
-		ac.moreInDB = true
 		logger.Debug("insufficient balance",
 			zap.Stringer("tx_id", ntx.ID),
 			zap.Stringer("address", ntx.Principal),
@@ -593,15 +592,10 @@ func (c *Cache) cleanupAccounts(accounts map[types.Address]struct{}) {
 	}
 }
 
-//   - errInsufficientBalance:
-//     conservative cache is conservative in that it only counts principal's spending for pending transactions.
-//     a tx rejected due to insufficient balance MAY become feasible after a layer is applied (principal
-//     received incoming funds). when we receive a errInsufficientBalance tx, we should store it in db and
-//     re-evaluate it after each layer is applied.
 //   - errTooManyNonce: when a principal has way too many nonces, we don't want to blow up the memory. they should
 //     be stored in db and retrieved after each earlier nonce is applied.
 func acceptable(err error) bool {
-	return err == nil || errors.Is(err, errInsufficientBalance) || errors.Is(err, errTooManyNonce)
+	return err == nil || errors.Is(err, errTooManyNonce)
 }
 
 func (c *Cache) Add(
