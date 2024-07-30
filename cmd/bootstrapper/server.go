@@ -134,8 +134,37 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 		// start generating fallback data
 		s.eg.Go(
 			func() error {
-				s.genDataLoop(ctx, errCh, last, params.updateActiveSetTime, s.GenFallbackActiveSet)
-				return nil
+				var (
+					errs    = 0
+					maxErrs = 10
+					timer   *time.Timer
+					backoff = 10 * time.Second
+				)
+				for epoch := last; ; epoch++ {
+					wait := time.Until(params.updateActiveSetTime(epoch))
+					select {
+					case <-timer.C:
+						if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
+							errs++
+							timer.Reset(backoff)
+							continue
+						}
+						errs = 0
+						if !timer.Stop() {
+							<-timer.C
+						}
+					case <-time.After(wait):
+						if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
+							timer = time.NewTimer(backoff)
+							if errs >= maxErrs {
+								errCh <- err
+								return err
+							}
+						}
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
 			})
 		s.eg.Go(
 			func() error {
