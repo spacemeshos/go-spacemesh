@@ -146,7 +146,7 @@ func NewHandler(
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
-			malPublisher:    nil, // TODO(mafa): use proper implementation
+			malPublisher:    &MalfeasancePublisher{},
 		},
 	}
 

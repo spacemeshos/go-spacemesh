@@ -683,7 +683,12 @@ func (h *HandlerV2) checkMalicious(
 	return nil
 }
 
-func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx *sql.Tx, atxID types.ATXID, marrying []marriage) (bool, error) {
+func (h *HandlerV2) checkDoubleMarry(
+	ctx context.Context,
+	tx *sql.Tx,
+	atxID types.ATXID,
+	marrying []marriage,
+) (bool, error) {
 	for _, m := range marrying {
 		mATX, err := identities.MarriageATX(tx, m.id)
 		if err != nil {
@@ -744,6 +749,9 @@ func (h *HandlerV2) storeAtx(
 	err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		// malfeasance check happens after storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
+		// TODO(mafa): don't store own ATX if it would mark the node as malicious
+		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
+		//    the gossip handler (not sync!)
 		err := h.checkMalicious(ctx, tx, watx, marrying)
 		if err != nil {
 			return fmt.Errorf("check malicious: %w", err)
