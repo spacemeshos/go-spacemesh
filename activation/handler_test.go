@@ -119,12 +119,13 @@ func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 type handlerMocks struct {
 	goldenATXID types.ATXID
 
-	mclock     *MocklayerClock
-	mpub       *pubsubmocks.MockPublisher
-	mockFetch  *mocks.MockFetcher
-	mValidator *MocknipostValidator
-	mbeacon    *MockatxReceiver
-	mtortoise  *mocks.MockTortoise
+	mclock      *MocklayerClock
+	mpub        *pubsubmocks.MockPublisher
+	mockFetch   *mocks.MockFetcher
+	mValidator  *MocknipostValidator
+	mbeacon     *MockatxReceiver
+	mtortoise   *mocks.MockTortoise
+	mMalPublish *MockmalfeasancePublisher
 }
 
 type testHandler struct {
@@ -188,6 +189,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 		mValidator:  NewMocknipostValidator(ctrl),
 		mbeacon:     NewMockatxReceiver(ctrl),
 		mtortoise:   mocks.NewMockTortoise(ctrl),
+		mMalPublish: NewMockmalfeasancePublisher(ctrl),
 	}
 }
 

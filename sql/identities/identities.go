@@ -133,19 +133,6 @@ func GetMalicious(db sql.Executor) (nids []types.NodeID, err error) {
 	return nids, nil
 }
 
-// Married checks if id is married.
-// ID is married if it has non-null marriage_atx column.
-func Married(db sql.Executor, id types.NodeID) (bool, error) {
-	rows, err := db.Exec("select 1 from identities where pubkey = ?1 and marriage_atx is not null;",
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id.Bytes())
-		}, nil)
-	if err != nil {
-		return false, fmt.Errorf("married %v: %w", id, err)
-	}
-	return rows > 0, nil
-}
-
 // MarriageATX obtains the marriage ATX for given ID.
 func MarriageATX(db sql.Executor, id types.NodeID) (types.ATXID, error) {
 	var atx types.ATXID

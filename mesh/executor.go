@@ -117,7 +117,7 @@ func (e *Executor) ExecuteOptimistic(
 	if err != nil {
 		return nil, fmt.Errorf("get state hash: %w", err)
 	}
-	e.logger.Info("optimistically executed block",
+	e.logger.Debug("optimistically executed block",
 		log.ZContext(ctx),
 		zap.Uint32("lid", lid.Uint32()),
 		zap.Stringer("block", b.ID()),
@@ -166,7 +166,7 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return fmt.Errorf("get state hash: %w", err)
 	}
-	e.logger.Info("executed block",
+	e.logger.Debug("executed block",
 		log.ZContext(ctx),
 		zap.Uint32("lid", lid.Uint32()),
 		zap.Stringer("block", block.ID()),
