@@ -24,13 +24,6 @@ func (t *ATXProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Certificates, 1024)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeByteSliceWithLimit(enc, t.Proof, 1048576)
 		if err != nil {
 			return total, err
@@ -58,70 +51,12 @@ func (t *ATXProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		t.ProofType = ProofType(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[ProofCertificate](dec, 1024)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Certificates = field
-	}
-	{
 		field, n, err := scale.DecodeByteSliceWithLimit(dec, 1048576)
 		if err != nil {
 			return total, err
 		}
 		total += n
 		t.Proof = field
-	}
-	return total, nil
-}
-
-func (t *ProofCertificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteArray(enc, t.Target[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.ID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *ProofCertificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.Target[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.ID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
 	}
 	return total, nil
 }

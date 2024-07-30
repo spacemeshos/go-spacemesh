@@ -65,6 +65,7 @@ type HandlerV2 struct {
 	tortoise        system.Tortoise
 	logger          *zap.Logger
 	fetcher         system.Fetcher
+	malPublisher    malfeasancePublisher
 }
 
 func (h *HandlerV2) processATX(
@@ -267,7 +268,7 @@ func (h *HandlerV2) fetchReferences(ctx context.Context, poetRefs []types.Hash32
 	if len(atxIDs) != 0 {
 		eg.Go(func() error {
 			if err := h.fetcher.GetAtxs(ctx, atxIDs, system.WithoutLimiting()); err != nil {
-				return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
+				return fmt.Errorf("missing atxs %s: %w", atxIDs, err)
 			}
 			return nil
 		})
@@ -618,14 +619,20 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				post.NumUnits,
 				PostSubset([]byte(h.local)),
 			)
-			var invalidIdx *verifying.ErrInvalidIndex
-			if errors.As(err, &invalidIdx) {
+			invalidIdx := &verifying.ErrInvalidIndex{}
+			if errors.As(err, invalidIdx) {
 				h.logger.Info(
 					"ATX with invalid post index",
 					zap.Stringer("id", atx.ID()),
 					zap.Int("index", invalidIdx.Index),
 				)
-				// TODO(mafa): generate malfeasance proof
+				// TODO(mafa): finish proof
+				proof := &wire.ATXProof{
+					ProofType: wire.InvalidPost,
+				}
+				if err := h.malPublisher.Publish(ctx, id, proof); err != nil {
+					return nil, fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
+				}
 			}
 			if err != nil {
 				return nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
@@ -645,11 +652,15 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	parts.ticks = nipostSizes.minTicks()
-
 	return &parts, nil
 }
 
-func (h *HandlerV2) checkMalicious(tx *sql.Tx, watx *wire.ActivationTxV2, marrying []marriage) error {
+func (h *HandlerV2) checkMalicious(
+	ctx context.Context,
+	tx *sql.Tx,
+	watx *wire.ActivationTxV2,
+	marrying []marriage,
+) error {
 	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
 	if err != nil {
 		return fmt.Errorf("checking if node is malicious: %w", err)
@@ -658,38 +669,42 @@ func (h *HandlerV2) checkMalicious(tx *sql.Tx, watx *wire.ActivationTxV2, marryi
 		return nil
 	}
 
-	if err := h.checkDoubleMarry(tx, marrying); err != nil {
+	malicious, err = h.checkDoubleMarry(ctx, tx, watx.ID(), marrying)
+	if err != nil {
 		return fmt.Errorf("checking double marry: %w", err)
 	}
+	if malicious {
+		return nil
+	}
 
-	// TODO: contextual validation:
+	// TODO(mafa): contextual validation:
 	// 1. check double-publish = ID contributed post to two ATXs in the same epoch
 	// 2. check previous ATX
 	// 3  ID already married (same node ID in multiple marriage certificates)
 	// 4. two ATXs referencing the same marriage certificate in the same epoch
-
 	return nil
 }
 
-func (h *HandlerV2) checkDoubleMarry(tx *sql.Tx, marrying []marriage) error {
+func (h *HandlerV2) checkDoubleMarry(
+	ctx context.Context,
+	tx *sql.Tx,
+	atxID types.ATXID,
+	marrying []marriage,
+) (bool, error) {
 	for _, m := range marrying {
-		married, err := identities.Married(tx, m.id)
+		mATX, err := identities.MarriageATX(tx, m.id)
 		if err != nil {
-			return fmt.Errorf("checking if ID is married: %w", err)
+			return false, fmt.Errorf("checking if ID is married: %w", err)
 		}
-		if married {
-			// TODO(mafa): publish malfeasance proof
-			// proof := &mwire.MalfeasanceProof{
-			// 	Proof: mwire.Proof{
-			// 		Type: mwire.DoubleMarry,
-			// 		Data: &mwire.DoubleMarryProof{},
-			// 	},
-			// }
-			// return proof, nil
-			return nil
+		if mATX != atxID {
+			// TODO(mafa): finish proof
+			proof := &wire.ATXProof{
+				ProofType: wire.DoubleMarry,
+			}
+			return true, h.malPublisher.Publish(ctx, m.id, proof)
 		}
 	}
-	return nil
+	return false, nil
 }
 
 // Store an ATX in the DB.
@@ -736,7 +751,10 @@ func (h *HandlerV2) storeAtx(
 	err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		// malfeasance check happens after storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
-		err := h.checkMalicious(tx, watx, marrying)
+		// TODO(mafa): don't store own ATX if it would mark the node as malicious
+		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
+		//    the gossip handler (not sync!)
+		err := h.checkMalicious(ctx, tx, watx, marrying)
 		if err != nil {
 			return fmt.Errorf("check malicious: %w", err)
 		}

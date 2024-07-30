@@ -444,7 +444,7 @@ func (f *Fetch) Stop() {
 	f.mu.Unlock()
 
 	_ = f.eg.Wait()
-	f.logger.Info("stopped fetch")
+	f.logger.Debug("stopped fetch")
 }
 
 // stopped returns if we should stop.
@@ -460,7 +460,7 @@ func (f *Fetch) stopped() bool {
 // here we receive all requests for hashes for all DBs and batch them together before we send the request to peer
 // there can be a priority request that will not be batched.
 func (f *Fetch) loop() {
-	f.logger.Info("starting fetch main loop")
+	f.logger.Debug("starting fetch main loop")
 	for {
 		select {
 		case <-f.batchTimeout.C:
@@ -698,7 +698,7 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][]*batc
 
 	best := f.peers.SelectBest(RedundantPeers)
 	if len(best) == 0 {
-		f.logger.Info("cannot send batch: no peers found")
+		f.logger.Warn("cannot send batch: no peers found")
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		errNoPeer := errors.New("no peers")

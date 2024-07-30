@@ -1,7 +1,6 @@
 package v2alpha1
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -36,7 +35,7 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 	return cfg, func() { assert.NoError(tb, grpc.Close()) }
 }
 
-func dialGrpc(ctx context.Context, tb testing.TB, cfg grpcserver.Config) *grpc.ClientConn {
+func dialGrpc(tb testing.TB, cfg grpcserver.Config) *grpc.ClientConn {
 	tb.Helper()
 	conn, err := grpc.NewClient(
 		cfg.PublicListener,

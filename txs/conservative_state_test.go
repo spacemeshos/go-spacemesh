@@ -402,10 +402,10 @@ func TestAddToCache_InsufficientBalance(t *testing.T) {
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
-	require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
+	require.ErrorIs(t, tcs.AddToCache(context.Background(), tx, time.Now()), errInsufficientBalance)
 	checkNoTX(t, tcs.cache, tx.ID)
-	require.True(t, tcs.cache.MoreInDB(addr))
-	checkTXStateFromDB(t, tcs.db, []*types.MeshTransaction{{Transaction: *tx}}, types.MEMPOOL)
+	require.False(t, tcs.cache.MoreInDB(addr))
+	checkTXNotInDB(t, tcs.db, tx.ID)
 }
 
 func TestAddToCache_TooManyForOneAccount(t *testing.T) {

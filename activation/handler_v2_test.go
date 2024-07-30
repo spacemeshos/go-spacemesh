@@ -61,6 +61,7 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 			fetcher:         mocks.mockFetch,
 			beacon:          mocks.mbeacon,
 			tortoise:        mocks.mtortoise,
+			malPublisher:    mocks.mMalPublish,
 		},
 		handlerMocks: mocks,
 	}
@@ -1403,7 +1404,6 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "verifying commitment ATX")
-		require.Nil(t, proof)
 	})
 	t.Run("can't find previous ATX", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
@@ -1413,7 +1413,6 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "fetching previous atx")
-		require.Nil(t, proof)
 	})
 	t.Run("previous ATX too new", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
@@ -1425,7 +1424,6 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "previous atx is too new")
-		require.Nil(t, proof)
 	})
 	t.Run("previous ATX by different smesher", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
@@ -1439,7 +1437,6 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 		_, err = atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.Error(t, err)
-		require.Nil(t, proof)
 	})
 	t.Run("invalid PoST", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
@@ -1461,15 +1458,14 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 			Return(errors.New("post failure"))
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "post failure")
-		require.Nil(t, proof)
 	})
 	t.Run("invalid PoST index - generates a malfeasance proof", func(t *testing.T) {
-		t.Skip("malfeasance proof is not generated yet")
 		atxHandler := newV2TestHandler(t, golden)
 
 		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
+		atxHandler.mValidator.EXPECT().PoetMembership(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 		atxHandler.mValidator.EXPECT().
 			PostV2(
 				gomock.Any(),
@@ -1481,9 +1477,21 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 				gomock.Any(),
 			).
 			Return(verifying.ErrInvalidIndex{Index: 7})
+		atxHandler.mMalPublish.EXPECT().Publish(
+			gomock.Any(),
+			sig.NodeID(),
+			gomock.Cond(func(data any) bool {
+				proof, ok := data.(*wire.ATXProof)
+				if !ok {
+					return false
+				}
+				return proof.ProofType == wire.InvalidPost
+			}),
+		)
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
-		require.ErrorContains(t, err, "invalid post")
-		require.NotNil(t, proof)
+		vErr := &verifying.ErrInvalidIndex{}
+		require.ErrorAs(t, err, vErr)
+		require.Equal(t, 7, vErr.Index)
 	})
 	t.Run("invalid PoET membership proof", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
@@ -1496,7 +1504,6 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 			Return(0, errors.New("poet failure"))
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "poet failure")
-		require.Nil(t, proof)
 	})
 }
 
@@ -1540,13 +1547,13 @@ func Test_Marriages(t *testing.T) {
 		err = atxHandler.processInitial(t, atx)
 		require.NoError(t, err)
 
-		married, err := identities.Married(atxHandler.cdb, sig.NodeID())
+		mAtx, err := identities.MarriageATX(atxHandler.cdb, sig.NodeID())
 		require.NoError(t, err)
-		require.True(t, married)
+		require.Equal(t, atx.ID(), mAtx)
 
-		married, err = identities.Married(atxHandler.cdb, otherSig.NodeID())
+		mAtx, err = identities.MarriageATX(atxHandler.cdb, otherSig.NodeID())
 		require.NoError(t, err)
-		require.True(t, married)
+		require.Equal(t, atx.ID(), mAtx)
 
 		set, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
 		require.NoError(t, err)
@@ -1624,22 +1631,19 @@ func Test_Marriages(t *testing.T) {
 		}
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
-		// TODO (mafa): change this check to assert that `publishProof` was called instead
-		// ids := []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}
-		// for _, id := range ids {
-		// 	atxHandler.mtortoise.EXPECT().OnMalfeasance(id)
-		// }
+		atxHandler.mMalPublish.EXPECT().Publish(
+			gomock.Any(),
+			sig.NodeID(),
+			gomock.Cond(func(data any) bool {
+				proof, ok := data.(*wire.ATXProof)
+				if !ok {
+					return false
+				}
+				return proof.ProofType == wire.DoubleMarry
+			}),
+		)
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
-		// TODO (mafa): check that publish proof was called on malfeasance publisher
-
-		// All 3 IDs are marked as malicious
-		// TODO (mafa): re-enable this check
-		// for _, id := range ids {
-		// 	malicious, err := identities.IsMalicious(atxHandler.cdb, id)
-		// 	require.NoError(t, err)
-		// 	require.True(t, malicious)
-		// }
 
 		// The equivocation set of sig and otherSig didn't grow
 		equiv, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
@@ -1707,14 +1711,9 @@ func Test_MarryingMalicious(t *testing.T) {
 				},
 			}
 			atx.Sign(sig)
-
 			require.NoError(t, identities.SetMalicious(atxHandler.cdb, tc.malicious, []byte("proof"), time.Now()))
 
 			atxHandler.expectInitialAtxV2(atx)
-			// TODO(mafa): test needs to be updated to assert that `publishProof` was called instead
-			// atxHandler.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
-			// atxHandler.mtortoise.EXPECT().OnMalfeasance(otherSig.NodeID())
-
 			err := atxHandler.processATX(context.Background(), "", atx, time.Now())
 			require.NoError(t, err)
 
