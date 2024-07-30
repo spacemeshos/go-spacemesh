@@ -24,13 +24,6 @@ func (t *ATXProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Certificates, 1024)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeByteSliceWithLimit(enc, t.Proof, 1048576)
 		if err != nil {
 			return total, err
@@ -56,14 +49,6 @@ func (t *ATXProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.ProofType = ProofType(field)
-	}
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[ProofCertificate](dec, 1024)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Certificates = field
 	}
 	{
 		field, n, err := scale.DecodeByteSliceWithLimit(dec, 1048576)

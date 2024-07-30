@@ -667,8 +667,12 @@ func (h *HandlerV2) checkMalicious(
 		return nil
 	}
 
-	if err := h.checkDoubleMarry(ctx, tx, watx.ID(), marrying); err != nil {
+	malicious, err = h.checkDoubleMarry(ctx, tx, watx.ID(), marrying)
+	if err != nil {
 		return fmt.Errorf("checking double marry: %w", err)
+	}
+	if malicious {
+		return nil
 	}
 
 	// TODO(mafa): contextual validation:
@@ -679,21 +683,21 @@ func (h *HandlerV2) checkMalicious(
 	return nil
 }
 
-func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx *sql.Tx, atxID types.ATXID, marrying []marriage) error {
+func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx *sql.Tx, atxID types.ATXID, marrying []marriage) (bool, error) {
 	for _, m := range marrying {
 		mATX, err := identities.MarriageATX(tx, m.id)
 		if err != nil {
-			return fmt.Errorf("checking if ID is married: %w", err)
+			return false, fmt.Errorf("checking if ID is married: %w", err)
 		}
 		if mATX != atxID {
 			// TODO(mafa): finish proof
 			proof := &wire.ATXProof{
 				ProofType: wire.DoubleMarry,
 			}
-			return h.malPublisher.Publish(ctx, m.id, proof)
+			return true, h.malPublisher.Publish(ctx, m.id, proof)
 		}
 	}
-	return nil
+	return false, nil
 }
 
 // Store an ATX in the DB.
