@@ -1,0 +1,9 @@
+[workspace]
+[package]
+name = "wallet-common"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+athena-interface = { git = "https://github.com/athenavm/athena.git", branch = "main" }
+parity-scale-codec = { version = "3.6.12", features = ["derive"] }

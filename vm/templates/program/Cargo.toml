@@ -1,0 +1,12 @@
+[workspace]
+[package]
+version = "0.1.0"
+name = "wallet-template"
+edition = "2021"
+
+[dependencies]
+athena-vm = { git = "https://github.com/athenavm/athena.git", branch = "main", features = [
+  "rv32e",
+] }
+parity-scale-codec = { version = "3.6.12", features = ["derive"] }
+wallet-common = { path = "../common" }
