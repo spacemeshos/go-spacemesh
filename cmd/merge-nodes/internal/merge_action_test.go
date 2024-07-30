@@ -214,6 +214,10 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	err = os.WriteFile(filepath.Join(tmpDst, keyDir, "id1.key"), key, 0o600)
 	require.NoError(t, err)
 
+	// this file should be ignored
+	err = os.WriteFile(filepath.Join(tmpDst, keyDir, ".DS_Store"), types.RandomBytes(20), 0o600)
+	require.NoError(t, err)
+
 	dstDB, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
 
@@ -265,6 +269,10 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	key = make([]byte, hex.EncodedLen(len(sig2.PrivateKey())))
 	hex.Encode(key, sig2.PrivateKey())
 	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, "id2.key"), key, 0o600)
+	require.NoError(t, err)
+
+	// this file should be ignored
+	err = os.WriteFile(filepath.Join(tmpSrc, keyDir, ".DS_Store"), types.RandomBytes(20), 0o600)
 	require.NoError(t, err)
 
 	srcDB, err := localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
