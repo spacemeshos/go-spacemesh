@@ -19,22 +19,14 @@ const (
 	sessionFieldsKey
 )
 
-// WithRequestID returns a context which knows its request ID.
+// withRequestID returns a context which knows its request ID.
 // A request ID tracks the lifecycle of a single request across all execution contexts, including
 // multiple goroutines, task queues, workers, etc. The canonical example is an incoming message
 // received over the network. Rule of thumb: requests "traverse the heap" and may be passed from one
 // session to another via channels.
 // This requires a requestId string, and optionally, other LoggableFields that are added to
 // context and printed in contextual logs.
-func WithRequestID(ctx context.Context, requestID string, fields ...LoggableField) context.Context {
-	// Warn if overwriting. This is expected. It happens every time an inbound request triggers a new
-	// outbound request, e.g., a newly-received block causes us to request the blocks and ATXs it refers to.
-	// But it's important that we log the old and new reqIDs here so that the thread can be followed.
-	if curRequestID, ok := ExtractRequestID(ctx); ok && curRequestID != requestID {
-		GetLogger().WithContext(ctx).With().Info("overwriting requestID in context",
-			String("old_request_id", curRequestID),
-			String("new_request_id", requestID))
-	}
+func withRequestID(ctx context.Context, requestID string, fields ...LoggableField) context.Context {
 	ctx = context.WithValue(ctx, requestIDKey, requestID)
 	if len(fields) > 0 {
 		ctx = context.WithValue(ctx, requestFieldsKey, fields)
@@ -46,7 +38,7 @@ func WithRequestID(ctx context.Context, requestID string, fields ...LoggableFiel
 // It can be used when there isn't a single, clear, unique id associated with a request (e.g.,
 // a block or tx hash).
 func WithNewRequestID(ctx context.Context, fields ...LoggableField) context.Context {
-	return WithRequestID(ctx, shortUUID(), fields...)
+	return withRequestID(ctx, shortUUID(), fields...)
 }
 
 // ExtractSessionID extracts the session id from a context object.

@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/fixed"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/minweight"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -25,7 +25,7 @@ type Validator struct {
 	atxsdata           *atxsdata.Data
 	clock              layerClock
 	beacons            system.BeaconCollector
-	logger             log.Log
+	logger             *zap.Logger
 	vrfVerifier        vrfVerifier
 }
 
@@ -40,7 +40,7 @@ func NewEligibilityValidator(
 	tortoise tortoiseProvider,
 	atxsdata *atxsdata.Data,
 	bc system.BeaconCollector,
-	lg log.Log,
+	lg *zap.Logger,
 	vrfVerifier vrfVerifier,
 	opts ...ValidatorOpt,
 ) *Validator {
@@ -116,7 +116,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 			return fmt.Errorf(
 				"%w: proof contains incorrect VRF signature. beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
 				fetch.ErrIgnore,
-				data.Beacon.ShortString(),
+				data.Beacon,
 				ballot.Layer.GetEpoch(),
 				proof.J,
 				proof.Sig,
@@ -129,11 +129,11 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		}
 	}
 
-	v.logger.WithContext(ctx).With().Debug("ballot eligibility verified",
-		ballot.ID(),
-		ballot.Layer,
-		ballot.Layer.GetEpoch(),
-		data.Beacon,
+	v.logger.Debug("ballot eligibility verified",
+		zap.Stringer("id", ballot.ID()),
+		zap.Uint32("layer", ballot.Layer.Uint32()),
+		zap.Uint32("layer", ballot.Layer.GetEpoch().Uint32()),
+		zap.Stringer("beacon", data.Beacon),
 	)
 
 	v.beacons.ReportBeaconFromBallot(ballot.Layer.GetEpoch(), ballot, data.Beacon,

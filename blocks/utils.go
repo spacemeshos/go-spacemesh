@@ -119,7 +119,7 @@ func getProposalMetadata(
 		}
 	}
 	if majorityState == nil {
-		logger.Info("no consensus on mesh hash. NOT doing optimistic filtering",
+		logger.Debug("no consensus on mesh hash. NOT doing optimistic filtering",
 			zap.Uint32("layer_id", lid.Uint32()),
 		)
 	} else {
@@ -203,7 +203,7 @@ func prune(
 	)
 	for idx, tid = range tids {
 		if gasRemaining < txs.MinTXGas {
-			logger.Info("gas exhausted for block",
+			logger.Debug("gas exhausted for block",
 				zap.Int("num_txs", idx),
 				zap.Uint64("gas_left", gasRemaining),
 				zap.Uint64("gas_limit", gasLimit),

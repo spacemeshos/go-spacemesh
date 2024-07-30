@@ -273,7 +273,7 @@ func (h *HandlerV2) fetchReferences(ctx context.Context, poetRefs []types.Hash32
 	if len(atxIDs) != 0 {
 		eg.Go(func() error {
 			if err := h.fetcher.GetAtxs(ctx, atxIDs, system.WithoutLimiting()); err != nil {
-				return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
+				return fmt.Errorf("missing atxs %s: %w", atxIDs, err)
 			}
 			return nil
 		})

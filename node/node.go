@@ -712,15 +712,15 @@ func (app *App) initServices(ctx context.Context) error {
 		app.atxsdata,
 		state,
 		app.conState,
-		app.addLogger(ExecutorLogger, lg),
+		app.addLogger(ExecutorLogger, lg).Zap(),
 	)
-	mlog := app.addLogger(MeshLogger, lg)
+	mlog := app.addLogger(MeshLogger, lg).Zap()
 	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
 
-	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog.Zap()))
+	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog))
 	if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
 		return fmt.Errorf("pruner %w", err)
 	}
@@ -823,7 +823,7 @@ func (app *App) initServices(ctx context.Context) error {
 	fetcher := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
-		fetch.WithLogger(flog),
+		fetch.WithLogger(flog.Zap()),
 	)
 	fetcherWrapped.Fetcher = fetcher
 	app.eg.Go(func() error {
@@ -859,7 +859,7 @@ func (app *App) initServices(ctx context.Context) error {
 			malsync.WithPeerErrMetric(syncer.MalPeerError),
 		),
 		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.syncLogger),
+		syncer.WithLogger(app.syncLogger.Zap()),
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
@@ -910,7 +910,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 		vrfVerifier,
 		app.clock,
-		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
+		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg).Zap()),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:              layerSize,
 			LayersPerEpoch:         layersPerEpoch,

@@ -11,6 +11,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#6187](https://github.com/spacemeshos/go-spacemesh/pull/6187) The merge tool now ignores files that are not `.key`
   files in the `identities` directory when merging two nodes.
 
+* [#6128](https://github.com/spacemeshos/go-spacemesh/pull/6128) Reduce logs spam
+
 ## Release v1.6.4
 
 ### Improvements

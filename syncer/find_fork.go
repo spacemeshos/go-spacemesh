@@ -7,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -34,7 +37,7 @@ type boundary struct {
 	from, to *layerHash
 }
 
-func (b *boundary) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (b *boundary) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("from", b.from.layer.Uint32())
 	encoder.AddString("from_hash", b.from.hash.String())
 	encoder.AddUint32("to", b.to.layer.Uint32())
@@ -43,7 +46,7 @@ func (b *boundary) MarshalLogObject(encoder log.ObjectEncoder) error {
 }
 
 type ForkFinder struct {
-	logger           log.Log
+	logger           *zap.Logger
 	db               sql.Executor
 	fetcher          fetcher
 	maxStaleDuration time.Duration
@@ -54,7 +57,7 @@ type ForkFinder struct {
 	resynced map[types.LayerID]map[types.Hash32]time.Time
 }
 
-func NewForkFinder(lg log.Log, db sql.Executor, f fetcher, maxStale time.Duration) *ForkFinder {
+func NewForkFinder(lg *zap.Logger, db sql.Executor, f fetcher, maxStale time.Duration) *ForkFinder {
 	return &ForkFinder{
 		logger:           lg,
 		db:               db,
@@ -140,12 +143,13 @@ func (ff *ForkFinder) FindFork(
 	diffLid types.LayerID,
 	diffHash types.Hash32,
 ) (types.LayerID, error) {
-	logger := ff.logger.WithContext(ctx).WithFields(
-		log.Stringer("diff_layer", diffLid),
-		log.Stringer("diff_hash", diffHash),
-		log.Stringer("peer", peer),
+	logger := ff.logger.With(
+		log.ZContext(ctx),
+		zap.Stringer("diff_layer", diffLid),
+		zap.Stringer("diff_hash", diffHash),
+		zap.Stringer("peer", peer),
 	)
-	logger.With().Info("begin fork finding with peer")
+	logger.Info("begin fork finding with peer")
 
 	bnd, err := ff.setupBoundary(peer, &layerHash{layer: diffLid, hash: diffHash})
 	if err != nil {
@@ -154,29 +158,27 @@ func (ff *ForkFinder) FindFork(
 
 	numReqs := 0
 	if bnd.from.layer.Add(1) == bnd.to.layer {
-		logger.With().Info("found hash fork with peer",
-			log.Stringer("fork", bnd.from.layer),
-			log.Stringer("fork_hash", bnd.from.hash),
-			log.Stringer("after_fork", bnd.to.layer),
-			log.Stringer("after_fork_hash", bnd.to.hash),
+		logger.Info("found hash fork with peer",
+			zap.Stringer("fork", bnd.from.layer),
+			zap.Stringer("fork_hash", bnd.from.hash),
+			zap.Stringer("after_fork", bnd.to.layer),
+			zap.Stringer("after_fork_hash", bnd.to.hash),
 		)
 		return bnd.from.layer, nil
 	}
 
 	for {
-		lg := logger.WithFields(log.Object("boundary", bnd))
+		lg := logger.With(zap.Object("boundary", bnd))
 		mh, err := ff.sendRequest(ctx, lg, peer, bnd)
 		numReqs++
 		if err != nil {
-			lg.With().Error("failed hash request", log.Err(err))
-			return 0, err
+			return 0, fmt.Errorf("sending hash request: %w", err)
 		}
 
 		req := fetch.NewMeshHashRequest(bnd.from.layer, bnd.to.layer)
 		ownHashes, err := layers.GetAggHashes(ff.db, req.From, req.To, req.Step)
 		if err != nil {
-			lg.With().Error("failed own hashes lookup", log.Err(err))
-			return 0, err
+			return 0, fmt.Errorf("getting own hashes: %w", err)
 		}
 
 		lid := req.From
@@ -185,12 +187,12 @@ func (ff *ForkFinder) FindFork(
 			ownHash := ownHashes[i]
 			if ownHash != hash {
 				if latestSame != nil && lid == latestSame.layer.Add(1) {
-					lg.With().Info("found hash fork with peer",
-						log.Int("num_reqs", numReqs),
-						log.Stringer("fork", latestSame.layer),
-						log.Stringer("fork_hash", latestSame.hash),
-						log.Stringer("after_fork", lid),
-						log.Stringer("after_fork_hash", hash),
+					lg.Info("found hash fork with peer",
+						zap.Int("num_reqs", numReqs),
+						zap.Stringer("fork", latestSame.layer),
+						zap.Stringer("fork_hash", latestSame.hash),
+						zap.Stringer("after_fork", lid),
+						zap.Stringer("after_fork_hash", hash),
 					)
 					return latestSame.layer, nil
 				}
@@ -229,8 +231,7 @@ func (ff *ForkFinder) UpdateAgreement(
 
 func (ff *ForkFinder) updateAgreement(peer p2p.Peer, update *layerHash, created time.Time) {
 	if update == nil {
-		ff.logger.With().Fatal("invalid arg", log.Stringer("peer", peer))
-		return // keep golint happy
+		ff.logger.Fatal("invalid arg", zap.Stringer("peer", peer))
 	}
 
 	ff.mu.Lock()
@@ -286,35 +287,33 @@ func (ff *ForkFinder) setupBoundary(peer p2p.Peer, oldestDiff *layerHash) (*boun
 // while ensuring hashes for the boundary layers are requested.
 func (ff *ForkFinder) sendRequest(
 	ctx context.Context,
-	logger log.Log,
+	logger *zap.Logger,
 	peer p2p.Peer,
 	bnd *boundary,
 ) (*fetch.MeshHashes, error) {
 	if bnd == nil {
 		logger.Fatal("invalid args")
 	} else if bnd.from == nil || bnd.to == nil || !bnd.to.layer.After(bnd.from.layer) {
-		logger.With().Fatal("invalid args", log.Object("boundary", bnd))
+		logger.Fatal("invalid args", zap.Object("boundary", bnd))
 	}
 
 	req := fetch.NewMeshHashRequest(bnd.from.layer, bnd.to.layer)
 	count := req.Count()
-	logger.With().Debug("sending request", log.Object("req", req))
+	logger.Debug("sending request", zap.Object("req", req))
 	mh, err := ff.fetcher.PeerMeshHashes(ctx, peer, req)
 	if err != nil {
 		return nil, fmt.Errorf("find fork hash req: %w", err)
 	}
-	logger.With().Debug("received response",
-		log.Int("num_hashes", len(mh.Hashes)),
-	)
+	logger.Debug("received response", zap.Int("num_hashes", len(mh.Hashes)))
 	if int(count) != len(mh.Hashes) {
 		return nil, errors.New("inconsistent layers for mesh hashes")
 	}
 	if mh.Hashes[0] != bnd.from.hash || mh.Hashes[count-1] != bnd.to.hash {
-		logger.With().Warning("peer boundary hashes have changed",
-			log.Stringer("hash_from", bnd.from.hash),
-			log.Stringer("hash_to", bnd.to.hash),
-			log.Stringer("peer_hash_from", mh.Hashes[0]),
-			log.Stringer("peer_hash_to", mh.Hashes[count-1]),
+		logger.Warn("peer boundary hashes have changed",
+			zap.Stringer("hash_from", bnd.from.hash),
+			zap.Stringer("hash_to", bnd.to.hash),
+			zap.Stringer("peer_hash_from", mh.Hashes[0]),
+			zap.Stringer("peer_hash_to", mh.Hashes[count-1]),
 		)
 		ff.Purge(false, peer)
 		return nil, ErrPeerMeshChangedMidSession
