@@ -129,6 +129,9 @@ type PoetService interface {
 		nodeID types.NodeID,
 	) (*types.PoetRound, error)
 
+	// Certify requests a certificate for the given nodeID.
+	//
+	// Returns ErrCertificatesNotSupported if the service does not support certificates.
 	Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error)
 
 	// Proof returns the proof for the given round ID.

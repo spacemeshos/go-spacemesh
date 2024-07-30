@@ -455,7 +455,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	for _, aweight := range activeWeights {
 		aset.total += aweight.weight
 	}
-	o.log.WithContext(ctx).With().Info("got hare active set", log.Int("count", len(activeWeights)))
+	o.log.WithContext(ctx).With().Debug("got hare active set", log.Int("count", len(activeWeights)))
 	o.activesCache.Add(targetEpoch, aset)
 	return aset, nil
 }
@@ -471,7 +471,7 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
 	activeSet, ok := o.fallback[targetEpoch]
 	if ok {
-		o.log.WithContext(ctx).With().Info("using fallback active set",
+		o.log.WithContext(ctx).With().Debug("using fallback active set",
 			targetEpoch,
 			log.Int("size", len(activeSet)),
 		)
@@ -563,7 +563,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(
 }
 
 func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
-	o.log.With().Info("received activeset update",
+	o.log.With().Debug("received activeset update",
 		epoch,
 		log.Int("size", len(activeSet)),
 	)
