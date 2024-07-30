@@ -2,4 +2,4 @@
 
 package activation
 
-const DefaultPostServiceName = "service"
+const DefaultPostServiceName = "post-service"

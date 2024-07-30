@@ -42,7 +42,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 	testDir := t.TempDir()
 
-	ctx := testcontext.New(t, testcontext.Labels("sanity"))
+	ctx := testcontext.New(t)
 	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
 
 	// Prepare cluster

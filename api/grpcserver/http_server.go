@@ -74,7 +74,6 @@ func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
 
 // StartService starts the json api server and listens for status (started, stopped).
 func (s *JSONHTTPServer) StartService(
-	ctx context.Context,
 	services ...ServiceAPI,
 ) error {
 	// At least one service must be enabled

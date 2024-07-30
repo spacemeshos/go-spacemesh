@@ -164,7 +164,7 @@ func getBlockTXs(
 	if err := txCache.BuildFromTXs(mtxs, blockSeed); err != nil {
 		return nil, fmt.Errorf("build txs for block: %w", err)
 	}
-	byAddrAndNonce := txCache.GetMempool(logger)
+	byAddrAndNonce := txCache.GetMempool()
 	if len(byAddrAndNonce) == 0 {
 		logger.Warn("no feasible txs for block")
 		return nil, nil

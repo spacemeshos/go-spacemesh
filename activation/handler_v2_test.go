@@ -19,7 +19,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -572,6 +574,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 
 		_, err = atxHandler.processATX(context.Background(), peer, atx, time.Now())
 		require.ErrorContains(t, err, "vrf nonce is not valid")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
 		_, err = atxs.Get(atxHandler.cdb, atx.ID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -607,6 +610,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		atxHandler.expectFetchDeps(atx)
 		_, err := atxHandler.processATX(context.Background(), peer, atx, time.Now())
 		require.ErrorContains(t, err, "validating positioning atx")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
 		_, err = atxs.Get(atxHandler.cdb, atx.ID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -802,6 +806,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 
 		p, err := atxHandler.processATX(context.Background(), "", merged, time.Now())
 		require.ErrorContains(t, err, "ATX signer not present in merged ATX")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 		require.Nil(t, p)
 	})
 	t.Run("ID must be present max 1 times", func(t *testing.T) {
@@ -834,6 +839,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		atxHandler.mclock.EXPECT().CurrentLayer().Return(merged.PublishEpoch.FirstLayer())
 		p, err := atxHandler.processATX(context.Background(), "", merged, time.Now())
 		require.ErrorContains(t, err, "ID present twice (duplicated marriage index)")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 		require.Nil(t, p)
 	})
 	t.Run("ID must use previous ATX containing itself", func(t *testing.T) {
@@ -864,7 +870,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		atxHandler.mclock.EXPECT().CurrentLayer().Return(merged.PublishEpoch.FirstLayer())
 		atxHandler.expectFetchDeps(merged)
 		p, err := atxHandler.processATX(context.Background(), "", merged, time.Now())
-		require.Error(t, err)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 		require.Nil(t, p)
 	})
 	t.Run("previous checkpointed ATX must include every ID", func(t *testing.T) {
@@ -930,7 +936,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		atxHandler.mclock.EXPECT().CurrentLayer().Return(merged.PublishEpoch.FirstLayer())
 		atxHandler.expectFetchDeps(merged)
 		p, err = atxHandler.processATX(context.Background(), "", merged, time.Now())
-		require.Error(t, err)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 		require.Nil(t, p)
 	})
 	t.Run("publishing two merged ATXs by one marriage set is malfeasance", func(t *testing.T) {
@@ -1152,6 +1158,20 @@ func TestHandlerV2_FetchesReferences(t *testing.T) {
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[1]).Return(errors.New("pooh"))
 		require.Error(t, atxHdlr.fetchReferences(context.Background(), poets, nil))
 	})
+	t.Run("reject ATX when dependency poet proof is rejected", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newV2TestHandler(t, golden)
+
+		poets := []types.Hash32{types.RandomHash()}
+		atxs := []types.ATXID{types.RandomATXID()}
+		var batchErr fetch.BatchError
+		batchErr.Add(atxs[0].Hash32(), pubsub.ErrValidationReject)
+
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[0]).Return(&batchErr)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxs, gomock.Any())
+
+		require.ErrorIs(t, atxHdlr.fetchReferences(context.Background(), poets, atxs), pubsub.ErrValidationReject)
+	})
 
 	t.Run("failed to fetch atxs", func(t *testing.T) {
 		t.Parallel()
@@ -1164,6 +1184,20 @@ func TestHandlerV2_FetchesReferences(t *testing.T) {
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[1])
 		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxs, gomock.Any()).Return(errors.New("oh"))
 		require.Error(t, atxHdlr.fetchReferences(context.Background(), poets, atxs))
+	})
+	t.Run("reject ATX when dependency ATX is rejected", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newV2TestHandler(t, golden)
+
+		poets := []types.Hash32{types.RandomHash()}
+		atxs := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
+		var batchErr fetch.BatchError
+		batchErr.Add(atxs[0].Hash32(), pubsub.ErrValidationReject)
+
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poets[0])
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxs, gomock.Any()).Return(&batchErr)
+
+		require.ErrorIs(t, atxHdlr.fetchReferences(context.Background(), poets, atxs), pubsub.ErrValidationReject)
 	})
 	t.Run("no atxs to fetch", func(t *testing.T) {
 		t.Parallel()
@@ -1741,6 +1775,7 @@ func Test_Marriages(t *testing.T) {
 		atxHandler.mclock.EXPECT().CurrentLayer().AnyTimes()
 		_, err = atxHandler.processATX(context.Background(), "", atx, time.Now())
 		require.ErrorContains(t, err, "signer must marry itself")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 }
 
