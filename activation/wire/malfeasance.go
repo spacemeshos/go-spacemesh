@@ -21,12 +21,6 @@ type ATXProof struct {
 	Layer types.LayerID
 	// ProofType is the type of proof that is being provided.
 	ProofType ProofType
-	// Certificates is a slice of marriage certificates showing which identities belong to the same marriage set as
-	// the one proven to be malfeasant. Up to 1024 can be put into a single proof, since by repeatedly marrying other
-	// identities there can be much more than 256 in a malfeasant marriage set. Beyond that a second proof could be
-	// provided to show that additional identities are part of the same malfeasant marriage set.
-	Certificates []ProofCertificate `scale:"max=1024"`
-
 	// Proof is the actual proof. Its type depends on the ProofType.
 	Proof []byte `scale:"max=1048576"` // max size of proof is 1MiB
 }
