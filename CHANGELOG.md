@@ -12,6 +12,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
+* [#6185](https://github.com/spacemeshos/go-spacemesh/pull/6185) Optimize mempool
+
 ## Release v1.6.4
 
 ### Improvements
