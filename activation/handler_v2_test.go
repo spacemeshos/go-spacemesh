@@ -587,7 +587,6 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 
 		err := atxHandler.processATX(context.Background(), peer, atx, time.Now())
 		require.NoError(t, err)
-		require.Nil(t, proof)
 
 		// verify that the ATX was added to the DB and it has the lower effective num units
 		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
@@ -1632,19 +1631,19 @@ func Test_Marriages(t *testing.T) {
 		}
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
-		ids := []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}
-		for _, id := range ids {
-			atxHandler.mtortoise.EXPECT().OnMalfeasance(id)
-		}
+		atxHandler.mMalPublish.EXPECT().Publish(
+			gomock.Any(),
+			sig.NodeID(),
+			gomock.Cond(func(data any) bool {
+				proof, ok := data.(*wire.ATXProof)
+				if !ok {
+					return false
+				}
+				return proof.ProofType == wire.DoubleMarry
+			}),
+		)
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
-
-		// All 3 IDs are marked as malicious
-		for _, id := range ids {
-			malicious, err := identities.IsMalicious(atxHandler.cdb, id)
-			require.NoError(t, err)
-			require.True(t, malicious)
-		}
 
 		// The equivocation set of sig and otherSig didn't grow
 		equiv, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
