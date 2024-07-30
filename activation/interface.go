@@ -91,6 +91,18 @@ type syncer interface {
 	RegisterForATXSynced() <-chan struct{}
 }
 
+// malfeasancePublisher is an interface for publishing malfeasance proofs.
+// This interface is used to publish proofs in V2.
+//
+// The provider of that interface ensures that only valid proofs are published (invalid ones return an error).
+// Proofs against an identity that is managed by the node will also return an error and will not be gossiped.
+//
+// Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them.
+// and mark the associated identity as malfeasant.
+type malfeasancePublisher interface {
+	Publish(ctx context.Context, id types.NodeID, data []byte) error
+}
+
 type atxProvider interface {
 	GetAtx(id types.ATXID) (*types.ActivationTx, error)
 }

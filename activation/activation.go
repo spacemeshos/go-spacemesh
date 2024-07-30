@@ -68,7 +68,7 @@ type Config struct {
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
-// it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
+// it is responsible for initializing post, receiving poet proof and orchestrating nipost. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
 	accountLock       sync.RWMutex

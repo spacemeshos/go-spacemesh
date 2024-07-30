@@ -146,6 +146,7 @@ func NewHandler(
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
+			malPublisher:    nil, // TODO(mafa): use proper implementation
 		},
 	}
 
@@ -285,7 +286,7 @@ func (h *Handler) handleAtx(
 		case *wire.ActivationTxV1:
 			return h.v1.processATX(ctx, peer, atx, receivedTime)
 		case *wire.ActivationTxV2:
-			return h.v2.processATX(ctx, peer, atx, receivedTime)
+			return (*mwire.MalfeasanceProof)(nil), h.v2.processATX(ctx, peer, atx, receivedTime)
 		default:
 			panic("unreachable")
 		}
