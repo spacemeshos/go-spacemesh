@@ -1547,13 +1547,13 @@ func Test_Marriages(t *testing.T) {
 		err = atxHandler.processInitial(t, atx)
 		require.NoError(t, err)
 
-		married, err := identities.Married(atxHandler.cdb, sig.NodeID())
+		mAtx, err := identities.MarriageATX(atxHandler.cdb, sig.NodeID())
 		require.NoError(t, err)
-		require.True(t, married)
+		require.Equal(t, atx.ID(), mAtx)
 
-		married, err = identities.Married(atxHandler.cdb, otherSig.NodeID())
+		mAtx, err = identities.MarriageATX(atxHandler.cdb, otherSig.NodeID())
 		require.NoError(t, err)
-		require.True(t, married)
+		require.Equal(t, atx.ID(), mAtx)
 
 		set, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
 		require.NoError(t, err)
