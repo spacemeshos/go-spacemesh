@@ -431,8 +431,7 @@ func (c *poetService) authorize(
 	}
 	// Fallback to PoW
 	// TODO: remove this fallback once we migrate to certificates fully.
-
-	logger.Debug("querying for poet pow parameters")
+	logger.Info("falling back to PoW authorization")
 	powCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
 	powParams, err := c.client.PowParams(powCtx)
@@ -458,6 +457,22 @@ func (c *poetService) authorize(
 		Nonce:  nonce,
 		Params: *powParams,
 	}}, nil
+}
+
+func (c *poetService) reauthorize(
+	ctx context.Context,
+	id types.NodeID,
+	challange []byte,
+	logger *zap.Logger,
+) (*PoetAuth, error) {
+	if c.certifier != nil {
+		if _, pubkey, err := c.getCertifierInfo(ctx); err == nil {
+			if err := c.certifier.DeleteCertificate(id, pubkey); err != nil {
+				return nil, fmt.Errorf("deleting cert: %w", err)
+			}
+		}
+	}
+	return c.authorize(ctx, id, challange, c.logger)
 }
 
 func (c *poetService) Submit(
@@ -488,10 +503,10 @@ func (c *poetService) Submit(
 	case err == nil:
 		return round, nil
 	case errors.Is(err, ErrUnauthorized):
-		logger.Warn("failed to submit challenge as unathorized - recertifying", zap.Error(err))
-		auth.PoetCert, err = c.recertify(ctx, nodeID)
+		logger.Warn("failed to submit challenge as unathorized - authorizing again", zap.Error(err))
+		auth, err := c.reauthorize(ctx, nodeID, challenge, logger)
 		if err != nil {
-			return nil, fmt.Errorf("recertifying: %w", err)
+			return nil, fmt.Errorf("authorizing: %w", err)
 		}
 		return c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
 	}
@@ -538,17 +553,6 @@ func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.
 		return nil, err
 	}
 	return c.certifier.Certificate(ctx, id, url, pubkey)
-}
-
-func (c *poetService) recertify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
-	if c.certifier == nil {
-		return nil, errors.New("certifier not configured")
-	}
-	url, pubkey, err := c.getCertifierInfo(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return c.certifier.Recertify(ctx, id, url, pubkey)
 }
 
 func (c *poetService) getCertifierInfo(ctx context.Context) (*url.URL, []byte, error) {
