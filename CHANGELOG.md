@@ -25,8 +25,6 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ## Release v1.6.4
 
-## Release v1.6.4
-
 ### Improvements
 
 * [#6107](https://github.com/spacemeshos/go-spacemesh/pull/6107) Cache PoET queries between multiple identities on the
