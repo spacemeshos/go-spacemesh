@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -55,6 +56,9 @@ func testnet() config.Config {
 	// NOTE(dshulyak) i forgot to set protocol name for testnet when we configured it manually.
 	// we can't do rolling upgrade if protocol name changes, so lets keep it like that temporarily.
 	hare3conf.ProtocolName = ""
+
+	hare4conf := hare4.DefaultConfig()
+	hare4conf.Enable = false
 	defaultdir := filepath.Join(home, "spacemesh-testnet", "/")
 	return config.Config{
 		Preset: "testnet",
@@ -95,6 +99,7 @@ func testnet() config.Config {
 			MinimalActiveSetWeight:   []types.EpochMinimalActiveWeight{{Weight: 10_000}},
 		},
 		HARE3: hare3conf,
+		HARE4: hare4conf,
 		HareEligibility: eligibility.Config{
 			ConfidenceParam: 20,
 		},
