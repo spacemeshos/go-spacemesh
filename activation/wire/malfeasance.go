@@ -46,10 +46,12 @@ const (
 	InvalidPost
 )
 
+// ProofVersion is an identifier for the version of the proof that is encoded in the ATXProof.
+type ProofVersion byte
+
 type ATXProof struct {
-	// LayerID is the layer in which the proof was created. This can be used to implement different versions of the ATX
-	// proof in the future.
-	Layer types.LayerID
+	// Version is the version identifier of the proof. This can be used to extend the ATX proof in the future.
+	Version ProofVersion
 	// ProofType is the type of proof that is being provided.
 	ProofType ProofType
 	// Proof is the actual proof. Its type depends on the ProofType.

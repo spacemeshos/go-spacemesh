@@ -18,6 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -65,7 +66,7 @@ type HandlerV2 struct {
 	tortoise        system.Tortoise
 	logger          *zap.Logger
 	fetcher         system.Fetcher
-	malPublisher    malfeasancePublisher
+	malPublisher    atxMalfeasancePublisher
 }
 
 func (h *HandlerV2) processATX(
@@ -669,7 +670,7 @@ func (h *HandlerV2) checkMalicious(
 		return nil
 	}
 
-	malicious, err = h.checkDoubleMarry(ctx, tx, watx.ID(), marrying)
+	malicious, err = h.checkDoubleMarry(ctx, tx, watx, marrying)
 	if err != nil {
 		return fmt.Errorf("checking double marry: %w", err)
 	}
@@ -688,21 +689,35 @@ func (h *HandlerV2) checkMalicious(
 func (h *HandlerV2) checkDoubleMarry(
 	ctx context.Context,
 	tx *sql.Tx,
-	atxID types.ATXID,
+	watx *wire.ActivationTxV2,
 	marrying []marriage,
 ) (bool, error) {
 	for _, m := range marrying {
-		mATX, err := identities.MarriageATX(tx, m.id)
+		mAtxID, err := identities.MarriageATX(tx, m.id)
 		if err != nil {
 			return false, fmt.Errorf("checking if ID is married: %w", err)
 		}
-		if mATX != atxID {
-			// TODO(mafa): finish proof
-			proof := &wire.ATXProof{
-				ProofType: wire.DoubleMarry,
-			}
-			return true, h.malPublisher.Publish(ctx, m.id, proof)
+		if mAtxID == watx.ID() {
+			continue
 		}
+
+		// found an identity that is already married
+		var blob sql.Blob
+		if _, err := atxs.LoadBlob(ctx, tx, mAtxID[:], &blob); err != nil {
+			return true, fmt.Errorf("get atx blob %s: %w", mAtxID.ShortString(), err)
+		}
+		mAtx := &wire.ActivationTxV2{}
+		codec.MustDecode(blob.Bytes, mAtx)
+		proof, err := wire.NewDoubleMarryProof(tx, watx, mAtx, m.id)
+		if err != nil {
+			return true, fmt.Errorf("creating double marry proof: %w", err)
+		}
+		atxProof := &wire.ATXProof{
+			Version:   0,
+			ProofType: wire.DoubleMarry,
+			Proof:     codec.MustEncode(proof),
+		}
+		return true, h.malPublisher.Publish(ctx, m.id, atxProof)
 	}
 	return false, nil
 }

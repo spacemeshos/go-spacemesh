@@ -17,6 +17,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -1631,17 +1632,18 @@ func Test_Marriages(t *testing.T) {
 		}
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
-		atxHandler.mMalPublish.EXPECT().Publish(
-			gomock.Any(),
-			sig.NodeID(),
-			gomock.Cond(func(data any) bool {
-				proof, ok := data.(*wire.ATXProof)
-				if !ok {
-					return false
-				}
-				return proof.ProofType == wire.DoubleMarry
-			}),
-		)
+		atxHandler.mMalPublish.EXPECT().Publish(gomock.Any(), sig.NodeID(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, id types.NodeID, proof *wire.ATXProof) error {
+				require.Equal(t, wire.ProofVersion(0), proof.Version)
+				require.Equal(t, wire.DoubleMarry, proof.ProofType)
+				doubleMarryProof := &wire.ProofDoubleMarry{}
+				codec.MustDecode(proof.Proof, doubleMarryProof)
+
+				nodeID, err := doubleMarryProof.Valid(atxHandler.edVerifier)
+				require.NoError(t, err)
+				require.Equal(t, sig.NodeID(), nodeID)
+				return nil
+			})
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
 

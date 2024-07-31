@@ -24,7 +24,7 @@ type MalfeasanceHandlerV2 struct {
 func NewMalfeasanceHandlerV2(
 	syncer syncer,
 	layerClock layerClock,
-	malfeasancePublisher malfeasancePublisher,
+	malPublisher malfeasancePublisher,
 	cdb *datastore.CachedDB,
 	tortoise system.Tortoise,
 	edVerifier *signing.EdVerifier,
@@ -32,7 +32,7 @@ func NewMalfeasanceHandlerV2(
 	return &MalfeasanceHandlerV2{
 		syncer:     syncer,
 		clock:      layerClock,
-		publisher:  malfeasancePublisher, // TODO(mafa): implement malfeasancePublisher in `malfeasance` package
+		publisher:  malPublisher, // TODO(mafa): implement malfeasancePublisher in `malfeasance` package
 		cdb:        cdb,
 		tortoise:   tortoise,
 		edVerifier: edVerifier,
@@ -61,6 +61,11 @@ func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) ([]ty
 			return nil, fmt.Errorf("decoding ATX double marry proof: %w", err)
 		}
 		proof = p
+	case wire.InvalidPost:
+		var p wire.ProofInvalidPost
+		if err := codec.Decode(decoded.Proof, &p); err != nil {
+			return nil, fmt.Errorf("decoding ATX invalid post proof: %w", err)
+		}
 	default:
 		return nil, fmt.Errorf("unknown ATX malfeasance proof type: %d", decoded.ProofType)
 	}
@@ -85,20 +90,6 @@ func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) ([]ty
 		validIDs = append(validIDs, cert.ID)
 	}
 	return validIDs, nil
-}
-
-func (mh *MalfeasanceHandlerV2) PublishDoublePublishProof(ctx context.Context, atx1, atx2 *wire.ActivationTxV2) error {
-	proof, err := wire.NewDoublePublishProof(atx1, atx2)
-	if err != nil {
-		return fmt.Errorf("create double publish proof: %w", err)
-	}
-
-	atxProof := &wire.ATXProof{
-		Layer:     mh.clock.CurrentLayer(),
-		ProofType: wire.DoublePublish,
-		Proof:     codec.MustEncode(proof),
-	}
-	return mh.publisher.Publish(ctx, atx1.SmesherID, codec.MustEncode(atxProof))
 }
 
 // TODO(mafa): this roughly how the general publisher looks like
