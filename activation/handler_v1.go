@@ -204,7 +204,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	}
 
 	expectedChallengeHash := atx.NIPostChallengeV1.Hash()
-	h.logger.Info("validating nipost",
+	h.logger.Debug("validating nipost",
 		log.ZContext(ctx),
 		zap.Stringer("expected_challenge_hash", expectedChallengeHash),
 		zap.Stringer("atx_id", atx.ID()),
@@ -221,7 +221,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	)
 	var invalidIdx *verifying.ErrInvalidIndex
 	if errors.As(err, &invalidIdx) {
-		h.logger.Info("ATX with invalid post index",
+		h.logger.Debug("ATX with invalid post index",
 			log.ZContext(ctx),
 			zap.Stringer("atx_id", atx.ID()),
 			zap.Int("index", invalidIdx.Index),
@@ -268,7 +268,7 @@ func (h *HandlerV1) validateNonInitialAtx(
 	}
 
 	if needRecheck {
-		h.logger.Info("validating VRF nonce",
+		h.logger.Debug("validating VRF nonce",
 			log.ZContext(ctx),
 			zap.Stringer("atx_id", atx.ID()),
 			zap.Bool("post increased", atx.NumUnits > previous.NumUnits),
@@ -329,7 +329,7 @@ func (h *HandlerV1) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
 // Returns true if the atx was cached, false otherwise.
 func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
-		malicious, err := h.cdb.IsMalicious(atx.SmesherID)
+		malicious, err := identities.IsMalicious(h.cdb, atx.SmesherID)
 		if err != nil {
 			h.logger.Error("failed is malicious read", zap.Error(err), log.ZContext(ctx))
 			return nil
@@ -633,7 +633,7 @@ func (h *HandlerV1) processATX(
 	}
 
 	events.ReportNewActivation(atx)
-	h.logger.Info("new atx",
+	h.logger.Debug("new atx",
 		log.ZContext(ctx),
 		zap.Inline(atx),
 		zap.Bool("malicious", proof != nil),
@@ -663,7 +663,7 @@ func (h *HandlerV1) fetchReferences(ctx context.Context, poetRef types.Hash32, a
 	}
 
 	if err := h.fetcher.GetAtxs(ctx, atxIDs, system.WithoutLimiting()); err != nil {
-		return fmt.Errorf("missing atxs %x: %w", atxIDs, err)
+		return fmt.Errorf("missing atxs %s: %w", atxIDs, err)
 	}
 
 	h.logger.Debug("done fetching references",
