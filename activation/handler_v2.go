@@ -718,24 +718,26 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, watx *wire
 	if watx.MarriageATX == nil {
 		return false, nil
 	}
-	id, err := atxs.AtxWithMarriage(tx, *watx.MarriageATX, watx.PublishEpoch)
+	ids, err := atxs.MergeConflict(tx, *watx.MarriageATX, watx.PublishEpoch)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		return false, nil
 	case err != nil:
-		return false, fmt.Errorf("checking for ATXs with the same marriage ATX: %w", err)
+		return false, fmt.Errorf("searching for ATXs with the same marriage ATX: %w", err)
 	}
+	otherIndex := slices.IndexFunc(ids, func(id types.ATXID) bool { return id != watx.ID() })
+	other := ids[otherIndex]
 
 	h.logger.Debug("second merged ATX for single marriage - creating malfeasance proof",
 		zap.Stringer("marriage_atx", *watx.MarriageATX),
 		zap.Stringer("atx", watx.ID()),
-		zap.Stringer("other atx", id),
+		zap.Stringer("other_atx", other),
 		zap.Stringer("smesher_id", watx.SmesherID),
 	)
 
 	// TODO(mafa): finish proof
 	proof := &wire.ATXProof{
-		ProofType: wire.DoubleMarry,
+		ProofType: wire.DoubleMerge,
 	}
 	return true, h.malPublisher.Publish(ctx, watx.SmesherID, proof)
 }

@@ -1201,3 +1201,55 @@ func Test_AtxWithPrevious(t *testing.T) {
 		require.Equal(t, atx2.ID(), id)
 	})
 }
+
+func Test_MergeConflict(t *testing.T) {
+	t.Parallel()
+	t.Run("no atxs", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		_, err := atxs.MergeConflict(db, types.RandomATXID(), 0)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("no conflict", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		marriage := types.RandomATXID()
+
+		atx := types.ActivationTx{MarriageATX: &marriage}
+		atx.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(db, &atx, types.AtxBlob{}))
+
+		_, err := atxs.MergeConflict(db, types.RandomATXID(), atx.PublishEpoch)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("finds conflict", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		marriage := types.RandomATXID()
+
+		atx0 := types.ActivationTx{MarriageATX: &marriage}
+		atx0.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(db, &atx0, types.AtxBlob{}))
+
+		atx1 := types.ActivationTx{MarriageATX: &marriage}
+		atx1.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(db, &atx1, types.AtxBlob{}))
+
+		ids, err := atxs.MergeConflict(db, marriage, atx0.PublishEpoch)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx0.ID(), atx1.ID()}, ids)
+
+		// filters by epoch
+		_, err = atxs.MergeConflict(db, types.RandomATXID(), 8)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+
+		// returns only 2 ATXs
+		atx2 := types.ActivationTx{MarriageATX: &marriage}
+		atx2.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(db, &atx2, types.AtxBlob{}))
+
+		ids, err = atxs.MergeConflict(db, marriage, atx0.PublishEpoch)
+		require.NoError(t, err)
+		require.Len(t, ids, 2)
+	})
+}

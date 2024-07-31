@@ -12,6 +12,7 @@ type ProofType byte
 const (
 	DoublePublish ProofType = iota + 1
 	DoubleMarry
+	DoubleMerge
 	InvalidPost
 )
 

@@ -985,8 +985,9 @@ func AtxWithPrevious(db sql.Executor, prev types.ATXID, id types.NodeID) (types.
 	return atxid, nil
 }
 
-func AtxWithMarriage(db sql.Executor, marriage types.ATXID, publish types.EpochID) (types.ATXID, error) {
-	var id types.ATXID
+// Find 2 distinct merged ATXs (having the same marriage ATX) in the same epoch.
+func MergeConflict(db sql.Executor, marriage types.ATXID, publish types.EpochID) ([]types.ATXID, error) {
+	var ids []types.ATXID
 	rows, err := db.Exec(`
 		SELECT id FROM atxs WHERE marriage_atx = ?1 and epoch = ?2;`,
 		func(stmt *sql.Statement) {
@@ -994,15 +995,17 @@ func AtxWithMarriage(db sql.Executor, marriage types.ATXID, publish types.EpochI
 			stmt.BindInt64(2, int64(publish))
 		},
 		func(stmt *sql.Statement) bool {
+			var id types.ATXID
 			stmt.ColumnBytes(0, id[:])
-			return false
+			ids = append(ids, id)
+			return len(ids) < 2
 		},
 	)
 	if err != nil {
-		return types.EmptyATXID, fmt.Errorf("getting ATX with marriage_atx: %w", err)
+		return nil, err
 	}
-	if rows == 0 {
-		return types.EmptyATXID, sql.ErrNotFound
+	if rows != 2 {
+		return nil, sql.ErrNotFound
 	}
-	return id, nil
+	return ids, nil
 }
