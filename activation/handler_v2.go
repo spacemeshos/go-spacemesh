@@ -721,17 +721,20 @@ func (h *HandlerV2) checkDoublePost(
 	ids []types.NodeID,
 ) (bool, error) {
 	for _, id := range ids {
-		atxid, err := atxs.ContributedToAtxInEpoch(tx, id, atx.PublishEpoch)
+		atxids, err := atxs.FindDoublePublish(tx, id, atx.PublishEpoch)
 		switch {
 		case errors.Is(err, sql.ErrNotFound):
 			continue
 		case err != nil:
-			return false, fmt.Errorf("checking if ID contributed to ATX in epoch: %w", err)
+			return false, fmt.Errorf("searching for double publish: %w", err)
 		}
+		otherAtxId := slices.IndexFunc(atxids, func(other types.ATXID) bool { return other != atx.ID() })
+		otherAtx := atxids[otherAtxId]
 		h.logger.Debug(
-			"found ID that has already contributed to PoST in epoch",
-			zap.Stringer("id", id),
-			zap.Stringer("atx_id", atxid),
+			"found ID that has already contributed its PoST in this epoch",
+			zap.Stringer("node_id", id),
+			zap.Stringer("atx_id", atx.ID()),
+			zap.Stringer("other_atx_id", otherAtx),
 			zap.Uint32("epoch", atx.PublishEpoch.Uint32()),
 		)
 		// TODO(mafa): finish proof

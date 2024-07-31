@@ -1202,57 +1202,55 @@ func Test_AtxWithPrevious(t *testing.T) {
 	})
 }
 
-func TestContributedToAtx(t *testing.T) {
+func Test_FindDoublePublish(t *testing.T) {
 	t.Parallel()
-	t.Run("not found", func(t *testing.T) {
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	t.Run("no atxs", func(t *testing.T) {
 		t.Parallel()
 		db := sql.InMemory()
-		_, err := atxs.ContributedToAtxInEpoch(db, types.RandomNodeID(), 0)
+		_, err := atxs.FindDoublePublish(db, types.RandomNodeID(), 0)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 
-	t.Run("contributed", func(t *testing.T) {
+	t.Run("no double publish", func(t *testing.T) {
 		t.Parallel()
 		db := sql.InMemory()
 
-		sig, err := signing.NewEdSigner()
-		require.NoError(t, err)
+		// one atx
+		atx0, blob := newAtx(t, sig, withPublishEpoch(1))
+		require.NoError(t, atxs.Add(db, atx0, blob))
+		require.NoError(t, atxs.SetUnits(db, atx0.ID(), atx0.SmesherID, 10))
 
-		atx, blob := newAtx(t, sig, withPublishEpoch(1))
-		require.NoError(t, atxs.Add(db, atx, blob))
-		require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, 10))
-
-		// different epoch - not found
-		_, err = atxs.ContributedToAtxInEpoch(db, types.RandomNodeID(), 7)
+		_, err = atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 
-		// same epoch
-		got, err := atxs.ContributedToAtxInEpoch(db, atx.SmesherID, atx.PublishEpoch)
-		require.NoError(t, err)
-		require.Equal(t, atx.ID(), got)
+		// two atxs in different epochs
+		atx1, blob := newAtx(t, sig, withPublishEpoch(atx0.PublishEpoch+1))
+		require.NoError(t, atxs.Add(db, atx1, blob))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), atx0.SmesherID, 10))
+
+		_, err = atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch)
+		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
-	t.Run("picks the right ATX from many", func(t *testing.T) {
+	t.Run("double publish", func(t *testing.T) {
 		t.Parallel()
 		db := sql.InMemory()
-		allAtxs := make(map[types.NodeID][]*types.ActivationTx)
 
-		for range 10 {
-			sig, err := signing.NewEdSigner()
-			require.NoError(t, err)
-			for epoch := range types.EpochID(7) {
-				atx, blob := newAtx(t, sig, withPublishEpoch(epoch))
-				require.NoError(t, atxs.Add(db, atx, blob))
-				require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, atx.NumUnits))
-				allAtxs[sig.NodeID()] = append(allAtxs[sig.NodeID()], atx)
-			}
-		}
+		atx0, blob := newAtx(t, sig)
+		require.NoError(t, atxs.Add(db, atx0, blob))
+		require.NoError(t, atxs.SetUnits(db, atx0.ID(), atx0.SmesherID, 10))
 
-		for nodeID, smesherAtxs := range allAtxs {
-			for _, atx := range smesherAtxs {
-				got, err := atxs.ContributedToAtxInEpoch(db, nodeID, atx.PublishEpoch)
-				require.NoError(t, err)
-				require.Equal(t, atx.ID(), got)
-			}
-		}
+		atx1, blob := newAtx(t, sig)
+		require.NoError(t, atxs.Add(db, atx1, blob))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), atx0.SmesherID, 10))
+
+		atxids, err := atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx0.ID(), atx1.ID()}, atxids)
+
+		// filters by epoch
+		_, err = atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch+1)
+		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 }

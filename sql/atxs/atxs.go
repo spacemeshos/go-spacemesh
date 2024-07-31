@@ -891,12 +891,13 @@ func Units(db sql.Executor, atxID types.ATXID, nodeID types.NodeID) (uint32, err
 	return units, err
 }
 
-// ContributedToAtxInEpoch returns the ID of the ATX that the given identity contributed PoST to in the given epoch.
+// FindDoublePublish finds 2 distinct ATXIDs that the given identity contributed PoST to in the given epoch.
 //
+// It is guaranteed to return 2 distinct ATXs when the error is nil.
 // It works by finding an ATX in the given epoch that has a PoST contribution from the given identity.
 // - `epoch` is looked up in the `atxs` table by matching atxid.
-func ContributedToAtxInEpoch(db sql.Executor, nodeID types.NodeID, epoch types.EpochID) (types.ATXID, error) {
-	var id types.ATXID
+func FindDoublePublish(db sql.Executor, nodeID types.NodeID, epoch types.EpochID) ([]types.ATXID, error) {
+	var ids []types.ATXID
 	rows, err := db.Exec(`
 		SELECT p.atxid
 		FROM posts p
@@ -907,17 +908,19 @@ func ContributedToAtxInEpoch(db sql.Executor, nodeID types.NodeID, epoch types.E
 			stmt.BindInt64(2, int64(epoch))
 		},
 		func(stmt *sql.Statement) bool {
+			var id types.ATXID
 			stmt.ColumnBytes(0, id[:])
-			return false
+			ids = append(ids, id)
+			return len(ids) < 2
 		},
 	)
 	if err != nil {
-		return types.EmptyATXID, fmt.Errorf("contributed to ATX in epoch %v: %w", epoch, err)
+		return nil, err
 	}
-	if rows == 0 {
-		return types.EmptyATXID, sql.ErrNotFound
+	if rows != 2 {
+		return nil, sql.ErrNotFound
 	}
-	return id, nil
+	return ids, nil
 }
 
 func AllUnits(db sql.Executor, id types.ATXID) (map[types.NodeID]uint32, error) {
