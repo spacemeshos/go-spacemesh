@@ -46,6 +46,7 @@ var (
 	errResponseTooBig       = errors.New("response too big")
 	errCannotFindProposal   = errors.New("cannot find proposal")
 	errNoEligibilityProofs  = errors.New("no eligibility proofs")
+	errSigTooShort          = errors.New("signature too short")
 	fetchFullTimeout        = 5 * time.Second
 )
 
@@ -224,7 +225,6 @@ func New(
 		atxsdata:  atxsdata,
 		proposals: proposals,
 		verifier:  verif,
-		compactFn: compactTruncate,
 		oracle: &legacyOracle{
 			log:    zap.NewNop(),
 			oracle: oracle,
@@ -268,7 +268,6 @@ type Hare struct {
 	atxsdata  *atxsdata.Data
 	proposals *store.Store
 	verifier  verifier
-	compactFn func([]byte) []byte
 	oracle    *legacyOracle
 	sync      system.SyncStateProvider
 	patrol    *layerpatrol.LayerPatrol
@@ -397,7 +396,7 @@ func (h *Hare) reconstructProposals(ctx context.Context, peer p2p.Peer, msgId ty
 	if len(proposals) == 0 {
 		return errNoLayerProposals
 	}
-	compacted := h.compactProposals(h.compactFn, msg.Layer, proposals)
+	compacted := h.compactProposals(msg.Layer, proposals)
 	proposalIds := make([]proposalTuple, len(proposals))
 	for i := range proposals {
 		proposalIds[i] = proposalTuple{id: proposals[i].ID(), compact: compacted[i]}
@@ -718,7 +717,7 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
 		if ir.Round == preround {
 			var err error
-			msg.Body.Value.CompactProposals, err = h.compactProposalIds(h.compactFn, msg.Layer,
+			msg.Body.Value.CompactProposals, err = h.compactProposalIds(msg.Layer,
 				out.message.Body.Value.Proposals)
 			if err != nil {
 				h.log.Debug("failed to compact proposals", zap.Error(err))
@@ -887,32 +886,20 @@ type session struct {
 	vrfs    []*types.HareEligibility
 }
 
-type compactFunc func([]byte) []byte
-
-// compactFunc will truncate a given byte slice to a shorter
-// byte slice by reslicing.
-func compactTruncate(b []byte) []byte {
-	return b[:4]
-}
-
-func compactVrf(compacter compactFunc, v types.VrfSignature) (c types.CompactProposalID) {
-	b := compacter(v[:])
-	copy(c[:], b)
-	return c
-}
-
-func (h *Hare) compactProposals(compacter compactFunc, layer types.LayerID,
+func (h *Hare) compactProposals(layer types.LayerID,
 	proposals []*types.Proposal,
 ) []types.CompactProposalID {
 	compactProposals := make([]types.CompactProposalID, len(proposals))
 	for i, prop := range proposals {
 		vrf := prop.EligibilityProofs[0].Sig
-		compactProposals[i] = compactVrf(compacter, vrf)
+		var c types.CompactProposalID
+		copy(c[:], vrf[:4])
+		compactProposals[i] = c
 	}
 	return compactProposals
 }
 
-func (h *Hare) compactProposalIds(compacter compactFunc, layer types.LayerID,
+func (h *Hare) compactProposalIds(layer types.LayerID,
 	proposals []types.ProposalID,
 ) ([]types.CompactProposalID, error) {
 	compactProposals := make([]types.CompactProposalID, len(proposals))
@@ -927,7 +914,11 @@ func (h *Hare) compactProposalIds(compacter compactFunc, layer types.LayerID,
 		if len(fp.EligibilityProofs) == 0 {
 			return nil, errNoEligibilityProofs
 		}
-		compactProposals[i] = compactVrf(compacter, fp.EligibilityProofs[0].Sig)
+
+		var c types.CompactProposalID
+		copy(c[:], fp.EligibilityProofs[0].Sig[:4])
+
+		compactProposals[i] = c
 	}
 	return compactProposals, nil
 }

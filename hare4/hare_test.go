@@ -308,9 +308,9 @@ func withMockVerifier() clusterOpt {
 	}
 }
 
-func withMockCompactFn(f func([]byte) []byte) clusterOpt {
+func withCollidingProposals() clusterOpt {
 	return func(cluster *lockstepCluster) {
-		cluster.mockCompactFn = f
+		cluster.collidingProposals = true
 	}
 }
 
@@ -349,9 +349,9 @@ type lockstepCluster struct {
 	nodes   []*node
 	signers []*node // nodes that active on consensus but don't run hare instance
 
-	mockVerify    bool
-	mockCompactFn func([]byte) []byte
-	units         struct {
+	mockVerify         bool
+	collidingProposals bool
+	units              struct {
 		min, max int
 	}
 	proposals struct {
@@ -395,9 +395,6 @@ func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 			withStreamRequester().withOracle().withHare()
 		if cl.mockVerify {
 			nn = nn.withVerifier()
-		}
-		if cl.mockCompactFn != nil {
-			nn.hare.compactFn = cl.mockCompactFn
 		}
 		cl.addNode(nn)
 	}
@@ -502,7 +499,11 @@ func (cl *lockstepCluster) genProposals(lid types.LayerID, skipNodes ...int) {
 		proposal.SetID(id)
 		proposal.Ballot.SetID(bid)
 		var vrf types.VrfSignature
-		cl.t.rng.Read(vrf[:])
+		if !cl.collidingProposals {
+			// if we want non-colliding proposals we copy from the rng
+			// otherwise it is kept as an array of zeroes
+			cl.t.rng.Read(vrf[:])
+		}
 		proposal.Ballot.EligibilityProofs = append(proposal.Ballot.EligibilityProofs, types.VotingEligibility{Sig: vrf})
 
 		proposal.SetBeacon(proposal.EpochData.Beacon)
@@ -897,7 +898,7 @@ func TestHandler(t *testing.T) {
 		msg1.Signature = n.signer.Sign(signing.HARE, msg1.ToMetadata().ToBytes())
 		msg1.Value.Proposals = nil
 		msg1.Value.CompactProposals = []types.CompactProposalID{
-			compactVrf(compactTruncate, p1.Ballot.EligibilityProofs[0].Sig),
+			compactVrf(p1.Ballot.EligibilityProofs[0].Sig),
 		}
 
 		msg2 := &Message{}
@@ -908,7 +909,7 @@ func TestHandler(t *testing.T) {
 		msg2.Signature = n.signer.Sign(signing.HARE, msg2.ToMetadata().ToBytes())
 		msg2.Value.Proposals = nil
 		msg2.Value.CompactProposals = []types.CompactProposalID{
-			compactVrf(compactTruncate, p2.Ballot.EligibilityProofs[0].Sig),
+			compactVrf(p2.Ballot.EligibilityProofs[0].Sig),
 		}
 
 		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg1)))
@@ -1184,7 +1185,7 @@ func TestHare_ReconstructForward(t *testing.T) {
 		n.mpublisher.EXPECT().
 			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 			Do(func(ctx context.Context, proto string, msg []byte) error {
-				// here we wanna call the handler on the second node
+				// here we want to call the handler on the second node
 				// but then call the handler on the third with the incoming peer id
 				// of the second node, this way we know the peers could resolve between
 				// themselves without having the connection to the original sender
@@ -1345,7 +1346,7 @@ func TestHare_ReconstructAll(t *testing.T) {
 }
 
 // TestHare_ReconstructCollision tests that the nodes go into a
-// full message exchange in the case that there's a siphash collision.
+// full message exchange in the case that there's a compacted id collision.
 func TestHare_ReconstructCollision(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.LogStats = true
@@ -1359,10 +1360,7 @@ func TestHare_ReconstructCollision(t *testing.T) {
 		genesis:       types.GetEffectiveGenesis(),
 	}
 
-	fn := func(_ []byte) []byte {
-		return []byte{0xab, 0xab, 0xab, 0xab}
-	}
-	cluster := newLockstepCluster(tst, withMockCompactFn(fn), withProposals(1)).
+	cluster := newLockstepCluster(tst, withProposals(1), withCollidingProposals()).
 		addActive(2)
 	if cluster.signersCount > 0 {
 		cluster = cluster.addSigner(cluster.signersCount)
@@ -1371,16 +1369,24 @@ func TestHare_ReconstructCollision(t *testing.T) {
 	layer := tst.genesis + 1
 
 	// scenario:
-	// node 1 has generated 1 proposal that (mocked) hash into 0xab as prefix - both nodes know the proposal
-	// node 2 has generated 1 proposal that hash into 0xab (but node 1 doesn't know about it)
+	// node 1 has generated 1 proposal that hash into 0x00 as prefix - both nodes know the proposal
+	// node 2 has generated 1 proposal that hash into 0x00 (but node 1 doesn't know about it)
 	// so the two proposals collide and then we check that the nodes actually go into a round of
 	// exchanging the missing/colliding hashes and then the signature verification (not mocked)
 	// should pass and that a full exchange of all hashes is not triggered (disambiguates case of
 	// failed signature vs. hashes colliding - there's a difference in number of single prefixes
 	// that are sent, but the response should be the same)
 
-	go func() { <-cluster.nodes[1].tracer.compactReq }()  // node 2 gets the request
-	go func() { <-cluster.nodes[0].tracer.compactResp }() // node 1 gets the response
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		<-cluster.nodes[1].tracer.compactReq
+		wg.Done()
+	}() // node 2 gets the request
+	go func() {
+		<-cluster.nodes[0].tracer.compactResp
+		wg.Done()
+	}() // node 1 gets the response
 
 	cluster.setup()
 
@@ -1411,6 +1417,12 @@ func TestHare_ReconstructCollision(t *testing.T) {
 		default:
 			t.Fatal("no result")
 		}
+		wg.Wait()
 		require.Empty(t, n.hare.Running())
 	}
+}
+
+func compactVrf(v types.VrfSignature) (c types.CompactProposalID) {
+	copy(c[:], v[:4])
+	return c
 }
