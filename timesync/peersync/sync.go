@@ -23,7 +23,7 @@ const (
 
 var (
 	// errPeersNotSynced returned if system clock is out of sync with peers clock for configured period of time.
-	errPeersNotSynced = errors.New("timesync: peers are not time synced, make sure your system clock is accurate")
+	errPeersNotSynced = errors.New("timesync: peers are not time synced")
 	// errTimesyncFailed returned if we weren't able to collect enough clock samples from peers.
 	errTimesyncFailed = errors.New("timesync: failed request")
 )
@@ -132,7 +132,7 @@ func New(h host.Host, peers getPeers, opts ...Option) *Sync {
 
 // Sync manages background worker that compares peers time with system time.
 type Sync struct {
-	errCnt uint32
+	errCnt atomic.Uint32
 
 	config Config
 	log    *zap.Logger
@@ -200,7 +200,7 @@ func (s *Sync) run() error {
 			s.log.Debug("starting time sync round with peers",
 				zap.Uint64("round", round),
 				zap.Int("peers_count", len(prs)),
-				zap.Uint32("errors_count", atomic.LoadUint32(&s.errCnt)),
+				zap.Uint32("errors_count", s.errCnt.Load()),
 			)
 			ctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
 			offset, err := s.GetOffset(ctx, round, prs)
@@ -212,7 +212,8 @@ func (s *Sync) run() error {
 						zap.Duration("offset", offset),
 						zap.Duration("max_offset", s.config.MaxClockOffset),
 					)
-					if atomic.AddUint32(&s.errCnt, 1) == uint32(s.config.MaxOffsetErrors) {
+					if s.errCnt.Add(1) == uint32(s.config.MaxOffsetErrors) {
+						s.log.Error("peers are not time synced, make sure your system clock is accurate")
 						return fmt.Errorf("%w: drift = %v", errPeersNotSynced, offset)
 					}
 				} else {
@@ -221,7 +222,7 @@ func (s *Sync) run() error {
 						zap.Duration("offset", offset),
 						zap.Duration("max_offset", s.config.MaxClockOffset),
 					)
-					atomic.StoreUint32(&s.errCnt, 0)
+					s.errCnt.Store(0)
 				}
 				offsetGauge.Set(offset.Seconds())
 				timeout = s.config.RoundInterval
