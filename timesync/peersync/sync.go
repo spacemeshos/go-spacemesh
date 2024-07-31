@@ -254,10 +254,8 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.D
 		}
 		wg sync.WaitGroup
 	)
-	buf, err := codec.Encode(&Request{ID: id})
-	if err != nil {
-		s.log.Panic("can't encode request to bytes", zap.Error(err))
-	}
+	buf := codec.MustEncode(&Request{ID: id})
+
 	for _, pid := range prs {
 		wg.Add(1)
 		go func(pid p2p.Peer) {
