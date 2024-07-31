@@ -5,13 +5,13 @@ pub type Pubkey = Bytes32;
 
 #[derive(Encode, Decode)]
 pub struct SendArguments {
-    recipient: Address,
-    amount: u64,
+    pub recipient: Address,
+    pub amount: u64,
 }
 
 #[derive(Encode, Decode)]
 pub struct SpawnArguments {
-    owner: Pubkey,
+    pub owner: Pubkey,
 }
 
 // The method selectors

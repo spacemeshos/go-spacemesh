@@ -2,8 +2,9 @@
 #![no_main]
 athena_vm::entrypoint!(main);
 
+use athena_vm_sdk::call;
 use parity_scale_codec::{Decode, Encode};
-use wallet_common::{SendArguments, MethodId, SpawnArguments};
+use wallet_common::{MethodId, Pubkey, SendArguments, SpawnArguments};
 
 #[derive(Encode, Decode)]
 pub struct Wallet {
@@ -21,22 +22,15 @@ impl Wallet {
         }
     }
 
-    fn send(&mut self, args: SendArguments) {
+    fn send(self, args: SendArguments) {
         // Send coins
         // Note: error checking happens inside the host
-        unsafe {
-            athena_vm::host::call(
-                args.recipient.as_ptr(),
-                std::ptr::null(),
-                0,
-                args.amount.to_le_bytes().as_ptr(),
-            )
-        }
+        call(args.recipient, None, args.amount);
     }
-    fn proxy(&mut self, _args: Vec<u8>) {
+    fn proxy(self, _args: Vec<u8>) {
         unimplemented!();
     }
-    fn deploy(&mut self, _args: Vec<u8>) {
+    fn deploy(self, _args: Vec<u8>) {
         unimplemented!();
     }
 }
@@ -45,6 +39,15 @@ pub fn main() {
     // Read function selector and input to selected function.
     let method_id = athena_vm::io::read::<u8>();
     let encoded_method_args = athena_vm::io::read::<Vec<u8>>();
+
+    // convert method_id to MethodId enum
+    let method = match method_id {
+        0 => MethodId::Spawn,
+        1 => MethodId::Send,
+        2 => MethodId::Proxy,
+        3 => MethodId::Deploy,
+        _ => panic!("unsupported method"),
+    };
 
     // Template only implements a single method, spawn.
     // A spawned program implements the other methods.
@@ -56,18 +59,18 @@ pub fn main() {
         // Instantiate the wallet and dispatch
         let spawn_args = athena_vm::io::read::<Vec<u8>>();
         let wallet = Wallet::decode(&mut &spawn_args[..]).unwrap();
-        match method_id {
-            MethodId::Send as u8 => {
+        match method {
+            MethodId::Send => {
                 let send_arguments = SendArguments::decode(&mut &encoded_method_args[..]).unwrap();
                 wallet.send(send_arguments);
             }
-            MethodId::Proxy as u8 => {
+            MethodId::Proxy => {
                 wallet.proxy(encoded_method_args);
             }
-            MethodId::Deploy as u8 => {
+            MethodId::Deploy => {
                 wallet.deploy(encoded_method_args);
             }
-            _ => panic!("unsupported method")
+            _ => panic!("unsupported method"),
         }
     };
 }
@@ -76,6 +79,7 @@ fn spawn(args: Vec<u8>) {
     // Decode the arguments
     // This just makes sure they're valid
     let args = SpawnArguments::decode(&mut &args[..]).unwrap();
+    Wallet::new(args.owner);
 
     // Spawn the wallet
     // Note: newly-created program address gets passed directly back from the VM

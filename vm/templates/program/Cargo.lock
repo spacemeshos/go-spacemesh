@@ -10,8 +10,8 @@ checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
 
 [[package]]
 name = "athena-hostfunctions"
-version = "0.1.0"
-source = "git+https://github.com/athenavm/athena.git?branch=main#583051a9896f36dcf63741527037d5597aaaa313"
+version = "0.3.0"
+source = "git+https://github.com/athenavm/athena.git?branch=vmsdk#371e7777ad9313bd13a41a5cdbd275108e8c5d0f"
 
 [[package]]
 name = "athena-interface"
@@ -23,9 +23,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "athena-precompiles"
-version = "0.1.0"
-source = "git+https://github.com/athenavm/athena.git?branch=main#583051a9896f36dcf63741527037d5597aaaa313"
+name = "athena-interface"
+version = "0.3.0"
+source = "git+https://github.com/athenavm/athena.git?branch=vmsdk#371e7777ad9313bd13a41a5cdbd275108e8c5d0f"
+dependencies = [
+ "bytemuck",
+ "log",
+]
+
+[[package]]
+name = "athena-lib"
+version = "0.3.0"
+source = "git+https://github.com/athenavm/athena.git?branch=vmsdk#371e7777ad9313bd13a41a5cdbd275108e8c5d0f"
 dependencies = [
  "bincode",
  "cfg-if",
@@ -34,18 +43,29 @@ dependencies = [
 
 [[package]]
 name = "athena-vm"
-version = "0.1.0"
-source = "git+https://github.com/athenavm/athena.git?branch=main#583051a9896f36dcf63741527037d5597aaaa313"
+version = "0.3.0"
+source = "git+https://github.com/athenavm/athena.git?branch=vmsdk#371e7777ad9313bd13a41a5cdbd275108e8c5d0f"
 dependencies = [
  "athena-hostfunctions",
- "athena-interface",
- "athena-precompiles",
+ "athena-interface 0.3.0",
+ "athena-lib",
  "bincode",
  "bytemuck",
  "cfg-if",
  "getrandom",
+ "lazy_static",
  "rand",
  "serde",
+]
+
+[[package]]
+name = "athena-vm-sdk"
+version = "0.3.0"
+source = "git+https://github.com/athenavm/athena.git?branch=vmsdk#371e7777ad9313bd13a41a5cdbd275108e8c5d0f"
+dependencies = [
+ "athena-hostfunctions",
+ "athena-interface 0.3.0",
+ "athena-vm",
 ]
 
 [[package]]
@@ -136,6 +156,12 @@ dependencies = [
  "equivalent",
  "hashbrown",
 ]
+
+[[package]]
+name = "lazy_static"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libc"
@@ -325,7 +351,7 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 name = "wallet-common"
 version = "0.1.0"
 dependencies = [
- "athena-interface",
+ "athena-interface 0.1.0",
  "parity-scale-codec",
 ]
 
@@ -334,6 +360,7 @@ name = "wallet-template"
 version = "0.1.0"
 dependencies = [
  "athena-vm",
+ "athena-vm-sdk",
  "parity-scale-codec",
  "wallet-common",
 ]
