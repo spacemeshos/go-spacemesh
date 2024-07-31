@@ -705,15 +705,15 @@ func (app *App) initServices(ctx context.Context) error {
 		app.atxsdata,
 		state,
 		app.conState,
-		app.addLogger(ExecutorLogger, lg),
+		app.addLogger(ExecutorLogger, lg).Zap(),
 	)
-	mlog := app.addLogger(MeshLogger, lg)
+	mlog := app.addLogger(MeshLogger, lg).Zap()
 	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
 
-	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog.Zap()))
+	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog))
 	if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
 		return fmt.Errorf("pruner %w", err)
 	}
@@ -903,7 +903,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 		vrfVerifier,
 		app.clock,
-		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
+		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg).Zap()),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:              layerSize,
 			LayersPerEpoch:         layersPerEpoch,
@@ -1760,7 +1760,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			app.Config.CollectMetrics,
 		)
 
-		if err := app.jsonAPIServer.StartService(ctx, maps.Values(publicSvcs)...); err != nil {
+		if err := app.jsonAPIServer.StartService(maps.Values(publicSvcs)...); err != nil {
 			return fmt.Errorf("start listen server: %w", err)
 		}
 		logger.With().Info("json listener started",

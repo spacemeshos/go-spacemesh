@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
@@ -29,7 +30,7 @@ import (
 var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
-	errCertificatesNotSupported = errors.New("poet doesn't support certificates")
+	ErrCertificatesNotSupported = errors.New("poet doesn't support certificates")
 )
 
 type PoetPowParams struct {
@@ -114,7 +115,7 @@ func WithLogger(logger *zap.Logger) PoetClientOpts {
 		c.logger = logger
 		c.client.Logger = &retryableHttpLogger{inner: logger}
 		c.client.ResponseLogHook = func(logger retryablehttp.Logger, resp *http.Response) {
-			c.logger.Info(
+			c.logger.Debug(
 				"response received",
 				zap.Stringer("url", resp.Request.URL),
 				zap.Int("status", resp.StatusCode),
@@ -190,7 +191,7 @@ func (c *HTTPPoetClient) CertifierInfo(ctx context.Context) (*url.URL, []byte, e
 	}
 	certifierInfo := info.GetCertifier()
 	if certifierInfo == nil {
-		return nil, nil, errCertificatesNotSupported
+		return nil, nil, ErrCertificatesNotSupported
 	}
 	url, err := url.Parse(certifierInfo.Url)
 	if err != nil {
@@ -308,7 +309,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 
 	if res.StatusCode != http.StatusOK {
-		c.logger.Info("got poet response != 200 OK", zap.String("status", res.Status), zap.String("body", string(data)))
+		c.logger.Debug("poet request failed", zap.String("status", res.Status), zap.String("body", string(data)))
 	}
 
 	switch res.StatusCode {
@@ -423,7 +424,7 @@ func (c *poetService) authorize(
 	switch {
 	case err == nil:
 		return &PoetAuth{PoetCert: cert}, nil
-	case errors.Is(err, errCertificatesNotSupported):
+	case errors.Is(err, ErrCertificatesNotSupported):
 		logger.Debug("poet doesn't support certificates")
 	default:
 		logger.Warn("failed to certify", zap.Error(err))
@@ -518,7 +519,7 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 
-	if err := c.db.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
+	if err := c.db.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		c.logger.Warn("failed to validate and store proof", zap.Error(err), zap.Object("proof", proof))
 		return nil, nil, fmt.Errorf("validating and storing proof: %w", err)
 	}

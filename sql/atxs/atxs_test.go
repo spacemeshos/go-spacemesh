@@ -1149,6 +1149,59 @@ func TestUnits(t *testing.T) {
 	})
 }
 
+func Test_AtxWithPrevious(t *testing.T) {
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	prev := types.RandomATXID()
+
+	t.Run("no atxs", func(t *testing.T) {
+		db := sql.InMemory()
+		_, err := atxs.AtxWithPrevious(db, prev, sig.NodeID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("finds other ATX with same previous", func(t *testing.T) {
+		db := sql.InMemory()
+
+		atx, blob := newAtx(t, sig)
+		require.NoError(t, atxs.Add(db, atx, blob))
+
+		id, err := atxs.AtxWithPrevious(db, atx.PrevATXID, sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.ID(), id)
+	})
+	t.Run("finds other ATX with same previous (empty)", func(t *testing.T) {
+		db := sql.InMemory()
+
+		atx, blob := newAtx(t, sig, withPrevATXID(types.EmptyATXID))
+		require.NoError(t, atxs.Add(db, atx, blob))
+
+		id, err := atxs.AtxWithPrevious(db, atx.PrevATXID, sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.ID(), id)
+	})
+	t.Run("filters out by node ID", func(t *testing.T) {
+		db := sql.InMemory()
+
+		sig2, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx, blob := newAtx(t, sig, withPrevATXID(types.EmptyATXID))
+		require.NoError(t, atxs.Add(db, atx, blob))
+
+		atx2, blob := newAtx(t, sig2, withPrevATXID(types.EmptyATXID))
+		require.NoError(t, atxs.Add(db, atx2, blob))
+
+		id, err := atxs.AtxWithPrevious(db, atx.PrevATXID, sig.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx.ID(), id)
+
+		id, err = atxs.AtxWithPrevious(db, atx.PrevATXID, sig2.NodeID())
+		require.NoError(t, err)
+		require.Equal(t, atx2.ID(), id)
+	})
+}
+
 func TestContributedToAtx(t *testing.T) {
 	t.Parallel()
 	t.Run("not found", func(t *testing.T) {

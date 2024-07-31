@@ -94,47 +94,57 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 		errCh <- fmt.Errorf("create persist dir %v: %w", dataDir, err)
 	}
 	s.eg.Go(func() error {
-		s.startHttp(errCh)
+		ln, err := net.Listen("tcp", s.Addr)
+		if err != nil {
+			errCh <- err
+			return err
+		}
+		http.HandleFunc("/", s.handle)
+		http.HandleFunc("/checkpoint", s.handleCheckpoint)
+		http.HandleFunc("/updateCheckpoint", s.handleUpdate)
+		s.logger.With().Info("server starts serving", log.String("addr", ln.Addr().String()))
+		if err = s.Serve(ln); err != nil {
+			errCh <- err
+			return err
+		}
+
 		return nil
 	})
 
 	s.eg.Go(func() error {
-		s.loop(ctx, errCh, params)
+		var last types.EpochID
+		for _, epoch := range s.bootstrapEpochs {
+			wait := time.Until(params.updateBeaconTime(epoch))
+			select {
+			case <-time.After(wait):
+				if err := s.GenBootstrap(ctx, epoch); err != nil {
+					errCh <- err
+					return err
+				}
+				last = epoch
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		if !s.genFallback {
+			return nil
+		}
+
+		// start generating fallback data
+		s.eg.Go(
+			func() error {
+				s.genDataLoop(ctx, errCh, last, params.updateActiveSetTime, s.GenFallbackActiveSet)
+				return nil
+			})
+		s.eg.Go(
+			func() error {
+				s.genDataLoop(ctx, errCh, last+1, params.updateBeaconTime, s.GenFallbackBeacon)
+				return nil
+			})
+
 		return nil
 	})
-}
-
-func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkParam) {
-	var last types.EpochID
-	for _, epoch := range s.bootstrapEpochs {
-		wait := time.Until(params.updateBeaconTime(epoch))
-		select {
-		case <-time.After(wait):
-			if err := s.GenBootstrap(ctx, epoch); err != nil {
-				errCh <- err
-				return
-			}
-			last = epoch
-		case <-ctx.Done():
-			return
-		}
-	}
-
-	if !s.genFallback {
-		return
-	}
-
-	// start generating fallback data
-	s.eg.Go(
-		func() error {
-			s.genDataLoop(ctx, errCh, last, params.updateActiveSetTime, s.GenFallbackActiveSet)
-			return nil
-		})
-	s.eg.Go(
-		func() error {
-			s.genDataLoop(ctx, errCh, last+1, params.updateBeaconTime, s.GenFallbackBeacon)
-			return nil
-		})
 }
 
 // in systests, we want to be sure the nodes use the fallback data unconditionally.
@@ -201,21 +211,6 @@ func (s *Server) genDataLoop(
 		case <-ctx.Done():
 			return
 		}
-	}
-}
-
-func (s *Server) startHttp(ch chan error) {
-	ln, err := net.Listen("tcp", s.Addr)
-	if err != nil {
-		ch <- err
-		return
-	}
-	http.HandleFunc("/", s.handle)
-	http.HandleFunc("/checkpoint", s.handleCheckpoint)
-	http.HandleFunc("/updateCheckpoint", s.handleUpdate)
-	s.logger.With().Info("server starts serving", log.String("addr", ln.Addr().String()))
-	if err = s.Serve(ln); err != nil {
-		ch <- err
 	}
 }
 

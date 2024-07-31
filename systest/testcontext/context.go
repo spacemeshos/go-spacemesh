@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/flowcontrol"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -49,15 +50,10 @@ var (
 	)
 	logLevel    = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
 	testTimeout = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
-	labels      = stringSet{}
 
 	tokens     chan struct{}
 	initTokens sync.Once
 )
-
-func init() {
-	flag.Var(labels, "labels", "test will be executed only if it matches all labels")
-}
 
 var (
 	testid = parameters.String(
@@ -260,15 +256,6 @@ func updateContext(ctx *Context) error {
 	return nil
 }
 
-// Labels sets list of labels for the test.
-func Labels(labels ...string) Opt {
-	return func(c *cfg) {
-		for _, label := range labels {
-			c.labels[label] = struct{}{}
-		}
-	}
-}
-
 // SkipClusterLimits will not block if there are no available tokens.
 func SkipClusterLimits() Opt {
 	return func(c *cfg) {
@@ -280,13 +267,10 @@ func SkipClusterLimits() Opt {
 type Opt func(*cfg)
 
 func newCfg() *cfg {
-	return &cfg{
-		labels: map[string]struct{}{},
-	}
+	return &cfg{}
 }
 
 type cfg struct {
-	labels     map[string]struct{}
 	skipLimits bool
 }
 
@@ -300,16 +284,18 @@ func New(t *testing.T, opts ...Opt) *Context {
 	for _, opt := range opts {
 		opt(c)
 	}
-	for label := range labels {
-		if _, exist := c.labels[label]; !exist {
-			t.Skipf("not labeled with '%s'", label)
-		}
-	}
 	if !c.skipLimits {
 		tokens <- struct{}{}
 		t.Cleanup(func() { <-tokens })
 	}
 	config, err := rest.InClusterConfig()
+
+	// The default rate limiter is too slow 5qps and 10 burst, This will prevent the client from being throttled
+	// Change the limits to the same of kubectl and argo
+	// That's were those number come from
+	// https://github.com/kubernetes/kubernetes/pull/105520
+	// https://github.com/argoproj/argo-workflows/pull/11603/files
+	config.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(50, 300)
 	require.NoError(t, err)
 
 	clientset, err := kubernetes.NewForConfig(config)

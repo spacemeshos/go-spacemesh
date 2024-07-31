@@ -5,9 +5,9 @@ tmpfile := $(shell mktemp /tmp/systest-XXX)
 test_name ?= TestSmeshing
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
-certifier_image ?= spacemeshos/certifier-service:v0.7.8
+certifier_image ?= spacemeshos/certifier-service:v0.7.11
 poet_image ?= $(org)/poet:v0.10.3
-post_service_image ?= $(org)/post-service:v0.7.8
+post_service_image ?= $(org)/post-service:v0.7.11
 post_init_image ?= $(org)/postcli:v0.12.5
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
@@ -22,8 +22,8 @@ bootstrap ?= 5m
 storage ?= standard=1Gi
 node_selector ?=
 namespace ?=
-label ?=
 count ?= 1
+failfast ?= true
 
 configname ?= $(test_job_name)
 smesher_config ?= parameters/fastnet/smesher.json
@@ -37,7 +37,11 @@ ifeq ($(configname),$(test_job_name))
 endif
 
 command := tests -test.v -test.count=$(count) -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) \
--level=$(level) -labels=$(label) -configname=$(configname)
+-level=$(level) -configname=$(configname)
+
+ifeq ($(failfast),true)
+	command := $(command) -test.failfast
+endif
 
 .PHONY: docker
 docker:

@@ -58,6 +58,7 @@ type request struct {
 }
 
 type promise struct {
+	once      sync.Once
 	completed chan struct{}
 	err       error
 }
@@ -435,15 +436,15 @@ func (f *Fetch) Stop() {
 	f.cancel()
 	f.mu.Lock()
 	for _, req := range f.unprocessed {
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
 	}
 	for _, req := range f.ongoing {
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
 	}
 	f.mu.Unlock()
 
 	_ = f.eg.Wait()
-	f.logger.Info("stopped fetch")
+	f.logger.Debug("stopped fetch")
 }
 
 // stopped returns if we should stop.
@@ -459,7 +460,7 @@ func (f *Fetch) stopped() bool {
 // here we receive all requests for hashes for all DBs and batch them together before we send the request to peer
 // there can be a priority request that will not be batched.
 func (f *Fetch) loop() {
-	f.logger.Info("starting fetch main loop")
+	f.logger.Debug("starting fetch main loop")
 	for {
 		select {
 		case <-f.batchTimeout.C:
@@ -589,7 +590,7 @@ func (f *Fetch) hashValidationDone(hash types.Hash32, err error) {
 	} else {
 		f.logger.Debug("hash request done", log.ZContext(req.ctx), zap.Stringer("hash", hash))
 	}
-	close(req.promise.completed)
+	req.promise.once.Do(func() { close(req.promise.completed) })
 	delete(f.ongoing, hash)
 }
 
@@ -605,7 +606,7 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 
 	// first check if we have it locally from gossips
 	if has, err := f.bs.Has(req.hint, hash.Bytes()); err == nil && has {
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
 		delete(f.ongoing, hash)
 		return
 	}
@@ -618,7 +619,8 @@ func (f *Fetch) failAfterRetry(hash types.Hash32) {
 			zap.Int("retries", req.retries),
 		)
 		req.promise.err = ErrExceedMaxRetries
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
+
 	} else {
 		// put the request back to the unprocessed list
 		f.unprocessed[req.hash] = req
@@ -696,14 +698,14 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][]*batc
 
 	best := f.peers.SelectBest(RedundantPeers)
 	if len(best) == 0 {
-		f.logger.Info("cannot send batch: no peers found")
+		f.logger.Warn("cannot send batch: no peers found")
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		errNoPeer := errors.New("no peers")
 		for _, msg := range requests {
 			if req, ok := f.ongoing[msg.Hash]; ok {
 				req.promise.err = errNoPeer
-				close(req.promise.completed)
+				req.promise.once.Do(func() { close(req.promise.completed) })
 				delete(f.ongoing, req.hash)
 			} else {
 				f.logger.Error("ongoing request missing",
@@ -918,7 +920,7 @@ func (f *Fetch) handleHashError(batch *batchInfo, err error) {
 		f.logger.Debug("hash request failed", log.ZContext(req.ctx), zap.Stringer("hash", req.hash), zap.Error(err))
 		req.promise.err = err
 		peerErrors.WithLabelValues(string(req.hint)).Inc()
-		close(req.promise.completed)
+		req.promise.once.Do(func() { close(req.promise.completed) })
 		delete(f.ongoing, req.hash)
 	}
 }
@@ -956,7 +958,7 @@ func (f *Fetch) getHash(
 			hint:      h,
 			validator: receiver,
 			promise: &promise{
-				completed: make(chan struct{}, 1),
+				completed: make(chan struct{}),
 			},
 		}
 		f.logger.Debug("hash request added to queue",

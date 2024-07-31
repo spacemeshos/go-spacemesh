@@ -2,6 +2,7 @@ package activation_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -74,7 +75,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	atxsdata := atxsdata.New()
 
 	// ensure that genesis aligns with layer timings
-	genesis := time.Now().Round(layerDuration)
+	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:  epoch,
@@ -85,7 +86,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
 		timesync.WithLayerDuration(layerDuration),
-		timesync.WithTickInterval(100*time.Millisecond),
+		timesync.WithTickInterval(10*time.Millisecond),
 		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)
@@ -135,6 +136,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	)
 
 	var previous *types.ActivationTx
+	var publishedAtxs atomic.Uint32
 	gomock.InOrder(
 		mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, _ string, msg []byte) error {
@@ -157,6 +159,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 				atx, err := atxs.Get(db, watx.ID())
 				require.NoError(t, err)
 				previous = atx
+				publishedAtxs.Add(1)
 				return nil
 			},
 		),
@@ -189,6 +192,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 				require.NotZero(t, atx.TickHeight())
 				require.Equal(t, opts.NumUnits, atx.NumUnits)
 				previous = atx
+				publishedAtxs.Add(1)
 				return nil
 			},
 		).Times(2),
@@ -211,6 +215,6 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	tab.Register(sig)
 
 	require.NoError(t, tab.StartSmeshing(coinbase))
-	require.Eventually(t, ctrl.Satisfied, epoch*4, time.Millisecond*100)
+	require.Eventually(t, func() bool { return publishedAtxs.Load() >= 3 }, epoch*4, time.Millisecond*100)
 	require.NoError(t, tab.StopSmeshing(false))
 }

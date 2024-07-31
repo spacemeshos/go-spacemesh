@@ -2,6 +2,57 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#6185](https://github.com/spacemeshos/go-spacemesh/pull/6185) Optimize mempool
+
+* [#6187](https://github.com/spacemeshos/go-spacemesh/pull/6187) The merge tool now ignores files that are not `.key`
+  files in the `identities` directory when merging two nodes.
+
+## Release v1.6.4
+
+### Improvements
+
+* [#6107](https://github.com/spacemeshos/go-spacemesh/pull/6107) Cache PoET queries between multiple identities on the
+  same node. This will reduce the number of requests the node makes to the PoET server during the cyclegap.
+
+* [#6152](https://github.com/spacemeshos/go-spacemesh/pull/6152) Fixed a bug where in rare cases the node would panic
+  due to the closing of a closed channel in the fetcher.
+
+* [#6142](https://github.com/spacemeshos/go-spacemesh/pull/6142) Fix node not dropping peers that are broadcasting
+  invalid ATXs.
+
+## Release v1.6.3
+
+### Improvements
+
+* [#6137](https://github.com/spacemeshos/go-spacemesh/pull/6137) Fix hanging ATX sync.
+
+## Release v1.6.2
+
+### Improvements
+
+* [#5793](https://github.com/spacemeshos/go-spacemesh/pull/5793) Reduced hare committee 8x from 400 to 50 to decrease
+  network traffic caused by Hare.
+
+* [#6099](https://github.com/spacemeshos/go-spacemesh/pull/6099) Adds new metrics to the API to provide insights into
+  the performance and behavior of the node's APIs.
+
+* [#6115](https://github.com/spacemeshos/go-spacemesh/pull/6115) Increase the number of supported ATXs to 8.0 Mio.
+
+### Features
+
+* [#6112](https://github.com/spacemeshos/go-spacemesh/pull/6112) Adds vesting, vault, and drain vault contents to the
+  v2alpha2 Transaction API. Fixes the 'unspecified' transaction type.
+
 ## Release v1.6.1
 
 ### Improvements

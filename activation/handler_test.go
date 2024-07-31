@@ -119,12 +119,13 @@ func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 type handlerMocks struct {
 	goldenATXID types.ATXID
 
-	mclock     *MocklayerClock
-	mpub       *pubsubmocks.MockPublisher
-	mockFetch  *mocks.MockFetcher
-	mValidator *MocknipostValidator
-	mbeacon    *MockAtxReceiver
-	mtortoise  *mocks.MockTortoise
+	mclock      *MocklayerClock
+	mpub        *pubsubmocks.MockPublisher
+	mockFetch   *mocks.MockFetcher
+	mValidator  *MocknipostValidator
+	mbeacon     *MockAtxReceiver
+	mtortoise   *mocks.MockTortoise
+	mMalPublish *MockmalfeasancePublisher
 }
 
 type testHandler struct {
@@ -188,6 +189,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 		mValidator:  NewMocknipostValidator(ctrl),
 		mbeacon:     NewMockAtxReceiver(ctrl),
 		mtortoise:   mocks.NewMockTortoise(ctrl),
+		mMalPublish: NewMockmalfeasancePublisher(ctrl),
 	}
 }
 
@@ -360,7 +362,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.Hash32(second.NIPost.PostMetadata.Challenge))
 	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{second.PrevATXID}, gomock.Any())
 	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second))
-	require.ErrorContains(t, err, "syntactically invalid based on deps")
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	// valid first comes in
 	atxHdlr.expectAtxV1(first, sig.NodeID())
@@ -514,6 +516,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		err := atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf)
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorContains(t, err, "invalid atx signature")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("atx V2", func(t *testing.T) {
 		t.Parallel()
@@ -857,12 +860,14 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 		_, err := atxHdlr.decodeATX(nil)
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("malformed atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 		_, err := atxHdlr.decodeATX([]byte("malformed"))
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("v1", func(t *testing.T) {
 		t.Parallel()
@@ -893,5 +898,6 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atx.PublishEpoch = 9
 		_, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 }

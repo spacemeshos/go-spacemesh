@@ -81,7 +81,7 @@ type mempoolIterator struct {
 
 // newMempoolIterator builds and returns a mempoolIterator.
 func newMempoolIterator(logger *zap.Logger, cs conStateCache, gasLimit uint64) *mempoolIterator {
-	txs := cs.GetMempool(logger)
+	txs := cs.GetMempool()
 	mi := &mempoolIterator{
 		logger:       logger,
 		gasRemaining: gasLimit,
