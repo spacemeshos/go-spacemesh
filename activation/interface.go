@@ -163,12 +163,7 @@ type certifierService interface {
 		pubkey []byte,
 	) (*certifier.PoetCert, error)
 
-	Recertify(
-		ctx context.Context,
-		id types.NodeID,
-		certifierAddress *url.URL,
-		pubkey []byte,
-	) (*certifier.PoetCert, error)
+	DeleteCertificate(id types.NodeID, pubkey []byte) error
 }
 
 type poetDbAPI interface {

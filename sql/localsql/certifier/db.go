@@ -28,6 +28,19 @@ func AddCertificate(db sql.Executor, nodeID types.NodeID, cert PoetCert, cerifie
 	return nil
 }
 
+func DeleteCertificate(db sql.Executor, nodeID types.NodeID, certifierID []byte) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+		stmt.BindBytes(2, certifierID)
+	}
+	if _, err := db.Exec(`
+		DELETE FROM poet_certificates WHERE node_id = ?1 AND certifier_id = ?2;`, enc, nil,
+	); err != nil {
+		return fmt.Errorf("deleting poet certificate for (%s; %x): %w", nodeID.ShortString(), certifierID, err)
+	}
+	return nil
+}
+
 func Certificate(db sql.Executor, nodeID types.NodeID, certifierID []byte) (*PoetCert, error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
