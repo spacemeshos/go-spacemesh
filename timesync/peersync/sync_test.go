@@ -10,8 +10,8 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync/mocks"
 )
@@ -70,7 +70,7 @@ func TestSyncGetOffset(t *testing.T) {
 
 		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
-		require.ErrorIs(t, err, ErrTimesyncFailed)
+		require.ErrorIs(t, err, errTimesyncFailed)
 		require.Empty(t, offset)
 	})
 }
@@ -118,7 +118,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 	}()
 	select {
 	case err := <-errors:
-		require.ErrorContains(t, err, ErrPeersNotSynced.Error())
+		require.ErrorIs(t, err, errPeersNotSynced)
 	case <-time.After(100 * time.Millisecond):
 		require.FailNow(t, "timed out waiting for sync to fail")
 	}
@@ -132,7 +132,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 
 	delays := []time.Duration{0, 1200 * time.Millisecond, 1900 * time.Millisecond, 10 * time.Second}
 	instances := []*Sync{}
-	errors := []error{ErrPeersNotSynced, nil, nil, ErrPeersNotSynced}
+	errors := []error{errPeersNotSynced, nil, nil, errPeersNotSynced}
 	mesh, err := mocknet.FullMeshLinked(len(delays))
 	require.NoError(t, err)
 	hosts := []*p2p.Host{}
@@ -150,7 +150,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 		sync := New(hosts[i], hosts[i],
 			WithConfig(config),
 			WithTime(delayedTime(delay)),
-			WithLog(logtest.New(t).Named(fmt.Sprintf("%d-%s", i, hosts[i].ID()))),
+			WithLog(zaptest.NewLogger(t).Named(fmt.Sprintf("%d-%s", i, hosts[i].ID()))),
 		)
 		instances = append(instances, sync)
 	}
@@ -168,7 +168,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 		}()
 		select {
 		case err := <-wait:
-			require.ErrorContains(t, err, errors[i].Error())
+			require.ErrorIs(t, err, errors[i])
 		case <-time.After(1000 * time.Millisecond):
 			require.FailNowf(t, "timed out waiting for an error", "node %d", i)
 		}
