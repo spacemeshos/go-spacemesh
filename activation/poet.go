@@ -579,7 +579,11 @@ func (c *poetService) getCertifierInfo(ctx context.Context) (*url.URL, []byte, e
 		}
 		return &certifierInfo{url: url, pubkey: pubkey}, nil
 	})
-	return info.url, info.pubkey, err
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return info.url, info.pubkey, nil
 }
 
 func (c *poetService) powParams(ctx context.Context) (*PoetPowParams, error) {
