@@ -146,8 +146,7 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 		RetryMax:     math.MaxInt,
 		RetryWaitMin: cfg.RequestRetryDelay,
 		RetryWaitMax: 2 * cfg.RequestRetryDelay,
-		Backoff:      retryablehttp.LinearJitterBackoff,
-		CheckRetry:   checkRetry,
+		Backoff:      retryablehttp.DefaultBackoff,
 	}
 
 	baseURL, err := url.Parse(server.Address)
