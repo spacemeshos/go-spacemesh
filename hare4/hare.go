@@ -46,7 +46,6 @@ var (
 	errResponseTooBig       = errors.New("response too big")
 	errCannotFindProposal   = errors.New("cannot find proposal")
 	errNoEligibilityProofs  = errors.New("no eligibility proofs")
-	errSigTooShort          = errors.New("signature too short")
 	fetchFullTimeout        = 5 * time.Second
 )
 
