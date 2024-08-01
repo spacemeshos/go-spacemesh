@@ -138,7 +138,6 @@ func (c *Certifier) DeleteCertificate(id types.NodeID, pubkey []byte) error {
 	if err := certifierdb.DeleteCertificate(c.db, id, pubkey); err != nil {
 		return err
 	}
-	c.certifications.Forget(string(append(id.Bytes(), pubkey...)))
 	return nil
 }
 
