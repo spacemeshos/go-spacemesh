@@ -1234,7 +1234,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.ptimesync = peersync.New(
 			app.host,
 			app.host,
-			peersync.WithLog(app.addLogger(TimeSyncLogger, lg)),
+			peersync.WithLog(app.addLogger(TimeSyncLogger, lg).Zap()),
 			peersync.WithConfig(app.Config.TIME.Peersync),
 		)
 	}
