@@ -31,7 +31,7 @@ func TestNodeService_Status(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewNodeServiceClient(conn)
 
 	t.Run("node status", func(t *testing.T) {

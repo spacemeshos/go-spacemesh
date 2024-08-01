@@ -119,43 +119,6 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 	require.Equal(t, []int{len(blob1.Bytes), -1, len(blob2.Bytes)}, blobSizes)
 }
 
-func TestMarried(t *testing.T) {
-	t.Parallel()
-	t.Run("identity not in DB", func(t *testing.T) {
-		t.Parallel()
-		db := sql.InMemory()
-
-		id := types.RandomNodeID()
-		married, err := Married(db, id)
-		require.NoError(t, err)
-		require.False(t, married)
-
-		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: types.RandomATXID()}))
-
-		married, err = Married(db, id)
-		require.NoError(t, err)
-		require.True(t, married)
-	})
-	t.Run("identity in DB", func(t *testing.T) {
-		t.Parallel()
-		db := sql.InMemory()
-
-		id := types.RandomNodeID()
-		// add ID in the DB
-		SetMalicious(db, id, types.RandomBytes(11), time.Now())
-
-		married, err := Married(db, id)
-		require.NoError(t, err)
-		require.False(t, married)
-
-		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: types.RandomATXID()}))
-
-		married, err = Married(db, id)
-		require.NoError(t, err)
-		require.True(t, married)
-	})
-}
-
 func TestMarriageATX(t *testing.T) {
 	t.Parallel()
 	t.Run("not married", func(t *testing.T) {
@@ -223,9 +186,9 @@ func TestEquivocationSet(t *testing.T) {
 		}
 
 		for _, id := range ids {
-			married, err := Married(db, id)
+			mAtx, err := MarriageATX(db, id)
 			require.NoError(t, err)
-			require.True(t, married)
+			require.Equal(t, atx, mAtx)
 			set, err := EquivocationSet(db, id)
 			require.NoError(t, err)
 			require.ElementsMatch(t, ids, set)

@@ -419,7 +419,7 @@ func (v *Validator) VerifyChain(ctx context.Context, id, goldenATXID types.ATXID
 	for _, opt := range opts {
 		opt(&options)
 	}
-	options.logger.Info("verifying ATX chain", zap.Stringer("atx_id", id))
+	options.logger.Debug("verifying ATX chain", zap.Stringer("atx_id", id))
 	return v.verifyChainWithOpts(ctx, id, goldenATXID, options)
 }
 

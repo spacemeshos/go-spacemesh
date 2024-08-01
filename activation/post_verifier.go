@@ -246,9 +246,9 @@ func newOffloadingPostVerifier(
 		v.prioritizedIds[id] = struct{}{}
 	}
 
-	v.log.Info("starting post verifier")
+	v.log.Debug("starting post verifier")
 	v.scale(numWorkers)
-	v.log.Info("started post verifier")
+	v.log.Debug("started post verifier")
 	return v
 }
 
@@ -355,18 +355,18 @@ func (v *offloadingPostVerifier) Close() error {
 		return nil
 	default:
 	}
-	v.log.Info("stopping post verifier")
+	v.log.Debug("stopping post verifier")
 	close(v.stop)
 	v.eg.Wait()
 
 	v.verifier.Close()
-	v.log.Info("stopped post verifier")
+	v.log.Debug("stopped post verifier")
 	return nil
 }
 
 func (w *postVerifierWorker) start() {
-	w.log.Info("starting")
-	defer w.log.Info("stopped")
+	w.log.Debug("starting")
+	defer w.log.Debug("stopped")
 	defer close(w.stopped)
 
 	for {

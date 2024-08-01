@@ -269,8 +269,8 @@ func (h *Hare) Start() {
 	}
 	h.log.Info("started",
 		zap.Inline(&h.config),
-		zap.Uint32("enabled", enabled.Uint32()),
-		zap.Uint32("disabled", disabled.Uint32()),
+		zap.Uint32("enabled layer", enabled.Uint32()),
+		zap.Uint32("disabled layer", disabled.Uint32()),
 	)
 	h.eg.Go(func() error {
 		for next := enabled; next < disabled; next++ {
@@ -475,7 +475,7 @@ func (h *Hare) run(session *session) error {
 			// we are logginng stats 1 network delay after new iteration start
 			// so that we can receive notify messages from previous iteration
 			if session.proto.Round == softlock && h.config.LogStats {
-				h.log.Info("stats", zap.Uint32("lid", session.lid.Uint32()), zap.Inline(session.proto.Stats()))
+				h.log.Debug("stats", zap.Uint32("lid", session.lid.Uint32()), zap.Inline(session.proto.Stats()))
 			}
 			if out.terminated {
 				if !result {
@@ -484,8 +484,7 @@ func (h *Hare) run(session *session) error {
 				return nil
 			}
 			if current.Iter == h.config.IterationsLimit {
-				return fmt.Errorf("hare failed to reach consensus in %d iterations",
-					h.config.IterationsLimit)
+				return fmt.Errorf("hare failed to reach consensus in %d iterations", h.config.IterationsLimit)
 			}
 		case <-h.ctx.Done():
 			return nil

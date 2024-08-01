@@ -219,7 +219,7 @@ type Participant struct {
 // StartRound process any buffered messages for this round and broadcast our proposal.
 func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID, participants []Participant) {
 	wc.mu.Lock()
-	wc.logger.Info("started beacon weak coin round",
+	wc.logger.Debug("started beacon weak coin round",
 		log.ZContext(ctx),
 		zap.Uint32("epoch", wc.epoch.Uint32()),
 		zap.Uint32("round", uint32(round)),
@@ -363,7 +363,7 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	coinflip := wc.smallest.LSB() == 1
 
 	wc.coins[wc.round] = coinflip
-	wc.logger.Info("completed round with beacon weak coin",
+	wc.logger.Debug("completed round with beacon weak coin",
 		log.ZContext(ctx),
 		zap.Uint32("epoch", wc.epoch.Uint32()),
 		zap.Uint32("round", uint32(wc.round)),

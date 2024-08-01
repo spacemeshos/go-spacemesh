@@ -109,7 +109,7 @@ func (p *Ping) runForPeer(ctx context.Context, peerID peer.ID, addrs []ma.Multia
 		if r.Error != nil {
 			return r.Error
 		} else {
-			p.logger.Info("PING succeeded",
+			p.logger.Debug("PING succeeded",
 				zap.Stringer("peer", peerID),
 				zap.Any("addrs", addrs),
 				zap.Duration("rtt", r.RTT))
