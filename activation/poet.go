@@ -482,7 +482,7 @@ func (c *poetService) authorize(
 func (c *poetService) reauthorize(
 	ctx context.Context,
 	id types.NodeID,
-	challange []byte,
+	challenge []byte,
 	logger *zap.Logger,
 ) (*PoetAuth, error) {
 	if c.certifier != nil {
@@ -492,7 +492,7 @@ func (c *poetService) reauthorize(
 			}
 		}
 	}
-	return c.authorize(ctx, id, challange, c.logger)
+	return c.authorize(ctx, id, challenge, c.logger)
 }
 
 func (c *poetService) Submit(
@@ -523,7 +523,7 @@ func (c *poetService) Submit(
 	case err == nil:
 		return round, nil
 	case errors.Is(err, ErrUnauthorized):
-		logger.Warn("failed to submit challenge as unathorized - authorizing again", zap.Error(err))
+		logger.Warn("failed to submit challenge as unauthorized - authorizing again", zap.Error(err))
 		auth, err := c.reauthorize(ctx, nodeID, challenge, logger)
 		if err != nil {
 			return nil, fmt.Errorf("authorizing: %w", err)
