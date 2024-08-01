@@ -4,14 +4,16 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/stretchr/testify/require"
+	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 )
 
 func TestInMemIDStore(t *testing.T) {
 	var (
-		it  iterator
+		it  hashsync.Iterator
 		err error
 	)
 	s := newInMemIDStore(32)

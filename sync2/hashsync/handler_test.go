@@ -132,6 +132,10 @@ func (it *sliceIterator) Next() error {
 	return nil
 }
 
+func (it *sliceIterator) Clone() Iterator {
+	return &sliceIterator{s: it.s}
+}
+
 type fakeSend struct {
 	x, y     Ordered
 	count    int
@@ -434,6 +438,7 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) Requester {
 	}
 	var client Requester
 	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []RangeSetReconcilerOption) bool {
+		opts = append(opts, WithRangeSyncLogger(zaptest.NewLogger(t))) // QQQQQ: TBD: rm
 		withClientServer(
 			storeA, getRequester, opts,
 			func(ctx context.Context, client Requester, srvPeerID p2p.Peer) {

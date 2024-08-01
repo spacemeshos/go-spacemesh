@@ -34,11 +34,11 @@ func (s *inMemIDStore) registerHash(h KeyBytes) error {
 	return nil
 }
 
-func (s *inMemIDStore) start() iterator {
+func (s *inMemIDStore) start() hashsync.Iterator {
 	return &inMemIDStoreIterator{sl: s.sl, node: s.sl.First()}
 }
 
-func (s *inMemIDStore) iter(from KeyBytes) iterator {
+func (s *inMemIDStore) iter(from KeyBytes) hashsync.Iterator {
 	node := s.sl.FindGTENode(from)
 	if node == nil {
 		node = s.sl.First()
@@ -51,7 +51,7 @@ type inMemIDStoreIterator struct {
 	node *skiplist.Node
 }
 
-var _ iterator = &inMemIDStoreIterator{}
+var _ hashsync.Iterator = &inMemIDStoreIterator{}
 
 func (it *inMemIDStoreIterator) Key() (hashsync.Ordered, error) {
 	if it.node == nil {
@@ -70,7 +70,7 @@ func (it *inMemIDStoreIterator) Next() error {
 	return nil
 }
 
-func (it *inMemIDStoreIterator) clone() iterator {
+func (it *inMemIDStoreIterator) Clone() hashsync.Iterator {
 	cloned := *it
 	return &cloned
 }

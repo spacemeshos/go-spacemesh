@@ -4,6 +4,7 @@ import (
 	"bytes"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 )
 
 const sqlMaxChunkSize = 1024
@@ -29,12 +30,12 @@ func (s *sqlIDStore) registerHash(h KeyBytes) error {
 	return nil
 }
 
-func (s *sqlIDStore) start() iterator {
+func (s *sqlIDStore) start() hashsync.Iterator {
 	// TODO: should probably use a different query to get the first key
 	return s.iter(make(KeyBytes, s.keyLen))
 }
 
-func (s *sqlIDStore) iter(from KeyBytes) iterator {
+func (s *sqlIDStore) iter(from KeyBytes) hashsync.Iterator {
 	if len(from) != s.keyLen {
 		panic("BUG: invalid key length")
 	}
@@ -66,13 +67,13 @@ func (s *dbBackedStore) registerHash(h KeyBytes) error {
 	return s.inMemIDStore.registerHash(h)
 }
 
-func (s *dbBackedStore) start() iterator {
+func (s *dbBackedStore) start() hashsync.Iterator {
 	dbIt := s.sqlIDStore.start()
 	memIt := s.inMemIDStore.start()
 	return combineIterators(nil, dbIt, memIt)
 }
 
-func (s *dbBackedStore) iter(from KeyBytes) iterator {
+func (s *dbBackedStore) iter(from KeyBytes) hashsync.Iterator {
 	dbIt := s.sqlIDStore.iter(from)
 	memIt := s.inMemIDStore.iter(from)
 	return combineIterators(from, dbIt, memIt)

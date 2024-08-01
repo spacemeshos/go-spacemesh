@@ -1,6 +1,9 @@
 package hashsync
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 type syncTreeIterator struct {
 	st  SyncTree
@@ -27,6 +30,13 @@ func (it *syncTreeIterator) Next() error {
 		it.ptr = it.st.Min()
 	}
 	return nil
+}
+
+func (it *syncTreeIterator) Clone() Iterator {
+	return &syncTreeIterator{
+		st:  it.st,
+		ptr: it.ptr.Clone(),
+	}
 }
 
 type SyncTreeStore struct {
@@ -102,6 +112,29 @@ func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x, y Ordered, count i
 		Start:       sts.iter(startPtr),
 		End:         sts.iter(endPtr),
 	}, nil
+}
+
+// SplitRange implements ItemStore.
+func (sts *SyncTreeStore) SplitRange(preceding Iterator, x, y Ordered, count int) (RangeInfo, RangeInfo, error) {
+	if count <= 0 {
+		panic("BUG: bad split count")
+	}
+	part0, err := sts.GetRangeInfo(preceding, x, y, count)
+	if err != nil {
+		return RangeInfo{}, RangeInfo{}, err
+	}
+	if part0.Count == 0 {
+		return RangeInfo{}, RangeInfo{}, errors.New("can't split empty range")
+	}
+	middle, err := part0.End.Key()
+	if err != nil {
+		return RangeInfo{}, RangeInfo{}, err
+	}
+	part1, err := sts.GetRangeInfo(part0.End.Clone(), middle, y, -1)
+	if err != nil {
+		return RangeInfo{}, RangeInfo{}, err
+	}
+	return part0, part1, nil
 }
 
 // Min implements ItemStore.

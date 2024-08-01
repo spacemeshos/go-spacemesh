@@ -296,7 +296,7 @@ func TestDBRangeIterator(t *testing.T) {
 			}
 			// when there are no items, errEmptySet is returned
 			require.NotEmpty(t, tc.items)
-			clonedIt := it.clone()
+			clonedIt := it.Clone()
 			var collected []KeyBytes
 			for i := 0; i < len(tc.items); i++ {
 				k := itKey(t, it)
@@ -312,7 +312,7 @@ func TestDBRangeIterator(t *testing.T) {
 			expected := slices.Concat(tc.items[tc.fromN:], tc.items[:tc.fromN])
 			require.Equal(t, expected, collected, "count=%d from=%s maxChunkSize=%d",
 				len(tc.items), hex.EncodeToString(tc.from), maxChunkSize)
-			clonedIt = it.clone()
+			clonedIt = it.Clone()
 			for range 2 {
 				for i := 0; i < len(tc.items); i++ {
 					k := itKey(t, it)
@@ -354,7 +354,7 @@ func (it *fakeIterator) Next() error {
 	return nil
 }
 
-func (it *fakeIterator) clone() iterator {
+func (it *fakeIterator) Clone() hashsync.Iterator {
 	cloned := &fakeIterator{
 		allItems: make([]KeyBytes, len(it.allItems)),
 	}
@@ -380,7 +380,7 @@ func TestCombineIterators(t *testing.T) {
 	}
 
 	it := combineIterators(nil, it1, it2)
-	clonedIt := it.clone()
+	clonedIt := it.Clone()
 	for range 3 {
 		var collected []KeyBytes
 		for range 4 {

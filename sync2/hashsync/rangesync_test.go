@@ -2,6 +2,7 @@ package hashsync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"slices"
@@ -208,6 +209,13 @@ func (it *dumbStoreIterator) Next() error {
 	return nil
 }
 
+func (it *dumbStoreIterator) Clone() Iterator {
+	return &dumbStoreIterator{
+		ds: it.ds,
+		n:  it.n,
+	}
+}
+
 type dumbStore struct {
 	keys []sampleID
 }
@@ -307,6 +315,28 @@ func (ds *dumbStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (
 	return r, nil
 }
 
+func (ds *dumbStore) SplitRange(preceding Iterator, x, y Ordered, count int) (RangeInfo, RangeInfo, error) {
+	if count <= 0 {
+		panic("BUG: bad split count")
+	}
+	part0, err := ds.GetRangeInfo(preceding, x, y, count)
+	if err != nil {
+		return RangeInfo{}, RangeInfo{}, err
+	}
+	if part0.Count == 0 {
+		return RangeInfo{}, RangeInfo{}, errors.New("can't split empty range")
+	}
+	middle, err := part0.End.Key()
+	if err != nil {
+		return RangeInfo{}, RangeInfo{}, err
+	}
+	part1, err := ds.GetRangeInfo(part0.End.Clone(), middle, y, -1)
+	if err != nil {
+		return RangeInfo{}, RangeInfo{}, err
+	}
+	return part0, part1, nil
+}
+
 func (ds *dumbStore) Min() (Iterator, error) {
 	if len(ds.keys) == 0 {
 		return nil, nil
@@ -372,6 +402,14 @@ func (it verifiedStoreIterator) Next() error {
 	return nil
 }
 
+func (it verifiedStoreIterator) Clone() Iterator {
+	return verifiedStoreIterator{
+		t:         it.t,
+		knownGood: it.knownGood.Clone(),
+		it:        it.it.Clone(),
+	}
+}
+
 type verifiedStore struct {
 	t            *testing.T
 	knownGood    ItemStore
@@ -406,23 +444,7 @@ func (vs *verifiedStore) Add(ctx context.Context, k Ordered) error {
 	return nil
 }
 
-func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error) {
-	var (
-		ri1, ri2 RangeInfo
-		err      error
-	)
-	if preceding != nil {
-		p := preceding.(verifiedStoreIterator)
-		ri1, err = vs.knownGood.GetRangeInfo(p.knownGood, x, y, count)
-		require.NoError(vs.t, err)
-		ri2, err = vs.store.GetRangeInfo(p.it, x, y, count)
-		require.NoError(vs.t, err)
-	} else {
-		ri1, err = vs.knownGood.GetRangeInfo(nil, x, y, count)
-		require.NoError(vs.t, err)
-		ri2, err = vs.store.GetRangeInfo(nil, x, y, count)
-		require.NoError(vs.t, err)
-	}
+func (vs *verifiedStore) verifySameRangeInfo(ri1, ri2 RangeInfo) RangeInfo {
 	require.Equal(vs.t, ri1.Fingerprint, ri2.Fingerprint, "range info fingerprint")
 	require.Equal(vs.t, ri1.Count, ri2.Count, "range info count")
 	ri := RangeInfo{
@@ -463,9 +485,49 @@ func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count in
 			it:        ri2.End,
 		}
 	}
+	return ri
+}
+
+func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error) {
+	var (
+		ri1, ri2 RangeInfo
+		err      error
+	)
+	if preceding != nil {
+		p := preceding.(verifiedStoreIterator)
+		ri1, err = vs.knownGood.GetRangeInfo(p.knownGood, x, y, count)
+		require.NoError(vs.t, err)
+		ri2, err = vs.store.GetRangeInfo(p.it, x, y, count)
+		require.NoError(vs.t, err)
+	} else {
+		ri1, err = vs.knownGood.GetRangeInfo(nil, x, y, count)
+		require.NoError(vs.t, err)
+		ri2, err = vs.store.GetRangeInfo(nil, x, y, count)
+		require.NoError(vs.t, err)
+	}
 	// QQQQQ: TODO: if count >= 0 and start+end != nil, do more calls to GetRangeInfo using resulting
 	// end iterator key to make sure the range is correct
-	return ri, nil
+	return vs.verifySameRangeInfo(ri1, ri2), nil
+}
+
+func (vs *verifiedStore) SplitRange(preceding Iterator, x, y Ordered, count int) (RangeInfo, RangeInfo, error) {
+	var (
+		ri11, ri12, ri21, ri22 RangeInfo
+		err                    error
+	)
+	if preceding != nil {
+		p := preceding.(verifiedStoreIterator)
+		ri11, ri12, err = vs.knownGood.SplitRange(p.knownGood, x, y, count)
+		require.NoError(vs.t, err)
+		ri21, ri22, err = vs.store.SplitRange(p.it, x, y, count)
+		require.NoError(vs.t, err)
+	} else {
+		ri11, ri12, err = vs.knownGood.SplitRange(nil, x, y, count)
+		require.NoError(vs.t, err)
+		ri21, ri22, err = vs.store.SplitRange(nil, x, y, count)
+		require.NoError(vs.t, err)
+	}
+	return vs.verifySameRangeInfo(ri11, ri21), vs.verifySameRangeInfo(ri12, ri22), nil
 }
 
 func (vs *verifiedStore) Min() (Iterator, error) {

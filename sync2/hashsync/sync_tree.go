@@ -74,6 +74,7 @@ type SyncTreePointer interface {
 	Value() any
 	Prev()
 	Next()
+	Clone() SyncTreePointer
 }
 
 type flags uint8
@@ -215,6 +216,13 @@ func (p *syncTreePointer) Next() {
 			}
 			oldNode = p.node
 		}
+	}
+}
+
+func (p *syncTreePointer) Clone() SyncTreePointer {
+	return &syncTreePointer{
+		parentStack: slices.Clone(p.parentStack),
+		node:        p.node,
 	}
 }
 

@@ -67,7 +67,7 @@ type dbRangeIterator struct {
 	loaded       bool
 }
 
-var _ iterator = &dbRangeIterator{}
+var _ hashsync.Iterator = &dbRangeIterator{}
 
 // makeDBIterator creates a dbRangeIterator and initializes it from the database.
 // If query returns no rows even after starting from zero ID, errEmptySet error is returned.
@@ -76,7 +76,7 @@ func newDBRangeIterator(
 	query string,
 	from KeyBytes,
 	maxChunkSize int,
-) iterator {
+) hashsync.Iterator {
 	if from == nil {
 		panic("BUG: makeDBIterator: nil from")
 	}
@@ -203,7 +203,7 @@ func (it *dbRangeIterator) Next() error {
 	return it.load()
 }
 
-func (it *dbRangeIterator) clone() iterator {
+func (it *dbRangeIterator) Clone() hashsync.Iterator {
 	cloned := *it
 	cloned.from = slices.Clone(it.from)
 	cloned.chunk = make([]KeyBytes, len(it.chunk))
@@ -215,15 +215,15 @@ func (it *dbRangeIterator) clone() iterator {
 
 type combinedIterator struct {
 	startingPoint hashsync.Ordered
-	iters         []iterator
-	wrapped       []iterator
-	ahead         iterator
+	iters         []hashsync.Iterator
+	wrapped       []hashsync.Iterator
+	ahead         hashsync.Iterator
 	aheadIdx      int
 }
 
 // combineIterators combines multiple iterators into one, returning the smallest current
 // key among all iterators at each step.
-func combineIterators(startingPoint hashsync.Ordered, iters ...iterator) iterator {
+func combineIterators(startingPoint hashsync.Ordered, iters ...hashsync.Iterator) hashsync.Iterator {
 	return &combinedIterator{startingPoint: startingPoint, iters: iters}
 }
 
@@ -257,7 +257,7 @@ func (c *combinedIterator) begin() error {
 	return nil
 }
 
-func (c *combinedIterator) aheadIterator() (iterator, error) {
+func (c *combinedIterator) aheadIterator() (hashsync.Iterator, error) {
 	if err := c.begin(); err != nil {
 		return nil, err
 	}
@@ -325,17 +325,17 @@ func (c *combinedIterator) Next() error {
 	return nil
 }
 
-func (c *combinedIterator) clone() iterator {
+func (c *combinedIterator) Clone() hashsync.Iterator {
 	cloned := &combinedIterator{
-		iters:         make([]iterator, len(c.iters)),
-		wrapped:       make([]iterator, len(c.wrapped)),
+		iters:         make([]hashsync.Iterator, len(c.iters)),
+		wrapped:       make([]hashsync.Iterator, len(c.wrapped)),
 		startingPoint: c.startingPoint,
 	}
 	for i, it := range c.iters {
-		cloned.iters[i] = it.clone()
+		cloned.iters[i] = it.Clone()
 	}
 	for i, it := range c.wrapped {
-		cloned.wrapped[i] = it.clone()
+		cloned.wrapped[i] = it.Clone()
 	}
 	return cloned
 }

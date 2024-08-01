@@ -1,6 +1,7 @@
 package dbsync
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
@@ -785,12 +786,12 @@ func (noIDStore) registerHash(h KeyBytes) error {
 	return nil
 }
 
-func (noIDStore) start() iterator {
+func (noIDStore) start() hashsync.Iterator {
 	panic("no ID store")
 
 }
 
-func (noIDStore) iter(from KeyBytes) iterator {
+func (noIDStore) iter(from KeyBytes) hashsync.Iterator {
 	return noIter{}
 }
 
@@ -804,11 +805,11 @@ func (noIter) Next() error {
 	panic("no ID store")
 }
 
-func (noIter) clone() iterator {
+func (noIter) Clone() hashsync.Iterator {
 	return noIter{}
 }
 
-var _ iterator = &noIter{}
+var _ hashsync.Iterator = &noIter{}
 
 // TestFPTreeNoIDStore tests that an fpTree can avoid using an idStore if X has only
 // 0 bits below max-depth and Y has only 1 bits below max-depth. It also checks that an fpTree
@@ -1209,6 +1210,79 @@ func TestFPTreeManyItems(t *testing.T) {
 	})
 	// TBD: test limits with both random and non-random bounds
 	// TBD: test start/end iterators
+}
+
+func verifyEasySplit(t *testing.T, ft *fpTree, x, y KeyBytes) {
+	t.Logf("--- fingerprint interval %s %s ---", x.String(), y.String())
+	fpr, err := ft.fingerprintInterval(x, y, -1)
+	require.NoError(t, err)
+	if fpr.count <= 1 {
+		return
+	}
+	a, err := fpr.start.Key()
+	require.NoError(t, err)
+	b, err := fpr.end.Key()
+	require.NoError(t, err)
+
+	m := fpr.count / 2
+	t.Logf("--- easy split %s %s %d ---", x.String(), y.String(), m)
+	fpr1, fpr2, err := ft.easySplit(x[:], y[:], int(m))
+	require.NoError(t, err)
+	require.NotZero(t, fpr1.count)
+	require.NotZero(t, fpr2.count)
+	require.Equal(t, fpr.count, fpr1.count+fpr2.count)
+	require.Equal(t, fpr.itype, fpr1.itype)
+	require.Equal(t, fpr.itype, fpr2.itype)
+	fp := fpr1.fp
+	fp.update(fpr2.fp[:])
+	require.Equal(t, fpr.fp, fp)
+	require.Equal(t, a, itKey(t, fpr1.start))
+	require.Equal(t, b, itKey(t, fpr2.end))
+	middle := itKey(t, fpr1.end)
+	require.Equal(t, middle, itKey(t, fpr2.start))
+
+	fpr11, err := ft.fingerprintInterval(x, middle, -1)
+	require.NoError(t, err)
+	require.Equal(t, fpr1.fp, fpr11.fp)
+	require.Equal(t, fpr1.count, fpr11.count)
+	require.Equal(t, a, itKey(t, fpr11.start))
+	require.Equal(t, middle, itKey(t, fpr11.end))
+
+	fpr12, err := ft.fingerprintInterval(middle, y, -1)
+	require.NoError(t, err)
+	require.Equal(t, fpr2.fp, fpr12.fp)
+	require.Equal(t, fpr2.count, fpr12.count)
+	require.Equal(t, middle, itKey(t, fpr12.start))
+	require.Equal(t, b, itKey(t, fpr12.end))
+
+	// TBD: QQQQQ: recurse!
+}
+
+func TestEasySplit(t *testing.T) {
+	var np nodePool
+	maxDepth := 24
+	ft := newFPTree(&np, newInMemIDStore(32), 32, maxDepth)
+	for range 10 {
+		h := types.RandomHash()
+		t.Logf("adding hash %s", h.String())
+		ft.addHash(h[:])
+	}
+	k, err := ft.start().Key()
+	require.NoError(t, err)
+	x := k.(KeyBytes)
+	v := load64(x) & ^(1<<(64-maxDepth) - 1)
+	binary.BigEndian.PutUint64(x, v)
+	for i := 8; i < len(x); i++ {
+		x[i] = 0
+	}
+
+	ft.traceEnabled = true
+	var sb strings.Builder
+	ft.dump(&sb)
+	t.Logf("tree:\n%s", sb.String())
+
+	verifyEasySplit(t, ft, x, x)
+	// TBD: test split with leafs that have c > 1
 }
 
 const dbFile = "/Users/ivan4th/Library/Application Support/Spacemesh/node-data/7c8cef2b/state.sql"

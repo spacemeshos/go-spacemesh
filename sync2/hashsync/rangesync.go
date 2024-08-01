@@ -208,24 +208,12 @@ func NewRangeSetReconciler(is ItemStore, opts ...RangeSetReconcilerOption) *Rang
 // 	return fmt.Sprintf("%s", it.Key())
 // }
 
-func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding Iterator, x, y Ordered) (Iterator, error) {
-	if preceding != nil {
-		k, err := preceding.Key()
-		if err != nil {
-			return nil, err
-		}
-		if k.Compare(x) > 0 {
-			preceding = nil
-		}
-	}
+func (rsr *RangeSetReconciler) processSubrange(c Conduit, x, y Ordered, info RangeInfo) error {
 	// fmt.Fprintf(os.Stderr, "QQQQQ: preceding=%q\n",
 	// 	qqqqRmmeK(preceding))
 	// TODO: don't re-request range info for the first part of range after stop
-	rsr.log.Debug("processSubrange", IteratorField("preceding", preceding), HexField("x", x), HexField("y", y))
-	info, err := rsr.is.GetRangeInfo(preceding, x, y, -1)
-	if err != nil {
-		return nil, err
-	}
+	rsr.log.Debug("processSubrange", HexField("x", x), HexField("y", y),
+		zap.Int("count", info.Count), HexField("fingerprint", info.Fingerprint))
 	// fmt.Fprintf(os.Stderr, "QQQQQ: start=%q end=%q info.Start=%q info.End=%q info.FP=%q x=%q y=%q\n",
 	// 	qqqqRmmeK(start), qqqqRmmeK(end), qqqqRmmeK(info.Start), qqqqRmmeK(info.End), info.Fingerprint, x, y)
 	switch {
@@ -247,7 +235,7 @@ func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding Iterator, x,
 		// Ask peer to send any items it has in the range
 		rsr.log.Debug("processSubrange: send empty range", HexField("x", x), HexField("y", y))
 		if err := c.SendEmptyRange(x, y); err != nil {
-			return nil, err
+			return err
 		}
 	default:
 		// The range is non-empty and large enough.
@@ -255,11 +243,11 @@ func (rsr *RangeSetReconciler) processSubrange(c Conduit, preceding Iterator, x,
 		rsr.log.Debug("processSubrange: send fingerprint", HexField("x", x), HexField("y", y),
 			zap.Int("count", info.Count))
 		if err := c.SendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	// fmt.Fprintf(os.Stderr, "QQQQQ: info.End=%q\n", qqqqRmmeK(info.End))
-	return info.End, nil
+	return nil
 }
 
 func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg SyncMessage) (it Iterator, done bool, err error) {
@@ -389,31 +377,30 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 		rsr.log.Debug("handleMessage: PRE split range",
 			HexField("x", x), HexField("y", y),
 			zap.Int("countArg", count))
-		part, err := rsr.is.GetRangeInfo(preceding, x, y, count)
+		part0, part1, err := rsr.is.SplitRange(preceding, x, y, count)
 		if err != nil {
 			return nil, false, err
-		}
-		if part.End == nil {
-			panic("BUG: can't split range with count > 1")
 		}
 		rsr.log.Debug("handleMessage: split range",
 			HexField("x", x), HexField("y", y),
 			zap.Int("countArg", count),
-			zap.Int("count", part.Count),
-			HexField("fingerprint", part.Fingerprint),
-			IteratorField("start", part.Start),
-			IteratorField("middle", part.End))
-		middle, err := part.End.Key()
+			zap.Int("count0", part0.Count),
+			HexField("fp0", part0.Fingerprint),
+			IteratorField("start0", part0.Start),
+			IteratorField("end0", part0.End),
+			zap.Int("count1", part1.Count),
+			HexField("fp1", part1.Fingerprint),
+			IteratorField("start1", part1.End),
+			IteratorField("end1", part1.End))
+		middle, err := part0.End.Key()
 		if err != nil {
 			return nil, false, err
 		}
-		next, err := rsr.processSubrange(c, info.Start, x, middle)
-		if err != nil {
+		if err := rsr.processSubrange(c, x, middle, part0); err != nil {
 			return nil, false, err
 		}
 		// fmt.Fprintf(os.Stderr, "QQQQQ: next=%q\n", qqqqRmmeK(next))
-		_, err = rsr.processSubrange(c, next, middle, y)
-		if err != nil {
+		if err := rsr.processSubrange(c, middle, y, part1); err != nil {
 			return nil, false, err
 		}
 		// fmt.Fprintf(os.Stderr, "normal: split X %s - middle %s - Y %s:\n  %s",

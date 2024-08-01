@@ -95,6 +95,32 @@ func (d *DBItemStore) GetRangeInfo(
 	}, nil
 }
 
+func (d *DBItemStore) SplitRange(
+	preceding hashsync.Iterator,
+	x, y hashsync.Ordered,
+	count int,
+) (hashsync.RangeInfo, hashsync.RangeInfo, error) {
+	if err := d.EnsureLoaded(); err != nil {
+		return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
+	}
+	panic("TBD")
+	// fpr1, fpr2, err := d.ft.splitFingerprintInterval(x.(KeyBytes), y.(KeyBytes), count)
+	// if err != nil {
+	// 	return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
+	// }
+	// return hashsync.RangeInfo{
+	// 		Fingerprint: fpr1.fp,
+	// 		Count:       int(fpr1.count),
+	// 		Start:       fpr1.start,
+	// 		End:         fpr1.end,
+	// 	}, hashsync.RangeInfo{
+	// 		Fingerprint: fpr2.fp,
+	// 		Count:       int(fpr2.count),
+	// 		Start:       fpr2.start,
+	// 		End:         fpr2.end,
+	// 	}, nil
+}
+
 // Min implements hashsync.ItemStore.
 func (d *DBItemStore) Min() (hashsync.Iterator, error) {
 	if err := d.EnsureLoaded(); err != nil {
@@ -190,6 +216,31 @@ func (a *ItemStoreAdapter) GetRangeInfo(preceding hashsync.Iterator, x hashsync.
 	}, nil
 }
 
+func (a *ItemStoreAdapter) SplitRange(preceding hashsync.Iterator, x hashsync.Ordered, y hashsync.Ordered, count int) (hashsync.RangeInfo, hashsync.RangeInfo, error) {
+	hx := x.(types.Hash32)
+	hy := y.(types.Hash32)
+	info1, info2, err := a.s.SplitRange(preceding, KeyBytes(hx[:]), KeyBytes(hy[:]), count)
+	if err != nil {
+		return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
+	}
+	var fp1, fp2 types.Hash12
+	src1 := info1.Fingerprint.(fingerprint)
+	src2 := info2.Fingerprint.(fingerprint)
+	copy(fp1[:], src1[:])
+	copy(fp2[:], src2[:])
+	return hashsync.RangeInfo{
+			Fingerprint: fp1,
+			Count:       info1.Count,
+			Start:       a.wrapIterator(info1.Start),
+			End:         a.wrapIterator(info1.End),
+		}, hashsync.RangeInfo{
+			Fingerprint: fp2,
+			Count:       info2.Count,
+			Start:       a.wrapIterator(info2.Start),
+			End:         a.wrapIterator(info2.End),
+		}, nil
+}
+
 // Has implements hashsync.ItemStore.
 func (a *ItemStoreAdapter) Has(k hashsync.Ordered) (bool, error) {
 	h := k.(types.Hash32)
@@ -223,4 +274,8 @@ func (ia *iteratorAdapter) Key() (hashsync.Ordered, error) {
 
 func (ia *iteratorAdapter) Next() error {
 	return ia.it.Next()
+}
+
+func (ia *iteratorAdapter) Clone() hashsync.Iterator {
+	return &iteratorAdapter{it: ia.it.Clone()}
 }

@@ -20,6 +20,8 @@ type Iterator interface {
 	Key() (Ordered, error)
 	// Next advances the iterator
 	Next() error
+	// Clone returns a copy of the iterator
+	Clone() Iterator
 }
 
 type RangeInfo struct {
@@ -38,6 +40,9 @@ type ItemStore interface {
 	// If both x and y is nil, the whole set of items is used.
 	// If only x or only y is nil, GetRangeInfo panics
 	GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error)
+	// SplitRange splits the range roughly after the specified count of items,
+	// returning RangeInfo for the first half and the second half of the range.
+	SplitRange(preceding Iterator, x, y Ordered, count int) (RangeInfo, RangeInfo, error)
 	// Min returns the iterator pointing at the minimum element
 	// in the store. If the store is empty, it returns nil
 	Min() (Iterator, error)
