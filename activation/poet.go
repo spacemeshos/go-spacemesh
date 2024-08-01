@@ -333,9 +333,29 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 }
 
 type certifierInfo struct {
-	obtained time.Time
-	url      *url.URL
-	pubkey   []byte
+	url    *url.URL
+	pubkey []byte
+}
+
+type cachedData[T any] struct {
+	mu   sync.Mutex
+	data T
+	exp  time.Time
+	ttl  time.Duration
+}
+
+func (c *cachedData[T]) get(init func() (T, error)) (T, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if time.Now().Before(c.exp) {
+		return c.data, nil
+	}
+	d, err := init()
+	if err == nil {
+		c.data = d
+		c.exp = time.Now().Add(c.ttl)
+	}
+	return d, err
 }
 
 // poetService is a higher-level interface to communicate with a PoET service.
@@ -353,9 +373,8 @@ type poetService struct {
 
 	certifier certifierService
 
-	certifierInfoTTL   time.Duration
-	certifierInfo      certifierInfo
-	certifierInfoMutex sync.Mutex
+	certifierInfoCache cachedData[*certifierInfo]
+	powParamsCache     cachedData[*PoetPowParams]
 }
 
 type PoetServiceOpt func(*poetService)
@@ -394,12 +413,13 @@ func NewPoetServiceWithClient(
 	opts ...PoetServiceOpt,
 ) *poetService {
 	poetClient := &poetService{
-		db:               db,
-		logger:           logger,
-		client:           client,
-		requestTimeout:   cfg.RequestTimeout,
-		certifierInfoTTL: cfg.CertifierInfoCacheTTL,
-		proofMembers:     make(map[string][]types.Hash32, 1),
+		db:                 db,
+		logger:             logger,
+		client:             client,
+		requestTimeout:     cfg.RequestTimeout,
+		certifierInfoCache: cachedData[*certifierInfo]{ttl: cfg.CertifierInfoCacheTTL},
+		powParamsCache:     cachedData[*PoetPowParams]{ttl: cfg.PowParamsCacheTTL},
+		proofMembers:       make(map[string][]types.Hash32, 1),
 	}
 
 	for _, opt := range opts {
@@ -435,7 +455,7 @@ func (c *poetService) authorize(
 	logger.Debug("querying for poet pow parameters")
 	powCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
-	powParams, err := c.client.PowParams(powCtx)
+	powParams, err := c.powParams(powCtx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
 	}
@@ -552,19 +572,22 @@ func (c *poetService) recertify(ctx context.Context, id types.NodeID) (*certifie
 }
 
 func (c *poetService) getCertifierInfo(ctx context.Context) (*url.URL, []byte, error) {
-	c.certifierInfoMutex.Lock()
-	defer c.certifierInfoMutex.Unlock()
-	if time.Since(c.certifierInfo.obtained) < c.certifierInfoTTL {
-		return c.certifierInfo.url, c.certifierInfo.pubkey, nil
-	}
-	url, pubkey, err := c.client.CertifierInfo(ctx)
+	info, err := c.certifierInfoCache.get(func() (*certifierInfo, error) {
+		url, pubkey, err := c.client.CertifierInfo(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("getting certifier info: %w", err)
+		}
+		return &certifierInfo{url: url, pubkey: pubkey}, nil
+	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("getting certifier info: %w", err)
+		return nil, nil, err
 	}
-	c.certifierInfo = certifierInfo{
-		obtained: time.Now(),
-		url:      url,
-		pubkey:   pubkey,
-	}
-	return c.certifierInfo.url, c.certifierInfo.pubkey, nil
+
+	return info.url, info.pubkey, nil
+}
+
+func (c *poetService) powParams(ctx context.Context) (*PoetPowParams, error) {
+	return c.powParamsCache.get(func() (*PoetPowParams, error) {
+		return c.client.PowParams(ctx)
+	})
 }

@@ -421,3 +421,37 @@ func TestPoetService_CachesCertifierInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestPoetService_CachesPowParams(t *testing.T) {
+	t.Parallel()
+	type test struct {
+		name string
+		ttl  time.Duration
+	}
+	for _, tc := range []test{
+		{name: "cache enabled", ttl: time.Hour},
+		{name: "cache disabled"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := DefaultPoetConfig()
+			cfg.PowParamsCacheTTL = tc.ttl
+			client := NewMockPoetClient(gomock.NewController(t))
+			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+
+			params := PoetPowParams{
+				Challenge:  types.RandomBytes(10),
+				Difficulty: 8,
+			}
+			exp := client.EXPECT().PowParams(gomock.Any()).Return(&params, nil)
+			if tc.ttl == 0 {
+				exp.Times(5)
+			}
+			for range 5 {
+				got, err := poet.powParams(context.Background())
+				require.NoError(t, err)
+				require.Equal(t, params, *got)
+			}
+		})
+	}
+}
