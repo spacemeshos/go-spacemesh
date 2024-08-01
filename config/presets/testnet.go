@@ -118,6 +118,7 @@ func testnet() config.Config {
 			RequestTimeout:    550 * time.Second, // RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
 			RequestRetryDelay: 5 * time.Second,
 			MaxRequestRetries: 10,
+			PowParamsCacheTTL: 5 * time.Minute,
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   2,
