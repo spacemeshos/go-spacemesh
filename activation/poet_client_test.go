@@ -1,7 +1,9 @@
 package activation
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -375,9 +377,84 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 		mCertifier.EXPECT().
 			Certificate(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
 			Return(&certifier.PoetCert{Data: []byte("first")}, nil),
+		mCertifier.EXPECT().DeleteCertificate(sig.NodeID(), certifierPubKey),
 		mCertifier.EXPECT().
-			Recertify(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
+			Certificate(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
 			Return(&certifier.PoetCert{Data: []byte("second")}, nil),
+	)
+
+	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
+	require.NoError(t, err)
+	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+
+	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, 2, submitCount)
+}
+
+func TestPoetClient_FallbacksToPowWhenCannotRecertify(t *testing.T) {
+	t.Parallel()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
+	certifierPubKey := []byte("certifier-pubkey")
+
+	mux := http.NewServeMux()
+	infoResp, err := protojson.Marshal(&rpcapi.InfoResponse{
+		ServicePubkey: []byte("pubkey"),
+		Certifier: &rpcapi.InfoResponse_Cerifier{
+			Url:    certifierAddress.String(),
+			Pubkey: certifierPubKey,
+		},
+	})
+	require.NoError(t, err)
+	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
+
+	powChallenge := []byte("challenge")
+	powResp, err := protojson.Marshal(&rpcapi.PowParamsResponse{PowParams: &rpcapi.PowParams{Challenge: powChallenge}})
+	require.NoError(t, err)
+	mux.HandleFunc("GET /v1/pow_params", func(w http.ResponseWriter, r *http.Request) { w.Write(powResp) })
+
+	submitResp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
+	require.NoError(t, err)
+	submitCount := 0
+	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
+		req := rpcapi.SubmitRequest{}
+		body, _ := io.ReadAll(r.Body)
+		protojson.Unmarshal(body, &req)
+
+		switch {
+		case submitCount == 0:
+			w.WriteHeader(http.StatusUnauthorized)
+		case submitCount == 1 && req.Certificate == nil && bytes.Equal(req.PowParams.Challenge, powChallenge):
+			w.Write(submitResp)
+		default:
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+		submitCount++
+	})
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	server := types.PoetServer{
+		Address: ts.URL,
+		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
+	}
+	cfg := PoetConfig{CertifierInfoCacheTTL: time.Hour}
+
+	ctrl := gomock.NewController(t)
+	mCertifier := NewMockcertifierService(ctrl)
+	gomock.InOrder(
+		mCertifier.EXPECT().
+			Certificate(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
+			Return(&certifier.PoetCert{Data: []byte("first")}, nil),
+		mCertifier.EXPECT().DeleteCertificate(sig.NodeID(), certifierPubKey),
+		mCertifier.EXPECT().
+			Certificate(gomock.Any(), sig.NodeID(), certifierAddress, certifierPubKey).
+			Return(nil, errors.New("cannot recertify")),
 	)
 
 	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
