@@ -915,7 +915,7 @@ func (h *Hare) compactProposalIds(layer types.LayerID,
 			return nil, errNoEligibilityProofs
 		}
 
-		compactProposals[i] = types.CompactProposalID(vrf[:])
+		compactProposals[i] = types.CompactProposalID(fp.EligibilityProofs[0].Sig[:])
 	}
 	return compactProposals, nil
 }
