@@ -1423,6 +1423,5 @@ func TestHare_ReconstructCollision(t *testing.T) {
 }
 
 func compactVrf(v types.VrfSignature) (c types.CompactProposalID) {
-	copy(c[:], v[:4])
-	return c
+	return types.CompactProposalID(v[:])
 }
