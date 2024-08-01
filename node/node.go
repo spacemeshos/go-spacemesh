@@ -54,6 +54,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -398,6 +399,8 @@ type App struct {
 	atxsdata          *atxsdata.Data
 	clock             *timesync.NodeClock
 	hare3             *hare3.Hare
+	hare4             *hare4.Hare
+	hareResultsChan   chan hare4.ConsensusOutput
 	hOracle           *eligibility.Oracle
 	blockGen          *blocks.Generator
 	certifier         *blocks.Certifier
@@ -864,37 +867,80 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	logger := app.addLogger(HareLogger, lg).Zap()
 
-	app.hare3 = hare3.New(
-		app.clock,
-		app.host,
-		app.db,
-		app.atxsdata,
-		proposalsStore,
-		app.edVerifier,
-		app.hOracle,
-		newSyncer,
-		patrol,
-		hare3.WithLogger(logger),
-		hare3.WithConfig(app.Config.HARE3),
-	)
-	for _, sig := range app.signers {
-		app.hare3.Register(sig)
-	}
-	app.hare3.Start()
-	app.eg.Go(func() error {
-		compat.ReportWeakcoin(
-			ctx,
-			logger,
-			app.hare3.Coins(),
-			tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+	// should be removed after hare4 transition is complete
+	app.hareResultsChan = make(chan hare4.ConsensusOutput, 32)
+	if app.Config.HARE3.Enable {
+		app.hare3 = hare3.New(
+			app.clock,
+			app.host,
+			app.db,
+			app.atxsdata,
+			proposalsStore,
+			app.edVerifier,
+			app.hOracle,
+			newSyncer,
+			patrol,
+			hare3.WithLogger(logger),
+			hare3.WithConfig(app.Config.HARE3),
+			hare3.WithResultsChan(app.hareResultsChan),
 		)
-		return nil
-	})
+		for _, sig := range app.signers {
+			app.hare3.Register(sig)
+		}
+		app.hare3.Start()
+		app.eg.Go(func() error {
+			compat.ReportWeakcoin(
+				ctx,
+				logger,
+				app.hare3.Coins(),
+				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+			)
+			return nil
+		})
+	}
+
+	if app.Config.HARE4.Enable {
+		app.hare4 = hare4.New(
+			app.clock,
+			app.host,
+			app.db,
+			app.atxsdata,
+			proposalsStore,
+			app.edVerifier,
+			app.hOracle,
+			newSyncer,
+			patrol,
+			app.host,
+			hare4.WithLogger(logger),
+			hare4.WithConfig(app.Config.HARE4),
+			hare4.WithResultsChan(app.hareResultsChan),
+		)
+		for _, sig := range app.signers {
+			app.hare4.Register(sig)
+		}
+		app.hare4.Start()
+		app.eg.Go(func() error {
+			compat.ReportWeakcoin(
+				ctx,
+				logger,
+				app.hare4.Coins(),
+				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+			)
+			return nil
+		})
+		panic("hare4 still not enabled")
+	}
+
+	propHare := &proposalConsumerHare{
+		hare3:          app.hare3,
+		h3DisableLayer: app.Config.HARE3.DisableLayer,
+		hare4:          app.hare4,
+	}
 
 	proposalListener := proposals.NewHandler(
 		app.db,
 		app.atxsdata,
-		app.hare3,
+		propHare,
 		app.edVerifier,
 		app.host,
 		fetcherWrapped,
@@ -928,7 +974,7 @@ func (app *App) initServices(ctx context.Context) error {
 			OptFilterThreshold: app.Config.OptFilterThreshold,
 			GenBlockInterval:   500 * time.Millisecond,
 		}),
-		blocks.WithHareOutputChan(app.hare3.Results()),
+		blocks.WithHareOutputChan(app.hareResultsChan),
 		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg).Zap()),
 	)
 
@@ -1827,6 +1873,14 @@ func (app *App) stopServices(ctx context.Context) {
 		app.hare3.Stop()
 	}
 
+	if app.hare4 != nil {
+		app.hare4.Stop()
+	}
+
+	if app.hareResultsChan != nil {
+		close(app.hareResultsChan)
+	}
+
 	if app.blockGen != nil {
 		app.blockGen.Stop()
 	}
@@ -2240,4 +2294,26 @@ func (w tortoiseWeakCoin) Set(lid types.LayerID, value bool) error {
 
 func onMainNet(conf *config.Config) bool {
 	return conf.Genesis.GenesisTime == config.MainnetConfig().Genesis.GenesisTime
+}
+
+// proposalConsumerHare is used for the hare3->hare4 migration
+// to satisfy the proposals handler dependency on hare.
+type proposalConsumerHare struct {
+	hare3          *hare3.Hare
+	h3DisableLayer types.LayerID
+	hare4          *hare4.Hare
+}
+
+func (p *proposalConsumerHare) IsKnown(layer types.LayerID, proposal types.ProposalID) bool {
+	if layer < p.h3DisableLayer {
+		return p.hare3.IsKnown(layer, proposal)
+	}
+	return p.hare4.IsKnown(layer, proposal)
+}
+
+func (p *proposalConsumerHare) OnProposal(proposal *types.Proposal) error {
+	if proposal.Layer < p.h3DisableLayer {
+		return p.hare3.OnProposal(proposal)
+	}
+	return p.hare4.OnProposal(proposal)
 }

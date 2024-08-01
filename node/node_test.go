@@ -1291,6 +1291,9 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.HARE3.RoundDuration = 2
 	cfg.HARE3.PreroundDelay = 1
 
+	cfg.HARE4.RoundDuration = 2
+	cfg.HARE4.PreroundDelay = 1
+
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerProposal = 100
