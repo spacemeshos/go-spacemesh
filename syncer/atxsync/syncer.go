@@ -41,8 +41,8 @@ func DefaultConfig() Config {
 	return Config{
 		EpochInfoInterval: 4 * time.Hour,
 		AtxsBatch:         1000,
-		RequestsLimit:     10,
-		EpochInfoPeers:    2,
+		RequestsLimit:     100,
+		EpochInfoPeers:    20,
 		ProgressFraction:  0.1,
 		ProgressInterval:  20 * time.Minute,
 	}
