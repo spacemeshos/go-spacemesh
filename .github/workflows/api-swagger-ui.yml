@@ -1,11 +1,14 @@
-name: Build and Push Swagger-UI to R2 testnet-api-docs.spacemesh.network
+name: Build and Push Swagger-UI
 
 env:
   go-version: "1.22"
 
 on:
-  release:
-    types: [created]
+  # Allow manually triggering this workflow
+  workflow_dispatch:
+  push:
+    tags:
+      - '*'
     
 jobs:
   check-version:
