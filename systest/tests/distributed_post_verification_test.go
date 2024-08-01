@@ -39,7 +39,6 @@ import (
 )
 
 func TestPostMalfeasanceProof(t *testing.T) {
-	t.Skip()
 	t.Parallel()
 	testDir := t.TempDir()
 

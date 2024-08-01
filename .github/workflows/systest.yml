@@ -5,7 +5,7 @@ on:
     inputs:
       test_name:
         description: "Test to run"
-        default: "TestCheckpoint"
+        default: "."
       log_level:
         description: "Log level"
         default: "debug"

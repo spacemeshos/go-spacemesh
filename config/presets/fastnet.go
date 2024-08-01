@@ -53,6 +53,7 @@ func fastnet() config.Config {
 	conf.Sync.GossipDuration = 10 * time.Second
 	conf.Sync.AtxSync.EpochInfoInterval = 1 * time.Second
 	conf.Sync.AtxSync.EpochInfoPeers = 10
+	conf.Sync.AtxSync.RequestsLimit = 100
 	conf.Sync.MalSync.IDRequestInterval = 20 * time.Second
 	conf.LayersPerEpoch = 4
 	conf.RegossipAtxInterval = 30 * time.Second
