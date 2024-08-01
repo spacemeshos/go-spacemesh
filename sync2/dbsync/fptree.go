@@ -258,7 +258,7 @@ func (p prefix) idAfter(b KeyBytes) {
 	}
 	binary.BigEndian.PutUint64(b, v)
 	for n := 8; n < len(b); n++ {
-		b[n] = 0xff
+		b[n] = 0 // QQQQQ: was 0xff
 	}
 }
 
@@ -392,8 +392,14 @@ func (ac *aggContext) nodeBelowY(node node, p prefix) bool {
 	return ac.prefixBelowY(p)
 }
 
-func (ac *aggContext) pruneY(node node) bool {
+func (ac *aggContext) pruneY(node node, p prefix) bool {
+	if p.bits()<<(64-p.len()) >= load64(ac.y) {
+		// min ID derived from the prefix is at or after y => prune
+		return true
+	}
 	if node.c != 1 {
+		// node has count > 1, so we can't use its fingerpeint
+		// to determine if it's below y
 		return false
 	}
 	k := make(KeyBytes, len(ac.y))
@@ -402,11 +408,23 @@ func (ac *aggContext) pruneY(node node) bool {
 }
 
 func (ac *aggContext) maybeIncludeNode(node node, p prefix) bool {
+	fmt.Fprintf(os.Stderr, "QQQQQ: maybeIncludeNode: limit %d node.c %d easySplit %v leaf %v\n",
+		ac.limit, node.c, ac.easySplit, node.leaf())
 	switch {
 	case ac.limit < 0:
 	case uint32(ac.limit) >= node.c:
 		ac.limit -= int(node.c)
-	case ac.easySplit && node.leaf():
+	case !ac.easySplit || !node.leaf():
+		return false
+	case ac.count == 0:
+		// We're doing a split and this node is over the limit, but the first part
+		// is still empty so we include this node in the first part and
+		// then switch to the second part
+		ac.limit = 0
+	default:
+		// We're doing a split and this node is over the limit, so store count and
+		// fingerpint for the first part and include the current node in the
+		// second part
 		ac.limit = -1
 		ac.fp0 = ac.fp
 		ac.count0 = ac.count
@@ -415,12 +433,25 @@ func (ac *aggContext) maybeIncludeNode(node node, p prefix) bool {
 		ac.count = node.c
 		ac.lastPrefix = &p
 		return true
-	default:
-		return false
 	}
 	ac.fp.update(node.fp[:])
 	ac.count += node.c
 	ac.lastPrefix = &p
+	if ac.easySplit && ac.limit == 0 {
+		// We're doing a split and this node is exactly at the limit, or it was
+		// above the limit but first part was still empty, so store count and
+		// fingerprint for the first part which includes the current node and zero
+		// out cound and figerprint for the second part
+		ac.limit = -1
+		ac.fp0 = ac.fp
+		ac.count0 = ac.count
+		ac.lastPrefix0 = ac.lastPrefix
+		for n := range ac.fp {
+			ac.fp[n] = 0
+		}
+		ac.count = 0
+		ac.lastPrefix = nil
+	}
 	return true
 }
 
@@ -698,10 +729,10 @@ func (ft *fpTree) node(idx nodeIndex) (node, bool) {
 }
 
 func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, ac *aggContext) (cont bool, err error) {
-	ft.enter("aggregateUpToLimit: idx %d p %s limit %d cur_fp %s cur_count %d", idx, p, ac.limit,
-		ac.fp, ac.count)
+	ft.enter("aggregateUpToLimit: idx %d p %s limit %d cur_fp %s cur_count0 %d cur_count %d", idx, p, ac.limit,
+		ac.fp, ac.count0, ac.count)
 	defer func() {
-		ft.leave(ac.fp, ac.count, err)
+		ft.leave(ac.fp, ac.count0, ac.count, err)
 	}()
 	node, ok := ft.node(idx)
 	switch {
@@ -753,7 +784,7 @@ func (ft *fpTree) aggregateUpToLimit(idx nodeIndex, p prefix, ac *aggContext) (c
 func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, ac *aggContext) (cont bool, err error) {
 	ft.enter("aggregateLeft: idx %d v %016x p %s limit %d", idx, v, p, ac.limit)
 	defer func() {
-		ft.leave(ac.fp, ac.count, err)
+		ft.leave(ac.fp, ac.count0, ac.count, err)
 	}()
 	node, ok := ft.node(idx)
 	switch {
@@ -797,7 +828,7 @@ func (ft *fpTree) aggregateLeft(idx nodeIndex, v uint64, p prefix, ac *aggContex
 func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, ac *aggContext) (cont bool, err error) {
 	ft.enter("aggregateRight: idx %d v %016x p %s limit %d", idx, v, p, ac.limit)
 	defer func() {
-		ft.leave(ac.fp, ac.count, err)
+		ft.leave(ac.fp, ac.count0, ac.count, err)
 	}()
 	node, ok := ft.node(idx)
 	switch {
@@ -811,7 +842,7 @@ func (ft *fpTree) aggregateRight(idx nodeIndex, v uint64, p prefix, ac *aggConte
 		if node.left != noIndex || node.right != noIndex {
 			panic("BUG: node @ maxDepth has children")
 		}
-		if ac.pruneY(node) {
+		if ac.pruneY(node, p) {
 			ft.log("node %d p %s pruned", idx, p)
 			return false, nil
 		}
@@ -956,7 +987,7 @@ func (ft *fpTree) aggregateInverse(ac *aggContext) (err error) {
 		// nothing to do
 	case ac.nodeBelowY(pf1Node, followedPrefix) && ac.maybeIncludeNode(pf1Node, followedPrefix):
 		// node is fully included
-	case ac.pruneY(pf1Node):
+	case ac.pruneY(pf1Node, followedPrefix):
 		ft.log("node %d p %s pruned", idx1, followedPrefix)
 		return nil
 	default:
@@ -1044,31 +1075,37 @@ func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, e
 	return fpr, nil
 }
 
+type splitResult struct {
+	part0, part1 fpResult
+	middle       KeyBytes
+}
+
 // easySplit splits an interval in two parts trying to do it in such way that the first
 // part has close to limit items while not making any idStore queries so that the database
 // is not accessed. If the split can't be done, which includes the situation where one of
 // the sides has 0 items, easySplit returns errEasySplitFailed error
-func (ft *fpTree) easySplit(x, y KeyBytes, limit int) (fprA, fprB fpResult, err error) {
+func (ft *fpTree) easySplit(x, y KeyBytes, limit int) (sr splitResult, err error) {
 	ft.enter("easySplit: x %s y %s limit %d", x, y, limit)
 	defer func() {
-		ft.leave(fprA.fp, fprA.count, fprA.itype, fprA.start, fprA.end,
-			fprB.fp, fprB.count, fprB.itype, fprB.start, fprB.end, err)
+		ft.leave(sr.part0.fp, sr.part0.count, sr.part0.itype, sr.part0.start, sr.part0.end,
+			sr.part1.fp, sr.part1.count, sr.part1.itype, sr.part1.start, sr.part1.end, err)
 	}()
 	if limit < 0 {
 		panic("BUG: easySplit with limit < 0")
 	}
 	ac := aggContext{x: x, y: y, limit: limit, easySplit: true}
 	if err := ft.aggregateInterval(&ac); err != nil {
-		return fpResult{}, fpResult{}, err
+		return splitResult{}, err
 	}
 
 	if ac.total == 0 {
-		return fpResult{}, fpResult{}, nil
+		return splitResult{}, nil
 	}
 
 	if ac.count0 == 0 || ac.count == 0 {
 		// need to get some items on both sides for the easy split to succeed
-		return fpResult{}, fpResult{}, errEasySplitFailed
+		ft.log("easySplit failed: one side missing: count0 %d count %d", ac.count0, ac.count)
+		return splitResult{}, errEasySplitFailed
 	}
 
 	// It should not be possible to have ac.lastPrefix0 == nil or ac.lastPrefix == nil
@@ -1080,21 +1117,27 @@ func (ft *fpTree) easySplit(x, y KeyBytes, limit int) (fprA, fprB fpResult, err 
 
 	// ac.start / ac.end are only set in aggregateEdge which fails with
 	// errEasySplitFailed if easySplit is enabled, so we can ignore them here
-	fprA = fpResult{
+	middle := make(KeyBytes, ft.keyLen)
+	ac.lastPrefix0.idAfter(middle)
+	part0 := fpResult{
 		fp:    ac.fp0,
 		count: ac.count0,
 		itype: ac.itype,
 		start: ft.iter(x),
 		end:   ft.endIterFromPrefix(*ac.lastPrefix0),
 	}
-	fprB = fpResult{
+	part1 := fpResult{
 		fp:    ac.fp,
 		count: ac.count,
 		itype: ac.itype,
-		start: fprA.end.Clone(),
+		start: part0.end.Clone(),
 		end:   ft.endIterFromPrefix(*ac.lastPrefix),
 	}
-	return fprA, fprB, nil
+	return splitResult{
+		part0:  part0,
+		part1:  part1,
+		middle: middle,
+	}, nil
 }
 
 func (ft *fpTree) dumpNode(w io.Writer, idx nodeIndex, indent, dir string) {

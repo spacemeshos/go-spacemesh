@@ -1212,7 +1212,8 @@ func TestFPTreeManyItems(t *testing.T) {
 	// TBD: test start/end iterators
 }
 
-func verifyEasySplit(t *testing.T, ft *fpTree, x, y KeyBytes) {
+func verifyEasySplit(t *testing.T, ft *fpTree, x, y KeyBytes, depth, maxDepth int) {
+	t.Logf("depth %d", depth)
 	t.Logf("--- fingerprint interval %s %s ---", x.String(), y.String())
 	fpr, err := ft.fingerprintInterval(x, y, -1)
 	require.NoError(t, err)
@@ -1226,47 +1227,98 @@ func verifyEasySplit(t *testing.T, ft *fpTree, x, y KeyBytes) {
 
 	m := fpr.count / 2
 	t.Logf("--- easy split %s %s %d ---", x.String(), y.String(), m)
-	fpr1, fpr2, err := ft.easySplit(x[:], y[:], int(m))
+	sr, err := ft.easySplit(x[:], y[:], int(m))
 	require.NoError(t, err)
-	require.NotZero(t, fpr1.count)
-	require.NotZero(t, fpr2.count)
-	require.Equal(t, fpr.count, fpr1.count+fpr2.count)
-	require.Equal(t, fpr.itype, fpr1.itype)
-	require.Equal(t, fpr.itype, fpr2.itype)
-	fp := fpr1.fp
-	fp.update(fpr2.fp[:])
+	require.NotZero(t, sr.part0.count)
+	require.NotZero(t, sr.part1.count)
+	require.Equal(t, fpr.count, sr.part0.count+sr.part1.count)
+	require.Equal(t, fpr.itype, sr.part0.itype)
+	require.Equal(t, fpr.itype, sr.part1.itype)
+	fp := sr.part0.fp
+	fp.update(sr.part1.fp[:])
 	require.Equal(t, fpr.fp, fp)
-	require.Equal(t, a, itKey(t, fpr1.start))
-	require.Equal(t, b, itKey(t, fpr2.end))
-	middle := itKey(t, fpr1.end)
-	require.Equal(t, middle, itKey(t, fpr2.start))
+	require.Equal(t, a, itKey(t, sr.part0.start))
+	require.Equal(t, b, itKey(t, sr.part1.end))
+	precMiddle := itKey(t, sr.part0.end)
+	require.Equal(t, precMiddle, itKey(t, sr.part1.start))
 
-	fpr11, err := ft.fingerprintInterval(x, middle, -1)
+	fpr11, err := ft.fingerprintInterval(x, precMiddle, -1)
 	require.NoError(t, err)
-	require.Equal(t, fpr1.fp, fpr11.fp)
-	require.Equal(t, fpr1.count, fpr11.count)
+	require.Equal(t, sr.part0.fp, fpr11.fp)
+	require.Equal(t, sr.part0.count, fpr11.count)
 	require.Equal(t, a, itKey(t, fpr11.start))
-	require.Equal(t, middle, itKey(t, fpr11.end))
+	require.Equal(t, precMiddle, itKey(t, fpr11.end))
 
-	fpr12, err := ft.fingerprintInterval(middle, y, -1)
+	fpr12, err := ft.fingerprintInterval(precMiddle, y, -1)
 	require.NoError(t, err)
-	require.Equal(t, fpr2.fp, fpr12.fp)
-	require.Equal(t, fpr2.count, fpr12.count)
-	require.Equal(t, middle, itKey(t, fpr12.start))
+	require.Equal(t, sr.part1.fp, fpr12.fp)
+	require.Equal(t, sr.part1.count, fpr12.count)
+	require.Equal(t, precMiddle, itKey(t, fpr12.start))
 	require.Equal(t, b, itKey(t, fpr12.end))
 
-	// TBD: QQQQQ: recurse!
+	fpr11, err = ft.fingerprintInterval(x, sr.middle, -1)
+	require.NoError(t, err)
+	require.Equal(t, sr.part0.fp, fpr11.fp)
+	require.Equal(t, sr.part0.count, fpr11.count)
+	require.Equal(t, a, itKey(t, fpr11.start))
+	require.Equal(t, precMiddle, itKey(t, fpr11.end))
+
+	fpr12, err = ft.fingerprintInterval(sr.middle, y, -1)
+	require.NoError(t, err)
+	require.Equal(t, sr.part1.fp, fpr12.fp)
+	require.Equal(t, sr.part1.count, fpr12.count)
+	require.Equal(t, precMiddle, itKey(t, fpr12.start))
+	require.Equal(t, b, itKey(t, fpr12.end))
+
+	if depth < maxDepth {
+		verifyEasySplit(t, ft, x, sr.middle, depth+1, maxDepth)
+		verifyEasySplit(t, ft, sr.middle, y, depth+1, maxDepth)
+	}
 }
 
 func TestEasySplit(t *testing.T) {
 	var np nodePool
-	maxDepth := 24
+	maxDepth := 5
+	// count := 25
 	ft := newFPTree(&np, newInMemIDStore(32), 32, maxDepth)
-	for range 10 {
-		h := types.RandomHash()
+	// QQQQQ: rm
+	for _, h := range []string{
+		"00754cf490eeed75fa614b77d6b2b3cd16298711c126f73e8d265304dd251a50",
+		"16d5ed7d8c71b7c7d6ba00340355e6a0de63ed48089a5d1e29dac608d96d246d",
+		"2edbb20246c25fbf3d8b56cd183f3ede530a02b9658babd7a90295ac645e2aa2",
+		"45450dfbdf6613eb137daa99cffe47a1b7e21454301bdf8f814b26c309bb2e4c",
+		"4b42fe0661e3356998293436b83d28d253751a39c382bdeb310f13dec9b0e79d",
+		"5349101f5ad0ed08bae1cfb95dbb0399dfe87017783ae67e48254445391a1e5e",
+		"5c3a1f51e1f84a93bbbd284f609a61e0b71b641e155b34f447fc1a189ab0bb08",
+		"68e8c4773cc7f0218503ed3b2da426bdaf288c8722a091da57edb8ff8303fa03",
+		"6edaa71d8d400dfcbb8dc3fa6041ae602127db1cd84ec17b729492d9f53025ee",
+		"7f509a73fef1d7e44abf87ceb775b4e4acc312271caca84aa719cf63ca6ae3ee",
+		"884cba4481c5d81ee62158baa74fc315fcd6a089b50c7abf197f75acfa40d9ef",
+		"8f9dbdd4d95afc56c0744b1f1cd6e98dc730078438bb6e5511a2bb8f1e7d16d0",
+		"92ccb9bb426375dbae456fc4f743ffa69543a9741ea9600ded314ce56dd678af",
+		"942469ecfc783631c644f1af572e18bf45977d3d9b0628a1bcd9cffbf86be3bf",
+		"97d46b0e99abf5e290b0783e1595fded3393ac7e7badda2f348859ca085afe80",
+		"a4d9bc80fd93d3008930089148ab55e3d576f9ce14a1f900d0cc12ca1632e478",
+		"aee28a625a79951613c5e3165e396e3f5a459803cf16c4305447b86f55dd9048",
+		"af8255c5db1cf9a9ba5fcb76dbaace9e08fd9d8aa11b02c034f43d90322ee3d1",
+		"bf6dfedbf2152fabb7ebaedab3589c8c21d0f6e996fee2b3f93740908e0e0115",
+		"da0c349844ca0d393996ada10fb3ce00eb002ed2f3b83e87f246b6863ed3b5d1",
+		"dea9caf0c26793cb46f70b30e3e772cb210cf21ced570dfe5e4257da37873715",
+		"e358c3b354a629b78c470ab873609f96dd5f3648d9eee6fe133fe5182514b057",
+		"e86dc212c57bdb978d0440fcc95b2900ad0f685e8655f958c1ab19c268653712",
+		"f3f8560d9d8d8342698c728bff154e797dfaaa9acc88cfbca7825db200310c69",
+		"f593bc74323d291c9c31ce3ad3af4826105f068519480eec7491360b0f01de8e",
+	} {
+		h := types.HexToHash32(h)
 		t.Logf("adding hash %s", h.String())
 		ft.addHash(h[:])
 	}
+	// QQQQQ: restore
+	// for range count {
+	// 	h := types.RandomHash()
+	// 	t.Logf("adding hash %s", h.String())
+	// 	ft.addHash(h[:])
+	// }
 	k, err := ft.start().Key()
 	require.NoError(t, err)
 	x := k.(KeyBytes)
@@ -1281,8 +1333,8 @@ func TestEasySplit(t *testing.T) {
 	ft.dump(&sb)
 	t.Logf("tree:\n%s", sb.String())
 
-	verifyEasySplit(t, ft, x, x)
-	// TBD: test split with leafs that have c > 1
+	verifyEasySplit(t, ft, x, x, 0, maxDepth-2)
+	// TBD: test split both with few items (incomplete tree) and many items
 }
 
 const dbFile = "/Users/ivan4th/Library/Application Support/Spacemesh/node-data/7c8cef2b/state.sql"
