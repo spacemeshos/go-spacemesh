@@ -84,6 +84,7 @@ func standalone() config.Config {
 	conf.POET.RequestRetryDelay = 1 * time.Second
 	conf.POET.MaxRequestRetries = 3
 	conf.POET.CertifierInfoCacheTTL = time.Minute
+	conf.POET.PowParamsCacheTTL = 10 * time.Second
 
 	conf.P2P.DisableNatPort = true
 

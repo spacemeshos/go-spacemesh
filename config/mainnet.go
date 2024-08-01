@@ -164,6 +164,7 @@ func MainnetConfig() Config {
 			GracePeriod:                    1 * time.Hour,
 			PositioningATXSelectionTimeout: 50 * time.Minute,
 			CertifierInfoCacheTTL:          5 * time.Minute,
+			PowParamsCacheTTL:              5 * time.Minute,
 			// RequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
 			RequestTimeout:    1100 * time.Second,
 			RequestRetryDelay: 10 * time.Second,

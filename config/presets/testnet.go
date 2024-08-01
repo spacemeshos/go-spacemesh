@@ -120,6 +120,7 @@ func testnet() config.Config {
 			MaxRequestRetries: 10,
 
 			CertifierInfoCacheTTL: 5 * time.Minute,
+			PowParamsCacheTTL:     5 * time.Minute,
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   2,
