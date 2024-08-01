@@ -32,20 +32,20 @@ func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Clus
 	)
 }
 
-//func TestCheckpoint1(t *testing.T) {
-//// t.Parallel()
-//TestCheckpoint(t)
-//}
+func TestCheckpoint1(t *testing.T) {
+	t.Parallel()
+	TestCheckpoint(t)
+}
 
-//func TestCheckpoint2(t *testing.T) {
-//// t.Parallel()
-//TestCheckpoint(t)
-//}
+func TestCheckpoint2(t *testing.T) {
+	t.Parallel()
+	TestCheckpoint(t)
+}
 
-//func TestCheckpoint3(t *testing.T) {
-//// t.Parallel()
-//TestCheckpoint(t)
-//}
+func TestCheckpoint3(t *testing.T) {
+	t.Parallel()
+	TestCheckpoint(t)
+}
 
 func TestCheckpoint(t *testing.T) {
 	// TODO(mafa): add new test with multi-smeshing nodes
