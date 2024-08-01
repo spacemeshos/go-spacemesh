@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -132,8 +131,6 @@ func New(h host.Host, peers getPeers, opts ...Option) *Sync {
 
 // Sync manages background worker that compares peers time with system time.
 type Sync struct {
-	errCnt atomic.Uint32
-
 	config Config
 	log    *zap.Logger
 	time   Time
@@ -188,8 +185,9 @@ func (s *Sync) Wait() error {
 
 func (s *Sync) run() error {
 	var (
-		timer *time.Timer
-		round uint64
+		timer    *time.Timer
+		round    uint64
+		failures int
 	)
 	s.log.Debug("started sync background worker")
 	defer s.log.Debug("exiting sync background worker")
@@ -200,19 +198,20 @@ func (s *Sync) run() error {
 			s.log.Debug("starting time sync round with peers",
 				zap.Uint64("round", round),
 				zap.Int("peers_count", len(prs)),
-				zap.Uint32("errors_count", s.errCnt.Load()),
+				zap.Int("errors_count", failures),
 			)
 			ctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
 			offset, err := s.GetOffset(ctx, round, prs)
 			cancel()
 			if err == nil {
 				if offset > s.config.MaxClockOffset || (offset < 0 && -offset > s.config.MaxClockOffset) {
+					failures += 1
 					s.log.Warn("peers offset is larger than max allowed clock difference",
 						zap.Uint64("round", round),
 						zap.Duration("offset", offset),
 						zap.Duration("max_offset", s.config.MaxClockOffset),
 					)
-					if s.errCnt.Add(1) == uint32(s.config.MaxOffsetErrors) {
+					if failures == s.config.MaxOffsetErrors {
 						s.log.Error("peers are not time synced, make sure your system clock is accurate")
 						return fmt.Errorf("%w: drift = %v", errPeersNotSynced, offset)
 					}
@@ -222,7 +221,7 @@ func (s *Sync) run() error {
 						zap.Duration("offset", offset),
 						zap.Duration("max_offset", s.config.MaxClockOffset),
 					)
-					s.errCnt.Store(0)
+					failures = 0
 				}
 				offsetGauge.Set(offset.Seconds())
 				timeout = s.config.RoundInterval
