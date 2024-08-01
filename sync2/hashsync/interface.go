@@ -24,10 +24,17 @@ type Iterator interface {
 	Clone() Iterator
 }
 
+// RangeInfo contains information about a range of items in the ItemStore as returned by
+// ItemStore.GetRangeInfo.
 type RangeInfo struct {
+	// Fingerprint of the interval
 	Fingerprint any
-	Count       int
-	Start, End  Iterator
+	// Number of items in the interval
+	Count int
+	// An iterator pointing to the beginning of the interval or nil if count is zero.
+	Start Iterator
+	// An iterator pointing to the end of the interval or nil if count is zero.
+	End Iterator
 }
 
 // ItemStore represents the data store that can be synced against a remote peer

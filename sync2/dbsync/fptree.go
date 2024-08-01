@@ -408,8 +408,6 @@ func (ac *aggContext) pruneY(node node, p prefix) bool {
 }
 
 func (ac *aggContext) maybeIncludeNode(node node, p prefix) bool {
-	fmt.Fprintf(os.Stderr, "QQQQQ: maybeIncludeNode: limit %d node.c %d easySplit %v leaf %v\n",
-		ac.limit, node.c, ac.easySplit, node.leaf())
 	switch {
 	case ac.limit < 0:
 	case uint32(ac.limit) >= node.c:

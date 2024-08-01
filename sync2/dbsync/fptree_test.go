@@ -1212,9 +1212,17 @@ func TestFPTreeManyItems(t *testing.T) {
 	// TBD: test start/end iterators
 }
 
-func verifyEasySplit(t *testing.T, ft *fpTree, x, y KeyBytes, depth, maxDepth int) {
-	t.Logf("depth %d", depth)
-	t.Logf("--- fingerprint interval %s %s ---", x.String(), y.String())
+func verifyEasySplit(
+	t *testing.T,
+	ft *fpTree,
+	x, y KeyBytes,
+	depth,
+	maxDepth int,
+) (
+	succeeded, failed int,
+) {
+	// t.Logf("depth %d", depth)
+	// t.Logf("--- fingerprint interval %s %s ---", x.String(), y.String())
 	fpr, err := ft.fingerprintInterval(x, y, -1)
 	require.NoError(t, err)
 	if fpr.count <= 1 {
@@ -1226,8 +1234,12 @@ func verifyEasySplit(t *testing.T, ft *fpTree, x, y KeyBytes, depth, maxDepth in
 	require.NoError(t, err)
 
 	m := fpr.count / 2
-	t.Logf("--- easy split %s %s %d ---", x.String(), y.String(), m)
+	// t.Logf("--- easy split %s %s %d ---", x.String(), y.String(), m)
 	sr, err := ft.easySplit(x[:], y[:], int(m))
+	if err != nil {
+		require.ErrorIs(t, err, errEasySplitFailed)
+		return 0, 1
+	}
 	require.NoError(t, err)
 	require.NotZero(t, sr.part0.count)
 	require.NotZero(t, sr.part1.count)
@@ -1270,71 +1282,45 @@ func verifyEasySplit(t *testing.T, ft *fpTree, x, y KeyBytes, depth, maxDepth in
 	require.Equal(t, precMiddle, itKey(t, fpr12.start))
 	require.Equal(t, b, itKey(t, fpr12.end))
 
-	if depth < maxDepth {
-		verifyEasySplit(t, ft, x, sr.middle, depth+1, maxDepth)
-		verifyEasySplit(t, ft, sr.middle, y, depth+1, maxDepth)
+	if depth >= maxDepth {
+		return 1, 0
 	}
+	s1, f1 := verifyEasySplit(t, ft, x, sr.middle, depth+1, maxDepth)
+	s2, f2 := verifyEasySplit(t, ft, sr.middle, y, depth+1, maxDepth)
+	return s1 + s2 + 1, f1 + f2
 }
 
 func TestEasySplit(t *testing.T) {
-	var np nodePool
-	maxDepth := 5
-	// count := 25
-	ft := newFPTree(&np, newInMemIDStore(32), 32, maxDepth)
-	// QQQQQ: rm
-	for _, h := range []string{
-		"00754cf490eeed75fa614b77d6b2b3cd16298711c126f73e8d265304dd251a50",
-		"16d5ed7d8c71b7c7d6ba00340355e6a0de63ed48089a5d1e29dac608d96d246d",
-		"2edbb20246c25fbf3d8b56cd183f3ede530a02b9658babd7a90295ac645e2aa2",
-		"45450dfbdf6613eb137daa99cffe47a1b7e21454301bdf8f814b26c309bb2e4c",
-		"4b42fe0661e3356998293436b83d28d253751a39c382bdeb310f13dec9b0e79d",
-		"5349101f5ad0ed08bae1cfb95dbb0399dfe87017783ae67e48254445391a1e5e",
-		"5c3a1f51e1f84a93bbbd284f609a61e0b71b641e155b34f447fc1a189ab0bb08",
-		"68e8c4773cc7f0218503ed3b2da426bdaf288c8722a091da57edb8ff8303fa03",
-		"6edaa71d8d400dfcbb8dc3fa6041ae602127db1cd84ec17b729492d9f53025ee",
-		"7f509a73fef1d7e44abf87ceb775b4e4acc312271caca84aa719cf63ca6ae3ee",
-		"884cba4481c5d81ee62158baa74fc315fcd6a089b50c7abf197f75acfa40d9ef",
-		"8f9dbdd4d95afc56c0744b1f1cd6e98dc730078438bb6e5511a2bb8f1e7d16d0",
-		"92ccb9bb426375dbae456fc4f743ffa69543a9741ea9600ded314ce56dd678af",
-		"942469ecfc783631c644f1af572e18bf45977d3d9b0628a1bcd9cffbf86be3bf",
-		"97d46b0e99abf5e290b0783e1595fded3393ac7e7badda2f348859ca085afe80",
-		"a4d9bc80fd93d3008930089148ab55e3d576f9ce14a1f900d0cc12ca1632e478",
-		"aee28a625a79951613c5e3165e396e3f5a459803cf16c4305447b86f55dd9048",
-		"af8255c5db1cf9a9ba5fcb76dbaace9e08fd9d8aa11b02c034f43d90322ee3d1",
-		"bf6dfedbf2152fabb7ebaedab3589c8c21d0f6e996fee2b3f93740908e0e0115",
-		"da0c349844ca0d393996ada10fb3ce00eb002ed2f3b83e87f246b6863ed3b5d1",
-		"dea9caf0c26793cb46f70b30e3e772cb210cf21ced570dfe5e4257da37873715",
-		"e358c3b354a629b78c470ab873609f96dd5f3648d9eee6fe133fe5182514b057",
-		"e86dc212c57bdb978d0440fcc95b2900ad0f685e8655f958c1ab19c268653712",
-		"f3f8560d9d8d8342698c728bff154e797dfaaa9acc88cfbca7825db200310c69",
-		"f593bc74323d291c9c31ce3ad3af4826105f068519480eec7491360b0f01de8e",
-	} {
-		h := types.HexToHash32(h)
-		t.Logf("adding hash %s", h.String())
-		ft.addHash(h[:])
-	}
-	// QQQQQ: restore
-	// for range count {
-	// 	h := types.RandomHash()
-	// 	t.Logf("adding hash %s", h.String())
-	// 	ft.addHash(h[:])
-	// }
-	k, err := ft.start().Key()
-	require.NoError(t, err)
-	x := k.(KeyBytes)
-	v := load64(x) & ^(1<<(64-maxDepth) - 1)
-	binary.BigEndian.PutUint64(x, v)
-	for i := 8; i < len(x); i++ {
-		x[i] = 0
-	}
+	maxDepth := 17
+	count := 10000
+	for range 5 {
+		var np nodePool
+		ft := newFPTree(&np, newInMemIDStore(32), 32, maxDepth)
+		for range count {
+			h := types.RandomHash()
+			// t.Logf("adding hash %s", h.String())
+			ft.addHash(h[:])
+		}
+		k, err := ft.start().Key()
+		require.NoError(t, err)
+		x := k.(KeyBytes)
+		v := load64(x) & ^(1<<(64-maxDepth) - 1)
+		binary.BigEndian.PutUint64(x, v)
+		for i := 8; i < len(x); i++ {
+			x[i] = 0
+		}
 
-	ft.traceEnabled = true
-	var sb strings.Builder
-	ft.dump(&sb)
-	t.Logf("tree:\n%s", sb.String())
+		// ft.traceEnabled = true
+		// var sb strings.Builder
+		// ft.dump(&sb)
+		// t.Logf("tree:\n%s", sb.String())
 
-	verifyEasySplit(t, ft, x, x, 0, maxDepth-2)
-	// TBD: test split both with few items (incomplete tree) and many items
+		succeeded, failed := verifyEasySplit(t, ft, x, x, 0, maxDepth-2)
+		successRate := float64(succeeded) * 100 / float64(succeeded+failed)
+		t.Logf("succeeded %d, failed %d, success rate %.2f%%",
+			succeeded, failed, successRate)
+		require.GreaterOrEqual(t, successRate, 95.0)
+	}
 }
 
 const dbFile = "/Users/ivan4th/Library/Application Support/Spacemesh/node-data/7c8cef2b/state.sql"

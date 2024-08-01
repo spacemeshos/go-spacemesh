@@ -99,11 +99,19 @@ func (d *DBItemStore) SplitRange(
 	preceding hashsync.Iterator,
 	x, y hashsync.Ordered,
 	count int,
-) (hashsync.RangeInfo, hashsync.RangeInfo, error) {
+) (
+	hashsync.RangeInfo,
+	hashsync.RangeInfo,
+	error,
+) {
 	if err := d.EnsureLoaded(); err != nil {
 		return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
 	}
 	panic("TBD")
+	// fpr1, fpr2, err := d.ft.easySplit(x.(KeyBytes), y.(KeyBytes), count)
+	// if err != nil {
+	// 	return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
+	// }
 	// fpr1, fpr2, err := d.ft.splitFingerprintInterval(x.(KeyBytes), y.(KeyBytes), count)
 	// if err != nil {
 	// 	return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
@@ -216,10 +224,20 @@ func (a *ItemStoreAdapter) GetRangeInfo(preceding hashsync.Iterator, x hashsync.
 	}, nil
 }
 
-func (a *ItemStoreAdapter) SplitRange(preceding hashsync.Iterator, x hashsync.Ordered, y hashsync.Ordered, count int) (hashsync.RangeInfo, hashsync.RangeInfo, error) {
+func (a *ItemStoreAdapter) SplitRange(
+	preceding hashsync.Iterator,
+	x hashsync.Ordered,
+	y hashsync.Ordered,
+	count int,
+) (
+	hashsync.RangeInfo,
+	hashsync.RangeInfo,
+	error,
+) {
 	hx := x.(types.Hash32)
 	hy := y.(types.Hash32)
-	info1, info2, err := a.s.SplitRange(preceding, KeyBytes(hx[:]), KeyBytes(hy[:]), count)
+	info1, info2, err := a.s.SplitRange(
+		preceding, KeyBytes(hx[:]), KeyBytes(hy[:]), count)
 	if err != nil {
 		return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
 	}
