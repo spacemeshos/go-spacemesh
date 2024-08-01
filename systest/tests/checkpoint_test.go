@@ -189,7 +189,7 @@ func TestCheckpoint(t *testing.T) {
 	require.NoError(t, cl.AddSmeshers(tctx, addedLater))
 
 	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", lastEpoch)
-	ensureSmeshing(t, tctx, cl, lastEpoch+4)
+	ensureSmeshing(t, tctx, cl, lastEpoch+6)
 }
 
 func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, stop uint32) {
