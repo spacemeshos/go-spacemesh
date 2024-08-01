@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.6.7
+
+### Improvements
+
+* [#6197](https://github.com/spacemeshos/go-spacemesh/pull/6197) Fix falling back to poet PoW if recertification
+  failed after getting a 401 on registering
+
 ## Release v1.6.6
 
 ### Improvements
