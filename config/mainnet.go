@@ -62,7 +62,6 @@ func MainnetConfig() Config {
 	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
 	logging.AtxHandlerLevel = zapcore.WarnLevel.String()
 	logging.ProposalListenerLevel = zapcore.WarnLevel.String()
-	forkLayer := types.LayerID(111_111_111) // TODO THIS NEEDS A NUMBER
 	hare3conf := hare3.DefaultConfig()
 	hare3conf.Committee = 400
 	hare3conf.Enable = true
@@ -71,7 +70,6 @@ func MainnetConfig() Config {
 		Layer: 105_720, // July 15, 2024, 10:00:00 AM UTC
 		Size:  50,
 	}
-	hare3conf.DisableLayer = forkLayer
 
 	hare4conf := hare4.DefaultConfig()
 	hare4conf.Enable = false
