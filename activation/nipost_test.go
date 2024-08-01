@@ -1076,10 +1076,11 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			})
 			require.NoError(t, err)
 
+			logger := zaptest.NewLogger(t)
 			nb, err := NewNIPostBuilder(
 				db,
 				nil,
-				zaptest.NewLogger(t),
+				logger,
 				PoetConfig{},
 				nil,
 				nil,
@@ -1087,16 +1088,18 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			existingRegistrations, err := nb.submitPoetChallenges(
+			defer func() {
+				if r := recover(); r == nil {
+					t.Errorf("Panic is expected")
+				}
+			}()
+
+			nb.submitPoetChallenges(
 				context.Background(),
 				sig,
 				time.Now().Add(10*time.Second),
 				time.Now().Add(-5*time.Second), // poet round started
 				challengeHash.Bytes())
-
-			require.ErrorIs(t, err, ErrNoRegistrationForGivenPoetFound)
-			require.ErrorContains(t, err, "poet round has already started")
-			require.Empty(t, existingRegistrations)
 		})
 }
 

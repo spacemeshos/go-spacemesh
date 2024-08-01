@@ -406,6 +406,30 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 		}
 	}
 
+	if len(registrations) != 0 && len(existingRegistrationsMap) == 0 {
+		nb.logger.Panic(
+			"Invalid PoET registrations found. Local state only contains PoETs not in node config",
+			zap.Strings("registrations_addresses", maps.Keys(registrationsMap)),
+			zap.Strings("configured_poets", maps.Keys(nb.poetProvers)),
+			log.ZShortStringer("smesherID", nodeID),
+		)
+	}
+
+	misconfiguredRegistrations := make(map[string]nipost.PoETRegistration)
+	for addr := range registrationsMap {
+		if reg, ok := existingRegistrationsMap[addr]; !ok {
+			misconfiguredRegistrations[addr] = reg
+		}
+	}
+
+	if len(misconfiguredRegistrations) != 0 {
+		nb.logger.Warn(
+			"Invalid PoET registrations found. Local state contains PoETs not in node config",
+			zap.Strings("registrations_addresses", maps.Keys(misconfiguredRegistrations)),
+			log.ZShortStringer("smesherID", nodeID),
+		)
+	}
+
 	existingRegistrations := maps.Values(existingRegistrationsMap)
 	if len(missingRegistrations) == 0 {
 		return existingRegistrations, nil
@@ -414,19 +438,10 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	now := time.Now()
 
 	if curPoetRoundStartDeadline.Before(now) {
-		if len(existingRegistrations) == 0 {
-			if len(registrations) == 0 {
-				// no existing registration at all, drop current registration challenge
-				err = ErrATXChallengeExpired
-			} else {
-				// no existing registration for given poets set
-				err = ErrNoRegistrationForGivenPoetFound
-				nb.logger.Warn("revert poet configuration to previous is needed immediately",
-					zap.Error(err), log.ZShortStringer("smesherID", nodeID))
-			}
+		if len(existingRegistrations) == 0 && len(registrations) == 0 {
 			return nil, fmt.Errorf(
 				"%w: poet round has already started at %s (now: %s)",
-				err,
+				ErrATXChallengeExpired,
 				curPoetRoundStartDeadline,
 				now,
 			)

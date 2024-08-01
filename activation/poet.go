@@ -29,6 +29,7 @@ import (
 var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
+	ErrPhaseShiftMismatch       = errors.New("phase shift mismatch")
 	errCertificatesNotSupported = errors.New("poet doesn't support certificates")
 )
 
@@ -149,6 +150,19 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 	}
 	for _, opt := range opts {
 		opt(poetClient)
+	}
+
+	resp, err := poetClient.info(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.PhaseShift.AsDuration() != cfg.PhaseShift {
+		poetClient.logger.Warn("getting info about poet service configuration",
+			zap.Duration("server: phase shift", resp.PhaseShift.AsDuration()),
+			zap.Duration("config: cycle gap", cfg.PhaseShift),
+		)
+		return nil, ErrPhaseShiftMismatch
 	}
 
 	poetClient.logger.Info(
@@ -374,7 +388,7 @@ func NewPoetService(
 ) (*poetService, error) {
 	client, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
 	if err != nil {
-		return nil, fmt.Errorf("creating HTTP poet client %s: %w", server.Address, err)
+		return nil, err
 	}
 	return NewPoetServiceWithClient(
 		db,
