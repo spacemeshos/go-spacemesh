@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -20,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -215,7 +214,7 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	switch {
 	case pm.err == nil:
 		return nil
-	case errors.Is(pm.err, activation.ErrObjectExists):
+	case errors.Is(pm.err, sql.ErrObjectExists):
 		// PoET proofs are concurrently stored in DB in two places:
 		// fetcher and nipost builder. Hence, it might happen that
 		// a proof had been inserted into the DB while the fetcher
@@ -405,28 +404,37 @@ var ErrIgnore = errors.New("fetch: ignore")
 
 type BatchError struct {
 	Errors map[types.Hash32]error
+	first  types.Hash32
 }
 
 func (b *BatchError) Empty() bool {
 	return len(b.Errors) == 0
 }
 
+func (b *BatchError) Is(target error) bool {
+	for _, err := range b.Errors {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
+}
+
 func (b *BatchError) Add(id types.Hash32, err error) {
 	if b.Errors == nil {
 		b.Errors = map[types.Hash32]error{}
+	}
+	if b.Empty() {
+		b.first = id
 	}
 	b.Errors[id] = err
 }
 
 func (b *BatchError) Error() string {
-	var builder strings.Builder
-	builder.WriteString("batch failure: ")
-	for hash, err := range b.Errors {
-		builder.WriteString(hash.ShortString())
-		builder.WriteString("=")
-		builder.WriteString(err.Error())
+	if len(b.Errors) == 0 {
+		return ""
 	}
-	return builder.String()
+	return fmt.Sprintf("batch failed, first failure: %s: %v", b.first.ShortString(), b.Errors[b.first])
 }
 
 func (b *BatchError) Ignore() bool {

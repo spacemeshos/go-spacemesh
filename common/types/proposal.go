@@ -28,6 +28,18 @@ type ProposalID Hash20
 // EmptyProposalID is a canonical empty ProposalID.
 var EmptyProposalID = ProposalID{}
 
+type CompactProposalID [4]byte
+
+// EncodeScale implements scale codec interface.
+func (id *CompactProposalID) EncodeScale(e *scale.Encoder) (int, error) {
+	return scale.EncodeByteArray(e, id[:])
+}
+
+// DecodeScale implements scale codec interface.
+func (id *CompactProposalID) DecodeScale(d *scale.Decoder) (int, error) {
+	return scale.DecodeByteArray(d, id[:])
+}
+
 // EncodeScale implements scale codec interface.
 func (id *ProposalID) EncodeScale(e *scale.Encoder) (int, error) {
 	return scale.EncodeByteArray(e, id[:])
@@ -156,11 +168,6 @@ func (id ProposalID) Bytes() []byte {
 // AsHash32 returns a Hash32 whose first 20 bytes are the bytes of this ProposalID, it is right-padded with zeros.
 func (id ProposalID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (id ProposalID) Field() log.Field {
-	return log.String("proposal_id", id.String())
 }
 
 // Compare returns true if other (the given ProposalID) is less than this ProposalID, by lexicographic comparison.

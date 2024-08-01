@@ -27,7 +27,7 @@ var layersToCheck = parameters.Int(
 
 func TestPoetsFailures(t *testing.T) {
 	t.Parallel()
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	tctx.Log.Debug("TestPoetsFailures start")
 
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
@@ -124,7 +124,7 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 
 func TestNodesUsingDifferentPoets(t *testing.T) {
 	t.Parallel()
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	if tctx.PoetSize < 2 {
 		t.Skip("Skipping test for using different poets - test configured with less then 2 poets")
 	}
@@ -214,7 +214,7 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 // https://github.com/spacemeshos/go-spacemesh/issues/5212
 func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
 	t.Parallel()
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	tctx.PoetSize = 2
 
 	cl := cluster.New(tctx, cluster.WithKeys(10))

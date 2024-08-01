@@ -1085,6 +1085,67 @@ func (c *MocksyncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{
 	return c
 }
 
+// MockmalfeasancePublisher is a mock of malfeasancePublisher interface.
+type MockmalfeasancePublisher struct {
+	ctrl     *gomock.Controller
+	recorder *MockmalfeasancePublisherMockRecorder
+}
+
+// MockmalfeasancePublisherMockRecorder is the mock recorder for MockmalfeasancePublisher.
+type MockmalfeasancePublisherMockRecorder struct {
+	mock *MockmalfeasancePublisher
+}
+
+// NewMockmalfeasancePublisher creates a new mock instance.
+func NewMockmalfeasancePublisher(ctrl *gomock.Controller) *MockmalfeasancePublisher {
+	mock := &MockmalfeasancePublisher{ctrl: ctrl}
+	mock.recorder = &MockmalfeasancePublisherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmalfeasancePublisher) EXPECT() *MockmalfeasancePublisherMockRecorder {
+	return m.recorder
+}
+
+// Publish mocks base method.
+func (m *MockmalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof *wire.ATXProof) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Publish", ctx, id, proof)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Publish indicates an expected call of Publish.
+func (mr *MockmalfeasancePublisherMockRecorder) Publish(ctx, id, proof any) *MockmalfeasancePublisherPublishCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockmalfeasancePublisher)(nil).Publish), ctx, id, proof)
+	return &MockmalfeasancePublisherPublishCall{Call: call}
+}
+
+// MockmalfeasancePublisherPublishCall wrap *gomock.Call
+type MockmalfeasancePublisherPublishCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmalfeasancePublisherPublishCall) Return(arg0 error) *MockmalfeasancePublisherPublishCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmalfeasancePublisherPublishCall) Do(f func(context.Context, types.NodeID, *wire.ATXProof) error) *MockmalfeasancePublisherPublishCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context, types.NodeID, *wire.ATXProof) error) *MockmalfeasancePublisherPublishCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockatxProvider is a mock of atxProvider interface.
 type MockatxProvider struct {
 	ctrl     *gomock.Controller
@@ -1874,41 +1935,40 @@ func (c *MockcertifierServiceCertificateCall) DoAndReturn(f func(context.Context
 	return c
 }
 
-// Recertify mocks base method.
-func (m *MockcertifierService) Recertify(ctx context.Context, id types.NodeID, certifierAddress *url.URL, pubkey []byte) (*certifier.PoetCert, error) {
+// DeleteCertificate mocks base method.
+func (m *MockcertifierService) DeleteCertificate(id types.NodeID, pubkey []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Recertify", ctx, id, certifierAddress, pubkey)
-	ret0, _ := ret[0].(*certifier.PoetCert)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "DeleteCertificate", id, pubkey)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// Recertify indicates an expected call of Recertify.
-func (mr *MockcertifierServiceMockRecorder) Recertify(ctx, id, certifierAddress, pubkey any) *MockcertifierServiceRecertifyCall {
+// DeleteCertificate indicates an expected call of DeleteCertificate.
+func (mr *MockcertifierServiceMockRecorder) DeleteCertificate(id, pubkey any) *MockcertifierServiceDeleteCertificateCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Recertify", reflect.TypeOf((*MockcertifierService)(nil).Recertify), ctx, id, certifierAddress, pubkey)
-	return &MockcertifierServiceRecertifyCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCertificate", reflect.TypeOf((*MockcertifierService)(nil).DeleteCertificate), id, pubkey)
+	return &MockcertifierServiceDeleteCertificateCall{Call: call}
 }
 
-// MockcertifierServiceRecertifyCall wrap *gomock.Call
-type MockcertifierServiceRecertifyCall struct {
+// MockcertifierServiceDeleteCertificateCall wrap *gomock.Call
+type MockcertifierServiceDeleteCertificateCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockcertifierServiceRecertifyCall) Return(arg0 *certifier.PoetCert, arg1 error) *MockcertifierServiceRecertifyCall {
-	c.Call = c.Call.Return(arg0, arg1)
+func (c *MockcertifierServiceDeleteCertificateCall) Return(arg0 error) *MockcertifierServiceDeleteCertificateCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockcertifierServiceRecertifyCall) Do(f func(context.Context, types.NodeID, *url.URL, []byte) (*certifier.PoetCert, error)) *MockcertifierServiceRecertifyCall {
+func (c *MockcertifierServiceDeleteCertificateCall) Do(f func(types.NodeID, []byte) error) *MockcertifierServiceDeleteCertificateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockcertifierServiceRecertifyCall) DoAndReturn(f func(context.Context, types.NodeID, *url.URL, []byte) (*certifier.PoetCert, error)) *MockcertifierServiceRecertifyCall {
+func (c *MockcertifierServiceDeleteCertificateCall) DoAndReturn(f func(types.NodeID, []byte) error) *MockcertifierServiceDeleteCertificateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

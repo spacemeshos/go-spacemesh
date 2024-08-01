@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 )
 
@@ -29,8 +30,8 @@ import (
 var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
+	ErrCertificatesNotSupported = errors.New("poet doesn't support certificates")
 	ErrPhaseShiftMismatch       = errors.New("phase shift mismatch")
-	errCertificatesNotSupported = errors.New("poet doesn't support certificates")
 )
 
 type PoetPowParams struct {
@@ -115,7 +116,7 @@ func WithLogger(logger *zap.Logger) PoetClientOpts {
 		c.logger = logger
 		c.client.Logger = &retryableHttpLogger{inner: logger}
 		c.client.ResponseLogHook = func(logger retryablehttp.Logger, resp *http.Response) {
-			c.logger.Info(
+			c.logger.Debug(
 				"response received",
 				zap.Stringer("url", resp.Request.URL),
 				zap.Int("status", resp.StatusCode),
@@ -204,7 +205,7 @@ func (c *HTTPPoetClient) CertifierInfo(ctx context.Context) (*url.URL, []byte, e
 	}
 	certifierInfo := info.GetCertifier()
 	if certifierInfo == nil {
-		return nil, nil, errCertificatesNotSupported
+		return nil, nil, ErrCertificatesNotSupported
 	}
 	url, err := url.Parse(certifierInfo.Url)
 	if err != nil {
@@ -322,7 +323,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 
 	if res.StatusCode != http.StatusOK {
-		c.logger.Info("got poet response != 200 OK", zap.String("status", res.Status), zap.String("body", string(data)))
+		c.logger.Debug("poet request failed", zap.String("status", res.Status), zap.String("body", string(data)))
 	}
 
 	switch res.StatusCode {
@@ -346,9 +347,29 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 }
 
 type certifierInfo struct {
-	obtained time.Time
-	url      *url.URL
-	pubkey   []byte
+	url    *url.URL
+	pubkey []byte
+}
+
+type cachedData[T any] struct {
+	mu   sync.Mutex
+	data T
+	exp  time.Time
+	ttl  time.Duration
+}
+
+func (c *cachedData[T]) get(init func() (T, error)) (T, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if time.Now().Before(c.exp) {
+		return c.data, nil
+	}
+	d, err := init()
+	if err == nil {
+		c.data = d
+		c.exp = time.Now().Add(c.ttl)
+	}
+	return d, err
 }
 
 // poetService is a higher-level interface to communicate with a PoET service.
@@ -366,9 +387,8 @@ type poetService struct {
 
 	certifier certifierService
 
-	certifierInfoTTL   time.Duration
-	certifierInfo      certifierInfo
-	certifierInfoMutex sync.Mutex
+	certifierInfoCache cachedData[*certifierInfo]
+	powParamsCache     cachedData[*PoetPowParams]
 }
 
 type PoetServiceOpt func(*poetService)
@@ -407,12 +427,13 @@ func NewPoetServiceWithClient(
 	opts ...PoetServiceOpt,
 ) *poetService {
 	poetClient := &poetService{
-		db:               db,
-		logger:           logger,
-		client:           client,
-		requestTimeout:   cfg.RequestTimeout,
-		certifierInfoTTL: cfg.CertifierInfoCacheTTL,
-		proofMembers:     make(map[string][]types.Hash32, 1),
+		db:                 db,
+		logger:             logger,
+		client:             client,
+		requestTimeout:     cfg.RequestTimeout,
+		certifierInfoCache: cachedData[*certifierInfo]{ttl: cfg.CertifierInfoCacheTTL},
+		powParamsCache:     cachedData[*PoetPowParams]{ttl: cfg.PowParamsCacheTTL},
+		proofMembers:       make(map[string][]types.Hash32, 1),
 	}
 
 	for _, opt := range opts {
@@ -437,18 +458,17 @@ func (c *poetService) authorize(
 	switch {
 	case err == nil:
 		return &PoetAuth{PoetCert: cert}, nil
-	case errors.Is(err, errCertificatesNotSupported):
+	case errors.Is(err, ErrCertificatesNotSupported):
 		logger.Debug("poet doesn't support certificates")
 	default:
 		logger.Warn("failed to certify", zap.Error(err))
 	}
 	// Fallback to PoW
 	// TODO: remove this fallback once we migrate to certificates fully.
-
-	logger.Debug("querying for poet pow parameters")
+	logger.Info("falling back to PoW authorization")
 	powCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
 	defer cancel()
-	powParams, err := c.client.PowParams(powCtx)
+	powParams, err := c.powParams(powCtx)
 	if err != nil {
 		return nil, &PoetSvcUnstableError{msg: "failed to get PoW params", source: err}
 	}
@@ -471,6 +491,22 @@ func (c *poetService) authorize(
 		Nonce:  nonce,
 		Params: *powParams,
 	}}, nil
+}
+
+func (c *poetService) reauthorize(
+	ctx context.Context,
+	id types.NodeID,
+	challenge []byte,
+	logger *zap.Logger,
+) (*PoetAuth, error) {
+	if c.certifier != nil {
+		if _, pubkey, err := c.getCertifierInfo(ctx); err == nil {
+			if err := c.certifier.DeleteCertificate(id, pubkey); err != nil {
+				return nil, fmt.Errorf("deleting cert: %w", err)
+			}
+		}
+	}
+	return c.authorize(ctx, id, challenge, c.logger)
 }
 
 func (c *poetService) Submit(
@@ -501,10 +537,10 @@ func (c *poetService) Submit(
 	case err == nil:
 		return round, nil
 	case errors.Is(err, ErrUnauthorized):
-		logger.Warn("failed to submit challenge as unathorized - recertifying", zap.Error(err))
-		auth.PoetCert, err = c.recertify(ctx, nodeID)
+		logger.Warn("failed to submit challenge as unauthorized - authorizing again", zap.Error(err))
+		auth, err := c.reauthorize(ctx, nodeID, challenge, logger)
 		if err != nil {
-			return nil, fmt.Errorf("recertifying: %w", err)
+			return nil, fmt.Errorf("authorizing: %w", err)
 		}
 		return c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
 	}
@@ -532,7 +568,7 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 
-	if err := c.db.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, ErrObjectExists) {
+	if err := c.db.ValidateAndStore(ctx, proof); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		c.logger.Warn("failed to validate and store proof", zap.Error(err), zap.Object("proof", proof))
 		return nil, nil, fmt.Errorf("validating and storing proof: %w", err)
 	}
@@ -553,31 +589,23 @@ func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.
 	return c.certifier.Certificate(ctx, id, url, pubkey)
 }
 
-func (c *poetService) recertify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
-	if c.certifier == nil {
-		return nil, errors.New("certifier not configured")
-	}
-	url, pubkey, err := c.getCertifierInfo(ctx)
+func (c *poetService) getCertifierInfo(ctx context.Context) (*url.URL, []byte, error) {
+	info, err := c.certifierInfoCache.get(func() (*certifierInfo, error) {
+		url, pubkey, err := c.client.CertifierInfo(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("getting certifier info: %w", err)
+		}
+		return &certifierInfo{url: url, pubkey: pubkey}, nil
+	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return c.certifier.Recertify(ctx, id, url, pubkey)
+
+	return info.url, info.pubkey, nil
 }
 
-func (c *poetService) getCertifierInfo(ctx context.Context) (*url.URL, []byte, error) {
-	c.certifierInfoMutex.Lock()
-	defer c.certifierInfoMutex.Unlock()
-	if time.Since(c.certifierInfo.obtained) < c.certifierInfoTTL {
-		return c.certifierInfo.url, c.certifierInfo.pubkey, nil
-	}
-	url, pubkey, err := c.client.CertifierInfo(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("getting certifier info: %w", err)
-	}
-	c.certifierInfo = certifierInfo{
-		obtained: time.Now(),
-		url:      url,
-		pubkey:   pubkey,
-	}
-	return c.certifierInfo.url, c.certifierInfo.pubkey, nil
+func (c *poetService) powParams(ctx context.Context) (*PoetPowParams, error) {
+	return c.powParamsCache.get(func() (*PoetPowParams, error) {
+		return c.client.PowParams(ctx)
+	})
 }

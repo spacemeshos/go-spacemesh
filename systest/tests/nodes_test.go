@@ -31,7 +31,7 @@ func TestAddNodes(t *testing.T) {
 		addedLater      = 2
 	)
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	size := min(tctx.ClusterSize, 30)
 	oldSize := size - addedLater
 	if tctx.ClusterSize > oldSize {
@@ -127,7 +127,7 @@ func TestAddNodes(t *testing.T) {
 func TestFailedNodes(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 

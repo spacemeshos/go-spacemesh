@@ -19,7 +19,7 @@ func TestNetworkService_Info(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewNetworkServiceClient(conn)
 
 	t.Run("network info", func(t *testing.T) {
