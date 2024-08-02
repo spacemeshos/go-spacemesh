@@ -1077,6 +1077,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			require.NoError(t, err)
 
 			logger := zaptest.NewLogger(t)
+
 			nb, err := NewNIPostBuilder(
 				db,
 				nil,

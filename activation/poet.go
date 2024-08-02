@@ -155,10 +155,8 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 
 	resp, err := poetClient.info(context.Background())
 	if err != nil {
-		return nil, err
-	}
-
-	if resp.PhaseShift.AsDuration() != cfg.PhaseShift {
+		poetClient.logger.Error("getting info about poet service configuration", zap.Error(err))
+	} else if resp.PhaseShift.AsDuration() != cfg.PhaseShift {
 		poetClient.logger.Warn("getting info about poet service configuration",
 			zap.Duration("server: phase shift", resp.PhaseShift.AsDuration()),
 			zap.Duration("config: cycle gap", cfg.PhaseShift),
@@ -497,7 +495,6 @@ func (c *poetService) reauthorize(
 	ctx context.Context,
 	id types.NodeID,
 	challenge []byte,
-	logger *zap.Logger,
 ) (*PoetAuth, error) {
 	if c.certifier != nil {
 		if _, pubkey, err := c.getCertifierInfo(ctx); err == nil {
@@ -538,7 +535,7 @@ func (c *poetService) Submit(
 		return round, nil
 	case errors.Is(err, ErrUnauthorized):
 		logger.Warn("failed to submit challenge as unauthorized - authorizing again", zap.Error(err))
-		auth, err := c.reauthorize(ctx, nodeID, challenge, logger)
+		auth, err := c.reauthorize(ctx, nodeID, challenge)
 		if err != nil {
 			return nil, fmt.Errorf("authorizing: %w", err)
 		}

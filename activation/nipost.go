@@ -406,16 +406,16 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 		}
 	}
 
-	misconfiguredRegistrations := make(map[string]nipost.PoETRegistration)
+	misconfiguredRegistrations := make(map[string]struct{})
 	for addr := range registrationsMap {
-		if reg, ok := existingRegistrationsMap[addr]; !ok {
-			misconfiguredRegistrations[addr] = reg
+		if _, ok := existingRegistrationsMap[addr]; !ok {
+			misconfiguredRegistrations[addr] = struct{}{}
 		}
 	}
 
 	if len(misconfiguredRegistrations) != 0 {
 		nb.logger.Warn(
-			"Invalid PoET registrations found. Local state contains PoETs not in node config",
+			"Found existing registrations for poets not listed in the config. Will not fetch proof from them.",
 			zap.Strings("registrations_addresses", maps.Keys(misconfiguredRegistrations)),
 			log.ZShortStringer("smesherID", nodeID),
 		)
@@ -441,7 +441,8 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 		case len(existingRegistrations) == 0:
 			// no existing registration for given poets set
 			nb.logger.Panic(
-				"Invalid PoET registrations found. Local state only contains PoETs not in node config",
+				"None of the poets listed in the config matches the existing registrations. "+
+					"Verify your config and local database state.",
 				zap.Strings("registrations", maps.Keys(registrationsMap)),
 				zap.Strings("configured_poets", maps.Keys(nb.poetProvers)),
 				log.ZShortStringer("smesherID", nodeID),
