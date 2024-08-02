@@ -132,53 +132,70 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 		}
 
 		// start generating fallback data
-		s.eg.Go(
-			func() error {
-				var (
-					errs    = 0
-					maxErrs = 10
-					timer   *time.Timer
-					timeC   <-chan time.Time
-					backoff = 10 * time.Second
-				)
-				for epoch := last; ; epoch++ {
-					wait := time.Until(params.updateActiveSetTime(epoch))
-					select {
-					case <-timeC:
-						if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
-							s.logger.With().Debug("generate fallback active set retry", log.Err(err))
-							errs++
-							timer.Reset(backoff)
-							continue
-						}
-						errs = 0
-						if !timer.Stop() {
-							<-timer.C
-						}
-						timeC = nil
-					case <-time.After(wait):
-						if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
-							s.logger.With().Debug("generate fallback active set. retrying", log.Err(err))
-							timer = time.NewTimer(backoff)
-							timeC = timer.C
-							if errs >= maxErrs {
-								errCh <- err
-								return err
-							}
-						}
-					case <-ctx.Done():
-						return ctx.Err()
+		s.eg.Go(func() error {
+			for epoch := last; ; epoch++ {
+				wait := time.Until(params.updateActiveSetTime(epoch))
+				select {
+				case <-time.After(wait):
+					if err := s.genWithRetry(ctx, epoch, 10); err != nil {
+						errCh <- err
+						return nil
 					}
+				case <-ctx.Done():
+					return nil
 				}
-			})
-		s.eg.Go(
-			func() error {
-				s.genDataLoop(ctx, errCh, last+1, params.updateBeaconTime, s.GenFallbackBeacon)
-				return nil
-			})
+			}
+		})
+		s.eg.Go(func() error {
+			for epoch := last + 1; ; epoch++ {
+				wait := time.Until(params.updateBeaconTime(epoch))
+				select {
+				case <-time.After(wait):
+					if err := s.GenFallbackBeacon(epoch); err != nil {
+						errCh <- err
+						return err
+					}
+				case <-ctx.Done():
+					return nil
+				}
+			}
+		})
 
 		return nil
 	})
+}
+
+func (s *Server) genWithRetry(ctx context.Context, epoch types.EpochID, maxRetries int) error {
+	err := s.GenFallbackActiveSet(ctx, epoch)
+	if err == nil {
+		return nil
+	}
+	s.logger.With().Debug("generate fallback active set retry", log.Err(err))
+
+	retries := 0
+	backoff := 10 * time.Second
+	timer := time.NewTimer(backoff)
+
+	for {
+		select {
+		case <-timer.C:
+			if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
+				s.logger.With().Debug("generate fallback active set retry", log.Err(err))
+				retries++
+				if retries >= maxRetries {
+					return err
+				}
+				timer.Reset(backoff)
+				continue
+			}
+			return nil
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return ctx.Err()
+		}
+	}
 }
 
 // in systests, we want to be sure the nodes use the fallback data unconditionally.
@@ -199,7 +216,7 @@ func (s *Server) GenBootstrap(ctx context.Context, epoch types.EpochID) error {
 	return err
 }
 
-func (s *Server) GenFallbackBeacon(_ context.Context, epoch types.EpochID) error {
+func (s *Server) GenFallbackBeacon(epoch types.EpochID) error {
 	suffix := bootstrap.SuffixBeacon
 	_, err := s.gen.GenUpdate(epoch, epochBeacon(epoch), nil, suffix)
 	return err
@@ -227,31 +244,10 @@ func getPartialActiveSet(ctx context.Context, smEndpoint string, targetEpoch typ
 	return actives[:cutoff], nil
 }
 
-func (s *Server) genDataLoop(
-	ctx context.Context,
-	errCh chan error,
-	start types.EpochID,
-	timeFunc func(types.EpochID) time.Time,
-	genFunc func(context.Context, types.EpochID) error,
-) {
-	for epoch := start; ; epoch++ {
-		wait := time.Until(timeFunc(epoch))
-		select {
-		case <-time.After(wait):
-			if err := genFunc(ctx, epoch); err != nil {
-				errCh <- err
-				return
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
 func (s *Server) Stop(ctx context.Context) {
 	s.logger.With().Info("shutting down server")
-	_ = s.Shutdown(ctx)
-	_ = s.eg.Wait()
+	s.Shutdown(ctx)
+	s.eg.Wait()
 }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
