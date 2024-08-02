@@ -1089,18 +1089,13 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			defer func() {
-				if r := recover(); r == nil {
-					t.Errorf("Panic is expected")
-				}
-			}()
-
-			nb.submitPoetChallenges(
+			_, err = nb.submitPoetChallenges(
 				context.Background(),
 				sig,
 				time.Now().Add(10*time.Second),
 				time.Now().Add(-5*time.Second), // poet round started
 				challengeHash.Bytes())
+			require.ErrorIs(t, err, ErrNoRegistrationForGivenPoetFound)
 		})
 }
 

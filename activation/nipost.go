@@ -237,6 +237,11 @@ func (nb *NIPostBuilder) BuildNIPost(
 		poetProofDeadline,
 		poetRoundStart, challenge.Bytes())
 	if err != nil {
+		if errors.Is(err, ErrNoRegistrationForGivenPoetFound) {
+			// misconfiguration of poet services detected, user has to fix config
+			logger.Fatal("submitting to poets", zap.Error(err))
+		}
+
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
@@ -440,13 +445,14 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 			)
 		case len(existingRegistrations) == 0:
 			// no existing registration for given poets set
-			nb.logger.Panic(
+			nb.logger.Warn(
 				"None of the poets listed in the config matches the existing registrations. "+
 					"Verify your config and local database state.",
 				zap.Strings("registrations", maps.Keys(registrationsMap)),
 				zap.Strings("configured_poets", maps.Keys(nb.poetProvers)),
 				log.ZShortStringer("smesherID", nodeID),
 			)
+			return nil, ErrNoRegistrationForGivenPoetFound
 		default:
 			return existingRegistrations, nil
 		}

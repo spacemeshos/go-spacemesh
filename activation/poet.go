@@ -68,10 +68,12 @@ type PoetClient interface {
 
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
-	id      []byte
-	baseURL *url.URL
-	client  *retryablehttp.Client
-	logger  *zap.Logger
+	id                 []byte
+	baseURL            *url.URL
+	client             *retryablehttp.Client
+	logger             *zap.Logger
+	expectedPhaseShift time.Duration
+	fetchedPhaseShift  time.Duration
 }
 
 func checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
@@ -144,24 +146,18 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 	}
 
 	poetClient := &HTTPPoetClient{
-		id:      server.Pubkey.Bytes(),
-		baseURL: baseURL,
-		client:  client,
-		logger:  zap.NewNop(),
+		id:                 server.Pubkey.Bytes(),
+		baseURL:            baseURL,
+		client:             client,
+		logger:             zap.NewNop(),
+		expectedPhaseShift: cfg.PhaseShift,
 	}
 	for _, opt := range opts {
 		opt(poetClient)
 	}
 
-	resp, err := poetClient.info(context.Background())
-	if err != nil {
+	if err := poetClient.verifyPhaseShiftConfiguration(context.Background()); err != nil {
 		poetClient.logger.Error("getting info about poet service configuration", zap.Error(err))
-	} else if resp.PhaseShift.AsDuration() != cfg.PhaseShift {
-		poetClient.logger.Warn("getting info about poet service configuration",
-			zap.Duration("server: phase shift", resp.PhaseShift.AsDuration()),
-			zap.Duration("config: cycle gap", cfg.PhaseShift),
-		)
-		return nil, ErrPhaseShiftMismatch
 	}
 
 	poetClient.logger.Info(
@@ -212,6 +208,25 @@ func (c *HTTPPoetClient) CertifierInfo(ctx context.Context) (*url.URL, []byte, e
 	return url, certifierInfo.Pubkey, nil
 }
 
+func (c *HTTPPoetClient) verifyPhaseShiftConfiguration(ctx context.Context) error {
+	if c.fetchedPhaseShift != 0 {
+		return nil
+	}
+
+	resp, err := c.info(ctx)
+	if err != nil {
+		return err
+	} else if resp.PhaseShift.AsDuration() != c.expectedPhaseShift {
+		c.logger.Panic("verifying poet service configuration",
+			zap.Duration("server: phase shift", resp.PhaseShift.AsDuration()),
+			zap.Duration("config: phase shift", c.expectedPhaseShift),
+		)
+	}
+
+	c.fetchedPhaseShift = resp.PhaseShift.AsDuration()
+	return nil
+}
+
 // Submit registers a challenge in the proving service current open round.
 func (c *HTTPPoetClient) Submit(
 	ctx context.Context,
@@ -221,6 +236,10 @@ func (c *HTTPPoetClient) Submit(
 	nodeID types.NodeID,
 	auth PoetAuth,
 ) (*types.PoetRound, error) {
+	if err := c.verifyPhaseShiftConfiguration(context.Background()); err != nil {
+		return nil, err
+	}
+
 	request := rpcapi.SubmitRequest{
 		Prefix:    prefix,
 		Challenge: challenge,

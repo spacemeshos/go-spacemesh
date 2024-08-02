@@ -12,6 +12,8 @@ var (
 	ErrPoetServiceUnstable = &PoetSvcUnstableError{}
 	// ErrPoetProofNotReceived is returned when no poet proof was received.
 	ErrPoetProofNotReceived = errors.New("builder: didn't receive any poet proof")
+	// ErrNoRegistrationForGivenPoetFound is returned when configured poets do not match existing registrations in db at all
+	ErrNoRegistrationForGivenPoetFound = errors.New("builder: none of configured poets matches the existing registrations")
 )
 
 // PoetSvcUnstableError means there was a problem communicating
