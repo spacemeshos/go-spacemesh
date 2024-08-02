@@ -16,11 +16,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -68,7 +68,7 @@ func defaultOracle(tb testing.TB) *testOracle {
 			mVerifier,
 			defLayersPerEpoch,
 			WithConfig(Config{ConfidenceParam: confidenceParam}),
-			WithLogger(logtest.New(tb)),
+			WithLogger(zaptest.NewLogger(tb)),
 		),
 		tb:        tb,
 		mBeacon:   mBeacon,

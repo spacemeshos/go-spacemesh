@@ -774,7 +774,7 @@ func (app *App) initServices(ctx context.Context) error {
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
 		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg)),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
 	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
