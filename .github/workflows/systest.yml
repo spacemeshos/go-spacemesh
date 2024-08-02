@@ -130,7 +130,6 @@ jobs:
           go-version-file: "go.mod"
 
       - name: Run tests
-        timeout-minutes: 60
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           storage: premium-rwo=10Gi
