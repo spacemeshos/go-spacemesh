@@ -1586,6 +1586,10 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewAccountService(app.db, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.Post:
+		service := v2alpha1.NewPostService(app.postSupervisor.Config())
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
