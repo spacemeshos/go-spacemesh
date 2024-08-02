@@ -146,6 +146,7 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 					select {
 					case <-timeC:
 						if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
+							s.logger.With().Debug("generate fallback active set retry", log.Err(err))
 							errs++
 							timer.Reset(backoff)
 							continue
@@ -157,6 +158,7 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 						timeC = nil
 					case <-time.After(wait):
 						if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
+							s.logger.With().Debug("generate fallback active set. retrying", log.Err(err))
 							timer = time.NewTimer(backoff)
 							timeC = timer.C
 							if errs >= maxErrs {
