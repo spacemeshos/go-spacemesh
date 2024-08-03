@@ -482,7 +482,7 @@ func (c *poetService) authorize(
 func (c *poetService) reauthorize(
 	ctx context.Context,
 	id types.NodeID,
-	challange []byte,
+	challenge []byte,
 	logger *zap.Logger,
 ) (*PoetAuth, error) {
 	if c.certifier != nil {
@@ -492,7 +492,7 @@ func (c *poetService) reauthorize(
 			}
 		}
 	}
-	return c.authorize(ctx, id, challange, c.logger)
+	return c.authorize(ctx, id, challenge, c.logger)
 }
 
 func (c *poetService) Submit(

@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -68,6 +69,9 @@ func MainnetConfig() Config {
 		Layer: 105_720, // July 15, 2024, 10:00:00 AM UTC
 		Size:  50,
 	}
+
+	hare4conf := hare4.DefaultConfig()
+	hare4conf.Enable = false
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
@@ -136,6 +140,7 @@ func MainnetConfig() Config {
 			},
 		},
 		HARE3: hare3conf,
+		HARE4: hare4conf,
 		HareEligibility: eligibility.Config{
 			ConfidenceParam: 200,
 		},
