@@ -36,8 +36,8 @@ ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
-command := tests -test.v -test.parallel=$(clusters) -test.count=$(count) -test.timeout=0 -test.run=$(test_name) \
-	-clusters=$(clusters) -level=$(level) -configname=$(configname) -test.failfast="$(failfast)"
+command := tests -test.v -test.count=$(count) -test.timeout=0 -test.run=$(test_name) -test.parallel=$(clusters) \
+	-clusters=$(clusters) -level=$(level) -configname=$(configname) -test.failfast=$(failfast)
 
 .PHONY: docker
 docker:
@@ -84,7 +84,7 @@ gomplate:
 # where /bin/bash is an old bash
 .PHONY: run
 run: gomplate $(run_deps)
-	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
+	@echo "launching test job with name=$(test_job_name) and testid=$(test_id), command=$(command)"
 	@ns=$$(kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null); \
 	export ns="$${ns:-default}"; \
 	if [ -z "$${norbac}" ]; then \

@@ -12,6 +12,14 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
+## Release v1.6.6
+
+### Improvements
+
+* [#6198](https://github.com/spacemeshos/go-spacemesh/pull/6198) Configure default TTL for caching poet's /v1/info
+
+* [#6199](https://github.com/spacemeshos/go-spacemesh/pull/6199) Cache poet's /v1/pow_params
+
 ## Release v1.6.5
 
 ### Improvements

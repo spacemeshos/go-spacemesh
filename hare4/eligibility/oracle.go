@@ -316,8 +316,8 @@ func (o *Oracle) Validate(
 				log.ZContext(ctx),
 				zap.Any("msg", msg),
 				zap.Int("n", n),
-				zap.String("p", p.String()),
-				zap.String("vrf_frac", vrfFrac.String()),
+				zap.Stringer("p", p),
+				zap.Stringer("vrf_frac", vrfFrac),
 			)
 		}
 	}()
@@ -326,7 +326,7 @@ func (o *Oracle) Validate(
 	if !fixed.BinCDF(n, p, x-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
-	o.log.Info("eligibility: node did not pass vrf eligibility threshold",
+	o.log.Warn("eligibility: node did not pass vrf eligibility threshold",
 		log.ZContext(ctx),
 		zap.Uint32("layer", layer.Uint32()),
 		zap.Uint32("round", round),
@@ -446,7 +446,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 	for _, aweight := range activeWeights {
 		aset.total += aweight.weight
 	}
-	o.log.Debug("got hare active set", log.ZContext(ctx), zap.Int("count", len(activeWeights)))
+	o.log.Info("got hare active set", log.ZContext(ctx), zap.Int("count", len(activeWeights)))
 	o.activesCache.Add(targetEpoch, aset)
 	return aset, nil
 }
@@ -462,7 +462,7 @@ func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]ty
 func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
 	activeSet, ok := o.fallback[targetEpoch]
 	if ok {
-		o.log.Debug("using fallback active set",
+		o.log.Info("using fallback active set",
 			log.ZContext(ctx),
 			zap.Uint32("target_epoch", targetEpoch.Uint32()),
 			zap.Int("size", len(activeSet)),
@@ -517,8 +517,8 @@ func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, er
 		actives, err := activesets.Get(o.db, ballot.EpochData.ActiveSetHash)
 		if err != nil {
 			o.log.Error("failed to get active set",
-				zap.String("actives hash", ballot.EpochData.ActiveSetHash.ShortString()),
-				zap.String("ballot ", ballot.ID().String()),
+				log.ZShortStringer("actives hash", ballot.EpochData.ActiveSetHash),
+				zap.Stringer("ballot ", ballot.ID()),
 				zap.Error(err),
 			)
 			continue
@@ -555,7 +555,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(
 }
 
 func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
-	o.log.Debug("received activeset update",
+	o.log.Info("received activeset update",
 		zap.Uint32("epoch", epoch.Uint32()),
 		zap.Int("size", len(activeSet)),
 	)

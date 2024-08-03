@@ -150,6 +150,9 @@ func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.WaitAllTimeout(cctx.BootstrapDuration); err != nil {
 		return nil, err
 	}
+	if err = cctx.CheckFail(); err != nil {
+		return nil, err
+	}
 	return cl, nil
 }
 
