@@ -891,6 +891,38 @@ func Units(db sql.Executor, atxID types.ATXID, nodeID types.NodeID) (uint32, err
 	return units, err
 }
 
+// FindDoublePublish finds 2 distinct ATXIDs that the given identity contributed PoST to in the given epoch.
+//
+// It is guaranteed to return 2 distinct ATXs when the error is nil.
+// It works by finding an ATX in the given epoch that has a PoST contribution from the given identity.
+// - `epoch` is looked up in the `atxs` table by matching atxid.
+func FindDoublePublish(db sql.Executor, nodeID types.NodeID, epoch types.EpochID) ([]types.ATXID, error) {
+	var ids []types.ATXID
+	rows, err := db.Exec(`
+		SELECT p.atxid
+		FROM posts p
+		INNER JOIN atxs a ON p.atxid = a.id
+		WHERE p.pubkey = ?1 AND a.epoch = ?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+			stmt.BindInt64(2, int64(epoch))
+		},
+		func(stmt *sql.Statement) bool {
+			var id types.ATXID
+			stmt.ColumnBytes(0, id[:])
+			ids = append(ids, id)
+			return len(ids) < 2
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if rows != 2 {
+		return nil, sql.ErrNotFound
+	}
+	return ids, nil
+}
+
 func AllUnits(db sql.Executor, id types.ATXID) (map[types.NodeID]uint32, error) {
 	units := make(map[types.NodeID]uint32)
 	rows, err := db.Exec(
