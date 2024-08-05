@@ -67,7 +67,7 @@ jobs:
         id: install
         uses: azure/setup-kubectl@v4
         with:
-          version: "v1.23.15"
+          version: "v1.27.16"
 
       - name: Setup gcloud authentication
         uses: google-github-actions/auth@v2
