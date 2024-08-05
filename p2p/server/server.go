@@ -516,7 +516,7 @@ func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) (int, er
 		n, err := toCall(respLen)
 		nBytes += n
 		if err != nil {
-			return nBytes, err
+			return nBytes, fmt.Errorf("callback error: %w", err)
 		}
 		if int(respLen) != n {
 			return nBytes, errors.New("malformed server response")
@@ -526,7 +526,7 @@ func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) (int, er
 	nBytes += n
 	switch {
 	case err != nil:
-		return nBytes, err
+		return nBytes, fmt.Errorf("decode error: %w", err)
 	case errStr != "":
 		return nBytes, NewServerError(errStr)
 	case respLen == 0:

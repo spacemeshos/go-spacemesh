@@ -1935,41 +1935,40 @@ func (c *MockcertifierServiceCertificateCall) DoAndReturn(f func(context.Context
 	return c
 }
 
-// Recertify mocks base method.
-func (m *MockcertifierService) Recertify(ctx context.Context, id types.NodeID, certifierAddress *url.URL, pubkey []byte) (*certifier.PoetCert, error) {
+// DeleteCertificate mocks base method.
+func (m *MockcertifierService) DeleteCertificate(id types.NodeID, pubkey []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Recertify", ctx, id, certifierAddress, pubkey)
-	ret0, _ := ret[0].(*certifier.PoetCert)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "DeleteCertificate", id, pubkey)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// Recertify indicates an expected call of Recertify.
-func (mr *MockcertifierServiceMockRecorder) Recertify(ctx, id, certifierAddress, pubkey any) *MockcertifierServiceRecertifyCall {
+// DeleteCertificate indicates an expected call of DeleteCertificate.
+func (mr *MockcertifierServiceMockRecorder) DeleteCertificate(id, pubkey any) *MockcertifierServiceDeleteCertificateCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Recertify", reflect.TypeOf((*MockcertifierService)(nil).Recertify), ctx, id, certifierAddress, pubkey)
-	return &MockcertifierServiceRecertifyCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCertificate", reflect.TypeOf((*MockcertifierService)(nil).DeleteCertificate), id, pubkey)
+	return &MockcertifierServiceDeleteCertificateCall{Call: call}
 }
 
-// MockcertifierServiceRecertifyCall wrap *gomock.Call
-type MockcertifierServiceRecertifyCall struct {
+// MockcertifierServiceDeleteCertificateCall wrap *gomock.Call
+type MockcertifierServiceDeleteCertificateCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockcertifierServiceRecertifyCall) Return(arg0 *certifier.PoetCert, arg1 error) *MockcertifierServiceRecertifyCall {
-	c.Call = c.Call.Return(arg0, arg1)
+func (c *MockcertifierServiceDeleteCertificateCall) Return(arg0 error) *MockcertifierServiceDeleteCertificateCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockcertifierServiceRecertifyCall) Do(f func(context.Context, types.NodeID, *url.URL, []byte) (*certifier.PoetCert, error)) *MockcertifierServiceRecertifyCall {
+func (c *MockcertifierServiceDeleteCertificateCall) Do(f func(types.NodeID, []byte) error) *MockcertifierServiceDeleteCertificateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockcertifierServiceRecertifyCall) DoAndReturn(f func(context.Context, types.NodeID, *url.URL, []byte) (*certifier.PoetCert, error)) *MockcertifierServiceRecertifyCall {
+func (c *MockcertifierServiceDeleteCertificateCall) DoAndReturn(f func(types.NodeID, []byte) error) *MockcertifierServiceDeleteCertificateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
