@@ -17,11 +17,14 @@ const (
 	Network = "network_v2alpha1"
 )
 
-func NewNetworkService(genesisTime time.Time, genesisID types.Hash20, layerDuration time.Duration) *NetworkService {
+func NewNetworkService(genesisTime time.Time, genesisID types.Hash20, layerDuration time.Duration,
+	labelsPerUnit uint64,
+) *NetworkService {
 	return &NetworkService{
 		genesisTime:   genesisTime,
 		genesisID:     genesisID,
 		layerDuration: layerDuration,
+		labelsPerUnit: labelsPerUnit,
 	}
 }
 
@@ -29,6 +32,7 @@ type NetworkService struct {
 	genesisTime   time.Time
 	genesisID     types.Hash20
 	layerDuration time.Duration
+	labelsPerUnit uint64
 }
 
 func (s *NetworkService) RegisterService(server *grpc.Server) {
@@ -54,5 +58,6 @@ func (s *NetworkService) Info(context.Context,
 		Hrp:                   types.NetworkHRP(),
 		EffectiveGenesisLayer: types.GetEffectiveGenesis().Uint32(),
 		LayersPerEpoch:        types.GetLayersPerEpoch(),
+		LabelsPerUnit:         s.labelsPerUnit,
 	}, nil
 }
