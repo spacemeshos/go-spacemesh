@@ -925,7 +925,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		err = atxHandler.processATX(context.Background(), "", merged, time.Now())
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
-	t.Run("publishing two merged ATXs by one marriage set is malfeasance", func(t *testing.T) {
+	t.Run("publishing two merged ATXs from one marriage set is malfeasance", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
 
 		// Marry 4 IDs
