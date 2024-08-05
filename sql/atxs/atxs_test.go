@@ -1201,3 +1201,80 @@ func Test_AtxWithPrevious(t *testing.T) {
 		require.Equal(t, atx2.ID(), id)
 	})
 }
+
+func Test_FindDoublePublish(t *testing.T) {
+	t.Parallel()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	t.Run("no atxs", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		_, err := atxs.FindDoublePublish(db, types.RandomNodeID(), 0)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+
+	t.Run("no double publish", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+
+		// one atx
+		atx0, blob := newAtx(t, sig, withPublishEpoch(1))
+		require.NoError(t, atxs.Add(db, atx0, blob))
+		require.NoError(t, atxs.SetUnits(db, atx0.ID(), atx0.SmesherID, 10))
+
+		_, err = atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+
+		// two atxs in different epochs
+		atx1, blob := newAtx(t, sig, withPublishEpoch(atx0.PublishEpoch+1))
+		require.NoError(t, atxs.Add(db, atx1, blob))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), atx0.SmesherID, 10))
+
+		_, err = atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("double publish", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+
+		atx0, blob := newAtx(t, sig)
+		require.NoError(t, atxs.Add(db, atx0, blob))
+		require.NoError(t, atxs.SetUnits(db, atx0.ID(), atx0.SmesherID, 10))
+
+		atx1, blob := newAtx(t, sig)
+		require.NoError(t, atxs.Add(db, atx1, blob))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), atx0.SmesherID, 10))
+
+		atxids, err := atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx0.ID(), atx1.ID()}, atxids)
+
+		// filters by epoch
+		_, err = atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch+1)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("double publish different smesher", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+
+		atx0Signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx0, blob := newAtx(t, atx0Signer)
+		require.NoError(t, atxs.Add(db, atx0, blob))
+		require.NoError(t, atxs.SetUnits(db, atx0.ID(), atx0.SmesherID, 10))
+		require.NoError(t, atxs.SetUnits(db, atx0.ID(), sig.NodeID(), 10))
+
+		atx1Signer, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx1, blob := newAtx(t, atx1Signer)
+		require.NoError(t, atxs.Add(db, atx1, blob))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), atx1.SmesherID, 10))
+		require.NoError(t, atxs.SetUnits(db, atx1.ID(), sig.NodeID(), 10))
+
+		atxIDs, err := atxs.FindDoublePublish(db, sig.NodeID(), atx0.PublishEpoch)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx0.ID(), atx1.ID()}, atxIDs)
+	})
+}
