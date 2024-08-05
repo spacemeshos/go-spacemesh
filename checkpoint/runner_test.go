@@ -1,4 +1,4 @@
-package checkpoint
+package checkpoint_test
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
@@ -313,12 +314,12 @@ func TestRunner_Generate(t *testing.T) {
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			err = Generate(ctx, fs, db, dir, snapshot, tc.numAtxs)
+			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, tc.numAtxs)
 			require.NoError(t, err)
-			fname := SelfCheckpointFilename(dir, snapshot)
+			fname := checkpoint.SelfCheckpointFilename(dir, snapshot)
 			persisted, err := afero.ReadFile(fs, fname)
 			require.NoError(t, err)
-			require.NoError(t, ValidateSchema(persisted))
+			require.NoError(t, checkpoint.ValidateSchema(persisted))
 			var got types.Checkpoint
 			expected := expectedCheckpoint(t, snapshot, tc.numAtxs, tc.miners)
 			require.NoError(t, json.Unmarshal(persisted, &got))
@@ -349,7 +350,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 		fs := afero.NewMemMapFs()
 		dir, err := afero.TempDir(fs, "", "Generate")
 		require.NoError(t, err)
-		err = Generate(context.Background(), fs, db, dir, snapshot, 2)
+		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
 		require.ErrorContains(t, err, "atxs snapshot commitment")
 	})
 	t.Run("no atxs", func(t *testing.T) {
@@ -362,7 +363,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 		dir, err := afero.TempDir(fs, "", "Generate")
 		require.NoError(t, err)
 
-		err = Generate(context.Background(), fs, db, dir, snapshot, 2)
+		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
 		require.Error(t, err)
 	})
 	t.Run("no accounts", func(t *testing.T) {
@@ -375,7 +376,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 		dir, err := afero.TempDir(fs, "", "Generate")
 		require.NoError(t, err)
 
-		err = Generate(context.Background(), fs, db, dir, snapshot, 2)
+		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
 		require.Error(t, err)
 	})
 }
@@ -396,7 +397,18 @@ func TestRunner_Generate_PreservesMarriageATX(t *testing.T) {
 	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 	require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, atx.NumUnits))
 
-	checkpoint, err := checkpointDB(context.Background(), db, 0, 1)
+	fs := afero.NewMemMapFs()
+	dir, err := afero.TempDir(fs, "", "Generate")
 	require.NoError(t, err)
+
+	err = checkpoint.Generate(context.Background(), fs, db, dir, 5, 2)
+	require.NoError(t, err)
+
+	file, err := fs.Open(checkpoint.SelfCheckpointFilename(dir, 5))
+	require.NoError(t, err)
+	defer file.Close()
+
+	var checkpoint types.Checkpoint
+	require.NoError(t, json.NewDecoder(file).Decode(&checkpoint))
 	require.Equal(t, atx.MarriageATX.Bytes(), checkpoint.Data.Atxs[0].MarriageAtx)
 }

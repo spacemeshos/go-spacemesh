@@ -430,8 +430,6 @@ func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
 		stmt.BindInt64(3, int64(atx.NumUnits))
 		if atx.CommitmentATX != nil {
 			stmt.BindBytes(4, atx.CommitmentATX.Bytes())
-		} else {
-			stmt.BindNull(4)
 		}
 		stmt.BindInt64(5, int64(atx.VRFNonce))
 		stmt.BindBytes(6, atx.SmesherID.Bytes())
@@ -443,14 +441,10 @@ func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
 		stmt.BindInt64(12, int64(atx.Validity()))
 		if atx.PrevATXID != types.EmptyATXID {
 			stmt.BindBytes(13, atx.PrevATXID.Bytes())
-		} else {
-			stmt.BindNull(13)
 		}
 		stmt.BindInt64(14, int64(atx.Weight))
 		if atx.MarriageATX != nil {
 			stmt.BindBytes(15, atx.MarriageATX.Bytes())
-		} else {
-			stmt.BindNull(15)
 		}
 	}
 
@@ -634,8 +628,6 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 		stmt.BindBytes(10, catx.Coinbase.Bytes())
 		if catx.MarriageATX != nil {
 			stmt.BindBytes(11, catx.MarriageATX.Bytes())
-		} else {
-			stmt.BindNull(11)
 		}
 	}
 
