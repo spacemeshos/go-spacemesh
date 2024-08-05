@@ -784,7 +784,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.updater = bootstrap.New(
 		app.clock,
 		bootstrap.WithConfig(bscfg),
-		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
+		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
 	)
 	if app.Config.Certificate.CommitteeSize == 0 {
 		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
