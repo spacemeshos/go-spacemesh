@@ -157,7 +157,7 @@ func expectedCheckpoint(t testing.TB, snapshot types.LayerID, numAtxs int, miner
 	require.NoError(t, err)
 
 	result := &types.Checkpoint{
-		Command: fmt.Sprintf(CommandString, request),
+		Command: fmt.Sprintf(checkpoint.CommandString, request),
 		Version: "https://spacemesh.io/checkpoint.schema.json.1.0",
 		Data: types.InnerData{
 			CheckpointId: "snapshot-5",
