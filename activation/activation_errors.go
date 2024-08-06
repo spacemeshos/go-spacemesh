@@ -51,7 +51,7 @@ func (e *PoetRegistrationMismatchError) Error() string {
 	return sb.String()
 }
 
-func (e *PoetRegistrationMismatchError) As(target error) bool {
+func (e *PoetRegistrationMismatchError) As(target any) bool {
 	var poetRegistrationMismatchError *PoetRegistrationMismatchError
-	return errors.As(target, &poetRegistrationMismatchError)
+	return errors.As(poetRegistrationMismatchError, target)
 }
