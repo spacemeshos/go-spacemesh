@@ -101,7 +101,7 @@ type syncer interface {
 // Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them.
 // and mark the associated identity as malfeasant.
 type malfeasancePublisher interface {
-	Publish(ctx context.Context, id types.NodeID, proof *wire.ATXProof) error
+	Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error
 }
 
 type atxProvider interface {

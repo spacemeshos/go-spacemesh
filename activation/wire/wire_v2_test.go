@@ -1,16 +1,64 @@
 package wire
 
 import (
-	"encoding/binary"
 	"math/rand/v2"
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
-	"github.com/spacemeshos/merkle-tree"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
+
+type testAtxV2Opt func(*ActivationTxV2)
+
+func WithPublishEpoch(epoch types.EpochID) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		atx.PublishEpoch = epoch
+	}
+}
+
+func WithMarriageCertificate(sig *signing.EdSigner, refAtx types.ATXID, atxPublisher types.NodeID) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		certificate := MarriageCertificate{
+			ReferenceAtx: refAtx,
+			Signature:    sig.Sign(signing.MARRIAGE, atxPublisher.Bytes()),
+		}
+		atx.Marriages = append(atx.Marriages, certificate)
+	}
+}
+
+func newActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
+	atx := &ActivationTxV2{
+		PublishEpoch:   rand.N(types.EpochID(255)),
+		PositioningATX: types.RandomATXID(),
+		PreviousATXs:   make([]types.ATXID, 1+rand.IntN(255)),
+		NiPosts: []NiPostsV2{
+			{
+				Membership: MerkleProofV2{
+					Nodes: make([]types.Hash32, 32),
+				},
+				Challenge: types.RandomHash(),
+				Posts: []SubPostV2{
+					{
+						MarriageIndex: rand.Uint32N(256),
+						PrevATXIndex:  0,
+						Post: PostV1{
+							Nonce:   0,
+							Indices: make([]byte, 800),
+							Pow:     0,
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, opt := range opts {
+		opt(atx)
+	}
+	return atx
+}
 
 func Benchmark_ATXv2ID(b *testing.B) {
 	f := fuzz.New()
@@ -82,80 +130,4 @@ func Test_NoATXv2IDCollisions(t *testing.T) {
 		require.NotContains(t, atxIDs, id, "ATX ID collision")
 		atxIDs = append(atxIDs, id)
 	}
-}
-
-const PublishEpochIndex = 0
-
-func Test_GenerateDoublePublishProof(t *testing.T) {
-	atx := &ActivationTxV2{
-		PublishEpoch:   10,
-		PositioningATX: types.RandomATXID(),
-		PreviousATXs:   make([]types.ATXID, 1),
-		NiPosts: []NiPostsV2{
-			{
-				Membership: MerkleProofV2{
-					Nodes: make([]types.Hash32, 32),
-				},
-				Challenge: types.RandomHash(),
-				Posts: []SubPostV2{
-					{
-						MarriageIndex: rand.Uint32N(256),
-						PrevATXIndex:  0,
-						Post: PostV1{
-							Nonce:   0,
-							Indices: make([]byte, 800),
-							Pow:     0,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	proof, err := generatePublishEpochProof(atx)
-	require.NoError(t, err)
-	require.NotNil(t, proof)
-
-	// a malfeasance proof for double publish will contain
-	// - the value of the PublishEpoch (here 10) - 4 bytes
-	// - the two ATX IDs - 32 bytes each
-	// - the two signatures (atx.Signature + atx.NodeID) - 64 bytes each
-	// - two merkle proofs - one per ATX - that is 128 bytes each (4 * 32)
-	// total: 452 bytes instead of two full ATXs (> 20 kB each in the worst case)
-
-	publishEpoch := make([]byte, 4)
-	binary.LittleEndian.PutUint32(publishEpoch, atx.PublishEpoch.Uint32())
-	ok, err := merkle.ValidatePartialTree(
-		[]uint64{PublishEpochIndex},
-		[][]byte{publishEpoch},
-		proof,
-		atx.ID().Bytes(),
-		atxTreeHash,
-	)
-	require.NoError(t, err)
-	require.True(t, ok)
-
-	// different PublishEpoch doesn't validate
-	publishEpoch = []byte{0xFF, 0x00, 0x00, 0x00}
-	ok, err = merkle.ValidatePartialTree(
-		[]uint64{PublishEpochIndex},
-		[][]byte{publishEpoch},
-		proof,
-		atx.ID().Bytes(),
-		atxTreeHash,
-	)
-	require.NoError(t, err)
-	require.False(t, ok)
-}
-
-func generatePublishEpochProof(atx *ActivationTxV2) ([][]byte, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{PublishEpochIndex: true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	atx.merkleTree(tree)
-	return tree.Proof(), nil
 }

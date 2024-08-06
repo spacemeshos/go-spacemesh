@@ -18,6 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -626,9 +627,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 					zap.Int("index", invalidIdx.Index),
 				)
 				// TODO(mafa): finish proof
-				proof := &wire.ATXProof{
-					ProofType: wire.InvalidPost,
-				}
+				var proof wire.Proof
 				if err := h.malPublisher.Publish(ctx, id, proof); err != nil {
 					return nil, fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
 				}
@@ -713,9 +712,34 @@ func (h *HandlerV2) checkDoubleMarry(
 			return false, fmt.Errorf("checking if ID is married: %w", err)
 		}
 		if mATX != atxID {
-			// TODO(mafa): finish proof
-			proof := &wire.ATXProof{
-				ProofType: wire.DoubleMarry,
+			var blob sql.Blob
+			v, err := atxs.LoadBlob(ctx, tx, atxID.Bytes(), &blob)
+			if err != nil {
+				return true, fmt.Errorf("creating double marry proof: %w", err)
+			}
+			if v != types.AtxV2 {
+				h.logger.Fatal("Failed to create double marry malfeasance proof: ATX is not v2",
+					zap.Stringer("atx_id", atxID),
+				)
+			}
+			var atx1 wire.ActivationTxV2
+			codec.MustDecode(blob.Bytes, &atx1)
+
+			v, err = atxs.LoadBlob(ctx, tx, mATX.Bytes(), &blob)
+			if err != nil {
+				return true, fmt.Errorf("creating double marry proof: %w", err)
+			}
+			if v != types.AtxV2 {
+				h.logger.Fatal("Failed to create double marry malfeasance proof: ATX is not v2",
+					zap.Stringer("atx_id", mATX),
+				)
+			}
+			var atx2 wire.ActivationTxV2
+			codec.MustDecode(blob.Bytes, &atx2)
+
+			proof, err := wire.NewDoubleMarryProof(tx, &atx1, &atx2, m.id)
+			if err != nil {
+				return true, fmt.Errorf("creating double marry proof: %w", err)
 			}
 			return true, h.malPublisher.Publish(ctx, m.id, proof)
 		}
@@ -747,9 +771,7 @@ func (h *HandlerV2) checkDoublePost(
 			zap.Uint32("epoch", atx.PublishEpoch.Uint32()),
 		)
 		// TODO(mafa): finish proof
-		proof := &wire.ATXProof{
-			ProofType: wire.DoublePublish,
-		}
+		var proof wire.Proof
 		return true, h.malPublisher.Publish(ctx, id, proof)
 	}
 	return false, nil
@@ -776,10 +798,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, watx *wire
 		zap.Stringer("smesher_id", watx.SmesherID),
 	)
 
-	// TODO(mafa): finish proof
-	proof := &wire.ATXProof{
-		ProofType: wire.DoubleMerge,
-	}
+	var proof wire.Proof
 	return true, h.malPublisher.Publish(ctx, watx.SmesherID, proof)
 }
 
