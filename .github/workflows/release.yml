@@ -22,6 +22,10 @@ jobs:
             outname_sufix: "mac-arm64"
           - os: windows-2022
             outname_sufix: "win-amd64"
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
     steps:
       - shell: bash
         run: echo "OUTNAME=go-spacemesh-${{ github.ref_name }}-${{ matrix.outname_sufix }}" >> $GITHUB_ENV
@@ -77,9 +81,12 @@ jobs:
           rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
       - name: Setup gcloud authentication
-        uses: google-github-actions/auth@v2
+        uses: 'google-github-actions/auth@v1'
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
+          service_account: ${{ secrets.GCP_WI_SA }} 
+          token_format: access_token
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
@@ -111,6 +118,9 @@ jobs:
   release:
     runs-on: ubuntu-22.04
     needs: build-and-upload
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     steps:
       - name: Download the artifacts
         uses: actions/download-artifact@v4
@@ -136,9 +146,13 @@ jobs:
           echo "mac-arm64: $(cat sha256-mac-arm64/sha256-mac-arm64.txt)" >> sha256sum.yaml
 
       - name: Setup gcloud authentication
-        uses: google-github-actions/auth@v2
+        uses: 'google-github-actions/auth@v1'
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
+          service_account: ${{ secrets.GCP_WI_SA }} 
+          token_format: access_token
+        
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
