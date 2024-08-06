@@ -713,9 +713,14 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
-			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
-		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		nipst, err := nb.BuildNIPost(
+			context.Background(),
+			sig,
+			challenge,
+			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2},
+		)
+		poetErr := &PoetSvcUnstableError{}
+		require.ErrorAs(t, err, &poetErr)
 		require.Nil(t, nipst)
 	})
 	t.Run("Submit hangs", func(t *testing.T) {
@@ -750,9 +755,14 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
-			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
-		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		nipst, err := nb.BuildNIPost(
+			context.Background(),
+			sig,
+			challenge,
+			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2},
+		)
+		poetErr := &PoetSvcUnstableError{}
+		require.ErrorAs(t, err, &poetErr)
 		require.Nil(t, nipst)
 	})
 	t.Run("GetProof fails", func(t *testing.T) {
