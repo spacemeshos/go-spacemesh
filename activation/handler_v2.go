@@ -668,7 +668,7 @@ func (h *HandlerV2) checkMalicious(
 		return nil
 	}
 
-	malicious, err = h.checkDoubleMarry(ctx, tx, watx.ID(), marrying)
+	malicious, err = h.checkDoubleMarry(ctx, tx, watx, marrying)
 	if err != nil {
 		return fmt.Errorf("checking double marry: %w", err)
 	}
@@ -703,7 +703,7 @@ func (h *HandlerV2) checkMalicious(
 func (h *HandlerV2) checkDoubleMarry(
 	ctx context.Context,
 	tx *sql.Tx,
-	atxID types.ATXID,
+	atx *wire.ActivationTxV2,
 	marrying []marriage,
 ) (bool, error) {
 	for _, m := range marrying {
@@ -711,21 +711,9 @@ func (h *HandlerV2) checkDoubleMarry(
 		if err != nil {
 			return false, fmt.Errorf("checking if ID is married: %w", err)
 		}
-		if mATX != atxID {
+		if mATX != atx.ID() {
 			var blob sql.Blob
-			v, err := atxs.LoadBlob(ctx, tx, atxID.Bytes(), &blob)
-			if err != nil {
-				return true, fmt.Errorf("creating double marry proof: %w", err)
-			}
-			if v != types.AtxV2 {
-				h.logger.Fatal("Failed to create double marry malfeasance proof: ATX is not v2",
-					zap.Stringer("atx_id", atxID),
-				)
-			}
-			var atx1 wire.ActivationTxV2
-			codec.MustDecode(blob.Bytes, &atx1)
-
-			v, err = atxs.LoadBlob(ctx, tx, mATX.Bytes(), &blob)
+			v, err := atxs.LoadBlob(ctx, tx, mATX.Bytes(), &blob)
 			if err != nil {
 				return true, fmt.Errorf("creating double marry proof: %w", err)
 			}
@@ -734,10 +722,10 @@ func (h *HandlerV2) checkDoubleMarry(
 					zap.Stringer("atx_id", mATX),
 				)
 			}
-			var atx2 wire.ActivationTxV2
-			codec.MustDecode(blob.Bytes, &atx2)
+			var otherAtx wire.ActivationTxV2
+			codec.MustDecode(blob.Bytes, &otherAtx)
 
-			proof, err := wire.NewDoubleMarryProof(tx, &atx1, &atx2, m.id)
+			proof, err := wire.NewDoubleMarryProof(tx, atx, &otherAtx, m.id)
 			if err != nil {
 				return true, fmt.Errorf("creating double marry proof: %w", err)
 			}
