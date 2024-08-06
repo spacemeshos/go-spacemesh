@@ -148,8 +148,8 @@ func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 	return n
 }
 
-func (n *node) withDb() *node {
-	n.db = sql.InMemory()
+func (n *node) withDb(tb testing.TB) *node {
+	n.db = sql.InMemoryTest(tb)
 	n.atxsdata = atxsdata.New()
 	n.proposals = store.New()
 	return n
@@ -340,12 +340,10 @@ func (cl *lockstepCluster) addSigner(n int) *lockstepCluster {
 func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 	last := len(cl.nodes)
 	for i := last; i < last+n; i++ {
-		nn := (&node{t: cl.t, i: i}).
+		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withSigner().withAtx(cl.units.min, cl.units.max).
-			withOracle().withHare()
-		cl.t.Cleanup(func() { nn.db.Close() })
-		cl.addNode(nn)
+			withClock().withDb(cl.t).withSigner().withAtx(cl.units.min, cl.units.max).
+			withOracle().withHare())
 	}
 	return cl
 }
@@ -353,12 +351,10 @@ func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 func (cl *lockstepCluster) addInactive(n int) *lockstepCluster {
 	last := len(cl.nodes)
 	for i := last; i < last+n; i++ {
-		nn := (&node{t: cl.t, i: i}).
+		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withSigner().
-			withOracle().withHare()
-		cl.t.Cleanup(func() { nn.db.Close() })
-		cl.addNode(nn)
+			withClock().withDb(cl.t).withSigner().
+			withOracle().withHare())
 	}
 	return cl
 }
@@ -367,13 +363,11 @@ func (cl *lockstepCluster) addEquivocators(n int) *lockstepCluster {
 	require.LessOrEqual(cl.t, n, len(cl.nodes))
 	last := len(cl.nodes)
 	for i := last; i < last+n; i++ {
-		nn := (&node{t: cl.t, i: i}).
+		cl.addNode((&node{t: cl.t, i: i}).
 			reuseSigner(cl.nodes[i-last].signer).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withAtx(cl.units.min, cl.units.max).
-			withOracle().withHare()
-		cl.t.Cleanup(func() { nn.db.Close() })
-		cl.addNode(nn)
+			withClock().withDb(cl.t).withAtx(cl.units.min, cl.units.max).
+			withOracle().withHare())
 	}
 	return cl
 }
