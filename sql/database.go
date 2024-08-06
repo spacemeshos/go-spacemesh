@@ -187,7 +187,7 @@ func InMemory(opts ...Opt) *Database {
 	return db
 }
 
-// InMemoryTest returns an in-mem database for testing and ensures t.Cleanup is called.
+// InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
 func InMemoryTest(tb testing.TB, opts ...Opt) *Database {
 	opts = append(opts, WithConnections(1))
 	db, err := Open("file::memory:?mode=memory", opts...)
