@@ -46,6 +46,7 @@ type PoetConfig struct {
 	RequestRetryDelay              time.Duration `mapstructure:"retry-delay"`
 	PositioningATXSelectionTimeout time.Duration `mapstructure:"positioning-atx-selection-timeout"`
 	CertifierInfoCacheTTL          time.Duration `mapstructure:"certifier-info-cache-ttl"`
+	PowParamsCacheTTL              time.Duration `mapstructure:"pow-params-cache-ttl"`
 	MaxRequestRetries              int           `mapstructure:"retry-max"`
 }
 
@@ -54,6 +55,7 @@ func DefaultPoetConfig() PoetConfig {
 		RequestRetryDelay:     400 * time.Millisecond,
 		MaxRequestRetries:     10,
 		CertifierInfoCacheTTL: 5 * time.Minute,
+		PowParamsCacheTTL:     5 * time.Minute,
 	}
 }
 
