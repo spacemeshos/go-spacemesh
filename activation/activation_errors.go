@@ -60,3 +60,9 @@ func (e *PoetRegistrationMismatchError) Error() string {
 	}
 	return sb.String()
 }
+
+func (e *PoetRegistrationMismatchError) Is(target error) bool {
+	var poetRegistrationMismatchError *PoetRegistrationMismatchError
+	ok := errors.As(target, &poetRegistrationMismatchError)
+	return ok
+}

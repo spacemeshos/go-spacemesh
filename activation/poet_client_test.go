@@ -514,6 +514,10 @@ func TestPoetService_CachesPowParams(t *testing.T) {
 			cfg := DefaultPoetConfig()
 			cfg.PowParamsCacheTTL = tc.ttl
 			client := NewMockPoetClient(gomock.NewController(t))
+
+			client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{}, nil)
+			client.EXPECT().Address().Return("some_address").AnyTimes()
+
 			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
 
 			params := PoetPowParams{
