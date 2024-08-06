@@ -2,6 +2,7 @@ package testcontext
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -18,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
@@ -53,6 +54,9 @@ var (
 
 	tokens     chan struct{}
 	initTokens sync.Once
+
+	failed   = make(chan struct{})
+	failOnce sync.Once
 )
 
 var (
@@ -227,7 +231,7 @@ func updateContext(ctx *Context) error {
 	ns, err := ctx.Client.CoreV1().Namespaces().Get(ctx, ctx.Namespace,
 		apimetav1.GetOptions{})
 	if err != nil || ns == nil {
-		if errors.IsNotFound(err) {
+		if k8serr.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -288,6 +292,12 @@ func New(t *testing.T, opts ...Opt) *Context {
 		tokens <- struct{}{}
 		t.Cleanup(func() { <-tokens })
 	}
+
+	t.Cleanup(func() {
+		if t.Failed() {
+			failOnce.Do(func() { close(failed) })
+		}
+	})
 	config, err := rest.InClusterConfig()
 
 	// The default rate limiter is too slow 5qps and 10 burst, This will prevent the client from being throttled
@@ -368,4 +378,13 @@ func New(t *testing.T, opts ...Opt) *Context {
 	require.NoError(t, deployNamespace(cctx))
 	cctx.Log.Infow("using", "namespace", cctx.Namespace)
 	return cctx
+}
+
+func (c *Context) CheckFail() error {
+	select {
+	case <-failed:
+		return errors.New("test suite failed. aborting test execution")
+	default:
+	}
+	return nil
 }

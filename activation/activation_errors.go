@@ -9,13 +9,8 @@ import (
 var (
 	// ErrATXChallengeExpired is returned when atx missed its publication window and needs to be regenerated.
 	ErrATXChallengeExpired = errors.New("builder: atx expired")
-	// ErrPoetServiceUnstable is returned when poet quality of service is low.
-	ErrPoetServiceUnstable = &PoetSvcUnstableError{}
 	// ErrPoetProofNotReceived is returned when no poet proof was received.
 	ErrPoetProofNotReceived = errors.New("builder: didn't receive any poet proof")
-	// ErrNoRegistrationForGivenPoetFound is returned when configured poets
-	// do not match existing registrations in db at all.
-	ErrNoRegistrationForGivenPoetFound = &PoetRegistrationMismatchError{}
 )
 
 // PoetSvcUnstableError means there was a problem communicating
@@ -32,11 +27,6 @@ func (e *PoetSvcUnstableError) Error() string {
 }
 
 func (e *PoetSvcUnstableError) Unwrap() error { return e.source }
-
-func (e *PoetSvcUnstableError) Is(target error) bool {
-	_, ok := target.(*PoetSvcUnstableError)
-	return ok
-}
 
 type PoetRegistrationMismatchError struct {
 	registrations   []string
@@ -61,7 +51,7 @@ func (e *PoetRegistrationMismatchError) Error() string {
 	return sb.String()
 }
 
-func (e *PoetRegistrationMismatchError) Is(target error) bool {
+func (e *PoetRegistrationMismatchError) As(target error) bool {
 	var poetRegistrationMismatchError *PoetRegistrationMismatchError
 	ok := errors.As(target, &poetRegistrationMismatchError)
 	return ok

@@ -774,7 +774,7 @@ func (app *App) initServices(ctx context.Context) error {
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
 		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg)),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
 	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
@@ -784,7 +784,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.updater = bootstrap.New(
 		app.clock,
 		bootstrap.WithConfig(bscfg),
-		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg)),
+		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
 	)
 	if app.Config.Certificate.CommitteeSize == 0 {
 		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
@@ -1558,8 +1558,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 	case v2alpha1.Network:
 		service := v2alpha1.NewNetworkService(
 			app.clock.GenesisTime(),
-			app.Config.Genesis.GenesisID(),
-			app.Config.LayerDuration)
+			app.Config)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Node:
