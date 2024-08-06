@@ -19,15 +19,17 @@ import (
 )
 
 type TestPoet struct {
-	mu    sync.Mutex
-	round int
+	mu      sync.Mutex
+	round   int
+	poetCfg activation.PoetConfig
 
 	expectedMembers int
 	registrations   chan []byte
 }
 
-func NewTestPoetClient(expectedMembers int) *TestPoet {
+func NewTestPoetClient(expectedMembers int, poetCfg activation.PoetConfig) *TestPoet {
 	return &TestPoet{
+		poetCfg:         poetCfg,
 		expectedMembers: expectedMembers,
 		registrations:   make(chan []byte, expectedMembers),
 	}
@@ -70,7 +72,10 @@ func (p *TestPoet) CertifierInfo(ctx context.Context) (*types.CertifierInfo, err
 }
 
 func (p *TestPoet) Info(ctx context.Context) (*types.PoetInfo, error) {
-	return nil, errors.New("Info: not supported")
+	return &types.PoetInfo{
+		PhaseShift: p.poetCfg.PhaseShift,
+		CycleGap:   p.poetCfg.CycleGap,
+	}, nil
 }
 
 // Build a proof.
