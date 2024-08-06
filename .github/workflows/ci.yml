@@ -262,7 +262,6 @@ jobs:
       - filter-changes
       - quicktests
       - lint
-      - build-tools
       - build
       - unittests
     runs-on: ubuntu-22.04
