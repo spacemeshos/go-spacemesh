@@ -384,7 +384,7 @@ type poetService struct {
 	certifier certifierService
 
 	certifierInfoCache cachedData[*types.CertifierInfo]
-	mtx                *sync.Mutex
+	mtx                sync.Mutex
 	expectedPhaseShift time.Duration
 	fetchedPhaseShift  time.Duration
 	powParamsCache     cachedData[*PoetPowParams]
@@ -434,21 +434,21 @@ func NewPoetServiceWithClient(
 		powParamsCache:     cachedData[*PoetPowParams]{ttl: cfg.PowParamsCacheTTL},
 		proofMembers:       make(map[string][]types.Hash32, 1),
 		expectedPhaseShift: cfg.PhaseShift,
-		mtx:                &sync.Mutex{},
 	}
 	for _, opt := range opts {
 		opt(service)
 	}
 
 	err := service.verifyPhaseShiftConfiguration(context.Background())
-	if err != nil {
-		if errors.Is(err, ErrIncompatiblePhaseShift) {
-			logger.Panic("failed to create poet service",
-				zap.String("poet", client.Address()))
-		}
+	switch {
+	case errors.Is(err, ErrIncompatiblePhaseShift):
+		logger.Fatal("failed to create poet service", zap.String("poet", client.Address()))
+		return nil
+	case err != nil:
 		logger.Warn("failed to fetch poet phase shift",
+			zap.String("poet", client.Address()),
 			zap.Error(err),
-			zap.String("poet", client.Address()))
+		)
 	}
 	return service
 }
@@ -550,11 +550,12 @@ func (c *poetService) Submit(
 		log.ZShortStringer("smesherID", nodeID),
 	)
 
-	if err := c.verifyPhaseShiftConfiguration(ctx); err != nil {
-		if errors.Is(err, ErrIncompatiblePhaseShift) {
-			logger.Panic("failed to submit challenge",
-				zap.String("poet", c.client.Address()))
-		}
+	err := c.verifyPhaseShiftConfiguration(ctx)
+	switch {
+	case errors.Is(err, ErrIncompatiblePhaseShift):
+		logger.Fatal("failed to submit challenge", zap.String("poet", c.client.Address()))
+		return nil, err
+	case err != nil:
 		return nil, err
 	}
 

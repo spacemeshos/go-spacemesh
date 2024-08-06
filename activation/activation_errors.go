@@ -22,7 +22,7 @@ type PoetSvcUnstableError struct {
 	source error
 }
 
-func (e *PoetSvcUnstableError) Error() string {
+func (e PoetSvcUnstableError) Error() string {
 	return fmt.Sprintf("poet service is unstable: %s (%v)", e.msg, e.source)
 }
 
@@ -33,7 +33,7 @@ type PoetRegistrationMismatchError struct {
 	configuredPoets []string
 }
 
-func (e *PoetRegistrationMismatchError) Error() string {
+func (e PoetRegistrationMismatchError) Error() string {
 	var sb strings.Builder
 	sb.WriteString("builder: none of configured poets matches the existing registrations.\n")
 	sb.WriteString("registrations:\n")
@@ -42,16 +42,11 @@ func (e *PoetRegistrationMismatchError) Error() string {
 		sb.WriteString(r)
 		sb.WriteString("\n")
 	}
-	sb.WriteString("\n configured poets:\n")
+	sb.WriteString("\nconfigured poets:\n")
 	for _, p := range e.configuredPoets {
 		sb.WriteString("\t")
 		sb.WriteString(p)
 		sb.WriteString("\n")
 	}
 	return sb.String()
-}
-
-func (e *PoetRegistrationMismatchError) As(target any) bool {
-	var poetRegistrationMismatchError *PoetRegistrationMismatchError
-	return errors.As(poetRegistrationMismatchError, target)
 }

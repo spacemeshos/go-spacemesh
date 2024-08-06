@@ -761,8 +761,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			challenge,
 			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2},
 		)
-		poetErr := &PoetSvcUnstableError{}
-		require.ErrorAs(t, err, &poetErr)
+		require.ErrorIs(t, err, ErrATXChallengeExpired)
 		require.Nil(t, nipst)
 	})
 	t.Run("GetProof fails", func(t *testing.T) {
@@ -1099,16 +1098,17 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			poetErr := &PoetRegistrationMismatchError{}
 			_, err = nb.submitPoetChallenges(
 				context.Background(),
 				sig,
 				time.Now().Add(10*time.Second),
 				time.Now().Add(-5*time.Second), // poet round started
-				challengeHash.Bytes())
+				challengeHash.Bytes(),
+			)
+			poetErr := &PoetRegistrationMismatchError{}
 			require.ErrorAs(t, err, &poetErr)
-			require.ElementsMatch(t, []string{poetProverAddr2}, poetErr.registrations)
-			require.ElementsMatch(t, []string{poetProverAddr}, poetErr.configuredPoets)
+			require.ElementsMatch(t, poetErr.configuredPoets, []string{poetProverAddr})
+			require.ElementsMatch(t, poetErr.registrations, []string{poetProverAddr2})
 		})
 }
 

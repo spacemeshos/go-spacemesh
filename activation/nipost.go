@@ -231,22 +231,23 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 	// Phase 0: Submit challenge to PoET services.
 	// Deadline: start of PoET round: we will not accept registrations after that
-	submitedRegistrations, err := nb.submitPoetChallenges(
+	submittedRegistrations, err := nb.submitPoetChallenges(
 		ctx,
 		signer,
 		poetProofDeadline,
-		poetRoundStart, challenge.Bytes())
-
+		poetRoundStart, challenge.Bytes(),
+	)
 	regErr := &PoetRegistrationMismatchError{}
-	if err != nil {
-		if errors.As(err, &regErr) {
-			logger.Fatal(
-				"None of the poets listed in the config matches the existing registrations. "+
-					"Verify your config and local database state.",
-				zap.Strings("registrations", regErr.registrations),
-				zap.Strings("configured_poets", regErr.configuredPoets),
-			)
-		}
+	switch {
+	case errors.As(err, &regErr):
+		logger.Fatal(
+			"None of the poets listed in the config matches the existing registrations. "+
+				"Verify your config and local database state.",
+			zap.Strings("registrations", regErr.registrations),
+			zap.Strings("configured_poets", regErr.configuredPoets),
+		)
+		return nil, err
+	case err != nil:
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
@@ -270,7 +271,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		}
 
 		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
-		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, submitedRegistrations)
+		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, submittedRegistrations)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
@@ -501,8 +502,6 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 
 	if len(existingRegistrations) == 0 {
 		if curPoetRoundStartDeadline.Before(time.Now()) {
-			nb.logger.Warn("failed to register in poets on time. ATX challenge expires",
-				log.ZShortStringer("smesherID", nodeID))
 			return nil, ErrATXChallengeExpired
 		}
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}

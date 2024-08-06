@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/poet/server"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -199,26 +200,27 @@ func TestPoetClient_CachesProof(t *testing.T) {
 func TestPoetClient_QueryProofTimeout(t *testing.T) {
 	t.Parallel()
 
-	block := make(chan struct{})
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-block
-	}))
-	defer ts.Close()
-	defer close(block)
-
-	server := types.PoetServer{
-		Address: ts.URL,
-		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
-	}
 	cfg := PoetConfig{
 		RequestTimeout: time.Millisecond * 100,
+		PhaseShift:     10 * time.Second,
 	}
-	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
-	require.NoError(t, err)
+	client := NewMockPoetClient(gomock.NewController(t))
+	// first call on info returns the expected value
+	client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{
+		PhaseShift: cfg.PhaseShift,
+	}, nil)
 	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
 
+	// any additional call on Info will block
+	client.EXPECT().Proof(gomock.Any(), "1").DoAndReturn(
+		func(ctx context.Context, _ string) (*types.PoetProofMessage, []types.Hash32, error) {
+			<-ctx.Done()
+			return nil, nil, ctx.Err()
+		},
+	).AnyTimes()
+
 	start := time.Now()
-	eg := errgroup.Group{}
+	var eg errgroup.Group
 	for range 50 {
 		eg.Go(func() error {
 			_, _, err := poet.Proof(context.Background(), "1")
@@ -578,12 +580,8 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 				PhaseShift: phaseShift * 2,
 			}, nil)
 
-			defer func() {
-				if r := recover(); r == nil {
-					t.Errorf("Panic is expected")
-				}
-			}()
-			NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			log := zaptest.NewLogger(t).WithOptions(zap.WithFatalHook(calledFatal(t)))
+			NewPoetServiceWithClient(nil, client, cfg, log)
 		})
 
 	t.Run("fetch phase shift before submitting challenge: success",
@@ -640,7 +638,8 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 			client.EXPECT().Address().Return("some_addr").AnyTimes()
 			client.EXPECT().Info(gomock.Any()).Return(nil, errors.New("some error"))
 
-			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			log := zaptest.NewLogger(t).WithOptions(zap.WithFatalHook(calledFatal(t)))
+			poet := NewPoetServiceWithClient(nil, client, cfg, log)
 			sig, err := signing.NewEdSigner()
 			require.NoError(t, err)
 
@@ -648,11 +647,6 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 				PhaseShift: phaseShift * 2,
 			}, nil)
 
-			defer func() {
-				if r := recover(); r == nil {
-					t.Errorf("Panic is expected")
-				}
-			}()
 			poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 		})
 }
