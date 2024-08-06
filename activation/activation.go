@@ -443,6 +443,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 		b.logger.Warn("failed to publish atx", zap.Error(err))
 
+		poetErr := &PoetSvcUnstableError{}
 		switch {
 		case errors.Is(err, ErrATXChallengeExpired):
 			b.logger.Debug("retrying with new challenge after waiting for a layer")
@@ -459,8 +460,11 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 				return
 			case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 			}
-		case errors.Is(err, ErrPoetServiceUnstable):
-			b.logger.Warn("retrying after poet retry interval", zap.Duration("interval", b.poetRetryInterval))
+		case errors.As(err, &poetErr):
+			b.logger.Warn("retrying after poet retry interval",
+				zap.Duration("interval", b.poetRetryInterval),
+				zap.Error(poetErr.source),
+			)
 			select {
 			case <-ctx.Done():
 				return
