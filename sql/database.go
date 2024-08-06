@@ -177,7 +177,7 @@ func WithQueryCacheSizes(sizes map[QueryCacheKind]int) Opt {
 type Opt func(c *conf)
 
 // InMemory database for testing.
-// Please use InMemoryTest to ensure t.Cleanup is called.
+// Please use InMemoryTest for automatic closing of the returned db during `tb.Cleanup`.
 func InMemory(opts ...Opt) *Database {
 	opts = append(opts, WithConnections(1))
 	db, err := Open("file::memory:?mode=memory", opts...)
