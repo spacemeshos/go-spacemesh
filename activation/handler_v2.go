@@ -118,6 +118,7 @@ func (h *HandlerV2) processATX(
 
 	atx := &types.ActivationTx{
 		PublishEpoch:   watx.PublishEpoch,
+		MarriageATX:    watx.MarriageATX,
 		Coinbase:       watx.Coinbase,
 		BaseTickHeight: baseTickHeight,
 		NumUnits:       parts.effectiveUnits,
@@ -661,6 +662,7 @@ func (h *HandlerV2) checkMalicious(
 	tx *sql.Tx,
 	watx *wire.ActivationTxV2,
 	marrying []marriage,
+	ids []types.NodeID,
 ) error {
 	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
 	if err != nil {
@@ -673,6 +675,22 @@ func (h *HandlerV2) checkMalicious(
 	malicious, err = h.checkDoubleMarry(ctx, tx, watx, marrying)
 	if err != nil {
 		return fmt.Errorf("checking double marry: %w", err)
+	}
+	if malicious {
+		return nil
+	}
+
+	malicious, err = h.checkDoublePost(ctx, tx, watx, ids)
+	if err != nil {
+		return fmt.Errorf("checking double post: %w", err)
+	}
+	if malicious {
+		return nil
+	}
+
+	malicious, err = h.checkDoubleMerge(ctx, tx, watx)
+	if err != nil {
+		return fmt.Errorf("checking double merge: %w", err)
 	}
 	if malicious {
 		return nil
@@ -722,6 +740,66 @@ func (h *HandlerV2) checkDoubleMarry(
 	return false, nil
 }
 
+func (h *HandlerV2) checkDoublePost(
+	ctx context.Context,
+	tx *sql.Tx,
+	atx *wire.ActivationTxV2,
+	ids []types.NodeID,
+) (bool, error) {
+	for _, id := range ids {
+		atxids, err := atxs.FindDoublePublish(tx, id, atx.PublishEpoch)
+		switch {
+		case errors.Is(err, sql.ErrNotFound):
+			continue
+		case err != nil:
+			return false, fmt.Errorf("searching for double publish: %w", err)
+		}
+		otherAtxId := slices.IndexFunc(atxids, func(other types.ATXID) bool { return other != atx.ID() })
+		otherAtx := atxids[otherAtxId]
+		h.logger.Debug(
+			"found ID that has already contributed its PoST in this epoch",
+			zap.Stringer("node_id", id),
+			zap.Stringer("atx_id", atx.ID()),
+			zap.Stringer("other_atx_id", otherAtx),
+			zap.Uint32("epoch", atx.PublishEpoch.Uint32()),
+		)
+		// TODO(mafa): finish proof
+		proof := &wire.ATXProof{
+			ProofType: wire.DoublePublish,
+		}
+		return true, h.malPublisher.Publish(ctx, id, proof)
+	}
+	return false, nil
+}
+
+func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, watx *wire.ActivationTxV2) (bool, error) {
+	if watx.MarriageATX == nil {
+		return false, nil
+	}
+	ids, err := atxs.MergeConflict(tx, *watx.MarriageATX, watx.PublishEpoch)
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("searching for ATXs with the same marriage ATX: %w", err)
+	}
+	otherIndex := slices.IndexFunc(ids, func(id types.ATXID) bool { return id != watx.ID() })
+	other := ids[otherIndex]
+
+	h.logger.Debug("second merged ATX for single marriage - creating malfeasance proof",
+		zap.Stringer("marriage_atx", *watx.MarriageATX),
+		zap.Stringer("atx", watx.ID()),
+		zap.Stringer("other_atx", other),
+		zap.Stringer("smesher_id", watx.SmesherID),
+	)
+
+	// TODO(mafa): finish proof
+	proof := &wire.ATXProof{
+		ProofType: wire.DoubleMerge,
+	}
+	return true, h.malPublisher.Publish(ctx, watx.SmesherID, proof)
+}
+
 // Store an ATX in the DB.
 func (h *HandlerV2) storeAtx(
 	ctx context.Context,
@@ -769,7 +847,7 @@ func (h *HandlerV2) storeAtx(
 		// TODO(mafa): don't store own ATX if it would mark the node as malicious
 		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
 		//    the gossip handler (not sync!)
-		err := h.checkMalicious(ctx, tx, watx, marrying)
+		err := h.checkMalicious(ctx, tx, watx, marrying, maps.Keys(units))
 		if err != nil {
 			return fmt.Errorf("check malicious: %w", err)
 		}

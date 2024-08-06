@@ -15,11 +15,11 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 const (
@@ -196,7 +196,7 @@ func TestLoad(t *testing.T) {
 			updater := bootstrap.New(
 				mc,
 				bootstrap.WithConfig(cfg),
-				bootstrap.WithLogger(logtest.New(t)),
+				bootstrap.WithLogger(zaptest.NewLogger(t)),
 				bootstrap.WithFilesystem(fs),
 			)
 			ch, err := updater.Subscribe()
@@ -248,7 +248,7 @@ func TestLoadedNotDownloadedAgain(t *testing.T) {
 	updater := bootstrap.New(
 		mc,
 		bootstrap.WithConfig(cfg),
-		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithLogger(zaptest.NewLogger(t)),
 		bootstrap.WithFilesystem(fs),
 	)
 	ch, err := updater.Subscribe()
@@ -276,7 +276,7 @@ func TestStartClose(t *testing.T) {
 	updater := bootstrap.New(
 		mc,
 		bootstrap.WithConfig(cfg),
-		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithLogger(zaptest.NewLogger(t)),
 		bootstrap.WithFilesystem(fs),
 	)
 	ch, err := updater.Subscribe()
@@ -322,7 +322,7 @@ func TestPrune(t *testing.T) {
 	updater := bootstrap.New(
 		mc,
 		bootstrap.WithConfig(cfg),
-		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithLogger(zaptest.NewLogger(t)),
 		bootstrap.WithFilesystem(fs),
 		bootstrap.WithHttpClient(ts.Client()),
 	)
@@ -384,7 +384,7 @@ func TestDoIt(t *testing.T) {
 			updater := bootstrap.New(
 				mc,
 				bootstrap.WithConfig(cfg),
-				bootstrap.WithLogger(logtest.New(t)),
+				bootstrap.WithLogger(zaptest.NewLogger(t)),
 				bootstrap.WithFilesystem(fs),
 				bootstrap.WithHttpClient(ts.Client()),
 			)
@@ -421,7 +421,7 @@ func TestEmptyResponse(t *testing.T) {
 	updater := bootstrap.New(
 		mc,
 		bootstrap.WithConfig(cfg),
-		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithLogger(zaptest.NewLogger(t)),
 		bootstrap.WithFilesystem(fs),
 		bootstrap.WithHttpClient(ts.Client()),
 	)
@@ -492,7 +492,7 @@ func TestGetInvalidUpdate(t *testing.T) {
 			updater := bootstrap.New(
 				mc,
 				bootstrap.WithConfig(cfg),
-				bootstrap.WithLogger(logtest.New(t)),
+				bootstrap.WithLogger(zaptest.NewLogger(t)),
 				bootstrap.WithFilesystem(fs),
 				bootstrap.WithHttpClient(ts.Client()),
 			)
@@ -526,7 +526,7 @@ func TestNoNewUpdate(t *testing.T) {
 	updater := bootstrap.New(
 		mc,
 		bootstrap.WithConfig(cfg),
-		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithLogger(zaptest.NewLogger(t)),
 		bootstrap.WithFilesystem(fs),
 		bootstrap.WithHttpClient(ts.Client()),
 	)
@@ -647,7 +647,7 @@ func TestRequiredEpochs(t *testing.T) {
 			updater := bootstrap.New(
 				mc,
 				bootstrap.WithConfig(cfg),
-				bootstrap.WithLogger(logtest.New(t)),
+				bootstrap.WithLogger(zaptest.NewLogger(t)),
 				bootstrap.WithFilesystem(fs),
 				bootstrap.WithHttpClient(ts.Client()),
 			)
@@ -676,7 +676,7 @@ func TestIntegration(t *testing.T) {
 	updater := bootstrap.New(
 		mc,
 		bootstrap.WithConfig(cfg),
-		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithLogger(zaptest.NewLogger(t)),
 		bootstrap.WithFilesystem(fs),
 	)
 	ch, err := updater.Subscribe()
@@ -709,7 +709,7 @@ func TestClose(t *testing.T) {
 	updater := bootstrap.New(
 		mc,
 		bootstrap.WithConfig(cfg),
-		bootstrap.WithLogger(logtest.New(t)),
+		bootstrap.WithLogger(zaptest.NewLogger(t)),
 		bootstrap.WithFilesystem(fs),
 	)
 	ch, err := updater.Subscribe()
