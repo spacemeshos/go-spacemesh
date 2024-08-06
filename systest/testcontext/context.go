@@ -31,6 +31,7 @@ import (
 	k8szap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
+	"github.com/spacemeshos/go-spacemesh/systest/postmortenHandler"
 )
 
 const (
@@ -138,6 +139,7 @@ var (
 	LayersPerEpoch = parameters.Int(
 		ParamLayersPerEpoch, "number of layers in an epoch", 4,
 	)
+	PostMorteEnabled = postmortenHandler.PosTMortenDebug
 )
 
 const nsfile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
@@ -294,8 +296,13 @@ func New(t *testing.T, opts ...Opt) *Context {
 	}
 
 	t.Cleanup(func() {
+
 		if t.Failed() {
-			failOnce.Do(func() { close(failed) })
+			postmortenHandler.LazyFunctionActor(
+				func() {
+					failOnce.Do(func() { close(failed) })
+				},
+			)
 		}
 	})
 	config, err := rest.InClusterConfig()
@@ -320,7 +327,10 @@ func New(t *testing.T, opts ...Opt) *Context {
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), *testTimeout)
-	t.Cleanup(cancel)
+
+	postmortenHandler.LazyFunctionActor(func() {
+		t.Cleanup(cancel)
+	})
 
 	podns, err := os.ReadFile(nsfile)
 	require.NoError(t, err, "reading nsfile at %s", nsfile)
@@ -366,6 +376,11 @@ func New(t *testing.T, opts ...Opt) *Context {
 	cctx.Storage.Size = size
 	err = updateContext(cctx)
 	require.NoError(t, err)
+
+	postmortenHandler.RegisterNamespace(cctx.Namespace, func() {
+		failOnce.Do(func() { close(failed) })
+	}, cctx.Parameters)
+
 	if !cctx.Keep {
 		cleanup(t, func() {
 			if err := deleteNamespace(cctx); err != nil {
