@@ -34,5 +34,6 @@ func TestNetworkService_Info(t *testing.T) {
 		require.Equal(t, types.NetworkHRP(), info.Hrp)
 		require.Equal(t, types.GetEffectiveGenesis().Uint32(), info.EffectiveGenesisLayer)
 		require.Equal(t, types.GetLayersPerEpoch(), info.LayersPerEpoch)
+		require.Equal(t, c.POST.LabelsPerUnit, info.LabelsPerUnit)
 	})
 }

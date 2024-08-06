@@ -57,5 +57,6 @@ func (s *NetworkService) Info(context.Context,
 		Hrp:                   types.NetworkHRP(),
 		EffectiveGenesisLayer: types.GetEffectiveGenesis().Uint32(),
 		LayersPerEpoch:        types.GetLayersPerEpoch(),
+		LabelsPerUnit:         s.labelsPerUnit,
 	}, nil
 }
