@@ -118,57 +118,6 @@ jobs:
       - name: lint
         run: make lint-github-action
 
-  build-tools:
-    runs-on: ${{ matrix.os }}
-    needs: filter-changes
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    strategy:
-      fail-fast: true
-      matrix:
-        os:
-          - ubuntu-22.04
-          - ubuntu-latest-arm-8-cores
-          - macos-13
-          - [self-hosted, macOS, ARM64, go-spacemesh]
-          - windows-2022
-    steps:
-      - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
-        run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
-      - name: disable Windows Defender - Windows
-        if: ${{ matrix.os == 'windows-2022' }}
-        run: |
-          Set-MpPreference -DisableRealtimeMonitoring $true
-      - name: Set new git config - Windows
-        if: ${{ matrix.os == 'windows-2022' }}
-        run: |
-          git config --global pack.window 1
-          git config --global core.compression 0
-          git config --global http.postBuffer 524288000
-      - name: checkout
-        uses: actions/checkout@v4
-        with:
-          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-      - uses: extractions/netrc@v2
-        with:
-          machine: github.com
-          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
-          password: ${{ secrets.GH_ACTION_TOKEN }}
-        if: vars.GOPRIVATE
-      - name: set up go
-        uses: actions/setup-go@v5
-        with:
-          check-latest: true
-          go-version: ${{ env.go-version }}
-      - name: setup env
-        run: make install
-      - name: build merge-nodes
-        run: make merge-nodes
-      - name: build gen-p2p-identity
-        run: make gen-p2p-identity
-      - name: build bootstrapper
-        run: make bootstrapper
-
   build:
     runs-on: ${{ matrix.os }}
     needs: filter-changes
@@ -214,6 +163,12 @@ jobs:
           cache: ${{ runner.arch != 'arm64' }}
       - name: setup env
         run: make install
+      - name: build merge-nodes
+        run: make merge-nodes
+      - name: build gen-p2p-identity
+        run: make gen-p2p-identity
+      - name: build bootstrapper
+        run: make bootstrapper
       - name: build
         timeout-minutes: 5
         run: make build
