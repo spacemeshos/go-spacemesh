@@ -53,6 +53,5 @@ func (e *PoetRegistrationMismatchError) Error() string {
 
 func (e *PoetRegistrationMismatchError) As(target error) bool {
 	var poetRegistrationMismatchError *PoetRegistrationMismatchError
-	ok := errors.As(target, &poetRegistrationMismatchError)
-	return ok
+	return errors.As(target, &poetRegistrationMismatchError)
 }

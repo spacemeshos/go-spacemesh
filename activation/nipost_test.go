@@ -1099,13 +1099,16 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			)
 			require.NoError(t, err)
 
+			poetErr := &PoetRegistrationMismatchError{}
 			_, err = nb.submitPoetChallenges(
 				context.Background(),
 				sig,
 				time.Now().Add(10*time.Second),
 				time.Now().Add(-5*time.Second), // poet round started
 				challengeHash.Bytes())
-			require.ErrorIs(t, err, ErrNoRegistrationForGivenPoetFound)
+			require.ErrorAs(t, err, &poetErr)
+			require.ElementsMatch(t, []string{poetProverAddr2}, poetErr.registrations)
+			require.ElementsMatch(t, []string{poetProverAddr}, poetErr.configuredPoets)
 		})
 }
 

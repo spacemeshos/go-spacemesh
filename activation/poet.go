@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go.uber.org/atomic"
 	"io"
 	"net/http"
 	"net/url"
@@ -385,8 +384,9 @@ type poetService struct {
 	certifier certifierService
 
 	certifierInfoCache cachedData[*types.CertifierInfo]
+	mtx                *sync.Mutex
 	expectedPhaseShift time.Duration
-	fetchedPhaseShift  *atomic.Duration
+	fetchedPhaseShift  time.Duration
 	powParamsCache     cachedData[*PoetPowParams]
 }
 
@@ -434,7 +434,7 @@ func NewPoetServiceWithClient(
 		powParamsCache:     cachedData[*PoetPowParams]{ttl: cfg.PowParamsCacheTTL},
 		proofMembers:       make(map[string][]types.Hash32, 1),
 		expectedPhaseShift: cfg.PhaseShift,
-		fetchedPhaseShift:  &atomic.Duration{},
+		mtx:                &sync.Mutex{},
 	}
 	for _, opt := range opts {
 		opt(service)
@@ -444,7 +444,6 @@ func NewPoetServiceWithClient(
 	if err != nil {
 		if errors.Is(err, ErrIncompatiblePhaseShift) {
 			logger.Panic("failed to create poet service",
-				zap.Error(err),
 				zap.String("poet", client.Address()))
 		}
 		logger.Warn("failed to fetch poet phase shift",
@@ -455,7 +454,10 @@ func NewPoetServiceWithClient(
 }
 
 func (c *poetService) verifyPhaseShiftConfiguration(ctx context.Context) error {
-	if c.fetchedPhaseShift.Load() != 0 {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	if c.fetchedPhaseShift != 0 {
 		return nil
 	}
 	resp, err := c.client.Info(ctx)
@@ -465,7 +467,7 @@ func (c *poetService) verifyPhaseShiftConfiguration(ctx context.Context) error {
 		return ErrIncompatiblePhaseShift
 	}
 
-	c.fetchedPhaseShift.Store(resp.PhaseShift)
+	c.fetchedPhaseShift = resp.PhaseShift
 	return nil
 }
 
@@ -551,12 +553,8 @@ func (c *poetService) Submit(
 	if err := c.verifyPhaseShiftConfiguration(ctx); err != nil {
 		if errors.Is(err, ErrIncompatiblePhaseShift) {
 			logger.Panic("failed to submit challenge",
-				zap.Error(err),
 				zap.String("poet", c.client.Address()))
 		}
-		logger.Warn("failed to submit challenge: couldn't fetch poet phase shift",
-			zap.Error(err),
-			zap.String("poet", c.client.Address()))
 		return nil, err
 	}
 
