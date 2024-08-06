@@ -178,7 +178,9 @@ type ActivationTx struct {
 	PrevATXID ATXID
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
-	CommitmentATX  *ATXID
+	CommitmentATX *ATXID
+	// The marriage ATX, used in merged ATXs only.
+	MarriageATX    *ATXID
 	Coinbase       Address
 	NumUnits       uint32 // the minimum number of space units in this and the previous ATX
 	BaseTickHeight uint64
@@ -230,6 +232,9 @@ func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
 
 	if atx.CommitmentATX != nil {
 		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
+	}
+	if atx.MarriageATX != nil {
+		encoder.AddString("marriage_atx_id", atx.MarriageATX.String())
 	}
 	encoder.AddUint64("vrf_nonce", uint64(atx.VRFNonce))
 	encoder.AddString("coinbase", atx.Coinbase.String())

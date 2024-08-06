@@ -22,7 +22,8 @@ const (
 // filters that refer to the id column.
 const fieldsQuery = `select
 atxs.id, atxs.nonce, atxs.base_tick_height, atxs.tick_count, atxs.pubkey, atxs.effective_num_units,
-atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.prev_id, atxs.commitment_atx, atxs.weight`
+atxs.received, atxs.epoch, atxs.sequence, atxs.coinbase, atxs.validity, atxs.prev_id, atxs.commitment_atx, atxs.weight,
+atxs.marriage_atx`
 
 const fullQuery = fieldsQuery + ` from atxs`
 
@@ -62,6 +63,10 @@ func decoder(fn decoderCallback) sql.Decoder {
 			stmt.ColumnBytes(12, a.CommitmentATX[:])
 		}
 		a.Weight = uint64(stmt.ColumnInt64(13))
+		if stmt.ColumnType(14) != sqlite.SQLITE_NULL {
+			a.MarriageATX = new(types.ATXID)
+			stmt.ColumnBytes(14, a.MarriageATX[:])
+		}
 
 		return fn(&a)
 	}
@@ -425,8 +430,6 @@ func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
 		stmt.BindInt64(3, int64(atx.NumUnits))
 		if atx.CommitmentATX != nil {
 			stmt.BindBytes(4, atx.CommitmentATX.Bytes())
-		} else {
-			stmt.BindNull(4)
 		}
 		stmt.BindInt64(5, int64(atx.VRFNonce))
 		stmt.BindBytes(6, atx.SmesherID.Bytes())
@@ -438,17 +441,18 @@ func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
 		stmt.BindInt64(12, int64(atx.Validity()))
 		if atx.PrevATXID != types.EmptyATXID {
 			stmt.BindBytes(13, atx.PrevATXID.Bytes())
-		} else {
-			stmt.BindNull(13)
 		}
 		stmt.BindInt64(14, int64(atx.Weight))
+		if atx.MarriageATX != nil {
+			stmt.BindBytes(15, atx.MarriageATX.Bytes())
+		}
 	}
 
 	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
 			 pubkey, received, base_tick_height, tick_count, sequence, coinbase,
-			 validity, prev_id, weight)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`, enc, nil)
+			 validity, prev_id, weight, marriage_atx)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
@@ -539,6 +543,7 @@ type CheckpointAtx struct {
 	ID             types.ATXID
 	Epoch          types.EpochID
 	CommitmentATX  types.ATXID
+	MarriageATX    *types.ATXID
 	VRFNonce       types.VRFPostIndex
 	BaseTickHeight uint64
 	TickCount      uint64
@@ -571,16 +576,21 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 		catx.Sequence = uint64(stmt.ColumnInt64(6))
 		stmt.ColumnBytes(7, catx.Coinbase[:])
 		catx.VRFNonce = types.VRFPostIndex(stmt.ColumnInt64(8))
-		catx.Units = make(map[types.NodeID]uint32)
+		if stmt.ColumnType(9) != sqlite.SQLITE_NULL {
+			catx.MarriageATX = new(types.ATXID)
+			stmt.ColumnBytes(9, catx.MarriageATX[:])
+		}
 		rst = append(rst, catx)
 		return true
 	}
 
 	rows, err := db.Exec(`
-		select id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
+		select
+		id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce, marriage_atx
 		from (
 			select row_number() over (partition by pubkey order by epoch desc) RowNum,
-			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce
+			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce,
+			marriage_atx
 			from atxs
 		)
 		where RowNum <= ?1 order by pubkey;`, enc, dec)
@@ -616,12 +626,15 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 		stmt.BindInt64(8, int64(catx.Sequence))
 		stmt.BindBytes(9, catx.SmesherID.Bytes())
 		stmt.BindBytes(10, catx.Coinbase.Bytes())
+		if catx.MarriageATX != nil {
+			stmt.BindBytes(11, catx.MarriageATX.Bytes())
+		}
 	}
 
 	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
-			base_tick_height, tick_count, sequence, pubkey, coinbase, received)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0)`, enc, nil)
+			base_tick_height, tick_count, sequence, pubkey, coinbase, marriage_atx, received)
+		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert checkpoint ATX %v: %w", catx.ID, err)
 	}
@@ -803,7 +816,7 @@ func IterateAtxsWithMalfeasance(
 		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
 		func(s *sql.Statement) bool {
 			return decoder(func(atx *types.ActivationTx) bool {
-				return fn(atx, s.ColumnInt(14) != 0)
+				return fn(atx, s.ColumnInt(15) != 0)
 			})(s)
 		},
 	)
@@ -994,4 +1007,29 @@ func AtxWithPrevious(db sql.Executor, prev types.ATXID, id types.NodeID) (types.
 		return types.EmptyATXID, sql.ErrNotFound
 	}
 	return atxid, nil
+}
+
+// Find 2 distinct merged ATXs (having the same marriage ATX) in the same epoch.
+func MergeConflict(db sql.Executor, marriage types.ATXID, publish types.EpochID) ([]types.ATXID, error) {
+	var ids []types.ATXID
+	rows, err := db.Exec(`
+		SELECT id FROM atxs WHERE marriage_atx = ?1 and epoch = ?2;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, marriage.Bytes())
+			stmt.BindInt64(2, int64(publish))
+		},
+		func(stmt *sql.Statement) bool {
+			var id types.ATXID
+			stmt.ColumnBytes(0, id[:])
+			ids = append(ids, id)
+			return len(ids) < 2
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	if rows != 2 {
+		return nil, sql.ErrNotFound
+	}
+	return ids, nil
 }

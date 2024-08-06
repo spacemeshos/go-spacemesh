@@ -117,6 +117,7 @@ func (h *HandlerV2) processATX(
 
 	atx := &types.ActivationTx{
 		PublishEpoch:   watx.PublishEpoch,
+		MarriageATX:    watx.MarriageATX,
 		Coinbase:       watx.Coinbase,
 		BaseTickHeight: baseTickHeight,
 		NumUnits:       parts.effectiveUnits,
@@ -684,6 +685,14 @@ func (h *HandlerV2) checkMalicious(
 		return nil
 	}
 
+	malicious, err = h.checkDoubleMerge(ctx, tx, watx)
+	if err != nil {
+		return fmt.Errorf("checking double merge: %w", err)
+	}
+	if malicious {
+		return nil
+	}
+
 	// TODO(mafa): contextual validation:
 	// 1. check double-publish = ID contributed post to two ATXs in the same epoch
 	// 2. check previous ATX
@@ -744,6 +753,34 @@ func (h *HandlerV2) checkDoublePost(
 		return true, h.malPublisher.Publish(ctx, id, proof)
 	}
 	return false, nil
+}
+
+func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, watx *wire.ActivationTxV2) (bool, error) {
+	if watx.MarriageATX == nil {
+		return false, nil
+	}
+	ids, err := atxs.MergeConflict(tx, *watx.MarriageATX, watx.PublishEpoch)
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("searching for ATXs with the same marriage ATX: %w", err)
+	}
+	otherIndex := slices.IndexFunc(ids, func(id types.ATXID) bool { return id != watx.ID() })
+	other := ids[otherIndex]
+
+	h.logger.Debug("second merged ATX for single marriage - creating malfeasance proof",
+		zap.Stringer("marriage_atx", *watx.MarriageATX),
+		zap.Stringer("atx", watx.ID()),
+		zap.Stringer("other_atx", other),
+		zap.Stringer("smesher_id", watx.SmesherID),
+	)
+
+	// TODO(mafa): finish proof
+	proof := &wire.ATXProof{
+		ProofType: wire.DoubleMerge,
+	}
+	return true, h.malPublisher.Publish(ctx, watx.SmesherID, proof)
 }
 
 // Store an ATX in the DB.
