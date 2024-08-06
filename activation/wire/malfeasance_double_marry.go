@@ -23,7 +23,7 @@ import (
 // 3. Both ATXs contain a marriage certificate created by the same identity.
 // 4. Both marriage certificates have valid signatures.
 //
-// HINT: this only works if the identity that publishes the ATX with the certificates marries itself.
+// HINT: this works if the identity that publishes the marriage ATX marries themselves.
 type ProofDoubleMarry struct {
 	Proofs [2]MarryProof
 }
