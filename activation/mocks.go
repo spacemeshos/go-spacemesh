@@ -20,6 +20,7 @@ import (
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	certifier "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	nipost "github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	v1 "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	shared "github.com/spacemeshos/post/shared"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -1728,6 +1729,45 @@ func (c *MockPoetServiceCertifyCall) Do(f func(context.Context, types.NodeID) (*
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockPoetServiceCertifyCall) DoAndReturn(f func(context.Context, types.NodeID) (*certifier.PoetCert, error)) *MockPoetServiceCertifyCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Info mocks base method.
+func (m *MockPoetService) Info(ctx context.Context) (*v1.InfoResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Info", ctx)
+	ret0, _ := ret[0].(*v1.InfoResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Info indicates an expected call of Info.
+func (mr *MockPoetServiceMockRecorder) Info(ctx any) *MockPoetServiceInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockPoetService)(nil).Info), ctx)
+	return &MockPoetServiceInfoCall{Call: call}
+}
+
+// MockPoetServiceInfoCall wrap *gomock.Call
+type MockPoetServiceInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockPoetServiceInfoCall) Return(arg0 *v1.InfoResponse, arg1 error) *MockPoetServiceInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockPoetServiceInfoCall) Do(f func(context.Context) (*v1.InfoResponse, error)) *MockPoetServiceInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockPoetServiceInfoCall) DoAndReturn(f func(context.Context) (*v1.InfoResponse, error)) *MockPoetServiceInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

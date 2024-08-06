@@ -259,10 +259,10 @@ func TestCertifierInfo(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	url, pubkey, err := client.CertifierInfo(context.Background())
+	certInfo, err := client.CertifierInfo(context.Background())
 	r.NoError(err)
-	r.Equal("http://localhost:8080", url.String())
-	r.Equal([]byte("pubkey"), pubkey)
+	r.Equal("http://localhost:8080", certInfo.Url.String())
+	r.Equal([]byte("pubkey"), certInfo.Pubkey)
 }
 
 func TestNoCertifierInfo(t *testing.T) {
@@ -291,6 +291,6 @@ func TestNoCertifierInfo(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, _, err = client.CertifierInfo(context.Background())
+	_, err = client.CertifierInfo(context.Background())
 	r.ErrorContains(err, "poet doesn't support certificates")
 }

@@ -15,7 +15,7 @@ import (
 	time "time"
 
 	network "github.com/libp2p/go-libp2p/core/network"
-	multiaddr "github.com/multiformats/go-multiaddr"
+	go_multiaddr "github.com/multiformats/go-multiaddr"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
@@ -126,10 +126,10 @@ func (c *MocknetworkInfoIDCall) DoAndReturn(f func() p2p.Peer) *MocknetworkInfoI
 }
 
 // KnownAddresses mocks base method.
-func (m *MocknetworkInfo) KnownAddresses() []multiaddr.Multiaddr {
+func (m *MocknetworkInfo) KnownAddresses() []go_multiaddr.Multiaddr {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "KnownAddresses")
-	ret0, _ := ret[0].([]multiaddr.Multiaddr)
+	ret0, _ := ret[0].([]go_multiaddr.Multiaddr)
 	return ret0
 }
 
@@ -146,28 +146,28 @@ type MocknetworkInfoKnownAddressesCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MocknetworkInfoKnownAddressesCall) Return(arg0 []multiaddr.Multiaddr) *MocknetworkInfoKnownAddressesCall {
+func (c *MocknetworkInfoKnownAddressesCall) Return(arg0 []go_multiaddr.Multiaddr) *MocknetworkInfoKnownAddressesCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknetworkInfoKnownAddressesCall) Do(f func() []multiaddr.Multiaddr) *MocknetworkInfoKnownAddressesCall {
+func (c *MocknetworkInfoKnownAddressesCall) Do(f func() []go_multiaddr.Multiaddr) *MocknetworkInfoKnownAddressesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknetworkInfoKnownAddressesCall) DoAndReturn(f func() []multiaddr.Multiaddr) *MocknetworkInfoKnownAddressesCall {
+func (c *MocknetworkInfoKnownAddressesCall) DoAndReturn(f func() []go_multiaddr.Multiaddr) *MocknetworkInfoKnownAddressesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // ListenAddresses mocks base method.
-func (m *MocknetworkInfo) ListenAddresses() []multiaddr.Multiaddr {
+func (m *MocknetworkInfo) ListenAddresses() []go_multiaddr.Multiaddr {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListenAddresses")
-	ret0, _ := ret[0].([]multiaddr.Multiaddr)
+	ret0, _ := ret[0].([]go_multiaddr.Multiaddr)
 	return ret0
 }
 
@@ -184,19 +184,19 @@ type MocknetworkInfoListenAddressesCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MocknetworkInfoListenAddressesCall) Return(arg0 []multiaddr.Multiaddr) *MocknetworkInfoListenAddressesCall {
+func (c *MocknetworkInfoListenAddressesCall) Return(arg0 []go_multiaddr.Multiaddr) *MocknetworkInfoListenAddressesCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocknetworkInfoListenAddressesCall) Do(f func() []multiaddr.Multiaddr) *MocknetworkInfoListenAddressesCall {
+func (c *MocknetworkInfoListenAddressesCall) Do(f func() []go_multiaddr.Multiaddr) *MocknetworkInfoListenAddressesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocknetworkInfoListenAddressesCall) DoAndReturn(f func() []multiaddr.Multiaddr) *MocknetworkInfoListenAddressesCall {
+func (c *MocknetworkInfoListenAddressesCall) DoAndReturn(f func() []go_multiaddr.Multiaddr) *MocknetworkInfoListenAddressesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

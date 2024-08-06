@@ -236,12 +236,17 @@ func (nb *NIPostBuilder) BuildNIPost(
 		signer,
 		poetProofDeadline,
 		poetRoundStart, challenge.Bytes())
-	if err != nil {
-		if errors.Is(err, ErrNoRegistrationForGivenPoetFound) {
-			// misconfiguration of poet services detected, user has to fix config
-			logger.Fatal("submitting to poets", zap.Error(err))
-		}
 
+	regErr := &PoetRegistrationMismatchError{}
+	if err != nil {
+		if errors.As(err, &regErr) {
+			logger.Fatal(
+				"None of the poets listed in the config matches the existing registrations. "+
+					"Verify your config and local database state.",
+				zap.Strings("registrations", regErr.registrations),
+				zap.Strings("configured_poets", regErr.configuredPoets),
+			)
+		}
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
@@ -299,13 +304,17 @@ func (nb *NIPostBuilder) BuildNIPost(
 		defer cancel()
 
 		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
+
 		startTime := time.Now()
 		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], postChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
+
 		postGenDuration := time.Since(startTime)
+
 		nb.logger.Info("finished post execution", zap.Duration("duration", postGenDuration))
+
 		metrics.PostDuration.Set(float64(postGenDuration.Nanoseconds()))
 		public.PostSeconds.Set(postGenDuration.Seconds())
 
@@ -445,14 +454,10 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 			)
 		case len(existingRegistrations) == 0:
 			// no existing registration for given poets set
-			nb.logger.Warn(
-				"None of the poets listed in the config matches the existing registrations. "+
-					"Verify your config and local database state.",
-				zap.Strings("registrations", maps.Keys(registrationsMap)),
-				zap.Strings("configured_poets", maps.Keys(nb.poetProvers)),
-				log.ZShortStringer("smesherID", nodeID),
-			)
-			return nil, ErrNoRegistrationForGivenPoetFound
+			return nil, &PoetRegistrationMismatchError{
+				registrations:   maps.Keys(registrationsMap),
+				configuredPoets: maps.Keys(nb.poetProvers),
+			}
 		default:
 			return existingRegistrations, nil
 		}

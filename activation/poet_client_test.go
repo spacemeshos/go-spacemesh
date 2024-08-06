@@ -452,6 +452,7 @@ func TestPoetClient_FallbacksToPowWhenCannotRecertify(t *testing.T) {
 
 	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
+
 	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
 
 	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
@@ -475,18 +476,24 @@ func TestPoetService_CachesCertifierInfo(t *testing.T) {
 			cfg.CertifierInfoCacheTTL = tc.ttl
 			client := NewMockPoetClient(gomock.NewController(t))
 			db := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
+
+			client.EXPECT().Address().Return("some_addr").AnyTimes()
+			client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{}, nil)
+
 			poet := NewPoetServiceWithClient(db, client, cfg, zaptest.NewLogger(t))
+
 			url := &url.URL{Host: "certifier.hello"}
 			pubkey := []byte("pubkey")
-			exp := client.EXPECT().CertifierInfo(gomock.Any()).Return(url, pubkey, nil)
+			exp := client.EXPECT().CertifierInfo(gomock.Any()).
+				Return(&types.CertifierInfo{Url: url, Pubkey: pubkey}, nil)
 			if tc.ttl == 0 {
 				exp.Times(5)
 			}
 			for range 5 {
-				gotUrl, gotPubkey, err := poet.getCertifierInfo(context.Background())
+				info, err := poet.getCertifierInfo(context.Background())
 				require.NoError(t, err)
-				require.Equal(t, url, gotUrl)
-				require.Equal(t, pubkey, gotPubkey)
+				require.Equal(t, url, info.Url)
+				require.Equal(t, pubkey, info.Pubkey)
 			}
 		})
 	}
@@ -524,4 +531,124 @@ func TestPoetService_CachesPowParams(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
+	t.Parallel()
+	const phaseShift = time.Second
+
+	t.Run("poet service created: expected and fetched phase shift are matching",
+		func(t *testing.T) {
+			cfg := DefaultPoetConfig()
+			cfg.PhaseShift = phaseShift
+
+			client := NewMockPoetClient(gomock.NewController(t))
+			client.EXPECT().Address().Return("some_addr").AnyTimes()
+			client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{
+				PhaseShift: phaseShift,
+			}, nil)
+
+			NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+		})
+
+	t.Run("poet service created: phase shift is not fetched",
+		func(t *testing.T) {
+			cfg := DefaultPoetConfig()
+			cfg.PhaseShift = phaseShift
+
+			client := NewMockPoetClient(gomock.NewController(t))
+			client.EXPECT().Address().Return("some_addr").AnyTimes()
+			client.EXPECT().Info(gomock.Any()).Return(nil, errors.New("some error"))
+
+			NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+		})
+
+	t.Run("poet service creation failed: expected and fetched phase shift are not matching",
+		func(t *testing.T) {
+			cfg := DefaultPoetConfig()
+			cfg.PhaseShift = phaseShift
+
+			client := NewMockPoetClient(gomock.NewController(t))
+			client.EXPECT().Address().Return("some_addr").AnyTimes()
+			client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{
+				PhaseShift: phaseShift * 2,
+			}, nil)
+
+			defer func() {
+				if r := recover(); r == nil {
+					t.Errorf("Panic is expected")
+				}
+			}()
+			NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+		})
+
+	t.Run("fetch phase shift before submitting challenge: success",
+		func(t *testing.T) {
+			cfg := DefaultPoetConfig()
+			cfg.PhaseShift = phaseShift
+
+			client := NewMockPoetClient(gomock.NewController(t))
+			client.EXPECT().Address().Return("some_addr").AnyTimes()
+			client.EXPECT().Info(gomock.Any()).Return(nil, errors.New("some error"))
+
+			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			sig, err := signing.NewEdSigner()
+			require.NoError(t, err)
+
+			client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{PhaseShift: phaseShift}, nil)
+			client.EXPECT().PowParams(gomock.Any()).Return(&PoetPowParams{}, nil)
+			client.EXPECT().
+				Submit(
+					gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+					gomock.Any(), gomock.Any(), gomock.Any()).
+				Return(&types.PoetRound{}, nil)
+
+			_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+			require.NoError(t, err)
+		})
+
+	t.Run("fetch phase shift before submitting challenge: failed to fetch poet info",
+		func(t *testing.T) {
+			cfg := DefaultPoetConfig()
+			cfg.PhaseShift = phaseShift
+
+			client := NewMockPoetClient(gomock.NewController(t))
+			client.EXPECT().Address().Return("some_addr").AnyTimes()
+			client.EXPECT().Info(gomock.Any()).Return(nil, errors.New("some error"))
+
+			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			sig, err := signing.NewEdSigner()
+			require.NoError(t, err)
+
+			expectedErr := errors.New("some error")
+			client.EXPECT().Info(gomock.Any()).Return(nil, expectedErr)
+
+			_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+			require.ErrorIs(t, err, expectedErr)
+		})
+
+	t.Run("fetch phase shift before submitting challenge: fetched and expected phase shift do not match",
+		func(t *testing.T) {
+			cfg := DefaultPoetConfig()
+			cfg.PhaseShift = phaseShift
+
+			client := NewMockPoetClient(gomock.NewController(t))
+			client.EXPECT().Address().Return("some_addr").AnyTimes()
+			client.EXPECT().Info(gomock.Any()).Return(nil, errors.New("some error"))
+
+			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			sig, err := signing.NewEdSigner()
+			require.NoError(t, err)
+
+			client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{
+				PhaseShift: phaseShift * 2,
+			}, nil)
+
+			defer func() {
+				if r := recover(); r == nil {
+					t.Errorf("Panic is expected")
+				}
+			}()
+			poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+		})
 }

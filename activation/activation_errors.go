@@ -3,6 +3,7 @@ package activation
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -12,8 +13,9 @@ var (
 	ErrPoetServiceUnstable = &PoetSvcUnstableError{}
 	// ErrPoetProofNotReceived is returned when no poet proof was received.
 	ErrPoetProofNotReceived = errors.New("builder: didn't receive any poet proof")
-	// ErrNoRegistrationForGivenPoetFound is returned when configured poets do not match existing registrations in db at all
-	ErrNoRegistrationForGivenPoetFound = errors.New("builder: none of configured poets matches the existing registrations")
+	// ErrNoRegistrationForGivenPoetFound is returned when configured poets
+	// do not match existing registrations in db at all.
+	ErrNoRegistrationForGivenPoetFound = &PoetRegistrationMismatchError{}
 )
 
 // PoetSvcUnstableError means there was a problem communicating
@@ -34,4 +36,27 @@ func (e *PoetSvcUnstableError) Unwrap() error { return e.source }
 func (e *PoetSvcUnstableError) Is(target error) bool {
 	_, ok := target.(*PoetSvcUnstableError)
 	return ok
+}
+
+type PoetRegistrationMismatchError struct {
+	registrations   []string
+	configuredPoets []string
+}
+
+func (e *PoetRegistrationMismatchError) Error() string {
+	var sb strings.Builder
+	sb.WriteString("builder: none of configured poets matches the existing registrations.\n")
+	sb.WriteString("registrations:\n")
+	for _, r := range e.registrations {
+		sb.WriteString("\t")
+		sb.WriteString(r)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n configured poets:\n")
+	for _, p := range e.configuredPoets {
+		sb.WriteString("\t")
+		sb.WriteString(p)
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }

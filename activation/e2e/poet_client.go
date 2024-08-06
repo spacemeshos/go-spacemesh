@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -66,8 +65,12 @@ func (p *TestPoet) Submit(
 	return &types.PoetRound{ID: strconv.Itoa(round), End: time.Now()}, nil
 }
 
-func (p *TestPoet) CertifierInfo(ctx context.Context) (*url.URL, []byte, error) {
-	return nil, nil, errors.New("not supported")
+func (p *TestPoet) CertifierInfo(ctx context.Context) (*types.CertifierInfo, error) {
+	return nil, errors.New("CertifierInfo: not supported")
+}
+
+func (p *TestPoet) Info(ctx context.Context) (*types.PoetInfo, error) {
+	return nil, errors.New("Info: not supported")
 }
 
 // Build a proof.
