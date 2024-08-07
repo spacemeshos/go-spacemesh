@@ -28,14 +28,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
 		atx1 := newActivationTxV2(
-			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
 		atx2 := newActivationTxV2(
-			WithMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
-			WithMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
+			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+			withMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
@@ -53,12 +53,12 @@ func Test_DoubleMarryProof(t *testing.T) {
 		db := sql.InMemory()
 
 		atx1 := newActivationTxV2(
-			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
 		atx2 := newActivationTxV2(
-			WithMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
@@ -73,25 +73,6 @@ func Test_DoubleMarryProof(t *testing.T) {
 			"proof for atx2: does not contain a marriage certificate signed by %s", sig.NodeID().ShortString(),
 		))
 		require.Nil(t, proof)
-
-		// manually construct an invalid proof
-		proof = &ProofDoubleMarry{
-			Proofs: [2]MarryProof{
-				{
-					ATXID:  atx1.ID(),
-					NodeID: sig.NodeID(),
-				},
-				{
-					ATXID:  atx2.ID(),
-					NodeID: otherSig.NodeID(),
-				},
-			},
-		}
-
-		verifier := signing.NewEdVerifier()
-		id, err := proof.Valid(verifier)
-		require.ErrorContains(t, err, "proofs have different node IDs")
-		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("same ATX ID", func(t *testing.T) {
@@ -129,14 +110,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
 		atx1 := newActivationTxV2(
-			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
 		atx2 := newActivationTxV2(
-			WithMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
-			WithMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
+			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+			withMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
@@ -147,6 +128,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, err)
 
 		proof := &ProofDoubleMarry{
+			NodeID: otherSig.NodeID(),
 			Proofs: [2]MarryProof{
 				proof1, proof2,
 			},
@@ -175,14 +157,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
 		atx1 := newActivationTxV2(
-			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
 		atx2 := newActivationTxV2(
-			WithMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
-			WithMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
+			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+			withMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
@@ -193,6 +175,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, err)
 
 		proof := &ProofDoubleMarry{
+			NodeID: otherSig.NodeID(),
 			Proofs: [2]MarryProof{
 				proof1, proof2,
 			},
@@ -221,14 +204,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
 		atx1 := newActivationTxV2(
-			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
 		atx2 := newActivationTxV2(
-			WithMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
-			WithMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
+			withMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
@@ -257,14 +240,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
 		atx1 := newActivationTxV2(
-			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
 		atx2 := newActivationTxV2(
-			WithMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
-			WithMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
+			withMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
@@ -289,14 +272,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 		db := sql.InMemory()
 
 		atx1 := newActivationTxV2(
-			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			WithMarriageCertificate(otherSig, types.RandomATXID(), sig.NodeID()), // unknown reference ATX
+			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(otherSig, types.RandomATXID(), sig.NodeID()), // unknown reference ATX
 		)
 		atx1.Sign(sig)
 
 		atx2 := newActivationTxV2(
-			WithMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
-			WithMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
+			withMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
+			withMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
