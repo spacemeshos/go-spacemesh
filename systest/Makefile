@@ -36,8 +36,8 @@ ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
-command := tests -test.v -test.count=$(count) -test.timeout=0 -test.run=$(test_name) -test.parallel=$(clusters) \
-	-clusters=$(clusters) -level=$(level) -configname=$(configname) -test.failfast=$(failfast)
+command := tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
+	-test.failfast=$(failfast) -clusters=$(clusters) -level=$(level) -configname=$(configname)
 
 .PHONY: docker
 docker:

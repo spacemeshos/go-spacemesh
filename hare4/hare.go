@@ -193,7 +193,7 @@ type nodeclock interface {
 
 func New(
 	nodeclock nodeclock,
-	pubsub pubsub.PublishSubsciber,
+	pubsub pubsub.PublishSubscriber,
 	db *sql.Database,
 	atxsdata *atxsdata.Data,
 	proposals *store.Store,
@@ -262,7 +262,7 @@ type Hare struct {
 
 	// dependencies
 	nodeclock nodeclock
-	pubsub    pubsub.PublishSubsciber
+	pubsub    pubsub.PublishSubscriber
 	db        *sql.Database
 	atxsdata  *atxsdata.Data
 	proposals *store.Store

@@ -50,20 +50,20 @@ func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) ([]ty
 	var proof wire.Proof
 	switch decoded.ProofType {
 	case wire.DoublePublish:
-		var p wire.ProofDoublePublish
-		if err := codec.Decode(decoded.Proof, &p); err != nil {
+		p := &wire.ProofDoublePublish{}
+		if err := codec.Decode(decoded.Proof, p); err != nil {
 			return nil, fmt.Errorf("decoding ATX double publish proof: %w", err)
 		}
 		proof = p
 	case wire.DoubleMarry:
-		var p wire.ProofDoubleMarry
-		if err := codec.Decode(decoded.Proof, &p); err != nil {
+		p := &wire.ProofDoubleMarry{}
+		if err := codec.Decode(decoded.Proof, p); err != nil {
 			return nil, fmt.Errorf("decoding ATX double marry proof: %w", err)
 		}
 		proof = p
 	case wire.InvalidPost:
-		var p wire.ProofInvalidPost
-		if err := codec.Decode(decoded.Proof, &p); err != nil {
+		p := &wire.ProofInvalidPost{}
+		if err := codec.Decode(decoded.Proof, p); err != nil {
 			return nil, fmt.Errorf("decoding ATX invalid post proof: %w", err)
 		}
 	default:

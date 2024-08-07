@@ -12,7 +12,7 @@ import (
 
 //go:generate scalegen
 
-// InvalidPostProof is a proof that an ATXs with an invalid Post was published by a smesher.
+// ProofInvalidPost is a proof that an ATXs with an invalid Post was published by a smesher.
 //
 // We are proofing the following:
 // 1. The provided Post is invalid for the given SmesherID.
@@ -21,23 +21,23 @@ import (
 // For this we need additional information:
 // 1. The initial ATX of the smesher for the Commitment ATX
 // 2. The marriage ATX of the smesher in the case the smesher is part of an equivocation set.
-type InvalidPostProof struct {
+type ProofInvalidPost struct {
 	InvalidPost InvalidATXPostProof
 	Commitment  CommitmentProof
 
 	// TODO(mafa): add marriage ATX proof
 }
 
-var _ Proof = &InvalidPostProof{}
+var _ Proof = &ProofInvalidPost{}
 
-func NewInvalidPostProof(atx, initialAtx *ActivationTxV2) (*InvalidPostProof, error) {
+func NewInvalidPostProof(atx, initialAtx *ActivationTxV2) (*ProofInvalidPost, error) {
 	// TODO(mafa): implement
 	return nil, nil
 }
 
 // Valid returns true if the proof is valid. It verifies that the two proofs have the same publish epoch, smesher ID,
 // and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
-func (p InvalidPostProof) Valid(edVerifier *signing.EdVerifier) (types.NodeID, error) {
+func (p ProofInvalidPost) Valid(edVerifier *signing.EdVerifier) (types.NodeID, error) {
 	// TODO(mafa): implement
 	return types.EmptyNodeID, nil
 }

@@ -1109,7 +1109,7 @@ func (m *MockmalfeasancePublisher) EXPECT() *MockmalfeasancePublisherMockRecorde
 }
 
 // Publish mocks base method.
-func (m *MockmalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof *wire.ATXProof) error {
+func (m *MockmalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Publish", ctx, id, proof)
 	ret0, _ := ret[0].(error)
@@ -1135,13 +1135,13 @@ func (c *MockmalfeasancePublisherPublishCall) Return(arg0 error) *Mockmalfeasanc
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockmalfeasancePublisherPublishCall) Do(f func(context.Context, types.NodeID, *wire.ATXProof) error) *MockmalfeasancePublisherPublishCall {
+func (c *MockmalfeasancePublisherPublishCall) Do(f func(context.Context, types.NodeID, wire.Proof) error) *MockmalfeasancePublisherPublishCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context, types.NodeID, *wire.ATXProof) error) *MockmalfeasancePublisherPublishCall {
+func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context, types.NodeID, wire.Proof) error) *MockmalfeasancePublisherPublishCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -15,10 +15,10 @@ func Test_DoublePublishProof(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid", func(t *testing.T) {
-		atx1 := newActivationTxV2(WithPublishEpoch(10))
+		atx1 := newActivationTxV2(withPublishEpoch(10))
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(WithPublishEpoch(10))
+		atx2 := newActivationTxV2(withPublishEpoch(10))
 		atx2.Sign(sig)
 
 		proof, err := NewDoublePublishProof(atx1, atx2)
@@ -31,10 +31,10 @@ func Test_DoublePublishProof(t *testing.T) {
 	})
 
 	t.Run("not same epoch", func(t *testing.T) {
-		atx1 := newActivationTxV2(WithPublishEpoch(10))
+		atx1 := newActivationTxV2(withPublishEpoch(10))
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(WithPublishEpoch(11))
+		atx2 := newActivationTxV2(withPublishEpoch(11))
 		atx2.Sign(sig)
 
 		proof, err := NewDoublePublishProof(atx1, atx2)
@@ -75,12 +75,12 @@ func Test_DoublePublishProof(t *testing.T) {
 
 	t.Run("not same smesher", func(t *testing.T) {
 		sig1 := sig
-		atx1 := newActivationTxV2(WithPublishEpoch(10))
+		atx1 := newActivationTxV2(withPublishEpoch(10))
 		atx1.Sign(sig1)
 
 		sig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		atx2 := newActivationTxV2(WithPublishEpoch(10))
+		atx2 := newActivationTxV2(withPublishEpoch(10))
 		atx2.Sign(sig2)
 
 		proof, err := NewDoublePublishProof(atx1, atx2)
@@ -120,7 +120,7 @@ func Test_DoublePublishProof(t *testing.T) {
 	})
 
 	t.Run("same ATX ID", func(t *testing.T) {
-		atx1 := newActivationTxV2(WithPublishEpoch(10))
+		atx1 := newActivationTxV2(withPublishEpoch(10))
 		atx1.Sign(sig)
 
 		proof, err := NewDoublePublishProof(atx1, atx1)
@@ -157,10 +157,10 @@ func Test_DoublePublishProof(t *testing.T) {
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
-		atx1 := newActivationTxV2(WithPublishEpoch(10))
+		atx1 := newActivationTxV2(withPublishEpoch(10))
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(WithPublishEpoch(10))
+		atx2 := newActivationTxV2(withPublishEpoch(10))
 		atx2.Sign(sig)
 
 		// manually construct an invalid proof
@@ -203,10 +203,10 @@ func Test_DoublePublishProof(t *testing.T) {
 	})
 
 	t.Run("invalid signature", func(t *testing.T) {
-		atx1 := newActivationTxV2(WithPublishEpoch(10))
+		atx1 := newActivationTxV2(withPublishEpoch(10))
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(WithPublishEpoch(10))
+		atx2 := newActivationTxV2(withPublishEpoch(10))
 		atx2.Sign(sig)
 
 		proof, err := NewDoublePublishProof(atx1, atx2)

@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *ProofInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := t.InvalidPost.EncodeScale(enc)
 		if err != nil {
@@ -26,7 +26,7 @@ func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error
 	return total, nil
 }
 
-func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *ProofInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := t.InvalidPost.DecodeScale(dec)
 		if err != nil {

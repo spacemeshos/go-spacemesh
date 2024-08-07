@@ -17,14 +17,17 @@ import (
 
 // ProofDoubleMarry is a proof that two distinct ATXs contain a marriage certificate signed by the same identity.
 //
-// We are proofing the following:
+// We are proving the following:
 // 1. The ATXs have different IDs.
 // 2. Both ATXs have a valid signature.
 // 3. Both ATXs contain a marriage certificate created by the same identity.
 // 4. Both marriage certificates have valid signatures.
 //
-// HINT: this only works if the identity that publishes the ATX with the certificates marries itself.
+// HINT: this works if the identity that publishes the marriage ATX marries themselves.
 type ProofDoubleMarry struct {
+	// NodeID is the node ID that married twice.
+	NodeID types.NodeID
+
 	Proofs [2]MarryProof
 }
 
@@ -46,6 +49,7 @@ func NewDoubleMarryProof(db sql.Executor, atx1, atx2 *ActivationTxV2, nodeID typ
 	}
 
 	proof := &ProofDoubleMarry{
+		NodeID: nodeID,
 		Proofs: [2]MarryProof{proof1, proof2},
 	}
 	return proof, nil
@@ -77,8 +81,7 @@ func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID)
 	}
 
 	proof := MarryProof{
-		ATXID:  atx.ID(),
-		NodeID: nodeID,
+		ATXID: atx.ID(),
 
 		MarriageRoot:  types.Hash32(atx.Marriages.Root()),
 		MarriageProof: marriageProof,
@@ -134,24 +137,19 @@ func (p ProofDoubleMarry) Valid(edVerifier *signing.EdVerifier) (types.NodeID, e
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
 		return types.EmptyNodeID, errors.New("proofs have the same ATX ID")
 	}
-	if p.Proofs[0].NodeID != p.Proofs[1].NodeID {
-		return types.EmptyNodeID, errors.New("proofs have different node IDs")
-	}
 
-	if err := p.Proofs[0].Valid(edVerifier); err != nil {
+	if err := p.Proofs[0].Valid(edVerifier, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 1 is invalid: %w", err)
 	}
-	if err := p.Proofs[1].Valid(edVerifier); err != nil {
+	if err := p.Proofs[1].Valid(edVerifier, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 2 is invalid: %w", err)
 	}
-	return p.Proofs[0].NodeID, nil
+	return p.NodeID, nil
 }
 
 type MarryProof struct {
 	// ATXID is the ID of the ATX being proven.
 	ATXID types.ATXID
-	// NodeID is the node ID that married twice.
-	NodeID types.NodeID
 
 	// MarriageRoot and its proof that it is contained in the ATX.
 	MarriageRoot  types.Hash32
@@ -170,12 +168,12 @@ type MarryProof struct {
 	Signature types.EdSignature
 }
 
-func (p MarryProof) Valid(edVerifier *signing.EdVerifier) error {
+func (p MarryProof) Valid(edVerifier *signing.EdVerifier, nodeID types.NodeID) error {
 	if !edVerifier.Verify(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
 		return errors.New("invalid ATX signature")
 	}
 
-	if !edVerifier.Verify(signing.MARRIAGE, p.NodeID, p.SmesherID.Bytes(), p.CertificateSignature) {
+	if !edVerifier.Verify(signing.MARRIAGE, nodeID, p.SmesherID.Bytes(), p.CertificateSignature) {
 		return errors.New("invalid certificate signature")
 	}
 

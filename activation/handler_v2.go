@@ -629,9 +629,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 					zap.Int("index", invalidIdx.Index),
 				)
 				// TODO(mafa): finish proof
-				proof := &wire.ATXProof{
-					ProofType: wire.InvalidPost,
-				}
+				var proof wire.Proof
 				if err := h.malPublisher.Publish(ctx, id, proof); err != nil {
 					return nil, fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
 				}
@@ -721,7 +719,7 @@ func (h *HandlerV2) checkDoubleMarry(
 
 		// found an identity that is already married
 		var blob sql.Blob
-		if _, err := atxs.LoadBlob(ctx, tx, mAtxID[:], &blob); err != nil {
+		if _, err := atxs.LoadBlob(ctx, tx, mAtxID.Bytes(), &blob); err != nil {
 			return true, fmt.Errorf("get atx blob %s: %w", mAtxID.ShortString(), err)
 		}
 		mAtx := &wire.ActivationTxV2{}
@@ -730,12 +728,7 @@ func (h *HandlerV2) checkDoubleMarry(
 		if err != nil {
 			return true, fmt.Errorf("creating double marry proof: %w", err)
 		}
-		atxProof := &wire.ATXProof{
-			Version:   0,
-			ProofType: wire.DoubleMarry,
-			Proof:     codec.MustEncode(proof),
-		}
-		return true, h.malPublisher.Publish(ctx, m.id, atxProof)
+		return true, h.malPublisher.Publish(ctx, m.id, proof)
 	}
 	return false, nil
 }
@@ -764,9 +757,7 @@ func (h *HandlerV2) checkDoublePost(
 			zap.Uint32("epoch", atx.PublishEpoch.Uint32()),
 		)
 		// TODO(mafa): finish proof
-		proof := &wire.ATXProof{
-			ProofType: wire.DoublePublish,
-		}
+		var proof wire.Proof
 		return true, h.malPublisher.Publish(ctx, id, proof)
 	}
 	return false, nil
@@ -793,10 +784,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, watx *wire
 		zap.Stringer("smesher_id", watx.SmesherID),
 	)
 
-	// TODO(mafa): finish proof
-	proof := &wire.ATXProof{
-		ProofType: wire.DoubleMerge,
-	}
+	var proof wire.Proof
 	return true, h.malPublisher.Publish(ctx, watx.SmesherID, proof)
 }
 

@@ -10,6 +10,13 @@ import (
 
 func (t *ProofDoubleMarry) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
+		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeStructArray(enc, t.Proofs[:])
 		if err != nil {
 			return total, err
@@ -20,6 +27,13 @@ func (t *ProofDoubleMarry) EncodeScale(enc *scale.Encoder) (total int, err error
 }
 
 func (t *ProofDoubleMarry) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.DecodeStructArray(dec, t.Proofs[:])
 		if err != nil {
@@ -33,13 +47,6 @@ func (t *ProofDoubleMarry) DecodeScale(dec *scale.Decoder) (total int, err error
 func (t *MarryProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}
@@ -107,13 +114,6 @@ func (t *MarryProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 func (t *MarryProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}

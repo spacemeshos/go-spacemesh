@@ -13,13 +13,13 @@ import (
 
 type testAtxV2Opt func(*ActivationTxV2)
 
-func WithPublishEpoch(epoch types.EpochID) testAtxV2Opt {
+func withPublishEpoch(epoch types.EpochID) testAtxV2Opt {
 	return func(atx *ActivationTxV2) {
 		atx.PublishEpoch = epoch
 	}
 }
 
-func WithMarriageCertificate(sig *signing.EdSigner, refAtx types.ATXID, atxPublisher types.NodeID) testAtxV2Opt {
+func withMarriageCertificate(sig *signing.EdSigner, refAtx types.ATXID, atxPublisher types.NodeID) testAtxV2Opt {
 	return func(atx *ActivationTxV2) {
 		certificate := MarriageCertificate{
 			ReferenceAtx: refAtx,

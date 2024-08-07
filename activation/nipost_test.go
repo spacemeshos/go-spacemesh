@@ -214,7 +214,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 	})
 
 	t.Run("connect, disconnect, then cancel before reconnect", func(t *testing.T) {
-		// post client connects, starts post, disconnects in between and proofing is canceled before reconnection
+		// post client connects, starts post, disconnects in between and proving is canceled before reconnection
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
@@ -713,9 +713,14 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
-			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
-		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		nipst, err := nb.BuildNIPost(
+			context.Background(),
+			sig,
+			challenge,
+			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2},
+		)
+		poetErr := &PoetSvcUnstableError{}
+		require.ErrorAs(t, err, &poetErr)
 		require.Nil(t, nipst)
 	})
 	t.Run("Submit hangs", func(t *testing.T) {
@@ -750,9 +755,14 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
-			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
-		require.ErrorIs(t, err, ErrPoetServiceUnstable)
+		nipst, err := nb.BuildNIPost(
+			context.Background(),
+			sig,
+			challenge,
+			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2},
+		)
+		poetErr := &PoetSvcUnstableError{}
+		require.ErrorAs(t, err, &poetErr)
 		require.Nil(t, nipst)
 	})
 	t.Run("GetProof fails", func(t *testing.T) {
