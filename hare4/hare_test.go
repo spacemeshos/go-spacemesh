@@ -598,12 +598,15 @@ func (cl *lockstepCluster) waitStopped() {
 // drainInteractiveMessages will make sure that the channels that signal
 // that interactive messages came in on the tracer are read from.
 func (cl *lockstepCluster) drainInteractiveMessages() {
+	done := make(chan struct{})
+	ct.t.Cleanup(func() { close(done) })
 	for _, n := range cl.nodes {
 		go func() {
 			for {
 				select {
 				case <-n.tracer.compactReq:
 				case <-n.tracer.compactResp:
+				case <-done:
 				}
 			}
 		}()
