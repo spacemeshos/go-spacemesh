@@ -10,7 +10,7 @@ import (
 // MalfeasancePublisher is the publisher for ATX proofs.
 type MalfeasancePublisher struct{}
 
-func (p *MalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof *wire.ATXProof) error {
+func (p *MalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
 	// TODO(mafa): implement me
 	return nil
 }
