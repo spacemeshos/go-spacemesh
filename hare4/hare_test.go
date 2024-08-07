@@ -599,7 +599,7 @@ func (cl *lockstepCluster) waitStopped() {
 // that interactive messages came in on the tracer are read from.
 func (cl *lockstepCluster) drainInteractiveMessages() {
 	done := make(chan struct{})
-	ct.t.Cleanup(func() { close(done) })
+	cl.t.Cleanup(func() { close(done) })
 	for _, n := range cl.nodes {
 		go func() {
 			for {
