@@ -189,14 +189,14 @@ jobs:
           tag_name:  ${{ github.ref_name }}
           body: |
             ## Zip Files
-            - Windows amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
-            - macOS amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_AMD64 }}.zip
-            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_ARM64 }}.zip
-            - Linux amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_AMD64 }}.zip
-            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_ARM64 }}.zip
+            - Windows amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
+            - macOS amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_MAC_AMD64 }}.zip
+            - macOS arm64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_MAC_ARM64 }}.zip
+            - Linux amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_AMD64 }}.zip
+            - Linux arm64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_ARM64 }}.zip
 
             ## checksum - Zip files
-            YAML with all the checksums of this version :  https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/sha256sum.yaml
+            YAML with all the checksums of this version :  https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/sha256sum.yaml
             - Windows amd64 - sha256 : ${{ env.SHA256_WIN_AMD64 }}
             - Linux amd64 - sha256: ${{ env.SHA256_LINUX_AMD64 }}
             - Linux arm64 - sha256: ${{ env.SHA256_LINUX_ARM64 }}
