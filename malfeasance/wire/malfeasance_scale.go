@@ -422,11 +422,3 @@ func (t *InvalidPrevATXProof) DecodeScale(dec *scale.Decoder) (total int, err er
 	}
 	return total, nil
 }
-
-func (t *DoubleMarryProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	return total, nil
-}
-
-func (t *DoubleMarryProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	return total, nil
-}

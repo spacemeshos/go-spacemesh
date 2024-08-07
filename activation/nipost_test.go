@@ -214,7 +214,7 @@ func Test_NIPost_PostClientHandling(t *testing.T) {
 	})
 
 	t.Run("connect, disconnect, then cancel before reconnect", func(t *testing.T) {
-		// post client connects, starts post, disconnects in between and proofing is canceled before reconnection
+		// post client connects, starts post, disconnects in between and proving is canceled before reconnection
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
