@@ -11,6 +11,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 ### Features
 
 ### Improvements
+* [#6035](https://github.com/spacemeshos/go-spacemesh/issues/6035) Fixed an issue where the node retried registering for the PoET round
+  only for 15-20 minutes instead of continuing until the start of the round
 
 ## Release v1.6.4
 
@@ -24,9 +26,6 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6142](https://github.com/spacemeshos/go-spacemesh/pull/6142) Fix node not dropping peers that are broadcasting
   invalid ATXs.
-
-* [#6035](https://github.com/spacemeshos/go-spacemesh/issues/6035) Fixed an issue where the node retried registering for the PoET round
-  only for 15-20 minutes instead of continuing until the start of the round
 ## Release v1.6.3
 
 ### Improvements

@@ -147,6 +147,7 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 		RetryWaitMin: cfg.RequestRetryDelay,
 		RetryWaitMax: 2 * cfg.RequestRetryDelay,
 		Backoff:      retryablehttp.DefaultBackoff,
+		CheckRetry:   retryablehttp.DefaultRetryPolicy,
 	}
 
 	baseURL, err := url.Parse(server.Address)
@@ -190,7 +191,7 @@ func (c *HTTPPoetClient) Address() string {
 
 func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) {
 	resBody := rpcapi.PowParamsResponse{}
-	if err := c.req(ctx, http.MethodGet, "/v1/pow_params", nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, "/v1/pow_params", nil, &resBody, c.client); err != nil {
 		return nil, fmt.Errorf("querying PoW params: %w", err)
 	}
 
@@ -247,7 +248,7 @@ func (c *HTTPPoetClient) Submit(
 	}
 
 	resBody := rpcapi.SubmitResponse{}
-	if err := c.req(ctx, http.MethodPost, submitPath, &request, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodPost, submitPath, &request, &resBody, c.submitChallengeClient); err != nil {
 		return nil, fmt.Errorf("submitting challenge: %w", err)
 	}
 	roundEnd := time.Time{}
@@ -260,7 +261,7 @@ func (c *HTTPPoetClient) Submit(
 
 func (c *HTTPPoetClient) info(ctx context.Context) (*rpcapi.InfoResponse, error) {
 	resBody := rpcapi.InfoResponse{}
-	if err := c.req(ctx, http.MethodGet, infoPath, nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, infoPath, nil, &resBody, c.client); err != nil {
 		return nil, fmt.Errorf("getting poet info: %w", err)
 	}
 	return &resBody, nil
@@ -269,7 +270,7 @@ func (c *HTTPPoetClient) info(ctx context.Context) (*rpcapi.InfoResponse, error)
 // Proof implements PoetProvingServiceClient.
 func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
 	resBody := rpcapi.ProofResponse{}
-	if err := c.req(ctx, http.MethodGet, fmt.Sprintf(proofPath+"/%s", roundID), nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("%s/%s", proofPath, roundID), nil, &resBody, c.client); err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 
@@ -301,7 +302,11 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 	return &proof, members, nil
 }
 
-func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, resBody proto.Message) error {
+func (c *HTTPPoetClient) req(
+	ctx context.Context,
+	method, path string,
+	reqBody, resBody proto.Message,
+	client *retryablehttp.Client) error {
 	jsonReqBody, err := protojson.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("marshaling request body: %w", err)
@@ -313,13 +318,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	var res *http.Response
-
-	if path == submitPath {
-		res, err = c.submitChallengeClient.Do(req)
-	} else {
-		res, err = c.client.Do(req)
-	}
+	res, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("doing request: %w", err)
 	}
@@ -350,7 +349,6 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 			return fmt.Errorf("decoding response body to proto: %w", err)
 		}
 	}
-
 	return nil
 }
 
