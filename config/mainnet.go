@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
@@ -59,8 +60,7 @@ func MainnetConfig() Config {
 	}
 	logging := DefaultLoggingConfig()
 	logging.TrtlLoggerLevel = zapcore.WarnLevel.String()
-	logging.AtxHandlerLevel = zapcore.WarnLevel.String()
-	logging.ProposalListenerLevel = zapcore.WarnLevel.String()
+	logging.MeshLoggerLevel = zapcore.WarnLevel.String()
 	hare3conf := hare3.DefaultConfig()
 	hare3conf.Committee = 400
 	hare3conf.Enable = true
@@ -69,6 +69,9 @@ func MainnetConfig() Config {
 		Layer: 105_720, // July 15, 2024, 10:00:00 AM UTC
 		Size:  50,
 	}
+
+	hare4conf := hare4.DefaultConfig()
+	hare4conf.Enable = false
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
@@ -137,6 +140,7 @@ func MainnetConfig() Config {
 			},
 		},
 		HARE3: hare3conf,
+		HARE4: hare4conf,
 		HareEligibility: eligibility.Config{
 			ConfidenceParam: 200,
 		},
@@ -160,14 +164,16 @@ func MainnetConfig() Config {
 			BeaconSyncWeightUnits:    800,
 		},
 		POET: activation.PoetConfig{
-			// RequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
-			RequestTimeout:                 1100 * time.Second,
-			RequestRetryDelay:              10 * time.Second,
-			MaxRequestRetries:              10,
 			PhaseShift:                     240 * time.Hour,
 			CycleGap:                       12 * time.Hour,
 			GracePeriod:                    1 * time.Hour,
 			PositioningATXSelectionTimeout: 50 * time.Minute,
+			CertifierInfoCacheTTL:          5 * time.Minute,
+			PowParamsCacheTTL:              5 * time.Minute,
+			// RequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+			RequestTimeout:    1100 * time.Second,
+			RequestRetryDelay: 10 * time.Second,
+			MaxRequestRetries: 10,
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   4,

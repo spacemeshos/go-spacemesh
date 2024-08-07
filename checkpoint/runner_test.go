@@ -238,10 +238,15 @@ func newAtx(
 }
 
 func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
+	var marriageATX []byte
+	if v.MarriageATX != nil {
+		marriageATX = v.MarriageATX.Bytes()
+	}
 	return types.AtxSnapshot{
 		ID:             v.ID().Bytes(),
 		Epoch:          v.PublishEpoch.Uint32(),
 		CommitmentAtx:  cmt.Bytes(),
+		MarriageAtx:    marriageATX,
 		VrfNonce:       uint64(v.VRFNonce),
 		NumUnits:       v.NumUnits,
 		BaseTickHeight: v.BaseTickHeight,
@@ -374,4 +379,36 @@ func TestRunner_Generate_Error(t *testing.T) {
 		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
 		require.Error(t, err)
 	})
+}
+
+func TestRunner_Generate_PreservesMarriageATX(t *testing.T) {
+	t.Parallel()
+	db := sql.InMemory()
+
+	require.NoError(t, accounts.Update(db, &types.Account{Address: types.Address{1, 1}}))
+
+	atx := &types.ActivationTx{
+		CommitmentATX: &types.ATXID{1, 2, 3, 4, 5},
+		MarriageATX:   &types.ATXID{6, 7, 8, 9},
+		SmesherID:     types.RandomNodeID(),
+		NumUnits:      4,
+	}
+	atx.SetID(types.RandomATXID())
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+	require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, atx.NumUnits))
+
+	fs := afero.NewMemMapFs()
+	dir, err := afero.TempDir(fs, "", "Generate")
+	require.NoError(t, err)
+
+	err = checkpoint.Generate(context.Background(), fs, db, dir, 5, 2)
+	require.NoError(t, err)
+
+	file, err := fs.Open(checkpoint.SelfCheckpointFilename(dir, 5))
+	require.NoError(t, err)
+	defer file.Close()
+
+	var checkpoint types.Checkpoint
+	require.NoError(t, json.NewDecoder(file).Decode(&checkpoint))
+	require.Equal(t, atx.MarriageATX.Bytes(), checkpoint.Data.Atxs[0].MarriageAtx)
 }

@@ -467,7 +467,7 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 	if err != nil {
 		return err
 	}
-	pb.logger.Info("loaded prepared active set",
+	pb.logger.Debug("loaded prepared active set",
 		zap.Uint32("epoch_id", pb.shared.epoch.Uint32()),
 		log.ZShortStringer("id", id),
 		zap.Int("size", len(set)),

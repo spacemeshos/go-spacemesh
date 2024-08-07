@@ -216,9 +216,9 @@ func (s *Syncer) Close() {
 		return // not started yet
 	}
 	s.stop()
-	s.logger.Info("waiting for syncer goroutines to finish")
+	s.logger.Debug("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()
-	s.logger.Info("all syncer goroutines finished", zap.Error(err))
+	s.logger.Debug("all syncer goroutines finished", zap.Error(err))
 }
 
 // RegisterForATXSynced returns a channel for notification when the node enters ATX synced state.
@@ -378,7 +378,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	}
 	// at most one synchronize process can run at any time
 	if !s.setSyncerBusy() {
-		s.logger.Info("sync is already running, giving up", log.ZContext(ctx))
+		s.logger.Debug("sync is already running, giving up", log.ZContext(ctx))
 		return false
 	}
 	defer s.setSyncerIdle()
@@ -426,7 +426,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			if err := s.syncLayer(ctx, layer); err != nil {
 				batchError := &fetch.BatchError{}
 				if errors.As(err, &batchError) && batchError.Ignore() {
-					s.logger.Info(
+					s.logger.Debug(
 						"remaining ballots are rejected in the layer",
 						log.ZContext(ctx),
 						zap.Error(err),

@@ -1076,7 +1076,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 				tries++
 				t.Logf("try %d: %s", tries, now)
 				if tries < expectedTries {
-					return nil, ErrPoetServiceUnstable
+					return nil, &PoetSvcUnstableError{}
 				}
 				close(builderConfirmation)
 				return newNIPostWithPoet(t, []byte("66666")), nil
