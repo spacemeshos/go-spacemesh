@@ -40,4 +40,6 @@ COPY --from=build /bin/gotestsum /bin/
 COPY --from=build /src/build/libpost.so /bin/
 COPY --from=build /src/build/post-service /bin/
 ENV LD_LIBRARY_PATH="/bin/"
+
 ENV GOVERSION=1.22
+ENV GOTESTSUM_FORMAT=standard-quiet
