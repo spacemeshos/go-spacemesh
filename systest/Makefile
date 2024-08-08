@@ -36,7 +36,8 @@ ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
-command := tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
+command := gotestsum --raw-command -- go tool test2json -t -p systest \
+	/bin/tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
 	-test.failfast=$(failfast) -clusters=$(clusters) -level=$(level) -configname=$(configname)
 
 .PHONY: docker
@@ -78,7 +79,7 @@ config: template
 
 .PHONY: gomplate
 gomplate:
-	@go install github.com/hairyhenderson/gomplate/v4/cmd/gomplate@v4.0.0-pre-1
+	@go install github.com/hairyhenderson/gomplate/v4/cmd/gomplate@v4.1.0
 
 # Using bash to invoke ./wait_for_job.sh script to avoid problems on Mac
 # where /bin/bash is an old bash
