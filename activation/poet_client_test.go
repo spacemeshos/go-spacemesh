@@ -28,7 +28,6 @@ import (
 )
 
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
-	t.Parallel()
 	cfg := server.DefaultRoundConfig()
 
 	t.Run("add http if missing", func(t *testing.T) {
@@ -53,7 +52,6 @@ func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Submit(t *testing.T) {
-	t.Parallel()
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
 		resp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
@@ -86,7 +84,6 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Address(t *testing.T) {
-	t.Parallel()
 	t.Run("with scheme", func(t *testing.T) {
 		t.Parallel()
 		client, err := NewHTTPPoetClient(types.PoetServer{Address: "https://poet-address"}, PoetConfig{})
@@ -104,7 +101,6 @@ func Test_HTTPPoetClient_Address(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
-	t.Parallel()
 	poetCfg := server.DefaultRoundConfig()
 
 	poETServers := []string{
@@ -127,7 +123,6 @@ func Test_HTTPPoetClient_Address_Mainnet(t *testing.T) {
 }
 
 func Test_HTTPPoetClient_Proof(t *testing.T) {
-	t.Parallel()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/proofs/1", func(w http.ResponseWriter, r *http.Request) {
 		resp, err := protojson.Marshal(&rpcapi.ProofResponse{})
@@ -152,8 +147,6 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 }
 
 func TestPoetClient_CachesProof(t *testing.T) {
-	t.Parallel()
-
 	var proofsCalled atomic.Uint64
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/proofs/", func(w http.ResponseWriter, r *http.Request) {
@@ -198,8 +191,6 @@ func TestPoetClient_CachesProof(t *testing.T) {
 }
 
 func TestPoetClient_QueryProofTimeout(t *testing.T) {
-	t.Parallel()
-
 	cfg := PoetConfig{
 		RequestTimeout: time.Millisecond * 100,
 		PhaseShift:     10 * time.Second,
@@ -233,8 +224,6 @@ func TestPoetClient_QueryProofTimeout(t *testing.T) {
 }
 
 func TestPoetClient_Certify(t *testing.T) {
-	t.Parallel()
-
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -275,8 +264,6 @@ func TestPoetClient_Certify(t *testing.T) {
 }
 
 func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
-	t.Parallel()
-
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -320,8 +307,6 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 }
 
 func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
-	t.Parallel()
-
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -388,8 +373,6 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 }
 
 func TestPoetClient_FallbacksToPowWhenCannotRecertify(t *testing.T) {
-	t.Parallel()
-
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -463,7 +446,6 @@ func TestPoetClient_FallbacksToPowWhenCannotRecertify(t *testing.T) {
 }
 
 func TestPoetService_CachesCertifierInfo(t *testing.T) {
-	t.Parallel()
 	type test struct {
 		name string
 		ttl  time.Duration
@@ -502,7 +484,6 @@ func TestPoetService_CachesCertifierInfo(t *testing.T) {
 }
 
 func TestPoetService_CachesPowParams(t *testing.T) {
-	t.Parallel()
 	type test struct {
 		name string
 		ttl  time.Duration
