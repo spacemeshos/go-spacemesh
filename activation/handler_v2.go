@@ -786,11 +786,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, watx *acti
 }
 
 // Store an ATX in the DB.
-func (h *HandlerV2) storeAtx(
-	ctx context.Context,
-	atx *types.ActivationTx,
-	watx *activationTx,
-) error {
+func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		if len(watx.marriages) != 0 {
 			marriageData := identities.MarriageData{
