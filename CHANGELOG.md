@@ -6,6 +6,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+The command line flag `--scan-malfeasant-atxs` has been removed. All malfeasant ATXs before 1.6.0 have been marked as
+such and the node will continue to scan new ATXs for their validity.
+
 ### Highlights
 
 ### Features
@@ -699,6 +702,7 @@ and permanent ineligibility for rewards.
 
 * [#5494](https://github.com/spacemeshos/go-spacemesh/pull/5494)
   Make routing discovery more configurable and less spammy by default.
+
 * [#5511](https://github.com/spacemeshos/go-spacemesh/pull/5511)
   Fix dialing peers on their private IPs, which was causing "portscan" complaints.
 

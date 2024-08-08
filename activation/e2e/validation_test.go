@@ -51,7 +51,7 @@ func TestValidator_Validate(t *testing.T) {
 	}
 
 	poetDb := activation.NewPoetDb(sql.InMemory(), logger.Named("poetDb"))
-	client := ae2e.NewTestPoetClient(1)
+	client := ae2e.NewTestPoetClient(1, poetCfg)
 	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	mclock := activation.NewMocklayerClock(ctrl)

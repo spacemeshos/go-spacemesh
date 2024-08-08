@@ -71,7 +71,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		CycleGap:    3 * epoch / 4,
 		GracePeriod: epoch / 4,
 	}
-	client := ae2e.NewTestPoetClient(1)
+	client := ae2e.NewTestPoetClient(1, poetCfg)
 	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	// ensure that genesis aligns with layer timings
