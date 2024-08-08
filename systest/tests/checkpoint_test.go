@@ -36,7 +36,7 @@ func TestCheckpoint(t *testing.T) {
 	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	addedLater := 2
 	size := min(tctx.ClusterSize, 30)
 	oldSize := size - addedLater
@@ -51,8 +51,8 @@ func TestCheckpoint(t *testing.T) {
 	// the start of the next poet round
 	snapshotLayer := uint32(15)
 	restoreLayer := uint32(18)
-	checkpointEpoch := uint32(4)
-	lastEpoch := uint32(8)
+	checkpointEpoch := uint32(8)
+	lastEpoch := uint32(14)
 
 	// bootstrap the checkpoint epoch and the next epoch as the beacon protocol was interrupted in the last epoch
 	cl, err := reuseCluster(tctx, restoreLayer)
@@ -168,8 +168,8 @@ func TestCheckpoint(t *testing.T) {
 		}
 	}
 
-	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", checkpointEpoch+2)
-	ensureSmeshing(t, tctx, cl, checkpointEpoch+2)
+	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", checkpointEpoch)
+	ensureSmeshing(t, tctx, cl, checkpointEpoch)
 
 	// increase the cluster size to the original test size
 	tctx.Log.Info("cluster size changed to ", size)

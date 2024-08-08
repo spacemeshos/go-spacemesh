@@ -44,7 +44,6 @@ const (
 	InvalidActivation MalfeasanceType = iota + 10
 	InvalidBallot
 	InvalidHareMsg
-	DoubleMarry = MalfeasanceType(wire.DoubleMarry)
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
@@ -198,7 +197,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 	h.reportMalfeasance(nodeID, &p.MalfeasanceProof)
 	h.cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
 	h.countProof(&p.MalfeasanceProof)
-	h.logger.Info("new malfeasance proof",
+	h.logger.Debug("new malfeasance proof",
 		log.ZContext(ctx),
 		zap.Stringer("smesher", nodeID),
 		zap.Inline(p),
@@ -216,7 +215,7 @@ func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (type
 	if err == nil {
 		return nodeID, nil
 	}
-	h.logger.Warn("malfeasance proof failed validation",
+	h.logger.Debug("malfeasance proof failed validation",
 		log.ZContext(ctx),
 		zap.Inline(p),
 		zap.Error(err),

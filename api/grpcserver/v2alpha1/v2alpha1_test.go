@@ -1,7 +1,6 @@
 package v2alpha1
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -12,15 +11,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 const (
 	genTimeUnix   = 1000000
 	layerDuration = 10 * time.Second
 )
-
-var genesisID = types.Hash20{}
 
 func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
 	cfg := grpcserver.DefaultTestConfig()
@@ -36,7 +32,7 @@ func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.
 	return cfg, func() { assert.NoError(tb, grpc.Close()) }
 }
 
-func dialGrpc(ctx context.Context, tb testing.TB, cfg grpcserver.Config) *grpc.ClientConn {
+func dialGrpc(tb testing.TB, cfg grpcserver.Config) *grpc.ClientConn {
 	tb.Helper()
 	conn, err := grpc.NewClient(
 		cfg.PublicListener,

@@ -46,6 +46,7 @@ type PoetConfig struct {
 	RequestRetryDelay              time.Duration `mapstructure:"retry-delay"`
 	PositioningATXSelectionTimeout time.Duration `mapstructure:"positioning-atx-selection-timeout"`
 	CertifierInfoCacheTTL          time.Duration `mapstructure:"certifier-info-cache-ttl"`
+	PowParamsCacheTTL              time.Duration `mapstructure:"pow-params-cache-ttl"`
 	MaxRequestRetries              int           `mapstructure:"retry-max"`
 }
 
@@ -54,6 +55,7 @@ func DefaultPoetConfig() PoetConfig {
 		RequestRetryDelay:     400 * time.Millisecond,
 		MaxRequestRetries:     10,
 		CertifierInfoCacheTTL: 5 * time.Minute,
+		PowParamsCacheTTL:     5 * time.Minute,
 	}
 }
 
@@ -68,7 +70,7 @@ type Config struct {
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
-// it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
+// it is responsible for initializing post, receiving poet proof and orchestrating nipost. after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
 	accountLock       sync.RWMutex
@@ -417,7 +419,13 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	for _, poet := range b.poets {
 		eg.Go(func() error {
 			_, err := poet.Certify(ctx, sig.NodeID())
-			if err != nil {
+			switch {
+			case errors.Is(err, ErrCertificatesNotSupported):
+				b.logger.Debug("not certifying (not supported in poet)",
+					log.ZShortStringer("smesherID", sig.NodeID()),
+					zap.String("poet", poet.Address()),
+				)
+			case err != nil:
 				b.logger.Warn("failed to certify poet", zap.Error(err), log.ZShortStringer("smesherID", sig.NodeID()))
 			}
 			return nil
@@ -435,6 +443,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 		b.logger.Warn("failed to publish atx", zap.Error(err))
 
+		poetErr := &PoetSvcUnstableError{}
 		switch {
 		case errors.Is(err, ErrATXChallengeExpired):
 			b.logger.Debug("retrying with new challenge after waiting for a layer")
@@ -451,8 +460,11 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 				return
 			case <-b.layerClock.AwaitLayer(currentLayer.Add(1)):
 			}
-		case errors.Is(err, ErrPoetServiceUnstable):
-			b.logger.Warn("retrying after poet retry interval", zap.Duration("interval", b.poetRetryInterval))
+		case errors.As(err, &poetErr):
+			b.logger.Warn("retrying after poet retry interval",
+				zap.Duration("interval", b.poetRetryInterval),
+				zap.Error(poetErr.source),
+			)
 			select {
 			case <-ctx.Done():
 				return
@@ -586,7 +598,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			PositioningATX: posAtx,
 		}
 	}
-	logger.Info("persisting the new NiPOST challenge", zap.Object("challenge", challenge))
+	logger.Debug("persisting the new NiPOST challenge", zap.Object("challenge", challenge))
 	if err := nipost.AddChallenge(b.localDB, nodeID, challenge); err != nil {
 		return nil, fmt.Errorf("add nipost challenge: %w", err)
 	}
@@ -626,7 +638,7 @@ func (b *Builder) getExistingChallenge(
 	}
 
 	// challenge is fresh
-	logger.Info("loaded NiPoST challenge from local state",
+	logger.Debug("loaded NiPoST challenge from local state",
 		zap.Uint32("current_epoch", currentEpochId.Uint32()),
 		zap.Uint32("publish_epoch", challenge.PublishEpoch.Uint32()),
 	)
@@ -729,7 +741,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		return fmt.Errorf("wait for publication epoch: %w", ctx.Err())
 	case <-b.layerClock.AwaitLayer(challenge.PublishEpoch.FirstLayer()):
 	}
-	b.logger.Debug("publication epoch has arrived!", log.ZShortStringer("smesherID", sig.NodeID()))
 
 	for {
 		b.logger.Info(
@@ -959,13 +970,13 @@ func (b *Builder) getPositioningAtx(
 		return types.EmptyATXID, err
 	}
 
-	b.logger.Info("found candidate positioning atx",
+	b.logger.Debug("found candidate positioning atx",
 		log.ZShortStringer("id", id),
 		log.ZShortStringer("smesherID", nodeID),
 	)
 
 	if previous == nil {
-		b.logger.Info("selected atx as positioning atx",
+		b.logger.Info("selected positioning atx",
 			log.ZShortStringer("id", id),
 			log.ZShortStringer("smesherID", nodeID))
 		return id, nil
@@ -1043,14 +1054,14 @@ func findFullyValidHighTickAtx(
 
 	// iterate trough epochs, to get first valid, not malicious ATX with the biggest height
 	atxdata.IterateHighTicksInEpoch(publish+1, func(id types.ATXID) (contSearch bool) {
-		logger.Info("found candidate for high-tick atx", log.ZShortStringer("id", id))
+		logger.Debug("found candidate for high-tick atx", log.ZShortStringer("id", id))
 		if ctx.Err() != nil {
 			return false
 		}
 		// verify ATX-candidate by getting their dependencies (previous Atx, positioning ATX etc.)
 		// and verifying PoST for every dependency
 		if err := validator.VerifyChain(ctx, id, goldenATXID, opts...); err != nil {
-			logger.Info("rejecting candidate for high-tick atx", zap.Error(err), log.ZShortStringer("id", id))
+			logger.Debug("rejecting candidate for high-tick atx", zap.Error(err), log.ZShortStringer("id", id))
 			return true
 		}
 		found = &id

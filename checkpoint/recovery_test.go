@@ -908,7 +908,8 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	atxid, err := hex.DecodeString("98e47278c1f58acfd2b670a730f28898f74eb140482a07b91ff81f9ff0b7d9f4")
 	require.NoError(t, err)
-	atx := newAtx(types.ATXID(atxid), nil, 3, 1, 0, nid)
+	atx := &types.ActivationTx{SmesherID: types.NodeID(nid)}
+	atx.SetID(types.ATXID(atxid))
 
 	cfg := &checkpoint.RecoverConfig{
 		GoldenAtx:   goldenAtx,

@@ -263,13 +263,13 @@ func (pd *ProtocolDriver) Close() {
 	pd.logger.Info("closing beacon protocol")
 	pd.metricsCollector.Stop()
 	close(pd.closed)
-	pd.logger.Info("waiting for beacon goroutines to finish")
+	pd.logger.Debug("waiting for beacon goroutines to finish")
 	if err := pd.eg.Wait(); err != nil {
-		pd.logger.Info("received error waiting for goroutines to finish", zap.Error(err))
+		pd.logger.Warn("received error waiting for goroutines to finish", zap.Error(err))
 	}
 	close(pd.results)
 	pd.results = nil
-	pd.logger.Info("beacon goroutines finished")
+	pd.logger.Debug("beacon goroutines finished")
 }
 
 func (pd *ProtocolDriver) onResult(epoch types.EpochID, beacon types.Beacon) {
@@ -651,7 +651,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger *zap.Logger, target 
 		}
 	}
 
-	logger.Info("selected active signers",
+	logger.Debug("selected active signers",
 		zap.Int("count", len(active)),
 		zap.Array("signers", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
 			for _, p := range active {
@@ -726,7 +726,7 @@ func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 		case <-pd.clock.AwaitLayer(layer):
 			current := pd.clock.CurrentLayer()
 			if current.Before(layer) {
-				pd.logger.Info("time sync detected, realigning Beacon")
+				pd.logger.Debug("time sync detected, realigning Beacon")
 				continue
 			}
 			if !current.FirstInEpoch() {
@@ -736,10 +736,7 @@ func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 			layer = epoch.Add(1).FirstLayer()
 
 			pd.setProposalTimeForNextEpoch()
-			pd.logger.Info("processing epoch",
-				zap.Uint32("layer", current.Uint32()),
-				zap.Uint32("epoch", epoch.Uint32()),
-			)
+			pd.logger.Info("processing epoch", zap.Uint32("epoch", epoch.Uint32()))
 			pd.eg.Go(func() error {
 				_ = pd.onNewEpoch(ctx, epoch)
 				return nil
@@ -794,7 +791,7 @@ func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) e
 		logger.Error("failed to set up epoch", zap.Error(err))
 		return err
 	}
-	logger.Info("participating in beacon protocol")
+	logger.Debug("participating in beacon protocol")
 	pd.runProtocol(ctx, epoch, s)
 	return nil
 }
@@ -859,7 +856,7 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 		log.ZContext(ctx),
 		zap.Uint32("epoch", epoch.Uint32()),
 	)
-	logger.Info("starting beacon proposal phase")
+	logger.Debug("starting beacon proposal phase")
 
 	ctx, cancel := context.WithTimeout(ctx, pd.config.ProposalDuration)
 	defer cancel()
@@ -879,7 +876,7 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 
 	finished := time.Now()
 	pd.markProposalPhaseFinished(st, finished)
-	logger.Info("proposal phase finished", zap.Time("finished_at", finished))
+	logger.Debug("proposal phase finished", zap.Time("finished_at", finished))
 	return nil
 }
 
@@ -898,10 +895,7 @@ func (pd *ProtocolDriver) sendProposal(
 		return
 	}
 
-	logger := pd.logger.With(
-		log.ZContext(ctx),
-		zap.Uint32("epoch", epoch.Uint32()),
-	)
+	logger := pd.logger.With(log.ZContext(ctx), zap.Uint32("epoch", epoch.Uint32()))
 	vrfSig := buildSignedProposal(ctx, pd.logger, s.signer.VRFSigner(), epoch, s.nonce)
 	proposal := ProposalFromVrf(vrfSig)
 	m := ProposalMessage{
@@ -929,7 +923,7 @@ func (pd *ProtocolDriver) sendProposal(
 			log.ZShortStringer("node_id", s.signer.NodeID()),
 		)
 	} else {
-		logger.Info("beacon proposal sent",
+		logger.Debug("beacon proposal sent",
 			zap.Inline(proposal),
 			log.ZShortStringer("node_id", s.signer.NodeID()),
 		)
@@ -939,7 +933,7 @@ func (pd *ProtocolDriver) sendProposal(
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
 func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.EpochID, st *state) (allVotes, error) {
 	logger := pd.logger.With(log.ZContext(ctx), zap.Uint32("epoch", epoch.Uint32()))
-	logger.Info("starting consensus phase")
+	logger.Debug("starting consensus phase")
 
 	// For K rounds: In each round that lasts δ, wait for votes to come in.
 	// For next rounds,
@@ -968,7 +962,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 			if err := pd.sendFirstRoundVote(ctx, msg, session.signer); err != nil {
 				logger.Error("failed to send proposal vote",
 					zap.Error(err),
-					log.ZShortStringer("node_id", session.signer.NodeID()),
+					log.ZShortStringer("smesherID", session.signer.NodeID()),
 					zap.Uint32("round", uint32(round)),
 				)
 			}
@@ -995,7 +989,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 				if err := pd.sendFollowingVote(ctx, epoch, round, votes, session.signer); err != nil {
 					logger.Error("failed to send following vote",
 						zap.Error(err),
-						log.ZShortStringer("node_id", session.signer.NodeID()),
+						log.ZShortStringer("smesherID", session.signer.NodeID()),
 					)
 				}
 				return nil
@@ -1044,7 +1038,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 		tallyUndecided(&ownVotes, undecided, flip)
 	}
 
-	logger.Info("consensus phase finished")
+	logger.Debug("consensus phase finished")
 	return ownVotes, nil
 }
 
@@ -1139,7 +1133,7 @@ func createProposalChecker(logger *zap.Logger, conf Config, numEarlyATXs, numATX
 
 	high := atxThreshold(conf.Kappa, &conf.Q, numEarlyATXs)
 	low := atxThreshold(conf.Kappa, &conf.Q, numATXs)
-	logger.Info("created proposal checker with ATX threshold",
+	logger.Debug("created proposal checker with ATX threshold",
 		zap.Int("num_early_atxs", numEarlyATXs),
 		zap.Int("num_atxs", numATXs),
 		zap.Stringer("threshold", high),

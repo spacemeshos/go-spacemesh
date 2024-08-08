@@ -81,7 +81,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 
-	client := ae2e.NewTestPoetClient(2)
+	client := ae2e.NewTestPoetClient(2, poetCfg)
 	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	clock, err := timesync.NewClock(
@@ -272,6 +272,12 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		require.Equal(t, marriageATX.ID(), marriage.ATX)
 		require.Equal(t, i, marriage.Index)
 	}
+
+	checkpointedMerged, err := atxs.Get(newDB, mergedATX.ID())
+	require.NoError(t, err)
+	require.True(t, checkpointedMerged.Golden())
+	require.NotNil(t, checkpointedMerged.MarriageATX)
+	require.Equal(t, marriageATX.ID(), *checkpointedMerged.MarriageATX)
 
 	// 4. Spawn new ATX handler and builder using the new DB
 	poetDb = activation.NewPoetDb(newDB, logger.Named("poetDb"))

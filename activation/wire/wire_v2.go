@@ -32,7 +32,7 @@ type ActivationTxV2 struct {
 	// All new IDs that are married to this ID are added to the equivocation set
 	// that this ID belongs to.
 	// It must contain a self-marriage certificate (needed for malfeasance proofs).
-	Marriages []MarriageCertificate `scale:"max=256"`
+	Marriages MarriageCertificates `scale:"max=256"`
 
 	// The ID of the ATX containing marriage for the included IDs.
 	// Only required when the ATX includes married IDs.
@@ -44,10 +44,6 @@ type ActivationTxV2 struct {
 	// cached fields to avoid repeated calculations
 	id   types.ATXID
 	blob []byte
-}
-
-func (atx *ActivationTxV2) SignedBytes() []byte {
-	return atx.ID().Bytes()
 }
 
 func (atx *ActivationTxV2) Blob() types.AtxBlob {
@@ -71,9 +67,9 @@ func DecodeAtxV2(blob []byte) (*ActivationTxV2, error) {
 }
 
 func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
-	publishEpoch := make([]byte, 4)
-	binary.LittleEndian.PutUint32(publishEpoch, atx.PublishEpoch.Uint32())
-	tree.AddLeaf(publishEpoch)
+	var publishEpoch types.Hash32
+	binary.LittleEndian.PutUint32(publishEpoch[:], atx.PublishEpoch.Uint32())
+	tree.AddLeaf(publishEpoch.Bytes())
 	tree.AddLeaf(atx.PositioningATX.Bytes())
 	tree.AddLeaf(atx.Coinbase.Bytes())
 
@@ -111,23 +107,11 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	}
 	tree.AddLeaf(niPostTree.Root())
 
-	vrfNonce := make([]byte, 8)
-	binary.LittleEndian.PutUint64(vrfNonce, atx.VRFNonce)
-	tree.AddLeaf(vrfNonce)
+	var vrfNonce types.Hash32
+	binary.LittleEndian.PutUint64(vrfNonce[:], atx.VRFNonce)
+	tree.AddLeaf(vrfNonce.Bytes())
 
-	marriagesTree, err := merkle.NewTreeBuilder().
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		panic(err)
-	}
-	for _, marriage := range atx.Marriages {
-		marriagesTree.AddLeaf(marriage.Root())
-	}
-	for i := len(atx.Marriages); i < 256; i++ {
-		marriagesTree.AddLeaf(types.EmptyHash32.Bytes())
-	}
-	tree.AddLeaf(marriagesTree.Root())
+	tree.AddLeaf(atx.Marriages.Root())
 
 	if atx.MarriageATX != nil {
 		tree.AddLeaf(atx.MarriageATX.Bytes())
@@ -154,7 +138,7 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 
 func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
 	atx.SmesherID = signer.NodeID()
-	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
+	atx.Signature = signer.Sign(signing.ATX, atx.ID().Bytes())
 }
 
 func (atx *ActivationTxV2) TotalNumUnits() uint32 {
@@ -165,6 +149,28 @@ func (atx *ActivationTxV2) TotalNumUnits() uint32 {
 		}
 	}
 	return total
+}
+
+type MarriageCertificates []MarriageCertificate
+
+func (mcs MarriageCertificates) Root() []byte {
+	marriagesTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	mcs.merkleTree(marriagesTree)
+	return marriagesTree.Root()
+}
+
+func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {
+	for _, marriage := range mcs {
+		tree.AddLeaf(marriage.Root())
+	}
+	for i := len(mcs); i < 256; i++ {
+		tree.AddLeaf(types.EmptyHash32.Bytes())
+	}
 }
 
 type InitialAtxPartsV2 struct {

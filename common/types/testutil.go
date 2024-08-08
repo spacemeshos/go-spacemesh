@@ -101,12 +101,16 @@ func RandomTransactionID() TransactionID {
 
 // RandomBallot generates a Ballot with random content for testing.
 func RandomBallot() *Ballot {
+	var vrf VrfSignature
+	_, _ = rand.Read(vrf[:])
+
 	return &Ballot{
 		InnerBallot: InnerBallot{
 			Layer:     LayerID(10),
 			AtxID:     RandomATXID(),
 			RefBallot: RandomBallotID(),
 		},
+		EligibilityProofs: []VotingEligibility{{Sig: vrf}},
 		Votes: Votes{
 			Base:    RandomBallotID(),
 			Support: []Vote{{ID: RandomBlockID()}, {ID: RandomBlockID()}},

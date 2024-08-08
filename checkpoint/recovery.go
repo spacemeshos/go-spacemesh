@@ -356,6 +356,10 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		cAtx.ID = types.ATXID(types.BytesToHash(atx.ID))
 		cAtx.Epoch = types.EpochID(atx.Epoch)
 		cAtx.CommitmentATX = types.ATXID(types.BytesToHash(atx.CommitmentAtx))
+		if len(atx.MarriageAtx) == 32 {
+			marriageATXID := types.ATXID(atx.MarriageAtx)
+			cAtx.MarriageATX = &marriageATXID
+		}
 		cAtx.SmesherID = types.BytesToNodeID(atx.PublicKey)
 		cAtx.NumUnits = atx.NumUnits
 		cAtx.VRFNonce = types.VRFPostIndex(atx.VrfNonce)

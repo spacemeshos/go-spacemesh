@@ -246,7 +246,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 
-	client := ae2e.NewTestPoetClient(2)
+	client := ae2e.NewTestPoetClient(2, poetCfg)
 	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	clock, err := timesync.NewClock(

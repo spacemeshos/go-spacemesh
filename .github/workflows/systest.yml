@@ -67,7 +67,7 @@ jobs:
         id: install
         uses: azure/setup-kubectl@v4
         with:
-          version: "v1.23.15"
+          version: "v1.27.16"
 
       - name: Setup gcloud authentication
         uses: google-github-actions/auth@v2
@@ -130,10 +130,8 @@ jobs:
           go-version-file: "go.mod"
 
       - name: Run tests
-        timeout-minutes: 60
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
-          label: sanity
           storage: premium-rwo=10Gi
           node_selector: cloud.google.com/gke-nodepool=systemtest
           size: 20

@@ -44,7 +44,7 @@ type Server struct {
 }
 
 func unaryGrpcLogStart(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	ctxzap.Info(ctx, "started unary call")
+	ctxzap.Debug(ctx, "started unary call")
 	return handler(ctx, req)
 }
 
@@ -54,7 +54,7 @@ func streamingGrpcLogStart(
 	_ *grpc.StreamServerInfo,
 	handler grpc.StreamHandler,
 ) error {
-	ctxzap.Info(stream.Context(), "started streaming call")
+	ctxzap.Debug(stream.Context(), "started streaming call")
 	return handler(srv, stream)
 }
 

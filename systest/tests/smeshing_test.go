@@ -32,7 +32,7 @@ func TestSmeshing(t *testing.T) {
 	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	tctx.RemoteSize = tctx.ClusterSize / 4 // 25% of nodes are remote
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),

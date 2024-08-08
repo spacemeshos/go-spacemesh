@@ -94,47 +94,108 @@ func (s *Server) Start(ctx context.Context, errCh chan error, params *NetworkPar
 		errCh <- fmt.Errorf("create persist dir %v: %w", dataDir, err)
 	}
 	s.eg.Go(func() error {
-		s.startHttp(errCh)
+		ln, err := net.Listen("tcp", s.Addr)
+		if err != nil {
+			errCh <- err
+			return err
+		}
+		http.HandleFunc("/", s.handle)
+		http.HandleFunc("/checkpoint", s.handleCheckpoint)
+		http.HandleFunc("/updateCheckpoint", s.handleUpdate)
+		s.logger.With().Info("server starts serving", log.String("addr", ln.Addr().String()))
+		if err = s.Serve(ln); err != nil {
+			errCh <- err
+			return err
+		}
+
 		return nil
 	})
 
 	s.eg.Go(func() error {
-		s.loop(ctx, errCh, params)
+		var last types.EpochID
+		for _, epoch := range s.bootstrapEpochs {
+			wait := time.Until(params.updateBeaconTime(epoch))
+			select {
+			case <-time.After(wait):
+				if err := s.GenBootstrap(ctx, epoch); err != nil {
+					errCh <- err
+					return err
+				}
+				last = epoch
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		if !s.genFallback {
+			return nil
+		}
+
+		// start generating fallback data
+		s.eg.Go(func() error {
+			for epoch := last; ; epoch++ {
+				wait := time.Until(params.updateActiveSetTime(epoch))
+				select {
+				case <-time.After(wait):
+					if err := s.genWithRetry(ctx, epoch, 10); err != nil {
+						errCh <- err
+						return nil
+					}
+				case <-ctx.Done():
+					return nil
+				}
+			}
+		})
+		s.eg.Go(func() error {
+			for epoch := last + 1; ; epoch++ {
+				wait := time.Until(params.updateBeaconTime(epoch))
+				select {
+				case <-time.After(wait):
+					if err := s.GenFallbackBeacon(epoch); err != nil {
+						errCh <- err
+						return err
+					}
+				case <-ctx.Done():
+					return nil
+				}
+			}
+		})
+
 		return nil
 	})
 }
 
-func (s *Server) loop(ctx context.Context, errCh chan error, params *NetworkParam) {
-	var last types.EpochID
-	for _, epoch := range s.bootstrapEpochs {
-		wait := time.Until(params.updateBeaconTime(epoch))
+func (s *Server) genWithRetry(ctx context.Context, epoch types.EpochID, maxRetries int) error {
+	err := s.GenFallbackActiveSet(ctx, epoch)
+	if err == nil {
+		return nil
+	}
+	s.logger.With().Debug("generate fallback active set retry", log.Err(err))
+
+	retries := 0
+	backoff := 10 * time.Second
+	timer := time.NewTimer(backoff)
+
+	for {
 		select {
-		case <-time.After(wait):
-			if err := s.GenBootstrap(ctx, epoch); err != nil {
-				errCh <- err
-				return
+		case <-timer.C:
+			if err := s.GenFallbackActiveSet(ctx, epoch); err != nil {
+				s.logger.With().Debug("generate fallback active set retry", log.Err(err))
+				retries++
+				if retries >= maxRetries {
+					return err
+				}
+				timer.Reset(backoff)
+				continue
 			}
-			last = epoch
+			return nil
 		case <-ctx.Done():
-			return
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return ctx.Err()
 		}
 	}
-
-	if !s.genFallback {
-		return
-	}
-
-	// start generating fallback data
-	s.eg.Go(
-		func() error {
-			s.genDataLoop(ctx, errCh, last, params.updateActiveSetTime, s.GenFallbackActiveSet)
-			return nil
-		})
-	s.eg.Go(
-		func() error {
-			s.genDataLoop(ctx, errCh, last+1, params.updateBeaconTime, s.GenFallbackBeacon)
-			return nil
-		})
 }
 
 // in systests, we want to be sure the nodes use the fallback data unconditionally.
@@ -155,7 +216,7 @@ func (s *Server) GenBootstrap(ctx context.Context, epoch types.EpochID) error {
 	return err
 }
 
-func (s *Server) GenFallbackBeacon(_ context.Context, epoch types.EpochID) error {
+func (s *Server) GenFallbackBeacon(epoch types.EpochID) error {
 	suffix := bootstrap.SuffixBeacon
 	_, err := s.gen.GenUpdate(epoch, epochBeacon(epoch), nil, suffix)
 	return err
@@ -183,46 +244,10 @@ func getPartialActiveSet(ctx context.Context, smEndpoint string, targetEpoch typ
 	return actives[:cutoff], nil
 }
 
-func (s *Server) genDataLoop(
-	ctx context.Context,
-	errCh chan error,
-	start types.EpochID,
-	timeFunc func(types.EpochID) time.Time,
-	genFunc func(context.Context, types.EpochID) error,
-) {
-	for epoch := start; ; epoch++ {
-		wait := time.Until(timeFunc(epoch))
-		select {
-		case <-time.After(wait):
-			if err := genFunc(ctx, epoch); err != nil {
-				errCh <- err
-				return
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (s *Server) startHttp(ch chan error) {
-	ln, err := net.Listen("tcp", s.Addr)
-	if err != nil {
-		ch <- err
-		return
-	}
-	http.HandleFunc("/", s.handle)
-	http.HandleFunc("/checkpoint", s.handleCheckpoint)
-	http.HandleFunc("/updateCheckpoint", s.handleUpdate)
-	s.logger.With().Info("server starts serving", log.String("addr", ln.Addr().String()))
-	if err = s.Serve(ln); err != nil {
-		ch <- err
-	}
-}
-
 func (s *Server) Stop(ctx context.Context) {
 	s.logger.With().Info("shutting down server")
-	_ = s.Shutdown(ctx)
-	_ = s.eg.Wait()
+	s.Shutdown(ctx)
+	s.eg.Wait()
 }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {

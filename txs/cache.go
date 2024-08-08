@@ -97,7 +97,7 @@ func (ac *accountCache) availBalance() uint64 {
 func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element, *candidate, error) {
 	if ac.txsByNonce.Len() >= maxTXsPerAcct {
 		ac.moreInDB = true
-		return nil, nil, errTooManyNonce
+		return nil, nil, fmt.Errorf("%w: len %d", errTooManyNonce, ac.txsByNonce.Len())
 	}
 	balance := ac.startBalance
 	var prev *list.Element
@@ -115,14 +115,6 @@ func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element
 		break
 	}
 	if balance < ntx.MaxSpending() {
-		ac.moreInDB = true
-		logger.Debug("insufficient balance",
-			zap.Stringer("tx_id", ntx.ID),
-			zap.Stringer("address", ntx.Principal),
-			zap.Uint64("nonce", ntx.Nonce),
-			zap.Uint64("cons_balance", balance),
-			zap.Uint64("cons_spending", ntx.MaxSpending()),
-		)
 		return nil, nil, errInsufficientBalance
 	}
 	return prev, &candidate{best: ntx, postBalance: balance - ntx.MaxSpending()}, nil
@@ -256,30 +248,6 @@ func (ac *accountCache) addBatch(logger *zap.Logger, nonce2TXs map[uint64][]*Nan
 	}
 
 	ac.moreInDB = len(sortedNonce) > len(added)
-	if len(added) > 0 {
-		logger.Debug("added batch to account pool",
-			zap.Stringer("address", ac.addr),
-			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				slices.Sort(added)
-				for _, nonce := range added {
-					encoder.AppendUint64(nonce)
-				}
-				return nil
-			})),
-		)
-	} else {
-		logger.Debug("no feasible txs from batch",
-			zap.Stringer("address", ac.addr),
-			zap.Array("batch", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				nonces := maps.Keys(nonce2TXs)
-				slices.Sort(nonces)
-				for _, nonce := range nonces {
-					encoder.AppendUint64(nonce)
-				}
-				return nil
-			})),
-		)
-	}
 	return nil
 }
 
@@ -302,11 +270,6 @@ func findBest(ntxs []*NanoTX, balance uint64, blockSeed []byte) *NanoTX {
 //   - nonce not present: add to cache.
 func (ac *accountCache) add(logger *zap.Logger, tx *types.Transaction, received time.Time) error {
 	if tx.Nonce < ac.startNonce {
-		logger.Debug("nonce too small",
-			zap.Stringer("tx_id", tx.ID),
-			zap.Uint64("next_nonce", ac.startNonce),
-			zap.Uint64("tx_nonce", tx.Nonce),
-		)
 		return errBadNonce
 	}
 
@@ -338,11 +301,7 @@ func (ac *accountCache) addPendingFromNonce(
 ) error {
 	mtxs, err := transactions.GetAcctPendingFromNonce(db, ac.addr, nonce)
 	if err != nil {
-		logger.Error("failed to get more pending txs from db",
-			zap.Stringer("address", ac.addr),
-			zap.Error(err),
-		)
-		return err
+		return fmt.Errorf("account pending txs: %w", err)
 	}
 
 	if len(mtxs) == 0 {
@@ -357,7 +316,7 @@ func (ac *accountCache) addPendingFromNonce(
 			}
 			nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
 			if err != nil {
-				return err
+				return fmt.Errorf("get next included: %w", err)
 			}
 			mtx.LayerID = nextLayer
 			mtx.BlockID = nextBlock
@@ -512,7 +471,7 @@ func (c *Cache) buildFromScratch(db *sql.Database) error {
 		}
 		nextLayer, nextBlock, err := getNextIncluded(db, mtx.ID, applied)
 		if err != nil {
-			return err
+			return fmt.Errorf("get next included: %w", err)
 		}
 		mtx.LayerID = nextLayer
 		mtx.BlockID = nextBlock
@@ -530,7 +489,7 @@ func (c *Cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) err
 	for _, tx := range rst {
 		toCleanup[tx.Principal] = struct{}{}
 	}
-	defer c.cleanupAccounts(toCleanup)
+	defer c.cleanupAccounts(maps.Keys(toCleanup)...)
 
 	byPrincipal := groupTXsByPrincipal(c.logger, rst)
 	acctsAdded := 0
@@ -585,23 +544,18 @@ func (c *Cache) MoreInDB(addr types.Address) bool {
 	return acct.moreInDB
 }
 
-func (c *Cache) cleanupAccounts(accounts map[types.Address]struct{}) {
-	for addr := range accounts {
+func (c *Cache) cleanupAccounts(accounts ...types.Address) {
+	for _, addr := range accounts {
 		if _, ok := c.pending[addr]; ok && c.pending[addr].shouldEvict() {
 			delete(c.pending, addr)
 		}
 	}
 }
 
-//   - errInsufficientBalance:
-//     conservative cache is conservative in that it only counts principal's spending for pending transactions.
-//     a tx rejected due to insufficient balance MAY become feasible after a layer is applied (principal
-//     received incoming funds). when we receive a errInsufficientBalance tx, we should store it in db and
-//     re-evaluate it after each layer is applied.
 //   - errTooManyNonce: when a principal has way too many nonces, we don't want to blow up the memory. they should
 //     be stored in db and retrieved after each earlier nonce is applied.
 func acceptable(err error) bool {
-	return err == nil || errors.Is(err, errInsufficientBalance) || errors.Is(err, errTooManyNonce)
+	return err == nil || errors.Is(err, errTooManyNonce)
 }
 
 func (c *Cache) Add(
@@ -615,7 +569,7 @@ func (c *Cache) Add(
 	defer c.mu.Unlock()
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
-	defer c.cleanupAccounts(map[types.Address]struct{}{principal: {}})
+	defer c.cleanupAccounts(principal)
 	logger := c.logger.With(
 		log.ZContext(ctx),
 		zap.Stringer("address", principal),
@@ -662,8 +616,7 @@ func (c *Cache) LinkTXsWithProposal(
 		return nil
 	}
 	if err := addToProposal(db, lid, pid, tids); err != nil {
-		c.logger.Error("failed to link txs to proposal in db", zap.Error(err))
-		return err
+		return fmt.Errorf("linking txs to proposal: %w", err)
 	}
 	return c.updateLayer(lid, types.EmptyBlockID, tids)
 }
@@ -794,7 +747,7 @@ func (c *Cache) ApplyLayer(
 		}
 		toReset[tx.Principal] = struct{}{}
 	}
-	defer c.cleanupAccounts(toCleanup)
+	defer c.cleanupAccounts(maps.Keys(toCleanup)...)
 
 	for principal := range byPrincipal {
 		c.createAcctIfNotPresent(principal)
@@ -844,8 +797,7 @@ func (c *Cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
 	}
 
 	if err := c.buildFromScratch(db); err != nil {
-		c.logger.Error("failed to build from scratch after revert", zap.Error(err))
-		return err
+		return fmt.Errorf("building from scratch after revert: %w", err)
 	}
 	return nil
 }
@@ -882,7 +834,6 @@ func (c *Cache) GetMempool() map[types.Address][]*NanoTX {
 func checkApplyOrder(logger *zap.Logger, db *sql.Database, toApply types.LayerID) error {
 	lastApplied, err := layers.GetLastApplied(db)
 	if err != nil {
-		logger.Error("failed to get last applied layer", zap.Error(err))
 		return fmt.Errorf("cache get last applied %w", err)
 	}
 	if toApply != lastApplied.Add(1) {
