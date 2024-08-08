@@ -169,8 +169,6 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			f := createFetch(t)
 			f.cfg.MaxRetriesForRequest = 0
 			peer := p2p.Peer("buddy")
