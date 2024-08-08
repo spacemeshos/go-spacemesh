@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -20,15 +19,17 @@ import (
 )
 
 type TestPoet struct {
-	mu    sync.Mutex
-	round int
+	mu      sync.Mutex
+	round   int
+	poetCfg activation.PoetConfig
 
 	expectedMembers int
 	registrations   chan []byte
 }
 
-func NewTestPoetClient(expectedMembers int) *TestPoet {
+func NewTestPoetClient(expectedMembers int, poetCfg activation.PoetConfig) *TestPoet {
 	return &TestPoet{
+		poetCfg:         poetCfg,
 		expectedMembers: expectedMembers,
 		registrations:   make(chan []byte, expectedMembers),
 	}
@@ -66,8 +67,15 @@ func (p *TestPoet) Submit(
 	return &types.PoetRound{ID: strconv.Itoa(round), End: time.Now()}, nil
 }
 
-func (p *TestPoet) CertifierInfo(ctx context.Context) (*url.URL, []byte, error) {
-	return nil, nil, errors.New("not supported")
+func (p *TestPoet) CertifierInfo(ctx context.Context) (*types.CertifierInfo, error) {
+	return nil, errors.New("CertifierInfo: not supported")
+}
+
+func (p *TestPoet) Info(ctx context.Context) (*types.PoetInfo, error) {
+	return &types.PoetInfo{
+		PhaseShift: p.poetCfg.PhaseShift,
+		CycleGap:   p.poetCfg.CycleGap,
+	}, nil
 }
 
 // Build a proof.
