@@ -22,9 +22,10 @@ COPY . .
 
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build go test -failfast -v -c -o ./build/tests.test ./systest/tests/
 
-ENV GOBIN=/bin
 ENV CGO_ENABLED=0
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build go build -o ./build/test2json -ldflags="-s -w" cmd/test2json
+
+ENV GOBIN=/bin
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build go install gotest.tools/gotestsum@v1.12.0
 
 FROM ubuntu:22.04 AS runtime
