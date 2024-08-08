@@ -618,7 +618,8 @@ func (c *Cache) LinkTXsWithProposal(
 	if err := addToProposal(db, lid, pid, tids); err != nil {
 		return fmt.Errorf("linking txs to proposal: %w", err)
 	}
-	return c.updateLayer(lid, types.EmptyBlockID, tids)
+	c.updateLayer(lid, types.EmptyBlockID, tids)
+	return nil
 }
 
 // LinkTXsWithBlock associates the transactions to a block.
@@ -632,27 +633,27 @@ func (c *Cache) LinkTXsWithBlock(
 		return nil
 	}
 	if err := addToBlock(db, lid, bid, tids); err != nil {
-		return err
+		return fmt.Errorf("add to block: %w", err)
 	}
-	return c.updateLayer(lid, bid, tids)
+	c.updateLayer(lid, bid, tids)
+	return nil
 }
 
 // updateLayer associates the transactions to a layer and optionally a block.
 // A transaction is tagged with a layer when it's included in a proposal/block.
 // If a transaction is included in multiple proposals/blocks in different layers,
 // the lowest layer is retained.
-func (c *Cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+func (c *Cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	for _, ID := range tids {
 		if _, ok := c.cachedTXs[ID]; !ok {
 			// transaction is not considered best in its nonce group
-			return nil
+			return
 		}
 		c.cachedTXs[ID].UpdateLayerMaybe(lid, bid)
 	}
-	return nil
 }
 
 func (c *Cache) applyEmptyLayer(db *sql.Database, lid types.LayerID) error {
