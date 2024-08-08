@@ -650,11 +650,10 @@ func (c *Cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 	for _, ID := range tids {
 		if _, ok := c.cachedTXs[ID]; !ok {
 			// transaction is not considered best in its nonce group
-			return nil
+			return
 		}
 		c.cachedTXs[ID].UpdateLayerMaybe(lid, bid)
 	}
-	return nil
 }
 
 func (c *Cache) applyEmptyLayer(db *sql.Database, lid types.LayerID) error {
