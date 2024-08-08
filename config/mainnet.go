@@ -80,8 +80,7 @@ func MainnetConfig() Config {
 			DatabaseConnections:   16,
 			DatabasePruneInterval: 30 * time.Minute,
 			DatabaseVacuumState:   15,
-			PruneActivesetsFrom:   12,    // starting from epoch 13 activesets below 12 will be pruned
-			ScanMalfeasantATXs:    false, // opt-in
+			PruneActivesetsFrom:   12, // starting from epoch 13 activesets below 12 will be pruned
 			NetworkHRP:            "sm",
 
 			LayerDuration:  5 * time.Minute,

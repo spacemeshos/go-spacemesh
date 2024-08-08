@@ -202,7 +202,7 @@ the build folder you need to ensure that you have the gpu setup dynamic library
 binary. The simplest way to do this is just copy the library file to be in the
 same directory as the go-spacemesh binary. Alternatively you can modify your
 system's library search paths (e.g. LD_LIBRARY_PATH) to ensure that the
-library is found._
+library is found.
 
 go-spacemesh is p2p software which is designed to form a decentralized network by connecting to other instances of
 go-spacemesh running on remote computers.

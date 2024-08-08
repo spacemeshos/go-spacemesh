@@ -1042,7 +1042,7 @@ func (app *App) initServices(ctx context.Context) error {
 			activation.WithCertifier(certifier),
 		)
 		if err != nil {
-			app.log.Panic("failed to create poet client: %v", err)
+			app.log.Panic("failed to create poet client with address %v: %v", server.Address, err)
 		}
 		poetClients = append(poetClients, client)
 	}
@@ -2008,15 +2008,6 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConfig(app.Config.Cache),
 		datastore.WithConsensusCache(data),
 	)
-
-	if app.Config.ScanMalfeasantATXs {
-		app.log.With().Info("checking DB for malicious ATXs")
-		start = time.Now()
-		if err := activation.CheckPrevATXs(ctx, app.log.Zap(), app.db); err != nil {
-			return fmt.Errorf("malicious ATX check: %w", err)
-		}
-		app.log.With().Info("malicious ATX check completed", log.Duration("duration", time.Since(start)))
-	}
 
 	migrations, err = sql.LocalMigrations()
 	if err != nil {

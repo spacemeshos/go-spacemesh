@@ -92,7 +92,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	client := ae2e.NewTestPoetClient(1)
+	client := ae2e.NewTestPoetClient(1, poetCfg)
 	poetClient := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	localDB := localsql.InMemory()

@@ -198,7 +198,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	err = nipost.AddPost(localDb, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
 	require.NoError(t, err)
 
-	client := ae2e.NewTestPoetClient(1)
+	client := ae2e.NewTestPoetClient(1, poetCfg)
 	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	localDB := localsql.InMemory()
@@ -272,7 +272,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	}
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
-	client := ae2e.NewTestPoetClient(len(signers))
+	client := ae2e.NewTestPoetClient(len(signers), poetCfg)
 	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	mclock := activation.NewMocklayerClock(ctrl)

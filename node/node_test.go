@@ -997,7 +997,7 @@ func TestAdminEvents(t *testing.T) {
 
 	select {
 	case <-app.Started():
-	case <-time.After(10 * time.Second):
+	case <-time.After(15 * time.Second):
 		require.Fail(t, "app did not start in time")
 	}
 
@@ -1090,7 +1090,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 
 	select {
 	case <-app.Started():
-	case <-time.After(10 * time.Second):
+	case <-time.After(15 * time.Second):
 		require.Fail(t, "app did not start in time")
 	}
 

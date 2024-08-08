@@ -74,7 +74,7 @@ func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData)
 		msg1.InnerMsg.MsgHash != msg2.InnerMsg.MsgHash {
 		return msg1.SmesherID, nil
 	}
-	mh.logger.Warn("received invalid ballot malfeasance proof",
+	mh.logger.Debug("received invalid ballot malfeasance proof",
 		log.ZContext(ctx),
 		zap.Stringer("first_smesher", bp.Messages[0].SmesherID),
 		zap.Object("first_proof", &bp.Messages[0].InnerMsg),
