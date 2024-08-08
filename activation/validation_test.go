@@ -492,7 +492,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newChainedActivationTxV1(t, invalidAtx, goldenATXID)
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx, atx.Blob(), invalidAtx.ID()))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -606,7 +606,7 @@ func TestVerifyChainDeps(t *testing.T) {
 			SmesherID:    watx.SmesherID,
 		}
 		atx.SetID(watx.ID())
-		require.NoError(t, atxs.Add(db, atx, watx.Blob(), initialAtx.ID()))
+		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
 
 		v := NewMockPostVerifier(gomock.NewController(t))
 		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
@@ -646,7 +646,7 @@ func TestVerifyChainDeps(t *testing.T) {
 			SmesherID:    watx.SmesherID,
 		}
 		atx.SetID(watx.ID())
-		require.NoError(t, atxs.Add(db, atx, watx.Blob(), initialAtx.ID()))
+		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
 
 		v := NewMockPostVerifier(gomock.NewController(t))
 		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))

@@ -520,11 +520,11 @@ func (h *HandlerV1) storeAtx(
 			return fmt.Errorf("check malicious: %w", err)
 		}
 
-		err = atxs.Add(tx, atx, watx.Blob(), watx.PrevATXID)
+		err = atxs.Add(tx, atx, watx.Blob())
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
-		err = atxs.SetUnits(tx, atx.ID(), atx.SmesherID, watx.NumUnits)
+		err = atxs.SetPost(tx, atx.ID(), watx.PrevATXID, atx.SmesherID, watx.NumUnits)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("set atx units: %w", err)
 		}

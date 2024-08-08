@@ -409,13 +409,15 @@ func Previous(db sql.Executor, id types.ATXID) ([]types.ATXID, error) {
 	}
 	dec := func(stmt *sql.Statement) bool {
 		var prev types.ATXID
-		stmt.ColumnBytes(0, prev[:])
+		if stmt.ColumnType(0) != sqlite.SQLITE_NULL {
+			stmt.ColumnBytes(0, prev[:])
+		}
 		previous = append(previous, prev)
 		return true
 	}
 
-	if _, err := db.Exec("select previous_id from previous_atxs where id = ?1;", enc, dec); err != nil {
-		return nil, fmt.Errorf("previous ATXs for id %v: %w", id, err)
+	if _, err := db.Exec("select prev_atxid from posts where atxid = ?1;", enc, dec); err != nil {
+		return nil, fmt.Errorf("previous ATXs for ATX ID %v: %w", id, err)
 	}
 	return previous, nil
 }
@@ -439,7 +441,7 @@ func NonceByID(db sql.Executor, id types.ATXID) (nonce types.VRFPostIndex, err e
 	return nonce, err
 }
 
-func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob, previous ...types.ATXID) error {
+func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PublishEpoch))
@@ -468,19 +470,6 @@ func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob, previous 
 		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
-	}
-
-	for _, id := range previous {
-		if id == types.EmptyATXID {
-			continue
-		}
-		_, err := db.Exec("insert into previous_atxs (id, previous_id) values (?1, ?2)", func(stmt *sql.Statement) {
-			stmt.BindBytes(1, atx.ID().Bytes())
-			stmt.BindBytes(2, id.Bytes())
-		}, nil)
-		if err != nil {
-			return fmt.Errorf("inserting previous ATX %s: %w", id, err)
-		}
 	}
 
 	return AddBlob(db, atx.ID(), blob.Blob, blob.Version)
@@ -674,7 +663,8 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 	}
 
 	for id, units := range catx.Units {
-		if err := SetUnits(db, catx.ID, id, units); err != nil {
+		// FIXME: should a checkpointed ATX reference its real previous ATX?
+		if err := SetPost(db, catx.ID, types.EmptyATXID, id, units); err != nil {
 			return fmt.Errorf("insert checkpoint ATX units %v: %w", catx.ID, err)
 		}
 	}
@@ -902,12 +892,10 @@ func PrevATXCollisions(db sql.Executor) ([]PrevATXCollision, error) {
 	// we are joining the table with itself to find ATXs with the same prevATX
 	// the WHERE clause ensures that we only get the pairs once
 	if _, err := db.Exec(`
-		SELECT a1.pubkey, a2.pubkey, a1.id, a2.id
-		FROM previous_atxs p1
-		INNER JOIN previous_atxs p2 ON p1.previous_id = p2.previous_id
-		JOIN atxs a1 ON p1.id = a1.id
-		JOIN atxs a2 ON p2.id = a2.id
-		WHERE p1.id < p2.id;`, nil, dec); err != nil {
+		SELECT p1.pubkey, p2.pubkey, p1.atxid, p2.atxid
+		FROM posts p1
+		INNER JOIN posts p2 ON p1.prev_atxid = p2.prev_atxid
+		WHERE p1.atxid < p2.atxid;`, nil, dec); err != nil {
 		return nil, fmt.Errorf("error getting ATXs with same prevATX: %w", err)
 	}
 
@@ -988,13 +976,16 @@ func AllUnits(db sql.Executor, id types.ATXID) (map[types.NodeID]uint32, error) 
 	return units, nil
 }
 
-func SetUnits(db sql.Executor, atxID types.ATXID, id types.NodeID, units uint32) error {
+func SetPost(db sql.Executor, atxID, prev types.ATXID, id types.NodeID, units uint32) error {
 	_, err := db.Exec(
-		`INSERT INTO posts (atxid, pubkey, units) VALUES (?1, ?2, ?3);`,
+		`INSERT INTO posts (atxid, pubkey, prev_atxid, units) VALUES (?1, ?2, ?3, ?4);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, atxID.Bytes())
 			stmt.BindBytes(2, id.Bytes())
-			stmt.BindInt64(3, int64(units))
+			if prev != types.EmptyATXID {
+				stmt.BindBytes(3, prev.Bytes())
+			}
+			stmt.BindInt64(4, int64(units))
 		},
 		nil,
 	)
@@ -1013,7 +1004,7 @@ func AtxWithPrevious(db sql.Executor, prev types.ATXID, id types.NodeID) (types.
 		return false
 	}
 	if prev == types.EmptyATXID {
-		rows, err = db.Exec("SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id IS NULL ORDER BY received ASC;",
+		rows, err = db.Exec("SELECT atxid FROM posts WHERE pubkey = ?1 AND prev_atxid IS NULL;",
 			func(s *sql.Statement) {
 				s.BindBytes(1, id.Bytes())
 			},
@@ -1021,7 +1012,7 @@ func AtxWithPrevious(db sql.Executor, prev types.ATXID, id types.NodeID) (types.
 		)
 	} else {
 		rows, err = db.Exec(`
-		SELECT id FROM atxs WHERE pubkey = ?1 AND prev_id = ?2 ORDER BY received ASC;`,
+		SELECT atxid FROM posts WHERE pubkey = ?1 AND prev_atxid = ?2;`,
 			func(s *sql.Statement) {
 				s.BindBytes(1, id.Bytes())
 				s.BindBytes(2, prev.Bytes())
