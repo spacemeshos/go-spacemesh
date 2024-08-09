@@ -160,7 +160,6 @@ func TestMain(m *testing.M) {
 	globalAtx = &types.ActivationTx{
 		PublishEpoch: postGenesisEpoch,
 		Sequence:     1,
-		PrevATXID:    types.ATXID{4, 4, 4, 4},
 		Coinbase:     addr1,
 		NumUnits:     numUnits,
 		Weight:       numUnits,
@@ -172,7 +171,6 @@ func TestMain(m *testing.M) {
 	globalAtx2 = &types.ActivationTx{
 		PublishEpoch: postGenesisEpoch,
 		Sequence:     1,
-		PrevATXID:    types.ATXID{5, 5, 5, 5},
 		Coinbase:     addr2,
 		NumUnits:     numUnits,
 		Weight:       numUnits,

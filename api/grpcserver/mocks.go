@@ -990,6 +990,45 @@ func (c *MockatxProviderMaxHeightAtxCall) DoAndReturn(f func() (types.ATXID, err
 	return c
 }
 
+// Previous mocks base method.
+func (m *MockatxProvider) Previous(id types.ATXID) ([]types.ATXID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Previous", id)
+	ret0, _ := ret[0].([]types.ATXID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Previous indicates an expected call of Previous.
+func (mr *MockatxProviderMockRecorder) Previous(id any) *MockatxProviderPreviousCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Previous", reflect.TypeOf((*MockatxProvider)(nil).Previous), id)
+	return &MockatxProviderPreviousCall{Call: call}
+}
+
+// MockatxProviderPreviousCall wrap *gomock.Call
+type MockatxProviderPreviousCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockatxProviderPreviousCall) Return(arg0 []types.ATXID, arg1 error) *MockatxProviderPreviousCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockatxProviderPreviousCall) Do(f func(types.ATXID) ([]types.ATXID, error)) *MockatxProviderPreviousCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockatxProviderPreviousCall) DoAndReturn(f func(types.ATXID) ([]types.ATXID, error)) *MockatxProviderPreviousCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockpostState is a mock of postState interface.
 type MockpostState struct {
 	ctrl     *gomock.Controller
