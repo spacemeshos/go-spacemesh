@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -210,7 +209,7 @@ func (n *node) withPublisher() *node {
 }
 
 func (n *node) withHare() *node {
-	logger := logtest.New(n.t).Named(fmt.Sprintf("hare=%d", n.i))
+	logger := zaptest.NewLogger(n.t).Named(fmt.Sprintf("hare=%d", n.i))
 
 	n.nclock = &testNodeClock{
 		genesis:       n.t.start,
@@ -230,7 +229,7 @@ func (n *node) withHare() *node {
 		n.msyncer,
 		n.patrol,
 		WithConfig(n.t.cfg),
-		WithLogger(logger.Zap()),
+		WithLogger(logger),
 		WithWallclock(n.clock),
 		WithTracer(tracer),
 	)
