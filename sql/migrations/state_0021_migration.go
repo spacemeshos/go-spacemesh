@@ -71,6 +71,7 @@ func (m *migration0021) applySql(db sql.Executor) error {
 		atxid  CHAR(32) NOT NULL,
 		pubkey CHAR(32) NOT NULL,
 		prev_atxid  CHAR(32),
+		prev_atx_index INT,
 		units  INT NOT NULL,
 		UNIQUE (atxid, pubkey)
 	);`
@@ -143,7 +144,7 @@ func (m *migration0021) processBatch(db sql.Executor, offset, size int) (int, er
 
 func (m *migration0021) applyPendingUpdates(db sql.Executor, updates map[types.ATXID]*update) error {
 	for atxID, upd := range updates {
-		if err := atxs.SetPost(db, atxID, upd.prev, upd.id, upd.units); err != nil {
+		if err := atxs.SetPost(db, atxID, upd.prev, 0, upd.id, upd.units); err != nil {
 			return err
 		}
 	}

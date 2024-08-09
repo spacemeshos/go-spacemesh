@@ -412,12 +412,25 @@ func Previous(db sql.Executor, id types.ATXID) ([]types.ATXID, error) {
 		if stmt.ColumnType(0) != sqlite.SQLITE_NULL {
 			stmt.ColumnBytes(0, prev[:])
 		}
-		previous = append(previous, prev)
+		// Index is returned in descending order, so the first one defines the length of the slice.
+		index := stmt.ColumnInt(1)
+		if previous == nil {
+			previous = make([]types.ATXID, index+1)
+		}
+		previous[index] = prev
 		return true
 	}
 
-	if _, err := db.Exec("select prev_atxid from posts where atxid = ?1;", enc, dec); err != nil {
+	rows, err := db.Exec(
+		"SELECT prev_atxid, prev_atx_index FROM posts WHERE atxid = ?1 ORDER BY prev_atx_index DESC;",
+		enc,
+		dec,
+	)
+	switch {
+	case err != nil:
 		return nil, fmt.Errorf("previous ATXs for ATX ID %v: %w", id, err)
+	case rows == 0:
+		return nil, sql.ErrNotFound
 	}
 	return previous, nil
 }
@@ -664,7 +677,7 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 
 	for id, units := range catx.Units {
 		// FIXME: should a checkpointed ATX reference its real previous ATX?
-		if err := SetPost(db, catx.ID, types.EmptyATXID, id, units); err != nil {
+		if err := SetPost(db, catx.ID, types.EmptyATXID, 0, id, units); err != nil {
 			return fmt.Errorf("insert checkpoint ATX units %v: %w", catx.ID, err)
 		}
 	}
@@ -976,16 +989,17 @@ func AllUnits(db sql.Executor, id types.ATXID) (map[types.NodeID]uint32, error) 
 	return units, nil
 }
 
-func SetPost(db sql.Executor, atxID, prev types.ATXID, id types.NodeID, units uint32) error {
+func SetPost(db sql.Executor, atxID, prev types.ATXID, prevIndex int, id types.NodeID, units uint32) error {
 	_, err := db.Exec(
-		`INSERT INTO posts (atxid, pubkey, prev_atxid, units) VALUES (?1, ?2, ?3, ?4);`,
+		`INSERT INTO posts (atxid, pubkey, prev_atxid, prev_atx_index, units) VALUES (?1, ?2, ?3, ?4, ?5);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, atxID.Bytes())
 			stmt.BindBytes(2, id.Bytes())
 			if prev != types.EmptyATXID {
 				stmt.BindBytes(3, prev.Bytes())
 			}
-			stmt.BindInt64(4, int64(units))
+			stmt.BindInt64(4, int64(prevIndex))
+			stmt.BindInt64(5, int64(units))
 		},
 		nil,
 	)

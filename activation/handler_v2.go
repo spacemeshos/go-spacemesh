@@ -144,7 +144,7 @@ func (h *HandlerV2) processATX(
 	}
 
 	events.ReportNewActivation(atx)
-	h.logger.Info("new atx", log.ZContext(ctx), zap.Inline(atx))
+	h.logger.Debug("new atx", log.ZContext(ctx), zap.Inline(atx))
 	return err
 }
 
@@ -433,8 +433,9 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 }
 
 type idData struct {
-	previous types.ATXID
-	units    uint32
+	previous      types.ATXID
+	previousIndex int
+	units         uint32
 }
 
 type activationTx struct {
@@ -644,8 +645,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				return nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
 			}
 			result.ids[id] = idData{
-				previous: previous,
-				units:    post.NumUnits,
+				previous:      previous,
+				previousIndex: int(post.PrevATXIndex),
+				units:         post.NumUnits,
 			}
 		}
 	}
@@ -807,7 +809,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		for id, post := range watx.ids {
-			err = atxs.SetPost(tx, atx.ID(), post.previous, id, post.units)
+			err = atxs.SetPost(tx, atx.ID(), post.previous, post.previousIndex, id, post.units)
 			if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 				return fmt.Errorf("setting atx units for ID %s: %w", id, err)
 			}

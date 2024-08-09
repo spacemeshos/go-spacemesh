@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
@@ -159,7 +161,7 @@ func TestLatestN(t *testing.T) {
 
 	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5, atx6} {
 		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
-		require.NoError(t, atxs.SetPost(db, atx.ID(), types.EmptyATXID, atx.SmesherID, atx.NumUnits))
+		require.NoError(t, atxs.SetPost(db, atx.ID(), types.EmptyATXID, 0, atx.SmesherID, atx.NumUnits))
 	}
 
 	for _, tc := range []struct {
@@ -1033,9 +1035,9 @@ func Test_PrevATXCollisions(t *testing.T) {
 	atx2, blob2 := newAtx(t, sig, withPublishEpoch(2))
 
 	require.NoError(t, atxs.Add(db, atx1, blob1))
-	require.NoError(t, atxs.SetPost(db, atx1.ID(), prevATXID, sig.NodeID(), 10))
+	require.NoError(t, atxs.SetPost(db, atx1.ID(), prevATXID, 0, sig.NodeID(), 10))
 	require.NoError(t, atxs.Add(db, atx2, blob2))
-	require.NoError(t, atxs.SetPost(db, atx2.ID(), prevATXID, sig.NodeID(), 10))
+	require.NoError(t, atxs.SetPost(db, atx2.ID(), prevATXID, 0, sig.NodeID(), 10))
 
 	// verify that the ATXs were added
 	got1, err := atxs.Get(db, atx1.ID())
@@ -1058,7 +1060,7 @@ func Test_PrevATXCollisions(t *testing.T) {
 			withPublishEpoch(types.EpochID(i+1)),
 		)
 		require.NoError(t, atxs.Add(db, atx2, blob2))
-		require.NoError(t, atxs.SetPost(db, atx2.ID(), atx.ID(), sig.NodeID(), 10))
+		require.NoError(t, atxs.SetPost(db, atx2.ID(), atx.ID(), 0, sig.NodeID(), 10))
 	}
 
 	// get the collisions
@@ -1117,7 +1119,7 @@ func TestUnits(t *testing.T) {
 		t.Parallel()
 		db := sql.InMemory()
 		atxID := types.RandomATXID()
-		require.NoError(t, atxs.SetPost(db, atxID, types.EmptyATXID, types.RandomNodeID(), 10))
+		require.NoError(t, atxs.SetPost(db, atxID, types.EmptyATXID, 0, types.RandomNodeID(), 10))
 		_, err := atxs.Units(db, atxID, types.RandomNodeID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
@@ -1130,7 +1132,7 @@ func TestUnits(t *testing.T) {
 			{4, 5, 6}: 20,
 		}
 		for id, units := range units {
-			require.NoError(t, atxs.SetPost(db, atxID, types.EmptyATXID, id, units))
+			require.NoError(t, atxs.SetPost(db, atxID, types.EmptyATXID, 0, id, units))
 		}
 
 		nodeID := types.NodeID{1, 2, 3}
@@ -1162,7 +1164,7 @@ func Test_AtxWithPrevious(t *testing.T) {
 		prev := types.RandomATXID()
 		atx, blob := newAtx(t, sig)
 		require.NoError(t, atxs.Add(db, atx, blob))
-		require.NoError(t, atxs.SetPost(db, atx.ID(), prev, sig.NodeID(), 10))
+		require.NoError(t, atxs.SetPost(db, atx.ID(), prev, 0, sig.NodeID(), 10))
 
 		id, err := atxs.AtxWithPrevious(db, prev, sig.NodeID())
 		require.NoError(t, err)
@@ -1173,7 +1175,7 @@ func Test_AtxWithPrevious(t *testing.T) {
 
 		atx, blob := newAtx(t, sig)
 		require.NoError(t, atxs.Add(db, atx, blob))
-		require.NoError(t, atxs.SetPost(db, atx.ID(), types.EmptyATXID, sig.NodeID(), 10))
+		require.NoError(t, atxs.SetPost(db, atx.ID(), types.EmptyATXID, 0, sig.NodeID(), 10))
 
 		id, err := atxs.AtxWithPrevious(db, types.EmptyATXID, sig.NodeID())
 		require.NoError(t, err)
@@ -1188,11 +1190,11 @@ func Test_AtxWithPrevious(t *testing.T) {
 
 		atx, blob := newAtx(t, sig)
 		require.NoError(t, atxs.Add(db, atx, blob))
-		require.NoError(t, atxs.SetPost(db, atx.ID(), prev, sig.NodeID(), 10))
+		require.NoError(t, atxs.SetPost(db, atx.ID(), prev, 0, sig.NodeID(), 10))
 
 		atx2, blob := newAtx(t, sig2)
 		require.NoError(t, atxs.Add(db, atx2, blob))
-		require.NoError(t, atxs.SetPost(db, atx2.ID(), prev, sig2.NodeID(), 10))
+		require.NoError(t, atxs.SetPost(db, atx2.ID(), prev, 0, sig2.NodeID(), 10))
 
 		id, err := atxs.AtxWithPrevious(db, prev, sig.NodeID())
 		require.NoError(t, err)
@@ -1222,7 +1224,7 @@ func Test_FindDoublePublish(t *testing.T) {
 		// one atx
 		atx0, blob := newAtx(t, sig, withPublishEpoch(1))
 		require.NoError(t, atxs.Add(db, atx0, blob))
-		require.NoError(t, atxs.SetPost(db, atx0.ID(), types.EmptyATXID, atx0.SmesherID, 10))
+		require.NoError(t, atxs.SetPost(db, atx0.ID(), types.EmptyATXID, 0, atx0.SmesherID, 10))
 
 		_, err = atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch)
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -1230,7 +1232,7 @@ func Test_FindDoublePublish(t *testing.T) {
 		// two atxs in different epochs
 		atx1, blob := newAtx(t, sig, withPublishEpoch(atx0.PublishEpoch+1))
 		require.NoError(t, atxs.Add(db, atx1, blob))
-		require.NoError(t, atxs.SetPost(db, atx1.ID(), types.EmptyATXID, atx0.SmesherID, 10))
+		require.NoError(t, atxs.SetPost(db, atx1.ID(), types.EmptyATXID, 0, atx0.SmesherID, 10))
 
 		_, err = atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch)
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -1241,11 +1243,11 @@ func Test_FindDoublePublish(t *testing.T) {
 
 		atx0, blob := newAtx(t, sig)
 		require.NoError(t, atxs.Add(db, atx0, blob))
-		require.NoError(t, atxs.SetPost(db, atx0.ID(), types.EmptyATXID, atx0.SmesherID, 10))
+		require.NoError(t, atxs.SetPost(db, atx0.ID(), types.EmptyATXID, 0, atx0.SmesherID, 10))
 
 		atx1, blob := newAtx(t, sig)
 		require.NoError(t, atxs.Add(db, atx1, blob))
-		require.NoError(t, atxs.SetPost(db, atx1.ID(), types.EmptyATXID, atx0.SmesherID, 10))
+		require.NoError(t, atxs.SetPost(db, atx1.ID(), types.EmptyATXID, 0, atx0.SmesherID, 10))
 
 		atxids, err := atxs.FindDoublePublish(db, atx0.SmesherID, atx0.PublishEpoch)
 		require.NoError(t, err)
@@ -1264,16 +1266,16 @@ func Test_FindDoublePublish(t *testing.T) {
 
 		atx0, blob := newAtx(t, atx0Signer)
 		require.NoError(t, atxs.Add(db, atx0, blob))
-		require.NoError(t, atxs.SetPost(db, atx0.ID(), types.EmptyATXID, atx0.SmesherID, 10))
-		require.NoError(t, atxs.SetPost(db, atx0.ID(), types.EmptyATXID, sig.NodeID(), 10))
+		require.NoError(t, atxs.SetPost(db, atx0.ID(), types.EmptyATXID, 0, atx0.SmesherID, 10))
+		require.NoError(t, atxs.SetPost(db, atx0.ID(), types.EmptyATXID, 0, sig.NodeID(), 10))
 
 		atx1Signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
 		atx1, blob := newAtx(t, atx1Signer)
 		require.NoError(t, atxs.Add(db, atx1, blob))
-		require.NoError(t, atxs.SetPost(db, atx1.ID(), types.EmptyATXID, atx1.SmesherID, 10))
-		require.NoError(t, atxs.SetPost(db, atx1.ID(), types.EmptyATXID, sig.NodeID(), 10))
+		require.NoError(t, atxs.SetPost(db, atx1.ID(), types.EmptyATXID, 0, atx1.SmesherID, 10))
+		require.NoError(t, atxs.SetPost(db, atx1.ID(), types.EmptyATXID, 0, sig.NodeID(), 10))
 
 		atxIDs, err := atxs.FindDoublePublish(db, sig.NodeID(), atx0.PublishEpoch)
 		require.NoError(t, err)
@@ -1330,5 +1332,33 @@ func Test_MergeConflict(t *testing.T) {
 		ids, err = atxs.MergeConflict(db, marriage, atx0.PublishEpoch)
 		require.NoError(t, err)
 		require.Len(t, ids, 2)
+	})
+}
+
+func Test_Previous(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
+		db := sql.InMemoryTest(t)
+		_, err := atxs.Previous(db, types.RandomATXID())
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+	t.Run("returns ATXs in order", func(t *testing.T) {
+		db := sql.InMemoryTest(t)
+
+		atx := types.RandomATXID()
+		var previousAtxs []types.ATXID
+		// 10 previous ATXs
+		for range 10 {
+			previousAtxs = append(previousAtxs, types.RandomATXID())
+		}
+		// used by 50 IDs randomly
+		for range 50 {
+			prev := previousAtxs[rand.Intn(len(previousAtxs))]
+			index := slices.Index(previousAtxs, prev)
+			require.NoError(t, atxs.SetPost(db, atx, prev, index, types.RandomNodeID(), 10))
+		}
+
+		got, err := atxs.Previous(db, atx)
+		require.NoError(t, err)
+		require.Equal(t, previousAtxs, got)
 	})
 }
