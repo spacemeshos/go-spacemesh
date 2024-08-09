@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -29,6 +30,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
+
+var sqlWriterSleep = 100 * time.Millisecond
 
 type nipostValidatorV1 interface {
 	InitialNIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, goldenATXID types.ATXID) error
@@ -83,6 +86,20 @@ type HandlerV1 struct {
 
 	signerMtx sync.Mutex
 	signers   map[types.NodeID]*signing.EdSigner
+
+	atxMu          sync.Mutex
+	atxBatch       []atxBatchItem
+	atxBatchResult *batchResult
+}
+
+type batchResult struct {
+	doneC chan struct{}
+	err   error
+}
+
+type atxBatchItem struct {
+	atx  *types.ActivationTx
+	watx *wire.ActivationTxV1
 }
 
 func (h *HandlerV1) Register(sig *signing.EdSigner) {
@@ -95,6 +112,75 @@ func (h *HandlerV1) Register(sig *signing.EdSigner) {
 
 	h.logger.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 	h.signers[sig.NodeID()] = sig
+}
+
+const poolItemMinSize = 1000 // minimum size of atx batch (to save on allocation)
+var pool = &sync.Pool{
+	New: func() any {
+		s := make([]atxBatchItem, 0, poolItemMinSize)
+		return &s
+	},
+}
+
+func getBatch() []atxBatchItem {
+	v := pool.Get().(*[]atxBatchItem)
+	return *v
+}
+
+func putBatch(v []atxBatchItem) {
+	v = v[:0]
+	pool.Put(&v)
+}
+
+func (h *HandlerV1) flushAtxLoop(ctx context.Context) {
+	t := time.NewTicker(sqlWriterSleep)
+	// initialize the first batch
+	h.atxMu.Lock()
+	h.atxBatchResult = &batchResult{doneC: make(chan struct{})}
+	h.atxMu.Unlock()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			// copy-on-write
+			h.atxMu.Lock()
+			if len(h.atxBatch) == 0 {
+				h.atxMu.Unlock()
+				continue
+			}
+			batch := h.atxBatch                                         // copy the existing slice
+			h.atxBatch = getBatch()                                     // make a new one
+			res := h.atxBatchResult                                     // copy the result type
+			h.atxBatchResult = &batchResult{doneC: make(chan struct{})} // make a new one
+			h.atxMu.Unlock()
+			metrics.FlushBatchSize.Add(float64(len(batch)))
+
+			if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+				var err error
+				for _, item := range batch {
+					err = atxs.Add(tx, item.atx, item.watx.Blob())
+					if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+						metrics.WriteBatchErrorsCount.Inc()
+						return fmt.Errorf("add atx to db: %w", err)
+					}
+					err = atxs.SetPost(tx, item.atx.ID(), item.watx.PrevATXID, 0,
+						item.atx.SmesherID, item.watx.NumUnits)
+					if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+						metrics.WriteBatchErrorsCount.Inc()
+						return fmt.Errorf("set atx units: %w", err)
+					}
+				}
+				return nil
+			}); err != nil {
+				res.err = err
+				metrics.ErroredBatchCount.Inc()
+				h.logger.Error("flush atxs to db", zap.Error(err))
+			}
+			putBatch(batch)
+			close(res.doneC)
+		}
+	}
 }
 
 func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.ActivationTxV1) error {
@@ -489,49 +575,56 @@ func (h *HandlerV1) checkWrongPrevAtx(
 
 func (h *HandlerV1) checkMalicious(
 	ctx context.Context,
-	tx *sql.Tx,
+	exec sql.Executor,
 	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
+	malicious, err := identities.IsMalicious(exec, watx.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	if malicious {
 		return nil, nil
 	}
-	proof, err := h.checkDoublePublish(ctx, tx, watx)
+	proof, err := h.checkDoublePublish(ctx, exec, watx)
 	if proof != nil || err != nil {
 		return proof, err
 	}
-	return h.checkWrongPrevAtx(ctx, tx, watx)
+	return h.checkWrongPrevAtx(ctx, exec, watx)
 }
 
-// storeAtx stores an ATX and notifies subscribers of the ATXID.
 func (h *HandlerV1) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV1,
+	deps bool,
 ) (*mwire.MalfeasanceProof, error) {
-	var proof *mwire.MalfeasanceProof
-	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
-		var err error
-		proof, err = h.checkMalicious(ctx, tx, watx)
-		if err != nil {
-			return fmt.Errorf("check malicious: %w", err)
-		}
+	var (
+		c     chan struct{}
+		proof *mwire.MalfeasanceProof
+		br    *batchResult
+		err   error
+	)
+	proof, err = h.checkMalicious(ctx, h.cdb, watx)
+	if err != nil {
+		return proof, fmt.Errorf("check malicious: %w", err)
+	}
+	if !deps {
+		h.atxMu.Lock()
+		h.atxBatch = append(h.atxBatch, atxBatchItem{atx: atx, watx: watx})
+		br = h.atxBatchResult
+		c = br.doneC
+		h.atxMu.Unlock()
+	} else {
+		// we have deps, persist with sync flow
+		return proof, h.storeAtxSync(ctx, atx, watx, proof)
+	}
 
-		err = atxs.Add(tx, atx, watx.Blob())
-		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return fmt.Errorf("add atx to db: %w", err)
-		}
-		err = atxs.SetPost(tx, atx.ID(), watx.PrevATXID, 0, atx.SmesherID, watx.NumUnits)
-		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return fmt.Errorf("set atx units: %w", err)
-		}
-
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("store atx: %w", err)
+	select {
+	case <-c:
+		// wait for the batch the corresponds to the atx to be written
+		err = br.err
+	case <-ctx.Done():
+		err = ctx.Err()
 	}
 
 	atxs.AtxAdded(h.cdb, atx)
@@ -550,7 +643,49 @@ func (h *HandlerV1) storeAtx(
 		zap.Stringer("atx_id", atx.ID()),
 		zap.Uint32("epoch_id", atx.PublishEpoch.Uint32()),
 	)
-	return proof, nil
+	return proof, err
+}
+
+// storeAtx stores an ATX and notifies subscribers of the ATXID.
+func (h *HandlerV1) storeAtxSync(
+	ctx context.Context,
+	atx *types.ActivationTx,
+	watx *wire.ActivationTxV1,
+	proof *mwire.MalfeasanceProof,
+) error {
+	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		err = atxs.Add(tx, atx, watx.Blob())
+		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("add atx to db: %w", err)
+		}
+		err = atxs.SetPost(tx, atx.ID(), watx.PrevATXID, 0, atx.SmesherID, watx.NumUnits)
+		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return fmt.Errorf("set atx units: %w", err)
+		}
+
+		return nil
+	}); err != nil {
+		return fmt.Errorf("store atx: %w", err)
+	}
+
+	atxs.AtxAdded(h.cdb, atx)
+	if proof != nil {
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
+		h.tortoise.OnMalfeasance(atx.SmesherID)
+	}
+
+	added := h.cacheAtx(ctx, atx)
+	h.beacon.OnAtx(atx)
+	if added != nil {
+		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
+	}
+
+	h.logger.Debug("finished storing atx in epoch",
+		zap.Stringer("atx_id", atx.ID()),
+		zap.Uint32("epoch_id", atx.PublishEpoch.Uint32()),
+	)
+	return nil
 }
 
 func (h *HandlerV1) processATX(
@@ -627,7 +762,7 @@ func (h *HandlerV1) processATX(
 	}
 	atx.Weight = weight
 
-	proof, err = h.storeAtx(ctx, atx, watx)
+	proof, err = h.storeAtx(ctx, atx, watx, len(atxIDs) > 0)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}

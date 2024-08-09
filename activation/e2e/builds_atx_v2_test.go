@@ -134,6 +134,9 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		logger,
 		activation.WithAtxVersions(atxVersions),
 	)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go atxHdlr.Start(ctx)
 
 	var previous *types.ActivationTx
 	var publishedAtxs atomic.Uint32

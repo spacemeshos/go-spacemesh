@@ -50,3 +50,21 @@ var PostVerificationLatency = metrics.NewHistogramWithBuckets(
 	[]string{},
 	prometheus.ExponentialBuckets(1, 2, 20),
 ).WithLabelValues()
+
+var WriteBatchErrorsCount = prometheus.NewCounter(metrics.NewCounterOpts(
+	namespace,
+	"write_batch_errors",
+	"number of errors when writing a batch",
+))
+
+var ErroredBatchCount = prometheus.NewCounter(metrics.NewCounterOpts(
+	namespace,
+	"errored_batch",
+	"number of batches that errored",
+))
+
+var FlushBatchSize = prometheus.NewCounter(metrics.NewCounterOpts(
+	namespace,
+	"flush_batch_size",
+	"size of flushed batch",
+))

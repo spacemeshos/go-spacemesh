@@ -131,6 +131,7 @@ func NewHandler(
 			beacon:          beacon,
 			tortoise:        tortoise,
 			signers:         make(map[types.NodeID]*signing.EdSigner),
+			atxBatchResult:  nil,
 		},
 
 		v2: &HandlerV2{
@@ -167,6 +168,10 @@ func NewHandler(
 
 func (h *Handler) Register(sig *signing.EdSigner) {
 	h.v1.Register(sig)
+}
+
+func (h *Handler) Start(ctx context.Context) {
+	h.v1.flushAtxLoop(ctx)
 }
 
 // HandleSyncedAtx handles atxs received by sync.

@@ -214,6 +214,9 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 		lg,
 		opts...,
 	)
+	ctx, cancel := context.WithCancel(context.Background())
+	go atxHdlr.Start(ctx)
+	tb.Cleanup(func() { cancel() })
 	return &testHandler{
 		Handler:    atxHdlr,
 		cdb:        cdb,

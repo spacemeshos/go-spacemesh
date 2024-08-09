@@ -168,7 +168,7 @@ func TestRecover(t *testing.T) {
 			}
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-			db := sql.InMemory()
+			db := sql.InMemoryTest(t)
 			localDB := localsql.InMemory()
 			data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
@@ -209,7 +209,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	}
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-	db := sql.InMemory()
+	db := sql.InMemoryTest(t)
 	localDB := localsql.InMemory()
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
@@ -267,6 +267,10 @@ func validateAndPreserveData(
 		mtrtl,
 		lg,
 	)
+	ctx, cancel := context.WithCancel(context.Background())
+	tb.Cleanup(cancel)
+	go atxHandler.Start(ctx)
+
 	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for _, dep := range deps {
 		var atx wire.ActivationTxV1

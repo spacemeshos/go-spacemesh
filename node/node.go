@@ -746,6 +746,10 @@ func (app *App) initServices(ctx context.Context) error {
 	for _, sig := range app.signers {
 		atxHandler.Register(sig)
 	}
+	app.eg.Go(func() error {
+		atxHandler.Start(ctx)
+		return nil
+	})
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
