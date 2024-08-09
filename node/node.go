@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/atxwriter"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -113,6 +114,7 @@ const (
 	PoetDbLogger           = "poetDb"
 	TrtlLogger             = "trtl"
 	ATXHandlerLogger       = "atxHandler"
+	ATXWriterLogger        = "atxWriter"
 	ATXBuilderLogger       = "atxBuilder"
 	MeshLogger             = "mesh"
 	SyncLogger             = "sync"
@@ -719,11 +721,12 @@ func (app *App) initServices(ctx context.Context) error {
 	})
 
 	fetcherWrapped := &layerFetcher{}
-
+	atxWriter := atxwriter.New(app.db, app.addLogger(ATXWriterLogger, lg).Zap())
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
 		app.atxsdata,
+		atxWriter,
 		app.edVerifier,
 		app.clock,
 		app.host,
@@ -739,6 +742,10 @@ func (app *App) initServices(ctx context.Context) error {
 	for _, sig := range app.signers {
 		atxHandler.Register(sig)
 	}
+	app.eg.Go(func() error {
+		atxWriter.Start(ctx)
+		return nil
+	})
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 

@@ -20,6 +20,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/atxwriter"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -169,7 +170,7 @@ func TestRecover(t *testing.T) {
 			}
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-			db := statesql.InMemory()
+			db := statesql.InMemoryTest(t)
 			localDB := localsql.InMemory()
 			data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
@@ -210,7 +211,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	}
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	localDB := localsql.InMemory()
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
@@ -254,10 +255,18 @@ func validateAndPreserveData(
 	mreceiver := activation.NewMockAtxReceiver(ctrl)
 	mtrtl := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	tb.Cleanup(cancel)
+	writer := atxwriter.New(db, lg)
+
+	go writer.Start(ctx)
+
 	atxHandler := activation.NewHandler(
 		"",
 		cdb,
 		atxsdata.New(),
+		writer,
 		signing.NewEdVerifier(),
 		mclock,
 		nil,

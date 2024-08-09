@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/activation/atxwriter"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -196,14 +197,16 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(statesql.InMemory(), lg)
+	db := statesql.InMemoryTest(tb)
+	cdb := datastore.NewCachedDB(db, lg)
 	edVerifier := signing.NewEdVerifier()
-
+	writer := atxwriter.New(db, lg)
 	mocks := newTestHandlerMocks(tb, goldenATXID)
 	atxHdlr := NewHandler(
 		"localID",
 		cdb,
 		atxsdata.New(),
+		writer,
 		edVerifier,
 		mocks.mclock,
 		mocks.mpub,
@@ -215,6 +218,9 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 		lg,
 		opts...,
 	)
+	ctx, cancel := context.WithCancel(context.Background())
+	go writer.Start(ctx)
+	tb.Cleanup(func() { cancel() })
 	return &testHandler{
 		Handler:    atxHdlr,
 		cdb:        cdb,

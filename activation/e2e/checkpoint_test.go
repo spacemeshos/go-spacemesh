@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/atxwriter"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -38,7 +39,9 @@ import (
 
 func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 
@@ -46,7 +49,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := testPostConfig()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
 
 	opts := testPostSetupOpts(t)
@@ -105,10 +108,14 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	mBeacon := activation.NewMockAtxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
+	writer := atxwriter.New(db, logger)
+	go writer.Start(ctx)
+
 	atxHdlr := activation.NewHandler(
 		"local",
 		cdb,
 		atxdata,
+		writer,
 		edVerifier,
 		clock,
 		mpub,
@@ -192,10 +199,17 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	poetService = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)
+
+	// writer := atxwriter.New(db, logger)
+	// ctx, cancel := context.WithCancel(context.Background())
+	// t.Cleanup(cancel)
+	// go writer.Start(ctx)
+
 	atxHdlr = activation.NewHandler(
 		"local",
 		cdb,
 		atxdata,
+		writer,
 		edVerifier,
 		clock,
 		mpub,

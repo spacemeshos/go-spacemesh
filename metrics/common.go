@@ -76,10 +76,22 @@ func ReportMessageLatency(protocol, msgType string, latency time.Duration) {
 	receivedMessagesLatency.WithLabelValues(protocol, msgType, sign).Observe(seconds)
 }
 
+// NewHistogram creates a Histogram metrics under the global namespace returns nop if metrics are disabled.
+func NewSimpleCounter(subsystem, name, help string) prometheus.Counter {
+	return promauto.NewCounter(NewCounterOpts(subsystem, name, help))
+}
+
 func NewCounterOpts(ns, name, help string) prometheus.CounterOpts {
 	return prometheus.CounterOpts{
-		Namespace: ns,
+		Namespace: Namespace,
+		Subsystem: ns,
 		Name:      name,
 		Help:      help,
 	}
+}
+
+func NewHistogramNoLabel(name, subsystem, help string, buckets []float64) prometheus.Histogram {
+	return promauto.NewHistogram(
+		prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Buckets: buckets},
+	)
 }

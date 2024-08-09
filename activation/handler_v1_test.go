@@ -11,6 +11,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/activation/atxwriter"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -33,13 +34,16 @@ type v1TestHandler struct {
 
 func newV1TestHandler(tb testing.TB, goldenATXID types.ATXID) *v1TestHandler {
 	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(statesql.InMemory(), lg)
+	db := statesql.InMemoryTest(tb)
+	cdb := datastore.NewCachedDB(db, lg)
+	writer := atxwriter.New(db, lg)
 	mocks := newTestHandlerMocks(tb, goldenATXID)
-	return &v1TestHandler{
+	v1 := &v1TestHandler{
 		HandlerV1: &HandlerV1{
 			local:           "localID",
 			cdb:             cdb,
 			atxsdata:        atxsdata.New(),
+			atxWriter:       writer,
 			edVerifier:      signing.NewEdVerifier(),
 			clock:           mocks.mclock,
 			tickSize:        1,
@@ -53,6 +57,10 @@ func newV1TestHandler(tb testing.TB, goldenATXID types.ATXID) *v1TestHandler {
 		},
 		handlerMocks: mocks,
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	tb.Cleanup(cancel)
+	go writer.Start(ctx)
+	return v1
 }
 
 func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {

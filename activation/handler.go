@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/spacemeshos/go-spacemesh/activation/atxwriter"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -100,6 +101,7 @@ func NewHandler(
 	local p2p.Peer,
 	cdb *datastore.CachedDB,
 	atxsdata *atxsdata.Data,
+	atxWriter *atxwriter.AtxWriter,
 	edVerifier *signing.EdVerifier,
 	c layerClock,
 	pub pubsub.Publisher,
@@ -121,6 +123,7 @@ func NewHandler(
 			local:           local,
 			cdb:             cdb,
 			atxsdata:        atxsdata,
+			atxWriter:       atxWriter,
 			edVerifier:      edVerifier,
 			clock:           c,
 			tickSize:        1,

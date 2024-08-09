@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/atxwriter"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -53,7 +54,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := testPostConfig()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
 
 	opts := testPostSetupOpts(t)
@@ -119,10 +120,16 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	mBeacon := activation.NewMockAtxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
+	writer := atxwriter.New(db, logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go writer.Start(ctx)
+
 	atxHdlr := activation.NewHandler(
 		"local",
 		cdb,
 		atxsdata,
+		writer,
 		edVerifier,
 		clock,
 		mpub,

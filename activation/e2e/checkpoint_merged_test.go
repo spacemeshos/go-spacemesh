@@ -15,6 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/atxwriter"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -43,7 +44,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
 	localDB := localsql.InMemory()
 
@@ -60,7 +61,9 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
-	eg, ctx := errgroup.WithContext(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	eg, ctx := errgroup.WithContext(ctx)
 	for _, sig := range signers {
 		opts := opts
 		opts.DataDir = t.TempDir()
@@ -109,10 +112,14 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	mBeacon := activation.NewMockAtxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
+	writer := atxwriter.New(db, logger)
+	go writer.Start(ctx)
+
 	atxHdlr := activation.NewHandler(
 		"local",
 		cdb,
 		atxsdata.New(),
+		writer,
 		signing.NewEdVerifier(),
 		clock,
 		mpub,
@@ -129,7 +136,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	publish := types.EpochID(1)
 	var niposts [2]nipostData
 	var initialPosts [2]*types.Post
-	eg, ctx = errgroup.WithContext(context.Background())
+	eg, _ = errgroup.WithContext(ctx)
 	for i, signer := range signers {
 		eg.Go(func() error {
 			post, postInfo, err := nb.Proof(context.Background(), signer.NodeID(), types.EmptyHash32[:], nil)
@@ -286,10 +293,12 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	poetSvc = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)
+
 	atxHdlr = activation.NewHandler(
 		"local",
 		cdb,
 		atxsdata.New(),
+		writer,
 		signing.NewEdVerifier(),
 		clock,
 		mpub,

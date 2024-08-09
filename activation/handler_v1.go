@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/activation/atxwriter"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -70,6 +71,7 @@ type nipostValidatorV1 interface {
 type HandlerV1 struct {
 	local           p2p.Peer
 	cdb             *datastore.CachedDB
+	atxWriter       *atxwriter.AtxWriter
 	atxsdata        *atxsdata.Data
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
@@ -285,7 +287,7 @@ func (h *HandlerV1) validateNonInitialAtx(
 }
 
 // cacheAtx caches the atx in the atxsdata cache.
-// Returns true if the atx was cached, false otherwise.
+// Returns the atx if the atx was cached, or nil in case it wasn't.
 func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		malicious, err := identities.IsMalicious(h.cdb, atx.SmesherID)
@@ -448,49 +450,44 @@ func (h *HandlerV1) checkWrongPrevAtx(
 
 func (h *HandlerV1) checkMalicious(
 	ctx context.Context,
-	tx sql.Transaction,
+	exec sql.Executor,
 	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
+	malicious, err := identities.IsMalicious(exec, watx.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	if malicious {
 		return nil, nil
 	}
-	proof, err := h.checkDoublePublish(ctx, tx, watx)
+	proof, err := h.checkDoublePublish(ctx, exec, watx)
 	if proof != nil || err != nil {
 		return proof, err
 	}
-	return h.checkWrongPrevAtx(ctx, tx, watx)
+	return h.checkWrongPrevAtx(ctx, exec, watx)
 }
 
-// storeAtx stores an ATX and notifies subscribers of the ATXID.
 func (h *HandlerV1) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	var proof *mwire.MalfeasanceProof
-	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
-		var err error
-		proof, err = h.checkMalicious(ctx, tx, watx)
-		if err != nil {
-			return fmt.Errorf("check malicious: %w", err)
-		}
+	proof, err := h.checkMalicious(ctx, h.cdb, watx)
+	if err != nil {
+		return proof, fmt.Errorf("check malicious: %w", err)
+	}
 
-		err = atxs.Add(tx, atx, watx.Blob())
-		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return fmt.Errorf("add atx to db: %w", err)
-		}
-		err = atxs.SetPost(tx, atx.ID(), watx.PrevATXID, 0, atx.SmesherID, watx.NumUnits, watx.PublishEpoch)
-		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return fmt.Errorf("set atx units: %w", err)
-		}
+	c, errFn := h.atxWriter.Store(atx, watx)
+	select {
+	case <-c:
+		// wait for the batch the corresponds to the atx to be written
+		err = errFn()
+	case <-ctx.Done():
+		err = ctx.Err()
+	}
 
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("store atx: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("atxwriter write: %w", err)
 	}
 
 	atxs.AtxAdded(h.cdb, atx)
@@ -509,7 +506,7 @@ func (h *HandlerV1) storeAtx(
 		zap.Stringer("atx_id", atx.ID()),
 		zap.Uint32("epoch_id", atx.PublishEpoch.Uint32()),
 	)
-	return proof, nil
+	return proof, err
 }
 
 func (h *HandlerV1) processATX(
