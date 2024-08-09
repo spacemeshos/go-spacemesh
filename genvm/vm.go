@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -31,7 +32,7 @@ import (
 type Opt func(*VM)
 
 // WithLogger sets logger for VM.
-func WithLogger(logger log.Log) Opt {
+func WithLogger(logger *zap.Logger) Opt {
 	return func(vm *VM) {
 		vm.logger = logger
 	}
@@ -60,7 +61,7 @@ func WithConfig(cfg Config) Opt {
 // New returns VM instance.
 func New(db *sql.Database, opts ...Opt) *VM {
 	vm := &VM{
-		logger:   log.NewNop(),
+		logger:   zap.NewNop(),
 		db:       db,
 		cfg:      DefaultConfig(),
 		registry: registry.New(),
@@ -77,7 +78,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 
 // VM handles modifications to the account state.
 type VM struct {
-	logger   log.Log
+	logger   *zap.Logger
 	db       *sql.Database
 	cfg      Config
 	registry *registry.Registry
@@ -143,7 +144,7 @@ func (v *VM) Revert(lid types.LayerID) error {
 	if err := v.revert(lid); err != nil {
 		return err
 	}
-	v.logger.With().Info("vm reverted to layer", lid)
+	v.logger.Info("vm reverted to layer", zap.Uint32("layer", lid.Uint32()))
 	return nil
 }
 
@@ -179,7 +180,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 	defer tx.Release()
 	for i := range genesis {
 		account := &genesis[i]
-		v.logger.With().Info("genesis account", log.Inline(account))
+		v.logger.Info("genesis account", zap.Inline(account))
 		if err := accounts.Update(tx, account); err != nil {
 			return fmt.Errorf("inserting genesis account: %w", err)
 		}
@@ -236,7 +237,7 @@ func (v *VM) Apply(
 	ss.IterateChanged(func(account *core.Account) bool {
 		total++
 		account.Layer = lctx.Layer
-		v.logger.With().Debug("update account state", log.Inline(account))
+		v.logger.Debug("update account state", zap.Inline(account))
 		err = accounts.Update(tx, account)
 		if err != nil {
 			return false
@@ -271,11 +272,11 @@ func (v *VM) Apply(
 	transactionsPerBlock.Observe(float64(len(txs)))
 	appliedLayer.Set(float64(lctx.Layer))
 
-	v.logger.With().Debug("applied layer",
-		log.Uint32("layer", lctx.Layer.Uint32()),
-		log.Int("count", len(txs)-len(skipped)),
-		log.Duration("duration", time.Since(t1)),
-		log.Stringer("state_hash", hashSum),
+	v.logger.Debug("applied layer",
+		zap.Uint32("layer", lctx.Layer.Uint32()),
+		zap.Int("count", len(txs)-len(skipped)),
+		zap.Duration("duration", time.Since(t1)),
+		zap.Stringer("state_hash", hashSum),
 	)
 	return skipped, results, nil
 }
@@ -294,7 +295,7 @@ func (v *VM) execute(
 		limit       = v.cfg.GasLimit
 	)
 	for i, tx := range txs {
-		logger := v.logger.WithFields(log.Int("ith", i))
+		logger := v.logger.With(zap.Int("ith", i))
 		txCount.Inc()
 
 		t1 := time.Now()
@@ -310,9 +311,9 @@ func (v *VM) execute(
 
 		header, err := req.Parse()
 		if err != nil {
-			logger.With().Warning("ineffective transaction. failed to parse",
-				tx.GetRaw().ID,
-				log.Err(err),
+			logger.Warn("ineffective transaction. failed to parse",
+				log.ZShortStringer("tx", tx.GetRaw().ID),
+				zap.Error(err),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
@@ -322,30 +323,30 @@ func (v *VM) execute(
 		args := req.args
 
 		if header.GasPrice == 0 {
-			logger.With().Warning("ineffective transaction. zero gas price",
-				log.Object("header", header),
-				log.Object("account", &ctx.PrincipalAccount),
+			logger.Warn("ineffective transaction. zero gas price",
+				zap.Object("header", header),
+				zap.Object("account", &ctx.PrincipalAccount),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
 		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
-			logger.With().Warning("ineffective transaction. intrinsic gas not covered",
-				log.Object("header", header),
-				log.Object("account", &ctx.PrincipalAccount),
-				log.Uint64("intrinsic gas", intrinsic),
+			logger.Warn("ineffective transaction. intrinsic gas not covered",
+				zap.Object("header", header),
+				zap.Object("account", &ctx.PrincipalAccount),
+				zap.Uint64("intrinsic gas", intrinsic),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
 		if limit < ctx.Header.MaxGas {
-			logger.With().Warning("ineffective transaction. out of block gas",
-				log.Uint64("block gas limit", v.cfg.GasLimit),
-				log.Uint64("current limit", limit),
-				log.Object("header", header),
-				log.Object("account", &ctx.PrincipalAccount),
+			logger.Warn("ineffective transaction. out of block gas",
+				zap.Uint64("block gas limit", v.cfg.GasLimit),
+				zap.Uint64("current limit", limit),
+				zap.Object("header", header),
+				zap.Object("account", &ctx.PrincipalAccount),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
@@ -355,9 +356,9 @@ func (v *VM) execute(
 		// NOTE this part is executed only for transactions that weren't verified
 		// when saved into database by txs module
 		if !tx.Verified() && !req.Verify() {
-			logger.With().Warning("ineffective transaction. failed verify",
-				log.Object("header", header),
-				log.Object("account", &ctx.PrincipalAccount),
+			logger.Warn("ineffective transaction. failed verify",
+				zap.Object("header", header),
+				zap.Object("account", &ctx.PrincipalAccount),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
@@ -365,9 +366,9 @@ func (v *VM) execute(
 		}
 
 		if ctx.PrincipalAccount.NextNonce > ctx.Header.Nonce {
-			logger.With().Warning("ineffective transaction. nonce too low",
-				log.Object("header", header),
-				log.Object("account", &ctx.PrincipalAccount),
+			logger.Warn("ineffective transaction. nonce too low",
+				zap.Object("header", header),
+				zap.Object("account", &ctx.PrincipalAccount),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw(), TxHeader: header})
 			invalidTxCount.Inc()
@@ -375,9 +376,9 @@ func (v *VM) execute(
 		}
 
 		t2 := time.Now()
-		logger.With().Debug("applying transaction",
-			log.Object("header", header),
-			log.Object("account", &ctx.PrincipalAccount),
+		logger.Debug("applying transaction",
+			zap.Object("header", header),
+			zap.Object("account", &ctx.PrincipalAccount),
 		)
 
 		rst := types.TransactionWithResult{}
@@ -388,10 +389,10 @@ func (v *VM) execute(
 			err = ctx.PrincipalHandler.Exec(ctx, ctx.Header.Method, args)
 		}
 		if err != nil {
-			logger.With().Debug("transaction failed",
-				log.Object("header", header),
-				log.Object("account", &ctx.PrincipalAccount),
-				log.Err(err),
+			logger.Debug("transaction failed",
+				zap.Object("header", header),
+				zap.Object("account", &ctx.PrincipalAccount),
+				zap.Error(err),
 			)
 			if errors.Is(err, core.ErrInternal) {
 				return nil, nil, 0, err
@@ -467,7 +468,7 @@ func (r *Request) Verify() bool {
 }
 
 func parse(
-	logger log.Log,
+	logger *zap.Logger,
 	lid types.LayerID,
 	reg *registry.Registry,
 	loader core.AccountLoader,
@@ -500,7 +501,7 @@ func parse(
 			err,
 		)
 	}
-	logger.With().Debug("loaded account state", log.Inline(&account))
+	logger.Debug("loaded account state", zap.Inline(&account))
 
 	ctx := &core.Context{
 		GenesisID:        cfg.GenesisID,
