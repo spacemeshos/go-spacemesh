@@ -621,7 +621,7 @@ func (app *App) initServices(ctx context.Context) error {
 	cfg.GenesisID = app.Config.Genesis.GenesisID()
 	state := vm.New(app.db,
 		vm.WithConfig(cfg),
-		vm.WithLogger(app.addLogger(VMLogger, lg)))
+		vm.WithLogger(app.addLogger(VMLogger, lg).Zap()))
 	app.conState = txs.NewConservativeState(state, app.db,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:     app.Config.BlockGasLimit,
