@@ -16,12 +16,12 @@ import (
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -35,7 +35,7 @@ func PersistedFilename(epoch types.EpochID, suffix string) string {
 }
 
 type Generator struct {
-	logger      log.Log
+	logger      *zap.Logger
 	fs          afero.Fs
 	client      *http.Client
 	btcEndpoint string
@@ -44,7 +44,7 @@ type Generator struct {
 
 type Opt func(*Generator)
 
-func WithLogger(logger log.Log) Opt {
+func WithLogger(logger *zap.Logger) Opt {
 	return func(g *Generator) {
 		g.logger = logger
 	}
@@ -64,7 +64,7 @@ func WithHttpClient(c *http.Client) Opt {
 
 func NewGenerator(btcEndpoint, smEndpoint string, opts ...Opt) *Generator {
 	g := &Generator{
-		logger:      log.NewNop(),
+		logger:      zap.NewNop(),
 		fs:          afero.NewOsFs(),
 		client:      &http.Client{},
 		btcEndpoint: btcEndpoint,
@@ -125,7 +125,7 @@ type BitcoinResponse struct {
 	Hash   string `json:"hash"`
 }
 
-func (g *Generator) genBeacon(ctx context.Context, logger log.Log) (types.Beacon, error) {
+func (g *Generator) genBeacon(ctx context.Context, logger *zap.Logger) (types.Beacon, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	br, err := bitcoinHash(ctx, logger, g.client, g.btcEndpoint)
@@ -142,15 +142,17 @@ func (g *Generator) genBeacon(ctx context.Context, logger log.Log) (types.Beacon
 	return beacon, nil
 }
 
-func bitcoinHash(ctx context.Context, logger log.Log, client *http.Client, targetUrl string) (*BitcoinResponse, error) {
+func bitcoinHash(
+	ctx context.Context,
+	logger *zap.Logger,
+	client *http.Client,
+	targetUrl string,
+) (*BitcoinResponse, error) {
 	latest, err := queryBitcoin(ctx, client, targetUrl)
 	if err != nil {
 		return nil, err
 	}
-	logger.With().Info("latest bitcoin block height",
-		log.Uint64("height", latest.Height),
-		log.String("hash", latest.Hash),
-	)
+	logger.Info("latest bitcoin block height", zap.Uint64("height", latest.Height), zap.String("hash", latest.Hash))
 	height := latest.Height - confirmation
 
 	blockUrl := fmt.Sprintf("%s/blocks/%d", targetUrl, height)
@@ -158,10 +160,7 @@ func bitcoinHash(ctx context.Context, logger log.Log, client *http.Client, targe
 	if err != nil {
 		return nil, err
 	}
-	logger.With().Info("confirmed bitcoin block",
-		log.Uint64("height", confirmed.Height),
-		log.String("hash", confirmed.Hash),
-	)
+	logger.Info("confirmed bitcoin block", zap.Uint64("height", confirmed.Height), zap.String("hash", confirmed.Hash))
 	return confirmed, nil
 }
 
@@ -257,8 +256,8 @@ func (g *Generator) GenUpdate(
 	if err != nil {
 		return "", fmt.Errorf("persist epoch update %v: %w", filename, err)
 	}
-	g.logger.With().Info("generated update",
-		log.String("filename", filename),
+	g.logger.Info("generated update",
+		zap.String("filename", filename),
 	)
 	return filename, nil
 }

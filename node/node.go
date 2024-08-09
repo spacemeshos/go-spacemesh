@@ -621,7 +621,7 @@ func (app *App) initServices(ctx context.Context) error {
 	cfg.GenesisID = app.Config.Genesis.GenesisID()
 	state := vm.New(app.db,
 		vm.WithConfig(cfg),
-		vm.WithLogger(app.addLogger(VMLogger, lg)))
+		vm.WithLogger(app.addLogger(VMLogger, lg).Zap()))
 	app.conState = txs.NewConservativeState(state, app.db,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:     app.Config.BlockGasLimit,
@@ -1949,14 +1949,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
-	dbLog := app.addLogger(StateDbLogger, lg)
-	m21 := migrations.New0021Migration(dbLog.Zap(), 1_000_000)
+	dbLog := app.addLogger(StateDbLogger, lg).Zap()
+	m21 := migrations.New0021Migration(dbLog, 1_000_000)
 	migrations, err := sql.StateMigrations()
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
 	dbopts := []sql.Opt{
-		sql.WithLogger(dbLog.Zap()),
+		sql.WithLogger(dbLog),
 		sql.WithMigrations(migrations),
 		sql.WithMigration(m21),
 		sql.WithConnections(app.Config.DatabaseConnections),
@@ -2010,7 +2010,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("load local migrations: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
-		sql.WithLogger(dbLog.Zap()),
+		sql.WithLogger(dbLog),
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)

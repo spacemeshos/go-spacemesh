@@ -42,7 +42,6 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	peerinfomocks "github.com/spacemeshos/go-spacemesh/p2p/peerinfo/mocks"
@@ -2270,9 +2269,9 @@ func TestEventsReceived(t *testing.T) {
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
 
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	svm := vm.New(sql.InMemory(), vm.WithLogger(lg))
-	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(lg.Zap().Named("conState")))
+	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(lg.Named("conState")))
 	conState.AddToCache(context.Background(), globalTx, time.Now())
 
 	weight := new(big.Rat).SetFloat64(18.7)
@@ -2335,7 +2334,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
+		svm := vm.New(sql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2356,7 +2355,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(sql.InMemory(), vm.WithLogger(logtest.New(t)))
+		svm := vm.New(sql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2378,7 +2377,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
+	svm := vm.New(db, vm.WithLogger(zaptest.NewLogger(t)))
 	cfg, cleanup := launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db)))
 	t.Cleanup(cleanup)
 
