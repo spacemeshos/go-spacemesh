@@ -32,7 +32,7 @@ func Test_Highest_ReturnsGoldenAtxOnError(t *testing.T) {
 	require.Nil(t, response.Atx.Layer)
 	require.Nil(t, response.Atx.SmesherId)
 	require.Nil(t, response.Atx.Coinbase)
-	require.Nil(t, response.Atx.PrevAtx)
+	require.Nil(t, response.Atx.PrevAtx) // nolint:staticcheck // SA1019 (deprecated)
 	require.EqualValues(t, 0, response.Atx.NumUnits)
 	require.EqualValues(t, 0, response.Atx.Sequence)
 }
@@ -62,7 +62,7 @@ func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 	require.Equal(t, atx.PublishEpoch.Uint32(), response.Atx.Layer.Number)
 	require.Equal(t, atx.SmesherID.Bytes(), response.Atx.SmesherId.Id)
 	require.Equal(t, atx.Coinbase.String(), response.Atx.Coinbase.Address)
-	require.Equal(t, previous.Bytes(), response.Atx.PrevAtx.Id)
+	require.Equal(t, previous.Bytes(), response.Atx.PrevAtx.Id) // nolint:staticcheck // SA1019 (deprecated)
 	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)
 	require.Equal(t, atx.Sequence, response.Atx.Sequence)
 }
@@ -122,7 +122,7 @@ func TestGet_HappyPath(t *testing.T) {
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
-	previous := types.RandomATXID()
+	previous := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
 	id := types.RandomATXID()
 	atx := types.ActivationTx{
 		Sequence:     rand.Uint64(),
@@ -133,7 +133,7 @@ func TestGet_HappyPath(t *testing.T) {
 	atx.SetID(id)
 	atxProvider.EXPECT().GetAtx(id).Return(&atx, nil)
 	atxProvider.EXPECT().GetMalfeasanceProof(gomock.Any()).Return(nil, sql.ErrNotFound)
-	atxProvider.EXPECT().Previous(id).Return([]types.ATXID{previous}, nil)
+	atxProvider.EXPECT().Previous(id).Return(previous, nil)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
 	require.NoError(t, err)
@@ -142,7 +142,10 @@ func TestGet_HappyPath(t *testing.T) {
 	require.Equal(t, atx.PublishEpoch.Uint32(), response.Atx.Layer.Number)
 	require.Equal(t, atx.SmesherID.Bytes(), response.Atx.SmesherId.Id)
 	require.Equal(t, atx.Coinbase.String(), response.Atx.Coinbase.Address)
-	require.Equal(t, previous.Bytes(), response.Atx.PrevAtx.Id)
+	require.Equal(t, previous[0].Bytes(), response.Atx.PrevAtx.Id) // nolint:staticcheck // SA1019 (deprecated)
+	require.Len(t, response.Atx.PreviousAtxs, 2)
+	require.Equal(t, previous[0].Bytes(), response.Atx.PreviousAtxs[0].Id)
+	require.Equal(t, previous[1].Bytes(), response.Atx.PreviousAtxs[1].Id)
 	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)
 	require.Equal(t, atx.Sequence, response.Atx.Sequence)
 	require.Nil(t, response.MalfeasanceProof)
@@ -175,7 +178,9 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	require.Equal(t, atx.PublishEpoch.Uint32(), response.Atx.Layer.Number)
 	require.Equal(t, atx.SmesherID.Bytes(), response.Atx.SmesherId.Id)
 	require.Equal(t, atx.Coinbase.String(), response.Atx.Coinbase.Address)
-	require.Equal(t, previous.Bytes(), response.Atx.PrevAtx.Id)
+	require.Equal(t, previous.Bytes(), response.Atx.PrevAtx.Id) // nolint:staticcheck // SA1019 (deprecated)
+	require.Len(t, response.Atx.PreviousAtxs, 1)
+	require.Equal(t, previous.Bytes(), response.Atx.PreviousAtxs[0].Id)
 	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)
 	require.Equal(t, atx.Sequence, response.Atx.Sequence)
 	require.Equal(t, events.ToMalfeasancePB(smesher, proof, false), response.MalfeasanceProof)

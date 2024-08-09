@@ -253,19 +253,24 @@ func castTransaction(t *types.Transaction) *pb.Transaction {
 }
 
 func convertActivation(a *types.ActivationTx, previous []types.ATXID) *pb.Activation {
-	if len(previous) == 0 {
-		previous = []types.ATXID{types.EmptyATXID}
-	}
-	return &pb.Activation{
+	atx := &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PublishEpoch.Uint32()},
 		SmesherId: &pb.SmesherId{Id: a.SmesherID.Bytes()},
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
-		// TODO: should we update the API to support multiple previous ATXs?
-		PrevAtx:  &pb.ActivationId{Id: previous[0].Bytes()},
-		NumUnits: uint32(a.NumUnits),
-		Sequence: a.Sequence,
+		NumUnits:  uint32(a.NumUnits),
+		Sequence:  a.Sequence,
 	}
+
+	if len(previous) == 0 {
+		previous = []types.ATXID{types.EmptyATXID}
+	}
+	// nolint:staticcheck // SA1019 (deprecated)
+	atx.PrevAtx = &pb.ActivationId{Id: previous[0].Bytes()}
+	for _, prev := range previous {
+		atx.PreviousAtxs = append(atx.PreviousAtxs, &pb.ActivationId{Id: prev.Bytes()})
+	}
+	return atx
 }
 
 func (s *MeshService) readLayer(
