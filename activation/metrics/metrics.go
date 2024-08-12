@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
@@ -51,19 +52,19 @@ var PostVerificationLatency = metrics.NewHistogramWithBuckets(
 	prometheus.ExponentialBuckets(1, 2, 20),
 ).WithLabelValues()
 
-var WriteBatchErrorsCount = prometheus.NewCounter(metrics.NewCounterOpts(
+var WriteBatchErrorsCount = promauto.NewCounter(metrics.NewCounterOpts(
 	namespace,
 	"write_batch_errors",
 	"number of errors when writing a batch",
 ))
 
-var ErroredBatchCount = prometheus.NewCounter(metrics.NewCounterOpts(
+var ErroredBatchCount = promauto.NewCounter(metrics.NewCounterOpts(
 	namespace,
 	"errored_batch",
 	"number of batches that errored",
 ))
 
-var FlushBatchSize = prometheus.NewCounter(metrics.NewCounterOpts(
+var FlushBatchSize = promauto.NewCounter(metrics.NewCounterOpts(
 	namespace,
 	"flush_batch_size",
 	"size of flushed batch",
