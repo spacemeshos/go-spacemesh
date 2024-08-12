@@ -235,7 +235,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		ctx,
 		signer,
 		poetProofDeadline,
-		poetRoundStart, challenge.Bytes(),
+		poetRoundStart, curPoetRoundEnd, challenge.Bytes(),
 	)
 	regErr := &PoetRegistrationMismatchError{}
 	switch {
@@ -370,26 +370,9 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
 
-	round, err := client.Submit(submitCtx, fetchProofDeadline, prefix, challenge, signature, nodeID)
-	if err != nil {
-		return nipost.PoETRegistration{},
-			&PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
-	}
-	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
-
-
 	registration := nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
 		Address:       client.Address(),
-		RoundID:       round.ID,
-		RoundEnd:      round.End,
-	}
-
-	if err := nipost.AddPoetRegistration(nb.localDB, nodeID, registration); err != nil {
-		return nipost.PoETRegistration{}, err
-	}
-
-	return registration, err
 	}
 
 	round, err := client.Submit(submitCtx, fetchProofDeadline, prefix, challenge, signature, nodeID)
