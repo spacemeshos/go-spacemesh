@@ -11,8 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/rand"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -823,23 +821,18 @@ func withCoinbase(addr types.Address) createAtxOpt {
 }
 
 func newAtx(t testing.TB, signer *signing.EdSigner, opts ...createAtxOpt) (*types.ActivationTx, types.AtxBlob) {
-	nonce := uint64(123)
-	watx := &wire.ActivationTxV1{
-		InnerActivationTxV1: wire.InnerActivationTxV1{
-			NIPostChallengeV1: wire.NIPostChallengeV1{
-				PrevATXID: types.RandomATXID(),
-			},
-			NumUnits: 2,
-			VRFNonce: &nonce,
-		},
+	atx := &types.ActivationTx{
+		NumUnits:  2,
+		TickCount: 1,
+		VRFNonce:  types.VRFPostIndex(123),
+		SmesherID: signer.NodeID(),
 	}
-	watx.Sign(signer)
-
-	atx := fixture.ToAtx(t, watx)
+	atx.SetID(types.RandomATXID())
+	atx.SetReceived(time.Now().Local())
 	for _, opt := range opts {
 		opt(atx)
 	}
-	return atx, watx.Blob()
+	return atx, types.AtxBlob{Blob: types.RandomBytes(100)}
 }
 
 type header struct {
