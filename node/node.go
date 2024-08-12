@@ -1985,24 +1985,28 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
-	app.log.Info("starting cache warmup")
-	applied, err := layers.GetLastApplied(app.db)
-	if err != nil {
-		return err
+	{
+		warmupLog := app.log.Zap().Named("warmup")
+		app.log.Info("starting cache warmup")
+		applied, err := layers.GetLastApplied(app.db)
+		if err != nil {
+			return err
+		}
+		start := time.Now()
+		data, err := atxsdata.Warm(
+			app.db,
+			app.Config.Tortoise.WindowSizeEpochs(applied),
+			warmupLog,
+		)
+		if err != nil {
+			return err
+		}
+		app.atxsdata = data
+		app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	}
-	start := time.Now()
-	data, err := atxsdata.Warm(
-		app.db,
-		app.Config.Tortoise.WindowSizeEpochs(applied),
-	)
-	if err != nil {
-		return err
-	}
-	app.atxsdata = data
-	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg).Zap(),
 		datastore.WithConfig(app.Config.Cache),
-		datastore.WithConsensusCache(data),
+		datastore.WithConsensusCache(app.atxsdata),
 	)
 
 	migrations, err = sql.LocalMigrations()
