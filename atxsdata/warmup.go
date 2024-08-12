@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"go.uber.org/zap"
 )
 
 func Warm(db *sql.Database, keep types.EpochID, logger *zap.Logger) (*Data, error) {
@@ -42,7 +43,10 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID, logger *zap.Logger
 	cache.EvictEpoch(evict)
 
 	from := cache.Evicted()
-	logger.Info("Reading ATXs from DB", zap.Uint32("from epoch", from.Uint32()), zap.Uint32("to epoch", latest.Uint32()))
+	logger.Info("Reading ATXs from DB",
+		zap.Uint32("from epoch", from.Uint32()),
+		zap.Uint32("to epoch", latest.Uint32()),
+	)
 	start := time.Now()
 	var processed int
 	err = atxs.IterateAtxsData(db, cache.Evicted(), latest,
