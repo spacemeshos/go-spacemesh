@@ -356,7 +356,7 @@ func (h *HandlerV1) checkDoublePublish(
 		return nil, fmt.Errorf("add malfeasance proof: %w", err)
 	}
 
-	h.logger.Warn("smesher produced more than one atx in the same epoch",
+	h.logger.Debug("smesher produced more than one atx in the same epoch",
 		log.ZContext(ctx),
 		zap.Stringer("smesher", atx.SmesherID),
 		zap.Stringer("previous", prev),
@@ -437,7 +437,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, fmt.Errorf("add malfeasance proof: %w", err)
 	}
 
-	h.logger.Warn("smesher referenced the wrong previous in published ATX",
+	h.logger.Debug("smesher referenced the wrong previous in published ATX",
 		log.ZContext(ctx),
 		zap.Stringer("smesher", atx.SmesherID),
 		log.ZShortStringer("actual", atx.PrevATXID),
