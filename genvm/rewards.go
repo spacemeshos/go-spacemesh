@@ -5,10 +5,10 @@ import (
 	"math/big"
 
 	"github.com/spacemeshos/economics/rewards"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 func (v *VM) addRewards(
@@ -50,12 +50,12 @@ func (v *VM) addRewards(
 				core.ErrInternal, subsidyReward, blockReward.Coinbase)
 		}
 
-		v.logger.With().Debug("rewards for coinbase",
-			lctx.Layer,
-			blockReward.Coinbase,
-			log.Stringer("relative weight", &blockReward.Weight),
-			log.Uint64("subsidy", subsidyReward.Uint64()),
-			log.Uint64("total", totalReward.Uint64()),
+		v.logger.Debug("rewards for coinbase",
+			zap.Uint32("layer", lctx.Layer.Uint32()),
+			zap.Stringer("coinbase", blockReward.Coinbase),
+			zap.Stringer("relative weight", &blockReward.Weight),
+			zap.Uint64("subsidy", subsidyReward.Uint64()),
+			zap.Uint64("total", totalReward.Uint64()),
 		)
 
 		reward := types.Reward{
@@ -76,14 +76,14 @@ func (v *VM) addRewards(
 		}
 		transferred += totalReward.Uint64()
 	}
-	v.logger.With().Debug("rewards for layer",
-		lctx.Layer,
-		log.Uint32("after genesis", layersAfterEffectiveGenesis),
-		log.Uint64("subsidy estimated", subsidy),
-		log.Uint64("fee", fees),
-		log.Uint64("total estimated", total),
-		log.Uint64("total transferred", transferred),
-		log.Uint64("total burnt", total-transferred),
+	v.logger.Debug("rewards for layer",
+		zap.Uint32("layer", lctx.Layer.Uint32()),
+		zap.Uint32("after genesis", layersAfterEffectiveGenesis),
+		zap.Uint64("subsidy estimated", subsidy),
+		zap.Uint64("fee", fees),
+		zap.Uint64("total estimated", total),
+		zap.Uint64("total transferred", transferred),
+		zap.Uint64("total burnt", total-transferred),
 	)
 	feesCount.Add(float64(fees))
 	subsidyCount.Add(float64(subsidy))

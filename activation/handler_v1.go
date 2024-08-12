@@ -524,7 +524,7 @@ func (h *HandlerV1) storeAtx(
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
-		err = atxs.SetUnits(tx, atx.ID(), atx.SmesherID, watx.NumUnits)
+		err = atxs.SetPost(tx, atx.ID(), watx.PrevATXID, 0, atx.SmesherID, watx.NumUnits)
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("set atx units: %w", err)
 		}

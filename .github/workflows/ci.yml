@@ -113,8 +113,6 @@ jobs:
           go-version: ${{ env.go-version }}
       - name: setup env
         run: make install
-      - name: staticcheck
-        run: make staticcheck
       - name: lint
         run: make lint-github-action
 

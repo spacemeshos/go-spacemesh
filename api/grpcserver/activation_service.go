@@ -63,6 +63,15 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 		)
 		return nil, status.Error(codes.NotFound, "id was not found")
 	}
+	prev, err := s.atxProvider.Previous(atxId)
+	if err != nil {
+		ctxzap.Error(ctx, "failed to get previous ATX",
+			zap.Stringer("id", atxId),
+			zap.Error(err),
+		)
+		return nil, status.Error(codes.Internal, "couldn't get previous ATXs")
+	}
+
 	proof, err := s.atxProvider.GetMalfeasanceProof(atx.SmesherID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		ctxzap.Error(ctx, "failed to get malfeasance proof",
@@ -74,7 +83,7 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 		return nil, status.Error(codes.NotFound, "id was not found")
 	}
 	resp := &pb.GetResponse{
-		Atx: convertActivation(atx),
+		Atx: convertActivation(atx, prev),
 	}
 	if proof != nil {
 		resp.MalfeasanceProof = events.ToMalfeasancePB(atx.SmesherID, proof, false)
@@ -95,7 +104,16 @@ func (s *activationService) Highest(ctx context.Context, req *emptypb.Empty) (*p
 	if err != nil || atx == nil {
 		return nil, status.Error(codes.NotFound, fmt.Sprintf("atx id %v not found: %v", highest, err.Error()))
 	}
+	prev, err := s.atxProvider.Previous(highest)
+	if err != nil {
+		ctxzap.Error(ctx, "failed to get previous ATX",
+			zap.Stringer("id", highest),
+			zap.Error(err),
+		)
+		return nil, status.Error(codes.Internal, "couldn't get previous ATXs")
+	}
+
 	return &pb.HighestResponse{
-		Atx: convertActivation(atx),
+		Atx: convertActivation(atx, prev),
 	}, nil
 }

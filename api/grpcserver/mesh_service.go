@@ -252,16 +252,25 @@ func castTransaction(t *types.Transaction) *pb.Transaction {
 	return tx
 }
 
-func convertActivation(a *types.ActivationTx) *pb.Activation {
-	return &pb.Activation{
+func convertActivation(a *types.ActivationTx, previous []types.ATXID) *pb.Activation {
+	atx := &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PublishEpoch.Uint32()},
 		SmesherId: &pb.SmesherId{Id: a.SmesherID.Bytes()},
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
-		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
 		Sequence:  a.Sequence,
 	}
+
+	if len(previous) == 0 {
+		previous = []types.ATXID{types.EmptyATXID}
+	}
+	// nolint:staticcheck // SA1019 (deprecated)
+	atx.PrevAtx = &pb.ActivationId{Id: previous[0].Bytes()}
+	for _, prev := range previous {
+		atx.PreviousAtxs = append(atx.PreviousAtxs, &pb.ActivationId{Id: prev.Bytes()})
+	}
+	return atx
 }
 
 func (s *MeshService) readLayer(
@@ -440,10 +449,14 @@ func (s *MeshService) AccountMeshDataStream(
 			activation := activationEvent.ActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
+				previous, err := s.cdb.Previous(activation.ID())
+				if err != nil {
+					return status.Error(codes.Internal, "getting previous ATXs failed")
+				}
 				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_Activation{
-							Activation: convertActivation(activation),
+							Activation: convertActivation(activation, previous),
 						},
 					},
 				}

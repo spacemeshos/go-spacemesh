@@ -26,7 +26,7 @@ var (
 
 	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
-	errInvalidProof  = fmt.Errorf("%w: invalid proof", pubsub.ErrValidationReject)
+	errUnknownProof  = fmt.Errorf("%w: unknown proof type", pubsub.ErrValidationReject)
 )
 
 type MalfeasanceType byte
@@ -153,6 +153,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 
 func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, error) {
 	if p.Eligibility != nil {
+		numMalformed.Inc()
 		return types.EmptyNodeID, fmt.Errorf(
 			"%w: eligibility field was deprecated with hare3",
 			pubsub.ErrValidationReject,
@@ -160,12 +161,12 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 	}
 	nodeID, err := h.Validate(ctx, p)
 	switch {
-	case errors.Is(err, errInvalidProof):
+	case errors.Is(err, errUnknownProof):
 		numMalformed.Inc()
 		return types.EmptyNodeID, err
 	case err != nil:
 		h.countInvalidProof(&p.MalfeasanceProof)
-		return types.EmptyNodeID, err
+		return types.EmptyNodeID, errors.Join(err, pubsub.ErrValidationReject)
 	}
 	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
 		malicious, err := identities.IsMalicious(dbtx, nodeID)
@@ -208,7 +209,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, error) {
 	mh, ok := h.handlersV1[MalfeasanceType(p.Proof.Type)]
 	if !ok {
-		return types.EmptyNodeID, fmt.Errorf("%w: unknown malfeasance type", errInvalidProof)
+		return types.EmptyNodeID, fmt.Errorf("%w: unknown malfeasance type", errUnknownProof)
 	}
 
 	nodeID, err := mh.Validate(ctx, p.Proof.Data)

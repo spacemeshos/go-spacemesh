@@ -137,6 +137,7 @@ func publishAtxV1(
 			return codec.Decode(got, &watx)
 		})
 	require.NoError(tb, atxs.Add(tab.db, toAtx(tb, &watx), watx.Blob()))
+	require.NoError(tb, atxs.SetPost(tab.db, watx.ID(), watx.PrevATXID, 0, watx.SmesherID, watx.NumUnits))
 	tab.atxsdata.AddFromAtx(toAtx(tb, &watx), false)
 	return &watx
 }
