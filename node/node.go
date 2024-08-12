@@ -1962,7 +1962,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 
 	if app.Config.ScanMalfeasantATXs {
 		app.log.With().Info("checking DB for malicious ATXs")
-		start = time.Now()
+		start := time.Now()
 		if err := activation.CheckPrevATXs(ctx, app.log.Zap(), app.db); err != nil {
 			return fmt.Errorf("malicious ATX check: %w", err)
 		}
