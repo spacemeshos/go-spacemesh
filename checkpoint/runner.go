@@ -78,10 +78,15 @@ func checkpointDB(
 		if mal, ok := malicious[catx.SmesherID]; ok && mal {
 			continue
 		}
+		var marriageAtx []byte
+		if catx.MarriageATX != nil {
+			marriageAtx = catx.MarriageATX.Bytes()
+		}
 		checkpoint.Data.Atxs = append(checkpoint.Data.Atxs, types.AtxSnapshot{
 			ID:             catx.ID.Bytes(),
 			Epoch:          catx.Epoch.Uint32(),
 			CommitmentAtx:  catx.CommitmentATX.Bytes(),
+			MarriageAtx:    marriageAtx,
 			VrfNonce:       uint64(catx.VRFNonce),
 			NumUnits:       catx.NumUnits,
 			BaseTickHeight: catx.BaseTickHeight,

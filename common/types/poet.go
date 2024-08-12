@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"time"
 
 	poetShared "github.com/spacemeshos/poet/shared"
@@ -96,4 +97,16 @@ func (p *PoetProof) Ref() (PoetProofRef, error) {
 type PoetRound struct {
 	ID  string `scale:"max=32"`
 	End time.Time
+}
+
+type PoetInfo struct {
+	ServicePubkey []byte
+	PhaseShift    time.Duration
+	CycleGap      time.Duration
+	Certifier     *CertifierInfo
+}
+
+type CertifierInfo struct {
+	Url    *url.URL
+	Pubkey []byte
 }

@@ -210,7 +210,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 	poetRoundStart := nb.layerClock.LayerToTime((postChallenge.PublishEpoch - 1).FirstLayer()).
 		Add(nb.poetCfg.PhaseShift)
-	poetRoundEnd := nb.layerClock.LayerToTime(postChallenge.PublishEpoch.FirstLayer()).
+	curPoetRoundEnd := nb.layerClock.LayerToTime(postChallenge.PublishEpoch.FirstLayer()).
 		Add(nb.poetCfg.PhaseShift).
 		Add(-nb.poetCfg.CycleGap)
 
@@ -224,7 +224,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 	logger.Info("building nipost",
 		zap.Time("poet round start", poetRoundStart),
-		zap.Time("poet round end", poetRoundEnd),
+		zap.Time("poet round end", curPoetRoundEnd),
 		zap.Time("publish epoch end", publishEpochEnd),
 		zap.Uint32("publish epoch", postChallenge.PublishEpoch.Uint32()),
 	)
@@ -235,9 +235,19 @@ func (nb *NIPostBuilder) BuildNIPost(
 		ctx,
 		signer,
 		poetProofDeadline,
-		poetRoundEnd,
-		poetRoundStart, challenge.Bytes())
-	if err != nil {
+		poetRoundStart, challenge.Bytes(),
+	)
+	regErr := &PoetRegistrationMismatchError{}
+	switch {
+	case errors.As(err, &regErr):
+		logger.Fatal(
+			"None of the poets listed in the config matches the existing registrations. "+
+				"Verify your config and local database state.",
+			zap.Strings("registrations", regErr.registrations),
+			zap.Strings("configured_poets", regErr.configuredPoets),
+		)
+		return nil, err
+	case err != nil:
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
@@ -260,7 +270,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 			)
 		}
 
-		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, poetRoundEnd)
+		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
 		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, submittedRegistrations)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
@@ -303,6 +313,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		}
 
 		postGenDuration := time.Since(startTime)
+
 		nb.logger.Info("finished post execution", zap.Duration("duration", postGenDuration))
 
 		metrics.PostDuration.Set(float64(postGenDuration.Nanoseconds()))
@@ -359,9 +370,26 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
 	defer cancel()
 
+	round, err := client.Submit(submitCtx, fetchProofDeadline, prefix, challenge, signature, nodeID)
+	if err != nil {
+		return nipost.PoETRegistration{},
+			&PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
+	}
+	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
+
+
 	registration := nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
 		Address:       client.Address(),
+		RoundID:       round.ID,
+		RoundEnd:      round.End,
+	}
+
+	if err := nipost.AddPoetRegistration(nb.localDB, nodeID, registration); err != nil {
+		return nipost.PoETRegistration{}, err
+	}
+
+	return registration, err
 	}
 
 	round, err := client.Submit(submitCtx, fetchProofDeadline, prefix, challenge, signature, nodeID)
@@ -418,6 +446,21 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 		}
 	}
 
+	misconfiguredRegistrations := make(map[string]struct{})
+	for addr := range registrationsMap {
+		if _, ok := existingRegistrationsMap[addr]; !ok {
+			misconfiguredRegistrations[addr] = struct{}{}
+		}
+	}
+
+	if len(misconfiguredRegistrations) != 0 {
+		nb.logger.Warn(
+			"Found existing registrations for poets not listed in the config. Will not fetch proof from them.",
+			zap.Strings("registrations_addresses", maps.Keys(misconfiguredRegistrations)),
+			log.ZShortStringer("smesherID", nodeID),
+		)
+	}
+
 	existingRegistrations := maps.Values(existingRegistrationsMap)
 	if len(missingRegistrations) == 0 {
 		return existingRegistrations, nil
@@ -426,24 +469,24 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	now := time.Now()
 
 	if curPoetRoundStartDeadline.Before(now) {
-		if len(existingRegistrations) == 0 {
-			if len(registrations) == 0 {
-				// no existing registration at all, drop current registration challenge
-				err = ErrATXChallengeExpired
-			} else {
-				// no existing registration for given poets set
-				err = ErrNoRegistrationForGivenPoetFound
-				nb.logger.Warn("revert poet configuration to previous is needed immediately",
-					zap.Error(err), log.ZShortStringer("smesherID", nodeID))
-			}
+		switch {
+		case len(existingRegistrations) == 0 && len(registrations) == 0:
+			// no existing registration at all, drop current registration challenge
 			return nil, fmt.Errorf(
 				"%w: poet round has already started at %s (now: %s)",
-				err,
+				ErrATXChallengeExpired,
 				curPoetRoundStartDeadline,
 				now,
 			)
+		case len(existingRegistrations) == 0:
+			// no existing registration for given poets set
+			return nil, &PoetRegistrationMismatchError{
+				registrations:   maps.Keys(registrationsMap),
+				configuredPoets: maps.Keys(nb.poetProvers),
+			}
+		default:
+			return existingRegistrations, nil
 		}
-		return existingRegistrations, nil
 	}
 
 	// send registrations to missing addresses
@@ -453,11 +496,11 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	submitCtx, cancel := context.WithDeadline(ctx, curPoetRoundStartDeadline)
 	defer cancel()
 
-	g, ctx := errgroup.WithContext(submitCtx)
+	eg, ctx := errgroup.WithContext(submitCtx)
 	submittedRegistrationsChan := make(chan nipost.PoETRegistration, len(missingRegistrations))
 
 	for _, client := range missingRegistrations {
-		g.Go(func() error {
+		eg.Go(func() error {
 			registration, err := nb.submitPoetChallenge(
 				ctx, nodeID,
 				fetchProofDeadline,
@@ -476,7 +519,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 		})
 	}
 
-	g.Wait()
+	eg.Wait()
 	close(submittedRegistrationsChan)
 
 	for registration := range submittedRegistrationsChan {
@@ -485,8 +528,6 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 
 	if len(existingRegistrations) == 0 {
 		if curPoetRoundStartDeadline.Before(time.Now()) {
-			nb.logger.Warn("failed to register in poets on time. ATX challenge expires",
-				log.ZShortStringer("smesherID", nodeID))
 			return nil, ErrATXChallengeExpired
 		}
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}

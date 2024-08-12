@@ -117,7 +117,15 @@ func (c *Certifier) Certificate(
 		case !errors.Is(err, sql.ErrNotFound):
 			return nil, fmt.Errorf("getting certificate from DB for: %w", err)
 		}
-		return c.Recertify(ctx, id, certifier, pubkey)
+		cert, err = c.client.Certify(ctx, id, certifier, pubkey)
+		if err != nil {
+			return nil, fmt.Errorf("certifying POST at %v: %w", certifier, err)
+		}
+
+		if err := certifierdb.AddCertificate(c.db, id, *cert, pubkey); err != nil {
+			c.logger.Warn("failed to persist poet cert", zap.Error(err))
+		}
+		return cert, nil
 	})
 
 	if err != nil {
@@ -126,21 +134,11 @@ func (c *Certifier) Certificate(
 	return cert.(*certifierdb.PoetCert), nil
 }
 
-func (c *Certifier) Recertify(
-	ctx context.Context,
-	id types.NodeID,
-	certifier *url.URL,
-	pubkey []byte,
-) (*certifierdb.PoetCert, error) {
-	cert, err := c.client.Certify(ctx, id, certifier, pubkey)
-	if err != nil {
-		return nil, fmt.Errorf("certifying POST at %v: %w", certifier, err)
+func (c *Certifier) DeleteCertificate(id types.NodeID, pubkey []byte) error {
+	if err := certifierdb.DeleteCertificate(c.db, id, pubkey); err != nil {
+		return err
 	}
-
-	if err := certifierdb.AddCertificate(c.db, id, *cert, pubkey); err != nil {
-		c.logger.Warn("failed to persist poet cert", zap.Error(err))
-	}
-	return cert, nil
+	return nil
 }
 
 type CertifierClient struct {
@@ -209,7 +207,7 @@ func (c *CertifierClient) obtainPostFromLastAtx(ctx context.Context, nodeId type
 		}
 	}
 
-	c.logger.Info("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
+	c.logger.Debug("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
 	return &nipost.Post{
 		Nonce:         post.Nonce,
 		Indices:       post.Indices,
@@ -222,11 +220,11 @@ func (c *CertifierClient) obtainPostFromLastAtx(ctx context.Context, nodeId type
 }
 
 func (c *CertifierClient) obtainPost(ctx context.Context, id types.NodeID) (*nipost.Post, error) {
-	c.logger.Info("looking for POST for poet certification")
+	c.logger.Debug("looking for POST for poet certification")
 	post, err := nipost.GetPost(c.localDb, id)
 	switch {
 	case err == nil:
-		c.logger.Info("found POST in local DB")
+		c.logger.Debug("found POST in local DB")
 		return post, nil
 	case errors.Is(err, sql.ErrNotFound):
 		// no post found
@@ -234,9 +232,9 @@ func (c *CertifierClient) obtainPost(ctx context.Context, id types.NodeID) (*nip
 		return nil, fmt.Errorf("loading initial post from db: %w", err)
 	}
 
-	c.logger.Info("POST not found in local DB. Trying to obtain POST from an existing ATX")
+	c.logger.Debug("POST not found in local DB. Trying to obtain POST from an existing ATX")
 	if post, err := c.obtainPostFromLastAtx(ctx, id); err == nil {
-		c.logger.Info("found POST in an existing ATX")
+		c.logger.Debug("found POST in an existing ATX")
 		if err := nipost.AddPost(c.localDb, id, *post); err != nil {
 			c.logger.Error("failed to save post", zap.Error(err))
 		}

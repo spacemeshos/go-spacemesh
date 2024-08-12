@@ -75,6 +75,9 @@ func PoetRegistrations(db sql.Executor, nodeIDs ...types.NodeID) ([]PoETRegistra
 		return true
 	}
 
+	query := `SELECT hash, address, round_id, round_end FROM poet_registration WHERE id = ?1;`
+
+
 	placeholders := make([]string, len(nodeIDs))
 	for i := range placeholders {
 		placeholders[i] = fmt.Sprintf("?%d", i+1)

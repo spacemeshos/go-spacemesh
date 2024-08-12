@@ -97,7 +97,7 @@ func (ac *accountCache) availBalance() uint64 {
 func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element, *candidate, error) {
 	if ac.txsByNonce.Len() >= maxTXsPerAcct {
 		ac.moreInDB = true
-		return nil, nil, errTooManyNonce
+		return nil, nil, fmt.Errorf("%w: len %d", errTooManyNonce, ac.txsByNonce.Len())
 	}
 	balance := ac.startBalance
 	var prev *list.Element
@@ -115,7 +115,6 @@ func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element
 		break
 	}
 	if balance < ntx.MaxSpending() {
-		ac.moreInDB = true
 		return nil, nil, errInsufficientBalance
 	}
 	return prev, &candidate{best: ntx, postBalance: balance - ntx.MaxSpending()}, nil
@@ -553,15 +552,10 @@ func (c *Cache) cleanupAccounts(accounts ...types.Address) {
 	}
 }
 
-//   - errInsufficientBalance:
-//     conservative cache is conservative in that it only counts principal's spending for pending transactions.
-//     a tx rejected due to insufficient balance MAY become feasible after a layer is applied (principal
-//     received incoming funds). when we receive a errInsufficientBalance tx, we should store it in db and
-//     re-evaluate it after each layer is applied.
 //   - errTooManyNonce: when a principal has way too many nonces, we don't want to blow up the memory. they should
 //     be stored in db and retrieved after each earlier nonce is applied.
 func acceptable(err error) bool {
-	return err == nil || errors.Is(err, errInsufficientBalance) || errors.Is(err, errTooManyNonce)
+	return err == nil || errors.Is(err, errTooManyNonce)
 }
 
 func (c *Cache) Add(
@@ -622,9 +616,10 @@ func (c *Cache) LinkTXsWithProposal(
 		return nil
 	}
 	if err := addToProposal(db, lid, pid, tids); err != nil {
-		return fmt.Errorf("add tx to proposal: %w", err)
+		return fmt.Errorf("linking txs to proposal: %w", err)
 	}
-	return c.updateLayer(lid, types.EmptyBlockID, tids)
+	c.updateLayer(lid, types.EmptyBlockID, tids)
+	return nil
 }
 
 // LinkTXsWithBlock associates the transactions to a block.
@@ -638,27 +633,27 @@ func (c *Cache) LinkTXsWithBlock(
 		return nil
 	}
 	if err := addToBlock(db, lid, bid, tids); err != nil {
-		return err
+		return fmt.Errorf("add to block: %w", err)
 	}
-	return c.updateLayer(lid, bid, tids)
+	c.updateLayer(lid, bid, tids)
+	return nil
 }
 
 // updateLayer associates the transactions to a layer and optionally a block.
 // A transaction is tagged with a layer when it's included in a proposal/block.
 // If a transaction is included in multiple proposals/blocks in different layers,
 // the lowest layer is retained.
-func (c *Cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+func (c *Cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	for _, ID := range tids {
 		if _, ok := c.cachedTXs[ID]; !ok {
 			// transaction is not considered best in its nonce group
-			return nil
+			return
 		}
 		c.cachedTXs[ID].UpdateLayerMaybe(lid, bid)
 	}
-	return nil
 }
 
 func (c *Cache) applyEmptyLayer(db *sql.Database, lid types.LayerID) error {
@@ -803,8 +798,7 @@ func (c *Cache) RevertToLayer(db *sql.Database, revertTo types.LayerID) error {
 	}
 
 	if err := c.buildFromScratch(db); err != nil {
-		c.logger.Error("failed to build from scratch after revert", zap.Error(err))
-		return err
+		return fmt.Errorf("building from scratch after revert: %w", err)
 	}
 	return nil
 }
@@ -841,7 +835,6 @@ func (c *Cache) GetMempool() map[types.Address][]*NanoTX {
 func checkApplyOrder(logger *zap.Logger, db *sql.Database, toApply types.LayerID) error {
 	lastApplied, err := layers.GetLastApplied(db)
 	if err != nil {
-		logger.Error("failed to get last applied layer", zap.Error(err))
 		return fmt.Errorf("cache get last applied %w", err)
 	}
 	if toApply != lastApplied.Add(1) {

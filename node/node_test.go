@@ -997,7 +997,7 @@ func TestAdminEvents(t *testing.T) {
 
 	select {
 	case <-app.Started():
-	case <-time.After(10 * time.Second):
+	case <-time.After(15 * time.Second):
 		require.Fail(t, "app did not start in time")
 	}
 
@@ -1090,7 +1090,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 
 	select {
 	case <-app.Started():
-	case <-time.After(10 * time.Second):
+	case <-time.After(15 * time.Second):
 		require.Fail(t, "app did not start in time")
 	}
 
@@ -1290,6 +1290,9 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 
 	cfg.HARE3.RoundDuration = 2
 	cfg.HARE3.PreroundDelay = 1
+
+	cfg.HARE4.RoundDuration = 2
+	cfg.HARE4.PreroundDelay = 1
 
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3

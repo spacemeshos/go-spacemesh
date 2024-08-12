@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -48,7 +48,7 @@ func TestPrune(t *testing.T) {
 	}
 	confidenceDist := uint32(3)
 
-	pruner := New(db, confidenceDist, current.GetEpoch()-1, WithLogger(logtest.New(t).Zap()))
+	pruner := New(db, confidenceDist, current.GetEpoch()-1, WithLogger(zaptest.NewLogger(t)))
 	// Act
 	require.NoError(t, pruner.Prune(current))
 

@@ -1,11 +1,14 @@
-name: Build and Push Swagger-UI to R2 testnet-api-docs.spacemesh.network
+name: Build and Push Swagger-UI
 
 env:
   go-version: "1.22"
 
 on:
-  release:
-    types: [published]
+  # Allow manually triggering this workflow
+  workflow_dispatch:
+  push:
+    tags:
+      - '*'
     
 jobs:
   check-version:
@@ -42,31 +45,32 @@ jobs:
     - name: upload to testnet
       uses: jakejarvis/s3-sync-action@master
       with:
-        args: --acl public-read --follow-symlinks --delete
+        args: --acl public-read --follow-symlinks
       env:
           AWS_S3_BUCKET: ${{ secrets.CLOUDFLARE_TESTNET_API_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
           SOURCE_DIR: api/release/openapi/swagger/src
-          DEST_DIR: '/${{ github.event.release.tag_name }}'
+          DEST_DIR: '${{ github.ref_name }}'
           AWS_S3_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
 
     - name: update url json file for testnet
       working-directory: api/release/openapi/swagger/src
       run: |
+        mkdir spec && cd spec
         curl -o spec_urls.json https://testnet-api-docs.spacemesh.network/spec_urls.json
-        new_url="{\"url\":\"https://testnet-api-docs.spacemesh.network/${{ github.event.release.tag_name }}/api.swagger.json\",\"name\":\"${{ github.event.release.tag_name }}\"}"
+        new_url="{\"url\":\"https://testnet-api-docs.spacemesh.network/${{ github.ref_name }}/api.swagger.json\",\"name\":\"${{ github.ref_name }}\"}"
         jq ". += [$new_url]" spec_urls.json > tmp.json && mv tmp.json spec_urls.json
    
     - name: upload new testnet json file
       uses: jakejarvis/s3-sync-action@master
       with:
-        args: --acl public-read --follow-symlinks --delete
+        args: --acl public-read --follow-symlinks
       env:
           AWS_S3_BUCKET: ${{ secrets.CLOUDFLARE_TESTNET_API_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
-          SOURCE_DIR: api/release/openapi/swagger/src/spec_urls.json
+          SOURCE_DIR: api/release/openapi/swagger/src/spec
           DEST_DIR: ''
           AWS_S3_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
    

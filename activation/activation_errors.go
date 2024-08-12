@@ -3,13 +3,12 @@ package activation
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
 	// ErrATXChallengeExpired is returned when atx missed its publication window and needs to be regenerated.
 	ErrATXChallengeExpired = errors.New("builder: atx expired")
-	// ErrPoetServiceUnstable is returned when poet quality of service is low.
-	ErrPoetServiceUnstable = &PoetSvcUnstableError{}
 	// ErrPoetProofNotReceived is returned when no poet proof was received.
 	ErrPoetProofNotReceived = errors.New("builder: didn't receive any poet proof")
 	// ErrNoRegistrationForGivenPoetFound is returned when there are existing registrations for given node id
@@ -27,13 +26,31 @@ type PoetSvcUnstableError struct {
 	source error
 }
 
-func (e *PoetSvcUnstableError) Error() string {
+func (e PoetSvcUnstableError) Error() string {
 	return fmt.Sprintf("poet service is unstable: %s (%v)", e.msg, e.source)
 }
 
 func (e *PoetSvcUnstableError) Unwrap() error { return e.source }
 
-func (e *PoetSvcUnstableError) Is(target error) bool {
-	_, ok := target.(*PoetSvcUnstableError)
-	return ok
+type PoetRegistrationMismatchError struct {
+	registrations   []string
+	configuredPoets []string
+}
+
+func (e PoetRegistrationMismatchError) Error() string {
+	var sb strings.Builder
+	sb.WriteString("builder: none of configured poets matches the existing registrations.\n")
+	sb.WriteString("registrations:\n")
+	for _, r := range e.registrations {
+		sb.WriteString("\t")
+		sb.WriteString(r)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\nconfigured poets:\n")
+	for _, p := range e.configuredPoets {
+		sb.WriteString("\t")
+		sb.WriteString(p)
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }

@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestCanBeAggregated(t *testing.T) {
@@ -28,7 +28,7 @@ func TestCanBeAggregated(t *testing.T) {
 		eg.Wait()
 	})
 	eg.Go(func() error {
-		return Sync(ctx, logtest.New(t).Zap(), req, fetch)
+		return Sync(ctx, zaptest.NewLogger(t), req, fetch)
 	})
 	fetch.EXPECT().
 		GetBlocks(gomock.Any(), gomock.Any()).
@@ -62,7 +62,7 @@ func TestErrorDoesntExit(t *testing.T) {
 		eg.Wait()
 	})
 	eg.Go(func() error {
-		return Sync(ctx, logtest.New(t).Zap(), req, fetch)
+		return Sync(ctx, zaptest.NewLogger(t), req, fetch)
 	})
 	fetch.EXPECT().
 		GetBlocks(gomock.Any(), gomock.Any()).

@@ -11,7 +11,6 @@ package activation
 
 import (
 	context "context"
-	url "net/url"
 	reflect "reflect"
 	time "time"
 
@@ -81,13 +80,12 @@ func (c *MockPoetClientAddressCall) DoAndReturn(f func() string) *MockPoetClient
 }
 
 // CertifierInfo mocks base method.
-func (m *MockPoetClient) CertifierInfo(ctx context.Context) (*url.URL, []byte, error) {
+func (m *MockPoetClient) CertifierInfo(ctx context.Context) (*types.CertifierInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CertifierInfo", ctx)
-	ret0, _ := ret[0].(*url.URL)
-	ret1, _ := ret[1].([]byte)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret0, _ := ret[0].(*types.CertifierInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // CertifierInfo indicates an expected call of CertifierInfo.
@@ -103,19 +101,19 @@ type MockPoetClientCertifierInfoCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockPoetClientCertifierInfoCall) Return(arg0 *url.URL, arg1 []byte, arg2 error) *MockPoetClientCertifierInfoCall {
-	c.Call = c.Call.Return(arg0, arg1, arg2)
+func (c *MockPoetClientCertifierInfoCall) Return(arg0 *types.CertifierInfo, arg1 error) *MockPoetClientCertifierInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockPoetClientCertifierInfoCall) Do(f func(context.Context) (*url.URL, []byte, error)) *MockPoetClientCertifierInfoCall {
+func (c *MockPoetClientCertifierInfoCall) Do(f func(context.Context) (*types.CertifierInfo, error)) *MockPoetClientCertifierInfoCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPoetClientCertifierInfoCall) DoAndReturn(f func(context.Context) (*url.URL, []byte, error)) *MockPoetClientCertifierInfoCall {
+func (c *MockPoetClientCertifierInfoCall) DoAndReturn(f func(context.Context) (*types.CertifierInfo, error)) *MockPoetClientCertifierInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -154,6 +152,45 @@ func (c *MockPoetClientIdCall) Do(f func() []byte) *MockPoetClientIdCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockPoetClientIdCall) DoAndReturn(f func() []byte) *MockPoetClientIdCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Info mocks base method.
+func (m *MockPoetClient) Info(ctx context.Context) (*types.PoetInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Info", ctx)
+	ret0, _ := ret[0].(*types.PoetInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Info indicates an expected call of Info.
+func (mr *MockPoetClientMockRecorder) Info(ctx any) *MockPoetClientInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockPoetClient)(nil).Info), ctx)
+	return &MockPoetClientInfoCall{Call: call}
+}
+
+// MockPoetClientInfoCall wrap *gomock.Call
+type MockPoetClientInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockPoetClientInfoCall) Return(arg0 *types.PoetInfo, arg1 error) *MockPoetClientInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockPoetClientInfoCall) Do(f func(context.Context) (*types.PoetInfo, error)) *MockPoetClientInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockPoetClientInfoCall) DoAndReturn(f func(context.Context) (*types.PoetInfo, error)) *MockPoetClientInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
