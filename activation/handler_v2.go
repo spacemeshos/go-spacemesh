@@ -630,7 +630,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			)
 			invalidIdx := &verifying.ErrInvalidIndex{}
 			if errors.As(err, invalidIdx) {
-				h.logger.Info(
+				h.logger.Debug(
 					"ATX with invalid post index",
 					zap.Stringer("id", atx.ID()),
 					zap.Int("index", invalidIdx.Index),
