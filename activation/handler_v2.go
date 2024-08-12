@@ -520,9 +520,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				post.NumUnits,
 				PostSubset([]byte(h.local)),
 			)
-			var invalidIdx *verifying.ErrInvalidIndex
-			if errors.As(err, &invalidIdx) {
-				h.logger.Info(
+			invalidIdx := &verifying.ErrInvalidIndex{}
+			if errors.As(err, invalidIdx) {
+				h.logger.Debug(
 					"ATX with invalid post index",
 					zap.Stringer("id", atx.ID()),
 					zap.Int("index", invalidIdx.Index),
