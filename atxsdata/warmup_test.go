@@ -54,21 +54,21 @@ func TestWarmup(t *testing.T) {
 		}
 		require.NoError(t, layers.SetApplied(db, applied, types.BlockID{1}))
 
-		c, err := Warm(db, 1)
+		c, err := Warm(db, 1, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		for _, atx := range data[2:] {
 			require.NotNil(t, c.Get(atx.TargetEpoch(), atx.ID()))
 		}
 	})
 	t.Run("no data", func(t *testing.T) {
-		c, err := Warm(sql.InMemory(), 1)
+		c, err := Warm(sql.InMemory(), 1, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		require.NotNil(t, c)
 	})
 	t.Run("closed db", func(t *testing.T) {
 		db := sql.InMemory()
 		require.NoError(t, db.Close())
-		c, err := Warm(db, 1)
+		c, err := Warm(db, 1, zaptest.NewLogger(t))
 		require.Error(t, err)
 		require.Nil(t, c)
 	})
