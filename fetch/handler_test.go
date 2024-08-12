@@ -9,9 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -263,22 +261,15 @@ func TestHandleMeshHashReq(t *testing.T) {
 }
 
 func newAtx(t *testing.T, published types.EpochID) (*types.ActivationTx, types.AtxBlob) {
-	t.Helper()
-	nonce := uint64(123)
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	atx := &wire.ActivationTxV1{
-		InnerActivationTxV1: wire.InnerActivationTxV1{
-			NIPostChallengeV1: wire.NIPostChallengeV1{
-				PublishEpoch: published,
-				PrevATXID:    types.RandomATXID(),
-			},
-			NumUnits: 2,
-			VRFNonce: &nonce,
-		},
+	atx := &types.ActivationTx{
+		PublishEpoch: published,
+		NumUnits:     2,
+		VRFNonce:     types.VRFPostIndex(123),
+		SmesherID:    types.RandomNodeID(),
 	}
-	atx.Sign(signer)
-	return fixture.ToAtx(t, atx), atx.Blob()
+	atx.SetID(types.RandomATXID())
+	atx.SetReceived(time.Now().Local())
+	return atx, types.AtxBlob{Blob: types.RandomBytes(100)}
 }
 
 func TestHandleEpochInfoReq(t *testing.T) {

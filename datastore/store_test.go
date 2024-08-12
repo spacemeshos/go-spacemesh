@@ -12,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
@@ -85,19 +84,14 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
-	atx := &wire.ActivationTxV1{
-		InnerActivationTxV1: wire.InnerActivationTxV1{
-			NIPostChallengeV1: wire.NIPostChallengeV1{
-				PublishEpoch: types.EpochID(22),
-				Sequence:     11,
-			},
-			NumUnits: 11,
-		},
+	atx := &types.ActivationTx{
+		PublishEpoch: types.EpochID(22),
+		Sequence:     11,
+		NumUnits:     11,
+		SmesherID:    types.RandomNodeID(),
 	}
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	atx.Sign(signer)
-	vAtx := fixture.ToAtx(t, atx)
+	atx.SetID(types.RandomATXID())
+	atx.SetReceived(time.Now().Local())
 
 	has, err := bs.Has(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
@@ -106,7 +100,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	_, err = getBytes(ctx, bs, datastore.ATXDB, atx.ID())
 	require.ErrorIs(t, err, datastore.ErrNotFound)
 
-	require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{Blob: types.RandomBytes(100)}))
 
 	has, err = bs.Has(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
