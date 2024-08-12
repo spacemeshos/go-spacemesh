@@ -665,20 +665,15 @@ func IterateAtxsData(
                    a.id, a.pubkey, a.epoch, a.coinbase, a.effective_num_units,
                    a.base_tick_height, a.tick_count, a.nonce,
                    iif(idn.proof is null, 0, 1) as is_malicious
-		from atxs a left join identities idn on a.pubkey = idn.pubkey`,
-		// SQLite happens to process the query much faster if we don't
-		// filter it by epoch
-		// where a.epoch between ? and ?`,
-		// func(stmt *sql.Statement) {
-		// 	stmt.BindInt64(1, int64(from.Uint32()))
-		// 	stmt.BindInt64(2, int64(to.Uint32()))
-		// },
-		nil,
+		from atxs a left join identities idn on a.pubkey = idn.pubkey
+		where a.epoch between ? and ?`,
+		// filtering in CODE is no longer effective on some machines in epoch 29
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(from.Uint32()))
+			stmt.BindInt64(2, int64(to.Uint32()))
+		},
 		func(stmt *sql.Statement) bool {
 			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
-			if epoch < from || epoch > to {
-				return true
-			}
 			var id types.ATXID
 			stmt.ColumnBytes(0, id[:])
 			var node types.NodeID
