@@ -730,20 +730,15 @@ func IterateAtxsData(
 	) bool,
 ) error {
 	_, err := db.Exec(
-		`SELECT id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count, nonce FROM atxs`,
-		// SQLite happens to process the query much faster if we don't
-		// filter it by epoch
-		// where a.epoch between ? and ?`,
-		// func(stmt *sql.Statement) {
-		// 	stmt.BindInt64(1, int64(from.Uint32()))
-		// 	stmt.BindInt64(2, int64(to.Uint32()))
-		// },
-		nil,
+		`SELECT id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count, nonce FROM atxs
+		WHERE epoch between ?1 and ?2`,
+		// filtering in CODE is no longer effective on some machines in epoch 29
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(from.Uint32()))
+			stmt.BindInt64(2, int64(to.Uint32()))
+		},
 		func(stmt *sql.Statement) bool {
 			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
-			if epoch < from || epoch > to {
-				return true
-			}
 			var id types.ATXID
 			stmt.ColumnBytes(0, id[:])
 			var node types.NodeID
