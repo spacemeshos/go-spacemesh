@@ -34,12 +34,12 @@ require (
 	github.com/prometheus/client_golang v1.19.1
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.55.0
-	github.com/quic-go/quic-go v0.45.2
+	github.com/quic-go/quic-go v0.46.0
 	github.com/rs/cors v1.11.0
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.12.0
-	github.com/spacemeshos/api/release/go v1.51.0
+	github.com/spacemeshos/api/release/go v1.52.0
 	github.com/spacemeshos/economics v0.1.3
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.2.0

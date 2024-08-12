@@ -6,6 +6,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+The command line flag `--scan-malfeasant-atxs` has been removed. All malfeasant ATXs before 1.6.0 have been marked as
+such and the node will continue to scan new ATXs for their validity.
+
 ### Highlights
 
 ### Features
@@ -699,6 +702,7 @@ and permanent ineligibility for rewards.
 
 * [#5494](https://github.com/spacemeshos/go-spacemesh/pull/5494)
   Make routing discovery more configurable and less spammy by default.
+
 * [#5511](https://github.com/spacemeshos/go-spacemesh/pull/5511)
   Fix dialing peers on their private IPs, which was causing "portscan" complaints.
 
@@ -708,7 +712,7 @@ and permanent ineligibility for rewards.
 
 * [#5470](https://github.com/spacemeshos/go-spacemesh/pull/5470)
   Fixed a bug in event reporting where the node reports a disconnection from the PoST service as a "PoST failed" event.
-  Disconnections cannot be avoided completely and do not interrupt the PoST proofing process. As long as the PoST
+  Disconnections cannot be avoided completely and do not interrupt the PoST proving process. As long as the PoST
   service reconnects within a reasonable time, the node will continue to operate normally without reporting any errors
   via the event API.
 

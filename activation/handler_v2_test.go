@@ -17,6 +17,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -1434,7 +1435,7 @@ func Test_ValidatePreviousATX(t *testing.T) {
 		t.Parallel()
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), types.RandomNodeID(), 13))
+		require.NoError(t, atxs.SetPost(atxHandler.cdb, prev.ID(), types.EmptyATXID, 0, types.RandomNodeID(), 13))
 
 		_, err := atxHandler.validatePreviousAtx(types.RandomNodeID(), &wire.SubPostV2{}, []*types.ActivationTx{prev})
 		require.Error(t, err)
@@ -1445,8 +1446,8 @@ func Test_ValidatePreviousATX(t *testing.T) {
 		other := types.RandomNodeID()
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), id, 7))
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), other, 13))
+		require.NoError(t, atxs.SetPost(atxHandler.cdb, prev.ID(), types.EmptyATXID, 0, id, 7))
+		require.NoError(t, atxs.SetPost(atxHandler.cdb, prev.ID(), types.EmptyATXID, 0, other, 13))
 
 		units, err := atxHandler.validatePreviousAtx(id, &wire.SubPostV2{NumUnits: 100}, []*types.ActivationTx{prev})
 		require.NoError(t, err)
@@ -1466,7 +1467,7 @@ func Test_ValidatePreviousATX(t *testing.T) {
 		other := types.RandomNodeID()
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), other, 13))
+		require.NoError(t, atxs.SetPost(atxHandler.cdb, prev.ID(), types.EmptyATXID, 0, other, 13))
 
 		_, err := atxHandler.validatePreviousAtx(id, &wire.SubPostV2{NumUnits: 100}, []*types.ActivationTx{prev})
 		require.Error(t, err)
@@ -1561,17 +1562,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 				gomock.Any(),
 			).
 			Return(verifying.ErrInvalidIndex{Index: 7})
-		atxHandler.mMalPublish.EXPECT().Publish(
-			gomock.Any(),
-			sig.NodeID(),
-			gomock.Cond(func(data any) bool {
-				proof, ok := data.(*wire.ATXProof)
-				if !ok {
-					return false
-				}
-				return proof.ProofType == wire.InvalidPost
-			}),
-		)
+		atxHandler.mMalPublish.EXPECT().Publish(gomock.Any(), sig.NodeID(), gomock.Any())
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		vErr := &verifying.ErrInvalidIndex{}
 		require.ErrorAs(t, err, vErr)
@@ -1719,13 +1710,18 @@ func Test_Marriages(t *testing.T) {
 			gomock.Any(),
 			sig.NodeID(),
 			gomock.Cond(func(data any) bool {
-				proof, ok := data.(*wire.ATXProof)
-				if !ok {
-					return false
-				}
-				return proof.ProofType == wire.DoubleMarry
+				_, ok := data.(*wire.ProofDoubleMarry)
+				return ok
 			}),
-		)
+		).DoAndReturn(func(ctx context.Context, id types.NodeID, proof wire.Proof) error {
+			malProof := proof.(*wire.ProofDoubleMarry)
+			nId, err := malProof.Valid(atxHandler.edVerifier)
+			require.NoError(t, err)
+			require.Equal(t, sig.NodeID(), nId)
+			b := codec.MustEncode(malProof)
+			_ = b
+			return nil
+		})
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
 
@@ -1937,9 +1933,7 @@ func TestContextual_PreviousATX(t *testing.T) {
 	merged.Sign(signers[0])
 
 	atxHndlr.expectMergedAtxV2(merged, eqSet, []uint64{100})
-	atxHndlr.mMalPublish.EXPECT().Publish(gomock.Any(), signers[1].NodeID(), gomock.Cond(func(data any) bool {
-		return data.(*wire.ATXProof).ProofType == wire.InvalidPrevious
-	}))
+	atxHndlr.mMalPublish.EXPECT().Publish(gomock.Any(), signers[1].NodeID(), gomock.Any())
 	err = atxHndlr.processATX(context.Background(), "", merged, time.Now())
 	require.NoError(t, err)
 }

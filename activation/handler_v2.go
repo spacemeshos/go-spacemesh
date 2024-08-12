@@ -18,6 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -128,10 +129,7 @@ func (h *HandlerV2) processATX(
 		SmesherID:      watx.SmesherID,
 	}
 
-	if watx.Initial == nil {
-		// FIXME: update to keep many previous ATXs to support merged ATXs
-		atx.PrevATXID = watx.PreviousATXs[0]
-	} else {
+	if watx.Initial != nil {
 		atx.CommitmentATX = &watx.Initial.CommitmentATX
 	}
 
@@ -146,7 +144,7 @@ func (h *HandlerV2) processATX(
 	}
 
 	events.ReportNewActivation(atx)
-	h.logger.Info("new atx", log.ZContext(ctx), zap.Inline(atx))
+	h.logger.Debug("new atx", log.ZContext(ctx), zap.Inline(atx))
 	return err
 }
 
@@ -435,8 +433,9 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 }
 
 type idData struct {
-	previous types.ATXID
-	units    uint32
+	previous      types.ATXID
+	previousIndex int
+	units         uint32
 }
 
 type activationTx struct {
@@ -602,8 +601,8 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	// validate all niposts
 	var smesherCommitment *types.ATXID
 	for _, niposts := range atx.NiPosts {
-		for _, p := range niposts.Posts {
-			id := equivocationSet[p.MarriageIndex]
+		for _, post := range niposts.Posts {
+			id := equivocationSet[post.MarriageIndex]
 			var commitment types.ATXID
 			var previous types.ATXID
 			if atx.Initial != nil {
@@ -617,16 +616,16 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				if id == atx.SmesherID {
 					smesherCommitment = &commitment
 				}
-				previous = previousAtxs[p.PrevATXIndex].ID()
+				previous = previousAtxs[post.PrevATXIndex].ID()
 			}
 
 			err := h.nipostValidator.PostV2(
 				ctx,
 				id,
 				commitment,
-				wire.PostFromWireV1(&p.Post),
+				wire.PostFromWireV1(&post.Post),
 				niposts.Challenge[:],
-				p.NumUnits,
+				post.NumUnits,
 				PostSubset([]byte(h.local)),
 			)
 			invalidIdx := &verifying.ErrInvalidIndex{}
@@ -637,9 +636,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 					zap.Int("index", invalidIdx.Index),
 				)
 				// TODO(mafa): finish proof
-				proof := &wire.ATXProof{
-					ProofType: wire.InvalidPost,
-				}
+				var proof wire.Proof
 				if err := h.malPublisher.Publish(ctx, id, proof); err != nil {
 					return nil, fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
 				}
@@ -648,8 +645,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				return nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
 			}
 			result.ids[id] = idData{
-				previous: previous,
-				units:    p.NumUnits,
+				previous:      previous,
+				previousIndex: int(post.PrevATXIndex),
+				units:         post.NumUnits,
 			}
 		}
 	}
@@ -677,7 +675,7 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx *sql.Tx, atx *activat
 		return nil
 	}
 
-	malicious, err = h.checkDoubleMarry(ctx, tx, atx.ID(), atx.marriages)
+	malicious, err = h.checkDoubleMarry(ctx, tx, atx)
 	if err != nil {
 		return fmt.Errorf("checking double marry: %w", err)
 	}
@@ -717,21 +715,29 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx *sql.Tx, atx *activat
 	return nil
 }
 
-func (h *HandlerV2) checkDoubleMarry(
-	ctx context.Context,
-	tx *sql.Tx,
-	atxID types.ATXID,
-	marrying []marriage,
-) (bool, error) {
-	for _, m := range marrying {
+func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+	for _, m := range atx.marriages {
 		mATX, err := identities.MarriageATX(tx, m.id)
 		if err != nil {
 			return false, fmt.Errorf("checking if ID is married: %w", err)
 		}
-		if mATX != atxID {
-			// TODO(mafa): finish proof
-			proof := &wire.ATXProof{
-				ProofType: wire.DoubleMarry,
+		if mATX != atx.ID() {
+			var blob sql.Blob
+			v, err := atxs.LoadBlob(ctx, tx, mATX.Bytes(), &blob)
+			if err != nil {
+				return true, fmt.Errorf("creating double marry proof: %w", err)
+			}
+			if v != types.AtxV2 {
+				h.logger.Fatal("Failed to create double marry malfeasance proof: ATX is not v2",
+					zap.Stringer("atx_id", mATX),
+				)
+			}
+			var otherAtx wire.ActivationTxV2
+			codec.MustDecode(blob.Bytes, &otherAtx)
+
+			proof, err := wire.NewDoubleMarryProof(tx, atx.ActivationTxV2, &otherAtx, m.id)
+			if err != nil {
+				return true, fmt.Errorf("creating double marry proof: %w", err)
 			}
 			return true, h.malPublisher.Publish(ctx, m.id, proof)
 		}
@@ -739,11 +745,7 @@ func (h *HandlerV2) checkDoubleMarry(
 	return false, nil
 }
 
-func (h *HandlerV2) checkDoublePost(
-	ctx context.Context,
-	tx *sql.Tx,
-	atx *activationTx,
-) (bool, error) {
+func (h *HandlerV2) checkDoublePost(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
 	for id := range atx.ids {
 		atxids, err := atxs.FindDoublePublish(tx, id, atx.PublishEpoch)
 		switch {
@@ -762,9 +764,7 @@ func (h *HandlerV2) checkDoublePost(
 			zap.Uint32("epoch", atx.PublishEpoch.Uint32()),
 		)
 		// TODO(mafa): finish proof
-		proof := &wire.ATXProof{
-			ProofType: wire.DoublePublish,
-		}
+		var proof wire.Proof
 		return true, h.malPublisher.Publish(ctx, id, proof)
 	}
 	return false, nil
@@ -791,10 +791,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, atx *activ
 		zap.Stringer("smesher_id", atx.SmesherID),
 	)
 
-	// TODO(mafa): finish proof
-	proof := &wire.ATXProof{
-		ProofType: wire.DoubleMerge,
-	}
+	var proof wire.Proof
 	return true, h.malPublisher.Publish(ctx, atx.SmesherID, proof)
 }
 
@@ -815,20 +812,14 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx *sql.Tx, atx *activatio
 		)
 
 		// TODO(mafa): finish proof
-		proof := &wire.ATXProof{
-			ProofType: wire.InvalidPrevious,
-		}
+		var proof wire.Proof
 		return true, h.malPublisher.Publish(ctx, id, proof)
 	}
 	return false, nil
 }
 
 // Store an ATX in the DB.
-func (h *HandlerV2) storeAtx(
-	ctx context.Context,
-	atx *types.ActivationTx,
-	watx *activationTx,
-) error {
+func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		if len(watx.marriages) != 0 {
 			marriageData := identities.MarriageData{
@@ -848,8 +839,8 @@ func (h *HandlerV2) storeAtx(
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
 		}
-		for id, p := range watx.ids {
-			err = atxs.SetUnits(tx, atx.ID(), id, p.units)
+		for id, post := range watx.ids {
+			err = atxs.SetPost(tx, atx.ID(), post.previous, post.previousIndex, id, post.units)
 			if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 				return fmt.Errorf("setting atx units for ID %s: %w", id, err)
 			}

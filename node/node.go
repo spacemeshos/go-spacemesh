@@ -621,7 +621,7 @@ func (app *App) initServices(ctx context.Context) error {
 	cfg.GenesisID = app.Config.Genesis.GenesisID()
 	state := vm.New(app.db,
 		vm.WithConfig(cfg),
-		vm.WithLogger(app.addLogger(VMLogger, lg)))
+		vm.WithLogger(app.addLogger(VMLogger, lg).Zap()))
 	app.conState = txs.NewConservativeState(state, app.db,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:     app.Config.BlockGasLimit,
@@ -1042,7 +1042,7 @@ func (app *App) initServices(ctx context.Context) error {
 			activation.WithCertifier(certifier),
 		)
 		if err != nil {
-			app.log.Panic("failed to create poet client: %v", err)
+			app.log.Panic("failed to create poet client with address %v: %v", server.Address, err)
 		}
 		poetClients = append(poetClients, client)
 	}
@@ -1949,14 +1949,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
-	dbLog := app.addLogger(StateDbLogger, lg)
-	m21 := migrations.New0021Migration(dbLog.Zap(), 1_000_000)
+	dbLog := app.addLogger(StateDbLogger, lg).Zap()
+	m21 := migrations.New0021Migration(dbLog, 1_000_000)
 	migrations, err := sql.StateMigrations()
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
 	dbopts := []sql.Opt{
-		sql.WithLogger(dbLog.Zap()),
+		sql.WithLogger(dbLog),
 		sql.WithMigrations(migrations),
 		sql.WithMigration(m21),
 		sql.WithConnections(app.Config.DatabaseConnections),
@@ -2005,21 +2005,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConsensusCache(data),
 	)
 
-	if app.Config.ScanMalfeasantATXs {
-		app.log.With().Info("checking DB for malicious ATXs")
-		start = time.Now()
-		if err := activation.CheckPrevATXs(ctx, app.log.Zap(), app.db); err != nil {
-			return fmt.Errorf("malicious ATX check: %w", err)
-		}
-		app.log.With().Info("malicious ATX check completed", log.Duration("duration", time.Since(start)))
-	}
-
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
 		return fmt.Errorf("load local migrations: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
-		sql.WithLogger(dbLog.Zap()),
+		sql.WithLogger(dbLog),
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)

@@ -5,12 +5,11 @@ package wire
 
 import (
 	"github.com/spacemeshos/go-scale"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func (t *ATXProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.Layer))
+		n, err := scale.EncodeCompact8(enc, uint8(t.Version))
 		if err != nil {
 			return total, err
 		}
@@ -35,12 +34,12 @@ func (t *ATXProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *ATXProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeCompact32(dec)
+		field, n, err := scale.DecodeCompact8(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Layer = types.LayerID(field)
+		t.Version = ProofVersion(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact8(dec)
