@@ -657,16 +657,11 @@ func IterateAtxsData(
 		base uint64,
 		height uint64,
 		nonce types.VRFPostIndex,
-		isMalicious bool,
 	) bool,
 ) error {
 	_, err := db.Exec(
-		`select
-                   a.id, a.pubkey, a.epoch, a.coinbase, a.effective_num_units,
-                   a.base_tick_height, a.tick_count, a.nonce,
-                   iif(idn.proof is null, 0, 1) as is_malicious
-		from atxs a left join identities idn on a.pubkey = idn.pubkey
-		where a.epoch between ? and ?`,
+		`SELECT id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count, nonce FROM atxs
+		WHERE epoch between ?1 and ?2`,
 		// filtering in CODE is no longer effective on some machines in epoch 29
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Uint32()))
@@ -684,9 +679,7 @@ func IterateAtxsData(
 			baseHeight := uint64(stmt.ColumnInt64(5))
 			ticks := uint64(stmt.ColumnInt64(6))
 			nonce := types.VRFPostIndex(stmt.ColumnInt64(7))
-			isMalicious := stmt.ColumnInt(8) != 0
-			return fn(id, node, epoch, coinbase, effectiveUnits*ticks,
-				baseHeight, baseHeight+ticks, nonce, isMalicious)
+			return fn(id, node, epoch, coinbase, effectiveUnits*ticks, baseHeight, baseHeight+ticks, nonce)
 		},
 	)
 	if err != nil {
