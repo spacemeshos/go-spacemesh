@@ -284,47 +284,6 @@ func (h *HandlerV1) validateNonInitialAtx(
 	return nil
 }
 
-// contextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
-// If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
-func (h *HandlerV1) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
-	lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.SmesherID)
-	if err == nil && atx.PrevATXID == lastAtx {
-		// last atx referenced equals last ATX seen from node
-		return nil
-	}
-
-	if err == nil && atx.PrevATXID == types.EmptyATXID {
-		// no previous atx declared, but already seen at least one atx from node
-		return fmt.Errorf(
-			"no prev atx reported, but other atx with same node id (%v) found: %v",
-			atx.SmesherID,
-			lastAtx.ShortString(),
-		)
-	}
-
-	if err == nil && atx.PrevATXID != lastAtx {
-		// last atx referenced does not equal last ATX seen from node
-		return errors.New("last atx is not the one referenced")
-	}
-
-	if errors.Is(err, sql.ErrNotFound) && atx.PrevATXID == types.EmptyATXID {
-		// no previous atx found and none referenced
-		return nil
-	}
-
-	if err != nil && atx.PrevATXID != types.EmptyATXID {
-		// no previous atx found but previous atx referenced
-		h.logger.Error("could not fetch node last atx",
-			zap.Stringer("atx_id", atx.ID()),
-			zap.Stringer("smesher", atx.SmesherID),
-			zap.Error(err),
-		)
-		return fmt.Errorf("could not fetch node last atx: %w", err)
-	}
-
-	return err
-}
-
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
 func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
@@ -591,17 +550,6 @@ func (h *HandlerV1) processATX(
 	}
 	if proof != nil {
 		return proof, nil
-	}
-
-	if err := h.contextuallyValidateAtx(watx); err != nil {
-		h.logger.Warn("atx is contextually invalid ",
-			log.ZContext(ctx),
-			zap.Stringer("atx_id", watx.ID()),
-			zap.Stringer("smesherID", watx.SmesherID),
-			zap.Error(err),
-		)
-	} else {
-		h.logger.Debug("atx is valid", zap.Stringer("atx_id", watx.ID()))
 	}
 
 	var baseTickHeight uint64
