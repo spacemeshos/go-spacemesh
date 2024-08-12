@@ -35,9 +35,7 @@ var (
 )
 
 const (
-	submitPath = "/v1/submit"
-	infoPath   = "/v1/info"
-	proofPath  = "/v1/proofs"
+	proofPath = "/v1/proofs"
 )
 
 type PoetPowParams struct {
@@ -248,7 +246,7 @@ func (c *HTTPPoetClient) Submit(
 	}
 
 	resBody := rpcapi.SubmitResponse{}
-	if err := c.req(ctx, http.MethodPost, submitPath, &request, &resBody, c.submitChallengeClient); err != nil {
+	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody, c.submitChallengeClient); err != nil {
 		return nil, fmt.Errorf("submitting challenge: %w", err)
 	}
 	roundEnd := time.Time{}
@@ -261,7 +259,7 @@ func (c *HTTPPoetClient) Submit(
 
 func (c *HTTPPoetClient) info(ctx context.Context) (*rpcapi.InfoResponse, error) {
 	resBody := rpcapi.InfoResponse{}
-	if err := c.req(ctx, http.MethodGet, infoPath, nil, &resBody, c.client); err != nil {
+	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody, c.client); err != nil {
 		return nil, fmt.Errorf("getting poet info: %w", err)
 	}
 	return &resBody, nil
@@ -270,7 +268,7 @@ func (c *HTTPPoetClient) info(ctx context.Context) (*rpcapi.InfoResponse, error)
 // Proof implements PoetProvingServiceClient.
 func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
 	resBody := rpcapi.ProofResponse{}
-	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("%s/%s", proofPath, roundID), nil, &resBody, c.client); err != nil {
+	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody, c.client); err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 

@@ -40,13 +40,15 @@ var (
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
 	// Start of new PoET round
-	PhaseShift                     time.Duration `mapstructure:"phase-shift"`
+	PhaseShift time.Duration `mapstructure:"phase-shift"`
 	// A gap between end of old PoET round and start of new one
-	CycleGap                       time.Duration `mapstructure:"cycle-gap"`
-	// Time in the end of cycle gap, when PoST challenge must be build and send to PoET server
-	GracePeriod                    time.Duration `mapstructure:"grace-period"`
-	RequestTimeout                 time.Duration `mapstructure:"poet-request-timeout"`
-	RequestRetryDelay              time.Duration `mapstructure:"retry-delay"`
+	CycleGap time.Duration `mapstructure:"cycle-gap"`
+	// Time duration measured from the end of cycle gap, when we start to build the NiPoST challenge.
+	// The later we start (the smaller this value is)
+	// the higher is the chance for getting a good positioning ATX.
+	GracePeriod       time.Duration `mapstructure:"grace-period"`
+	RequestTimeout    time.Duration `mapstructure:"poet-request-timeout"`
+	RequestRetryDelay time.Duration `mapstructure:"retry-delay"`
 	// Period to find positioning ATX. Must be less, than GracePeriod
 	PositioningATXSelectionTimeout time.Duration `mapstructure:"positioning-atx-selection-timeout"`
 	CertifierInfoCacheTTL          time.Duration `mapstructure:"certifier-info-cache-ttl"`

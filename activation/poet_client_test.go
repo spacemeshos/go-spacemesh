@@ -84,32 +84,30 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_HTTPPoetClient_SubmitTillCtxDeadlineReached(t *testing.T) {
+func Test_HTTPPoetClient_SubmitTillCtxCanceled(t *testing.T) {
 	t.Parallel()
-
-	const maxRequests = 1
-
-	ctxWithDeadline, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
+	tries := 0
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
+		tries += 1
+		if tries == 3 {
+			cancel()
+		}
 		http.Error(w, "some_error", http.StatusInternalServerError)
 	})
-
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
-
 	cfg := server.DefaultRoundConfig()
 	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
 		PhaseShift:        cfg.PhaseShift,
 		CycleGap:          cfg.CycleGap,
-		MaxRequestRetries: maxRequests,
+		MaxRequestRetries: 1,
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
-
 	_, err = client.Submit(
-		ctxWithDeadline,
+		ctx,
 		time.Time{},
 		nil,
 		nil,
@@ -117,8 +115,8 @@ func Test_HTTPPoetClient_SubmitTillCtxDeadlineReached(t *testing.T) {
 		types.NodeID{},
 		PoetAuth{},
 	)
-
-	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 3, tries)
 }
 
 func Test_HTTPPoetClient_Address(t *testing.T) {
