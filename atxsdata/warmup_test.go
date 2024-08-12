@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -94,7 +95,7 @@ func TestWarmup(t *testing.T) {
 			AnyTimes()
 		for range 3 {
 			c := New()
-			require.Error(t, Warmup(exec, c, 1))
+			require.Error(t, Warmup(exec, c, 1, zaptest.NewLogger(t)))
 			fail++
 			call = 0
 		}
