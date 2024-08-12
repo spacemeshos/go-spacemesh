@@ -35,10 +35,6 @@ var (
 	ErrIncompatiblePhaseShift   = errors.New("fetched poet phase_shift is incompatible with configured phase_shift")
 )
 
-const (
-	proofPath = "/v1/proofs"
-)
-
 type PoetPowParams struct {
 	Challenge  []byte
 	Difficulty uint
@@ -319,7 +315,8 @@ func (c *HTTPPoetClient) req(
 	ctx context.Context,
 	method, path string,
 	reqBody, resBody proto.Message,
-	client *retryablehttp.Client) error {
+	client *retryablehttp.Client,
+) error {
 	jsonReqBody, err := protojson.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("marshaling request body: %w", err)
