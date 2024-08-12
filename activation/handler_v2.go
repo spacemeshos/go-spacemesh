@@ -797,18 +797,32 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, atx *activ
 
 func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
 	for id, data := range atx.ids {
-		prevID, err := atxs.PrevIDByNodeID(tx, id, atx.PublishEpoch)
+		expectedPrevID, err := atxs.PrevIDByNodeID(tx, id, atx.PublishEpoch)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return false, fmt.Errorf("get last atx by node id: %w", err)
 		}
-		if prevID == data.previous {
+		if expectedPrevID == data.previous {
 			continue
 		}
 
 		h.logger.Debug("atx references a wrong previous ATX",
 			log.ZShortStringer("smesherID", id),
 			log.ZShortStringer("actual", data.previous),
-			log.ZShortStringer("expected", prevID),
+			log.ZShortStringer("expected", expectedPrevID),
+		)
+
+		atx1, atx2, err := atxs.PrevATXCollision(tx, data.previous, id)
+		switch {
+		case errors.Is(err, sql.ErrNotFound):
+			continue
+		case err != nil:
+			return false, fmt.Errorf("checking for previous ATX collision: %w", err)
+		}
+
+		h.logger.Debug("creating a malfeasance proof for invalid previous ATX",
+			log.ZShortStringer("smesherID", id),
+			log.ZShortStringer("atx1", atx1),
+			log.ZShortStringer("atx2", atx2),
 		)
 
 		// TODO(mafa): finish proof

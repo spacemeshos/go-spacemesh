@@ -1023,7 +1023,7 @@ func TestLatest(t *testing.T) {
 	}
 }
 
-func Test_PrevATXCollisions(t *testing.T) {
+func Test_PrevATXCollision(t *testing.T) {
 	db := sql.InMemory()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -1048,29 +1048,29 @@ func Test_PrevATXCollisions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, atx2, got2)
 
-	// add 10 valid ATXs by 10 other smeshers
+	// add 10 valid ATXs by 10 other smeshers, using the same previous but no collision
+	var otherIds []types.NodeID
 	for i := 2; i < 6; i++ {
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
+		otherIds = append(otherIds, otherSig.NodeID())
 
-		atx, blob := newAtx(t, otherSig, withPublishEpoch(types.EpochID(i)))
-		require.NoError(t, atxs.Add(db, atx, blob))
-
-		atx2, blob2 := newAtx(t, otherSig,
-			withPublishEpoch(types.EpochID(i+1)),
-		)
+		atx2, blob2 := newAtx(t, otherSig, withPublishEpoch(types.EpochID(i+1)))
 		require.NoError(t, atxs.Add(db, atx2, blob2))
-		require.NoError(t, atxs.SetPost(db, atx2.ID(), atx.ID(), 0, sig.NodeID(), 10))
+		require.NoError(t, atxs.SetPost(db, atx2.ID(), prevATXID, 0, atx2.SmesherID, 10))
 	}
 
-	// get the collisions
-	got, err := atxs.PrevATXCollisions(db)
+	collision1, collision2, err := atxs.PrevATXCollision(db, prevATXID, sig.NodeID())
 	require.NoError(t, err)
-	require.Len(t, got, 1)
+	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, []types.ATXID{collision1, collision2})
 
-	require.Equal(t, sig.NodeID(), got[0].NodeID1)
-	require.Equal(t, sig.NodeID(), got[0].NodeID2)
-	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, []types.ATXID{got[0].ATX1, got[0].ATX2})
+	_, _, err = atxs.PrevATXCollision(db, types.RandomATXID(), sig.NodeID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	for _, id := range append(otherIds, types.RandomNodeID()) {
+		_, _, err := atxs.PrevATXCollision(db, prevATXID, id)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	}
 }
 
 func TestCoinbase(t *testing.T) {
