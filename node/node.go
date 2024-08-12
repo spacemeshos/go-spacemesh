@@ -390,6 +390,7 @@ type App struct {
 	proposalBuilder   *miner.ProposalBuilder
 	mesh              *mesh.Mesh
 	atxsdata          *atxsdata.Data
+	atxcache          *atxcache.Cache
 	clock             *timesync.NodeClock
 	hare3             *hare3.Hare
 	hare4             *hare4.Hare
