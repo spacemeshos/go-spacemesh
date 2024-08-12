@@ -9,6 +9,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#6197](https://github.com/spacemeshos/go-spacemesh/pull/6197) Fix falling back to poet PoW if recertification
   failed after getting a 401 on registering
 
+* [#6241](https://github.com/spacemeshos/go-spacemesh/pull/6241) Improve speed of ATX cache warmup.
+
 ### Features
 
 * [#6213](https://github.com/spacemeshos/go-spacemesh/pull/6213) Adds `labels_per_unit` to the v2alpha1 Network Info API.
