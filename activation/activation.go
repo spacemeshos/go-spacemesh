@@ -39,7 +39,7 @@ var (
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
-	// Start of new PoET round
+	// Offset from the epoch start when the poet round starts
 	PhaseShift time.Duration `mapstructure:"phase-shift"`
 	// A gap between end of old PoET round and start of new one
 	CycleGap time.Duration `mapstructure:"cycle-gap"`
