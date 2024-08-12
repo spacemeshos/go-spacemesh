@@ -196,7 +196,6 @@ func ActivationTxFromWireV1(atx *ActivationTxV1) *types.ActivationTx {
 	result := &types.ActivationTx{
 		PublishEpoch:  atx.PublishEpoch,
 		Sequence:      atx.Sequence,
-		PrevATXID:     atx.PrevATXID,
 		CommitmentATX: atx.CommitmentATXID,
 		Coinbase:      atx.Coinbase,
 		NumUnits:      atx.NumUnits,

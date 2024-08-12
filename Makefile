@@ -3,7 +3,6 @@ COMMIT = $(shell git rev-parse HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 GOLANGCI_LINT_VERSION := v1.59.0
-STATICCHECK_VERSION := v0.4.7
 GOTESTSUM_VERSION := v1.12.0
 GOSCALE_VERSION := v1.2.0
 MOCKGEN_VERSION := v0.4.0
@@ -61,7 +60,6 @@ install:
 	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
-	go install honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION)
 .PHONY: install
 
 build: go-spacemesh get-profiler get-postrs-service
@@ -111,10 +109,6 @@ test-generate:
 	@make generate
 	@git diff --name-only --diff-filter=AM --exit-code . || { echo "\nPlease rerun 'make generate' and commit changes.\n"; exit 1; }
 .PHONY: test-generate
-
-staticcheck: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" staticcheck ./...
-.PHONY: staticcheck
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive
