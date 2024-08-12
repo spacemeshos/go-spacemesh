@@ -42,14 +42,15 @@ func TestData(t *testing.T) {
 						d.BaseHeight,
 						d.Height,
 						d.Nonce,
-						d.malicious,
+						false,
 					)
 				}
 			}
 			for epoch := 0; epoch < epochs; epoch++ {
 				for i := range atxids[epoch] {
-					byatxid := c.Get(types.EpochID(epoch)+1, atxids[epoch][i])
-					require.Equal(t, &data[epoch][i], byatxid)
+					atx := c.Get(types.EpochID(epoch)+1, atxids[epoch][i])
+					require.Equal(t, &data[epoch][i], atx)
+					require.False(t, c.IsMalicious(atx.Node))
 				}
 			}
 		}
@@ -71,13 +72,9 @@ func TestData(t *testing.T) {
 			)
 			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
 			require.NotNil(t, data)
-			require.False(t, data.malicious)
+			require.False(t, c.IsMalicious(data.Node))
 		}
 		c.SetMalicious(node)
-		for epoch := 1; epoch <= 10; epoch++ {
-			data := c.Get(types.EpochID(epoch), types.ATXID{byte(epoch)})
-			require.True(t, data.malicious)
-		}
 		require.True(t, c.IsMalicious(node))
 	})
 	t.Run("eviction", func(t *testing.T) {
