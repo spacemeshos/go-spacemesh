@@ -31,7 +31,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-var sqlWriterSleep = 100 * time.Millisecond
+var sqlWriterSleep = 50 * time.Millisecond
 
 type nipostValidatorV1 interface {
 	InitialNIPostChallengeV1(challenge *wire.NIPostChallengeV1, atxs atxProvider, goldenATXID types.ATXID) error
@@ -596,7 +596,6 @@ func (h *HandlerV1) storeAtx(
 	ctx context.Context,
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV1,
-	deps bool,
 ) (*mwire.MalfeasanceProof, error) {
 	var (
 		c     chan struct{}
@@ -608,16 +607,12 @@ func (h *HandlerV1) storeAtx(
 	if err != nil {
 		return proof, fmt.Errorf("check malicious: %w", err)
 	}
-	if !deps {
-		h.atxMu.Lock()
-		h.atxBatch = append(h.atxBatch, atxBatchItem{atx: atx, watx: watx})
-		br = h.atxBatchResult
-		c = br.doneC
-		h.atxMu.Unlock()
-	} else {
-		// we have deps, persist with sync flow
-		return proof, h.storeAtxSync(ctx, atx, watx, proof)
-	}
+
+	h.atxMu.Lock()
+	h.atxBatch = append(h.atxBatch, atxBatchItem{atx: atx, watx: watx})
+	br = h.atxBatchResult
+	c = br.doneC
+	h.atxMu.Unlock()
 
 	select {
 	case <-c:
@@ -762,7 +757,7 @@ func (h *HandlerV1) processATX(
 	}
 	atx.Weight = weight
 
-	proof, err = h.storeAtx(ctx, atx, watx, len(atxIDs) > 0)
+	proof, err = h.storeAtx(ctx, atx, watx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
