@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -100,18 +99,15 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 	_, err = getBytes(ctx, bs, datastore.ATXDB, atx.ID())
 	require.ErrorIs(t, err, datastore.ErrNotFound)
 
-	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{Blob: types.RandomBytes(100)}))
+	blob := types.AtxBlob{Blob: types.RandomBytes(100)}
+	require.NoError(t, atxs.Add(db, atx, blob))
 
 	has, err = bs.Has(datastore.ATXDB, atx.ID().Bytes())
 	require.NoError(t, err)
 	require.True(t, has)
 	got, err := getBytes(ctx, bs, datastore.ATXDB, atx.ID())
 	require.NoError(t, err)
-
-	gotA, err := wire.DecodeAtxV1(got)
-	require.NoError(t, err)
-	require.Equal(t, atx.ID(), gotA.ID())
-	require.Equal(t, atx, gotA)
+	require.Equal(t, blob.Blob, got)
 
 	_, err = getBytes(ctx, bs, datastore.BallotDB, atx.ID())
 	require.ErrorIs(t, err, datastore.ErrNotFound)

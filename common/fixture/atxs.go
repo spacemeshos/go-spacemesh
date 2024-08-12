@@ -49,7 +49,10 @@ func (g *AtxsGenerator) Next() *types.ActivationTx {
 		PublishEpoch: g.Epochs[g.rng.Intn(len(g.Epochs))],
 		Coinbase:     wallet.Address(nodeID.Bytes()),
 		NumUnits:     g.rng.Uint32(),
+		TickCount:    1,
 		SmesherID:    nodeID,
 	}
+	atx.SetID(types.RandomATXID())
+	atx.SetReceived(time.Now().Local())
 	return atx
 }
