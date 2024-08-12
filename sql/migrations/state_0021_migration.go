@@ -38,7 +38,7 @@ func (*migration0021) Rollback() error {
 }
 
 func (m *migration0021) Apply(db sql.Executor) error {
-	if err := m.createTable(db); err != nil {
+	if err := m.applySql(db); err != nil {
 		return err
 	}
 	var total int
@@ -66,10 +66,12 @@ func (m *migration0021) Apply(db sql.Executor) error {
 	}
 }
 
-func (m *migration0021) createTable(db sql.Executor) error {
+func (m *migration0021) applySql(db sql.Executor) error {
 	query := `CREATE TABLE posts (
 		atxid  CHAR(32) NOT NULL,
 		pubkey CHAR(32) NOT NULL,
+		prev_atxid  CHAR(32),
+		prev_atx_index INT,
 		units  INT NOT NULL,
 		UNIQUE (atxid, pubkey)
 	);`
@@ -78,16 +80,23 @@ func (m *migration0021) createTable(db sql.Executor) error {
 		return fmt.Errorf("creating posts table: %w", err)
 	}
 
-	query = "CREATE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey);"
+	query = "CREATE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey, prev_atxid);"
 	_, err = db.Exec(query, nil, nil)
 	if err != nil {
 		return fmt.Errorf("creating index `posts_by_atxid_by_pubkey`: %w", err)
+	}
+
+	query = "ALTER TABLE atxs DROP COLUMN prev_id;"
+	_, err = db.Exec(query, nil, nil)
+	if err != nil {
+		return fmt.Errorf("dropping column `prev_id` from `atxs`: %w", err)
 	}
 	return nil
 }
 
 type update struct {
 	id    types.NodeID
+	prev  types.ATXID
 	units uint32
 }
 
@@ -135,7 +144,7 @@ func (m *migration0021) processBatch(db sql.Executor, offset, size int) (int, er
 
 func (m *migration0021) applyPendingUpdates(db sql.Executor, updates map[types.ATXID]*update) error {
 	for atxID, upd := range updates {
-		if err := atxs.SetUnits(db, atxID, upd.id, upd.units); err != nil {
+		if err := atxs.SetPost(db, atxID, upd.prev, 0, upd.id, upd.units); err != nil {
 			return err
 		}
 	}
@@ -153,7 +162,7 @@ func processATX(blob types.AtxBlob) (*update, error) {
 		if err := codec.Decode(blob.Blob, &watx); err != nil {
 			return nil, fmt.Errorf("decoding ATX V1: %w", err)
 		}
-		return &update{watx.SmesherID, watx.NumUnits}, nil
+		return &update{watx.SmesherID, watx.PrevATXID, watx.NumUnits}, nil
 	default:
 		return nil, fmt.Errorf("unsupported ATX version: %d", blob.Version)
 	}

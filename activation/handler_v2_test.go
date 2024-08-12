@@ -1434,7 +1434,7 @@ func Test_ValidatePreviousATX(t *testing.T) {
 		t.Parallel()
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), types.RandomNodeID(), 13))
+		require.NoError(t, atxs.SetPost(atxHandler.cdb, prev.ID(), types.EmptyATXID, 0, types.RandomNodeID(), 13))
 
 		_, err := atxHandler.validatePreviousAtx(types.RandomNodeID(), &wire.SubPostV2{}, []*types.ActivationTx{prev})
 		require.Error(t, err)
@@ -1445,8 +1445,8 @@ func Test_ValidatePreviousATX(t *testing.T) {
 		other := types.RandomNodeID()
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), id, 7))
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), other, 13))
+		require.NoError(t, atxs.SetPost(atxHandler.cdb, prev.ID(), types.EmptyATXID, 0, id, 7))
+		require.NoError(t, atxs.SetPost(atxHandler.cdb, prev.ID(), types.EmptyATXID, 0, other, 13))
 
 		units, err := atxHandler.validatePreviousAtx(id, &wire.SubPostV2{NumUnits: 100}, []*types.ActivationTx{prev})
 		require.NoError(t, err)
@@ -1466,7 +1466,7 @@ func Test_ValidatePreviousATX(t *testing.T) {
 		other := types.RandomNodeID()
 		prev := &types.ActivationTx{}
 		prev.SetID(types.RandomATXID())
-		require.NoError(t, atxs.SetUnits(atxHandler.cdb, prev.ID(), other, 13))
+		require.NoError(t, atxs.SetPost(atxHandler.cdb, prev.ID(), types.EmptyATXID, 0, other, 13))
 
 		_, err := atxHandler.validatePreviousAtx(id, &wire.SubPostV2{NumUnits: 100}, []*types.ActivationTx{prev})
 		require.Error(t, err)

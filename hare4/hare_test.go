@@ -27,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare4/eligibility"
 	hmock "github.com/spacemeshos/go-spacemesh/hare4/mocks"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -231,7 +230,7 @@ func (n *node) withStreamRequester() *node {
 }
 
 func (n *node) withHare() *node {
-	logger := logtest.New(n.t).Named(fmt.Sprintf("hare=%d", n.i))
+	logger := zaptest.NewLogger(n.t).Named(fmt.Sprintf("hare=%d", n.i))
 	n.nclock = &testNodeClock{
 		genesis:       n.t.start,
 		layerDuration: n.t.layerDuration,
@@ -258,7 +257,7 @@ func (n *node) withHare() *node {
 		n.patrol,
 		nil,
 		WithConfig(n.t.cfg),
-		WithLogger(logger.Zap()),
+		WithLogger(logger),
 		WithWallclock(n.clock),
 		WithTracer(tracer),
 		WithServer(n.mockStreamRequester),
