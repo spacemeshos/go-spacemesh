@@ -352,11 +352,12 @@ func TestP2PGetATXs(t *testing.T) {
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
 			atx := newAtx(tpf.t, epoch)
-			require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, types.AtxBlob{}))
+			blob := types.AtxBlob{Blob: types.RandomBytes(100)}
+			require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, blob))
 			tpf.verifyGetHash(
 				func() error { return tpf.clientFetch.GetAtxs(context.Background(), []types.ATXID{atx.ID()}) },
 				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
-				[]byte{},
+				blob.Blob,
 			)
 		})
 }
@@ -477,12 +478,10 @@ func TestP2PGetBlockTransactions(t *testing.T) {
 			tx := genTx(t, signer, types.Address{1}, 1, 1, 1)
 			require.NoError(t, transactions.Add(tpf.serverCDB, &tx, time.Now()))
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetBlockTxs(
-						context.Background(), []types.TransactionID{tx.ID})
-				},
+				func() error { return tpf.clientFetch.GetBlockTxs(context.Background(), []types.TransactionID{tx.ID}) },
 				errStr, "txBlock", "hs/1", types.Hash32(tx.ID), tx.ID.Bytes(),
-				tx.Raw)
+				tx.Raw,
+			)
 		})
 }
 
@@ -510,8 +509,7 @@ func TestP2PGetMalfeasanceProofs(t *testing.T) {
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			nid := types.RandomNodeID()
 			proof := types.RandomBytes(11)
-			require.NoError(t, identities.SetMalicious(
-				tpf.serverCDB, nid, proof, time.Now()))
+			require.NoError(t, identities.SetMalicious(tpf.serverCDB, nid, proof, time.Now()))
 			tpf.verifyGetHash(
 				func() error { return tpf.clientFetch.GetMalfeasanceProofs(context.Background(), []types.NodeID{nid}) },
 				errStr, "mal", "hs/1", types.Hash32(nid), nid.Bytes(),
