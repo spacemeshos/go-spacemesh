@@ -21,7 +21,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("valid", func(t *testing.T) {
-		db := sql.InMemory()
+		db := sql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
 		otherAtx.SmesherID = otherSig.NodeID()
@@ -50,7 +50,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 	})
 
 	t.Run("does not contain same certificate owner", func(t *testing.T) {
-		db := sql.InMemory()
+		db := sql.InMemoryTest(t)
 
 		atx1 := newActivationTxV2(
 			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
@@ -79,7 +79,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 		atx1 := newActivationTxV2()
 		atx1.Sign(sig)
 
-		db := sql.InMemory()
+		db := sql.InMemoryTest(t)
 		proof, err := NewDoubleMarryProof(db, atx1, atx1, sig.NodeID())
 		require.ErrorContains(t, err, "ATXs have the same ID")
 		require.Nil(t, proof)
@@ -103,7 +103,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 	})
 
 	t.Run("invalid marriage proof", func(t *testing.T) {
-		db := sql.InMemory()
+		db := sql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
 		otherAtx.SmesherID = otherSig.NodeID()
@@ -150,7 +150,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 	})
 
 	t.Run("invalid certificate proof", func(t *testing.T) {
-		db := sql.InMemory()
+		db := sql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
 		otherAtx.SmesherID = otherSig.NodeID()
@@ -197,7 +197,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 	})
 
 	t.Run("invalid atx signature", func(t *testing.T) {
-		db := sql.InMemory()
+		db := sql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
 		otherAtx.SmesherID = otherSig.NodeID()
@@ -233,7 +233,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 	})
 
 	t.Run("invalid certificate signature", func(t *testing.T) {
-		db := sql.InMemory()
+		db := sql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
 		otherAtx.SmesherID = otherSig.NodeID()
@@ -269,7 +269,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 	})
 
 	t.Run("unknown reference ATX", func(t *testing.T) {
-		db := sql.InMemory()
+		db := sql.InMemoryTest(t)
 
 		atx1 := newActivationTxV2(
 			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),

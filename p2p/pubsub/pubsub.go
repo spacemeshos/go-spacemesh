@@ -133,8 +133,8 @@ var (
 	WithValidatorConcurrency = pubsub.WithValidatorConcurrency
 )
 
-// PublishSubsciber common interface for publisher and subscribing.
-type PublishSubsciber interface {
+// PublishSubscriber common interface for publisher and subscribing.
+type PublishSubscriber interface {
 	Publisher
 	Subscriber
 }
