@@ -11,6 +11,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6241](https://github.com/spacemeshos/go-spacemesh/pull/6241) Improve speed of ATX cache warmup.
 
+* [#6248](https://github.com/spacemeshos/go-spacemesh/pull/6248) Fixed node not being able to handle more than 6.55M
+  ATXs per epoch.
+
 ### Features
 
 * [#6213](https://github.com/spacemeshos/go-spacemesh/pull/6213) Adds `labels_per_unit` to the v2alpha1 Network Info API.
