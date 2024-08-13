@@ -62,7 +62,7 @@ type atxProvider interface {
 }
 
 type postState interface {
-	// PostStates returns the current state of all registered IDs.
+	// PostStates returns the current state of the post service for all registered IDs.
 	PostStates() map[types.IdentityDescriptor]types.PostState
 }
 

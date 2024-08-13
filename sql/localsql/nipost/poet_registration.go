@@ -10,6 +10,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+var ErrNoNodeId = errors.New("np node id is given")
+
 type PoETRegistration struct {
 	NodeId        types.NodeID
 	ChallengeHash types.Hash32
@@ -30,7 +32,6 @@ func AddPoetRegistration(
 		stmt.BindText(4, registration.RoundID)
 		stmt.BindInt64(5, registration.RoundEnd.Unix())
 	}
-
 	if _, err := db.Exec(`
 		insert into poet_registration (id, hash, address, round_id, round_end)
 		values (?1, ?2, ?3, ?4, ?5);`, enc, nil,
@@ -52,7 +53,7 @@ func ClearPoetRegistrations(db sql.Executor, nodeID types.NodeID) error {
 
 func PoetRegistrations(db sql.Executor, nodeIDs ...types.NodeID) ([]PoETRegistration, error) {
 	if len(nodeIDs) == 0 {
-		return nil, errors.New("no node IDs provided")
+		return nil, ErrNoNodeId
 	}
 
 	var registrations []PoETRegistration
@@ -69,14 +70,16 @@ func PoetRegistrations(db sql.Executor, nodeIDs ...types.NodeID) ([]PoETRegistra
 			RoundID:  stmt.ColumnText(3),
 			RoundEnd: time.Unix(stmt.ColumnInt64(4), 0),
 		}
-		stmt.ColumnBytes(0, registration.NodeId.Bytes())
+
+		nodeId := make([]byte, types.NodeIDSize)
+		stmt.ColumnBytes(0, nodeId)
+
+		registration.NodeId = types.BytesToNodeID(nodeId)
+
 		stmt.ColumnBytes(1, registration.ChallengeHash[:])
 		registrations = append(registrations, registration)
 		return true
 	}
-
-	query := `SELECT hash, address, round_id, round_end FROM poet_registration WHERE id = ?1;`
-
 
 	placeholders := make([]string, len(nodeIDs))
 	for i := range placeholders {

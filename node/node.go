@@ -1586,9 +1586,9 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.SmeshingIdentities:
-		nodeIds := make([]types.NodeID, len(app.signers))
-		for i, signer := range app.signers {
-			nodeIds[i] = signer.NodeID()
+		nodeIds := make(map[types.NodeID]struct{})
+		for _, signer := range app.signers {
+			nodeIds[signer.NodeID()] = struct{}{}
 		}
 
 		configuredPoets := make(map[string]struct{})
@@ -1596,7 +1596,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			configuredPoets[server.Address] = struct{}{}
 		}
 
-		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, nodeIds)
+		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, app.atxBuilder, nodeIds)
 		app.grpcServices[svc] = service
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)

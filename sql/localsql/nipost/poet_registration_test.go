@@ -77,3 +77,42 @@ func Test_AddPoetRegistration_NoDuplicates(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, registrations, 1)
 }
+
+func Test_PoetRegistrations_WithMultipleNodeId(t *testing.T) {
+	db := localsql.InMemory()
+
+	nodeID1 := types.RandomNodeID()
+	reg1 := PoETRegistration{
+		NodeId:        nodeID1,
+		ChallengeHash: types.RandomHash(),
+		Address:       "address1",
+		RoundID:       "round1",
+		RoundEnd:      time.Now().Round(time.Second),
+	}
+
+	err := AddPoetRegistration(db, nodeID1, reg1)
+	require.NoError(t, err)
+
+	registrations, err := PoetRegistrations(db, nodeID1)
+	require.NoError(t, err)
+	require.Len(t, registrations, 1)
+
+	nodeID2 := types.RandomNodeID()
+	reg2 := PoETRegistration{
+		NodeId:        nodeID2,
+		ChallengeHash: types.RandomHash(),
+		Address:       "address2",
+		RoundID:       "round2",
+		RoundEnd:      time.Now().Round(time.Second),
+	}
+	err = AddPoetRegistration(db, nodeID2, reg2)
+	require.NoError(t, err)
+
+	registrations, err = PoetRegistrations(db, nodeID2)
+	require.NoError(t, err)
+	require.Len(t, registrations, 1)
+
+	registrations, err = PoetRegistrations(db, nodeID1, nodeID2)
+	require.NoError(t, err)
+	require.Len(t, registrations, 2)
+}

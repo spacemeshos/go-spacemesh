@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -25,17 +24,20 @@ var ErrInvalidSmesherId = errors.New("smesher id is invalid")
 
 type SmeshingIdentitiesService struct {
 	db                     sql.Executor
-	signers                []types.NodeID
+	states                 identityState
+	signers                map[types.NodeID]struct{}
 	configuredPoetServices map[string]struct{}
 }
 
 func NewSmeshingIdentitiesService(
 	db sql.Executor,
 	configuredPoetServices map[string]struct{},
-	signers []types.NodeID) *SmeshingIdentitiesService {
+	states identityState,
+	signers map[types.NodeID]struct{}) *SmeshingIdentitiesService {
 	return &SmeshingIdentitiesService{
 		db:                     db,
 		configuredPoetServices: configuredPoetServices,
+		states:                 states,
 		signers:                signers,
 	}
 }
@@ -54,17 +56,23 @@ func (s *SmeshingIdentitiesService) String() string {
 }
 
 func (s *SmeshingIdentitiesService) PoetServices(_ context.Context, req *pb.PoetServicesRequest) (*pb.PoetServicesResponse, error) {
-	nodeIds := s.signers
+	states := s.states.IdentityStates()
 
-	if len(req.SmesherIdHex) > 0 {
-		nodeIdBytes := util.FromHex(req.SmesherIdHex)
-		if len(nodeIdBytes) == 0 {
-			return nil, status.Error(codes.InvalidArgument, ErrInvalidSmesherId.Error())
+	nodeIdsToRequest := make([]types.NodeID, 0)
+	for desc, state := range states {
+		if state != types.WaitForPoetRoundEnd {
+			continue
 		}
-		nodeIds = []types.NodeID{types.BytesToNodeID(nodeIdBytes)}
+
+		_, ok := s.signers[desc.NodeID()]
+		if !ok {
+			// TODO log
+			continue
+		}
+		nodeIdsToRequest = append(nodeIdsToRequest, desc.NodeID())
 	}
 
-	regs, err := nipost.PoetRegistrations(s.db, nodeIds...)
+	regs, err := nipost.PoetRegistrations(s.db, nodeIdsToRequest...)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -96,6 +104,7 @@ func (s *SmeshingIdentitiesService) PoetServices(_ context.Context, req *pb.Poet
 			RegistrationStatus: regStatus,
 			Warning:            warning,
 		}
+
 		identities[reg.NodeId] = poetInfos
 	}
 
