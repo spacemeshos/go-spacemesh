@@ -15,6 +15,13 @@ such and the node will continue to scan new ATXs for their validity.
 
 ### Improvements
 
+## Release v1.6.6-hotfix1
+
+### Improvements
+
+* [#6248](https://github.com/spacemeshos/go-spacemesh/pull/6248) Fixed node not being able to handle more than 6.55M
+  ATXs per epoch.
+
 ## Release v1.6.6
 
 ### Improvements

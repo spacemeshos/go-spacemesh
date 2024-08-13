@@ -258,7 +258,7 @@ func (n *node) withHare() *node {
 		nil,
 		WithConfig(n.t.cfg),
 		WithLogger(logger),
-		WithWallclock(n.clock),
+		WithWallClock(n.clock),
 		WithTracer(tracer),
 		WithServer(n.mockStreamRequester),
 		WithLogger(z),

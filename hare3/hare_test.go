@@ -230,7 +230,7 @@ func (n *node) withHare() *node {
 		n.patrol,
 		WithConfig(n.t.cfg),
 		WithLogger(logger),
-		WithWallclock(n.clock),
+		WithWallClock(n.clock),
 		WithTracer(tracer),
 	)
 	n.register(n.signer)
