@@ -33,10 +33,11 @@ const (
 	LegacyInvalidPost    ProofType = 0x01
 	LegacyInvalidPrevATX ProofType = 0x02
 
-	DoublePublish ProofType = 0x10
-	DoubleMarry   ProofType = 0x11
-	DoubleMerge   ProofType = 0x12
-	InvalidPost   ProofType = 0x13
+	DoublePublish   ProofType = 0x10
+	DoubleMarry     ProofType = 0x11
+	DoubleMerge     ProofType = 0x12
+	InvalidPost     ProofType = 0x13
+	InvalidPrevious ProofType = 0x14
 )
 
 // ProofVersion is an identifier for the version of the proof that is encoded in the ATXProof.
