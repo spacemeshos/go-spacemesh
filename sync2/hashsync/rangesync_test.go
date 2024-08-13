@@ -315,26 +315,29 @@ func (ds *dumbStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (
 	return r, nil
 }
 
-func (ds *dumbStore) SplitRange(preceding Iterator, x, y Ordered, count int) (RangeInfo, RangeInfo, error) {
+func (ds *dumbStore) SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error) {
 	if count <= 0 {
 		panic("BUG: bad split count")
 	}
 	part0, err := ds.GetRangeInfo(preceding, x, y, count)
 	if err != nil {
-		return RangeInfo{}, RangeInfo{}, err
+		return SplitInfo{}, err
 	}
 	if part0.Count == 0 {
-		return RangeInfo{}, RangeInfo{}, errors.New("can't split empty range")
+		return SplitInfo{}, errors.New("can't split empty range")
 	}
 	middle, err := part0.End.Key()
 	if err != nil {
-		return RangeInfo{}, RangeInfo{}, err
+		return SplitInfo{}, err
 	}
 	part1, err := ds.GetRangeInfo(part0.End.Clone(), middle, y, -1)
 	if err != nil {
-		return RangeInfo{}, RangeInfo{}, err
+		return SplitInfo{}, err
 	}
-	return part0, part1, nil
+	return SplitInfo{
+		Parts:  [2]RangeInfo{part0, part1},
+		Middle: middle,
+	}, nil
 }
 
 func (ds *dumbStore) Min() (Iterator, error) {
@@ -510,24 +513,31 @@ func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count in
 	return vs.verifySameRangeInfo(ri1, ri2), nil
 }
 
-func (vs *verifiedStore) SplitRange(preceding Iterator, x, y Ordered, count int) (RangeInfo, RangeInfo, error) {
+func (vs *verifiedStore) SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error) {
 	var (
-		ri11, ri12, ri21, ri22 RangeInfo
-		err                    error
+		si1, si2 SplitInfo
+		err      error
 	)
 	if preceding != nil {
 		p := preceding.(verifiedStoreIterator)
-		ri11, ri12, err = vs.knownGood.SplitRange(p.knownGood, x, y, count)
+		si1, err = vs.knownGood.SplitRange(p.knownGood, x, y, count)
 		require.NoError(vs.t, err)
-		ri21, ri22, err = vs.store.SplitRange(p.it, x, y, count)
+		si2, err = vs.store.SplitRange(p.it, x, y, count)
 		require.NoError(vs.t, err)
 	} else {
-		ri11, ri12, err = vs.knownGood.SplitRange(nil, x, y, count)
+		si1, err = vs.knownGood.SplitRange(nil, x, y, count)
 		require.NoError(vs.t, err)
-		ri21, ri22, err = vs.store.SplitRange(nil, x, y, count)
+		si2, err = vs.store.SplitRange(nil, x, y, count)
 		require.NoError(vs.t, err)
 	}
-	return vs.verifySameRangeInfo(ri11, ri21), vs.verifySameRangeInfo(ri12, ri22), nil
+	require.Equal(vs.t, si1.Middle, si2.Middle, "split middle")
+	return SplitInfo{
+		Parts: [2]RangeInfo{
+			vs.verifySameRangeInfo(si1.Parts[0], si2.Parts[0]),
+			vs.verifySameRangeInfo(si1.Parts[1], si2.Parts[1]),
+		},
+		Middle: si1.Middle,
+	}, nil
 }
 
 func (vs *verifiedStore) Min() (Iterator, error) {

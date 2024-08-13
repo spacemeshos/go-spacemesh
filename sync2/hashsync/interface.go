@@ -37,6 +37,14 @@ type RangeInfo struct {
 	End Iterator
 }
 
+// SplitInfo contains information about range split in two.
+type SplitInfo struct {
+	// 2 parts of the range
+	Parts [2]RangeInfo
+	// Middle point between the ranges
+	Middle Ordered
+}
+
 // ItemStore represents the data store that can be synced against a remote peer
 type ItemStore interface {
 	// Add adds a key to the store
@@ -49,7 +57,7 @@ type ItemStore interface {
 	GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error)
 	// SplitRange splits the range roughly after the specified count of items,
 	// returning RangeInfo for the first half and the second half of the range.
-	SplitRange(preceding Iterator, x, y Ordered, count int) (RangeInfo, RangeInfo, error)
+	SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error)
 	// Min returns the iterator pointing at the minimum element
 	// in the store. If the store is empty, it returns nil
 	Min() (Iterator, error)

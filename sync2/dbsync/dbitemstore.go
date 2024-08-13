@@ -2,6 +2,7 @@ package dbsync
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -100,33 +101,61 @@ func (d *DBItemStore) SplitRange(
 	x, y hashsync.Ordered,
 	count int,
 ) (
-	hashsync.RangeInfo,
-	hashsync.RangeInfo,
+	hashsync.SplitInfo,
 	error,
 ) {
-	if err := d.EnsureLoaded(); err != nil {
-		return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
+	if count <= 0 {
+		panic("BUG: bad split count")
 	}
-	panic("TBD")
-	// fpr1, fpr2, err := d.ft.easySplit(x.(KeyBytes), y.(KeyBytes), count)
-	// if err != nil {
-	// 	return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
-	// }
-	// fpr1, fpr2, err := d.ft.splitFingerprintInterval(x.(KeyBytes), y.(KeyBytes), count)
-	// if err != nil {
-	// 	return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
-	// }
-	// return hashsync.RangeInfo{
-	// 		Fingerprint: fpr1.fp,
-	// 		Count:       int(fpr1.count),
-	// 		Start:       fpr1.start,
-	// 		End:         fpr1.end,
-	// 	}, hashsync.RangeInfo{
-	// 		Fingerprint: fpr2.fp,
-	// 		Count:       int(fpr2.count),
-	// 		Start:       fpr2.start,
-	// 		End:         fpr2.end,
-	// 	}, nil
+
+	if err := d.EnsureLoaded(); err != nil {
+		return hashsync.SplitInfo{}, err
+	}
+
+	sr, err := d.ft.easySplit(x.(KeyBytes), y.(KeyBytes), count)
+	if err == nil {
+		return hashsync.SplitInfo{
+			Parts: [2]hashsync.RangeInfo{
+				{
+					Fingerprint: sr.part0.fp,
+					Count:       int(sr.part0.count),
+					Start:       sr.part0.start,
+					End:         sr.part0.end,
+				},
+				{
+					Fingerprint: sr.part1.fp,
+					Count:       int(sr.part1.count),
+					Start:       sr.part1.start,
+					End:         sr.part1.end,
+				},
+			},
+			Middle: sr.middle,
+		}, nil
+	}
+
+	if !errors.Is(err, errEasySplitFailed) {
+		return hashsync.SplitInfo{}, err
+	}
+
+	part0, err := d.GetRangeInfo(preceding, x, y, count)
+	if err != nil {
+		return hashsync.SplitInfo{}, err
+	}
+	if part0.Count == 0 {
+		return hashsync.SplitInfo{}, errors.New("can't split empty range")
+	}
+	middle, err := part0.End.Key()
+	if err != nil {
+		return hashsync.SplitInfo{}, err
+	}
+	part1, err := d.GetRangeInfo(part0.End.Clone(), middle, y, -1)
+	if err != nil {
+		return hashsync.SplitInfo{}, err
+	}
+	return hashsync.SplitInfo{
+		Parts:  [2]hashsync.RangeInfo{part0, part1},
+		Middle: middle,
+	}, nil
 }
 
 // Min implements hashsync.ItemStore.
@@ -230,33 +259,40 @@ func (a *ItemStoreAdapter) SplitRange(
 	y hashsync.Ordered,
 	count int,
 ) (
-	hashsync.RangeInfo,
-	hashsync.RangeInfo,
+	hashsync.SplitInfo,
 	error,
 ) {
 	hx := x.(types.Hash32)
 	hy := y.(types.Hash32)
-	info1, info2, err := a.s.SplitRange(
+	si, err := a.s.SplitRange(
 		preceding, KeyBytes(hx[:]), KeyBytes(hy[:]), count)
 	if err != nil {
-		return hashsync.RangeInfo{}, hashsync.RangeInfo{}, err
+		return hashsync.SplitInfo{}, err
 	}
 	var fp1, fp2 types.Hash12
-	src1 := info1.Fingerprint.(fingerprint)
-	src2 := info2.Fingerprint.(fingerprint)
+	src1 := si.Parts[0].Fingerprint.(fingerprint)
+	src2 := si.Parts[1].Fingerprint.(fingerprint)
 	copy(fp1[:], src1[:])
 	copy(fp2[:], src2[:])
-	return hashsync.RangeInfo{
-			Fingerprint: fp1,
-			Count:       info1.Count,
-			Start:       a.wrapIterator(info1.Start),
-			End:         a.wrapIterator(info1.End),
-		}, hashsync.RangeInfo{
-			Fingerprint: fp2,
-			Count:       info2.Count,
-			Start:       a.wrapIterator(info2.Start),
-			End:         a.wrapIterator(info2.End),
-		}, nil
+	var middle types.Hash32
+	copy(middle[:], si.Middle.(KeyBytes))
+	return hashsync.SplitInfo{
+		Parts: [2]hashsync.RangeInfo{
+			{
+				Fingerprint: fp1,
+				Count:       si.Parts[0].Count,
+				Start:       a.wrapIterator(si.Parts[0].Start),
+				End:         a.wrapIterator(si.Parts[0].End),
+			},
+			{
+				Fingerprint: fp2,
+				Count:       si.Parts[1].Count,
+				Start:       a.wrapIterator(si.Parts[1].Start),
+				End:         a.wrapIterator(si.Parts[1].End),
+			},
+		},
+		Middle: middle,
+	}, nil
 }
 
 // Has implements hashsync.ItemStore.

@@ -115,26 +115,29 @@ func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x, y Ordered, count i
 }
 
 // SplitRange implements ItemStore.
-func (sts *SyncTreeStore) SplitRange(preceding Iterator, x, y Ordered, count int) (RangeInfo, RangeInfo, error) {
+func (sts *SyncTreeStore) SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error) {
 	if count <= 0 {
 		panic("BUG: bad split count")
 	}
 	part0, err := sts.GetRangeInfo(preceding, x, y, count)
 	if err != nil {
-		return RangeInfo{}, RangeInfo{}, err
+		return SplitInfo{}, err
 	}
 	if part0.Count == 0 {
-		return RangeInfo{}, RangeInfo{}, errors.New("can't split empty range")
+		return SplitInfo{}, errors.New("can't split empty range")
 	}
 	middle, err := part0.End.Key()
 	if err != nil {
-		return RangeInfo{}, RangeInfo{}, err
+		return SplitInfo{}, err
 	}
 	part1, err := sts.GetRangeInfo(part0.End.Clone(), middle, y, -1)
 	if err != nil {
-		return RangeInfo{}, RangeInfo{}, err
+		return SplitInfo{}, err
 	}
-	return part0, part1, nil
+	return SplitInfo{
+		Parts:  [2]RangeInfo{part0, part1},
+		Middle: middle,
+	}, nil
 }
 
 // Min implements ItemStore.

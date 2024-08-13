@@ -43,6 +43,44 @@ func (m *MockIterator) EXPECT() *MockIteratorMockRecorder {
 	return m.recorder
 }
 
+// Clone mocks base method.
+func (m *MockIterator) Clone() Iterator {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Clone")
+	ret0, _ := ret[0].(Iterator)
+	return ret0
+}
+
+// Clone indicates an expected call of Clone.
+func (mr *MockIteratorMockRecorder) Clone() *MockIteratorCloneCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockIterator)(nil).Clone))
+	return &MockIteratorCloneCall{Call: call}
+}
+
+// MockIteratorCloneCall wrap *gomock.Call
+type MockIteratorCloneCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockIteratorCloneCall) Return(arg0 Iterator) *MockIteratorCloneCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockIteratorCloneCall) Do(f func() Iterator) *MockIteratorCloneCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockIteratorCloneCall) DoAndReturn(f func() Iterator) *MockIteratorCloneCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Key mocks base method.
 func (m *MockIterator) Key() (Ordered, error) {
 	m.ctrl.T.Helper()
@@ -337,13 +375,12 @@ func (c *MockItemStoreMinCall) DoAndReturn(f func() (Iterator, error)) *MockItem
 }
 
 // SplitRange mocks base method.
-func (m *MockItemStore) SplitRange(preceding Iterator, x, y Ordered, count int) (RangeInfo, RangeInfo, error) {
+func (m *MockItemStore) SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SplitRange", preceding, x, y, count)
-	ret0, _ := ret[0].(RangeInfo)
-	ret1, _ := ret[1].(RangeInfo)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret0, _ := ret[0].(SplitInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // SplitRange indicates an expected call of SplitRange.
@@ -359,19 +396,19 @@ type MockItemStoreSplitRangeCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockItemStoreSplitRangeCall) Return(arg0, arg1 RangeInfo, arg2 error) *MockItemStoreSplitRangeCall {
-	c.Call = c.Call.Return(arg0, arg1, arg2)
+func (c *MockItemStoreSplitRangeCall) Return(arg0 SplitInfo, arg1 error) *MockItemStoreSplitRangeCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockItemStoreSplitRangeCall) Do(f func(Iterator, Ordered, Ordered, int) (RangeInfo, RangeInfo, error)) *MockItemStoreSplitRangeCall {
+func (c *MockItemStoreSplitRangeCall) Do(f func(Iterator, Ordered, Ordered, int) (SplitInfo, error)) *MockItemStoreSplitRangeCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreSplitRangeCall) DoAndReturn(f func(Iterator, Ordered, Ordered, int) (RangeInfo, RangeInfo, error)) *MockItemStoreSplitRangeCall {
+func (c *MockItemStoreSplitRangeCall) DoAndReturn(f func(Iterator, Ordered, Ordered, int) (SplitInfo, error)) *MockItemStoreSplitRangeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
