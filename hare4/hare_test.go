@@ -130,7 +130,7 @@ type node struct {
 	proposals  *store.Store
 
 	ctrl                *gomock.Controller
-	mpublisher          *pmocks.MockPublishSubsciber
+	mpublisher          *pmocks.MockPublishSubscriber
 	msyncer             *smocks.MockSyncStateProvider
 	mverifier           *hmock.Mockverifier
 	mockStreamRequester *hmock.MockstreamRequester
@@ -219,7 +219,7 @@ func (n *node) withOracle() *node {
 }
 
 func (n *node) withPublisher() *node {
-	n.mpublisher = pmocks.NewMockPublishSubsciber(n.ctrl)
+	n.mpublisher = pmocks.NewMockPublishSubscriber(n.ctrl)
 	n.mpublisher.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	return n
 }
@@ -258,7 +258,7 @@ func (n *node) withHare() *node {
 		nil,
 		WithConfig(n.t.cfg),
 		WithLogger(logger),
-		WithWallclock(n.clock),
+		WithWallClock(n.clock),
 		WithTracer(tracer),
 		WithServer(n.mockStreamRequester),
 		WithLogger(z),

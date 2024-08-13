@@ -188,7 +188,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	// 3. Spawn new ATX handler and builder using the new DB
 	poetDb = activation.NewPoetDb(newDB, logger.Named("poetDb"))
 	cdb = datastore.NewCachedDB(newDB, logger)
-	atxdata, err = atxsdata.Warm(newDB, 1)
+	atxdata, err = atxsdata.Warm(newDB, 1, logger)
 	poetService = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)
