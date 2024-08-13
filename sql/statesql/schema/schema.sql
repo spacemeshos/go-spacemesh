@@ -25,7 +25,6 @@ CREATE UNIQUE INDEX atx_blobs_id ON atx_blobs (id);
 CREATE TABLE atxs
 (
     id                  CHAR(32),
-    prev_id             CHAR(32),
     epoch               INT NOT NULL,
     effective_num_units INT NOT NULL,
     commitment_atx      CHAR(32),
@@ -37,7 +36,7 @@ CREATE TABLE atxs
     coinbase            CHAR(24),
     received            INT NOT NULL,
     validity INTEGER DEFAULT false
-, weight INTEGER);
+, marriage_atx CHAR(32), weight INTEGER);
 CREATE INDEX atxs_by_coinbase ON atxs (coinbase);
 CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, pubkey);
 CREATE INDEX atxs_by_epoch_by_pubkey_nonce ON atxs (pubkey, epoch desc, nonce) WHERE nonce IS NOT NULL;
@@ -108,10 +107,12 @@ CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
 CREATE TABLE posts (
 		atxid  CHAR(32) NOT NULL,
 		pubkey CHAR(32) NOT NULL,
+		prev_atxid  CHAR(32),
+		prev_atx_index INT,
 		units  INT NOT NULL,
 		UNIQUE (atxid, pubkey)
 	);
-CREATE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey);
+CREATE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey, prev_atxid);
 CREATE TABLE proposal_transactions
 (
     tid     CHAR(32),
