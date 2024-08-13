@@ -250,7 +250,7 @@ func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, certs []*types.Ce
 				zap.Error(err),
 			)
 		} else {
-			s.logger.Info("adopted cert from peer",
+			s.logger.Debug("adopted cert from peer",
 				log.ZContext(ctx),
 				zap.Uint32("layer", lid.Uint32()),
 				zap.Stringer("block", cert.BlockID),

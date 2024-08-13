@@ -49,7 +49,7 @@ func (s *AccountService) String() string {
 }
 
 func (s *AccountService) List(
-	ctx context.Context,
+	_ context.Context,
 	request *spacemeshv2alpha1.AccountRequest,
 ) (*spacemeshv2alpha1.AccountList, error) {
 	switch {

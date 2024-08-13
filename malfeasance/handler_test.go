@@ -84,7 +84,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		}
 
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
-		require.ErrorIs(t, err, errInvalidProof)
+		require.ErrorIs(t, err, errUnknownProof)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 
@@ -114,6 +114,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
 		require.ErrorContains(t, err, "invalid proof")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -224,7 +225,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			"peer",
 			codec.MustEncode(proof),
 		)
-		require.ErrorIs(t, err, errInvalidProof)
+		require.ErrorIs(t, err, errUnknownProof)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 
@@ -292,6 +293,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			codec.MustEncode(proof),
 		)
 		require.ErrorContains(t, err, "invalid proof")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 
 	t.Run("valid proof", func(t *testing.T) {

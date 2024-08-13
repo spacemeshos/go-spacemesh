@@ -869,8 +869,8 @@ func (t *turtle) compareBeacons(bid types.BallotID, lid types.LayerID, beacon ty
 		t.logger.Debug("ballot has different beacon",
 			zap.Uint32("layer_id", lid.Uint32()),
 			zap.Stringer("block", bid),
-			log.ZShortStringer("ballot_beacon", beacon),
-			log.ZShortStringer("epoch_beacon", epoch.beacon),
+			zap.Stringer("ballot_beacon", beacon),
+			zap.Stringer("epoch_beacon", epoch.beacon),
 		)
 		return true, nil
 	}

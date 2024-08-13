@@ -91,7 +91,6 @@ func createP2PFetch(
 ) (*testP2PFetch, context.Context) {
 	lg := zaptest.NewLogger(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	t.Cleanup(cancel)
 
 	serverHost, err := p2p.AutoStart(ctx, lg, p2pCfg(t), []byte{}, []byte{})
 	require.NoError(t, err)
@@ -100,6 +99,13 @@ func createP2PFetch(
 	clientHost, err := p2p.AutoStart(ctx, lg, p2pCfg(t), []byte{}, []byte{})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, clientHost.Stop()) })
+
+	t.Cleanup(func() {
+		cancel()
+		time.Sleep(10 * time.Millisecond)
+		// mafa: p2p internally uses a global logger this should prevent logging after
+		// the test ends (send PR with fix to libp2p/go-libp2p-pubsub) (go loop in pubsub.go)
+	})
 
 	var sqlOpts []sql.Opt
 	if sqlCache {

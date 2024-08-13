@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -50,12 +51,16 @@ func Download(
 		logger.Info("downloaded atxs",
 			zap.Int("total", total),
 			zap.Int("downloaded", downloaded),
-			zap.Array("missing", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
-				for _, atx := range missing {
-					enc.AppendString(atx.ShortString())
-				}
-				return nil
-			})))
+			zap.Int("progress [%]", 100*downloaded/total),
+			log.DebugField(
+				logger,
+				zap.Array("missing", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+					for _, atx := range missing {
+						enc.AppendString(atx.ShortString())
+					}
+					return nil
+				}))),
+		)
 		if len(missing) == 0 {
 			return nil
 		}

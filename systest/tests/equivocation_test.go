@@ -19,7 +19,7 @@ import (
 func TestEquivocation(t *testing.T) {
 	t.Parallel()
 	const bootnodes = 2
-	cctx := testcontext.New(t, testcontext.Labels("sanity"))
+	cctx := testcontext.New(t)
 
 	keys := make([]ed25519.PrivateKey, cctx.ClusterSize-bootnodes)
 	honest := int(float64(len(keys)) * 0.6)

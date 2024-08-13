@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"maps"
@@ -16,7 +17,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 var (
@@ -627,7 +627,7 @@ func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
 		}); err != nil {
 		return fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
 	} else if rows == 0 {
-		return fmt.Errorf("%w: object %s", ErrNotFound, util.Encode(id))
+		return fmt.Errorf("%w: object %s", ErrNotFound, hex.EncodeToString(id))
 	}
 	return nil
 }

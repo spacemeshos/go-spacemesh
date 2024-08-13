@@ -42,7 +42,6 @@ import (
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	peerinfomocks "github.com/spacemeshos/go-spacemesh/p2p/peerinfo/mocks"
@@ -124,7 +123,7 @@ func genLayerBlock(layerID types.LayerID, txs []types.TransactionID) *types.Bloc
 	return b
 }
 
-func dialGrpc(ctx context.Context, tb testing.TB, cfg Config) *grpc.ClientConn {
+func dialGrpc(tb testing.TB, cfg Config) *grpc.ClientConn {
 	tb.Helper()
 	conn, err := grpc.NewClient(
 		cfg.PublicListener,
@@ -161,7 +160,6 @@ func TestMain(m *testing.M) {
 	globalAtx = &types.ActivationTx{
 		PublishEpoch: postGenesisEpoch,
 		Sequence:     1,
-		PrevATXID:    types.ATXID{4, 4, 4, 4},
 		Coinbase:     addr1,
 		NumUnits:     numUnits,
 		Weight:       numUnits,
@@ -173,7 +171,6 @@ func TestMain(m *testing.M) {
 	globalAtx2 = &types.ActivationTx{
 		PublishEpoch: postGenesisEpoch,
 		Sequence:     1,
-		PrevATXID:    types.ATXID{5, 5, 5, 5},
 		Coinbase:     addr2,
 		NumUnits:     numUnits,
 		Weight:       numUnits,
@@ -528,9 +525,7 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := pb.NewSmesherServiceClient(conn)
 
 	return &smesherServiceConn{
@@ -748,9 +743,7 @@ func TestMeshService(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewMeshServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1262,7 +1255,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := codec.Encode(globalTx)
@@ -1301,7 +1294,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	serializedTx, err := codec.Encode(globalTx)
@@ -1334,7 +1327,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 	for range numTxs {
 		res, err := c.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{
@@ -1360,9 +1353,7 @@ func TestTransactionService(t *testing.T) {
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
 
 	// Construct an array of test cases to test each endpoint in turn
@@ -1679,9 +1670,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewMeshServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -1694,7 +1683,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		},
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	stream, err := c.AccountMeshDataStream(ctx, req)
 	require.NoError(t, err, "stream request returned unexpected error")
@@ -1729,9 +1718,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -1745,7 +1732,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		},
 	}
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	stream, err := c.AccountDataStream(ctx, req)
 	require.NoError(t, err, "stream request returned unexpected error")
@@ -1789,9 +1776,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewGlobalStateServiceClient(conn)
 
 	// set up the grpc listener stream
@@ -1801,6 +1786,9 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH |
 				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD),
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	stream, err := c.GlobalStateStream(ctx, req)
 	require.NoError(t, err, "stream request returned unexpected error")
@@ -1864,12 +1852,13 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 
 	// set up the grpc listener stream
 	c := pb.NewMeshServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	stream, err := c.LayerStream(ctx, &pb.LayerStreamRequest{})
 	require.NoError(t, err, "stream request returned unexpected error")
 	// Give the server-side time to subscribe to events
@@ -2007,8 +1996,8 @@ func TestMultiService(t *testing.T) {
 	cfg, shutDown := launchServer(t, svc1, svc2)
 	t.Cleanup(shutDown)
 
-	c1 := pb.NewNodeServiceClient(dialGrpc(ctx, t, cfg))
-	c2 := pb.NewMeshServiceClient(dialGrpc(ctx, t, cfg))
+	c1 := pb.NewNodeServiceClient(dialGrpc(t, cfg))
+	c2 := pb.NewMeshServiceClient(dialGrpc(t, cfg))
 
 	// call endpoints and validate results
 	const message = "Hello World"
@@ -2050,9 +2039,7 @@ func TestDebugService(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewDebugServiceClient(conn)
 
 	t.Run("Accounts", func(t *testing.T) {
@@ -2241,8 +2228,8 @@ func TestEventsReceived(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn1 := dialGrpc(ctx, t, cfg)
-	conn2 := dialGrpc(ctx, t, cfg)
+	conn1 := dialGrpc(t, cfg)
+	conn2 := dialGrpc(t, cfg)
 
 	txClient := pb.NewTransactionServiceClient(conn1)
 	accountClient := pb.NewGlobalStateServiceClient(conn2)
@@ -2282,9 +2269,9 @@ func TestEventsReceived(t *testing.T) {
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
 
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	svm := vm.New(statesql.InMemory(), vm.WithLogger(lg))
-	conState := txs.NewConservativeState(svm, statesql.InMemory(), txs.WithLogger(lg.Zap().Named("conState")))
+	conState := txs.NewConservativeState(svm, statesql.InMemory(), txs.WithLogger(lg.Named("conState")))
 	conState.AddToCache(context.Background(), globalTx, time.Now())
 
 	weight := new(big.Rat).SetFloat64(18.7)
@@ -2329,7 +2316,7 @@ func TestTransactionsRewards(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 
 	address := wallet.Address(types.RandomNodeID().Bytes())
 	weight := new(big.Rat).SetFloat64(18.7)
@@ -2347,7 +2334,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(statesql.InMemory(), vm.WithLogger(logtest.New(t)))
+		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2368,7 +2355,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(statesql.InMemory(), vm.WithLogger(logtest.New(t)))
+		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2390,7 +2377,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	db, err := statesql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	svm := vm.New(db, vm.WithLogger(logtest.New(t)))
+	svm := vm.New(db, vm.WithLogger(zaptest.NewLogger(t)))
 	cfg, cleanup := launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db)))
 	t.Cleanup(cleanup)
 
@@ -2419,7 +2406,7 @@ func TestVMAccountUpdates(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	client := pb.NewGlobalStateServiceClient(dialGrpc(ctx, t, cfg))
+	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 	eg, ctx := errgroup.WithContext(ctx)
 	states := make(chan *pb.AccountState, len(accounts))
 	for _, account := range accounts {
@@ -2512,7 +2499,7 @@ func TestMeshService_EpochStream(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := pb.NewMeshServiceClient(conn)
 
 	stream, err := client.EpochStream(ctx, &pb.EpochStreamRequest{Epoch: epoch.Uint32()})

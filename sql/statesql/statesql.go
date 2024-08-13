@@ -3,6 +3,7 @@ package statesql
 import (
 	"embed"
 	"strings"
+	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -64,4 +65,15 @@ func InMemory(opts ...sql.Opt) sql.StateDatabase {
 	opts = append(defaultOpts, opts...)
 	db := sql.InMemory(opts...)
 	return &database{Database: db}
+}
+
+// InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
+func InMemoryTest(tb testing.TB, opts ...sql.Opt) sql.StateDatabase {
+	opts = append(opts, sql.WithConnections(1))
+	db, err := Open("file::memory:?mode=memory", opts...)
+	if err != nil {
+		panic(err)
+	}
+	tb.Cleanup(func() { db.Close() })
+	return db
 }

@@ -10,13 +10,13 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -160,7 +160,7 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	syncer := New(fetcher, db, localdb,
 		withClock(clock),
 		WithConfig(cfg),
-		WithLogger(logtest.New(tb).Zap()),
+		WithLogger(zaptest.NewLogger(tb)),
 		WithPeerErrMetric(peerErrCount),
 	)
 	return &tester{
@@ -339,7 +339,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectPeers(tester.peers)
 		tester.expectGetMaliciousIDs()
 		tester.expectGetProofs(map[types.NodeID]error{
-			nid("2"): fetch.ErrExceedMaxRetries,
+			nid("2"): errors.New("fail"),
 		})
 		epochStart := tester.clock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)

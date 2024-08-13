@@ -35,7 +35,7 @@ func TestRewardService_List(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewRewardServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -118,7 +118,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewRewardStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {

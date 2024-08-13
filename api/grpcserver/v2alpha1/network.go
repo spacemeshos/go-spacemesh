@@ -11,17 +11,19 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/config"
 )
 
 const (
 	Network = "network_v2alpha1"
 )
 
-func NewNetworkService(genesisTime time.Time, genesisID types.Hash20, layerDuration time.Duration) *NetworkService {
+func NewNetworkService(genesisTime time.Time, config *config.Config) *NetworkService {
 	return &NetworkService{
 		genesisTime:   genesisTime,
-		genesisID:     genesisID,
-		layerDuration: layerDuration,
+		genesisID:     config.Genesis.GenesisID(),
+		layerDuration: config.LayerDuration,
+		labelsPerUnit: config.POST.LabelsPerUnit,
 	}
 }
 
@@ -29,6 +31,7 @@ type NetworkService struct {
 	genesisTime   time.Time
 	genesisID     types.Hash20
 	layerDuration time.Duration
+	labelsPerUnit uint64
 }
 
 func (s *NetworkService) RegisterService(server *grpc.Server) {
@@ -54,5 +57,6 @@ func (s *NetworkService) Info(context.Context,
 		Hrp:                   types.NetworkHRP(),
 		EffectiveGenesisLayer: types.GetEffectiveGenesis().Uint32(),
 		LayersPerEpoch:        types.GetLayersPerEpoch(),
+		LabelsPerUnit:         s.labelsPerUnit,
 	}, nil
 }

@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -72,7 +71,7 @@ func launchServer(tb testing.TB, cdb *datastore.CachedDB) (grpcserver.Config, fu
 	// start gRPC and json servers
 	err := grpcService.Start()
 	require.NoError(tb, err)
-	err = jsonService.StartService(context.Background(), s)
+	err = jsonService.StartService(s)
 	require.NoError(tb, err)
 
 	// update config with bound addresses
@@ -144,7 +143,7 @@ func TestGenerator_Generate(t *testing.T) {
 			g := NewGenerator(
 				ts.URL,
 				cfg.PublicListener,
-				WithLogger(logtest.New(t)),
+				WithLogger(zaptest.NewLogger(t)),
 				WithFilesystem(fs),
 				WithHttpClient(ts.Client()),
 			)
@@ -171,9 +170,9 @@ func TestGenerator_CheckAPI(t *testing.T) {
 	t.Parallel()
 	targetEpoch := types.EpochID(3)
 	db := statesql.InMemory()
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
-	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, lg.Zap()))
+	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, lg))
 	t.Cleanup(cleanup)
 
 	fs := afero.NewMemMapFs()

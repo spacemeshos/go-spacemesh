@@ -29,7 +29,7 @@ func launchJsonServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 		[]string{}, false)
 
 	// start json server
-	require.NoError(tb, jsonService.StartService(context.Background(), services...))
+	require.NoError(tb, jsonService.StartService(services...))
 
 	// update config with bound address
 	cfg.JSONListener = jsonService.BoundAddress

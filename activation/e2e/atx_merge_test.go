@@ -238,7 +238,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// ensure that genesis aligns with layer timings
-	genesis := time.Now().Round(layerDuration)
+	genesis := time.Now().Add(layerDuration).Round(layerDuration)
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
 		PhaseShift:  epoch,
@@ -246,13 +246,13 @@ func Test_MarryAndMerge(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 
-	client := ae2e.NewTestPoetClient(2)
+	client := ae2e.NewTestPoetClient(2, poetCfg)
 	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
 		timesync.WithLayerDuration(layerDuration),
-		timesync.WithTickInterval(100*time.Millisecond),
+		timesync.WithTickInterval(10*time.Millisecond),
 		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)
@@ -513,6 +513,9 @@ func Test_MarryAndMerge(t *testing.T) {
 		require.Equal(t, units[i], atxFromDb.NumUnits)
 		require.Equal(t, signer.NodeID(), atxFromDb.SmesherID)
 		require.Equal(t, publish, atxFromDb.PublishEpoch)
-		require.Equal(t, mergedATX2.ID(), atxFromDb.PrevATXID)
+		prev, err := atxs.Previous(db, atxFromDb.ID())
+		require.NoError(t, err)
+		require.Len(t, prev, 1)
+		require.Equal(t, mergedATX2.ID(), prev[0])
 	}
 }

@@ -11,7 +11,6 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -52,67 +51,6 @@ func getBytes(
 		return nil, err
 	}
 	return blob.Bytes, nil
-}
-
-func TestMalfeasanceProof_Honest(t *testing.T) {
-	db := statesql.InMemory()
-	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
-	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
-
-	nodeID1 := types.NodeID{1}
-	got, err := cdb.GetMalfeasanceProof(nodeID1)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, got)
-	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
-
-	// secretly save the proof to database
-	require.NoError(t, identities.SetMalicious(db, nodeID1, []byte("bad"), time.Now()))
-	bad, err := identities.IsMalicious(db, nodeID1)
-	require.NoError(t, err)
-	require.True(t, bad)
-	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
-
-	// but it will retrieve it from cache
-	got, err = cdb.GetMalfeasanceProof(nodeID1)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, got)
-	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
-	bad, err = cdb.IsMalicious(nodeID1)
-	require.NoError(t, err)
-	require.False(t, bad)
-
-	// asking will cause the answer cached for honest nodes
-	nodeID2 := types.NodeID{2}
-	bad, err = cdb.IsMalicious(nodeID2)
-	require.NoError(t, err)
-	require.False(t, bad)
-	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
-
-	// secretly save the proof to database
-	require.NoError(t, identities.SetMalicious(db, nodeID2, []byte("bad"), time.Now()))
-	bad, err = identities.IsMalicious(db, nodeID2)
-	require.NoError(t, err)
-	require.True(t, bad)
-	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
-
-	// but an add will update the cache
-	proof := &mwire.MalfeasanceProof{
-		Layer: types.LayerID(11),
-		Proof: mwire.Proof{
-			Type: mwire.MultipleBallots,
-			Data: &mwire.BallotProof{
-				Messages: [2]mwire.BallotProofMsg{
-					{},
-					{},
-				},
-			},
-		},
-	}
-	cdb.CacheMalfeasanceProof(nodeID2, proof)
-	bad, err = cdb.IsMalicious(nodeID2)
-	require.NoError(t, err)
-	require.True(t, bad)
-	require.Equal(t, 2, cdb.MalfeasanceCacheSize())
 }
 
 func TestMalfeasanceProof_Dishonest(t *testing.T) {
@@ -407,17 +345,4 @@ func TestBlobStore_GetActiveSet(t *testing.T) {
 	got, err := getBytes(ctx, bs, datastore.ActiveSet, hash)
 	require.NoError(t, err)
 	require.Equal(t, codec.MustEncode(as), got)
-}
-
-func Test_MarkingMalicious(t *testing.T) {
-	db := statesql.InMemory()
-	store := atxsdata.New()
-	id := types.RandomNodeID()
-	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t), datastore.WithConsensusCache(store))
-
-	cdb.CacheMalfeasanceProof(id, &mwire.MalfeasanceProof{})
-	m, err := cdb.IsMalicious(id)
-	require.NoError(t, err)
-	require.True(t, m)
-	require.True(t, store.IsMalicious(id))
 }

@@ -138,6 +138,7 @@ func publishAtxV1(
 			return codec.Decode(got, &watx)
 		})
 	require.NoError(tb, atxs.Add(tab.db, toAtx(tb, &watx), watx.Blob()))
+	require.NoError(tb, atxs.SetPost(tab.db, watx.ID(), watx.PrevATXID, 0, watx.SmesherID, watx.NumUnits))
 	tab.atxsdata.AddFromAtx(toAtx(tb, &watx), false)
 	return &watx
 }
@@ -1077,7 +1078,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 				tries++
 				t.Logf("try %d: %s", tries, now)
 				if tries < expectedTries {
-					return nil, ErrPoetServiceUnstable
+					return nil, &PoetSvcUnstableError{}
 				}
 				close(builderConfirmation)
 				return newNIPostWithPoet(t, []byte("66666")), nil

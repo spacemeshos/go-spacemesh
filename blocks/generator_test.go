@@ -20,8 +20,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -57,13 +57,13 @@ type testGenerator struct {
 	mockFetch  *smocks.MockProposalFetcher
 	mockCert   *mocks.Mockcertifier
 	mockPatrol *mocks.MocklayerPatrol
-	hareCh     chan hare3.ConsensusOutput
+	hareCh     chan hare4.ConsensusOutput
 }
 
 func createTestGenerator(t *testing.T) *testGenerator {
 	types.SetLayersPerEpoch(3)
 	ctrl := gomock.NewController(t)
-	ch := make(chan hare3.ConsensusOutput, 100)
+	ch := make(chan hare4.ConsensusOutput, 100)
 	tg := &testGenerator{
 		mockMesh:   mocks.NewMockmeshProvider(ctrl),
 		mockExec:   mocks.NewMockexecutor(ctrl),
@@ -272,7 +272,7 @@ func genData(
 	store *store.Store,
 	lid types.LayerID,
 	optimistic bool,
-) hare3.ConsensusOutput {
+) hare4.ConsensusOutput {
 	numTXs := 1000
 	numProposals := 10
 	txIDs := createAndSaveTxs(t, numTXs, db)
@@ -284,7 +284,7 @@ func genData(
 	}
 	require.NoError(t, layers.SetMeshHash(db, lid.Sub(1), meshHash))
 	plist := createProposals(t, db, store, lid, meshHash, signers, activeSet, txIDs)
-	return hare3.ConsensusOutput{
+	return hare4.ConsensusOutput{
 		Layer:     lid,
 		Proposals: types.ToProposalIDs(plist),
 	}
@@ -449,7 +449,7 @@ func Test_run(t *testing.T) {
 					})
 			tg.mockPatrol.EXPECT().CompleteHare(layerID)
 			tg.Start(context.Background())
-			tg.hareCh <- hare3.ConsensusOutput{Layer: layerID, Proposals: pids}
+			tg.hareCh <- hare4.ConsensusOutput{Layer: layerID, Proposals: pids}
 			require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 			tg.Stop()
 		})
@@ -465,7 +465,7 @@ func Test_processHareOutput_EmptyOutput(t *testing.T) {
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, types.EmptyBlockID)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, types.EmptyBlockID, false)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	tg.hareCh <- hare3.ConsensusOutput{Layer: layerID}
+	tg.hareCh <- hare4.ConsensusOutput{Layer: layerID}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
 }
@@ -481,7 +481,7 @@ func Test_run_FetchFailed(t *testing.T) {
 			return errors.New("unknown")
 		})
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	tg.hareCh <- hare3.ConsensusOutput{Layer: layerID, Proposals: pids}
+	tg.hareCh <- hare4.ConsensusOutput{Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
 }
@@ -503,7 +503,7 @@ func Test_run_DiffHasFromConsensus(t *testing.T) {
 
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	tg.hareCh <- hare3.ConsensusOutput{Layer: layerID, Proposals: pids}
+	tg.hareCh <- hare4.ConsensusOutput{Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
 }
@@ -536,7 +536,7 @@ func Test_run_ExecuteFailed(t *testing.T) {
 				return nil, errors.New("unknown")
 			})
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	tg.hareCh <- hare3.ConsensusOutput{Layer: layerID, Proposals: pids}
+	tg.hareCh <- hare4.ConsensusOutput{Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
 }
@@ -561,7 +561,7 @@ func Test_run_AddBlockFailed(t *testing.T) {
 		Return(block, nil)
 	tg.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).Return(errors.New("unknown"))
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	tg.hareCh <- hare3.ConsensusOutput{Layer: layerID, Proposals: pids}
+	tg.hareCh <- hare4.ConsensusOutput{Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
 }
@@ -589,7 +589,7 @@ func Test_run_RegisterCertFailureIgnored(t *testing.T) {
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, gomock.Any())
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	tg.hareCh <- hare3.ConsensusOutput{Layer: layerID, Proposals: pids}
+	tg.hareCh <- hare4.ConsensusOutput{Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
 }
@@ -617,7 +617,7 @@ func Test_run_CertifyFailureIgnored(t *testing.T) {
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, gomock.Any()).Return(errors.New("unknown"))
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	tg.hareCh <- hare3.ConsensusOutput{Layer: layerID, Proposals: pids}
+	tg.hareCh <- hare4.ConsensusOutput{Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
 }
@@ -647,7 +647,7 @@ func Test_run_ProcessLayerFailed(t *testing.T) {
 		ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID(), true).
 		Return(errors.New("unknown"))
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	tg.hareCh <- hare3.ConsensusOutput{Layer: layerID, Proposals: pids}
+	tg.hareCh <- hare4.ConsensusOutput{Layer: layerID, Proposals: pids}
 	require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 	tg.Stop()
 }
@@ -674,7 +674,7 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 	activeSet := types.ToATXIDs(atxes)
 	pList := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers, activeSet, nil)
 	ctx := context.Background()
-	ho := hare3.ConsensusOutput{
+	ho := hare4.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(pList),
 	}
@@ -731,7 +731,7 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 			[]types.TransactionID{types.RandomTransactionID()},
 			1,
 		)
-		ho := hare3.ConsensusOutput{
+		ho := hare4.ConsensusOutput{
 			Layer:     layerID,
 			Proposals: types.ToProposalIDs([]*types.Proposal{p}),
 		}
@@ -760,7 +760,7 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 			1,
 		)
 		ctx := context.Background()
-		ho := hare3.ConsensusOutput{
+		ho := hare4.ConsensusOutput{
 			Layer:     layerID,
 			Proposals: types.ToProposalIDs([]*types.Proposal{p}),
 		}
@@ -784,7 +784,7 @@ func Test_processHareOutput_EmptyProposals(t *testing.T) {
 		plist = append(plist, p)
 	}
 	ctx := context.Background()
-	ho := hare3.ConsensusOutput{
+	ho := hare4.ConsensusOutput{
 		Layer:     lid,
 		Proposals: types.ToProposalIDs(plist),
 	}
@@ -833,7 +833,7 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	activeSet := types.ToATXIDs(atxes)
 	plist := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers, activeSet, txIDs)
 	ctx := context.Background()
-	ho1 := hare3.ConsensusOutput{
+	ho1 := hare4.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(plist),
 	}
@@ -853,7 +853,7 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	ordered := plist[numProposals/2 : numProposals]
 	ordered = append(ordered, plist[0:numProposals/2]...)
 	require.NotEqual(t, plist, ordered)
-	ho2 := hare3.ConsensusOutput{
+	ho2 := hare4.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(ordered),
 	}
@@ -882,7 +882,7 @@ func Test_processHareOutput_SameATX(t *testing.T) {
 		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[0:500], 1),
 		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxID, signers[0], txIDs[400:], 1),
 	}
-	ho := hare3.ConsensusOutput{
+	ho := hare4.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(plist),
 	}
@@ -906,7 +906,7 @@ func Test_processHareOutput_EmptyATXID(t *testing.T) {
 		txIDs, 1,
 	)
 	plist = append(plist, p)
-	ho := hare3.ConsensusOutput{
+	ho := hare4.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(plist),
 	}
@@ -929,7 +929,7 @@ func Test_processHareOutput_MultipleEligibilities(t *testing.T) {
 		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
 	}
 	ctx := context.Background()
-	ho := hare3.ConsensusOutput{
+	ho := hare4.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(plist),
 	}

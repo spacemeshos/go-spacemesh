@@ -449,8 +449,8 @@ func TestBeaconWithMetrics(t *testing.T) {
 			spacemesh_beacons_beacon_observed_total{beacon="%s",epoch="%d"} %d
 			spacemesh_beacons_beacon_observed_total{beacon="%s",epoch="%d"} %d
 			`,
-			beacon1.ShortString(), thisEpoch, count,
-			beacon2.ShortString(), thisEpoch, count,
+			beacon1.String(), thisEpoch, count,
+			beacon2.String(), thisEpoch, count,
 		)
 		err := testutil.GatherAndCompare(
 			prometheus.DefaultGatherer,
@@ -467,8 +467,8 @@ func TestBeaconWithMetrics(t *testing.T) {
 			spacemesh_beacons_beacon_observed_weight{beacon="%s",epoch="%d"} %d
 			spacemesh_beacons_beacon_observed_weight{beacon="%s",epoch="%d"} %d
 			`,
-			beacon1.ShortString(), thisEpoch, weight,
-			beacon2.ShortString(), thisEpoch, weight,
+			beacon1.String(), thisEpoch, weight,
+			beacon2.String(), thisEpoch, weight,
 		)
 		err = testutil.GatherAndCompare(
 			prometheus.DefaultGatherer,

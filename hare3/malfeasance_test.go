@@ -27,7 +27,7 @@ type testMalfeasanceHandler struct {
 }
 
 func newTestMalfeasanceHandler(tb testing.TB) *testMalfeasanceHandler {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {

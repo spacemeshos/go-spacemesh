@@ -29,6 +29,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/spf13/afero"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -71,7 +72,7 @@ func DefaultConfig() Config {
 
 type Updater struct {
 	cfg    Config
-	logger log.Log
+	logger *zap.Logger
 	clock  layerClock
 	fs     afero.Fs
 	client *http.Client
@@ -92,7 +93,7 @@ func WithConfig(cfg Config) Opt {
 	}
 }
 
-func WithLogger(logger log.Log) Opt {
+func WithLogger(logger *zap.Logger) Opt {
 	return func(u *Updater) {
 		u.logger = logger
 	}
@@ -113,7 +114,7 @@ func WithHttpClient(c *http.Client) Opt {
 func New(clock layerClock, opts ...Opt) *Updater {
 	u := &Updater{
 		cfg:     DefaultConfig(),
-		logger:  log.NewNop(),
+		logger:  zap.NewNop(),
 		clock:   clock,
 		fs:      afero.NewOsFs(),
 		client:  &http.Client{},
@@ -149,7 +150,7 @@ func (u *Updater) Load(ctx context.Context) error {
 		if err = u.updateAndNotify(ctx, verified); err != nil {
 			return err
 		}
-		u.logger.With().Info("loaded bootstrap file", log.Inline(verified))
+		u.logger.Info("loaded bootstrap file", zap.Inline(verified))
 		u.addUpdate(verified.Data.Epoch, verified.Persisted[len(verified.Persisted)-suffixLen:])
 	}
 	return nil
@@ -165,14 +166,14 @@ func (u *Updater) Start() error {
 			if err := u.Load(ctx); err != nil {
 				return err
 			}
-			u.logger.With().Info("start listening to update",
-				log.String("source", u.cfg.URL),
-				log.Duration("interval", u.cfg.Interval),
+			u.logger.Info("start listening to update",
+				zap.String("source", u.cfg.URL),
+				zap.Duration("interval", u.cfg.Interval),
 			)
 			for {
 				if err := u.DoIt(ctx); err != nil {
 					updateFailureCount.Add(1)
-					u.logger.With().Debug("failed to get bootstrap update", log.Err(err))
+					u.logger.Debug("failed to get bootstrap update", zap.Error(err))
 				}
 				select {
 				case <-u.stop:
@@ -233,10 +234,10 @@ func (u *Updater) DoIt(ctx context.Context) error {
 	current := u.clock.CurrentLayer().GetEpoch()
 	defer func() {
 		if err := u.prune(current); err != nil {
-			u.logger.With().Error("failed to prune",
-				log.Context(ctx),
-				log.Uint32("current epoch", current.Uint32()),
-				log.Err(err),
+			u.logger.Error("failed to prune",
+				log.ZContext(ctx),
+				zap.Uint32("current epoch", current.Uint32()),
+				zap.Error(err),
 			)
 		}
 	}()
@@ -291,7 +292,7 @@ func (u *Updater) checkEpochUpdate(
 		return nil, false, fmt.Errorf("persist bootstrap %s: %w", filename, err)
 	}
 	verified.Persisted = filename
-	u.logger.WithContext(ctx).With().Info("new bootstrap file", log.Inline(verified))
+	u.logger.Info("new bootstrap file", log.ZContext(ctx), zap.Inline(verified))
 	if err = u.updateAndNotify(ctx, verified); err != nil {
 		return verified, false, err
 	}

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -34,7 +35,7 @@ import (
 
 // Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
-	logger   log.Log
+	logger   *zap.Logger
 	cdb      sql.StateDatabase
 	atxsdata *atxsdata.Data
 	clock    layerClock
@@ -64,7 +65,7 @@ func NewMesh(
 	trtl system.Tortoise,
 	exec *Executor,
 	state conservativeState,
-	logger log.Log,
+	logger *zap.Logger,
 ) (*Mesh, error) {
 	msh := &Mesh{
 		logger:              logger,
@@ -104,7 +105,7 @@ func NewMesh(
 		}
 		return nil
 	}); err != nil {
-		msh.logger.With().Panic("error initialize genesis data", log.Err(err))
+		msh.logger.Panic("error initialize genesis data", zap.Error(err))
 	}
 
 	msh.setLatestLayer(genesis)
@@ -118,25 +119,27 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 
 	lyr, err := layers.GetProcessed(msh.cdb)
 	if err != nil {
-		msh.logger.With().Fatal("failed to recover processed layer", log.Err(err))
+		msh.logger.Fatal("failed to recover processed layer", zap.Error(err))
 	}
 	msh.processedLayer.Store(lyr)
 
 	applied, err := layers.GetLastApplied(msh.cdb)
 	if err != nil {
-		msh.logger.With().Fatal("failed to recover latest applied layer", log.Err(err))
+		msh.logger.Fatal("failed to recover latest applied layer", zap.Error(err))
 	}
 	msh.setLatestLayerInState(applied)
 
 	if applied.After(types.GetEffectiveGenesis()) {
 		if err = msh.executor.Revert(context.Background(), applied); err != nil {
-			msh.logger.With().
-				Fatal("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
+			msh.logger.Fatal("failed to load state for layer",
+				zap.Error(err),
+				zap.Uint32("layer", msh.LatestLayerInState().Uint32()),
+			)
 		}
 	}
-	msh.logger.With().Info("recovered mesh from disk",
-		log.Stringer("latest", msh.LatestLayer()),
-		log.Stringer("processed", msh.ProcessedLayer()))
+	msh.logger.Info("recovered mesh from disk",
+		zap.Stringer("latest", msh.LatestLayer()),
+		zap.Stringer("processed", msh.ProcessedLayer()))
 }
 
 // LatestLayerInState returns the latest layer we applied to state.
@@ -258,11 +261,11 @@ func (msh *Mesh) ensureStateConsistent(ctx context.Context, results []result.Lay
 		}
 
 		if bid := layer.FirstValid(); bid != applied {
-			msh.logger.With().Debug("incorrect block applied",
-				log.Context(ctx),
-				log.Uint32("layer_id", layer.Layer.Uint32()),
-				log.Stringer("expected", bid),
-				log.Stringer("applied", applied),
+			msh.logger.Debug("incorrect block applied",
+				log.ZContext(ctx),
+				zap.Uint32("layer_id", layer.Layer.Uint32()),
+				zap.Stringer("expected", bid),
+				zap.Stringer("applied", applied),
 			)
 			changed = min(changed, layer.Layer)
 		}
@@ -297,10 +300,10 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	next := msh.LatestLayerInState() + 1
 	// TODO(dshulyak) https://github.com/spacemeshos/go-spacemesh/issues/4425
 	if len(results) > 0 {
-		msh.logger.With().Debug("consensus results",
-			log.Context(ctx),
-			log.Uint32("layer_id", lid.Uint32()),
-			log.Array("results", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		msh.logger.Debug("consensus results",
+			log.ZContext(ctx),
+			zap.Uint32("layer_id", lid.Uint32()),
+			zap.Array("results", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				for i := range results {
 					encoder.AppendObject(&results[i])
 				}
@@ -411,10 +414,10 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 }
 
 func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid types.BlockID) error {
-	msh.logger.With().Debug("saving hare output",
-		log.Context(ctx),
-		log.Uint32("lid", lid.Uint32()),
-		log.Stringer("block", bid),
+	msh.logger.Debug("saving hare output",
+		log.ZContext(ctx),
+		zap.Uint32("lid", lid.Uint32()),
+		zap.Stringer("block", bid),
 	)
 	var (
 		certs []certificates.CertValidity
@@ -456,9 +459,9 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid type
 		return err
 	}
 	if len(certs) > 1 {
-		msh.logger.With().Warning("multiple certificates found in network",
-			log.Context(ctx),
-			log.Object("certificates", log.ObjectMarshallerFunc(func(encoder zapcore.ObjectEncoder) error {
+		msh.logger.Warn("multiple certificates found in network",
+			log.ZContext(ctx),
+			zap.Object("certificates", zapcore.ObjectMarshalerFunc(func(encoder zapcore.ObjectEncoder) error {
 				for _, cert := range certs {
 					encoder.AddString("block_id", cert.Block.String())
 					encoder.AddBool("valid", cert.Valid)
@@ -569,16 +572,16 @@ func (msh *Mesh) AddBallot(
 				}
 				encoded, err := codec.Encode(proof)
 				if err != nil {
-					msh.logger.With().Panic("failed to encode MalfeasanceProof", log.Err(err))
+					msh.logger.Panic("failed to encode MalfeasanceProof", zap.Error(err))
 				}
 				if err := identities.SetMalicious(dbtx, ballot.SmesherID, encoded, time.Now()); err != nil {
 					return fmt.Errorf("add malfeasance proof: %w", err)
 				}
 				ballot.SetMalicious()
-				msh.logger.With().Warning("smesher produced more than one ballot in the same layer",
-					log.Stringer("smesher", ballot.SmesherID),
-					log.Object("prev", prev),
-					log.Object("curr", ballot),
+				msh.logger.Warn("smesher produced more than one ballot in the same layer",
+					zap.Stringer("smesher", ballot.SmesherID),
+					zap.Object("prev", prev),
+					zap.Object("curr", ballot),
 				)
 			}
 		}

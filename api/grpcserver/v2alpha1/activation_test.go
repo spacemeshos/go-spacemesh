@@ -37,7 +37,7 @@ func TestActivationService_List(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -120,7 +120,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewActivationStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {
@@ -240,7 +240,7 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
 	t.Run("count without filter", func(t *testing.T) {

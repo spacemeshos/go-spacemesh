@@ -39,7 +39,7 @@ func newAtx(tb testing.TB, db sql.StateDatabase) {
 	atx.SmesherID = types.BytesToNodeID(types.RandomBytes(20))
 	atx.SetReceived(time.Now().Local())
 	require.NoError(tb, atxs.Add(db, atx, types.AtxBlob{}))
-	require.NoError(tb, atxs.SetUnits(db, atx.ID(), atx.SmesherID, atx.NumUnits))
+	require.NoError(tb, atxs.SetPost(db, atx.ID(), types.EmptyATXID, 0, atx.SmesherID, atx.NumUnits))
 }
 
 func createMesh(tb testing.TB, db sql.StateDatabase) {
@@ -66,7 +66,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewAdminServiceClient(conn)
 
 	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
@@ -102,7 +102,7 @@ func TestAdminService_CheckpointError(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewAdminServiceClient(conn)
 
 	stream, err := c.CheckpointStream(ctx, &pb.CheckpointStreamRequest{SnapshotLayer: snapshot})
@@ -122,7 +122,7 @@ func TestAdminService_Recovery(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewAdminServiceClient(conn)
 
 	_, err := c.Recover(ctx, &pb.RecoverRequest{})
@@ -142,7 +142,7 @@ func TestAdminService_PeerInfo(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := pb.NewAdminServiceClient(conn)
 
 	p1 := p2p.Peer("p1")

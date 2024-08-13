@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -176,7 +177,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		ev.Atx.BaseTickHeight = 1
 		ev.Atx.TickCount = 2
 		atxs.Add(c.cdb, ev.Atx, types.AtxBlob{})
-		malicious, err := c.cdb.IsMalicious(ev.Atx.SmesherID)
+		malicious, err := identities.IsMalicious(c.cdb, ev.Atx.SmesherID)
 		if err != nil {
 			c.logger.Fatal("failed is malicious lookup", zap.Error(err))
 		}

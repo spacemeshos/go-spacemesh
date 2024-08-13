@@ -119,7 +119,7 @@ func getProposalMetadata(
 		}
 	}
 	if majorityState == nil {
-		logger.Info("no consensus on mesh hash. NOT doing optimistic filtering",
+		logger.Debug("no consensus on mesh hash. NOT doing optimistic filtering",
 			zap.Uint32("layer_id", lid.Uint32()),
 		)
 	} else {
@@ -164,7 +164,7 @@ func getBlockTXs(
 	if err := txCache.BuildFromTXs(mtxs, blockSeed); err != nil {
 		return nil, fmt.Errorf("build txs for block: %w", err)
 	}
-	byAddrAndNonce := txCache.GetMempool(logger)
+	byAddrAndNonce := txCache.GetMempool()
 	if len(byAddrAndNonce) == 0 {
 		logger.Warn("no feasible txs for block")
 		return nil, nil
@@ -203,7 +203,7 @@ func prune(
 	)
 	for idx, tid = range tids {
 		if gasRemaining < txs.MinTXGas {
-			logger.Info("gas exhausted for block",
+			logger.Debug("gas exhausted for block",
 				zap.Int("num_txs", idx),
 				zap.Uint64("gas_left", gasRemaining),
 				zap.Uint64("gas_limit", gasLimit),

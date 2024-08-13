@@ -9,10 +9,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -46,7 +46,7 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	db := statesql.InMemory()
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
-	syncer := New(fetcher, db, localdb, WithConfig(cfg), WithLogger(logtest.New(tb).Zap()))
+	syncer := New(fetcher, db, localdb, WithConfig(cfg), WithLogger(zaptest.NewLogger(tb)))
 	return &tester{
 		tb:      tb,
 		syncer:  syncer,
@@ -191,7 +191,7 @@ func TestSyncer(t *testing.T) {
 					}
 					for _, bad := range bad.AtxIDs {
 						if bad == id {
-							berr.Add(bad.Hash32(), fmt.Errorf("%w: test", fetch.ErrExceedMaxRetries))
+							berr.Add(bad.Hash32(), fmt.Errorf("%w: test", errors.New("oh no failed")))
 						}
 					}
 				}

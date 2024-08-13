@@ -58,7 +58,7 @@ func TestTransactionService_List(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}}, nil)
 	require.NoError(t, err)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	t.Run("valid tx", func(t *testing.T) {
@@ -267,7 +267,7 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 	mangled := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
 	mangled[len(mangled)-1] -= 1
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	t.Run("valid tx", func(t *testing.T) {
@@ -364,7 +364,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	signer, err := signing.NewEdSigner()
@@ -407,7 +407,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	signer, err := signing.NewEdSigner()
@@ -444,7 +444,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	c := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	signer, err := signing.NewEdSigner()
