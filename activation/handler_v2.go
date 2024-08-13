@@ -630,7 +630,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			)
 			invalidIdx := &verifying.ErrInvalidIndex{}
 			if errors.As(err, invalidIdx) {
-				h.logger.Info(
+				h.logger.Debug(
 					"ATX with invalid post index",
 					zap.Stringer("id", atx.ID()),
 					zap.Int("index", invalidIdx.Index),
@@ -699,6 +699,14 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx *sql.Tx, atx *activat
 		return nil
 	}
 
+	malicious, err = h.checkPrevAtx(ctx, tx, atx)
+	if err != nil {
+		return fmt.Errorf("checking previous ATX: %w", err)
+	}
+	if malicious {
+		return nil
+	}
+
 	// TODO(mafa): contextual validation:
 	// 1. check double-publish = ID contributed post to two ATXs in the same epoch
 	// 2. check previous ATX
@@ -762,29 +770,66 @@ func (h *HandlerV2) checkDoublePost(ctx context.Context, tx *sql.Tx, atx *activa
 	return false, nil
 }
 
-func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, watx *activationTx) (bool, error) {
-	if watx.MarriageATX == nil {
+func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+	if atx.MarriageATX == nil {
 		return false, nil
 	}
-	ids, err := atxs.MergeConflict(tx, *watx.MarriageATX, watx.PublishEpoch)
+	ids, err := atxs.MergeConflict(tx, *atx.MarriageATX, atx.PublishEpoch)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		return false, nil
 	case err != nil:
 		return false, fmt.Errorf("searching for ATXs with the same marriage ATX: %w", err)
 	}
-	otherIndex := slices.IndexFunc(ids, func(id types.ATXID) bool { return id != watx.ID() })
+	otherIndex := slices.IndexFunc(ids, func(id types.ATXID) bool { return id != atx.ID() })
 	other := ids[otherIndex]
 
 	h.logger.Debug("second merged ATX for single marriage - creating malfeasance proof",
-		zap.Stringer("marriage_atx", *watx.MarriageATX),
-		zap.Stringer("atx", watx.ID()),
+		zap.Stringer("marriage_atx", *atx.MarriageATX),
+		zap.Stringer("atx", atx.ID()),
 		zap.Stringer("other_atx", other),
-		zap.Stringer("smesher_id", watx.SmesherID),
+		zap.Stringer("smesher_id", atx.SmesherID),
 	)
 
 	var proof wire.Proof
-	return true, h.malPublisher.Publish(ctx, watx.SmesherID, proof)
+	return true, h.malPublisher.Publish(ctx, atx.SmesherID, proof)
+}
+
+func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+	for id, data := range atx.ids {
+		expectedPrevID, err := atxs.PrevIDByNodeID(tx, id, atx.PublishEpoch)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return false, fmt.Errorf("get last atx by node id: %w", err)
+		}
+		if expectedPrevID == data.previous {
+			continue
+		}
+
+		h.logger.Debug("atx references a wrong previous ATX",
+			log.ZShortStringer("smesherID", id),
+			log.ZShortStringer("actual", data.previous),
+			log.ZShortStringer("expected", expectedPrevID),
+		)
+
+		atx1, atx2, err := atxs.PrevATXCollision(tx, data.previous, id)
+		switch {
+		case errors.Is(err, sql.ErrNotFound):
+			continue
+		case err != nil:
+			return false, fmt.Errorf("checking for previous ATX collision: %w", err)
+		}
+
+		h.logger.Debug("creating a malfeasance proof for invalid previous ATX",
+			log.ZShortStringer("smesherID", id),
+			log.ZShortStringer("atx1", atx1),
+			log.ZShortStringer("atx2", atx2),
+		)
+
+		// TODO(mafa): finish proof
+		var proof wire.Proof
+		return true, h.malPublisher.Publish(ctx, id, proof)
+	}
+	return false, nil
 }
 
 // Store an ATX in the DB.
