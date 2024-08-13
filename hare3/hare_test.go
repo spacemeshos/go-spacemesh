@@ -121,7 +121,7 @@ type node struct {
 	proposals  *store.Store
 
 	ctrl       *gomock.Controller
-	mpublisher *pmocks.MockPublishSubsciber
+	mpublisher *pmocks.MockPublishSubscriber
 	msyncer    *smocks.MockSyncStateProvider
 	patrol     *layerpatrol.LayerPatrol
 	tracer     *testTracer
@@ -203,7 +203,7 @@ func (n *node) withOracle() *node {
 }
 
 func (n *node) withPublisher() *node {
-	n.mpublisher = pmocks.NewMockPublishSubsciber(n.ctrl)
+	n.mpublisher = pmocks.NewMockPublishSubscriber(n.ctrl)
 	n.mpublisher.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	return n
 }
