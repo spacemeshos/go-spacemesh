@@ -129,7 +129,7 @@ type WeakCoinOutput struct {
 
 type Opt func(*Hare)
 
-func WithWallclock(clock clockwork.Clock) Opt {
+func WithWallClock(clock clockwork.Clock) Opt {
 	return func(hr *Hare) {
 		hr.wallClock = clock
 	}

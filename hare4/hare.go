@@ -151,7 +151,7 @@ func WithServer(s streamRequester) Opt {
 	}
 }
 
-func WithWallclock(clock clockwork.Clock) Opt {
+func WithWallClock(clock clockwork.Clock) Opt {
 	return func(hr *Hare) {
 		hr.wallClock = clock
 	}
