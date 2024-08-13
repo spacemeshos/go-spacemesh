@@ -171,8 +171,8 @@ func createP2PFetch(
 func (tpf *testP2PFetch) createATXs(epoch types.EpochID) []types.ATXID {
 	atxIDs := make([]types.ATXID, 10)
 	for i := range atxIDs {
-		atx, blob := newAtx(tpf.t, epoch)
-		require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, blob))
+		atx := newAtx(tpf.t, epoch)
+		require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, types.AtxBlob{}))
 		atxIDs[i] = atx.ID()
 	}
 	return atxIDs
@@ -351,15 +351,13 @@ func TestP2PGetATXs(t *testing.T) {
 		t, "database: no free connection",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
-			atx, blob := newAtx(tpf.t, epoch)
-			require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, blob))
+			atx := newAtx(tpf.t, epoch)
+			require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, types.AtxBlob{}))
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetAtxs(
-						context.Background(), []types.ATXID{atx.ID()})
-				},
+				func() error { return tpf.clientFetch.GetAtxs(context.Background(), []types.ATXID{atx.ID()}) },
 				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
-				blob.Blob)
+				[]byte{},
+			)
 		})
 }
 
@@ -368,17 +366,13 @@ func TestP2PGetPoet(t *testing.T) {
 		t, "database: no free connection", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			ref := types.PoetProofRef{0x42, 0x43}
-			require.NoError(t, poets.Add(
-				tpf.serverCDB, ref,
-				[]byte("proof1"), []byte("sid1"), "rid1"))
+			require.NoError(t, poets.Add(tpf.serverCDB, ref, []byte("proof1"), []byte("sid1"), "rid1"))
 
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetPoetProof(
-						context.Background(), types.Hash32(ref))
-				},
+				func() error { return tpf.clientFetch.GetPoetProof(context.Background(), types.Hash32(ref)) },
 				errStr, "poet", "hs/1", types.Hash32(ref), ref[:],
-				[]byte("proof1"))
+				[]byte("proof1"),
+			)
 		})
 }
 
@@ -397,12 +391,10 @@ func TestP2PGetBallot(t *testing.T) {
 			require.NoError(t, ballots.Add(tpf.serverCDB, b))
 
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetBallots(
-						context.Background(), []types.BallotID{b.ID()})
-				},
+				func() error { return tpf.clientFetch.GetBallots(context.Background(), []types.BallotID{b.ID()}) },
 				errStr, "ballot", "hs/1", b.ID().AsHash32(), b.ID().Bytes(),
-				codec.MustEncode(b))
+				codec.MustEncode(b),
+			)
 		})
 }
 
@@ -418,11 +410,10 @@ func TestP2PGetActiveSet(t *testing.T) {
 			require.NoError(tpf.t, activesets.Add(tpf.serverCDB, id, set))
 
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetActiveSet(context.Background(), id)
-				},
+				func() error { return tpf.clientFetch.GetActiveSet(context.Background(), id) },
 				errStr, "activeset", "as/1", id, id.Bytes(),
-				codec.MustEncode(set))
+				codec.MustEncode(set),
+			)
 		})
 }
 
@@ -435,12 +426,10 @@ func TestP2PGetBlock(t *testing.T) {
 			require.NoError(t, blocks.Add(tpf.serverCDB, bk))
 
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetBlocks(
-						context.Background(), []types.BlockID{bk.ID()})
-				},
+				func() error { return tpf.clientFetch.GetBlocks(context.Background(), []types.BlockID{bk.ID()}) },
 				errStr, "block", "hs/1", bk.ID().AsHash32(), bk.ID().Bytes(),
-				codec.MustEncode(bk))
+				codec.MustEncode(bk),
+			)
 		})
 }
 
@@ -507,11 +496,11 @@ func TestP2PGetProposalTransactions(t *testing.T) {
 			require.NoError(t, transactions.Add(tpf.serverCDB, &tx, time.Now()))
 			tpf.verifyGetHash(
 				func() error {
-					return tpf.clientFetch.GetProposalTxs(
-						context.Background(), []types.TransactionID{tx.ID})
+					return tpf.clientFetch.GetProposalTxs(context.Background(), []types.TransactionID{tx.ID})
 				},
 				errStr, "txProposal", "hs/1", types.Hash32(tx.ID), tx.ID.Bytes(),
-				tx.Raw)
+				tx.Raw,
+			)
 		})
 }
 
@@ -524,11 +513,9 @@ func TestP2PGetMalfeasanceProofs(t *testing.T) {
 			require.NoError(t, identities.SetMalicious(
 				tpf.serverCDB, nid, proof, time.Now()))
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetMalfeasanceProofs(
-						context.Background(), []types.NodeID{nid})
-				},
+				func() error { return tpf.clientFetch.GetMalfeasanceProofs(context.Background(), []types.NodeID{nid}) },
 				errStr, "mal", "hs/1", types.Hash32(nid), nid.Bytes(),
-				proof)
+				proof,
+			)
 		})
 }
