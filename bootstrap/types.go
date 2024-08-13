@@ -1,8 +1,9 @@
 package bootstrap
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type Update struct {
