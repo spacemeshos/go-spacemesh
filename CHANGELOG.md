@@ -11,18 +11,23 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6241](https://github.com/spacemeshos/go-spacemesh/pull/6241) Improve speed of ATX cache warmup.
 
-* [#6248](https://github.com/spacemeshos/go-spacemesh/pull/6248) Fixed node not being able to handle more than 6.55M
-  ATXs per epoch.
-
 ### Features
 
 * [#6213](https://github.com/spacemeshos/go-spacemesh/pull/6213) Adds `labels_per_unit` to the v2alpha1 Network Info API.
+
+## Release v1.6.6-hotfix1
+
+### Improvements
+
+* [#6248](https://github.com/spacemeshos/go-spacemesh/pull/6248) Fixed node not being able to handle more than 6.55M
+  ATXs per epoch.
 
 ## Release v1.6.6
 
 ### Improvements
 
 * [#6198](https://github.com/spacemeshos/go-spacemesh/pull/6198) Configure default TTL for caching poet's /v1/info
+
 * [#6199](https://github.com/spacemeshos/go-spacemesh/pull/6199) Cache poet's /v1/pow_params
 
 ## Release v1.6.5
