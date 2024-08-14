@@ -3,8 +3,9 @@ package result
 import (
 	"fmt"
 
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type Layer struct {
@@ -34,13 +35,13 @@ func (l Layer) String() string {
 	return fmt.Sprintf("%d %+v", l.Layer, l.Blocks)
 }
 
-func (l *Layer) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (l *Layer) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("layer", l.Layer.Uint32())
 	encoder.AddString("opinion", l.Opinion.ShortString())
 	encoder.AddBool("verified", l.Verified)
-	encoder.AddArray("blocks", log.ArrayMarshalerFunc(func(aencoder log.ArrayEncoder) error {
+	encoder.AddArray("blocks", zapcore.ArrayMarshalerFunc(func(arrayEncoder zapcore.ArrayEncoder) error {
 		for i := range l.Blocks {
-			aencoder.AppendObject(&l.Blocks[i])
+			arrayEncoder.AppendObject(&l.Blocks[i])
 		}
 		return nil
 	}))
@@ -56,7 +57,7 @@ type Block struct {
 	Data    bool       `json:"d"`
 }
 
-func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (b *Block) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	b.Header.MarshalLogObject(encoder)
 	encoder.AddBool("valid", b.Valid)
 	encoder.AddBool("invalid", b.Invalid)
