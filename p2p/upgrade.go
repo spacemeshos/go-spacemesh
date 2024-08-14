@@ -52,7 +52,7 @@ func WithContext(ctx context.Context) Opt {
 
 // WithNodeReporter updates reporter that is notified every time when
 // node added or removed a peer.
-func WithNodeReporter(reporter func()) Opt {
+func WithNodeReporter(reporter func() error) Opt {
 	return func(fh *Host) {
 		fh.nodeReporter = reporter
 	}
@@ -101,7 +101,7 @@ type Host struct {
 	peerInfo peerinfo.PeerInfo
 	pubsub.PubSub
 
-	nodeReporter func()
+	nodeReporter func() error
 
 	discovery        *discovery.Discovery
 	direct, bootnode map[peer.ID]struct{}
@@ -222,10 +222,18 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	if fh.nodeReporter != nil {
 		fh.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(network.Network, network.Conn) {
-				fh.nodeReporter()
+				if err := fh.nodeReporter(); err != nil {
+					fh.logger.Error("Failed to emit status update", zap.Error(err))
+				} else {
+					fh.logger.Debug("reported status update")
+				}
 			},
 			DisconnectedF: func(network.Network, network.Conn) {
-				fh.nodeReporter()
+				if err := fh.nodeReporter(); err != nil {
+					fh.logger.Error("Failed to emit status update", zap.Error(err))
+				} else {
+					fh.logger.Debug("reported status update")
+				}
 			},
 		})
 	}

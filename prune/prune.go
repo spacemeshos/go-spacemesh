@@ -56,7 +56,7 @@ func Run(ctx context.Context, p *Pruner, clock *timesync.NodeClock, interval tim
 			current := clock.CurrentLayer()
 			if err := p.Prune(current); err != nil {
 				p.logger.Error("failed to prune",
-					current.Field().Zap(),
+					zap.Uint32("lid", current.Uint32()),
 					zap.Uint32("dist", p.safeDist),
 					zap.Error(err),
 				)

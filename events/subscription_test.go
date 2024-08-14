@@ -18,7 +18,7 @@ func TestSubscribe(t *testing.T) {
 	lid := types.LayerID(10)
 	tx := &types.Transaction{}
 	tx.ID = types.TransactionID{1, 1, 1}
-	ReportNewTx(lid, tx)
+	require.NoError(t, ReportNewTx(lid, tx))
 
 	select {
 	case received := <-sub.Out():
@@ -39,7 +39,7 @@ func TestSubscribeFull(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		tx := &types.Transaction{}
 		tx.ID = types.TransactionID{1, 1, 1}
-		ReportNewTx(lid, tx)
+		require.NoError(t, ReportNewTx(lid, tx))
 	}
 
 	select {

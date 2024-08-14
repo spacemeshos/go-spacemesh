@@ -259,11 +259,22 @@ func (v *VM) Apply(
 		return nil, nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
 	}
 	ss.IterateChanged(func(account *core.Account) bool {
-		events.ReportAccountUpdate(account.Address)
+		if err := events.ReportAccountUpdate(account.Address); err != nil {
+			v.logger.Error("Failed to emit account update",
+				zap.String("account", account.Address.String()),
+				zap.Error(err),
+			)
+		} else {
+			v.logger.Debug("reported account update", zap.Stringer("address", account.Address))
+		}
 		return true
 	})
 	for _, reward := range rewardsResult {
-		events.ReportRewardReceived(reward)
+		if err := events.ReportRewardReceived(reward); err != nil {
+			v.logger.Error("Failed to emit rewards", zap.Uint32("lid", reward.Layer.Uint32()), zap.Error(err))
+		} else {
+			v.logger.Debug("reported reward: %v", zap.Inline(reward))
+		}
 	}
 	hash.PutHasher(hasher)
 

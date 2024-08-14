@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate scalegen -types Transaction,Reward,RawTx
@@ -40,9 +40,6 @@ func (id TransactionID) String() string {
 func (id TransactionID) Bytes() []byte {
 	return id[:]
 }
-
-// Field returns a log field. Implements the LoggableField interface.
-func (id TransactionID) Field() log.Field { return log.FieldNamed("tx_id", id.Hash32()) }
 
 // Compare returns true if other (the given TransactionID) is less than this TransactionID, by lexicographic comparison.
 func (id TransactionID) Compare(other TransactionID) bool {
@@ -132,6 +129,15 @@ type Reward struct {
 	LayerReward uint64
 	Coinbase    Address
 	SmesherID   NodeID
+}
+
+func (r Reward) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddUint32("layer", r.Layer.Uint32())
+	enc.AddUint64("total_reward", r.TotalReward)
+	enc.AddUint64("layer_reward", r.LayerReward)
+	enc.AddString("coinbase", r.Coinbase.String())
+	enc.AddString("smesher_id", r.SmesherID.String())
+	return nil
 }
 
 // NewRawTx computes id from raw bytes and returns the object.

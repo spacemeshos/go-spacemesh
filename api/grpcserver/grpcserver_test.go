@@ -1445,7 +1445,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(0, globalTx)
+			require.NoError(t, events.ReportNewTx(0, globalTx))
 			res, err := stream.Recv()
 			require.NoError(t, err)
 			require.Nil(t, res.Transaction)
@@ -1470,7 +1470,7 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			events.ReportNewTx(0, globalTx)
+			require.NoError(t, events.ReportNewTx(0, globalTx))
 
 			// Verify
 			res, err := stream.Recv()
@@ -1563,7 +1563,7 @@ func TestTransactionService(t *testing.T) {
 
 			// TODO send header after stream has subscribed
 
-			events.ReportNewTx(0, globalTx)
+			require.NoError(t, events.ReportNewTx(0, globalTx))
 
 			for _, stream := range streams {
 				res, err := stream.Recv()
@@ -1593,7 +1593,7 @@ func TestTransactionService(t *testing.T) {
 			time.Sleep(time.Millisecond * 50)
 
 			for range subscriptionChanBufSize * 2 {
-				events.ReportNewTx(0, globalTx)
+				require.NoError(t, events.ReportNewTx(0, globalTx))
 			}
 
 			for range subscriptionChanBufSize {
@@ -1691,15 +1691,15 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	// publish a tx
-	events.ReportNewTx(0, globalTx)
+	require.NoError(t, events.ReportNewTx(0, globalTx))
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
 	checkAccountMeshDataItemTx(t, res.Datum.Datum)
 
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
-	events.ReportNewTx(0, globalTx2)
-	events.ReportNewActivation(globalAtx2)
+	require.NoError(t, events.ReportNewTx(0, globalTx2))
+	require.NoError(t, events.ReportNewActivation(globalAtx2))
 
 	_, err = stream.Recv()
 	require.Error(t, err)
@@ -1739,20 +1739,20 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// Give the server-side time to subscribe to events
 	time.Sleep(time.Millisecond * 50)
 
-	events.ReportRewardReceived(types.Reward{
+	require.NoError(t, events.ReportRewardReceived(types.Reward{
 		Layer:       layerFirst,
 		TotalReward: rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
 		SmesherID:   rewardSmesherID,
-	})
+	}))
 
 	res, err := stream.Recv()
 	require.NoError(t, err)
 	checkAccountDataItemReward(t, res.Datum.Datum)
 
 	// publish an account data update
-	events.ReportAccountUpdate(addr1)
+	require.NoError(t, events.ReportAccountUpdate(addr1))
 
 	res, err = stream.Recv()
 	require.NoError(t, err)
@@ -1760,8 +1760,8 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	// test streaming a reward and account update that should be filtered out
 	// these should not be received
-	events.ReportAccountUpdate(addr2)
-	events.ReportRewardReceived(types.Reward{Coinbase: addr2})
+	require.NoError(t, events.ReportAccountUpdate(addr2))
+	require.NoError(t, events.ReportRewardReceived(types.Reward{Coinbase: addr2}))
 
 	_, err = stream.Recv()
 	require.Error(t, err)
@@ -1796,19 +1796,19 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	// publish a reward
-	events.ReportRewardReceived(types.Reward{
+	require.NoError(t, events.ReportRewardReceived(types.Reward{
 		Layer:       layerFirst,
 		TotalReward: rewardAmount,
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
 		SmesherID:   rewardSmesherID,
-	})
+	}))
 	res, err := stream.Recv()
 	require.NoError(t, err, "got error from stream")
 	checkGlobalStateDataReward(t, res.Datum.Datum)
 
 	// publish an account data update
-	events.ReportAccountUpdate(addr1)
+	require.NoError(t, events.ReportAccountUpdate(addr1))
 	res, err = stream.Recv()
 	require.NoError(t, err, "got error from stream")
 	checkGlobalStateDataAccountWrapper(t, res.Datum.Datum)
@@ -1817,10 +1817,10 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	layer, err := meshAPIMock.GetLayer(layerFirst)
 	require.NoError(t, err)
 
-	events.ReportLayerUpdate(events.LayerUpdate{
+	require.NoError(t, events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layer.Index(),
 		Status:  events.LayerStatusTypeApplied,
-	})
+	}))
 	res, err = stream.Recv()
 	require.NoError(t, err, "got error from stream")
 	checkGlobalStateDataGlobalState(t, res.Datum.Datum)
@@ -1868,10 +1868,10 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act
-	events.ReportLayerUpdate(events.LayerUpdate{
+	require.NoError(t, events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layer.Index(),
 		Status:  events.LayerStatusTypeConfirmed,
-	})
+	}))
 
 	// Verify
 	res, err := stream.Recv()

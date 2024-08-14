@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // BytesToNodeID is a helper to copy buffer into a NodeID.
@@ -38,9 +37,6 @@ func (id NodeID) Bytes() []byte {
 func (id NodeID) ShortString() string {
 	return hex.EncodeToString(id[:3])
 }
-
-// Field returns a log field. Implements the LoggableField interface.
-func (id NodeID) Field() log.Field { return log.Stringer("node_id", id) }
 
 // EmptyNodeID is a canonical empty NodeID.
 var EmptyNodeID NodeID
