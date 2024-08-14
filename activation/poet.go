@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"sync"
@@ -128,13 +129,31 @@ func WithLogger(logger *zap.Logger) PoetClientOpts {
 	}
 }
 
+func customLinearJitterBackoff(min, max time.Duration, attemptNum int, resp *http.Response) time.Duration {
+	attemptNum++
+	if max <= min {
+		return min * time.Duration(attemptNum)
+	}
+
+	source := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
+
+	jitter := source.Float64() * float64(max-min)
+	jitterMin := int64(jitter) + int64(min)
+
+	sleep := time.Duration(jitterMin * int64(attemptNum))
+	if sleep > max {
+		sleep = max
+	}
+	return sleep
+}
+
 // NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified url.
 func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
 	client := &retryablehttp.Client{
 		RetryMax:     cfg.MaxRequestRetries,
 		RetryWaitMin: cfg.RequestRetryDelay,
 		RetryWaitMax: 2 * cfg.RequestRetryDelay,
-		Backoff:      retryablehttp.LinearJitterBackoff,
+		Backoff:      customLinearJitterBackoff,
 		CheckRetry:   checkRetry,
 	}
 
@@ -161,6 +180,7 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 		submitChallengeClient: submitChallengeClient,
 		logger:                zap.NewNop(),
 	}
+
 	for _, opt := range opts {
 		opt(poetClient)
 	}
