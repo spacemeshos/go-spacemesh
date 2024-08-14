@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-var statusMap map[types.PostState]pb.PostState_State = map[types.PostState]pb.PostState_State{
+var statusMap = map[types.PostState]pb.PostState_State{
 	types.PostStateIdle:    pb.PostState_IDLE,
 	types.PostStateProving: pb.PostState_PROVING,
 }

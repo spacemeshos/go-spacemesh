@@ -2,7 +2,6 @@ package v2alpha1
 
 import (
 	"context"
-	"errors"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
@@ -19,8 +18,6 @@ import (
 const SmeshingIdentities = "smeshing_identities_v2alpha1"
 
 const poetsMismatchWarning = "poet is not configured, reconfiguration required"
-
-var ErrInvalidSmesherId = errors.New("smesher id is invalid")
 
 type SmeshingIdentitiesService struct {
 	db                     sql.Executor
@@ -42,6 +39,14 @@ func NewSmeshingIdentitiesService(
 	}
 }
 
+var statusMap = map[types.IdentityState]pb.IdentityStatus{
+	types.WaitForATXSyncing:     pb.IdentityStatus_STATUS_IS_SYNCING,
+	types.WaitForPoetRoundStart: pb.IdentityStatus_STATUS_WAIT_FOR_POET_ROUND_START,
+	types.WaitForPoetRoundEnd:   pb.IdentityStatus_STATUS_WAIT_FOR_POET_ROUND_END,
+	types.FetchingProofs:        pb.IdentityStatus_STATUS_FETCHING_PROOFS,
+	types.PostProving:           pb.IdentityStatus_STATUS_POST_PROVING,
+}
+
 func (s *SmeshingIdentitiesService) RegisterService(server *grpc.Server) {
 	pb.RegisterSmeshingIdentitiesServiceServer(server, s)
 }
@@ -58,8 +63,15 @@ func (s *SmeshingIdentitiesService) String() string {
 func (s *SmeshingIdentitiesService) PoetServices(_ context.Context, req *pb.PoetServicesRequest) (*pb.PoetServicesResponse, error) {
 	states := s.states.IdentityStates()
 
+	pbIdentities := make(map[types.NodeID]*pb.PoetServicesResponse_Identity)
 	nodeIdsToRequest := make([]types.NodeID, 0)
+
 	for desc, state := range states {
+		pbIdentities[desc.NodeID()] = &pb.PoetServicesResponse_Identity{
+			SmesherIdHex: desc.NodeID().String(),
+			Status:       statusMap[state],
+		}
+
 		if state != types.WaitForPoetRoundEnd {
 			continue
 		}
@@ -72,30 +84,35 @@ func (s *SmeshingIdentitiesService) PoetServices(_ context.Context, req *pb.Poet
 		nodeIdsToRequest = append(nodeIdsToRequest, desc.NodeID())
 	}
 
-	regs, err := nipost.PoetRegistrations(s.db, nodeIdsToRequest...)
+	if len(nodeIdsToRequest) == 0 {
+		return &pb.PoetServicesResponse{Identities: pbIdentities}, nil
+	}
+
+	regsInfos, err := nipost.PoetRegistrations(s.db, nodeIdsToRequest...)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	identities := make(map[types.NodeID]map[string]*pb.PoetServicesResponse_Identity_PoetInfo)
-	for _, reg := range regs {
+
+	for _, reg := range regsInfos {
 		poetInfos, ok := identities[reg.NodeId]
 		if !ok {
 			poetInfos = make(map[string]*pb.PoetServicesResponse_Identity_PoetInfo)
 		}
 
 		var (
-			regStatus pb.PoetServicesResponse_Identity_PoetInfo_RegistrationStatus
+			regStatus pb.RegistrationStatus
 			warning   string
 		)
 
 		if reg.RoundID == "" {
-			regStatus = pb.PoetServicesResponse_Identity_PoetInfo_STATUS_FAILED_REG
+			regStatus = pb.RegistrationStatus_STATUS_FAILED_REG
 		} else if _, ok := s.configuredPoetServices[reg.Address]; !ok {
-			regStatus = pb.PoetServicesResponse_Identity_PoetInfo_STATUS_RESIDUAL_REG
+			regStatus = pb.RegistrationStatus_STATUS_RESIDUAL_REG
 			warning = poetsMismatchWarning
 		} else {
-			regStatus = pb.PoetServicesResponse_Identity_PoetInfo_STATUS_SUCCESS_REG
+			regStatus = pb.RegistrationStatus_STATUS_SUCCESS_REG
 		}
 
 		poetInfos[reg.Address] = &pb.PoetServicesResponse_Identity_PoetInfo{
@@ -108,15 +125,13 @@ func (s *SmeshingIdentitiesService) PoetServices(_ context.Context, req *pb.Poet
 		identities[reg.NodeId] = poetInfos
 	}
 
-	pbIdentities := make([]*pb.PoetServicesResponse_Identity, 0)
-
 	for id, poets := range identities {
 		for poetAddr := range s.configuredPoetServices {
 			if _, ok := poets[poetAddr]; !ok {
 				// registration is missed
 				identities[id][poetAddr] = &pb.PoetServicesResponse_Identity_PoetInfo{
 					Url:                poetAddr,
-					RegistrationStatus: pb.PoetServicesResponse_Identity_PoetInfo_STATUS_NO_REG,
+					RegistrationStatus: pb.RegistrationStatus_STATUS_NO_REG,
 				}
 			}
 		}
