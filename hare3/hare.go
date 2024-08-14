@@ -129,9 +129,9 @@ type WeakCoinOutput struct {
 
 type Opt func(*Hare)
 
-func WithWallclock(clock clockwork.Clock) Opt {
+func WithWallClock(clock clockwork.Clock) Opt {
 	return func(hr *Hare) {
-		hr.wallclock = clock
+		hr.wallClock = clock
 	}
 }
 
@@ -163,15 +163,15 @@ func WithResultsChan(c chan hare4.ConsensusOutput) Opt {
 	}
 }
 
-type nodeclock interface {
+type nodeClock interface {
 	AwaitLayer(types.LayerID) <-chan struct{}
 	CurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
 
 func New(
-	nodeclock nodeclock,
-	pubsub pubsub.PublishSubsciber,
+	nodeClock nodeClock,
+	pubsub pubsub.PublishSubscriber,
 	db *sql.Database,
 	atxsdata *atxsdata.Data,
 	proposals *store.Store,
@@ -192,9 +192,9 @@ func New(
 
 		config:    DefaultConfig(),
 		log:       zap.NewNop(),
-		wallclock: clockwork.NewRealClock(),
+		wallClock: clockwork.NewRealClock(),
 
-		nodeclock: nodeclock,
+		nodeClock: nodeClock,
 		pubsub:    pubsub,
 		db:        db,
 		atxsdata:  atxsdata,
@@ -229,11 +229,11 @@ type Hare struct {
 	// options
 	config    Config
 	log       *zap.Logger
-	wallclock clockwork.Clock
+	wallClock clockwork.Clock
 
 	// dependencies
-	nodeclock nodeclock
-	pubsub    pubsub.PublishSubsciber
+	nodeClock nodeClock
+	pubsub    pubsub.PublishSubscriber
 	db        *sql.Database
 	atxsdata  *atxsdata.Data
 	proposals *store.Store
@@ -261,7 +261,7 @@ func (h *Hare) Coins() <-chan hare4.WeakCoinOutput {
 
 func (h *Hare) Start() {
 	h.pubsub.Register(h.config.ProtocolName, h.Handler, pubsub.WithValidatorInline(true))
-	current := h.nodeclock.CurrentLayer() + 1
+	current := h.nodeClock.CurrentLayer() + 1
 	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
 	disabled := types.LayerID(math.MaxUint32)
 	if h.config.DisableLayer > 0 {
@@ -275,7 +275,7 @@ func (h *Hare) Start() {
 	h.eg.Go(func() error {
 		for next := enabled; next < disabled; next++ {
 			select {
-			case <-h.nodeclock.AwaitLayer(next):
+			case <-h.nodeClock.AwaitLayer(next):
 				h.log.Debug("notified", zap.Uint32("lid", next.Uint32()))
 				h.onLayer(next)
 			case <-h.ctx.Done():
@@ -349,7 +349,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		droppedMessages.Inc()
 		return errors.New("dropped by graded gossip")
 	}
-	expected := h.nodeclock.LayerToTime(msg.Layer).Add(h.config.roundStart(msg.IterRound))
+	expected := h.nodeClock.LayerToTime(msg.Layer).Add(h.config.roundStart(msg.IterRound))
 	metrics.ReportMessageLatency(h.config.ProtocolName, msg.Round.String(), time.Since(expected))
 	return nil
 }
@@ -426,12 +426,12 @@ func (h *Hare) run(session *session) error {
 	h.tracer.OnActive(session.vrfs)
 	activeLatency.Observe(time.Since(start).Seconds())
 
-	walltime := h.nodeclock.LayerToTime(session.lid).Add(h.config.PreroundDelay)
+	walltime := h.nodeClock.LayerToTime(session.lid).Add(h.config.PreroundDelay)
 	if active {
 		h.log.Debug("active in preround. waiting for preround delay", zap.Uint32("lid", session.lid.Uint32()))
 		// initial set is not needed if node is not active in preround
 		select {
-		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
+		case <-h.wallClock.After(walltime.Sub(h.wallClock.Now())):
 		case <-h.ctx.Done():
 			return h.ctx.Err()
 		}
@@ -459,7 +459,7 @@ func (h *Hare) run(session *session) error {
 		activeLatency.Observe(time.Since(start).Seconds())
 
 		select {
-		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
+		case <-h.wallClock.After(walltime.Sub(h.wallClock.Now())):
 			h.log.Debug("execute round",
 				zap.Uint32("lid", session.lid.Uint32()),
 				zap.Uint8("iter", session.proto.Iter), zap.Stringer("round", session.proto.Round),

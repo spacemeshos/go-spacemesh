@@ -121,7 +121,8 @@ type MaliciousIDs struct {
 
 type EpochData struct {
 	// When changing this value also check
-	// - the size of `ResponseMessage` above
+	// - the size of `ResponseMessage.Data` above
+	// - the size of `Response.Data` in `p2p/server/server.go`
 	// - the size of `NodeIDs` in `MaliciousIDs` above
 	// - the size of `Set` in `EpochActiveSet` in common/types/activation.go
 	// - the size of `EligibilityProofs` in the type `Ballot` in common/types/ballot.go

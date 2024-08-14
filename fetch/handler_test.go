@@ -9,9 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -262,23 +260,16 @@ func TestHandleMeshHashReq(t *testing.T) {
 	}
 }
 
-func newAtx(t *testing.T, published types.EpochID) (*types.ActivationTx, types.AtxBlob) {
-	t.Helper()
-	nonce := uint64(123)
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	atx := &wire.ActivationTxV1{
-		InnerActivationTxV1: wire.InnerActivationTxV1{
-			NIPostChallengeV1: wire.NIPostChallengeV1{
-				PublishEpoch: published,
-				PrevATXID:    types.RandomATXID(),
-			},
-			NumUnits: 2,
-			VRFNonce: &nonce,
-		},
+func newAtx(t *testing.T, published types.EpochID) *types.ActivationTx {
+	atx := &types.ActivationTx{
+		PublishEpoch: published,
+		NumUnits:     2,
+		VRFNonce:     types.VRFPostIndex(123),
+		SmesherID:    types.RandomNodeID(),
 	}
-	atx.Sign(signer)
-	return fixture.ToAtx(t, atx), atx.Blob()
+	atx.SetID(types.RandomATXID())
+	atx.SetReceived(time.Now().Local())
+	return atx
 }
 
 func TestHandleEpochInfoReq(t *testing.T) {
@@ -304,8 +295,8 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			var expected EpochData
 			if !tc.missingData {
 				for i := 0; i < 10; i++ {
-					vatx, blob := newAtx(t, epoch)
-					require.NoError(t, atxs.Add(th.cdb, vatx, blob))
+					vatx := newAtx(t, epoch)
+					require.NoError(t, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
 					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 				}
 			}
@@ -353,8 +344,8 @@ func testHandleEpochInfoReqWithQueryCache(
 	var expected EpochData
 
 	for i := 0; i < 10; i++ {
-		vatx, blob := newAtx(t, epoch)
-		require.NoError(t, atxs.Add(th.cdb, vatx, blob))
+		vatx := newAtx(t, epoch)
+		require.NoError(t, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
 		atxs.AtxAdded(th.cdb, vatx)
 		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 	}
@@ -372,8 +363,8 @@ func testHandleEpochInfoReqWithQueryCache(
 	}
 
 	// Add another ATX which should be appended to the cached slice
-	vatx, blob := newAtx(t, epoch)
-	require.NoError(t, atxs.Add(th.cdb, vatx, blob))
+	vatx := newAtx(t, epoch)
+	require.NoError(t, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
 	atxs.AtxAdded(th.cdb, vatx)
 	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 	require.Equal(t, 23, qc.QueryCount())
