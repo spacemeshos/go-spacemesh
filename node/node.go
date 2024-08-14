@@ -1580,7 +1580,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
 
-func (app *App) startAPIServices(ctx context.Context) error {
+func (app *App) startAPIServices() error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpcLog, logger.Zap())
 
@@ -2189,7 +2189,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		app.log.Info("no need to preserve data after recovery")
 	}
 
-	if err := app.startAPIServices(ctx); err != nil {
+	if err := app.startAPIServices(); err != nil {
 		return err
 	}
 

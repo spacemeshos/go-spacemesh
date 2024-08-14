@@ -58,8 +58,8 @@ type test struct {
 	expectErr string
 }
 
-func unixPtr(sec, nsec int64) *time.Time {
-	t := time.Unix(sec, nsec)
+func unixPtr(sec int64) *time.Time {
+	t := time.Unix(sec, 0)
 	return &t
 }
 
@@ -115,8 +115,8 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc: "fallback success",
 			atxs: []*types.ActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2),
-				gatx(types.ATXID{2}, 2, types.NodeID{1}, 3),
+				gatx(types.ATXID{1}, types.NodeID{1}, 2),
+				gatx(types.ATXID{2}, types.NodeID{1}, 3),
 			},
 			fallbacks: []types.EpochActiveSet{
 				{Epoch: 3, Set: []types.ATXID{{1}, {2}}},
@@ -127,7 +127,7 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc: "fallback failure",
 			atxs: []*types.ActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2),
+				gatx(types.ATXID{1}, types.NodeID{1}, 2),
 			},
 			fallbacks: []types.EpochActiveSet{
 				{Epoch: 3, Set: []types.ATXID{{1}, {2}}},
@@ -138,12 +138,12 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc: "graded active set > 60",
 			atxs: []*types.ActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
-				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{1}, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{2}, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
 				// the last atx won't be marked as good due to being received only 2 seconds before epoch start
-				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(28, 0))),
+				gatx(types.ATXID{3}, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(28, 0))),
 			},
-			epochStart:     unixPtr(30, 0),
+			epochStart:     unixPtr(30),
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 60,
 			target:         3,
@@ -152,12 +152,12 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc: "graded active set < 60",
 			atxs: []*types.ActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{1}, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
 				// two last atx won't be marked as good due to being received only 2 seconds before epoch start
-				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(28, 0))),
-				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(28, 0))),
+				gatx(types.ATXID{2}, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(28, 0))),
+				gatx(types.ATXID{3}, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(28, 0))),
 			},
-			epochStart:     unixPtr(30, 0),
+			epochStart:     unixPtr(30),
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 60,
 			target:         3,
@@ -166,14 +166,14 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc: "graded active set with malicious",
 			atxs: []*types.ActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
-				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
-				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{1}, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{2}, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{3}, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
 			},
 			malfeasent: []identity{
 				gidentity(types.NodeID{3}, time.Unix(29, 0)),
 			},
-			epochStart:     unixPtr(30, 0),
+			epochStart:     unixPtr(30),
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 60,
 			target:         3,
@@ -182,14 +182,14 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc: "graded active set with late malicious",
 			atxs: []*types.ActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
-				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
-				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{1}, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{2}, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{3}, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
 			},
 			malfeasent: []identity{
 				gidentity(types.NodeID{3}, time.Unix(31, 0)),
 			},
-			epochStart:     unixPtr(30, 0),
+			epochStart:     unixPtr(30),
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 60,
 			target:         3,
@@ -198,7 +198,7 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc:           "graded empty",
 			atxs:           []*types.ActivationTx{},
-			epochStart:     unixPtr(30, 0),
+			epochStart:     unixPtr(30),
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 60,
 			target:         3,
@@ -207,10 +207,10 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc: "first block not found",
 			atxs: []*types.ActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2),
-				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2),
+				gatx(types.ATXID{1}, types.NodeID{1}, 2),
+				gatx(types.ATXID{2}, types.NodeID{2}, 2),
 			},
-			epochStart:     unixPtr(0, 0),
+			epochStart:     unixPtr(0),
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 100,
 			current:        thirdFirst + 1,
@@ -220,8 +220,8 @@ func TestActiveSetGenerate(t *testing.T) {
 		{
 			desc: "first block success",
 			atxs: []*types.ActivationTx{
-				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2),
-				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2),
+				gatx(types.ATXID{1}, types.NodeID{1}, 2),
+				gatx(types.ATXID{2}, types.NodeID{2}, 2),
 			},
 			blocks: []*types.Block{
 				gblock(thirdFirst, types.ATXID{1}, types.ATXID{2}),
@@ -237,7 +237,7 @@ func TestActiveSetGenerate(t *testing.T) {
 			activesets: []*types.EpochActiveSet{
 				{Epoch: 3, Set: []types.ATXID{{1}, {2}}},
 			},
-			epochStart:     unixPtr(0, 0),
+			epochStart:     unixPtr(0),
 			networkDelay:   2 * time.Second,
 			goodAtxPercent: 100,
 			current:        types.EpochID(3).FirstLayer() + 1,
@@ -343,7 +343,7 @@ func TestActiveSetEnsure(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	// computes from first try
-	tester.atxsdata.AddFromAtx(gatx(expected[0], 2, types.NodeID{1}, 1), false)
+	tester.atxsdata.AddFromAtx(gatx(expected[0], types.NodeID{1}, 1), false)
 	tester.clock.EXPECT().CurrentLayer().Return(0).Times(1)
 	tester.gen.ensure(ctx, target)
 	id, weight, set, err := activeset.Get(tester.localdb, activeset.Tortoise, target)

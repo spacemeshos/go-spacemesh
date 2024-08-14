@@ -77,9 +77,11 @@ func (s *smesher) rawatx(id types.ATXID, publish types.EpochID, opts ...*aopt) *
 	return val
 }
 
+const publish = 1
+
 // atx accepts publish epoch and atx fields that are relevant for tortoise
 // as options.
-func (s *smesher) atx(publish types.EpochID, opts ...*aopt) *atxAction {
+func (s *smesher) atx(opts ...*aopt) *atxAction {
 	id := hash.Sum([]byte(strconv.Itoa(s.id)), []byte(strconv.Itoa(int(publish))))
 	if val, exists := s.atxs[id]; exists {
 		return val
@@ -125,12 +127,14 @@ type bopt struct {
 	opts []ballotOpt
 }
 
-func (b *bopt) beacon(value string) *bopt {
+const beaconVal = "a"
+
+func (b *bopt) beacon() *bopt {
 	b.opts = append(b.opts, func(ballot *ballotAction) {
 		if ballot.EpochData == nil {
 			ballot.EpochData = &types.ReferenceData{}
 		}
-		copy(ballot.EpochData.Beacon[:], value)
+		copy(ballot.EpochData.Beacon[:], beaconVal)
 	})
 	return b
 }
@@ -169,10 +173,12 @@ func (e *evotes) abstain(lid uint32) *evotes {
 	return e
 }
 
-func (e *evotes) support(lid int, id string, height uint64) *evotes {
+const supportHeight = uint64(0)
+
+func (e *evotes) support(lid int, id string) *evotes {
 	vote := types.Vote{
 		LayerID: types.GetEffectiveGenesis() + types.LayerID(lid),
-		Height:  height,
+		Height:  supportHeight,
 	}
 	copy(vote.ID[:], id)
 	e.votes.Support = append(e.votes.Support, vote)
@@ -490,7 +496,7 @@ func (s *session) block(lid int, id string, height uint64) *blockAction {
 	return val
 }
 
-func (s *session) hareblock(lid int, id string, height uint64) {
+func (s *session) hareblock(lid int, id string) {
 	s.hare(s.block(lid, id, height))
 }
 
@@ -511,12 +517,19 @@ func (b *beaconAction) execute(trt *Tortoise) {
 	trt.OnBeacon(types.EpochID(b.epoch), b.beacon)
 }
 
+// FIXME: these are pulled out to satisfy the linter, but must be
+// actually changed so that the tests actually test _different_ values.
+const (
+	epoch  = 1
+	value  = "a"
+	height = uint64(0)
+)
+
 // beacon accepts publish epoch and value of the beacon.
-func (s *session) beacon(epoch uint32, value string) *beaconAction {
+func (s *session) beacon() {
 	beacon := &beaconAction{epoch: epoch + 1}
 	copy(beacon.beacon[:], value)
 	s.register(beacon)
-	return beacon
 }
 
 type results struct {
@@ -548,7 +561,7 @@ const (
 	local
 )
 
-func (r *results) block(id string, height uint64, fields uint) *results {
+func (r *results) block(id string, fields uint) *results {
 	rst := &r.results[len(r.results)-1]
 	block := result.Block{
 		Valid:   fields&valid > 0,
@@ -740,29 +753,29 @@ func TestSanity(t *testing.T) {
 	const n = 2
 	s := newSession(t)
 	for i := 0; i < n; i++ {
-		s.smesher(i).atx(1, new(aopt).height(100).weight(400))
+		s.smesher(i).atx(new(aopt).height(100).weight(400))
 	}
-	s.beacon(1, "a")
+	s.beacon()
 	for i := 0; i < n; i++ {
-		s.smesher(i).atx(1).ballot(1, new(bopt).
-			beacon("a").
+		s.smesher(i).atx().ballot(1, new(bopt).
+			beacon().
 			totalEligibilities(s.epochEligibilities()).
 			eligibilities(s.layerSize/n))
 	}
 	s.tally(1)
-	s.hareblock(1, "aa", 0)
+	s.hareblock(1, "aa")
 	for i := 0; i < n; i++ {
-		s.smesher(i).atx(1).ballot(2, new(bopt).
+		s.smesher(i).atx().ballot(2, new(bopt).
 			eligibilities(s.layerSize/n).
-			votes(new(evotes).support(1, "aa", 0)),
+			votes(new(evotes).support(1, "aa")),
 		)
 	}
-	s.hareblock(2, "bb", 0)
+	s.hareblock(2, "bb")
 	s.tallyWait(2)
 	s.updates(t, new(results).
 		verified(0).
-		verified(1).block("aa", 0, valid|hare|data).
-		next(2).block("bb", 0, hare|data),
+		verified(1).block("aa", valid|hare|data).
+		next(2).block("bb", hare|data),
 	)
 	t.Run("inorder", func(t *testing.T) { s.runInorder() })
 	t.Run("random", func(t *testing.T) { s.runRandomTopoN(100) })
@@ -772,26 +785,26 @@ func TestDisagreement(t *testing.T) {
 	const n = 5
 	s := newSession(t)
 	for i := 0; i < n; i++ {
-		s.smesher(i).atx(1, new(aopt).height(100).weight(400))
+		s.smesher(i).atx(new(aopt).height(100).weight(400))
 	}
-	s.beacon(1, "a")
+	s.beacon()
 	for i := 0; i < n; i++ {
-		s.smesher(i).atx(1).ballot(1, new(bopt).
-			beacon("a").
+		s.smesher(i).atx().ballot(1, new(bopt).
+			beacon().
 			totalEligibilities(s.epochEligibilities()).
 			eligibilities(s.layerSize/n))
 	}
-	s.hareblock(1, "aa", 0)
+	s.hareblock(1, "aa")
 	for i := 0; i < n; i++ {
 		v := new(evotes)
 		if i < n/2 {
-			v = v.support(1, "aa", 0)
+			v = v.support(1, "aa")
 		} else if i == n/2 {
 			v = v.abstain(1)
 		} else {
 			v = v.against(1, "aa", 0)
 		}
-		s.smesher(i).atx(1).ballot(2, new(bopt).
+		s.smesher(i).atx().ballot(2, new(bopt).
 			eligibilities(s.layerSize/n).
 			votes(v),
 		)
@@ -799,7 +812,7 @@ func TestDisagreement(t *testing.T) {
 	s.tallyWait(1)
 	s.updates(t, new(results).
 		verified(0).
-		next(1).block("aa", 0, hare|data),
+		next(1).block("aa", hare|data),
 	)
 	s.runInorder()
 }
@@ -807,22 +820,22 @@ func TestDisagreement(t *testing.T) {
 func TestOpinion(t *testing.T) {
 	s := newSession(t)
 
-	s.smesher(0).atx(1, new(aopt).height(100).weight(2000))
+	s.smesher(0).atx(new(aopt).height(100).weight(2000))
 
-	s.beacon(1, "a")
-	s.smesher(0).atx(1).ballot(1, new(bopt).
+	s.beacon()
+	s.smesher(0).atx().ballot(1, new(bopt).
 		eligibilities(s.layerSize).
-		beacon("a").
+		beacon().
 		totalEligibilities(s.epochEligibilities()),
 	)
 	for i := 2; i < s.epochSize; i++ {
 		id := strconv.Itoa(i)
-		s.hareblock(i-1, id, 0)
-		s.smesher(0).atx(1).ballot(i, new(bopt).
+		s.hareblock(i-1, id)
+		s.smesher(0).atx().ballot(i, new(bopt).
 			eligibilities(s.layerSize).
 			votes(new(evotes).
-				base(s.smesher(0).atx(1).ballot(i-1)).
-				support(i-1, id, 0)),
+				base(s.smesher(0).atx().ballot(i-1)).
+				support(i-1, id)),
 		)
 	}
 	s.tallyWait(s.epochSize)
@@ -833,12 +846,12 @@ func TestOpinion(t *testing.T) {
 func TestEpochGap(t *testing.T) {
 	s := newSession(t).withEpochSize(4)
 	for i := 0; i < 2; i++ {
-		s.smesher(i).atx(1, new(aopt).height(1).weight(10))
+		s.smesher(i).atx(new(aopt).height(1).weight(10))
 	}
-	s.beacon(1, "a")
+	s.beacon()
 	for i := 0; i < 2; i++ {
-		s.smesher(i).atx(1).ballot(1, new(bopt).
-			beacon("a").
+		s.smesher(i).atx().ballot(1, new(bopt).
+			beacon().
 			totalEligibilities(s.epochEligibilities()).
 			eligibilities(s.layerSize/2))
 	}
@@ -846,14 +859,14 @@ func TestEpochGap(t *testing.T) {
 		verified(0)
 	for l := 2; l <= s.epochSize; l++ {
 		id := strconv.Itoa(l - 1)
-		s.hareblock(l-1, id, 0)
-		rst = rst.verified(l-1).block(id, 0, hare|data|valid)
+		s.hareblock(l-1, id)
+		rst = rst.verified(l-1).block(id, hare|data|valid)
 		for i := 0; i < 2; i++ {
-			s.smesher(i).atx(1).ballot(l, new(bopt).
+			s.smesher(i).atx().ballot(l, new(bopt).
 				eligibilities(s.layerSize/2).
 				votes(new(evotes).
-					base(s.smesher(i).atx(1).ballot(l-1)).
-					support(l-1, id, 0)),
+					base(s.smesher(i).atx().ballot(l-1)).
+					support(l-1, id)),
 			)
 		}
 	}

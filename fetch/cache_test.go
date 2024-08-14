@@ -15,11 +15,12 @@ import (
 )
 
 // getCachedEntry is a thread-safe cache get helper.
-func getCachedEntry(cache *HashPeersCache, hash types.Hash32) (HashPeers, bool) {
+func getCachedEntry(cache *HashPeersCache, hash types.Hash32) HashPeers {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
-	return cache.get(hash)
+	hp, _ := cache.get(hash)
+	return hp
 }
 
 func TestAdd(t *testing.T) {
@@ -45,7 +46,7 @@ func TestAdd(t *testing.T) {
 			cache.Add(hash, peer3)
 		}()
 		wg.Wait()
-		hashPeers, _ := getCachedEntry(cache, hash)
+		hashPeers := getCachedEntry(cache, hash)
 		require.Len(t, hashPeers, 3)
 	})
 	t.Run("2Hashes1Peer", func(t *testing.T) {
@@ -64,9 +65,9 @@ func TestAdd(t *testing.T) {
 			cache.Add(hash2, peer)
 		}()
 		wg.Wait()
-		hash1Peers, _ := getCachedEntry(cache, hash1)
+		hash1Peers := getCachedEntry(cache, hash1)
 		require.Len(t, hash1Peers, 1)
-		hash2Peers, _ := getCachedEntry(cache, hash2)
+		hash2Peers := getCachedEntry(cache, hash2)
 		require.Len(t, hash2Peers, 1)
 	})
 }
@@ -144,11 +145,11 @@ func TestRegisterPeerHashes(t *testing.T) {
 		hash3 := types.RandomHash()
 		peer1 := p2p.Peer("test_peer_1")
 		cache.RegisterPeerHashes(peer1, []types.Hash32{hash1, hash2, hash3})
-		hash1Peers, _ := getCachedEntry(cache, hash1)
+		hash1Peers := getCachedEntry(cache, hash1)
 		require.Len(t, hash1Peers, 1)
-		hash2Peers, _ := getCachedEntry(cache, hash2)
+		hash2Peers := getCachedEntry(cache, hash2)
 		require.Len(t, hash2Peers, 1)
-		hash3Peers, _ := getCachedEntry(cache, hash3)
+		hash3Peers := getCachedEntry(cache, hash3)
 		require.Len(t, hash3Peers, 1)
 	})
 }

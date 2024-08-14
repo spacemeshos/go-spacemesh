@@ -67,7 +67,7 @@ func getProposalMetadata(
 		meshHashes = make(map[types.Hash32]*meshState)
 		err        error
 	)
-	md.tickHeight, md.rewards, err = rewardInfoAndHeight(cfg, db, atxs, proposals)
+	md.tickHeight, md.rewards, err = rewardInfoAndHeight(db, atxs, proposals)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,6 @@ func toUint64Slice(b []byte) []uint64 {
 }
 
 func rewardInfoAndHeight(
-	cfg Config,
 	db *sql.Database,
 	atxs *atxsdata.Data,
 	props []*types.Proposal,

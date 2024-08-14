@@ -63,10 +63,7 @@ func (s *LayerStreamService) Stream(
 	dbChan := make(chan *spacemeshv2alpha1.Layer, 100)
 	errChan := make(chan error, 1)
 
-	ops, err := toLayerOperations(toLayerRequest(request))
-	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
-	}
+	ops := toLayerOperations(toLayerRequest(request))
 	// send db data to chan to avoid buffer overflow
 	go func() {
 		defer close(dbChan)
@@ -201,10 +198,7 @@ func (s *LayerService) List(
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 
-	ops, err := toLayerOperations(request)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
+	ops := toLayerOperations(request)
 
 	rst := make([]*spacemeshv2alpha1.Layer, 0, request.Limit)
 	if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
@@ -217,10 +211,10 @@ func (s *LayerService) List(
 	return &spacemeshv2alpha1.LayerList{Layers: rst}, nil
 }
 
-func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operations, error) {
+func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) builder.Operations {
 	ops := builder.Operations{}
 	if filter == nil {
-		return ops, nil
+		return ops
 	}
 
 	if filter.StartLayer != 0 {
@@ -259,7 +253,7 @@ func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operatio
 		})
 	}
 
-	return ops, nil
+	return ops
 }
 
 func toLayer(layer *layers.Layer) *spacemeshv2alpha1.Layer {

@@ -161,7 +161,7 @@ func (s *Syncer) processLayerOpinions(ctx context.Context, lid types.LayerID, re
 	}
 }
 
-func (s *Syncer) needCert(ctx context.Context, lid types.LayerID) (bool, error) {
+func (s *Syncer) needCert(lid types.LayerID) (bool, error) {
 	cutoff := s.certCutoffLayer()
 	if !lid.After(cutoff) {
 		return false, nil
@@ -183,7 +183,7 @@ func (s *Syncer) layerOpinions(
 	}
 
 	v2OpnPoll.Inc()
-	needCert, err := s.needCert(ctx, lid)
+	needCert, err := s.needCert(lid)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -233,7 +233,7 @@ func (s *Syncer) checkMeshAgreement(
 }
 
 func (s *Syncer) adopt(ctx context.Context, lid types.LayerID, certs []*types.Certificate) error {
-	needCert, err := s.needCert(ctx, lid)
+	needCert, err := s.needCert(lid)
 	if err != nil {
 		return err
 	}

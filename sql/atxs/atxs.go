@@ -359,7 +359,7 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (
 			// We don't use the provided blob in this case to avoid
 			// caching references to the underlying slice (subsequent calls would modify it).
 			var blob sql.Blob
-			v, err := getBlob(ctx, db, id, &blob)
+			v, err := getBlob(db, id, &blob)
 			if err != nil {
 				return nil, err
 			}
@@ -373,10 +373,10 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (
 		return cached.version, nil
 	}
 
-	return getBlob(ctx, db, id, blob)
+	return getBlob(db, id, blob)
 }
 
-func getBlob(ctx context.Context, db sql.Executor, id []byte, blob *sql.Blob) (types.AtxVersion, error) {
+func getBlob(db sql.Executor, id []byte, blob *sql.Blob) (types.AtxVersion, error) {
 	var version types.AtxVersion
 	rows, err := db.Exec("select atx, version from atx_blobs where id = ?1",
 		func(stmt *sql.Statement) {

@@ -2451,7 +2451,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	require.Equal(t, len(accounts), i)
 }
 
-func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*types.ActivationTx {
+func createAtxs(epoch types.EpochID, atxids []types.ATXID) []*types.ActivationTx {
 	all := make([]*types.ActivationTx, 0, len(atxids))
 	for _, id := range atxids {
 		atx := &types.ActivationTx{
@@ -2487,7 +2487,7 @@ func TestMeshService_EpochStream(t *testing.T) {
 
 	epoch := types.EpochID(3)
 	atxids := types.RandomActiveSet(100)
-	all := createAtxs(t, epoch, atxids)
+	all := createAtxs(epoch, atxids)
 	var expected, got []types.ATXID
 	for i, vatx := range all {
 		require.NoError(t, atxs.Add(db, vatx, types.AtxBlob{}))

@@ -17,11 +17,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/mocks"
 )
 
+var nonce = types.VRFPostIndex(1)
+
 func gatx(
 	id types.ATXID,
 	epoch types.EpochID,
 	smesher types.NodeID,
-	nonce types.VRFPostIndex,
 ) types.ActivationTx {
 	atx := &types.ActivationTx{
 		NumUnits:     1,
@@ -40,14 +41,13 @@ func TestWarmup(t *testing.T) {
 	t.Run("sanity", func(t *testing.T) {
 		db := sql.InMemory()
 		applied := types.LayerID(10)
-		nonce := types.VRFPostIndex(1)
 		data := []types.ActivationTx{
-			gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nonce),
-			gatx(types.ATXID{1, 2}, 1, types.NodeID{2}, nonce),
-			gatx(types.ATXID{2, 1}, 2, types.NodeID{1}, nonce),
-			gatx(types.ATXID{2, 2}, 2, types.NodeID{2}, nonce),
-			gatx(types.ATXID{3, 2}, 3, types.NodeID{2}, nonce),
-			gatx(types.ATXID{3, 3}, 3, types.NodeID{3}, nonce),
+			gatx(types.ATXID{1, 1}, 1, types.NodeID{1}),
+			gatx(types.ATXID{1, 2}, 1, types.NodeID{2}),
+			gatx(types.ATXID{2, 1}, 2, types.NodeID{1}),
+			gatx(types.ATXID{2, 2}, 2, types.NodeID{2}),
+			gatx(types.ATXID{3, 2}, 3, types.NodeID{2}),
+			gatx(types.ATXID{3, 3}, 3, types.NodeID{3}),
 		}
 		for i := range data {
 			require.NoError(t, atxs.Add(db, &data[i], types.AtxBlob{}))
@@ -74,8 +74,7 @@ func TestWarmup(t *testing.T) {
 	})
 	t.Run("db failures", func(t *testing.T) {
 		db := sql.InMemory()
-		nonce := types.VRFPostIndex(1)
-		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nonce)
+		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1})
 		require.NoError(t, atxs.Add(db, &data, types.AtxBlob{}))
 
 		exec := mocks.NewMockExecutor(gomock.NewController(t))

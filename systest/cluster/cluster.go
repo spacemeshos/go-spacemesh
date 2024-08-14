@@ -742,8 +742,7 @@ func (c *Cluster) Wait(tctx *testcontext.Context, i int) error {
 func (c *Cluster) WaitAll(ctx context.Context) error {
 	var eg errgroup.Group
 	wait := func(clients []*NodeClient) {
-		for i := range c.clients {
-			client := c.clients[i]
+		for _, client := range clients {
 			eg.Go(func() error {
 				_, err := client.Resolve(ctx)
 				return err

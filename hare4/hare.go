@@ -390,12 +390,12 @@ func (h *Hare) handleProposalsStream(ctx context.Context, msg []byte, s io.ReadW
 
 // reconstructProposals tries to reconstruct the full list of proposals from a peer based on a delivered
 // set of compact IDs.
-func (h *Hare) reconstructProposals(ctx context.Context, peer p2p.Peer, msgId types.Hash32, msg *Message) error {
+func (h *Hare) reconstructProposals(msg *Message) error {
 	proposals := h.proposals.GetForLayer(msg.Layer)
 	if len(proposals) == 0 {
 		return errNoLayerProposals
 	}
-	compacted := h.compactProposals(msg.Layer, proposals)
+	compacted := h.compactProposals(proposals)
 	proposalIds := make([]proposalTuple, len(proposals))
 	for i := range proposals {
 		proposalIds[i] = proposalTuple{id: proposals[i].ID(), compact: compacted[i]}
@@ -476,7 +476,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		// original sent message for signature validation to occur
 		compacts = msg.Value.CompactProposals
 		messageCompactsCounter.Add(float64(len(compacts)))
-		err := h.reconstructProposals(ctx, peer, msgId, msg)
+		err := h.reconstructProposals(msg)
 		switch {
 		case errors.Is(err, errCannotMatchProposals):
 			msg.Value.Proposals, err = h.fetchFull(ctx, peer, msgId)
@@ -885,9 +885,7 @@ type session struct {
 	vrfs    []*types.HareEligibility
 }
 
-func (h *Hare) compactProposals(layer types.LayerID,
-	proposals []*types.Proposal,
-) []types.CompactProposalID {
+func (h *Hare) compactProposals(proposals []*types.Proposal) []types.CompactProposalID {
 	compactProposals := make([]types.CompactProposalID, len(proposals))
 	for i, prop := range proposals {
 		vrf := prop.EligibilityProofs[0].Sig

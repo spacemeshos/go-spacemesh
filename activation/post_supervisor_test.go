@@ -42,7 +42,7 @@ func testSetupOpts(t *testing.T) PostSetupOpts {
 	return opts
 }
 
-func newPostManager(t *testing.T, cfg PostConfig, opts PostSetupOpts) *PostSetupManager {
+func newPostManager(t *testing.T, cfg PostConfig) *PostSetupManager {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	validator := NewMocknipostValidator(ctrl)
@@ -159,7 +159,7 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
-	mgr := newPostManager(t, postCfg, postOpts)
+	mgr := newPostManager(t, postCfg)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
@@ -196,7 +196,7 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
-	mgr := newPostManager(t, postCfg, postOpts)
+	mgr := newPostManager(t, postCfg)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
@@ -227,7 +227,7 @@ func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
-	mgr := newPostManager(t, postCfg, postOpts)
+	mgr := newPostManager(t, postCfg)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
@@ -260,7 +260,7 @@ func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
-	mgr := newPostManager(t, postCfg, postOpts)
+	mgr := newPostManager(t, postCfg)
 	builder := NewMockAtxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)

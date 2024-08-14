@@ -111,7 +111,6 @@ func createBlock(
 	db sql.Executor,
 	mesh *Mesh,
 	layerID types.LayerID,
-	nodeID types.NodeID,
 ) *types.Block {
 	t.Helper()
 	txIDs := CreateAndSaveTxs(t, db, numTXs)
@@ -135,8 +134,7 @@ func createLayerBlocks(
 	t.Helper()
 	blks := make([]*types.Block, 0, numBlocks)
 	for i := 0; i < numBlocks; i++ {
-		nodeID := types.NodeID{byte(i)}
-		blk := createBlock(t, db, mesh, lyrID, nodeID)
+		blk := createBlock(t, db, mesh, lyrID)
 		blks = append(blks, blk)
 	}
 	return blks
@@ -752,7 +750,7 @@ func TestProcessLayer(t *testing.T) {
 				}
 
 				tm.mockTortoise.EXPECT().Updates().Return(c.updates)
-				ensuresDatabaseConsistent(t, tm.cdb, c.updates)
+				ensuresDatabaseConsistent(tm.cdb, c.updates)
 				err := tm.ProcessLayer(context.TODO(), lid)
 				if len(c.err) > 0 {
 					require.ErrorContains(t, err, c.err)
@@ -775,7 +773,7 @@ func TestProcessLayer(t *testing.T) {
 	}
 }
 
-func ensuresDatabaseConsistent(t *testing.T, db sql.Executor, results []result.Layer) {
+func ensuresDatabaseConsistent(db sql.Executor, results []result.Layer) {
 	for _, layer := range results {
 		for _, rst := range layer.Blocks {
 			if !rst.Data {

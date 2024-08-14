@@ -35,10 +35,10 @@ func TestSmeshing(t *testing.T) {
 	tctx := testcontext.New(t)
 	tctx.RemoteSize = tctx.ClusterSize / 4 // 25% of nodes are remote
 	vests := vestingAccs{
-		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
-		prepareVesting(t, 5, 8, 20, 1e15, 10e15),
-		prepareVesting(t, 1, 8, 20, 1e15, 1e15),
-		prepareVesting(t, 1, 8, 20, 0, 1e15),
+		prepareVesting(t, 3, 1e15, 10e15),
+		prepareVesting(t, 5, 1e15, 10e15),
+		prepareVesting(t, 1, 1e15, 1e15),
+		prepareVesting(t, 1, 0, 1e15),
 	}
 	cl, err := cluster.ReuseWait(tctx,
 		cluster.WithKeys(tctx.ClusterSize),
@@ -381,7 +381,12 @@ func genKeys(tb testing.TB, n int) (pks []ed25519.PrivateKey, pubs []ed25519.Pub
 	return pks, pubs
 }
 
-func prepareVesting(tb testing.TB, keys, start, end, initial, total int) vestingAcc {
+const (
+	start = 8
+	end   = 20
+)
+
+func prepareVesting(tb testing.TB, keys, initial, total int) vestingAcc {
 	tb.Helper()
 	pks, pubs := genKeys(tb, keys)
 	var hashes []types.Hash32

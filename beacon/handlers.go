@@ -409,7 +409,7 @@ func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Pee
 		return errUntimelyMessage
 	}
 
-	nodeID, err := pd.verifyFollowingVotes(ctx, m)
+	nodeID, err := pd.verifyFollowingVotes(m)
 	if err != nil {
 		return err
 	}
@@ -434,7 +434,7 @@ func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Pee
 	return nil
 }
 
-func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (types.NodeID, error) {
+func (pd *ProtocolDriver) verifyFollowingVotes(m FollowingVotingMessage) (types.NodeID, error) {
 	messageBytes := codec.MustEncode(&m.FollowingVotingMessageBody)
 	if !pd.edVerifier.Verify(signing.BEACON_FOLLOWUP_MSG, m.SmesherID, messageBytes, m.Signature) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)

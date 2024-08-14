@@ -178,7 +178,7 @@ func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
 }
 
 // buildVRFMessage builds the VRF message used as input for hare eligibility validation.
-func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(layer types.LayerID, round uint32) ([]byte, error) {
 	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
@@ -240,7 +240,7 @@ func (o *Oracle) prepareEligibilityCheck(
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	msg, err := o.buildVRFMessage(ctx, layer, round)
+	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		logger.Warn("could not build vrf message", zap.Error(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err

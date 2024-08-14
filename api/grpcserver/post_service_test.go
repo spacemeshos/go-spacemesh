@@ -29,7 +29,6 @@ import (
 func launchPostSupervisor(
 	tb testing.TB,
 	log *zap.Logger,
-	cfg Config,
 	serviceCfg activation.PostSupervisorConfig,
 	postOpts activation.PostSetupOpts,
 ) (types.NodeID, func()) {
@@ -74,7 +73,6 @@ func launchPostSupervisor(
 func launchPostSupervisorTLS(
 	tb testing.TB,
 	log *zap.Logger,
-	cfg Config,
 	serviceCfg activation.PostSupervisorConfig,
 	postOpts activation.PostSetupOpts,
 ) (types.NodeID, func()) {
@@ -102,7 +100,7 @@ func launchPostSupervisorTLS(
 		close(ch)
 		return ch
 	})
-	db := sql.InMemory()
+	db := sql.InMemoryTest(tb)
 	logger := log.Named("post supervisor")
 	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
@@ -130,7 +128,7 @@ func Test_GenerateProof(t *testing.T) {
 	serviceCfg := activation.DefaultTestPostServiceConfig()
 	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 
-	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, serviceCfg, opts)
+	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient
@@ -181,7 +179,7 @@ func Test_GenerateProof_TLS(t *testing.T) {
 	serviceCfg.Cert = filepath.Join(certDir, clientCertName)
 	serviceCfg.Key = filepath.Join(certDir, clientKeyName)
 
-	id, postCleanup := launchPostSupervisorTLS(t, log.Named("supervisor"), cfg, serviceCfg, opts)
+	id, postCleanup := launchPostSupervisorTLS(t, log.Named("supervisor"), serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient
@@ -228,7 +226,7 @@ func Test_GenerateProof_Cancel(t *testing.T) {
 	serviceCfg := activation.DefaultTestPostServiceConfig()
 	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 
-	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, serviceCfg, opts)
+	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient
@@ -268,7 +266,7 @@ func Test_Metadata(t *testing.T) {
 	serviceCfg := activation.DefaultTestPostServiceConfig()
 	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 
-	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, serviceCfg, opts)
+	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient
@@ -313,15 +311,15 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 
 	// all but one should not be able to register to the node (i.e. open a stream to it).
-	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor1"), cfg, serviceCfg, opts)
+	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor1"), serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	opts.DataDir = t.TempDir()
-	_, postCleanup = launchPostSupervisor(t, log.Named("supervisor2"), cfg, serviceCfg, opts)
+	_, postCleanup = launchPostSupervisor(t, log.Named("supervisor2"), serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	opts.DataDir = t.TempDir()
-	_, postCleanup = launchPostSupervisor(t, log.Named("supervisor3"), cfg, serviceCfg, opts)
+	_, postCleanup = launchPostSupervisor(t, log.Named("supervisor3"), serviceCfg, opts)
 	t.Cleanup(postCleanup)
 
 	var client activation.PostClient

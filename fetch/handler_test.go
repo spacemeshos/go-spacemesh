@@ -260,7 +260,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 	}
 }
 
-func newAtx(t *testing.T, published types.EpochID) *types.ActivationTx {
+func newAtx(published types.EpochID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		PublishEpoch: published,
 		NumUnits:     2,
@@ -295,7 +295,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			var expected EpochData
 			if !tc.missingData {
 				for i := 0; i < 10; i++ {
-					vatx := newAtx(t, epoch)
+					vatx := newAtx(epoch)
 					require.NoError(t, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
 					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 				}
@@ -344,7 +344,7 @@ func testHandleEpochInfoReqWithQueryCache(
 	var expected EpochData
 
 	for i := 0; i < 10; i++ {
-		vatx := newAtx(t, epoch)
+		vatx := newAtx(epoch)
 		require.NoError(t, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
 		atxs.AtxAdded(th.cdb, vatx)
 		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
@@ -363,7 +363,7 @@ func testHandleEpochInfoReqWithQueryCache(
 	}
 
 	// Add another ATX which should be appended to the cached slice
-	vatx := newAtx(t, epoch)
+	vatx := newAtx(epoch)
 	require.NoError(t, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
 	atxs.AtxAdded(th.cdb, vatx)
 	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())

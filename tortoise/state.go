@@ -434,7 +434,7 @@ type headerWithSign struct {
 	sign   sign
 }
 
-func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, types.LayerID, error) {
+func decodeVotes(blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, types.LayerID, error) {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]headerWithSign{}
 	for _, header := range exceptions.Against {

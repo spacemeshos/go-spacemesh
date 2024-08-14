@@ -786,7 +786,7 @@ func (f *Fetch) streamBatch(peer p2p.Peer, batch *batchInfo) error {
 			batchMap := batch.toMap()
 
 			n, err := server.ReadResponse(s, func(respLen uint32) (n int, err error) {
-				return f.receiveStreamedBatch(ctx, s, batch, batchMap)
+				return f.receiveStreamedBatch(s, batch, batchMap)
 			})
 			if err != nil {
 				return n, err
@@ -819,7 +819,6 @@ func (f *Fetch) streamBatch(peer p2p.Peer, batch *batchInfo) error {
 }
 
 func (f *Fetch) receiveStreamedBatch(
-	ctx context.Context,
 	s io.ReadWriter,
 	batch *batchInfo,
 	batchMap map[types.Hash32]RequestMessage,

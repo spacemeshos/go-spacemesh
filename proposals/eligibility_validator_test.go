@@ -14,11 +14,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
+const units = uint32(10)
+
 func gatx(
 	id types.ATXID,
 	epoch types.EpochID,
 	smesher types.NodeID,
-	units uint32,
 	nonce types.VRFPostIndex,
 ) types.ActivationTx {
 	atx := types.ActivationTx{
@@ -83,8 +84,10 @@ func geligibilities(js ...uint32) (rst []types.VotingEligibility) {
 	return rst
 }
 
+const j = uint32(1)
+
 // geligibilityWithSig is useful to influence CalcEligibleLayer.
-func geligibilityWithSig(j uint32, sig string) []types.VotingEligibility {
+func geligibilityWithSig(sig string) []types.VotingEligibility {
 	el := types.VotingEligibility{J: j}
 	copy(el.Sig[:], sig)
 	return []types.VotingEligibility{el}
@@ -140,8 +143,8 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "ref ballot in current",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
-				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10),
 			},
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
@@ -156,8 +159,8 @@ func TestEligibilityValidator(t *testing.T) {
 			current:   epoch.FirstLayer(),
 			minWeight: 10000,
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
-				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10),
 			},
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
@@ -186,7 +189,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "ref ballot in previous",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish-1, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{1}, publish-1, types.NodeID{1}, 10),
 			},
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
@@ -218,7 +221,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "ref ballot in secondary no epoch data",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish-1, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{1}, publish-1, types.NodeID{1}, 10),
 			},
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
@@ -232,7 +235,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "ref ballot in current no epoch data",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10),
 			},
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
@@ -246,7 +249,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "ref ballot in current activeset empty",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10),
 			},
 			actives: types.ATXIDList{},
 			executed: gballot(
@@ -261,7 +264,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "ref ballot in current empty beacon",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 10),
+				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10),
 			},
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
@@ -275,7 +278,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "mismatched num eligible",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 0),
+				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 0),
 			},
 			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
@@ -290,7 +293,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "ballot targets wrong epoch",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 10, 0),
+				gatx(types.ATXID{1}, epoch-1, types.NodeID{1}, 0),
 			},
 			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
@@ -306,7 +309,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "ballot uses wrong atx",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, epoch-1, types.NodeID{2}, 10, 0),
+				gatx(types.ATXID{1}, epoch-1, types.NodeID{2}, 0),
 			},
 			actives: gactiveset(types.ATXID{1}),
 			executed: gballot(
@@ -337,7 +340,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "secondary ballot",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10),
 			},
 			ballots: []types.Ballot{
 				gballot(
@@ -353,14 +356,14 @@ func TestEligibilityValidator(t *testing.T) {
 				types.NodeID{1, 1, 1},
 				epoch.FirstLayer()+2,
 				types.BallotID{1},
-				geligibilityWithSig(1, "test1111111"),
+				geligibilityWithSig("test1111111"),
 			),
 		},
 		{
 			desc:    "secondary ballot empty ref",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10),
 			},
 			executed: gref(
 				types.BallotID{2}, types.ATXID{1},
@@ -376,7 +379,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "secondary ballot missing ref",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10),
 			},
 			executed: gref(
 				types.BallotID{2}, types.ATXID{1},
@@ -392,7 +395,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "secondary ballot atx id mismatch",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10),
 			},
 			ballots: []types.Ballot{
 				gballot(
@@ -408,7 +411,7 @@ func TestEligibilityValidator(t *testing.T) {
 				types.NodeID{1, 1, 1},
 				epoch.FirstLayer()+2,
 				types.BallotID{1},
-				geligibilityWithSig(1, "test1111111"),
+				geligibilityWithSig("test1111111"),
 			),
 			fail: true,
 			err:  "sharing atx with a reference ballot",
@@ -417,7 +420,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "secondary ballot smesher id mismatch",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10),
 			},
 			ballots: []types.Ballot{
 				gballot(
@@ -433,7 +436,7 @@ func TestEligibilityValidator(t *testing.T) {
 				types.NodeID{1, 1, 1},
 				epoch.FirstLayer()+2,
 				types.BallotID{1},
-				geligibilityWithSig(1, "test1111111"),
+				geligibilityWithSig("test1111111"),
 			),
 			fail: true,
 			err:  "mismatched smesher id with refballot",
@@ -442,7 +445,7 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "secondary ballot mismatched epochs",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1, 1, 1}, 10),
 			},
 			ballots: []types.Ballot{
 				gballot(
@@ -458,7 +461,7 @@ func TestEligibilityValidator(t *testing.T) {
 				types.NodeID{1, 1, 1},
 				epoch.FirstLayer()+2,
 				types.BallotID{1},
-				geligibilityWithSig(1, "test1111111"),
+				geligibilityWithSig("test1111111"),
 			),
 			fail: true,
 			err:  "targets mismatched epoch",
@@ -467,8 +470,8 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "ref ballot bad elig order",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
-				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10),
 			},
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
@@ -484,8 +487,8 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "proof overflows slots",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
-				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10),
 			},
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
@@ -501,8 +504,8 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "verified didnt pass",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
-				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10),
 			},
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
@@ -519,15 +522,15 @@ func TestEligibilityValidator(t *testing.T) {
 			desc:    "layer is wrong",
 			current: epoch.FirstLayer(),
 			atxs: []types.ActivationTx{
-				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10, 10),
-				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10, 10),
+				gatx(types.ATXID{1}, publish, types.NodeID{1}, 10),
+				gatx(types.ATXID{2}, publish, types.NodeID{2}, 10),
 			},
 			actives: gactiveset(types.ATXID{1}, types.ATXID{2}),
 			executed: gballot(
 				types.BallotID{1}, types.ATXID{1},
 				types.NodeID{1}, epoch.FirstLayer(),
 				gdata(15, types.Beacon{1}, gactiveset(types.ATXID{1}, types.ATXID{2}).Hash()),
-				geligibilityWithSig(1, "adjust layer"),
+				geligibilityWithSig("adjust layer"),
 			),
 			fail: true,
 			err:  "ballot has incorrect layer index",

@@ -17,14 +17,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-const epochWeight = uint64(100)
+const (
+	epochWeight = uint64(100)
+	// FIXME: pulled out to satisfy the linter but needs to be
+	// actually modified in tests to run different values.
+	epoch = types.EpochID(10)
+	round = types.RoundID(5)
+)
 
 func createProtocolDriverWithFirstRoundVotes(
 	t *testing.T,
 	signer *signing.EdSigner,
 	malicious bool,
-	epoch types.EpochID,
-	round types.RoundID,
 ) (*testProtocolDriver, proposalList) {
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
@@ -131,7 +135,6 @@ func checkProposals(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, expec
 }
 
 func createFirstVote(
-	t *testing.T,
 	signer *signing.EdSigner,
 	epoch types.EpochID,
 	valid, pValid proposalList,
@@ -185,10 +188,8 @@ func checkFirstIncomingVotes(
 }
 
 func createFollowingVote(
-	t *testing.T,
 	signer *signing.EdSigner,
 	epoch types.EpochID,
-	round types.RoundID,
 	bitVector []byte,
 	corruptSignature bool,
 ) *FollowingVotingMessage {
@@ -874,7 +875,7 @@ func Test_HandleFirstVotes_Success(t *testing.T) {
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
 
-	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
+	msg := createFirstVote(signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -909,7 +910,7 @@ func Test_HandleFirstVotes_Malicious(t *testing.T) {
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
 
-	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
+	msg := createFirstVote(signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -941,7 +942,7 @@ func Test_HandleFirstVotes_Shutdown(t *testing.T) {
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
 
-	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
+	msg := createFirstVote(signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -966,7 +967,7 @@ func Test_HandleFirstVotes_NotInProtocol(t *testing.T) {
 		signer.NodeID(): {atxid: createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, time.Now())},
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
-	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
+	msg := createFirstVote(signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -992,7 +993,7 @@ func Test_handleFirstVotes_CorruptMsg(t *testing.T) {
 		signer.NodeID(): {atxid: createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, time.Now())},
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
-	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
+	msg := createFirstVote(signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1019,7 +1020,7 @@ func Test_handleFirstVotes_WrongEpoch(t *testing.T) {
 	createEpochState(t, tpd.ProtocolDriver, epoch-1, minerAtxs, nil)
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
 	createEpochState(t, tpd.ProtocolDriver, epoch+1, minerAtxs, nil)
-	msg := createFirstVote(t, signer, epoch+1, validVotes, pValidVotes, false)
+	msg := createFirstVote(signer, epoch+1, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1032,7 +1033,7 @@ func Test_handleFirstVotes_WrongEpoch(t *testing.T) {
 	checkVoted(t, tpd.ProtocolDriver, epoch+1, signer, types.FirstRound, false)
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch+1, map[types.NodeID]proposalList{})
 
-	msg = createFirstVote(t, signer, epoch-1, validVotes, pValidVotes, false)
+	msg = createFirstVote(signer, epoch-1, validVotes, pValidVotes, false)
 	msgBytes, err = codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1060,7 +1061,7 @@ func Test_handleFirstVotes_TooLate(t *testing.T) {
 		signer.NodeID(): {atxid: createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, time.Now())},
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
-	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
+	msg := createFirstVote(signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1088,7 +1089,7 @@ func Test_HandleFirstVotes_FailedToVerifySig(t *testing.T) {
 		signer.NodeID(): {atxid: createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, time.Now())},
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
-	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, true)
+	msg := createFirstVote(signer, epoch, validVotes, pValidVotes, true)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1115,7 +1116,7 @@ func Test_HandleFirstVotes_AlreadyVoted(t *testing.T) {
 		signer.NodeID(): {atxid: createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, time.Now())},
 	}
 	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
-	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
+	msg := createFirstVote(signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1130,7 +1131,7 @@ func Test_HandleFirstVotes_AlreadyVoted(t *testing.T) {
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, expected)
 
 	// the same ed key will not cause double-vote
-	msg2 := createFirstVote(t, signer, epoch, validVotes, proposalList{}, false)
+	msg2 := createFirstVote(signer, epoch, validVotes, proposalList{}, false)
 	msgBytes2, err := codec.Encode(msg2)
 	require.NoError(t, err)
 
@@ -1153,7 +1154,7 @@ func Test_HandleFirstVotes_MinerMissingATX(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	createEpochState(t, tpd.ProtocolDriver, epoch, map[types.NodeID]*minerInfo{}, nil)
-	msg := createFirstVote(t, signer, epoch, validVotes, pValidVotes, false)
+	msg := createFirstVote(signer, epoch, validVotes, pValidVotes, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1168,14 +1169,12 @@ func Test_HandleFirstVotes_MinerMissingATX(t *testing.T) {
 func Test_HandleFollowingVotes_Success(t *testing.T) {
 	t.Parallel()
 
-	const epoch = types.EpochID(10)
-	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
+	msg := createFollowingVote(signer, epoch, []byte{0b101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1202,10 +1201,10 @@ func Test_HandleFollowingVotes_Malicious(t *testing.T) {
 	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, true, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, true)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
+	msg := createFollowingVote(signer, epoch, []byte{0b101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1228,11 +1227,11 @@ func Test_HandleFollowingVotes_Shutdown(t *testing.T) {
 	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false)
 	tpd.Close()
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
+	msg := createFollowingVote(signer, epoch, []byte{0b101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1249,10 +1248,10 @@ func Test_HandleFollowingVotes_NotInProtocol(t *testing.T) {
 	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
+	msg := createFollowingVote(signer, epoch, []byte{0b101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1270,10 +1269,10 @@ func Test_handleFollowingVotes_CorruptMsg(t *testing.T) {
 	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
+	msg := createFollowingVote(signer, epoch, []byte{0b101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1290,7 +1289,7 @@ func Test_handleFollowingVotes_WrongEpoch(t *testing.T) {
 	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false)
 	minerAtxs := map[types.NodeID]*minerInfo{
 		signer.NodeID(): {atxid: createATX(t, tpd.cdb, (epoch - 1).FirstLayer().Sub(1), signer, 10, time.Now())},
 	}
@@ -1301,7 +1300,7 @@ func Test_handleFollowingVotes_WrongEpoch(t *testing.T) {
 	createEpochState(t, tpd.ProtocolDriver, epoch+1, minerAtxs, nil)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch+1, round, []byte{0b101}, false)
+	msg := createFollowingVote(signer, epoch+1, []byte{0b101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1313,7 +1312,7 @@ func Test_handleFollowingVotes_WrongEpoch(t *testing.T) {
 	checkVoted(t, tpd.ProtocolDriver, epoch+1, signer, round, false)
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch+1, emptyVoteMargins(proposalList{}))
 
-	msg = createFollowingVote(t, signer, epoch-1, round, []byte{0b101}, false)
+	msg = createFollowingVote(signer, epoch-1, []byte{0b101}, false)
 	msgBytes, err = codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1333,10 +1332,10 @@ func Test_handleFollowingVotes_TooEarly(t *testing.T) {
 	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
+	msg := createFollowingVote(signer, epoch, []byte{0b101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1356,10 +1355,10 @@ func Test_handleFollowingVotes_FailedToVerifySig(t *testing.T) {
 	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, true)
+	msg := createFollowingVote(signer, epoch, []byte{0b101}, true)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1378,10 +1377,10 @@ func Test_handleFollowingVotes_AlreadyVoted(t *testing.T) {
 	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
+	msg := createFollowingVote(signer, epoch, []byte{0b101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1401,7 +1400,7 @@ func Test_handleFollowingVotes_AlreadyVoted(t *testing.T) {
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, expected)
 
 	// now vote again
-	msg = createFollowingVote(t, signer, epoch, round, []byte{0b111}, false)
+	msg = createFollowingVote(signer, epoch, []byte{0b111}, false)
 	msgBytes, err = codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1420,13 +1419,13 @@ func Test_handleFollowingVotes_MinerMissingATX(t *testing.T) {
 	const round = types.RoundID(5)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, false)
 
 	miner, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, miner, epoch, round, []byte{0b101}, false)
+	msg := createFollowingVote(miner, epoch, []byte{0b101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 
@@ -1442,7 +1441,6 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	const round = types.RoundID(5)
 	tpd := setUpProtocolDriver(t)
 	tpd.setBeginProtocol(context.Background())
 	signer, err := signing.NewEdSigner()
@@ -1469,7 +1467,7 @@ func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
 
 	// this msg will contain a bit vector that set bit 0 and 2-4. the miner voted for two proposals
 	// we don't know about locally
-	msg := createFollowingVote(t, signer, epoch, round, []byte{0b11101}, false)
+	msg := createFollowingVote(signer, epoch, []byte{0b11101}, false)
 	msgBytes, err := codec.Encode(msg)
 	require.NoError(t, err)
 

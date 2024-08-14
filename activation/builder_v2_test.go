@@ -49,7 +49,7 @@ func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 	tab.mValidator.EXPECT().PostV2(gomock.Any(), sig.NodeID(), commitment, &initialPost, post.Challenge, post.NumUnits)
 
 	var atx wire.ActivationTxV2
-	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch,
+	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer,
 		func(_ context.Context, _ string, got []byte) error {
 			require.NoError(t, codec.Decode(got, &atx))
 
@@ -86,7 +86,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 	// create and publish ATX V1
 	tab.mclock.EXPECT().CurrentLayer().Return(layer).Times(4)
-	atx1 := publishAtxV1(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch)
+	atx1 := publishAtxV1(t, tab, sig.NodeID(), posEpoch, &layer)
 	require.NotNil(t, atx1)
 
 	// create and publish ATX V2
@@ -95,7 +95,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	tab.mclock.EXPECT().CurrentLayer().Return(layer).Times(4)
 	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atx1.ID(), tab.goldenATXID, gomock.Any())
 	var atx2 wire.ActivationTxV2
-	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch,
+	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer,
 		func(_ context.Context, _ string, got []byte) error {
 			return codec.Decode(got, &atx2)
 		})

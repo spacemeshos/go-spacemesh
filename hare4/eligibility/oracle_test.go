@@ -451,7 +451,7 @@ func TestBuildVRFMessage_BeaconError(t *testing.T) {
 	o := defaultOracle(t)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errUnknown).Times(1)
-	msg, err := o.buildVRFMessage(context.Background(), types.LayerID(1), 1)
+	msg, err := o.buildVRFMessage(types.LayerID(1), 1)
 	require.ErrorIs(t, err, errUnknown)
 	require.Nil(t, msg)
 }
@@ -462,24 +462,24 @@ func TestBuildVRFMessage(t *testing.T) {
 	secondLayer := firstLayer.Add(1)
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m1, err := o.buildVRFMessage(context.Background(), firstLayer, 2)
+	m1, err := o.buildVRFMessage(firstLayer, 2)
 	require.NoError(t, err)
 
 	// check not same for different round
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m3, err := o.buildVRFMessage(context.Background(), firstLayer, 3)
+	m3, err := o.buildVRFMessage(firstLayer, 3)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m3)
 
 	// check not same for different layer
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m4, err := o.buildVRFMessage(context.Background(), secondLayer, 2)
+	m4, err := o.buildVRFMessage(secondLayer, 2)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m4)
 
 	// check same call returns same result
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m5, err := o.buildVRFMessage(context.Background(), firstLayer, 2)
+	m5, err := o.buildVRFMessage(firstLayer, 2)
 	require.NoError(t, err)
 	require.Equal(t, m1, m5) // check same result
 }
@@ -495,7 +495,7 @@ func TestBuildVRFMessage_Concurrency(t *testing.T) {
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(context.Background(), firstLayer, uint32(x%expectAdd))
+			_, err := o.buildVRFMessage(firstLayer, uint32(x%expectAdd))
 			assert.NoError(t, err)
 			wg.Done()
 		}(i)

@@ -537,8 +537,8 @@ func (t *testTracer) waitEligibility() []*types.HareEligibility {
 	return waitForChan(t.TB, t.eligibility, 10*time.Second, "no eligibility")
 }
 
-func (t *testTracer) waitSent() *Message {
-	return waitForChan(t.TB, t.sent, 10*time.Second, "no message")
+func (t *testTracer) waitSent() {
+	waitForChan(t.TB, t.sent, 10*time.Second, "no message")
 }
 
 func (*testTracer) OnStart(types.LayerID) {}
@@ -753,7 +753,9 @@ func TestHandler(t *testing.T) {
 	})
 }
 
-func gatx(id types.ATXID, epoch types.EpochID, smesher types.NodeID, base, height uint64) types.ActivationTx {
+const epoch = types.EpochID(1)
+
+func gatx(id types.ATXID, smesher types.NodeID, base, height uint64) types.ActivationTx {
 	atx := &types.ActivationTx{
 		NumUnits:       10,
 		PublishEpoch:   epoch,
@@ -797,8 +799,7 @@ func TestProposals(t *testing.T) {
 		pids[i][0] = byte(i) + 1
 		ids[i][0] = byte(i) + 1
 	}
-	publish := types.EpochID(1)
-	layer := (publish + 1).FirstLayer()
+	layer := (epoch + 1).FirstLayer()
 	goodBeacon := types.Beacon{1}
 	badBeacon := types.Beacon{2}
 
@@ -818,9 +819,9 @@ func TestProposals(t *testing.T) {
 			layer:  layer,
 			beacon: goodBeacon,
 			atxs: []types.ActivationTx{
-				gatx(atxids[0], publish, ids[0], 10, 100),
-				gatx(atxids[1], publish, ids[1], 10, 100),
-				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
+				gatx(atxids[0], ids[0], 10, 100),
+				gatx(atxids[1], ids[1], 10, 100),
+				gatx(atxids[2], signer.NodeID(), 10, 100),
 			},
 			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -833,9 +834,9 @@ func TestProposals(t *testing.T) {
 			layer:  layer,
 			beacon: goodBeacon,
 			atxs: []types.ActivationTx{
-				gatx(atxids[0], publish, ids[0], 10, 100),
-				gatx(atxids[1], publish, ids[1], 10, 100),
-				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
+				gatx(atxids[0], ids[0], 10, 100),
+				gatx(atxids[1], ids[1], 10, 100),
+				gatx(atxids[2], signer.NodeID(), 10, 100),
 			},
 			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -848,9 +849,9 @@ func TestProposals(t *testing.T) {
 			layer:  layer,
 			beacon: goodBeacon,
 			atxs: []types.ActivationTx{
-				gatx(atxids[0], publish, ids[0], 10, 100),
-				gatx(atxids[1], publish, ids[1], 10, 100),
-				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
+				gatx(atxids[0], ids[0], 10, 100),
+				gatx(atxids[1], ids[1], 10, 100),
+				gatx(atxids[2], signer.NodeID(), 10, 100),
 			},
 			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -864,8 +865,8 @@ func TestProposals(t *testing.T) {
 			layer:  layer,
 			beacon: goodBeacon,
 			atxs: []types.ActivationTx{
-				gatx(atxids[0], publish, ids[0], 101, 1000),
-				gatx(atxids[1], publish, signer.NodeID(), 10, 100),
+				gatx(atxids[0], ids[0], 101, 1000),
+				gatx(atxids[1], signer.NodeID(), 10, 100),
 			},
 			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
@@ -878,9 +879,9 @@ func TestProposals(t *testing.T) {
 			layer:  layer,
 			beacon: goodBeacon,
 			atxs: []types.ActivationTx{
-				gatx(atxids[0], publish, ids[0], 10, 100),
-				gatx(atxids[1], publish, ids[1], 10, 100),
-				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
+				gatx(atxids[0], ids[0], 10, 100),
+				gatx(atxids[1], ids[1], 10, 100),
+				gatx(atxids[2], signer.NodeID(), 10, 100),
 			},
 			proposals: []*types.Proposal{
 				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),

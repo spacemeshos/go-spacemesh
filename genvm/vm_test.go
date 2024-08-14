@@ -465,11 +465,13 @@ func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) i
 		int(core.TxDataGas(len(tx)))
 }
 
-func (t *tester) estimateDrainGas(principal, vault, to, amount int, nonce core.Nonce) int {
+const vaultVal = 20
+
+func (t *tester) estimateDrainGas(principal, to, amount int, nonce core.Nonce) int {
 	require.IsType(t, &vestingAccount{}, t.accounts[principal])
 	vestacc := t.accounts[principal].(*vestingAccount)
 	tx := vestacc.drainVault(
-		t.accounts[vault].getAddress(),
+		t.accounts[vaultVal].getAddress(),
 		t.accounts[to].getAddress(),
 		uint64(amount),
 		nonce)
@@ -704,7 +706,7 @@ type layertc struct {
 	headers     map[int]struct{} // is vm expected to return the header
 }
 
-func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *tester) []templateTestCase {
+func singleWalletTestCases(template core.Address, ref *tester) []templateTestCase {
 	return []templateTestCase{
 		{
 			desc: "Sanity",
@@ -1459,10 +1461,12 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 	}
 }
 
-func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTester func(t *testing.T) *tester) {
+const defaultGasPrice = 1
+
+func testWallet(t *testing.T, template core.Address, genTester func(t *testing.T) *tester) {
 	t.Parallel()
 	runTestCases(t,
-		singleWalletTestCases(defaultGasPrice, template, genTester(t)),
+		singleWalletTestCases(template, genTester(t)),
 		genTester,
 	)
 }
@@ -1473,10 +1477,9 @@ func TestWallets(t *testing.T) {
 		funded = 10  // number of funded accounts, included in genesis
 		total  = 100 // total number of accounts
 
-		defaultGasPrice = 1
 	)
 	t.Run("SingleSig", func(t *testing.T) {
-		testWallet(t, defaultGasPrice, wallet.TemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, wallet.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addSingleSig(funded).
 				applyGenesisWithBalance().
@@ -1485,7 +1488,7 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("MultiSig13", func(t *testing.T) {
 		const n = 3
-		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 1, n).
 				applyGenesisWithBalance().
@@ -1494,7 +1497,7 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("MultiSig25", func(t *testing.T) {
 		const n = 5
-		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 2, n).
 				applyGenesisWithBalance().
@@ -1503,7 +1506,7 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("MultiSig310", func(t *testing.T) {
 		const n = 10
-		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultisig(funded, 3, n).
 				applyGenesisWithBalance().
@@ -1512,7 +1515,7 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("Vesting13", func(t *testing.T) {
 		const n = 3
-		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addVesting(funded, 1, n).
 				applyGenesisWithBalance().
@@ -1521,7 +1524,7 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("Vesting25", func(t *testing.T) {
 		const n = 5
-		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addVesting(funded, 2, n).
 				applyGenesisWithBalance().
@@ -1530,7 +1533,7 @@ func TestWallets(t *testing.T) {
 	})
 	t.Run("Vesting310", func(t *testing.T) {
 		const n = 10
-		testWallet(t, defaultGasPrice, vesting.TemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, vesting.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addVesting(funded, 3, n).
 				applyGenesisWithBalance().
@@ -1802,7 +1805,7 @@ func TestVestingWithVault(t *testing.T) {
 						&drainVault{0, 20, 11, 500},
 					},
 					expected: map[int]change{
-						0:  spent{amount: ref.estimateDrainGas(0, 20, 11, 500, 2)},
+						0:  spent{amount: ref.estimateDrainGas(0, 11, 500, 2)},
 						20: spent{amount: 500},
 						11: earned{amount: 500},
 					},
@@ -1837,7 +1840,7 @@ func TestVestingWithVault(t *testing.T) {
 					},
 					expected: map[int]change{
 						// gas was spent on failed tx
-						0: spent{amount: ref.estimateDrainGas(0, 20, 11, 1, 2)},
+						0: spent{amount: ref.estimateDrainGas(0, 11, 1, 2)},
 					},
 				},
 				{
@@ -1855,9 +1858,9 @@ func TestVestingWithVault(t *testing.T) {
 					},
 					expected: map[int]change{
 						// gas spent on one successful and two unsuccessful txs
-						0: spent{amount: ref.estimateDrainGas(0, 20, 11, 5501, 2) +
-							ref.estimateDrainGas(0, 20, 11, 5500, 2) +
-							ref.estimateDrainGas(0, 20, 11, 1, 3)},
+						0: spent{amount: ref.estimateDrainGas(0, 11, 5501, 2) +
+							ref.estimateDrainGas(0, 11, 5500, 2) +
+							ref.estimateDrainGas(0, 11, 1, 3)},
 						20: spent{amount: 5500},
 						11: earned{amount: 5500},
 					},
@@ -1893,7 +1896,7 @@ func TestVestingWithVault(t *testing.T) {
 					expected: map[int]change{
 						0: same{},
 						1: spent{
-							amount: ref.estimateDrainGas(1, 20, 11, 100, 1),
+							amount: ref.estimateDrainGas(1, 11, 100, 1),
 							change: nonce{increased: 1},
 						},
 						11: same{},
@@ -1941,9 +1944,9 @@ func TestVestingWithVault(t *testing.T) {
 					},
 					expected: map[int]change{
 						0: spent{
-							amount: ref.estimateDrainGas(0, 20, 11, 1001, 3) +
-								ref.estimateDrainGas(0, 20, 11, 1000, 4) +
-								ref.estimateDrainGas(0, 20, 11, 1000, 5),
+							amount: ref.estimateDrainGas(0, 11, 1001, 3) +
+								ref.estimateDrainGas(0, 11, 1000, 4) +
+								ref.estimateDrainGas(0, 11, 1000, 5),
 						},
 						11: earned{amount: 1000},
 						20: spent{amount: 1000},
@@ -1964,8 +1967,8 @@ func TestVestingWithVault(t *testing.T) {
 						0: vault.ErrAmountNotAvailable,
 					},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateDrainGas(0, 20, 10, 10000, 5) +
-							ref.estimateDrainGas(0, 20, 10, 5000, 6)},
+						0: spent{amount: ref.estimateDrainGas(0, 10, 10000, 5) +
+							ref.estimateDrainGas(0, 10, 5000, 6)},
 						10: earned{amount: 5000},
 						20: spent{amount: 5000},
 					},
@@ -1985,8 +1988,8 @@ func TestVestingWithVault(t *testing.T) {
 						0: vault.ErrAmountNotAvailable,
 					},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateDrainGas(0, 20, 9, 5001, 7) +
-							ref.estimateDrainGas(0, 20, 9, 5000, 8)},
+						0: spent{amount: ref.estimateDrainGas(0, 9, 5001, 7) +
+							ref.estimateDrainGas(0, 9, 5000, 8)},
 						9:  earned{amount: 5000},
 						20: spent{amount: 5000},
 					},

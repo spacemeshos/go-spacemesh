@@ -228,7 +228,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	require.NoError(t, err)
 
 	run := func(c *cobra.Command, args []string) error {
-		return app.startAPIServices(context.Background())
+		return app.startAPIServices()
 	}
 	defer app.stopServices(context.Background())
 
@@ -277,7 +277,7 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
-		return app.startAPIServices(context.Background())
+		return app.startAPIServices()
 	}
 
 	str, err := testArgs(context.Background(), cmdWithRun(run))
@@ -312,7 +312,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
-		return app.startAPIServices(context.Background())
+		return app.startAPIServices()
 	}
 
 	// Test starting the JSON server from the command line
@@ -368,7 +368,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
 
-	run := func(c *cobra.Command, args []string) error {
+	run := func(_ *cobra.Command, _ []string) error {
 		// Give the error channel a buffer
 		events.CloseEventReporter()
 		events.InitializeReporter()
@@ -483,7 +483,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
 
-	run := func(c *cobra.Command, args []string) error {
+	run := func(_ *cobra.Command, _ []string) error {
 		require.NoError(t, app.Initialize())
 
 		// GRPC configuration

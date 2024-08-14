@@ -308,7 +308,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 	defer t.mu.Unlock()
 	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	start = time.Now()
-	t.trtl.tallyVotes(ctx, lid)
+	t.trtl.tallyVotes(lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	if t.tracer != nil {
 		t.tracer.On(&TallyTrace{Layer: lid})

@@ -56,17 +56,15 @@ type mockSet struct {
 	mconsumer *MockproposalsConsumer
 }
 
-func (ms *mockSet) decodeAnyBallots() *mockSet {
+func (ms *mockSet) decodeAnyBallots() {
 	ms.md.EXPECT().DecodeBallot(gomock.Any()).AnyTimes()
 	ms.md.EXPECT().StoreBallot(gomock.Any()).AnyTimes()
-	return ms
 }
 
-func (ms *mockSet) setCurrentLayer(layer types.LayerID) *mockSet {
+func (ms *mockSet) setCurrentLayer(layer types.LayerID) {
 	ms.mclock.EXPECT().CurrentLayer().Return(layer).AnyTimes()
 	ms.mm.EXPECT().ProcessedLayer().Return(layer - 1).AnyTimes()
 	ms.mclock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now().Add(-5 * time.Second)).AnyTimes()
-	return ms
 }
 
 type testHandler struct {

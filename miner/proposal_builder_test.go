@@ -61,11 +61,13 @@ func genAtxWithReceived(received time.Time) genAtxOpt {
 	}
 }
 
-const ticks = 100
+const (
+	ticks = 100
+	epoch = types.EpochID(2)
+)
 
 func gatx(
 	id types.ATXID,
-	epoch types.EpochID,
 	smesher types.NodeID,
 	units uint32,
 	opts ...genAtxOpt,
@@ -145,9 +147,10 @@ func expectMeshHash(hash types.Hash32) expectOpt {
 	}
 }
 
+const epochExpectCounter = types.EpochID(3)
+
 func expectCounters(
 	signer *signing.EdSigner,
-	epoch types.EpochID,
 	beacon types.Beacon,
 	nonce types.VRFPostIndex,
 	js ...uint32,
@@ -157,7 +160,7 @@ func expectCounters(
 		for _, j := range js {
 			p.EligibilityProofs = append(p.EligibilityProofs, types.VotingEligibility{
 				J:   j,
-				Sig: vsigner.Sign(proposals.MustSerializeVRFMessage(beacon, epoch, nonce, j)),
+				Sig: vsigner.Sign(proposals.MustSerializeVRFMessage(beacon, epochExpectCounter, nonce, j)),
 			})
 		}
 	}
@@ -269,10 +272,10 @@ func TestBuild(t *testing.T) {
 					lid:    15,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
-						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
-						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1),
-						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, types.NodeID{2}, 1),
+						gatx(types.ATXID{3}, types.NodeID{3}, 1),
+						gatx(types.ATXID{4}, types.NodeID{4}, 1),
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{{1}, {2}},
@@ -285,7 +288,7 @@ func TestBuild(t *testing.T) {
 							types.Beacon{1},
 						),
 						expectTxs([]types.TransactionID{{1}, {2}}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 0, 6, 9),
+						expectCounters(signer, types.Beacon{1}, 777, 0, 6, 9),
 					),
 				},
 			},
@@ -297,12 +300,12 @@ func TestBuild(t *testing.T) {
 					lid:    15,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
-						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
-						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1),
-						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1),
-						gatx(types.ATXID{5}, 2, types.NodeID{5}, 1),
-						gatx(types.ATXID{6}, 2, types.NodeID{6}, 1),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, types.NodeID{2}, 1),
+						gatx(types.ATXID{3}, types.NodeID{3}, 1),
+						gatx(types.ATXID{4}, types.NodeID{4}, 1),
+						gatx(types.ATXID{5}, types.NodeID{5}, 1),
+						gatx(types.ATXID{6}, types.NodeID{6}, 1),
 					},
 					fallbackActiveSets: []struct {
 						epoch types.EpochID
@@ -321,7 +324,7 @@ func TestBuild(t *testing.T) {
 							types.Beacon{1},
 						),
 						expectTxs([]types.TransactionID{{1}, {2}}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 0, 6, 9),
+						expectCounters(signer, types.Beacon{1}, 777, 0, 6, 9),
 					),
 				},
 			},
@@ -334,7 +337,7 @@ func TestBuild(t *testing.T) {
 					lid:    15,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{},
@@ -346,7 +349,7 @@ func TestBuild(t *testing.T) {
 							5,
 							types.Beacon{1},
 						),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 0),
+						expectCounters(signer, types.Beacon{1}, 777, 0),
 					),
 				},
 			},
@@ -358,8 +361,8 @@ func TestBuild(t *testing.T) {
 					lid:    16,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
-						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, types.NodeID{2}, 1),
 					},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
@@ -375,7 +378,7 @@ func TestBuild(t *testing.T) {
 					expectProposal: expectProposal(
 						signer, 16, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
 						expectRef(types.BallotID{1}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 2),
+						expectCounters(signer, types.Beacon{1}, 777, 2),
 					),
 				},
 			},
@@ -395,13 +398,13 @@ func TestBuild(t *testing.T) {
 				{
 					lid: 15,
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{20}, 2, types.NodeID{20}, 1),
+						gatx(types.ATXID{20}, types.NodeID{20}, 1),
 					},
 				},
 				{
 					lid: 16,
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{10}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{10}, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{1}, types.ATXID{10}, signer.NodeID(), 15, &types.EpochData{
@@ -417,7 +420,7 @@ func TestBuild(t *testing.T) {
 						signer, 16, types.ATXID{10}, types.Opinion{Hash: types.Hash32{1}},
 						expectRef(types.BallotID{1}),
 						expectTxs([]types.TransactionID{{1}}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 2),
+						expectCounters(signer, types.Beacon{1}, 777, 2),
 					),
 				},
 			},
@@ -429,8 +432,8 @@ func TestBuild(t *testing.T) {
 					lid:    16,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
-						gatx(types.ATXID{2}, 2, types.NodeID{2}, 100),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, types.NodeID{2}, 100),
 					},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
@@ -453,7 +456,7 @@ func TestBuild(t *testing.T) {
 					lid:    16,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
@@ -476,7 +479,7 @@ func TestBuild(t *testing.T) {
 					lid:    16,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
@@ -493,7 +496,7 @@ func TestBuild(t *testing.T) {
 					expectProposal: expectProposal(
 						signer, 16, types.ATXID{1}, types.Opinion{},
 						expectRef(types.BallotID{1}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5),
+						expectCounters(signer, types.Beacon{1}, 777, 2, 5),
 					),
 				},
 			},
@@ -505,8 +508,8 @@ func TestBuild(t *testing.T) {
 					lid:    16,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
-						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, types.NodeID{2}, 1),
 					},
 					identities: []identity{{
 						id: types.NodeID{2},
@@ -525,7 +528,7 @@ func TestBuild(t *testing.T) {
 							50,
 							types.Beacon{1},
 						),
-						expectCounters(signer, 3, types.Beacon{1}, 777,
+						expectCounters(signer, types.Beacon{1}, 777,
 							2, 5, 11, 19, 22, 24, 28, 30, 33, 36),
 					),
 				},
@@ -542,9 +545,9 @@ func TestBuild(t *testing.T) {
 					lid:    16,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
-						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1, genAtxWithReceived(time.Unix(20, 0))),
-						gatx(types.ATXID{3}, 2, types.NodeID{3}, 1, genAtxWithReceived(time.Unix(20, 0))),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, types.NodeID{2}, 1, genAtxWithReceived(time.Unix(20, 0))),
+						gatx(types.ATXID{3}, types.NodeID{3}, 1, genAtxWithReceived(time.Unix(20, 0))),
 					},
 					expectErr: "first block",
 				},
@@ -572,7 +575,7 @@ func TestBuild(t *testing.T) {
 				{
 					lid: 16,
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{4}, 2, types.NodeID{4}, 1, genAtxWithReceived(time.Unix(20, 0))),
+						gatx(types.ATXID{4}, types.NodeID{4}, 1, genAtxWithReceived(time.Unix(20, 0))),
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{},
@@ -584,7 +587,7 @@ func TestBuild(t *testing.T) {
 							16,
 							types.Beacon{1},
 						),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5, 11),
+						expectCounters(signer, types.Beacon{1}, 777, 2, 5, 11),
 					),
 				},
 			},
@@ -596,7 +599,7 @@ func TestBuild(t *testing.T) {
 					lid:    16,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{11}, types.ATXID{1}, signer.NodeID(), 15, nil),
@@ -613,7 +616,7 @@ func TestBuild(t *testing.T) {
 					lid:    16,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
@@ -629,7 +632,7 @@ func TestBuild(t *testing.T) {
 					expectProposal: expectProposal(
 						signer, 16, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
 						expectRef(types.BallotID{1}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5),
+						expectCounters(signer, types.Beacon{1}, 777, 2, 5),
 					),
 				},
 				{
@@ -640,7 +643,7 @@ func TestBuild(t *testing.T) {
 					expectProposal: expectProposal(
 						signer, 17, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
 						expectRef(types.BallotID{1}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 3, 7),
+						expectCounters(signer, types.Beacon{1}, 777, 3, 7),
 					),
 				},
 				{
@@ -652,7 +655,7 @@ func TestBuild(t *testing.T) {
 					expectProposal: expectProposal(
 						signer, 18, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
 						expectRef(types.BallotID{1}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 1, 4, 8),
+						expectCounters(signer, types.Beacon{1}, 777, 1, 4, 8),
 					),
 				},
 			},
@@ -665,7 +668,7 @@ func TestBuild(t *testing.T) {
 					lid:    16,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{1}, signer.NodeID(), 1, genAtxWithNonce(777)),
 					},
 					ballots: []*types.Ballot{
 						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
@@ -681,7 +684,7 @@ func TestBuild(t *testing.T) {
 					expectProposal: expectProposal(
 						signer, 16, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
 						expectRef(types.BallotID{1}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5),
+						expectCounters(signer, types.Beacon{1}, 777, 2, 5),
 					),
 				},
 				{
@@ -695,7 +698,7 @@ func TestBuild(t *testing.T) {
 						signer, 17, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
 						expectRef(types.BallotID{1}),
 						expectMeshHash(types.Hash32{9, 9, 9}),
-						expectCounters(signer, 3, types.Beacon{1}, 777, 3, 7),
+						expectCounters(signer, types.Beacon{1}, 777, 3, 7),
 					),
 				},
 			},
@@ -708,8 +711,8 @@ func TestBuild(t *testing.T) {
 					lid:    15,
 					beacon: types.Beacon{1},
 					atxs: []*types.ActivationTx{
-						gatx(types.ATXID{1}, 2, signers[0].NodeID(), 1, genAtxWithNonce(777)),
-						gatx(types.ATXID{2}, 2, signers[1].NodeID(), 1, genAtxWithNonce(999)),
+						gatx(types.ATXID{1}, signers[0].NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, signers[1].NodeID(), 1, genAtxWithNonce(999)),
 					},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{{1}, {2}},
@@ -723,7 +726,7 @@ func TestBuild(t *testing.T) {
 								types.Beacon{1},
 							),
 							expectTxs([]types.TransactionID{{1}, {2}}),
-							expectCounters(signers[0], 3, types.Beacon{1}, 777, 0, 6, 9, 12, 16, 18, 20, 23),
+							expectCounters(signers[0], types.Beacon{1}, 777, 0, 6, 9, 12, 16, 18, 20, 23),
 						),
 						expectProposal(
 							signers[1], 15, types.ATXID{2}, types.Opinion{Hash: types.Hash32{1}},
@@ -733,7 +736,7 @@ func TestBuild(t *testing.T) {
 								types.Beacon{1},
 							),
 							expectTxs([]types.TransactionID{{1}, {2}}),
-							expectCounters(signers[1], 3, types.Beacon{1}, 999, 0, 4, 6, 8, 9, 17),
+							expectCounters(signers[1], types.Beacon{1}, 999, 0, 4, 6, 8, 9, 17),
 						),
 					},
 				},

@@ -221,9 +221,9 @@ func (o *testOpinion) support(hid string, height uint64) *testOpinion {
 	return o
 }
 
-func (o *testOpinion) against(hid string, height uint64) *testOpinion {
+func (o *testOpinion) against(height uint64) *testOpinion {
 	id := types.BlockID{}
-	copy(id[:], hid)
+	copy(id[:], "a")
 	o.pending.ag = append(o.pending.ag, types.Vote{
 		ID:      id,
 		Height:  height,
@@ -303,7 +303,7 @@ func TestStateDecodeVotes(t *testing.T) {
 			"cancel support",
 			[]*testOpinion{
 				newTestOpinion(genesis).support("a", 100),
-				newTestOpinion(genesis).against("a", 100),
+				newTestOpinion(genesis).against(100),
 			},
 			newTestOpinion(genesis).next(),
 			"",
@@ -324,7 +324,7 @@ func TestStateDecodeVotes(t *testing.T) {
 			[]*testOpinion{
 				newTestOpinion(genesis).support("a", 100),
 				newTestOpinion(genesis).support("a", 101),
-				newTestOpinion(genesis).against("a", 100),
+				newTestOpinion(genesis).against(100),
 			},
 			nil,
 			"wrong target",
@@ -332,7 +332,7 @@ func TestStateDecodeVotes(t *testing.T) {
 		{
 			"conflicting votes with against",
 			[]*testOpinion{
-				newTestOpinion(genesis).against("a", 100).against("a", 200),
+				newTestOpinion(genesis).against(100).against(200),
 			},
 			nil,
 			"conflicting",
@@ -348,7 +348,7 @@ func TestStateDecodeVotes(t *testing.T) {
 		{
 			"conflicting votes with against and support",
 			[]*testOpinion{
-				newTestOpinion(genesis).against("a", 100).support("a", 200),
+				newTestOpinion(genesis).against(100).support("a", 200),
 			},
 			nil,
 			"conflicting",
@@ -356,7 +356,7 @@ func TestStateDecodeVotes(t *testing.T) {
 		{
 			"conflicting abstain",
 			[]*testOpinion{
-				newTestOpinion(genesis).against("a", 100).abstain(),
+				newTestOpinion(genesis).against(100).abstain(),
 			},
 			nil,
 			"conflict with abstain",
@@ -370,7 +370,7 @@ func TestStateDecodeVotes(t *testing.T) {
 				lid := base.layer.Add(1)
 				encoded := opinion.encodedVotes()
 				var rst votes
-				rst, _, err = decodeVotes(genesis.Sub(1), lid, base, encoded)
+				rst, _, err = decodeVotes(lid, base, encoded)
 				if err != nil {
 					break
 				}

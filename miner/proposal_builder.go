@@ -449,7 +449,7 @@ func (pb *ProposalBuilder) UpdateActiveSet(target types.EpochID, set []types.ATX
 	pb.activeGen.updateFallback(target, set)
 }
 
-func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.LayerID) error {
+func (pb *ProposalBuilder) initSharedData(current types.LayerID) error {
 	if pb.shared.epoch != current.GetEpoch() {
 		pb.shared = sharedSession{epoch: current.GetEpoch()}
 	}
@@ -480,7 +480,6 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 }
 
 func (pb *ProposalBuilder) initSignerData(
-	ctx context.Context,
 	ss *signerSession,
 	lid types.LayerID,
 ) error {
@@ -559,7 +558,7 @@ func (pb *ProposalBuilder) initSignerData(
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	start := time.Now()
-	if err := pb.initSharedData(ctx, lid); err != nil {
+	if err := pb.initSharedData(lid); err != nil {
 		return err
 	}
 
@@ -573,7 +572,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	for _, ss := range signers {
 		ss.latency.start = start
 		eg.Go(func() error {
-			if err := pb.initSignerData(ctx, ss, lid); err != nil {
+			if err := pb.initSignerData(ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
 					ss.log.Debug("smesher doesn't have atx that targets this epoch",
 						log.ZContext(ctx),

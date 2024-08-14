@@ -50,9 +50,13 @@ func (t *tinput) round(r Round) *tinput {
 	return t
 }
 
-func (t *tinput) iter(i uint8) *tinput {
+// FIXME: made to satisfy the linter but actually needs unit test
+// changes to test different cases.
+const iter1 = uint8(1)
+
+func (t *tinput) iter() *tinput {
 	t.ensureMsg()
-	t.Iter = i
+	t.Iter = iter1
 	return t
 }
 
@@ -143,9 +147,9 @@ func (t *toutput) round(r Round) *toutput {
 	return t
 }
 
-func (t *toutput) iter(i uint8) *toutput {
+func (t *toutput) iter() *toutput {
 	t.ensureMsg()
-	t.message.Iter = i
+	t.message.Iter = iter1
 	return t
 }
 
@@ -182,8 +186,10 @@ type setup struct {
 	proposals []types.ProposalID
 }
 
-func (s *setup) thresh(v uint16) *setup {
-	s.threshold = v
+const threshold = 10
+
+func (s *setup) thresh() *setup {
+	s.threshold = threshold
 	return s
 }
 
@@ -204,7 +210,7 @@ func gen(desc string, steps ...any) testCase {
 func TestProtocol(t *testing.T) {
 	for _, tc := range []testCase{
 		gen("sanity", // simplest e2e protocol run
-			new(setup).thresh(10).initial("a", "b"),
+			new(setup).thresh().initial("a", "b"),
 			new(toutput).active().round(preround).proposals("a", "b"),
 			new(tinput).sender("1").round(preround).proposals("b", "a").vrfcount(3).g(grade5),
 			new(tinput).sender("2").round(preround).proposals("a", "c").vrfcount(9).g(grade5),
@@ -224,15 +230,15 @@ func TestProtocol(t *testing.T) {
 			new(toutput).result("a", "c"), // hardlock
 			new(toutput),                  // softlock
 			// propose, commit, notify messages are built based on prervious state
-			new(toutput).active().round(propose).iter(1).proposals("a", "c"), // propose
+			new(toutput).active().round(propose).iter().proposals("a", "c"), // propose
 			new(toutput), // wait1
 			new(toutput), // wait2
-			new(toutput).active().round(commit).iter(1).ref("a", "c"), // commit
-			new(toutput).active().round(notify).iter(1).ref("a", "c"), // notify
+			new(toutput).active().round(commit).iter().ref("a", "c"), // commit
+			new(toutput).active().round(notify).iter().ref("a", "c"), // notify
 			new(toutput).terminated(),
 		),
 		gen("commit on softlock",
-			new(setup).thresh(10).initial("a", "b"),
+			new(setup).thresh().initial("a", "b"),
 			new(toutput),
 			new(tinput).sender("1").round(preround).proposals("a", "b").vrfcount(11).g(grade5),
 			new(toutput).coin(false),
@@ -248,13 +254,13 @@ func TestProtocol(t *testing.T) {
 			new(toutput), // softlock
 			// propose, commit, notify messages are built based on prervious state
 			new(toutput), // propose
-			new(tinput).sender("1").iter(1).round(propose).proposals("b").g(grade5),
+			new(tinput).sender("1").iter().round(propose).proposals("b").g(grade5),
 			new(toutput), // wait1
 			new(toutput), // wait2
-			new(toutput).active().round(commit).iter(1).ref("b"), // commit
+			new(toutput).active().round(commit).iter().ref("b"), // commit
 		),
 		gen("empty 0 iteration", // test that protocol can complete not only in 0st iteration
-			new(setup).thresh(10).initial("a", "b"),
+			new(setup).thresh().initial("a", "b"),
 			new(toutput), // preround
 			new(tinput).sender("1").round(preround).proposals("a", "b").vrfcount(3).g(grade5),
 			new(tinput).sender("2").round(preround).proposals("a", "b").vrfcount(9).g(grade5),
@@ -266,14 +272,14 @@ func TestProtocol(t *testing.T) {
 			new(toutput),             // notify
 			new(toutput),             // 2nd hardlock
 			new(toutput),             // 2nd softlock
-			new(toutput).active().iter(1).round(propose).proposals("a", "b"), // 2nd propose
-			new(tinput).sender("1").iter(1).round(propose).proposals("a", "b").g(grade5),
+			new(toutput).active().iter().round(propose).proposals("a", "b"), // 2nd propose
+			new(tinput).sender("1").iter().round(propose).proposals("a", "b").g(grade5),
 			new(toutput), // 2nd wait1
 			new(toutput), // 2nd wait2
-			new(toutput).active().iter(1).round(commit).ref("a", "b"),
-			new(tinput).sender("1").iter(1).round(commit).ref("a", "b").g(grade5).vrfcount(11),
-			new(toutput).active().iter(1).round(notify).ref("a", "b"),
-			new(tinput).sender("1").iter(1).round(notify).ref("a", "b").g(grade5).vrfcount(11),
+			new(toutput).active().iter().round(commit).ref("a", "b"),
+			new(tinput).sender("1").iter().round(commit).ref("a", "b").g(grade5).vrfcount(11),
+			new(toutput).active().iter().round(notify).ref("a", "b"),
+			new(tinput).sender("1").iter().round(notify).ref("a", "b").g(grade5).vrfcount(11),
 			new(toutput).result("a", "b"), // 3rd hardlock
 			new(toutput),                  // 3rd softlock
 			new(toutput),                  // 3rd propose
@@ -284,7 +290,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).terminated(),     // 4th softlock
 		),
 		gen("empty proposal",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput), // preround
 			new(tinput).sender("1").round(preround).vrfcount(11).g(grade5),
 			new(toutput).coin(false),                         // softlock
@@ -299,7 +305,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).result(), // hardlock
 		),
 		gen("coin true",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("2").round(preround).vrf(2).g(grade5),
 			new(tinput).sender("1").round(preround).vrf(1).g(grade5),
@@ -307,7 +313,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).coin(true),
 		),
 		gen("coin false",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("2").round(preround).vrf(1, 2).g(grade5),
 			new(tinput).sender("1").round(preround).vrf(0, 1).g(grade5),
@@ -315,7 +321,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).coin(false),
 		),
 		gen("coin delayed",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(toutput),
 			new(tinput).sender("2").round(preround).vrf(1, 2).g(grade5),
@@ -323,7 +329,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).coin(true),
 		),
 		gen("duplicates don't affect thresholds",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("1").round(preround).proposals("a", "b").vrfcount(5).g(grade5),
 			new(tinput).sender("3").round(preround).proposals("d").vrfcount(6).g(grade5).gossip(),
@@ -344,7 +350,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active().round(notify).ref("a"), // duplicates commits were ignored
 		),
 		gen("malicious preround",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("1").round(preround).proposals("a", "b").vrfcount(9).g(grade5),
 			new(tinput).sender("2").malicious().gossip().
@@ -354,7 +360,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active().round(propose).proposals("b"),
 		),
 		gen("malicious proposal",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(toutput), // softlock
 			new(tinput).sender("5").
@@ -369,7 +375,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active().round(commit).ref("a", "c"), // commit
 		),
 		gen("malicious commit",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("5").
 				round(preround).proposals("a").vrfcount(11).g(grade5),
@@ -384,7 +390,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active(), // notify outputs nothing
 		),
 		gen("malicious notify",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("5").
 				round(preround).proposals("a").vrfcount(11).g(grade5),
@@ -401,7 +407,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput), // no result as the only notify is malicious
 		),
 		gen("equivocation preround",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("7").mshHash("m0").
 				round(preround).proposals("a").vrfcount(11).g(grade4),
@@ -411,7 +417,7 @@ func TestProtocol(t *testing.T) {
 				round(preround).proposals("c").vrfcount(11).g(grade3),
 		),
 		gen("multiple malicious not broadcasted",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("7").malicious().gossip().
 				round(preround).proposals("a").vrfcount(11).g(grade5),
@@ -421,7 +427,7 @@ func TestProtocol(t *testing.T) {
 				round(preround).proposals("c").vrfcount(11).g(grade5),
 		),
 		gen("no commit for grade1",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("5").
 				round(preround).proposals("a").vrfcount(11).g(grade5),
@@ -433,7 +439,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active(), // commit
 		),
 		gen("other gradecast was received",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput),
 			new(tinput).sender("5").
 				round(preround).proposals("a").vrfcount(11).g(grade5),
@@ -446,7 +452,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active(), // commit
 		),
 		gen("no commit if not subset of grade3",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput), // preround
 			new(toutput), // softlock
 			new(toutput), // propose
@@ -458,7 +464,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active(),    // commit
 		),
 		gen("grade5 proposals are not in propose",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput), // preround
 			new(tinput).sender("1").
 				round(preround).proposals("a").vrfcount(11).g(grade5),
@@ -472,7 +478,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active(), // commit
 		),
 		gen("commit locked",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(toutput), // preround
 			new(tinput).sender("1").
 				round(preround).proposals("a", "b").vrfcount(11).g(grade5),
@@ -490,16 +496,16 @@ func TestProtocol(t *testing.T) {
 			new(toutput), // propose
 			// commit on b will have grade1, to satisfy condition (g)
 			new(tinput).sender("2").round(commit).ref("b").vrfcount(11).g(grade5),
-			new(tinput).sender("1").iter(1).round(propose).proposals("a").g(grade5).vrf(2),
-			new(tinput).sender("2").iter(1).round(propose).proposals("b").g(grade5).vrf(1),
+			new(tinput).sender("1").iter().round(propose).proposals("a").g(grade5).vrf(2),
+			new(tinput).sender("2").iter().round(propose).proposals("b").g(grade5).vrf(1),
 			new(toutput), // wait1
 			new(toutput), // wait2
 			// condition (h) ensures that we commit on locked value, even though proposal for b
 			// is first in the order
-			new(toutput).active().round(commit).iter(1).ref("a"), // commit
+			new(toutput).active().round(commit).iter().ref("a"), // commit
 		),
 		gen("early proposal by one",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(tinput).sender("1").round(preround).proposals("a", "b").vrfcount(11).g(grade5),
 			new(toutput).coin(false), // preround
 			new(toutput),             // softlock
@@ -510,7 +516,7 @@ func TestProtocol(t *testing.T) {
 			new(toutput).active().round(commit).ref("a", "b"),
 		),
 		gen("early proposal by two",
-			new(setup).thresh(10),
+			new(setup).thresh(),
 			new(tinput).sender("1").round(preround).proposals("a", "b").vrfcount(11).g(grade5),
 			new(toutput).coin(false), // preround
 			new(tinput).sender("1").round(propose).proposals("a", "b").g(grade5).vrf(1),

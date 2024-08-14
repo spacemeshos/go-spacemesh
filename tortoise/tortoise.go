@@ -273,7 +273,7 @@ func (t *turtle) encodeVotes(
 	if explen := len(votes.Support) + len(votes.Against); explen > t.MaxExceptions {
 		return nil, fmt.Errorf("too many exceptions (%v)", explen)
 	}
-	decoded, _, err := decodeVotes(t.evicted, current, base, votes)
+	decoded, _, err := decodeVotes(current, base, votes)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +320,7 @@ func (t *turtle) updateLast(last types.LayerID) {
 	}
 }
 
-func (t *turtle) tallyVotes(ctx context.Context, last types.LayerID) {
+func (t *turtle) tallyVotes(last types.LayerID) {
 	defer t.evict()
 
 	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
@@ -779,7 +779,7 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 			votes votes
 			err   error
 		)
-		votes, min, err = decodeVotes(t.evicted, binfo.layer, base, ballot.Opinion.Votes)
+		votes, min, err = decodeVotes(binfo.layer, base, ballot.Opinion.Votes)
 		if err != nil {
 			return nil, 0, err
 		}

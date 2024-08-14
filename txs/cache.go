@@ -94,7 +94,7 @@ func (ac *accountCache) availBalance() uint64 {
 	return ac.txsByNonce.Back().Value.(*candidate).postBalance
 }
 
-func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element, *candidate, error) {
+func (ac *accountCache) precheck(ntx *NanoTX) (*list.Element, *candidate, error) {
 	if ac.txsByNonce.Len() >= maxTXsPerAcct {
 		ac.moreInDB = true
 		return nil, nil, fmt.Errorf("%w: len %d", errTooManyNonce, ac.txsByNonce.Len())
@@ -127,7 +127,7 @@ func (ac *accountCache) accept(logger *zap.Logger, ntx *NanoTX, blockSeed []byte
 		replaced    *NanoTX
 		err         error
 	)
-	prev, cand, err = ac.precheck(logger, ntx)
+	prev, cand, err = ac.precheck(ntx)
 	if err != nil {
 		return err
 	}

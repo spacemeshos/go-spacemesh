@@ -53,7 +53,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		defer dstDB.Close()
 		// target database exists, check if there is at least one key in the target key directory
 		// not named supervisedIDKeyFileName
-		if err := checkIdentities(dbLog, to); err != nil {
+		if err := checkIdentities(to); err != nil {
 			switch {
 			case errors.Is(err, ErrSupervisedNode):
 				dbLog.Sugar().Errorf(
@@ -76,7 +76,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 		return fmt.Errorf("close source database: %w", err)
 	}
 
-	if err := checkIdentities(dbLog, from); err != nil {
+	if err := checkIdentities(from); err != nil {
 		switch {
 		case errors.Is(err, ErrSupervisedNode):
 			dbLog.Sugar().Errorf(
@@ -226,7 +226,7 @@ func openDB(dbLog *zap.Logger, path string) (*localsql.Database, error) {
 	return db, nil
 }
 
-func checkIdentities(dbLog *zap.Logger, path string) error {
+func checkIdentities(path string) error {
 	dir := filepath.Join(path, keyDir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err

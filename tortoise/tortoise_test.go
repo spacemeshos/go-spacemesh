@@ -3200,13 +3200,13 @@ func TestUpdates(t *testing.T) {
 
 func TestDuplicateBallot(t *testing.T) {
 	s := newSession(t)
-	s.smesher(0).atx(1, new(aopt).height(10).weight(2))
+	s.smesher(0).atx(new(aopt).height(10).weight(2))
 	id := types.BallotID{1}
-	s.smesher(0).atx(1).rawballot(id, 1, new(bopt).
+	s.smesher(0).atx().rawballot(id, 1, new(bopt).
 		totalEligibilities(s.epochEligibilities()).
 		eligibilities(1),
 	)
-	s.smesher(0).atx(1).rawballot(id, 1, new(bopt).
+	s.smesher(0).atx().rawballot(id, 1, new(bopt).
 		totalEligibilities(s.epochEligibilities()).
 		eligibilities(1).assert(
 		func(db *DecodedBallot, err error) {
@@ -3228,12 +3228,12 @@ func TestSwitch(t *testing.T) {
 	const smeshers = 4
 	elig := s.layerSize / smeshers
 	for i := 0; i < smeshers; i++ {
-		s.smesher(i).atx(1, new(aopt).height(10).weight(100))
+		s.smesher(i).atx(new(aopt).height(10).weight(100))
 	}
-	s.beacon(1, "a")
+	s.beacon()
 	for i := 0; i < smeshers; i++ {
-		s.smesher(i).atx(1).ballot(1, new(bopt).
-			beacon("a").
+		s.smesher(i).atx().ballot(1, new(bopt).
+			beacon().
 			totalEligibilities(s.epochEligibilities()).
 			eligibilities(elig))
 	}
@@ -3241,20 +3241,20 @@ func TestSwitch(t *testing.T) {
 	for lid := 2; lid <= s.hdist; lid++ {
 		for i := 0; i < smeshers; i++ {
 			votes := new(evotes).
-				base(s.smesher(i).atx(1).ballot(lid-1)).
-				support(lid-1, strconv.Itoa(lid-1), 0)
-			s.smesher(i).atx(1).ballot(lid,
+				base(s.smesher(i).atx().ballot(lid-1)).
+				support(lid-1, strconv.Itoa(lid-1))
+			s.smesher(i).atx().ballot(lid,
 				new(bopt).eligibilities(elig).votes(votes),
 			)
 		}
 	}
 	nonverified := new(results).verified(0)
 	for lid := 2; lid <= s.hdist; lid++ {
-		nonverified = nonverified.next(lid-1).block(strconv.Itoa(lid-1), 0, 0)
+		nonverified = nonverified.next(lid-1).block(strconv.Itoa(lid-1), 0)
 	}
 	verified := new(results)
 	for lid := 2; lid <= s.hdist; lid++ {
-		verified = verified.verified(lid-1).block(strconv.Itoa(lid-1), 0, valid|local)
+		verified = verified.verified(lid-1).block(strconv.Itoa(lid-1), valid|local)
 	}
 	verified.next(s.hdist)
 	s.tallyWait(s.hdist - 1)
@@ -3273,12 +3273,12 @@ func TestOnMalfeasance(t *testing.T) {
 		const smeshers = 3
 		elig := s.layerSize / smeshers
 		for i := 0; i < smeshers; i++ {
-			s.smesher(i).atx(1, new(aopt).height(10).weight(100))
+			s.smesher(i).atx(new(aopt).height(10).weight(100))
 		}
-		s.beacon(1, "a")
+		s.beacon()
 		for i := 0; i < smeshers; i++ {
-			s.smesher(i).atx(1).ballot(1, new(bopt).
-				beacon("a").
+			s.smesher(i).atx().ballot(1, new(bopt).
+				beacon().
 				totalEligibilities(s.epochEligibilities()).
 				eligibilities(elig))
 		}
@@ -3299,30 +3299,30 @@ func TestOnMalfeasance(t *testing.T) {
 		const smeshers = 3
 		elig := s.layerSize / smeshers
 		for i := 0; i < smeshers; i++ {
-			s.smesher(i).atx(1, new(aopt).height(10).weight(100))
+			s.smesher(i).atx(new(aopt).height(10).weight(100))
 		}
-		s.beacon(1, "a")
+		s.beacon()
 		for i := 0; i < smeshers; i++ {
-			s.smesher(i).atx(1).ballot(1, new(bopt).
-				beacon("a").
+			s.smesher(i).atx().ballot(1, new(bopt).
+				beacon().
 				totalEligibilities(s.epochEligibilities()).
 				eligibilities(elig))
 		}
 		for i := 0; i < smeshers; i++ {
-			s.smesher(i).atx(1).ballot(2, new(bopt).
+			s.smesher(i).atx().ballot(2, new(bopt).
 				votes(new(evotes).
-					base(s.smesher(i).atx(1).ballot(1)).
-					support(1, "a", 0)).
+					base(s.smesher(i).atx().ballot(1)).
+					support(1, "a")).
 				eligibilities(elig))
 		}
 		s.smesher(0).malfeasant() // without this call tally will be skewed by following ballots
 		for i := 0; i < 10; i++ {
-			s.smesher(0).atx(1).
+			s.smesher(0).atx().
 				rawballot(types.BallotID{'e', byte(i)}, 2,
 					new(bopt).eligibilities(elig))
 		}
 		s.tally(2)
-		s.updates(t, new(results).verified(0).verified(1).block("a", 0, valid|local).next(2))
+		s.updates(t, new(results).verified(0).verified(1).block("a", valid|local).next(2))
 		s.runInorder()
 	})
 }
@@ -3330,17 +3330,17 @@ func TestOnMalfeasance(t *testing.T) {
 func TestBaseAbstain(t *testing.T) {
 	s := newSession(t)
 
-	s.smesher(0).atx(1, new(aopt).height(10).weight(100))
+	s.smesher(0).atx(new(aopt).height(10).weight(100))
 
-	s.beacon(1, "a")
-	s.smesher(0).atx(1).ballot(1, new(bopt).
-		beacon("a").
+	s.beacon()
+	s.smesher(0).atx().ballot(1, new(bopt).
+		beacon().
 		totalEligibilities(s.epochEligibilities()).
 		eligibilities(s.layerSize))
-	s.smesher(0).atx(1).ballot(2, new(bopt).
+	s.smesher(0).atx().ballot(2, new(bopt).
 		eligibilities(s.layerSize).
 		votes(new(evotes).
-			base(s.smesher(0).atx(1).ballot(1)).
+			base(s.smesher(0).atx().ballot(1)).
 			abstain(1),
 		))
 	s.block(1, "aa", 0)
@@ -3350,7 +3350,7 @@ func TestBaseAbstain(t *testing.T) {
 	s.runOn(trt)
 	op, err := trt.EncodeVotes(context.Background())
 	require.NoError(t, err)
-	base := s.smesher(0).atx(1).ballot(2)
+	base := s.smesher(0).atx().ballot(2)
 	require.Equal(t, op.Base, base.ID)
 	require.Equal(t, []types.LayerID{base.Layer}, op.Abstain)
 	require.Empty(t, op.Support)
