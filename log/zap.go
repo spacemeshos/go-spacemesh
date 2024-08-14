@@ -72,7 +72,7 @@ func FieldNamed(name string, field LoggableField) Field {
 	return f
 }
 
-func (f Field) AddTo(enc ObjectEncoder) {
+func (f Field) AddTo(enc zapcore.ObjectEncoder) {
 	(zapcore.Field)(f).AddTo(enc)
 }
 
@@ -153,7 +153,7 @@ func Duration(name string, val time.Duration) Field {
 
 // Err returns an error field.
 func Err(err error) Field {
-	var loggable ObjectMarshaller
+	var loggable zapcore.ObjectMarshaler
 	if errors.As(err, &loggable) {
 		return Field(zap.Inline(loggable))
 	}
@@ -161,17 +161,17 @@ func Err(err error) Field {
 }
 
 // Object for logging struct fields in namespace.
-func Object(namespace string, object ObjectMarshaller) Field {
+func Object(namespace string, object zapcore.ObjectMarshaler) Field {
 	return Field(zap.Object(namespace, object))
 }
 
 // Inline for inline logging.
-func Inline(object ObjectMarshaller) Field {
+func Inline(object zapcore.ObjectMarshaler) Field {
 	return Field(zap.Inline(object))
 }
 
 // Array for logging array efficiently.
-func Array(name string, array ArrayMarshaler) Field {
+func Array(name string, array zapcore.ArrayMarshaler) Field {
 	return Field(zap.Array(name, array))
 }
 
@@ -185,7 +185,7 @@ func ZContext(ctx context.Context) zap.Field {
 }
 
 func NiceZapError(err error) zap.Field {
-	var loggable ObjectMarshaller
+	var loggable zapcore.ObjectMarshaler
 	if errors.As(err, &loggable) {
 		return zap.Inline(loggable)
 	}
@@ -200,7 +200,7 @@ type marshalledContext struct {
 	context.Context
 }
 
-func (c *marshalledContext) MarshalLogObject(encoder ObjectEncoder) error {
+func (c *marshalledContext) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if c.Context != nil {
 		if ctxRequestID, ok := ExtractRequestID(c.Context); ok {
 			encoder.AddString("requestId", ctxRequestID)

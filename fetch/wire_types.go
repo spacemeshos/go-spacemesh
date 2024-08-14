@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -103,7 +103,7 @@ func (r *MeshHashRequest) Validate() error {
 	return nil
 }
 
-func (r *MeshHashRequest) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (r *MeshHashRequest) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("from", r.From.Uint32())
 	encoder.AddUint32("to", r.To.Uint32())
 	encoder.AddUint32("by", r.Step)
@@ -173,7 +173,7 @@ func (lo *LayerOpinion) Peer() p2p.Peer {
 }
 
 // MarshalLogObject implements logging encoder for LayerOpinion.
-func (lo *LayerOpinion) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (lo *LayerOpinion) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("peer", lo.peer.String())
 	encoder.AddString("prev hash", lo.PrevAggHash.String())
 	encoder.AddBool("has cert", lo.Certified != nil)
