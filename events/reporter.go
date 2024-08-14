@@ -83,7 +83,11 @@ func ReportNewActivation(activation *types.ActivationTx) {
 	if reporter != nil {
 		if err := reporter.activationEmitter.Emit(activationTxEvent); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit activation", activation.ID(), activation.PublishEpoch, log.Err(err))
+			log.With().Error("Failed to emit activation",
+				log.ShortStringer("atx_id", activation.ID()),
+				activation.PublishEpoch,
+				log.Err(err),
+			)
 		}
 	}
 }

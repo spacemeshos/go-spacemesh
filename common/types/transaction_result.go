@@ -1,8 +1,6 @@
 package types
 
-import (
-	"github.com/spacemeshos/go-spacemesh/log"
-)
+import "go.uber.org/zap/zapcore"
 
 //go:generate scalegen
 
@@ -42,7 +40,7 @@ type TransactionResult struct {
 }
 
 // MarshalLogObject implements encoding for the tx result.
-func (h *TransactionResult) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (h *TransactionResult) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("status", h.Status.String())
 	if h.Status > 0 {
 		encoder.AddString("message", h.Message)
@@ -51,9 +49,9 @@ func (h *TransactionResult) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint64("fee", h.Fee)
 	encoder.AddString("block", h.Block.String())
 	encoder.AddUint32("layer", h.Layer.Uint32())
-	encoder.AddArray("addresses", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	encoder.AddArray("addresses", zapcore.ArrayMarshalerFunc(func(arrayEncoder zapcore.ArrayEncoder) error {
 		for i := range h.Addresses {
-			encoder.AppendString((&h.Addresses[i]).String())
+			arrayEncoder.AppendString((&h.Addresses[i]).String())
 		}
 		return nil
 	}))
