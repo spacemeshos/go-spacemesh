@@ -55,6 +55,7 @@ such and the node will continue to scan new ATXs for their validity.
 
 * [#6142](https://github.com/spacemeshos/go-spacemesh/pull/6142) Fix node not dropping peers that are broadcasting
   invalid ATXs.
+
 ## Release v1.6.3
 
 ### Improvements

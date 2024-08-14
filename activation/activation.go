@@ -41,11 +41,12 @@ var (
 type PoetConfig struct {
 	// Offset from the epoch start when the poet round starts
 	PhaseShift time.Duration `mapstructure:"phase-shift"`
-	// A gap between end of old PoET round and start of new one
+	// CycleGap gives the duration between the end of a PoET round and the start of the next
 	CycleGap time.Duration `mapstructure:"cycle-gap"`
-	// Time duration measured from the end of cycle gap, when we start to build the NiPoST challenge.
-	// The later we start (the smaller this value is)
-	// the higher is the chance for getting a good positioning ATX.
+	// GracePeriod defines the time before the start of the next PoET round until the node
+	// waits before building its NiPoST challenge. Shorter durations allow the node to
+	// possibly pick a better positioning ATX, but come with the risk that the node might
+	// not be able to validate that ATX and has to fall back to using its own previous ATX.
 	GracePeriod       time.Duration `mapstructure:"grace-period"`
 	RequestTimeout    time.Duration `mapstructure:"poet-request-timeout"`
 	RequestRetryDelay time.Duration `mapstructure:"retry-delay"`

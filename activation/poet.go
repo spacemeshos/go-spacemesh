@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"sync"
@@ -129,22 +129,11 @@ func WithLogger(logger *zap.Logger) PoetClientOpts {
 	}
 }
 
-func customLinearJitterBackoff(min, max time.Duration, attemptNum int, resp *http.Response) time.Duration {
-	attemptNum++
+func customLinearJitterBackoff(min, max time.Duration, _ int, _ *http.Response) time.Duration {
 	if max <= min {
-		return min * time.Duration(attemptNum)
+		return min
 	}
-
-	source := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
-
-	jitter := source.Float64() * float64(max-min)
-	jitterMin := int64(jitter) + int64(min)
-
-	sleep := time.Duration(jitterMin * int64(attemptNum))
-	if sleep > max {
-		sleep = max
-	}
-	return sleep
+	return min + rand.N(max-min)
 }
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified url.
@@ -153,7 +142,7 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 		RetryMax:     cfg.MaxRequestRetries,
 		RetryWaitMin: cfg.RequestRetryDelay,
 		RetryWaitMax: 2 * cfg.RequestRetryDelay,
-		Backoff:      customLinearJitterBackoff,
+		Backoff:      retryablehttp.LinearJitterBackoff,
 		CheckRetry:   checkRetry,
 	}
 
@@ -161,7 +150,7 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 		RetryMax:     math.MaxInt,
 		RetryWaitMin: cfg.RequestRetryDelay,
 		RetryWaitMax: 2 * cfg.RequestRetryDelay,
-		Backoff:      retryablehttp.DefaultBackoff,
+		Backoff:      customLinearJitterBackoff,
 		CheckRetry:   retryablehttp.DefaultRetryPolicy,
 	}
 
