@@ -8,11 +8,11 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -74,7 +74,7 @@ func newTesterActiveSetGenerator(tb testing.TB, cfg config) *testerActiveSetGene
 		wallclock = clockwork.NewFakeClock()
 		gen       = newActiveSetGenerator(
 			cfg,
-			logtest.New(tb).Zap(),
+			zaptest.NewLogger(tb),
 			db,
 			localdb,
 			atxsdata,
@@ -253,7 +253,7 @@ func TestActiveSetGenerate(t *testing.T) {
 				config{networkDelay: tc.networkDelay, goodAtxPercent: tc.goodAtxPercent},
 			)
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(tester.db, atx))
+				require.NoError(t, atxs.Add(tester.db, atx, types.AtxBlob{}))
 				tester.atxsdata.AddFromAtx(atx, false)
 			}
 			for _, identity := range tc.malfeasent {

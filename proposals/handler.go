@@ -10,6 +10,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -46,7 +47,7 @@ var (
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {
-	logger log.Log
+	logger *zap.Logger
 	cfg    Config
 
 	db                sql.StateDatabase
@@ -93,7 +94,7 @@ func withValidator(v eligibilityValidator) Opt {
 }
 
 // WithLogger defines logger for Handler.
-func WithLogger(logger log.Log) Opt {
+func WithLogger(logger *zap.Logger) Opt {
 	return func(h *Handler) {
 		h.logger = logger
 	}
@@ -126,7 +127,7 @@ func NewHandler(
 		panic(err)
 	}
 	b := &Handler{
-		logger:            log.NewNop(),
+		logger:            zap.NewNop(),
 		cfg:               defaultConfig(),
 		db:                db,
 		atxsdata:          atxsdata,
@@ -161,8 +162,6 @@ func NewHandler(
 
 // HandleSyncedBallot handles Ballot data from sync.
 func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
-	logger := h.logger.WithContext(ctx)
-
 	var b types.Ballot
 	t0 := time.Now()
 	if err := codec.Decode(data, &b); err != nil {
@@ -205,8 +204,7 @@ func (h *Handler) HandleSyncedBallot(ctx context.Context, expHash types.Hash32, 
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(b))
 	ballotDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t1)))
 
-	logger = logger.WithFields(b.ID(), b.Layer)
-	if _, err := h.processBallot(ctx, logger, &b); err != nil {
+	if _, err := h.processBallot(ctx, &b); err != nil {
 		if errors.Is(err, errKnownBallot) {
 			return nil
 		}
@@ -284,15 +282,13 @@ func (h *Handler) HandleSyncedProposal(ctx context.Context, expHash types.Hash32
 func (h *Handler) HandleProposal(ctx context.Context, peer p2p.Peer, data []byte) error {
 	err := h.handleProposal(ctx, types.Hash32{}, peer, data)
 	if err != nil {
-		h.logger.WithContext(ctx).With().Debug("failed to process proposal gossip", log.Err(err))
+		h.logger.Debug("failed to process proposal gossip", log.ZContext(ctx), zap.Error(err))
 	}
 	return err
 }
 
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
-	logger := h.logger.WithContext(ctx)
-
 	t0 := time.Now()
 	var p types.Proposal
 	if err := codec.Decode(data, &p); err != nil {
@@ -339,19 +335,24 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	}
 	proposalDuration.WithLabelValues(decodeInit).Observe(float64(time.Since(t0)))
 
-	logger = logger.WithFields(p.ID(), p.Ballot.ID(), p.Layer)
+	logger := h.logger.With(
+		log.ZContext(ctx),
+		zap.Stringer("proposal", p.ID()),
+		zap.Stringer("ballot", p.Ballot.ID()),
+		zap.Uint32("layer", p.Layer.Uint32()),
+	)
 	if h.proposals.IsKnown(p.Layer, p.ID()) {
 		known.Inc()
 		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
-	logger.With().Info("new proposal", log.ShortStringer("exp hash", expHash), log.Int("num_txs", len(p.TxIDs)))
+	logger.Debug("new proposal", log.ZShortStringer("exp hash", expHash), zap.Int("num_txs", len(p.TxIDs)))
 
 	t2 := time.Now()
 	h.fetcher.RegisterPeerHashes(peer, collectHashes(p))
 	proposalDuration.WithLabelValues(peerHashes).Observe(float64(time.Since(t2)))
 
 	t3 := time.Now()
-	proof, err := h.processBallot(ctx, logger, &p.Ballot)
+	proof, err := h.processBallot(ctx, &p.Ballot)
 	if err != nil && !errors.Is(err, errKnownBallot) && !errors.Is(err, errMaliciousBallot) {
 		return err
 	}
@@ -367,7 +368,7 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	if err := h.setProposalBeacon(&p); err != nil {
 		return fmt.Errorf("setting proposal beacon: %w", err)
 	}
-	logger.With().Debug("proposal is syntactically valid")
+	logger.Debug("proposal is syntactically valid")
 
 	err = h.proposals.OnProposal(&p)
 	switch {
@@ -377,11 +378,11 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 	case err != nil:
 		return fmt.Errorf("saving proposal: %w", err)
 	}
-	logger.With().Debug("stored proposal")
+	logger.Debug("stored proposal")
 
 	t6 := time.Now()
 	if err = h.mesh.AddTXsFromProposal(ctx, p.Layer, p.ID(), p.TxIDs); err != nil {
-		logger.With().Error("failed to link txs to proposal", log.Err(err))
+		logger.Error("failed to link txs to proposal", zap.Error(err))
 		return fmt.Errorf("proposal add TXs: %w", err)
 	}
 	proposalDuration.WithLabelValues(linkTxs).Observe(float64(time.Since(t6)))
@@ -396,11 +397,11 @@ func (h *Handler) handleProposal(ctx context.Context, expHash types.Hash32, peer
 		}
 		encodedProof, err := codec.Encode(&gossip)
 		if err != nil {
-			h.logger.With().Fatal("failed to encode MalfeasanceGossip", log.Err(err))
+			h.logger.Fatal("failed to encode MalfeasanceGossip", zap.Error(err))
 		}
 		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
 			failedPublish.Inc()
-			logger.With().Error("failed to broadcast malfeasance proof", log.Err(err))
+			logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
 			return fmt.Errorf("broadcast ballot malfeasance proof: %w", err)
 		}
 		return errMaliciousBallot
@@ -432,19 +433,20 @@ func (h *Handler) setProposalBeacon(p *types.Proposal) error {
 	return nil
 }
 
-func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ballot) (*wire.MalfeasanceProof, error) {
+func (h *Handler) processBallot(ctx context.Context, b *types.Ballot) (*wire.MalfeasanceProof, error) {
 	if data := h.tortoise.GetBallot(b.ID()); data != nil {
 		known.Inc()
 		return nil, fmt.Errorf("%w: ballot %s", errKnownBallot, b.ID())
 	}
 
-	logger.With().Info("new ballot", log.Inline(b))
+	h.logger.Debug("new ballot", log.ZContext(ctx), zap.Inline(b))
 
-	decoded, err := h.checkBallotSyntacticValidity(ctx, logger, b)
+	decoded, err := h.checkBallotSyntacticValidity(ctx, b)
 	if err != nil {
 		return nil, err
 	}
 	b.ActiveSet = nil // the active set is not needed anymore
+	h.logger.Debug("ballot is syntactically valid", log.ZContext(ctx), zap.Stringer("id", b.ID()))
 
 	t1 := time.Now()
 	proof, err := h.mesh.AddBallot(ctx, b)
@@ -466,11 +468,7 @@ func (h *Handler) processBallot(ctx context.Context, logger log.Log, b *types.Ba
 	return proof, nil
 }
 
-func (h *Handler) checkBallotSyntacticValidity(
-	ctx context.Context,
-	logger log.Log,
-	b *types.Ballot,
-) (*tortoise.DecodedBallot, error) {
+func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Ballot) (*tortoise.DecodedBallot, error) {
 	t0 := time.Now()
 	ref, err := h.checkBallotDataIntegrity(ctx, b)
 	if err != nil {
@@ -519,7 +517,6 @@ func (h *Handler) checkBallotSyntacticValidity(
 	}
 	ballotDuration.WithLabelValues(eligible).Observe(float64(time.Since(t4)))
 
-	logger.With().Debug("ballot is syntactically valid")
 	return decoded, nil
 }
 
@@ -642,13 +639,14 @@ func (h *Handler) checkVotesConsistency(ctx context.Context, b *types.Ballot) er
 		if voted, ok := layers[vote.LayerID]; ok {
 			// already voted for a block in this layer
 			if voted != vote.ID && vote.LayerID.Add(h.cfg.Hdist).After(b.Layer) {
-				h.logger.WithContext(ctx).With().Warning("ballot doubly voted within hdist, set smesher malicious",
-					b.ID(),
-					b.Layer,
-					log.Stringer("smesher", b.SmesherID),
-					log.Stringer("voted_bid", voted),
-					log.Stringer("voted_bid", vote.ID),
-					log.Uint32("hdist", h.cfg.Hdist),
+				h.logger.Warn("ballot doubly voted within hdist, set smesher malicious",
+					log.ZContext(ctx),
+					zap.Stringer("ballot", b.ID()),
+					zap.Uint32("layer", b.Layer.Uint32()),
+					zap.Stringer("smesherID", b.SmesherID),
+					zap.Stringer("voted_bid", voted),
+					zap.Stringer("voted_bid", vote.ID),
+					zap.Uint32("hdist", h.cfg.Hdist),
 				)
 				return errDoubleVoting
 			}

@@ -319,19 +319,6 @@ type Layer struct {
 	Block          *types.Block
 }
 
-func CountLayersByOps(
-	db sql.Executor,
-	operations builder.Operations,
-) (count uint32, err error) {
-	_, err = db.Exec(`select count(*) from layers l`+builder.FilterFrom(operations),
-		builder.BindingsFrom(operations),
-		func(stmt *sql.Statement) bool {
-			count = uint32(stmt.ColumnInt32(0))
-			return true
-		})
-	return
-}
-
 func IterateLayersWithBlockOps(
 	db sql.Executor,
 	operations builder.Operations,

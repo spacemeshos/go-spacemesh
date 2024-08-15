@@ -5,15 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -22,10 +21,10 @@ const (
 )
 
 var (
-	// ErrPeersNotSynced returned if system clock is out of sync with peers clock for configured period of time.
-	ErrPeersNotSynced = errors.New("timesync: peers are not time synced, make sure your system clock is accurate")
-	// ErrTimesyncFailed returned if we weren't able to collect enough clock samples from peers.
-	ErrTimesyncFailed = errors.New("timesync: failed request")
+	// errPeersNotSynced returned if system clock is out of sync with peers clock for configured period of time.
+	errPeersNotSynced = errors.New("timesync: peers are not time synced")
+	// errTimesyncFailed returned if we weren't able to collect enough clock samples from peers.
+	errTimesyncFailed = errors.New("timesync: failed request")
 )
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./sync.go
@@ -99,7 +98,7 @@ func WithContext(ctx context.Context) Option {
 }
 
 // WithLog modifies Log used in Sync.
-func WithLog(lg log.Log) Option {
+func WithLog(lg *zap.Logger) Option {
 	return func(s *Sync) {
 		s.log = lg
 	}
@@ -115,7 +114,7 @@ func WithConfig(config Config) Option {
 // New creates Sync instance and returns pointer.
 func New(h host.Host, peers getPeers, opts ...Option) *Sync {
 	sync := &Sync{
-		log:    log.NewNop(),
+		log:    zap.NewNop(),
 		ctx:    context.Background(),
 		time:   systemTime{},
 		h:      h,
@@ -132,10 +131,8 @@ func New(h host.Host, peers getPeers, opts ...Option) *Sync {
 
 // Sync manages background worker that compares peers time with system time.
 type Sync struct {
-	errCnt uint32
-
 	config Config
-	log    log.Log
+	log    *zap.Logger
 	time   Time
 	h      host.Host
 	peers  getPeers
@@ -151,7 +148,7 @@ func (s *Sync) streamHandler(stream network.Stream) {
 	defer stream.SetDeadline(time.Time{})
 	var request Request
 	if _, err := codec.DecodeFrom(stream, &request); err != nil {
-		s.log.With().Debug("can't decode request", log.Err(err))
+		s.log.Debug("can't decode request", zap.Error(err))
 		return
 	}
 	resp := Response{
@@ -159,7 +156,7 @@ func (s *Sync) streamHandler(stream network.Stream) {
 		Timestamp: uint64(s.time.Now().UnixNano()),
 	}
 	if _, err := codec.EncodeTo(stream, &resp); err != nil {
-		s.log.With().Debug("can't encode response", log.Err(err))
+		s.log.Debug("can't encode response", zap.Error(err))
 	}
 }
 
@@ -188,48 +185,48 @@ func (s *Sync) Wait() error {
 
 func (s *Sync) run() error {
 	var (
-		timer *time.Timer
-		round uint64
+		timer    *time.Timer
+		round    uint64
+		failures int
 	)
-	s.log.With().Debug("started sync background worker")
-	defer s.log.With().Debug("exiting sync background worker")
+	s.log.Debug("started sync background worker")
+	defer s.log.Debug("exiting sync background worker")
 	for {
 		prs := s.peers.GetPeers()
 		timeout := s.config.RoundRetryInterval
 		if len(prs) >= s.config.RequiredResponses {
-			s.log.With().Debug("starting time sync round with peers",
-				log.Uint64("round", round),
-				log.Int("peers_count", len(prs)),
-				log.Uint32("errors_count", atomic.LoadUint32(&s.errCnt)),
+			s.log.Debug("starting time sync round with peers",
+				zap.Uint64("round", round),
+				zap.Int("peers_count", len(prs)),
+				zap.Int("errors_count", failures),
 			)
 			ctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
 			offset, err := s.GetOffset(ctx, round, prs)
 			cancel()
 			if err == nil {
 				if offset > s.config.MaxClockOffset || (offset < 0 && -offset > s.config.MaxClockOffset) {
-					s.log.With().Warning("peers offset is larger than max allowed clock difference",
-						log.Uint64("round", round),
-						log.Duration("offset", offset),
-						log.Duration("max_offset", s.config.MaxClockOffset),
+					failures += 1
+					s.log.Warn("peers offset is larger than max allowed clock difference",
+						zap.Uint64("round", round),
+						zap.Duration("offset", offset),
+						zap.Duration("max_offset", s.config.MaxClockOffset),
 					)
-					if atomic.AddUint32(&s.errCnt, 1) == uint32(s.config.MaxOffsetErrors) {
-						return clockError{
-							err:     ErrPeersNotSynced,
-							details: clockErrorDetails{Drift: offset},
-						}
+					if failures == s.config.MaxOffsetErrors {
+						s.log.Error("peers are not time synced, make sure your system clock is accurate")
+						return fmt.Errorf("%w: drift = %v", errPeersNotSynced, offset)
 					}
 				} else {
-					s.log.With().Debug("peers offset is within max allowed clock difference",
-						log.Uint64("round", round),
-						log.Duration("offset", offset),
-						log.Duration("max_offset", s.config.MaxClockOffset),
+					s.log.Debug("peers offset is within max allowed clock difference",
+						zap.Uint64("round", round),
+						zap.Duration("offset", offset),
+						zap.Duration("max_offset", s.config.MaxClockOffset),
 					)
-					atomic.StoreUint32(&s.errCnt, 0)
+					failures = 0
 				}
 				offsetGauge.Set(offset.Seconds())
 				timeout = s.config.RoundInterval
 			} else {
-				s.log.With().Error("failed to fetch offset from peers", log.Err(err))
+				s.log.Error("failed to fetch offset from peers", zap.Error(err))
 			}
 			round++
 		}
@@ -257,30 +254,27 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.D
 		}
 		wg sync.WaitGroup
 	)
-	buf, err := codec.Encode(&Request{ID: id})
-	if err != nil {
-		s.log.With().Panic("can't encode request to bytes", log.Err(err))
-	}
+	buf := codec.MustEncode(&Request{ID: id})
+
 	for _, pid := range prs {
 		wg.Add(1)
 		go func(pid p2p.Peer) {
 			defer wg.Done()
-			logger := s.log.WithFields(log.Stringer("pid", pid)).With()
 			stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocolName)
 			if err != nil {
-				logger.Debug("failed to create new stream", log.Err(err))
+				s.log.Debug("failed to create new stream", zap.Error(err), zap.Stringer("pid", pid))
 				return
 			}
 			defer stream.Close()
 			_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
 			defer stream.SetDeadline(time.Time{})
 			if _, err := stream.Write(buf); err != nil {
-				logger.Debug("failed to send a request", log.Err(err))
+				s.log.Debug("failed to send a request", zap.Error(err), zap.Stringer("pid", pid))
 				return
 			}
 			var resp Response
 			if _, err := codec.DecodeFrom(stream, &resp); err != nil {
-				logger.Debug("failed to read response from peer", log.Err(err))
+				s.log.Debug("failed to read response from peer", zap.Error(err), zap.Stringer("pid", pid))
 				return
 			}
 			select {
@@ -299,5 +293,5 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.D
 	if round.Ready() {
 		return round.Offset(), nil
 	}
-	return 0, fmt.Errorf("%w: failed on timeout", ErrTimesyncFailed)
+	return 0, fmt.Errorf("%w: failed on timeout", errTimesyncFailed)
 }

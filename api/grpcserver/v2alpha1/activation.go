@@ -151,9 +151,9 @@ func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
 		SmesherId:    atx.SmesherID.Bytes(),
 		PublishEpoch: atx.PublishEpoch.Uint32(),
 		Coinbase:     atx.Coinbase.String(),
-		Weight:       atx.GetWeight(),
+		Weight:       atx.Weight,
 		Height:       atx.TickHeight(),
-		NumUnits:     atx.TotalNumUnits(),
+		NumUnits:     atx.NumUnits,
 	}
 }
 
@@ -203,13 +203,7 @@ func (s *ActivationService) List(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	ops.Modifiers = nil
-	count, err := atxs.CountAtxsByOps(s.db, ops)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	return &spacemeshv2alpha1.ActivationList{Activations: rst, Total: count}, nil
+	return &spacemeshv2alpha1.ActivationList{Activations: rst}, nil
 }
 
 func (s *ActivationService) ActivationsCount(

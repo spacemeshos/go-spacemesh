@@ -44,7 +44,7 @@ func (s *State) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 func (s *State) OnActivationTx(atx *types.ActivationTx) {
 	// TODO: consider using actual values for malicious if needed
 	s.Atxdata.AddFromAtx(atx, false)
-	if err := atxs.Add(s.DB, atx); err != nil {
+	if err := atxs.Add(s.DB, atx, types.AtxBlob{}); err != nil {
 		s.logger.Panic("failed to add atx", zap.Error(err))
 	}
 }

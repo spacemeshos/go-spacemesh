@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -96,26 +96,25 @@ func TestDownload(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			logger := logtest.New(t)
+			logger := zaptest.NewLogger(t)
 			db := statesql.InMemory()
 			ctrl := gomock.NewController(t)
 			fetcher := mocks.NewMockAtxFetcher(ctrl)
 			for _, atx := range tc.existing {
-				require.NoError(t, atxs.Add(db, atx))
+				require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			}
 			for i := range tc.fetched {
 				req := tc.fetched[i]
 				fetcher.EXPECT().
 					GetAtxs(tc.ctx, req.request, gomock.Any()).
-					Times(1).
 					DoAndReturn(func(_ context.Context, _ []types.ATXID, _ ...system.GetAtxOpt) error {
 						for _, atx := range req.result {
-							require.NoError(t, atxs.Add(db, atx))
+							require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 						}
 						return req.error
 					})
 			}
-			require.Equal(t, tc.rst, Download(tc.ctx, tc.retry, logger.Zap(), db, fetcher, tc.set))
+			require.Equal(t, tc.rst, Download(tc.ctx, tc.retry, logger, db, fetcher, tc.set))
 		})
 	}
 }

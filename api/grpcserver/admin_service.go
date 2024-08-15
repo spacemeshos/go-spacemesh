@@ -57,20 +57,20 @@ func NewAdminService(db sql.StateDatabase, dataDir string, p peers) *AdminServic
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (a AdminService) RegisterService(server *grpc.Server) {
+func (a *AdminService) RegisterService(server *grpc.Server) {
 	pb.RegisterAdminServiceServer(server, a)
 }
 
-func (s AdminService) RegisterHandlerService(mux *runtime.ServeMux) error {
-	return pb.RegisterAdminServiceHandlerServer(context.Background(), mux, s)
+func (a *AdminService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterAdminServiceHandlerServer(context.Background(), mux, a)
 }
 
 // String returns the name of this service.
-func (a AdminService) String() string {
+func (a *AdminService) String() string {
 	return "AdminService"
 }
 
-func (a AdminService) CheckpointStream(
+func (a *AdminService) CheckpointStream(
 	req *pb.CheckpointStreamRequest,
 	stream pb.AdminService_CheckpointStreamServer,
 ) error {
@@ -118,13 +118,13 @@ func (a AdminService) CheckpointStream(
 	}
 }
 
-func (a AdminService) Recover(ctx context.Context, _ *pb.RecoverRequest) (*emptypb.Empty, error) {
+func (a *AdminService) Recover(ctx context.Context, _ *pb.RecoverRequest) (*emptypb.Empty, error) {
 	ctxzap.Info(ctx, "going to recover from checkpoint")
 	a.recover()
 	return &emptypb.Empty{}, nil
 }
 
-func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
+func (a *AdminService) EventsStream(_ *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
 	sub, buf, err := events.SubscribeUserEvents(events.WithBuffer(1000))
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, err.Error())
@@ -156,7 +156,7 @@ func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminSe
 	}
 }
 
-func (a AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_PeerInfoStreamServer) error {
+func (a *AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_PeerInfoStreamServer) error {
 	for _, p := range a.p.GetPeers() {
 		select {
 		case <-stream.Context().Done():

@@ -68,7 +68,7 @@ func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 	require.Empty(t, atx.Marriages)
 	require.Equal(t, posEpoch+1, atx.PublishEpoch)
 	require.Equal(t, sig.NodeID(), atx.SmesherID)
-	require.True(t, signing.NewEdVerifier().Verify(signing.ATX, atx.SmesherID, atx.SignedBytes(), atx.Signature))
+	require.True(t, signing.NewEdVerifier().Verify(signing.ATX, atx.SmesherID, atx.ID().Bytes(), atx.Signature))
 }
 
 func TestBuilder_SwitchesToBuildV2(t *testing.T) {
@@ -79,7 +79,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 	prevAtx := newInitialATXv1(t, tab.goldenATXID)
 	prevAtx.Sign(sig)
-	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx)))
+	require.NoError(t, atxs.Add(tab.db, toAtx(t, prevAtx), prevAtx.Blob()))
 
 	posEpoch := prevAtx.PublishEpoch
 	layer := posEpoch.FirstLayer()
@@ -106,5 +106,5 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	require.Empty(t, atx2.Marriages)
 	require.Equal(t, atx1.PublishEpoch+1, atx2.PublishEpoch)
 	require.Equal(t, sig.NodeID(), atx2.SmesherID)
-	require.True(t, signing.NewEdVerifier().Verify(signing.ATX, atx2.SmesherID, atx2.SignedBytes(), atx2.Signature))
+	require.True(t, signing.NewEdVerifier().Verify(signing.ATX, atx2.SmesherID, atx2.ID().Bytes(), atx2.Signature))
 }

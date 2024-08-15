@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
+	"go.uber.org/zap/zapcore"
 )
 
 //go:generate scalegen
@@ -22,7 +22,7 @@ type HareEligibilityGossip struct {
 	Eligibility HareEligibility
 }
 
-func (hg *HareEligibilityGossip) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (hg *HareEligibilityGossip) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("layer", hg.Layer.Uint32())
 	encoder.AddUint32("round", hg.Round)
 	encoder.AddString("smesher", hg.NodeID.String())
@@ -41,7 +41,7 @@ type HareEligibility struct {
 }
 
 // MarshalLogObject implements logging interface.
-func (e *HareEligibility) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (e *HareEligibility) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint16("count", e.Count)
 	encoder.AddString("proof", e.Proof.String())
 	return nil
@@ -59,7 +59,7 @@ type VotingEligibility struct {
 }
 
 // MarshalLogObject implements logging interface.
-func (v *VotingEligibility) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (v *VotingEligibility) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("j", v.J)
 	encoder.AddString("sig", v.Sig.String())
 	return nil

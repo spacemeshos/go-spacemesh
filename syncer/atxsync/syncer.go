@@ -40,7 +40,7 @@ func DefaultConfig() Config {
 	return Config{
 		EpochInfoInterval: 4 * time.Hour,
 		AtxsBatch:         1000,
-		RequestsLimit:     20,
+		RequestsLimit:     10,
 		EpochInfoPeers:    2,
 		ProgressFraction:  0.1,
 		ProgressInterval:  20 * time.Minute,
@@ -313,10 +313,10 @@ func (s *Syncer) downloadAtxs(
 						if _, exists := state[types.ATXID(hash)]; !exists {
 							continue
 						}
-						if errors.Is(err, fetch.ErrExceedMaxRetries) {
-							state[types.ATXID(hash)]++
-						} else if errors.Is(err, pubsub.ErrValidationReject) {
+						if errors.Is(err, pubsub.ErrValidationReject) {
 							state[types.ATXID(hash)] = s.cfg.RequestsLimit
+						} else {
+							state[types.ATXID(hash)]++
 						}
 					}
 				}

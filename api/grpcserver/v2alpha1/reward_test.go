@@ -35,7 +35,7 @@ func TestRewardService_List(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewRewardServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -65,14 +65,12 @@ func TestRewardService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Rewards, 25)
-		require.Equal(t, len(rwds), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.RewardRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Len(t, rwds, len(list.Rewards))
-		require.Equal(t, len(rwds), int(list.Total))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {
@@ -120,7 +118,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewRewardStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {

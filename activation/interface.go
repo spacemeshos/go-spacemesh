@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 
+	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
@@ -24,11 +25,38 @@ type AtxReceiver interface {
 
 type PostVerifier interface {
 	io.Closer
-	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
+	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...postVerifierOptionFunc) error
 }
 
 type scaler interface {
 	scale(int)
+}
+
+type postVerifierCallOption struct {
+	prioritized     bool
+	verifierOptions []verifying.OptionFunc
+}
+
+type postVerifierOptionFunc func(*postVerifierCallOption)
+
+func applyOptions(options ...postVerifierOptionFunc) postVerifierCallOption {
+	opts := postVerifierCallOption{}
+	for _, opt := range options {
+		opt(&opts)
+	}
+	return opts
+}
+
+func PrioritizedCall() postVerifierOptionFunc {
+	return func(o *postVerifierCallOption) {
+		o.prioritized = true
+	}
+}
+
+func WithVerifierOptions(ops ...verifying.OptionFunc) postVerifierOptionFunc {
+	return func(o *postVerifierCallOption) {
+		o.verifierOptions = ops
+	}
 }
 
 // validatorOption is a functional option type for the validator.
@@ -64,6 +92,18 @@ type syncer interface {
 	RegisterForATXSynced() <-chan struct{}
 }
 
+// malfeasancePublisher is an interface for publishing malfeasance proofs.
+// This interface is used to publish proofs in V2.
+//
+// The provider of that interface ensures that only valid proofs are published (invalid ones return an error).
+// Proofs against an identity that is managed by the node will also return an error and will not be gossiped.
+//
+// Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them.
+// and mark the associated identity as malfeasant.
+type malfeasancePublisher interface {
+	Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error
+}
+
 type atxProvider interface {
 	GetAtx(id types.ATXID) (*types.ActivationTx, error)
 }
@@ -88,9 +128,9 @@ type SmeshingProvider interface {
 	SetCoinbase(coinbase types.Address)
 }
 
-// PoetClient servers as an interface to communicate with a PoET server.
+// PoetService servers as an interface to communicate with a PoET server.
 // It is used to submit challenges and fetch proofs.
-type PoetClient interface {
+type PoetService interface {
 	Address() string
 
 	// Submit registers a challenge in the proving service current open round.
@@ -102,6 +142,9 @@ type PoetClient interface {
 		nodeID types.NodeID,
 	) (*types.PoetRound, error)
 
+	// Certify requests a certificate for the given nodeID.
+	//
+	// Returns ErrCertificatesNotSupported if the service does not support certificates.
 	Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error)
 
 	// Proof returns the proof for the given round ID.
@@ -133,12 +176,7 @@ type certifierService interface {
 		pubkey []byte,
 	) (*certifier.PoetCert, error)
 
-	Recertify(
-		ctx context.Context,
-		id types.NodeID,
-		certifierAddress *url.URL,
-		pubkey []byte,
-	) (*certifier.PoetCert, error)
+	DeleteCertificate(id types.NodeID, pubkey []byte) error
 }
 
 type poetDbAPI interface {

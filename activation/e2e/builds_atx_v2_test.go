@@ -2,6 +2,7 @@ package activation_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -50,80 +52,49 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	cfg := activation.DefaultPostConfig()
+	cfg := testPostConfig()
 	db := statesql.InMemory()
 	cdb := datastore.NewCachedDB(db, logger)
 
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		synced := make(chan struct{})
-		close(synced)
-		return synced
-	}).AnyTimes()
-
-	svc := grpcserver.NewPostService(logger)
+	opts := testPostSetupOpts(t)
+	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
+
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
+
+	initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 
 	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	opts := testPostSetupOpts(t)
+
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
 	atxsdata := atxsdata.New()
-	mgr, err := activation.NewPostSetupManager(cfg, logger, cdb, atxsdata, goldenATX, syncer, validator)
-	require.NoError(t, err)
-
-	initPost(t, mgr, opts, sig.NodeID())
-	stop := launchPostSupervisor(t, logger, mgr, sig, grpcCfg, opts)
-	t.Cleanup(stop)
-
-	require.Eventually(t, func() bool {
-		_, err := svc.Client(sig.NodeID())
-		return err == nil
-	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
-	layerDuration := 2 * time.Second
 	epoch := layersPerEpoch * layerDuration
 	poetCfg := activation.PoetConfig{
-		PhaseShift:        epoch,
-		CycleGap:          epoch / 2,
-		GracePeriod:       epoch / 5,
-		RequestTimeout:    epoch / 5,
-		RequestRetryDelay: epoch / 50,
-		MaxRequestRetries: 10,
+		PhaseShift:  epoch,
+		CycleGap:    epoch * 3 / 4,
+		GracePeriod: epoch / 4,
 	}
-	poetProver := spawnPoet(
-		t,
-		WithGenesis(genesis),
-		WithEpochDuration(epoch),
-		WithPhaseShift(poetCfg.PhaseShift),
-		WithCycleGap(poetCfg.CycleGap),
-	)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
 		timesync.WithLayerDuration(layerDuration),
-		timesync.WithTickInterval(100*time.Millisecond),
+		timesync.WithTickInterval(10*time.Millisecond),
 		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	client, err := activation.NewPoetClient(
-		poetDb,
-		poetProver.ServerCfg(),
-		poetCfg,
-		logger,
-	)
-	require.NoError(t, err)
+	client := ae2e.NewTestPoetClient(1, poetCfg)
+	poetClient := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
-	postStates := activation.NewMockPostStates(ctrl)
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
@@ -132,8 +103,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		poetCfg,
 		clock,
 		validator,
-		activation.NipostbuilderWithPostStates(postStates),
-		activation.WithPoetClients(client),
+		activation.WithPoetServices(poetClient),
 	)
 	require.NoError(t, err)
 
@@ -166,6 +136,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	)
 
 	var previous *types.ActivationTx
+	var publishedAtxs atomic.Uint32
 	gomock.InOrder(
 		mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
 			func(ctx context.Context, _ string, msg []byte) error {
@@ -188,6 +159,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 				atx, err := atxs.Get(db, watx.ID())
 				require.NoError(t, err)
 				previous = atx
+				publishedAtxs.Add(1)
 				return nil
 			},
 		),
@@ -216,10 +188,11 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 				require.NotZero(t, atx.BaseTickHeight)
 				require.NotZero(t, atx.TickCount)
-				require.NotZero(t, atx.GetWeight())
+				require.NotZero(t, atx.Weight)
 				require.NotZero(t, atx.TickHeight())
 				require.Equal(t, opts.NumUnits, atx.NumUnits)
 				previous = atx
+				publishedAtxs.Add(1)
 				return nil
 			},
 		).Times(2),
@@ -233,32 +206,15 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		mpub,
 		nb,
 		clock,
-		syncer,
+		syncedSyncer(t),
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),
-		activation.WithPostStates(postStates),
 		activation.BuilderAtxVersions(atxVersions),
-	)
-	gomock.InOrder(
-		// it starts by setting to IDLE
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		// initial proof
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		// post proof - 1st epoch
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		// 2nd epoch
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
-		// 3rd epoch
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateProving),
-		postStates.EXPECT().Set(sig.NodeID(), types.PostStateIdle),
 	)
 	tab.Register(sig)
 
 	require.NoError(t, tab.StartSmeshing(coinbase))
-	require.Eventually(t, ctrl.Satisfied, epoch*4, time.Second)
+	require.Eventually(t, func() bool { return publishedAtxs.Load() >= 3 }, epoch*4, time.Millisecond*100)
 	require.NoError(t, tab.StopSmeshing(false))
 }

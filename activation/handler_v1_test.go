@@ -13,13 +13,13 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -68,7 +68,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		prevAtx.NumUnits = 100
 		prevAtx.Sign(sig)
 		atxHdlr.expectAtxV1(prevAtx, sig.NodeID())
-		_, err := atxHdlr.processATX(context.Background(), "", prevAtx, codec.MustEncode(prevAtx), time.Now())
+		_, err := atxHdlr.processATX(context.Background(), "", prevAtx, time.Now())
 		require.NoError(t, err)
 
 		otherSig, err := signing.NewEdSigner()
@@ -77,7 +77,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		posAtx := newInitialATXv1(t, goldenATXID)
 		posAtx.Sign(otherSig)
 		atxHdlr.expectAtxV1(posAtx, otherSig.NodeID())
-		_, err = atxHdlr.processATX(context.Background(), "", posAtx, codec.MustEncode(posAtx), time.Now())
+		_, err = atxHdlr.processATX(context.Background(), "", posAtx, time.Now())
 		require.NoError(t, err)
 		return atxHdlr, prevAtx, posAtx
 	}
@@ -299,7 +299,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 			NIPost(gomock.Any(), atx.SmesherID, goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			Return(0, errors.New("bad nipost"))
 		_, _, _, err := atxHdlr.syntacticallyValidateDeps(context.Background(), atx)
-		require.EqualError(t, err, "invalid nipost: bad nipost")
+		require.EqualError(t, err, "validating nipost: bad nipost")
 	})
 	t.Run("missing NodeID in initial atx", func(t *testing.T) {
 		t.Parallel()
@@ -453,85 +453,6 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 	})
 }
 
-func TestHandler_ContextuallyValidateAtx(t *testing.T) {
-	goldenATXID := types.ATXID{2, 3, 4}
-
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	t.Run("valid initial atx", func(t *testing.T) {
-		t.Parallel()
-
-		atx := newInitialATXv1(t, goldenATXID)
-		atx.Sign(sig)
-
-		atxHdlr := newV1TestHandler(t, goldenATXID)
-		require.NoError(t, atxHdlr.contextuallyValidateAtx(atx))
-	})
-
-	t.Run("missing prevAtx", func(t *testing.T) {
-		t.Parallel()
-
-		atxHdlr := newV1TestHandler(t, goldenATXID)
-
-		prevAtx := newInitialATXv1(t, goldenATXID)
-		atx := newChainedActivationTxV1(t, prevAtx, goldenATXID)
-
-		err = atxHdlr.contextuallyValidateAtx(atx)
-		require.ErrorIs(t, err, sql.ErrNotFound)
-	})
-
-	t.Run("wrong previous atx by same node", func(t *testing.T) {
-		t.Parallel()
-
-		atxHdlr := newV1TestHandler(t, goldenATXID)
-
-		atx0 := newInitialATXv1(t, goldenATXID)
-		atx0.Sign(sig)
-		atxHdlr.expectAtxV1(atx0, sig.NodeID())
-		_, err := atxHdlr.processATX(context.Background(), "", atx0, codec.MustEncode(atx0), time.Now())
-		require.NoError(t, err)
-
-		atx1 := newChainedActivationTxV1(t, atx0, goldenATXID)
-		atx1.Sign(sig)
-		atxHdlr.expectAtxV1(atx1, sig.NodeID())
-		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
-		_, err = atxHdlr.processATX(context.Background(), "", atx1, codec.MustEncode(atx1), time.Now())
-		require.NoError(t, err)
-
-		atxInvalidPrevious := newChainedActivationTxV1(t, atx0, goldenATXID)
-		atxInvalidPrevious.Sign(sig)
-		err = atxHdlr.contextuallyValidateAtx(atxInvalidPrevious)
-		require.EqualError(t, err, "last atx is not the one referenced")
-	})
-
-	t.Run("wrong previous atx from different node", func(t *testing.T) {
-		t.Parallel()
-
-		otherSig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-
-		atxHdlr := newV1TestHandler(t, goldenATXID)
-
-		atx0 := newInitialATXv1(t, goldenATXID)
-		atx0.Sign(otherSig)
-		atxHdlr.expectAtxV1(atx0, otherSig.NodeID())
-		_, err = atxHdlr.processATX(context.Background(), "", atx0, codec.MustEncode(atx0), time.Now())
-		require.NoError(t, err)
-
-		atx1 := newInitialATXv1(t, goldenATXID)
-		atx1.Sign(sig)
-		atxHdlr.expectAtxV1(atx1, sig.NodeID())
-		_, err = atxHdlr.processATX(context.Background(), "", atx1, codec.MustEncode(atx1), time.Now())
-		require.NoError(t, err)
-
-		atxInvalidPrevious := newChainedActivationTxV1(t, atx0, goldenATXID)
-		atxInvalidPrevious.Sign(sig)
-		err = atxHdlr.contextuallyValidateAtx(atxInvalidPrevious)
-		require.EqualError(t, err, "last atx is not the one referenced")
-	})
-}
-
 func TestHandlerV1_StoreAtx(t *testing.T) {
 	goldenATXID := types.RandomATXID()
 
@@ -556,7 +477,6 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		atxFromDb, err := atxs.Get(atxHdlr.cdb, atx.ID())
 		require.NoError(t, err)
 		atx.SetReceived(time.Unix(0, atx.Received().UnixNano()))
-		atx.AtxBlob = types.AtxBlob{}
 		require.Equal(t, atx, atxFromDb)
 	})
 
@@ -606,7 +526,6 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		atxFromDb, err := atxs.Get(atxHdlr.cdb, atx.ID())
 		require.NoError(t, err)
 		atx.SetReceived(time.Unix(0, atx.Received().UnixNano()))
-		atx.AtxBlob = types.AtxBlob{}
 		require.Equal(t, atx, atxFromDb)
 	})
 
@@ -734,7 +653,6 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx3.PublishEpoch+1, watx3.ID(), gomock.Any())
 		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
-		atxHdlr.mclock.EXPECT().CurrentLayer().Return(watx3.PublishEpoch.FirstLayer())
 		proof, err = atxHdlr.storeAtx(context.Background(), atx3, watx3)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
@@ -857,5 +775,19 @@ func TestHandlerV1_FetchesReferences(t *testing.T) {
 		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poet)
 		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxs, gomock.Any()).Return(errors.New("oh"))
 		require.Error(t, atxHdlr.fetchReferences(context.Background(), poet, atxs))
+	})
+	t.Run("reject ATX when dependency ATX is rejected", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr := newV1TestHandler(t, goldenATXID)
+
+		poet := types.RandomHash()
+		atxs := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
+		var batchErr fetch.BatchError
+		batchErr.Add(atxs[0].Hash32(), pubsub.ErrValidationReject)
+
+		atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), poet)
+		atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), atxs, gomock.Any()).Return(&batchErr)
+
+		require.ErrorIs(t, atxHdlr.fetchReferences(context.Background(), poet, atxs), pubsub.ErrValidationReject)
 	})
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
@@ -148,19 +149,20 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			return
 		}
 
-		nipost := types.NIPostChallenge{
-			PublishEpoch: ev.LayerID.GetEpoch(),
+		atx := &types.ActivationTx{
+			PublishEpoch:   ev.LayerID.GetEpoch(),
+			NumUnits:       c.units,
+			Coinbase:       types.GenerateAddress(c.signer.PublicKey().Bytes()),
+			SmesherID:      c.signer.NodeID(),
+			BaseTickHeight: 1,
+			TickCount:      2,
+			Weight:         uint64(c.units) * 2,
 		}
-		addr := types.GenerateAddress(c.signer.PublicKey().Bytes())
-		atx := types.NewActivationTx(nipost, addr, c.units)
-		atx.SmesherID = c.signer.NodeID()
 		atx.SetID(types.RandomATXID())
 		atx.SetReceived(time.Now())
-		atx.BaseTickHeight = 1
-		atx.TickCount = 2
 		c.refBallot = nil
 		c.atx = atx.ID()
-		c.weight = atx.GetWeight()
+		c.weight = atx.Weight
 
 		m.Send(MessageAtx{Atx: atx})
 	case MessageBlock:
@@ -174,8 +176,8 @@ func (c *core) OnMessage(m Messenger, event Message) {
 	case MessageAtx:
 		ev.Atx.BaseTickHeight = 1
 		ev.Atx.TickCount = 2
-		atxs.Add(c.cdb, ev.Atx)
-		malicious, err := c.cdb.IsMalicious(ev.Atx.SmesherID)
+		atxs.Add(c.cdb, ev.Atx, types.AtxBlob{})
+		malicious, err := identities.IsMalicious(c.cdb, ev.Atx.SmesherID)
 		if err != nil {
 			c.logger.Fatal("failed is malicious lookup", zap.Error(err))
 		}

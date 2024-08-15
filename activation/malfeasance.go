@@ -68,7 +68,7 @@ func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData)
 		msg1.InnerMsg.MsgHash != msg2.InnerMsg.MsgHash {
 		return msg1.SmesherID, nil
 	}
-	mh.logger.Warn("received invalid atx malfeasance proof",
+	mh.logger.Debug("received invalid atx malfeasance proof",
 		log.ZContext(ctx),
 		zap.Stringer("first_smesher", msg1.SmesherID),
 		zap.Object("first_proof", &msg1.InnerMsg),
@@ -139,7 +139,7 @@ func (mh *InvalidPostIndexHandler) Validate(ctx context.Context, data wire.Proof
 		ctx,
 		post,
 		meta,
-		verifying.SelectedIndex(int(proof.InvalidIdx)),
+		WithVerifierOptions(verifying.SelectedIndex(int(proof.InvalidIdx))),
 	); err != nil {
 		return atx.SmesherID, nil
 	}

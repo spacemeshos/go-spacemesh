@@ -148,7 +148,6 @@ func TestLayerBallotBySmesher(t *testing.T) {
 func newAtx(signer *signing.EdSigner, layerID types.LayerID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		PublishEpoch: layerID.GetEpoch(),
-		PrevATXID:    types.RandomATXID(),
 		NumUnits:     2,
 		TickCount:    1,
 		SmesherID:    signer.NodeID(),
@@ -164,7 +163,7 @@ func TestFirstInEpoch(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	atx := newAtx(sig, lid)
-	require.NoError(t, atxs.Add(db, atx))
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 
 	got, err := FirstInEpoch(db, atx.ID(), 2)
 	require.ErrorIs(t, err, sql.ErrNotFound)

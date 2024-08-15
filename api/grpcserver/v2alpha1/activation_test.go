@@ -28,16 +28,15 @@ func TestActivationService_List(t *testing.T) {
 	activations := make([]types.ActivationTx, 100)
 	for i := range activations {
 		atx := gen.Next()
-		vAtx := fixture.ToAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
-		activations[i] = *vAtx
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		activations[i] = *atx
 	}
 
 	svc := NewActivationService(db)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -67,14 +66,12 @@ func TestActivationService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Activations, 25)
-		require.Equal(t, len(activations), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Equal(t, len(activations), len(list.Activations))
-		require.Equal(t, len(activations), int(list.Total))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {
@@ -113,16 +110,15 @@ func TestActivationStreamService_Stream(t *testing.T) {
 	activations := make([]types.ActivationTx, 100)
 	for i := range activations {
 		atx := gen.Next()
-		vAtx := fixture.ToAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
-		activations[i] = *vAtx
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		activations[i] = *atx
 	}
 
 	svc := NewActivationStreamService(db)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewActivationStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {
@@ -155,8 +151,8 @@ func TestActivationStreamService_Stream(t *testing.T) {
 		gen = fixture.NewAtxsGenerator().WithEpochs(start, 10)
 		var streamed []*events.ActivationTx
 		for i := 0; i < n; i++ {
-			atx := fixture.ToAtx(t, gen.Next())
-			require.NoError(t, atxs.Add(db, atx))
+			atx := gen.Next()
+			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			streamed = append(streamed, &events.ActivationTx{ActivationTx: atx})
 		}
 
@@ -222,9 +218,8 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	epoch3ATXs := make([]types.ActivationTx, 30)
 	for i := range epoch3ATXs {
 		atx := genEpoch3.Next()
-		vatx := fixture.ToAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vatx))
-		epoch3ATXs[i] = *vatx
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		epoch3ATXs[i] = *atx
 	}
 
 	genEpoch5 := fixture.NewAtxsGenerator().WithSeed(time.Now().UnixNano()+1).
@@ -232,16 +227,15 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	epoch5ATXs := make([]types.ActivationTx, 10) // ensure the number here is different from above
 	for i := range epoch5ATXs {
 		atx := genEpoch5.Next()
-		vatx := fixture.ToAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vatx))
-		epoch5ATXs[i] = *vatx
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		epoch5ATXs[i] = *atx
 	}
 
 	svc := NewActivationService(db)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
 	t.Run("count without filter", func(t *testing.T) {

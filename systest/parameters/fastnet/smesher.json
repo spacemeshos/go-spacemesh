@@ -8,7 +8,8 @@
     "poet": {
         "phase-shift": "30s",
         "cycle-gap": "30s",
-        "grace-period": "10s"
+        "grace-period": "10s",
+        "positioning-atx-selection-timeout":"7s"
     },
     "api": {
         "grpc-public-listener": "0.0.0.0:9092",
@@ -24,6 +25,12 @@
                 "queue": 200,
                 "requests": 100
             }
+        }
+    },
+    "hare3": {
+        "committeeupgrade": {
+            "layer": 16,
+            "size": 15
         }
     },
     "smeshing": {

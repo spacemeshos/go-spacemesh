@@ -8,11 +8,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
@@ -28,13 +28,12 @@ type testDataFetch struct {
 
 func newTestDataFetch(t *testing.T) *testDataFetch {
 	ctrl := gomock.NewController(t)
-	lg := logtest.New(t)
 	tl := &testDataFetch{
 		mMesh:     mocks.NewMockmeshProvider(ctrl),
 		mFetcher:  mocks.NewMockfetcher(ctrl),
 		mTortoise: smocks.NewMockTortoise(ctrl),
 	}
-	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mTortoise, lg)
+	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mTortoise, zaptest.NewLogger(t))
 	return tl
 }
 

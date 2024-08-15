@@ -57,7 +57,7 @@ func TestReplayMainnet(t *testing.T) {
 	require.NoError(t, err)
 
 	start := time.Now()
-	atxsdata, err := atxsdata.Warm(db, cfg.Tortoise.WindowSizeEpochs(applied))
+	atxsdata, err := atxsdata.Warm(db, cfg.Tortoise.WindowSizeEpochs(applied), logger)
 	require.NoError(t, err)
 	trtl, err := tortoise.Recover(
 		context.Background(),

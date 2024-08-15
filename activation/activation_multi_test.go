@@ -197,7 +197,7 @@ func TestRegossip(t *testing.T) {
 			atx.PublishEpoch = layer.GetEpoch()
 			atx.Sign(sig)
 			vAtx := toAtx(t, atx)
-			require.NoError(t, atxs.Add(tab.db, vAtx))
+			require.NoError(t, atxs.Add(tab.db, vAtx, atx.Blob()))
 
 			if refAtx == nil {
 				refAtx = vAtx
@@ -258,10 +258,10 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 				},
 				nil,
 			)
-			require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+			require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
 
 			// postClient.Proof() should not be called again
-			require.NoError(t, tab.buildInitialPost(context.Background(), sig.NodeID()))
+			require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
 			return nil
 		})
 	}

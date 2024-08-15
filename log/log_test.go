@@ -34,18 +34,30 @@ func TestLogLevel(t *testing.T) {
 	}
 
 	// Make it easier to read the logs
-	defaultEncoder.TimeKey = ""
+	encoder := zap.NewDevelopmentEncoderConfig()
+	encoder.TimeKey = ""
 
 	// Capture the log output
 	var buf bytes.Buffer
-	logwriter = &buf
-	AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(zapcore.DebugLevel))
+	logWriter = &buf
+	core := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(encoder),
+		&nopSync{Buffer: &buf},
+		zap.NewAtomicLevelAt(zapcore.InfoLevel),
+	)
+	logger := NewFromLog(zap.New(core))
+	SetupGlobal(logger)
 
 	// Instantiate a logger and a sublogger
 	nid := FakeNodeID{key: "abc123"}
 	nidEncoded := fmt.Sprintf("{\"node_id\": \"%s\"}", nid.key)
 	loggerName := "logtest"
-	logger := NewWithLevel(loggerName, zap.NewAtomicLevelAt(zapcore.InfoLevel), hookFn).WithFields(nid)
+	logger = NewWithLevel(
+		loggerName,
+		zap.NewAtomicLevelAt(zapcore.InfoLevel),
+		zapcore.NewConsoleEncoder(encoder),
+		hookFn,
+	).WithFields(nid)
 
 	lvl := zap.NewAtomicLevel()
 	r.NoError(lvl.UnmarshalText([]byte("INFO")))
@@ -100,53 +112,16 @@ func TestLogLevel(t *testing.T) {
 	r.Equal(hookedExpected, hooked, "hook function was not called the expected number of times")
 }
 
-func TestJsonLog(t *testing.T) {
-	r := require.New(t)
-
-	// Make it easier to read the logs
-	defaultEncoder.TimeKey = ""
-
-	// Capture the log output
-	var buf bytes.Buffer
-	logwriter = &buf
-	AppLog = NewDefault(mainLoggerName)
-
-	// Expect output not to be in JSON format
-	teststr := "test001"
-	Info(teststr)
-	r.Equal(fmt.Sprintf("INFO\t%s\t%s\n", mainLoggerName, teststr), buf.String())
-	buf.Reset()
-
-	// Enable JSON mode
-	JSONLog(true)
-
-	// Expect output to be in JSON format
-	teststr = "test002"
-	type entry struct {
-		L, M, N string
-	}
-	expect := entry{
-		L: "INFO",
-		M: teststr,
-		N: mainLoggerName,
-	}
-	Info(teststr)
-	got := entry{}
-	r.NoError(json.Unmarshal(buf.Bytes(), &got))
-	r.Equal(expect, got)
-}
-
 func TestContextualLogging(t *testing.T) {
 	// basic housekeeping
 	r := require.New(t)
 	reqID := "myRequestId"
 	sesID := "mySessionId"
 	teststr := "test003"
-	JSONLog(true)
 
 	// test basic context first: try to set and read context, roundtrip
 	ctx := context.Background()
-	ctx = WithRequestID(ctx, reqID)
+	ctx = withRequestID(ctx, reqID)
 	if reqID2, ok := ExtractRequestID(ctx); ok {
 		r.Equal(reqID, reqID2)
 	} else {
@@ -161,7 +136,7 @@ func TestContextualLogging(t *testing.T) {
 
 	// try again in reverse order
 	ctx = context.Background()
-	ctx = WithRequestID(WithSessionID(ctx, sesID), reqID)
+	ctx = withRequestID(WithSessionID(ctx, sesID), reqID)
 	if reqID2, ok := ExtractRequestID(ctx); ok {
 		r.Equal(reqID, reqID2)
 	} else {
@@ -175,7 +150,7 @@ func TestContextualLogging(t *testing.T) {
 	}
 
 	// try re-setting (in reverse)
-	ctx = WithRequestID(WithSessionID(ctx, reqID), sesID)
+	ctx = withRequestID(WithSessionID(ctx, reqID), sesID)
 	if reqID2, ok := ExtractRequestID(ctx); ok {
 		r.Equal(sesID, reqID2)
 	} else {
@@ -198,12 +173,16 @@ func TestContextualLogging(t *testing.T) {
 
 	// Capture the log output
 	var buf bytes.Buffer
-	logwriter = &buf
-	AppLog = NewDefault(mainLoggerName)
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig()),
+		&nopSync{Buffer: &buf},
+		zap.NewAtomicLevelAt(zapcore.InfoLevel),
+	)
+	logger := NewFromLog(zap.New(core).Named(mainLoggerName))
 
 	// make sure we can set and read context
-	ctx = WithRequestID(context.Background(), reqID)
-	contextualLogger := AppLog.WithContext(ctx)
+	ctx = withRequestID(context.Background(), reqID)
+	contextualLogger := logger.WithContext(ctx)
 	contextualLogger.Info(teststr)
 	type entry struct {
 		L, M, N, RequestID, SessionID, Foo string
@@ -221,7 +200,7 @@ func TestContextualLogging(t *testing.T) {
 	// test extra fields
 	buf.Reset()
 	ctx = WithSessionID(context.Background(), sesID, String("foo", "bar"))
-	contextualLogger = AppLog.WithContext(ctx)
+	contextualLogger = logger.WithContext(ctx)
 	contextualLogger.Info(teststr)
 	expect = entry{
 		L:         "INFO",

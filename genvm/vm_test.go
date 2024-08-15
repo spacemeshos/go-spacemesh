@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/economics/rewards"
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -32,7 +33,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -49,7 +49,7 @@ func newTester(tb testing.TB) *tester {
 	return &tester{
 		TB: tb,
 		VM: New(statesql.InMemory(),
-			WithLogger(logtest.New(tb)),
+			WithLogger(zaptest.NewLogger(tb)),
 			WithConfig(Config{GasLimit: math.MaxUint64}),
 		),
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -282,7 +282,7 @@ func (t *tester) persistent() *tester {
 	db, err := statesql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
-	t.VM = New(db, WithLogger(logtest.New(t)),
+	t.VM = New(db, WithLogger(zaptest.NewLogger(t)),
 		WithConfig(Config{GasLimit: math.MaxUint64}))
 	return t
 }
@@ -2481,6 +2481,7 @@ func FuzzParse(f *testing.F) {
 		}
 	}
 	f.Fuzz(func(t *testing.T, version int, principal []byte, method int, payload, args, sig []byte) {
+		tt.VM.logger = zaptest.NewLogger(t)
 		var (
 			buf = bytes.NewBuffer(nil)
 			enc = scale.NewEncoder(buf)
@@ -2572,7 +2573,7 @@ func TestVestingData(t *testing.T) {
 			spendAccountNonce := t2.nonces[0]
 			spendAmount := uint64(1_000_000)
 
-			vm := New(statesql.InMemory(), WithLogger(logtest.New(t)))
+			vm := New(statesql.InMemory(), WithLogger(zaptest.NewLogger(t)))
 			require.NoError(t, vm.ApplyGenesis(
 				[]core.Account{
 					{

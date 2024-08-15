@@ -11,11 +11,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -49,8 +49,7 @@ func newTestExecutor(t *testing.T) *testExecutor {
 		mvm:      mocks.NewMockvmState(ctrl),
 		mcs:      mocks.NewMockconservativeState(ctrl),
 	}
-	lg := logtest.New(t)
-	te.exec = mesh.NewExecutor(te.db, te.atxsdata, te.mvm, te.mcs, lg)
+	te.exec = mesh.NewExecutor(te.db, te.atxsdata, te.mvm, te.mcs, zaptest.NewLogger(t))
 	return te
 }
 
@@ -70,17 +69,18 @@ func makeResults(lid types.LayerID, txs ...types.Transaction) []types.Transactio
 func (t *testExecutor) createATX(epoch types.EpochID, cb types.Address) (types.ATXID, types.NodeID) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t.tb, err)
-	atx := types.NewActivationTx(
-		types.NIPostChallenge{PublishEpoch: epoch},
-		cb,
-		11,
-	)
-	atx.VRFNonce = 1
+	atx := &types.ActivationTx{
+		PublishEpoch: epoch,
+		Coinbase:     cb,
+		NumUnits:     11,
+		Weight:       11,
+		VRFNonce:     1,
+		TickCount:    1,
+		SmesherID:    sig.NodeID(),
+	}
 	atx.SetReceived(time.Now())
-	atx.SmesherID = sig.NodeID()
 	atx.SetID(types.RandomATXID())
-	atx.TickCount = 1
-	require.NoError(t.tb, atxs.Add(t.db, atx))
+	require.NoError(t.tb, atxs.Add(t.db, atx, types.AtxBlob{}))
 	t.atxsdata.AddFromAtx(atx, false)
 	return atx.ID(), sig.NodeID()
 }

@@ -207,24 +207,14 @@ func (s *LayerService) List(
 	}
 
 	rst := make([]*spacemeshv2alpha1.Layer, 0, request.Limit)
-	var derr error
 	if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
 		rst = append(rst, toLayer(layer))
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if derr != nil {
-		return nil, derr
-	}
 
-	ops.Modifiers = nil
-	count, err := layers.CountLayersByOps(s.db, ops)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	return &spacemeshv2alpha1.LayerList{Layers: rst, Total: count}, nil
+	return &spacemeshv2alpha1.LayerList{Layers: rst}, nil
 }
 
 func toLayerOperations(filter *spacemeshv2alpha1.LayerRequest) (builder.Operations, error) {

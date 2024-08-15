@@ -3,6 +3,7 @@ package statesql
 import (
 	"embed"
 	"strings"
+	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -21,13 +22,16 @@ type database struct {
 
 var _ sql.StateDatabase = &database{}
 
-func (db *database) IsStateDatabase() bool { return true }
+func (db *database) IsStateDatabase() {}
 
 // Schema returns the schema for the state database.
-func Schema() (*sql.Schema, error) {
+func Schema(inCodeMigrations ...sql.Migration) (*sql.Schema, error) {
 	sqlMigrations, err := sql.LoadSQLMigrations(migrations)
 	if err != nil {
 		return nil, err
+	}
+	for _, m := range inCodeMigrations {
+		sqlMigrations = sqlMigrations.AddMigration(m)
 	}
 	// NOTE: coded state migrations can be added here
 	// They can be a part of this localsql package
@@ -63,4 +67,15 @@ func InMemory(opts ...sql.Opt) sql.StateDatabase {
 	opts = append(defaultOpts, opts...)
 	db := sql.InMemory(opts...)
 	return &database{Database: db}
+}
+
+// InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
+func InMemoryTest(tb testing.TB, opts ...sql.Opt) sql.StateDatabase {
+	opts = append(opts, sql.WithConnections(1))
+	db, err := Open("file::memory:?mode=memory", opts...)
+	if err != nil {
+		panic(err)
+	}
+	tb.Cleanup(func() { db.Close() })
+	return db
 }

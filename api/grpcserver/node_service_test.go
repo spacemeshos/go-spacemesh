@@ -3,7 +3,6 @@ package grpcserver
 import (
 	"context"
 	"testing"
-	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
@@ -37,9 +36,7 @@ func setupNodeService(t *testing.T) (*nodeServiceConn, context.Context) {
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := pb.NewNodeServiceClient(conn)
 
 	return &nodeServiceConn{

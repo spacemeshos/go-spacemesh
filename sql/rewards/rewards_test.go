@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -222,7 +223,7 @@ func Test_0008Migration_EmptyDBIsNoOp(t *testing.T) {
 	require.NoError(t, err)
 
 	// apply the migration
-	err = origMigrations[7].Apply(db)
+	err = origMigrations[7].Apply(db, zaptest.NewLogger(t))
 	require.NoError(t, err)
 
 	// verify that db is still empty
@@ -290,7 +291,7 @@ func Test_0008Migration(t *testing.T) {
 	require.NoError(t, err)
 
 	// apply the migration
-	err = origMigrations[7].Apply(db)
+	err = origMigrations[7].Apply(db, zaptest.NewLogger(t))
 	require.NoError(t, err)
 
 	// verify that one row is still present

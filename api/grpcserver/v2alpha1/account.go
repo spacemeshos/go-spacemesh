@@ -49,7 +49,7 @@ func (s *AccountService) String() string {
 }
 
 func (s *AccountService) List(
-	ctx context.Context,
+	_ context.Context,
 	request *spacemeshv2alpha1.AccountRequest,
 ) (*spacemeshv2alpha1.AccountList, error) {
 	switch {
@@ -84,13 +84,7 @@ func (s *AccountService) List(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	ops.Modifiers = nil
-	count, err := accounts.CountAccountsByOps(s.db, ops)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	return &spacemeshv2alpha1.AccountList{Accounts: rst, Total: count}, nil
+	return &spacemeshv2alpha1.AccountList{Accounts: rst}, nil
 }
 
 func toAccountOperations(filter *spacemeshv2alpha1.AccountRequest) (builder.Operations, error) {

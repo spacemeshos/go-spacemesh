@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -31,19 +32,32 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+type CommitteeUpgrade struct {
+	Layer types.LayerID
+	Size  uint16
+}
+
 type Config struct {
-	Enable          bool          `mapstructure:"enable"`
-	EnableLayer     types.LayerID `mapstructure:"enable-layer"`
-	DisableLayer    types.LayerID `mapstructure:"disable-layer"`
-	Committee       uint16        `mapstructure:"committee"`
-	Leaders         uint16        `mapstructure:"leaders"`
-	IterationsLimit uint8         `mapstructure:"iterations-limit"`
-	PreroundDelay   time.Duration `mapstructure:"preround-delay"`
-	RoundDuration   time.Duration `mapstructure:"round-duration"`
+	Enable           bool          `mapstructure:"enable"`
+	EnableLayer      types.LayerID `mapstructure:"enable-layer"`
+	DisableLayer     types.LayerID `mapstructure:"disable-layer"`
+	Committee        uint16        `mapstructure:"committee"`
+	CommitteeUpgrade *CommitteeUpgrade
+	Leaders          uint16        `mapstructure:"leaders"`
+	IterationsLimit  uint8         `mapstructure:"iterations-limit"`
+	PreroundDelay    time.Duration `mapstructure:"preround-delay"`
+	RoundDuration    time.Duration `mapstructure:"round-duration"`
 	// LogStats if true will log iteration statistics with INFO level at the start of the next iteration.
 	// This requires additional computation and should be used for debugging only.
 	LogStats     bool   `mapstructure:"log-stats"`
 	ProtocolName string `mapstructure:"protocolname"`
+}
+
+func (cfg *Config) CommitteeFor(layer types.LayerID) uint16 {
+	if cfg.CommitteeUpgrade != nil && layer >= cfg.CommitteeUpgrade.Layer {
+		return cfg.CommitteeUpgrade.Size
+	}
+	return cfg.Committee
 }
 
 func (cfg *Config) Validate(zdist time.Duration) error {
@@ -63,6 +77,10 @@ func (cfg *Config) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("enabled layer", cfg.EnableLayer.Uint32())
 	encoder.AddUint32("disabled layer", cfg.DisableLayer.Uint32())
 	encoder.AddUint16("committee", cfg.Committee)
+	if cfg.CommitteeUpgrade != nil {
+		encoder.AddUint32("committee upgrade layer", cfg.CommitteeUpgrade.Layer.Uint32())
+		encoder.AddUint16("committee upgrade size", cfg.CommitteeUpgrade.Size)
+	}
 	encoder.AddUint16("leaders", cfg.Leaders)
 	encoder.AddUint8("iterations limit", cfg.IterationsLimit)
 	encoder.AddDuration("preround delay", cfg.PreroundDelay)
@@ -111,9 +129,9 @@ type WeakCoinOutput struct {
 
 type Opt func(*Hare)
 
-func WithWallclock(clock clockwork.Clock) Opt {
+func WithWallClock(clock clockwork.Clock) Opt {
 	return func(hr *Hare) {
-		hr.wallclock = clock
+		hr.wallClock = clock
 	}
 }
 
@@ -137,15 +155,23 @@ func WithTracer(tracer Tracer) Opt {
 	}
 }
 
-type nodeclock interface {
+// WithResultsChan overrides the default result channel with a different one.
+// This is only needed for the migration period between hare3 and hare4.
+func WithResultsChan(c chan hare4.ConsensusOutput) Opt {
+	return func(hr *Hare) {
+		hr.results = c
+	}
+}
+
+type nodeClock interface {
 	AwaitLayer(types.LayerID) <-chan struct{}
 	CurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
 
 func New(
-	nodeclock nodeclock,
-	pubsub pubsub.PublishSubsciber,
+	nodeClock nodeClock,
+	pubsub pubsub.PublishSubscriber,
 	db sql.StateDatabase,
 	atxsdata *atxsdata.Data,
 	proposals *store.Store,
@@ -159,16 +185,16 @@ func New(
 	hr := &Hare{
 		ctx:      ctx,
 		cancel:   cancel,
-		results:  make(chan ConsensusOutput, 32),
-		coins:    make(chan WeakCoinOutput, 32),
+		results:  make(chan hare4.ConsensusOutput, 32),
+		coins:    make(chan hare4.WeakCoinOutput, 32),
 		signers:  map[string]*signing.EdSigner{},
 		sessions: map[types.LayerID]*protocol{},
 
 		config:    DefaultConfig(),
 		log:       zap.NewNop(),
-		wallclock: clockwork.NewRealClock(),
+		wallClock: clockwork.NewRealClock(),
 
-		nodeclock: nodeclock,
+		nodeClock: nodeClock,
 		pubsub:    pubsub,
 		db:        db,
 		atxsdata:  atxsdata,
@@ -194,8 +220,8 @@ type Hare struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	eg       errgroup.Group
-	results  chan ConsensusOutput
-	coins    chan WeakCoinOutput
+	results  chan hare4.ConsensusOutput
+	coins    chan hare4.WeakCoinOutput
 	mu       sync.Mutex
 	signers  map[string]*signing.EdSigner
 	sessions map[types.LayerID]*protocol
@@ -203,11 +229,11 @@ type Hare struct {
 	// options
 	config    Config
 	log       *zap.Logger
-	wallclock clockwork.Clock
+	wallClock clockwork.Clock
 
 	// dependencies
-	nodeclock nodeclock
-	pubsub    pubsub.PublishSubsciber
+	nodeClock nodeClock
+	pubsub    pubsub.PublishSubscriber
 	db        sql.StateDatabase
 	atxsdata  *atxsdata.Data
 	proposals *store.Store
@@ -225,17 +251,17 @@ func (h *Hare) Register(sig *signing.EdSigner) {
 	h.signers[string(sig.NodeID().Bytes())] = sig
 }
 
-func (h *Hare) Results() <-chan ConsensusOutput {
+func (h *Hare) Results() <-chan hare4.ConsensusOutput {
 	return h.results
 }
 
-func (h *Hare) Coins() <-chan WeakCoinOutput {
+func (h *Hare) Coins() <-chan hare4.WeakCoinOutput {
 	return h.coins
 }
 
 func (h *Hare) Start() {
 	h.pubsub.Register(h.config.ProtocolName, h.Handler, pubsub.WithValidatorInline(true))
-	current := h.nodeclock.CurrentLayer() + 1
+	current := h.nodeClock.CurrentLayer() + 1
 	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
 	disabled := types.LayerID(math.MaxUint32)
 	if h.config.DisableLayer > 0 {
@@ -243,13 +269,13 @@ func (h *Hare) Start() {
 	}
 	h.log.Info("started",
 		zap.Inline(&h.config),
-		zap.Uint32("enabled", enabled.Uint32()),
-		zap.Uint32("disabled", disabled.Uint32()),
+		zap.Uint32("enabled layer", enabled.Uint32()),
+		zap.Uint32("disabled layer", disabled.Uint32()),
 	)
 	h.eg.Go(func() error {
 		for next := enabled; next < disabled; next++ {
 			select {
-			case <-h.nodeclock.AwaitLayer(next):
+			case <-h.nodeClock.AwaitLayer(next):
 				h.log.Debug("notified", zap.Uint32("lid", next.Uint32()))
 				h.onLayer(next)
 			case <-h.ctx.Done():
@@ -323,7 +349,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		droppedMessages.Inc()
 		return errors.New("dropped by graded gossip")
 	}
-	expected := h.nodeclock.LayerToTime(msg.Layer).Add(h.config.roundStart(msg.IterRound))
+	expected := h.nodeClock.LayerToTime(msg.Layer).Add(h.config.roundStart(msg.IterRound))
 	metrics.ReportMessageLatency(h.config.ProtocolName, msg.Round.String(), time.Since(expected))
 	return nil
 }
@@ -352,7 +378,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		beacon:  beacon,
 		signers: maps.Values(h.signers),
 		vrfs:    make([]*types.HareEligibility, len(h.signers)),
-		proto:   newProtocol(h.config.Committee/2 + 1),
+		proto:   newProtocol(h.config.CommitteeFor(layer)/2 + 1),
 	}
 	h.sessions[layer] = s.proto
 	h.mu.Unlock()
@@ -400,12 +426,12 @@ func (h *Hare) run(session *session) error {
 	h.tracer.OnActive(session.vrfs)
 	activeLatency.Observe(time.Since(start).Seconds())
 
-	walltime := h.nodeclock.LayerToTime(session.lid).Add(h.config.PreroundDelay)
+	walltime := h.nodeClock.LayerToTime(session.lid).Add(h.config.PreroundDelay)
 	if active {
 		h.log.Debug("active in preround. waiting for preround delay", zap.Uint32("lid", session.lid.Uint32()))
 		// initial set is not needed if node is not active in preround
 		select {
-		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
+		case <-h.wallClock.After(walltime.Sub(h.wallClock.Now())):
 		case <-h.ctx.Done():
 			return h.ctx.Err()
 		}
@@ -433,7 +459,7 @@ func (h *Hare) run(session *session) error {
 		activeLatency.Observe(time.Since(start).Seconds())
 
 		select {
-		case <-h.wallclock.After(walltime.Sub(h.wallclock.Now())):
+		case <-h.wallClock.After(walltime.Sub(h.wallClock.Now())):
 			h.log.Debug("execute round",
 				zap.Uint32("lid", session.lid.Uint32()),
 				zap.Uint8("iter", session.proto.Iter), zap.Stringer("round", session.proto.Round),
@@ -449,7 +475,7 @@ func (h *Hare) run(session *session) error {
 			// we are logginng stats 1 network delay after new iteration start
 			// so that we can receive notify messages from previous iteration
 			if session.proto.Round == softlock && h.config.LogStats {
-				h.log.Info("stats", zap.Uint32("lid", session.lid.Uint32()), zap.Inline(session.proto.Stats()))
+				h.log.Debug("stats", zap.Uint32("lid", session.lid.Uint32()), zap.Inline(session.proto.Stats()))
 			}
 			if out.terminated {
 				if !result {
@@ -458,8 +484,7 @@ func (h *Hare) run(session *session) error {
 				return nil
 			}
 			if current.Iter == h.config.IterationsLimit {
-				return fmt.Errorf("hare failed to reach consensus in %d iterations",
-					h.config.IterationsLimit)
+				return fmt.Errorf("hare failed to reach consensus in %d iterations", h.config.IterationsLimit)
 			}
 		case <-h.ctx.Done():
 			return nil
@@ -491,7 +516,7 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 		select {
 		case <-h.ctx.Done():
 			return h.ctx.Err()
-		case h.coins <- WeakCoinOutput{Layer: session.lid, Coin: *out.coin}:
+		case h.coins <- hare4.WeakCoinOutput{Layer: session.lid, Coin: *out.coin}:
 		}
 		sessionCoin.Inc()
 	}
@@ -499,7 +524,7 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 		select {
 		case <-h.ctx.Done():
 			return h.ctx.Err()
-		case h.results <- ConsensusOutput{Layer: session.lid, Proposals: out.result}:
+		case h.results <- hare4.ConsensusOutput{Layer: session.lid, Proposals: out.result}:
 		}
 		sessionResult.Inc()
 	}
@@ -582,8 +607,8 @@ func (h *Hare) selectProposals(session *session) []types.ProposalID {
 			h.log.Warn("proposal has different beacon value",
 				zap.Uint32("lid", session.lid.Uint32()),
 				zap.Stringer("id", p.ID()),
-				zap.String("proposal_beacon", p.Beacon().ShortString()),
-				zap.String("epoch_beacon", session.beacon.ShortString()),
+				zap.Stringer("proposal_beacon", p.Beacon()),
+				zap.Stringer("epoch_beacon", session.beacon),
 			)
 		}
 	}
@@ -601,7 +626,6 @@ func (h *Hare) OnProposal(p *types.Proposal) error {
 func (h *Hare) Stop() {
 	h.cancel()
 	h.eg.Wait()
-	close(h.results)
 	close(h.coins)
 	h.log.Info("stopped")
 }

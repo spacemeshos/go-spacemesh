@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -94,18 +93,6 @@ func Test_BlockBytes(t *testing.T) {
 	expectedBytes = testBlock.ID().AsHash32().Bytes()
 	actualBytes = testBlock.ID().Bytes()
 	require.Equal(t, expectedBytes, actualBytes)
-}
-
-func Test_BlockFieldString(t *testing.T) {
-	testBlockID := types.BlockID{1, 1}
-
-	expectedField := log.String("block_id", testBlockID.String())
-	actualField := testBlockID.Field()
-	require.Equal(t, expectedField, actualField)
-
-	expectedIDString := testBlockID.AsHash32().ShortString()
-	actualIDString := testBlockID.String()
-	require.Equal(t, expectedIDString, actualIDString)
 }
 
 func Test_BlockIDCompare(t *testing.T) {

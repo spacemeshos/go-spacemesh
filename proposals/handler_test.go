@@ -13,13 +13,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -128,7 +128,7 @@ func createTestHandler(t *testing.T) *testHandler {
 			ms.md,
 			ms.mvrf,
 			ms.mclock,
-			WithLogger(logtest.New(t)),
+			WithLogger(zaptest.NewLogger(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
 				LayersPerEpoch: layersPerEpoch,
@@ -246,7 +246,7 @@ func createAtx(t *testing.T, db sql.StateDatabase, epoch types.EpochID, atxID ty
 	}
 	atx.SetID(atxID)
 	atx.SetReceived(time.Now())
-	require.NoError(t, atxs.Add(db, atx))
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 }
 
 func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {

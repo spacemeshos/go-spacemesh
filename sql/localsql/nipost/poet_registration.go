@@ -37,23 +37,6 @@ func AddPoetRegistration(
 	return nil
 }
 
-func PoetRegistrationCount(db sql.Executor, nodeID types.NodeID) (int, error) {
-	var count int
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-	}
-	dec := func(stmt *sql.Statement) bool {
-		count = int(stmt.ColumnInt64(0))
-		return true
-	}
-	query := `select count(*) from poet_registration where id = ?1;`
-	_, err := db.Exec(query, enc, dec)
-	if err != nil {
-		return 0, fmt.Errorf("get poet registration count for node id %s: %w", nodeID.ShortString(), err)
-	}
-	return count, nil
-}
-
 func ClearPoetRegistrations(db sql.Executor, nodeID types.NodeID) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
@@ -66,9 +49,11 @@ func ClearPoetRegistrations(db sql.Executor, nodeID types.NodeID) error {
 
 func PoetRegistrations(db sql.Executor, nodeID types.NodeID) ([]PoETRegistration, error) {
 	var registrations []PoETRegistration
+
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
 	}
+
 	dec := func(stmt *sql.Statement) bool {
 		registration := PoETRegistration{
 			Address:  stmt.ColumnText(1),
@@ -79,10 +64,13 @@ func PoetRegistrations(db sql.Executor, nodeID types.NodeID) ([]PoETRegistration
 		registrations = append(registrations, registration)
 		return true
 	}
-	query := `select hash, address, round_id, round_end from poet_registration where id = ?1;`
+
+	query := `SELECT hash, address, round_id, round_end FROM poet_registration WHERE id = ?1;`
+
 	_, err := db.Exec(query, enc, dec)
 	if err != nil {
 		return nil, fmt.Errorf("get poet registrations for node id %s: %w", nodeID.ShortString(), err)
 	}
+
 	return registrations, nil
 }

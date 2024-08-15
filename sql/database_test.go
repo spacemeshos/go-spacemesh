@@ -64,8 +64,8 @@ func Test_Migration_Rollback(t *testing.T) {
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
-	migration2.EXPECT().Apply(gomock.Any()).Return(errors.New("migration 2 failed"))
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
 
 	migration2.EXPECT().Rollback().Return(nil)
 
@@ -85,7 +85,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Name().Return("test").AnyTimes()
 	migration1.EXPECT().Order().Return(1).AnyTimes()
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	db, err := Open("file:"+dbFile,
@@ -102,7 +102,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).Return(errors.New("migration 2 failed"))
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
 	migration2.EXPECT().Rollback().Return(nil)
 
 	_, err = Open("file:"+dbFile,
@@ -120,7 +120,7 @@ func Test_Migration_Disabled(t *testing.T) {
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Name().Return("test").AnyTimes()
 	migration1.EXPECT().Order().Return(1).AnyTimes()
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	db, err := Open("file:"+dbFile,
@@ -153,7 +153,7 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).Return(nil)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 
 	schema := &Schema{
 		Migrations: MigrationList{migration1, migration2},
@@ -190,28 +190,30 @@ func TestDatabaseVacuumState(t *testing.T) {
 	// in-place.
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Order().Return(1).AnyTimes()
-	migration1.EXPECT().Apply(gomock.Any()).DoAndReturn(func(db Executor) error {
-		require.NotContains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
-		require.Equal(t, "wal", execSQL(t, db, "PRAGMA journal_mode", 0))
-		require.Equal(t, "1", execSQL(t, db, "PRAGMA synchronous", 0)) // NORMAL
-		execSQL(t, db, "create table foo(x int)", -1)
-		return nil
-	}).Times(1)
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(db Executor, logger *zap.Logger) error {
+			require.NotContains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
+			require.Equal(t, "wal", execSQL(t, db, "PRAGMA journal_mode", 0))
+			require.Equal(t, "1", execSQL(t, db, "PRAGMA synchronous", 0)) // NORMAL
+			execSQL(t, db, "create table foo(x int)", -1)
+			return nil
+		}).Times(1)
 
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).DoAndReturn(func(db Executor) error {
-		// We must be operating on a temp database.
-		require.Contains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
-		// Journaling is off for the temp database as it is deleted in case
-		// of migration failure.
-		require.Equal(t, "off", execSQL(t, db, "PRAGMA journal_mode", 0))
-		// Synchronous is off for the temp database as it is deleted in case
-		// of migration failure.
-		require.Equal(t, "0", execSQL(t, db, "PRAGMA synchronous", 0)) // OFF
-		execSQL(t, db, "create table bar(y int)", -1)
-		return nil
-	}).Times(1)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(db Executor, logger *zap.Logger) error {
+			// We must be operating on a temp database.
+			require.Contains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
+			// Journaling is off for the temp database as it is deleted in case
+			// of migration failure.
+			require.Equal(t, "off", execSQL(t, db, "PRAGMA journal_mode", 0))
+			// Synchronous is off for the temp database as it is deleted in case
+			// of migration failure.
+			require.Equal(t, "0", execSQL(t, db, "PRAGMA synchronous", 0)) // OFF
+			execSQL(t, db, "create table bar(y int)", -1)
+			return nil
+		}).Times(1)
 
 	dbFile := filepath.Join(dir, "test.sql")
 	db, err := Open("file:"+dbFile,
@@ -263,13 +265,14 @@ func TestDatabaseVacuumStateError(t *testing.T) {
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Name().Return("0002_test.sql").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).DoAndReturn(func(db Executor) error {
-		if fail {
-			return errors.New("migration failed")
-		}
-		execSQL(t, db, "create table bar(y int)", -1)
-		return nil
-	}).Times(2)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(db Executor, logger *zap.Logger) error {
+			if fail {
+				return errors.New("migration failed")
+			}
+			execSQL(t, db, "create table bar(y int)", -1)
+			return nil
+		}).Times(2)
 
 	dbFile := filepath.Join(dir, "test.sql")
 	db, err := Open("file:"+dbFile,
@@ -323,7 +326,9 @@ type faultyMigration struct {
 	*sqlMigration
 }
 
-func (m *faultyMigration) Apply(db Executor) error {
+var _ Migration = &faultyMigration{}
+
+func (m *faultyMigration) Apply(db Executor, logger *zap.Logger) error {
 	if m.interceptVacuumInto {
 		db.(Database).Intercept("crashOnVacuum", func(query string) error {
 			if strings.Contains(strings.ToLower(query), "vacuum into") {
@@ -335,7 +340,7 @@ func (m *faultyMigration) Apply(db Executor) error {
 	if m.panic {
 		panic("simulated crash")
 	}
-	return m.sqlMigration.Apply(db)
+	return m.sqlMigration.Apply(db, logger)
 }
 
 func TestDropIncompleteMigration(t *testing.T) {

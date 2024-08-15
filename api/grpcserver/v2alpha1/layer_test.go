@@ -41,7 +41,7 @@ func TestLayerService_List(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewLayerServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -71,7 +71,6 @@ func TestLayerService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, list.Layers, 25)
-		require.Equal(t, len(lrs), int(list.Total))
 	})
 
 	t.Run("all", func(t *testing.T) {
@@ -82,7 +81,6 @@ func TestLayerService_List(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, lrs, len(ls.Layers))
-		require.Equal(t, len(lrs), int(ls.Total))
 	})
 }
 
@@ -119,7 +117,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewLayerStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {

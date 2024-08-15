@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-pubsub/timecache"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -98,7 +99,7 @@ type Config struct {
 }
 
 // New creates PubSub instance.
-func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*GossipPubSub, error) {
+func New(ctx context.Context, logger *zap.Logger, h host.Host, cfg Config) (*GossipPubSub, error) {
 	// TODO(dshulyak) refactor code to accept options
 	opts := getOptions(cfg)
 	ps, err := pubsub.NewGossipSub(ctx, h, opts...)
@@ -132,8 +133,8 @@ var (
 	WithValidatorConcurrency = pubsub.WithValidatorConcurrency
 )
 
-// PublishSubsciber common interface for publisher and subscribing.
-type PublishSubsciber interface {
+// PublishSubscriber common interface for publisher and subscribing.
+type PublishSubscriber interface {
 	Publisher
 	Subscriber
 }
@@ -164,39 +165,33 @@ func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
 
 // DropPeerOnValidationReject wraps a gossip handler to provide a handler that drops a
 // peer if the wrapped handler returns ErrValidationReject.
-func DropPeerOnValidationReject(handler GossipHandler, h host.Host, logger log.Log) GossipHandler {
+func DropPeerOnValidationReject(handler GossipHandler, h host.Host, logger *zap.Logger) GossipHandler {
 	return func(ctx context.Context, peer peer.ID, data []byte) error {
 		err := handler(ctx, peer, data)
 		if errors.Is(err, ErrValidationReject) {
-			logger.With().Warning("dropping a peer due to a rejected validation",
-				log.Context(ctx),
-				log.Stringer("peer", peer),
-				log.Err(err),
+			logger.Warn("dropping a peer due to a rejected validation",
+				log.ZContext(ctx),
+				zap.Stringer("peer", peer),
+				zap.Error(err),
 			)
 			p2pmetrics.DroppedConnectionsValidationReject.Inc()
 			err := h.Network().ClosePeer(peer)
 			if err != nil {
-				logger.With().Debug("failed to close peer",
-					log.String("peer", peer.ShortString()),
-					log.Err(err),
-				)
+				logger.Debug("failed to close peer", log.ZShortStringer("peer", peer), zap.Error(err))
 			}
 		}
 		return err
 	}
 }
 
-func DropPeerOnSyncValidationReject(handler SyncHandler, h host.Host, logger log.Log) SyncHandler {
+func DropPeerOnSyncValidationReject(handler SyncHandler, h host.Host, logger *zap.Logger) SyncHandler {
 	return func(ctx context.Context, hash types.Hash32, peer peer.ID, data []byte) error {
 		err := handler(ctx, hash, peer, data)
 		if errors.Is(err, ErrValidationReject) {
 			p2pmetrics.DroppedConnectionsValidationReject.Inc()
 			err := h.Network().ClosePeer(peer)
 			if err != nil {
-				logger.With().Debug("failed to close peer",
-					log.String("peer", peer.ShortString()),
-					log.Err(err),
-				)
+				logger.Debug("failed to close peer", log.ZShortStringer("peer", peer), zap.Error(err))
 			}
 		}
 		return err

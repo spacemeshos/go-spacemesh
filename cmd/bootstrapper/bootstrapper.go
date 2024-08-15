@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -89,16 +88,26 @@ var cmd = &cobra.Command{
 			targetEpochs = append(targetEpochs, types.EpochID(epoch))
 		}
 
-		log.JSONLog(true)
-		lvl, err := zap.ParseAtomicLevel(strings.ToLower(logLevel))
+		lvl, err := zap.ParseAtomicLevel(logLevel)
 		if err != nil {
 			return err
 		}
-		logger := log.NewWithLevel("", lvl)
+
+		logger, err := zap.Config{
+			Level:            lvl,
+			Encoding:         "json",
+			EncoderConfig:    zap.NewProductionEncoderConfig(),
+			OutputPaths:      []string{"stderr"},
+			ErrorOutputPaths: []string{"stderr"},
+		}.Build()
+		if err != nil {
+			return fmt.Errorf("creating logger: %w", err)
+		}
+
 		g := NewGenerator(
 			bitcoinEndpoint,
 			spacemeshEndpoint,
-			WithLogger(logger.WithName("generator")),
+			WithLogger(logger.Named("generator")),
 		)
 
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -106,7 +115,7 @@ var cmd = &cobra.Command{
 		if serveUpdate {
 			srv := NewServer(g, genFallback, port,
 				WithSrvFilesystem(afero.NewOsFs()),
-				WithSrvLogger(logger.WithName("server")),
+				WithSrvLogger(logger.Named("server")),
 				WithBootstrapEpochs(targetEpochs),
 			)
 			return runServer(ctx, srv)

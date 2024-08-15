@@ -97,7 +97,12 @@ Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activat
 
 ### Setting Up Local Dev Environment
 
-Building is supported on OS X, Linux, FreeBSD, and Windows.
+Building is supported on: 
+- Linux, GLIBC 2.34+ is required
+- MacOS 13 (Intel) and MacOS 14 (Arm) and newer
+- Windows 10 and newer
+
+FreeBSD is not officially supported.
 
 Install [Go 1.22 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
@@ -111,6 +116,24 @@ Before building we need to set up the golang environment. Do this by running:
 ```bash
 make install
 ```
+
+Make sure the environment is set up correctly:
+
+```bash
+make go-env-test
+```
+
+**CGO_CFLAGS** must be set to "-I<absolute_path_to_repo>/go-spacemesh/build/ -DSQLITE_ENABLE_DBSTAT_VTAB=1"
+**CGO_LDFLAGS** must be set to "-L<absolute_path_to_repo>/go-spacemesh/build/ -Wl,-rpath,$ORIGIN -Wl,-rpath,<absolute_path_to_repo>/go-spacemesh/build/"
+
+Make sure you have **OpenCL** library installed
+
+To check if setup was configured successfully, try to run: 
+```bash
+make test
+```
+
+There shouldn't be any build errors, but please note that running the tests will take some time.
 
 ### How to run standalone node?
 
@@ -179,7 +202,7 @@ the build folder you need to ensure that you have the gpu setup dynamic library
 binary. The simplest way to do this is just copy the library file to be in the
 same directory as the go-spacemesh binary. Alternatively you can modify your
 system's library search paths (e.g. LD_LIBRARY_PATH) to ensure that the
-library is found._
+library is found.
 
 go-spacemesh is p2p software which is designed to form a decentralized network by connecting to other instances of
 go-spacemesh running on remote computers.

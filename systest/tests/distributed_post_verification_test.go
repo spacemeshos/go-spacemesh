@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
@@ -43,7 +42,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 	testDir := t.TempDir()
 
-	ctx := testcontext.New(t, testcontext.Labels("sanity"))
+	ctx := testcontext.New(t)
 	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
 
 	// Prepare cluster
@@ -87,8 +86,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	prologue := fmt.Sprintf("%x-%v", cl.GenesisID(), cfg.LayersPerEpoch*2-1)
 	host, err := p2p.New(
-		ctx,
-		log.NewFromLog(logger.Named("p2p")),
+		logger.Named("p2p"),
 		cfg.P2P,
 		[]byte(prologue),
 		handshake.NetworkCookie(prologue),
@@ -142,7 +140,10 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
+	grpcPostService := grpcserver.NewPostService(
+		logger.Named("grpc-post-service"),
+		grpcserver.PostServiceQueryInterval(500*time.Millisecond),
+	)
 	grpcPostService.AllowConnections(true)
 
 	grpcPrivateServer, err := grpcserver.NewWithServices(
@@ -160,7 +161,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
 	poetDb := activation.NewPoetDb(db, zap.NewNop())
-	poetClient, err := activation.NewPoetClient(
+	poetService, err := activation.NewPoetService(
 		poetDb,
 		types.PoetServer{
 			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
@@ -190,7 +191,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		cfg.POET,
 		clock,
 		validator,
-		activation.WithPoetClients(poetClient),
+		activation.WithPoetServices(poetService),
 	)
 	require.NoError(t, err)
 

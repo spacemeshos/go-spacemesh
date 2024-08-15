@@ -10,15 +10,21 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/cors"
+	metricsProm "github.com/slok/go-http-metrics/metrics/prometheus"
+	"github.com/slok/go-http-metrics/middleware"
+	"github.com/slok/go-http-metrics/middleware/std"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
-	listener string
-	logger   *zap.Logger
+	listener       string
+	collectMetrics bool
+	logger         *zap.Logger
 
 	// BoundAddress contains the address that the server bound to, useful if
 	// the server uses a dynamic port. It is set during startup and can be
@@ -37,11 +43,13 @@ func NewJSONHTTPServer(
 	lg *zap.Logger,
 	listener string,
 	corsAllowedOrigins []string,
+	collectMetrics bool,
 ) *JSONHTTPServer {
 	return &JSONHTTPServer{
-		logger:   lg,
-		listener: listener,
-		origins:  corsAllowedOrigins,
+		logger:         lg,
+		listener:       listener,
+		origins:        corsAllowedOrigins,
+		collectMetrics: collectMetrics,
 	}
 }
 
@@ -66,7 +74,6 @@ func (s *JSONHTTPServer) Shutdown(ctx context.Context) error {
 
 // StartService starts the json api server and listens for status (started, stopped).
 func (s *JSONHTTPServer) StartService(
-	ctx context.Context,
 	services ...ServiceAPI,
 ) error {
 	// At least one service must be enabled
@@ -89,6 +96,17 @@ func (s *JSONHTTPServer) StartService(
 		AllowedOrigins: s.origins,
 	})
 
+	// mdlw is the middleware stack for the http server
+	handler := c.Handler(mux)
+	if s.collectMetrics {
+		mdlw := middleware.New(middleware.Config{
+			Recorder: metricsProm.NewRecorder(metricsProm.Config{
+				Prefix: metrics.Namespace + "_api",
+			}),
+		})
+		handler = c.Handler(std.Handler("", mdlw, mux))
+	}
+
 	s.logger.Info("starting grpc gateway server", zap.String("address", s.listener))
 	lis, err := net.Listen("tcp", s.listener)
 	if err != nil {
@@ -99,7 +117,7 @@ func (s *JSONHTTPServer) StartService(
 		MaxHeaderBytes: 1 << 21,
 		ReadTimeout:    15 * time.Second,
 		WriteTimeout:   15 * time.Second,
-		Handler:        c.Handler(mux),
+		Handler:        handler,
 	}
 	s.eg.Go(func() error {
 		if err := s.server.Serve(lis); err != nil {

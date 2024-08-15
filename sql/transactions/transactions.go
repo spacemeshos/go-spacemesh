@@ -412,21 +412,6 @@ func TransactionInBlock(
 	return bid, rst, nil
 }
 
-func CountTransactionsByOps(
-	db sql.Executor,
-	operations builder.Operations,
-) (count uint32, err error) {
-	_, err = db.Exec(`select COUNT(DISTINCT tx)
-		from transactions
-		left join transactions_results_addresses on id=tid`+builder.FilterFrom(operations),
-		builder.BindingsFrom(operations),
-		func(stmt *sql.Statement) bool {
-			count = uint32(stmt.ColumnInt32(0))
-			return true
-		})
-	return
-}
-
 func IterateTransactionsOps(
 	db sql.Executor,
 	operations builder.Operations,

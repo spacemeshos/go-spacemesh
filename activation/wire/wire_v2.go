@@ -32,7 +32,7 @@ type ActivationTxV2 struct {
 	// All new IDs that are married to this ID are added to the equivocation set
 	// that this ID belongs to.
 	// It must contain a self-marriage certificate (needed for malfeasance proofs).
-	Marriages []MarriageCertificate `scale:"max=256"`
+	Marriages MarriageCertificates `scale:"max=256"`
 
 	// The ID of the ATX containing marriage for the included IDs.
 	// Only required when the ATX includes married IDs.
@@ -42,17 +42,34 @@ type ActivationTxV2 struct {
 	Signature types.EdSignature
 
 	// cached fields to avoid repeated calculations
-	id types.ATXID
+	id   types.ATXID
+	blob []byte
 }
 
-func (atx *ActivationTxV2) SignedBytes() []byte {
-	return atx.ID().Bytes()
+func (atx *ActivationTxV2) Blob() types.AtxBlob {
+	if len(atx.blob) == 0 {
+		atx.blob = codec.MustEncode(atx)
+	}
+	return types.AtxBlob{
+		Blob:    atx.blob,
+		Version: types.AtxV2,
+	}
+}
+
+func DecodeAtxV2(blob []byte) (*ActivationTxV2, error) {
+	atx := &ActivationTxV2{
+		blob: blob,
+	}
+	if err := codec.Decode(blob, atx); err != nil {
+		return nil, err
+	}
+	return atx, nil
 }
 
 func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
-	publishEpoch := make([]byte, 4)
-	binary.LittleEndian.PutUint32(publishEpoch, atx.PublishEpoch.Uint32())
-	tree.AddLeaf(publishEpoch)
+	var publishEpoch types.Hash32
+	binary.LittleEndian.PutUint32(publishEpoch[:], atx.PublishEpoch.Uint32())
+	tree.AddLeaf(publishEpoch.Bytes())
 	tree.AddLeaf(atx.PositioningATX.Bytes())
 	tree.AddLeaf(atx.Coinbase.Bytes())
 
@@ -90,23 +107,11 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	}
 	tree.AddLeaf(niPostTree.Root())
 
-	vrfNonce := make([]byte, 8)
-	binary.LittleEndian.PutUint64(vrfNonce, atx.VRFNonce)
-	tree.AddLeaf(vrfNonce)
+	var vrfNonce types.Hash32
+	binary.LittleEndian.PutUint64(vrfNonce[:], atx.VRFNonce)
+	tree.AddLeaf(vrfNonce.Bytes())
 
-	marriagesTree, err := merkle.NewTreeBuilder().
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		panic(err)
-	}
-	for _, marriage := range atx.Marriages {
-		marriagesTree.AddLeaf(marriage.Root())
-	}
-	for i := len(atx.Marriages); i < 256; i++ {
-		marriagesTree.AddLeaf(types.EmptyHash32.Bytes())
-	}
-	tree.AddLeaf(marriagesTree.Root())
+	tree.AddLeaf(atx.Marriages.Root())
 
 	if atx.MarriageATX != nil {
 		tree.AddLeaf(atx.MarriageATX.Bytes())
@@ -133,11 +138,7 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 
 func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
 	atx.SmesherID = signer.NodeID()
-	atx.Signature = signer.Sign(signing.ATX, atx.SignedBytes())
-}
-
-func (atx *ActivationTxV2) Published() types.EpochID {
-	return atx.PublishEpoch
+	atx.Signature = signer.Sign(signing.ATX, atx.ID().Bytes())
 }
 
 func (atx *ActivationTxV2) TotalNumUnits() uint32 {
@@ -148,6 +149,28 @@ func (atx *ActivationTxV2) TotalNumUnits() uint32 {
 		}
 	}
 	return total
+}
+
+type MarriageCertificates []MarriageCertificate
+
+func (mcs MarriageCertificates) Root() []byte {
+	marriagesTree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	mcs.merkleTree(marriagesTree)
+	return marriagesTree.Root()
+}
+
+func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {
+	for _, marriage := range mcs {
+		tree.AddLeaf(marriage.Root())
+	}
+	for i := len(mcs); i < 256; i++ {
+		tree.AddLeaf(types.EmptyHash32.Bytes())
+	}
 }
 
 type InitialAtxPartsV2 struct {
@@ -196,8 +219,7 @@ func (mc *MarriageCertificate) Root() []byte {
 // MerkleProofV2 proves membership of multiple challenges in a PoET membership merkle tree.
 type MerkleProofV2 struct {
 	// Nodes on path from leaf to root (not including leaf)
-	Nodes       []types.Hash32 `scale:"max=32"`
-	LeafIndices []uint64       `scale:"max=256"` // support merging up to 256 IDs
+	Nodes []types.Hash32 `scale:"max=32"`
 }
 
 type SubPostV2 struct {
@@ -206,8 +228,12 @@ type SubPostV2 struct {
 	// Must be 0 for non-merged ATXs.
 	MarriageIndex uint32
 	PrevATXIndex  uint32 // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
-	Post          PostV1
-	NumUnits      uint32
+	// Index of the leaf for this ID's challenge in the poet membership tree.
+	// IDs might shared the same index if their nipost challenges are equal.
+	// This happens when the IDs are continuously merged (they share the previous ATX).
+	MembershipLeafIndex uint64
+	Post                PostV1
+	NumUnits            uint32
 }
 
 func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
@@ -225,6 +251,11 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 		return nil // invalid index, root cannot be generated
 	}
 	tree.AddLeaf(prevATXs[sp.PrevATXIndex].Bytes())
+
+	var leafIndex types.Hash32
+	binary.LittleEndian.PutUint64(leafIndex[:], sp.MembershipLeafIndex)
+	tree.AddLeaf(leafIndex[:])
+
 	tree.AddLeaf(sp.Post.Root())
 
 	numUnits := make([]byte, 4)
@@ -235,7 +266,6 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 
 type NiPostsV2 struct {
 	// Single membership proof for all IDs in `Posts`.
-	// The index of ID in `Posts` is the index of the challenge in the proof (`LeafIndices`).
 	Membership MerkleProofV2
 	// The root of the PoET proof, that serves as the challenge for PoSTs.
 	Challenge types.Hash32
@@ -336,6 +366,7 @@ func (post *SubPostV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	}
 	encoder.AddUint32("MarriageIndex", post.MarriageIndex)
 	encoder.AddUint32("PrevATXIndex", post.PrevATXIndex)
+	encoder.AddUint64("MembershipLeafIndex", post.MembershipLeafIndex)
 	encoder.AddObject("Post", &post.Post)
 	encoder.AddUint32("NumUnits", post.NumUnits)
 	return nil

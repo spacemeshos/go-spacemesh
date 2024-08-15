@@ -2,6 +2,90 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+The command line flag `--scan-malfeasant-atxs` has been removed. All malfeasant ATXs before 1.6.0 have been marked as
+such and the node will continue to scan new ATXs for their validity.
+
+### Highlights
+
+### Features
+
+### Improvements
+* [#6035](https://github.com/spacemeshos/go-spacemesh/issues/6035) Fixed an issue where the node retried registering for the PoET round
+  only for 15-20 minutes instead of continuing until the start of the round
+
+## Release v1.6.6-hotfix1
+
+### Improvements
+
+* [#6248](https://github.com/spacemeshos/go-spacemesh/pull/6248) Fixed node not being able to handle more than 6.55M
+  ATXs per epoch.
+
+## Release v1.6.6
+
+### Improvements
+
+* [#6198](https://github.com/spacemeshos/go-spacemesh/pull/6198) Configure default TTL for caching poet's /v1/info
+
+* [#6199](https://github.com/spacemeshos/go-spacemesh/pull/6199) Cache poet's /v1/pow_params
+
+## Release v1.6.5
+
+### Improvements
+
+* [#6185](https://github.com/spacemeshos/go-spacemesh/pull/6185) Optimize mempool
+
+* [#6187](https://github.com/spacemeshos/go-spacemesh/pull/6187) The merge tool now ignores files that are not `.key`
+  files in the `identities` directory when merging two nodes.
+
+* [#6128](https://github.com/spacemeshos/go-spacemesh/pull/6128) Reduce logs spam
+
+## Release v1.6.4
+
+### Improvements
+
+* [#6107](https://github.com/spacemeshos/go-spacemesh/pull/6107) Cache PoET queries between multiple identities on the
+  same node. This will reduce the number of requests the node makes to the PoET server during the cyclegap.
+
+* [#6152](https://github.com/spacemeshos/go-spacemesh/pull/6152) Fixed a bug where in rare cases the node would panic
+  due to the closing of a closed channel in the fetcher.
+
+* [#6142](https://github.com/spacemeshos/go-spacemesh/pull/6142) Fix node not dropping peers that are broadcasting
+  invalid ATXs.
+
+## Release v1.6.3
+
+### Improvements
+
+* [#6137](https://github.com/spacemeshos/go-spacemesh/pull/6137) Fix hanging ATX sync.
+
+## Release v1.6.2
+
+### Improvements
+
+* [#5793](https://github.com/spacemeshos/go-spacemesh/pull/5793) Reduced hare committee 8x from 400 to 50 to decrease
+  network traffic caused by Hare.
+
+* [#6099](https://github.com/spacemeshos/go-spacemesh/pull/6099) Adds new metrics to the API to provide insights into
+  the performance and behavior of the node's APIs.
+
+* [#6115](https://github.com/spacemeshos/go-spacemesh/pull/6115) Increase the number of supported ATXs to 8.0 Mio.
+
+### Features
+
+* [#6112](https://github.com/spacemeshos/go-spacemesh/pull/6112) Adds vesting, vault, and drain vault contents to the
+  v2alpha2 Transaction API. Fixes the 'unspecified' transaction type.
+
+## Release v1.6.1
+
+### Improvements
+
+* [#6053](https://github.com/spacemeshos/go-spacemesh/pull/6053) Fixed an issue where the node could fail to select a
+  positioning ATX during the cyclegap and miss the registration window for the next PoET round.
+
 ## Release v1.6.0
 
 ### Upgrade information
@@ -630,6 +714,7 @@ and permanent ineligibility for rewards.
 
 * [#5494](https://github.com/spacemeshos/go-spacemesh/pull/5494)
   Make routing discovery more configurable and less spammy by default.
+
 * [#5511](https://github.com/spacemeshos/go-spacemesh/pull/5511)
   Fix dialing peers on their private IPs, which was causing "portscan" complaints.
 
@@ -639,7 +724,7 @@ and permanent ineligibility for rewards.
 
 * [#5470](https://github.com/spacemeshos/go-spacemesh/pull/5470)
   Fixed a bug in event reporting where the node reports a disconnection from the PoST service as a "PoST failed" event.
-  Disconnections cannot be avoided completely and do not interrupt the PoST proofing process. As long as the PoST
+  Disconnections cannot be avoided completely and do not interrupt the PoST proving process. As long as the PoST
   service reconnects within a reasonable time, the node will continue to operate normally without reporting any errors
   via the event API.
 

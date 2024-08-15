@@ -51,7 +51,9 @@ func fastnet() config.Config {
 	conf.LayerDuration = 15 * time.Second
 	conf.Sync.Interval = 5 * time.Second
 	conf.Sync.GossipDuration = 10 * time.Second
-	conf.Sync.AtxSync.EpochInfoInterval = 20 * time.Second
+	conf.Sync.AtxSync.EpochInfoInterval = 1 * time.Second
+	conf.Sync.AtxSync.EpochInfoPeers = 10
+	conf.Sync.AtxSync.RequestsLimit = 100
 	conf.Sync.MalSync.IDRequestInterval = 20 * time.Second
 	conf.LayersPerEpoch = 4
 	conf.RegossipAtxInterval = 30 * time.Second
@@ -94,8 +96,13 @@ func fastnet() config.Config {
 	conf.POET.GracePeriod = 10 * time.Second
 	conf.POET.CycleGap = 30 * time.Second
 	conf.POET.PhaseShift = 30 * time.Second
-	conf.POET.RequestTimeout = 12 * time.Second // RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+	conf.POET.PositioningATXSelectionTimeout = 8 * time.Second
+	// RequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+	conf.POET.RequestTimeout = 12 * time.Second
 	conf.POET.RequestRetryDelay = 1 * time.Second
 	conf.POET.MaxRequestRetries = 3
+	conf.POET.CertifierInfoCacheTTL = time.Minute
+	conf.POET.PowParamsCacheTTL = 10 * time.Second
+
 	return conf
 }

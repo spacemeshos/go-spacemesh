@@ -118,32 +118,6 @@ func (db *CachedDB) MalfeasanceCacheSize() int {
 	return db.malfeasanceCache.Len()
 }
 
-// IsMalicious returns true if the NodeID is malicious.
-func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
-	if id == types.EmptyNodeID {
-		panic("invalid argument to IsMalicious")
-	}
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if proof, ok := db.malfeasanceCache.Get(id); ok {
-		if proof == nil {
-			return false, nil
-		} else {
-			return true, nil
-		}
-	}
-
-	bad, err := identities.IsMalicious(db, id)
-	if err != nil {
-		return false, err
-	}
-	if !bad {
-		db.malfeasanceCache.Add(id, nil)
-	}
-	return bad, nil
-}
-
 // GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
 func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
 	if id == types.EmptyNodeID {
@@ -214,6 +188,11 @@ func (db *CachedDB) GetAtx(id types.ATXID) (*types.ActivationTx, error) {
 
 	db.atxCache.Add(id, atx)
 	return atx, nil
+}
+
+// Previous retrieves the list of previous ATXs for the given ATX ID.
+func (db *CachedDB) Previous(id types.ATXID) ([]types.ATXID, error) {
+	return atxs.Previous(db, id)
 }
 
 func (db *CachedDB) IterateMalfeasanceProofs(

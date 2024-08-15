@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime/pprof"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,13 +15,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -120,7 +122,7 @@ type node struct {
 	proposals  *store.Store
 
 	ctrl       *gomock.Controller
-	mpublisher *pmocks.MockPublishSubsciber
+	mpublisher *pmocks.MockPublishSubscriber
 	msyncer    *smocks.MockSyncStateProvider
 	patrol     *layerpatrol.LayerPatrol
 	tracer     *testTracer
@@ -146,8 +148,8 @@ func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 	return n
 }
 
-func (n *node) withDb() *node {
-	n.db = statesql.InMemory()
+func (n *node) withDb(tb testing.TB) *node {
+	n.db = statesql.InMemoryTest(tb)
 	n.atxsdata = atxsdata.New()
 	n.proposals = store.New()
 	return n
@@ -164,6 +166,7 @@ func (n *node) withAtx(min, max int) *node {
 	} else {
 		atx.NumUnits = uint32(min)
 	}
+	atx.Weight = uint64(atx.NumUnits) * atx.TickCount
 	id := types.ATXID{}
 	n.t.rng.Read(id[:])
 	atx.SetID(id)
@@ -201,13 +204,13 @@ func (n *node) withOracle() *node {
 }
 
 func (n *node) withPublisher() *node {
-	n.mpublisher = pmocks.NewMockPublishSubsciber(n.ctrl)
+	n.mpublisher = pmocks.NewMockPublishSubscriber(n.ctrl)
 	n.mpublisher.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	return n
 }
 
 func (n *node) withHare() *node {
-	logger := logtest.New(n.t).Named(fmt.Sprintf("hare=%d", n.i))
+	logger := zaptest.NewLogger(n.t).Named(fmt.Sprintf("hare=%d", n.i))
 
 	n.nclock = &testNodeClock{
 		genesis:       n.t.start,
@@ -227,8 +230,8 @@ func (n *node) withHare() *node {
 		n.msyncer,
 		n.patrol,
 		WithConfig(n.t.cfg),
-		WithLogger(logger.Zap()),
-		WithWallclock(n.clock),
+		WithLogger(logger),
+		WithWallClock(n.clock),
 		WithTracer(tracer),
 	)
 	n.register(n.signer)
@@ -249,7 +252,7 @@ func (n *node) register(signer *signing.EdSigner) {
 }
 
 func (n *node) storeAtx(atx *types.ActivationTx) error {
-	if err := atxs.Add(n.db, atx); err != nil {
+	if err := atxs.Add(n.db, atx, types.AtxBlob{}); err != nil {
 		return err
 	}
 	n.atxsdata.AddFromAtx(atx, false)
@@ -339,7 +342,7 @@ func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 	for i := last; i < last+n; i++ {
 		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withSigner().withAtx(cl.units.min, cl.units.max).
+			withClock().withDb(cl.t).withSigner().withAtx(cl.units.min, cl.units.max).
 			withOracle().withHare())
 	}
 	return cl
@@ -350,7 +353,7 @@ func (cl *lockstepCluster) addInactive(n int) *lockstepCluster {
 	for i := last; i < last+n; i++ {
 		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withSigner().
+			withClock().withDb(cl.t).withSigner().
 			withOracle().withHare())
 	}
 	return cl
@@ -363,7 +366,7 @@ func (cl *lockstepCluster) addEquivocators(n int) *lockstepCluster {
 		cl.addNode((&node{t: cl.t, i: i}).
 			reuseSigner(cl.nodes[i-last].signer).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withAtx(cl.units.min, cl.units.max).
+			withClock().withDb(cl.t).withAtx(cl.units.min, cl.units.max).
 			withOracle().withHare())
 	}
 	return cl
@@ -505,37 +508,38 @@ type testTracer struct {
 	sent        chan *Message
 }
 
-func (t *testTracer) waitStopped() types.LayerID {
-	wait := 10 * time.Second
+func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
+	var value T
 	select {
-	case <-time.After(wait):
-		require.FailNow(t, "didn't stop", "wait %v", wait)
-	case lid := <-t.stopped:
-		return lid
+	case <-time.After(timeout):
+		builder := strings.Builder{}
+		pprof.Lookup("goroutine").WriteTo(&builder, 2)
+		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+	case value = <-ch:
 	}
-	return 0
+	return value
+}
+
+func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
+	select {
+	case <-time.After(timeout):
+		builder := strings.Builder{}
+		pprof.Lookup("goroutine").WriteTo(&builder, 2)
+		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+	case ch <- value:
+	}
+}
+
+func (t *testTracer) waitStopped() types.LayerID {
+	return waitForChan(t.TB, t.stopped, 10*time.Second, "didn't stop")
 }
 
 func (t *testTracer) waitEligibility() []*types.HareEligibility {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "no eligibility", "wait %v", wait)
-	case el := <-t.eligibility:
-		return el
-	}
-	return nil
+	return waitForChan(t.TB, t.eligibility, 10*time.Second, "no eligibility")
 }
 
 func (t *testTracer) waitSent() *Message {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "no message", "wait %v", wait)
-	case m := <-t.sent:
-		return m
-	}
-	return nil
+	return waitForChan(t.TB, t.sent, 10*time.Second, "no message")
 }
 
 func (*testTracer) OnStart(types.LayerID) {}
@@ -548,21 +552,11 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "eligibility can't be sent", "wait %v", wait)
-	case t.eligibility <- el:
-	}
+	sendWithTimeout(t.TB, el, t.eligibility, 10*time.Second, "eligibility can't be sent")
 }
 
 func (t *testTracer) OnMessageSent(m *Message) {
-	wait := 10 * time.Second
-	select {
-	case <-time.After(wait):
-		require.FailNow(t, "message can't be sent", "wait %v", wait)
-	case t.sent <- m:
-	}
+	sendWithTimeout(t.TB, m, t.sent, 10*time.Second, "message can't be sent")
 }
 
 func (*testTracer) OnMessageReceived(*Message) {}
@@ -911,10 +905,10 @@ func TestProposals(t *testing.T) {
 				nil,
 				nil,
 				layerpatrol.New(),
-				WithLogger(logtest.New(t).Zap()),
+				WithLogger(zaptest.NewLogger(t)),
 			)
 			for _, atx := range tc.atxs {
-				require.NoError(t, atxs.Add(db, &atx))
+				require.NoError(t, atxs.Add(db, &atx, types.AtxBlob{}))
 				atxsdata.AddFromAtx(&atx, false)
 			}
 			for _, proposal := range tc.proposals {
@@ -951,4 +945,28 @@ func TestHare_AddProposal(t *testing.T) {
 
 	require.True(t, hare.IsKnown(p.Layer, p.ID()))
 	require.ErrorIs(t, hare.OnProposal(p), store.ErrProposalExists)
+}
+
+func TestHareConfig_CommitteeUpgrade(t *testing.T) {
+	t.Parallel()
+	t.Run("no upgrade", func(t *testing.T) {
+		cfg := Config{
+			Committee: 400,
+		}
+		require.Equal(t, cfg.Committee, cfg.CommitteeFor(0))
+		require.Equal(t, cfg.Committee, cfg.CommitteeFor(100))
+	})
+	t.Run("upgrade", func(t *testing.T) {
+		cfg := Config{
+			Committee: 400,
+			CommitteeUpgrade: &CommitteeUpgrade{
+				Layer: 16,
+				Size:  50,
+			},
+		}
+		require.EqualValues(t, cfg.Committee, cfg.CommitteeFor(0))
+		require.EqualValues(t, cfg.Committee, cfg.CommitteeFor(15))
+		require.EqualValues(t, 50, cfg.CommitteeFor(16))
+		require.EqualValues(t, 50, cfg.CommitteeFor(100))
+	})
 }
