@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
-	localmigrations "github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
+	localmigrations "github.com/spacemeshos/go-spacemesh/sql/localsql/migrations"
 	statemigrations "github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
 )
 
