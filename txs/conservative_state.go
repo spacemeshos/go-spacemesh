@@ -128,17 +128,12 @@ func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transacti
 			zap.Stringer("tx_id", tx.ID),
 			zap.Error(err),
 		)
-	} else {
-		cs.logger.Debug("reported tx: %v", zap.Inline(tx))
 	}
-
 	if err := events.ReportAccountUpdate(tx.Principal); err != nil {
 		cs.logger.Error("Failed to emit account update",
 			zap.String("account", tx.Principal.String()),
 			zap.Error(err),
 		)
-	} else {
-		cs.logger.Debug("reported account update", zap.Stringer("address", tx.Principal))
 	}
 	return nil
 }

@@ -170,8 +170,6 @@ func (msh *Mesh) setLatestLayer(lid types.LayerID) {
 		Status:  events.LayerStatusTypeUnknown,
 	}); err != nil {
 		msh.logger.Error("Failed to emit updated layer", zap.Uint32("lid", lid.Uint32()), zap.Error(err))
-	} else {
-		msh.logger.Debug("reported new or updated layer", zap.Uint32("lid", lid.Uint32()))
 	}
 	for {
 		current := msh.LatestLayer()
@@ -181,8 +179,6 @@ func (msh *Mesh) setLatestLayer(lid types.LayerID) {
 		if msh.latestLayer.CompareAndSwap(current, lid) {
 			if err := events.ReportNodeStatusUpdate(); err != nil {
 				msh.logger.Error("Failed to emit status update", zap.Error(err))
-			} else {
-				msh.logger.Debug("reported status update")
 			}
 		}
 	}
@@ -252,8 +248,6 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 	msh.processedLayer.Store(processed)
 	if err := events.ReportNodeStatusUpdate(); err != nil {
 		msh.logger.Error("Failed to emit status update", zap.Error(err))
-	} else {
-		msh.logger.Debug("reported status update")
 	}
 	return nil
 }
@@ -421,8 +415,6 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 					zap.Uint32("lid", layer.Layer.Uint32()),
 					zap.Error(err),
 				)
-			} else {
-				msh.logger.Debug("reported new or updated layer", zap.Uint32("lid", layer.Layer.Uint32()))
 			}
 		}
 		if layer.Layer > msh.LatestLayerInState() {
@@ -507,8 +499,6 @@ func (msh *Mesh) ProcessLayerPerHareOutput(
 		Status:  events.LayerStatusTypeApproved,
 	}); err != nil {
 		msh.logger.Error("Failed to emit updated layer", zap.Uint32("lid", layerID.Uint32()), zap.Error(err))
-	} else {
-		msh.logger.Debug("reported new or updated layer", zap.Uint32("lid", layerID.Uint32()))
 	}
 	if err := msh.saveHareOutput(ctx, layerID, blockID); err != nil {
 		return err

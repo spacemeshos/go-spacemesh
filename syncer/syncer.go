@@ -322,8 +322,6 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 			zap.Stringer("processed", s.mesh.ProcessedLayer()))
 		if err := events.ReportNodeStatusUpdate(); err != nil {
 			s.logger.Error("Failed to emit status update", zap.Error(err))
-		} else {
-			s.logger.Debug("reported status update")
 		}
 	}
 	switch newState {

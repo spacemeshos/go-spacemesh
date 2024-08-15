@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-scale"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
@@ -129,15 +128,6 @@ type Reward struct {
 	LayerReward uint64
 	Coinbase    Address
 	SmesherID   NodeID
-}
-
-func (r Reward) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddUint32("layer", r.Layer.Uint32())
-	enc.AddUint64("total_reward", r.TotalReward)
-	enc.AddUint64("layer_reward", r.LayerReward)
-	enc.AddString("coinbase", r.Coinbase.String())
-	enc.AddString("smesher_id", r.SmesherID.String())
-	return nil
 }
 
 // NewRawTx computes id from raw bytes and returns the object.

@@ -264,16 +264,12 @@ func (v *VM) Apply(
 				zap.String("account", account.Address.String()),
 				zap.Error(err),
 			)
-		} else {
-			v.logger.Debug("reported account update", zap.Stringer("address", account.Address))
 		}
 		return true
 	})
 	for _, reward := range rewardsResult {
 		if err := events.ReportRewardReceived(reward); err != nil {
 			v.logger.Error("Failed to emit rewards", zap.Uint32("lid", reward.Layer.Uint32()), zap.Error(err))
-		} else {
-			v.logger.Debug("reported reward: %v", zap.Inline(reward))
 		}
 	}
 	hash.PutHasher(hasher)

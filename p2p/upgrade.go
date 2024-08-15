@@ -224,15 +224,11 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 			ConnectedF: func(network.Network, network.Conn) {
 				if err := fh.nodeReporter(); err != nil {
 					fh.logger.Error("Failed to emit status update", zap.Error(err))
-				} else {
-					fh.logger.Debug("reported status update")
 				}
 			},
 			DisconnectedF: func(network.Network, network.Conn) {
 				if err := fh.nodeReporter(); err != nil {
 					fh.logger.Error("Failed to emit status update", zap.Error(err))
-				} else {
-					fh.logger.Debug("reported status update")
 				}
 			},
 		})
