@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
@@ -30,7 +31,7 @@ Example:
 	if len(dbpath) == 0 {
 		must(errors.New("dbpath is empty"), "dbpath is empty\n")
 	}
-	db, err := statesql.Open("file:" + dbpath)
+	db, err := statesql.Open("file:"+dbpath, sql.WithMigrationsDisabled())
 	must(err, "can't open db at dbpath=%v. err=%s\n", dbpath, err)
 
 	ids, err := atxs.GetIDsByEpoch(context.Background(), db, types.EpochID(publish))

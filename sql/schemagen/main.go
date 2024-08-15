@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	localmigrations "github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
+	statemigrations "github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
 )
 
 var (
@@ -32,9 +32,9 @@ func main() {
 	logger := zap.New(core).With(zap.String("dbType", *dbType))
 	switch *dbType {
 	case "state":
-		schema, err = statesql.Schema()
+		schema, err = statemigrations.SchemaWithInCodeMigrations()
 	case "local":
-		schema, err = localsql.Schema()
+		schema, err = localmigrations.SchemaWithInCodeMigrations()
 	default:
 		logger.Fatal("unknown database type, must be state or local")
 	}

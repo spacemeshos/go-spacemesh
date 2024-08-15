@@ -1,4 +1,4 @@
-package statesql
+package migrations
 
 import (
 	"slices"
@@ -13,15 +13,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func Test0021Migration(t *testing.T) {
-	schema, err := Schema()
+	schema, err := statesql.Schema()
 	require.NoError(t, err)
 	schema.Migrations = slices.DeleteFunc(schema.Migrations, func(m sql.Migration) bool {
-		if m.Order() != 21 {
-			t.Logf("QQQQQ: include migration %d -- %s", m.Order(), m.Name())
-		}
 		return m.Order() == 21
 	})
 

@@ -25,12 +25,14 @@ var _ sql.StateDatabase = &database{}
 func (db *database) IsStateDatabase() {}
 
 // Schema returns the schema for the state database.
-func Schema() (*sql.Schema, error) {
+func Schema(inCodeMigrations ...sql.Migration) (*sql.Schema, error) {
 	sqlMigrations, err := sql.LoadSQLMigrations(migrations)
 	if err != nil {
 		return nil, err
 	}
-	sqlMigrations = sqlMigrations.AddMigration(New0021Migration(1_000_000))
+	for _, m := range inCodeMigrations {
+		sqlMigrations = sqlMigrations.AddMigration(m)
+	}
 	// NOTE: coded state migrations can be added here
 	// They can be a part of this localsql package
 	return &sql.Schema{

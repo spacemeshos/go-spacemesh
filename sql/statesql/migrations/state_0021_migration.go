@@ -1,4 +1,4 @@
-package statesql
+package migrations
 
 import (
 	"errors"

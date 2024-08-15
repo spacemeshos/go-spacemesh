@@ -42,6 +42,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 
 		dstDB, err = localsql.Open("file:"+filepath.Join(to, localDbFile),
 			sql.WithLogger(dbLog),
+			sql.WithMigrationsDisabled(),
 		)
 		if err != nil {
 			return err

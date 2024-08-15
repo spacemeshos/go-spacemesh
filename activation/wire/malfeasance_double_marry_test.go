@@ -1,7 +1,3 @@
-//go:build exclude
-
-// FIXME: tmp circular dep fix
-
 package wire
 
 import (

@@ -37,8 +37,8 @@ func TestIdempotentMigration(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	// "running migrations" + "applying migration 21" + "processed ATXs"
-	require.Equal(t, 3, observedLogs.Len(), "expected count of log messages")
+	// "running migrations"
+	require.Equal(t, 1, observedLogs.Len(), "expected count of log messages")
 	l := observedLogs.All()[0]
 	require.Equal(t, "running migrations", l.Message)
 	require.Equal(t, int64(0), l.ContextMap()["current version"])
@@ -70,5 +70,5 @@ func TestIdempotentMigration(t *testing.T) {
 
 	require.NoError(t, db.Close())
 	// make sure there's no schema drift warnings in the logs
-	require.Equal(t, 3, observedLogs.Len(), "expected 1 log message")
+	require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
 }

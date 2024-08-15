@@ -23,7 +23,7 @@ func newCacheDB(logger *zap.Logger, conf config) *datastore.CachedDB {
 	if len(conf.Path) == 0 {
 		db = statesql.InMemory()
 	} else {
-		db, err = statesql.Open(filepath.Join(conf.Path, atxpath))
+		db, err = statesql.Open(filepath.Join(conf.Path, atxpath), sql.WithMigrationsDisabled())
 		if err != nil {
 			panic(err)
 		}
