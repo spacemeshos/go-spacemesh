@@ -276,22 +276,18 @@ func openDB(config *conf) (*sqliteDatabase, error) {
 		// fail, so we make it faster by disabling journaling and synchronous
 		// writes.
 		if _, err := db.Exec("PRAGMA journal_mode=OFF", nil, nil); err != nil {
-			return nil, errors.Join(
-				fmt.Errorf("PRAGMA journal_mode=OFF: %w", err),
-				db.Close())
+			db.Close()
+			return nil, fmt.Errorf("PRAGMA journal_mode=OFF: %w", err)
 		}
 		if _, err := db.Exec("PRAGMA synchronous=OFF", nil, nil); err != nil {
-			return nil, errors.Join(
-				fmt.Errorf("PRAGMA journal_mode=OFF: %w", err),
-				db.Close())
+			db.Close()
+			return nil, fmt.Errorf("PRAGMA journal_mode=OFF: %w", err)
 		}
 	}
 
 	if freshDB && !config.forceMigrations {
 		if err := config.schema.Apply(db); err != nil {
-			return nil, errors.Join(
-				fmt.Errorf("error running schema script: %w", err),
-				db.Close())
+			return nil, fmt.Errorf("error running schema script: %w", err)
 		}
 	} else if db, err = ensureDBSchemaUpToDate(logger, db, config); err != nil {
 		// ensureDBSchemaUpToDate may replace the original database and open the new one,
@@ -299,7 +295,7 @@ func openDB(config *conf) (*sqliteDatabase, error) {
 		// If there are migrations to be done in place without vacuuming,
 		// the original db is returned and we must close it if there's an error.
 		if db != nil {
-			err = errors.Join(err, db.Close())
+			db.Close()
 		}
 		return nil, err
 	}
@@ -307,9 +303,8 @@ func openDB(config *conf) (*sqliteDatabase, error) {
 	if !config.ignoreSchemaDrift {
 		loaded, err := LoadDBSchemaScript(db)
 		if err != nil {
-			return nil, errors.Join(
-				fmt.Errorf("error loading database schema: %w", err),
-				db.Close())
+			db.Close()
+			return nil, fmt.Errorf("error loading database schema: %w", err)
 		}
 		diff := config.schema.Diff(loaded)
 		switch {
@@ -320,9 +315,8 @@ func openDB(config *conf) (*sqliteDatabase, error) {
 				zap.String("diff", diff),
 			)
 		default:
-			return nil, errors.Join(
-				fmt.Errorf("schema drift detected (uri %s):\n%s", config.uri, diff),
-				db.Close())
+			db.Close()
+			return nil, fmt.Errorf("schema drift detected (uri %s):\n%s", config.uri, diff)
 		}
 	}
 
@@ -338,7 +332,7 @@ func ensureDBSchemaUpToDate(logger *zap.Logger, db *sqliteDatabase, config *conf
 	before, after, err := config.schema.CheckDBVersion(logger, db)
 	switch {
 	case err != nil:
-		return db, err
+		return db, fmt.Errorf("check db version: %w", err)
 	case before == after:
 		return db, nil
 	case before > after:
@@ -392,7 +386,14 @@ func Version(uri string) (int, error) {
 	}
 	db := &sqliteDatabase{pool: pool}
 	v, err := version(db)
-	return v, errors.Join(err, db.Close())
+	if err != nil {
+		db.Close()
+		return 0, err
+	}
+	if err := db.Close(); err != nil {
+		return 0, fmt.Errorf("close db %s: %w", uri, err)
+	}
+	return v, nil
 }
 
 // deleteDB deletes the database at the specified path by removing /path/to/DB* files.
@@ -436,7 +437,8 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 		return err
 	}
 	if err := db.vacuumInto(toPath); err != nil {
-		return errors.Join(err, db.Close())
+		db.Close()
+		return err
 	}
 	// Open the freshly vacuumed DB to avoid race condition when another process
 	// also tries to vacuum the temporary DB into the original path after
@@ -450,16 +452,16 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 	if err != nil {
 		return fmt.Errorf("open vacuumed DB %s: %w", toPath, err)
 	}
-	defer func() {
-		if closeErr := origDB.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close DB %s after migration: %w", toPath, closeErr))
-		}
-	}()
 	if err := db.Close(); err != nil {
+		origDB.Close()
 		return fmt.Errorf("close temporary DB %s: %w", fromPath, err)
 	}
 	if err := deleteDB(fromPath); err != nil {
+		origDB.Close()
 		return err
+	}
+	if err := origDB.Close(); err != nil {
+		return fmt.Errorf("close DB %s after migration: %w", toPath, err)
 	}
 	return nil
 }
@@ -589,7 +591,9 @@ func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func
 		return err
 	}
 	defer func() {
-		err = errors.Join(err, tx.Release())
+		if rErr := tx.Release(); err != nil {
+			err = errors.Join(err, fmt.Errorf("release tx: %w", rErr))
+		}
 	}()
 	if err := exec(tx); err != nil {
 		tx.queryCache.ClearCache()
@@ -724,9 +728,7 @@ func (db *sqliteDatabase) vacuumInto(toPath string) error {
 // The source database is always closed by this function.
 // Upon success, the migrated database is opened.
 func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, err error) {
-	defer func() {
-		err = errors.Join(err, db.Close())
-	}()
+	defer db.Close()
 
 	dbPath, migratedPath, err := dbMigrationPaths(config.uri)
 	if err != nil {
@@ -791,8 +793,9 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		return nil, fmt.Errorf("create marker file %s_done: %w", migratedPath, err)
 	} else {
 		if err := f.Sync(); err != nil {
-			return nil, fmt.Errorf("sync/close marker file %s_done: %w", migratedPath,
-				errors.Join(err, f.Close()))
+			f.Close()
+			os.Remove(markerPath)
+			return nil, fmt.Errorf("sync/close marker file %s_done: %w", migratedPath, err)
 		}
 		if err := f.Close(); err != nil {
 			return nil, fmt.Errorf("close marker file %s: %w", markerPath, err)
@@ -843,7 +846,12 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		return nil, err
 	}
 
-	return finalDB, err
+	if err := db.Close(); err != nil {
+		finalDB.Close()
+		return nil, fmt.Errorf("close original DB %s: %w", dbPath, err)
+	}
+
+	return finalDB, nil
 }
 
 // QueryCount returns the number of queries executed, including failed
@@ -865,9 +873,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (nR
 	if encoder != nil {
 		encoder(stmt)
 	}
-	defer func() {
-		err = errors.Join(err, stmt.ClearBindings())
-	}()
+	defer stmt.ClearBindings()
 
 	rows := 0
 	for {
