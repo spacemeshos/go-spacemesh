@@ -7,10 +7,10 @@ import (
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -133,11 +133,11 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		tctx.Log.Debugw("client states",
 			"layer", layer,
 			"num_states", len(hashes[layer]),
-			"states", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+			"states", zapcore.ObjectMarshalerFunc(func(encoder zapcore.ObjectEncoder) error {
 				for hash, clients := range hashes[layer] {
 					encoder.AddString("hash", hash.ShortString())
 					encoder.AddInt("num_clients", len(clients))
-					encoder.AddArray("clients", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+					encoder.AddArray("clients", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 						for _, c := range clients {
 							encoder.AppendString(c)
 						}

@@ -1,8 +1,6 @@
 package types
 
-import (
-	"github.com/spacemeshos/go-spacemesh/log"
-)
+import "go.uber.org/zap/zapcore"
 
 //go:generate scalegen
 
@@ -17,7 +15,7 @@ type Account struct {
 }
 
 // MarshalLogObject implements encoding for the account state.
-func (a *Account) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (a *Account) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("layer", a.Layer.String())
 	encoder.AddString("principal", a.Address.String())
 	encoder.AddUint64("next nonce", a.NextNonce)

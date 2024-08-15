@@ -1,6 +1,6 @@
 package types
 
-import "github.com/spacemeshos/go-spacemesh/log"
+import "go.uber.org/zap/zapcore"
 
 //go:generate scalegen
 
@@ -28,7 +28,7 @@ func (h *TxHeader) Spending() uint64 {
 }
 
 // MarshalLogObject implements encoding for the tx header.
-func (h *TxHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (h *TxHeader) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("principal", h.Principal.String())
 	encoder.AddUint64("nonce_counter", h.Nonce)
 	encoder.AddUint32("layer_min", h.LayerLimits.Min)
