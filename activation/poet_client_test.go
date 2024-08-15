@@ -83,6 +83,41 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func Test_HTTPPoetClient_SubmitTillCtxCanceled(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tries := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
+		tries += 1
+		if tries == 3 {
+			cancel()
+		}
+		http.Error(w, "some_error", http.StatusInternalServerError)
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	cfg := server.DefaultRoundConfig()
+	client, err := NewHTTPPoetClient(types.PoetServer{Address: ts.URL}, PoetConfig{
+		PhaseShift:        cfg.PhaseShift,
+		CycleGap:          cfg.CycleGap,
+		MaxRequestRetries: 1,
+	}, withCustomHttpClient(ts.Client()))
+	require.NoError(t, err)
+	_, err = client.Submit(
+		ctx,
+		time.Time{},
+		nil,
+		nil,
+		types.EmptyEdSignature,
+		types.NodeID{},
+		PoetAuth{},
+	)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 3, tries)
+}
+
 func Test_HTTPPoetClient_Address(t *testing.T) {
 	t.Run("with scheme", func(t *testing.T) {
 		t.Parallel()

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"sync"
@@ -69,10 +71,11 @@ type PoetClient interface {
 
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
-	id      []byte
-	baseURL *url.URL
-	client  *retryablehttp.Client
-	logger  *zap.Logger
+	id                    []byte
+	baseURL               *url.URL
+	client                *retryablehttp.Client
+	submitChallengeClient *retryablehttp.Client
+	logger                *zap.Logger
 }
 
 func checkRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
@@ -126,6 +129,13 @@ func WithLogger(logger *zap.Logger) PoetClientOpts {
 	}
 }
 
+func customLinearJitterBackoff(min, max time.Duration, _ int, _ *http.Response) time.Duration {
+	if max <= min {
+		return min
+	}
+	return min + rand.N(max-min)
+}
+
 // NewHTTPPoetClient returns new instance of HTTPPoetClient connecting to the specified url.
 func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClientOpts) (*HTTPPoetClient, error) {
 	client := &retryablehttp.Client{
@@ -134,6 +144,14 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 		RetryWaitMax: 2 * cfg.RequestRetryDelay,
 		Backoff:      retryablehttp.LinearJitterBackoff,
 		CheckRetry:   checkRetry,
+	}
+
+	submitChallengeClient := &retryablehttp.Client{
+		RetryMax:     math.MaxInt,
+		RetryWaitMin: cfg.RequestRetryDelay,
+		RetryWaitMax: 2 * cfg.RequestRetryDelay,
+		Backoff:      customLinearJitterBackoff,
+		CheckRetry:   retryablehttp.DefaultRetryPolicy,
 	}
 
 	baseURL, err := url.Parse(server.Address)
@@ -145,11 +163,13 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 	}
 
 	poetClient := &HTTPPoetClient{
-		id:      server.Pubkey.Bytes(),
-		baseURL: baseURL,
-		client:  client,
-		logger:  zap.NewNop(),
+		id:                    server.Pubkey.Bytes(),
+		baseURL:               baseURL,
+		client:                client,
+		submitChallengeClient: submitChallengeClient,
+		logger:                zap.NewNop(),
 	}
+
 	for _, opt := range opts {
 		opt(poetClient)
 	}
@@ -158,11 +178,11 @@ func NewHTTPPoetClient(server types.PoetServer, cfg PoetConfig, opts ...PoetClie
 		"created poet client",
 		zap.Stringer("url", baseURL),
 		zap.Binary("pubkey", server.Pubkey.Bytes()),
-		zap.Int("max retries", client.RetryMax),
+		zap.Int("default max retries", client.RetryMax),
+		zap.Int("submit challenge max retries", submitChallengeClient.RetryMax),
 		zap.Duration("min retry wait", client.RetryWaitMin),
 		zap.Duration("max retry wait", client.RetryWaitMax),
 	)
-
 	return poetClient, nil
 }
 
@@ -176,7 +196,7 @@ func (c *HTTPPoetClient) Address() string {
 
 func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) {
 	resBody := rpcapi.PowParamsResponse{}
-	if err := c.req(ctx, http.MethodGet, "/v1/pow_params", nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, "/v1/pow_params", nil, &resBody, c.client); err != nil {
 		return nil, fmt.Errorf("querying PoW params: %w", err)
 	}
 
@@ -228,7 +248,7 @@ func (c *HTTPPoetClient) Submit(
 	}
 
 	resBody := rpcapi.SubmitResponse{}
-	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody, c.submitChallengeClient); err != nil {
 		return nil, fmt.Errorf("submitting challenge: %w", err)
 	}
 	roundEnd := time.Time{}
@@ -241,7 +261,7 @@ func (c *HTTPPoetClient) Submit(
 
 func (c *HTTPPoetClient) Info(ctx context.Context) (*types.PoetInfo, error) {
 	resBody := rpcapi.InfoResponse{}
-	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, "/v1/info", nil, &resBody, c.client); err != nil {
 		return nil, fmt.Errorf("getting poet info: %w", err)
 	}
 
@@ -268,7 +288,7 @@ func (c *HTTPPoetClient) Info(ctx context.Context) (*types.PoetInfo, error) {
 // Proof implements PoetProvingServiceClient.
 func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.PoetProofMessage, []types.Hash32, error) {
 	resBody := rpcapi.ProofResponse{}
-	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody); err != nil {
+	if err := c.req(ctx, http.MethodGet, fmt.Sprintf("/v1/proofs/%s", roundID), nil, &resBody, c.client); err != nil {
 		return nil, nil, fmt.Errorf("getting proof: %w", err)
 	}
 
@@ -300,7 +320,12 @@ func (c *HTTPPoetClient) Proof(ctx context.Context, roundID string) (*types.Poet
 	return &proof, members, nil
 }
 
-func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, resBody proto.Message) error {
+func (c *HTTPPoetClient) req(
+	ctx context.Context,
+	method, path string,
+	reqBody, resBody proto.Message,
+	client *retryablehttp.Client,
+) error {
 	jsonReqBody, err := protojson.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("marshaling request body: %w", err)
@@ -312,7 +337,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	res, err := c.client.Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("doing request: %w", err)
 	}
@@ -343,7 +368,6 @@ func (c *HTTPPoetClient) req(ctx context.Context, method, path string, reqBody, 
 			return fmt.Errorf("decoding response body to proto: %w", err)
 		}
 	}
-
 	return nil
 }
 
@@ -371,9 +395,10 @@ func (c *cachedData[T]) get(init func() (T, error)) (T, error) {
 // poetService is a higher-level interface to communicate with a PoET service.
 // It wraps the HTTP client, adding additional functionality.
 type poetService struct {
-	db             poetDbAPI
-	logger         *zap.Logger
-	client         PoetClient
+	db     poetDbAPI
+	logger *zap.Logger
+	client PoetClient
+
 	requestTimeout time.Duration
 
 	// Used to avoid concurrent requests for proof.
@@ -567,9 +592,7 @@ func (c *poetService) Submit(
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	submitCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)
-	defer cancel()
-	round, err := c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
+	round, err := c.client.Submit(ctx, deadline, prefix, challenge, signature, nodeID, *auth)
 	switch {
 	case err == nil:
 		return round, nil
@@ -579,7 +602,7 @@ func (c *poetService) Submit(
 		if err != nil {
 			return nil, fmt.Errorf("authorizing: %w", err)
 		}
-		return c.client.Submit(submitCtx, deadline, prefix, challenge, signature, nodeID, *auth)
+		return c.client.Submit(ctx, deadline, prefix, challenge, signature, nodeID, *auth)
 	}
 	return nil, fmt.Errorf("submitting challenge: %w", err)
 }

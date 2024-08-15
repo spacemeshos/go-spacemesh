@@ -7,10 +7,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -107,24 +107,17 @@ func (p *Proposal) MustInitialize() {
 
 // SignedBytes returns the serialization of the InnerProposal.
 func (p *Proposal) SignedBytes() []byte {
-	data, err := codec.Encode(&BallotMetadata{
+	return codec.MustEncode(&BallotMetadata{
 		Layer:   p.Layer,
 		MsgHash: BytesToHash(p.HashInnerProposal()),
 	})
-	if err != nil {
-		log.With().Fatal("failed to serialize BallotMetadata for proposal", log.Err(err))
-	}
-	return data
 }
 
 // HashInnerProposal returns the hash of the InnerProposal.
 func (p *Proposal) HashInnerProposal() []byte {
 	h := hash.GetHasher()
 	defer hash.PutHasher(h)
-	_, err := codec.EncodeTo(h, &p.InnerProposal)
-	if err != nil {
-		log.With().Fatal("failed to encode InnerProposal for hashing", log.Err(err))
-	}
+	codec.MustEncodeTo(h, &p.InnerProposal)
 	return h.Sum(nil)
 }
 
@@ -147,7 +140,7 @@ func (p *Proposal) SetBeacon(beacon Beacon) {
 }
 
 // MarshalLogObject implements logging interface.
-func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (p *Proposal) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("proposal_id", p.ID().String())
 	encoder.AddInt("transactions", len(p.TxIDs))
 	encoder.AddString("mesh_hash", p.MeshHash.ShortString())

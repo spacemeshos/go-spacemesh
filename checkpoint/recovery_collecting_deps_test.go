@@ -8,7 +8,6 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -29,7 +28,10 @@ func TestCollectingDeps(t *testing.T) {
 			},
 			SmesherID: types.RandomNodeID(),
 		}
-		require.NoError(t, atxs.Add(db, fixture.ToAtx(t, marriageATX), marriageATX.Blob()))
+		atx := wire.ActivationTxFromWireV1(marriageATX)
+		atx.SetReceived(time.Now().Local())
+		atx.TickCount = 1
+		require.NoError(t, atxs.Add(db, atx, marriageATX.Blob()))
 		mAtxID := marriageATX.ID()
 
 		watx := &wire.ActivationTxV2{
@@ -37,7 +39,7 @@ func TestCollectingDeps(t *testing.T) {
 			SmesherID:      types.RandomNodeID(),
 			MarriageATX:    &mAtxID,
 		}
-		atx := &types.ActivationTx{
+		atx = &types.ActivationTx{
 			SmesherID: watx.SmesherID,
 		}
 		atx.SetID(watx.ID())

@@ -245,7 +245,8 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 }
 
 // PrevIDByNodeID returns the previous ATX ID for a given node ID and public epoch.
-// It returns the newest ATX ID that was published before the given public epoch.
+// It returns the newest ATX ID containing PoST of the given node ID
+// that was published before the given public epoch.
 func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
@@ -257,10 +258,10 @@ func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID
 	}
 
 	if rows, err := db.Exec(`
-		select id from atxs
-		where pubkey = ?1 and epoch < ?2
-		order by epoch desc
-		limit 1;`, enc, dec); err != nil {
+		SELECT posts.atxid FROM posts JOIN atxs ON posts.atxid = atxs.id
+		WHERE posts.pubkey = ?1 AND atxs.epoch < ?2
+		ORDER BY atxs.epoch DESC
+		LIMIT 1;`, enc, dec); err != nil {
 		return types.EmptyATXID, fmt.Errorf("exec nodeID %v, epoch %d: %w", nodeID, pubEpoch, err)
 	} else if rows == 0 {
 		return types.EmptyATXID, fmt.Errorf("exec nodeID %s, epoch %d: %w", nodeID, pubEpoch, sql.ErrNotFound)
@@ -861,46 +862,26 @@ func IterateAtxIdsWithMalfeasance(
 	return err
 }
 
-type PrevATXCollision struct {
-	NodeID1 types.NodeID
-	ATX1    types.ATXID
-
-	NodeID2 types.NodeID
-	ATX2    types.ATXID
-}
-
-func PrevATXCollisions(db sql.Executor) ([]PrevATXCollision, error) {
-	var result []PrevATXCollision
-
+func PrevATXCollision(db sql.Executor, prev types.ATXID, id types.NodeID) (types.ATXID, types.ATXID, error) {
+	var atxs []types.ATXID
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, prev[:])
+		stmt.BindBytes(2, id[:])
+	}
 	dec := func(stmt *sql.Statement) bool {
-		var nodeID1, nodeID2 types.NodeID
-		stmt.ColumnBytes(0, nodeID1[:])
-		stmt.ColumnBytes(1, nodeID2[:])
-
-		var id1, id2 types.ATXID
-		stmt.ColumnBytes(2, id1[:])
-		stmt.ColumnBytes(3, id2[:])
-
-		result = append(result, PrevATXCollision{
-			NodeID1: nodeID1,
-			ATX1:    id1,
-
-			NodeID2: nodeID2,
-			ATX2:    id2,
-		})
-		return true
+		var id types.ATXID
+		stmt.ColumnBytes(0, id[:])
+		atxs = append(atxs, id)
+		return len(atxs) < 2
 	}
-	// we are joining the table with itself to find ATXs with the same prevATX
-	// the WHERE clause ensures that we only get the pairs once
-	if _, err := db.Exec(`
-		SELECT p1.pubkey, p2.pubkey, p1.atxid, p2.atxid
-		FROM posts p1
-		INNER JOIN posts p2 ON p1.prev_atxid = p2.prev_atxid
-		WHERE p1.atxid < p2.atxid;`, nil, dec); err != nil {
-		return nil, fmt.Errorf("error getting ATXs with same prevATX: %w", err)
+	_, err := db.Exec("SELECT atxid FROM posts WHERE prev_atxid = ?1 AND pubkey = ?2;", enc, dec)
+	if err != nil {
+		return types.EmptyATXID, types.EmptyATXID, fmt.Errorf("error getting ATXs with same prevATX: %w", err)
 	}
-
-	return result, nil
+	if len(atxs) != 2 {
+		return types.EmptyATXID, types.EmptyATXID, sql.ErrNotFound
+	}
+	return atxs[0], atxs[1], nil
 }
 
 func Units(db sql.Executor, atxID types.ATXID, nodeID types.NodeID) (uint32, error) {
