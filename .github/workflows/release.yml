@@ -99,7 +99,7 @@ jobs:
           aws s3 sync build-zip
           s3://${{ secrets.CLOUDFLARE_GO_SM_BUILDS_BUCKET }}/${{ github.ref_name }}
           --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          --acl public-read --follow-symlinks --delete
+          --acl public-read --follow-symlinks
         env:
             AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
             AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
@@ -173,7 +173,7 @@ jobs:
           aws s3 sync sha256sum
           s3://${{ secrets.CLOUDFLARE_GO_SM_BUILDS_BUCKET }}/${{ github.ref_name }}
           --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          --acl public-read --follow-symlinks --delete
+          --acl public-read --follow-symlinks
         env:
             AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
             AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
