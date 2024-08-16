@@ -591,7 +591,7 @@ func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func
 		return err
 	}
 	defer func() {
-		if rErr := tx.Release(); err != nil {
+		if rErr := tx.Release(); rErr != nil {
 			err = errors.Join(err, fmt.Errorf("release tx: %w", rErr))
 		}
 	}()
