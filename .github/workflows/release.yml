@@ -23,8 +23,8 @@ jobs:
           - os: windows-2022
             outname_sufix: "win-amd64"
     permissions:
-      contents: read
-      id-token: write
+      contents: 'read'
+      id-token: 'write'
 
     steps:
       - shell: bash
@@ -119,8 +119,8 @@ jobs:
     runs-on: ubuntu-22.04
     needs: build-and-upload
     permissions:
-      contents: read
-      id-token: write
+      contents: 'read'
+      id-token: 'write'
     steps:
       - name: Download the artifacts
         uses: actions/download-artifact@v4
