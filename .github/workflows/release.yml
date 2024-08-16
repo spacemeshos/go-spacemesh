@@ -153,7 +153,7 @@ jobs:
       - name: Setup gcloud authentication
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
@@ -169,16 +169,15 @@ jobs:
           mkdir sha256sum
           cp sha256sum.yaml sha256sum
       - name: Upload sha256sums to R2
-        uses: jakejarvis/s3-sync-action@master
-        with:
-          args: --acl public-read --follow-symlinks
+        run: >
+          aws s3 sync sha256sum
+          s3://${{ secrets.CLOUDFLARE_GO_SM_BUILDS_BUCKET }}/${{ github.ref_name }}
+          --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          --acl public-read --follow-symlinks --delete
         env:
-            AWS_S3_BUCKET: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_BUCKET }}
             AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
             AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
-            SOURCE_DIR: sha256sum
-            DEST_DIR: '${{ github.ref_name }}'
-            AWS_S3_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+            AWS_REGION: us-east-1
       - name: Create Release
         uses: softprops/action-gh-release@v2
         id: create_release
