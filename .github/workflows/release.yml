@@ -95,16 +95,15 @@ jobs:
           mkdir build-zip
           cp ${{ env.OUTNAME }}.zip build-zip
       - name: Upload zip to R2
-        uses: jakejarvis/s3-sync-action@master
-        with:
-          args: --acl public-read --follow-symlinks
+        run: >
+          aws s3 sync build-zip
+          s3://${{ secrets.CLOUDFLARE_GO_SM_BUILDS_BUCKET }}/${{ github.ref_name }}
+          --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          --acl public-read --follow-symlinks --delete
         env:
-            AWS_S3_BUCKET: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_BUCKET }}
             AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
             AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
-            SOURCE_DIR: build-zip
-            DEST_DIR: '${{ github.ref_name }}'
-            AWS_S3_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+            AWS_REGION: us-east-1
       - name: Install coreutils
         if: ${{ matrix.os == 'macos-13' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
         run: brew install coreutils
