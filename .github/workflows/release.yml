@@ -23,8 +23,8 @@ jobs:
           - os: windows-2022
             outname_sufix: "win-amd64"
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: read
+      id-token: write
 
     steps:
       - shell: bash
@@ -81,7 +81,7 @@ jobs:
           rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
       - name: Setup gcloud authentication
-        uses: 'google-github-actions/auth@v1'
+        uses: google-github-actions/auth@v2
         with:
           project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
@@ -119,8 +119,8 @@ jobs:
     runs-on: ubuntu-22.04
     needs: build-and-upload
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: read
+      id-token: write
     steps:
       - name: Download the artifacts
         uses: actions/download-artifact@v4
@@ -146,7 +146,7 @@ jobs:
           echo "mac-arm64: $(cat sha256-mac-arm64/sha256-mac-arm64.txt)" >> sha256sum.yaml
 
       - name: Setup gcloud authentication
-        uses: 'google-github-actions/auth@v1'
+        uses: google-github-actions/auth@v2
         with:
           project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
