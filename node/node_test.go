@@ -1055,8 +1055,8 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	logger := logtest.New(t)
-	app := New(WithConfig(&cfg), WithLog(logger))
+	logger := zaptest.NewLogger(t)
+	app := New(WithConfig(&cfg), WithLog(log.NewFromLog(logger)))
 
 	dir := filepath.Join(app.Config.DataDir(), keyDir)
 	require.NoError(t, os.MkdirAll(dir, 0o700))
@@ -1097,7 +1097,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	for _, signer := range app.signers {
 		mgr, err := activation.NewPostSetupManager(
 			cfg.POST,
-			logger.Zap(),
+			logger,
 			app.db,
 			app.atxsdata,
 			types.ATXID(app.Config.Genesis.GoldenATX()),
@@ -1108,7 +1108,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 
 		cfg.SMESHING.Opts.DataDir = t.TempDir()
 		t.Cleanup(launchPostSupervisor(t,
-			logger.Zap(),
+			logger,
 			mgr,
 			signer,
 			"127.0.0.1:10094",

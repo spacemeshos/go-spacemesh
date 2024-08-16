@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -27,11 +26,6 @@ func (b Beacon) String() string { return hex.EncodeToString(b[:]) }
 // Bytes gets the byte representation of the underlying hash.
 func (b Beacon) Bytes() []byte {
 	return b[:]
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (b Beacon) Field() log.Field {
-	return log.Stringer("beacon", b)
 }
 
 func (b *Beacon) MarshalText() ([]byte, error) {
