@@ -60,8 +60,6 @@ type Field zap.Field
 // Field satisfies loggable field interface.
 func (f Field) Field() Field { return f }
 
-func (f Field) Zap() zap.Field { return zap.Field(f) }
-
 // FieldNamed returns a field with the provided name instead of the default.
 func FieldNamed(name string, field LoggableField) Field {
 	if field == nil || (reflect.ValueOf(field).Kind() == reflect.Ptr && reflect.ValueOf(field).IsNil()) {
@@ -72,7 +70,7 @@ func FieldNamed(name string, field LoggableField) Field {
 	return f
 }
 
-func (f Field) AddTo(enc ObjectEncoder) {
+func (f Field) AddTo(enc zapcore.ObjectEncoder) {
 	(zapcore.Field)(f).AddTo(enc)
 }
 
@@ -111,11 +109,6 @@ func ZShortStringer(name string, val ShortString) zap.Field {
 	return zap.Stringer(name, shortStringAdapter{val: val})
 }
 
-// Int returns an int Field.
-func Int(name string, val int) Field {
-	return Field(zap.Int(name, val))
-}
-
 // Uint16 returns an uint32 Field.
 func Uint16(name string, val uint16) Field {
 	return Field(zap.Uint16(name, val))
@@ -124,21 +117,6 @@ func Uint16(name string, val uint16) Field {
 // Uint32 returns an uint32 Field.
 func Uint32(name string, val uint32) Field {
 	return Field(zap.Uint32(name, val))
-}
-
-// Uint64 returns an uint64 Field.
-func Uint64(name string, val uint64) Field {
-	return Field(zap.Uint64(name, val))
-}
-
-// Float64 returns a float64 Field.
-func Float64(name string, val float64) Field {
-	return Field(zap.Float64(name, val))
-}
-
-// Bool returns a bool field.
-func Bool(name string, val bool) Field {
-	return Field(zap.Bool(name, val))
 }
 
 // Time returns a field for time.Time struct value.
@@ -153,31 +131,21 @@ func Duration(name string, val time.Duration) Field {
 
 // Err returns an error field.
 func Err(err error) Field {
-	var loggable ObjectMarshaller
+	var loggable zapcore.ObjectMarshaler
 	if errors.As(err, &loggable) {
 		return Field(zap.Inline(loggable))
 	}
 	return Field(zap.NamedError("errmsg", err))
 }
 
-// Object for logging struct fields in namespace.
-func Object(namespace string, object ObjectMarshaller) Field {
-	return Field(zap.Object(namespace, object))
-}
-
 // Inline for inline logging.
-func Inline(object ObjectMarshaller) Field {
+func Inline(object zapcore.ObjectMarshaler) Field {
 	return Field(zap.Inline(object))
 }
 
 // Array for logging array efficiently.
-func Array(name string, array ArrayMarshaler) Field {
+func Array(name string, array zapcore.ArrayMarshaler) Field {
 	return Field(zap.Array(name, array))
-}
-
-// Context inlines requestId and sessionId fields if they are present.
-func Context(ctx context.Context) Field {
-	return Field(zap.Inline(&marshalledContext{Context: ctx}))
 }
 
 func ZContext(ctx context.Context) zap.Field {
@@ -185,7 +153,7 @@ func ZContext(ctx context.Context) zap.Field {
 }
 
 func NiceZapError(err error) zap.Field {
-	var loggable ObjectMarshaller
+	var loggable zapcore.ObjectMarshaler
 	if errors.As(err, &loggable) {
 		return zap.Inline(loggable)
 	}
@@ -200,7 +168,7 @@ type marshalledContext struct {
 	context.Context
 }
 
-func (c *marshalledContext) MarshalLogObject(encoder ObjectEncoder) error {
+func (c *marshalledContext) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if c.Context != nil {
 		if ctxRequestID, ok := ExtractRequestID(c.Context); ok {
 			encoder.AddString("requestId", ctxRequestID)
@@ -250,11 +218,6 @@ func (l Log) SetLevel(level *zap.AtomicLevel) Log {
 // Check if following level is supported by the logger.
 func (l Log) Check(level zapcore.Level) bool {
 	return l.logger.Check(level, "") != nil
-}
-
-// Core returns logger engine.
-func (l Log) Core() zapcore.Core {
-	return l.logger.Core()
 }
 
 // WithName appends a name to a current name.
@@ -326,11 +289,6 @@ func (fl FieldLogger) Warning(msg string, fields ...LoggableField) {
 // Panic prints message with fields.
 func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
 	fl.l.Panic(msg, unpack(append(fields, String("name", fl.name)))...)
-}
-
-// Fatal prints message with fields.
-func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
-	fl.l.Fatal(msg, unpack(append(fields, String("name", fl.name)))...)
 }
 
 // DebugField is only added if debug level is enabled.

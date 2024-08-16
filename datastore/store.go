@@ -200,6 +200,11 @@ func (db *CachedDB) GetAtx(id types.ATXID) (*types.ActivationTx, error) {
 	return atx, nil
 }
 
+// Previous retrieves the list of previous ATXs for the given ATX ID.
+func (db *CachedDB) Previous(id types.ATXID) ([]types.ATXID, error) {
+	return atxs.Previous(db, id)
+}
+
 func (db *CachedDB) IterateMalfeasanceProofs(
 	iter func(types.NodeID, *wire.MalfeasanceProof) error,
 ) error {

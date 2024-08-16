@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -176,12 +177,24 @@ func WithQueryCacheSizes(sizes map[QueryCacheKind]int) Opt {
 type Opt func(c *conf)
 
 // InMemory database for testing.
+// Please use InMemoryTest for automatic closing of the returned db during `tb.Cleanup`.
 func InMemory(opts ...Opt) *Database {
 	opts = append(opts, WithConnections(1))
 	db, err := Open("file::memory:?mode=memory", opts...)
 	if err != nil {
 		panic(err)
 	}
+	return db
+}
+
+// InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
+func InMemoryTest(tb testing.TB, opts ...Opt) *Database {
+	opts = append(opts, WithConnections(1))
+	db, err := Open("file::memory:?mode=memory", opts...)
+	if err != nil {
+		panic(err)
+	}
+	tb.Cleanup(func() { db.Close() })
 	return db
 }
 

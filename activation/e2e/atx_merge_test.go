@@ -246,7 +246,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 
-	client := ae2e.NewTestPoetClient(2)
+	client := ae2e.NewTestPoetClient(2, poetCfg)
 	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 
 	clock, err := timesync.NewClock(
@@ -513,6 +513,9 @@ func Test_MarryAndMerge(t *testing.T) {
 		require.Equal(t, units[i], atxFromDb.NumUnits)
 		require.Equal(t, signer.NodeID(), atxFromDb.SmesherID)
 		require.Equal(t, publish, atxFromDb.PublishEpoch)
-		require.Equal(t, mergedATX2.ID(), atxFromDb.PrevATXID)
+		prev, err := atxs.Previous(db, atxFromDb.ID())
+		require.NoError(t, err)
+		require.Len(t, prev, 1)
+		require.Equal(t, mergedATX2.ID(), prev[0])
 	}
 }

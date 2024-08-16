@@ -3,12 +3,13 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"time"
 
 	poetShared "github.com/spacemeshos/poet/shared"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate scalegen -types PoetProof,PoetProofMessage
@@ -34,20 +35,20 @@ type PoetProof struct {
 	LeafCount uint64
 }
 
-func (p *PoetProof) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (p *PoetProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if p == nil {
 		return nil
 	}
 	encoder.AddUint64("LeafCount", p.LeafCount)
 
 	encoder.AddString("MerkleProof.Root", hex.EncodeToString(p.Root))
-	encoder.AddArray("MerkleProof.ProvenLeaves", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	encoder.AddArray("MerkleProof.ProvenLeaves", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 		for _, v := range p.ProvenLeaves {
 			encoder.AppendString(hex.EncodeToString(v))
 		}
 		return nil
 	}))
-	encoder.AddArray("MerkleProof.ProofNodes", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	encoder.AddArray("MerkleProof.ProofNodes", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 		for _, v := range p.ProofNodes {
 			encoder.AppendString(hex.EncodeToString(v))
 		}
@@ -69,7 +70,7 @@ type PoetProofMessage struct {
 	Signature EdSignature
 }
 
-func (p *PoetProofMessage) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (p *PoetProofMessage) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if p == nil {
 		return nil
 	}
@@ -96,4 +97,16 @@ func (p *PoetProof) Ref() (PoetProofRef, error) {
 type PoetRound struct {
 	ID  string `scale:"max=32"`
 	End time.Time
+}
+
+type PoetInfo struct {
+	ServicePubkey []byte
+	PhaseShift    time.Duration
+	CycleGap      time.Duration
+	Certifier     *CertifierInfo
+}
+
+type CertifierInfo struct {
+	Url    *url.URL
+	Pubkey []byte
 }

@@ -29,52 +29,57 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
+type activationTx struct {
+	*types.ActivationTx
+	previous types.ATXID
+}
+
 type miner struct {
-	atxs             []*types.ActivationTx
+	atxs             []activationTx
 	malfeasanceProof []byte
 }
 
 var allMiners = []miner{
 	// smesher 1 has 7 ATXs, one in each epoch from 1 to 7
 	{
-		atxs: []*types.ActivationTx{
-			newAtx(types.ATXID{17}, types.ATXID{16}, nil, 7, 6, 123, []byte("smesher1")),
-			newAtx(types.ATXID{16}, types.ATXID{15}, nil, 6, 5, 123, []byte("smesher1")),
-			newAtx(types.ATXID{15}, types.ATXID{14}, nil, 5, 4, 123, []byte("smesher1")),
-			newAtx(types.ATXID{14}, types.ATXID{13}, nil, 4, 3, 123, []byte("smesher1")),
-			newAtx(types.ATXID{13}, types.ATXID{12}, nil, 3, 2, 123, []byte("smesher1")),
-			newAtx(types.ATXID{12}, types.ATXID{11}, nil, 2, 1, 123, []byte("smesher1")),
-			newAtx(types.ATXID{11}, types.EmptyATXID, &types.ATXID{1}, 1, 0, 123, []byte("smesher1")),
+		atxs: []activationTx{
+			{newAtx(types.ATXID{17}, nil, 7, 6, 123, []byte("smesher1")), types.ATXID{16}},
+			{newAtx(types.ATXID{16}, nil, 6, 5, 123, []byte("smesher1")), types.ATXID{15}},
+			{newAtx(types.ATXID{15}, nil, 5, 4, 123, []byte("smesher1")), types.ATXID{14}},
+			{newAtx(types.ATXID{14}, nil, 4, 3, 123, []byte("smesher1")), types.ATXID{13}},
+			{newAtx(types.ATXID{13}, nil, 3, 2, 123, []byte("smesher1")), types.ATXID{12}},
+			{newAtx(types.ATXID{12}, nil, 2, 1, 123, []byte("smesher1")), types.ATXID{11}},
+			{newAtx(types.ATXID{11}, &types.ATXID{1}, 1, 0, 123, []byte("smesher1")), types.EmptyATXID},
 		},
 	},
 
 	// smesher 2 has 1 ATX in epoch 7
 	{
-		atxs: []*types.ActivationTx{
-			newAtx(types.ATXID{27}, types.EmptyATXID, &types.ATXID{2}, 7, 0, 152, []byte("smesher2")),
+		atxs: []activationTx{
+			{newAtx(types.ATXID{27}, &types.ATXID{2}, 7, 0, 152, []byte("smesher2")), types.EmptyATXID},
 		},
 	},
 
 	// smesher 3 has 1 ATX in epoch 2
 	{
-		atxs: []*types.ActivationTx{
-			newAtx(types.ATXID{32}, types.EmptyATXID, &types.ATXID{3}, 2, 0, 211, []byte("smesher3")),
+		atxs: []activationTx{
+			{newAtx(types.ATXID{32}, &types.ATXID{3}, 2, 0, 211, []byte("smesher3")), types.EmptyATXID},
 		},
 	},
 
 	// smesher 4 has 1 ATX in epoch 3 and one in epoch 7
 	{
-		atxs: []*types.ActivationTx{
-			newAtx(types.ATXID{47}, types.ATXID{43}, nil, 7, 1, 420, []byte("smesher4")),
-			newAtx(types.ATXID{43}, types.EmptyATXID, &types.ATXID{4}, 4, 0, 420, []byte("smesher4")),
+		atxs: []activationTx{
+			{newAtx(types.ATXID{47}, nil, 7, 1, 420, []byte("smesher4")), types.ATXID{43}},
+			{newAtx(types.ATXID{43}, &types.ATXID{4}, 4, 0, 420, []byte("smesher4")), types.EmptyATXID},
 		},
 	},
 
 	// smesher 5 is malicious and equivocated in epoch 7
 	{
-		atxs: []*types.ActivationTx{
-			newAtx(types.ATXID{83}, types.EmptyATXID, &types.ATXID{27}, 7, 0, 113, []byte("smesher5")),
-			newAtx(types.ATXID{97}, types.EmptyATXID, &types.ATXID{16}, 7, 0, 113, []byte("smesher5")),
+		atxs: []activationTx{
+			{newAtx(types.ATXID{83}, &types.ATXID{27}, 7, 0, 113, []byte("smesher5")), types.EmptyATXID},
+			{newAtx(types.ATXID{97}, &types.ATXID{16}, 7, 0, 113, []byte("smesher5")), types.EmptyATXID},
 		},
 		malfeasanceProof: []byte("im bad"),
 	},
@@ -181,7 +186,7 @@ func expectedCheckpoint(t testing.TB, snapshot types.LayerID, numAtxs int, miner
 		for i := 0; i < n; i++ {
 			atxData = append(
 				atxData,
-				asAtxSnapshot(atxs[i], atxs[len(atxs)-1].CommitmentATX),
+				asAtxSnapshot(atxs[i].ActivationTx, atxs[len(atxs)-1].CommitmentATX),
 			)
 		}
 	}
@@ -215,7 +220,7 @@ func expectedCheckpoint(t testing.TB, snapshot types.LayerID, numAtxs int, miner
 }
 
 func newAtx(
-	id, prevID types.ATXID,
+	id types.ATXID,
 	commitAtx *types.ATXID,
 	epoch uint32,
 	seq, vrfnonce uint64,
@@ -225,7 +230,6 @@ func newAtx(
 		PublishEpoch:  types.EpochID(epoch),
 		Sequence:      seq,
 		CommitmentATX: commitAtx,
-		PrevATXID:     prevID,
 		NumUnits:      2,
 		Coinbase:      types.Address{1, 2, 3},
 		TickCount:     1,
@@ -238,10 +242,15 @@ func newAtx(
 }
 
 func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
+	var marriageATX []byte
+	if v.MarriageATX != nil {
+		marriageATX = v.MarriageATX.Bytes()
+	}
 	return types.AtxSnapshot{
 		ID:             v.ID().Bytes(),
 		Epoch:          v.PublishEpoch.Uint32(),
 		CommitmentAtx:  cmt.Bytes(),
+		MarriageAtx:    marriageATX,
 		VrfNonce:       uint64(v.VRFNonce),
 		NumUnits:       v.NumUnits,
 		BaseTickHeight: v.BaseTickHeight,
@@ -257,8 +266,8 @@ func createMesh(t testing.TB, db *sql.Database, miners []miner, accts []*types.A
 	t.Helper()
 	for _, miner := range miners {
 		for _, atx := range miner.atxs {
-			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
-			require.NoError(t, atxs.SetUnits(db, atx.ID(), atx.SmesherID, atx.NumUnits))
+			require.NoError(t, atxs.Add(db, atx.ActivationTx, types.AtxBlob{}))
+			require.NoError(t, atxs.SetPost(db, atx.ID(), atx.previous, 0, atx.SmesherID, atx.NumUnits))
 		}
 		if proof := miner.malfeasanceProof; len(proof) > 0 {
 			require.NoError(t, identities.SetMalicious(db, miner.atxs[0].SmesherID, proof, time.Now()))
@@ -339,8 +348,8 @@ func TestRunner_Generate_Error(t *testing.T) {
 		db := sql.InMemory()
 		snapshot := types.LayerID(5)
 
-		atx := newAtx(types.ATXID{13}, types.EmptyATXID, nil, 2, 1, 11, types.RandomNodeID().Bytes())
-		createMesh(t, db, []miner{{atxs: []*types.ActivationTx{atx}}}, allAccounts)
+		atx := newAtx(types.ATXID{13}, nil, 2, 1, 11, types.RandomNodeID().Bytes())
+		createMesh(t, db, []miner{{atxs: []activationTx{{atx, types.EmptyATXID}}}}, allAccounts)
 
 		fs := afero.NewMemMapFs()
 		dir, err := afero.TempDir(fs, "", "Generate")
@@ -374,4 +383,36 @@ func TestRunner_Generate_Error(t *testing.T) {
 		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
 		require.Error(t, err)
 	})
+}
+
+func TestRunner_Generate_PreservesMarriageATX(t *testing.T) {
+	t.Parallel()
+	db := sql.InMemory()
+
+	require.NoError(t, accounts.Update(db, &types.Account{Address: types.Address{1, 1}}))
+
+	atx := &types.ActivationTx{
+		CommitmentATX: &types.ATXID{1, 2, 3, 4, 5},
+		MarriageATX:   &types.ATXID{6, 7, 8, 9},
+		SmesherID:     types.RandomNodeID(),
+		NumUnits:      4,
+	}
+	atx.SetID(types.RandomATXID())
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+	require.NoError(t, atxs.SetPost(db, atx.ID(), types.EmptyATXID, 0, atx.SmesherID, atx.NumUnits))
+
+	fs := afero.NewMemMapFs()
+	dir, err := afero.TempDir(fs, "", "Generate")
+	require.NoError(t, err)
+
+	err = checkpoint.Generate(context.Background(), fs, db, dir, 5, 2)
+	require.NoError(t, err)
+
+	file, err := fs.Open(checkpoint.SelfCheckpointFilename(dir, 5))
+	require.NoError(t, err)
+	defer file.Close()
+
+	var checkpoint types.Checkpoint
+	require.NoError(t, json.NewDecoder(file).Decode(&checkpoint))
+	require.Equal(t, atx.MarriageATX.Bytes(), checkpoint.Data.Atxs[0].MarriageAtx)
 }

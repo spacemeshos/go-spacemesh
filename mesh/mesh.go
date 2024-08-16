@@ -165,17 +165,21 @@ func (msh *Mesh) MeshHash(lid types.LayerID) (types.Hash32, error) {
 
 // setLatestLayer sets the latest layer we saw from the network.
 func (msh *Mesh) setLatestLayer(lid types.LayerID) {
-	events.ReportLayerUpdate(events.LayerUpdate{
+	if err := events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: lid,
 		Status:  events.LayerStatusTypeUnknown,
-	})
+	}); err != nil {
+		msh.logger.Error("Failed to emit updated layer", zap.Uint32("lid", lid.Uint32()), zap.Error(err))
+	}
 	for {
 		current := msh.LatestLayer()
 		if !lid.After(current) {
 			return
 		}
 		if msh.latestLayer.CompareAndSwap(current, lid) {
-			events.ReportNodeStatusUpdate()
+			if err := events.ReportNodeStatusUpdate(); err != nil {
+				msh.logger.Error("Failed to emit status update", zap.Error(err))
+			}
 		}
 	}
 }
@@ -242,7 +246,9 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) error {
 		return fmt.Errorf("failed to set processed layer %v: %w", processed, err)
 	}
 	msh.processedLayer.Store(processed)
-	events.ReportNodeStatusUpdate()
+	if err := events.ReportNodeStatusUpdate(); err != nil {
+		msh.logger.Error("Failed to emit status update", zap.Error(err))
+	}
 	return nil
 }
 
@@ -401,10 +407,15 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 			// in such case we would apply block because of hare, and then we may evict event when block.Valid was set
 			// but before it was saved to database
 			msh.trtl.OnApplied(layer.Layer, layer.Opinion)
-			events.ReportLayerUpdate(events.LayerUpdate{
+			if err := events.ReportLayerUpdate(events.LayerUpdate{
 				LayerID: layer.Layer,
 				Status:  events.LayerStatusTypeApplied,
-			})
+			}); err != nil {
+				msh.logger.Error("Failed to emit updated layer",
+					zap.Uint32("lid", layer.Layer.Uint32()),
+					zap.Error(err),
+				)
+			}
 		}
 		if layer.Layer > msh.LatestLayerInState() {
 			msh.setLatestLayerInState(layer.Layer)
@@ -483,10 +494,12 @@ func (msh *Mesh) ProcessLayerPerHareOutput(
 	blockID types.BlockID,
 	executed bool,
 ) error {
-	events.ReportLayerUpdate(events.LayerUpdate{
+	if err := events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layerID,
 		Status:  events.LayerStatusTypeApproved,
-	})
+	}); err != nil {
+		msh.logger.Error("Failed to emit updated layer", zap.Uint32("lid", layerID.Uint32()), zap.Error(err))
+	}
 	if err := msh.saveHareOutput(ctx, layerID, blockID); err != nil {
 		return err
 	}

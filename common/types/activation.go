@@ -7,9 +7,9 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/post/shared"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate scalegen -types ATXMetadata,MerkleProof,EpochActiveSet
@@ -56,9 +56,6 @@ func (t ATXID) Bytes() []byte {
 	return Hash32(t).Bytes()
 }
 
-// Field returns a log field. Implements the LoggableField interface.
-func (t ATXID) Field() log.Field { return log.FieldNamed("atx_id", t.Hash32()) }
-
 // EncodeScale implements scale codec interface.
 func (t *ATXID) EncodeScale(e *scale.Encoder) (int, error) {
 	return scale.EncodeByteArray(e, t[:])
@@ -83,7 +80,7 @@ var EmptyATXID = ATXID{}
 type ATXIDs []ATXID
 
 // impl zap's ArrayMarshaler interface.
-func (ids ATXIDs) MarshalLogArray(enc log.ArrayEncoder) error {
+func (ids ATXIDs) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 	for _, id := range ids {
 		enc.AppendString(id.String())
 	}
@@ -107,7 +104,7 @@ type NIPostChallenge struct {
 	InitialPost   *Post
 }
 
-func (c *NIPostChallenge) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (c *NIPostChallenge) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if c == nil {
 		return nil
 	}
@@ -136,7 +133,7 @@ type ATXMetadata struct {
 	MsgHash      Hash32 // Hash of InnerActivationTx (returned by HashInnerBytes)
 }
 
-func (m *ATXMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (m *ATXMetadata) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("epoch", uint32(m.PublishEpoch))
 	encoder.AddString("hash", m.MsgHash.ShortString())
 	return nil
@@ -174,11 +171,11 @@ type ActivationTx struct {
 	// Two ATXs with the same sequence number from the same miner can be used as the proof of malfeasance against
 	// that miner.
 	Sequence uint64
-	// the previous ATX's ID (for all but the first in the sequence)
-	PrevATXID ATXID
 
 	// CommitmentATX is the ATX used in the commitment for initializing the PoST of the node.
-	CommitmentATX  *ATXID
+	CommitmentATX *ATXID
+	// The marriage ATX, used in merged ATXs only.
+	MarriageATX    *ATXID
 	Coinbase       Address
 	NumUnits       uint32 // the minimum number of space units in this and the previous ATX
 	BaseTickHeight uint64
@@ -222,14 +219,16 @@ func (atx *ActivationTx) TickHeight() uint64 {
 }
 
 // MarshalLogObject implements logging interface.
-func (atx *ActivationTx) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (atx *ActivationTx) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("atx_id", atx.id.String())
 	encoder.AddString("smesher", atx.SmesherID.String())
 	encoder.AddUint32("publish_epoch", atx.PublishEpoch.Uint32())
-	encoder.AddString("prev_atx_id", atx.PrevATXID.String())
 
 	if atx.CommitmentATX != nil {
 		encoder.AddString("commitment_atx_id", atx.CommitmentATX.String())
+	}
+	if atx.MarriageATX != nil {
+		encoder.AddString("marriage_atx_id", atx.MarriageATX.String())
 	}
 	encoder.AddUint64("vrf_nonce", uint64(atx.VRFNonce))
 	encoder.AddString("coinbase", atx.Coinbase.String())
@@ -313,13 +312,10 @@ type NIPost struct {
 // grinding of identities for VRF eligibility.
 type VRFPostIndex uint64
 
-// Field returns a log field. Implements the LoggableField interface.
-func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
-
 // Post is an alias to postShared.Proof.
 type Post shared.Proof
 
-func (p *Post) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (p *Post) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if p == nil {
 		return nil
 	}
@@ -335,7 +331,7 @@ type PostMetadata struct {
 	LabelsPerUnit uint64
 }
 
-func (m *PostMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (m *PostMetadata) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if m == nil {
 		return nil
 	}

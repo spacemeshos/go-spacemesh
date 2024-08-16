@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -96,7 +96,7 @@ func TestDownload(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			logger := logtest.New(t)
+			logger := zaptest.NewLogger(t)
 			db := sql.InMemory()
 			ctrl := gomock.NewController(t)
 			fetcher := mocks.NewMockAtxFetcher(ctrl)
@@ -114,7 +114,7 @@ func TestDownload(t *testing.T) {
 						return req.error
 					})
 			}
-			require.Equal(t, tc.rst, Download(tc.ctx, tc.retry, logger.Zap(), db, fetcher, tc.set))
+			require.Equal(t, tc.rst, Download(tc.ctx, tc.retry, logger, db, fetcher, tc.set))
 		})
 	}
 }

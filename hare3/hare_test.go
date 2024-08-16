@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -122,7 +121,7 @@ type node struct {
 	proposals  *store.Store
 
 	ctrl       *gomock.Controller
-	mpublisher *pmocks.MockPublishSubsciber
+	mpublisher *pmocks.MockPublishSubscriber
 	msyncer    *smocks.MockSyncStateProvider
 	patrol     *layerpatrol.LayerPatrol
 	tracer     *testTracer
@@ -148,8 +147,8 @@ func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 	return n
 }
 
-func (n *node) withDb() *node {
-	n.db = sql.InMemory()
+func (n *node) withDb(tb testing.TB) *node {
+	n.db = sql.InMemoryTest(tb)
 	n.atxsdata = atxsdata.New()
 	n.proposals = store.New()
 	return n
@@ -204,13 +203,13 @@ func (n *node) withOracle() *node {
 }
 
 func (n *node) withPublisher() *node {
-	n.mpublisher = pmocks.NewMockPublishSubsciber(n.ctrl)
+	n.mpublisher = pmocks.NewMockPublishSubscriber(n.ctrl)
 	n.mpublisher.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	return n
 }
 
 func (n *node) withHare() *node {
-	logger := logtest.New(n.t).Named(fmt.Sprintf("hare=%d", n.i))
+	logger := zaptest.NewLogger(n.t).Named(fmt.Sprintf("hare=%d", n.i))
 
 	n.nclock = &testNodeClock{
 		genesis:       n.t.start,
@@ -230,8 +229,8 @@ func (n *node) withHare() *node {
 		n.msyncer,
 		n.patrol,
 		WithConfig(n.t.cfg),
-		WithLogger(logger.Zap()),
-		WithWallclock(n.clock),
+		WithLogger(logger),
+		WithWallClock(n.clock),
 		WithTracer(tracer),
 	)
 	n.register(n.signer)
@@ -342,7 +341,7 @@ func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 	for i := last; i < last+n; i++ {
 		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withSigner().withAtx(cl.units.min, cl.units.max).
+			withClock().withDb(cl.t).withSigner().withAtx(cl.units.min, cl.units.max).
 			withOracle().withHare())
 	}
 	return cl
@@ -353,7 +352,7 @@ func (cl *lockstepCluster) addInactive(n int) *lockstepCluster {
 	for i := last; i < last+n; i++ {
 		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withSigner().
+			withClock().withDb(cl.t).withSigner().
 			withOracle().withHare())
 	}
 	return cl
@@ -366,7 +365,7 @@ func (cl *lockstepCluster) addEquivocators(n int) *lockstepCluster {
 		cl.addNode((&node{t: cl.t, i: i}).
 			reuseSigner(cl.nodes[i-last].signer).
 			withController().withSyncer().withPublisher().
-			withClock().withDb().withAtx(cl.units.min, cl.units.max).
+			withClock().withDb(cl.t).withAtx(cl.units.min, cl.units.max).
 			withOracle().withHare())
 	}
 	return cl

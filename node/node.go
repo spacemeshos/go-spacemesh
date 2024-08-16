@@ -146,12 +146,15 @@ func GetCommand() *cobra.Command {
 				return err
 			}
 
-			app := New(
-				WithConfig(&conf),
-				// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
-				// otherwise it will fail later when child logger will try to increase level.
-				WithLog(log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel), events.EventHook())),
-			)
+			// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
+			// otherwise it will fail later when child logger will try to increase level.
+			encoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+			if conf.LOGGING.Encoder == config.JSONLogEncoder {
+				encoder = zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig())
+			}
+			lg := log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel), encoder, events.EventHook())
+
+			app := New(WithConfig(&conf), WithLog(lg))
 
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -247,10 +250,6 @@ func configure(c *cobra.Command, configPath string, conf *config.Config) error {
 		return fmt.Errorf("parsing flags: %w", err)
 	}
 
-	if conf.LOGGING.Encoder == config.JSONLogEncoder {
-		log.JSONLog(true)
-	}
-
 	if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
 		return errors.New("this is a testnet-only build not intended for mainnet")
 	}
@@ -258,15 +257,7 @@ func configure(c *cobra.Command, configPath string, conf *config.Config) error {
 	return nil
 }
 
-var (
-	appLog  log.Log
-	grpclog grpc_logsettable.SettableLoggerV2
-)
-
-func init() {
-	appLog = log.NewNop()
-	grpclog = grpc_logsettable.ReplaceGrpcLoggerV2()
-}
+var grpcLog = grpc_logsettable.ReplaceGrpcLoggerV2()
 
 // loadConfig loads config and preset (if provided) into the provided config.
 // It first loads the preset and then overrides it with values from the config file.
@@ -355,7 +346,7 @@ func New(opts ...Option) *App {
 	defaultConfig := config.DefaultConfig()
 	app := &App{
 		Config:       &defaultConfig,
-		log:          appLog,
+		log:          log.NewNop(),
 		loggers:      make(map[string]*zap.AtomicLevel),
 		grpcServices: make(map[grpcserver.Service]grpcserver.ServiceAPI),
 		started:      make(chan struct{}),
@@ -621,7 +612,7 @@ func (app *App) initServices(ctx context.Context) error {
 	cfg.GenesisID = app.Config.Genesis.GenesisID()
 	state := vm.New(app.db,
 		vm.WithConfig(cfg),
-		vm.WithLogger(app.addLogger(VMLogger, lg)))
+		vm.WithLogger(app.addLogger(VMLogger, lg).Zap()))
 	app.conState = txs.NewConservativeState(state, app.db,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:     app.Config.BlockGasLimit,
@@ -1042,7 +1033,7 @@ func (app *App) initServices(ctx context.Context) error {
 			activation.WithCertifier(certifier),
 		)
 		if err != nil {
-			app.log.Panic("failed to create poet client: %v", err)
+			app.log.Panic("failed to create poet client with address %v: %v", server.Address, err)
 		}
 		poetClients = append(poetClients, client)
 	}
@@ -1558,8 +1549,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 	case v2alpha1.Network:
 		service := v2alpha1.NewNetworkService(
 			app.clock.GenesisTime(),
-			app.Config.Genesis.GenesisID(),
-			app.Config.LayerDuration)
+			app.Config)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Node:
@@ -1592,7 +1582,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 
 func (app *App) startAPIServices(ctx context.Context) error {
 	logger := app.addLogger(GRPCLogger, app.log)
-	grpczap.SetGrpcLoggerV2(grpclog, logger.Zap())
+	grpczap.SetGrpcLoggerV2(grpcLog, logger.Zap())
 
 	var (
 		publicSvcs        = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.Config.API.PublicServices))
@@ -1672,7 +1662,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		}
 		logger.With().Info("public grpc service started",
 			log.String("address", app.Config.API.PublicListener),
-			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				services := maps.Keys(publicSvcs)
 				slices.Sort(services)
 				for _, svc := range services {
@@ -1698,7 +1688,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		}
 		logger.With().Info("private grpc service started",
 			log.String("address", app.Config.API.PrivateListener),
-			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				services := maps.Keys(privateSvcs)
 				slices.Sort(services)
 				for _, svc := range services {
@@ -1724,7 +1714,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		}
 		logger.With().Info("post grpc service started",
 			log.String("address", app.Config.API.PostListener),
-			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				services := maps.Keys(postSvcs)
 				slices.Sort(services)
 				for _, svc := range services {
@@ -1784,7 +1774,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		}
 		logger.With().Info("authenticated grpc service started",
 			log.String("address", app.Config.API.TLSListener),
-			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				services := maps.Keys(authenticatedSvcs)
 				slices.Sort(services)
 				for _, svc := range services {
@@ -1811,7 +1801,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		}
 		logger.With().Info("json listener started",
 			log.String("address", app.Config.API.JSONListener),
-			log.Array("services", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 				services := maps.Keys(publicSvcs)
 				slices.Sort(services)
 				for _, svc := range services {
@@ -1942,7 +1932,7 @@ func (app *App) stopServices(ctx context.Context) {
 	// SetGrpcLogger unfortunately is global
 	// this ensures that a test-logger isn't used after the app shuts down
 	// by e.g. a grpc connection to the node that is still open - like in TestSpacemeshApp_NodeService
-	grpczap.SetGrpcLoggerV2(grpclog, log.NewNop().Zap())
+	grpczap.SetGrpcLoggerV2(grpcLog, log.NewNop().Zap())
 }
 
 func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
@@ -1950,14 +1940,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
-	dbLog := app.addLogger(StateDbLogger, lg)
-	m21 := migrations.New0021Migration(dbLog.Zap(), 1_000_000)
+	dbLog := app.addLogger(StateDbLogger, lg).Zap()
+	m21 := migrations.New0021Migration(dbLog, 1_000_000)
 	migrations, err := sql.StateMigrations()
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
 	}
 	dbopts := []sql.Opt{
-		sql.WithLogger(dbLog.Zap()),
+		sql.WithLogger(dbLog),
 		sql.WithMigrations(migrations),
 		sql.WithMigration(m21),
 		sql.WithConnections(app.Config.DatabaseConnections),
@@ -1986,41 +1976,36 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.Config.DatabaseSizeMeteringInterval,
 		)
 	}
-	app.log.Info("starting cache warmup")
-	applied, err := layers.GetLastApplied(app.db)
-	if err != nil {
-		return err
+	{
+		warmupLog := app.log.Zap().Named("warmup")
+		app.log.Info("starting cache warmup")
+		applied, err := layers.GetLastApplied(app.db)
+		if err != nil {
+			return err
+		}
+		start := time.Now()
+		data, err := atxsdata.Warm(
+			app.db,
+			app.Config.Tortoise.WindowSizeEpochs(applied),
+			warmupLog,
+		)
+		if err != nil {
+			return err
+		}
+		app.atxsdata = data
+		app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	}
-	start := time.Now()
-	data, err := atxsdata.Warm(
-		app.db,
-		app.Config.Tortoise.WindowSizeEpochs(applied),
-	)
-	if err != nil {
-		return err
-	}
-	app.atxsdata = data
-	app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg).Zap(),
 		datastore.WithConfig(app.Config.Cache),
-		datastore.WithConsensusCache(data),
+		datastore.WithConsensusCache(app.atxsdata),
 	)
-
-	if app.Config.ScanMalfeasantATXs {
-		app.log.With().Info("checking DB for malicious ATXs")
-		start = time.Now()
-		if err := activation.CheckPrevATXs(ctx, app.log.Zap(), app.db); err != nil {
-			return fmt.Errorf("malicious ATX check: %w", err)
-		}
-		app.log.With().Info("malicious ATX check completed", log.Duration("duration", time.Since(start)))
-	}
 
 	migrations, err = sql.LocalMigrations()
 	if err != nil {
 		return fmt.Errorf("load local migrations: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
-		sql.WithLogger(dbLog.Zap()),
+		sql.WithLogger(dbLog),
 		sql.WithMigrations(migrations),
 		sql.WithConnections(app.Config.DatabaseConnections),
 	)

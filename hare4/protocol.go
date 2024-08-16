@@ -10,7 +10,6 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
@@ -77,7 +76,7 @@ func (o *output) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 		encoder.AddBool("coin", *o.coin)
 	}
 	if o.result != nil {
-		encoder.AddArray("result", zapcore.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		encoder.AddArray("result", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 			for _, id := range o.result {
 				encoder.AppendString(types.Hash20(id).ShortString())
 			}

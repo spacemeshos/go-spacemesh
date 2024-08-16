@@ -190,7 +190,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 
 				var expect []*types.Reward
 				for _, rst := range streamed {
-					events.ReportRewardReceived(rst)
+					require.NoError(t, events.ReportRewardReceived(rst))
 					matcher := rewardsMatcher{tc.request, ctx}
 					if matcher.match(&rst) {
 						expect = append(expect, &rst)
