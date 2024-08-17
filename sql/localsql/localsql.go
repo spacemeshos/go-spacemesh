@@ -73,11 +73,7 @@ func InMemory(opts ...sql.Opt) *database {
 
 // InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
 func InMemoryTest(tb testing.TB, opts ...sql.Opt) sql.LocalDatabase {
-	opts = append(opts, sql.WithConnections(1))
-	db, err := Open("file::memory:?mode=memory", opts...)
-	if err != nil {
-		panic(err)
-	}
+	db := InMemory(opts...)
 	tb.Cleanup(func() { db.Close() })
 	return db
 }
