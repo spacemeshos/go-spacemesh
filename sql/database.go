@@ -229,7 +229,7 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 	for _, opt := range opts {
 		opt(config)
 	}
-	if !config.temp && config.handleIncompleteMigrations {
+	if !config.temp && config.handleIncompleteMigrations && !config.forceFresh {
 		if err := handleIncompleteCopyMigration(config); err != nil {
 			return nil, err
 		}
