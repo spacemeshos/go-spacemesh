@@ -13,12 +13,18 @@ type sqlIDStore struct {
 	db     sql.Database
 	query  string
 	keyLen int
+	cache  *lru
 }
 
 var _ idStore = &sqlIDStore{}
 
 func newSQLIDStore(db sql.Database, query string, keyLen int) *sqlIDStore {
-	return &sqlIDStore{db: db, query: query, keyLen: keyLen}
+	return &sqlIDStore{
+		db:     db,
+		query:  query,
+		keyLen: keyLen,
+		cache:  newLRU(),
+	}
 }
 
 func (s *sqlIDStore) clone() idStore {
@@ -39,7 +45,7 @@ func (s *sqlIDStore) iter(from KeyBytes) hashsync.Iterator {
 	if len(from) != s.keyLen {
 		panic("BUG: invalid key length")
 	}
-	return newDBRangeIterator(s.db, s.query, from, sqlMaxChunkSize)
+	return newDBRangeIterator(s.db, s.query, from, sqlMaxChunkSize, s.cache)
 }
 
 type dbBackedStore struct {

@@ -205,6 +205,7 @@ func getDelimiters(numPeers int) (h []types.Hash32) {
 	if numPeers < 2 {
 		return nil
 	}
+	// QQQQQ: TBD: support maxDepth
 	inc := (uint64(0x80) << 56) / uint64(numPeers)
 	h = make([]types.Hash32, numPeers-1)
 	for i, v := 0, uint64(0); i < numPeers-1; i++ {

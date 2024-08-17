@@ -392,15 +392,11 @@ func (rsr *RangeSetReconciler) handleMessage(c Conduit, preceding Iterator, msg 
 			HexField("fp1", si.Parts[1].Fingerprint),
 			IteratorField("start1", si.Parts[1].End),
 			IteratorField("end1", si.Parts[1].End))
-		middle, err := si.Parts[0].End.Key()
-		if err != nil {
-			return false, err
-		}
-		if err := rsr.processSubrange(c, x, middle, si.Parts[0]); err != nil {
+		if err := rsr.processSubrange(c, x, si.Middle, si.Parts[0]); err != nil {
 			return false, err
 		}
 		// fmt.Fprintf(os.Stderr, "QQQQQ: next=%q\n", qqqqRmmeK(next))
-		if err := rsr.processSubrange(c, middle, y, si.Parts[1]); err != nil {
+		if err := rsr.processSubrange(c, si.Middle, y, si.Parts[1]); err != nil {
 			return false, err
 		}
 		// fmt.Fprintf(os.Stderr, "normal: split X %s - middle %s - Y %s:\n  %s",
@@ -426,7 +422,7 @@ func (rsr *RangeSetReconciler) Initiate(c Conduit) error {
 }
 
 func (rsr *RangeSetReconciler) InitiateBounded(c Conduit, x, y Ordered) error {
-	rsr.log.Debug("inititate", HexField("x", x), HexField("y", y))
+	rsr.log.Debug("initiate", HexField("x", x), HexField("y", y))
 	if x == nil {
 		rsr.log.Debug("initiate: send empty set")
 		if err := c.SendEmptySet(); err != nil {

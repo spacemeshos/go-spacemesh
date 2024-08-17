@@ -114,6 +114,7 @@ func (d *DBItemStore) SplitRange(
 
 	sr, err := d.ft.easySplit(x.(KeyBytes), y.(KeyBytes), count)
 	if err == nil {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: fast split, middle: %s\n", sr.middle.String())
 		return hashsync.SplitInfo{
 			Parts: [2]hashsync.RangeInfo{
 				{
@@ -137,6 +138,7 @@ func (d *DBItemStore) SplitRange(
 		return hashsync.SplitInfo{}, err
 	}
 
+	// fmt.Fprintf(os.Stderr, "QQQQQ: slow split x %s y %s\n", x.(fmt.Stringer), y.(fmt.Stringer))
 	part0, err := d.GetRangeInfo(preceding, x, y, count)
 	if err != nil {
 		return hashsync.SplitInfo{}, err

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 )
@@ -54,6 +55,23 @@ func (k KeyBytes) isZero() bool {
 
 var errEmptySet = errors.New("empty range")
 
+type dbIDKey struct {
+	id        string
+	chunkSize int
+}
+
+type lru = simplelru.LRU[dbIDKey, []KeyBytes]
+
+const lruCacheSize = 1024 * 1024
+
+func newLRU() *lru {
+	cache, err := simplelru.NewLRU[dbIDKey, []KeyBytes](lruCacheSize, nil)
+	if err != nil {
+		panic("BUG: failed to create LRU cache: " + err.Error())
+	}
+	return cache
+}
+
 type dbRangeIterator struct {
 	db           sql.Database
 	from         KeyBytes
@@ -65,6 +83,7 @@ type dbRangeIterator struct {
 	keyLen       int
 	singleChunk  bool
 	loaded       bool
+	cache        *lru
 }
 
 var _ hashsync.Iterator = &dbRangeIterator{}
@@ -76,6 +95,7 @@ func newDBRangeIterator(
 	query string,
 	from KeyBytes,
 	maxChunkSize int,
+	lru *lru,
 ) hashsync.Iterator {
 	if from == nil {
 		panic("BUG: makeDBIterator: nil from")
@@ -95,7 +115,26 @@ func newDBRangeIterator(
 		chunk:        make([]KeyBytes, maxChunkSize),
 		singleChunk:  false,
 		loaded:       false,
+		cache:        lru,
 	}
+}
+
+func (it *dbRangeIterator) loadCached(key dbIDKey) (bool, int) {
+	chunk, ok := it.cache.Get(key)
+	if !ok {
+		// fmt.Fprintf(os.Stderr, "QQQQQ: cache miss\n")
+		return false, 0
+	}
+
+	// fmt.Fprintf(os.Stderr, "QQQQQ: cache hit, chunk size %d\n", len(chunk))
+	for n, id := range it.chunk[:len(chunk)] {
+		if id == nil {
+			id = make([]byte, it.keyLen)
+			it.chunk[n] = id
+		}
+		copy(id, chunk[n])
+	}
+	return true, len(chunk)
 }
 
 func (it *dbRangeIterator) load() error {
@@ -114,27 +153,39 @@ func (it *dbRangeIterator) load() error {
 	} else {
 		it.chunk = it.chunk[:it.chunkSize]
 	}
-	var ierr error
-	_, err := it.db.Exec(
-		it.query, func(stmt *sql.Statement) {
-			stmt.BindBytes(1, it.from)
-			stmt.BindInt64(2, int64(it.chunkSize))
-		},
-		func(stmt *sql.Statement) bool {
-			if n >= len(it.chunk) {
-				ierr = errors.New("too many rows")
-				return false
+	// fmt.Fprintf(os.Stderr, "QQQQQ: from: %s chunkSize: %d\n", hex.EncodeToString(it.from), it.chunkSize)
+	key := dbIDKey{string(it.from), it.chunkSize}
+	var ierr, err error
+	found, n := it.loadCached(key)
+	if !found {
+		_, err = it.db.Exec(
+			it.query, func(stmt *sql.Statement) {
+				stmt.BindBytes(1, it.from)
+				stmt.BindInt64(2, int64(it.chunkSize))
+			},
+			func(stmt *sql.Statement) bool {
+				if n >= len(it.chunk) {
+					ierr = errors.New("too many rows")
+					return false
+				}
+				// we reuse existing slices when possible for retrieving new IDs
+				id := it.chunk[n]
+				if id == nil {
+					id = make([]byte, it.keyLen)
+					it.chunk[n] = id
+				}
+				stmt.ColumnBytes(0, id)
+				n++
+				return true
+			})
+		if err == nil && ierr == nil {
+			cached := make([]KeyBytes, n)
+			for n, id := range it.chunk[:n] {
+				cached[n] = slices.Clone(id)
 			}
-			// we reuse existing slices when possible for retrieving new IDs
-			id := it.chunk[n]
-			if id == nil {
-				id = make([]byte, it.keyLen)
-				it.chunk[n] = id
-			}
-			stmt.ColumnBytes(0, id)
-			n++
-			return true
-		})
+			it.cache.Add(key, cached)
+		}
+	}
 	fromZero := it.from.isZero()
 	it.chunkSize = min(it.chunkSize*2, it.maxChunkSize)
 	switch {

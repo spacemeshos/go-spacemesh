@@ -1,6 +1,7 @@
 package dbsync
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -41,24 +42,35 @@ func TestIncID(t *testing.T) {
 }
 
 func createDB(t *testing.T, keyLen int) sql.Database {
-	db := sql.InMemory(sql.WithIgnoreSchemaDrift())
+	// QQQQQ: FIXME
+	tmpDir := t.TempDir()
+	t.Logf("QQQQQ: temp dir: %s", tmpDir)
+	db, err := sql.Open(fmt.Sprintf("file:%s/test.db", tmpDir), sql.WithIgnoreSchemaDrift())
+	require.NoError(t, err)
+	// db := sql.InMemory(sql.WithIgnoreSchemaDrift())
 	t.Cleanup(func() {
 		require.NoError(t, db.Close())
 	})
-	_, err := db.Exec(fmt.Sprintf("create table foo(id char(%d) not null primary key)", keyLen), nil, nil)
+	_, err = db.Exec(fmt.Sprintf("create table foo(id char(%d) not null primary key)", keyLen), nil, nil)
 	require.NoError(t, err)
 	return db
 }
 
 func insertDBItems(t *testing.T, db sql.Database, content []KeyBytes) {
-	for _, id := range content {
-		_, err := db.Exec(
-			"insert into foo(id) values(?)",
-			func(stmt *sql.Statement) {
-				stmt.BindBytes(1, id)
-			}, nil)
-		require.NoError(t, err)
-	}
+	err := db.WithTx(context.Background(), func(tx sql.Transaction) error {
+		for _, id := range content {
+			_, err := tx.Exec(
+				"insert into foo(id) values(?)",
+				func(stmt *sql.Statement) {
+					stmt.BindBytes(1, id)
+				}, nil)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
 }
 
 func deleteDBItems(t *testing.T, db sql.Database) {
@@ -287,8 +299,9 @@ func TestDBRangeIterator(t *testing.T) {
 	} {
 		deleteDBItems(t, db)
 		insertDBItems(t, db, tc.items)
+		cache := newLRU()
 		for maxChunkSize := 1; maxChunkSize < 12; maxChunkSize++ {
-			it := newDBRangeIterator(db, testQuery, tc.from, maxChunkSize)
+			it := newDBRangeIterator(db, testQuery, tc.from, maxChunkSize, cache)
 			if tc.expErr != nil {
 				_, err := it.Key()
 				require.ErrorIs(t, err, tc.expErr)

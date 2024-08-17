@@ -2,6 +2,7 @@ package dbsync
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"slices"
@@ -21,14 +22,20 @@ import (
 )
 
 func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
+	const maxDepth = 24
 	log := zaptest.NewLogger(t)
+	t.Logf("QQQQQ: 0")
 	dbA := populateDB(t, 32, itemsA)
+	t.Logf("QQQQQ: 1")
 	dbB := populateDB(t, 32, itemsB)
 	mesh, err := mocknet.FullMeshConnected(2)
 	require.NoError(t, err)
 	proto := "itest"
-	storeA := NewItemStoreAdapter(NewDBItemStore(dbA, "select id from foo", testQuery, 32, 24))
-	storeB := NewItemStoreAdapter(NewDBItemStore(dbB, "select id from foo", testQuery, 32, 24))
+	t.Logf("QQQQQ: 2")
+	storeA := NewItemStoreAdapter(NewDBItemStore(dbA, "select id from foo", testQuery, 32, maxDepth))
+	t.Logf("QQQQQ: 3")
+	storeB := NewItemStoreAdapter(NewDBItemStore(dbB, "select id from foo", testQuery, 32, maxDepth))
+	t.Logf("QQQQQ: 4")
 
 	// QQQQQ: rmme
 	// storeB.s.ft.traceEnabled = true
@@ -90,7 +97,26 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 		// uncomment to enable verbose logging which may slow down tests
 		// hashsync.WithRangeSyncLogger(log.Named("sideB")),
 	})
-	require.NoError(t, pss.SyncStore(ctx, srvPeerID, storeB, nil, nil))
+
+	var x *types.Hash32
+	it, err := storeB.Min()
+	require.NoError(t, err)
+	if it != nil {
+		x = &types.Hash32{}
+		k, err := it.Key()
+		require.NoError(t, err)
+		h := k.(types.Hash32)
+		v := load64(h[:]) & ^uint64(1<<(64-maxDepth)-1)
+		binary.BigEndian.PutUint64(x[:], v)
+		for i := 8; i < len(x); i++ {
+			x[i] = 0
+		}
+		t.Logf("x: %s", x.String())
+	}
+
+	tStart := time.Now()
+	require.NoError(t, pss.SyncStore(ctx, srvPeerID, storeB, x, x))
+	t.Logf("synced in %v", time.Since(tStart))
 
 	// // QQQQQ: rmme
 	// sb = strings.Builder{}
@@ -103,7 +129,7 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 	if len(combinedItems) == 0 {
 		return
 	}
-	it, err := storeA.Min()
+	it, err = storeA.Min()
 	require.NoError(t, err)
 	var actItemsA []KeyBytes
 	if len(combinedItems) == 0 {
@@ -213,7 +239,7 @@ func TestP2P(t *testing.T) {
 	})
 	t.Run("random test", func(t *testing.T) {
 		// TODO: increase these values and profile
-		const nShared = 8000
+		const nShared = 800000
 		const nUniqueA = 400
 		const nUniqueB = 800
 		// const nShared = 2
