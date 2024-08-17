@@ -1,7 +1,6 @@
 package events
 
 import (
-	"fmt"
 	"runtime/debug"
 	"sync"
 
@@ -14,7 +13,7 @@ import (
 )
 
 // Subscription is a subscription to events.
-// Consumer must be aware that publish will block if subsription is not read fast enough.
+// Consumer must be aware that publish will block if subscription is not read fast enough.
 type Subscription = event.Subscription
 
 var (
@@ -40,101 +39,79 @@ func EventHook() func(entry zapcore.Entry) error {
 	return func(entry zapcore.Entry) error {
 		// If we report anything less than this we'll end up in an infinite loop
 		if entry.Level >= zapcore.ErrorLevel {
-			ReportError(NodeError{
+			if err := ReportError(NodeError{
 				Msg:   entry.Message,
 				Trace: string(debug.Stack()),
 				Level: entry.Level,
-			})
+			}); err != nil {
+				// TODO(nkryuchkov): consider returning an error and log outside the function
+				log.With().Error("Failed to emit error", log.Err(err))
+			} else {
+				log.Debug("reported error: %v", err)
+			}
 		}
 		return nil
 	}
 }
 
 // ReportNewTx dispatches incoming events to the reporter singleton.
-func ReportNewTx(layerID types.LayerID, tx *types.Transaction) {
-	ReportTxWithValidity(layerID, tx, true)
-}
-
-// ReportTxWithValidity reports a tx along with whether it was just invalidated.
-func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bool) {
+func ReportNewTx(layerID types.LayerID, tx *types.Transaction) error {
 	mu.RLock()
 	defer mu.RUnlock()
 	txWithValidity := Transaction{
 		Transaction: tx,
 		LayerID:     layerID,
-		Valid:       valid,
+		Valid:       true,
 	}
 	if reporter != nil {
-		if err := reporter.transactionEmitter.Emit(txWithValidity); err != nil {
-			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit transaction", tx.ID, layerID, log.Err(err))
-		} else {
-			log.Debug("reported tx: %v", txWithValidity)
-		}
+		return reporter.transactionEmitter.Emit(txWithValidity)
 	}
+	return nil
 }
 
 // ReportNewActivation reports a new activation.
-func ReportNewActivation(activation *types.ActivationTx) {
+func ReportNewActivation(activation *types.ActivationTx) error {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	activationTxEvent := ActivationTx{activation}
 	if reporter != nil {
-		if err := reporter.activationEmitter.Emit(activationTxEvent); err != nil {
-			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit activation",
-				log.ShortStringer("atx_id", activation.ID()),
-				activation.PublishEpoch,
-				log.Err(err),
-			)
-		}
+		return reporter.activationEmitter.Emit(activationTxEvent)
 	}
+	return nil
 }
 
 // ReportRewardReceived reports a new reward.
-func ReportRewardReceived(r types.Reward) {
+func ReportRewardReceived(r types.Reward) error {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if err := reporter.rewardEmitter.Emit(r); err != nil {
-			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit rewards", r.Layer, log.Err(err))
-		} else {
-			log.Debug("reported reward: %v", r)
-		}
+		return reporter.rewardEmitter.Emit(r)
 	}
+	return nil
 }
 
 // ReportLayerUpdate reports a new layer, or an update to an existing layer.
-func ReportLayerUpdate(layer LayerUpdate) {
+func ReportLayerUpdate(layer LayerUpdate) error {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if err := reporter.layerEmitter.Emit(layer); err != nil {
-			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit updated layer", layer, log.Err(err))
-		} else {
-			log.With().Debug("reported new or updated layer", layer)
-		}
+		return reporter.layerEmitter.Emit(layer)
 	}
+	return nil
 }
 
 // ReportError reports an error.
-func ReportError(err NodeError) {
+func ReportError(err NodeError) error {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if err := reporter.errorEmitter.Emit(err); err != nil {
-			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit error", log.Err(err))
-		} else {
-			log.Debug("reported error: %v", err)
-		}
+		return reporter.errorEmitter.Emit(err)
 	}
+	return nil
 }
 
 // ReportNodeStatusUpdate reports an update to the node status. It just
@@ -149,157 +126,110 @@ func ReportError(err NodeError) {
 // happen here because the status update includes only a layer ID, not
 // full layer data, and the Reporter currently has no way to retrieve
 // full layer data.
-func ReportNodeStatusUpdate() {
+func ReportNodeStatusUpdate() error {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if err := reporter.statusEmitter.Emit(Status{}); err != nil {
-			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit status update", log.Err(err))
-		} else {
-			log.Debug("reported status update")
-		}
+		return reporter.statusEmitter.Emit(Status{})
 	}
+	return nil
 }
 
 // ReportResult reports creation or receipt of a new tx receipt.
-func ReportResult(rst types.TransactionWithResult) {
+func ReportResult(rst types.TransactionWithResult) error {
 	if reporter != nil {
-		if err := reporter.resultsEmitter.Emit(rst); err != nil {
-			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit tx results", rst.ID, log.Err(err))
-		}
+		return reporter.resultsEmitter.Emit(rst)
 	}
+	return nil
 }
 
 // ReportAccountUpdate reports an account whose data has been updated.
-func ReportAccountUpdate(a types.Address) {
+func ReportAccountUpdate(a types.Address) error {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	accountEvent := Account{Address: a}
-
 	if reporter != nil {
-		if err := reporter.accountEmitter.Emit(accountEvent); err != nil {
-			// TODO(nkryuchkov): consider returning an error and log outside the function
-			log.With().Error("Failed to emit account update", log.String("account", a.String()), log.Err(err))
-		} else {
-			log.With().Debug("reported account update", a)
-		}
+		return reporter.accountEmitter.Emit(Account{Address: a})
 	}
+	return nil
 }
 
 // SubscribeTxs subscribes to new transactions.
-func SubscribeTxs() Subscription {
+func SubscribeTxs() (Subscription, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(Transaction))
-		if err != nil {
-			log.With().Panic("Failed to subscribe to transactions")
-		}
-
-		return sub
+		return reporter.bus.Subscribe(new(Transaction))
 	}
-	return nil
+	return nil, nil
 }
 
 // SubscribeActivations subscribes to activations.
-func SubscribeActivations() Subscription {
+func SubscribeActivations() (Subscription, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(ActivationTx))
-		if err != nil {
-			log.With().Panic("Failed to subscribe to activations")
-		}
-
-		return sub
+		return reporter.bus.Subscribe(new(ActivationTx))
 	}
-	return nil
+	return nil, nil
 }
 
 // SubscribeLayers subscribes to all layer data.
-func SubscribeLayers() Subscription {
+func SubscribeLayers() (Subscription, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(LayerUpdate))
-		if err != nil {
-			log.With().Panic("Failed to subscribe to layers")
-		}
-
-		return sub
+		return reporter.bus.Subscribe(new(LayerUpdate))
 	}
-	return nil
+	return nil, nil
 }
 
 // SubscribeErrors subscribes to node errors.
-func SubscribeErrors() Subscription {
+func SubscribeErrors() (Subscription, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(NodeError))
-		if err != nil {
-			log.With().Panic("Failed to subscribe to errors")
-		}
-
-		return sub
+		return reporter.bus.Subscribe(new(NodeError))
 	}
-	return nil
+	return nil, nil
 }
 
 // SubscribeStatus subscribes to node status messages.
-func SubscribeStatus() Subscription {
+func SubscribeStatus() (Subscription, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(Status))
-		if err != nil {
-			log.With().Panic("Failed to subscribe to status")
-		}
-
-		return sub
+		return reporter.bus.Subscribe(new(Status))
 	}
-	return nil
+	return nil, nil
 }
 
 // SubscribeAccount subscribes to account data updates.
-func SubscribeAccount() Subscription {
+func SubscribeAccount() (Subscription, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(Account))
-		if err != nil {
-			log.With().Panic("Failed to subscribe to account updates")
-		}
-
-		return sub
+		return reporter.bus.Subscribe(new(Account))
 	}
-	return nil
+	return nil, nil
 }
 
 // SubscribeRewards subscribes to rewards.
-func SubscribeRewards() Subscription {
+func SubscribeRewards() (Subscription, error) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		sub, err := reporter.bus.Subscribe(new(types.Reward))
-		if err != nil {
-			log.With().Panic("Failed to subscribe to rewards")
-		}
-
-		return sub
+		return reporter.bus.Subscribe(new(types.Reward))
 	}
-	return nil
+	return nil, nil
 }
 
 // SubscribeToLayers is used to track and report automatically every time a
@@ -328,8 +258,13 @@ func SubscribeToLayers(ticker LayerClock) {
 					continue
 				}
 				next = current.Add(1)
-				log.With().Debug("reporter got new layer", current)
-				ReportNodeStatusUpdate()
+				log.With().Debug("reporter got new layer", log.Uint32("layer_id", current.Uint32()))
+				if err := ReportNodeStatusUpdate(); err != nil {
+					// TODO(nkryuchkov): consider returning an error and log outside the function
+					log.With().Error("Failed to emit status update", log.Err(err))
+				} else {
+					log.Debug("reported status update")
+				}
 			case <-stopChan:
 				return
 			}
@@ -362,9 +297,10 @@ type LayerUpdate struct {
 	Status  int
 }
 
-// Field returns a log field. Implements the LoggableField interface.
-func (nl LayerUpdate) Field() log.Field {
-	return log.String("layer", fmt.Sprintf("status: %d, number: %d", nl.Status, nl.LayerID))
+func (lu LayerUpdate) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddUint32("layer", lu.LayerID.Uint32())
+	enc.AddInt("status", lu.Status)
+	return nil
 }
 
 // NodeError represents an internal error to be reported.
@@ -540,7 +476,7 @@ func CloseEventReporter() {
 			log.With().Panic("failed to close receiptEmitter", log.Err(err))
 		}
 		if err := reporter.proposalsEmitter.Close(); err != nil {
-			log.With().Panic("failed to close propoposalsEmitter", log.Err(err))
+			log.With().Panic("failed to close proposalsEmitter", log.Err(err))
 		}
 		if err := reporter.malfeasanceEmitter.Close(); err != nil {
 			log.With().Panic("failed to close malfeasanceEmitter", log.Err(err))
