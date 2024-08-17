@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -204,16 +203,6 @@ func (h *Hash32) SetBytes(b []byte) {
 func (h Hash32) ToHash20() (h20 Hash20) {
 	copy(h20[:], h[:])
 	return
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (h Hash20) Field() log.Field {
-	return log.Stringer("hash", h)
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (h Hash32) Field() log.Field {
-	return log.Stringer("hash", h)
 }
 
 // EncodeScale implements scale codec interface.

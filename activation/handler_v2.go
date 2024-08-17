@@ -145,7 +145,13 @@ func (h *HandlerV2) processATX(
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
-	events.ReportNewActivation(atx)
+	if err := events.ReportNewActivation(atx); err != nil {
+		h.logger.Error("failed to emit activation",
+			log.ZShortStringer("atx_id", atx.ID()),
+			zap.Uint32("epoch", atx.PublishEpoch.Uint32()),
+			zap.Error(err),
+		)
+	}
 	h.logger.Debug("new atx", log.ZContext(ctx), zap.Inline(atx))
 	return err
 }
