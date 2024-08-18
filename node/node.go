@@ -589,6 +589,8 @@ func (app *App) initServices(ctx context.Context) error {
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap())
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
+	idStates := types.NewIdentityStateStorage()
+
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
 		activation.WithAutoscaling(postStates),
@@ -1055,6 +1057,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.validator,
 		activation.NipostbuilderWithPostStates(postStates),
+		activation.NipostbuilderWithIdentityStates(idStates),
 		activation.WithPoetServices(poetClients...),
 	)
 	if err != nil {
@@ -1082,6 +1085,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 		activation.WithPostStates(postStates),
+		activation.WithIdentityStates(idStates),
 		activation.WithPoets(poetClients...),
 		activation.BuilderAtxVersions(app.Config.AtxVersions),
 	)

@@ -876,6 +876,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 		existingRegistrations, err := nb.submitPoetChallenges(
 			context.Background(),
 			sig,
+			time.Time{},
 			time.Now().Add(10*time.Second),
 			time.Now().Add(5*time.Second),
 			challengeHash.Bytes())
@@ -922,6 +923,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 		existingRegistrations, err := nb.submitPoetChallenges(
 			context.Background(),
 			sig,
+			time.Time{},
 			time.Now().Add(10*time.Second),
 			time.Now().Add(5*time.Second),
 			challengeHash.Bytes())
@@ -965,8 +967,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 		existingRegistrations, err := nb.submitPoetChallenges(
 			context.Background(),
 			sig,
-			time.Now().Add(10*time.Second),
+			time.Time{},
 			time.Now().Add(5*time.Second),
+			time.Now().Add(10*time.Second),
 			challengeHash.Bytes())
 
 		require.NoError(t, err)
@@ -1009,8 +1012,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			existingRegistrations, err := nb.submitPoetChallenges(
 				context.Background(),
 				sig,
-				time.Now().Add(10*time.Second),
+				time.Time{},
 				time.Now().Add(-5*time.Second), // poet round started
+				time.Now().Add(10*time.Second),
 				challengeHash.Bytes())
 
 			require.NoError(t, err)
@@ -1059,8 +1063,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			existingRegistrations, err := nb.submitPoetChallenges(
 				context.Background(),
 				sig,
-				time.Now().Add(10*time.Second),
+				time.Time{},
 				time.Now().Add(-5*time.Second), // poet round started
+				time.Now().Add(10*time.Second),
 				challengeHash.Bytes())
 
 			require.NoError(t, err)
@@ -1101,8 +1106,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			_, err = nb.submitPoetChallenges(
 				context.Background(),
 				sig,
-				time.Now().Add(10*time.Second),
+				time.Time{},
 				time.Now().Add(-5*time.Second), // poet round started
+				time.Now().Add(10*time.Second),
 				challengeHash.Bytes(),
 			)
 			poetErr := &PoetRegistrationMismatchError{}

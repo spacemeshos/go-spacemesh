@@ -71,7 +71,7 @@ func (s *IdentityStateStorage) Set(id NodeID, newState IdentityState) error {
 
 	currentState, exists := s.states[id]
 	if !exists {
-		if newState == WaitForATXSyncing {
+		if newState == WaitForATXSyncing || newState == WaitForPoetRoundStart {
 			s.states[id] = newState
 			return nil
 		}

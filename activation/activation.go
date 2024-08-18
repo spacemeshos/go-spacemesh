@@ -96,10 +96,11 @@ type Builder struct {
 
 	posAtxFinder positioningAtxFinder
 
-	// states of each known identity
+	// post states of each known identity
 	postStates PostStates
 
-	smeshingIdentitiesStates types.IdentityStates
+	// identity states of each known identity
+	identitiesStates types.IdentityStates
 
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
 	// since they (can) modify the fields below.
@@ -165,6 +166,12 @@ func WithPostStates(ps PostStates) BuilderOption {
 	}
 }
 
+func WithIdentityStates(is types.IdentityStates) BuilderOption {
+	return func(b *Builder) {
+		b.identitiesStates = is
+	}
+}
+
 func BuilderAtxVersions(v AtxVersions) BuilderOption {
 	return func(h *Builder) {
 		h.versions = append([]atxVersion{{0, types.AtxV1}}, v.asSlice()...)
@@ -199,6 +206,7 @@ func NewBuilder(
 		poetRetryInterval: defaultPoetRetryInterval,
 		postValidityDelay: 12 * time.Hour,
 		postStates:        NewPostStates(log),
+		identitiesStates:  types.NewIdentityStateStorage(),
 		versions:          []atxVersion{{0, types.AtxV1}},
 	}
 	for _, opt := range opts {
@@ -248,7 +256,7 @@ func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
 
 // IdentityStates returns the current state of the identity for each smesher.
 func (b *Builder) IdentityStates() map[types.IdentityDescriptor]types.IdentityState {
-	states := b.smeshingIdentitiesStates.GetAll()
+	states := b.identitiesStates.GetAll()
 	res := make(map[types.IdentityDescriptor]types.IdentityState, len(states))
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -518,7 +526,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID))
 
-	if err := b.smeshingIdentitiesStates.Set(nodeID, types.WaitForATXSyncing); err != nil {
+	if err := b.identitiesStates.Set(nodeID, types.WaitForATXSyncing); err != nil {
 		b.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", nodeID),
 			zap.Error(err),
@@ -532,7 +540,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	}
 	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()
 
-	if err := b.smeshingIdentitiesStates.Set(nodeID, types.WaitForPoetRoundStart); err != nil {
+	if err := b.identitiesStates.Set(nodeID, types.WaitForPoetRoundStart); err != nil {
 		b.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", nodeID),
 			zap.Error(err),

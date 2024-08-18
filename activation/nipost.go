@@ -77,6 +77,12 @@ func NipostbuilderWithPostStates(ps PostStates) NIPostBuilderOption {
 	}
 }
 
+func NipostbuilderWithIdentityStates(is types.IdentityStates) NIPostBuilderOption {
+	return func(nb *NIPostBuilder) {
+		nb.identityStates = is
+	}
+}
+
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
 	db *localsql.Database,
@@ -88,13 +94,14 @@ func NewNIPostBuilder(
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
 	b := &NIPostBuilder{
-		localDB:     db,
-		postService: postService,
-		logger:      lg,
-		poetCfg:     poetCfg,
-		layerClock:  layerClock,
-		postStates:  NewPostStates(lg),
-		validator:   validator,
+		localDB:        db,
+		postService:    postService,
+		logger:         lg,
+		poetCfg:        poetCfg,
+		layerClock:     layerClock,
+		postStates:     NewPostStates(lg),
+		identityStates: types.NewIdentityStateStorage(),
+		validator:      validator,
 	}
 
 	for _, opt := range opts {
@@ -215,7 +222,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 	poetRoundStart := nb.layerClock.LayerToTime((postChallenge.PublishEpoch - 1).FirstLayer()).
 		Add(nb.poetCfg.PhaseShift)
-	curPoetRoundEnd := nb.layerClock.LayerToTime(postChallenge.PublishEpoch.FirstLayer()).
+	poetRoundEnd := nb.layerClock.LayerToTime(postChallenge.PublishEpoch.FirstLayer()).
 		Add(nb.poetCfg.PhaseShift).
 		Add(-nb.poetCfg.CycleGap)
 
@@ -229,7 +236,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 	logger.Info("building nipost",
 		zap.Time("poet round start", poetRoundStart),
-		zap.Time("poet round end", curPoetRoundEnd),
+		zap.Time("poet round end", poetRoundEnd),
 		zap.Time("publish epoch end", publishEpochEnd),
 		zap.Uint32("publish epoch", postChallenge.PublishEpoch.Uint32()),
 	)
@@ -240,7 +247,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		ctx,
 		signer,
 		poetProofDeadline,
-		poetRoundStart, curPoetRoundEnd, challenge.Bytes(),
+		poetRoundStart, poetRoundEnd, challenge.Bytes(),
 	)
 	regErr := &PoetRegistrationMismatchError{}
 	switch {
@@ -283,7 +290,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 			)
 		}
 
-		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
+		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, poetRoundEnd)
 
 		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, submittedRegistrations)
 		if err != nil {
@@ -437,7 +444,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	}
 
 	registrationsMap := make(map[string]nipost.PoETRegistration)
-	// TODO analyse failed registrations too and if deadline has not expired,
+	// TODO (Sofia) analyse failed registrations too and if deadline has not expired,
 	// try to re-register (requires db txs)
 	for _, reg := range registrations {
 		if reg.RoundID != "" {
@@ -500,6 +507,8 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	// send registrations to missing addresses
 	signature := signer.Sign(signing.POET, challenge)
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
+
+	fmt.Printf("curPoetRoundStartDeadline %v \n", curPoetRoundStartDeadline)
 
 	submitCtx, cancel := context.WithDeadline(ctx, curPoetRoundStartDeadline)
 	defer cancel()
