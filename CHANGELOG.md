@@ -14,6 +14,15 @@ such and the node will continue to scan new ATXs for their validity.
 ### Features
 
 ### Improvements
+* [#6035](https://github.com/spacemeshos/go-spacemesh/issues/6035) Fixed an issue where the node retried registering for the PoET round
+  only for 15-20 minutes instead of continuing until the start of the round
+
+## Release v1.6.6-hotfix1
+
+### Improvements
+
+* [#6248](https://github.com/spacemeshos/go-spacemesh/pull/6248) Fixed node not being able to handle more than 6.55M
+  ATXs per epoch.
 
 ## Release v1.6.6
 

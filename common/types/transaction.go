@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate scalegen -types Transaction,Reward,RawTx
@@ -40,9 +39,6 @@ func (id TransactionID) String() string {
 func (id TransactionID) Bytes() []byte {
 	return id[:]
 }
-
-// Field returns a log field. Implements the LoggableField interface.
-func (id TransactionID) Field() log.Field { return log.FieldNamed("tx_id", id.Hash32()) }
 
 // Compare returns true if other (the given TransactionID) is less than this TransactionID, by lexicographic comparison.
 func (id TransactionID) Compare(other TransactionID) bool {

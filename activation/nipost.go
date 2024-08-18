@@ -395,15 +395,12 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 
 	logger.Debug("submitting challenge to poet proving service")
 
-	submitCtx, cancel := withConditionalTimeout(ctx, nb.poetCfg.RequestTimeout)
-	defer cancel()
-
 	registration := nipost.PoETRegistration{
 		ChallengeHash: types.Hash32(challenge),
 		Address:       client.Address(),
 	}
 
-	round, err := client.Submit(submitCtx, fetchProofDeadline, prefix, challenge, signature, nodeID)
+	round, err := client.Submit(ctx, fetchProofDeadline, prefix, challenge, signature, nodeID)
 	if err != nil {
 		registration.RoundEnd = poetRoundEnd
 

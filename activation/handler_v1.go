@@ -284,47 +284,6 @@ func (h *HandlerV1) validateNonInitialAtx(
 	return nil
 }
 
-// contextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
-// If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
-func (h *HandlerV1) contextuallyValidateAtx(atx *wire.ActivationTxV1) error {
-	lastAtx, err := atxs.GetLastIDByNodeID(h.cdb, atx.SmesherID)
-	if err == nil && atx.PrevATXID == lastAtx {
-		// last atx referenced equals last ATX seen from node
-		return nil
-	}
-
-	if err == nil && atx.PrevATXID == types.EmptyATXID {
-		// no previous atx declared, but already seen at least one atx from node
-		return fmt.Errorf(
-			"no prev atx reported, but other atx with same node id (%v) found: %v",
-			atx.SmesherID,
-			lastAtx.ShortString(),
-		)
-	}
-
-	if err == nil && atx.PrevATXID != lastAtx {
-		// last atx referenced does not equal last ATX seen from node
-		return errors.New("last atx is not the one referenced")
-	}
-
-	if errors.Is(err, sql.ErrNotFound) && atx.PrevATXID == types.EmptyATXID {
-		// no previous atx found and none referenced
-		return nil
-	}
-
-	if err != nil && atx.PrevATXID != types.EmptyATXID {
-		// no previous atx found but previous atx referenced
-		h.logger.Error("could not fetch node last atx",
-			zap.Stringer("atx_id", atx.ID()),
-			zap.Stringer("smesher", atx.SmesherID),
-			zap.Error(err),
-		)
-		return fmt.Errorf("could not fetch node last atx: %w", err)
-	}
-
-	return err
-}
-
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
 func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
@@ -397,7 +356,7 @@ func (h *HandlerV1) checkDoublePublish(
 		return nil, fmt.Errorf("add malfeasance proof: %w", err)
 	}
 
-	h.logger.Warn("smesher produced more than one atx in the same epoch",
+	h.logger.Debug("smesher produced more than one atx in the same epoch",
 		log.ZContext(ctx),
 		zap.Stringer("smesher", atx.SmesherID),
 		zap.Stringer("previous", prev),
@@ -478,7 +437,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, fmt.Errorf("add malfeasance proof: %w", err)
 	}
 
-	h.logger.Warn("smesher referenced the wrong previous in published ATX",
+	h.logger.Debug("smesher referenced the wrong previous in published ATX",
 		log.ZContext(ctx),
 		zap.Stringer("smesher", atx.SmesherID),
 		log.ZShortStringer("actual", atx.PrevATXID),
@@ -593,17 +552,6 @@ func (h *HandlerV1) processATX(
 		return proof, nil
 	}
 
-	if err := h.contextuallyValidateAtx(watx); err != nil {
-		h.logger.Warn("atx is contextually invalid ",
-			log.ZContext(ctx),
-			zap.Stringer("atx_id", watx.ID()),
-			zap.Stringer("smesherID", watx.SmesherID),
-			zap.Error(err),
-		)
-	} else {
-		h.logger.Debug("atx is valid", zap.Stringer("atx_id", watx.ID()))
-	}
-
 	var baseTickHeight uint64
 	if watx.PositioningATXID != h.goldenATXID {
 		posAtx, err := h.cdb.GetAtx(watx.PositioningATXID)
@@ -632,7 +580,13 @@ func (h *HandlerV1) processATX(
 		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
-	events.ReportNewActivation(atx)
+	if err := events.ReportNewActivation(atx); err != nil {
+		h.logger.Error("failed to emit activation",
+			log.ZShortStringer("atx_id", atx.ID()),
+			zap.Uint32("epoch", atx.PublishEpoch.Uint32()),
+			zap.Error(err),
+		)
+	}
 	h.logger.Debug("new atx",
 		log.ZContext(ctx),
 		zap.Inline(atx),

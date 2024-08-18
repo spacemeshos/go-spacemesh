@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
@@ -161,7 +160,7 @@ func (m *Message) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("round", m.Round.String())
 	encoder.AddString("sender", m.Sender.ShortString())
 	if m.Value.Proposals != nil {
-		encoder.AddArray("full", zapcore.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		encoder.AddArray("full", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 			for _, id := range m.Value.Proposals {
 				encoder.AppendString(types.Hash20(id).ShortString())
 			}

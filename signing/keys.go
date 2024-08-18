@@ -4,8 +4,6 @@ import (
 	"encoding/hex"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // PrivateKey is an alias to ed25519.PrivateKey.
@@ -26,11 +24,6 @@ func Public(priv PrivateKey) ed25519.PublicKey {
 // NewPublicKey constructs a new public key instance from a byte array.
 func NewPublicKey(pub []byte) *PublicKey {
 	return &PublicKey{pub}
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (p *PublicKey) Field() log.Field {
-	return log.String("public_key", p.ShortString())
 }
 
 // Bytes returns the public key as byte array.

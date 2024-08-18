@@ -1,6 +1,6 @@
 package types
 
-import "github.com/spacemeshos/go-spacemesh/log"
+import "go.uber.org/zap/zapcore"
 
 type BallotTortoiseData struct {
 	ID            BallotID       `json:"id"`
@@ -18,7 +18,7 @@ func (b *BallotTortoiseData) SetMalicious() {
 	b.Malicious = true
 }
 
-func (b *BallotTortoiseData) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (b *BallotTortoiseData) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("id", b.ID.String())
 	encoder.AddString("smesher", b.Smesher.ShortString())
 	encoder.AddUint32("layer", b.Layer.Uint32())
@@ -39,7 +39,7 @@ type ReferenceData struct {
 	Eligibilities uint32 `json:"elig"`
 }
 
-func (r *ReferenceData) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (r *ReferenceData) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("beacon", r.Beacon.String())
 	encoder.AddUint32("elig", r.Eligibilities)
 	return nil

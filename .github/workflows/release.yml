@@ -22,6 +22,9 @@ jobs:
             outname_sufix: "mac-arm64"
           - os: windows-2022
             outname_sufix: "win-amd64"
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     steps:
       - shell: bash
         run: echo "OUTNAME=go-spacemesh-${{ github.ref_name }}-${{ matrix.outname_sufix }}" >> $GITHUB_ENV
@@ -79,16 +82,34 @@ jobs:
       - name: Setup gcloud authentication
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
+          service_account: ${{ secrets.GCP_WI_SA }} 
+          token_format: access_token
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           version: "469.0.0"
-      - name: Upload zip
+      - name: Upload zip to GCP
         uses: google-github-actions/upload-cloud-storage@v2
         with:
           path: ${{ env.OUTNAME }}.zip
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
+      - name: Copy build
+        shell: bash
+        run: |
+          mkdir build-zip
+          cp ${{ env.OUTNAME }}.zip build-zip
+      - name: Upload zip to R2
+        run: >
+          aws s3 sync build-zip
+          s3://${{ secrets.CLOUDFLARE_GO_SM_BUILDS_BUCKET }}/${{ github.ref_name }}
+          --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          --acl public-read --follow-symlinks
+        env:
+            AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
+            AWS_REGION: us-east-1
       - name: Install coreutils
         if: ${{ matrix.os == 'macos-13' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
         run: brew install coreutils
@@ -111,6 +132,9 @@ jobs:
   release:
     runs-on: ubuntu-22.04
     needs: build-and-upload
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     steps:
       - name: Download the artifacts
         uses: actions/download-artifact@v4
@@ -138,16 +162,34 @@ jobs:
       - name: Setup gcloud authentication
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
+          service_account: ${{ secrets.GCP_WI_SA }} 
+          token_format: access_token
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           version: "469.0.0"
-      - name: Upload sha256sums
+      - name: Upload sha256sums to GCP
         uses: google-github-actions/upload-cloud-storage@v2
         with:
           path: sha256sum.yaml
           destination: ${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/
+      - name: Copy sha256sum
+        shell: bash
+        run: |
+          mkdir sha256sum
+          cp sha256sum.yaml sha256sum
+      - name: Upload sha256sums to R2
+        run: >
+          aws s3 sync sha256sum
+          s3://${{ secrets.CLOUDFLARE_GO_SM_BUILDS_BUCKET }}/${{ github.ref_name }}
+          --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          --acl public-read --follow-symlinks
+        env:
+            AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
+            AWS_REGION: us-east-1
       - name: Create Release
         uses: softprops/action-gh-release@v2
         id: create_release
@@ -157,14 +199,14 @@ jobs:
           tag_name:  ${{ github.ref_name }}
           body: |
             ## Zip Files
-            - Windows amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
-            - macOS amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_AMD64 }}.zip
-            - macOS arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_MAC_ARM64 }}.zip
-            - Linux amd64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_AMD64 }}.zip
-            - Linux arm64: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_ARM64 }}.zip
+            - Windows amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
+            - macOS amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_MAC_AMD64 }}.zip
+            - macOS arm64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_MAC_ARM64 }}.zip
+            - Linux amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_AMD64 }}.zip
+            - Linux arm64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_ARM64 }}.zip
 
             ## checksum - Zip files
-            YAML with all the checksums of this version :  https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ github.ref_name }}/sha256sum.yaml
+            YAML with all the checksums of this version :  https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/sha256sum.yaml
             - Windows amd64 - sha256 : ${{ env.SHA256_WIN_AMD64 }}
             - Linux amd64 - sha256: ${{ env.SHA256_LINUX_AMD64 }}
             - Linux arm64 - sha256: ${{ env.SHA256_LINUX_ARM64 }}
