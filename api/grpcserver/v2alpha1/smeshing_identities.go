@@ -17,7 +17,7 @@ import (
 
 const SmeshingIdentities = "smeshing_identities_v2alpha1"
 
-const poetsMismatchWarning = "poet is not configured, reconfiguration required"
+const poetsMismatchWarning = "poet is not configured, proof will not be fetched"
 
 type SmeshingIdentitiesService struct {
 	db                     sql.Executor

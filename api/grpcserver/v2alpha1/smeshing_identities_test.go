@@ -226,7 +226,6 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 		for _, poetInfo := range identityResp.PoetInfos {
 			expectedInfo, ok := expectedResp.poetInfos[poetInfo.Url]
 			require.True(t, ok)
-
 			require.Equal(t, expectedInfo.RegistrationStatus, poetInfo.RegistrationStatus)
 			require.Equal(t, expectedInfo.Warning, poetInfo.Warning)
 		}
