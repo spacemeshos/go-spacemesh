@@ -16,26 +16,28 @@ func Test_AddPoetRegistration(t *testing.T) {
 
 	nodeID := types.RandomNodeID()
 	reg1 := PoETRegistration{
+		NodeId:        nodeID,
 		ChallengeHash: types.RandomHash(),
 		Address:       "address1",
 		RoundID:       "round1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	reg2 := PoETRegistration{
+		NodeId:        nodeID,
 		ChallengeHash: types.RandomHash(),
 		Address:       "address2",
 		RoundID:       "round2",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 
-	err := AddPoetRegistration(db, nodeID, reg1)
+	err := AddPoetRegistration(db, reg1)
 	require.NoError(t, err)
 
 	registrations, err := PoetRegistrations(db, nodeID)
 	require.NoError(t, err)
 	require.Len(t, registrations, 1)
 
-	err = AddPoetRegistration(db, nodeID, reg2)
+	err = AddPoetRegistration(db, reg2)
 	require.NoError(t, err)
 
 	registrations, err = PoetRegistrations(db, nodeID)
@@ -57,20 +59,21 @@ func Test_AddPoetRegistration_NoDuplicates(t *testing.T) {
 
 	nodeID := types.RandomNodeID()
 	reg := PoETRegistration{
+		NodeId:        nodeID,
 		ChallengeHash: types.RandomHash(),
 		Address:       "address1",
 		RoundID:       "round1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 
-	err := AddPoetRegistration(db, nodeID, reg)
+	err := AddPoetRegistration(db, reg)
 	require.NoError(t, err)
 
 	registrations, err := PoetRegistrations(db, nodeID)
 	require.NoError(t, err)
 	require.Len(t, registrations, 1)
 
-	err = AddPoetRegistration(db, nodeID, reg)
+	err = AddPoetRegistration(db, reg)
 	require.ErrorIs(t, err, sql.ErrObjectExists)
 
 	registrations, err = PoetRegistrations(db, nodeID)
@@ -90,7 +93,7 @@ func Test_PoetRegistrations_WithMultipleNodeId(t *testing.T) {
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 
-	err := AddPoetRegistration(db, nodeID1, reg1)
+	err := AddPoetRegistration(db, reg1)
 	require.NoError(t, err)
 
 	registrations, err := PoetRegistrations(db, nodeID1)
@@ -105,7 +108,7 @@ func Test_PoetRegistrations_WithMultipleNodeId(t *testing.T) {
 		RoundID:       "round2",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
-	err = AddPoetRegistration(db, nodeID2, reg2)
+	err = AddPoetRegistration(db, reg2)
 	require.NoError(t, err)
 
 	registrations, err = PoetRegistrations(db, nodeID2)
@@ -115,4 +118,63 @@ func Test_PoetRegistrations_WithMultipleNodeId(t *testing.T) {
 	registrations, err = PoetRegistrations(db, nodeID1, nodeID2)
 	require.NoError(t, err)
 	require.Len(t, registrations, 2)
+}
+
+func Test_UpdatePoetRegistrations(t *testing.T) {
+	db := localsql.InMemory()
+
+	nodeID := types.RandomNodeID()
+	challengeHash := types.RandomHash()
+
+	const (
+		address = "address1"
+		roundId = "1"
+	)
+
+	failedReg := PoETRegistration{
+		NodeId:        nodeID,
+		ChallengeHash: challengeHash,
+		Address:       address,
+		RoundEnd:      time.Time{}.Local(),
+	}
+
+	err := AddPoetRegistration(db, failedReg)
+	require.NoError(t, err)
+
+	successReg1 := PoETRegistration{
+		NodeId:        nodeID,
+		ChallengeHash: types.RandomHash(), // different challenge
+		Address:       address,
+		RoundID:       roundId,
+		RoundEnd:      time.Now().Round(time.Second),
+	}
+
+	err = AddPoetRegistration(db, successReg1)
+	require.ErrorIs(t, err, sql.ErrObjectExists)
+
+	err = UpdatePoetRegistration(db, successReg1)
+	require.NoError(t, err)
+
+	regs, err := PoetRegistrations(db, nodeID)
+	require.NoError(t, err)
+	require.Len(t, regs, 1)
+	require.Equal(t, regs[0].RoundID, failedReg.RoundID)
+	require.Equal(t, regs[0].RoundEnd, failedReg.RoundEnd)
+
+	successReg2 := PoETRegistration{
+		NodeId:        nodeID,
+		ChallengeHash: challengeHash,
+		Address:       address,
+		RoundID:       roundId,
+		RoundEnd:      time.Now().Round(time.Second),
+	}
+
+	err = UpdatePoetRegistration(db, successReg2)
+	require.NoError(t, err)
+
+	regs, err = PoetRegistrations(db, nodeID)
+	require.NoError(t, err)
+	require.Len(t, regs, 1)
+	require.Equal(t, regs[0].RoundID, successReg2.RoundID)
+	require.Equal(t, regs[0].RoundEnd, successReg2.RoundEnd)
 }

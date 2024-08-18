@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-var ErrNoNodeId = errors.New("np node id is given")
+var ErrNoNodeId = errors.New("no node id is given")
 
 type PoETRegistration struct {
 	NodeId        types.NodeID
@@ -22,11 +22,10 @@ type PoETRegistration struct {
 
 func AddPoetRegistration(
 	db sql.Executor,
-	nodeID types.NodeID,
 	registration PoETRegistration,
 ) error {
 	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
+		stmt.BindBytes(1, registration.NodeId.Bytes())
 		stmt.BindBytes(2, registration.ChallengeHash.Bytes())
 		stmt.BindText(3, registration.Address)
 		stmt.BindText(4, registration.RoundID)
@@ -36,8 +35,30 @@ func AddPoetRegistration(
 		insert into poet_registration (id, hash, address, round_id, round_end)
 		values (?1, ?2, ?3, ?4, ?5);`, enc, nil,
 	); err != nil {
-		return fmt.Errorf("insert poet registration for %s: %w", nodeID, err)
+		return fmt.Errorf("insert poet registration for %s: %w", registration.NodeId.Bytes(), err)
 	}
+	return nil
+}
+
+func UpdatePoetRegistration(db sql.Executor, registration PoETRegistration) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindText(1, registration.RoundID)
+		stmt.BindInt64(2, registration.RoundEnd.Unix())
+		stmt.BindBytes(3, registration.NodeId.Bytes())
+		stmt.BindText(4, registration.Address)
+		stmt.BindBytes(5, registration.ChallengeHash.Bytes())
+	}
+
+	query := `
+        update poet_registration 
+        SET round_id = ?1, round_end = ?2
+        where id = ?3 AND address = ?4 AND hash = ?5;`
+
+	_, err := db.Exec(query, enc, nil)
+	if err != nil {
+		return fmt.Errorf("update poet registration for %s: %w", registration.NodeId, err)
+	}
+
 	return nil
 }
 

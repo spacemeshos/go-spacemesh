@@ -10,13 +10,13 @@ import (
 
 type PowDifficulty [32]byte
 
-func (d PowDifficulty) String() string {
+func (d *PowDifficulty) String() string {
 	return hex.EncodeToString(d[:])
 }
 
 // Set implements pflag.Value.Set.
-func (f *PowDifficulty) Set(value string) error {
-	return f.UnmarshalText([]byte(value))
+func (d *PowDifficulty) Set(value string) error {
+	return d.UnmarshalText([]byte(value))
 }
 
 // Type implements pflag.Value.Type.

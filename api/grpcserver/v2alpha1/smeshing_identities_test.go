@@ -80,7 +80,8 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	challengeHash := types.RandomHash()
 
 	// set up db registration state
-	err := nipost.AddPoetRegistration(db, nodeId3, nipost.PoETRegistration{
+	err := nipost.AddPoetRegistration(db, nipost.PoETRegistration{
+		NodeId:        nodeId3,
 		ChallengeHash: challengeHash,
 		Address:       poetAddr1,
 		RoundID:       "1",
@@ -88,7 +89,8 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = nipost.AddPoetRegistration(db, nodeId3, nipost.PoETRegistration{
+	err = nipost.AddPoetRegistration(db, nipost.PoETRegistration{
+		NodeId:        nodeId3,
 		ChallengeHash: challengeHash,
 		Address:       poetAddr2,
 		RoundID:       "1",
@@ -96,14 +98,16 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = nipost.AddPoetRegistration(db, nodeId3, nipost.PoETRegistration{
+	err = nipost.AddPoetRegistration(db, nipost.PoETRegistration{
+		NodeId:        nodeId3,
 		ChallengeHash: challengeHash,
 		Address:       poetAddr3,
 		RoundEnd:      time.Now().Add(3 * time.Second),
 	})
 	require.NoError(t, err)
 
-	err = nipost.AddPoetRegistration(db, nodeId4, nipost.PoETRegistration{
+	err = nipost.AddPoetRegistration(db, nipost.PoETRegistration{
+		NodeId:        nodeId4,
 		ChallengeHash: challengeHash,
 		RoundID:       "1",
 		Address:       poetAddr3,
@@ -111,7 +115,8 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = nipost.AddPoetRegistration(db, nodeId4, nipost.PoETRegistration{
+	err = nipost.AddPoetRegistration(db, nipost.PoETRegistration{
+		NodeId:        nodeId4,
 		ChallengeHash: challengeHash,
 		RoundID:       "1",
 		Address:       poetAddr4,
@@ -119,21 +124,24 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = nipost.AddPoetRegistration(db, nodeId2, nipost.PoETRegistration{
+	err = nipost.AddPoetRegistration(db, nipost.PoETRegistration{
+		NodeId:        nodeId2,
 		ChallengeHash: challengeHash,
 		Address:       poetAddr4,
 		RoundEnd:      time.Now().Add(3 * time.Second),
 	})
 	require.NoError(t, err)
 
-	err = nipost.AddPoetRegistration(db, nodeId5, nipost.PoETRegistration{
+	err = nipost.AddPoetRegistration(db, nipost.PoETRegistration{
+		NodeId:        nodeId5,
 		ChallengeHash: challengeHash,
 		Address:       poetAddr3,
 		RoundEnd:      time.Now().Add(3 * time.Second),
 	})
 	require.NoError(t, err)
 
-	err = nipost.AddPoetRegistration(db, nodeId6, nipost.PoETRegistration{
+	err = nipost.AddPoetRegistration(db, nipost.PoETRegistration{
+		NodeId:        nodeId6,
 		ChallengeHash: challengeHash,
 		Address:       poetAddr2,
 		RoundEnd:      time.Now().Add(3 * time.Second),

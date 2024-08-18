@@ -242,20 +242,22 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 
 	sig1Poet1 := nipost.PoETRegistration{
+		NodeId:        sig1.NodeID(),
 		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet1.spacemesh.io",
 		RoundID:       "1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	sig1Poet2 := nipost.PoETRegistration{
+		NodeId:        sig1.NodeID(),
 		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet2.spacemesh.io",
 		RoundID:       "10",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
-	err = nipost.AddPoetRegistration(dstDB, sig1.NodeID(), sig1Poet1)
+	err = nipost.AddPoetRegistration(dstDB, sig1Poet1)
 	require.NoError(t, err)
-	err = nipost.AddPoetRegistration(dstDB, sig1.NodeID(), sig1Poet2)
+	err = nipost.AddPoetRegistration(dstDB, sig1Poet2)
 	require.NoError(t, err)
 
 	require.NoError(t, dstDB.Close())
@@ -307,20 +309,22 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 	require.NoError(t, err)
 
 	sig2Poet1 := nipost.PoETRegistration{
+		NodeId:        sig2.NodeID(),
 		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet1.spacemesh.io",
 		RoundID:       "1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	sig2Poet2 := nipost.PoETRegistration{
+		NodeId:        sig2.NodeID(),
 		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet2.spacemesh.io",
 		RoundID:       "10",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
-	err = nipost.AddPoetRegistration(srcDB, sig2.NodeID(), sig2Poet1)
+	err = nipost.AddPoetRegistration(srcDB, sig2Poet1)
 	require.NoError(t, err)
-	err = nipost.AddPoetRegistration(srcDB, sig2.NodeID(), sig2Poet2)
+	err = nipost.AddPoetRegistration(srcDB, sig2Poet2)
 	require.NoError(t, err)
 
 	require.NoError(t, srcDB.Close())
@@ -413,20 +417,22 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 	require.NoError(t, err)
 
 	sigPoet1 := nipost.PoETRegistration{
+		NodeId:        sig.NodeID(),
 		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet1.spacemesh.io",
 		RoundID:       "1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
 	sigPoet2 := nipost.PoETRegistration{
+		NodeId:        sig.NodeID(),
 		ChallengeHash: types.RandomHash(),
 		Address:       "http://poet2.spacemesh.io",
 		RoundID:       "10",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
-	err = nipost.AddPoetRegistration(srcDB, sig.NodeID(), sigPoet1)
+	err = nipost.AddPoetRegistration(srcDB, sigPoet1)
 	require.NoError(t, err)
-	err = nipost.AddPoetRegistration(srcDB, sig.NodeID(), sigPoet2)
+	err = nipost.AddPoetRegistration(srcDB, sigPoet2)
 	require.NoError(t, err)
 
 	require.NoError(t, srcDB.Close())
