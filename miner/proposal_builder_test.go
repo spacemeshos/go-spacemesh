@@ -891,7 +891,7 @@ func TestMarshalLog(t *testing.T) {
 		require.NoError(t, session.MarshalLogObject(encoder))
 	})
 	t.Run("latency", func(t *testing.T) {
-		latency := &latencyTracker{start: time.Unix(0, 0), publish: time.Unix(1000, 0)}
+		latency := &latencyTracker{start: time.Unix(0, 0), end: time.Unix(1000, 0)}
 		require.NoError(t, latency.MarshalLogObject(encoder))
 	})
 }
