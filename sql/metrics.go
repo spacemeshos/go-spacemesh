@@ -23,5 +23,5 @@ var connWaitLatency = metrics.NewHistogramWithBuckets(
 	namespace,
 	"time spent in waiting for a connection from a pool",
 	[]string{},
-	prometheus.ExponentialBuckets(0.01, 2, 20),
+	prometheus.ExponentialBuckets(0.01, 10, 5),
 ).WithLabelValues()
