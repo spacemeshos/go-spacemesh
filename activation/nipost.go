@@ -377,7 +377,7 @@ func withConditionalTimeout(ctx context.Context, timeout time.Duration) (context
 	return ctx, func() {}
 }
 
-// Submit the challenge (register) to a single PoET and returns registration in case of success.
+// Submit the challenge (register) to a single PoET and return registration in case of success.
 func (nb *NIPostBuilder) submitPoetChallenge(
 	ctx context.Context,
 	nodeID types.NodeID,

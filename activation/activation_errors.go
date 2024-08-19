@@ -11,10 +11,6 @@ var (
 	ErrATXChallengeExpired = errors.New("builder: atx expired")
 	// ErrPoetProofNotReceived is returned when no poet proof was received.
 	ErrPoetProofNotReceived = errors.New("builder: didn't receive any poet proof")
-	// ErrNoRegistrationForGivenPoetFound is returned when there are existing registrations for given node id
-	// in current poet round, but for other poet services and poet round has already started.
-	// So poet proof will not be fetched.
-	ErrNoRegistrationForGivenPoetFound = errors.New("builder: no registration found for given poet set")
 )
 
 // PoetSvcUnstableError means there was a problem communicating
