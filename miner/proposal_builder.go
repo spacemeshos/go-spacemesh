@@ -635,6 +635,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		ss.latency.tortoise = time.Since(start)
 	}
 
+	start = time.Now()
 	meshHash := pb.decideMeshHash(ctx, lid)
 	for _, ss := range signers {
 		ss.latency.hash = time.Since(start)
