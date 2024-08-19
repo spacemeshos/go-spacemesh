@@ -16,27 +16,27 @@ var (
 type IdentityState int
 
 const (
-	WaitForATXSyncing IdentityState = iota
-	WaitForPoetRoundStart
-	WaitForPoetRoundEnd
-	FetchingProofs
-	PostProving
+	IdentityStateWaitForATXSyncing IdentityState = iota
+	IdentityStateWaitForPoetRoundStart
+	IdentityStateWaitForPoetRoundEnd
+	IdentityStateFetchingProofs
+	IdentityStatePostProving
 )
 
 func (s IdentityState) String() string {
 	switch s {
-	case WaitForATXSyncing:
+	case IdentityStateWaitForATXSyncing:
 		return "wait_for_atx_syncing"
-	case WaitForPoetRoundStart:
+	case IdentityStateWaitForPoetRoundStart:
 		return "wait_for_poet_round_start"
-	case WaitForPoetRoundEnd:
+	case IdentityStateWaitForPoetRoundEnd:
 		return "wait_for_poet_round_end"
-	case FetchingProofs:
+	case IdentityStateFetchingProofs:
 		return "fetching_proofs"
-	case PostProving:
+	case IdentityStatePostProving:
 		return "post_proving"
 	default:
-		panic(fmt.Sprintf("unknown post state %d", s))
+		panic(fmt.Sprintf(ErrIdentityStateUnknown.Error()+" %d", s))
 	}
 }
 
@@ -58,11 +58,11 @@ func NewIdentityStateStorage() IdentityStates {
 }
 
 var validStateSwitch = map[IdentityState][]IdentityState{
-	WaitForATXSyncing:     {WaitForPoetRoundStart},
-	PostProving:           {WaitForPoetRoundStart},
-	WaitForPoetRoundStart: {WaitForPoetRoundEnd, WaitForATXSyncing},
-	WaitForPoetRoundEnd:   {FetchingProofs, WaitForPoetRoundStart},
-	FetchingProofs:        {PostProving, WaitForPoetRoundStart},
+	IdentityStateWaitForATXSyncing:     {IdentityStateWaitForPoetRoundStart},
+	IdentityStatePostProving:           {IdentityStateWaitForPoetRoundStart},
+	IdentityStateWaitForPoetRoundStart: {IdentityStateWaitForPoetRoundEnd, IdentityStateWaitForATXSyncing},
+	IdentityStateWaitForPoetRoundEnd:   {IdentityStateFetchingProofs, IdentityStateWaitForPoetRoundStart},
+	IdentityStateFetchingProofs:        {IdentityStatePostProving, IdentityStateWaitForPoetRoundStart},
 }
 
 func (s *IdentityStateStorage) Set(id NodeID, newState IdentityState) error {
@@ -70,22 +70,22 @@ func (s *IdentityStateStorage) Set(id NodeID, newState IdentityState) error {
 	defer s.mu.Unlock()
 
 	currentState, exists := s.states[id]
-	if !exists {
-		if newState == WaitForATXSyncing || newState == WaitForPoetRoundStart {
+	switch {
+	case !exists:
+		if newState == IdentityStateWaitForATXSyncing {
+			s.states[id] = newState
+			return nil
+		}
+	case currentState == newState:
+		return nil
+
+	default:
+		if validNextStates, ok := validStateSwitch[currentState]; ok &&
+			slices.Contains(validNextStates, newState) {
 			s.states[id] = newState
 			return nil
 		}
 	}
-
-	if currentState == newState {
-		return nil
-	}
-
-	if validNextStates, ok := validStateSwitch[currentState]; ok && slices.Contains(validNextStates, newState) {
-		s.states[id] = newState
-		return nil
-	}
-
 	return ErrInvalidIdentityStateSwitch
 }
 

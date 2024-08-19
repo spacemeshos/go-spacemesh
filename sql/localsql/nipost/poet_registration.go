@@ -108,7 +108,10 @@ func PoetRegistrations(db sql.Executor, nodeIDs ...types.NodeID) ([]PoETRegistra
 	}
 	placeholderStr := strings.Join(placeholders, ", ")
 
-	query := fmt.Sprintf(`SELECT id, hash, address, round_id, round_end FROM poet_registration WHERE id IN (%s);`, placeholderStr)
+	query := fmt.Sprintf(
+		`SELECT id, hash, address, round_id, round_end FROM poet_registration WHERE id IN (%s);`,
+		placeholderStr,
+	)
 
 	_, err := db.Exec(query, enc, dec)
 	if err != nil {

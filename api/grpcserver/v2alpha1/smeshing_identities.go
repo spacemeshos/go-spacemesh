@@ -2,14 +2,15 @@ package v2alpha1
 
 import (
 	"context"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -30,7 +31,8 @@ func NewSmeshingIdentitiesService(
 	db sql.Executor,
 	configuredPoetServices map[string]struct{},
 	states identityState,
-	signers map[types.NodeID]struct{}) *SmeshingIdentitiesService {
+	signers map[types.NodeID]struct{},
+) *SmeshingIdentitiesService {
 	return &SmeshingIdentitiesService{
 		db:                     db,
 		configuredPoetServices: configuredPoetServices,
@@ -40,11 +42,11 @@ func NewSmeshingIdentitiesService(
 }
 
 var statusMap = map[types.IdentityState]pb.IdentityStatus{
-	types.WaitForATXSyncing:     pb.IdentityStatus_STATUS_IS_SYNCING,
-	types.WaitForPoetRoundStart: pb.IdentityStatus_STATUS_WAIT_FOR_POET_ROUND_START,
-	types.WaitForPoetRoundEnd:   pb.IdentityStatus_STATUS_WAIT_FOR_POET_ROUND_END,
-	types.FetchingProofs:        pb.IdentityStatus_STATUS_FETCHING_PROOFS,
-	types.PostProving:           pb.IdentityStatus_STATUS_POST_PROVING,
+	types.IdentityStateWaitForATXSyncing:     pb.IdentityStatus_IS_SYNCING,
+	types.IdentityStateWaitForPoetRoundStart: pb.IdentityStatus_WAIT_FOR_POET_ROUND_START,
+	types.IdentityStateWaitForPoetRoundEnd:   pb.IdentityStatus_WAIT_FOR_POET_ROUND_END,
+	types.IdentityStateFetchingProofs:        pb.IdentityStatus_FETCHING_PROOFS,
+	types.IdentityStatePostProving:           pb.IdentityStatus_POST_PROVING,
 }
 
 func (s *SmeshingIdentitiesService) RegisterService(server *grpc.Server) {
@@ -60,7 +62,10 @@ func (s *SmeshingIdentitiesService) String() string {
 	return "SmeshingIdentitiesService"
 }
 
-func (s *SmeshingIdentitiesService) PoetServices(_ context.Context, _ *pb.PoetServicesRequest) (*pb.PoetServicesResponse, error) {
+func (s *SmeshingIdentitiesService) PoetServices(
+	context.Context,
+	*pb.PoetServicesRequest,
+) (*pb.PoetServicesResponse, error) {
 	states := s.states.IdentityStates()
 
 	pbIdentities := make(map[types.NodeID]*pb.PoetServicesResponse_Identity)
@@ -68,11 +73,11 @@ func (s *SmeshingIdentitiesService) PoetServices(_ context.Context, _ *pb.PoetSe
 
 	for desc, state := range states {
 		pbIdentities[desc.NodeID()] = &pb.PoetServicesResponse_Identity{
-			SmesherIdHex: desc.NodeID().String(),
-			Status:       statusMap[state],
+			SmesherId: desc.NodeID().Bytes(),
+			Status:    statusMap[state],
 		}
 
-		if state != types.WaitForPoetRoundEnd {
+		if state != types.IdentityStateWaitForPoetRoundEnd {
 			continue
 		}
 		nodeIdsToRequest = append(nodeIdsToRequest, desc.NodeID())
@@ -92,7 +97,10 @@ func (s *SmeshingIdentitiesService) PoetServices(_ context.Context, _ *pb.PoetSe
 	return &pb.PoetServicesResponse{Identities: maps.Values(pbIdentities)}, nil
 }
 
-func (s *SmeshingIdentitiesService) collectPoetInfos(nodeIds []types.NodeID) (map[types.NodeID]map[string]*pb.PoetServicesResponse_Identity_PoetInfo, error) {
+func (s *SmeshingIdentitiesService) collectPoetInfos(nodeIds []types.NodeID) (
+	map[types.NodeID]map[string]*pb.PoetServicesResponse_Identity_PoetInfo,
+	error,
+) {
 	dbRegs, err := nipost.PoetRegistrations(s.db, nodeIds...)
 	if err != nil {
 		return nil, err
@@ -113,12 +121,12 @@ func (s *SmeshingIdentitiesService) collectPoetInfos(nodeIds []types.NodeID) (ma
 		_, ok = s.configuredPoetServices[reg.Address]
 		switch {
 		case !ok:
-			status = pb.RegistrationStatus_STATUS_RESIDUAL_REG
+			status = pb.RegistrationStatus_RESIDUAL_REG
 			warning = poetsMismatchWarning
 		case reg.RoundID == "":
-			status = pb.RegistrationStatus_STATUS_FAILED_REG
+			status = pb.RegistrationStatus_FAILED_REG
 		default:
-			status = pb.RegistrationStatus_STATUS_SUCCESS_REG
+			status = pb.RegistrationStatus_SUCCESS_REG
 		}
 
 		poetInfos[reg.Address] = &pb.PoetServicesResponse_Identity_PoetInfo{
@@ -134,10 +142,9 @@ func (s *SmeshingIdentitiesService) collectPoetInfos(nodeIds []types.NodeID) (ma
 	for id, poets := range identityRegInfos {
 		for poetAddr := range s.configuredPoetServices {
 			if _, ok := poets[poetAddr]; !ok {
-				// registration is missed
 				identityRegInfos[id][poetAddr] = &pb.PoetServicesResponse_Identity_PoetInfo{
 					Url:                poetAddr,
-					RegistrationStatus: pb.RegistrationStatus_STATUS_NO_REG,
+					RegistrationStatus: pb.RegistrationStatus_NO_REG,
 				}
 			}
 		}

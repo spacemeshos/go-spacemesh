@@ -117,7 +117,7 @@ func (nb *NIPostBuilder) ResetState(nodeId types.NodeID) error {
 	if err := nipost.RemoveNIPost(nb.localDB, nodeId); err != nil {
 		return fmt.Errorf("remove nipost: %w", err)
 	}
-	if err := nb.identityStates.Set(nodeId, types.WaitForPoetRoundStart); err != nil {
+	if err := nb.identityStates.Set(nodeId, types.IdentityStateWaitForPoetRoundStart); err != nil {
 		return fmt.Errorf("set up node id state: %w", err)
 	}
 	return nil
@@ -264,7 +264,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	}
 
 	// Stage 1: query PoET services for proofs
-	if err := nb.identityStates.Set(signer.NodeID(), types.WaitForPoetRoundEnd); err != nil {
+	if err := nb.identityStates.Set(signer.NodeID(), types.IdentityStateWaitForPoetRoundEnd); err != nil {
 		nb.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", signer.NodeID()),
 			zap.Error(err),
@@ -305,7 +305,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	}
 
 	// Stage 2: Post execution.
-	if err := nb.identityStates.Set(signer.NodeID(), types.PostProving); err != nil {
+	if err := nb.identityStates.Set(signer.NodeID(), types.IdentityStatePostProving); err != nil {
 		nb.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", signer.NodeID()),
 			zap.Error(err),
@@ -406,11 +406,12 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		registration.RoundEnd = poetRoundEnd
 
 		if err := nipost.AddPoetRegistration(nb.localDB, registration); err != nil {
-			nb.logger.Warn("failed to save poet registration into db",
+			nb.logger.Warn("failed to save failed poet registration into db",
 				zap.Error(err),
 				log.ZShortStringer("smesherID", nodeID))
 		}
-		return nipost.PoETRegistration{}, &PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
+		return nipost.PoETRegistration{},
+			&PoetSvcUnstableError{msg: "failed to submit challenge to poet service", source: err}
 	}
 
 	logger.Info("challenge submitted to poet proving service", zap.String("round", round.ID))
@@ -605,7 +606,7 @@ func (nb *NIPostBuilder) getBestProof(
 			case <-time.After(time.Until(waitDeadline)):
 			}
 
-			if err := nb.identityStates.Set(nodeID, types.FetchingProofs); err != nil {
+			if err := nb.identityStates.Set(nodeID, types.IdentityStateFetchingProofs); err != nil {
 				nb.logger.Warn("failed to switch identity state",
 					zap.Stringer("smesherID", nodeID),
 					zap.Error(err),

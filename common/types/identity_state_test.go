@@ -1,9 +1,10 @@
 package types
 
 import (
-	"github.com/stretchr/testify/require"
 	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestStateSwitch(t *testing.T) {
@@ -12,7 +13,7 @@ func TestStateSwitch(t *testing.T) {
 		nodeId := RandomNodeID()
 
 		for state := range validStateSwitch {
-			if state != WaitForATXSyncing && state != WaitForPoetRoundStart {
+			if state != IdentityStateWaitForATXSyncing && state != IdentityStateWaitForPoetRoundStart {
 				require.ErrorIs(t, storage.Set(nodeId, state), ErrInvalidIdentityStateSwitch)
 			}
 		}
@@ -22,19 +23,19 @@ func TestStateSwitch(t *testing.T) {
 		storage := NewIdentityStateStorage()
 		nodeId := RandomNodeID()
 
-		require.NoError(t, storage.Set(nodeId, WaitForATXSyncing))
+		require.NoError(t, storage.Set(nodeId, IdentityStateWaitForATXSyncing))
 
 		curState, err := storage.Get(nodeId)
 		require.NoError(t, err)
-		require.Equal(t, curState, WaitForATXSyncing)
+		require.Equal(t, IdentityStateWaitForATXSyncing, curState)
 
 		metStates := make(map[IdentityState]struct{})
-		metStates[WaitForATXSyncing] = struct{}{}
+		metStates[IdentityStateWaitForATXSyncing] = struct{}{}
 
 		for len(metStates) != len(validStateSwitch) {
-			// check all invalid states for given current state
-			for _, newStates := range validStateSwitch {
-				for _, state := range newStates {
+			for _, possibleStates := range validStateSwitch {
+				for _, state := range possibleStates {
+					// try switch to all existing states except of valid
 					validSwitches := validStateSwitch[curState]
 
 					if !slices.Contains(validSwitches, state) && state != curState {
@@ -43,7 +44,7 @@ func TestStateSwitch(t *testing.T) {
 				}
 			}
 
-			// switch to one of valid states, which didn't meet before
+			// switch to one of valid states, which didn't visit before
 			validStates := validStateSwitch[curState]
 			for i, newState := range validStates {
 				if _, ok := metStates[newState]; ok {
@@ -59,6 +60,7 @@ func TestStateSwitch(t *testing.T) {
 				curState, err = storage.Get(nodeId)
 				require.NoError(t, err)
 				require.Equal(t, curState, newState)
+
 				metStates[curState] = struct{}{}
 				break
 			}

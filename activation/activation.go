@@ -533,7 +533,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID))
 
-	if err := b.identitiesStates.Set(nodeID, types.WaitForATXSyncing); err != nil {
+	if err := b.identitiesStates.Set(nodeID, types.IdentityStateWaitForATXSyncing); err != nil {
 		b.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", nodeID),
 			zap.Error(err),
@@ -547,7 +547,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	}
 	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()
 
-	if err := b.identitiesStates.Set(nodeID, types.WaitForPoetRoundStart); err != nil {
+	if err := b.identitiesStates.Set(nodeID, types.IdentityStateWaitForPoetRoundStart); err != nil {
 		b.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", nodeID),
 			zap.Error(err),
