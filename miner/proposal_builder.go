@@ -559,6 +559,9 @@ func (pb *ProposalBuilder) initSignerData(
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	start := time.Now()
+	for _, ss := range pb.signers.signers {
+		ss.latency.start = start
+	}
 	if err := pb.initSharedData(ctx, lid); err != nil {
 		return err
 	}
@@ -571,7 +574,6 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	var eg errgroup.Group
 	eg.SetLimit(pb.cfg.workersLimit)
 	for _, ss := range signers {
-		ss.latency.start = start
 		eg.Go(func() error {
 			if err := pb.initSignerData(ctx, ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
@@ -591,7 +593,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 				)
 			}
 			ss.session.prev = lid
-			ss.latency.data = time.Now()
+			ss.latency.data = time.Since(start)
 			return nil
 		})
 	}
@@ -599,6 +601,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		return err
 	}
 
+	start = time.Now()
 	any := false
 	for _, ss := range signers {
 		if n := len(ss.session.eligibilities.proofs[lid]); n == 0 {
@@ -629,14 +632,15 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		return fmt.Errorf("encode votes: %w", err)
 	}
 	for _, ss := range signers {
-		ss.latency.tortoise = time.Now()
+		ss.latency.tortoise = time.Since(start)
 	}
 
 	meshHash := pb.decideMeshHash(ctx, lid)
 	for _, ss := range signers {
-		ss.latency.hash = time.Now()
+		ss.latency.hash = time.Since(start)
 	}
 
+	start = time.Now()
 	for _, ss := range signers {
 		proofs := ss.session.eligibilities.proofs[lid]
 		if len(proofs) == 0 {
@@ -654,7 +658,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		)
 
 		txs := pb.conState.SelectProposalTXs(lid, len(proofs))
-		ss.latency.txs = time.Now()
+		ss.latency.txs = time.Since(start)
 
 		// needs to be saved before publishing, as we will query it in handler
 		if ss.session.ref == types.EmptyBallotID {
@@ -666,6 +670,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 			}
 		}
 
+		start = time.Now()
 		eg.Go(func() error {
 			proposal := createProposal(
 				&ss.session,
@@ -686,7 +691,8 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 					zap.Error(err),
 				)
 			} else {
-				ss.latency.publish = time.Now()
+				ss.latency.publish = time.Since(start)
+				ss.latency.end = time.Now()
 				ss.log.Info("proposal created",
 					log.ZContext(ctx),
 					zap.Inline(proposal),
