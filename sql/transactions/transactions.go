@@ -419,8 +419,7 @@ func IterateTransactionsOps(
 ) error {
 	var derr error
 	_, err := db.Exec(`select distinct tx, header, layer, block, timestamp, id, result 
-		from transactions
-		left join transactions_results_addresses on id=tid`+builder.FilterFrom(operations),
+		from transactions`+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
 		func(stmt *sql.Statement) bool {
 			var txId types.TransactionID
