@@ -558,9 +558,8 @@ func (pb *ProposalBuilder) initSignerData(
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
-	start := time.Now()
 	for _, ss := range pb.signers.signers {
-		ss.latency.start = start
+		ss.latency.start = time.Now()
 	}
 	if err := pb.initSharedData(ctx, lid); err != nil {
 		return err
@@ -575,6 +574,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	eg.SetLimit(pb.cfg.workersLimit)
 	for _, ss := range signers {
 		eg.Go(func() error {
+			start := time.Now()
 			if err := pb.initSignerData(ctx, ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
 					ss.log.Debug("smesher doesn't have atx that targets this epoch",
@@ -601,7 +601,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		return err
 	}
 
-	start = time.Now()
+	start := time.Now()
 	any := false
 	for _, ss := range signers {
 		if n := len(ss.session.eligibilities.proofs[lid]); n == 0 {
@@ -671,8 +671,8 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 			}
 		}
 
-		start = time.Now()
 		eg.Go(func() error {
+			start := time.Now()
 			proposal := createProposal(
 				&ss.session,
 				pb.shared.beacon,
