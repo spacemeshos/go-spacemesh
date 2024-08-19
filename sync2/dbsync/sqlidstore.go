@@ -2,12 +2,33 @@ package dbsync
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 )
 
 const sqlMaxChunkSize = 1024
+
+type dbExecKey struct{}
+
+func WithSQLExec(ctx context.Context, db sql.Executor) context.Context {
+	return context.WithValue(ctx, dbExecKey{}, db)
+}
+
+func ContextSQLExec(ctx context.Context, db sql.Database) sql.Executor {
+	v := ctx.Value(dbExecKey{})
+	if v == nil {
+		return db
+	}
+	return v.(sql.Executor)
+}
+
+func WithSQLTransaction(ctx context.Context, db sql.Database, toCall func(context.Context) error) error {
+	return db.WithTx(ctx, func(tx sql.Transaction) error {
+		return toCall(WithSQLExec(ctx, tx))
+	})
+}
 
 type sqlIDStore struct {
 	db     sql.Database
@@ -36,16 +57,16 @@ func (s *sqlIDStore) registerHash(h KeyBytes) error {
 	return nil
 }
 
-func (s *sqlIDStore) start() hashsync.Iterator {
+func (s *sqlIDStore) start(ctx context.Context) hashsync.Iterator {
 	// TODO: should probably use a different query to get the first key
-	return s.iter(make(KeyBytes, s.keyLen))
+	return s.iter(ctx, make(KeyBytes, s.keyLen))
 }
 
-func (s *sqlIDStore) iter(from KeyBytes) hashsync.Iterator {
+func (s *sqlIDStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator {
 	if len(from) != s.keyLen {
 		panic("BUG: invalid key length")
 	}
-	return newDBRangeIterator(s.db, s.query, from, sqlMaxChunkSize, s.cache)
+	return newDBRangeIterator(ContextSQLExec(ctx, s.db), s.query, from, sqlMaxChunkSize, s.cache)
 }
 
 type dbBackedStore struct {
@@ -73,15 +94,15 @@ func (s *dbBackedStore) registerHash(h KeyBytes) error {
 	return s.inMemIDStore.registerHash(h)
 }
 
-func (s *dbBackedStore) start() hashsync.Iterator {
-	dbIt := s.sqlIDStore.start()
-	memIt := s.inMemIDStore.start()
+func (s *dbBackedStore) start(ctx context.Context) hashsync.Iterator {
+	dbIt := s.sqlIDStore.start(ctx)
+	memIt := s.inMemIDStore.start(ctx)
 	return combineIterators(nil, dbIt, memIt)
 }
 
-func (s *dbBackedStore) iter(from KeyBytes) hashsync.Iterator {
-	dbIt := s.sqlIDStore.iter(from)
-	memIt := s.inMemIDStore.iter(from)
+func (s *dbBackedStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator {
+	dbIt := s.sqlIDStore.iter(ctx, from)
+	memIt := s.inMemIDStore.iter(ctx, from)
 	return combineIterators(from, dbIt, memIt)
 }
 

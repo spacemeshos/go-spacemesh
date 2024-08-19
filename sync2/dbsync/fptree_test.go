@@ -1,6 +1,7 @@
 package dbsync
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -728,7 +729,10 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					name = fmt.Sprintf("%d-%d_%d", rtc.xIdx, rtc.yIdx, rtc.limit)
 				}
 				t.Run(name, func(t *testing.T) {
-					fpr, err := ft.fingerprintInterval(x[:], y[:], rtc.limit)
+					fpr, err := ft.fingerprintInterval(
+						context.Background(),
+						x[:], y[:], rtc.limit,
+					)
 					require.NoError(t, err)
 					assert.Equal(t, rtc.fp, fpr.fp.String(), "fp")
 					assert.Equal(t, rtc.count, fpr.count, "count")
@@ -786,12 +790,12 @@ func (noIDStore) registerHash(h KeyBytes) error {
 	return nil
 }
 
-func (noIDStore) start() hashsync.Iterator {
+func (noIDStore) start(ctx context.Context) hashsync.Iterator {
 	panic("no ID store")
 
 }
 
-func (noIDStore) iter(from KeyBytes) hashsync.Iterator {
+func (noIDStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator {
 	return noIter{}
 }
 
@@ -856,7 +860,7 @@ func TestFPTreeNoIDStore(t *testing.T) {
 			count: 4,
 		},
 	} {
-		fpr, err := ft.fingerprintInterval(tc.x, tc.y, tc.limit)
+		fpr, err := ft.fingerprintInterval(context.Background(), tc.x, tc.y, tc.limit)
 		require.NoError(t, err)
 		require.Equal(t, tc.fp, fpr.fp.String(), "fp")
 		require.Equal(t, tc.count, fpr.count, "count")
@@ -874,7 +878,8 @@ func TestFPTreeClone(t *testing.T) {
 	ft1.addHash(hashes[0][:])
 	ft1.addHash(hashes[1][:])
 
-	fpr, err := ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
+	ctx := context.Background()
+	fpr, err := ft1.fingerprintInterval(ctx, hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
 	require.Equal(t, "222222222222222222222222", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(2), fpr.count, "count")
@@ -895,7 +900,7 @@ func TestFPTreeClone(t *testing.T) {
 	t.Logf("ft2 after-clone:\n%s", sb.String())
 
 	// original tree unchanged --- rmme!!!!
-	fpr, err = ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
+	fpr, err = ft1.fingerprintInterval(ctx, hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
 	require.Equal(t, "222222222222222222222222", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(2), fpr.count, "count")
@@ -903,14 +908,14 @@ func TestFPTreeClone(t *testing.T) {
 
 	ft2.addHash(hashes[2][:])
 
-	fpr, err = ft2.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
+	fpr, err = ft2.fingerprintInterval(ctx, hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
 	require.Equal(t, "666666666666666666666666", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(3), fpr.count, "count")
 	require.Equal(t, 0, fpr.itype, "itype")
 
 	// original tree unchanged
-	fpr, err = ft1.fingerprintInterval(hashes[0][:], hashes[0][:], -1)
+	fpr, err = ft1.fingerprintInterval(ctx, hashes[0][:], hashes[0][:], -1)
 	require.NoError(t, err)
 	require.Equal(t, "222222222222222222222222", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(2), fpr.count, "count")
@@ -1091,7 +1096,7 @@ func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResultWithBounds {
 
 func verifyInterval(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32, limit int) fpResult {
 	expFPR := dumbFP(hs, x, y, limit)
-	fpr, err := ft.fingerprintInterval(x[:], y[:], limit)
+	fpr, err := ft.fingerprintInterval(context.Background(), x[:], y[:], limit)
 	require.NoError(t, err)
 	require.Equal(t, expFPR, toFPResultWithBounds(t, fpr),
 		"x=%s y=%s limit=%d", x.String(), y.String(), limit)
@@ -1149,7 +1154,7 @@ func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems,
 
 	checkTree(t, ft, maxDepth)
 
-	fpr, err := ft.fingerprintInterval(hs[0][:], hs[0][:], -1)
+	fpr, err := ft.fingerprintInterval(context.Background(), hs[0][:], hs[0][:], -1)
 	require.NoError(t, err)
 	require.Equal(t, fp, fpr.fp, "fp")
 	require.Equal(t, uint32(numItems), fpr.count, "count")
@@ -1223,7 +1228,7 @@ func verifyEasySplit(
 ) {
 	// t.Logf("depth %d", depth)
 	// t.Logf("--- fingerprint interval %s %s ---", x.String(), y.String())
-	fpr, err := ft.fingerprintInterval(x, y, -1)
+	fpr, err := ft.fingerprintInterval(context.Background(), x, y, -1)
 	require.NoError(t, err)
 	if fpr.count <= 1 {
 		return
@@ -1235,7 +1240,7 @@ func verifyEasySplit(
 
 	m := fpr.count / 2
 	// t.Logf("--- easy split %s %s %d ---", x.String(), y.String(), m)
-	sr, err := ft.easySplit(x[:], y[:], int(m))
+	sr, err := ft.easySplit(context.Background(), x[:], y[:], int(m))
 	if err != nil {
 		require.ErrorIs(t, err, errEasySplitFailed)
 		return 0, 1
@@ -1254,28 +1259,28 @@ func verifyEasySplit(
 	precMiddle := itKey(t, sr.part0.end)
 	require.Equal(t, precMiddle, itKey(t, sr.part1.start))
 
-	fpr11, err := ft.fingerprintInterval(x, precMiddle, -1)
+	fpr11, err := ft.fingerprintInterval(context.Background(), x, precMiddle, -1)
 	require.NoError(t, err)
 	require.Equal(t, sr.part0.fp, fpr11.fp)
 	require.Equal(t, sr.part0.count, fpr11.count)
 	require.Equal(t, a, itKey(t, fpr11.start))
 	require.Equal(t, precMiddle, itKey(t, fpr11.end))
 
-	fpr12, err := ft.fingerprintInterval(precMiddle, y, -1)
+	fpr12, err := ft.fingerprintInterval(context.Background(), precMiddle, y, -1)
 	require.NoError(t, err)
 	require.Equal(t, sr.part1.fp, fpr12.fp)
 	require.Equal(t, sr.part1.count, fpr12.count)
 	require.Equal(t, precMiddle, itKey(t, fpr12.start))
 	require.Equal(t, b, itKey(t, fpr12.end))
 
-	fpr11, err = ft.fingerprintInterval(x, sr.middle, -1)
+	fpr11, err = ft.fingerprintInterval(context.Background(), x, sr.middle, -1)
 	require.NoError(t, err)
 	require.Equal(t, sr.part0.fp, fpr11.fp)
 	require.Equal(t, sr.part0.count, fpr11.count)
 	require.Equal(t, a, itKey(t, fpr11.start))
 	require.Equal(t, precMiddle, itKey(t, fpr11.end))
 
-	fpr12, err = ft.fingerprintInterval(sr.middle, y, -1)
+	fpr12, err = ft.fingerprintInterval(context.Background(), sr.middle, y, -1)
 	require.NoError(t, err)
 	require.Equal(t, sr.part1.fp, fpr12.fp)
 	require.Equal(t, sr.part1.count, fpr12.count)
@@ -1301,7 +1306,7 @@ func TestEasySplit(t *testing.T) {
 			// t.Logf("adding hash %s", h.String())
 			ft.addHash(h[:])
 		}
-		k, err := ft.start().Key()
+		k, err := ft.start(context.Background()).Key()
 		require.NoError(t, err)
 		x := k.(KeyBytes)
 		v := load64(x) & ^(1<<(64-maxDepth) - 1)
@@ -1460,7 +1465,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	for n := 0; n < numIter; n++ {
 		x := types.RandomHash()
 		y := types.RandomHash()
-		ft.fingerprintInterval(x[:], y[:], -1)
+		ft.fingerprintInterval(context.Background(), x[:], y[:], -1)
 	}
 	elapsed := time.Now().Sub(ts)
 
@@ -1486,7 +1491,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 		// t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
 		expFPResult := dumbFP(*hs, x, y, -1)
 		//expFPResult := dumbAggATXs(t, db, x, y)
-		fpr, err := ft.fingerprintInterval(x[:], y[:], -1)
+		fpr, err := ft.fingerprintInterval(context.Background(), x[:], y[:], -1)
 		require.NoError(t, err)
 		require.Equal(t, expFPResult, toFPResultWithBounds(t, fpr),
 			"x=%s y=%s", x.String(), y.String())
@@ -1497,7 +1502,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 		}
 		// t.Logf("QQQQQ: x=%s y=%s limit=%d", x.String(), y.String(), limit)
 		expFPResult = dumbFP(*hs, x, y, limit)
-		fpr, err = ft.fingerprintInterval(x[:], y[:], limit)
+		fpr, err = ft.fingerprintInterval(context.Background(), x[:], y[:], limit)
 		require.NoError(t, err)
 		require.Equal(t, expFPResult, toFPResultWithBounds(t, fpr),
 			"x=%s y=%s limit=%d", x.String(), y.String(), limit)

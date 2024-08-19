@@ -481,11 +481,11 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) Requester {
 			storeA, getRequester, opts,
 			func(ctx context.Context, client Requester, srvPeerID p2p.Peer) {
 				pss := NewPairwiseStoreSyncer(client, opts)
-				minA, err := storeA.Min()
+				minA, err := storeA.Min(ctx)
 				require.NoError(t, err)
 				kA, err := minA.Key()
 				require.NoError(t, err)
-				infoA, err := storeA.GetRangeInfo(nil, kA, kA, -1)
+				infoA, err := storeA.GetRangeInfo(ctx, nil, kA, kA, -1)
 				require.NoError(t, err)
 				prA, err := pss.Probe(ctx, srvPeerID, storeB, nil, nil)
 				require.NoError(t, err)
@@ -493,11 +493,11 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) Requester {
 				require.Equal(t, infoA.Count, prA.Count)
 				require.InDelta(t, 0.98, prA.Sim, 0.05, "sim")
 
-				minA, err = storeA.Min()
+				minA, err = storeA.Min(ctx)
 				require.NoError(t, err)
 				kA, err = minA.Key()
 				require.NoError(t, err)
-				partInfoA, err := storeA.GetRangeInfo(nil, kA, kA, infoA.Count/2)
+				partInfoA, err := storeA.GetRangeInfo(ctx, nil, kA, kA, infoA.Count/2)
 				require.NoError(t, err)
 				xK, err := partInfoA.Start.Key()
 				require.NoError(t, err)

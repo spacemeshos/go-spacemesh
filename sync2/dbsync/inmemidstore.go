@@ -1,6 +1,8 @@
 package dbsync
 
 import (
+	"context"
+
 	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 	"github.com/spacemeshos/go-spacemesh/sync2/internal/skiplist"
 )
@@ -34,11 +36,11 @@ func (s *inMemIDStore) registerHash(h KeyBytes) error {
 	return nil
 }
 
-func (s *inMemIDStore) start() hashsync.Iterator {
+func (s *inMemIDStore) start(ctx context.Context) hashsync.Iterator {
 	return &inMemIDStoreIterator{sl: s.sl, node: s.sl.First()}
 }
 
-func (s *inMemIDStore) iter(from KeyBytes) hashsync.Iterator {
+func (s *inMemIDStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator {
 	node := s.sl.FindGTENode(from)
 	if node == nil {
 		node = s.sl.First()

@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 )
 
@@ -32,9 +33,41 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 	require.NoError(t, err)
 	proto := "itest"
 	t.Logf("QQQQQ: 2")
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	storeA := NewItemStoreAdapter(NewDBItemStore(dbA, "select id from foo", testQuery, 32, maxDepth))
+	t.Logf("QQQQQ: 2.1")
+	require.NoError(t, dbA.WithTx(ctx, func(tx sql.Transaction) error {
+		return storeA.s.EnsureLoaded(WithSQLExec(ctx, tx))
+	}))
 	t.Logf("QQQQQ: 3")
 	storeB := NewItemStoreAdapter(NewDBItemStore(dbB, "select id from foo", testQuery, 32, maxDepth))
+	t.Logf("QQQQQ: 3.1")
+	var x *types.Hash32
+	require.NoError(t, dbB.WithTx(ctx, func(tx sql.Transaction) error {
+		ctx := WithSQLExec(ctx, tx)
+		if err := storeB.s.EnsureLoaded(ctx); err != nil {
+			return err
+		}
+		it, err := storeB.Min(ctx)
+		if err != nil {
+			return err
+		}
+		if it != nil {
+			x = &types.Hash32{}
+			k, err := it.Key()
+			if err != nil {
+				return err
+			}
+			h := k.(types.Hash32)
+			v := load64(h[:]) & ^uint64(1<<(64-maxDepth)-1)
+			binary.BigEndian.PutUint64(x[:], v)
+			for i := 8; i < len(x); i++ {
+				x[i] = 0
+			}
+			t.Logf("x: %s", x.String())
+		}
+		return nil
+	}))
 	t.Logf("QQQQQ: 4")
 
 	// QQQQQ: rmme
@@ -56,12 +89,13 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 				// uncomment to enable verbose logging which may slow down tests
 				// hashsync.WithRangeSyncLogger(log.Named("sideA")),
 			})
-			return pss.Serve(ctx, req, stream, storeA)
+			return dbA.WithTx(ctx, func(tx sql.Transaction) error {
+				return pss.Serve(WithSQLExec(ctx, tx), req, stream, storeA)
+			})
 		},
 		server.WithTimeout(10*time.Second),
 		server.WithLog(log))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	var eg errgroup.Group
 
 	client := server.New(mesh.Hosts()[1], proto,
@@ -98,24 +132,10 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 		// hashsync.WithRangeSyncLogger(log.Named("sideB")),
 	})
 
-	var x *types.Hash32
-	it, err := storeB.Min()
-	require.NoError(t, err)
-	if it != nil {
-		x = &types.Hash32{}
-		k, err := it.Key()
-		require.NoError(t, err)
-		h := k.(types.Hash32)
-		v := load64(h[:]) & ^uint64(1<<(64-maxDepth)-1)
-		binary.BigEndian.PutUint64(x[:], v)
-		for i := 8; i < len(x); i++ {
-			x[i] = 0
-		}
-		t.Logf("x: %s", x.String())
-	}
-
 	tStart := time.Now()
-	require.NoError(t, pss.SyncStore(ctx, srvPeerID, storeB, x, x))
+	require.NoError(t, dbB.WithTx(ctx, func(tx sql.Transaction) error {
+		return pss.SyncStore(WithSQLExec(ctx, tx), srvPeerID, storeB, x, x)
+	}))
 	t.Logf("synced in %v", time.Since(tStart))
 
 	// // QQQQQ: rmme
@@ -129,47 +149,53 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 	if len(combinedItems) == 0 {
 		return
 	}
-	it, err = storeA.Min()
-	require.NoError(t, err)
 	var actItemsA []KeyBytes
-	if len(combinedItems) == 0 {
-		assert.Nil(t, it)
-	} else {
-		for range combinedItems {
+	require.NoError(t, dbA.WithTx(ctx, func(tx sql.Transaction) error {
+		it, err := storeA.Min(WithSQLExec(ctx, tx))
+		require.NoError(t, err)
+		if len(combinedItems) == 0 {
+			assert.Nil(t, it)
+		} else {
+			for range combinedItems {
+				k, err := it.Key()
+				require.NoError(t, err)
+				h := k.(types.Hash32)
+				// t.Logf("synced itemA: %s", h.String())
+				actItemsA = append(actItemsA, h[:])
+				require.NoError(t, it.Next())
+			}
 			k, err := it.Key()
 			require.NoError(t, err)
 			h := k.(types.Hash32)
-			// t.Logf("synced itemA: %s", h.String())
-			actItemsA = append(actItemsA, h[:])
-			require.NoError(t, it.Next())
+			assert.Equal(t, actItemsA[0], KeyBytes(h[:]))
 		}
-		k, err := it.Key()
-		require.NoError(t, err)
-		h := k.(types.Hash32)
-		assert.Equal(t, actItemsA[0], KeyBytes(h[:]))
-	}
+		return nil
+	}))
 
-	it, err = storeB.Min()
-	require.NoError(t, err)
 	var actItemsB []KeyBytes
-	if len(combinedItems) == 0 {
-		assert.Nil(t, it)
-	} else {
-		for range combinedItems {
+	require.NoError(t, dbB.WithTx(ctx, func(tx sql.Transaction) error {
+		it, err := storeB.Min(WithSQLExec(ctx, tx))
+		require.NoError(t, err)
+		if len(combinedItems) == 0 {
+			assert.Nil(t, it)
+		} else {
+			for range combinedItems {
+				k, err := it.Key()
+				require.NoError(t, err)
+				h := k.(types.Hash32)
+				// t.Logf("synced itemB: %s", h.String())
+				actItemsB = append(actItemsB, h[:])
+				require.NoError(t, it.Next())
+			}
 			k, err := it.Key()
 			require.NoError(t, err)
 			h := k.(types.Hash32)
-			// t.Logf("synced itemB: %s", h.String())
-			actItemsB = append(actItemsB, h[:])
-			require.NoError(t, it.Next())
+			assert.Equal(t, actItemsB[0], KeyBytes(h[:]))
 		}
-		k, err := it.Key()
-		require.NoError(t, err)
-		h := k.(types.Hash32)
-		assert.Equal(t, actItemsB[0], KeyBytes(h[:]))
-		assert.Equal(t, combinedItems, actItemsA)
-		assert.Equal(t, actItemsA, actItemsB)
-	}
+		return nil
+	}))
+	assert.Equal(t, combinedItems, actItemsA)
+	assert.Equal(t, actItemsA, actItemsB)
 }
 
 func TestP2P(t *testing.T) {
@@ -239,7 +265,10 @@ func TestP2P(t *testing.T) {
 	})
 	t.Run("random test", func(t *testing.T) {
 		// TODO: increase these values and profile
-		const nShared = 800000
+		// const nShared = 8000000
+		// const nUniqueA = 40000
+		// const nUniqueB = 80000
+		const nShared = 80000
 		const nUniqueA = 400
 		const nUniqueB = 800
 		// const nShared = 2

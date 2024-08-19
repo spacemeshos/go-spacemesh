@@ -12,11 +12,12 @@ import (
 func TestDBItemStoreEmpty(t *testing.T) {
 	db := populateDB(t, 32, nil)
 	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
-	it, err := s.Min()
+	ctx := context.Background()
+	it, err := s.Min(ctx)
 	require.NoError(t, err)
 	require.Nil(t, it)
 
-	info, err := s.GetRangeInfo(nil,
+	info, err := s.GetRangeInfo(ctx, nil,
 		KeyBytes(util.FromHex("0000000000000000000000000000000000000000000000000000000000000000")),
 		KeyBytes(util.FromHex("0000000000000000000000000000000000000000000000000000000000000000")),
 		-1)
@@ -26,7 +27,7 @@ func TestDBItemStoreEmpty(t *testing.T) {
 	require.Nil(t, info.Start)
 	require.Nil(t, info.End)
 
-	info, err = s.GetRangeInfo(nil,
+	info, err = s.GetRangeInfo(ctx, nil,
 		KeyBytes(util.FromHex("0000000000000000000000000000000000000000000000000000000000000000")),
 		KeyBytes(util.FromHex("9999000000000000000000000000000000000000000000000000000000000000")),
 		-1)
@@ -45,13 +46,14 @@ func TestDBItemStore(t *testing.T) {
 		util.FromHex("8888888888888888888888888888888888888888888888888888888888888888"),
 		util.FromHex("abcdef1234567890000000000000000000000000000000000000000000000000"),
 	}
+	ctx := context.Background()
 	db := populateDB(t, 32, ids)
 	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
-	it, err := s.Min()
+	it, err := s.Min(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
 		itKey(t, it).String())
-	has, err := s.Has(KeyBytes(util.FromHex("9876000000000000000000000000000000000000000000000000000000000000")))
+	has, err := s.Has(ctx, KeyBytes(util.FromHex("9876000000000000000000000000000000000000000000000000000000000000")))
 	require.NoError(t, err)
 	require.False(t, has)
 
@@ -111,16 +113,16 @@ func TestDBItemStore(t *testing.T) {
 		name := fmt.Sprintf("%d-%d_%d", tc.xIdx, tc.yIdx, tc.limit)
 		t.Run(name, func(t *testing.T) {
 			t.Logf("x %s y %s limit %d", ids[tc.xIdx], ids[tc.yIdx], tc.limit)
-			info, err := s.GetRangeInfo(nil, ids[tc.xIdx], ids[tc.yIdx], tc.limit)
+			info, err := s.GetRangeInfo(ctx, nil, ids[tc.xIdx], ids[tc.yIdx], tc.limit)
 			require.NoError(t, err)
 			require.Equal(t, tc.count, info.Count)
 			require.Equal(t, tc.fp, info.Fingerprint.(fmt.Stringer).String())
 			require.Equal(t, ids[tc.startIdx], itKey(t, info.Start))
 			require.Equal(t, ids[tc.endIdx], itKey(t, info.End))
-			has, err := s.Has(ids[tc.startIdx])
+			has, err := s.Has(ctx, ids[tc.startIdx])
 			require.NoError(t, err)
 			require.True(t, has)
-			has, err = s.Has(ids[tc.endIdx])
+			has, err = s.Has(ctx, ids[tc.endIdx])
 			require.NoError(t, err)
 			require.True(t, has)
 		})
@@ -136,7 +138,8 @@ func TestDBItemStoreAdd(t *testing.T) {
 	}
 	db := populateDB(t, 32, ids)
 	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
-	it, err := s.Min()
+	ctx := context.Background()
+	it, err := s.Min(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
 		itKey(t, it).String())
@@ -150,7 +153,7 @@ func TestDBItemStoreAdd(t *testing.T) {
 	// s.ft.dump(&sb)
 	// t.Logf("tree:\n%s", sb.String())
 
-	info, err := s.GetRangeInfo(nil, ids[2], ids[0], -1)
+	info, err := s.GetRangeInfo(ctx, nil, ids[2], ids[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, 3, info.Count)
 	require.Equal(t, "761032cfe98ba54ddddddddd", info.Fingerprint.(fmt.Stringer).String())
@@ -167,14 +170,15 @@ func TestDBItemStoreCopy(t *testing.T) {
 	}
 	db := populateDB(t, 32, ids)
 	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
-	it, err := s.Min()
+	ctx := context.Background()
+	it, err := s.Min(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
 		itKey(t, it).String())
 
 	copy := s.Copy()
 
-	info, err := copy.GetRangeInfo(nil, ids[2], ids[0], -1)
+	info, err := copy.GetRangeInfo(ctx, nil, ids[2], ids[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, 2, info.Count)
 	require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.(fmt.Stringer).String())
@@ -184,14 +188,14 @@ func TestDBItemStoreCopy(t *testing.T) {
 	newID := KeyBytes(util.FromHex("abcdef1234567890000000000000000000000000000000000000000000000000"))
 	require.NoError(t, copy.Add(context.Background(), newID))
 
-	info, err = s.GetRangeInfo(nil, ids[2], ids[0], -1)
+	info, err = s.GetRangeInfo(ctx, nil, ids[2], ids[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, 2, info.Count)
 	require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.(fmt.Stringer).String())
 	require.Equal(t, ids[2], itKey(t, info.Start))
 	require.Equal(t, ids[0], itKey(t, info.End))
 
-	info, err = copy.GetRangeInfo(nil, ids[2], ids[0], -1)
+	info, err = copy.GetRangeInfo(ctx, nil, ids[2], ids[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, 3, info.Count)
 	require.Equal(t, "761032cfe98ba54ddddddddd", info.Fingerprint.(fmt.Stringer).String())

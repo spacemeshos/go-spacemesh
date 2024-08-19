@@ -2,6 +2,7 @@ package dbsync
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -320,6 +321,7 @@ type fpResult struct {
 }
 
 type aggContext struct {
+	ctx                     context.Context
 	x, y                    KeyBytes
 	fp, fp0                 fingerprint
 	count, count0           uint32
@@ -456,8 +458,8 @@ func (ac *aggContext) maybeIncludeNode(node node, p prefix) bool {
 type idStore interface {
 	clone() idStore
 	registerHash(h KeyBytes) error
-	start() hashsync.Iterator
-	iter(from KeyBytes) hashsync.Iterator
+	start(ctx context.Context) hashsync.Iterator
+	iter(ctx context.Context, from KeyBytes) hashsync.Iterator
 }
 
 type fpTree struct {
@@ -669,7 +671,7 @@ func (ft *fpTree) aggregateEdge(x, y KeyBytes, p prefix, ac *aggContext) (cont b
 		startFrom = x
 	}
 	ft.log("aggregateEdge: startFrom %s", startFrom)
-	it := ft.iter(startFrom)
+	it := ft.iter(ac.ctx, startFrom)
 	if ac.limit == 0 {
 		ac.end = it.Clone()
 		if x != nil {
@@ -1022,19 +1024,19 @@ func (ft *fpTree) aggregateInterval(ac *aggContext) (err error) {
 	}
 }
 
-func (ft *fpTree) endIterFromPrefix(p prefix) hashsync.Iterator {
+func (ft *fpTree) endIterFromPrefix(ac *aggContext, p prefix) hashsync.Iterator {
 	k := make(KeyBytes, ft.keyLen)
 	p.idAfter(k)
 	ft.log("endIterFromPrefix: p: %s idAfter: %s", p, k)
-	return ft.iter(k)
+	return ft.iter(ac.ctx, k)
 }
 
-func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, err error) {
+func (ft *fpTree) fingerprintInterval(ctx context.Context, x, y KeyBytes, limit int) (fpr fpResult, err error) {
 	ft.enter("fingerprintInterval: x %s y %s limit %d", x, y, limit)
 	defer func() {
 		ft.leave(fpr.fp, fpr.count, fpr.itype, fpr.start, fpr.end, err)
 	}()
-	ac := aggContext{x: x, y: y, limit: limit}
+	ac := aggContext{ctx: ctx, x: x, y: y, limit: limit}
 	if err := ft.aggregateInterval(&ac); err != nil {
 		return fpResult{}, err
 	}
@@ -1052,7 +1054,7 @@ func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, e
 		ft.log("fingerprintInterval: start %s", ac.start)
 		fpr.start = ac.start
 	} else {
-		fpr.start = ft.iter(x)
+		fpr.start = ft.iter(ac.ctx, x)
 		ft.log("fingerprintInterval: start from x: %s", fpr.start)
 	}
 
@@ -1063,10 +1065,10 @@ func (ft *fpTree) fingerprintInterval(x, y KeyBytes, limit int) (fpr fpResult, e
 		fpr.end = fpr.start
 		ft.log("fingerprintInterval: end at start %s", fpr.end)
 	} else if ac.lastPrefix != nil {
-		fpr.end = ft.endIterFromPrefix(*ac.lastPrefix)
+		fpr.end = ft.endIterFromPrefix(&ac, *ac.lastPrefix)
 		ft.log("fingerprintInterval: end at lastPrefix %s -> %s", *ac.lastPrefix, fpr.end)
 	} else {
-		fpr.end = ft.iter(y)
+		fpr.end = ft.iter(ac.ctx, y)
 		ft.log("fingerprintInterval: end at y: %s", fpr.end)
 	}
 
@@ -1082,7 +1084,7 @@ type splitResult struct {
 // part has close to limit items while not making any idStore queries so that the database
 // is not accessed. If the split can't be done, which includes the situation where one of
 // the sides has 0 items, easySplit returns errEasySplitFailed error
-func (ft *fpTree) easySplit(x, y KeyBytes, limit int) (sr splitResult, err error) {
+func (ft *fpTree) easySplit(ctx context.Context, x, y KeyBytes, limit int) (sr splitResult, err error) {
 	ft.enter("easySplit: x %s y %s limit %d", x, y, limit)
 	defer func() {
 		ft.leave(sr.part0.fp, sr.part0.count, sr.part0.itype, sr.part0.start, sr.part0.end,
@@ -1091,7 +1093,7 @@ func (ft *fpTree) easySplit(x, y KeyBytes, limit int) (sr splitResult, err error
 	if limit < 0 {
 		panic("BUG: easySplit with limit < 0")
 	}
-	ac := aggContext{x: x, y: y, limit: limit, easySplit: true}
+	ac := aggContext{ctx: ctx, x: x, y: y, limit: limit, easySplit: true}
 	if err := ft.aggregateInterval(&ac); err != nil {
 		return splitResult{}, err
 	}
@@ -1121,15 +1123,15 @@ func (ft *fpTree) easySplit(x, y KeyBytes, limit int) (sr splitResult, err error
 		fp:    ac.fp0,
 		count: ac.count0,
 		itype: ac.itype,
-		start: ft.iter(x),
-		end:   ft.endIterFromPrefix(*ac.lastPrefix0),
+		start: ft.iter(ac.ctx, x),
+		end:   ft.endIterFromPrefix(&ac, *ac.lastPrefix0),
 	}
 	part1 := fpResult{
 		fp:    ac.fp,
 		count: ac.count,
 		itype: ac.itype,
 		start: part0.end.Clone(),
-		end:   ft.endIterFromPrefix(*ac.lastPrefix),
+		end:   ft.endIterFromPrefix(&ac, *ac.lastPrefix),
 	}
 	return splitResult{
 		part0:  part0,

@@ -287,12 +287,12 @@ func (pss *PairwiseStoreSyncer) Probe(
 	rsr := NewRangeSetReconciler(is, pss.opts...)
 	if x == nil {
 		initReq, err = c.withInitialRequest(func(c Conduit) error {
-			info, err = rsr.InitiateProbe(c)
+			info, err = rsr.InitiateProbe(ctx, c)
 			return err
 		})
 	} else {
 		initReq, err = c.withInitialRequest(func(c Conduit) error {
-			info, err = rsr.InitiateBoundedProbe(c, *x, *y)
+			info, err = rsr.InitiateBoundedProbe(ctx, c, *x, *y)
 			return err
 		})
 	}
@@ -325,10 +325,12 @@ func (pss *PairwiseStoreSyncer) SyncStore(
 		err     error
 	)
 	if x == nil {
-		initReq, err = c.withInitialRequest(rsr.Initiate)
+		initReq, err = c.withInitialRequest(func(c Conduit) error {
+			return rsr.Initiate(ctx, c)
+		})
 	} else {
 		initReq, err = c.withInitialRequest(func(c Conduit) error {
-			return rsr.InitiateBounded(c, *x, *y)
+			return rsr.InitiateBounded(ctx, c, *x, *y)
 		})
 	}
 	if err != nil {

@@ -35,11 +35,11 @@ func NewSetSyncBase(ps PairwiseSyncer, is ItemStore, handler SyncKeyHandler) *Se
 }
 
 // Count implements syncBase.
-func (ssb *SetSyncBase) Count() (int, error) {
+func (ssb *SetSyncBase) Count(ctx context.Context) (int, error) {
 	// TODO: don't lock on db-bound operations
 	ssb.Lock()
 	defer ssb.Unlock()
-	it, err := ssb.is.Min()
+	it, err := ssb.is.Min(ctx)
 	if it == nil || err != nil {
 		return 0, err
 	}
@@ -47,7 +47,7 @@ func (ssb *SetSyncBase) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	info, err := ssb.is.GetRangeInfo(nil, x, x, -1)
+	info, err := ssb.is.GetRangeInfo(ctx, nil, x, x, -1)
 	if err != nil {
 		return 0, err
 	}
@@ -79,7 +79,7 @@ func (ssb *SetSyncBase) acceptKey(ctx context.Context, k Ordered, p p2p.Peer) er
 	ssb.Lock()
 	defer ssb.Unlock()
 	key := k.(fmt.Stringer).String()
-	has, err := ssb.is.Has(k)
+	has, err := ssb.is.Has(ctx, k)
 	if err != nil {
 		return err
 	}

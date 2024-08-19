@@ -179,7 +179,7 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 				zap.Int("count", pr.Count))
 		}
 
-		c, err := mpr.syncBase.Count()
+		c, err := mpr.syncBase.Count(ctx)
 		if err != nil {
 			return s, err
 		}

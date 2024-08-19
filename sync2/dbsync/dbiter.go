@@ -73,7 +73,7 @@ func newLRU() *lru {
 }
 
 type dbRangeIterator struct {
-	db           sql.Database
+	db           sql.Executor
 	from         KeyBytes
 	query        string
 	chunkSize    int
@@ -91,7 +91,7 @@ var _ hashsync.Iterator = &dbRangeIterator{}
 // makeDBIterator creates a dbRangeIterator and initializes it from the database.
 // If query returns no rows even after starting from zero ID, errEmptySet error is returned.
 func newDBRangeIterator(
-	db sql.Database,
+	db sql.Executor,
 	query string,
 	from KeyBytes,
 	maxChunkSize int,
@@ -103,8 +103,6 @@ func newDBRangeIterator(
 	if maxChunkSize <= 0 {
 		panic("BUG: makeDBIterator: chunkSize must be > 0")
 	}
-	// panic("TBD: QQQQQ: do not preload the iterator! Key should panic upon no entries. With from > max item, iterator should work, wrapping around (TEST)!")
-	// panic("TBD: QQQQQ: Key() should return an error!")
 	return &dbRangeIterator{
 		db:           db,
 		from:         from.Clone(),

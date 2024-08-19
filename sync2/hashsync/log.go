@@ -10,15 +10,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+type itFormatter struct {
+	it Iterator
+}
+
+func (f itFormatter) String() string {
+	k, err := f.it.Key()
+	if err != nil {
+		return fmt.Sprintf("<error: %v>", err)
+	}
+	return hexStr(k)
+}
+
 func IteratorField(name string, it Iterator) zap.Field {
 	if it == nil {
 		return zap.String(name, "<nil>")
 	}
-	k, err := it.Key()
-	if err != nil {
-		return zap.String(name, fmt.Sprintf("<error: %v>", err))
-	}
-	return HexField(name, k)
+	return zap.Stringer(name, itFormatter{it: it})
 }
 
 // based on code from testify
@@ -40,25 +48,29 @@ func isNil(object any) bool {
 	return false
 }
 
-func HexField(name string, k any) zap.Field {
+func hexStr(k any) string {
 	switch h := k.(type) {
 	case types.Hash32:
-		return zap.String(name, h.ShortString())
+		return h.ShortString()
 	case types.Hash12:
-		return zap.String(name, hex.EncodeToString(h[:5]))
+		return hex.EncodeToString(h[:5])
 	case []byte:
 		if len(h) > 5 {
 			h = h[:5]
 		}
-		return zap.String(name, hex.EncodeToString(h[:5]))
+		return hex.EncodeToString(h[:5])
 	case string:
-		return zap.String(name, h)
+		return h
 	case fmt.Stringer:
-		return zap.String(name, h.String())
+		return h.String()
 	default:
 		if isNil(k) {
-			return zap.String(name, "<nil>")
+			return "<nil>"
 		}
-		panic("unexpected type: " + reflect.TypeOf(k).String())
+		return fmt.Sprintf("<unexpected type: %T>", k)
 	}
+}
+
+func HexField(name string, k any) zap.Field {
+	return zap.String(name, hexStr(k))
 }

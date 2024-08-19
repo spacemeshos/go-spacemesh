@@ -43,15 +43,19 @@ func TestIncID(t *testing.T) {
 
 func createDB(t *testing.T, keyLen int) sql.Database {
 	// QQQQQ: FIXME
-	tmpDir := t.TempDir()
-	t.Logf("QQQQQ: temp dir: %s", tmpDir)
-	db, err := sql.Open(fmt.Sprintf("file:%s/test.db", tmpDir), sql.WithIgnoreSchemaDrift())
-	require.NoError(t, err)
-	// db := sql.InMemory(sql.WithIgnoreSchemaDrift())
+	// tmpDir := t.TempDir()
+	// t.Logf("QQQQQ: temp dir: %s", tmpDir)
+	// db, err := sql.Open(
+	// 	fmt.Sprintf("file:%s/test.db", tmpDir),
+	// 	sql.WithIgnoreSchemaDrift(),
+	// 	sql.WithConnections(16),
+	// )
+	// require.NoError(t, err)
+	db := sql.InMemory(sql.WithIgnoreSchemaDrift(), sql.WithConnections(16))
 	t.Cleanup(func() {
 		require.NoError(t, db.Close())
 	})
-	_, err = db.Exec(fmt.Sprintf("create table foo(id char(%d) not null primary key)", keyLen), nil, nil)
+	_, err := db.Exec(fmt.Sprintf("create table foo(id char(%d) not null primary key)", keyLen), nil, nil)
 	require.NoError(t, err)
 	return db
 }

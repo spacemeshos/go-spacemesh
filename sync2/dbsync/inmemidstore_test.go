@@ -1,6 +1,7 @@
 package dbsync
 
 import (
+	"context"
 	"encoding/hex"
 	"testing"
 
@@ -17,11 +18,12 @@ func TestInMemIDStore(t *testing.T) {
 		err error
 	)
 	s := newInMemIDStore(32)
+	ctx := context.Background()
 
-	_, err = s.start().Key()
+	_, err = s.start(ctx).Key()
 	require.ErrorIs(t, err, errEmptySet)
 
-	_, err = s.iter(util.FromHex("0000000000000000000000000000000000000000000000000000000000000000")).Key()
+	_, err = s.iter(ctx, util.FromHex("0000000000000000000000000000000000000000000000000000000000000000")).Key()
 	require.ErrorIs(t, err, errEmptySet)
 
 	for _, h := range []string{
@@ -38,9 +40,10 @@ func TestInMemIDStore(t *testing.T) {
 
 	for i := range 6 {
 		if i%2 == 0 {
-			it = s.start()
+			it = s.start(ctx)
 		} else {
 			it = s.iter(
+				ctx,
 				util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"))
 		}
 		var items []string
@@ -67,6 +70,7 @@ func TestInMemIDStore(t *testing.T) {
 		s1.registerHash(h[:])
 		items = nil
 		it = s1.iter(
+			ctx,
 			util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"))
 		for range 8 {
 			items = append(items, hex.EncodeToString(itKey(t, it)))
@@ -87,6 +91,7 @@ func TestInMemIDStore(t *testing.T) {
 			hex.EncodeToString(itKey(t, it)))
 
 		it = s1.iter(
+			ctx,
 			util.FromHex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0"))
 		require.Equal(t,
 			"0000000000000000000000000000000000000000000000000000000000000000",

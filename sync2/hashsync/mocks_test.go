@@ -258,18 +258,18 @@ func (c *MockItemStoreCopyCall) DoAndReturn(f func() ItemStore) *MockItemStoreCo
 }
 
 // GetRangeInfo mocks base method.
-func (m *MockItemStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error) {
+func (m *MockItemStore) GetRangeInfo(ctx context.Context, preceding Iterator, x, y Ordered, count int) (RangeInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRangeInfo", preceding, x, y, count)
+	ret := m.ctrl.Call(m, "GetRangeInfo", ctx, preceding, x, y, count)
 	ret0, _ := ret[0].(RangeInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetRangeInfo indicates an expected call of GetRangeInfo.
-func (mr *MockItemStoreMockRecorder) GetRangeInfo(preceding, x, y, count any) *MockItemStoreGetRangeInfoCall {
+func (mr *MockItemStoreMockRecorder) GetRangeInfo(ctx, preceding, x, y, count any) *MockItemStoreGetRangeInfoCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRangeInfo", reflect.TypeOf((*MockItemStore)(nil).GetRangeInfo), preceding, x, y, count)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRangeInfo", reflect.TypeOf((*MockItemStore)(nil).GetRangeInfo), ctx, preceding, x, y, count)
 	return &MockItemStoreGetRangeInfoCall{Call: call}
 }
 
@@ -285,30 +285,30 @@ func (c *MockItemStoreGetRangeInfoCall) Return(arg0 RangeInfo, arg1 error) *Mock
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockItemStoreGetRangeInfoCall) Do(f func(Iterator, Ordered, Ordered, int) (RangeInfo, error)) *MockItemStoreGetRangeInfoCall {
+func (c *MockItemStoreGetRangeInfoCall) Do(f func(context.Context, Iterator, Ordered, Ordered, int) (RangeInfo, error)) *MockItemStoreGetRangeInfoCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreGetRangeInfoCall) DoAndReturn(f func(Iterator, Ordered, Ordered, int) (RangeInfo, error)) *MockItemStoreGetRangeInfoCall {
+func (c *MockItemStoreGetRangeInfoCall) DoAndReturn(f func(context.Context, Iterator, Ordered, Ordered, int) (RangeInfo, error)) *MockItemStoreGetRangeInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Has mocks base method.
-func (m *MockItemStore) Has(k Ordered) (bool, error) {
+func (m *MockItemStore) Has(ctx context.Context, k Ordered) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Has", k)
+	ret := m.ctrl.Call(m, "Has", ctx, k)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Has indicates an expected call of Has.
-func (mr *MockItemStoreMockRecorder) Has(k any) *MockItemStoreHasCall {
+func (mr *MockItemStoreMockRecorder) Has(ctx, k any) *MockItemStoreHasCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Has", reflect.TypeOf((*MockItemStore)(nil).Has), k)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Has", reflect.TypeOf((*MockItemStore)(nil).Has), ctx, k)
 	return &MockItemStoreHasCall{Call: call}
 }
 
@@ -324,30 +324,30 @@ func (c *MockItemStoreHasCall) Return(arg0 bool, arg1 error) *MockItemStoreHasCa
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockItemStoreHasCall) Do(f func(Ordered) (bool, error)) *MockItemStoreHasCall {
+func (c *MockItemStoreHasCall) Do(f func(context.Context, Ordered) (bool, error)) *MockItemStoreHasCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreHasCall) DoAndReturn(f func(Ordered) (bool, error)) *MockItemStoreHasCall {
+func (c *MockItemStoreHasCall) DoAndReturn(f func(context.Context, Ordered) (bool, error)) *MockItemStoreHasCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Min mocks base method.
-func (m *MockItemStore) Min() (Iterator, error) {
+func (m *MockItemStore) Min(ctx context.Context) (Iterator, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Min")
+	ret := m.ctrl.Call(m, "Min", ctx)
 	ret0, _ := ret[0].(Iterator)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Min indicates an expected call of Min.
-func (mr *MockItemStoreMockRecorder) Min() *MockItemStoreMinCall {
+func (mr *MockItemStoreMockRecorder) Min(ctx any) *MockItemStoreMinCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Min", reflect.TypeOf((*MockItemStore)(nil).Min))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Min", reflect.TypeOf((*MockItemStore)(nil).Min), ctx)
 	return &MockItemStoreMinCall{Call: call}
 }
 
@@ -363,30 +363,30 @@ func (c *MockItemStoreMinCall) Return(arg0 Iterator, arg1 error) *MockItemStoreM
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockItemStoreMinCall) Do(f func() (Iterator, error)) *MockItemStoreMinCall {
+func (c *MockItemStoreMinCall) Do(f func(context.Context) (Iterator, error)) *MockItemStoreMinCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreMinCall) DoAndReturn(f func() (Iterator, error)) *MockItemStoreMinCall {
+func (c *MockItemStoreMinCall) DoAndReturn(f func(context.Context) (Iterator, error)) *MockItemStoreMinCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // SplitRange mocks base method.
-func (m *MockItemStore) SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error) {
+func (m *MockItemStore) SplitRange(ctx context.Context, preceding Iterator, x, y Ordered, count int) (SplitInfo, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SplitRange", preceding, x, y, count)
+	ret := m.ctrl.Call(m, "SplitRange", ctx, preceding, x, y, count)
 	ret0, _ := ret[0].(SplitInfo)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // SplitRange indicates an expected call of SplitRange.
-func (mr *MockItemStoreMockRecorder) SplitRange(preceding, x, y, count any) *MockItemStoreSplitRangeCall {
+func (mr *MockItemStoreMockRecorder) SplitRange(ctx, preceding, x, y, count any) *MockItemStoreSplitRangeCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SplitRange", reflect.TypeOf((*MockItemStore)(nil).SplitRange), preceding, x, y, count)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SplitRange", reflect.TypeOf((*MockItemStore)(nil).SplitRange), ctx, preceding, x, y, count)
 	return &MockItemStoreSplitRangeCall{Call: call}
 }
 
@@ -402,13 +402,13 @@ func (c *MockItemStoreSplitRangeCall) Return(arg0 SplitInfo, arg1 error) *MockIt
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockItemStoreSplitRangeCall) Do(f func(Iterator, Ordered, Ordered, int) (SplitInfo, error)) *MockItemStoreSplitRangeCall {
+func (c *MockItemStoreSplitRangeCall) Do(f func(context.Context, Iterator, Ordered, Ordered, int) (SplitInfo, error)) *MockItemStoreSplitRangeCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockItemStoreSplitRangeCall) DoAndReturn(f func(Iterator, Ordered, Ordered, int) (SplitInfo, error)) *MockItemStoreSplitRangeCall {
+func (c *MockItemStoreSplitRangeCall) DoAndReturn(f func(context.Context, Iterator, Ordered, Ordered, int) (SplitInfo, error)) *MockItemStoreSplitRangeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -541,18 +541,18 @@ func (m *MockSyncBase) EXPECT() *MockSyncBaseMockRecorder {
 }
 
 // Count mocks base method.
-func (m *MockSyncBase) Count() (int, error) {
+func (m *MockSyncBase) Count(ctx context.Context) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Count")
+	ret := m.ctrl.Call(m, "Count", ctx)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Count indicates an expected call of Count.
-func (mr *MockSyncBaseMockRecorder) Count() *MockSyncBaseCountCall {
+func (mr *MockSyncBaseMockRecorder) Count(ctx any) *MockSyncBaseCountCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockSyncBase)(nil).Count))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Count", reflect.TypeOf((*MockSyncBase)(nil).Count), ctx)
 	return &MockSyncBaseCountCall{Call: call}
 }
 
@@ -568,13 +568,13 @@ func (c *MockSyncBaseCountCall) Return(arg0 int, arg1 error) *MockSyncBaseCountC
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncBaseCountCall) Do(f func() (int, error)) *MockSyncBaseCountCall {
+func (c *MockSyncBaseCountCall) Do(f func(context.Context) (int, error)) *MockSyncBaseCountCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncBaseCountCall) DoAndReturn(f func() (int, error)) *MockSyncBaseCountCall {
+func (c *MockSyncBaseCountCall) DoAndReturn(f func(context.Context) (int, error)) *MockSyncBaseCountCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

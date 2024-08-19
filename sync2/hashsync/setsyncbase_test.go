@@ -140,7 +140,7 @@ func TestSetSyncBase(t *testing.T) {
 		st.ps.EXPECT().SyncStore(ctx, p2p.Peer("p1"), ss, &x, &y)
 		require.NoError(t, ss.Sync(ctx, &x, &y))
 
-		st.is.EXPECT().Has(addedKey)
+		st.is.EXPECT().Has(gomock.Any(), addedKey)
 		st.is.EXPECT().Add(ctx, addedKey)
 		st.expectSyncStore(ctx, p2p.Peer("p1"), ss, addedKey)
 		require.NoError(t, ss.Sync(ctx, nil, nil))
@@ -164,7 +164,7 @@ func TestSetSyncBase(t *testing.T) {
 		// added just once
 		st.is.EXPECT().Add(ctx, addedKey)
 		for i := 0; i < 3; i++ {
-			st.is.EXPECT().Has(addedKey)
+			st.is.EXPECT().Has(gomock.Any(), addedKey)
 			st.expectSyncStore(ctx, p2p.Peer("p1"), ss, addedKey)
 			require.NoError(t, ss.Sync(ctx, nil, nil))
 		}
@@ -186,8 +186,8 @@ func TestSetSyncBase(t *testing.T) {
 		ss := st.ssb.Derive(p2p.Peer("p1"))
 		require.Equal(t, p2p.Peer("p1"), ss.Peer())
 
-		st.is.EXPECT().Has(k1)
-		st.is.EXPECT().Has(k2)
+		st.is.EXPECT().Has(gomock.Any(), k1)
+		st.is.EXPECT().Has(gomock.Any(), k2)
 		st.is.EXPECT().Add(ctx, k1)
 		st.is.EXPECT().Add(ctx, k2)
 		st.expectSyncStore(ctx, p2p.Peer("p1"), ss, k1, k2)
@@ -211,8 +211,8 @@ func TestSetSyncBase(t *testing.T) {
 		ss := st.ssb.Derive(p2p.Peer("p1"))
 		require.Equal(t, p2p.Peer("p1"), ss.Peer())
 
-		st.is.EXPECT().Has(k1)
-		st.is.EXPECT().Has(k2)
+		st.is.EXPECT().Has(gomock.Any(), k1)
+		st.is.EXPECT().Has(gomock.Any(), k2)
 		// k1 is not propagated to syncBase due to the handler failure
 		st.is.EXPECT().Add(ctx, k2)
 		st.expectSyncStore(ctx, p2p.Peer("p1"), ss, k1, k2)
@@ -240,10 +240,10 @@ func TestSetSyncBase(t *testing.T) {
 		ss.(ItemStore).Add(context.Background(), hs[2])
 		ss.(ItemStore).Add(context.Background(), hs[3])
 		// syncer's cloned ItemStore has new key immediately
-		has, err := ss.(ItemStore).Has(hs[2])
+		has, err := ss.(ItemStore).Has(context.Background(), hs[2])
 		require.NoError(t, err)
 		require.True(t, has)
-		has, err = ss.(ItemStore).Has(hs[3])
+		has, err = ss.(ItemStore).Has(context.Background(), hs[3])
 		require.True(t, has)
 		handlerErr := errors.New("fail")
 		st.getWaitCh(hs[2]) <- handlerErr
@@ -252,9 +252,9 @@ func TestSetSyncBase(t *testing.T) {
 		require.ErrorIs(t, err, handlerErr)
 		require.ElementsMatch(t, hs[2:], handledKeys)
 		// only successfully handled key propagate the syncBase
-		has, err = is.Has(hs[2])
+		has, err = is.Has(context.Background(), hs[2])
 		require.False(t, has)
-		has, err = is.Has(hs[3])
+		has, err = is.Has(context.Background(), hs[3])
 		require.True(t, has)
 	})
 }

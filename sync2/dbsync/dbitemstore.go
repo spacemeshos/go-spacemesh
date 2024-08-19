@@ -40,8 +40,9 @@ func NewDBItemStore(
 	}
 }
 
-func (d *DBItemStore) load() error {
-	_, err := d.db.Exec(d.loadQuery, nil,
+func (d *DBItemStore) load(ctx context.Context) error {
+	db := ContextSQLExec(ctx, d.db)
+	_, err := db.Exec(d.loadQuery, nil,
 		func(stmt *sql.Statement) bool {
 			id := make(KeyBytes, d.keyLen) // TODO: don't allocate new ID
 			stmt.ColumnBytes(0, id[:])
@@ -51,11 +52,11 @@ func (d *DBItemStore) load() error {
 	return err
 }
 
-func (d *DBItemStore) EnsureLoaded() error {
+func (d *DBItemStore) EnsureLoaded(ctx context.Context) error {
 	d.loadMtx.Lock()
 	defer d.loadMtx.Unlock()
 	if !d.loaded {
-		if err := d.load(); err != nil {
+		if err := d.load(ctx); err != nil {
 			return err
 		}
 		d.loaded = true
@@ -65,10 +66,10 @@ func (d *DBItemStore) EnsureLoaded() error {
 
 // Add implements hashsync.ItemStore.
 func (d *DBItemStore) Add(ctx context.Context, k hashsync.Ordered) error {
-	if err := d.EnsureLoaded(); err != nil {
+	if err := d.EnsureLoaded(ctx); err != nil {
 		return err
 	}
-	has, err := d.Has(k) // TODO: this check shouldn't be needed
+	has, err := d.Has(ctx, k) // TODO: this check shouldn't be needed
 	if has || err != nil {
 		return err
 	}
@@ -77,14 +78,15 @@ func (d *DBItemStore) Add(ctx context.Context, k hashsync.Ordered) error {
 
 // GetRangeInfo implements hashsync.ItemStore.
 func (d *DBItemStore) GetRangeInfo(
+	ctx context.Context,
 	preceding hashsync.Iterator,
 	x, y hashsync.Ordered,
 	count int,
 ) (hashsync.RangeInfo, error) {
-	if err := d.EnsureLoaded(); err != nil {
+	if err := d.EnsureLoaded(ctx); err != nil {
 		return hashsync.RangeInfo{}, err
 	}
-	fpr, err := d.ft.fingerprintInterval(x.(KeyBytes), y.(KeyBytes), count)
+	fpr, err := d.ft.fingerprintInterval(ctx, x.(KeyBytes), y.(KeyBytes), count)
 	if err != nil {
 		return hashsync.RangeInfo{}, err
 	}
@@ -97,6 +99,7 @@ func (d *DBItemStore) GetRangeInfo(
 }
 
 func (d *DBItemStore) SplitRange(
+	ctx context.Context,
 	preceding hashsync.Iterator,
 	x, y hashsync.Ordered,
 	count int,
@@ -108,11 +111,11 @@ func (d *DBItemStore) SplitRange(
 		panic("BUG: bad split count")
 	}
 
-	if err := d.EnsureLoaded(); err != nil {
+	if err := d.EnsureLoaded(ctx); err != nil {
 		return hashsync.SplitInfo{}, err
 	}
 
-	sr, err := d.ft.easySplit(x.(KeyBytes), y.(KeyBytes), count)
+	sr, err := d.ft.easySplit(ctx, x.(KeyBytes), y.(KeyBytes), count)
 	if err == nil {
 		// fmt.Fprintf(os.Stderr, "QQQQQ: fast split, middle: %s\n", sr.middle.String())
 		return hashsync.SplitInfo{
@@ -139,7 +142,7 @@ func (d *DBItemStore) SplitRange(
 	}
 
 	// fmt.Fprintf(os.Stderr, "QQQQQ: slow split x %s y %s\n", x.(fmt.Stringer), y.(fmt.Stringer))
-	part0, err := d.GetRangeInfo(preceding, x, y, count)
+	part0, err := d.GetRangeInfo(ctx, preceding, x, y, count)
 	if err != nil {
 		return hashsync.SplitInfo{}, err
 	}
@@ -150,7 +153,7 @@ func (d *DBItemStore) SplitRange(
 	if err != nil {
 		return hashsync.SplitInfo{}, err
 	}
-	part1, err := d.GetRangeInfo(part0.End.Clone(), middle, y, -1)
+	part1, err := d.GetRangeInfo(ctx, part0.End.Clone(), middle, y, -1)
 	if err != nil {
 		return hashsync.SplitInfo{}, err
 	}
@@ -161,14 +164,14 @@ func (d *DBItemStore) SplitRange(
 }
 
 // Min implements hashsync.ItemStore.
-func (d *DBItemStore) Min() (hashsync.Iterator, error) {
-	if err := d.EnsureLoaded(); err != nil {
+func (d *DBItemStore) Min(ctx context.Context) (hashsync.Iterator, error) {
+	if err := d.EnsureLoaded(ctx); err != nil {
 		return nil, err
 	}
 	if d.ft.count() == 0 {
 		return nil, nil
 	}
-	it := d.ft.start()
+	it := d.ft.start(ctx)
 	if _, err := it.Key(); err != nil {
 		return nil, err
 	}
@@ -177,7 +180,10 @@ func (d *DBItemStore) Min() (hashsync.Iterator, error) {
 
 // Copy implements hashsync.ItemStore.
 func (d *DBItemStore) Copy() hashsync.ItemStore {
-	d.EnsureLoaded()
+	if !d.loaded {
+		// FIXME
+		panic("BUG: can't copy DBItemStore before it's loaded")
+	}
 	return &DBItemStore{
 		db:        d.db,
 		ft:        d.ft.clone(),
@@ -190,8 +196,8 @@ func (d *DBItemStore) Copy() hashsync.ItemStore {
 }
 
 // Has implements hashsync.ItemStore.
-func (d *DBItemStore) Has(k hashsync.Ordered) (bool, error) {
-	if err := d.EnsureLoaded(); err != nil {
+func (d *DBItemStore) Has(ctx context.Context, k hashsync.Ordered) (bool, error) {
+	if err := d.EnsureLoaded(ctx); err != nil {
 		return false, err
 	}
 	if d.ft.count() == 0 {
@@ -199,7 +205,7 @@ func (d *DBItemStore) Has(k hashsync.Ordered) (bool, error) {
 	}
 	// TODO: should often be able to avoid querying the database if we check the key
 	// against the fptree
-	it := d.ft.iter(k.(KeyBytes))
+	it := d.ft.iter(ctx, k.(KeyBytes))
 	itK, err := it.Key()
 	if err != nil {
 		return false, err
@@ -237,10 +243,16 @@ func (a *ItemStoreAdapter) Copy() hashsync.ItemStore {
 }
 
 // GetRangeInfo implements hashsync.ItemStore.
-func (a *ItemStoreAdapter) GetRangeInfo(preceding hashsync.Iterator, x hashsync.Ordered, y hashsync.Ordered, count int) (hashsync.RangeInfo, error) {
+func (a *ItemStoreAdapter) GetRangeInfo(
+	ctx context.Context,
+	preceding hashsync.Iterator,
+	x hashsync.Ordered,
+	y hashsync.Ordered,
+	count int,
+) (hashsync.RangeInfo, error) {
 	hx := x.(types.Hash32)
 	hy := y.(types.Hash32)
-	info, err := a.s.GetRangeInfo(preceding, KeyBytes(hx[:]), KeyBytes(hy[:]), count)
+	info, err := a.s.GetRangeInfo(ctx, preceding, KeyBytes(hx[:]), KeyBytes(hy[:]), count)
 	if err != nil {
 		return hashsync.RangeInfo{}, err
 	}
@@ -256,6 +268,7 @@ func (a *ItemStoreAdapter) GetRangeInfo(preceding hashsync.Iterator, x hashsync.
 }
 
 func (a *ItemStoreAdapter) SplitRange(
+	ctx context.Context,
 	preceding hashsync.Iterator,
 	x hashsync.Ordered,
 	y hashsync.Ordered,
@@ -267,7 +280,7 @@ func (a *ItemStoreAdapter) SplitRange(
 	hx := x.(types.Hash32)
 	hy := y.(types.Hash32)
 	si, err := a.s.SplitRange(
-		preceding, KeyBytes(hx[:]), KeyBytes(hy[:]), count)
+		ctx, preceding, KeyBytes(hx[:]), KeyBytes(hy[:]), count)
 	if err != nil {
 		return hashsync.SplitInfo{}, err
 	}
@@ -298,14 +311,14 @@ func (a *ItemStoreAdapter) SplitRange(
 }
 
 // Has implements hashsync.ItemStore.
-func (a *ItemStoreAdapter) Has(k hashsync.Ordered) (bool, error) {
+func (a *ItemStoreAdapter) Has(ctx context.Context, k hashsync.Ordered) (bool, error) {
 	h := k.(types.Hash32)
-	return a.s.Has(KeyBytes(h[:]))
+	return a.s.Has(ctx, KeyBytes(h[:]))
 }
 
 // Min implements hashsync.ItemStore.
-func (a *ItemStoreAdapter) Min() (hashsync.Iterator, error) {
-	it, err := a.s.Min()
+func (a *ItemStoreAdapter) Min(ctx context.Context) (hashsync.Iterator, error) {
+	it, err := a.s.Min(ctx)
 	if err != nil {
 		return nil, err
 	}

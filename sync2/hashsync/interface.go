@@ -54,17 +54,17 @@ type ItemStore interface {
 	// is returned for the corresponding subrange of the requested range.
 	// If both x and y is nil, the whole set of items is used.
 	// If only x or only y is nil, GetRangeInfo panics
-	GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error)
+	GetRangeInfo(ctx context.Context, preceding Iterator, x, y Ordered, count int) (RangeInfo, error)
 	// SplitRange splits the range roughly after the specified count of items,
 	// returning RangeInfo for the first half and the second half of the range.
-	SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error)
+	SplitRange(ctx context.Context, preceding Iterator, x, y Ordered, count int) (SplitInfo, error)
 	// Min returns the iterator pointing at the minimum element
 	// in the store. If the store is empty, it returns nil
-	Min() (Iterator, error)
+	Min(ctx context.Context) (Iterator, error)
 	// Copy makes a shallow copy of the ItemStore
 	Copy() ItemStore
 	// Has returns true if the specified key is present in ItemStore
-	Has(k Ordered) (bool, error)
+	Has(ctx context.Context, k Ordered) (bool, error)
 }
 
 type Requester interface {
@@ -73,7 +73,7 @@ type Requester interface {
 }
 
 type SyncBase interface {
-	Count() (int, error)
+	Count(ctx context.Context) (int, error)
 	Derive(p p2p.Peer) Syncer
 	Probe(ctx context.Context, p p2p.Peer) (ProbeResult, error)
 	Wait() error

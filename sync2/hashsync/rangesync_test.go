@@ -265,9 +265,14 @@ func (ds *dumbStore) iterFor(s sampleID) Iterator {
 	return ds.iter(n)
 }
 
-func (ds *dumbStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error) {
+func (ds *dumbStore) GetRangeInfo(
+	ctx context.Context,
+	preceding Iterator,
+	x, y Ordered,
+	count int,
+) (RangeInfo, error) {
 	if x == nil && y == nil {
-		it, err := ds.Min()
+		it, err := ds.Min(ctx)
 		if err != nil {
 			return RangeInfo{}, err
 		}
@@ -315,11 +320,16 @@ func (ds *dumbStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (
 	return r, nil
 }
 
-func (ds *dumbStore) SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error) {
+func (ds *dumbStore) SplitRange(
+	ctx context.Context,
+	preceding Iterator,
+	x, y Ordered,
+	count int,
+) (SplitInfo, error) {
 	if count <= 0 {
 		panic("BUG: bad split count")
 	}
-	part0, err := ds.GetRangeInfo(preceding, x, y, count)
+	part0, err := ds.GetRangeInfo(ctx, preceding, x, y, count)
 	if err != nil {
 		return SplitInfo{}, err
 	}
@@ -330,7 +340,7 @@ func (ds *dumbStore) SplitRange(preceding Iterator, x, y Ordered, count int) (Sp
 	if err != nil {
 		return SplitInfo{}, err
 	}
-	part1, err := ds.GetRangeInfo(part0.End.Clone(), middle, y, -1)
+	part1, err := ds.GetRangeInfo(ctx, part0.End.Clone(), middle, y, -1)
 	if err != nil {
 		return SplitInfo{}, err
 	}
@@ -340,7 +350,7 @@ func (ds *dumbStore) SplitRange(preceding Iterator, x, y Ordered, count int) (Sp
 	}, nil
 }
 
-func (ds *dumbStore) Min() (Iterator, error) {
+func (ds *dumbStore) Min(ctx context.Context) (Iterator, error) {
 	if len(ds.keys) == 0 {
 		return nil, nil
 	}
@@ -354,7 +364,7 @@ func (ds *dumbStore) Copy() ItemStore {
 	return &dumbStore{keys: slices.Clone(ds.keys)}
 }
 
-func (ds *dumbStore) Has(k Ordered) (bool, error) {
+func (ds *dumbStore) Has(ctx context.Context, k Ordered) (bool, error) {
 	for _, cur := range ds.keys {
 		if k.Compare(cur) == 0 {
 			return true, nil
@@ -491,21 +501,26 @@ func (vs *verifiedStore) verifySameRangeInfo(ri1, ri2 RangeInfo) RangeInfo {
 	return ri
 }
 
-func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error) {
+func (vs *verifiedStore) GetRangeInfo(
+	ctx context.Context,
+	preceding Iterator,
+	x, y Ordered,
+	count int,
+) (RangeInfo, error) {
 	var (
 		ri1, ri2 RangeInfo
 		err      error
 	)
 	if preceding != nil {
 		p := preceding.(verifiedStoreIterator)
-		ri1, err = vs.knownGood.GetRangeInfo(p.knownGood, x, y, count)
+		ri1, err = vs.knownGood.GetRangeInfo(ctx, p.knownGood, x, y, count)
 		require.NoError(vs.t, err)
-		ri2, err = vs.store.GetRangeInfo(p.it, x, y, count)
+		ri2, err = vs.store.GetRangeInfo(ctx, p.it, x, y, count)
 		require.NoError(vs.t, err)
 	} else {
-		ri1, err = vs.knownGood.GetRangeInfo(nil, x, y, count)
+		ri1, err = vs.knownGood.GetRangeInfo(ctx, nil, x, y, count)
 		require.NoError(vs.t, err)
-		ri2, err = vs.store.GetRangeInfo(nil, x, y, count)
+		ri2, err = vs.store.GetRangeInfo(ctx, nil, x, y, count)
 		require.NoError(vs.t, err)
 	}
 	// QQQQQ: TODO: if count >= 0 and start+end != nil, do more calls to GetRangeInfo using resulting
@@ -513,21 +528,26 @@ func (vs *verifiedStore) GetRangeInfo(preceding Iterator, x, y Ordered, count in
 	return vs.verifySameRangeInfo(ri1, ri2), nil
 }
 
-func (vs *verifiedStore) SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error) {
+func (vs *verifiedStore) SplitRange(
+	ctx context.Context,
+	preceding Iterator,
+	x, y Ordered,
+	count int,
+) (SplitInfo, error) {
 	var (
 		si1, si2 SplitInfo
 		err      error
 	)
 	if preceding != nil {
 		p := preceding.(verifiedStoreIterator)
-		si1, err = vs.knownGood.SplitRange(p.knownGood, x, y, count)
+		si1, err = vs.knownGood.SplitRange(ctx, p.knownGood, x, y, count)
 		require.NoError(vs.t, err)
-		si2, err = vs.store.SplitRange(p.it, x, y, count)
+		si2, err = vs.store.SplitRange(ctx, p.it, x, y, count)
 		require.NoError(vs.t, err)
 	} else {
-		si1, err = vs.knownGood.SplitRange(nil, x, y, count)
+		si1, err = vs.knownGood.SplitRange(ctx, nil, x, y, count)
 		require.NoError(vs.t, err)
-		si2, err = vs.store.SplitRange(nil, x, y, count)
+		si2, err = vs.store.SplitRange(ctx, nil, x, y, count)
 		require.NoError(vs.t, err)
 	}
 	require.Equal(vs.t, si1.Middle, si2.Middle, "split middle")
@@ -540,10 +560,10 @@ func (vs *verifiedStore) SplitRange(preceding Iterator, x, y Ordered, count int)
 	}, nil
 }
 
-func (vs *verifiedStore) Min() (Iterator, error) {
-	m1, err := vs.knownGood.Min()
+func (vs *verifiedStore) Min(ctx context.Context) (Iterator, error) {
+	m1, err := vs.knownGood.Min(ctx)
 	require.NoError(vs.t, err)
-	m2, err := vs.store.Min()
+	m2, err := vs.store.Min(ctx)
 	require.NoError(vs.t, err)
 	if m1 == nil {
 		require.Nil(vs.t, m2, "Min")
@@ -572,10 +592,10 @@ func (vs *verifiedStore) Copy() ItemStore {
 	}
 }
 
-func (vs *verifiedStore) Has(k Ordered) (bool, error) {
-	h1, err := vs.knownGood.Has(k)
+func (vs *verifiedStore) Has(ctx context.Context, k Ordered) (bool, error) {
+	h1, err := vs.knownGood.Has(ctx, k)
 	require.NoError(vs.t, err)
-	h2, err := vs.store.Has(k)
+	h2, err := vs.store.Has(ctx, k)
 	require.NoError(vs.t, err)
 	require.Equal(vs.t, h1, h2)
 	return h2, nil
@@ -655,13 +675,13 @@ func dumpRangeMessages(t *testing.T, msgs []rangeMessage, fmt string, args ...an
 
 func runSync(t *testing.T, syncA, syncB *RangeSetReconciler, maxRounds int) (nRounds, nMsg, nItems int) {
 	fc := &fakeConduit{t: t}
-	require.NoError(t, syncA.Initiate(fc))
+	require.NoError(t, syncA.Initiate(context.Background(), fc))
 	return doRunSync(fc, syncA, syncB, maxRounds)
 }
 
 func runBoundedSync(t *testing.T, syncA, syncB *RangeSetReconciler, x, y Ordered, maxRounds int) (nRounds, nMsg, nItems int) {
 	fc := &fakeConduit{t: t}
-	require.NoError(t, syncA.InitiateBounded(fc, x, y))
+	require.NoError(t, syncA.InitiateBounded(context.Background(), fc, x, y))
 	return doRunSync(fc, syncA, syncB, maxRounds)
 }
 
@@ -706,14 +726,14 @@ func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int)
 
 func runProbe(t *testing.T, from, to *RangeSetReconciler) ProbeResult {
 	fc := &fakeConduit{t: t}
-	info, err := from.InitiateProbe(fc)
+	info, err := from.InitiateProbe(context.Background(), fc)
 	require.NoError(t, err)
 	return doRunProbe(fc, from, to, info)
 }
 
 func runBoundedProbe(t *testing.T, from, to *RangeSetReconciler, x, y Ordered) ProbeResult {
 	fc := &fakeConduit{t: t}
-	info, err := from.InitiateBoundedProbe(fc, x, y)
+	info, err := from.InitiateBoundedProbe(context.Background(), fc, x, y)
 	require.NoError(t, err)
 	return doRunProbe(fc, from, to, info)
 }

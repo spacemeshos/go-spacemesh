@@ -70,9 +70,14 @@ func (sts *SyncTreeStore) iter(ptr SyncTreePointer) Iterator {
 }
 
 // GetRangeInfo implements ItemStore.
-func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x, y Ordered, count int) (RangeInfo, error) {
+func (sts *SyncTreeStore) GetRangeInfo(
+	ctx context.Context,
+	preceding Iterator,
+	x, y Ordered,
+	count int,
+) (RangeInfo, error) {
 	if x == nil && y == nil {
-		it, err := sts.Min()
+		it, err := sts.Min(ctx)
 		if err != nil {
 			return RangeInfo{}, err
 		}
@@ -115,11 +120,16 @@ func (sts *SyncTreeStore) GetRangeInfo(preceding Iterator, x, y Ordered, count i
 }
 
 // SplitRange implements ItemStore.
-func (sts *SyncTreeStore) SplitRange(preceding Iterator, x, y Ordered, count int) (SplitInfo, error) {
+func (sts *SyncTreeStore) SplitRange(
+	ctx context.Context,
+	preceding Iterator,
+	x, y Ordered,
+	count int,
+) (SplitInfo, error) {
 	if count <= 0 {
 		panic("BUG: bad split count")
 	}
-	part0, err := sts.GetRangeInfo(preceding, x, y, count)
+	part0, err := sts.GetRangeInfo(ctx, preceding, x, y, count)
 	if err != nil {
 		return SplitInfo{}, err
 	}
@@ -130,7 +140,7 @@ func (sts *SyncTreeStore) SplitRange(preceding Iterator, x, y Ordered, count int
 	if err != nil {
 		return SplitInfo{}, err
 	}
-	part1, err := sts.GetRangeInfo(part0.End.Clone(), middle, y, -1)
+	part1, err := sts.GetRangeInfo(ctx, part0.End.Clone(), middle, y, -1)
 	if err != nil {
 		return SplitInfo{}, err
 	}
@@ -141,7 +151,7 @@ func (sts *SyncTreeStore) SplitRange(preceding Iterator, x, y Ordered, count int
 }
 
 // Min implements ItemStore.
-func (sts *SyncTreeStore) Min() (Iterator, error) {
+func (sts *SyncTreeStore) Min(ctx context.Context) (Iterator, error) {
 	return sts.iter(sts.st.Min()), nil
 }
 
@@ -154,7 +164,7 @@ func (sts *SyncTreeStore) Copy() ItemStore {
 }
 
 // Has implements ItemStore.
-func (sts *SyncTreeStore) Has(k Ordered) (bool, error) {
+func (sts *SyncTreeStore) Has(ctx context.Context, k Ordered) (bool, error) {
 	_, found := sts.st.Lookup(k)
 	return found, nil
 }
