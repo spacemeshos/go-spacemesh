@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestMain(m *testing.M) {
@@ -262,7 +263,7 @@ func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
 	}
 }
 
-func createMesh(t testing.TB, db *sql.Database, miners []miner, accts []*types.Account) {
+func createMesh(t testing.TB, db sql.StateDatabase, miners []miner, accts []*types.Account) {
 	t.Helper()
 	for _, miner := range miners {
 		for _, atx := range miner.atxs {
@@ -309,7 +310,7 @@ func TestRunner_Generate(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			snapshot := types.LayerID(5)
 			createMesh(t, db, tc.miners, tc.accts)
 
@@ -345,7 +346,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 	t.Parallel()
 	t.Run("no commitment atx", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		snapshot := types.LayerID(5)
 
 		atx := newAtx(types.ATXID{13}, nil, 2, 1, 11, types.RandomNodeID().Bytes())
@@ -359,7 +360,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 	})
 	t.Run("no atxs", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		snapshot := types.LayerID(5)
 		createMesh(t, db, nil, allAccounts)
 
@@ -372,7 +373,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 	})
 	t.Run("no accounts", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		snapshot := types.LayerID(5)
 		createMesh(t, db, allMiners, nil)
 
@@ -387,7 +388,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 
 func TestRunner_Generate_PreservesMarriageATX(t *testing.T) {
 	t.Parallel()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	require.NoError(t, accounts.Update(db, &types.Account{Address: types.Address{1, 1}}))
 

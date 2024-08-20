@@ -2,7 +2,7 @@
 Thank you for considering to contribute to the go-spacemesh open source project. We welcome contributions large and small and we actively accept contributions.
 
 - go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed free open source software.
-- Please make sure to scan the [open issues](https://github.com/spacemeshos/go-spacemesh/issues). 
+- Please make sure to scan the [open issues](https://github.com/spacemeshos/go-spacemesh/issues).
 - Search the closed ones before reporting things, and help us with the open ones.
 - Make sure that you are able to contribute to MIT licensed free open software (no legal issues please).
 - Introduce yourself, ask questions about issues or talk about things on our [discord server](https://chat.spacemesh.io/).
@@ -39,7 +39,7 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 # Code Guidelines
 Please follow these guidelines for your PR to be reviewed and be considered for merging into the project.
 
-1. Document all methods and functions using [go commentary](https://golang.org/doc/effective_go.html#commentary).  
+1. Document all methods and functions using [go commentary](https://golang.org/doc/effective_go.html#commentary).
 2. Provide at least one unit test for each function and method.
 3. Provide at least one integration test for each feature with a flow which involves more than one function call. Your tests should reflect the main ways that your code should be used.
 4. Run `go mod tidy`, `go fmt ./...` and `make lint` to format and lint your code before submitting your PR.
@@ -49,7 +49,7 @@ Please follow these guidelines for your PR to be reviewed and be considered for 
 - Check for existing 3rd-party packages in the vendor folder `./vendor` before adding a new dependency.
 - Use [govendor](https://github.com/kardianos/govendor) to add a new dependency.
 
-# Working on a funded issue 
+# Working on a funded issue
 
 ## Step 1 - Discover :sunrise_over_mountains:
 - Browse the [open funded issues](https://github.com/spacemeshos/go-spacemesh/labels/funded%20%3Amoneybag%3A) in our github repo, or on our [gitcoin.io funded issues page](https://gitcoin.co/profile/spacemeshos).
@@ -68,6 +68,6 @@ Please follow these guidelines for your PR to be reviewed and be considered for 
 ## Step 3 - Get paid :moneybag:
 - When ready, submit your PR for review and go through the code review process with one of our maintainers.
 - Expect a review process that ensures that you have followed our code guidelines at that your design and implementation are solid. You are expected to revision your code based on reviewers comments.
-- You should receive your bounty as soon as your PR is approved and merged by one of our maintainers. 
+- You should receive your bounty as soon as your PR is approved and merged by one of our maintainers.
 
 Please review our funded issues program [legal notes](https://github.com/spacemeshos/go-spacemesh/blob/master/legal.md).

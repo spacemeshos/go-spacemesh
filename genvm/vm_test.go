@@ -34,9 +34,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func testContext(lid types.LayerID) ApplyContext {
@@ -48,7 +48,7 @@ func testContext(lid types.LayerID) ApplyContext {
 func newTester(tb testing.TB) *tester {
 	return &tester{
 		TB: tb,
-		VM: New(sql.InMemory(),
+		VM: New(statesql.InMemory(),
 			WithLogger(zaptest.NewLogger(tb)),
 			WithConfig(Config{GasLimit: math.MaxUint64}),
 		),
@@ -279,7 +279,7 @@ type tester struct {
 }
 
 func (t *tester) persistent() *tester {
-	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
+	db, err := statesql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
 	t.VM = New(db, WithLogger(zaptest.NewLogger(t)),
@@ -2573,7 +2573,7 @@ func TestVestingData(t *testing.T) {
 			spendAccountNonce := t2.nonces[0]
 			spendAmount := uint64(1_000_000)
 
-			vm := New(sql.InMemory(), WithLogger(zaptest.NewLogger(t)))
+			vm := New(statesql.InMemory(), WithLogger(zaptest.NewLogger(t)))
 			require.NoError(t, vm.ApplyGenesis(
 				[]core.Account{
 					{

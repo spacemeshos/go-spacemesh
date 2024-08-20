@@ -30,7 +30,7 @@ type Generator struct {
 	eg     errgroup.Group
 	stop   func()
 
-	db        *sql.Database
+	db        sql.StateDatabase
 	atxs      *atxsdata.Data
 	proposals *store.Store
 	msh       meshProvider
@@ -84,7 +84,7 @@ func WithHareOutputChan(ch <-chan hare4.ConsensusOutput) GeneratorOpt {
 
 // NewGenerator creates new block generator.
 func NewGenerator(
-	db *sql.Database,
+	db sql.StateDatabase,
 	atxs *atxsdata.Data,
 	proposals *store.Store,
 	exec executor,

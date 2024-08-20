@@ -21,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 type testFetch struct {
@@ -80,7 +80,7 @@ func createFetch(tb testing.TB) *testFetch {
 	}
 	lg := zaptest.NewLogger(tb)
 
-	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), store.New(), nil,
+	tf.Fetch = NewFetch(datastore.NewCachedDB(statesql.InMemory(), lg), store.New(), nil,
 		WithContext(context.TODO()),
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -117,7 +117,7 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 
 func TestFetch_Start(t *testing.T) {
 	lg := zaptest.NewLogger(t)
-	f := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), store.New(), nil,
+	f := NewFetch(datastore.NewCachedDB(statesql.InMemory(), lg), store.New(), nil,
 		WithContext(context.TODO()),
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
@@ -382,7 +382,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	defer eg.Wait()
 
-	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg), store.New(), h,
+	fetcher := NewFetch(datastore.NewCachedDB(statesql.InMemory(), lg), store.New(), h,
 		WithContext(ctx),
 		WithConfig(cfg),
 		WithLogger(lg),

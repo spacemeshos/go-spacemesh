@@ -23,9 +23,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestCertification(t *testing.T) {
@@ -34,7 +34,7 @@ func TestCertification(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := testPostConfig()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	localDb := localsql.InMemory()
 
 	opts := testPostSetupOpts(t)

@@ -50,7 +50,7 @@ type proposalMetadata struct {
 func getProposalMetadata(
 	ctx context.Context,
 	logger *zap.Logger,
-	db *sql.Database,
+	db sql.StateDatabase,
 	atxs *atxsdata.Data,
 	cfg Config,
 	lid types.LayerID,
@@ -232,7 +232,7 @@ func toUint64Slice(b []byte) []uint64 {
 
 func rewardInfoAndHeight(
 	cfg Config,
-	db *sql.Database,
+	db sql.StateDatabase,
 	atxs *atxsdata.Data,
 	props []*types.Proposal,
 ) (uint64, []types.AnyReward, error) {

@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func matchTx(tx types.TransactionWithResult, filter ResultsFilter) bool {
@@ -59,11 +60,11 @@ func filterTxs(txs []types.TransactionWithResult, filter ResultsFilter) []types.
 }
 
 func TestIterateResults(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	gen := fixture.NewTransactionResultGenerator()
 	txs := make([]types.TransactionWithResult, 100)
-	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx sql.Transaction) error {
 		for i := range txs {
 			tx := gen.Next()
 
@@ -142,12 +143,12 @@ func TestIterateResults(t *testing.T) {
 }
 
 func TestIterateSnapshot(t *testing.T) {
-	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
+	db, err := statesql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
 	gen := fixture.NewTransactionResultGenerator()
 	expect := 10
-	require.NoError(t, db.WithTx(context.Background(), func(dtx *sql.Tx) error {
+	require.NoError(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
 		for i := 0; i < expect; i++ {
 			tx := gen.Next()
 
@@ -175,7 +176,7 @@ func TestIterateSnapshot(t *testing.T) {
 	}()
 	<-initialized
 
-	require.NoError(t, db.WithTx(context.TODO(), func(dtx *sql.Tx) error {
+	require.NoError(t, db.WithTx(context.TODO(), func(dtx sql.Transaction) error {
 		for i := 0; i < 10; i++ {
 			tx := gen.Next()
 

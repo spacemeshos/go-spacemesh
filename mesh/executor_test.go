@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestMain(m *testing.M) {
@@ -33,7 +34,7 @@ func TestMain(m *testing.M) {
 type testExecutor struct {
 	tb       testing.TB
 	exec     *mesh.Executor
-	db       *sql.Database
+	db       sql.StateDatabase
 	atxsdata *atxsdata.Data
 	mcs      *mocks.MockconservativeState
 	mvm      *mocks.MockvmState
@@ -43,7 +44,7 @@ func newTestExecutor(t *testing.T) *testExecutor {
 	ctrl := gomock.NewController(t)
 	te := &testExecutor{
 		tb:       t,
-		db:       sql.InMemory(),
+		db:       statesql.InMemory(),
 		atxsdata: atxsdata.New(),
 		mvm:      mocks.NewMockvmState(ctrl),
 		mcs:      mocks.NewMockconservativeState(ctrl),

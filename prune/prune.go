@@ -22,7 +22,7 @@ func WithLogger(logger *zap.Logger) Opt {
 	}
 }
 
-func New(db *sql.Database, safeDist uint32, activesetEpoch types.EpochID, opts ...Opt) *Pruner {
+func New(db sql.StateDatabase, safeDist uint32, activesetEpoch types.EpochID, opts ...Opt) *Pruner {
 	p := &Pruner{
 		logger:         zap.NewNop(),
 		db:             db,
@@ -37,7 +37,7 @@ func New(db *sql.Database, safeDist uint32, activesetEpoch types.EpochID, opts .
 
 type Pruner struct {
 	logger         *zap.Logger
-	db             *sql.Database
+	db             sql.StateDatabase
 	safeDist       uint32
 	activesetEpoch types.EpochID
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -46,14 +47,14 @@ func TestMain(m *testing.M) {
 type testOracle struct {
 	*Oracle
 	tb        testing.TB
-	db        *sql.Database
+	db        sql.StateDatabase
 	atxsdata  *atxsdata.Data
 	mBeacon   *mocks.MockBeaconGetter
 	mVerifier *MockvrfVerifier
 }
 
 func defaultOracle(tb testing.TB) *testOracle {
-	db := sql.InMemoryTest(tb)
+	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
 
 	ctrl := gomock.NewController(tb)

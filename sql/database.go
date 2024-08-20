@@ -6,12 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"testing"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -31,6 +28,9 @@ var (
 	ErrObjectExists = errors.New("database: object exists")
 	// ErrTooNew is returned if database version is newer than expected.
 	ErrTooNew = errors.New("database version is too new")
+	// ErrOldSchema is returned when the database version differs from the expected one
+	// and migrations are disabled.
+	ErrOldSchema = errors.New("old database version")
 )
 
 const (
@@ -38,7 +38,7 @@ const (
 	beginImmediate = "BEGIN IMMEDIATE;"
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./database.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/sql Executor
 
 // Executor is an interface for executing raw statement.
 type Executor interface {
@@ -62,29 +62,28 @@ type Encoder func(*Statement)
 type Decoder func(*Statement) bool
 
 func defaultConf() *conf {
-	migrations, err := StateMigrations()
-	if err != nil {
-		panic(err)
-	}
-
 	return &conf{
-		connections:   16,
-		migrations:    migrations,
-		skipMigration: map[int]struct{}{},
-		logger:        zap.NewNop(),
+		enableMigrations: true,
+		connections:      16,
+		logger:           zap.NewNop(),
+		schema:           &Schema{},
+		checkSchemaDrift: true,
 	}
 }
 
 type conf struct {
-	flags         sqlite.OpenFlags
-	connections   int
-	skipMigration map[int]struct{}
-	vacuumState   int
-	migrations    []Migration
-	enableLatency bool
-	cache         bool
-	cacheSizes    map[QueryCacheKind]int
-	logger        *zap.Logger
+	enableMigrations bool
+	forceFresh       bool
+	forceMigrations  bool
+	connections      int
+	vacuumState      int
+	enableLatency    bool
+	cache            bool
+	cacheSizes       map[QueryCacheKind]int
+	logger           *zap.Logger
+	schema           *Schema
+	allowSchemaDrift bool
+	checkSchemaDrift bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -94,48 +93,18 @@ func WithConnections(n int) Opt {
 	}
 }
 
+// WithLogger specifies logger for the database.
 func WithLogger(logger *zap.Logger) Opt {
 	return func(c *conf) {
 		c.logger = logger
 	}
 }
 
-// WithMigrations overwrites embedded migrations.
-// Migrations are sorted by order before applying.
-func WithMigrations(migrations []Migration) Opt {
+// WithMigrationsDisabled disables migrations for the database.
+// The migrations are enabled by default.
+func WithMigrationsDisabled() Opt {
 	return func(c *conf) {
-		sort.Slice(migrations, func(i, j int) bool {
-			return migrations[i].Order() < migrations[j].Order()
-		})
-		c.migrations = migrations
-	}
-}
-
-// WithMigration adds migration to the list of migrations.
-// It will overwrite an existing migration with the same order.
-func WithMigration(migration Migration) Opt {
-	return func(c *conf) {
-		for i, m := range c.migrations {
-			if m.Order() == migration.Order() {
-				c.migrations[i] = migration
-				return
-			}
-			if m.Order() > migration.Order() {
-				c.migrations = slices.Insert(c.migrations, i, migration)
-				return
-			}
-		}
-		c.migrations = append(c.migrations, migration)
-	}
-}
-
-// WithSkipMigrations will update database version with executing associated migrations.
-// It should be used at your own risk.
-func WithSkipMigrations(i ...int) Opt {
-	return func(c *conf) {
-		for _, index := range i {
-			c.skipMigration[index] = struct{}{}
-		}
+		c.enableMigrations = false
 	}
 }
 
@@ -173,28 +142,58 @@ func WithQueryCacheSizes(sizes map[QueryCacheKind]int) Opt {
 	}
 }
 
+// WithForceMigrations forces database to run all the migrations instead
+// of using a schema snapshot in case of a fresh database.
+func WithForceMigrations(force bool) Opt {
+	return func(c *conf) {
+		c.forceMigrations = true
+	}
+}
+
+// WithSchema specifies database schema script.
+func WithDatabaseSchema(schema *Schema) Opt {
+	return func(c *conf) {
+		c.schema = schema
+	}
+}
+
+// WithAllowSchemaDrift prevents Open from failing upon schema drift when schema drift
+// checks are enabled. A warning is printed instead.
+func WithAllowSchemaDrift(allow bool) Opt {
+	return func(c *conf) {
+		c.allowSchemaDrift = allow
+	}
+}
+
+// WithNoCheckSchemaDrift disables schema drift checks.
+func WithNoCheckSchemaDrift() Opt {
+	return func(c *conf) {
+		c.checkSchemaDrift = false
+	}
+}
+
+func withForceFresh() Opt {
+	return func(c *conf) {
+		c.forceFresh = true
+	}
+}
+
 // Opt for configuring database.
 type Opt func(c *conf)
 
-// InMemory database for testing.
-// Please use InMemoryTest for automatic closing of the returned db during `tb.Cleanup`.
-func InMemory(opts ...Opt) *Database {
-	opts = append(opts, WithConnections(1))
-	db, err := Open("file::memory:?mode=memory", opts...)
-	if err != nil {
-		panic(err)
-	}
-	return db
+// OpenInMemory creates an in-memory database.
+func OpenInMemory(opts ...Opt) (*sqliteDatabase, error) {
+	opts = append(opts, WithConnections(1), withForceFresh())
+	return Open("file::memory:?mode=memory", opts...)
 }
 
-// InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
-func InMemoryTest(tb testing.TB, opts ...Opt) *Database {
-	opts = append(opts, WithConnections(1))
-	db, err := Open("file::memory:?mode=memory", opts...)
+// InMemory creates an in-memory database for testing and panics if
+// there's an error.
+func InMemory(opts ...Opt) *sqliteDatabase {
+	db, err := OpenInMemory(opts...)
 	if err != nil {
 		panic(err)
 	}
-	tb.Cleanup(func() { db.Close() })
 	return db
 }
 
@@ -203,82 +202,92 @@ func InMemoryTest(tb testing.TB, opts ...Opt) *Database {
 // Database is opened in WAL mode and pragma synchronous=normal.
 // https://sqlite.org/wal.html
 // https://www.sqlite.org/pragma.html#pragma_synchronous
-func Open(uri string, opts ...Opt) (*Database, error) {
+func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 	config := defaultConf()
 	for _, opt := range opts {
 		opt(config)
 	}
-	pool, err := sqlitex.Open(uri, config.flags, config.connections)
-	if err != nil {
-		return nil, fmt.Errorf("open db %s: %w", uri, err)
+	logger := config.logger.With(zap.String("uri", uri))
+	var flags sqlite.OpenFlags
+	if !config.forceFresh {
+		flags = sqlite.SQLITE_OPEN_READWRITE |
+			sqlite.SQLITE_OPEN_WAL |
+			sqlite.SQLITE_OPEN_URI |
+			sqlite.SQLITE_OPEN_NOMUTEX
 	}
-	db := &Database{pool: pool}
+	freshDB := config.forceFresh
+	pool, err := sqlitex.Open(uri, flags, config.connections)
+	if err != nil {
+		if config.forceFresh || sqlite.ErrCode(err) != sqlite.SQLITE_CANTOPEN {
+			return nil, fmt.Errorf("open db %s: %w", uri, err)
+		}
+		flags |= sqlite.SQLITE_OPEN_CREATE
+		freshDB = true
+		pool, err = sqlitex.Open(uri, flags, config.connections)
+		if err != nil {
+			return nil, fmt.Errorf("create db %s: %w", uri, err)
+		}
+	}
+	db := &sqliteDatabase{pool: pool}
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
-	//nolint:nestif
-	if config.migrations != nil {
-		before, err := version(db)
-		if err != nil {
-			return nil, err
+	if freshDB && !config.forceMigrations {
+		if err := config.schema.Apply(db); err != nil {
+			return nil, errors.Join(
+				fmt.Errorf("error running schema script: %w", err),
+				db.Close())
 		}
-		after := 0
-		if len(config.migrations) > 0 {
-			after = config.migrations[len(config.migrations)-1].Order()
-		}
-		if before > after {
-			pool.Close()
-			config.logger.Error("database version is newer than expected - downgrade is not supported",
-				zap.String("uri", uri),
+	} else {
+		before, after, err := config.schema.CheckDBVersion(logger, db)
+		switch {
+		case err != nil:
+			return nil, errors.Join(err, db.Close())
+		case before != after && config.enableMigrations:
+			logger.Info("running migrations",
 				zap.Int("current version", before),
 				zap.Int("target version", after),
 			)
-			return nil, fmt.Errorf("%w: %d > %d", ErrTooNew, before, after)
+			if err := config.schema.Migrate(
+				logger, db, before, config.vacuumState,
+			); err != nil {
+				return nil, errors.Join(err, db.Close())
+			}
+		case before != after:
+			logger.Error("database version is too old",
+				zap.Int("current version", before),
+				zap.Int("target version", after),
+			)
+			return nil, errors.Join(
+				fmt.Errorf("%w: %d < %d", ErrOldSchema, before, after),
+				db.Close())
 		}
-		config.logger.Info("running migrations",
-			zap.String("uri", uri),
-			zap.Int("current version", before),
-			zap.Int("target version", after),
-		)
-		for i, m := range config.migrations {
-			if m.Order() <= before {
-				continue
-			}
-			if err := db.WithTx(context.Background(), func(tx *Tx) error {
-				if _, ok := config.skipMigration[m.Order()]; !ok {
-					if err := m.Apply(tx); err != nil {
-						for j := i; j >= 0 && config.migrations[j].Order() > before; j-- {
-							if e := config.migrations[j].Rollback(); e != nil {
-								err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
-								break
-							}
-						}
-
-						return fmt.Errorf("apply %s: %w", m.Name(), err)
-					}
-				}
-				// version is set intentionally even if actual migration was skipped
-				if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.Order()), nil, nil); err != nil {
-					return fmt.Errorf("update user_version to %d: %w", m.Order(), err)
-				}
-				return nil
-			}); err != nil {
-				err = errors.Join(err, db.Close())
-				return nil, err
-			}
-
-			if config.vacuumState != 0 && before <= config.vacuumState {
-				if err := Vacuum(db); err != nil {
-					err = errors.Join(err, db.Close())
-					return nil, err
-				}
-			}
-			before = m.Order()
-		}
-
 	}
+
+	if config.checkSchemaDrift {
+		loaded, err := LoadDBSchemaScript(db)
+		if err != nil {
+			return nil, errors.Join(
+				fmt.Errorf("error loading database schema: %w", err),
+				db.Close())
+		}
+		diff := config.schema.Diff(loaded)
+		switch {
+		case diff == "": // ok
+		case config.allowSchemaDrift:
+			logger.Warn("database schema drift detected",
+				zap.String("uri", uri),
+				zap.String("diff", diff),
+			)
+		default:
+			return nil, errors.Join(
+				fmt.Errorf("schema drift detected (uri %s):\n%s", uri, diff),
+				db.Close())
+		}
+	}
+
 	if config.cache {
-		config.logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
+		logger.Debug("using query cache", zap.Any("sizes", config.cacheSizes))
 		db.queryCache = &queryCache{cacheSizesByKind: config.cacheSizes}
 	}
 	db.queryCount.Store(0)
@@ -290,13 +299,32 @@ func Version(uri string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("open db %s: %w", uri, err)
 	}
-	db := &Database{pool: pool}
+	db := &sqliteDatabase{pool: pool}
 	defer db.Close()
 	return version(db)
 }
 
-// Database is an instance of sqlite database.
-type Database struct {
+// Database represents a database.
+type Database interface {
+	Executor
+	QueryCache
+	Close() error
+	QueryCount() int
+	QueryCache() QueryCache
+	Tx(ctx context.Context) (Transaction, error)
+	WithTx(ctx context.Context, exec func(Transaction) error) error
+	TxImmediate(ctx context.Context) (Transaction, error)
+	WithTxImmediate(ctx context.Context, exec func(Transaction) error) error
+}
+
+// Transaction represents a transaction.
+type Transaction interface {
+	Executor
+	Commit() error
+	Release() error
+}
+
+type sqliteDatabase struct {
 	*queryCache
 	pool *sqlitex.Pool
 
@@ -307,7 +335,9 @@ type Database struct {
 	queryCount atomic.Int64
 }
 
-func (db *Database) getConn(ctx context.Context) *sqlite.Conn {
+var _ Database = &sqliteDatabase{}
+
+func (db *sqliteDatabase) getConn(ctx context.Context) *sqlite.Conn {
 	start := time.Now()
 	conn := db.pool.Get(ctx)
 	if conn != nil {
@@ -316,19 +346,19 @@ func (db *Database) getConn(ctx context.Context) *sqlite.Conn {
 	return conn
 }
 
-func (db *Database) getTx(ctx context.Context, initstmt string) (*Tx, error) {
+func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx, error) {
 	conn := db.getConn(ctx)
 	if conn == nil {
 		return nil, ErrNoConnection
 	}
-	tx := &Tx{queryCache: db.queryCache, db: db, conn: conn}
+	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn}
 	if err := tx.begin(initstmt); err != nil {
 		return nil, err
 	}
 	return tx, nil
 }
 
-func (db *Database) withTx(ctx context.Context, initstmt string, exec func(*Tx) error) error {
+func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func(Transaction) error) error {
 	tx, err := db.getTx(ctx, initstmt)
 	if err != nil {
 		return err
@@ -348,13 +378,13 @@ func (db *Database) withTx(ctx context.Context, initstmt string, exec func(*Tx) 
 // after one of the write statements.
 //
 // https://www.sqlite.org/lang_transaction.html
-func (db *Database) Tx(ctx context.Context) (*Tx, error) {
+func (db *sqliteDatabase) Tx(ctx context.Context) (Transaction, error) {
 	return db.getTx(ctx, beginDefault)
 }
 
 // WithTx will pass initialized deferred transaction to exec callback.
 // Will commit only if error is nil.
-func (db *Database) WithTx(ctx context.Context, exec func(*Tx) error) error {
+func (db *sqliteDatabase) WithTx(ctx context.Context, exec func(Transaction) error) error {
 	return db.withTx(ctx, beginImmediate, exec)
 }
 
@@ -363,13 +393,16 @@ func (db *Database) WithTx(ctx context.Context, exec func(*Tx) error) error {
 // IMMEDIATE cause the database connection to start a new write immediately, without waiting
 // for a write statement. The BEGIN IMMEDIATE might fail with SQLITE_BUSY if another write
 // transaction is already active on another database connection.
-func (db *Database) TxImmediate(ctx context.Context) (*Tx, error) {
+func (db *sqliteDatabase) TxImmediate(ctx context.Context) (Transaction, error) {
 	return db.getTx(ctx, beginImmediate)
 }
 
 // WithTxImmediate will pass initialized immediate transaction to exec callback.
 // Will commit only if error is nil.
-func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) error {
+func (db *sqliteDatabase) WithTxImmediate(
+	ctx context.Context,
+	exec func(Transaction) error,
+) error {
 	return db.withTx(ctx, beginImmediate, exec)
 }
 
@@ -381,7 +414,7 @@ func (db *Database) WithTxImmediate(ctx context.Context, exec func(*Tx) error) e
 //
 // Note that Exec will block until database is closed or statement has finished.
 // If application needs to control statement execution lifetime use one of the transaction.
-func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+func (db *sqliteDatabase) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	db.queryCount.Add(1)
 	conn := db.getConn(context.Background())
 	if conn == nil {
@@ -398,7 +431,7 @@ func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 }
 
 // Close closes all pooled connections.
-func (db *Database) Close() error {
+func (db *sqliteDatabase) Close() error {
 	db.closeMux.Lock()
 	defer db.closeMux.Unlock()
 	if db.closed {
@@ -413,12 +446,12 @@ func (db *Database) Close() error {
 
 // QueryCount returns the number of queries executed, including failed
 // queries, but not counting transaction start / commit / rollback.
-func (db *Database) QueryCount() int {
+func (db *sqliteDatabase) QueryCount() int {
 	return int(db.queryCount.Load())
 }
 
 // Return database's QueryCache.
-func (db *Database) QueryCache() QueryCache {
+func (db *sqliteDatabase) QueryCache() QueryCache {
 	return db.queryCache
 }
 
@@ -436,11 +469,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 	for {
 		row, err := stmt.Step()
 		if err != nil {
-			code := sqlite.ErrCode(err)
-			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY || code == sqlite.SQLITE_CONSTRAINT_UNIQUE {
-				return 0, ErrObjectExists
-			}
-			return 0, fmt.Errorf("step %d: %w", rows, err)
+			return 0, fmt.Errorf("step %d: %w", rows, mapSqliteError(err))
 		}
 		if !row {
 			return rows, nil
@@ -459,48 +488,48 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 	}
 }
 
-// Tx is wrapper for database transaction.
-type Tx struct {
+// sqliteTx is wrapper for database transaction.
+type sqliteTx struct {
 	*queryCache
-	db        *Database
+	db        *sqliteDatabase
 	conn      *sqlite.Conn
 	committed bool
 	err       error
 }
 
-func (tx *Tx) begin(initstmt string) error {
+func (tx *sqliteTx) begin(initstmt string) error {
 	stmt := tx.conn.Prep(initstmt)
 	_, err := stmt.Step()
 	if err != nil {
-		return fmt.Errorf("begin: %w", err)
+		return fmt.Errorf("begin: %w", mapSqliteError(err))
 	}
 	return nil
 }
 
 // Commit transaction.
-func (tx *Tx) Commit() error {
+func (tx *sqliteTx) Commit() error {
 	stmt := tx.conn.Prep("COMMIT;")
 	_, tx.err = stmt.Step()
 	if tx.err != nil {
-		return tx.err
+		return mapSqliteError(tx.err)
 	}
 	tx.committed = true
 	return nil
 }
 
 // Release transaction. Every transaction that was created must be released.
-func (tx *Tx) Release() error {
+func (tx *sqliteTx) Release() error {
 	defer tx.db.pool.Put(tx.conn)
 	if tx.committed {
 		return nil
 	}
 	stmt := tx.conn.Prep("ROLLBACK")
 	_, tx.err = stmt.Step()
-	return tx.err
+	return mapSqliteError(tx.err)
 }
 
 // Exec query.
-func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	tx.db.queryCount.Add(1)
 	if tx.db.latency != nil {
 		start := time.Now()
@@ -509,6 +538,19 @@ func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) 
 		}()
 	}
 	return exec(tx.conn, query, encoder, decoder)
+}
+
+func mapSqliteError(err error) error {
+	switch sqlite.ErrCode(err) {
+	case sqlite.SQLITE_CONSTRAINT_PRIMARYKEY, sqlite.SQLITE_CONSTRAINT_UNIQUE:
+		return ErrObjectExists
+	case sqlite.SQLITE_INTERRUPT:
+		// TODO: we probably should check if there was indeed a context that was
+		// canceled
+		return context.Canceled
+	default:
+		return err
+	}
 }
 
 // Blob represents a binary blob data. It can be reused efficiently
@@ -594,4 +636,16 @@ func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
 // IsNull returns true if the specified result column is null.
 func IsNull(stmt *Statement, col int) bool {
 	return stmt.ColumnType(col) == sqlite.SQLITE_NULL
+}
+
+// StateDatabase is a Database used for Spacemesh state.
+type StateDatabase interface {
+	Database
+	IsStateDatabase()
+}
+
+// LocalDatabase is a Database used for local node data.
+type LocalDatabase interface {
+	Database
+	IsLocalDatabase()
 }

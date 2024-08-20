@@ -11,10 +11,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestMalicious(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	nodeID := types.NodeID{1, 1, 1, 1}
 	mal, err := IsMalicious(db, nodeID)
@@ -60,7 +61,7 @@ func TestMalicious(t *testing.T) {
 }
 
 func Test_GetMalicious(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	got, err := GetMalicious(db)
 	require.NoError(t, err)
 	require.Nil(t, got)
@@ -78,7 +79,7 @@ func Test_GetMalicious(t *testing.T) {
 }
 
 func TestLoadMalfeasanceBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	nid1 := types.RandomNodeID()
@@ -123,7 +124,7 @@ func TestMarriageATX(t *testing.T) {
 	t.Parallel()
 	t.Run("not married", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 
 		id := types.RandomNodeID()
 		_, err := MarriageATX(db, id)
@@ -131,7 +132,7 @@ func TestMarriageATX(t *testing.T) {
 	})
 	t.Run("married", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 
 		id := types.RandomNodeID()
 		marriage := MarriageData{
@@ -150,7 +151,7 @@ func TestMarriageATX(t *testing.T) {
 func TestMarriage(t *testing.T) {
 	t.Parallel()
 
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	id := types.RandomNodeID()
 	marriage := MarriageData{
@@ -169,7 +170,7 @@ func TestEquivocationSet(t *testing.T) {
 	t.Parallel()
 	t.Run("equivocation set of married IDs", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
@@ -196,7 +197,7 @@ func TestEquivocationSet(t *testing.T) {
 	})
 	t.Run("equivocation set for unmarried ID contains itself only", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		id := types.RandomNodeID()
 		set, err := EquivocationSet(db, id)
 		require.NoError(t, err)
@@ -204,7 +205,7 @@ func TestEquivocationSet(t *testing.T) {
 	})
 	t.Run("can't escape the marriage", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
 			types.RandomNodeID(),
@@ -237,7 +238,7 @@ func TestEquivocationSet(t *testing.T) {
 		}
 	})
 	t.Run("married doesn't become malicious immediately", func(t *testing.T) {
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		atx := types.RandomATXID()
 		id := types.RandomNodeID()
 		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx}))
@@ -256,7 +257,7 @@ func TestEquivocationSet(t *testing.T) {
 	})
 	t.Run("all IDs in equivocation set are malicious if one is", func(t *testing.T) {
 		t.Parallel()
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
 			types.RandomNodeID(),
@@ -280,7 +281,7 @@ func TestEquivocationSetByMarriageATX(t *testing.T) {
 	t.Parallel()
 
 	t.Run("married IDs", func(t *testing.T) {
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		ids := []types.NodeID{
 			types.RandomNodeID(),
 			types.RandomNodeID(),
@@ -296,7 +297,7 @@ func TestEquivocationSetByMarriageATX(t *testing.T) {
 		require.Equal(t, ids, set)
 	})
 	t.Run("empty set", func(t *testing.T) {
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		set, err := EquivocationSetByMarriageATX(db, types.RandomATXID())
 		require.NoError(t, err)
 		require.Empty(t, set)

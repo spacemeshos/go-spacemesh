@@ -18,7 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func launchJsonServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
@@ -66,7 +66,7 @@ func TestJsonApi(t *testing.T) {
 	conStateAPI := NewMockconservativeState(ctrl)
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build)
 	svc2 := NewMeshService(
-		datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t)),
+		datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,

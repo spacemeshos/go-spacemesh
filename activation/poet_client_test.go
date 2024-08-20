@@ -23,8 +23,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
@@ -530,7 +530,7 @@ func TestPoetService_CachesCertifierInfo(t *testing.T) {
 
 			cfg := DefaultPoetConfig()
 			cfg.InfoCacheTTL = tc.ttl
-			db := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
+			db := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
 
 			url := &url.URL{Host: "certifier.hello"}
 			pubkey := []byte("pubkey")

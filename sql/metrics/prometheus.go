@@ -22,7 +22,7 @@ const (
 type DBMetricsCollector struct {
 	logger        *zap.Logger
 	checkInterval time.Duration
-	db            *sql.Database
+	db            sql.StateDatabase
 	tablesList    map[string]struct{}
 	eg            errgroup.Group
 	cancel        context.CancelFunc
@@ -35,7 +35,7 @@ type DBMetricsCollector struct {
 // NewDBMetricsCollector creates new DBMetricsCollector.
 func NewDBMetricsCollector(
 	ctx context.Context,
-	db *sql.Database,
+	db sql.StateDatabase,
 	logger *zap.Logger,
 	checkInterval time.Duration,
 ) *DBMetricsCollector {

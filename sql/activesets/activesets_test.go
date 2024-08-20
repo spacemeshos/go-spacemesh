@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestActiveSet(t *testing.T) {
@@ -19,7 +20,7 @@ func TestActiveSet(t *testing.T) {
 		Epoch: 2,
 		Set:   []types.ATXID{{1}, {2}},
 	}
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	require.NoError(t, Add(db, ids[0], set))
 	require.ErrorIs(t, Add(db, ids[0], set), sql.ErrObjectExists)
@@ -68,7 +69,7 @@ func TestCachedActiveSet(t *testing.T) {
 		Epoch: 2,
 		Set:   []types.ATXID{{3}, {4}},
 	}
-	db := sql.InMemory(sql.WithQueryCache(true))
+	db := statesql.InMemory(sql.WithQueryCache(true))
 
 	require.NoError(t, Add(db, ids[0], set0))
 	require.NoError(t, Add(db, ids[1], set1))
@@ -78,12 +79,12 @@ func TestCachedActiveSet(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		require.NoError(t, LoadBlob(ctx, db, ids[0].Bytes(), &b))
 		require.Equal(t, codec.MustEncode(set0), b.Bytes)
-		require.Equal(t, 3, db.QueryCount())
+		require.Equal(t, 3, db.QueryCount(), "ids[0]: QueryCount at i=%d", i)
 	}
 
 	for i := 0; i < 3; i++ {
 		require.NoError(t, LoadBlob(ctx, db, ids[1].Bytes(), &b))
 		require.Equal(t, codec.MustEncode(set1), b.Bytes)
-		require.Equal(t, 4, db.QueryCount())
+		require.Equal(t, 4, db.QueryCount(), "ids[1]: QueryCount at i=%d", i)
 	}
 }

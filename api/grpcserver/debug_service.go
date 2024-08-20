@@ -24,7 +24,7 @@ import (
 
 // DebugService exposes global state data, output from the STF.
 type DebugService struct {
-	db       *sql.Database
+	db       sql.StateDatabase
 	conState conservativeState
 	netInfo  networkInfo
 	oracle   oracle
@@ -46,7 +46,7 @@ func (d *DebugService) String() string {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(db *sql.Database, conState conservativeState, host networkInfo, oracle oracle,
+func NewDebugService(db sql.StateDatabase, conState conservativeState, host networkInfo, oracle oracle,
 	loggers map[string]*zap.AtomicLevel,
 ) *DebugService {
 	return &DebugService{

@@ -47,11 +47,11 @@ import (
 	peerinfomocks "github.com/spacemeshos/go-spacemesh/p2p/peerinfo/mocks"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
@@ -720,7 +720,7 @@ func TestMeshService(t *testing.T) {
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-	db := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
+	db := datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t))
 	svc := NewMeshService(
 		db,
 		meshAPIMock,
@@ -1249,7 +1249,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
-	svc := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	svc := NewTransactionService(statesql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -1288,7 +1288,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	grpcService := NewTransactionService(statesql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
@@ -1321,7 +1321,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	grpcService := NewTransactionService(statesql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
@@ -1349,7 +1349,7 @@ func TestTransactionService(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	grpcService := NewTransactionService(sql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	grpcService := NewTransactionService(statesql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
@@ -1657,7 +1657,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	grpcService := NewMeshService(
-		datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t)),
+		datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -1836,7 +1836,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t))
+	db := datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t))
 
 	grpcService := NewMeshService(
 		db,
@@ -1983,7 +1983,7 @@ func TestMultiService(t *testing.T) {
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
 	svc2 := NewMeshService(
-		datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t)),
+		datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -2028,7 +2028,7 @@ func TestDebugService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	netInfo := NewMocknetworkInfo(ctrl)
 	mOracle := NewMockoracle(ctrl)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	testLog := zap.NewAtomicLevel()
 	loggers := map[string]*zap.AtomicLevel{
@@ -2220,7 +2220,7 @@ func TestEventsReceived(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	txService := NewTransactionService(sql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil)
+	txService := NewTransactionService(statesql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil)
 	gsService := NewGlobalStateService(meshAPIMock, conStateAPI)
 	cfg, cleanup := launchServer(t, txService, gsService)
 	t.Cleanup(cleanup)
@@ -2270,8 +2270,8 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	lg := zaptest.NewLogger(t)
-	svm := vm.New(sql.InMemory(), vm.WithLogger(lg))
-	conState := txs.NewConservativeState(svm, sql.InMemory(), txs.WithLogger(lg.Named("conState")))
+	svm := vm.New(statesql.InMemory(), vm.WithLogger(lg))
+	conState := txs.NewConservativeState(svm, statesql.InMemory(), txs.WithLogger(lg.Named("conState")))
 	conState.AddToCache(context.Background(), globalTx, time.Now())
 
 	weight := new(big.Rat).SetFloat64(18.7)
@@ -2334,7 +2334,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(sql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
+		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2355,7 +2355,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(sql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
+		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2374,7 +2374,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	events.InitializeReporter()
 
 	// in memory database doesn't allow reads while writer locked db
-	db, err := sql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
+	db, err := statesql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	svm := vm.New(db, vm.WithLogger(zaptest.NewLogger(t)))
@@ -2470,7 +2470,7 @@ func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*typ
 func TestMeshService_EpochStream(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	srv := NewMeshService(
 		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		meshAPIMock,

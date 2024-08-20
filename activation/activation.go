@@ -28,7 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
@@ -85,7 +84,7 @@ type Builder struct {
 	conf              Config
 	db                sql.Executor
 	atxsdata          *atxsdata.Data
-	localDB           *localsql.Database
+	localDB           sql.LocalDatabase
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
 	validator         nipostValidator
@@ -181,7 +180,7 @@ func NewBuilder(
 	conf Config,
 	db sql.Executor,
 	atxsdata *atxsdata.Data,
-	localDB *localsql.Database,
+	localDB sql.LocalDatabase,
 	publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder,
 	layerClock layerClock,

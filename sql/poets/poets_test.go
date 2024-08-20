@@ -8,10 +8,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestHas(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	refs := []types.PoetProofRef{
 		{0xca, 0xfe},
@@ -51,7 +52,7 @@ func TestHas(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	refs := []types.PoetProofRef{
 		{0xca, 0xfe},
@@ -102,7 +103,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	ref := types.PoetProofRef{0xca, 0xfe}
 	poet := []byte("proof0")
@@ -121,7 +122,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestGetRef(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	sids := [][]byte{
 		[]byte("sid1"),

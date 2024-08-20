@@ -448,7 +448,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 
 func (h *HandlerV1) checkMalicious(
 	ctx context.Context,
-	tx *sql.Tx,
+	tx sql.Transaction,
 	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
 	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
@@ -472,7 +472,7 @@ func (h *HandlerV1) storeAtx(
 	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
 	var proof *mwire.MalfeasanceProof
-	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
 		var err error
 		proof, err = h.checkMalicious(ctx, tx, watx)
 		if err != nil {
