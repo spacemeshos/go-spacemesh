@@ -345,18 +345,8 @@ func ensureDBSchemaUpToDate(logger *zap.Logger, db *sqliteDatabase, config *conf
 	case before == after:
 		return db, nil
 	case before > after:
-		// TODO: this should be logged by the caller
-		logger.Error("database version is newer than expected - downgrade is not supported",
-			zap.Int("current version", before),
-			zap.Int("target version", after),
-		)
 		return db, fmt.Errorf("%w: %d > %d", ErrTooNew, before, after)
 	case !config.enableMigrations:
-		// TODO: this should be logged by the caller
-		logger.Error("database version is too old",
-			zap.Int("current version", before),
-			zap.Int("target version", after),
-		)
 		return db, fmt.Errorf("%w: %d < %d", ErrOldSchema, before, after)
 	case config.temp:
 		// Temporary database, do migrations without transactions
@@ -370,22 +360,13 @@ func ensureDBSchemaUpToDate(logger *zap.Logger, db *sqliteDatabase, config *conf
 			zap.Int("target version", after),
 		)
 		return db.copyMigrateDB(config)
-	default:
-		// Do not produce extra "running migrations" log message for the
-		// temporary DB, as it was already logged
-		if !config.temp {
-			logger.Info("running migrations in-place",
-				zap.Int("current version", before),
-				zap.Int("target version", after),
-			)
-		} else {
-			logger.Info("applying migrations to temporary DB",
-				zap.Int("current version", before),
-				zap.Int("target version", after),
-			)
-		}
-		return db, config.schema.Migrate(logger, db, before, config.vacuumState)
 	}
+
+	logger.Info("running migrations in-place",
+		zap.Int("current version", before),
+		zap.Int("target version", after),
+	)
+	return db, config.schema.Migrate(logger, db, before, config.vacuumState)
 }
 
 func Version(uri string) (int, error) {
@@ -600,8 +581,8 @@ func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func
 		return err
 	}
 	defer func() {
-		if rErr := tx.Release(); rErr != nil {
-			err = errors.Join(err, fmt.Errorf("release tx: %w", rErr))
+		if rErr := tx.Release(); rErr != nil && err == nil {
+			err = fmt.Errorf("release tx: %w", rErr)
 		}
 	}()
 	if err := exec(tx); err != nil {
@@ -799,21 +780,21 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	// and PRAGMA synchronous=OFF, it may become corrupt in case of a crash or power
 	// outage, so we avoid trying to open it.
 	markerPath := migratedPath + "_done"
-	if f, err := os.Create(markerPath); err != nil {
+	f, err := os.Create(markerPath)
+	if err != nil {
 		return nil, fmt.Errorf("create marker file %s_done: %w", migratedPath, err)
-	} else {
-		if err := f.Sync(); err != nil {
-			f.Close()
-			os.Remove(markerPath)
-			return nil, fmt.Errorf("sync/close marker file %s_done: %w", migratedPath, err)
-		}
-		if err := f.Close(); err != nil {
-			return nil, fmt.Errorf("close marker file %s: %w", markerPath, err)
-		}
-		// The temporary database is complete and should not be deleted
-		// until we copy it to the original database location.
-		tempDBReady = true
 	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(markerPath)
+		return nil, fmt.Errorf("sync/close marker file %s_done: %w", migratedPath, err)
+	}
+	if err := f.Close(); err != nil {
+		return nil, fmt.Errorf("close marker file %s: %w", markerPath, err)
+	}
+	// The temporary database is complete and should not be deleted
+	// until we copy it to the original database location.
+	tempDBReady = true
 
 	// We only close the source database at the end of the migration process
 	// so that the lock is held. There's a possibility that right after we

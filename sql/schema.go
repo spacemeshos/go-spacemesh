@@ -108,10 +108,7 @@ func (s *Schema) CheckDBVersion(logger *zap.Logger, db Database) (before, after 
 	if err != nil {
 		return 0, 0, err
 	}
-	after = 0
-	if len(s.Migrations) > 0 {
-		after = s.Migrations.Version()
-	}
+	after = s.Migrations.Version()
 	if before > after {
 		logger.Error("database version is newer than expected - downgrade is not supported",
 			zap.Int("current version", before),
