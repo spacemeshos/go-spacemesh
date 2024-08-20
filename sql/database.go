@@ -67,22 +67,23 @@ func defaultConf() *conf {
 		connections:      16,
 		logger:           zap.NewNop(),
 		schema:           &Schema{},
+		checkSchemaDrift: true,
 	}
 }
 
 type conf struct {
-	enableMigrations  bool
-	forceFresh        bool
-	forceMigrations   bool
-	connections       int
-	vacuumState       int
-	enableLatency     bool
-	cache             bool
-	cacheSizes        map[QueryCacheKind]int
-	logger            *zap.Logger
-	schema            *Schema
-	allowSchemaDrift  bool
-	ignoreSchemaDrift bool
+	enableMigrations bool
+	forceFresh       bool
+	forceMigrations  bool
+	connections      int
+	vacuumState      int
+	enableLatency    bool
+	cache            bool
+	cacheSizes       map[QueryCacheKind]int
+	logger           *zap.Logger
+	schema           *Schema
+	allowSchemaDrift bool
+	checkSchemaDrift bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -156,17 +157,18 @@ func WithDatabaseSchema(schema *Schema) Opt {
 	}
 }
 
-// WithAllowSchemaDrift prevents Open from failing upon schema
-// drift. A warning is printed instead.
+// WithAllowSchemaDrift prevents Open from failing upon schema drift when schema drift
+// checks are enabled. A warning is printed instead.
 func WithAllowSchemaDrift(allow bool) Opt {
 	return func(c *conf) {
 		c.allowSchemaDrift = allow
 	}
 }
 
-func WithIgnoreSchemaDrift() Opt {
+// WithNoCheckSchemaDrift disables schema drift checks.
+func WithNoCheckSchemaDrift() Opt {
 	return func(c *conf) {
-		c.ignoreSchemaDrift = true
+		c.checkSchemaDrift = false
 	}
 }
 
@@ -262,7 +264,7 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 		}
 	}
 
-	if !config.ignoreSchemaDrift {
+	if config.checkSchemaDrift {
 		loaded, err := LoadDBSchemaScript(db)
 		if err != nil {
 			return nil, errors.Join(
@@ -539,17 +541,16 @@ func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 }
 
 func mapSqliteError(err error) error {
-	code := sqlite.ErrCode(err)
-	if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY || code == sqlite.SQLITE_CONSTRAINT_UNIQUE {
+	switch sqlite.ErrCode(err) {
+	case sqlite.SQLITE_CONSTRAINT_PRIMARYKEY, sqlite.SQLITE_CONSTRAINT_UNIQUE:
 		return ErrObjectExists
-	}
-	if code == sqlite.SQLITE_INTERRUPT {
-		// TODO: we probably should check if there was indeed a context
-		// that was canceled. But we're likely to replace crawshaw library
-		// in future so this part should be rewritten anyway
+	case sqlite.SQLITE_INTERRUPT:
+		// TODO: we probably should check if there was indeed a context that was
+		// canceled
 		return context.Canceled
+	default:
+		return err
 	}
-	return err
 }
 
 // Blob represents a binary blob data. It can be reused efficiently

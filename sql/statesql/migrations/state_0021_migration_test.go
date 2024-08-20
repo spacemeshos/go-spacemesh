@@ -26,7 +26,7 @@ func Test0021Migration(t *testing.T) {
 	db := sql.InMemory(
 		sql.WithLogger(zaptest.NewLogger(t)),
 		sql.WithDatabaseSchema(schema),
-		sql.WithIgnoreSchemaDrift(),
+		sql.WithNoCheckSchemaDrift(),
 		sql.WithForceMigrations(true),
 	)
 

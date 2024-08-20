@@ -191,7 +191,7 @@ func (g *SchemaGen) Generate(outputFile string) error {
 		WithLogger(g.logger),
 		WithDatabaseSchema(g.schema),
 		WithForceMigrations(true),
-		WithIgnoreSchemaDrift())
+		WithNoCheckSchemaDrift())
 	if err != nil {
 		return fmt.Errorf("error opening in-memory db: %w", err)
 	}
