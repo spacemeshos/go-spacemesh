@@ -430,13 +430,16 @@ func (app *App) loadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, 
 		}
 	}
 	cfg := &checkpoint.RecoverConfig{
-		GoldenAtx:   types.ATXID(app.Config.Genesis.GoldenATX()),
-		DataDir:     app.Config.DataDir(),
-		DbFile:      dbFile,
-		LocalDbFile: localDbFile,
-		NodeIDs:     nodeIDs,
-		Uri:         app.Config.Recovery.Uri,
-		Restore:     types.LayerID(app.Config.Recovery.Restore),
+		GoldenAtx:                 types.ATXID(app.Config.Genesis.GoldenATX()),
+		DataDir:                   app.Config.DataDir(),
+		DbFile:                    dbFile,
+		LocalDbFile:               localDbFile,
+		NodeIDs:                   nodeIDs,
+		Uri:                       app.Config.Recovery.Uri,
+		Restore:                   types.LayerID(app.Config.Recovery.Restore),
+		RetryMax:                  app.Config.Recovery.RetryMax,
+		RetryDelay:                app.Config.Recovery.RetryDelay,
+		IgnoreCheckpointReqErrors: app.Config.Recovery.IgnoreCheckpointReqErrors,
 	}
 
 	return checkpoint.Recover(ctx, app.log.Zap(), afero.NewOsFs(), cfg)

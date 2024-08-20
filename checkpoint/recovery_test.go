@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -131,65 +133,117 @@ func checkpointServer(t testing.TB) string {
 
 func TestRecover(t *testing.T) {
 	t.Parallel()
-	url := checkpointServer(t)
 
-	tt := []struct {
-		name   string
-		uri    string
-		expErr error
-	}{
-		{
-			name: "http",
-			uri:  fmt.Sprintf("%s/snapshot-15", url),
-		},
-		{
-			name:   "url unreachable",
-			uri:    "http://nowhere/snapshot-15",
-			expErr: checkpoint.ErrCheckpointNotFound,
-		},
-		{
-			name:   "ftp",
-			uri:    "ftp://snapshot-15",
-			expErr: checkpoint.ErrUrlSchemeNotSupported,
-		},
+	setup := func(t *testing.T, handler http.HandlerFunc) (afero.Fs, *checkpoint.RecoverConfig) {
+		t.Helper()
+		fs := afero.NewMemMapFs()
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /snapshot-15", handler)
+		ts := httptest.NewServer(mux)
+		t.Cleanup(ts.Close)
+		cfg := &checkpoint.RecoverConfig{
+			GoldenAtx:   goldenAtx,
+			DataDir:     t.TempDir(),
+			DbFile:      "test.sql",
+			LocalDbFile: "local.sql",
+			NodeIDs:     []types.NodeID{types.RandomNodeID()},
+			Uri:         fmt.Sprintf("%s/snapshot-15", ts.URL),
+			Restore:     types.LayerID(recoverLayer),
+			RetryMax:    5,
+			RetryDelay:  100 * time.Millisecond,
+		}
+		require.NoError(t, fs.MkdirAll(filepath.Join(cfg.DataDir, bootstrap.DirName), 0o700))
+		return fs, cfg
 	}
 
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			fs := afero.NewMemMapFs()
-			cfg := &checkpoint.RecoverConfig{
-				GoldenAtx:   goldenAtx,
-				DataDir:     t.TempDir(),
-				DbFile:      "test.sql",
-				LocalDbFile: "local.sql",
-				NodeIDs:     []types.NodeID{types.RandomNodeID()},
-				Uri:         tc.uri,
-				Restore:     types.LayerID(recoverLayer),
-			}
-			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
-			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-			db := sql.InMemory()
-			localDB := localsql.InMemory()
-			data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
-			if tc.expErr != nil {
-				require.ErrorIs(t, err, tc.expErr)
+	t.Run("http", func(t *testing.T) {
+		db := sql.InMemory()
+		localDB := localsql.InMemory()
+		fs, cfg := setup(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(checkpointData))
+		})
+
+		data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
+		require.NoError(t, err)
+		require.Nil(t, data)
+
+		newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+		require.NoError(t, err)
+		require.NotNil(t, newDB)
+		defer newDB.Close()
+		verifyDbContent(t, newDB)
+
+		restore, err := recovery.CheckpointInfo(newDB)
+		require.NoError(t, err)
+		require.EqualValues(t, recoverLayer, restore)
+	})
+
+	t.Run("http+retry", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		localDB := localsql.InMemory()
+		var fail atomic.Bool
+		fail.Store(true)
+		fs, cfg := setup(t, func(w http.ResponseWriter, r *http.Request) {
+			if fail.CompareAndSwap(true, false) { // fail on first request
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Write([]byte("service unavailable"))
 				return
 			}
-			require.NoError(t, err)
-			require.Nil(t, data)
-			newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
-			require.NoError(t, err)
-			require.NotNil(t, newDB)
-			defer newDB.Close()
-			verifyDbContent(t, newDB)
-			restore, err := recovery.CheckpointInfo(newDB)
-			require.NoError(t, err)
-			require.EqualValues(t, recoverLayer, restore)
-			exist, err := afero.Exists(fs, bsdir)
-			require.NoError(t, err)
-			require.False(t, exist)
+			w.Write([]byte(checkpointData))
 		})
-	}
+
+		data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
+		require.NoError(t, err)
+		require.Nil(t, data)
+
+		newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+		require.NoError(t, err)
+		require.NotNil(t, newDB)
+		defer newDB.Close()
+		verifyDbContent(t, newDB)
+
+		restore, err := recovery.CheckpointInfo(newDB)
+		require.NoError(t, err)
+		require.EqualValues(t, recoverLayer, restore)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		localDB := localsql.InMemory()
+		fs, cfg := setup(t, func(w http.ResponseWriter, r *http.Request) {})
+		cfg.Uri = strings.Replace(cfg.Uri, "/snapshot-15", "/snapshot-42", -1) // unavailable snapshot
+
+		data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
+		require.ErrorIs(t, err, checkpoint.ErrCheckpointNotFound)
+		require.Nil(t, data)
+	})
+
+	t.Run("url unreachable", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		localDB := localsql.InMemory()
+		fs, cfg := setup(t, func(w http.ResponseWriter, r *http.Request) {})
+		cfg.Uri = "http://nowhere/snapshot-15" // unreachable url
+
+		data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
+		require.ErrorIs(t, err, checkpoint.ErrCheckpointRequestFailed)
+		require.Nil(t, data)
+	})
+
+	t.Run("unsupported scheme", func(t *testing.T) {
+		t.Parallel()
+		db := sql.InMemory()
+		localDB := localsql.InMemory()
+		fs, cfg := setup(t, func(w http.ResponseWriter, r *http.Request) {})
+		cfg.Uri = "ftp://snapshot-15" // unsupported scheme
+
+		data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
+		require.ErrorIs(t, err, checkpoint.ErrUrlSchemeNotSupported)
+		require.Nil(t, data)
+	})
 }
 
 func TestRecover_SameRecoveryInfo(t *testing.T) {

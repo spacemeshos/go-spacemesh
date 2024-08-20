@@ -26,6 +26,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		"recovery-uri", cfg.Recovery.Uri, "reset the node state based on the supplied checkpoint file")
 	flagSet.Uint32Var(&cfg.Recovery.Restore,
 		"recovery-layer", cfg.Recovery.Restore, "restart the mesh with the checkpoint file at this layer")
+	flagSet.BoolVar(&cfg.Recovery.IgnoreCheckpointReqErrors,
+		"ignore-checkpoint-req-errors", cfg.Recovery.IgnoreCheckpointReqErrors,
+		"ignore checkpoint request errors")
 
 	/** ======================== BaseConfig Flags ========================== **/
 	flagSet.StringVarP(&cfg.BaseConfig.DataDirParent, "data-folder", "d",
