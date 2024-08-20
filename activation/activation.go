@@ -52,17 +52,17 @@ type PoetConfig struct {
 	RequestRetryDelay time.Duration `mapstructure:"retry-delay"`
 	// Period to find positioning ATX. Must be less, than GracePeriod
 	PositioningATXSelectionTimeout time.Duration `mapstructure:"positioning-atx-selection-timeout"`
-	CertifierInfoCacheTTL          time.Duration `mapstructure:"certifier-info-cache-ttl"`
+	InfoCacheTTL                   time.Duration `mapstructure:"info-cache-ttl"`
 	PowParamsCacheTTL              time.Duration `mapstructure:"pow-params-cache-ttl"`
 	MaxRequestRetries              int           `mapstructure:"retry-max"`
 }
 
 func DefaultPoetConfig() PoetConfig {
 	return PoetConfig{
-		RequestRetryDelay:     400 * time.Millisecond,
-		MaxRequestRetries:     10,
-		CertifierInfoCacheTTL: 5 * time.Minute,
-		PowParamsCacheTTL:     5 * time.Minute,
+		RequestRetryDelay: 400 * time.Millisecond,
+		MaxRequestRetries: 10,
+		InfoCacheTTL:      5 * time.Minute,
+		PowParamsCacheTTL: 5 * time.Minute,
 	}
 }
 
