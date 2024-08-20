@@ -120,6 +120,50 @@ func TestTransactionService_List(t *testing.T) {
 		require.Len(t, list.Transactions, len(expectedTxs))
 	})
 
+	t.Run("address/startlayer/endlayer", func(t *testing.T) {
+		address := txsList[0].Principal.String()
+		layer := txsList[0].Layer.Uint32()
+		var expectedTxs []types.TransactionWithResult
+		for _, tx := range txsList {
+			found := false
+			if tx.Transaction.Principal.String() == address &&
+				tx.Layer.Uint32() >= layer && tx.Layer.Uint32() <= layer {
+				found = true
+			}
+
+			for _, addr := range tx.TransactionResult.Addresses {
+				if addr.String() == address &&
+					tx.Layer.Uint32() >= layer && tx.Layer.Uint32() <= layer {
+					found = true
+					break
+				}
+			}
+			if found {
+				expectedTxs = append(expectedTxs, tx)
+			}
+		}
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
+			Address:    &address,
+			StartLayer: &layer,
+			EndLayer:   &layer,
+			Limit:      100,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, len(expectedTxs))
+	})
+
+	t.Run("address/txid", func(t *testing.T) {
+		address := txsList[0].Principal.String()
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
+			Address: &address,
+			Txid:    [][]byte{txsList[0].ID[:]},
+			Limit:   100,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, 1)
+		require.Equal(t, txsList[0].TxHeader.Principal.String(), list.Transactions[0].Tx.Principal)
+	})
+
 	t.Run("tx id", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
 			Txid:  [][]byte{txsList[0].ID[:]},
