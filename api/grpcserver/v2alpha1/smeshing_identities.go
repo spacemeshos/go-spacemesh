@@ -139,9 +139,9 @@ func (s *SmeshingIdentitiesService) collectPoetInfos(nodeIds []types.NodeID) (
 		identityRegInfos[reg.NodeId] = poetInfos
 	}
 
-	for id, poets := range identityRegInfos {
+	for id, poetInfos := range identityRegInfos {
 		for poetAddr := range s.configuredPoetServices {
-			if _, ok := poets[poetAddr]; !ok {
+			if _, ok := poetInfos[poetAddr]; !ok {
 				identityRegInfos[id][poetAddr] = &pb.PoetServicesResponse_Identity_PoetInfo{
 					Url:                poetAddr,
 					RegistrationStatus: pb.RegistrationStatus_NO_REG,

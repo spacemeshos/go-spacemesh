@@ -362,7 +362,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 }
 
-// SmesherID returns the ID of the smesher that created this activation.
+// SmesherIDs returns the ID of the smesher that created this activation.
 func (b *Builder) SmesherIDs() []types.NodeID {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
