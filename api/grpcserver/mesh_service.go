@@ -294,7 +294,7 @@ func (s *MeshService) readLayer(
 	// internal or an input error? For now, all missing layers produce
 	// internal errors.
 	if err != nil {
-		ctxzap.Error(ctx, "could not read layer from database", layerID.Field().Zap(), zap.Error(err))
+		ctxzap.Error(ctx, "could not read layer from database", zap.Uint32("lid", layerID.Uint32()), zap.Error(err))
 		return pbLayer, status.Errorf(codes.Internal, "error reading layer data: %v", err)
 	} else if block == nil {
 		return pbLayer, nil
@@ -305,7 +305,9 @@ func (s *MeshService) readLayer(
 	// E.g., if this node has not synced/received them yet.
 	if len(missing) != 0 {
 		ctxzap.Error(ctx, "could not find transactions from layer",
-			zap.String("missing", fmt.Sprint(missing)), layerID.Field().Zap())
+			zap.String("missing", fmt.Sprint(missing)),
+			zap.Uint32("lid", layerID.Uint32()),
+		)
 		return pbLayer, status.Errorf(codes.Internal, "error retrieving tx data")
 	}
 
@@ -325,14 +327,20 @@ func (s *MeshService) readLayer(
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
 		ctxzap.Debug(ctx, "no state root for layer",
-			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
+			zap.Uint32("lid", layerID.Uint32()),
+			zap.Stringer("status", layerStatus),
+			zap.Error(err),
+		)
 	}
 	hash, err := s.mesh.MeshHash(layerID)
 	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
 		ctxzap.Debug(ctx, "no mesh hash at layer",
-			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
+			zap.Uint32("lid", layerID.Uint32()),
+			zap.Stringer("status", layerStatus),
+			zap.Error(err),
+		)
 	}
 	pbLayer.Blocks = []*pb.Block{pbBlock}
 	pbLayer.Hash = hash.Bytes()
@@ -424,12 +432,20 @@ func (s *MeshService) AccountMeshDataStream(
 	)
 
 	if filterTx {
-		if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
+		txsSubscription, err := events.SubscribeTxs()
+		if err != nil {
+			return status.Errorf(codes.Internal, "subscribing to txs failed: %v", err)
+		}
+		if txsSubscription != nil {
 			txCh, txBufFull = consumeEvents[events.Transaction](stream.Context(), txsSubscription)
 		}
 	}
 	if filterActivations {
-		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
+		activationsSubscription, err := events.SubscribeActivations()
+		if err != nil {
+			return status.Errorf(codes.Internal, "subscribing to activations failed: %v", err)
+		}
+		if activationsSubscription != nil {
 			activationsCh, activationsBufFull = consumeEvents[events.ActivationTx](
 				stream.Context(),
 				activationsSubscription,
@@ -497,7 +513,11 @@ func (s *MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshServic
 		layersBufFull <-chan struct{}
 	)
 
-	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
+	layersSubscription, err := events.SubscribeLayers()
+	if err != nil {
+		return status.Errorf(codes.Internal, "subscribing to layers failed: %v", err)
+	}
+	if layersSubscription != nil {
 		layerCh, layersBufFull = consumeEvents[events.LayerUpdate](stream.Context(), layersSubscription)
 	}
 

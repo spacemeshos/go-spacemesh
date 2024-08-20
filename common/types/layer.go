@@ -139,9 +139,6 @@ func (l LayerID) Difference(other LayerID) uint32 {
 	return (l - other).Uint32()
 }
 
-// Field returns a log field. Implements the LoggableField interface.
-func (l LayerID) Field() log.Field { return log.Uint32("layer_id", l.Uint32()) }
-
 // String returns string representation of the layer id numeric value.
 func (l LayerID) String() string {
 	return strconv.FormatUint(uint64(l), 10)
@@ -152,14 +149,6 @@ type Layer struct {
 	index   LayerID
 	ballots []*Ballot
 	blocks  []*Block
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (l *Layer) Field() log.Field {
-	return log.String(
-		"layer",
-		fmt.Sprintf("layer_id %d num_ballot %d num_blocks %d", l.index, len(l.ballots), len(l.blocks)),
-	)
 }
 
 // Index returns the layer's ID.

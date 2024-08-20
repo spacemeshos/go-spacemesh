@@ -118,7 +118,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 
 				var expect []*types.TransactionWithResult
 				for _, rst := range streamed {
-					events.ReportResult(*rst)
+					require.NoError(t, events.ReportResult(*rst))
 					if tc.matcher.match(rst) {
 						expect = append(expect, rst)
 					}

@@ -4,8 +4,6 @@ import (
 	"strconv"
 
 	"github.com/spacemeshos/go-scale"
-
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
@@ -44,9 +42,6 @@ func (e EpochID) Add(epochs uint32) EpochID {
 	e = EpochID(nl)
 	return e
 }
-
-// Field returns a log field. Implements the LoggableField interface.
-func (e EpochID) Field() log.Field { return log.Uint32("epoch_id", uint32(e)) }
 
 // String returns string representation of the epoch id numeric value.
 func (e EpochID) String() string {

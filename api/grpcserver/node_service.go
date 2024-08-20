@@ -133,7 +133,11 @@ func (s *NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServ
 		statusBufFull <-chan struct{}
 	)
 
-	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
+	statusSubscription, err := events.SubscribeStatus()
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to subscribe to status events: %v", err)
+	}
+	if statusSubscription != nil {
 		statusCh, statusBufFull = consumeEvents[events.Status](stream.Context(), statusSubscription)
 	}
 
@@ -180,7 +184,11 @@ func (s *NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeServic
 		errorsBufFull <-chan struct{}
 	)
 
-	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
+	errorsSubscription, err := events.SubscribeErrors()
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to subscribe to error events: %v", err)
+	}
+	if errorsSubscription != nil {
 		errorsCh, errorsBufFull = consumeEvents[events.NodeError](stream.Context(), errorsSubscription)
 	}
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
