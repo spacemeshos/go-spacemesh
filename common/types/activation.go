@@ -10,7 +10,6 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 //go:generate scalegen -types ATXMetadata,MerkleProof,EpochActiveSet
@@ -312,9 +311,6 @@ type NIPost struct {
 // VRFPostIndex is the nonce generated using Pow during post initialization. It is used as a mitigation for
 // grinding of identities for VRF eligibility.
 type VRFPostIndex uint64
-
-// Field returns a log field. Implements the LoggableField interface.
-func (v VRFPostIndex) Field() log.Field { return log.Uint64("vrf_nonce", uint64(v)) }
 
 // Post is an alias to postShared.Proof.
 type Post shared.Proof

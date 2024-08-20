@@ -76,13 +76,13 @@ type activeSetGenerator struct {
 
 func (p *activeSetGenerator) updateFallback(target types.EpochID, set []types.ATXID) {
 	p.log.Info("received trusted activeset update",
-		target.Field().Zap(),
+		zap.Uint32("epoch_id", target.Uint32()),
 		zap.Int("size", len(set)),
 	)
 	p.fallback.Lock()
 	defer p.fallback.Unlock()
 	if _, exists := p.fallback.data[target]; exists {
-		p.log.Debug("fallback active set already exists", target.Field().Zap())
+		p.log.Debug("fallback active set already exists", zap.Uint32("epoch_id", target.Uint32()))
 		return
 	}
 	p.fallback.data[target] = set
@@ -137,7 +137,7 @@ func (p *activeSetGenerator) generate(
 	start := time.Now()
 	if exists {
 		p.log.Info("generating activeset from trusted fallback",
-			target.Field().Zap(),
+			zap.Uint32("epoch_id", target.Uint32()),
 			zap.Int("size", len(fallback)),
 		)
 		var err error
@@ -149,7 +149,7 @@ func (p *activeSetGenerator) generate(
 	} else {
 		epochStart := p.clock.LayerToTime(target.FirstLayer())
 		networkDelay := p.cfg.networkDelay
-		p.log.Info("generating activeset from grades", target.Field().Zap(),
+		p.log.Info("generating activeset from grades", zap.Uint32("epoch_id", target.Uint32()),
 			zap.Time("epoch start", epochStart),
 			zap.Duration("network delay", networkDelay),
 		)
@@ -165,7 +165,7 @@ func (p *activeSetGenerator) generate(
 			setWeight = result.Weight
 		} else {
 			p.log.Info("node was not synced during previous epoch. can't use activeset from grades",
-				target.Field().Zap(),
+				zap.Uint32("epoch_id", target.Uint32()),
 				zap.Time("epoch start", epochStart),
 				zap.Duration("network delay", networkDelay),
 				zap.Int("total", result.Total),
@@ -195,7 +195,7 @@ func (p *activeSetGenerator) generate(
 	}
 	if set != nil {
 		p.log.Info("prepared activeset",
-			target.Field().Zap(),
+			zap.Uint32("epoch_id", target.Uint32()),
 			zap.Int("size", len(set)),
 			zap.Uint64("weight", setWeight),
 			zap.Duration("elapsed", time.Since(start)),

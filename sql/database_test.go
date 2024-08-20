@@ -27,7 +27,7 @@ func Test_Transaction_Isolation(t *testing.T) {
 				field int
 			);`,
 		}),
-		WithIgnoreSchemaDrift(),
+		WithNoCheckSchemaDrift(),
 	)
 	tx, err := db.Tx(context.Background())
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 			Migrations: MigrationList{migration1},
 		}),
 		WithForceMigrations(true),
-		WithIgnoreSchemaDrift(),
+		WithNoCheckSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -110,7 +110,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1, migration2},
 		}),
-		WithIgnoreSchemaDrift(),
+		WithNoCheckSchemaDrift(),
 	)
 	require.ErrorContains(t, err, "migration 2 failed")
 }
@@ -128,7 +128,7 @@ func Test_Migration_Disabled(t *testing.T) {
 			Migrations: MigrationList{migration1},
 		}),
 		WithForceMigrations(true),
-		WithIgnoreSchemaDrift(),
+		WithNoCheckSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -163,7 +163,7 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	db, err := Open("file:"+dbFile,
 		WithDatabaseSchema(schema),
 		WithForceMigrations(true),
-		WithIgnoreSchemaDrift(),
+		WithNoCheckSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -475,7 +475,7 @@ func TestResumeCopyMigration(t *testing.T) {
 }
 
 func TestDBClosed(t *testing.T) {
-	db := InMemory(WithLogger(zaptest.NewLogger(t)), WithIgnoreSchemaDrift())
+	db := InMemory(WithLogger(zaptest.NewLogger(t)), WithNoCheckSchemaDrift())
 	require.NoError(t, db.Close())
 	_, err := db.Exec("select 1", nil, nil)
 	require.ErrorIs(t, err, ErrClosed)
@@ -484,7 +484,7 @@ func TestDBClosed(t *testing.T) {
 }
 
 func TestQueryCount(t *testing.T) {
-	db := InMemory(WithLogger(zaptest.NewLogger(t)), WithIgnoreSchemaDrift())
+	db := InMemory(WithLogger(zaptest.NewLogger(t)), WithNoCheckSchemaDrift())
 	require.Equal(t, 0, db.QueryCount())
 
 	n, err := db.Exec("select 1", nil, nil)
@@ -512,7 +512,7 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	db, err := Open("file:"+dbFile,
 		WithLogger(logger),
 		WithForceMigrations(true),
-		WithIgnoreSchemaDrift())
+		WithNoCheckSchemaDrift())
 	require.NoError(t, err)
 	_, err = db.Exec("PRAGMA user_version = 3", nil, nil)
 	require.NoError(t, err)
@@ -523,7 +523,7 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 		WithDatabaseSchema(&Schema{
 			Migrations: MigrationList{migration1, migration2},
 		}),
-		WithIgnoreSchemaDrift(),
+		WithNoCheckSchemaDrift(),
 	)
 	require.ErrorIs(t, err, ErrTooNew)
 }

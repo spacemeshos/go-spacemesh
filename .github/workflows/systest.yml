@@ -58,6 +58,9 @@ jobs:
     needs:
       - filter-changes
     timeout-minutes: 70
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,8 +75,10 @@ jobs:
       - name: Setup gcloud authentication
         uses: google-github-actions/auth@v2
         with:
-          # GCP_CREDENTIALS is minified JSON of service account
-          credentials_json: "${{ secrets.CI_GCP_CREDENTIALS }}"
+          project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
+          service_account: ${{ secrets.GCP_WI_SA }} 
+          token_format: access_token
 
       - name: Configure gcloud
         uses: google-github-actions/setup-gcloud@v2

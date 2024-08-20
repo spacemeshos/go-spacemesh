@@ -72,35 +72,32 @@ func (g *TransactionResultGenerator) Next() *types.TransactionWithResult {
 	var tx types.TransactionWithResult
 	g.rng.Read(tx.ID[:])
 
+	rnd := g.rng.Perm(len(g.Addrs))
+	principal := g.Addrs[rnd[0]]
+	tx.Addresses = []types.Address{
+		principal,
+	}
+
 	_, priv, _ := ed25519.GenerateKey(g.rng)
 	var rawTx []byte
 	method := core.MethodSpawn
 
 	if g.rng.Intn(2) == 1 {
-		rawTx = wallet2.Spend(priv, g.Addrs[g.rng.Intn(len(g.Addrs))], 100, types.Nonce(1))
+		dest := g.Addrs[rnd[1]]
+		tx.Addresses = append(tx.Addresses, dest)
+		rawTx = wallet2.Spend(priv, dest, 100, types.Nonce(1))
 		method = core.MethodSpend
 	} else {
 		rawTx = wallet2.SelfSpawn(priv, types.Nonce(1))
 	}
-
 	tx.RawTx = types.NewRawTx(rawTx)
-
 	tx.Block = g.Blocks[g.rng.Intn(len(g.Blocks))]
 	tx.Layer = g.Layers[g.rng.Intn(len(g.Layers))]
 	tx.TxHeader = &types.TxHeader{
 		TemplateAddress: wallet.TemplateAddress,
 		Method:          uint8(method),
-		Principal:       g.Addrs[g.rng.Intn(len(g.Addrs))],
+		Principal:       principal,
 		Nonce:           types.Nonce(1),
-	}
-
-	if lth := g.rng.Intn(len(g.Addrs)); lth > 0 {
-		tx.Addresses = make([]types.Address, lth%10+1)
-
-		g.rng.Shuffle(len(g.Addrs), func(i, j int) {
-			g.Addrs[i], g.Addrs[j] = g.Addrs[j], g.Addrs[i]
-		})
-		copy(tx.Addresses, g.Addrs)
 	}
 	return &tx
 }

@@ -346,7 +346,8 @@ func (s *Syncer) updateState(ctx context.Context) error {
 	}); err != nil {
 		if ctx.Err() != nil {
 			// FIXME: with crawshaw, canceling the context which has been used to get
-			// a connection from the pool may cause "database: no free connection" errors
+			// a connection from the pool may cause "database: no free connection" errors.
+			// Related: #6273
 			err = ctx.Err()
 		}
 		return fmt.Errorf("error updating malsync state: %w", err)

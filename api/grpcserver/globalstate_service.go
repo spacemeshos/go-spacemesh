@@ -101,7 +101,7 @@ func (s *GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest)
 	}
 
 	ctxzap.Debug(ctx, "GRPC GlobalStateService.Account",
-		addr.Field().Zap(),
+		zap.Stringer("address", addr),
 		zap.Uint64("balance", acct.StateCurrent.Balance.Value),
 		zap.Uint64("counter", acct.StateCurrent.Counter),
 		zap.Uint64("balance projected", acct.StateProjected.Balance.Value),
@@ -240,12 +240,20 @@ func (s *GlobalStateService) AccountDataStream(
 		rewardsBufFull <-chan struct{}
 	)
 	if filterAccount {
-		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
+		accountSubscription, err := events.SubscribeAccount()
+		if err != nil {
+			return status.Errorf(codes.Internal, "error subscribing to account events: %v", err)
+		}
+		if accountSubscription != nil {
 			accountCh, accountBufFull = consumeEvents[events.Account](stream.Context(), accountSubscription)
 		}
 	}
 	if filterReward {
-		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
+		rewardsSubscription, err := events.SubscribeRewards()
+		if err != nil {
+			return status.Errorf(codes.Internal, "error subscribing to rewards events: %v", err)
+		}
+		if rewardsSubscription != nil {
 			rewardsCh, rewardsBufFull = consumeEvents[types.Reward](stream.Context(), rewardsSubscription)
 		}
 	}
@@ -369,12 +377,20 @@ func (s *GlobalStateService) GlobalStateStream(
 		layersBufFull  <-chan struct{}
 	)
 	if filterAccount {
-		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
+		accountSubscription, err := events.SubscribeAccount()
+		if err != nil {
+			return status.Errorf(codes.Internal, "error subscribing to account events: %v", err)
+		}
+		if accountSubscription != nil {
 			accountCh, accountBufFull = consumeEvents[events.Account](stream.Context(), accountSubscription)
 		}
 	}
 	if filterReward {
-		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
+		rewardsSubscription, err := events.SubscribeRewards()
+		if err != nil {
+			return status.Errorf(codes.Internal, "error subscribing to rewards events: %v", err)
+		}
+		if rewardsSubscription != nil {
 			rewardsCh, rewardsBufFull = consumeEvents[types.Reward](stream.Context(), rewardsSubscription)
 		}
 	}
@@ -382,7 +398,11 @@ func (s *GlobalStateService) GlobalStateStream(
 	if filterState {
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
-		if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
+		layersSubscription, err := events.SubscribeLayers()
+		if err != nil {
+			return status.Errorf(codes.Internal, "error subscribing to layer updates: %v", err)
+		}
+		if layersSubscription != nil {
 			layersCh, layersBufFull = consumeEvents[events.LayerUpdate](stream.Context(), layersSubscription)
 		}
 	}

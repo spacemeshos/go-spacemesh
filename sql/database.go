@@ -71,6 +71,7 @@ func defaultConf() *conf {
 		connections:                16,
 		logger:                     zap.NewNop(),
 		schema:                     &Schema{},
+		checkSchemaDrift:           true,
 		handleIncompleteMigrations: true,
 	}
 }
@@ -88,7 +89,7 @@ type conf struct {
 	logger                     *zap.Logger
 	schema                     *Schema
 	allowSchemaDrift           bool
-	ignoreSchemaDrift          bool
+	checkSchemaDrift           bool
 	temp                       bool
 	handleIncompleteMigrations bool
 }
@@ -164,17 +165,18 @@ func WithDatabaseSchema(schema *Schema) Opt {
 	}
 }
 
-// WithAllowSchemaDrift prevents Open from failing upon schema
-// drift. A warning is printed instead.
+// WithAllowSchemaDrift prevents Open from failing upon schema drift when schema drift
+// checks are enabled. A warning is printed instead.
 func WithAllowSchemaDrift(allow bool) Opt {
 	return func(c *conf) {
 		c.allowSchemaDrift = allow
 	}
 }
 
-func WithIgnoreSchemaDrift() Opt {
+// WithNoCheckSchemaDrift disables schema drift checks.
+func WithNoCheckSchemaDrift() Opt {
 	return func(c *conf) {
-		c.ignoreSchemaDrift = true
+		c.checkSchemaDrift = false
 	}
 }
 
@@ -300,7 +302,7 @@ func openDB(config *conf) (*sqliteDatabase, error) {
 		return nil, err
 	}
 
-	if !config.ignoreSchemaDrift {
+	if config.checkSchemaDrift {
 		loaded, err := LoadDBSchemaScript(db)
 		if err != nil {
 			db.Close()
@@ -429,7 +431,7 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 		WithLogger(config.logger),
 		WithConnections(1),
 		WithTemp(),
-		WithIgnoreSchemaDrift())
+		WithNoCheckSchemaDrift())
 	if err != nil {
 		return fmt.Errorf("open temporary DB %s: %w", fromPath, err)
 	}
@@ -447,7 +449,7 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 		WithLogger(config.logger),
 		WithConnections(1),
 		WithMigrationsDisabled(),
-		WithIgnoreSchemaDrift(),
+		WithNoCheckSchemaDrift(),
 		withDisableIncompleteMigrationHandling())
 	if err != nil {
 		return fmt.Errorf("open vacuumed DB %s: %w", toPath, err)
@@ -759,8 +761,8 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		WithTemp(),
 		WithDatabaseSchema(config.schema),
 	}
-	if config.ignoreSchemaDrift {
-		opts = append(opts, WithIgnoreSchemaDrift())
+	if !config.checkSchemaDrift {
+		opts = append(opts, WithNoCheckSchemaDrift())
 	}
 	migratedDB, err := Open("file:"+migratedPath, opts...)
 	if err != nil {
@@ -865,7 +867,7 @@ func (db *sqliteDatabase) QueryCache() QueryCache {
 	return db.queryCache
 }
 
-func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (nRows int, err error) {
+func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
 	stmt, err := conn.Prepare(query)
 	if err != nil {
 		return 0, fmt.Errorf("prepare %s: %w", query, err)
@@ -955,17 +957,16 @@ func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 }
 
 func mapSqliteError(err error) error {
-	code := sqlite.ErrCode(err)
-	if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY || code == sqlite.SQLITE_CONSTRAINT_UNIQUE {
+	switch sqlite.ErrCode(err) {
+	case sqlite.SQLITE_CONSTRAINT_PRIMARYKEY, sqlite.SQLITE_CONSTRAINT_UNIQUE:
 		return ErrObjectExists
-	}
-	if code == sqlite.SQLITE_INTERRUPT {
-		// TODO: we probably should check if there was indeed a context
-		// that was canceled. But we're likely to replace crawshaw library
-		// in future so this part should be rewritten anyway
+	case sqlite.SQLITE_INTERRUPT:
+		// TODO: we probably should check if there was indeed a context that was
+		// canceled
 		return context.Canceled
+	default:
+		return err
 	}
-	return err
 }
 
 // Blob represents a binary blob data. It can be reused efficiently

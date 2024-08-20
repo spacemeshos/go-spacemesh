@@ -193,7 +193,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 
 				var expect []*types.ActivationTx
 				for _, rst := range streamed {
-					events.ReportNewActivation(rst.ActivationTx)
+					require.NoError(t, events.ReportNewActivation(rst.ActivationTx))
 					matcher := atxsMatcher{tc.request, ctx}
 					if matcher.match(rst) {
 						expect = append(expect, rst.ActivationTx)

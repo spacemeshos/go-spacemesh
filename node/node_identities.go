@@ -36,7 +36,7 @@ func (app *App) NewIdentity() error {
 
 	app.log.With().Info("Created new identity",
 		log.String("filename", supervisedIDKeyFileName),
-		signer.PublicKey(),
+		log.ShortStringer("public_key", signer.PublicKey()),
 	)
 	app.signers = []*signing.EdSigner{signer}
 	return nil
@@ -72,7 +72,7 @@ func (app *App) LoadIdentities() error {
 
 		app.log.With().Info("Loaded existing identity",
 			log.String("filename", d.Name()),
-			signer.PublicKey(),
+			log.ShortStringer("public_key", signer.PublicKey()),
 		)
 		signers = append(signers, signer)
 		return nil
@@ -92,7 +92,7 @@ func (app *App) LoadIdentities() error {
 			app.log.With().Error("duplicate key",
 				log.String("filename1", sig.Name()),
 				log.String("filename2", file),
-				sig.PublicKey(),
+				log.String("public_key", sig.PublicKey().ShortString()),
 			)
 			collision = true
 			continue

@@ -724,7 +724,9 @@ func (c *Cache) ApplyLayer(
 				return err
 			}
 		}
-		events.ReportResult(rst)
+		if err := events.ReportResult(rst); err != nil {
+			c.logger.Error("Failed to emit tx results", zap.Stringer("tx_id", rst.ID), zap.Error(err))
+		}
 	}
 
 	for _, tx := range ineffective {

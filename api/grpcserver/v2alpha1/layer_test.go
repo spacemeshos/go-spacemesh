@@ -190,7 +190,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 						Status:  s,
 					}
 
-					events.ReportLayerUpdate(lu)
+					require.NoError(t, events.ReportLayerUpdate(lu))
 					matcher := layersMatcher{tc.request, ctx}
 					if matcher.match(&lu) {
 						expect = append(expect, &rst)
