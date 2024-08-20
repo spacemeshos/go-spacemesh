@@ -55,12 +55,12 @@ type ConservativeState struct {
 
 	logger *zap.Logger
 	cfg    CSConfig
-	db     *sql.Database
+	db     sql.StateDatabase
 	cache  *Cache
 }
 
 // NewConservativeState returns a ConservativeState.
-func NewConservativeState(state vmState, db *sql.Database, opts ...ConservativeStateOpt) *ConservativeState {
+func NewConservativeState(state vmState, db sql.StateDatabase, opts ...ConservativeStateOpt) *ConservativeState {
 	cs := &ConservativeState{
 		vmState: state,
 		cfg:     defaultCSConfig(),

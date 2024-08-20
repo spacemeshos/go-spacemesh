@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -29,7 +30,7 @@ const (
 )
 
 func newCore(rng *rand.Rand, id string, logger *zap.Logger) *core {
-	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
+	cdb := datastore.NewCachedDB(statesql.InMemory(), logger)
 	sig, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	if err != nil {
 		panic(err)
@@ -135,7 +136,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
 			tortoise.RecoverLayer(context.Background(),
 				c.tortoise,
-				c.cdb.Executor,
+				c.cdb.Database,
 				c.atxdata,
 				ev.LayerID,
 				c.tortoise.OnBallot,

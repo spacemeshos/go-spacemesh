@@ -16,8 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func Test_Validation_VRFNonce(t *testing.T) {
@@ -476,7 +476,7 @@ func TestValidateMerkleProof(t *testing.T) {
 }
 
 func TestVerifyChainDeps(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()
@@ -662,7 +662,7 @@ func TestVerifyChainDeps(t *testing.T) {
 }
 
 func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()

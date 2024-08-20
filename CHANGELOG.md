@@ -163,6 +163,9 @@ operating your own PoET and want to use certificate authentication please refer 
   ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
   eligible for them.
 
+* [#6003](https://github.com/spacemeshos/go-spacemesh/pull/6003) Improve database schema handling.
+  This includes schema drift detection which may happen after running unreleased versions.
+
 * [#6031](https://github.com/spacemeshos/go-spacemesh/pull/6031) Fixed an edge case where the storage units might have
   changed after the initial PoST was generated but before the first ATX has been emitted, invalidating the initial PoST.
   The node will now try to verify the initial PoST and regenerate it if necessary.

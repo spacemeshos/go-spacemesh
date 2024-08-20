@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -76,7 +75,7 @@ func WithConfig(cfg Config) Opt {
 	}
 }
 
-func New(fetcher fetcher, db sql.Executor, localdb *localsql.Database, opts ...Opt) *Syncer {
+func New(fetcher fetcher, db sql.Executor, localdb sql.LocalDatabase, opts ...Opt) *Syncer {
 	s := &Syncer{
 		logger:  zap.NewNop(),
 		cfg:     DefaultConfig(),
@@ -95,7 +94,7 @@ type Syncer struct {
 	cfg     Config
 	fetcher fetcher
 	db      sql.Executor
-	localdb *localsql.Database
+	localdb sql.LocalDatabase
 }
 
 func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloadUntil time.Time) error {
@@ -327,7 +326,7 @@ func (s *Syncer) downloadAtxs(
 			}
 		}
 
-		if err := s.localdb.WithTx(context.Background(), func(tx *sql.Tx) error {
+		if err := s.localdb.WithTx(context.Background(), func(tx sql.Transaction) error {
 			err := atxsync.SaveRequest(tx, publish, lastSuccess, int64(len(state)), int64(len(downloaded)))
 			if err != nil {
 				return fmt.Errorf("failed to save request time: %w", err)

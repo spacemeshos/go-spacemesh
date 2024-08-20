@@ -52,7 +52,7 @@ type testNIPostBuilder struct {
 	observedLogs *observer.ObservedLogs
 	eventSub     <-chan events.UserEvent
 
-	mDb          *localsql.Database
+	mDb          sql.LocalDatabase
 	mLogger      *zap.Logger
 	mPoetDb      *MockpoetDbAPI
 	mClock       *MocklayerClock

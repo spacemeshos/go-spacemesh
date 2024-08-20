@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -218,12 +217,12 @@ type Syncer struct {
 	cfg           Config
 	fetcher       fetcher
 	db            sql.Executor
-	localdb       *localsql.Database
+	localdb       sql.LocalDatabase
 	clock         clockwork.Clock
 	peerErrMetric counter
 }
 
-func New(fetcher fetcher, db sql.Executor, localdb *localsql.Database, opts ...Opt) *Syncer {
+func New(fetcher fetcher, db sql.Executor, localdb sql.LocalDatabase, opts ...Opt) *Syncer {
 	s := &Syncer{
 		logger:        zap.NewNop(),
 		cfg:           DefaultConfig(),
@@ -341,8 +340,16 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 	}
 }
 
-func (s *Syncer) updateState() error {
-	if err := malsync.UpdateSyncState(s.localdb, s.clock.Now()); err != nil {
+func (s *Syncer) updateState(ctx context.Context) error {
+	if err := s.localdb.WithTx(ctx, func(tx sql.Transaction) error {
+		return malsync.UpdateSyncState(tx, s.clock.Now())
+	}); err != nil {
+		if ctx.Err() != nil {
+			// FIXME: with crawshaw, canceling the context which has been used to get
+			// a connection from the pool may cause "database: no free connection" errors.
+			// Related: #6273
+			err = ctx.Err()
+		}
 		return fmt.Errorf("error updating malsync state: %w", err)
 	}
 
@@ -360,13 +367,13 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 		if nothingToDownload {
 			sst.done()
 			if initial && sst.numSyncedPeers() >= s.cfg.MinSyncPeers {
-				if err := s.updateState(); err != nil {
+				if err := s.updateState(ctx); err != nil {
 					return err
 				}
 				s.logger.Info("initial sync of malfeasance proofs completed", log.ZContext(ctx))
 				return nil
 			} else if !initial && gotUpdate {
-				if err := s.updateState(); err != nil {
+				if err := s.updateState(ctx); err != nil {
 					return err
 				}
 			}

@@ -21,12 +21,12 @@ import (
 
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	sqlDB  *sql.Database
+	sqlDB  sql.StateDatabase
 	logger *zap.Logger
 }
 
 // NewPoetDb returns a new PoET handler.
-func NewPoetDb(db *sql.Database, log *zap.Logger) *PoetDb {
+func NewPoetDb(db sql.StateDatabase, log *zap.Logger) *PoetDb {
 	return &PoetDb{sqlDB: db, logger: log}
 }
 

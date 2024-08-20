@@ -119,6 +119,7 @@ type BaseConfig struct {
 	DatabaseSkipMigrations       []int                   `mapstructure:"db-skip-migrations"`
 	DatabaseQueryCache           bool                    `mapstructure:"db-query-cache"`
 	DatabaseQueryCacheSizes      DatabaseQueryCacheSizes `mapstructure:"db-query-cache-sizes"`
+	DatabaseSchemaAllowDrift     bool                    `mapstructure:"db-allow-schema-drift"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 

@@ -81,7 +81,7 @@ type Certifier struct {
 	stop    func()
 	stopped atomic.Bool
 
-	db         *sql.Database
+	db         sql.StateDatabase
 	oracle     eligibility.Rolacle
 	signers    map[types.NodeID]*signing.EdSigner
 	edVerifier *signing.EdVerifier
@@ -99,7 +99,7 @@ type Certifier struct {
 
 // NewCertifier creates new block certifier.
 func NewCertifier(
-	db *sql.Database,
+	db sql.StateDatabase,
 	o eligibility.Rolacle,
 
 	v *signing.EdVerifier,
@@ -567,7 +567,7 @@ func (c *Certifier) save(
 	if len(valid)+len(invalid) == 0 {
 		return certificates.Add(c.db, lid, cert)
 	}
-	return c.db.WithTx(ctx, func(dbtx *sql.Tx) error {
+	return c.db.WithTx(ctx, func(dbtx sql.Transaction) error {
 		if err := certificates.Add(dbtx, lid, cert); err != nil {
 			return err
 		}

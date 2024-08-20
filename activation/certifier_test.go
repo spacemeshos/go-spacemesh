@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	certdb "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestPersistsCerts(t *testing.T) {
@@ -113,7 +114,7 @@ func TestObtainingPost(t *testing.T) {
 	id := types.RandomNodeID()
 
 	t.Run("no POST or ATX", func(t *testing.T) {
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		localDb := localsql.InMemory()
 
 		certifier := NewCertifierClient(db, localDb, zaptest.NewLogger(t))
@@ -121,7 +122,7 @@ func TestObtainingPost(t *testing.T) {
 		require.ErrorContains(t, err, "PoST not found")
 	})
 	t.Run("initial POST available", func(t *testing.T) {
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		localDb := localsql.InMemory()
 
 		post := nipost.Post{
@@ -142,7 +143,7 @@ func TestObtainingPost(t *testing.T) {
 		require.Equal(t, post, *got)
 	})
 	t.Run("initial POST unavailable but ATX exists", func(t *testing.T) {
-		db := sql.InMemory()
+		db := statesql.InMemory()
 		localDb := localsql.InMemory()
 
 		atx := newInitialATXv1(t, types.RandomATXID())

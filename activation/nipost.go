@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
@@ -48,7 +47,7 @@ var ErrInvalidInitialPost = errors.New("invalid initial post")
 
 // NIPostBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPost).
 type NIPostBuilder struct {
-	localDB *localsql.Database
+	localDB sql.LocalDatabase
 
 	poetProvers    map[string]PoetService
 	postService    postService
@@ -85,7 +84,7 @@ func NipostbuilderWithIdentityStates(is types.IdentityStates) NIPostBuilderOptio
 
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
-	db *localsql.Database,
+	db sql.LocalDatabase,
 	postService postService,
 	lg *zap.Logger,
 	poetCfg PoetConfig,

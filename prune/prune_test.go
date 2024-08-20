@@ -11,13 +11,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 func TestPrune(t *testing.T) {
 	types.SetLayersPerEpoch(3)
 
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	current := types.LayerID(10)
 
 	lyrProps := make([]*types.Proposal, 0, current)

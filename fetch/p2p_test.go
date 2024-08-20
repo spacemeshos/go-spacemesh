@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -37,13 +38,13 @@ type blobKey struct {
 
 type testP2PFetch struct {
 	t        *testing.T
-	clientDB *sql.Database
+	clientDB sql.StateDatabase
 	// client proposals
 	clientPDB   *store.Store
 	clientCDB   *datastore.CachedDB
 	clientFetch *Fetch
 	serverID    peer.ID
-	serverDB    *sql.Database
+	serverDB    sql.StateDatabase
 	// server proposals
 	serverPDB    *store.Store
 	serverCDB    *datastore.CachedDB
@@ -110,8 +111,8 @@ func createP2PFetch(
 	if sqlCache {
 		sqlOpts = []sql.Opt{sql.WithQueryCache(true)}
 	}
-	clientDB := sql.InMemory(sqlOpts...)
-	serverDB := sql.InMemory(sqlOpts...)
+	clientDB := statesql.InMemory(sqlOpts...)
+	serverDB := statesql.InMemory(sqlOpts...)
 	tpf := &testP2PFetch{
 		t:            t,
 		clientDB:     clientDB,
