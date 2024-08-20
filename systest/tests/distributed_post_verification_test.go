@@ -30,9 +30,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -110,7 +110,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
-		datastore.NewCachedDB(sql.InMemory(), zap.NewNop()),
+		datastore.NewCachedDB(statesql.InMemory(), zap.NewNop()),
 		atxsdata.New(),
 		cl.GoldenATX(),
 		syncer,
@@ -156,7 +156,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, grpcPrivateServer.Start())
 	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
 
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	localDb := localsql.InMemory()
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)

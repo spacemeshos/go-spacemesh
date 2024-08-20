@@ -31,6 +31,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -195,7 +196,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	cdb := datastore.NewCachedDB(statesql.InMemory(), lg)
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)

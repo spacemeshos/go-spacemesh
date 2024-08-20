@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -27,7 +28,7 @@ const defaultCnt = uint16(2)
 
 type testCertifier struct {
 	*Certifier
-	db        *sql.Database
+	db        sql.StateDatabase
 	mOracle   *eligibility.MockRolacle
 	mPub      *pubsubmock.MockPublisher
 	mClk      *mocks.MocklayerClock
@@ -38,7 +39,7 @@ type testCertifier struct {
 func newTestCertifier(t *testing.T, signers int) *testCertifier {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctrl := gomock.NewController(t)
 	mo := eligibility.NewMockRolacle(ctrl)
 	mp := pubsubmock.NewMockPublisher(ctrl)

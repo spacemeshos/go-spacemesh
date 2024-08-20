@@ -31,18 +31,19 @@ import (
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 func TestTransactionService_List(t *testing.T) {
 	types.SetLayersPerEpoch(5)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewTransactionResultGenerator().WithAddresses(2)
 	txsList := make([]types.TransactionWithResult, 100)
-	require.NoError(t, db.WithTx(ctx, func(dtx *sql.Tx) error {
+	require.NoError(t, db.WithTx(ctx, func(dtx sql.Transaction) error {
 		for i := range txsList {
 			tx := gen.Next()
 
@@ -120,6 +121,50 @@ func TestTransactionService_List(t *testing.T) {
 		require.Len(t, list.Transactions, len(expectedTxs))
 	})
 
+	t.Run("address/startlayer/endlayer", func(t *testing.T) {
+		address := txsList[0].Principal.String()
+		layer := txsList[0].Layer.Uint32()
+		var expectedTxs []types.TransactionWithResult
+		for _, tx := range txsList {
+			found := false
+			if tx.Transaction.Principal.String() == address &&
+				tx.Layer.Uint32() >= layer && tx.Layer.Uint32() <= layer {
+				found = true
+			}
+
+			for _, addr := range tx.TransactionResult.Addresses {
+				if addr.String() == address &&
+					tx.Layer.Uint32() >= layer && tx.Layer.Uint32() <= layer {
+					found = true
+					break
+				}
+			}
+			if found {
+				expectedTxs = append(expectedTxs, tx)
+			}
+		}
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
+			Address:    &address,
+			StartLayer: &layer,
+			EndLayer:   &layer,
+			Limit:      100,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, len(expectedTxs))
+	})
+
+	t.Run("address/txid", func(t *testing.T) {
+		address := txsList[0].Principal.String()
+		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
+			Address: &address,
+			Txid:    [][]byte{txsList[0].ID[:]},
+			Limit:   100,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Transactions, 1)
+		require.Equal(t, txsList[0].TxHeader.Principal.String(), list.Transactions[0].Tx.Principal)
+	})
+
 	t.Run("tx id", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.TransactionRequest{
 			Txid:  [][]byte{txsList[0].ID[:]},
@@ -178,7 +223,7 @@ func TestTransactionService_List(t *testing.T) {
 
 func TestTransactionService_EstimateGas(t *testing.T) {
 	types.SetLayersPerEpoch(5)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	vminst := vm.New(db)
 	ctx := context.Background()
 
@@ -241,7 +286,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 
 func TestTransactionService_ParseTransaction(t *testing.T) {
 	types.SetLayersPerEpoch(5)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	vminst := vm.New(db)
 	ctx := context.Background()
 
@@ -357,7 +402,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	txHandler := NewMocktransactionValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
-	svc := NewTransactionService(sql.InMemory(), nil, syncer, txHandler, publisher)
+	svc := NewTransactionService(statesql.InMemory(), nil, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -400,7 +445,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	txHandler := NewMocktransactionValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
-	svc := NewTransactionService(sql.InMemory(), nil, syncer, txHandler, publisher)
+	svc := NewTransactionService(statesql.InMemory(), nil, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -437,7 +482,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	txHandler := NewMocktransactionValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
-	svc := NewTransactionService(sql.InMemory(), nil, syncer, txHandler, publisher)
+	svc := NewTransactionService(statesql.InMemory(), nil, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 

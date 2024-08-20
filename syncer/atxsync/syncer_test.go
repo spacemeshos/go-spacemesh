@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync/mocks"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -42,7 +43,7 @@ func edata(ids ...string) *fetch.EpochData {
 
 func newTester(tb testing.TB, cfg Config) *tester {
 	localdb := localsql.InMemory()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
 	syncer := New(fetcher, db, localdb, WithConfig(cfg), WithLogger(zaptest.NewLogger(tb)))
@@ -60,8 +61,8 @@ func newTester(tb testing.TB, cfg Config) *tester {
 type tester struct {
 	tb      testing.TB
 	syncer  *Syncer
-	localdb *localsql.Database
-	db      *sql.Database
+	localdb sql.LocalDatabase
+	db      sql.StateDatabase
 	cfg     Config
 	ctrl    *gomock.Controller
 	fetcher *mocks.Mockfetcher

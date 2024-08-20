@@ -50,7 +50,7 @@ type Handler struct {
 	logger *zap.Logger
 	cfg    Config
 
-	db                *sql.Database
+	db                sql.StateDatabase
 	atxsdata          *atxsdata.Data
 	activeSets        *lru.Cache[types.Hash32, uint64]
 	edVerifier        *signing.EdVerifier
@@ -109,7 +109,7 @@ func WithConfig(cfg Config) Opt {
 
 // NewHandler creates new Handler.
 func NewHandler(
-	db *sql.Database,
+	db sql.StateDatabase,
 	atxsdata *atxsdata.Data,
 	proposals proposalsConsumer,
 	edVerifier *signing.EdVerifier,

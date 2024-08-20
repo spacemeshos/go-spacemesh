@@ -23,9 +23,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 const (
@@ -136,7 +136,7 @@ func initPost(
 
 	logger := zaptest.NewLogger(tb)
 	syncer := syncedSyncer(tb)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), golden, syncer, nil)
 	require.NoError(tb, err)
 
@@ -157,7 +157,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	localDb := localsql.InMemory()
 
 	opts := testPostSetupOpts(t)
@@ -243,7 +243,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	opts := testPostSetupOpts(t)
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))

@@ -17,8 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestPostSetupManager(t *testing.T) {
@@ -369,7 +369,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
 
 	logger := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
+	cdb := datastore.NewCachedDB(statesql.InMemory(), logger)
 	mgr, err := NewPostSetupManager(DefaultPostConfig(), logger, cdb, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 

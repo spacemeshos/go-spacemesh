@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/activeset"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 type expect struct {
@@ -65,7 +66,7 @@ func unixPtr(sec, nsec int64) *time.Time {
 
 func newTesterActiveSetGenerator(tb testing.TB, cfg config) *testerActiveSetGenerator {
 	var (
-		db        = sql.InMemory()
+		db        = statesql.InMemory()
 		localdb   = localsql.InMemory()
 		atxsdata  = atxsdata.New()
 		ctrl      = gomock.NewController(tb)
@@ -97,8 +98,8 @@ type testerActiveSetGenerator struct {
 	tb  testing.TB
 	gen *activeSetGenerator
 
-	db        *sql.Database
-	localdb   *localsql.Database
+	db        sql.StateDatabase
+	localdb   sql.LocalDatabase
 	atxsdata  *atxsdata.Data
 	ctrl      *gomock.Controller
 	clock     *mocks.MocklayerClock

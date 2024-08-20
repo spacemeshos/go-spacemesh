@@ -25,11 +25,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -43,7 +43,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	cdb := datastore.NewCachedDB(db, logger)
 	localDB := localsql.InMemory()
 
@@ -261,7 +261,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, data)
 
-	newDB, err := sql.Open("file:" + recoveryCfg.DbPath())
+	newDB, err := statesql.Open("file:" + recoveryCfg.DbPath())
 	require.NoError(t, err)
 	defer newDB.Close()
 

@@ -138,7 +138,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 		h.countInvalidProof(p)
 		return types.EmptyNodeID, errors.Join(err, pubsub.ErrValidationReject)
 	}
-	if err := h.cdb.WithTx(ctx, func(dbtx *sql.Tx) error {
+	if err := h.cdb.WithTx(ctx, func(dbtx sql.Transaction) error {
 		malicious, err := identities.IsMalicious(dbtx, nodeID)
 		if err != nil {
 			return fmt.Errorf("check known malicious: %w", err)

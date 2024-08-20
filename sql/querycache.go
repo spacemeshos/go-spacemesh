@@ -17,14 +17,14 @@ type (
 
 var NullQueryCache QueryCache = (*queryCache)(nil)
 
-type queryCacheKey struct {
+type QueryCacheItemKey struct {
 	Kind QueryCacheKind
 	Key  string
 }
 
 // QueryCacheKey creates a key for QueryCache.
-func QueryCacheKey(kind QueryCacheKind, key string) queryCacheKey {
-	return queryCacheKey{Kind: kind, Key: key}
+func QueryCacheKey(kind QueryCacheKind, key string) QueryCacheItemKey {
+	return QueryCacheItemKey{Kind: kind, Key: key}
 }
 
 // QueryCacheSubKey denotes a cache subkey. The empty subkey refers to the main
@@ -60,14 +60,14 @@ type QueryCache interface {
 	// called for this cache.
 	GetValue(
 		ctx context.Context,
-		key queryCacheKey,
+		key QueryCacheItemKey,
 		subKey QueryCacheSubKey,
 		retrieve UntypedRetrieveFunc,
 	) (any, error)
 	// UpdateSlice updates the slice stored in the cache by invoking the
 	// specified SliceAppender. If the entry is not cached, the method does
 	// nothing.
-	UpdateSlice(key queryCacheKey, update SliceAppender)
+	UpdateSlice(key QueryCacheItemKey, update SliceAppender)
 	// ClearCache empties the cache.
 	ClearCache()
 }
@@ -87,7 +87,7 @@ func IsCached(db any) bool {
 func WithCachedValue[T any](
 	ctx context.Context,
 	db any,
-	key queryCacheKey,
+	key QueryCacheItemKey,
 	retrieve func(ctx context.Context) (T, error),
 ) (T, error) {
 	return WithCachedSubKey(ctx, db, key, mainSubKey, retrieve)
@@ -100,7 +100,7 @@ func WithCachedValue[T any](
 func WithCachedSubKey[T any](
 	ctx context.Context,
 	db any,
-	key queryCacheKey,
+	key QueryCacheItemKey,
 	subKey QueryCacheSubKey,
 	retrieve func(ctx context.Context) (T, error),
 ) (T, error) {
@@ -124,7 +124,7 @@ func WithCachedSubKey[T any](
 // AppendToCachedSlice adds a value to the slice stored in the cache by invoking
 // the specified SliceAppender. If the entry is not cached, the function does
 // nothing.
-func AppendToCachedSlice[T any](db any, key queryCacheKey, v T) {
+func AppendToCachedSlice[T any](db any, key QueryCacheItemKey, v T) {
 	if cache, ok := db.(QueryCache); ok {
 		cache.UpdateSlice(key, func(s any) any {
 			if s == nil {
@@ -145,7 +145,7 @@ type lru = simplelru.LRU[lruCacheKey, any]
 type queryCache struct {
 	sync.Mutex
 	updateMtx        sync.RWMutex
-	subKeyMap        map[queryCacheKey][]QueryCacheSubKey
+	subKeyMap        map[QueryCacheItemKey][]QueryCacheSubKey
 	cacheSizesByKind map[QueryCacheKind]int
 	caches           map[QueryCacheKind]*lru
 }
@@ -162,7 +162,7 @@ func (c *queryCache) ensureLRU(kind QueryCacheKind) *lru {
 	}
 	lruForKind, err := simplelru.NewLRU[lruCacheKey, any](size, func(k lruCacheKey, v any) {
 		if k.subKey == mainSubKey {
-			c.clearSubKeys(queryCacheKey{Kind: kind, Key: k.key})
+			c.clearSubKeys(QueryCacheItemKey{Kind: kind, Key: k.key})
 		}
 	})
 	if err != nil {
@@ -175,7 +175,7 @@ func (c *queryCache) ensureLRU(kind QueryCacheKind) *lru {
 	return lruForKind
 }
 
-func (c *queryCache) clearSubKeys(key queryCacheKey) {
+func (c *queryCache) clearSubKeys(key QueryCacheItemKey) {
 	lru, found := c.caches[key.Kind]
 	if !found {
 		return
@@ -188,7 +188,7 @@ func (c *queryCache) clearSubKeys(key queryCacheKey) {
 	}
 }
 
-func (c *queryCache) get(key queryCacheKey, subKey QueryCacheSubKey) (any, bool) {
+func (c *queryCache) get(key QueryCacheItemKey, subKey QueryCacheSubKey) (any, bool) {
 	c.Lock()
 	defer c.Unlock()
 	lru, found := c.caches[key.Kind]
@@ -202,14 +202,14 @@ func (c *queryCache) get(key queryCacheKey, subKey QueryCacheSubKey) (any, bool)
 	})
 }
 
-func (c *queryCache) set(key queryCacheKey, subKey QueryCacheSubKey, v any) {
+func (c *queryCache) set(key QueryCacheItemKey, subKey QueryCacheSubKey, v any) {
 	c.Lock()
 	defer c.Unlock()
 	if subKey != mainSubKey {
 		sks := c.subKeyMap[key]
 		if slices.Index(sks, subKey) < 0 {
 			if c.subKeyMap == nil {
-				c.subKeyMap = make(map[queryCacheKey][]QueryCacheSubKey)
+				c.subKeyMap = make(map[QueryCacheItemKey][]QueryCacheSubKey)
 			}
 			c.subKeyMap[key] = append(sks, subKey)
 		}
@@ -224,7 +224,7 @@ func (c *queryCache) IsCached() bool {
 
 func (c *queryCache) GetValue(
 	ctx context.Context,
-	key queryCacheKey,
+	key QueryCacheItemKey,
 	subKey QueryCacheSubKey,
 	retrieve UntypedRetrieveFunc,
 ) (any, error) {
@@ -251,7 +251,7 @@ func (c *queryCache) GetValue(
 	return v, err
 }
 
-func (c *queryCache) UpdateSlice(key queryCacheKey, update SliceAppender) {
+func (c *queryCache) UpdateSlice(key QueryCacheItemKey, update SliceAppender) {
 	if c == nil {
 		return
 	}

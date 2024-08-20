@@ -674,7 +674,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	return &result, nil
 }
 
-func (h *HandlerV2) checkMalicious(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
 	malicious, err := identities.IsMalicious(tx, atx.SmesherID)
 	if err != nil {
 		return malicious, fmt.Errorf("checking if node is malicious: %w", err)
@@ -715,7 +715,11 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx *sql.Tx, atx *activat
 	return malicious, err
 }
 
-func (h *HandlerV2) fetchWireAtx(ctx context.Context, tx *sql.Tx, id types.ATXID) (*wire.ActivationTxV2, error) {
+func (h *HandlerV2) fetchWireAtx(
+	ctx context.Context,
+	tx sql.Transaction,
+	id types.ATXID,
+) (*wire.ActivationTxV2, error) {
 	var blob sql.Blob
 	v, err := atxs.LoadBlob(ctx, tx, id.Bytes(), &blob)
 	if err != nil {
@@ -729,7 +733,7 @@ func (h *HandlerV2) fetchWireAtx(ctx context.Context, tx *sql.Tx, id types.ATXID
 	return atx, nil
 }
 
-func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
 	for _, m := range atx.marriages {
 		mATXID, err := identities.MarriageATX(tx, m.id)
 		if err != nil {
@@ -758,7 +762,7 @@ func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx *sql.Tx, atx *activ
 	return false, nil
 }
 
-func (h *HandlerV2) checkDoublePost(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+func (h *HandlerV2) checkDoublePost(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
 	for id := range atx.ids {
 		atxIDs, err := atxs.FindDoublePublish(tx, id, atx.PublishEpoch)
 		switch {
@@ -783,7 +787,7 @@ func (h *HandlerV2) checkDoublePost(ctx context.Context, tx *sql.Tx, atx *activa
 	return false, nil
 }
 
-func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
 	if atx.MarriageATX == nil {
 		return false, nil
 	}
@@ -808,7 +812,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx *sql.Tx, atx *activ
 	return true, h.malPublisher.Publish(ctx, atx.SmesherID, proof)
 }
 
-func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx *sql.Tx, atx *activationTx) (bool, error) {
+func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
 	for id, data := range atx.ids {
 		expectedPrevID, err := atxs.PrevIDByNodeID(tx, id, atx.PublishEpoch)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -847,7 +851,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx *sql.Tx, atx *activatio
 
 // Store an ATX in the DB.
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
-	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
 			marriageData := identities.MarriageData{
 				ATX:    atx.ID(),
@@ -880,7 +884,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 	atxs.AtxAdded(h.cdb, atx)
 
 	malicious := false
-	err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
+	err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
 		// malfeasance check happens after storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
 		// TODO(mafa): don't store own ATX if it would mark the node as malicious

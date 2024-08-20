@@ -6,12 +6,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestRecoveryInfo(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	restore := types.LayerID(12)
 
 	got, err := recovery.CheckpointInfo(db)

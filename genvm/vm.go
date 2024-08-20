@@ -59,7 +59,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New returns VM instance.
-func New(db *sql.Database, opts ...Opt) *VM {
+func New(db sql.StateDatabase, opts ...Opt) *VM {
 	vm := &VM{
 		logger:   zap.NewNop(),
 		db:       db,
@@ -79,7 +79,7 @@ func New(db *sql.Database, opts ...Opt) *VM {
 // VM handles modifications to the account state.
 type VM struct {
 	logger   *zap.Logger
-	db       *sql.Database
+	db       sql.StateDatabase
 	cfg      Config
 	registry *registry.Registry
 }

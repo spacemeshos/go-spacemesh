@@ -10,12 +10,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestAdd(t *testing.T) {
 	t.Parallel()
 
-	db := sql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	id := types.RandomNodeID()
 	domain := byte(1)
@@ -32,7 +33,7 @@ func TestAdd(t *testing.T) {
 func TestAddMarried(t *testing.T) {
 	t.Parallel()
 
-	db := sql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	id := types.RandomNodeID()
 	marriedTo := types.RandomNodeID()
@@ -54,7 +55,7 @@ func TestAddMarried(t *testing.T) {
 func TestAddMarriedMissing(t *testing.T) {
 	t.Parallel()
 
-	db := sql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	id := types.RandomNodeID()
 	marriedTo := types.RandomNodeID()
@@ -77,7 +78,7 @@ func TestAddMarriedMissing(t *testing.T) {
 func TestProof(t *testing.T) {
 	t.Parallel()
 
-	db := sql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	id := types.RandomNodeID()
 	domain := byte(1)
@@ -102,7 +103,7 @@ func TestProof(t *testing.T) {
 func TestProofMarried(t *testing.T) {
 	t.Parallel()
 
-	db := sql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	id := types.RandomNodeID()
 	marriedTo := types.RandomNodeID()
@@ -130,7 +131,7 @@ func TestProofMarried(t *testing.T) {
 func TestAll(t *testing.T) {
 	t.Parallel()
 
-	db := sql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	ids := make([]types.NodeID, 3)
 	domain := byte(1)
