@@ -75,21 +75,23 @@ func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) ([]ty
 		return nil, fmt.Errorf("validating ATX malfeasance proof: %w", err)
 	}
 
-	validIDs := make([]types.NodeID, 0, len(decoded.Certificates)+1)
-	validIDs = append(validIDs, id) // id has already been proven to be malfeasant
+	// TODO(mafa): do this in the general handler
+	// validIDs := make([]types.NodeID, 0, len(decoded.Certificates)+1)
+	// validIDs = append(validIDs, id) // id has already been proven to be malfeasant
 
-	// check certificates provided with the proof
-	// TODO(mafa): this only works if the main identity becomes malfeasant - try different approach with merkle proofs
-	for _, cert := range decoded.Certificates {
-		if id != cert.Target {
-			continue
-		}
-		if !mh.edVerifier.Verify(signing.MARRIAGE, cert.Target, cert.ID.Bytes(), cert.Signature) {
-			continue
-		}
-		validIDs = append(validIDs, cert.ID)
-	}
-	return validIDs, nil
+	// // check certificates provided with the proof
+	// // TODO(mafa): only works if the main identity becomes malfeasant - try different approach with merkle proofs
+	// for _, cert := range decoded.Certificates {
+	// 	if id != cert.Target {
+	// 		continue
+	// 	}
+	// 	if !mh.edVerifier.Verify(signing.MARRIAGE, cert.Target, cert.ID.Bytes(), cert.Signature) {
+	// 		continue
+	// 	}
+	// 	validIDs = append(validIDs, cert.ID)
+	// }
+	// return validIDs, nil
+	return []types.NodeID{id}, nil
 }
 
 // TODO(mafa): this roughly how the general publisher looks like
