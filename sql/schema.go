@@ -56,7 +56,10 @@ type Schema struct {
 // Diff diffs the database schema against the actual schema.
 // If there's no differences, it returns an empty string.
 func (s *Schema) Diff(actualScript string) string {
-	return cmp.Diff(s.Script, actualScript)
+	opt := cmp.Comparer(func(x, y string) bool {
+		return strings.Join(strings.Fields(x), "") == strings.Join(strings.Fields(y), "")
+	})
+	return cmp.Diff(s.Script, actualScript, opt)
 }
 
 // WriteToFile writes the schema to the corresponding updated schema file.
