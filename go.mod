@@ -7,7 +7,7 @@ require (
 	github.com/ALTree/bigfloat v0.2.0
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240723064249-49aa87c63f00
 	github.com/cosmos/btcutil v1.0.5
-	github.com/go-llsqlite/crawshaw v0.5.3
+	github.com/go-llsqlite/crawshaw v0.5.5
 	github.com/gofrs/flock v0.12.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gofuzz v1.2.0
