@@ -56,7 +56,7 @@ func UpdatePoetRegistration(db sql.Executor, registration PoETRegistration) erro
 
 	_, err := db.Exec(query, enc, nil)
 	if err != nil {
-		return fmt.Errorf("update poet registration for %s: %w", registration.NodeId, err)
+		return fmt.Errorf("update poet registration for %s: %w", registration.NodeId.String(), err)
 	}
 
 	return nil
