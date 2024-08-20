@@ -25,10 +25,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	localmigrations "github.com/spacemeshos/go-spacemesh/sql/localsql/migrations"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	statemigrations "github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
 )
 
 const recoveryDir = "recovery"
@@ -120,18 +123,32 @@ func Recover(
 		return nil, errors.New("restore layer not set")
 	}
 	logger.Info("recovering from checkpoint", zap.String("url", cfg.Uri), zap.Stringer("restore", cfg.Restore))
-	db, err := sql.Open("file:" + cfg.DbPath())
+	schema, err := statemigrations.SchemaWithInCodeMigrations()
+	if err != nil {
+		return nil, fmt.Errorf("error loading db schema: %w", err)
+	}
+	db, err := statesql.Open(
+		"file:"+cfg.DbPath(),
+		sql.WithDatabaseSchema(schema),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("open old database: %w", err)
 	}
 	defer db.Close()
-	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
+	lSchema, err := localmigrations.SchemaWithInCodeMigrations()
+	if err != nil {
+		return nil, fmt.Errorf("get schema with in-code migrations: %w", err)
+	}
+	localDB, err := localsql.Open(
+		"file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile),
+		sql.WithDatabaseSchema(lSchema),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("open old local database: %w", err)
 	}
 	defer localDB.Close()
 	logger.Info("clearing atx and malfeasance sync metadata from local database")
-	if err := localDB.WithTx(ctx, func(tx *sql.Tx) error {
+	if err := localDB.WithTx(ctx, func(tx sql.Transaction) error {
 		if err := atxsync.Clear(tx); err != nil {
 			return err
 		}
@@ -153,8 +170,8 @@ func Recover(
 func RecoverWithDb(
 	ctx context.Context,
 	logger *zap.Logger,
-	db *sql.Database,
-	localDB *localsql.Database,
+	db sql.StateDatabase,
+	localDB sql.LocalDatabase,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 ) (*PreservedData, error) {
@@ -187,8 +204,8 @@ type recoveryData struct {
 func RecoverFromLocalFile(
 	ctx context.Context,
 	logger *zap.Logger,
-	db *sql.Database,
-	localDB *localsql.Database,
+	db sql.StateDatabase,
+	localDB sql.LocalDatabase,
 	fs afero.Fs,
 	cfg *RecoverConfig,
 	file string,
@@ -257,8 +274,7 @@ func RecoverFromLocalFile(
 	}
 	logger.Info("backed up old database", log.ZContext(ctx), zap.String("backup dir", backupDir))
 
-	var newDB *sql.Database
-	newDB, err = sql.Open("file:" + cfg.DbPath())
+	newDB, err := statesql.Open("file:" + cfg.DbPath())
 	if err != nil {
 		return nil, fmt.Errorf("creating new DB: %w", err)
 	}
@@ -268,7 +284,7 @@ func RecoverFromLocalFile(
 		zap.Int("num accounts", len(data.accounts)),
 		zap.Int("num atxs", len(data.atxs)),
 	)
-	if err = newDB.WithTx(ctx, func(tx *sql.Tx) error {
+	if err = newDB.WithTx(ctx, func(tx sql.Transaction) error {
 		for _, acct := range data.accounts {
 			if err = accounts.Update(tx, acct); err != nil {
 				return fmt.Errorf("restore account snapshot: %w", err)
@@ -392,8 +408,8 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 
 func collectOwnAtxDeps(
 	logger *zap.Logger,
-	db *sql.Database,
-	localDB *localsql.Database,
+	db sql.StateDatabase,
+	localDB sql.LocalDatabase,
 	nodeID types.NodeID,
 	goldenATX types.ATXID,
 	data *recoveryData,
@@ -454,7 +470,7 @@ func collectOwnAtxDeps(
 }
 
 func collectDeps(
-	db *sql.Database,
+	db sql.StateDatabase,
 	ref types.ATXID,
 	all map[types.ATXID]struct{},
 ) (map[types.ATXID]*AtxDep, map[types.PoetProofRef]*types.PoetProofMessage, error) {
@@ -470,7 +486,7 @@ func collectDeps(
 }
 
 func collect(
-	db *sql.Database,
+	db sql.StateDatabase,
 	ref types.ATXID,
 	all map[types.ATXID]struct{},
 	deps map[types.ATXID]*AtxDep,
@@ -535,7 +551,7 @@ func collect(
 }
 
 func poetProofs(
-	db *sql.Database,
+	db sql.StateDatabase,
 	atxIds map[types.ATXID]*AtxDep,
 ) (map[types.PoetProofRef]*types.PoetProofMessage, error) {
 	proofs := make(map[types.PoetProofRef]*types.PoetProofMessage, len(atxIds))

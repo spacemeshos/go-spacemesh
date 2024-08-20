@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	certifierdb "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
@@ -80,14 +79,14 @@ type CertifyResponse struct {
 
 type Certifier struct {
 	logger *zap.Logger
-	db     *localsql.Database
+	db     sql.LocalDatabase
 	client certifierClient
 
 	certifications singleflight.Group
 }
 
 func NewCertifier(
-	db *localsql.Database,
+	db sql.LocalDatabase,
 	logger *zap.Logger,
 	client certifierClient,
 ) *Certifier {
@@ -145,7 +144,7 @@ type CertifierClient struct {
 	client  *retryablehttp.Client
 	logger  *zap.Logger
 	db      sql.Executor
-	localDb *localsql.Database
+	localDb sql.LocalDatabase
 }
 
 type certifierClientOpts func(*CertifierClient)
@@ -160,7 +159,7 @@ func WithCertifierClientConfig(cfg CertifierClientConfig) certifierClientOpts {
 
 func NewCertifierClient(
 	db sql.Executor,
-	localDb *localsql.Database,
+	localDb sql.LocalDatabase,
 	logger *zap.Logger,
 	opts ...certifierClientOpts,
 ) *CertifierClient {

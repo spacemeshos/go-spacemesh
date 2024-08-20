@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-func Warm(db *sql.Database, keep types.EpochID, logger *zap.Logger) (*Data, error) {
+func Warm(db sql.StateDatabase, keep types.EpochID, logger *zap.Logger) (*Data, error) {
 	cache := New()
 	tx, err := db.Tx(context.Background())
 	if err != nil {

@@ -16,8 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestValidator_Validate(t *testing.T) {
@@ -29,7 +29,7 @@ func TestValidator_Validate(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	validator := activation.NewMocknipostValidator(gomock.NewController(t))
 
@@ -50,7 +50,7 @@ func TestValidator_Validate(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 
-	poetDb := activation.NewPoetDb(sql.InMemory(), logger.Named("poetDb"))
+	poetDb := activation.NewPoetDb(statesql.InMemory(), logger.Named("poetDb"))
 	client := ae2e.NewTestPoetClient(1, poetCfg)
 	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 

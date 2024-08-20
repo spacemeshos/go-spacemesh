@@ -16,17 +16,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 type testMalfeasanceHandler struct {
 	*MalfeasanceHandler
 
 	observedLogs *observer.ObservedLogs
-	db           *sql.Database
+	db           sql.StateDatabase
 }
 
 func newTestMalfeasanceHandler(tb testing.TB) *testMalfeasanceHandler {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {

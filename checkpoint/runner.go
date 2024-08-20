@@ -28,7 +28,7 @@ const (
 
 func checkpointDB(
 	ctx context.Context,
-	db *sql.Database,
+	db sql.StateDatabase,
 	snapshot types.LayerID,
 	numAtxs int,
 ) (*types.Checkpoint, error) {
@@ -171,7 +171,7 @@ func checkpointDB(
 func Generate(
 	ctx context.Context,
 	fs afero.Fs,
-	db *sql.Database,
+	db sql.StateDatabase,
 	dataDir string,
 	snapshot types.LayerID,
 	numAtxs int,

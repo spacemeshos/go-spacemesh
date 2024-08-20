@@ -38,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -125,7 +126,7 @@ type node struct {
 	vrfsigner  *signing.VRFSigner
 	atx        *types.ActivationTx
 	oracle     *eligibility.Oracle
-	db         *sql.Database
+	db         sql.StateDatabase
 	atxsdata   *atxsdata.Data
 	proposals  *store.Store
 
@@ -159,7 +160,7 @@ func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 }
 
 func (n *node) withDb(tb testing.TB) *node {
-	n.db = sql.InMemoryTest(tb)
+	n.db = statesql.InMemoryTest(tb)
 	n.atxsdata = atxsdata.New()
 	n.proposals = store.New()
 	return n
@@ -1066,7 +1067,7 @@ func TestProposals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			atxsdata := atxsdata.New()
 			proposals := store.New()
 			hare := New(

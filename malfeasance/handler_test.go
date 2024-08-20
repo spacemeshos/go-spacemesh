@@ -21,18 +21,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 type testMalfeasanceHandler struct {
 	*Handler
 
 	observedLogs *observer.ObservedLogs
-	db           *sql.Database
+	db           sql.StateDatabase
 	mockTrt      *Mocktortoise
 }
 
 func newHandler(tb testing.TB) *testMalfeasanceHandler {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	observer, observedLogs := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {

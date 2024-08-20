@@ -35,6 +35,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -77,7 +78,7 @@ func accountEqual(tb testing.TB, cacct types.AccountSnapshot, acct *types.Accoun
 	}
 }
 
-func verifyDbContent(tb testing.TB, db *sql.Database) {
+func verifyDbContent(tb testing.TB, db sql.StateDatabase) {
 	tb.Helper()
 	var expected types.Checkpoint
 	require.NoError(tb, json.Unmarshal([]byte(checkpointData), &expected))
@@ -168,7 +169,7 @@ func TestRecover(t *testing.T) {
 			}
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			localDB := localsql.InMemory()
 			data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
@@ -177,7 +178,7 @@ func TestRecover(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Nil(t, data)
-			newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+			newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 			require.NoError(t, err)
 			require.NotNil(t, newDB)
 			defer newDB.Close()
@@ -209,7 +210,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	}
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	localDB := localsql.InMemory()
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
@@ -241,7 +242,7 @@ func TestRecover_RestoreLayerCannotBeZero(t *testing.T) {
 
 func validateAndPreserveData(
 	tb testing.TB,
-	db *sql.Database,
+	db sql.StateDatabase,
 	deps []*checkpoint.AtxDep,
 ) {
 	tb.Helper()
@@ -496,7 +497,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 		Restore:     types.LayerID(recoverLayer),
 	}
 
-	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
 
@@ -541,7 +542,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	require.ElementsMatch(t, atxRef, atxIDs(preserve.Deps))
 	require.ElementsMatch(t, proofRef, proofRefs(preserve.Proofs))
 
-	newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, newDB)
 	t.Cleanup(func() { assert.NoError(t, newDB.Close()) })
@@ -581,7 +582,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 		Restore:     types.LayerID(recoverLayer),
 	}
 
-	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
 
@@ -653,7 +654,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	require.ElementsMatch(t, atxRef, atxIDs(preserve.Deps))
 	require.ElementsMatch(t, proofRef, proofRefs(preserve.Proofs))
 
-	newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, newDB)
 	t.Cleanup(func() { assert.NoError(t, newDB.Close()) })
@@ -691,7 +692,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 		Restore:     types.LayerID(recoverLayer),
 	}
 
-	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
 
@@ -748,7 +749,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
-	newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, newDB)
 	t.Cleanup(func() { assert.NoError(t, newDB.Close()) })
@@ -781,7 +782,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 		Restore:     types.LayerID(recoverLayer),
 	}
 
-	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
 	vAtxs, proofs := createAtxChain(t, sig)
@@ -824,7 +825,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
-	newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, newDB)
 	t.Cleanup(func() { assert.NoError(t, newDB.Close()) })
@@ -857,7 +858,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 		Restore:     types.LayerID(recoverLayer),
 	}
 
-	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
 	vAtxs, proofs := createAtxChain(t, sig)
@@ -883,7 +884,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
-	newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, newDB)
 	t.Cleanup(func() { assert.NoError(t, newDB.Close()) })
@@ -921,7 +922,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 		Restore:     types.LayerID(recoverLayer),
 	}
 
-	oldDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
 	require.NoError(t, atxs.Add(oldDB, atx, types.AtxBlob{}))
@@ -931,7 +932,7 @@ func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, preserve)
 
-	newDB, err := sql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
+	newDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, newDB)
 	t.Cleanup(func() { assert.NoError(t, newDB.Close()) })

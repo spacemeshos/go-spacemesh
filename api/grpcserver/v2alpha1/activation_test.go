@@ -16,12 +16,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestActivationService_List(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewAtxsGenerator()
@@ -103,7 +103,7 @@ func TestActivationService_List(t *testing.T) {
 }
 
 func TestActivationStreamService_Stream(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewAtxsGenerator()
@@ -211,7 +211,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 }
 
 func TestActivationService_ActivationsCount(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	genEpoch3 := fixture.NewAtxsGenerator().WithEpochs(3, 1)

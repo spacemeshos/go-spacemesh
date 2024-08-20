@@ -14,14 +14,14 @@ import (
 )
 
 type migration0021 struct {
-	batch  int
-	logger *zap.Logger
+	batch int
 }
 
-func New0021Migration(log *zap.Logger, batch int) *migration0021 {
+var _ sql.Migration = &migration0021{}
+
+func New0021Migration(batch int) *migration0021 {
 	return &migration0021{
-		logger: log,
-		batch:  batch,
+		batch: batch,
 	}
 }
 
@@ -37,7 +37,7 @@ func (*migration0021) Rollback() error {
 	return nil
 }
 
-func (m *migration0021) Apply(db sql.Executor) error {
+func (m *migration0021) Apply(db sql.Executor, logger *zap.Logger) error {
 	if err := m.applySql(db); err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func (m *migration0021) Apply(db sql.Executor) error {
 	if err != nil {
 		return fmt.Errorf("counting all ATXs %w", err)
 	}
-	m.logger.Info("applying migration 21", zap.Int("total", total))
+	logger.Info("applying migration 21", zap.Int("total", total))
 
 	for offset := 0; ; offset += m.batch {
 		n, err := m.processBatch(db, offset, m.batch)
@@ -59,7 +59,7 @@ func (m *migration0021) Apply(db sql.Executor) error {
 
 		processed := offset + n
 		progress := float64(processed) * 100.0 / float64(total)
-		m.logger.Info("processed ATXs", zap.Float64("progress [%]", progress))
+		logger.Info("processed ATXs", zap.Float64("progress [%]", progress))
 		if processed >= total {
 			return nil
 		}

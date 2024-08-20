@@ -28,8 +28,8 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 	if _, err = db.Exec(`
 		insert into transactions (id, tx, header, principal, nonce, timestamp)
 		values (?1, ?2, ?3, ?4, ?5, ?6)
-		on conflict(id) do update set 
-		header=?3, principal=?4, nonce=?5 
+		on conflict(id) do update set
+		header=?3, principal=?4, nonce=?5
 		where header is null;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, tx.ID.Bytes())
@@ -49,7 +49,7 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 // AddToProposal associates a transaction with a proposal.
 func AddToProposal(db sql.Executor, tid types.TransactionID, lid types.LayerID, pid types.ProposalID) error {
 	if _, err := db.Exec(`
-		insert into proposal_transactions (pid, tid, layer) values (?1, ?2, ?3) 
+		insert into proposal_transactions (pid, tid, layer) values (?1, ?2, ?3)
 		on conflict(tid, pid) do nothing;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, pid.Bytes())
@@ -136,8 +136,8 @@ func GetAppliedLayer(db sql.Executor, tid types.TransactionID) (types.LayerID, e
 }
 
 // UndoLayers unset all transactions to `statePending` from `from` layer to the max layer with applied transactions.
-func UndoLayers(db *sql.Tx, from types.LayerID) error {
-	_, err := db.Exec(`delete from transactions_results_addresses 
+func UndoLayers(tx sql.Transaction, from types.LayerID) error {
+	_, err := tx.Exec(`delete from transactions_results_addresses
 		where tid in (select id from transactions where layer >= ?1);`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from))
@@ -145,8 +145,8 @@ func UndoLayers(db *sql.Tx, from types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("delete addresses mapping %w", err)
 	}
-	_, err = db.Exec(`update transactions 
-		set layer = null, block = null, result = null 
+	_, err = tx.Exec(`update transactions
+		set layer = null, block = null, result = null
 		where layer >= ?1`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from))
@@ -287,7 +287,7 @@ func AddressesWithPendingTransactions(db sql.Executor) ([]types.AddressNonce, er
 // GetAcctPendingFromNonce get all pending transactions with nonce after `from` for the given address.
 func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64) ([]*types.MeshTransaction, error) {
 	return queryPending(db, `select tx, header, layer, block, timestamp, id from transactions
-		where principal = ?1 and nonce >= ?2 and result is null 
+		where principal = ?1 and nonce >= ?2 and result is null
 		order by nonce asc, timestamp asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
@@ -321,14 +321,14 @@ func queryPending(
 }
 
 // AddResult adds result for the transaction.
-func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult) error {
+func AddResult(tx sql.Transaction, id types.TransactionID, rst *types.TransactionResult) error {
 	buf, err := codec.Encode(rst)
 	if err != nil {
 		return fmt.Errorf("encode %w", err)
 	}
 
-	if rows, err := db.Exec(`update transactions
-		set result = ?2, layer = ?3, block = ?4 
+	if rows, err := tx.Exec(`update transactions
+		set result = ?2, layer = ?3, block = ?4
 		where id = ?1 and result is null returning id;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id[:])
@@ -345,7 +345,7 @@ func AddResult(db *sql.Tx, id types.TransactionID, rst *types.TransactionResult)
 		return fmt.Errorf("invalid state for %s", id)
 	}
 	for i := range rst.Addresses {
-		if _, err := db.Exec(`insert into transactions_results_addresses 
+		if _, err := tx.Exec(`insert into transactions_results_addresses
 		(address, tid) values (?1, ?2);`,
 			func(stmt *sql.Statement) {
 				stmt.BindBytes(1, rst.Addresses[i][:])
@@ -418,9 +418,8 @@ func IterateTransactionsOps(
 	fn func(tx *types.MeshTransaction, result *types.TransactionResult) bool,
 ) error {
 	var derr error
-	_, err := db.Exec(`select distinct tx, header, layer, block, timestamp, id, result 
-		from transactions
-		left join transactions_results_addresses on id=tid`+builder.FilterFrom(operations),
+	_, err := db.Exec(`select distinct tx, header, layer, block, timestamp, id, result
+		from transactions`+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
 		func(stmt *sql.Statement) bool {
 			var txId types.TransactionID

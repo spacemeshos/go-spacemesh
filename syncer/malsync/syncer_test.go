@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync/mocks"
 )
 
@@ -137,8 +138,8 @@ func malData(ids ...string) []types.NodeID {
 type tester struct {
 	tb           testing.TB
 	syncer       *Syncer
-	localdb      *localsql.Database
-	db           *sql.Database
+	localdb      sql.LocalDatabase
+	db           sql.StateDatabase
 	cfg          Config
 	ctrl         *gomock.Controller
 	fetcher      *mocks.Mockfetcher
@@ -151,7 +152,7 @@ type tester struct {
 
 func newTester(tb testing.TB, cfg Config) *tester {
 	localdb := localsql.InMemory()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
 	clock := clockwork.NewFakeClock()

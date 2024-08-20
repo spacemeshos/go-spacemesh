@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -51,7 +52,7 @@ func getBytes(
 }
 
 func TestMalfeasanceProof_Dishonest(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
 	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
@@ -79,7 +80,7 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 }
 
 func TestBlobStore_GetATXBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
@@ -114,7 +115,7 @@ func TestBlobStore_GetATXBlob(t *testing.T) {
 }
 
 func TestBlobStore_GetBallotBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
@@ -149,7 +150,7 @@ func TestBlobStore_GetBallotBlob(t *testing.T) {
 }
 
 func TestBlobStore_GetBlockBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
@@ -184,7 +185,7 @@ func TestBlobStore_GetBlockBlob(t *testing.T) {
 }
 
 func TestBlobStore_GetPoetBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
@@ -213,7 +214,7 @@ func TestBlobStore_GetPoetBlob(t *testing.T) {
 }
 
 func TestBlobStore_GetProposalBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	proposals := store.New()
 	bs := datastore.NewBlobStore(db, proposals)
 	ctx := context.Background()
@@ -251,7 +252,7 @@ func TestBlobStore_GetProposalBlob(t *testing.T) {
 }
 
 func TestBlobStore_GetTXBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
@@ -279,7 +280,7 @@ func TestBlobStore_GetTXBlob(t *testing.T) {
 }
 
 func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 
@@ -313,7 +314,7 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 }
 
 func TestBlobStore_GetActiveSet(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	bs := datastore.NewBlobStore(db, store.New())
 	ctx := context.Background()
 

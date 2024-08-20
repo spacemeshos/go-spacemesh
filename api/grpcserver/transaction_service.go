@@ -28,7 +28,7 @@ import (
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
-	db        *sql.Database
+	db        sql.StateDatabase
 	publisher pubsub.Publisher // P2P Swarm
 	mesh      meshAPI          // Mesh
 	conState  conservativeState
@@ -52,7 +52,7 @@ func (s *TransactionService) String() string {
 
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
-	db *sql.Database,
+	db sql.StateDatabase,
 	publisher pubsub.Publisher,
 	msh meshAPI,
 	conState conservativeState,

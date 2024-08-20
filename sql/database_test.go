@@ -9,29 +9,25 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func Test_Transaction_Isolation(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	testMigration := NewMockMigration(ctrl)
-	testMigration.EXPECT().Name().Return("test").AnyTimes()
-	testMigration.EXPECT().Order().Return(1).AnyTimes()
-	testMigration.EXPECT().Apply(gomock.Any()).DoAndReturn(func(e Executor) error {
-		if _, err := e.Exec(`create table testing1 (
-			id varchar primary key,
-			field int
-		)`, nil, nil); err != nil {
-			return err
-		}
-		return nil
-	})
-
 	db := InMemory(
-		WithMigrations([]Migration{testMigration}),
+		WithLogger(zaptest.NewLogger(t)),
 		WithConnections(10),
 		WithLatencyMetering(true),
+		WithDatabaseSchema(&Schema{
+			Script: `create table testing1 (
+				id varchar primary key,
+				field int
+			);`,
+		}),
+		WithNoCheckSchemaDrift(),
 	)
-
 	tx, err := db.Tx(context.Background())
 	require.NoError(t, err)
 
@@ -67,28 +63,37 @@ func Test_Migration_Rollback(t *testing.T) {
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
-	migration2.EXPECT().Apply(gomock.Any()).Return(errors.New("migration 2 failed"))
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
 
 	migration2.EXPECT().Rollback().Return(nil)
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	_, err := Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
+		WithForceMigrations(true),
 	)
 	require.ErrorContains(t, err, "migration 2 failed")
 }
 
 func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
+	logger := zaptest.NewLogger(t)
 	ctrl := gomock.NewController(t)
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Name().Return("test").AnyTimes()
 	migration1.EXPECT().Order().Return(1).AnyTimes()
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil)
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	db, err := Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1}),
+		WithLogger(logger),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1},
+		}),
+		WithForceMigrations(true),
+		WithNoCheckSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -96,13 +101,46 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).Return(errors.New("migration 2 failed"))
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
 	migration2.EXPECT().Rollback().Return(nil)
 
 	_, err = Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
+		WithLogger(logger),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
 	)
 	require.ErrorContains(t, err, "migration 2 failed")
+}
+
+func Test_Migration_Disabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	migration1 := NewMockMigration(ctrl)
+	migration1.EXPECT().Name().Return("test").AnyTimes()
+	migration1.EXPECT().Order().Return(1).AnyTimes()
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
+
+	dbFile := filepath.Join(t.TempDir(), "test.sql")
+	db, err := Open("file:"+dbFile,
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1},
+		}),
+		WithForceMigrations(true),
+		WithNoCheckSchemaDrift(),
+	)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	migration2 := NewMockMigration(ctrl)
+	migration2.EXPECT().Order().Return(2).AnyTimes()
+
+	_, err = Open("file:"+dbFile,
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
+		WithMigrationsDisabled(),
+	)
+	require.ErrorIs(t, err, ErrOldSchema)
 }
 
 func TestDatabaseSkipMigrations(t *testing.T) {
@@ -113,12 +151,17 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).Return(nil)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 
+	schema := &Schema{
+		Migrations: MigrationList{migration1, migration2},
+	}
+	schema.SkipMigrations(1)
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	db, err := Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
-		WithSkipMigrations(1),
+		WithDatabaseSchema(schema),
+		WithForceMigrations(true),
+		WithNoCheckSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -126,26 +169,36 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 
 func TestDatabaseVacuumState(t *testing.T) {
 	dir := t.TempDir()
+	logger := zaptest.NewLogger(t)
 
 	ctrl := gomock.NewController(t)
 	migration1 := NewMockMigration(ctrl)
 	migration1.EXPECT().Order().Return(1).AnyTimes()
-	migration1.EXPECT().Apply(gomock.Any()).Return(nil).Times(1)
+	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 	migration2 := NewMockMigration(ctrl)
 	migration2.EXPECT().Order().Return(2).AnyTimes()
-	migration2.EXPECT().Apply(gomock.Any()).Return(nil).Times(1)
+	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 
 	dbFile := filepath.Join(dir, "test.sql")
 	db, err := Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1}),
+		WithLogger(logger),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1},
+		}),
+		WithForceMigrations(true),
+		WithNoCheckSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	db, err = Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
+		WithLogger(logger),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
 		WithVacuumState(2),
+		WithNoCheckSchemaDrift(),
 	)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
@@ -156,7 +209,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 }
 
 func TestQueryCount(t *testing.T) {
-	db := InMemory()
+	db := InMemory(WithLogger(zaptest.NewLogger(t)), WithNoCheckSchemaDrift())
 	require.Equal(t, 0, db.QueryCount())
 
 	n, err := db.Exec("select 1", nil, nil)
@@ -171,6 +224,7 @@ func TestQueryCount(t *testing.T) {
 
 func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	dir := t.TempDir()
+	logger := zaptest.NewLogger(t)
 
 	ctrl := gomock.NewController(t)
 	migration1 := NewMockMigration(ctrl)
@@ -180,14 +234,71 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 
 	dbFile := filepath.Join(dir, "test.sql")
-	db, err := Open("file:" + dbFile)
+	db, err := Open("file:"+dbFile,
+		WithLogger(logger),
+		WithForceMigrations(true),
+		WithNoCheckSchemaDrift())
 	require.NoError(t, err)
 	_, err = db.Exec("PRAGMA user_version = 3", nil, nil)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	_, err = Open("file:"+dbFile,
-		WithMigrations([]Migration{migration1, migration2}),
+		WithLogger(logger),
+		WithDatabaseSchema(&Schema{
+			Migrations: MigrationList{migration1, migration2},
+		}),
+		WithNoCheckSchemaDrift(),
 	)
 	require.ErrorIs(t, err, ErrTooNew)
+}
+
+func TestSchemaDrift(t *testing.T) {
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
+	dbFile := filepath.Join(t.TempDir(), "test.sql")
+	schema := &Schema{
+		// Not using ` here to avoid schema drift warnings due to whitespace
+		// TODO: ignore whitespace and comments during schema comparison
+		Script: "PRAGMA user_version = 0;\n" +
+			"CREATE TABLE testing1 (\n" +
+			" id varchar primary key,\n" +
+			" field int\n" +
+			");\n",
+	}
+	db, err := Open("file:"+dbFile,
+		WithDatabaseSchema(schema),
+		WithLogger(logger),
+	)
+	require.NoError(t, err)
+
+	_, err = db.Exec("create table newtbl (id int)", nil, nil)
+	require.NoError(t, err)
+
+	require.NoError(t, db.Close())
+	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
+
+	_, err = Open("file:"+dbFile,
+		WithDatabaseSchema(schema),
+		WithLogger(logger),
+	)
+	require.Error(t, err)
+	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`, err.Error())
+	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
+
+	db, err = Open("file:"+dbFile,
+		WithDatabaseSchema(schema),
+		WithLogger(logger),
+		WithAllowSchemaDrift(true),
+	)
+	require.NoError(t, db.Close())
+	require.NoError(t, err)
+	require.Equal(t, 1, observedLogs.Len(), "expected 1 log messages")
+	require.Equal(t, "database schema drift detected", observedLogs.All()[0].Message)
+	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`,
+		observedLogs.All()[0].ContextMap()["diff"])
 }

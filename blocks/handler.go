@@ -28,7 +28,7 @@ type Handler struct {
 	logger *zap.Logger
 
 	fetcher  system.Fetcher
-	db       *sql.Database
+	db       sql.StateDatabase
 	tortoise tortoiseProvider
 	mesh     meshProvider
 }
@@ -44,7 +44,13 @@ func WithLogger(logger *zap.Logger) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(f system.Fetcher, db *sql.Database, tortoise tortoiseProvider, m meshProvider, opts ...Opt) *Handler {
+func NewHandler(
+	f system.Fetcher,
+	db sql.StateDatabase,
+	tortoise tortoiseProvider,
+	m meshProvider,
+	opts ...Opt,
+) *Handler {
 	h := &Handler{
 		logger:   zap.NewNop(),
 		fetcher:  f,
