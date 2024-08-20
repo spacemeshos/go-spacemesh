@@ -16,13 +16,14 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/mesh/ballotwriter"
+	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -55,6 +56,9 @@ type Mesh struct {
 	processedLayer      atomic.Value
 	nextProcessedLayers map[types.LayerID]struct{}
 	maxProcessedLayer   types.LayerID
+
+	addBallotMu  sync.Mutex
+	ballotWriter *ballotwriter.BallotWriter
 }
 
 // NewMesh creates a new instant of a mesh.
@@ -77,6 +81,7 @@ func NewMesh(
 		conState:            state,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
 		missingBlocks:       make(chan []types.BlockID, 32),
+		ballotWriter:        ballotwriter.New(db, logger),
 	}
 	msh.latestLayer.Store(types.LayerID(0))
 	msh.latestLayerInState.Store(types.LayerID(0))
@@ -112,6 +117,10 @@ func NewMesh(
 	msh.processedLayer.Store(genesis)
 	msh.setLatestLayerInState(genesis)
 	return msh, nil
+}
+
+func (m *Mesh) Start(ctx context.Context) {
+	m.ballotWriter.Start(ctx)
 }
 
 func (msh *Mesh) recoverFromDB(latest types.LayerID) {
@@ -551,61 +560,48 @@ func (msh *Mesh) AddBallot(
 	ctx context.Context,
 	ballot *types.Ballot,
 ) (*wire.MalfeasanceProof, error) {
+START:
+	initiallyMalfeasant := false
+	msh.addBallotMu.Lock()
 	malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
 	if malicious {
 		ballot.SetMalicious()
+		initiallyMalfeasant = true
+	}
+
+	// Store should only allow one ballot per node ID per batch.
+	waitC, errFunc, retry := msh.ballotWriter.Store(ballot)
+	msh.addBallotMu.Unlock()
+	start := time.Now()
+	if retry != nil {
+		// this means that we got a ballot from the same smesher in this layer.
+		// while this doesn't directly implicate a node as being malfeasant, it does
+		// force us to retry this operation once the current batch is written to the db
+		retry()
+		metrics.BallotWaitRetry.Observe(time.Since(start).Seconds())
+		goto START
+	}
+	var err error
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-waitC:
+		metrics.BallotWaitWrite.Observe(time.Since(start).Seconds())
+		err = errFunc()
+	}
+	if err != nil {
+		return nil, fmt.Errorf("batch store: %w", err)
 	}
 	var proof *wire.MalfeasanceProof
-	// ballots.LayerBallotByNodeID and ballots.Add should be atomic
-	// otherwise concurrent ballots.Add from the same smesher may not be noticed
-	if err := msh.cdb.WithTx(ctx, func(dbtx sql.Transaction) error {
-		if !malicious {
-			prev, err := ballots.LayerBallotByNodeID(dbtx, ballot.Layer, ballot.SmesherID)
-			if err != nil && !errors.Is(err, sql.ErrNotFound) {
-				return err
-			}
-			if prev != nil && prev.ID() != ballot.ID() {
-				var ballotProof wire.BallotProof
-				for i, b := range []*types.Ballot{prev, ballot} {
-					ballotProof.Messages[i] = wire.BallotProofMsg{
-						InnerMsg: types.BallotMetadata{
-							Layer:   b.Layer,
-							MsgHash: types.BytesToHash(b.HashInnerBytes()),
-						},
-						Signature: b.Signature,
-						SmesherID: b.SmesherID,
-					}
-				}
-				proof = &wire.MalfeasanceProof{
-					Layer: ballot.Layer,
-					Proof: wire.Proof{
-						Type: wire.MultipleBallots,
-						Data: &ballotProof,
-					},
-				}
-				encoded, err := codec.Encode(proof)
-				if err != nil {
-					msh.logger.Panic("failed to encode MalfeasanceProof", zap.Error(err))
-				}
-				if err := identities.SetMalicious(dbtx, ballot.SmesherID, encoded, time.Now()); err != nil {
-					return fmt.Errorf("add malfeasance proof: %w", err)
-				}
-				ballot.SetMalicious()
-				msh.logger.Warn("smesher produced more than one ballot in the same layer",
-					zap.Stringer("smesher", ballot.SmesherID),
-					zap.Object("prev", prev),
-					zap.Object("curr", ballot),
-				)
-			}
-		}
-		if err := ballots.Add(dbtx, ballot); err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return err
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	if proof != nil {
+	// if this ballot was the one that turned the identity to be malicious
+	// we call the hooks to notify tortoise and atxsdata
+	if !initiallyMalfeasant && ballot.IsMalicious() {
+		// so this is a bit of double work (getting the malfeasance proof right after
+		// we stored it), BUT, probably negligble considering the amount of malfeasant
+		// identities we have. The other way to go about this is to allocate an individual channel
+		// for every write (so that every writer gets its own response with the potential proof)
+		// However I find that more costly than this approach.
+		proof, _ = identities.GetMalfeasanceProof(msh.cdb, ballot.SmesherID)
 		msh.atxsdata.SetMalicious(ballot.SmesherID)
 		msh.trtl.OnMalfeasance(ballot.SmesherID)
 	}

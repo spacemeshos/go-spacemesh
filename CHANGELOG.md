@@ -53,6 +53,9 @@ are doing.
 * [#6274](https://github.com/spacemeshos/go-spacemesh/pull/6274) Additional queries to PoETs are now cached to reduce
   the number of requests made to PoET servers.
 
+* [#6289](https://github.com/spacemeshos/go-spacemesh/pull/6289) Added write coalescing for ballots, reducing the
+  amount of time and CPU we're spending on writing ballots.
+
 ## Release v1.6.8
 
 ### Improvements
