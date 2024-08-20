@@ -23,8 +23,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
@@ -494,7 +494,7 @@ func TestPoetService_CachesCertifierInfo(t *testing.T) {
 			cfg := DefaultPoetConfig()
 			cfg.CertifierInfoCacheTTL = tc.ttl
 			client := NewMockPoetClient(gomock.NewController(t))
-			db := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
+			db := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
 
 			client.EXPECT().Address().Return("some_addr").AnyTimes()
 			client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{}, nil)

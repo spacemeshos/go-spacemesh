@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestUpgradeToV15(t *testing.T) {
@@ -37,10 +38,15 @@ func TestUpgradeToV15(t *testing.T) {
 
 		uri := path.Join(cfg.DataDir(), localDbFile)
 
-		migrations, err := sql.LocalMigrations()
+		schema, err := statesql.Schema()
 		require.NoError(t, err)
 
-		db, err := sql.Open(uri, sql.WithMigrations(migrations[:2]))
+		schema.Migrations = schema.Migrations[:2]
+
+		db, err := statesql.Open(uri,
+			sql.WithDatabaseSchema(schema),
+			sql.WithForceMigrations(true),
+			sql.WithNoCheckSchemaDrift())
 		require.NoError(t, err)
 		require.NoError(t, db.Close())
 

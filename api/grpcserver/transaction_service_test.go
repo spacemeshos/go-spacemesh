@@ -23,12 +23,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 func TestTransactionService_StreamResults(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -36,7 +37,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	gen := fixture.NewTransactionResultGenerator().
 		WithAddresses(2)
 	txs := make([]types.TransactionWithResult, 100)
-	require.NoError(t, db.WithTx(ctx, func(dtx *sql.Tx) error {
+	require.NoError(t, db.WithTx(ctx, func(dtx sql.Transaction) error {
 		for i := range txs {
 			tx := gen.Next()
 
@@ -134,7 +135,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 }
 
 func BenchmarkStreamResults(b *testing.B) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -216,7 +217,7 @@ func parseOk() parseExpectation {
 }
 
 func TestParseTransactions(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	vminst := vm.New(db)
 	cfg, cleanup := launchServer(t, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil))

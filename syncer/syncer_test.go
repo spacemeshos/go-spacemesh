@@ -20,8 +20,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	mmocks "github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -127,7 +127,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mCertHdr:     mocks.NewMockcertHandler(ctrl),
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
 	}
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ts.cdb = datastore.NewCachedDB(db, lg)
 	var err error
 	atxsdata := atxsdata.New()

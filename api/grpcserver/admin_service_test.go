@@ -19,11 +19,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 const snapshot uint32 = 15
 
-func newAtx(tb testing.TB, db *sql.Database) {
+func newAtx(tb testing.TB, db sql.StateDatabase) {
 	atx := &types.ActivationTx{
 		PublishEpoch:   types.EpochID(2),
 		Sequence:       0,
@@ -41,7 +42,7 @@ func newAtx(tb testing.TB, db *sql.Database) {
 	require.NoError(tb, atxs.SetPost(db, atx.ID(), types.EmptyATXID, 0, atx.SmesherID, atx.NumUnits))
 }
 
-func createMesh(tb testing.TB, db *sql.Database) {
+func createMesh(tb testing.TB, db sql.StateDatabase) {
 	for range 10 {
 		newAtx(tb, db)
 	}
@@ -57,7 +58,7 @@ func createMesh(tb testing.TB, db *sql.Database) {
 }
 
 func TestAdminService_Checkpoint(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	createMesh(t, db)
 	svc := NewAdminService(db, t.TempDir(), nil)
 	cfg, cleanup := launchServer(t, svc)
@@ -94,7 +95,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 }
 
 func TestAdminService_CheckpointError(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	svc := NewAdminService(db, t.TempDir(), nil)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
@@ -111,7 +112,7 @@ func TestAdminService_CheckpointError(t *testing.T) {
 }
 
 func TestAdminService_Recovery(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	recoveryCalled := atomic.Bool{}
 	svc := NewAdminService(db, t.TempDir(), nil)
 	svc.recover = func() { recoveryCalled.Store(true) }
@@ -133,7 +134,7 @@ func TestAdminService_PeerInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	p := NewMockpeers(ctrl)
 
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	svc := NewAdminService(db, t.TempDir(), p)
 
 	cfg, cleanup := launchServer(t, svc)

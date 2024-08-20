@@ -31,6 +31,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -93,7 +94,7 @@ func fullMockSet(tb testing.TB) *mockSet {
 func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	atxsdata := atxsdata.New()
 	ms.md.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
 		ballot, err := ballots.Get(db, id)
@@ -236,7 +237,7 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	return p
 }
 
-func createAtx(t *testing.T, db *sql.Database, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
+func createAtx(t *testing.T, db sql.StateDatabase, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
 	atx := &types.ActivationTx{
 		PublishEpoch: epoch,
 		NumUnits:     1,

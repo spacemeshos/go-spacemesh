@@ -25,7 +25,6 @@ import (
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -35,6 +34,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -749,7 +749,7 @@ func TestBuild(t *testing.T) {
 				publisher = pmocks.NewMockPublisher(ctrl)
 				tortoise  = mocks.NewMockvotesEncoder(ctrl)
 				syncer    = smocks.NewMockSyncStateProvider(ctrl)
-				db        = sql.InMemory()
+				db        = statesql.InMemory()
 				localdb   = localsql.InMemory()
 				atxsdata  = atxsdata.New()
 			)
@@ -905,7 +905,7 @@ func TestStartStop(t *testing.T) {
 		publisher = pmocks.NewMockPublisher(ctrl)
 		tortoise  = mocks.NewMockvotesEncoder(ctrl)
 		syncer    = smocks.NewMockSyncStateProvider(ctrl)
-		db        = sql.InMemory()
+		db        = statesql.InMemory()
 		localdb   = localsql.InMemory()
 		atxsdata  = atxsdata.New()
 	)

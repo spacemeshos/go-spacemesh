@@ -1,7 +1,7 @@
 package migrations
 
 import (
-	"strings"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,44 +13,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
-// Test that in-code migration results in the same schema as the .sql one.
-func Test0021Migration_CompatibleSchema(t *testing.T) {
-	db := sql.InMemory(
-		sql.WithLogger(zaptest.NewLogger(t)),
-		sql.WithMigration(New0021Migration(zaptest.NewLogger(t), 1000)),
-	)
-
-	var schemasInCode []string
-	_, err := db.Exec("SELECT sql FROM sqlite_schema;", nil, func(stmt *sql.Statement) bool {
-		sql := stmt.ColumnText(0)
-		sql = strings.Join(strings.Fields(sql), " ") // remove whitespace
-		schemasInCode = append(schemasInCode, sql)
-		return true
-	})
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-
-	db = sql.InMemory()
-
-	var schemasInFile []string
-	_, err = db.Exec("SELECT sql FROM sqlite_schema;", nil, func(stmt *sql.Statement) bool {
-		sql := stmt.ColumnText(0)
-		sql = strings.Join(strings.Fields(sql), " ") // remove whitespace
-		schemasInFile = append(schemasInFile, sql)
-		return true
-	})
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-
-	require.Equal(t, schemasInFile, schemasInCode)
-}
-
 func Test0021Migration(t *testing.T) {
+	schema, err := statesql.Schema()
+	require.NoError(t, err)
+	schema.Migrations = slices.DeleteFunc(schema.Migrations, func(m sql.Migration) bool {
+		return m.Order() == 21
+	})
+
 	db := sql.InMemory(
 		sql.WithLogger(zaptest.NewLogger(t)),
-		sql.WithSkipMigrations(21),
+		sql.WithDatabaseSchema(schema),
+		sql.WithNoCheckSchemaDrift(),
+		sql.WithForceMigrations(true),
 	)
 
 	var signers [177]*signing.EdSigner
@@ -82,9 +59,9 @@ func Test0021Migration(t *testing.T) {
 		}
 	}
 
-	m := New0021Migration(zaptest.NewLogger(t), 1000)
+	m := New0021Migration(1000)
 	require.Equal(t, 21, m.Order())
-	require.NoError(t, m.Apply(db))
+	require.NoError(t, m.Apply(db, zaptest.NewLogger(t)))
 
 	for _, posts := range allPosts {
 		for atx, post := range posts {

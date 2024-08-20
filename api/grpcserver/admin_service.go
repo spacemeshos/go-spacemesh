@@ -34,14 +34,14 @@ const (
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
-	db      *sql.Database
+	db      sql.StateDatabase
 	dataDir string
 	recover func()
 	p       peers
 }
 
 // NewAdminService creates a new admin grpc service.
-func NewAdminService(db *sql.Database, dataDir string, p peers) *AdminService {
+func NewAdminService(db sql.StateDatabase, dataDir string, p peers) *AdminService {
 	return &AdminService{
 		db:      db,
 		dataDir: dataDir,

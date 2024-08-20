@@ -76,8 +76,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	localmigrations "github.com/spacemeshos/go-spacemesh/sql/localsql/migrations"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
-	"github.com/spacemeshos/go-spacemesh/sql/migrations"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	statemigrations "github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/blockssync"
@@ -371,10 +373,10 @@ type App struct {
 	fileLock          *flock.Flock
 	signers           []*signing.EdSigner
 	Config            *config.Config
-	db                *sql.Database
+	db                sql.StateDatabase
 	cachedDB          *datastore.CachedDB
 	dbMetrics         *dbmetrics.DBMetricsCollector
-	localDB           *localsql.Database
+	localDB           sql.LocalDatabase
 	grpcPublicServer  *grpcserver.Server
 	grpcPrivateServer *grpcserver.Server
 	grpcPostServer    *grpcserver.Server
@@ -1941,18 +1943,20 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 	dbLog := app.addLogger(StateDbLogger, lg).Zap()
-	m21 := migrations.New0021Migration(dbLog, 1_000_000)
-	migrations, err := sql.StateMigrations()
+	schema, err := statemigrations.SchemaWithInCodeMigrations()
 	if err != nil {
-		return fmt.Errorf("failed to load migrations: %w", err)
+		return fmt.Errorf("error loading db schema: %w", err)
+	}
+	if len(app.Config.DatabaseSkipMigrations) > 0 {
+		schema.SkipMigrations(app.Config.DatabaseSkipMigrations...)
 	}
 	dbopts := []sql.Opt{
 		sql.WithLogger(dbLog),
-		sql.WithMigrations(migrations),
-		sql.WithMigration(m21),
+		sql.WithDatabaseSchema(schema),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
 		sql.WithVacuumState(app.Config.DatabaseVacuumState),
+		sql.WithAllowSchemaDrift(app.Config.DatabaseSchemaAllowDrift),
 		sql.WithQueryCache(app.Config.DatabaseQueryCache),
 		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
 			atxs.CacheKindEpochATXs:           app.Config.DatabaseQueryCacheSizes.EpochATXs,
@@ -1960,10 +1964,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			activesets.CacheKindActiveSetBlob: app.Config.DatabaseQueryCacheSizes.ActiveSetBlob,
 		}),
 	}
-	if len(app.Config.DatabaseSkipMigrations) > 0 {
-		dbopts = append(dbopts, sql.WithSkipMigrations(app.Config.DatabaseSkipMigrations...))
-	}
-	sqlDB, err := sql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
+	sqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)
 	}
@@ -2000,14 +2001,15 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConsensusCache(app.atxsdata),
 	)
 
-	migrations, err = sql.LocalMigrations()
+	lSchema, err := localmigrations.SchemaWithInCodeMigrations()
 	if err != nil {
-		return fmt.Errorf("load local migrations: %w", err)
+		return fmt.Errorf("error loading db schema: %w", err)
 	}
 	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
 		sql.WithLogger(dbLog),
-		sql.WithMigrations(migrations),
+		sql.WithDatabaseSchema(lSchema),
 		sql.WithConnections(app.Config.DatabaseConnections),
+		sql.WithAllowSchemaDrift(app.Config.DatabaseSchemaAllowDrift),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db %w", err)

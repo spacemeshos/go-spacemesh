@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -73,7 +74,7 @@ func createTestGenerator(t *testing.T) *testGenerator {
 	}
 	tg.mockMesh.EXPECT().ProcessedLayer().Return(types.LayerID(1)).AnyTimes()
 	lg := zaptest.NewLogger(t)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	data := atxsdata.New()
 	proposals := store.New()
 	tg.Generator = NewGenerator(
@@ -266,7 +267,7 @@ func Test_StopBeforeStart(t *testing.T) {
 
 func genData(
 	t *testing.T,
-	db *sql.Database,
+	db sql.StateDatabase,
 	data *atxsdata.Data,
 	store *store.Store,
 	lid types.LayerID,

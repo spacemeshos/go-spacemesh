@@ -19,19 +19,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 )
 
 type testForkFinder struct {
 	*syncer.ForkFinder
-	db       *sql.Database
+	db       sql.StateDatabase
 	mFetcher *mocks.Mockfetcher
 }
 
 func newTestForkFinderWithDuration(t *testing.T, d time.Duration, lg *zap.Logger) *testForkFinder {
 	mf := mocks.NewMockfetcher(gomock.NewController(t))
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	require.NoError(t, layers.SetMeshHash(db, types.GetEffectiveGenesis(), types.RandomHash()))
 	return &testForkFinder{
 		ForkFinder: syncer.NewForkFinder(lg, db, mf, d),
@@ -88,7 +89,7 @@ func layerHash(layer int, good bool) types.Hash32 {
 	return h2
 }
 
-func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
+func storeNodeHashes(t *testing.T, db sql.StateDatabase, diverge, max int) {
 	for lid := 0; lid <= max; lid++ {
 		if lid < diverge {
 			require.NoError(t, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, true)))

@@ -6,13 +6,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestRewards(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	var part uint64 = math.MaxUint64 / 2
 	lyrReward := part / 2
@@ -199,13 +201,17 @@ func TestRewards(t *testing.T) {
 }
 
 func Test_0008Migration_EmptyDBIsNoOp(t *testing.T) {
-	migrations, err := sql.StateMigrations()
+	schema, err := statesql.Schema()
 	require.NoError(t, err)
-	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Order() < migrations[j].Order() })
+	sort.Slice(schema.Migrations, func(i, j int) bool {
+		return schema.Migrations[i].Order() < schema.Migrations[j].Order()
+	})
+	origMigrations := schema.Migrations
+	schema.Migrations = schema.Migrations[:7]
 
 	// apply previous migrations
-	db := sql.InMemory(
-		sql.WithMigrations(migrations[:7]),
+	db := statesql.InMemory(
+		sql.WithDatabaseSchema(schema),
 	)
 
 	// verify that the DB is empty
@@ -217,7 +223,7 @@ func Test_0008Migration_EmptyDBIsNoOp(t *testing.T) {
 	require.NoError(t, err)
 
 	// apply the migration
-	err = migrations[7].Apply(db)
+	err = origMigrations[7].Apply(db, zaptest.NewLogger(t))
 	require.NoError(t, err)
 
 	// verify that db is still empty
@@ -230,13 +236,19 @@ func Test_0008Migration_EmptyDBIsNoOp(t *testing.T) {
 }
 
 func Test_0008Migration(t *testing.T) {
-	migrations, err := sql.StateMigrations()
+	schema, err := statesql.Schema()
 	require.NoError(t, err)
-	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Order() < migrations[j].Order() })
+	sort.Slice(schema.Migrations, func(i, j int) bool {
+		return schema.Migrations[i].Order() < schema.Migrations[j].Order()
+	})
+	origMigrations := schema.Migrations
+	schema.Migrations = schema.Migrations[:7]
 
 	// apply previous migrations
-	db := sql.InMemory(
-		sql.WithMigrations(migrations[:7]),
+	db := statesql.InMemory(
+		sql.WithDatabaseSchema(schema),
+		sql.WithForceMigrations(true),
+		sql.WithAllowSchemaDrift(true),
 	)
 
 	// verify that the DB is empty
@@ -279,7 +291,7 @@ func Test_0008Migration(t *testing.T) {
 	require.NoError(t, err)
 
 	// apply the migration
-	err = migrations[7].Apply(db)
+	err = origMigrations[7].Apply(db, zaptest.NewLogger(t))
 	require.NoError(t, err)
 
 	// verify that one row is still present

@@ -105,3 +105,79 @@ Some useful logging recommendations for cleaner output:
 ## Commit Messages
 
 For commit messages, follow [this guideline](https://www.conventionalcommits.org/en/v1.0.0/). Use reasonable length for the subject and body, ideally no longer than 72 characters. Use the imperative mood for subject lines.
+
+## Handling database schema changes
+
+go-spacemesh currently maintains 2 SQLite databases in the data folder: `state.sql` (state database) and `local.sql` (local database). It employs schema versioning for both databases, with a possibility to upgrade older versions of each database to the current schema version by means of running a series of migrations. Also, go-spacemesh tracks any schema drift (unexpected schema changes) in the databases.
+
+When a database is first created, the corresponding schema file embedded in go-spacemesh executable is used to initialize it:
+* `sql/statesql/schema/schema.sql` for `state.sql`
+* `sql/localsql/schema/schema.sql` for `local.sql`
+The schema file includes `PRAGMA user_version = ...` which sets the version of the database schema. The version of the schema is equal to the number of migrations defined for the corresponding database (`state.sql` or `local.sql`).
+
+For an existing database, the `PRAGMA user_version` is checked against the expected version number. If the database's schema version is too new, go-spacemesh fails right away as an older go-spacemesh version cannot be expected to work with a database from a newer version. If the database version number is older than the expected version, go-spacemesh runs the necessary migration scripts embedded in go-spacemesh executable and updates `PRAGMA user_version = ...`. The migration scripts are located in the following folders:
+* `sql/statesql/schema/migrations` for `state.sql`
+* `sql/localsql/schema/migrations` for `local.sql`
+
+Additionally, some migrations ("coded migrations") can be implemented in Go code, in which case they reside in `.go` files located in `sql/statesql` and `sql/localsql` packages, respectively. It is worth noting that old coded migrations can be removed at some point, rendering database versions that are *too* old unusable with newer go-spacemesh versions.
+
+After all the migrations are run, go-spacemesh compares the schema of each database to the embedded schema scripts and if they differ, fails with an error message:
+```
+Error: open sqlite db schema drift detected (uri file:data/state.sql):
+  (
+        """
+        ... // 82 identical lines
+            PRIMARY KEY (layer, block)
+        );
++       CREATE TABLE foo(id int);
+        CREATE TABLE identities
+        (
+        ... // 66 identical lines
+        """
+  )
+```
+
+In this case, a table named `foo` has somehow appeared in the database, causing go-spacemesh to fail due to the schema drift. The possible reasons for schema drift can be the following:
+* running an unreleased version of go-spacemesh using your data folder. The unreleased version may contain migrations that may be changed before the release happens
+* manual changes in the database
+* external SQLite tooling used on the database that adds some tables, indices etc.
+
+In case if you want to run go-spacemesh with schema drift anyway, you can set `main.db-allow-schema-drift` to true. In this case, a warning with schema diff will be logged instead of failing.
+
+The schema changes in go-spacemesh code should be always done by means of adding migrations. Let's for example create a new migration (use zero-padded N+1 instead of 0010 with N being the number of the last migration for the local db):
+
+```console
+$ echo 'CREATE TABLE foo(id int);' >sql/localsql/schema/migrations/0010_foo.sql
+```
+
+After that, we update the schema files
+```console
+$ make generate
+$ # alternative: cd sql/localsql && go generate
+$ git diff sql/localsql/schema/schema.sql
+diff --git a/sql/localsql/schema/schema.sql b/sql/localsql/schema/schema.sql
+index 02c44d3cc..ebcdf4278 100755
+--- a/sql/localsql/schema/schema.sql
++++ b/sql/localsql/schema/schema.sql
+@@ -1,4 +1,4 @@
+-PRAGMA user_version = 9;
++PRAGMA user_version = 10;
+ CREATE TABLE atx_sync_requests
+ (
+     epoch     INT NOT NULL,
+@@ -24,6 +24,7 @@ CREATE TABLE "challenge"
+     post_indices  VARCHAR,
+     post_pow      UNSIGNED LONG INT
+ , poet_proof_ref        CHAR(32), poet_proof_membership VARCHAR) WITHOUT ROWID;
++CREATE TABLE foo(id int);
+ CREATE TABLE malfeasance_sync_state
+ (
+   id INT NOT NULL PRIMARY KEY,
+```
+
+Note that the changes include both the new table and an updated `PRAGMA user_version` line.
+The changes in the schema file must be committed along with the migration we added.
+```console
+$ git add sql/localsql/schema/migrations/0010_foo.sql sql/localsql/schema.sql
+$ git commit -m "sql: add a test migration"
+```
