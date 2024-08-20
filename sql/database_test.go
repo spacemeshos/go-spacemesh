@@ -249,6 +249,20 @@ func TestDatabaseVacuumState(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
+func TestQueryCount(t *testing.T) {
+	db := InMemory(WithLogger(zaptest.NewLogger(t)), WithNoCheckSchemaDrift())
+	require.Equal(t, 0, db.QueryCount())
+
+	n, err := db.Exec("select 1", nil, nil)
+	require.Equal(t, 1, n)
+	require.NoError(t, err)
+	require.Equal(t, 1, db.QueryCount())
+
+	_, err = db.Exec("select invalid", nil, nil)
+	require.Error(t, err)
+	require.Equal(t, 2, db.QueryCount())
+}
+
 func TestDatabaseVacuumStateError(t *testing.T) {
 	dir := t.TempDir()
 	logger := zaptest.NewLogger(t)
@@ -481,20 +495,6 @@ func TestDBClosed(t *testing.T) {
 	require.ErrorIs(t, err, ErrClosed)
 	err = db.WithTx(context.Background(), func(tx Transaction) error { return nil })
 	require.ErrorIs(t, err, ErrClosed)
-}
-
-func TestQueryCount(t *testing.T) {
-	db := InMemory(WithLogger(zaptest.NewLogger(t)), WithNoCheckSchemaDrift())
-	require.Equal(t, 0, db.QueryCount())
-
-	n, err := db.Exec("select 1", nil, nil)
-	require.Equal(t, 1, n)
-	require.NoError(t, err)
-	require.Equal(t, 1, db.QueryCount())
-
-	_, err = db.Exec("select invalid", nil, nil)
-	require.Error(t, err)
-	require.Equal(t, 2, db.QueryCount())
 }
 
 func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
