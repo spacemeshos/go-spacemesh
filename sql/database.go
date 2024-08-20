@@ -239,7 +239,7 @@ func Open(uri string, opts ...Opt) (*sqliteDatabase, error) {
 	return openDB(config)
 }
 
-func openDB(config *conf) (*sqliteDatabase, error) {
+func openDB(config *conf) (db *sqliteDatabase, err error) {
 	logger := config.logger.With(zap.String("uri", config.uri))
 	var flags sqlite.OpenFlags
 	if !config.forceFresh {
@@ -268,7 +268,15 @@ func openDB(config *conf) (*sqliteDatabase, error) {
 			return nil, fmt.Errorf("create db %s: %w", config.uri, err)
 		}
 	}
-	db := &sqliteDatabase{pool: pool}
+	db = &sqliteDatabase{pool: pool}
+	success := false
+	defer func() {
+		// Close the database even in case of a panic. This is important for tests
+		// that verify incomplete migration.
+		if !success && db != nil {
+			db.Close()
+		}
+	}()
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
@@ -278,11 +286,9 @@ func openDB(config *conf) (*sqliteDatabase, error) {
 		// fail, so we make it faster by disabling journaling and synchronous
 		// writes.
 		if _, err := db.Exec("PRAGMA journal_mode=OFF", nil, nil); err != nil {
-			db.Close()
 			return nil, fmt.Errorf("PRAGMA journal_mode=OFF: %w", err)
 		}
 		if _, err := db.Exec("PRAGMA synchronous=OFF", nil, nil); err != nil {
-			db.Close()
 			return nil, fmt.Errorf("PRAGMA journal_mode=OFF: %w", err)
 		}
 	}
@@ -327,6 +333,7 @@ func openDB(config *conf) (*sqliteDatabase, error) {
 		db.queryCache = &queryCache{cacheSizesByKind: config.cacheSizes}
 	}
 	db.queryCount.Store(0)
+	success = true // do not close the db in the deferred func
 	return db, nil
 }
 
@@ -770,6 +777,7 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 			fmt.Errorf("process temporary DB %s: %w", migratedPath, err),
 			deleteDB(migratedPath))
 	}
+	defer migratedDB.Close()
 	tempDBReady := false
 	defer func() {
 		err = errors.Join(err, migratedDB.Close())
@@ -836,6 +844,14 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	if err != nil {
 		return nil, fmt.Errorf("open final DB %s: %w", config.uri, err)
 	}
+	success := false
+	defer func() {
+		// Close the database even in case of a panic. This is important for tests
+		// that verify incomplete migration.
+		if !success {
+			finalDB.Close()
+		}
+	}()
 
 	if err := migratedDB.Close(); err != nil {
 		finalDB.Close()
@@ -853,6 +869,7 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		return nil, fmt.Errorf("close original DB %s: %w", dbPath, err)
 	}
 
+	success = true // do not close the db in the deferred func
 	return finalDB, nil
 }
 
