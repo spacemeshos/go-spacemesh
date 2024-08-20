@@ -251,19 +251,8 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 			return builder.Operations{}, err
 		}
 		ops.Filter = append(ops.Filter, builder.Op{
-			Group: []builder.Op{
-				{
-					Field: builder.Address,
-					Token: builder.Eq,
-					Value: addr.Bytes(),
-				},
-				{
-					Field: builder.Principal,
-					Token: builder.Eq,
-					Value: addr.Bytes(),
-				},
-			},
-			GroupOperator: builder.Or,
+			Value:       addr.Bytes(),
+			CustomQuery: "id IN (SELECT tid FROM transactions_results_addresses WHERE address = ?1)",
 		})
 	}
 
