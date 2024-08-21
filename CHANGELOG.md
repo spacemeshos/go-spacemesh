@@ -2,6 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Release v1.6.8
+
+### Improvements
+* [#6269](https://github.com/spacemeshos/go-spacemesh/pull/6269) Use subquery instead of left join to speed up 
+  transaction list query
+
 ## Release v1.6.7
 
 ### Improvements
