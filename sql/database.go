@@ -269,12 +269,12 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 		}
 	}
 	db = &sqliteDatabase{pool: pool}
-	success := false
 	defer func() {
 		// Close the database even in case of a panic. This is important for tests
 		// that verify incomplete migration.
-		if !success && db != nil {
+		if r := recover(); r != nil {
 			db.Close()
+			panic(r)
 		}
 	}()
 	if config.enableLatency {
@@ -333,7 +333,6 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 		db.queryCache = &queryCache{cacheSizesByKind: config.cacheSizes}
 	}
 	db.queryCount.Store(0)
-	success = true // do not close the db in the deferred func
 	return db, nil
 }
 
@@ -737,7 +736,14 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		zap.String("path", dbPath),
 		zap.String("target", migratedPath))
 	if err := db.vacuumInto(migratedPath); err != nil {
-		return nil, errors.Join(err, deleteDB(migratedPath))
+		if err := deleteDB(migratedPath); err != nil {
+			config.logger.Error(
+				"incomplete temporary copy of the database couldn't be deleted",
+				zap.String("path", migratedPath),
+				zap.Error(err),
+			)
+		}
+		return nil, errors.Join(err)
 	}
 
 	// Opening the temporary migrated DB runs the actual migrations on it.
@@ -754,16 +760,27 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	}
 	migratedDB, err := Open("file:"+migratedPath, opts...)
 	if err != nil {
-		return nil, errors.Join(
-			fmt.Errorf("process temporary DB %s: %w", migratedPath, err),
-			deleteDB(migratedPath))
+		if err := deleteDB(migratedPath); err != nil {
+			config.logger.Error(
+				"incomplete temporary copy of the database couldn't be deleted",
+				zap.String("path", migratedPath),
+				zap.Error(err),
+			)
+		}
+		return nil, fmt.Errorf("process temporary DB %s: %w", migratedPath, err)
 	}
 	defer migratedDB.Close()
 	tempDBReady := false
 	defer func() {
-		err = errors.Join(err, migratedDB.Close())
+		migratedDB.Close()
 		if !tempDBReady {
-			err = errors.Join(err, deleteDB(migratedPath))
+			if err := deleteDB(migratedPath); err != nil {
+				config.logger.Error(
+					"incomplete temporary copy of the database couldn't be deleted",
+					zap.String("path", migratedPath),
+					zap.Error(err),
+				)
+			}
 		}
 	}()
 
@@ -773,25 +790,18 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		return nil, fmt.Errorf("checkpoint temporary DB %s: %w", migratedPath, err)
 	}
 
-	// Create the marker file to indicate that the migration is complete.
-	// Make sure the file is written to the disk before closing the database.
+	// Create the marker file to indicate that the migration is complete and make sure
+	// the file is written to the disk before closing the database.
 	// We could create a table in the temporary database instead of the marker file,
 	// but as the temporary database is opened without PRAGMA journal_mode=OFF
 	// and PRAGMA synchronous=OFF, it may become corrupt in case of a crash or power
 	// outage, so we avoid trying to open it.
-	markerPath := migratedPath + "_done"
-	f, err := os.Create(markerPath)
-	if err != nil {
-		return nil, fmt.Errorf("create marker file %s_done: %w", migratedPath, err)
+	if err := createMarkerFile(migratedPath); err != nil {
+		// The errors returned by createMarkerFile are already descriptive enough
+		// so no need to augment them
+		return nil, err
 	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		os.Remove(markerPath)
-		return nil, fmt.Errorf("sync/close marker file %s_done: %w", migratedPath, err)
-	}
-	if err := f.Close(); err != nil {
-		return nil, fmt.Errorf("close marker file %s: %w", markerPath, err)
-	}
+
 	// The temporary database is complete and should not be deleted
 	// until we copy it to the original database location.
 	tempDBReady = true
@@ -825,14 +835,6 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	if err != nil {
 		return nil, fmt.Errorf("open final DB %s: %w", config.uri, err)
 	}
-	success := false
-	defer func() {
-		// Close the database even in case of a panic. This is important for tests
-		// that verify incomplete migration.
-		if !success {
-			finalDB.Close()
-		}
-	}()
 
 	if err := migratedDB.Close(); err != nil {
 		finalDB.Close()
@@ -845,13 +847,24 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		return nil, err
 	}
 
-	if err := db.Close(); err != nil {
-		finalDB.Close()
-		return nil, fmt.Errorf("close original DB %s: %w", dbPath, err)
-	}
-
-	success = true // do not close the db in the deferred func
 	return finalDB, nil
+}
+
+func createMarkerFile(basePath string) error {
+	markerPath := basePath + "_done"
+	f, err := os.Create(markerPath)
+	if err != nil {
+		return fmt.Errorf("create marker file %s: %w", markerPath, err)
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(markerPath)
+		return fmt.Errorf("sync/close marker file %s: %w", markerPath, err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close marker file %s: %w", markerPath, err)
+	}
+	return nil
 }
 
 // QueryCount returns the number of queries executed, including failed
