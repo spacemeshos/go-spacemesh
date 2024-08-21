@@ -577,6 +577,3 @@ func TestSchemaDrift(t *testing.T) {
 	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`,
 		observedLogs.All()[0].ContextMap()["diff"])
 }
-
-// TBD: test WAL modes for temp DB
-// TBD: remove SQLITE_OPEN_WAL from open flags and check journal mode

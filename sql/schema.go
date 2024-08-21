@@ -158,12 +158,12 @@ func (s *Schema) Migrate(logger *zap.Logger, db Database, before, vacuumState in
 			}
 			return nil
 		}); err != nil {
-			return errors.Join(err, db.Close())
+			return err
 		}
 
 		if vacuumState != 0 && before <= vacuumState {
 			if err := Vacuum(db); err != nil {
-				return errors.Join(err, db.Close())
+				return err
 			}
 		}
 		before = m.Order()
@@ -190,7 +190,7 @@ func (s *Schema) MigrateTempDB(logger *zap.Logger, db Database, before int) erro
 
 		if _, ok := s.skipMigration[m.Order()]; !ok {
 			if err := m.Apply(db, logger); err != nil {
-				return errors.Join(fmt.Errorf("apply %s: %w", m.Name(), err), db.Close())
+				return fmt.Errorf("apply %s: %w", m.Name(), err)
 			}
 		}
 
