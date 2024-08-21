@@ -59,6 +59,12 @@ type Op struct {
 
 	Group         []Op
 	GroupOperator operator
+
+	// CustomQuery is used to add custom query. If this is set, Field and Token will be ignored.
+	// This is useful for complex queries that can't be expressed with Field and Token.
+	// Value will be used for custom query if it's not nil.
+	// Remember about setting correct bind index for Value.
+	CustomQuery string
 }
 
 type Modifier struct {
@@ -95,6 +101,14 @@ func FilterFrom(operations Operations) string {
 			}
 		} else {
 			queryBuilder.WriteString(" and")
+		}
+
+		if len(op.CustomQuery) > 0 {
+			queryBuilder.WriteString(fmt.Sprintf("  %s", op.CustomQuery))
+			if op.Value != nil {
+				bindIndex++
+			}
+			continue
 		}
 
 		if len(op.Group) > 0 {
