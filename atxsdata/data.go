@@ -5,8 +5,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"golang.org/x/exp/maps"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // SAFETY: all exported fields are read-only and are safe to read concurrently.
