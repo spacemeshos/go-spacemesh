@@ -56,10 +56,9 @@ type Schema struct {
 // Diff diffs the database schema against the actual schema.
 // If there's no differences, it returns an empty string.
 func (s *Schema) Diff(actualScript string) string {
-	opt := cmp.Comparer(func(x, y string) bool {
-		return strings.Join(strings.Fields(x), "") == strings.Join(strings.Fields(y), "")
-	})
-	return cmp.Diff(s.Script, actualScript, opt)
+	// If the difference is only in whitespaces, consider the schemas equal.
+	return cmp.Diff(strings.Join(strings.Fields(s.Script), " "),
+		strings.Join(strings.Fields(actualScript), " "))
 }
 
 // WriteToFile writes the schema to the corresponding updated schema file.
@@ -189,7 +188,9 @@ func (s *Schema) MigrateTempDB(logger *zap.Logger, db Database, before int) erro
 		}
 
 		if _, ok := s.skipMigration[m.Order()]; !ok {
-			if err := m.Apply(db, logger); err != nil {
+			if err := db.WithTx(context.Background(), func(tx Transaction) error {
+				return m.Apply(tx, logger)
+			}); err != nil {
 				return fmt.Errorf("apply %s: %w", m.Name(), err)
 			}
 		}
