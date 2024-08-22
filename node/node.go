@@ -2090,6 +2090,14 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 			}
 			return nil
 		})
+		if app.Config.PprofMutexProfile {
+			// this will set the mutex profiling to sample a third of all lock events
+			runtime.SetMutexProfileFraction(3)
+		}
+		if app.Config.PprofBlockProfile {
+			// record block sample for every block event that takes more than 10 milliseconds
+			runtime.SetBlockProfileRate(int(10 * time.Millisecond))
+		}
 	}
 
 	if app.Config.ProfilerURL != "" {
