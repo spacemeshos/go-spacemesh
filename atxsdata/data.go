@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"golang.org/x/exp/maps"
 )
 
 // SAFETY: all exported fields are read-only and are safe to read concurrently.
@@ -145,6 +146,12 @@ func (d *Data) SetMalicious(node types.NodeID) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.malicious[node] = struct{}{}
+}
+
+func (d *Data) MaliciousIdentities() []types.NodeID {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return maps.Keys(d.malicious)
 }
 
 // Get returns atx data.
