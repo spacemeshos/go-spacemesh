@@ -6,8 +6,15 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
-* [#6269](https://github.com/spacemeshos/go-spacemesh/pull/6269) Use sub query instead of left join to speed up.
-  transaction list query
+* [#6269](https://github.com/spacemeshos/go-spacemesh/pull/6269) Use sub query instead of left join to speed up
+  transaction list query.
+
+* [#6278](https://github.com/spacemeshos/go-spacemesh/pull/6278) Reduce logging levels of some messages to reduce noise.
+
+* [#6279](https://github.com/spacemeshos/go-spacemesh/pull/6279) Speed up initialization of tortoise by reducing the
+  number of queries to the DB.
+
+* [#6268](https://github.com/spacemeshos/go-spacemesh/pull/6268) Fix incorrect timing collection for proposal builder.
 
 * [#6278](https://github.com/spacemeshos/go-spacemesh/pull/6278) Reduce logging levels of some messages to reduce noise.
 
