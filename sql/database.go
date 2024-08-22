@@ -92,6 +92,7 @@ type conf struct {
 	checkSchemaDrift           bool
 	temp                       bool
 	handleIncompleteMigrations bool
+	exclusive                  bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -201,6 +202,18 @@ func withDisableIncompleteMigrationHandling() Opt {
 	}
 }
 
+// WithExclusive specifies that the database is to be open in exclusive mode.
+// This means that no other processes can open the database at the same time.
+// If the database is already open by any process, this Open will fail.
+// Any subsequent attempts by other processes to open the database will fail until this db
+// handle is closed.
+// In Exclusive mode, the database supports just one concurrent connection.
+func WithExclusive() Opt {
+	return func(c *conf) {
+		c.exclusive = true
+	}
+}
+
 // Opt for configuring database.
 type Opt func(c *conf)
 
@@ -256,6 +269,9 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 		}
 	}
 	freshDB := config.forceFresh
+	if config.exclusive {
+		config.connections = 1
+	}
 	pool, err := sqlitex.Open(config.uri, flags, config.connections)
 	if err != nil {
 		if config.forceFresh || sqlite.ErrCode(err) != sqlite.SQLITE_CANTOPEN {
@@ -270,13 +286,26 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 	}
 	db = &sqliteDatabase{pool: pool}
 	defer func() {
-		// Close the database even in case of a panic. This is important for tests
-		// that verify incomplete migration.
+		// If something goes wrong, close the database even in case of a
+		// panic. This is important for tests that verify incomplete migration.
 		if r := recover(); r != nil {
 			db.Close()
 			panic(r)
 		}
 	}()
+	// In case of VACUUM INTO based migration, prepareDB may close this database and
+	// open another one.
+	actualDB, err := prepareDB(logger, db, config, freshDB)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	return actualDB, nil
+}
+
+func prepareDB(logger *zap.Logger, db *sqliteDatabase, config *conf, freshDB bool) (*sqliteDatabase, error) {
+	var err error
+
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
@@ -290,6 +319,12 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 		}
 		if _, err := db.Exec("PRAGMA synchronous=OFF", nil, nil); err != nil {
 			return nil, fmt.Errorf("PRAGMA journal_mode=OFF: %w", err)
+		}
+	}
+
+	if config.exclusive {
+		if err := db.startExclusive(); err != nil {
+			return nil, fmt.Errorf("error switching to exclusive mode: %w", err)
 		}
 	}
 
@@ -311,7 +346,6 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 	if config.checkSchemaDrift {
 		loaded, err := LoadDBSchemaScript(db)
 		if err != nil {
-			db.Close()
 			return nil, fmt.Errorf("error loading database schema: %w", err)
 		}
 		diff := config.schema.Diff(loaded)
@@ -323,7 +357,6 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 				zap.String("diff", diff),
 			)
 		default:
-			db.Close()
 			return nil, fmt.Errorf("schema drift detected (uri %s):\n%s", config.uri, diff)
 		}
 	}
@@ -409,7 +442,8 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 	config.logger.Warn("finalizing migration by moving the temporary DB to the original path",
 		zap.String("fromPath", fromPath),
 		zap.String("toPath", toPath))
-	// Try to open the temporary migrated DB before deleting the original one.
+	// Try to open the temporary migrated DB in exclusive mode before deleting the
+	// original one.
 	// If the temporary DB is being copied to the original path by another
 	// process, this will fail and the original database will not be deleted.
 	// We don't use the proper database schema here because the temporary DB
@@ -418,7 +452,9 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 		WithLogger(config.logger),
 		WithConnections(1),
 		WithTemp(),
-		WithNoCheckSchemaDrift())
+		WithNoCheckSchemaDrift(),
+		WithExclusive(),
+	)
 	if err != nil {
 		return fmt.Errorf("open temporary DB %s: %w", fromPath, err)
 	}
@@ -429,15 +465,17 @@ func moveMigratedDB(config *conf, fromPath, toPath string) (err error) {
 		db.Close()
 		return err
 	}
-	// Open the freshly vacuumed DB to avoid race condition when another process
-	// also tries to vacuum the temporary DB into the original path after
-	// we close the temporary DB.
+	// Open the freshly vacuumed DB in exclusive mode to avoid race condition when
+	// another process also tries to vacuum the temporary DB into the original path
+	// after we close the temporary DB.
 	origDB, err := Open("file:"+toPath,
 		WithLogger(config.logger),
 		WithConnections(1),
 		WithMigrationsDisabled(),
 		WithNoCheckSchemaDrift(),
-		withDisableIncompleteMigrationHandling())
+		withDisableIncompleteMigrationHandling(),
+		WithExclusive(),
+	)
 	if err != nil {
 		return fmt.Errorf("open vacuumed DB %s: %w", toPath, err)
 	}
@@ -591,6 +629,42 @@ func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func
 	return tx.Commit()
 }
 
+func (db *sqliteDatabase) startExclusive() error {
+	conn := db.getConn(context.Background())
+	if conn == nil {
+		return ErrNoConnection
+	}
+	// We don't need to wait for long if the database is busy
+	conn.SetBusyTimeout(1 * time.Millisecond)
+	// From SQLite docs:
+	// When the locking-mode is set to EXCLUSIVE, the database connection
+	// never releases file-locks. The first time the database is read in
+	// EXCLUSIVE mode, a shared lock is obtained and held. The first time the
+	// database is written, an exclusive lock is obtained and held.
+	if _, err := exec(conn, "PRAGMA locking_mode=EXCLUSIVE", nil, nil); err != nil {
+		db.pool.Put(conn)
+		return fmt.Errorf("PRAGMA locking_mode=EXCLUSIVE: %w", err)
+	}
+	// We need to perform a transaction to have the database actually locked.
+	// From SQLite docs, regarding BEGIN EXCLUSIVE / BEGIN IMMEDIATE:
+	// EXCLUSIVE is similar to IMMEDIATE in that a write transaction is
+	// started immediately. EXCLUSIVE and IMMEDIATE are the same in WAL mode,
+	// but in other journaling modes, EXCLUSIVE prevents other database
+	// connections from reading the database while the transaction is
+	// underway.
+	_, err := exec(conn, "BEGIN EXCLUSIVE", nil, nil)
+	if err != nil {
+		db.pool.Put(conn)
+		return fmt.Errorf("error starting the EXCLUSIVE transaction: %w", err)
+	}
+	if _, err := exec(conn, "COMMIT", nil, nil); err != nil {
+		db.pool.Put(conn)
+		return fmt.Errorf("error committing the EXCLUSIVE transaction: %w", err)
+	}
+	db.pool.Put(conn)
+	return nil
+}
+
 // Tx creates deferred sqlite transaction.
 //
 // Deferred transactions are not started until the first statement.
@@ -676,7 +750,7 @@ func (db *sqliteDatabase) Close() error {
 		return nil
 	}
 	if err := db.pool.Close(); err != nil {
-		return fmt.Errorf("close pool %w", err)
+		return fmt.Errorf("close pool: %w", err)
 	}
 	db.closed = true
 	return nil
@@ -717,8 +791,6 @@ func (db *sqliteDatabase) vacuumInto(toPath string) error {
 // The source database is always closed by this function.
 // Upon success, the migrated database is opened.
 func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, err error) {
-	defer db.Close()
-
 	dbPath, migratedPath, err := dbMigrationPaths(config.uri)
 	if err != nil {
 		return nil, err
@@ -727,7 +799,25 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		return nil, fmt.Errorf("cannot migrate database, only file DBs are supported: %s", config.uri)
 	}
 
-	// Instead of just copying the source database to the temporary migration DB, use VACUUM INTO.
+	// Before we start the migration, re-open the database in exclusive mode
+	// so that no other connections will be able to use it.
+	// This will fail if another process is already using this database.
+	if err := db.Close(); err != nil {
+		return nil, fmt.Errorf("error closing DB: %w", err)
+	}
+
+	excDB, err := Open("file:"+dbPath,
+		WithLogger(config.logger),
+		WithConnections(1),
+		WithNoCheckSchemaDrift(),
+		WithExclusive(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error opening the database in exclusive mode: %v", err)
+	}
+	defer excDB.Close()
+
+	// instead of just copying the source database to the temporary migration DB, use VACUUM INTO.
 	// This is somewhat slower but achieves two goals:
 	// 1. The lock is held on the source database while it's being copied
 	// 2. If the source database has a lot of free pages for whatever reason, those
@@ -735,7 +825,7 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	config.logger.Info("making a temporary copy of the database",
 		zap.String("path", dbPath),
 		zap.String("target", migratedPath))
-	if err := db.vacuumInto(migratedPath); err != nil {
+	if err := excDB.vacuumInto(migratedPath); err != nil {
 		if err := deleteDB(migratedPath); err != nil {
 			config.logger.Error(
 				"incomplete temporary copy of the database couldn't be deleted",
@@ -754,6 +844,7 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		WithConnections(1),
 		WithTemp(),
 		WithDatabaseSchema(config.schema),
+		WithExclusive(),
 	}
 	if !config.checkSchemaDrift {
 		opts = append(opts, WithNoCheckSchemaDrift())
@@ -810,7 +901,7 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	// so that the lock is held. There's a possibility that right after we
 	// close the source database, another process will see the migrated database
 	// and the marker file and will try to open the migrated database. If the
-	if err := db.Close(); err != nil {
+	if err := excDB.Close(); err != nil {
 		return nil, fmt.Errorf("close db: %w", err)
 	}
 
@@ -828,9 +919,11 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		return nil, err
 	}
 
-	// Open the final DB before deleting the source DB, so one of the locks
+	// Open the final DB in the exclusive mode before deleting the source DB, so one of the locks
 	// is always held. The migrations are already run, so we're disabling them.
+	origExclusive := config.exclusive
 	config.enableMigrations = false
+	config.exclusive = true
 	finalDB, err = openDB(config)
 	if err != nil {
 		return nil, fmt.Errorf("open final DB %s: %w", config.uri, err)
@@ -845,6 +938,19 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	if err := deleteDB(migratedPath); err != nil {
 		finalDB.Close()
 		return nil, err
+	}
+
+	// If we were not intending to open the database in exclusive mode,
+	// reopen it in the normal mode
+	if !origExclusive {
+		if err := finalDB.Close(); err != nil {
+			return nil, fmt.Errorf("close final DB: %w", err)
+		}
+		config.exclusive = false
+		finalDB, err = openDB(config)
+		if err != nil {
+			return nil, fmt.Errorf("open final DB %s: %w", config.uri, err)
+		}
 	}
 
 	return finalDB, nil

@@ -224,6 +224,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 			Migrations: MigrationList{migration1},
 		}),
 		WithForceMigrations(true),
+		WithConnections(10),
 	)
 	require.NoError(t, err)
 	execSQL(t, db, "select * from foo", -1) // ensure table exists
@@ -576,4 +577,39 @@ func TestSchemaDrift(t *testing.T) {
 	require.Equal(t, "database schema drift detected", observedLogs.All()[0].Message)
 	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`,
 		observedLogs.All()[0].ContextMap()["diff"])
+}
+
+func TestExclusive(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		optsA []Opt
+		optsB []Opt
+	}{
+		{
+			name:  "exclusive succeeds, non-exclusive fails",
+			optsA: []Opt{WithExclusive()},
+		},
+		{
+			name:  "exclusive succeeds, non-exclusive fails",
+			optsB: []Opt{WithExclusive()},
+		},
+		{
+			name:  "first exclusive succeeds, second exclusive fails",
+			optsA: []Opt{WithExclusive()},
+			optsB: []Opt{WithExclusive()},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			dbPath := filepath.Join(dir, "test.db")
+			db, err := Open(dbPath, append([]Opt{WithNoCheckSchemaDrift()}, tc.optsA...)...)
+			require.NoError(t, err)
+			_, err = Open(dbPath, append([]Opt{WithNoCheckSchemaDrift()}, tc.optsB...)...)
+			require.ErrorContains(t, err, "SQLITE_BUSY: database is locked")
+			_, err = db.Exec("select count(*) from sqlite_master", nil, nil)
+			require.NoError(t, err)
+			require.NoError(t, db.Close())
+		})
+	}
 }
