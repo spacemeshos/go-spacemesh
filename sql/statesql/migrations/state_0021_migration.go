@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/lithammer/dedent"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
@@ -73,16 +72,16 @@ func (m *migration0021) Apply(db sql.Executor, logger *zap.Logger) error {
 	return nil
 }
 
+const tableSQL = `CREATE TABLE posts (
+    atxid CHAR(32) NOT NULL,
+    pubkey CHAR(32) NOT NULL,
+    prev_atxid CHAR(32),
+    prev_atx_index INT,
+    units INT NOT NULL
+);`
+
 func (m *migration0021) applySql(db sql.Executor) error {
-	query := dedent.Dedent(`
-		CREATE TABLE posts (
-		    atxid CHAR(32) NOT NULL,
-		    pubkey CHAR(32) NOT NULL,
-		    prev_atxid CHAR(32),
-		    prev_atx_index INT,
-		    units INT NOT NULL
-		);`)
-	_, err := db.Exec(query, nil, nil)
+	_, err := db.Exec(tableSQL, nil, nil)
 	if err != nil {
 		return fmt.Errorf("creating posts table: %w", err)
 	}
