@@ -861,23 +861,17 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 		return nil, fmt.Errorf("process temporary DB %s: %w", migratedPath, err)
 	}
 	defer migratedDB.Close()
-	tempDBReady := false
-	defer func() {
-		migratedDB.Close()
-		if !tempDBReady {
-			if err := deleteDB(migratedPath); err != nil {
-				config.logger.Error(
-					"incomplete temporary copy of the database couldn't be deleted",
-					zap.String("path", migratedPath),
-					zap.Error(err),
-				)
-			}
-		}
-	}()
 
 	// Make sure the temporary DB is fully synced to the disk before creating the marker file.
 	// We don't need wal_checkpoint(TRUNCATE) here as we're going to delete the temporary DB.
 	if _, err := migratedDB.Exec("PRAGMA wal_checkpoint(FULL)", nil, nil); err != nil {
+		if err := deleteDB(migratedPath); err != nil {
+			config.logger.Error(
+				"incomplete temporary copy of the database couldn't be deleted",
+				zap.String("path", migratedPath),
+				zap.Error(err),
+			)
+		}
 		return nil, fmt.Errorf("checkpoint temporary DB %s: %w", migratedPath, err)
 	}
 
@@ -888,14 +882,20 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 	// and PRAGMA synchronous=OFF, it may become corrupt in case of a crash or power
 	// outage, so we avoid trying to open it.
 	if err := createMarkerFile(migratedPath); err != nil {
+		if err := deleteDB(migratedPath); err != nil {
+			config.logger.Error(
+				"incomplete temporary copy of the database couldn't be deleted",
+				zap.String("path", migratedPath),
+				zap.Error(err),
+			)
+		}
 		// The errors returned by createMarkerFile are already descriptive enough
 		// so no need to augment them
 		return nil, err
 	}
 
-	// The temporary database is complete and should not be deleted
+	// At this point, the temporary database is complete and should not be deleted
 	// until we copy it to the original database location.
-	tempDBReady = true
 
 	// We only close the source database at the end of the migration process
 	// so that the lock is held. There's a possibility that right after we
