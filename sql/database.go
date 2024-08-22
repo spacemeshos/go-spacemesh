@@ -833,7 +833,7 @@ func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, 
 				zap.Error(err),
 			)
 		}
-		return nil, errors.Join(err)
+		return nil, err
 	}
 
 	// Opening the temporary migrated DB runs the actual migrations on it.
