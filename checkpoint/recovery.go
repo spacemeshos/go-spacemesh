@@ -276,7 +276,7 @@ func RecoverFromLocalFile(
 
 	newDB, err := statesql.Open("file:" + cfg.DbPath())
 	if err != nil {
-		return nil, fmt.Errorf("creating new DB: %w", err)
+		return nil, fmt.Errorf("create new db: %w", err)
 	}
 	defer newDB.Close()
 	logger.Info("populating new database",
