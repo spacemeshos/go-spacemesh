@@ -201,18 +201,18 @@ func (s *Schema) MigrateTempDB(logger *zap.Logger, db Database, before int) erro
 
 	logger.Info("syncing temporary database")
 
-	// Enable synchronous mode and WAL journal to ensure the database is synced
+	// Enable WAL journal and synchronous mode to ensure the database is synced
 	if _, err := db.Exec("PRAGMA journal_mode=WAL", nil, nil); err != nil {
-		return fmt.Errorf("PRAGMA journal_mode=WAL: %w", err)
+		return fmt.Errorf("setting WAL journal mode: %w", err)
 	}
 
 	if _, err := db.Exec("PRAGMA synchronous=FULL", nil, nil); err != nil {
-		return fmt.Errorf("PRAGMA journal_mode=OFF: %w", err)
+		return fmt.Errorf("setting synchronous mode: %w", err)
 	}
 
 	// This should trigger file sync
 	if err := s.setVersion(db, v); err != nil {
-		return err
+		return fmt.Errorf("setting DB schema version: %w", err)
 	}
 
 	return nil

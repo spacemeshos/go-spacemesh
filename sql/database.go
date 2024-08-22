@@ -318,13 +318,13 @@ func prepareDB(logger *zap.Logger, db *sqliteDatabase, config *conf, freshDB boo
 			return nil, fmt.Errorf("PRAGMA journal_mode=OFF: %w", err)
 		}
 		if _, err := db.Exec("PRAGMA synchronous=OFF", nil, nil); err != nil {
-			return nil, fmt.Errorf("PRAGMA journal_mode=OFF: %w", err)
+			return nil, fmt.Errorf("PRAGMA synchronous=OFF: %w", err)
 		}
 	}
 
 	if config.exclusive {
 		if err := db.startExclusive(); err != nil {
-			return nil, fmt.Errorf("error switching to exclusive mode: %w", err)
+			return nil, fmt.Errorf("start exclusive: %w", err)
 		}
 	}
 
@@ -520,7 +520,7 @@ func dbMigrationPaths(uri string) (dbPath, migratedPath string, err error) {
 func handleIncompleteCopyMigration(config *conf) error {
 	dbPath, migratedPath, err := dbMigrationPaths(config.uri)
 	if err != nil {
-		return err
+		return fmt.Errorf("getting DB migration paths: %w", err)
 	}
 	if migratedPath == "" {
 		return nil
@@ -634,6 +634,7 @@ func (db *sqliteDatabase) startExclusive() error {
 	if conn == nil {
 		return ErrNoConnection
 	}
+	defer db.pool.Put(conn)
 	// We don't need to wait for long if the database is busy
 	conn.SetBusyTimeout(1 * time.Millisecond)
 	// From SQLite docs:
@@ -642,7 +643,6 @@ func (db *sqliteDatabase) startExclusive() error {
 	// EXCLUSIVE mode, a shared lock is obtained and held. The first time the
 	// database is written, an exclusive lock is obtained and held.
 	if _, err := exec(conn, "PRAGMA locking_mode=EXCLUSIVE", nil, nil); err != nil {
-		db.pool.Put(conn)
 		return fmt.Errorf("PRAGMA locking_mode=EXCLUSIVE: %w", err)
 	}
 	// We need to perform a transaction to have the database actually locked.
@@ -654,14 +654,11 @@ func (db *sqliteDatabase) startExclusive() error {
 	// underway.
 	_, err := exec(conn, "BEGIN EXCLUSIVE", nil, nil)
 	if err != nil {
-		db.pool.Put(conn)
 		return fmt.Errorf("error starting the EXCLUSIVE transaction: %w", err)
 	}
 	if _, err := exec(conn, "COMMIT", nil, nil); err != nil {
-		db.pool.Put(conn)
 		return fmt.Errorf("error committing the EXCLUSIVE transaction: %w", err)
 	}
-	db.pool.Put(conn)
 	return nil
 }
 
@@ -793,7 +790,7 @@ func (db *sqliteDatabase) vacuumInto(toPath string) error {
 func (db *sqliteDatabase) copyMigrateDB(config *conf) (finalDB *sqliteDatabase, err error) {
 	dbPath, migratedPath, err := dbMigrationPaths(config.uri)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting DB migration paths: %w", err)
 	}
 	if migratedPath == "" {
 		return nil, fmt.Errorf("cannot migrate database, only file DBs are supported: %s", config.uri)
@@ -1060,7 +1057,7 @@ func (tx *sqliteTx) Release() error {
 // Exec query.
 func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	if err := tx.db.runInterceptors(query); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("running query interceptors: %w", err)
 	}
 
 	tx.db.queryCount.Add(1)
