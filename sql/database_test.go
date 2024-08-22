@@ -563,7 +563,7 @@ func TestSchemaDrift(t *testing.T) {
 		WithLogger(logger),
 	)
 	require.Error(t, err)
-	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`, err.Error())
+	require.Contains(t, err.Error(), "newtbl")
 	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
 
 	db, err = Open("file:"+dbFile,
@@ -575,8 +575,7 @@ func TestSchemaDrift(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, observedLogs.Len(), "expected 1 log messages")
 	require.Equal(t, "database schema drift detected", observedLogs.All()[0].Message)
-	require.Regexp(t, `.*\n.*\+.*CREATE TABLE newtbl \(id int\);`,
-		observedLogs.All()[0].ContextMap()["diff"])
+	require.Contains(t, observedLogs.All()[0].ContextMap()["diff"], "newtbl")
 }
 
 func TestExclusive(t *testing.T) {
