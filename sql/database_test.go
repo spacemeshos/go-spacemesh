@@ -345,7 +345,7 @@ var _ Migration = &faultyMigration{}
 
 func (m *faultyMigration) Apply(db Executor, logger *zap.Logger) error {
 	if m.interceptVacuumInto {
-		db.(Database).Intercept("crashOnVacuum", func(query string) error {
+		db.(*sqliteTx).db.Intercept("crashOnVacuum", func(query string) error {
 			if strings.Contains(strings.ToLower(query), "vacuum into") {
 				panic("simulated crash")
 			}
