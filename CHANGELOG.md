@@ -14,8 +14,36 @@ such and the node will continue to scan new ATXs for their validity.
 ### Features
 
 ### Improvements
-* [#6035](https://github.com/spacemeshos/go-spacemesh/issues/6035) Fixed an issue where the node retried registering for the PoET round
-  only for 15-20 minutes instead of continuing until the start of the round
+
+* [#6136](https://github.com/spacemeshos/go-spacemesh/pull/6136) Fixed an issue where the node retried registering
+  for the PoET round only for 15-20 minutes instead of continuing until the start of the round.
+
+## Release v1.6.8
+
+### Improvements
+
+* [#6269](https://github.com/spacemeshos/go-spacemesh/pull/6269) Use sub query instead of left join to speed up
+  transaction list query.
+
+* [#6278](https://github.com/spacemeshos/go-spacemesh/pull/6278) Reduce logging levels of some messages to reduce noise.
+
+* [#6279](https://github.com/spacemeshos/go-spacemesh/pull/6279) Speed up initialization of tortoise by reducing the
+  number of queries to the DB.
+
+* [#6268](https://github.com/spacemeshos/go-spacemesh/pull/6268) Fix incorrect timing collection for proposal builder.
+
+## Release v1.6.7
+
+### Improvements
+
+* [#6197](https://github.com/spacemeshos/go-spacemesh/pull/6197) Fix falling back to poet PoW if recertification
+  failed after getting a 401 on registering
+
+* [#6241](https://github.com/spacemeshos/go-spacemesh/pull/6241) Improve speed of ATX cache warmup.
+
+### Features
+
+* [#6213](https://github.com/spacemeshos/go-spacemesh/pull/6213) Adds `labels_per_unit` to the v2alpha1 Network Info API.
 
 ## Release v1.6.6-hotfix1
 

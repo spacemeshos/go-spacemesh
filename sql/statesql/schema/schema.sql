@@ -120,14 +120,14 @@ CREATE TABLE poets
 );
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
 CREATE TABLE posts (
-		atxid  CHAR(32) NOT NULL,
-		pubkey CHAR(32) NOT NULL,
-		prev_atxid  CHAR(32),
-		prev_atx_index INT,
-		units  INT NOT NULL,
-		UNIQUE (atxid, pubkey)
-	);
-CREATE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey, prev_atxid);
+    atxid CHAR(32) NOT NULL,
+    pubkey CHAR(32) NOT NULL,
+    prev_atxid CHAR(32),
+    prev_atx_index INT,
+    units INT NOT NULL
+);
+CREATE UNIQUE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey);
+CREATE INDEX posts_by_atxid_by_pubkey_prev_atxid ON posts (atxid, pubkey, prev_atxid);
 CREATE TABLE proposal_transactions
 (
     tid     CHAR(32),

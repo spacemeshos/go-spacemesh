@@ -66,10 +66,6 @@ func (m *sqlMigration) Apply(db Executor, logger *zap.Logger) error {
 			}
 		}
 	}
-	// binding values in pragma statement is not allowed
-	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.order), nil, nil); err != nil {
-		return fmt.Errorf("update user_version to %d: %w", m.order, err)
-	}
 
 	return nil
 }
