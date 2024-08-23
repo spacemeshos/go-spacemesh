@@ -16,7 +16,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 var (
@@ -33,7 +33,7 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 			prover.TreeConfig{Datadir: t.TempDir()},
 			poetHash.GenLabelHashFunc(challenge),
 			poetHash.GenMerkleHashFunc(challenge),
-			time.Now().Add(500*time.Millisecond),
+			time.Now(),
 			shared.T,
 		)
 		require.NoError(t, err)
@@ -63,7 +63,7 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 func TestPoetDbHappyFlow(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
+	poetDb := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
 
 	r.NoError(poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
 	ref, err := msg.Ref()
@@ -83,7 +83,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
+	poetDb := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
 	msg.PoetProof.Root = []byte("some other root")
 
 	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
@@ -99,7 +99,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 func TestPoetDbInvalidPoetStatement(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
+	poetDb := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
 	msg.Statement = types.CalcHash32([]byte("some other statement"))
 
 	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
@@ -115,7 +115,7 @@ func TestPoetDbInvalidPoetStatement(t *testing.T) {
 func TestPoetDbNonExistingKeys(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(sql.InMemory(), zaptest.NewLogger(t))
+	poetDb := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
 
 	_, err := poetDb.GetProofRef(msg.PoetServiceID, "0")
 	r.EqualError(

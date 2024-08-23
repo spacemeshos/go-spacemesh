@@ -1,9 +1,11 @@
 package v2alpha1
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -146,11 +148,12 @@ func (s *ActivationStreamService) Stream(
 func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
 	return &spacemeshv2alpha1.Activation{
 		Id:           atx.ID().Bytes(),
+		SmesherId:    atx.SmesherID.Bytes(),
 		PublishEpoch: atx.PublishEpoch.Uint32(),
-		PreviousAtx:  atx.PrevATXID[:],
 		Coinbase:     atx.Coinbase.String(),
-		Weight:       atx.GetWeight(),
+		Weight:       atx.Weight,
 		Height:       atx.TickHeight(),
+		NumUnits:     atx.NumUnits,
 	}
 }
 
@@ -179,17 +182,19 @@ func (s *ActivationService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.ActivationRequest,
 ) (*spacemeshv2alpha1.ActivationList, error) {
-	ops, err := toAtxOperations(request)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	// every full atx is ~1KB. 100 atxs is ~100KB.
 	switch {
 	case request.Limit > 100:
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
 	case request.Limit == 0:
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
+
+	ops, err := toAtxOperations(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	// every full atx is ~1KB. 100 atxs is ~100KB.
 	rst := make([]*spacemeshv2alpha1.Activation, 0, request.Limit)
 	if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.ActivationTx) bool {
 		rst = append(rst, toAtx(atx))
@@ -197,6 +202,7 @@ func (s *ActivationService) List(
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
 	return &spacemeshv2alpha1.ActivationList{Activations: rst}, nil
 }
 
@@ -223,7 +229,7 @@ func (s *ActivationService) ActivationsCount(
 
 func toAtxRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {
 	return &spacemeshv2alpha1.ActivationRequest{
-		NodeId:     filter.NodeId,
+		SmesherId:  filter.SmesherId,
 		Id:         filter.Id,
 		Coinbase:   filter.Coinbase,
 		StartEpoch: filter.StartEpoch,
@@ -236,17 +242,17 @@ func toAtxOperations(filter *spacemeshv2alpha1.ActivationRequest) (builder.Opera
 	if filter == nil {
 		return ops, nil
 	}
-	if filter.NodeId != nil {
+	if len(filter.SmesherId) > 0 {
 		ops.Filter = append(ops.Filter, builder.Op{
 			Field: builder.Smesher,
-			Token: builder.Eq,
-			Value: filter.NodeId,
+			Token: builder.In,
+			Value: filter.SmesherId,
 		})
 	}
-	if filter.Id != nil {
+	if len(filter.Id) > 0 {
 		ops.Filter = append(ops.Filter, builder.Op{
 			Field: builder.Id,
-			Token: builder.Eq,
+			Token: builder.In,
 			Value: filter.Id,
 		})
 	}
@@ -303,20 +309,16 @@ type atxsMatcher struct {
 }
 
 func (m *atxsMatcher) match(t *events.ActivationTx) bool {
-	if len(m.NodeId) > 0 {
-		var nodeId types.NodeID
-		copy(nodeId[:], m.NodeId)
-
-		if t.SmesherID != nodeId {
+	if len(m.SmesherId) > 0 {
+		idx := slices.IndexFunc(m.SmesherId, func(id []byte) bool { return bytes.Equal(id, t.SmesherID.Bytes()) })
+		if idx == -1 {
 			return false
 		}
 	}
 
 	if len(m.Id) > 0 {
-		var atxId types.ATXID
-		copy(atxId[:], m.Id)
-
-		if t.ID() != atxId {
+		idx := slices.IndexFunc(m.Id, func(id []byte) bool { return bytes.Equal(id, t.ID().Bytes()) })
+		if idx == -1 {
 			return false
 		}
 	}

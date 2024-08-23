@@ -7,7 +7,8 @@
     "poet": {
         "phase-shift": "10m",
         "cycle-gap": "1m",
-        "grace-period": "5s"
+        "grace-period": "5s",
+        "positioning-atx-selection-timeout":"3s"
     },
     "tortoise": {
         "tortoise-zdist": 4,
@@ -38,5 +39,8 @@
         "client": {
             "max-retries": 10
         }
+    },
+    "logging": {
+        "log-encoder": "json"
     }
 }

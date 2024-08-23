@@ -17,7 +17,6 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	system "github.com/spacemeshos/go-spacemesh/system"
 	gomock "go.uber.org/mock/gomock"
-	zap "go.uber.org/zap"
 )
 
 // MockconservativeState is a mock of conservativeState interface.
@@ -554,17 +553,17 @@ func (m *MockconStateCache) EXPECT() *MockconStateCacheMockRecorder {
 }
 
 // GetMempool mocks base method.
-func (m *MockconStateCache) GetMempool(arg0 *zap.Logger) map[types.Address][]*NanoTX {
+func (m *MockconStateCache) GetMempool() map[types.Address][]*NanoTX {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMempool", arg0)
+	ret := m.ctrl.Call(m, "GetMempool")
 	ret0, _ := ret[0].(map[types.Address][]*NanoTX)
 	return ret0
 }
 
 // GetMempool indicates an expected call of GetMempool.
-func (mr *MockconStateCacheMockRecorder) GetMempool(arg0 any) *MockconStateCacheGetMempoolCall {
+func (mr *MockconStateCacheMockRecorder) GetMempool() *MockconStateCacheGetMempoolCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMempool", reflect.TypeOf((*MockconStateCache)(nil).GetMempool), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMempool", reflect.TypeOf((*MockconStateCache)(nil).GetMempool))
 	return &MockconStateCacheGetMempoolCall{Call: call}
 }
 
@@ -580,13 +579,13 @@ func (c *MockconStateCacheGetMempoolCall) Return(arg0 map[types.Address][]*NanoT
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockconStateCacheGetMempoolCall) Do(f func(*zap.Logger) map[types.Address][]*NanoTX) *MockconStateCacheGetMempoolCall {
+func (c *MockconStateCacheGetMempoolCall) Do(f func() map[types.Address][]*NanoTX) *MockconStateCacheGetMempoolCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockconStateCacheGetMempoolCall) DoAndReturn(f func(*zap.Logger) map[types.Address][]*NanoTX) *MockconStateCacheGetMempoolCall {
+func (c *MockconStateCacheGetMempoolCall) DoAndReturn(f func() map[types.Address][]*NanoTX) *MockconStateCacheGetMempoolCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

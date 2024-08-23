@@ -10,11 +10,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
@@ -37,13 +38,13 @@ type blobKey struct {
 
 type testP2PFetch struct {
 	t        *testing.T
-	clientDB *sql.Database
+	clientDB sql.StateDatabase
 	// client proposals
 	clientPDB   *store.Store
 	clientCDB   *datastore.CachedDB
 	clientFetch *Fetch
 	serverID    peer.ID
-	serverDB    *sql.Database
+	serverDB    sql.StateDatabase
 	// server proposals
 	serverPDB    *store.Store
 	serverCDB    *datastore.CachedDB
@@ -88,9 +89,8 @@ func createP2PFetch(
 	sqlCache bool,
 	opts ...Option,
 ) (*testP2PFetch, context.Context) {
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	t.Cleanup(cancel)
 
 	serverHost, err := p2p.AutoStart(ctx, lg, p2pCfg(t), []byte{}, []byte{})
 	require.NoError(t, err)
@@ -100,21 +100,28 @@ func createP2PFetch(
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, clientHost.Stop()) })
 
+	t.Cleanup(func() {
+		cancel()
+		time.Sleep(10 * time.Millisecond)
+		// mafa: p2p internally uses a global logger this should prevent logging after
+		// the test ends (send PR with fix to libp2p/go-libp2p-pubsub) (go loop in pubsub.go)
+	})
+
 	var sqlOpts []sql.Opt
 	if sqlCache {
 		sqlOpts = []sql.Opt{sql.WithQueryCache(true)}
 	}
-	clientDB := sql.InMemory(sqlOpts...)
-	serverDB := sql.InMemory(sqlOpts...)
+	clientDB := statesql.InMemory(sqlOpts...)
+	serverDB := statesql.InMemory(sqlOpts...)
 	tpf := &testP2PFetch{
 		t:            t,
 		clientDB:     clientDB,
-		clientPDB:    store.New(store.WithLogger(lg.Zap())),
-		clientCDB:    datastore.NewCachedDB(clientDB, lg.Zap()),
+		clientPDB:    store.New(store.WithLogger(lg)),
+		clientCDB:    datastore.NewCachedDB(clientDB, lg),
 		serverID:     serverHost.ID(),
 		serverDB:     serverDB,
-		serverPDB:    store.New(store.WithLogger(lg.Zap())),
-		serverCDB:    datastore.NewCachedDB(serverDB, lg.Zap()),
+		serverPDB:    store.New(store.WithLogger(lg)),
+		serverCDB:    datastore.NewCachedDB(serverDB, lg),
 		receivedData: make(map[blobKey][]byte),
 	}
 
@@ -166,7 +173,7 @@ func (tpf *testP2PFetch) createATXs(epoch types.EpochID) []types.ATXID {
 	atxIDs := make([]types.ATXID, 10)
 	for i := range atxIDs {
 		atx := newAtx(tpf.t, epoch)
-		require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx))
+		require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, types.AtxBlob{}))
 		atxIDs[i] = atx.ID()
 	}
 	return atxIDs
@@ -263,7 +270,7 @@ func forStreamingCachedUncached(
 
 func TestP2PPeerEpochInfo(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "peer error: exec epoch 11: database: no free connection",
+		t, "peer error: getting ATX IDs: exec epoch 11: database closed",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
 			atxIDs := tpf.createATXs(epoch)
@@ -284,7 +291,7 @@ func TestP2PPeerEpochInfo(t *testing.T) {
 
 func TestP2PPeerMeshHashes(t *testing.T) {
 	forStreaming(
-		t, "peer error: get aggHashes from 7 to 23 by 5: database: no free connection", false,
+		t, "peer error: get aggHashes from 7 to 23 by 5: database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			req := &MeshHashRequest{
 				From: 7,
@@ -317,7 +324,7 @@ func TestP2PPeerMeshHashes(t *testing.T) {
 
 func TestP2PMaliciousIDs(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			var bad []types.NodeID
 			for i := 0; i < 11; i++ {
@@ -342,43 +349,38 @@ func TestP2PMaliciousIDs(t *testing.T) {
 
 func TestP2PGetATXs(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "database: no free connection",
+		t, "database closed",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
 			atx := newAtx(tpf.t, epoch)
-			require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx))
+			blob := types.AtxBlob{Blob: types.RandomBytes(100)}
+			require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, blob))
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetAtxs(
-						context.Background(), []types.ATXID{atx.ID()})
-				},
+				func() error { return tpf.clientFetch.GetAtxs(context.Background(), []types.ATXID{atx.ID()}) },
 				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
-				atx.AtxBlob.Blob)
+				blob.Blob,
+			)
 		})
 }
 
 func TestP2PGetPoet(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			ref := types.PoetProofRef{0x42, 0x43}
-			require.NoError(t, poets.Add(
-				tpf.serverCDB, ref,
-				[]byte("proof1"), []byte("sid1"), "rid1"))
+			require.NoError(t, poets.Add(tpf.serverCDB, ref, []byte("proof1"), []byte("sid1"), "rid1"))
 
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetPoetProof(
-						context.Background(), types.Hash32(ref))
-				},
+				func() error { return tpf.clientFetch.GetPoetProof(context.Background(), types.Hash32(ref)) },
 				errStr, "poet", "hs/1", types.Hash32(ref), ref[:],
-				[]byte("proof1"))
+				[]byte("proof1"),
+			)
 		})
 }
 
 func TestP2PGetBallot(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -391,18 +393,16 @@ func TestP2PGetBallot(t *testing.T) {
 			require.NoError(t, ballots.Add(tpf.serverCDB, b))
 
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetBallots(
-						context.Background(), []types.BallotID{b.ID()})
-				},
+				func() error { return tpf.clientFetch.GetBallots(context.Background(), []types.BallotID{b.ID()}) },
 				errStr, "ballot", "hs/1", b.ID().AsHash32(), b.ID().Bytes(),
-				codec.MustEncode(b))
+				codec.MustEncode(b),
+			)
 		})
 }
 
 func TestP2PGetActiveSet(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "database: no free connection",
+		t, "database closed",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			id := types.RandomHash()
 			set := &types.EpochActiveSet{
@@ -412,29 +412,26 @@ func TestP2PGetActiveSet(t *testing.T) {
 			require.NoError(tpf.t, activesets.Add(tpf.serverCDB, id, set))
 
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetActiveSet(context.Background(), id)
-				},
+				func() error { return tpf.clientFetch.GetActiveSet(context.Background(), id) },
 				errStr, "activeset", "as/1", id, id.Bytes(),
-				codec.MustEncode(set))
+				codec.MustEncode(set),
+			)
 		})
 }
 
 func TestP2PGetBlock(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			lid := types.LayerID(111)
 			bk := types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{LayerIndex: lid})
 			require.NoError(t, blocks.Add(tpf.serverCDB, bk))
 
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetBlocks(
-						context.Background(), []types.BlockID{bk.ID()})
-				},
+				func() error { return tpf.clientFetch.GetBlocks(context.Background(), []types.BlockID{bk.ID()}) },
 				errStr, "block", "hs/1", bk.ID().AsHash32(), bk.ID().Bytes(),
-				codec.MustEncode(bk))
+				codec.MustEncode(bk),
+			)
 		})
 }
 
@@ -475,25 +472,23 @@ func TestP2PGetProp(t *testing.T) {
 
 func TestP2PGetBlockTransactions(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
 			tx := genTx(t, signer, types.Address{1}, 1, 1, 1)
 			require.NoError(t, transactions.Add(tpf.serverCDB, &tx, time.Now()))
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetBlockTxs(
-						context.Background(), []types.TransactionID{tx.ID})
-				},
+				func() error { return tpf.clientFetch.GetBlockTxs(context.Background(), []types.TransactionID{tx.ID}) },
 				errStr, "txBlock", "hs/1", types.Hash32(tx.ID), tx.ID.Bytes(),
-				tx.Raw)
+				tx.Raw,
+			)
 		})
 }
 
 func TestP2PGetProposalTransactions(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -501,28 +496,25 @@ func TestP2PGetProposalTransactions(t *testing.T) {
 			require.NoError(t, transactions.Add(tpf.serverCDB, &tx, time.Now()))
 			tpf.verifyGetHash(
 				func() error {
-					return tpf.clientFetch.GetProposalTxs(
-						context.Background(), []types.TransactionID{tx.ID})
+					return tpf.clientFetch.GetProposalTxs(context.Background(), []types.TransactionID{tx.ID})
 				},
 				errStr, "txProposal", "hs/1", types.Hash32(tx.ID), tx.ID.Bytes(),
-				tx.Raw)
+				tx.Raw,
+			)
 		})
 }
 
 func TestP2PGetMalfeasanceProofs(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			nid := types.RandomNodeID()
 			proof := types.RandomBytes(11)
-			require.NoError(t, identities.SetMalicious(
-				tpf.serverCDB, nid, proof, time.Now()))
+			require.NoError(t, identities.SetMalicious(tpf.serverCDB, nid, proof, time.Now()))
 			tpf.verifyGetHash(
-				func() error {
-					return tpf.clientFetch.GetMalfeasanceProofs(
-						context.Background(), []types.NodeID{nid})
-				},
+				func() error { return tpf.clientFetch.GetMalfeasanceProofs(context.Background(), []types.NodeID{nid}) },
 				errStr, "mal", "hs/1", types.Hash32(nid), nid.Bytes(),
-				proof)
+				proof,
+			)
 		})
 }

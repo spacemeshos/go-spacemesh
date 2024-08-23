@@ -9,9 +9,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go -exclude_interfaces Host
 
 // Host is a subset of libp2p Host interface that needs to be implemented to be usable with server.
 type Host interface {
@@ -19,6 +21,7 @@ type Host interface {
 	NewStream(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)
 	Network() network.Network
 	ConnManager() connmgr.ConnManager
+	PeerInfo() peerinfo.PeerInfo
 }
 
 type peerStream interface {

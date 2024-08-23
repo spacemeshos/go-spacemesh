@@ -30,18 +30,9 @@ type VrfNonceKey struct {
 	Epoch types.EpochID
 }
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./store.go
-
-type Executor interface {
-	sql.Executor
-	WithTx(context.Context, func(*sql.Tx) error) error
-	QueryCache() sql.QueryCache
-}
-
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
-	Executor
-	sql.QueryCache
+	sql.Database
 	logger *zap.Logger
 
 	// cache is optional in tests. It MUST be set for the 'App'
@@ -91,7 +82,7 @@ func WithConsensusCache(c *atxsdata.Data) Opt {
 }
 
 // NewCachedDB create an instance of a CachedDB.
-func NewCachedDB(db Executor, lg *zap.Logger, opts ...Opt) *CachedDB {
+func NewCachedDB(db sql.StateDatabase, lg *zap.Logger, opts ...Opt) *CachedDB {
 	o := cacheOpts{cfg: DefaultConfig()}
 	for _, opt := range opts {
 		opt(&o)
@@ -114,8 +105,7 @@ func NewCachedDB(db Executor, lg *zap.Logger, opts ...Opt) *CachedDB {
 	}
 
 	return &CachedDB{
-		Executor:         db,
-		QueryCache:       db.QueryCache(),
+		Database:         db,
 		logger:           lg,
 		atxsdata:         o.atxsdata,
 		atxCache:         atxHdrCache,
@@ -126,32 +116,6 @@ func NewCachedDB(db Executor, lg *zap.Logger, opts ...Opt) *CachedDB {
 
 func (db *CachedDB) MalfeasanceCacheSize() int {
 	return db.malfeasanceCache.Len()
-}
-
-// IsMalicious returns true if the NodeID is malicious.
-func (db *CachedDB) IsMalicious(id types.NodeID) (bool, error) {
-	if id == types.EmptyNodeID {
-		panic("invalid argument to IsMalicious")
-	}
-
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if proof, ok := db.malfeasanceCache.Get(id); ok {
-		if proof == nil {
-			return false, nil
-		} else {
-			return true, nil
-		}
-	}
-
-	bad, err := identities.IsMalicious(db, id)
-	if err != nil {
-		return false, err
-	}
-	if !bad {
-		db.malfeasanceCache.Add(id, nil)
-	}
-	return bad, nil
 }
 
 // GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
@@ -169,7 +133,7 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof
 		return proof, nil
 	}
 
-	proof, err := identities.GetMalfeasanceProof(db.Executor, id)
+	proof, err := identities.GetMalfeasanceProof(db.Database, id)
 	if err != nil && err != sql.ErrNotFound {
 		return nil, err
 	}
@@ -224,6 +188,11 @@ func (db *CachedDB) GetAtx(id types.ATXID) (*types.ActivationTx, error) {
 
 	db.atxCache.Add(id, atx)
 	return atx, nil
+}
+
+// Previous retrieves the list of previous ATXs for the given ATX ID.
+func (db *CachedDB) Previous(id types.ATXID) ([]types.ATXID, error) {
+	return atxs.Previous(db, id)
 }
 
 func (db *CachedDB) IterateMalfeasanceProofs(

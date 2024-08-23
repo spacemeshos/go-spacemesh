@@ -14,9 +14,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestMain(m *testing.M) {
@@ -159,7 +159,7 @@ func Test_getBlockTXs_expected_order(t *testing.T) {
 
 func Test_getProposalMetadata(t *testing.T) {
 	lg := zaptest.NewLogger(t)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	data := atxsdata.New()
 	cfg := Config{OptFilterThreshold: 70}
 	lid := types.LayerID(111)

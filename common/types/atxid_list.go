@@ -7,8 +7,8 @@ type ATXIDList []ATXID
 
 // Hash returns ATX ID list hash.
 func (atxList ATXIDList) Hash() Hash32 {
-	hasher := hash.New()
-
+	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
 	for _, id := range atxList {
 		if _, err := hasher.Write(id.Bytes()); err != nil {
 			panic("should not happen") // an error is never returned: https://golang.org/pkg/hash/#Hash

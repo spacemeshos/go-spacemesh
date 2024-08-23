@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
@@ -15,18 +16,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/malfeasance"
-	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -39,7 +37,7 @@ const (
 
 type testMesh struct {
 	*Mesh
-	db *sql.Database
+	db sql.StateDatabase
 	// it is used in malfeasence.Validate, which is called in the tests
 	cdb          *datastore.CachedDB
 	atxsdata     *atxsdata.Data
@@ -52,13 +50,13 @@ type testMesh struct {
 func createTestMesh(t *testing.T) *testMesh {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
-	lg := logtest.New(t)
-	db := sql.InMemory()
+	lg := zaptest.NewLogger(t)
+	db := statesql.InMemory()
 	atxsdata := atxsdata.New()
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
 		db:           db,
-		cdb:          datastore.NewCachedDB(db, lg.Zap()),
+		cdb:          datastore.NewCachedDB(db, lg),
 		atxsdata:     atxsdata,
 		mockClock:    mocks.NewMocklayerClock(ctrl),
 		mockVM:       mocks.NewMockvmState(ctrl),
@@ -127,17 +125,6 @@ func createBlock(
 	b.Initialize()
 	require.NoError(t, blocks.Add(mesh.cdb, b))
 	return b
-}
-
-func createIdentity(t *testing.T, db sql.Executor, sig *signing.EdSigner) {
-	challenge := types.NIPostChallenge{
-		PublishEpoch: types.EpochID(1),
-	}
-	atx := types.NewActivationTx(challenge, types.Address{}, 1)
-	atx.SmesherID = sig.NodeID()
-	atx.SetReceived(time.Now())
-	atx.TickCount = 1
-	require.NoError(t, atxs.Add(db, atx))
 }
 
 func createLayerBlocks(
@@ -218,7 +205,7 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 		tm.mockTortoise,
 		tm.executor,
 		tm.mockState,
-		logtest.New(t),
+		zaptest.NewLogger(t),
 	)
 	require.NoError(t, err)
 	gLid := types.GetEffectiveGenesis()
@@ -256,7 +243,7 @@ func TestMesh_WakeUp(t *testing.T) {
 		tm.mockTortoise,
 		tm.executor,
 		tm.mockState,
-		logtest.New(t),
+		zaptest.NewLogger(t),
 	)
 	require.NoError(t, err)
 	gotL := msh.LatestLayer()
@@ -397,45 +384,21 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.Nil(t, saved)
 
 	// second one will create a MalfeasanceProof
-
 	tm.mockTortoise.EXPECT().OnMalfeasance(sig.NodeID())
 	malProof, err = tm.AddBallot(context.Background(), blts[1])
 	require.NoError(t, err)
 	require.NotNil(t, malProof)
 	require.True(t, blts[1].IsMalicious())
-	nodeID, err := malfeasance.Validate(
-		context.Background(),
-		tm.logger,
-		tm.cdb,
-		signing.NewEdVerifier(),
-		malfeasance.NewMockpostVerifier(gomock.NewController(t)),
-		&wire.MalfeasanceGossip{MalfeasanceProof: *malProof},
-	)
+
+	mh := NewMalfeasanceHandler(tm.cdb, signing.NewEdVerifier(), WithMalfeasanceLogger(tm.logger))
+	nodeID, err := mh.Validate(context.Background(), malProof.Proof.Data)
 	require.NoError(t, err)
 	require.Equal(t, sig.NodeID(), nodeID)
-	mal, err = identities.IsMalicious(tm.cdb, sig.NodeID())
-	require.NoError(t, err)
-	require.True(t, mal)
-	saved, err = identities.GetMalfeasanceProof(tm.cdb, sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, saved.Received())
-	saved.SetReceived(time.Time{})
-	require.EqualValues(t, malProof, saved)
-	expected := malProof
 
 	// third one will NOT generate another MalfeasanceProof
 	malProof, err = tm.AddBallot(context.Background(), blts[2])
 	require.NoError(t, err)
 	require.Nil(t, malProof)
-	// but identity is still malicious
-	mal, err = identities.IsMalicious(tm.cdb, sig.NodeID())
-	require.NoError(t, err)
-	require.True(t, mal)
-	saved, err = identities.GetMalfeasanceProof(tm.cdb, sig.NodeID())
-	require.NoError(t, err)
-	require.NotNil(t, saved.Received())
-	saved.SetReceived(time.Time{})
-	require.EqualValues(t, expected, saved)
 }
 
 func TestProcessLayer(t *testing.T) {

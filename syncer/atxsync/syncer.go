@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -41,7 +40,7 @@ func DefaultConfig() Config {
 	return Config{
 		EpochInfoInterval: 4 * time.Hour,
 		AtxsBatch:         1000,
-		RequestsLimit:     20,
+		RequestsLimit:     10,
 		EpochInfoPeers:    2,
 		ProgressFraction:  0.1,
 		ProgressInterval:  20 * time.Minute,
@@ -76,7 +75,7 @@ func WithConfig(cfg Config) Opt {
 	}
 }
 
-func New(fetcher fetcher, db sql.Executor, localdb *localsql.Database, opts ...Opt) *Syncer {
+func New(fetcher fetcher, db sql.Executor, localdb sql.LocalDatabase, opts ...Opt) *Syncer {
 	s := &Syncer{
 		logger:  zap.NewNop(),
 		cfg:     DefaultConfig(),
@@ -95,7 +94,7 @@ type Syncer struct {
 	cfg     Config
 	fetcher fetcher
 	db      sql.Executor
-	localdb *localsql.Database
+	localdb sql.LocalDatabase
 }
 
 func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloadUntil time.Time) error {
@@ -110,10 +109,13 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloa
 	// in case of immediate we will request epoch info without waiting EpochInfoInterval
 	immediate := len(state) == 0 || (errors.Is(err, sql.ErrNotFound) || !lastSuccess.After(downloadUntil))
 	if !immediate && total == downloaded {
-		s.logger.Debug("sync for epoch was completed before", log.ZContext(parent), publish.Field().Zap())
+		s.logger.Debug("sync for epoch was completed before",
+			log.ZContext(parent),
+			zap.Uint32("epoch_id", publish.Uint32()),
+		)
 		return nil
 	}
-	s.logger.Info("starting atx sync", log.ZContext(parent), publish.Field().Zap())
+	s.logger.Info("starting atx sync", log.ZContext(parent), zap.Uint32("epoch_id", publish.Uint32()))
 	ctx, cancel := context.WithCancel(parent)
 	eg, ctx := errgroup.WithContext(ctx)
 	updates := make(chan epochUpdate, s.cfg.EpochInfoPeers)
@@ -154,7 +156,7 @@ func (s *Syncer) downloadEpochInfo(
 		if interval != 0 {
 			s.logger.Debug(
 				"waiting between epoch info requests",
-				publish.Field().Zap(),
+				zap.Uint32("epoch_id", publish.Uint32()),
 				zap.Duration("duration", interval),
 			)
 		}
@@ -179,7 +181,7 @@ func (s *Syncer) downloadEpochInfo(
 				}
 				s.logger.Warn("failed to download epoch info",
 					log.ZContext(ctx),
-					publish.Field().Zap(),
+					zap.Uint32("epoch_id", publish.Uint32()),
 					zap.String("peer", peer.String()),
 					zap.Error(err),
 				)
@@ -187,7 +189,7 @@ func (s *Syncer) downloadEpochInfo(
 			}
 			s.logger.Info("downloaded epoch info",
 				log.ZContext(ctx),
-				publish.Field().Zap(),
+				zap.Uint32("epoch_id", publish.Uint32()),
 				zap.String("peer", peer.String()),
 				zap.Int("atxs", len(epochData.AtxIDs)),
 			)
@@ -231,7 +233,7 @@ func (s *Syncer) downloadAtxs(
 			s.logger.Info(
 				"atx sync completed",
 				log.ZContext(ctx),
-				publish.Field().Zap(),
+				zap.Uint32("epoch_id", publish.Uint32()),
 				zap.Int("downloaded", len(downloaded)),
 				zap.Int("total", len(state)),
 				zap.Int("unavailable", len(state)-len(downloaded)),
@@ -293,7 +295,7 @@ func (s *Syncer) downloadAtxs(
 			s.logger.Info(
 				"atx sync progress",
 				log.ZContext(ctx),
-				publish.Field().Zap(),
+				zap.Uint32("epoch_id", publish.Uint32()),
 				zap.Int("downloaded", len(downloaded)),
 				zap.Int("total", len(state)),
 				zap.Int("progress", int(progress)),
@@ -314,17 +316,17 @@ func (s *Syncer) downloadAtxs(
 						if _, exists := state[types.ATXID(hash)]; !exists {
 							continue
 						}
-						if errors.Is(err, fetch.ErrExceedMaxRetries) {
-							state[types.ATXID(hash)]++
-						} else if errors.Is(err, pubsub.ErrValidationReject) {
+						if errors.Is(err, pubsub.ErrValidationReject) {
 							state[types.ATXID(hash)] = s.cfg.RequestsLimit
+						} else {
+							state[types.ATXID(hash)]++
 						}
 					}
 				}
 			}
 		}
 
-		if err := s.localdb.WithTx(context.Background(), func(tx *sql.Tx) error {
+		if err := s.localdb.WithTx(context.Background(), func(tx sql.Transaction) error {
 			err := atxsync.SaveRequest(tx, publish, lastSuccess, int64(len(state)), int64(len(downloaded)))
 			if err != nil {
 				return fmt.Errorf("failed to save request time: %w", err)

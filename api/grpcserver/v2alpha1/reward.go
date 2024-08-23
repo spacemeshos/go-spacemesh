@@ -165,7 +165,7 @@ func (s *RewardService) String() string {
 }
 
 func (s *RewardService) List(
-	ctx context.Context,
+	_ context.Context,
 	request *spacemeshv2alpha1.RewardRequest,
 ) (*spacemeshv2alpha1.RewardList, error) {
 	ops, err := toRewardOperations(request)
@@ -187,6 +187,7 @@ func (s *RewardService) List(
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
 	return &spacemeshv2alpha1.RewardList{Rewards: rst}, nil
 }
 
@@ -251,7 +252,7 @@ func toRewardOperations(filter *spacemeshv2alpha1.RewardRequest) (builder.Operat
 
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
-		Value: "layer asc",
+		Value: "layer " + filter.SortOrder.String(),
 	})
 
 	if filter.Limit != 0 {

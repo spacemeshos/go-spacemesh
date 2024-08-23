@@ -4,20 +4,21 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 func TestPrune(t *testing.T) {
 	types.SetLayersPerEpoch(3)
 
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	current := types.LayerID(10)
 
 	lyrProps := make([]*types.Proposal, 0, current)
@@ -48,7 +49,7 @@ func TestPrune(t *testing.T) {
 	}
 	confidenceDist := uint32(3)
 
-	pruner := New(db, confidenceDist, current.GetEpoch()-1, WithLogger(logtest.New(t).Zap()))
+	pruner := New(db, confidenceDist, current.GetEpoch()-1, WithLogger(zaptest.NewLogger(t)))
 	// Act
 	require.NoError(t, pruner.Prune(current))
 

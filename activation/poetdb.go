@@ -19,16 +19,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 )
 
-var ErrObjectExists = sql.ErrObjectExists
-
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	sqlDB  *sql.Database
+	sqlDB  sql.StateDatabase
 	logger *zap.Logger
 }
 
 // NewPoetDb returns a new PoET handler.
-func NewPoetDb(db *sql.Database, log *zap.Logger) *PoetDb {
+func NewPoetDb(db sql.StateDatabase, log *zap.Logger) *PoetDb {
 	return &PoetDb{sqlDB: db, logger: log}
 }
 
@@ -96,7 +94,6 @@ func (db *PoetDb) Validate(
 		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %w", shortID, roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
-
 	return nil
 }
 
@@ -114,7 +111,7 @@ func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofM
 		)
 	}
 
-	db.logger.Info("stored poet proof",
+	db.logger.Debug("stored poet proof",
 		log.ZContext(ctx),
 		log.ZShortStringer("poet_proof_id", types.Hash32(ref)),
 		zap.String("round_id", proofMessage.RoundID),

@@ -14,8 +14,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 type testAccount struct {
@@ -27,7 +27,7 @@ type testAccount struct {
 }
 
 func TestAccountService_List(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	ctrl, ctx := gomock.WithContext(context.Background(), t)
 	conState := NewMockaccountConState(ctrl)
@@ -66,7 +66,7 @@ func TestAccountService_List(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewAccountServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {

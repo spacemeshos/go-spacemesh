@@ -20,6 +20,7 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
+	peerinfo "github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	system "github.com/spacemeshos/go-spacemesh/system"
 	gomock "go.uber.org/mock/gomock"
@@ -235,6 +236,44 @@ func (c *MocknetworkInfoNATDeviceTypeCall) Do(f func() (network.NATDeviceType, n
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MocknetworkInfoNATDeviceTypeCall) DoAndReturn(f func() (network.NATDeviceType, network.NATDeviceType)) *MocknetworkInfoNATDeviceTypeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// PeerInfo mocks base method.
+func (m *MocknetworkInfo) PeerInfo() peerinfo.PeerInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PeerInfo")
+	ret0, _ := ret[0].(peerinfo.PeerInfo)
+	return ret0
+}
+
+// PeerInfo indicates an expected call of PeerInfo.
+func (mr *MocknetworkInfoMockRecorder) PeerInfo() *MocknetworkInfoPeerInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerInfo", reflect.TypeOf((*MocknetworkInfo)(nil).PeerInfo))
+	return &MocknetworkInfoPeerInfoCall{Call: call}
+}
+
+// MocknetworkInfoPeerInfoCall wrap *gomock.Call
+type MocknetworkInfoPeerInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknetworkInfoPeerInfoCall) Return(arg0 peerinfo.PeerInfo) *MocknetworkInfoPeerInfoCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknetworkInfoPeerInfoCall) Do(f func() peerinfo.PeerInfo) *MocknetworkInfoPeerInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknetworkInfoPeerInfoCall) DoAndReturn(f func() peerinfo.PeerInfo) *MocknetworkInfoPeerInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -947,6 +986,45 @@ func (c *MockatxProviderMaxHeightAtxCall) Do(f func() (types.ATXID, error)) *Moc
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockatxProviderMaxHeightAtxCall) DoAndReturn(f func() (types.ATXID, error)) *MockatxProviderMaxHeightAtxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Previous mocks base method.
+func (m *MockatxProvider) Previous(id types.ATXID) ([]types.ATXID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Previous", id)
+	ret0, _ := ret[0].([]types.ATXID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Previous indicates an expected call of Previous.
+func (mr *MockatxProviderMockRecorder) Previous(id any) *MockatxProviderPreviousCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Previous", reflect.TypeOf((*MockatxProvider)(nil).Previous), id)
+	return &MockatxProviderPreviousCall{Call: call}
+}
+
+// MockatxProviderPreviousCall wrap *gomock.Call
+type MockatxProviderPreviousCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockatxProviderPreviousCall) Return(arg0 []types.ATXID, arg1 error) *MockatxProviderPreviousCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockatxProviderPreviousCall) Do(f func(types.ATXID) ([]types.ATXID, error)) *MockatxProviderPreviousCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockatxProviderPreviousCall) DoAndReturn(f func(types.ATXID) ([]types.ATXID, error)) *MockatxProviderPreviousCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

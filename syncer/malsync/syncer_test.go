@@ -10,19 +10,20 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync/mocks"
 )
 
@@ -137,8 +138,8 @@ func malData(ids ...string) []types.NodeID {
 type tester struct {
 	tb           testing.TB
 	syncer       *Syncer
-	localdb      *localsql.Database
-	db           *sql.Database
+	localdb      sql.LocalDatabase
+	db           sql.StateDatabase
 	cfg          Config
 	ctrl         *gomock.Controller
 	fetcher      *mocks.Mockfetcher
@@ -151,7 +152,7 @@ type tester struct {
 
 func newTester(tb testing.TB, cfg Config) *tester {
 	localdb := localsql.InMemory()
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
 	clock := clockwork.NewFakeClock()
@@ -159,7 +160,7 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	syncer := New(fetcher, db, localdb,
 		withClock(clock),
 		WithConfig(cfg),
-		WithLogger(logtest.New(tb).Zap()),
+		WithLogger(zaptest.NewLogger(tb)),
 		WithPeerErrMetric(peerErrCount),
 	)
 	return &tester{
@@ -338,7 +339,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectPeers(tester.peers)
 		tester.expectGetMaliciousIDs()
 		tester.expectGetProofs(map[types.NodeID]error{
-			nid("2"): fetch.ErrExceedMaxRetries,
+			nid("2"): errors.New("fail"),
 		})
 		epochStart := tester.clock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)

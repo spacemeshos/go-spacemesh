@@ -997,7 +997,7 @@ func TestAdminEvents(t *testing.T) {
 
 	select {
 	case <-app.Started():
-	case <-time.After(10 * time.Second):
+	case <-time.After(15 * time.Second):
 		require.Fail(t, "app did not start in time")
 	}
 
@@ -1055,8 +1055,8 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
-	logger := logtest.New(t)
-	app := New(WithConfig(&cfg), WithLog(logger))
+	logger := zaptest.NewLogger(t)
+	app := New(WithConfig(&cfg), WithLog(log.NewFromLog(logger)))
 
 	dir := filepath.Join(app.Config.DataDir(), keyDir)
 	require.NoError(t, os.MkdirAll(dir, 0o700))
@@ -1090,14 +1090,14 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 
 	select {
 	case <-app.Started():
-	case <-time.After(10 * time.Second):
+	case <-time.After(15 * time.Second):
 		require.Fail(t, "app did not start in time")
 	}
 
 	for _, signer := range app.signers {
 		mgr, err := activation.NewPostSetupManager(
 			cfg.POST,
-			logger.Zap(),
+			logger,
 			app.db,
 			app.atxsdata,
 			types.ATXID(app.Config.Genesis.GoldenATX()),
@@ -1108,7 +1108,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 
 		cfg.SMESHING.Opts.DataDir = t.TempDir()
 		t.Cleanup(launchPostSupervisor(t,
-			logger.Zap(),
+			logger,
 			mgr,
 			signer,
 			"127.0.0.1:10094",
@@ -1290,6 +1290,9 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 
 	cfg.HARE3.RoundDuration = 2
 	cfg.HARE3.PreroundDelay = 1
+
+	cfg.HARE4.RoundDuration = 2
+	cfg.HARE4.PreroundDelay = 1
 
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3

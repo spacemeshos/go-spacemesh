@@ -10,18 +10,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 type testFetch struct {
@@ -78,9 +78,9 @@ func createFetch(tb testing.TB) *testFetch {
 		MaxRetriesForRequest: 3,
 		GetAtxsConcurrency:   DefaultConfig().GetAtxsConcurrency,
 	}
-	lg := logtest.New(tb)
+	lg := zaptest.NewLogger(tb)
 
-	tf.Fetch = NewFetch(datastore.NewCachedDB(sql.InMemory(), lg.Zap()), store.New(), nil,
+	tf.Fetch = NewFetch(datastore.NewCachedDB(statesql.InMemory(), lg), store.New(), nil,
 		WithContext(context.TODO()),
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -116,8 +116,8 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 }
 
 func TestFetch_Start(t *testing.T) {
-	lg := logtest.New(t)
-	f := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg.Zap()), store.New(), nil,
+	lg := zaptest.NewLogger(t)
+	f := NewFetch(datastore.NewCachedDB(statesql.InMemory(), lg), store.New(), nil,
 		WithContext(context.TODO()),
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
@@ -169,8 +169,6 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
 			f := createFetch(t)
 			f.cfg.MaxRetriesForRequest = 0
 			peer := p2p.Peer("buddy")
@@ -325,7 +323,7 @@ func TestFetch_RegisterPeerHashes(t *testing.T) {
 }
 
 func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	cfg := Config{
@@ -384,7 +382,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	defer eg.Wait()
 
-	fetcher := NewFetch(datastore.NewCachedDB(sql.InMemory(), lg.Zap()), store.New(), h,
+	fetcher := NewFetch(datastore.NewCachedDB(statesql.InMemory(), lg), store.New(), h,
 		WithContext(ctx),
 		WithConfig(cfg),
 		WithLogger(lg),

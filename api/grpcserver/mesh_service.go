@@ -38,16 +38,16 @@ type MeshService struct {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (s MeshService) RegisterService(server *grpc.Server) {
+func (s *MeshService) RegisterService(server *grpc.Server) {
 	pb.RegisterMeshServiceServer(server, s)
 }
 
-func (s MeshService) RegisterHandlerService(mux *runtime.ServeMux) error {
+func (s *MeshService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterMeshServiceHandlerServer(context.Background(), mux, s)
 }
 
 // String returns the name of this service.
-func (s MeshService) String() string {
+func (s *MeshService) String() string {
 	return "MeshService"
 }
 
@@ -77,21 +77,21 @@ func NewMeshService(
 }
 
 // GenesisTime returns the network genesis time as UNIX time.
-func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.GenesisTimeResponse, error) {
+func (s *MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.GenesisTimeResponse, error) {
 	return &pb.GenesisTimeResponse{Unixtime: &pb.SimpleInt{
 		Value: uint64(s.genTime.GenesisTime().Unix()),
 	}}, nil
 }
 
 // CurrentLayer returns the current layer number.
-func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
+func (s *MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
 		Number: s.genTime.CurrentLayer().Uint32(),
 	}}, nil
 }
 
 // CurrentEpoch returns the current epoch number.
-func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
+func (s *MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
 	curLayer := s.genTime.CurrentLayer()
 	return &pb.CurrentEpochResponse{Epochnum: &pb.EpochNumber{
 		Number: curLayer.GetEpoch().Uint32(),
@@ -99,26 +99,26 @@ func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb
 }
 
 // GenesisID returns the network ID.
-func (s MeshService) GenesisID(context.Context, *pb.GenesisIDRequest) (*pb.GenesisIDResponse, error) {
+func (s *MeshService) GenesisID(context.Context, *pb.GenesisIDRequest) (*pb.GenesisIDResponse, error) {
 	return &pb.GenesisIDResponse{GenesisId: s.genesisID.Bytes()}, nil
 }
 
 // EpochNumLayers returns the number of layers per epoch (a network parameter).
-func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) (*pb.EpochNumLayersResponse, error) {
+func (s *MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) (*pb.EpochNumLayersResponse, error) {
 	return &pb.EpochNumLayersResponse{Numlayers: &pb.LayerNumber{
 		Number: s.layersPerEpoch,
 	}}, nil
 }
 
 // LayerDuration returns the layer duration in seconds (a network parameter).
-func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*pb.LayerDurationResponse, error) {
+func (s *MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*pb.LayerDurationResponse, error) {
 	return &pb.LayerDurationResponse{Duration: &pb.SimpleInt{
 		Value: uint64(s.layerDuration.Seconds()),
 	}}, nil
 }
 
 // MaxTransactionsPerSecond returns the max number of tx per sec (a network parameter).
-func (s MeshService) MaxTransactionsPerSecond(
+func (s *MeshService) MaxTransactionsPerSecond(
 	context.Context,
 	*pb.MaxTransactionsPerSecondRequest,
 ) (*pb.MaxTransactionsPerSecondResponse, error) {
@@ -129,7 +129,7 @@ func (s MeshService) MaxTransactionsPerSecond(
 
 // QUERIES
 
-func (s MeshService) getFilteredTransactions(
+func (s *MeshService) getFilteredTransactions(
 	from types.LayerID,
 	address types.Address,
 ) ([]*types.MeshTransaction, error) {
@@ -142,7 +142,7 @@ func (s MeshService) getFilteredTransactions(
 }
 
 // AccountMeshDataQuery returns account data.
-func (s MeshService) AccountMeshDataQuery(
+func (s *MeshService) AccountMeshDataQuery(
 	ctx context.Context,
 	in *pb.AccountMeshDataQueryRequest,
 ) (*pb.AccountMeshDataQueryResponse, error) {
@@ -252,19 +252,28 @@ func castTransaction(t *types.Transaction) *pb.Transaction {
 	return tx
 }
 
-func convertActivation(a *types.ActivationTx) *pb.Activation {
-	return &pb.Activation{
+func convertActivation(a *types.ActivationTx, previous []types.ATXID) *pb.Activation {
+	atx := &pb.Activation{
 		Id:        &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:     &pb.LayerNumber{Number: a.PublishEpoch.Uint32()},
 		SmesherId: &pb.SmesherId{Id: a.SmesherID.Bytes()},
 		Coinbase:  &pb.AccountId{Address: a.Coinbase.String()},
-		PrevAtx:   &pb.ActivationId{Id: a.PrevATXID.Bytes()},
 		NumUnits:  uint32(a.NumUnits),
 		Sequence:  a.Sequence,
 	}
+
+	if len(previous) == 0 {
+		previous = []types.ATXID{types.EmptyATXID}
+	}
+	// nolint:staticcheck // SA1019 (deprecated)
+	atx.PrevAtx = &pb.ActivationId{Id: previous[0].Bytes()}
+	for _, prev := range previous {
+		atx.PreviousAtxs = append(atx.PreviousAtxs, &pb.ActivationId{Id: prev.Bytes()})
+	}
+	return atx
 }
 
-func (s MeshService) readLayer(
+func (s *MeshService) readLayer(
 	ctx context.Context,
 	layerID types.LayerID,
 	layerStatus pb.Layer_LayerStatus,
@@ -285,7 +294,7 @@ func (s MeshService) readLayer(
 	// internal or an input error? For now, all missing layers produce
 	// internal errors.
 	if err != nil {
-		ctxzap.Error(ctx, "could not read layer from database", layerID.Field().Zap(), zap.Error(err))
+		ctxzap.Error(ctx, "could not read layer from database", zap.Uint32("lid", layerID.Uint32()), zap.Error(err))
 		return pbLayer, status.Errorf(codes.Internal, "error reading layer data: %v", err)
 	} else if block == nil {
 		return pbLayer, nil
@@ -296,7 +305,9 @@ func (s MeshService) readLayer(
 	// E.g., if this node has not synced/received them yet.
 	if len(missing) != 0 {
 		ctxzap.Error(ctx, "could not find transactions from layer",
-			zap.String("missing", fmt.Sprint(missing)), layerID.Field().Zap())
+			zap.String("missing", fmt.Sprint(missing)),
+			zap.Uint32("lid", layerID.Uint32()),
+		)
 		return pbLayer, status.Errorf(codes.Internal, "error retrieving tx data")
 	}
 
@@ -316,14 +327,20 @@ func (s MeshService) readLayer(
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
 		ctxzap.Debug(ctx, "no state root for layer",
-			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
+			zap.Uint32("lid", layerID.Uint32()),
+			zap.Stringer("status", layerStatus),
+			zap.Error(err),
+		)
 	}
 	hash, err := s.mesh.MeshHash(layerID)
 	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
 		ctxzap.Debug(ctx, "no mesh hash at layer",
-			layerID.Field().Zap(), zap.Stringer("status", layerStatus), zap.Error(err))
+			zap.Uint32("lid", layerID.Uint32()),
+			zap.Stringer("status", layerStatus),
+			zap.Error(err),
+		)
 	}
 	pbLayer.Blocks = []*pb.Block{pbBlock}
 	pbLayer.Hash = hash.Bytes()
@@ -332,7 +349,7 @@ func (s MeshService) readLayer(
 }
 
 // LayersQuery returns all mesh data, layer by layer.
-func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
+func (s *MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	var startLayer, endLayer types.LayerID
 	if in.StartLayer != nil {
 		startLayer = types.LayerID(in.StartLayer.Number)
@@ -383,7 +400,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 // STREAMS
 
 // AccountMeshDataStream exposes a stream of transactions and activations for an account.
-func (s MeshService) AccountMeshDataStream(
+func (s *MeshService) AccountMeshDataStream(
 	in *pb.AccountMeshDataStreamRequest,
 	stream pb.MeshService_AccountMeshDataStreamServer,
 ) error {
@@ -415,12 +432,20 @@ func (s MeshService) AccountMeshDataStream(
 	)
 
 	if filterTx {
-		if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
+		txsSubscription, err := events.SubscribeTxs()
+		if err != nil {
+			return status.Errorf(codes.Internal, "subscribing to txs failed: %v", err)
+		}
+		if txsSubscription != nil {
 			txCh, txBufFull = consumeEvents[events.Transaction](stream.Context(), txsSubscription)
 		}
 	}
 	if filterActivations {
-		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
+		activationsSubscription, err := events.SubscribeActivations()
+		if err != nil {
+			return status.Errorf(codes.Internal, "subscribing to activations failed: %v", err)
+		}
+		if activationsSubscription != nil {
 			activationsCh, activationsBufFull = consumeEvents[events.ActivationTx](
 				stream.Context(),
 				activationsSubscription,
@@ -440,10 +465,14 @@ func (s MeshService) AccountMeshDataStream(
 			activation := activationEvent.ActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
+				previous, err := s.cdb.Previous(activation.ID())
+				if err != nil {
+					return status.Error(codes.Internal, "getting previous ATXs failed")
+				}
 				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_Activation{
-							Activation: convertActivation(activation),
+							Activation: convertActivation(activation, previous),
 						},
 					},
 				}
@@ -478,13 +507,17 @@ func (s MeshService) AccountMeshDataStream(
 }
 
 // LayerStream exposes a stream of all mesh data per layer.
-func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
+func (s *MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	var (
 		layerCh       <-chan events.LayerUpdate
 		layersBufFull <-chan struct{}
 	)
 
-	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
+	layersSubscription, err := events.SubscribeLayers()
+	if err != nil {
+		return status.Errorf(codes.Internal, "subscribing to layers failed: %v", err)
+	}
+	if layersSubscription != nil {
 		layerCh, layersBufFull = consumeEvents[events.LayerUpdate](stream.Context(), layersSubscription)
 	}
 
@@ -528,7 +561,7 @@ func convertLayerStatus(in int) pb.Layer_LayerStatus {
 	}
 }
 
-func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshService_EpochStreamServer) error {
+func (s *MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshService_EpochStreamServer) error {
 	epoch := types.EpochID(req.Epoch)
 	var (
 		sendErr    error
@@ -565,7 +598,7 @@ func (s MeshService) EpochStream(req *pb.EpochStreamRequest, stream pb.MeshServi
 	return nil
 }
 
-func (s MeshService) MalfeasanceQuery(
+func (s *MeshService) MalfeasanceQuery(
 	ctx context.Context,
 	req *pb.MalfeasanceRequest,
 ) (*pb.MalfeasanceResponse, error) {
@@ -587,7 +620,7 @@ func (s MeshService) MalfeasanceQuery(
 	}, nil
 }
 
-func (s MeshService) MalfeasanceStream(
+func (s *MeshService) MalfeasanceStream(
 	req *pb.MalfeasanceStreamRequest,
 	stream pb.MeshService_MalfeasanceStreamServer,
 ) error {

@@ -25,15 +25,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -43,7 +42,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 	testDir := t.TempDir()
 
-	ctx := testcontext.New(t, testcontext.Labels("sanity"))
+	ctx := testcontext.New(t)
 	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
 
 	// Prepare cluster
@@ -87,8 +86,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	prologue := fmt.Sprintf("%x-%v", cl.GenesisID(), cfg.LayersPerEpoch*2-1)
 	host, err := p2p.New(
-		ctx,
-		log.NewFromLog(logger.Named("p2p")),
+		logger.Named("p2p"),
 		cfg.P2P,
 		[]byte(prologue),
 		handshake.NetworkCookie(prologue),
@@ -112,7 +110,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
-		datastore.NewCachedDB(sql.InMemory(), zap.NewNop()),
+		datastore.NewCachedDB(statesql.InMemory(), zap.NewNop()),
 		atxsdata.New(),
 		cl.GoldenATX(),
 		syncer,
@@ -142,7 +140,10 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	grpcPostService := grpcserver.NewPostService(logger.Named("grpc-post-service"))
+	grpcPostService := grpcserver.NewPostService(
+		logger.Named("grpc-post-service"),
+		grpcserver.PostServiceQueryInterval(500*time.Millisecond),
+	)
 	grpcPostService.AllowConnections(true)
 
 	grpcPrivateServer, err := grpcserver.NewWithServices(
@@ -155,12 +156,13 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, grpcPrivateServer.Start())
 	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
 
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	localDb := localsql.InMemory()
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
-	poetClient, err := activation.NewPoetClient(
-		activation.NewPoetDb(db, zap.NewNop()),
+	poetDb := activation.NewPoetDb(db, zap.NewNop())
+	poetService, err := activation.NewPoetService(
+		poetDb,
 		types.PoetServer{
 			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
 		}, cfg.POET,
@@ -169,13 +171,27 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	verifyingOpts := activation.DefaultPostVerifyingOpts()
+	verifyingOpts.Workers = 1
+	verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
+	require.NoError(t, err)
+
+	validator := activation.NewValidator(
+		db,
+		poetDb,
+		cfg.POST,
+		cfg.SMESHING.Opts.Scrypt,
+		verifier,
+	)
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		localDb,
 		grpcPostService,
 		logger.Named("nipostBuilder"),
 		cfg.POET,
 		clock,
-		activation.WithPoetClients(poetClient),
+		validator,
+		activation.WithPoetServices(poetService),
 	)
 	require.NoError(t, err)
 
@@ -205,7 +221,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 		challenge = &wire.NIPostChallengeV1{
 			PrevATXID:        types.EmptyATXID,
-			PublishEpoch:     2,
+			PublishEpoch:     1,
 			PositioningATXID: goldenATXID,
 			CommitmentATXID:  &postInfo.CommitmentATX,
 			InitialPost: &wire.PostV1{
@@ -216,19 +232,27 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		}
 		break
 	}
+	nipostChallenge := &types.NIPostChallenge{
+		PublishEpoch:   challenge.PublishEpoch,
+		PrevATXID:      types.EmptyATXID,
+		PositioningATX: challenge.PositioningATXID,
+		CommitmentATX:  challenge.CommitmentATXID,
+		InitialPost: &types.Post{
+			Nonce:   challenge.InitialPost.Nonce,
+			Indices: challenge.InitialPost.Indices,
+			Pow:     challenge.InitialPost.Pow,
+		},
+	}
 
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.PublishEpoch, challenge.Hash())
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.Hash(), nipostChallenge)
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST
 	for i := range nipost.Post.Indices {
 		nipost.Post.Indices[i] += 1
 	}
+
 	// Sanity check that the POST is invalid
-	verifyingOpts := activation.DefaultPostVerifyingOpts()
-	verifyingOpts.Workers = 1
-	verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
-	require.NoError(t, err)
 	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
 		NodeId:          signer.NodeID().Bytes(),
 		CommitmentAtxId: challenge.CommitmentATXID.Bytes(),

@@ -26,7 +26,7 @@ const (
 
 func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	// Open the target database
-	var dstDB *localsql.Database
+	var dstDB sql.LocalDatabase
 	var err error
 	dstDB, err = openDB(dbLog, to)
 	switch {
@@ -42,6 +42,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 
 		dstDB, err = localsql.Open("file:"+filepath.Join(to, localDbFile),
 			sql.WithLogger(dbLog),
+			sql.WithMigrationsDisabled(),
 		)
 		if err != nil {
 			return err
@@ -97,10 +98,18 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	if err != nil {
 		return fmt.Errorf("read target key directory: %w", err)
 	}
+	toKeyDirFiles = slices.DeleteFunc(toKeyDirFiles, func(e fs.DirEntry) bool {
+		// skip files that are not identity files
+		return filepath.Ext(e.Name()) != ".key"
+	})
 	fromKeyDirFiles, err := os.ReadDir(fromKeyDir)
 	if err != nil {
 		return fmt.Errorf("read source key directory: %w", err)
 	}
+	fromKeyDirFiles = slices.DeleteFunc(fromKeyDirFiles, func(e fs.DirEntry) bool {
+		// skip files that are not identity files
+		return filepath.Ext(e.Name()) != ".key"
+	})
 	for _, toFile := range toKeyDirFiles {
 		for _, fromFile := range fromKeyDirFiles {
 			if toFile.Name() == fromFile.Name() {
@@ -150,7 +159,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	}
 
 	dbLog.Info("merging databases", zap.String("from", from), zap.String("to", to))
-	err = dstDB.WithTx(ctx, func(tx *sql.Tx) error {
+	err = dstDB.WithTx(ctx, func(tx sql.Transaction) error {
 		enc := func(stmt *sql.Statement) {
 			stmt.BindText(1, filepath.Join(from, localDbFile))
 		}
@@ -183,38 +192,20 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	return nil
 }
 
-func openDB(dbLog *zap.Logger, path string) (*localsql.Database, error) {
+func openDB(dbLog *zap.Logger, path string) (sql.LocalDatabase, error) {
 	dbPath := filepath.Join(path, localDbFile)
 	if _, err := os.Stat(dbPath); err != nil {
-		return nil, fmt.Errorf("open database %s: %w", dbPath, err)
-	}
-
-	migrations, err := sql.LocalMigrations()
-	if err != nil {
-		return nil, fmt.Errorf("get local migrations: %w", err)
+		return nil, fmt.Errorf("stat source database %s: %w", dbPath, err)
 	}
 
 	db, err := localsql.Open("file:"+dbPath,
 		sql.WithLogger(dbLog),
-		sql.WithMigrations(nil), // do not migrate database when opening
+		sql.WithMigrationsDisabled(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open source database %s: %w", dbPath, err)
 	}
 
-	// check if the source database has the right schema
-	var version int
-	_, err = db.Exec("PRAGMA user_version;", nil, func(stmt *sql.Statement) bool {
-		version = stmt.ColumnInt(0)
-		return true
-	})
-	if err != nil {
-		return nil, fmt.Errorf("get source database schema for %s: %w", dbPath, err)
-	}
-	if version != len(migrations) {
-		db.Close()
-		return nil, ErrInvalidSchema
-	}
 	return db, nil
 }
 

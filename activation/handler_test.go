@@ -22,8 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -33,6 +31,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -113,6 +112,7 @@ func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 	t.Helper()
 	atx := wire.ActivationTxFromWireV1(watx)
 	atx.SetReceived(time.Now())
+	atx.BaseTickHeight = uint64(atx.PublishEpoch)
 	atx.TickCount = 1
 	return atx
 }
@@ -120,12 +120,13 @@ func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 type handlerMocks struct {
 	goldenATXID types.ATXID
 
-	mclock     *MocklayerClock
-	mpub       *pubsubmocks.MockPublisher
-	mockFetch  *mocks.MockFetcher
-	mValidator *MocknipostValidator
-	mbeacon    *MockAtxReceiver
-	mtortoise  *mocks.MockTortoise
+	mclock      *MocklayerClock
+	mpub        *pubsubmocks.MockPublisher
+	mockFetch   *mocks.MockFetcher
+	mValidator  *MocknipostValidator
+	mbeacon     *MockAtxReceiver
+	mtortoise   *mocks.MockTortoise
+	mMalPublish *MockmalfeasancePublisher
 }
 
 type testHandler struct {
@@ -189,12 +190,13 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 		mValidator:  NewMocknipostValidator(ctrl),
 		mbeacon:     NewMockAtxReceiver(ctrl),
 		mtortoise:   mocks.NewMockTortoise(ctrl),
+		mMalPublish: NewMockmalfeasancePublisher(ctrl),
 	}
 }
 
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), lg)
+	cdb := datastore.NewCachedDB(statesql.InMemory(), lg)
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)
@@ -253,23 +255,23 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	if synced {
 		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, msg))
 	} else {
+		postVerifier := NewMockPostVerifier(gomock.NewController(t))
+		mh := NewInvalidPostIndexHandler(atxHdlr.cdb,
+			atxHdlr.logger,
+			atxHdlr.edVerifier,
+			postVerifier,
+		)
 		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ string, data []byte) error {
 				require.NoError(t, codec.Decode(data, &got))
-				postVerifier := NewMockPostVerifier(gomock.NewController(t))
+				require.Equal(t, mwire.InvalidPostIndex, got.Proof.Type)
+
 				postVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(errors.New("invalid"))
-				nodeID, err := malfeasance.Validate(
-					context.Background(),
-					log.NewFromLog(atxHdlr.logger),
-					atxHdlr.cdb,
-					atxHdlr.edVerifier,
-					postVerifier,
-					&got,
-				)
+				nodeID, err := mh.Validate(context.Background(), got.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
-				require.Equal(t, mwire.InvalidPostIndex, got.Proof.Type)
+
 				p, ok := got.Proof.Data.(*mwire.InvalidPostIndexProof)
 				require.True(t, ok)
 				require.EqualValues(t, 2, p.InvalidIdx)
@@ -361,7 +363,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.Hash32(second.NIPost.PostMetadata.Challenge))
 	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{second.PrevATXID}, gomock.Any())
 	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second))
-	require.ErrorContains(t, err, "syntactically invalid based on deps")
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	// valid first comes in
 	atxHdlr.expectAtxV1(first, sig.NodeID())
@@ -398,7 +400,7 @@ func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
-func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
+func testHandler_HandleDoublePublish(t *testing.T, synced bool) {
 	t.Parallel()
 	goldenATXID := types.ATXID{2, 3, 4}
 	sig, err := signing.NewEdSigner()
@@ -420,17 +422,12 @@ func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 	if synced {
 		require.NoError(t, hdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, "", msg))
 	} else {
+		mh := NewMalfeasanceHandler(hdlr.cdb, hdlr.logger, hdlr.edVerifier)
 		hdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ string, data []byte) error {
 				require.NoError(t, codec.Decode(data, &got))
-				nodeID, err := malfeasance.Validate(
-					context.Background(),
-					log.NewFromLog(hdlr.logger),
-					hdlr.cdb,
-					hdlr.edVerifier,
-					nil,
-					&got,
-				)
+				require.Equal(t, mwire.MultipleATXs, got.Proof.Type)
+				nodeID, err := mh.Validate(context.Background(), got.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
 				return nil
@@ -449,11 +446,11 @@ func testHandler_HandleMaliciousAtx(t *testing.T, synced bool) {
 
 func TestHandler_HandleMaliciousAtx(t *testing.T) {
 	t.Run("produced but not published during sync", func(t *testing.T) {
-		testHandler_HandleMaliciousAtx(t, true)
+		testHandler_HandleDoublePublish(t, true)
 	})
 
 	t.Run("produced and published during gossip", func(t *testing.T) {
-		testHandler_HandleMaliciousAtx(t, false)
+		testHandler_HandleDoublePublish(t, false)
 	})
 }
 
@@ -520,6 +517,7 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		err := atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf)
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorContains(t, err, "invalid atx signature")
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("atx V2", func(t *testing.T) {
 		t.Parallel()
@@ -648,7 +646,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, uint64(0), stored1.BaseTickHeight)
 	require.Equal(t, leaves/tickSize, stored1.TickCount)
 	require.Equal(t, leaves/tickSize, stored1.TickHeight())
-	require.Equal(t, (leaves/tickSize)*units, stored1.GetWeight())
+	require.Equal(t, (leaves/tickSize)*units, stored1.Weight)
 
 	atx2 := newChainedActivationTxV1(t, atx1, atx1.ID())
 	atx2.Sign(sig)
@@ -663,7 +661,7 @@ func TestHandler_AtxWeight(t *testing.T) {
 	require.Equal(t, stored1.TickHeight(), stored2.BaseTickHeight)
 	require.Equal(t, leaves/tickSize, stored2.TickCount)
 	require.Equal(t, stored1.TickHeight()+leaves/tickSize, stored2.TickHeight())
-	require.Equal(t, int(leaves/tickSize)*units, int(stored2.GetWeight()))
+	require.Equal(t, int(leaves/tickSize)*units, int(stored2.Weight))
 }
 
 func TestHandler_WrongHash(t *testing.T) {
@@ -863,19 +861,21 @@ func TestHandler_DecodeATX(t *testing.T) {
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 		_, err := atxHdlr.decodeATX(nil)
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("malformed atx", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 		_, err := atxHdlr.decodeATX([]byte("malformed"))
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 	t.Run("v1", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr := newTestHandler(t, types.RandomATXID())
 
 		atx := newInitialATXv1(t, atxHdlr.goldenATXID)
-		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		decoded, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.NoError(t, err)
 		require.Equal(t, atx, decoded)
 	})
@@ -886,7 +886,7 @@ func TestHandler_DecodeATX(t *testing.T) {
 
 		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
 		atx.PublishEpoch = 10
-		decoded, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		decoded, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.NoError(t, err)
 		require.Equal(t, atx, decoded)
 	})
@@ -897,7 +897,8 @@ func TestHandler_DecodeATX(t *testing.T) {
 
 		atx := newInitialATXv2(t, atxHdlr.goldenATXID)
 		atx.PublishEpoch = 9
-		_, err := atxHdlr.decodeATX(codec.MustEncode(atx))
+		_, err := atxHdlr.decodeATX(atx.Blob().Blob)
 		require.ErrorIs(t, err, errMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 }

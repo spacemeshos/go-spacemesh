@@ -30,6 +30,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -91,7 +92,7 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher, miners int, id
 
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 
-	tpd.cdb = datastore.NewCachedDB(sql.InMemory(), lg)
+	tpd.cdb = datastore.NewCachedDB(statesql.InMemory(), lg)
 	tpd.ProtocolDriver = New(p, signing.NewEdVerifier(), tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -114,22 +115,25 @@ func createATX(
 	numUnits uint32,
 	received time.Time,
 ) types.ATXID {
-	nonce := types.VRFPostIndex(1)
-	atx := types.NewActivationTx(
-		types.NIPostChallenge{PublishEpoch: lid.GetEpoch()},
-		types.GenerateAddress(types.RandomBytes(types.AddressLength)),
-		numUnits,
-	)
-	atx.VRFNonce = nonce
+	tb.Helper()
+	atx := types.ActivationTx{
+		PublishEpoch: lid.GetEpoch(),
+		Coinbase:     types.GenerateAddress(types.RandomBytes(types.AddressLength)),
+		NumUnits:     numUnits,
+		VRFNonce:     1,
+		TickCount:    1,
+		Weight:       uint64(numUnits),
+		SmesherID:    sig.NodeID(),
+	}
+
 	atx.SetReceived(received)
-	atx.SmesherID = sig.NodeID()
 	atx.SetID(types.RandomATXID())
-	atx.TickCount = 1
-	require.NoError(tb, atxs.Add(db, atx))
+	require.NoError(tb, atxs.Add(db, &atx, types.AtxBlob{}))
 	return atx.ID()
 }
 
 func createRandomATXs(tb testing.TB, db *datastore.CachedDB, lid types.LayerID, num int) {
+	tb.Helper()
 	for i := 0; i < num; i++ {
 		sig, err := signing.NewEdSigner()
 		require.NoError(tb, err)
@@ -187,12 +191,8 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, bootstrap, got)
 	}
-	for i, node := range testNodes {
-		if i == 0 {
-			// make the first node non-smeshing node
-			continue
-		}
-
+	// make the first node non-smeshing node
+	for _, node := range testNodes[1:] {
 		for _, db := range dbs {
 			for _, s := range node.signers {
 				createATX(t, db, atxPublishLid, s, 1, time.Now().Add(-1*time.Second))
@@ -449,8 +449,8 @@ func TestBeaconWithMetrics(t *testing.T) {
 			spacemesh_beacons_beacon_observed_total{beacon="%s",epoch="%d"} %d
 			spacemesh_beacons_beacon_observed_total{beacon="%s",epoch="%d"} %d
 			`,
-			beacon1.ShortString(), thisEpoch, count,
-			beacon2.ShortString(), thisEpoch, count,
+			beacon1.String(), thisEpoch, count,
+			beacon2.String(), thisEpoch, count,
 		)
 		err := testutil.GatherAndCompare(
 			prometheus.DefaultGatherer,
@@ -467,8 +467,8 @@ func TestBeaconWithMetrics(t *testing.T) {
 			spacemesh_beacons_beacon_observed_weight{beacon="%s",epoch="%d"} %d
 			spacemesh_beacons_beacon_observed_weight{beacon="%s",epoch="%d"} %d
 			`,
-			beacon1.ShortString(), thisEpoch, weight,
-			beacon2.ShortString(), thisEpoch, weight,
+			beacon1.String(), thisEpoch, weight,
+			beacon2.String(), thisEpoch, weight,
 		)
 		err = testutil.GatherAndCompare(
 			prometheus.DefaultGatherer,
@@ -494,7 +494,7 @@ func TestBeacon_NoRaceOnClose(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:           lg.Named("Beacon"),
 		beacons:          make(map[types.EpochID]types.Beacon),
-		cdb:              datastore.NewCachedDB(sql.InMemory(), lg),
+		cdb:              datastore.NewCachedDB(statesql.InMemory(), lg),
 		clock:            mclock,
 		closed:           make(chan struct{}),
 		results:          make(chan result.Beacon, 100),
@@ -529,7 +529,7 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:  lg.Named("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		cdb:     datastore.NewCachedDB(sql.InMemory(), lg),
+		cdb:     datastore.NewCachedDB(statesql.InMemory(), lg),
 		clock:   mclock,
 	}
 	epoch3 := types.EpochID(3)
@@ -582,7 +582,7 @@ func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:  lg.Named("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		cdb:     datastore.NewCachedDB(sql.InMemory(), lg),
+		cdb:     datastore.NewCachedDB(statesql.InMemory(), lg),
 		clock:   mclock,
 	}
 	epoch := types.EpochID(3)
@@ -600,7 +600,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
 		logger:         lg.Named("Beacon"),
-		cdb:            datastore.NewCachedDB(sql.InMemory(), lg),
+		cdb:            datastore.NewCachedDB(statesql.InMemory(), lg),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		clock:          mclock,
@@ -705,7 +705,7 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 			pd := &ProtocolDriver{
 				logger:         lg.Named("Beacon"),
 				config:         UnitTestConfig(),
-				cdb:            datastore.NewCachedDB(sql.InMemory(), lg),
+				cdb:            datastore.NewCachedDB(statesql.InMemory(), lg),
 				beacons:        make(map[types.EpochID]types.Beacon),
 				ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 				clock:          mclock,
@@ -741,7 +741,7 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:         lg.Named("Beacon"),
 		config:         UnitTestConfig(),
-		cdb:            datastore.NewCachedDB(sql.InMemory(), lg),
+		cdb:            datastore.NewCachedDB(statesql.InMemory(), lg),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		clock:          mclock,

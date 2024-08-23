@@ -57,6 +57,8 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.LayerAvgSize, "Layer Avg size")
 	flagSet.BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
+	flagSet.BoolVar(&cfg.PprofMutexProfile, "pprof-mutex-profile", false, "enable pprof mutex profile")
+	flagSet.BoolVar(&cfg.PprofBlockProfile, "pprof-block-profile", false, "enable pprof block profile")
 	flagSet.StringVar(&cfg.PprofHTTPServerListener, "pprof-listener", cfg.PprofHTTPServerListener,
 		"Listen address for pprof server, not safe to expose publicly")
 	flagSet.Uint64Var(&cfg.TickSize, "tick-size", cfg.TickSize, "number of poet leaves in a single tick")
@@ -78,9 +80,6 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.DatabaseLatencyMetering, "if enabled collect latency histogram for every database query")
 	flagSet.DurationVar(&cfg.DatabasePruneInterval, "db-prune-interval",
 		cfg.DatabasePruneInterval, "configure interval for database pruning")
-
-	flagSet.BoolVar(&cfg.ScanMalfeasantATXs, "scan-malfeasant-atxs", cfg.ScanMalfeasantATXs,
-		"scan for malfeasant ATXs")
 
 	flagSet.BoolVar(&cfg.NoMainOverride, "no-main-override",
 		cfg.NoMainOverride, "force 'nomain' builds to run on the mainnet")
@@ -320,13 +319,13 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	/**======================== PoET Flags ========================== **/
 
 	flagSet.DurationVar(&cfg.POET.PhaseShift, "phase-shift",
-		cfg.POET.PhaseShift, "phase shift of poet server")
+		cfg.POET.PhaseShift, "phase shift of poet server: duration after epoch start, at which poet round starts")
 	flagSet.DurationVar(&cfg.POET.CycleGap, "cycle-gap",
-		cfg.POET.CycleGap, "cycle gap of poet server")
+		cfg.POET.CycleGap, "cycle gap of poet server: gap between poet rounds")
 	flagSet.DurationVar(&cfg.POET.GracePeriod, "grace-period",
-		cfg.POET.GracePeriod, "time before PoET round starts when the node builds and submits a challenge")
+		cfg.POET.GracePeriod, "time before poet round starts, when the node builds and submits a challenge")
 	flagSet.DurationVar(&cfg.POET.RequestTimeout, "poet-request-timeout",
-		cfg.POET.RequestTimeout, "timeout for poet requests")
+		cfg.POET.RequestTimeout, "default timeout for poet requests")
 
 	/**======================== bootstrap data updater Flags ========================== **/
 

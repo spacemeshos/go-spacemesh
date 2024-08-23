@@ -1,25 +1,53 @@
 package sql
 
 import (
-	"bufio"
-	"bytes"
-	"embed"
 	"fmt"
 	"io/fs"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
-//go:embed migrations/**/*.sql
-var embedded embed.FS
+// MigrationList denotes a list of migrations.
+type MigrationList []Migration
+
+// AddMigration adds a Migration to the MigrationList, overriding the migration with the
+// same order number if it already exists. The function returns updated migration list.
+// The state of the original migration list is undefined after calling this function.
+func (l MigrationList) AddMigration(migration Migration) MigrationList {
+	for i, m := range l {
+		if m.Order() == migration.Order() {
+			l[i] = migration
+			return l
+		}
+		if m.Order() > migration.Order() {
+			l = slices.Insert(l, i, migration)
+			return l
+		}
+	}
+	return append(l, migration)
+}
+
+// Version returns database version for the specified migration list.
+func (l MigrationList) Version() int {
+	if len(l) == 0 {
+		return 0
+	}
+	return l[len(l)-1].Order()
+}
 
 type sqlMigration struct {
 	order   int
 	name    string
-	content *bufio.Scanner
+	content string
 }
 
-func (m *sqlMigration) Apply(db Executor) error {
+var sqlCommentRx = regexp.MustCompile(`(?m)--.*$`)
+
+func (m *sqlMigration) Apply(db Executor, logger *zap.Logger) error {
 	current, err := version(db)
 	if err != nil {
 		return err
@@ -28,14 +56,15 @@ func (m *sqlMigration) Apply(db Executor) error {
 	if m.order <= current {
 		return nil
 	}
-	for m.content.Scan() {
-		if _, err := db.Exec(m.content.Text(), nil, nil); err != nil {
-			return fmt.Errorf("exec %s: %w", m.content.Text(), err)
+	// TODO: use more advanced approach to split the SQL script
+	// into commands
+	for _, cmd := range strings.Split(m.content, ";") {
+		cmd = sqlCommentRx.ReplaceAllString(cmd, "")
+		if strings.TrimSpace(cmd) != "" {
+			if _, err := db.Exec(cmd, nil, nil); err != nil {
+				return fmt.Errorf("exec %s: %w", cmd, err)
+			}
 		}
-	}
-	// binding values in pragma statement is not allowed
-	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.order), nil, nil); err != nil {
-		return fmt.Errorf("update user_version to %d: %w", m.order, err)
 	}
 
 	return nil
@@ -65,18 +94,9 @@ func version(db Executor) (int, error) {
 	return current, nil
 }
 
-func StateMigrations() ([]Migration, error) {
-	return sqlMigrations("state")
-}
-
-func LocalMigrations() ([]Migration, error) {
-	return sqlMigrations("local")
-}
-
-func sqlMigrations(dbname string) ([]Migration, error) {
-	var migrations []Migration
-	root := fmt.Sprintf("migrations/%s", dbname)
-	err := fs.WalkDir(embedded, root, func(path string, d fs.DirEntry, err error) error {
+func LoadSQLMigrations(fsys fs.FS) (MigrationList, error) {
+	var migrations MigrationList
+	err := fs.WalkDir(fsys, "schema/migrations", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("walkdir %s: %w", path, err)
 		}
@@ -91,21 +111,14 @@ func sqlMigrations(dbname string) ([]Migration, error) {
 		if err != nil {
 			return fmt.Errorf("invalid migration %s: %w", d.Name(), err)
 		}
-		f, err := embedded.Open(path)
+		script, err := fs.ReadFile(fsys, path)
 		if err != nil {
 			return fmt.Errorf("read file %s: %w", path, err)
 		}
-		scanner := bufio.NewScanner(f)
-		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-			if i := bytes.Index(data, []byte(";")); i >= 0 {
-				return i + 1, data[0 : i+1], nil
-			}
-			return 0, nil, nil
-		})
 		migrations = append(migrations, &sqlMigration{
 			order:   order,
 			name:    d.Name(),
-			content: scanner,
+			content: string(script),
 		})
 		return nil
 	})

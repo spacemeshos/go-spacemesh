@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
@@ -20,9 +20,9 @@ const (
 
 // DBMetricsCollector collects metrics from db.
 type DBMetricsCollector struct {
-	logger        log.Logger
+	logger        *zap.Logger
 	checkInterval time.Duration
-	db            *sql.Database
+	db            sql.StateDatabase
 	tablesList    map[string]struct{}
 	eg            errgroup.Group
 	cancel        context.CancelFunc
@@ -35,14 +35,14 @@ type DBMetricsCollector struct {
 // NewDBMetricsCollector creates new DBMetricsCollector.
 func NewDBMetricsCollector(
 	ctx context.Context,
-	db *sql.Database,
-	logger log.Logger,
+	db sql.StateDatabase,
+	logger *zap.Logger,
 	checkInterval time.Duration,
 ) *DBMetricsCollector {
 	ctx, cancel := context.WithCancel(ctx)
 	collector := &DBMetricsCollector{
 		checkInterval: checkInterval,
-		logger:        logger.WithName("db_metrics"),
+		logger:        logger.Named("db_metrics"),
 		db:            db,
 		cancel:        cancel,
 		tableSize:     metrics.NewGauge("table_size", subsystem, "Size of table in bytes", []string{"name"}),
@@ -51,20 +51,20 @@ func NewDBMetricsCollector(
 	}
 	statEnabled, err := collector.checkCompiledWithDBStat()
 	if err != nil {
-		collector.logger.With().Error("error check compile options", log.Err(err))
+		collector.logger.Error("error check compile options", zap.Error(err))
 		return nil
 	}
 	if !statEnabled {
-		collector.logger.With().Info("sqlite compiled without `SQLITE_ENABLE_DBSTAT_VTAB`. Metrics will not collected")
+		collector.logger.Info("sqlite compiled without `SQLITE_ENABLE_DBSTAT_VTAB`. Metrics will not collected")
 		return nil
 	}
 
 	collector.tablesList, err = collector.getListOfTables()
 	if err != nil {
-		collector.logger.With().Error("error get list of tables", log.Err(err))
+		collector.logger.Error("error get list of tables", zap.Error(err))
 		return nil
 	}
-	collector.logger.With().Info("start collect stat")
+	collector.logger.Info("start collect stat")
 	collector.eg.Go(func() error {
 		collector.CollectMetrics(ctx)
 		return nil
@@ -76,7 +76,7 @@ func NewDBMetricsCollector(
 func (d *DBMetricsCollector) Close() {
 	d.cancel()
 	if err := d.eg.Wait(); err != nil {
-		d.logger.With().Error("received error waiting for db metrics collector", log.Err(err))
+		d.logger.Error("received error waiting for db metrics collector", zap.Error(err))
 	}
 }
 
@@ -89,7 +89,7 @@ func (d *DBMetricsCollector) CollectMetrics(ctx context.Context) {
 		case <-ticker.C:
 			d.logger.Debug("collect stats from db")
 			if err := d.collect(); err != nil {
-				d.logger.With().Error("error check db metrics", log.Err(err))
+				d.logger.Error("error collecting db metrics", zap.Error(err))
 			}
 		case <-ctx.Done():
 			return

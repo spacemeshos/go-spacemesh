@@ -16,28 +16,27 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestActivationService_List(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewAtxsGenerator()
 	activations := make([]types.ActivationTx, 100)
 	for i := range activations {
 		atx := gen.Next()
-		vAtx := fixture.ToAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
-		activations[i] = *vAtx
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		activations[i] = *atx
 	}
 
 	svc := NewActivationService(db)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -84,10 +83,10 @@ func TestActivationService_List(t *testing.T) {
 		require.Equal(t, activations[3].ID().Bytes(), list.GetActivations()[0].GetId())
 	})
 
-	t.Run("nodeId", func(t *testing.T) {
+	t.Run("smesherId", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{
-			Limit:  1,
-			NodeId: activations[1].SmesherID.Bytes(),
+			Limit:     1,
+			SmesherId: [][]byte{activations[1].SmesherID.Bytes()},
 		})
 		require.NoError(t, err)
 		require.Equal(t, activations[1].ID().Bytes(), list.GetActivations()[0].GetId())
@@ -96,7 +95,7 @@ func TestActivationService_List(t *testing.T) {
 	t.Run("id", func(t *testing.T) {
 		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{
 			Limit: 1,
-			Id:    activations[3].ID().Bytes(),
+			Id:    [][]byte{activations[3].ID().Bytes()},
 		})
 		require.NoError(t, err)
 		require.Equal(t, activations[3].ID().Bytes(), list.GetActivations()[0].GetId())
@@ -104,23 +103,22 @@ func TestActivationService_List(t *testing.T) {
 }
 
 func TestActivationStreamService_Stream(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewAtxsGenerator()
 	activations := make([]types.ActivationTx, 100)
 	for i := range activations {
 		atx := gen.Next()
-		vAtx := fixture.ToAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
-		activations[i] = *vAtx
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		activations[i] = *atx
 	}
 
 	svc := NewActivationStreamService(db)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewActivationStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {
@@ -153,8 +151,8 @@ func TestActivationStreamService_Stream(t *testing.T) {
 		gen = fixture.NewAtxsGenerator().WithEpochs(start, 10)
 		var streamed []*events.ActivationTx
 		for i := 0; i < n; i++ {
-			atx := fixture.ToAtx(t, gen.Next())
-			require.NoError(t, atxs.Add(db, atx))
+			atx := gen.Next()
+			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			streamed = append(streamed, &events.ActivationTx{ActivationTx: atx})
 		}
 
@@ -165,15 +163,15 @@ func TestActivationStreamService_Stream(t *testing.T) {
 			{
 				desc: "ID",
 				request: &spacemeshv2alpha1.ActivationStreamRequest{
-					Id:         streamed[3].ID().Bytes(),
+					Id:         [][]byte{streamed[3].ID().Bytes()},
 					StartEpoch: start,
 					Watch:      true,
 				},
 			},
 			{
-				desc: "NodeID",
+				desc: "SmesherId",
 				request: &spacemeshv2alpha1.ActivationStreamRequest{
-					NodeId:     streamed[3].SmesherID.Bytes(),
+					SmesherId:  [][]byte{streamed[3].SmesherID.Bytes()},
 					StartEpoch: start,
 					Watch:      true,
 				},
@@ -195,7 +193,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 
 				var expect []*types.ActivationTx
 				for _, rst := range streamed {
-					events.ReportNewActivation(rst.ActivationTx)
+					require.NoError(t, events.ReportNewActivation(rst.ActivationTx))
 					matcher := atxsMatcher{tc.request, ctx}
 					if matcher.match(rst) {
 						expect = append(expect, rst.ActivationTx)
@@ -213,16 +211,15 @@ func TestActivationStreamService_Stream(t *testing.T) {
 }
 
 func TestActivationService_ActivationsCount(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	genEpoch3 := fixture.NewAtxsGenerator().WithEpochs(3, 1)
 	epoch3ATXs := make([]types.ActivationTx, 30)
 	for i := range epoch3ATXs {
 		atx := genEpoch3.Next()
-		vatx := fixture.ToAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vatx))
-		epoch3ATXs[i] = *vatx
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		epoch3ATXs[i] = *atx
 	}
 
 	genEpoch5 := fixture.NewAtxsGenerator().WithSeed(time.Now().UnixNano()+1).
@@ -230,16 +227,15 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	epoch5ATXs := make([]types.ActivationTx, 10) // ensure the number here is different from above
 	for i := range epoch5ATXs {
 		atx := genEpoch5.Next()
-		vatx := fixture.ToAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vatx))
-		epoch5ATXs[i] = *vatx
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		epoch5ATXs[i] = *atx
 	}
 
 	svc := NewActivationService(db)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
 	t.Run("count without filter", func(t *testing.T) {

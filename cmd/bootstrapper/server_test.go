@@ -19,8 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 //go:embed checkpointdata.json
@@ -57,7 +56,7 @@ func updateCheckpoint(t *testing.T, ctx context.Context, data string) {
 }
 
 func TestServer(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
 	t.Cleanup(cleanup)
 
@@ -65,14 +64,14 @@ func TestServer(t *testing.T) {
 	g := NewGenerator(
 		"",
 		cfg.PublicListener,
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 		WithFilesystem(fs),
 	)
 
 	epochs := []types.EpochID{types.EpochID(4), types.EpochID(5)}
 	srv := NewServer(g, false, port,
 		WithSrvFilesystem(fs),
-		WithSrvLogger(logtest.New(t)),
+		WithSrvLogger(zaptest.NewLogger(t)),
 		WithBootstrapEpochs(epochs),
 	)
 	np := &NetworkParam{

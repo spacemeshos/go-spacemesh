@@ -49,19 +49,19 @@ func (s *AccountService) String() string {
 }
 
 func (s *AccountService) List(
-	ctx context.Context,
+	_ context.Context,
 	request *spacemeshv2alpha1.AccountRequest,
 ) (*spacemeshv2alpha1.AccountList, error) {
-	ops, err := toAccountOperations(request)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
 	switch {
 	case request.Limit > 100:
 		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
 	case request.Limit == 0:
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
+	}
+
+	ops, err := toAccountOperations(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	rst := make([]*spacemeshv2alpha1.Account, 0, request.Limit)
@@ -83,6 +83,7 @@ func (s *AccountService) List(
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
 	return &spacemeshv2alpha1.AccountList{Accounts: rst}, nil
 }
 

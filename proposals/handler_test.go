@@ -13,13 +13,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -31,6 +31,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -93,7 +94,7 @@ func fullMockSet(tb testing.TB) *mockSet {
 func createTestHandler(t *testing.T) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(t)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	atxsdata := atxsdata.New()
 	ms.md.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
 		ballot, err := ballots.Get(db, id)
@@ -127,7 +128,7 @@ func createTestHandler(t *testing.T) *testHandler {
 			ms.md,
 			ms.mvrf,
 			ms.mclock,
-			WithLogger(logtest.New(t)),
+			WithLogger(zaptest.NewLogger(t)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
 				LayersPerEpoch: layersPerEpoch,
@@ -236,7 +237,7 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 	return p
 }
 
-func createAtx(t *testing.T, db *sql.Database, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
+func createAtx(t *testing.T, db sql.StateDatabase, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
 	atx := &types.ActivationTx{
 		PublishEpoch: epoch,
 		NumUnits:     1,
@@ -245,7 +246,7 @@ func createAtx(t *testing.T, db *sql.Database, epoch types.EpochID, atxID types.
 	}
 	atx.SetID(atxID)
 	atx.SetReceived(time.Now())
-	require.NoError(t, atxs.Add(db, atx))
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 }
 
 func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {

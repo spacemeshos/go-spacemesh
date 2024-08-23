@@ -1,10 +1,9 @@
 package types
 
 import (
-	"fmt"
+	"encoding/hex"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -20,28 +19,13 @@ type Beacon [BeaconSize]byte
 // EmptyBeacon is a canonical empty Beacon.
 var EmptyBeacon = Beacon{}
 
-// Hex converts a hash to a hex string.
-func (b Beacon) Hex() string { return util.Encode(b[:]) }
-
 // String implements the stringer interface and is used also by the logger when
 // doing full logging into a file.
-func (b Beacon) String() string { return b.Hex() }
-
-// ShortString returns the first 10 characters of the Beacon, usually for logging purposes.
-func (b Beacon) ShortString() string {
-	str := b.Hex()
-	l := len(str)
-	return fmt.Sprintf("%.10s", str[min(2, l):])
-}
+func (b Beacon) String() string { return hex.EncodeToString(b[:]) }
 
 // Bytes gets the byte representation of the underlying hash.
 func (b Beacon) Bytes() []byte {
 	return b[:]
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (b Beacon) Field() log.Field {
-	return log.String("beacon", b.ShortString())
 }
 
 func (b *Beacon) MarshalText() ([]byte, error) {

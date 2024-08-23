@@ -5,9 +5,9 @@ tmpfile := $(shell mktemp /tmp/systest-XXX)
 test_name ?= TestSmeshing
 org ?= spacemeshos
 image_name ?= $(org)/systest:$(version_info)
-certifier_image ?= spacemeshos/certifier-service:v0.7.8
+certifier_image ?= spacemeshos/certifier-service:v0.7.11
 poet_image ?= $(org)/poet:v0.10.3
-post_service_image ?= $(org)/post-service:v0.7.8
+post_service_image ?= $(org)/post-service:v0.7.11
 post_init_image ?= $(org)/postcli:v0.12.5
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
@@ -22,8 +22,8 @@ bootstrap ?= 5m
 storage ?= standard=1Gi
 node_selector ?=
 namespace ?=
-label ?=
 count ?= 1
+failfast ?= true
 
 configname ?= $(test_job_name)
 smesher_config ?= parameters/fastnet/smesher.json
@@ -36,8 +36,9 @@ ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
-command := tests -test.v -test.count=$(count) -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) \
--level=$(level) -labels=$(label) -configname=$(configname)
+command := gotestsum --raw-command -- test2json -t -p systest \
+	/bin/tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
+	-test.failfast=$(failfast) -clusters=$(clusters) -level=$(level) -configname=$(configname)
 
 .PHONY: docker
 docker:
@@ -78,13 +79,13 @@ config: template
 
 .PHONY: gomplate
 gomplate:
-	@go install github.com/hairyhenderson/gomplate/v4/cmd/gomplate@v4.0.0-pre-1
+	@go install github.com/hairyhenderson/gomplate/v4/cmd/gomplate@v4.1.0
 
 # Using bash to invoke ./wait_for_job.sh script to avoid problems on Mac
 # where /bin/bash is an old bash
 .PHONY: run
 run: gomplate $(run_deps)
-	@echo "launching test job with name=$(test_job_name) and testid=$(test_id)"
+	@echo "launching test job with name=$(test_job_name) and testid=$(test_id), command=$(command)"
 	@ns=$$(kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null); \
 	export ns="$${ns:-default}"; \
 	if [ -z "$${norbac}" ]; then \

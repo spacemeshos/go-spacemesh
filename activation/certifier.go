@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	certifierdb "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
@@ -80,14 +79,14 @@ type CertifyResponse struct {
 
 type Certifier struct {
 	logger *zap.Logger
-	db     *localsql.Database
+	db     sql.LocalDatabase
 	client certifierClient
 
 	certifications singleflight.Group
 }
 
 func NewCertifier(
-	db *localsql.Database,
+	db sql.LocalDatabase,
 	logger *zap.Logger,
 	client certifierClient,
 ) *Certifier {
@@ -117,7 +116,15 @@ func (c *Certifier) Certificate(
 		case !errors.Is(err, sql.ErrNotFound):
 			return nil, fmt.Errorf("getting certificate from DB for: %w", err)
 		}
-		return c.Recertify(ctx, id, certifier, pubkey)
+		cert, err = c.client.Certify(ctx, id, certifier, pubkey)
+		if err != nil {
+			return nil, fmt.Errorf("certifying POST at %v: %w", certifier, err)
+		}
+
+		if err := certifierdb.AddCertificate(c.db, id, *cert, pubkey); err != nil {
+			c.logger.Warn("failed to persist poet cert", zap.Error(err))
+		}
+		return cert, nil
 	})
 
 	if err != nil {
@@ -126,28 +133,18 @@ func (c *Certifier) Certificate(
 	return cert.(*certifierdb.PoetCert), nil
 }
 
-func (c *Certifier) Recertify(
-	ctx context.Context,
-	id types.NodeID,
-	certifier *url.URL,
-	pubkey []byte,
-) (*certifierdb.PoetCert, error) {
-	cert, err := c.client.Certify(ctx, id, certifier, pubkey)
-	if err != nil {
-		return nil, fmt.Errorf("certifying POST at %v: %w", certifier, err)
+func (c *Certifier) DeleteCertificate(id types.NodeID, pubkey []byte) error {
+	if err := certifierdb.DeleteCertificate(c.db, id, pubkey); err != nil {
+		return err
 	}
-
-	if err := certifierdb.AddCertificate(c.db, id, *cert, pubkey); err != nil {
-		c.logger.Warn("failed to persist poet cert", zap.Error(err))
-	}
-	return cert, nil
+	return nil
 }
 
 type CertifierClient struct {
 	client  *retryablehttp.Client
 	logger  *zap.Logger
 	db      sql.Executor
-	localDb *localsql.Database
+	localDb sql.LocalDatabase
 }
 
 type certifierClientOpts func(*CertifierClient)
@@ -162,7 +159,7 @@ func WithCertifierClientConfig(cfg CertifierClientConfig) certifierClientOpts {
 
 func NewCertifierClient(
 	db sql.Executor,
-	localDb *localsql.Database,
+	localDb sql.LocalDatabase,
 	logger *zap.Logger,
 	opts ...certifierClientOpts,
 ) *CertifierClient {
@@ -197,7 +194,7 @@ func (c *CertifierClient) obtainPostFromLastAtx(ctx context.Context, nodeId type
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve ATX: %w", err)
 	}
-	atxNipost, err := loadNipost(ctx, c.db, atxid)
+	post, challenge, err := loadPost(ctx, c.db, atxid)
 	if err != nil {
 		return nil, errors.New("no NIPoST found in last ATX")
 	}
@@ -209,12 +206,12 @@ func (c *CertifierClient) obtainPostFromLastAtx(ctx context.Context, nodeId type
 		}
 	}
 
-	c.logger.Info("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
+	c.logger.Debug("found POST in an existing ATX", zap.String("atx_id", atxid.Hash32().ShortString()))
 	return &nipost.Post{
-		Nonce:         atxNipost.Post.Nonce,
-		Indices:       atxNipost.Post.Indices,
-		Pow:           atxNipost.Post.Pow,
-		Challenge:     atxNipost.PostMetadata.Challenge,
+		Nonce:         post.Nonce,
+		Indices:       post.Indices,
+		Pow:           post.Pow,
+		Challenge:     challenge,
 		NumUnits:      atx.NumUnits,
 		CommitmentATX: *atx.CommitmentATX,
 		// VRF nonce is not needed
@@ -222,11 +219,11 @@ func (c *CertifierClient) obtainPostFromLastAtx(ctx context.Context, nodeId type
 }
 
 func (c *CertifierClient) obtainPost(ctx context.Context, id types.NodeID) (*nipost.Post, error) {
-	c.logger.Info("looking for POST for poet certification")
+	c.logger.Debug("looking for POST for poet certification")
 	post, err := nipost.GetPost(c.localDb, id)
 	switch {
 	case err == nil:
-		c.logger.Info("found POST in local DB")
+		c.logger.Debug("found POST in local DB")
 		return post, nil
 	case errors.Is(err, sql.ErrNotFound):
 		// no post found
@@ -234,9 +231,9 @@ func (c *CertifierClient) obtainPost(ctx context.Context, id types.NodeID) (*nip
 		return nil, fmt.Errorf("loading initial post from db: %w", err)
 	}
 
-	c.logger.Info("POST not found in local DB. Trying to obtain POST from an existing ATX")
+	c.logger.Debug("POST not found in local DB. Trying to obtain POST from an existing ATX")
 	if post, err := c.obtainPostFromLastAtx(ctx, id); err == nil {
-		c.logger.Info("found POST in an existing ATX")
+		c.logger.Debug("found POST in an existing ATX")
 		if err := nipost.AddPost(c.localDb, id, *post); err != nil {
 			c.logger.Error("failed to save post", zap.Error(err))
 		}
@@ -328,22 +325,26 @@ func (c *CertifierClient) Certify(
 }
 
 // load NIPoST for the given ATX from the database.
-func loadNipost(ctx context.Context, db sql.Executor, id types.ATXID) (*types.NIPost, error) {
+func loadPost(ctx context.Context, db sql.Executor, id types.ATXID) (*types.Post, []byte, error) {
 	var blob sql.Blob
 	version, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
 	if err != nil {
-		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
+		return nil, nil, fmt.Errorf("getting blob for %s: %w", id, err)
 	}
 
 	switch version {
 	case types.AtxV1:
 		var atx wire.ActivationTxV1
 		if err := codec.Decode(blob.Bytes, &atx); err != nil {
-			return nil, fmt.Errorf("decoding ATX blob: %w", err)
+			return nil, nil, fmt.Errorf("decoding ATX blob: %w", err)
 		}
-		return wire.NiPostFromWireV1(atx.NIPost), nil
+		return wire.PostFromWireV1(atx.NIPost.Post), atx.NIPost.PostMetadata.Challenge, nil
 	case types.AtxV2:
-		// TODO: support ATX V2
+		var atx wire.ActivationTxV2
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return nil, nil, fmt.Errorf("decoding ATX blob: %w", err)
+		}
+		return wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post), atx.NiPosts[0].Challenge[:], nil
 	}
 	panic("unsupported ATX version")
 }

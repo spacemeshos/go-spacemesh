@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -336,7 +337,7 @@ func tortoiseFromSimState(tb testing.TB, state sim.State, opts ...Opt) *recovery
 	return &recoveryAdapter{
 		TB:       tb,
 		Tortoise: trtl,
-		db:       state.DB.Executor,
+		db:       state.DB.Database,
 		atxdata:  state.Atxdata,
 	}
 }
@@ -467,7 +468,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
-				db     = sql.InMemory()
+				db     = statesql.InMemory()
 				epochs = map[types.EpochID]*epochInfo{}
 				first  = tc.target.Add(1).GetEpoch()
 			)
@@ -475,12 +476,11 @@ func TestComputeExpectedWeight(t *testing.T) {
 				eid := first + types.EpochID(i)
 				atx := &types.ActivationTx{
 					PublishEpoch: eid - 1,
-					NumUnits:     uint32(weight),
-					TickCount:    1,
+					Weight:       weight,
 				}
 				atx.SetID(types.RandomATXID())
 				atx.SetReceived(time.Now())
-				require.NoError(t, atxs.Add(db, atx))
+				require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			}
 			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
 				weight, _, err := extractAtxsData(db, lid.GetEpoch())
@@ -500,7 +500,7 @@ func extractAtxsData(db sql.Executor, target types.EpochID) (uint64, uint64, err
 		heights []uint64
 	)
 	if err := atxs.IterateAtxsOps(db, builder.FilterEpochOnly(target-1), func(atx *types.ActivationTx) bool {
-		weight += atx.GetWeight()
+		weight += atx.Weight
 		heights = append(heights, atx.TickHeight())
 		return true
 	}); err != nil {

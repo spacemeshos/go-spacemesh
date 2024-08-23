@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 const layersPerEpoch = 3
@@ -26,7 +27,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestLayer(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	start := types.LayerID(1)
 	pub := types.BytesToNodeID([]byte{1, 1, 1})
 	ballots := []types.Ballot{
@@ -65,7 +66,7 @@ func TestLayer(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	nodeID := types.RandomNodeID()
 	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 	_, err := Get(db, ballot.ID())
@@ -85,7 +86,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestHas(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ballot := types.NewExistingBallot(types.BallotID{1}, types.EmptyEdSignature, types.EmptyNodeID, types.LayerID(0))
 
 	exists, err := Has(db, ballot.ID())
@@ -99,7 +100,7 @@ func TestHas(t *testing.T) {
 }
 
 func TestLatest(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	latest, err := LatestLayer(db)
 	require.NoError(t, err)
 	require.Equal(t, types.LayerID(0), latest)
@@ -123,7 +124,7 @@ func TestLatest(t *testing.T) {
 }
 
 func TestLayerBallotBySmesher(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lid := types.LayerID(1)
 	nodeID1 := types.RandomNodeID()
 	nodeID2 := types.RandomNodeID()
@@ -147,7 +148,6 @@ func TestLayerBallotBySmesher(t *testing.T) {
 func newAtx(signer *signing.EdSigner, layerID types.LayerID) *types.ActivationTx {
 	atx := &types.ActivationTx{
 		PublishEpoch: layerID.GetEpoch(),
-		PrevATXID:    types.RandomATXID(),
 		NumUnits:     2,
 		TickCount:    1,
 		SmesherID:    signer.NodeID(),
@@ -158,12 +158,12 @@ func newAtx(signer *signing.EdSigner, layerID types.LayerID) *types.ActivationTx
 }
 
 func TestFirstInEpoch(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	lid := types.LayerID(layersPerEpoch * 2)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	atx := newAtx(sig, lid)
-	require.NoError(t, atxs.Add(db, atx))
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 
 	got, err := FirstInEpoch(db, atx.ID(), 2)
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -285,7 +285,7 @@ func TestAllFirstInEpoch(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			for _, ballot := range tc.ballots {
 				require.NoError(t, Add(db, &ballot))
 			}
@@ -301,7 +301,7 @@ func TestAllFirstInEpoch(t *testing.T) {
 }
 
 func TestLoadBlob(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	ballot1 := types.NewExistingBallot(

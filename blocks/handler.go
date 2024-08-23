@@ -28,7 +28,7 @@ type Handler struct {
 	logger *zap.Logger
 
 	fetcher  system.Fetcher
-	db       *sql.Database
+	db       sql.StateDatabase
 	tortoise tortoiseProvider
 	mesh     meshProvider
 }
@@ -44,7 +44,13 @@ func WithLogger(logger *zap.Logger) Opt {
 }
 
 // NewHandler creates new Handler.
-func NewHandler(f system.Fetcher, db *sql.Database, tortoise tortoiseProvider, m meshProvider, opts ...Opt) *Handler {
+func NewHandler(
+	f system.Fetcher,
+	db sql.StateDatabase,
+	tortoise tortoiseProvider,
+	m meshProvider,
+	opts ...Opt,
+) *Handler {
 	h := &Handler{
 		logger:   zap.NewNop(),
 		fetcher:  f,
@@ -82,7 +88,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 		return fmt.Errorf("%w: %s", pubsub.ErrValidationReject, err.Error())
 	}
 
-	logger = logger.With(zap.Stringer("block_id", b.ID()), zap.Uint32("layer_id", b.LayerIndex.Uint32()))
+	logger = logger.With(zap.Stringer("block_id", b.ID()), zap.Uint32("layer", b.LayerIndex.Uint32()))
 
 	if exists, err := blocks.Has(h.db, b.ID()); err != nil {
 		logger.Error("failed to check block exist", zap.Error(err))
@@ -90,7 +96,7 @@ func (h *Handler) HandleSyncedBlock(ctx context.Context, expHash types.Hash32, p
 		logger.Debug("known block")
 		return nil
 	}
-	logger.Info("new block")
+	logger.Debug("new block")
 
 	if missing := h.tortoise.GetMissingActiveSet(b.LayerIndex.GetEpoch(), toAtxIDs(b.Rewards)); len(missing) > 0 {
 		h.fetcher.RegisterPeerHashes(peer, types.ATXIDsToHashes(missing))

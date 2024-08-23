@@ -15,24 +15,8 @@ import (
 // mainLoggerName is a name of the global logger.
 const mainLoggerName = "00000.defaultLogger"
 
-// should we format out logs in json.
-var jsonLog = false
-
 // where logs go by default.
-var logwriter io.Writer
-
-// default encoders.
-var defaultEncoder = zap.NewDevelopmentEncoderConfig()
-
-// Level is an alias to zapcore.Level.
-type Level = zapcore.Level
-
-// DefaultLevel returns the zapcore level of logging.
-func DefaultLevel() Level {
-	return zapcore.InfoLevel
-}
-
-//go:generate mockgen -typed -package=log -destination=./log_mock.go -source=./log.go
+var logWriter io.Writer = os.Stdout
 
 // Logger is an interface for our logging API.
 type Logger interface {
@@ -44,13 +28,6 @@ type Logger interface {
 	With() FieldLogger
 	WithContext(context.Context) Log
 	WithName(string) Log
-}
-
-func encoder() zapcore.Encoder {
-	if jsonLog {
-		return zapcore.NewJSONEncoder(defaultEncoder)
-	}
-	return zapcore.NewConsoleEncoder(defaultEncoder)
 }
 
 // AppLog is the local app singleton logger.
@@ -67,36 +44,18 @@ func GetLogger() Log {
 	return AppLog
 }
 
-// SetLogger sets logger.
-func SetLogger(logger Log) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	AppLog = logger
-}
-
 // SetupGlobal overwrites global logger.
 func SetupGlobal(logger Log) {
-	SetLogger(NewFromLog(logger.logger.Named(mainLoggerName)))
+	mu.Lock()
+	defer mu.Unlock()
+	AppLog = NewFromLog(logger.logger.Named(mainLoggerName))
 }
 
 func init() {
-	logwriter = os.Stdout
-
-	// create a basic temp os.Stdout logger
-	initLogging()
-}
-
-func initLogging() {
-	SetLogger(NewDefault(mainLoggerName))
-}
-
-// JSONLog turns JSON format on or off.
-func JSONLog(b bool) {
-	jsonLog = b
-
-	// Need to reinitialize
-	initLogging()
+	SetupGlobal(NewWithLevel(mainLoggerName,
+		zap.NewAtomicLevelAt(zapcore.InfoLevel),
+		zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig()),
+	))
 }
 
 // NewNop creates silent logger.
@@ -105,17 +64,15 @@ func NewNop() Log {
 }
 
 // NewWithLevel creates a logger with a fixed level and with a set of (optional) hooks.
-func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
-	consoleSyncer := zapcore.AddSync(logwriter)
-	enc := encoder()
-	core := zapcore.NewCore(enc, consoleSyncer, level)
+func NewWithLevel(module string,
+	level zap.AtomicLevel,
+	encoder zapcore.Encoder,
+	hooks ...func(zapcore.Entry) error,
+) Log {
+	consoleSyncer := zapcore.AddSync(logWriter)
+	core := zapcore.NewCore(encoder, consoleSyncer, level)
 	log := zap.New(zapcore.RegisterHooks(core, hooks...)).Named(module)
 	return NewFromLog(log)
-}
-
-// NewDefault creates a Log with the default log level.
-func NewDefault(module string) Log {
-	return NewWithLevel(module, zap.NewAtomicLevelAt(DefaultLevel()))
 }
 
 // NewFromLog creates a Log from an existing zap-compatible log.
@@ -140,11 +97,6 @@ func Warning(msg string, args ...any) {
 	GetLogger().Warning(msg, args...)
 }
 
-// Fatal prints formatted error level log message.
-func Fatal(msg string, args ...any) {
-	GetLogger().Fatal(msg, args...)
-}
-
 // With returns a FieldLogger which you can append fields to.
 func With() FieldLogger {
 	return FieldLogger{GetLogger().logger, GetLogger().name}
@@ -154,18 +106,3 @@ func With() FieldLogger {
 func Panic(msg string, args ...any) {
 	GetLogger().Panic(msg, args...)
 }
-
-type (
-	// ObjectMarshaller is an alias to zapcore.ObjectMarshaller.
-	ObjectMarshaller = zapcore.ObjectMarshaler
-	// ObjectMarshallerFunc is an alias to zapcore.ObjectMarshallerFunc.
-	ObjectMarshallerFunc = zapcore.ObjectMarshalerFunc
-	// ObjectEncoder is an alias to zapcore.ObjectEncoder.
-	ObjectEncoder = zapcore.ObjectEncoder
-	// ArrayMarshaler is an alias to zapcore.ArrayMarshaller.
-	ArrayMarshaler = zapcore.ArrayMarshaler
-	// ArrayMarshalerFunc is an alias to zapcore.ArrayMarshallerFunc.
-	ArrayMarshalerFunc = zapcore.ArrayMarshalerFunc
-	// ArrayEncoder is an alias to zapcore.ArrayEncoder.
-	ArrayEncoder = zapcore.ArrayEncoder
-)

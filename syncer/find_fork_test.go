@@ -11,27 +11,28 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 )
 
 type testForkFinder struct {
 	*syncer.ForkFinder
-	db       *sql.Database
+	db       sql.StateDatabase
 	mFetcher *mocks.Mockfetcher
 }
 
-func newTestForkFinderWithDuration(t *testing.T, d time.Duration, lg log.Log) *testForkFinder {
+func newTestForkFinderWithDuration(t *testing.T, d time.Duration, lg *zap.Logger) *testForkFinder {
 	mf := mocks.NewMockfetcher(gomock.NewController(t))
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	require.NoError(t, layers.SetMeshHash(db, types.GetEffectiveGenesis(), types.RandomHash()))
 	return &testForkFinder{
 		ForkFinder: syncer.NewForkFinder(lg, db, mf, d),
@@ -41,7 +42,7 @@ func newTestForkFinderWithDuration(t *testing.T, d time.Duration, lg log.Log) *t
 }
 
 func TestResynced(t *testing.T) {
-	tf := newTestForkFinderWithDuration(t, 0, logtest.New(t))
+	tf := newTestForkFinderWithDuration(t, 0, zaptest.NewLogger(t))
 	lid := types.LayerID(11)
 	hash := types.RandomHash()
 	require.True(t, tf.NeedResync(lid, hash))
@@ -54,7 +55,7 @@ func TestResynced(t *testing.T) {
 }
 
 func TestForkFinder_Purge(t *testing.T) {
-	tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
+	tf := newTestForkFinderWithDuration(t, time.Hour, zaptest.NewLogger(t))
 	numCached := 10
 	tf.UpdateAgreement(
 		p2p.Peer(strconv.Itoa(0)),
@@ -88,7 +89,7 @@ func layerHash(layer int, good bool) types.Hash32 {
 	return h2
 }
 
-func storeNodeHashes(t *testing.T, db *sql.Database, diverge, max int) {
+func storeNodeHashes(t *testing.T, db sql.StateDatabase, diverge, max int) {
 	for lid := 0; lid <= max; lid++ {
 		if lid < diverge {
 			require.NoError(t, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, true)))
@@ -124,7 +125,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 	}
 	expected := diverge - 1
 	for lid := max; lid > expected; lid-- {
-		tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
+		tf := newTestForkFinderWithDuration(t, time.Hour, zaptest.NewLogger(t))
 		storeNodeHashes(t, tf.db, diverge, max)
 		tf.mFetcher.EXPECT().PeerMeshHashes(gomock.Any(), peer, gomock.Any()).DoAndReturn(
 			func(_ context.Context, _ p2p.Peer, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
@@ -145,7 +146,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 	t.Run("peer mesh changed", func(t *testing.T) {
 		t.Parallel()
 
-		tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
+		tf := newTestForkFinderWithDuration(t, time.Hour, zaptest.NewLogger(t))
 		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
 		tf.UpdateAgreement("shorty", types.LayerID(111), types.RandomHash(), time.Now())
@@ -166,7 +167,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 	t.Run("node mesh changed", func(t *testing.T) {
 		t.Parallel()
 
-		tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
+		tf := newTestForkFinderWithDuration(t, time.Hour, zaptest.NewLogger(t))
 		require.NoError(t, layers.SetMeshHash(tf.db, lastAgreedLid, lastAgreedHash))
 		tf.UpdateAgreement(peer, lastAgreedLid, lastAgreedHash, time.Now())
 		tf.UpdateAgreement("shorty", types.LayerID(111), types.RandomHash(), time.Now())
@@ -223,7 +224,7 @@ func TestForkFinder_FindFork_Edges(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tf := newTestForkFinderWithDuration(t, time.Hour, logtest.New(t))
+			tf := newTestForkFinderWithDuration(t, time.Hour, zaptest.NewLogger(t))
 			storeNodeHashes(t, tf.db, diverge, max)
 
 			peer := p2p.Peer("grumpy")

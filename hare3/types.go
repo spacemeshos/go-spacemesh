@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
@@ -82,14 +81,14 @@ type Value struct {
 	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
 	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
 	//
-	// If we expect 6.0 Mio ATXs that would be a total of 6.0 Mio + 50 * 4032 = 6 201 600 slots.
+	// If we expect 7.0 Mio ATXs that would be a total of 7.0 Mio + 50 * 4032 = 8 201 600 slots.
 	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 6 201 600 / 4032 = 1538.1 eligibilities in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(3 701 600 * 1/4032 * 4031/4032) = 39.2
+	// 8 201 600 / 4032 = 2034.1 eligibilities in a layer with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(8 201 600 * 1/4032 * 4031/4032) = 45.1
 	//
-	// This means that we can expect a maximum of 1538.1 + 6*39.2 = 1773.4 eligibilities in a layer with
+	// This means that we can expect a maximum of 2034.1 + 6*45.1 = 2304.7 eligibilities in a layer with
 	// > 99.9997% probability.
-	Proposals []types.ProposalID `scale:"max=1775"`
+	Proposals []types.ProposalID `scale:"max=2350"`
 	// Reference is set in messages for commit and notify rounds.
 	Reference *types.Hash32
 }
@@ -108,10 +107,11 @@ type Message struct {
 }
 
 func (m *Message) ToHash() types.Hash32 {
-	hash := hash.New()
-	codec.MustEncodeTo(hash, &m.Body)
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
+	codec.MustEncodeTo(h, &m.Body)
 	var rst types.Hash32
-	hash.Sum(rst[:0])
+	h.Sum(rst[:0])
 	return rst
 }
 
@@ -157,7 +157,7 @@ func (m *Message) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("round", m.Round.String())
 	encoder.AddString("sender", m.Sender.ShortString())
 	if m.Value.Proposals != nil {
-		encoder.AddArray("full", zapcore.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		encoder.AddArray("full", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 			for _, id := range m.Value.Proposals {
 				encoder.AppendString(types.Hash20(id).ShortString())
 			}

@@ -85,7 +85,8 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 		return len(conns[0].GetStreams()) == 2
 	}, time.Second*5, time.Millisecond*50)
 
-	s := getStream(conns[0], pubsub.GossipSubID_v11, network.DirOutbound)
+	s := getStream(conns[0], pubsub.GossipSubID_v12, network.DirOutbound)
+	require.NotNil(t, s)
 
 	require.True(t, app1.syncer.IsSynced(ctx))
 	require.True(t, app2.syncer.IsSynced(ctx))

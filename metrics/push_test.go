@@ -24,13 +24,9 @@ func TestStartPushMetrics(t *testing.T) {
 	}, nil)
 	testMetric.WithLabelValues().Add(1)
 
+	var response []byte
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resBytes, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-
-		res := string(resBytes)
-		require.Contains(t, res, testMetricName+" 1")
-
+		response, _ = io.ReadAll(r.Body)
 		w.WriteHeader(202)
 	}))
 	defer ts.Close()
@@ -39,4 +35,5 @@ func TestStartPushMetrics(t *testing.T) {
 		Gatherer(prometheus.DefaultGatherer).
 		Format(expfmt.NewFormat(expfmt.TypeTextPlain))
 	require.NoError(t, pusher.Push())
+	require.Contains(t, string(response), testMetricName+" 1")
 }

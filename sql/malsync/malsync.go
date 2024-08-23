@@ -9,7 +9,7 @@ import (
 
 func GetSyncState(db sql.Executor) (time.Time, error) {
 	var timestamp time.Time
-	rows, err := db.Exec("select timestamp from malfeasance_sync_state",
+	rows, err := db.Exec("select timestamp from malfeasance_sync_state where id = 1",
 		nil, func(stmt *sql.Statement) bool {
 			v := stmt.ColumnInt64(0)
 			if v > 0 {
@@ -17,21 +17,25 @@ func GetSyncState(db sql.Executor) (time.Time, error) {
 			}
 			return true
 		})
-	if err != nil {
+	switch {
+	case err != nil:
 		return time.Time{}, fmt.Errorf("error getting malfeasance sync state: %w", err)
-	} else if rows != 1 {
+	case rows <= 1:
+		return timestamp, nil
+	default:
 		return time.Time{}, fmt.Errorf("expected malfeasance_sync_state to have 1 row but got %d rows", rows)
 	}
-	return timestamp, nil
 }
 
 func updateSyncState(db sql.Executor, ts int64) error {
-	_, err := db.Exec("update malfeasance_sync_state set timestamp = ?1",
+	if _, err := db.Exec(
+		`insert into malfeasance_sync_state (id, timestamp) values(1, ?1)
+                   on conflict (id) do update set timestamp = ?1`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, ts)
-		}, nil)
-	if err != nil {
-		return fmt.Errorf("error updating malfeasance sync state: %w", err)
+		}, nil,
+	); err != nil {
+		return fmt.Errorf("error initializing malfeasance sync state: %w", err)
 	}
 	return nil
 }

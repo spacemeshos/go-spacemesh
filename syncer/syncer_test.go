@@ -10,18 +10,18 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	mmocks "github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -109,7 +109,7 @@ func (ts *testSyncer) expectDownloadLoop() chan struct{} {
 }
 
 func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
-	lg := logtest.New(t)
+	lg := zaptest.NewLogger(t)
 	mt := newMockLayerTicker()
 	ctrl := gomock.NewController(t)
 
@@ -127,8 +127,8 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mCertHdr:     mocks.NewMockcertHandler(ctrl),
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
 	}
-	db := sql.InMemory()
-	ts.cdb = datastore.NewCachedDB(db, lg.Zap())
+	db := statesql.InMemory()
+	ts.cdb = datastore.NewCachedDB(db, lg)
 	var err error
 	atxsdata := atxsdata.New()
 	exec := mesh.NewExecutor(ts.cdb, atxsdata, ts.mVm, ts.mConState, lg)

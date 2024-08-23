@@ -3,23 +3,24 @@ package malfeasance
 import (
 	"context"
 
-	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/verifying"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
 //go:generate mockgen -typed -package=malfeasance -destination=./mocks.go -source=./interface.go
-
-type SigVerifier interface {
-	Verify(signing.Domain, types.NodeID, []byte, types.EdSignature) bool
-}
 
 type tortoise interface {
 	OnMalfeasance(types.NodeID)
 }
 
-type postVerifier interface {
-	Verify(ctx context.Context, p *shared.Proof, m *shared.ProofMetadata, opts ...verifying.OptionFunc) error
+type HandlerV1 interface {
+	Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error)
+	ReportProof(vec *prometheus.CounterVec)
+	ReportInvalidProof(vec *prometheus.CounterVec)
+}
+
+type HandlerV2 interface {
+	Validate(ctx context.Context, data []byte) (types.NodeID, error)
 }

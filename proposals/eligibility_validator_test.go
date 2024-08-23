@@ -7,10 +7,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
@@ -27,6 +27,7 @@ func gatx(
 		VRFNonce:     nonce,
 		TickCount:    100,
 		SmesherID:    smesher,
+		Weight:       uint64(units) * 100,
 	}
 	atx.SetID(id)
 	atx.SetReceived(time.Time{}.Add(1))
@@ -552,7 +553,6 @@ func TestEligibilityValidator(t *testing.T) {
 				}
 			}).AnyTimes()
 
-			lg := logtest.New(t)
 			c := atxsdata.New()
 			c.EvictEpoch(tc.evicted)
 			tv := NewEligibilityValidator(
@@ -563,7 +563,7 @@ func TestEligibilityValidator(t *testing.T) {
 				ms.md,
 				c,
 				ms.mbc,
-				lg,
+				zaptest.NewLogger(t),
 				ms.mvrf,
 			)
 			for _, atx := range tc.atxs {

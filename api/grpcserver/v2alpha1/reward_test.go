@@ -15,12 +15,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestRewardService_List(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewRewardsGenerator().WithAddresses(100).WithUniqueCoinbase()
@@ -35,7 +35,7 @@ func TestRewardService_List(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewRewardServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -103,7 +103,7 @@ func TestRewardService_List(t *testing.T) {
 }
 
 func TestRewardStreamService_Stream(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	gen := fixture.NewRewardsGenerator()
@@ -118,7 +118,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewRewardStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {
@@ -190,7 +190,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 
 				var expect []*types.Reward
 				for _, rst := range streamed {
-					events.ReportRewardReceived(rst)
+					require.NoError(t, events.ReportRewardReceived(rst))
 					matcher := rewardsMatcher{tc.request, ctx}
 					if matcher.match(&rst) {
 						expect = append(expect, &rst)

@@ -13,19 +13,18 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -35,6 +34,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -75,6 +75,7 @@ func gatx(
 		PublishEpoch: epoch,
 		TickCount:    ticks,
 		SmesherID:    smesher,
+		Weight:       uint64(units) * ticks,
 	}
 	atx.SetID(id)
 	atx.SetReceived(time.Time{}.Add(1))
@@ -748,14 +749,14 @@ func TestBuild(t *testing.T) {
 				publisher = pmocks.NewMockPublisher(ctrl)
 				tortoise  = mocks.NewMockvotesEncoder(ctrl)
 				syncer    = smocks.NewMockSyncStateProvider(ctrl)
-				db        = sql.InMemory()
+				db        = statesql.InMemory()
 				localdb   = localsql.InMemory()
 				atxsdata  = atxsdata.New()
 			)
 
 			clock.EXPECT().LayerToTime(gomock.Any()).Return(time.Unix(0, 0)).AnyTimes()
 
-			full := append(defaults, WithLogger(logtest.New(t)), WithSigners(signer))
+			full := append(defaults, WithLogger(zaptest.NewLogger(t)), WithSigners(signer))
 			full = append(full, tc.opts...)
 			builder := New(clock, db, localdb, atxsdata, publisher, tortoise, syncer, conState, full...)
 			var decoded chan *types.Proposal
@@ -776,7 +777,7 @@ func TestBuild(t *testing.T) {
 						)
 					}
 					for _, atx := range step.atxs {
-						require.NoError(t, atxs.Add(db, atx))
+						require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 						atxsdata.AddFromAtx(atx, false)
 					}
 					for _, ballot := range step.ballots {
@@ -891,7 +892,7 @@ func TestMarshalLog(t *testing.T) {
 		require.NoError(t, session.MarshalLogObject(encoder))
 	})
 	t.Run("latency", func(t *testing.T) {
-		latency := &latencyTracker{start: time.Unix(0, 0), publish: time.Unix(1000, 0)}
+		latency := &latencyTracker{start: time.Unix(0, 0), end: time.Unix(1000, 0)}
 		require.NoError(t, latency.MarshalLogObject(encoder))
 	})
 }
@@ -904,7 +905,7 @@ func TestStartStop(t *testing.T) {
 		publisher = pmocks.NewMockPublisher(ctrl)
 		tortoise  = mocks.NewMockvotesEncoder(ctrl)
 		syncer    = smocks.NewMockSyncStateProvider(ctrl)
-		db        = sql.InMemory()
+		db        = statesql.InMemory()
 		localdb   = localsql.InMemory()
 		atxsdata  = atxsdata.New()
 	)
@@ -949,7 +950,7 @@ func TestStartStop(t *testing.T) {
 		tortoise,
 		syncer,
 		conState,
-		WithLogger(logtest.New(t)),
+		WithLogger(zaptest.NewLogger(t)),
 		WithActivesetPreparation(ActiveSetPreparation{}),
 	)
 	builder.Register(signer)

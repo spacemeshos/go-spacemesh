@@ -19,10 +19,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestLayerService_List(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	lrs := make([]layers.Layer, 100)
@@ -40,7 +41,7 @@ func TestLayerService_List(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewLayerServiceClient(conn)
 
 	t.Run("limit set too high", func(t *testing.T) {
@@ -98,7 +99,7 @@ func TestLayerConvertEventStatus(t *testing.T) {
 }
 
 func TestLayerStreamService_Stream(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 
 	lrs := make([]layers.Layer, 100)
@@ -116,7 +117,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewLayerStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {
@@ -189,7 +190,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 						Status:  s,
 					}
 
-					events.ReportLayerUpdate(lu)
+					require.NoError(t, events.ReportLayerUpdate(lu))
 					matcher := layersMatcher{tc.request, ctx}
 					if matcher.match(&lu) {
 						expect = append(expect, &rst)
@@ -225,7 +226,7 @@ func layerGenWithBlock(withBlock bool) layerGenOpt {
 	}
 }
 
-func generateLayer(db *sql.Database, id types.LayerID, opts ...layerGenOpt) (*layers.Layer, error) {
+func generateLayer(db sql.StateDatabase, id types.LayerID, opts ...layerGenOpt) (*layers.Layer, error) {
 	g := &layerGenOpts{}
 	for _, opt := range opts {
 		opt(g)

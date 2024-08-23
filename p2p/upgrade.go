@@ -17,11 +17,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
 	ma "github.com/multiformats/go-multiaddr"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	discovery "github.com/spacemeshos/go-spacemesh/p2p/dhtdiscovery"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -29,7 +30,7 @@ import (
 type Opt func(fh *Host)
 
 // WithLog configures logger for Host.
-func WithLog(logger log.Log) Opt {
+func WithLog(logger *zap.Logger) Opt {
 	return func(fh *Host) {
 		fh.logger = logger
 	}
@@ -51,7 +52,7 @@ func WithContext(ctx context.Context) Opt {
 
 // WithNodeReporter updates reporter that is notified every time when
 // node added or removed a peer.
-func WithNodeReporter(reporter func()) Opt {
+func WithNodeReporter(reporter func() error) Opt {
 	return func(fh *Host) {
 		fh.nodeReporter = reporter
 	}
@@ -75,6 +76,12 @@ func WithRelayCandidateChannel(relayCh chan<- peer.AddrInfo) Opt {
 	}
 }
 
+func WithPeerInfo(pi peerinfo.PeerInfo) Opt {
+	return func(fh *Host) {
+		fh.peerInfo = pi
+	}
+}
+
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -83,7 +90,7 @@ type Host struct {
 	cancel context.CancelFunc
 
 	cfg    Config
-	logger log.Log
+	logger *zap.Logger
 
 	closed struct {
 		sync.Mutex
@@ -91,9 +98,10 @@ type Host struct {
 	}
 
 	host.Host
+	peerInfo peerinfo.PeerInfo
 	pubsub.PubSub
 
-	nodeReporter func()
+	nodeReporter func() error
 
 	discovery        *discovery.Discovery
 	direct, bootnode map[peer.ID]struct{}
@@ -121,7 +129,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		ctx:    ctx,
 		cancel: cancel,
 		cfg:    DefaultConfig(),
-		logger: log.NewNop(),
+		logger: zap.NewNop(),
 		Host:   h,
 	}
 	for _, opt := range opts {
@@ -162,7 +170,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		discovery.WithHighPeers(cfg.HighPeers),
 		discovery.WithDir(cfg.DataDir),
 		discovery.WithBootnodes(bootnodes),
-		discovery.WithLogger(fh.logger.Zap()),
+		discovery.WithLogger(fh.logger),
 		discovery.WithAdvertiseDelay(fh.cfg.DiscoveryTimings.AdvertiseDelay),
 		discovery.WithAdvertiseInterval(fh.cfg.DiscoveryTimings.AdvertiseInterval),
 		discovery.WithAdvertiseIntervalSpread(fh.cfg.DiscoveryTimings.AdvertiseIntervalSpread),
@@ -191,7 +199,7 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 		dopts = append(dopts, discovery.WithMode(dht.ModeAutoServer))
 		backup, err := loadPeers(cfg.DataDir)
 		if err != nil {
-			fh.logger.With().Warning("failed to to load backup peers", log.Err(err))
+			fh.logger.Warn("failed to to load backup peers", zap.Error(err))
 		} else if len(backup) > 0 {
 			dopts = append(dopts, discovery.WithBackup(backup))
 		}
@@ -214,10 +222,14 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	if fh.nodeReporter != nil {
 		fh.Network().Notify(&network.NotifyBundle{
 			ConnectedF: func(network.Network, network.Conn) {
-				fh.nodeReporter()
+				if err := fh.nodeReporter(); err != nil {
+					fh.logger.Error("Failed to emit status update", zap.Error(err))
+				}
 			},
 			DisconnectedF: func(network.Network, network.Conn) {
-				fh.nodeReporter()
+				if err := fh.nodeReporter(); err != nil {
+					fh.logger.Error("Failed to emit status update", zap.Error(err))
+				}
 			},
 		})
 	}
@@ -226,13 +238,13 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	for _, p := range cfg.PingPeers {
 		peerID, err := peer.Decode(p)
 		if err != nil {
-			fh.logger.With().Warning("ignoring invalid ping peer", log.Err(err))
+			fh.logger.Warn("ignoring invalid ping peer", zap.Error(err))
 			continue
 		}
 		peers = append(peers, peerID)
 	}
 	if len(peers) != 0 {
-		fh.ping = NewPing(fh.logger.Zap(), fh, peers, fh.discovery, WithPingInterval(fh.cfg.PingInterval))
+		fh.ping = NewPing(fh.logger, fh, peers, fh.discovery, WithPingInterval(fh.cfg.PingInterval))
 	}
 
 	fh.natTypeSub, err = fh.EventBus().Subscribe(new(event.EvtNATDeviceTypeChanged),
@@ -255,7 +267,7 @@ func (fh *Host) GetPeers() []Peer {
 }
 
 // Connected returns true if the specified peer is connected.
-// Peers that only have limited connections to them aren't considered connected.
+// Peers that only have transient connections to them aren't considered connected.
 func (fh *Host) Connected(p Peer) bool {
 	if fh.Host.Network().Connectedness(p) != network.Connected {
 		return false
@@ -271,6 +283,9 @@ func (fh *Host) Connected(p Peer) bool {
 // ConnectedPeerInfo retrieves a peer info object for the given peer.ID, if the
 // given peer is not connected then nil is returned.
 func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
+	if fh.peerInfo == nil {
+		panic("no PeerInfo")
+	}
 	conns := fh.Network().ConnsToPeer(id)
 	// there's no sync between  Peers() and ConnsToPeer() so by the time we
 	// try to get the conns they may not exist.
@@ -278,12 +293,14 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 		return nil
 	}
 
+	pi := fh.PeerInfo().EnsurePeerInfo(id)
 	var connections []ConnectionInfo
 	for _, c := range conns {
 		connections = append(connections, ConnectionInfo{
 			Address:  c.RemoteMultiaddr(),
 			Uptime:   time.Since(c.Stat().Opened),
 			Outbound: c.Stat().Direction == network.DirOutbound,
+			Kind:     pi.Kind(c),
 		})
 	}
 	var tags []string
@@ -297,8 +314,31 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 	return &PeerInfo{
 		ID:          id,
 		Connections: connections,
-		Tags:        tags,
+		ClientStats: grabPeerConnStats(&pi.ClientStats),
+		ServerStats: grabPeerConnStats(&pi.ServerStats),
+		DataStats: DataStats{
+			BytesSent:     pi.BytesSent(),
+			BytesReceived: pi.BytesReceived(),
+			SendRate: [2]int64{
+				pi.SendRate(1),
+				pi.SendRate(2),
+			},
+			RecvRate: [2]int64{
+				pi.RecvRate(1),
+				pi.RecvRate(2),
+			},
+		},
+		Tags: tags,
 	}
+}
+
+// ProtocolDataStats returns per-protocol data stats.
+func (fh *Host) ProtocolDataStats() map[protocol.ID]*peerinfo.DataStats {
+	r := make(map[protocol.ID]*peerinfo.DataStats)
+	for _, proto := range fh.peerInfo.Protocols() {
+		r[proto] = fh.peerInfo.EnsureProtoStats(proto)
+	}
+	return r
 }
 
 // ListenAddresses returns the addresses on which this host listens.
@@ -442,9 +482,9 @@ func (fh *Host) trackNetEvents() error {
 				return nil
 			}
 			natEv := ev.(event.EvtNATDeviceTypeChanged)
-			fh.logger.With().Info("NAT type changed",
-				log.Stringer("transportProtocol", natEv.TransportProtocol),
-				log.Stringer("type", natEv.NatDeviceType))
+			fh.logger.Info("NAT type changed",
+				zap.Stringer("transportProtocol", natEv.TransportProtocol),
+				zap.Stringer("type", natEv.NatDeviceType))
 			fh.natType.Lock()
 			switch natEv.TransportProtocol {
 			case network.NATTransportUDP:
@@ -458,8 +498,8 @@ func (fh *Host) trackNetEvents() error {
 				return nil
 			}
 			reachEv := ev.(event.EvtLocalReachabilityChanged)
-			fh.logger.With().Info("local reachability changed",
-				log.Stringer("reachability", reachEv.Reachability))
+			fh.logger.Info("local reachability changed",
+				zap.Stringer("reachability", reachEv.Reachability))
 			fh.reachability.Lock()
 			fh.reachability.value = reachEv.Reachability
 			fh.reachability.Unlock()
@@ -467,4 +507,8 @@ func (fh *Host) trackNetEvents() error {
 			return fh.ctx.Err()
 		}
 	}
+}
+
+func (fh *Host) PeerInfo() peerinfo.PeerInfo {
+	return fh.peerInfo
 }

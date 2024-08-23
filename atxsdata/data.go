@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -16,10 +18,6 @@ type ATX struct {
 	Weight             uint64
 	BaseHeight, Height uint64
 	Nonce              types.VRFPostIndex
-	// unexported to avoid accidental unsynchronized access
-	// (this field is mutated by the Data under a lock and
-	// might only be safely read under the same lock)
-	malicious bool
 }
 
 func New() *Data {
@@ -76,7 +74,7 @@ func (d *Data) AddFromAtx(atx *types.ActivationTx, malicious bool) *ATX {
 		atx.SmesherID,
 		atx.Coinbase,
 		atx.ID(),
-		atx.GetWeight(),
+		atx.Weight,
 		atx.BaseTickHeight,
 		atx.TickHeight(),
 		atx.VRFNonce,
@@ -107,9 +105,6 @@ func (d *Data) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 	atxsCounter.WithLabelValues(target.String()).Inc()
 
 	ecache.index[id] = atx
-	if atx.malicious {
-		d.malicious[atx.Node] = struct{}{}
-	}
 	return true
 }
 
@@ -131,7 +126,9 @@ func (d *Data) Add(
 		BaseHeight: baseHeight,
 		Height:     height,
 		Nonce:      nonce,
-		malicious:  malicious,
+	}
+	if malicious {
+		d.SetMalicious(node)
 	}
 	if d.AddAtx(epoch, atxid, atx) {
 		return atx
@@ -152,6 +149,12 @@ func (d *Data) SetMalicious(node types.NodeID) {
 	d.malicious[node] = struct{}{}
 }
 
+func (d *Data) MaliciousIdentities() []types.NodeID {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return maps.Keys(d.malicious)
+}
+
 // Get returns atx data.
 // SAFETY: The returned pointer MUST NOT be modified.
 func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
@@ -165,8 +168,6 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	if !exists {
 		return nil
 	}
-	_, exists = d.malicious[data.Node]
-	data.malicious = exists
 	return data
 }
 
@@ -185,10 +186,11 @@ type lockGuard struct{}
 // AtxFilter is a function that filters atxs.
 // The `lockGuard` prevents using the filter functions outside of the allowed context
 // to prevent data races.
-type AtxFilter func(*ATX, lockGuard) bool
+type AtxFilter func(*Data, *ATX, lockGuard) bool
 
-func NotMalicious(data *ATX, _ lockGuard) bool {
-	return !data.malicious
+func NotMalicious(d *Data, atx *ATX, _ lockGuard) bool {
+	_, m := d.malicious[atx.Node]
+	return !m
 }
 
 // IterateInEpoch calls `fn` for every ATX in epoch.
@@ -202,12 +204,9 @@ func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), f
 		return
 	}
 	for id, atx := range ecache.index {
-		if _, exists := d.malicious[atx.Node]; exists {
-			atx.malicious = true
-		}
 		ok := true
 		for _, filter := range filters {
-			ok = ok && filter(atx, lockGuard{})
+			ok = ok && filter(d, atx, lockGuard{})
 		}
 		if ok {
 			fn(id, atx)

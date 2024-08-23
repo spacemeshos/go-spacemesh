@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
@@ -25,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -73,7 +73,7 @@ func newTxWthRecipient(
 type testConState struct {
 	*ConservativeState
 	logger *zap.Logger
-	db     *sql.Database
+	db     sql.StateDatabase
 	mvm    *MockvmState
 
 	id peer.ID
@@ -86,12 +86,12 @@ func (t *testConState) handler() *TxHandler {
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
 	ctrl := gomock.NewController(t)
 	mvm := NewMockvmState(ctrl)
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	cfg := CSConfig{
 		BlockGasLimit:     gasLimit,
 		NumTXsPerProposal: numTXsInProposal,
 	}
-	logger := zaptest.NewLogger(t)
+	logger := zap.NewNop()
 	_, pub, err := crypto.GenerateEd25519Key(nil)
 	require.NoError(t, err)
 	id, err := peer.IDFromPublicKey(pub)
@@ -107,10 +107,6 @@ func createTestState(t *testing.T, gasLimit uint64) *testConState {
 		mvm:    mvm,
 		id:     id,
 	}
-}
-
-func createConservativeState(t *testing.T) *testConState {
-	return createTestState(t, math.MaxUint64)
 }
 
 func addBatch(tb testing.TB, tcs *testConState, numTXs int) ([]types.TransactionID, []*types.Transaction) {
@@ -132,7 +128,7 @@ func addBatch(tb testing.TB, tcs *testConState, numTXs int) ([]types.Transaction
 }
 
 func TestSelectProposalTXs(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	numTXs := 2 * numTXsInProposal
 	lid := types.LayerID(97)
 	bid := types.BlockID{100}
@@ -198,7 +194,7 @@ func TestSelectProposalTXs_ExhaustGas(t *testing.T) {
 }
 
 func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	numTXs := numTXsInProposal - 1
 	lid := types.LayerID(97)
 	bid := types.BlockID{100}
@@ -249,7 +245,7 @@ func TestSelectProposalTXs_ExhaustMemPool(t *testing.T) {
 }
 
 func TestSelectProposalTXs_SamePrincipal(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
@@ -282,7 +278,7 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 		numTXs        = numInProposal * 2
 		numInDBs      = numInProposal
 	)
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	signer1, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	addr1 := types.GenerateAddress(signer1.PublicKey().Bytes())
@@ -334,7 +330,7 @@ func TestSelectProposalTXs_TwoPrincipals(t *testing.T) {
 }
 
 func TestGetProjection(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
@@ -352,7 +348,7 @@ func TestGetProjection(t *testing.T) {
 }
 
 func TestAddToCache(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
@@ -368,7 +364,7 @@ func TestAddToCache(t *testing.T) {
 }
 
 func TestAddToCache_BadNonceNotPersisted(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	tx := &types.Transaction{
 		RawTx: types.NewRawTx([]byte{1, 1, 1}),
 		TxHeader: &types.TxHeader{
@@ -383,7 +379,7 @@ func TestAddToCache_BadNonceNotPersisted(t *testing.T) {
 }
 
 func TestAddToCache_NonceGap(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	tx := &types.Transaction{
 		RawTx: types.NewRawTx([]byte{1, 1, 1}),
 		TxHeader: &types.TxHeader{
@@ -400,21 +396,21 @@ func TestAddToCache_NonceGap(t *testing.T) {
 }
 
 func TestAddToCache_InsufficientBalance(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mvm.EXPECT().GetBalance(addr).Return(defaultAmount, nil).Times(1)
 	tcs.mvm.EXPECT().GetNonce(addr).Return(nonce, nil).Times(1)
 	tx := newTx(t, nonce, defaultAmount, defaultFee, signer)
-	require.NoError(t, tcs.AddToCache(context.Background(), tx, time.Now()))
+	require.ErrorIs(t, tcs.AddToCache(context.Background(), tx, time.Now()), errInsufficientBalance)
 	checkNoTX(t, tcs.cache, tx.ID)
-	require.True(t, tcs.cache.MoreInDB(addr))
-	checkTXStateFromDB(t, tcs.db, []*types.MeshTransaction{{Transaction: *tx}}, types.MEMPOOL)
+	require.False(t, tcs.cache.MoreInDB(addr))
+	checkTXNotInDB(t, tcs.db, tx.ID)
 }
 
 func TestAddToCache_TooManyForOneAccount(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
@@ -431,7 +427,7 @@ func TestAddToCache_TooManyForOneAccount(t *testing.T) {
 }
 
 func TestGetMeshTransaction(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
@@ -458,7 +454,7 @@ func TestGetMeshTransaction(t *testing.T) {
 }
 
 func TestUpdateCache_UpdateHeader(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	lid := types.LayerID(1)
 
 	signer, err := signing.NewEdSigner()
@@ -500,7 +496,7 @@ func TestUpdateCache_UpdateHeader(t *testing.T) {
 }
 
 func TestUpdateCache(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	lid := types.LayerID(1)
 	ids, txs := addBatch(t, tcs, numTXs)
 	block := types.NewExistingBlock(types.BlockID{1},
@@ -532,7 +528,7 @@ func TestUpdateCache(t *testing.T) {
 }
 
 func TestUpdateCache_EmptyLayer(t *testing.T) {
-	tcs := createConservativeState(t)
+	tcs := createTestState(t, math.MaxUint64)
 	lid := types.LayerID(1)
 	ids, _ := addBatch(t, tcs, numTXs)
 	require.NoError(t, tcs.LinkTXsWithBlock(lid, types.BlockID{1, 2, 3}, ids))
@@ -552,8 +548,8 @@ func TestConsistentHandling(t *testing.T) {
 	// conservative cache state
 
 	instances := []*testConState{
-		createConservativeState(t),
-		createConservativeState(t),
+		createTestState(t, math.MaxUint64),
+		createTestState(t, math.MaxUint64),
 	}
 
 	rng := mrand.New(mrand.NewSource(101))

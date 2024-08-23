@@ -18,17 +18,18 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func launchJsonServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	cfg := DefaultTestConfig()
 
 	// run on random port
-	jsonService := NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0", []string{})
+	jsonService := NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0",
+		[]string{}, false)
 
 	// start json server
-	require.NoError(tb, jsonService.StartService(context.Background(), services...))
+	require.NoError(tb, jsonService.StartService(services...))
 
 	// update config with bound address
 	cfg.JSONListener = jsonService.BoundAddress
@@ -65,7 +66,7 @@ func TestJsonApi(t *testing.T) {
 	conStateAPI := NewMockconservativeState(ctrl)
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build)
 	svc2 := NewMeshService(
-		datastore.NewCachedDB(sql.InMemory(), zaptest.NewLogger(t)),
+		datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,

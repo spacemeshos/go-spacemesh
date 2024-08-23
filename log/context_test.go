@@ -1,4 +1,4 @@
-package log_test
+package log
 
 import (
 	"bytes"
@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type nopSync struct {
@@ -28,8 +26,8 @@ func TestShortUUID(t *testing.T) {
 		&nopSync{Buffer: &buf},
 		zap.NewAtomicLevelAt(zapcore.InfoLevel),
 	)
-	logger := log.NewFromLog(zap.New(core))
-	session := log.WithNewSessionID(context.Background())
+	logger := NewFromLog(zap.New(core))
+	session := WithNewSessionID(context.Background())
 	logger.WithContext(session).Info("test")
 	type msg struct {
 		Session string `json:"sessionId"`

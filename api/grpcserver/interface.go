@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -19,6 +20,7 @@ import (
 
 // networkInfo interface.
 type networkInfo interface {
+	PeerInfo() peerinfo.PeerInfo
 	ID() p2p.Peer
 	ListenAddresses() []ma.Multiaddr
 	KnownAddresses() []ma.Multiaddr
@@ -54,6 +56,7 @@ type txValidator interface {
 // atxProvider is used by ActivationService to get ATXes.
 type atxProvider interface {
 	GetAtx(id types.ATXID) (*types.ActivationTx, error)
+	Previous(id types.ATXID) ([]types.ATXID, error)
 	MaxHeightAtx() (types.ATXID, error)
 	GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error)
 }

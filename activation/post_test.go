@@ -17,8 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestPostSetupManager(t *testing.T) {
@@ -273,16 +273,16 @@ func TestPostSetupManager_findCommitmentAtx_UsesLatestAtx(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	challenge := types.NIPostChallenge{
+	atx := &types.ActivationTx{
 		PublishEpoch: 1,
+		NumUnits:     2,
+		Weight:       2,
+		SmesherID:    signer.NodeID(),
+		TickCount:    1,
 	}
-	atx := types.NewActivationTx(challenge, types.Address{}, 2)
-	atx.SmesherID = signer.NodeID()
 	atx.SetID(types.RandomATXID())
 	atx.SetReceived(time.Now())
-	atx.TickCount = 1
-	require.NoError(t, err)
-	require.NoError(t, atxs.Add(mgr.db, atx))
+	require.NoError(t, atxs.Add(mgr.db, atx, types.AtxBlob{}))
 	mgr.atxsdata.AddFromAtx(atx, false)
 
 	commitmentAtx, err := mgr.findCommitmentAtx(context.Background())
@@ -323,13 +323,17 @@ func TestPostSetupManager_getCommitmentAtx_getsCommitmentAtxFromInitialAtx(t *te
 
 	// add an atx by the same node
 	commitmentAtx := types.RandomATXID()
-	atx := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 1)
-	atx.CommitmentATX = &commitmentAtx
-	atx.SmesherID = signer.NodeID()
+	atx := &types.ActivationTx{
+		NumUnits:      1,
+		Weight:        1,
+		SmesherID:     signer.NodeID(),
+		TickCount:     1,
+		CommitmentATX: &commitmentAtx,
+	}
+
 	atx.SetID(types.RandomATXID())
 	atx.SetReceived(time.Now())
-	atx.TickCount = 1
-	require.NoError(t, atxs.Add(mgr.cdb, atx))
+	require.NoError(t, atxs.Add(mgr.cdb, atx, types.AtxBlob{}))
 
 	atxid, err := mgr.commitmentAtx(context.Background(), mgr.opts.DataDir, signer.NodeID())
 	require.NoError(t, err)
@@ -365,7 +369,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
 
 	logger := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(sql.InMemory(), logger)
+	cdb := datastore.NewCachedDB(statesql.InMemory(), logger)
 	mgr, err := NewPostSetupManager(DefaultPostConfig(), logger, cdb, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 

@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestComputeThreshold(t *testing.T) {
@@ -165,7 +165,7 @@ func TestReferenceHeight(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := sql.InMemory()
+			db := statesql.InMemory()
 			for i, height := range tc.heights {
 				atx := &types.ActivationTx{
 					PublishEpoch: types.EpochID(tc.epoch) - 1,
@@ -174,7 +174,7 @@ func TestReferenceHeight(t *testing.T) {
 				}
 				atx.SetID(types.ATXID{byte(i + 1)})
 				atx.SetReceived(time.Now())
-				require.NoError(t, atxs.Add(db, atx))
+				require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			}
 			_, height, err := extractAtxsData(db, types.EpochID(tc.epoch))
 			require.NoError(t, err)

@@ -22,6 +22,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -32,14 +34,14 @@ const (
 
 // AdminService exposes endpoints for node administration.
 type AdminService struct {
-	db      *sql.Database
+	db      sql.StateDatabase
 	dataDir string
 	recover func()
 	p       peers
 }
 
 // NewAdminService creates a new admin grpc service.
-func NewAdminService(db *sql.Database, dataDir string, p peers) *AdminService {
+func NewAdminService(db sql.StateDatabase, dataDir string, p peers) *AdminService {
 	return &AdminService{
 		db:      db,
 		dataDir: dataDir,
@@ -55,20 +57,20 @@ func NewAdminService(db *sql.Database, dataDir string, p peers) *AdminService {
 }
 
 // RegisterService registers this service with a grpc server instance.
-func (a AdminService) RegisterService(server *grpc.Server) {
+func (a *AdminService) RegisterService(server *grpc.Server) {
 	pb.RegisterAdminServiceServer(server, a)
 }
 
-func (s AdminService) RegisterHandlerService(mux *runtime.ServeMux) error {
-	return pb.RegisterAdminServiceHandlerServer(context.Background(), mux, s)
+func (a *AdminService) RegisterHandlerService(mux *runtime.ServeMux) error {
+	return pb.RegisterAdminServiceHandlerServer(context.Background(), mux, a)
 }
 
 // String returns the name of this service.
-func (a AdminService) String() string {
+func (a *AdminService) String() string {
 	return "AdminService"
 }
 
-func (a AdminService) CheckpointStream(
+func (a *AdminService) CheckpointStream(
 	req *pb.CheckpointStreamRequest,
 	stream pb.AdminService_CheckpointStreamServer,
 ) error {
@@ -116,13 +118,13 @@ func (a AdminService) CheckpointStream(
 	}
 }
 
-func (a AdminService) Recover(ctx context.Context, _ *pb.RecoverRequest) (*emptypb.Empty, error) {
+func (a *AdminService) Recover(ctx context.Context, _ *pb.RecoverRequest) (*emptypb.Empty, error) {
 	ctxzap.Info(ctx, "going to recover from checkpoint")
 	a.recover()
 	return &emptypb.Empty{}, nil
 }
 
-func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
+func (a *AdminService) EventsStream(_ *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
 	sub, buf, err := events.SubscribeUserEvents(events.WithBuffer(1000))
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, err.Error())
@@ -154,7 +156,7 @@ func (a AdminService) EventsStream(req *pb.EventStreamRequest, stream pb.AdminSe
 	}
 }
 
-func (a AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_PeerInfoStreamServer) error {
+func (a *AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_PeerInfoStreamServer) error {
 	for _, p := range a.p.GetPeers() {
 		select {
 		case <-stream.Context().Done():
@@ -172,13 +174,32 @@ func (a AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_Pe
 					Address:  c.Address.String(),
 					Uptime:   durationpb.New(c.Uptime),
 					Outbound: c.Outbound,
+					Kind:     connKind(c.Kind),
 				}
 			}
-			err := stream.Send(&pb.PeerInfo{
-				Id:          info.ID.String(),
-				Connections: connections,
-				Tags:        info.Tags,
-			})
+			ds := info.DataStats
+			msg := &pb.PeerInfo{
+				Id:            info.ID.String(),
+				Connections:   connections,
+				Tags:          info.Tags,
+				ClientStats:   peerStats(info.ClientStats),
+				ServerStats:   peerStats(info.ServerStats),
+				BytesSent:     uint64(ds.BytesSent),
+				BytesReceived: uint64(ds.BytesReceived),
+			}
+			if ds.SendRate[0] != 0 || ds.SendRate[1] != 0 {
+				msg.SendRate = []uint64{
+					uint64(ds.SendRate[0]),
+					uint64(ds.SendRate[1]),
+				}
+			}
+			if ds.RecvRate[0] != 0 || ds.RecvRate[1] != 0 {
+				msg.RecvRate = []uint64{
+					uint64(ds.RecvRate[0]),
+					uint64(ds.RecvRate[1]),
+				}
+			}
+			err := stream.Send(msg)
 			if err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
@@ -186,4 +207,38 @@ func (a AdminService) PeerInfoStream(_ *emptypb.Empty, stream pb.AdminService_Pe
 	}
 
 	return nil
+}
+
+func connKind(kind peerinfo.Kind) pb.ConnectionInfo_Kind {
+	switch kind {
+	case peerinfo.KindInbound:
+		return pb.ConnectionInfo_Inbound
+	case peerinfo.KindOutbound:
+		return pb.ConnectionInfo_Outbound
+	case peerinfo.KindHolePunchInbound:
+		return pb.ConnectionInfo_HPInbound
+	case peerinfo.KindHolePunchOutbound:
+		return pb.ConnectionInfo_HPOutbound
+	case peerinfo.KindRelayInbound:
+		return pb.ConnectionInfo_RelayInbound
+	case peerinfo.KindRelayOutbound:
+		return pb.ConnectionInfo_RelayOutbound
+	default:
+		return pb.ConnectionInfo_Uknown
+	}
+}
+
+func peerStats(stats p2p.PeerRequestStats) *pb.PeerRequestStats {
+	if stats.SuccessCount == 0 && stats.FailureCount == 0 {
+		return nil
+	}
+	var latency *durationpb.Duration
+	if stats.SuccessCount > 0 || stats.FailureCount > 0 {
+		latency = durationpb.New(stats.Latency)
+	}
+	return &pb.PeerRequestStats{
+		SuccessCount: uint64(stats.SuccessCount),
+		FailureCount: uint64(stats.FailureCount),
+		Latency:      latency,
+	}
 }

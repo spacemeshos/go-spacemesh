@@ -8,10 +8,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -77,14 +77,14 @@ type InnerBlock struct {
 	// In this case they will get all 50 available slots in all 4032 layers of the epoch.
 	// Additionally every other identity on the network that successfully published an ATX will get 1 slot.
 	//
-	// If we expect 6.0 Mio ATXs that would be a total of 6.0 Mio + 50 * 4032 = 6 201 600 slots.
+	// If we expect 8.0 Mio ATXs that would be a total of 8.0 Mio + 50 * 4032 = 8 201 600 slots.
 	// Since these are randomly distributed across the epoch, we can expect an average of n * p =
-	// 6 201 600 / 4032 = 1538.1 rewards in a block with a standard deviation of sqrt(n * p * (1 - p)) =
-	// sqrt(3 701 600 * 1/4032 * 4031/4032) = 39.2
+	// 8 201 600 / 4032 = 2034.1 rewards in a block with a standard deviation of sqrt(n * p * (1 - p)) =
+	// sqrt(8 201 600 * 1/4032 * 4031/4032) = 45.1
 	//
-	// This means that we can expect a maximum of 1538.1 + 6*39.2 = 1773.4 rewards per block with
+	// This means that we can expect a maximum of 2034.1 + 6*45.1 = 2304.7 rewards per block with
 	// > 99.9997% probability.
-	Rewards []AnyReward     `scale:"max=1775"`
+	Rewards []AnyReward     `scale:"max=2350"`
 	TxIDs   []TransactionID `scale:"max=100000"`
 }
 
@@ -133,11 +133,7 @@ func (b *Block) Initialize() {
 
 // Bytes returns the serialization of the InnerBlock.
 func (b *Block) Bytes() []byte {
-	data, err := codec.Encode(&b.InnerBlock)
-	if err != nil {
-		log.Panic("failed to serialize block: %v", err)
-	}
-	return data
+	return codec.MustEncode(&b.InnerBlock)
 }
 
 // ID returns the BlockID.
@@ -151,7 +147,7 @@ func (b *Block) ToVote() Vote {
 }
 
 // MarshalLogObject implements logging encoder for Block.
-func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (b *Block) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("block_id", b.ID().String())
 	encoder.AddUint32("layer_id", b.LayerIndex.Uint32())
 	encoder.AddUint64("tick_height", b.TickHeight)
@@ -170,14 +166,9 @@ func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
 }
 
-// Field returns a log field. Implements the LoggableField interface.
-func (id BlockID) Field() log.Field {
-	return log.String("block_id", id.String())
-}
-
 // String implements the Stringer interface.
 func (id BlockID) String() string {
-	return id.AsHash32().ShortString()
+	return Hash20(id).ShortString()
 }
 
 // Compare returns true if other (the given BlockID) is less than this BlockID, by lexicographic comparison.
@@ -196,7 +187,7 @@ func BlockIDsToHashes(ids []BlockID) []Hash32 {
 
 type blockIDs []BlockID
 
-func (ids blockIDs) MarshalLogArray(encoder log.ArrayEncoder) error {
+func (ids blockIDs) MarshalLogArray(encoder zapcore.ArrayEncoder) error {
 	for i := range ids {
 		encoder.AppendString(ids[i].String())
 	}
@@ -251,9 +242,5 @@ type CertifyContent struct {
 
 // Bytes returns the actual data being signed in a CertifyMessage.
 func (cm *CertifyMessage) Bytes() []byte {
-	data, err := codec.Encode(&cm.CertifyContent)
-	if err != nil {
-		log.Panic("failed to serialize certify msg: %v", err)
-	}
-	return data
+	return codec.MustEncode(&cm.CertifyContent)
 }

@@ -7,10 +7,10 @@ import (
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -80,28 +80,32 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	stateCh := make(chan *stateUpdate, uint32(cl.Total())*numLayers*10)
 	tctx.Log.Debug("listening to state hashes...")
 	for i := range cl.Total() {
-		client := cl.Client(i)
-		watchStateHashes(ctx, eg, client, tctx.Log.Desugar(), func(state *pb.GlobalStateStreamResponse) (bool, error) {
-			data := state.Datum.Datum
-			require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
+		node := cl.Client(i)
 
-			resp := data.(*pb.GlobalStateData_GlobalState)
-			layer := resp.GlobalState.Layer.Number
-			if layer > stop {
-				return false, nil
-			}
+		eg.Go(func() error {
+			return stateHashStream(ctx, node, tctx.Log.Desugar(),
+				func(state *pb.GlobalStateStreamResponse) (bool, error) {
+					data := state.Datum.Datum
+					require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
 
-			stateHash := types.BytesToHash(resp.GlobalState.RootHash)
-			tctx.Log.Debugw("state hash collected",
-				"client", client.Name,
-				"layer", layer,
-				"state", stateHash.ShortString())
-			stateCh <- &stateUpdate{
-				layer:  layer,
-				hash:   stateHash,
-				client: client.Name,
-			}
-			return true, nil
+					resp := data.(*pb.GlobalStateData_GlobalState)
+					layer := resp.GlobalState.Layer.Number
+					if layer > stop {
+						return false, nil
+					}
+
+					stateHash := types.BytesToHash(resp.GlobalState.RootHash)
+					tctx.Log.Debugw("state hash collected",
+						"client", node.Name,
+						"layer", layer,
+						"state", stateHash.ShortString())
+					stateCh <- &stateUpdate{
+						layer:  layer,
+						hash:   stateHash,
+						client: node.Name,
+					}
+					return true, nil
+				})
 		})
 	}
 
@@ -129,11 +133,11 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		tctx.Log.Debugw("client states",
 			"layer", layer,
 			"num_states", len(hashes[layer]),
-			"states", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+			"states", zapcore.ObjectMarshalerFunc(func(encoder zapcore.ObjectEncoder) error {
 				for hash, clients := range hashes[layer] {
 					encoder.AddString("hash", hash.ShortString())
 					encoder.AddInt("num_clients", len(clients))
-					encoder.AddArray("clients", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+					encoder.AddArray("clients", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 						for _, c := range clients {
 							encoder.AppendString(c)
 						}
@@ -178,7 +182,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 func TestPartition_30_70(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	if tctx.ClusterSize > 30 {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30
@@ -192,7 +196,7 @@ func TestPartition_30_70(t *testing.T) {
 func TestPartition_50_50(t *testing.T) {
 	t.Parallel()
 
-	tctx := testcontext.New(t, testcontext.Labels("sanity"))
+	tctx := testcontext.New(t)
 	if tctx.ClusterSize > 30 {
 		tctx.Log.Info("cluster size changed to 30")
 		tctx.ClusterSize = 30

@@ -16,8 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func Test_Validation_VRFNonce(t *testing.T) {
@@ -476,7 +476,7 @@ func TestValidateMerkleProof(t *testing.T) {
 }
 
 func TestVerifyChainDeps(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()
@@ -486,13 +486,13 @@ func TestVerifyChainDeps(t *testing.T) {
 	invalidAtx.Sign(signer)
 	vInvalidAtx := toAtx(t, invalidAtx)
 	vInvalidAtx.SetValidity(types.Invalid)
-	require.NoError(t, atxs.Add(db, vInvalidAtx))
+	require.NoError(t, atxs.Add(db, vInvalidAtx, invalidAtx.Blob()))
 
 	t.Run("invalid prev ATX", func(t *testing.T) {
 		atx := newChainedActivationTxV1(t, invalidAtx, goldenATXID)
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -507,7 +507,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -524,7 +524,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx.Sign(signer)
 		atx.CommitmentATXID = &commitmentAtxID
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -538,7 +538,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -551,7 +551,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, invalidAtx.ID())
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -565,7 +565,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(signer)
 		vAtx := toAtx(t, atx)
-		require.NoError(t, atxs.Add(db, vAtx))
+		require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
@@ -576,10 +576,93 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.ErrorIs(t, err, &InvalidChainError{ID: vAtx.ID()})
 		require.ErrorIs(t, err, expected)
 	})
+
+	t.Run("initial V2 ATX", func(t *testing.T) {
+		watx := newInitialATXv2(t, goldenATXID)
+		watx.Sign(signer)
+		atx := &types.ActivationTx{
+			PublishEpoch: watx.PublishEpoch,
+			SmesherID:    watx.SmesherID,
+		}
+		atx.SetID(watx.ID())
+		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
+
+		v := NewMockPostVerifier(gomock.NewController(t))
+		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
+		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, watx.ID(), goldenATXID)
+		require.NoError(t, err)
+	})
+	t.Run("non-initial V2 ATX", func(t *testing.T) {
+		initialAtx := newInitialATXv1(t, goldenATXID)
+		initialAtx.Sign(signer)
+		require.NoError(t, atxs.Add(db, toAtx(t, initialAtx), initialAtx.Blob()))
+
+		watx := newSoloATXv2(t, initialAtx.PublishEpoch+1, initialAtx.ID(), initialAtx.ID())
+		watx.Sign(signer)
+		atx := &types.ActivationTx{
+			PublishEpoch: watx.PublishEpoch,
+			SmesherID:    watx.SmesherID,
+		}
+		atx.SetID(watx.ID())
+		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
+
+		v := NewMockPostVerifier(gomock.NewController(t))
+		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
+		v.EXPECT().Verify(ctx, (*shared.Proof)(initialAtx.NIPost.Post), gomock.Any(), gomock.Any())
+		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, watx.ID(), goldenATXID)
+		require.NoError(t, err)
+	})
+	t.Run("merged ATX", func(t *testing.T) {
+		initialAtx := newInitialATXv1(t, goldenATXID)
+		initialAtx.Sign(signer)
+		require.NoError(t, atxs.Add(db, toAtx(t, initialAtx), initialAtx.Blob()))
+
+		// second ID for the merged ATX
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		initialAtx2 := newInitialATXv1(t, goldenATXID)
+		initialAtx2.Sign(otherSig)
+		require.NoError(t, atxs.Add(db, toAtx(t, initialAtx2), initialAtx2.Blob()))
+
+		watx := newSoloATXv2(t, initialAtx.PublishEpoch+1, initialAtx.ID(), initialAtx.ID())
+		watx.NiPosts[0].Posts = append(watx.NiPosts[0].Posts, wire.SubPostV2{
+			MarriageIndex: 1,
+			PrevATXIndex:  1,
+			Post: wire.PostV1{
+				Nonce:   99,
+				Pow:     55,
+				Indices: types.RandomBytes(33),
+			},
+			NumUnits: 77,
+		})
+		watx.PreviousATXs = append(watx.PreviousATXs, initialAtx2.ID())
+		watx.Sign(signer)
+		atx := &types.ActivationTx{
+			PublishEpoch: watx.PublishEpoch,
+			SmesherID:    watx.SmesherID,
+		}
+		atx.SetID(watx.ID())
+		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
+
+		v := NewMockPostVerifier(gomock.NewController(t))
+		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
+		expectedPost2 := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[1].Post))
+		v.EXPECT().Verify(ctx, (*shared.Proof)(initialAtx.NIPost.Post), gomock.Any(), gomock.Any())
+		v.EXPECT().Verify(ctx, (*shared.Proof)(initialAtx2.NIPost.Post), gomock.Any(), gomock.Any())
+		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())
+		v.EXPECT().Verify(ctx, expectedPost2, gomock.Any(), gomock.Any())
+		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
+		err = validator.VerifyChain(ctx, watx.ID(), goldenATXID)
+		require.NoError(t, err)
+	})
 }
 
 func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()
@@ -605,7 +688,7 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 	atx := newChainedActivationTxV1(t, checkpointedAtx, checkpointedAtx.ID())
 	atx.Sign(signer)
 	vAtx := toAtx(t, atx)
-	require.NoError(t, atxs.Add(db, vAtx))
+	require.NoError(t, atxs.Add(db, vAtx, atx.Blob()))
 
 	ctrl := gomock.NewController(t)
 	v := NewMockPostVerifier(ctrl)

@@ -7,11 +7,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -103,7 +103,7 @@ type BallotMetadata struct {
 	MsgHash Hash32  // Hash of InnerBallot (returned by HashInnerBytes)
 }
 
-func (m *BallotMetadata) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (m *BallotMetadata) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint32("layer", m.Layer.Uint32())
 	encoder.AddString("msgHash", m.MsgHash.String())
 	return nil
@@ -186,21 +186,21 @@ type Votes struct {
 }
 
 // MarshalLogObject implements logging interface.
-func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (v *Votes) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("base", v.Base.String())
-	encoder.AddArray("support", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	encoder.AddArray("support", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 		for _, vote := range v.Support {
 			encoder.AppendObject(&vote)
 		}
 		return nil
 	}))
-	encoder.AddArray("against", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	encoder.AddArray("against", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 		for _, vote := range v.Against {
 			encoder.AppendObject(&vote)
 		}
 		return nil
 	}))
-	encoder.AddArray("abstain", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+	encoder.AddArray("abstain", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 		for _, lid := range v.Abstain {
 			encoder.AppendString(lid.String())
 		}
@@ -216,7 +216,7 @@ type BlockHeader struct {
 }
 
 // MarshalLogObject implements logging interface.
-func (header *BlockHeader) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (header *BlockHeader) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("id", header.ID.String())
 	encoder.AddUint32("layer", header.LayerID.Uint32())
 	encoder.AddUint64("height", header.Height)
@@ -234,7 +234,7 @@ type Opinion struct {
 }
 
 // MarshalLogObject implements logging interface.
-func (o *Opinion) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (o *Opinion) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddString("hash", o.Hash.ShortString())
 	return o.Votes.MarshalLogObject(encoder)
 }
@@ -261,23 +261,17 @@ func (b *Ballot) Initialize() error {
 
 // SignedBytes returns the serialization of the BallotMetadata for signing.
 func (b *Ballot) SignedBytes() []byte {
-	data, err := codec.Encode(&BallotMetadata{
+	return codec.MustEncode(&BallotMetadata{
 		Layer:   b.Layer,
 		MsgHash: BytesToHash(b.HashInnerBytes()),
 	})
-	if err != nil {
-		log.With().Fatal("failed to serialize BallotMetadata", log.Err(err))
-	}
-	return data
 }
 
 // HashInnerBytes returns the hash of the InnerBallot.
 func (b *Ballot) HashInnerBytes() []byte {
-	h := hash.New()
-	_, err := codec.EncodeTo(h, &b.InnerBallot)
-	if err != nil {
-		log.With().Fatal("failed to encode InnerBallot for hashing", log.Err(err))
-	}
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
+	codec.MustEncodeTo(h, &b.InnerBallot)
 	return h.Sum(nil)
 }
 
@@ -302,7 +296,7 @@ func (b *Ballot) IsMalicious() bool {
 }
 
 // MarshalLogObject implements logging encoder for Ballot.
-func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
+func (b *Ballot) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	var (
 		activeHash Hash32
 		beacon     Beacon
@@ -325,7 +319,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("atx_id", b.AtxID.String())
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddString("active set hash", activeHash.ShortString())
-	encoder.AddString("beacon", beacon.ShortString())
+	encoder.AddString("beacon", beacon.String())
 	encoder.AddObject("votes", &b.Votes)
 	return nil
 }
@@ -376,11 +370,6 @@ func (id BallotID) Bytes() []byte {
 // AsHash32 returns a Hash32 whose first 20 bytes are the bytes of this BallotID, it is right-padded with zeros.
 func (id BallotID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (id BallotID) Field() log.Field {
-	return log.String("ballot_id", id.String())
 }
 
 // Compare returns true if other (the given BallotID) is less than this BallotID, by lexicographic comparison.

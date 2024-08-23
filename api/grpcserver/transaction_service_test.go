@@ -23,12 +23,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 func TestTransactionService_StreamResults(t *testing.T) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -36,7 +37,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	gen := fixture.NewTransactionResultGenerator().
 		WithAddresses(2)
 	txs := make([]types.TransactionWithResult, 100)
-	require.NoError(t, db.WithTx(ctx, func(dtx *sql.Tx) error {
+	require.NoError(t, db.WithTx(ctx, func(dtx sql.Transaction) error {
 		for i := range txs {
 			tx := gen.Next()
 
@@ -51,7 +52,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, t, cfg)
+	conn := dialGrpc(t, cfg)
 	client := pb.NewTransactionServiceClient(conn)
 
 	t.Run("All", func(t *testing.T) {
@@ -117,7 +118,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 
 				var expect []*types.TransactionWithResult
 				for _, rst := range streamed {
-					events.ReportResult(*rst)
+					require.NoError(t, events.ReportResult(*rst))
 					if tc.matcher.match(rst) {
 						expect = append(expect, rst)
 					}
@@ -134,7 +135,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 }
 
 func BenchmarkStreamResults(b *testing.B) {
-	db := sql.InMemory()
+	db := statesql.InMemory()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -166,7 +167,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	cfg, cleanup := launchServer(b, svc)
 	b.Cleanup(cleanup)
 
-	conn := dialGrpc(ctx, b, cfg)
+	conn := dialGrpc(b, cfg)
 	client := pb.NewTransactionServiceClient(conn)
 
 	b.Logf("setup took %s", time.Since(start))
@@ -216,14 +217,13 @@ func parseOk() parseExpectation {
 }
 
 func TestParseTransactions(t *testing.T) {
-	db := sql.InMemory()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	t.Cleanup(cancel)
+	db := statesql.InMemory()
+
 	vminst := vm.New(db)
 	cfg, cleanup := launchServer(t, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil))
 	t.Cleanup(cleanup)
 	var (
-		conn     = dialGrpc(ctx, t, cfg)
+		conn     = dialGrpc(t, cfg)
 		client   = pb.NewTransactionServiceClient(conn)
 		keys     = make([]signing.PrivateKey, 4)
 		accounts = make([]types.Account, len(keys))
@@ -232,7 +232,7 @@ func TestParseTransactions(t *testing.T) {
 	for i := range keys {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
-		keys[i] = signing.PrivateKey(priv)
+		keys[i] = priv
 		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))

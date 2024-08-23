@@ -166,40 +166,31 @@ func backupOldDb(fs afero.Fs, srcDir, dbFile string) (string, error) {
 	return backupDir, nil
 }
 
-func positioningATX(ctx context.Context, db sql.Executor, id types.ATXID) (types.ATXID, error) {
+func poetProofRefs(ctx context.Context, db sql.Executor, id types.ATXID) ([]types.PoetProofRef, error) {
 	var blob sql.Blob
 	version, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
 	if err != nil {
-		return types.EmptyATXID, fmt.Errorf("get blob %s: %w", id, err)
+		return nil, fmt.Errorf("getting blob for %s: %w", id, err)
 	}
-	// TODO: implement for ATX V2
+
 	switch version {
 	case types.AtxV1:
 		var atx wire.ActivationTxV1
 		if err := codec.Decode(blob.Bytes, &atx); err != nil {
-			return types.EmptyATXID, fmt.Errorf("decode %s: %w", id, err)
+			return nil, fmt.Errorf("decoding ATX blob: %w", err)
 		}
-		return atx.PositioningATXID, nil
-	}
-	return types.EmptyATXID, fmt.Errorf("unsupported ATX version: %v", version)
-}
 
-func poetProofRef(ctx context.Context, db sql.Executor, id types.ATXID) (types.PoetProofRef, error) {
-	var blob sql.Blob
-	version, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
-	if err != nil {
-		return types.PoetProofRef{}, fmt.Errorf("getting blob for %s: %w", id, err)
-	}
-
-	// TODO: implement for ATX V2
-	switch version {
-	case types.AtxV1:
-		var atx wire.ActivationTxV1
+		return []types.PoetProofRef{types.PoetProofRef(atx.NIPost.PostMetadata.Challenge)}, nil
+	case types.AtxV2:
+		var atx wire.ActivationTxV2
 		if err := codec.Decode(blob.Bytes, &atx); err != nil {
-			return types.PoetProofRef{}, fmt.Errorf("decoding ATX blob: %w", err)
+			return nil, fmt.Errorf("decoding ATX blob: %w", err)
 		}
-
-		return types.PoetProofRef(atx.NIPost.PostMetadata.Challenge), nil
+		refs := make([]types.PoetProofRef, len(atx.NiPosts))
+		for i, post := range atx.NiPosts {
+			refs[i] = types.PoetProofRef(post.Challenge)
+		}
+		return refs, nil
 	}
-	return types.PoetProofRef{}, fmt.Errorf("unsupported ATX version: %v", version)
+	return nil, fmt.Errorf("unsupported ATX version: %v", version)
 }

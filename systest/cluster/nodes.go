@@ -19,6 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	apiv1 "k8s.io/api/core/v1"
@@ -61,12 +62,12 @@ var (
 		"requests and limits for smesher container",
 		&apiv1.ResourceRequirements{
 			Requests: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("0.2"),
-				apiv1.ResourceMemory: resource.MustParse("400Mi"),
+				apiv1.ResourceCPU:    resource.MustParse("1.3"),
+				apiv1.ResourceMemory: resource.MustParse("800Mi"),
 			},
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("2"),
-				apiv1.ResourceMemory: resource.MustParse("1Gi"),
+				apiv1.ResourceCPU:    resource.MustParse("1.3"),
+				apiv1.ResourceMemory: resource.MustParse("800Mi"),
 			},
 		},
 		toResources,
@@ -91,11 +92,11 @@ var (
 		"requests and limits for poet container",
 		&apiv1.ResourceRequirements{
 			Requests: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("0.5"),
+				apiv1.ResourceCPU:    resource.MustParse("0.4"),
 				apiv1.ResourceMemory: resource.MustParse("1Gi"),
 			},
 			Limits: apiv1.ResourceList{
-				apiv1.ResourceCPU:    resource.MustParse("0.5"),
+				apiv1.ResourceCPU:    resource.MustParse("0.4"),
 				apiv1.ResourceMemory: resource.MustParse("1Gi"),
 			},
 		},
@@ -168,7 +169,7 @@ func (n *NodeClient) Resolve(ctx context.Context) (string, error) {
 	return pod.Status.PodIP, nil
 }
 
-func (n *NodeClient) ensurePubConn() (*grpc.ClientConn, error) {
+func (n *NodeClient) ensurePubConn(ctx context.Context) (*grpc.ClientConn, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if n.pubConn != nil {
@@ -185,8 +186,33 @@ func (n *NodeClient) ensurePubConn() (*grpc.ClientConn, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := n.waitForConnectionReady(ctx, conn); err != nil {
+		return nil, err
+	}
 	n.pubConn = conn
 	return n.pubConn, nil
+}
+
+// waitForConnectionReady blocks until the connection is ready. It returns an error if the context is canceled or
+// timed out.
+//
+// This doesn't guarantee that the connection will stay ready, but it makes it so that the test runner waits at least
+// until the nodes are started before querying them.
+func (n *NodeClient) waitForConnectionReady(ctx context.Context, conn *grpc.ClientConn) error {
+	// A blocking dial blocks until the clientConn is ready.
+	for {
+		s := conn.GetState()
+		if s == connectivity.Ready {
+			return nil
+		}
+		if s == connectivity.Idle {
+			conn.Connect()
+		}
+		if !conn.WaitForStateChange(ctx, s) {
+			// ctx got timeout or canceled.
+			return fmt.Errorf("waiting for connection to %s: %w", conn.Target(), ctx.Err())
+		}
+	}
 }
 
 func (n *NodeClient) resetPubConn(conn *grpc.ClientConn) {
@@ -198,7 +224,7 @@ func (n *NodeClient) resetPubConn(conn *grpc.ClientConn) {
 	}
 }
 
-func (n *NodeClient) ensurePrivConn() (*grpc.ClientConn, error) {
+func (n *NodeClient) ensurePrivConn(ctx context.Context) (*grpc.ClientConn, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if n.privConn != nil {
@@ -213,6 +239,9 @@ func (n *NodeClient) ensurePrivConn() (*grpc.ClientConn, error) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
+		return nil, err
+	}
+	if err := n.waitForConnectionReady(ctx, conn); err != nil {
 		return nil, err
 	}
 	n.privConn = conn
@@ -237,7 +266,7 @@ type PubNodeClient struct {
 }
 
 func (n *PubNodeClient) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
-	conn, err := n.ensurePubConn()
+	conn, err := n.ensurePubConn(ctx)
 	if err != nil {
 		return err
 	}
@@ -259,7 +288,7 @@ func (n *PubNodeClient) NewStream(
 	method string,
 	opts ...grpc.CallOption,
 ) (grpc.ClientStream, error) {
-	conn, err := n.ensurePubConn()
+	conn, err := n.ensurePubConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +308,7 @@ type PrivNodeClient struct {
 }
 
 func (n *PrivNodeClient) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
-	conn, err := n.ensurePrivConn()
+	conn, err := n.ensurePrivConn(ctx)
 	if err != nil {
 		return err
 	}
@@ -301,7 +330,7 @@ func (n *PrivNodeClient) NewStream(
 	method string,
 	opts ...grpc.CallOption,
 ) (grpc.ClientStream, error) {
-	conn, err := n.ensurePrivConn()
+	conn, err := n.ensurePrivConn(ctx)
 	if err != nil {
 		return nil, err
 	}
