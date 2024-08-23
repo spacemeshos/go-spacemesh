@@ -16,8 +16,6 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6268](https://github.com/spacemeshos/go-spacemesh/pull/6268) Fix incorrect timing collection for proposal builder.
 
-* [#6278](https://github.com/spacemeshos/go-spacemesh/pull/6278) Reduce logging levels of some messages to reduce noise.
-
 ## Release v1.6.7
 
 ### Improvements
