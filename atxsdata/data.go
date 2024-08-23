@@ -5,6 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -145,6 +147,12 @@ func (d *Data) SetMalicious(node types.NodeID) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.malicious[node] = struct{}{}
+}
+
+func (d *Data) MaliciousIdentities() []types.NodeID {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return maps.Keys(d.malicious)
 }
 
 // Get returns atx data.

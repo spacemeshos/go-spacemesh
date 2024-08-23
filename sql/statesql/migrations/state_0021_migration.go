@@ -61,26 +61,42 @@ func (m *migration0021) Apply(db sql.Executor, logger *zap.Logger) error {
 		progress := float64(processed) * 100.0 / float64(total)
 		logger.Info("processed ATXs", zap.Float64("progress [%]", progress))
 		if processed >= total {
-			return nil
+			break
 		}
 	}
+
+	if err := m.applyIndices(db); err != nil {
+		return err
+	}
+
+	return nil
 }
 
+const tableSQL = `CREATE TABLE posts (
+    atxid CHAR(32) NOT NULL,
+    pubkey CHAR(32) NOT NULL,
+    prev_atxid CHAR(32),
+    prev_atx_index INT,
+    units INT NOT NULL
+);`
+
 func (m *migration0021) applySql(db sql.Executor) error {
-	query := `CREATE TABLE posts (
-		atxid  CHAR(32) NOT NULL,
-		pubkey CHAR(32) NOT NULL,
-		prev_atxid  CHAR(32),
-		prev_atx_index INT,
-		units  INT NOT NULL,
-		UNIQUE (atxid, pubkey)
-	);`
-	_, err := db.Exec(query, nil, nil)
+	_, err := db.Exec(tableSQL, nil, nil)
 	if err != nil {
 		return fmt.Errorf("creating posts table: %w", err)
 	}
 
-	query = "CREATE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey, prev_atxid);"
+	return nil
+}
+
+func (m *migration0021) applyIndices(db sql.Executor) error {
+	query := "CREATE UNIQUE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey);"
+	_, err := db.Exec(query, nil, nil)
+	if err != nil {
+		return fmt.Errorf("creating index `posts_by_atxid_by_pubkey`: %w", err)
+	}
+
+	query = "CREATE INDEX posts_by_atxid_by_pubkey_prev_atxid ON posts (atxid, pubkey, prev_atxid);"
 	_, err = db.Exec(query, nil, nil)
 	if err != nil {
 		return fmt.Errorf("creating index `posts_by_atxid_by_pubkey`: %w", err)

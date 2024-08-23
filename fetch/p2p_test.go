@@ -270,7 +270,7 @@ func forStreamingCachedUncached(
 
 func TestP2PPeerEpochInfo(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "peer error: getting ATX IDs: exec epoch 11: database: no free connection",
+		t, "peer error: getting ATX IDs: exec epoch 11: database closed",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
 			atxIDs := tpf.createATXs(epoch)
@@ -291,7 +291,7 @@ func TestP2PPeerEpochInfo(t *testing.T) {
 
 func TestP2PPeerMeshHashes(t *testing.T) {
 	forStreaming(
-		t, "peer error: get aggHashes from 7 to 23 by 5: database: no free connection", false,
+		t, "peer error: get aggHashes from 7 to 23 by 5: database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			req := &MeshHashRequest{
 				From: 7,
@@ -324,7 +324,7 @@ func TestP2PPeerMeshHashes(t *testing.T) {
 
 func TestP2PMaliciousIDs(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			var bad []types.NodeID
 			for i := 0; i < 11; i++ {
@@ -349,7 +349,7 @@ func TestP2PMaliciousIDs(t *testing.T) {
 
 func TestP2PGetATXs(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "database: no free connection",
+		t, "database closed",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
 			atx := newAtx(tpf.t, epoch)
@@ -365,7 +365,7 @@ func TestP2PGetATXs(t *testing.T) {
 
 func TestP2PGetPoet(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			ref := types.PoetProofRef{0x42, 0x43}
 			require.NoError(t, poets.Add(tpf.serverCDB, ref, []byte("proof1"), []byte("sid1"), "rid1"))
@@ -380,7 +380,7 @@ func TestP2PGetPoet(t *testing.T) {
 
 func TestP2PGetBallot(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -402,7 +402,7 @@ func TestP2PGetBallot(t *testing.T) {
 
 func TestP2PGetActiveSet(t *testing.T) {
 	forStreamingCachedUncached(
-		t, "database: no free connection",
+		t, "database closed",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			id := types.RandomHash()
 			set := &types.EpochActiveSet{
@@ -421,7 +421,7 @@ func TestP2PGetActiveSet(t *testing.T) {
 
 func TestP2PGetBlock(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			lid := types.LayerID(111)
 			bk := types.NewExistingBlock(types.RandomBlockID(), types.InnerBlock{LayerIndex: lid})
@@ -472,7 +472,7 @@ func TestP2PGetProp(t *testing.T) {
 
 func TestP2PGetBlockTransactions(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -488,7 +488,7 @@ func TestP2PGetBlockTransactions(t *testing.T) {
 
 func TestP2PGetProposalTransactions(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
@@ -506,7 +506,7 @@ func TestP2PGetProposalTransactions(t *testing.T) {
 
 func TestP2PGetMalfeasanceProofs(t *testing.T) {
 	forStreaming(
-		t, "database: no free connection", false,
+		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			nid := types.RandomNodeID()
 			proof := types.RandomBytes(11)

@@ -103,6 +103,8 @@ type BaseConfig struct {
 
 	PprofHTTPServer         bool   `mapstructure:"pprof-server"`
 	PprofHTTPServerListener string `mapstructure:"pprof-listener"`
+	PprofMutexProfile       bool   `mapstructure:"pprof-mutex-profile"`
+	PprofBlockProfile       bool   `mapstructure:"pprof-block-profile"`
 
 	TxsPerProposal int    `mapstructure:"txs-per-proposal"`
 	BlockGasLimit  uint64 `mapstructure:"block-gas-limit"`

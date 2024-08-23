@@ -57,6 +57,8 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		cfg.LayerAvgSize, "Layer Avg size")
 	flagSet.BoolVar(&cfg.PprofHTTPServer, "pprof-server",
 		cfg.PprofHTTPServer, "enable http pprof server")
+	flagSet.BoolVar(&cfg.PprofMutexProfile, "pprof-mutex-profile", false, "enable pprof mutex profile")
+	flagSet.BoolVar(&cfg.PprofBlockProfile, "pprof-block-profile", false, "enable pprof block profile")
 	flagSet.StringVar(&cfg.PprofHTTPServerListener, "pprof-listener", cfg.PprofHTTPServerListener,
 		"Listen address for pprof server, not safe to expose publicly")
 	flagSet.Uint64Var(&cfg.TickSize, "tick-size", cfg.TickSize, "number of poet leaves in a single tick")
