@@ -70,14 +70,14 @@ func TestP2P(t *testing.T) {
 		for _, hsync := range hs {
 			// use a snapshot to avoid races
 			is := hsync.ItemStore().Copy()
-			it, err := is.Min()
+			it, err := is.Min(context.Background())
 			require.NoError(t, err)
 			if it == nil {
 				return false
 			}
 			k, err := it.Key()
 			require.NoError(t, err)
-			info, err := is.GetRangeInfo(nil, k, k, -1)
+			info, err := is.GetRangeInfo(context.Background(), nil, k, k, -1)
 			require.NoError(t, err)
 			if info.Count < numHashes {
 				return false

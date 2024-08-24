@@ -51,7 +51,7 @@ func createDB(t *testing.T, keyLen int) sql.Database {
 	// 	sql.WithConnections(16),
 	// )
 	// require.NoError(t, err)
-	db := sql.InMemory(sql.WithIgnoreSchemaDrift(), sql.WithConnections(16))
+	db := sql.InMemory(sql.WithNoCheckSchemaDrift(), sql.WithConnections(16))
 	t.Cleanup(func() {
 		require.NoError(t, db.Close())
 	})

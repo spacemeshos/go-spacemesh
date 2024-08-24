@@ -1400,7 +1400,7 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	// counts := make(map[uint64]uint64)
 	// prefLens := make(map[int]int)
 	// QQQQQ: TBD: reenable schema drift check
-	db, err := statesql.Open("file:"+dbFile, sql.WithIgnoreSchemaDrift())
+	db, err := statesql.Open("file:"+dbFile, sql.WithNoCheckSchemaDrift())
 	require.NoError(t, err)
 	defer db.Close()
 	// _, err = db.Exec("PRAGMA cache_size = -2000000", nil, nil)
