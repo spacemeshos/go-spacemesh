@@ -23,6 +23,8 @@ import (
 )
 
 func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
+	nr := hashsync.RmmeNumRead()
+	nw := hashsync.RmmeNumWritten()
 	const maxDepth = 24
 	log := zaptest.NewLogger(t)
 	t.Logf("QQQQQ: 0")
@@ -137,6 +139,7 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 		return pss.SyncStore(WithSQLExec(ctx, tx), srvPeerID, storeB, x, x)
 	}))
 	t.Logf("synced in %v", time.Since(tStart))
+	t.Logf("bytes read: %d, bytes written: %d", hashsync.RmmeNumRead()-nr, hashsync.RmmeNumWritten()-nw)
 
 	// // QQQQQ: rmme
 	// sb = strings.Builder{}
@@ -266,8 +269,11 @@ func TestP2P(t *testing.T) {
 	t.Run("random test", func(t *testing.T) {
 		// TODO: increase these values and profile
 		// const nShared = 8000000
-		// const nUniqueA = 40000
+		// const nUniqueA = 100
 		// const nUniqueB = 80000
+		// const nShared = 8000000
+		// const nUniqueA = 10
+		// const nUniqueB = 8000
 		const nShared = 80000
 		const nUniqueA = 400
 		const nUniqueB = 800

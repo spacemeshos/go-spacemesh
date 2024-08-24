@@ -84,14 +84,14 @@ func (t *EmptySetMessage) DecodeScale(dec *scale.Decoder) (total int, err error)
 
 func (t *EmptyRangeMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.RangeX[:])
+		n, err := t.RangeX.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.RangeY[:])
+		n, err := t.RangeY.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -102,14 +102,14 @@ func (t *EmptyRangeMessage) EncodeScale(enc *scale.Encoder) (total int, err erro
 
 func (t *EmptyRangeMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.RangeX[:])
+		n, err := t.RangeX.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.RangeY[:])
+		n, err := t.RangeY.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
@@ -120,14 +120,14 @@ func (t *EmptyRangeMessage) DecodeScale(dec *scale.Decoder) (total int, err erro
 
 func (t *FingerprintMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.RangeX[:])
+		n, err := t.RangeX.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.RangeY[:])
+		n, err := t.RangeY.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -152,14 +152,14 @@ func (t *FingerprintMessage) EncodeScale(enc *scale.Encoder) (total int, err err
 
 func (t *FingerprintMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.RangeX[:])
+		n, err := t.RangeX.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.RangeY[:])
+		n, err := t.RangeY.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
@@ -185,14 +185,14 @@ func (t *FingerprintMessage) DecodeScale(dec *scale.Decoder) (total int, err err
 
 func (t *RangeContentsMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.RangeX[:])
+		n, err := t.RangeX.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.RangeY[:])
+		n, err := t.RangeY.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -210,14 +210,14 @@ func (t *RangeContentsMessage) EncodeScale(enc *scale.Encoder) (total int, err e
 
 func (t *RangeContentsMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.RangeX[:])
+		n, err := t.RangeX.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.RangeY[:])
+		n, err := t.RangeY.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
@@ -259,14 +259,14 @@ func (t *ItemBatchMessage) DecodeScale(dec *scale.Decoder) (total int, err error
 
 func (t *ProbeMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeOption(enc, t.RangeX)
+		n, err := t.RangeX.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeOption(enc, t.RangeY)
+		n, err := t.RangeY.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -291,20 +291,18 @@ func (t *ProbeMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 
 func (t *ProbeMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeOption[types.Hash32](dec)
+		n, err := t.RangeX.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.RangeX = field
 	}
 	{
-		field, n, err := scale.DecodeOption[types.Hash32](dec)
+		n, err := t.RangeY.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.RangeY = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.RangeFingerprint[:])
@@ -326,14 +324,14 @@ func (t *ProbeMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 
 func (t *ProbeResponseMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeOption(enc, t.RangeX)
+		n, err := t.RangeX.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeOption(enc, t.RangeY)
+		n, err := t.RangeY.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -365,20 +363,18 @@ func (t *ProbeResponseMessage) EncodeScale(enc *scale.Encoder) (total int, err e
 
 func (t *ProbeResponseMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		field, n, err := scale.DecodeOption[types.Hash32](dec)
+		n, err := t.RangeX.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.RangeX = field
 	}
 	{
-		field, n, err := scale.DecodeOption[types.Hash32](dec)
+		n, err := t.RangeY.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.RangeY = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.RangeFingerprint[:])

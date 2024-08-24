@@ -44,14 +44,14 @@ func (*EmptySetMessage) Type() MessageType { return MessageTypeEmptySet }
 // EmptyRangeMessage notifies the peer that it needs to send all of its items in
 // the specified range
 type EmptyRangeMessage struct {
-	RangeX, RangeY types.Hash32
+	RangeX, RangeY CompactHash32
 }
 
 var _ SyncMessage = &EmptyRangeMessage{}
 
 func (m *EmptyRangeMessage) Type() MessageType { return MessageTypeEmptyRange }
-func (m *EmptyRangeMessage) X() Ordered        { return m.RangeX }
-func (m *EmptyRangeMessage) Y() Ordered        { return m.RangeY }
+func (m *EmptyRangeMessage) X() Ordered        { return m.RangeX.ToOrdered() }
+func (m *EmptyRangeMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
 func (m *EmptyRangeMessage) Fingerprint() any  { return nil }
 func (m *EmptyRangeMessage) Count() int        { return 0 }
 func (m *EmptyRangeMessage) Keys() []Ordered   { return nil }
@@ -59,7 +59,7 @@ func (m *EmptyRangeMessage) Keys() []Ordered   { return nil }
 // FingerprintMessage contains range fingerprint for comparison against the
 // peer's fingerprint of the range with the same bounds [RangeX, RangeY)
 type FingerprintMessage struct {
-	RangeX, RangeY   types.Hash32
+	RangeX, RangeY   CompactHash32
 	RangeFingerprint types.Hash12
 	NumItems         uint32
 }
@@ -67,8 +67,8 @@ type FingerprintMessage struct {
 var _ SyncMessage = &FingerprintMessage{}
 
 func (m *FingerprintMessage) Type() MessageType { return MessageTypeFingerprint }
-func (m *FingerprintMessage) X() Ordered        { return m.RangeX }
-func (m *FingerprintMessage) Y() Ordered        { return m.RangeY }
+func (m *FingerprintMessage) X() Ordered        { return m.RangeX.ToOrdered() }
+func (m *FingerprintMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
 func (m *FingerprintMessage) Fingerprint() any  { return m.RangeFingerprint }
 func (m *FingerprintMessage) Count() int        { return int(m.NumItems) }
 func (m *FingerprintMessage) Keys() []Ordered   { return nil }
@@ -77,15 +77,15 @@ func (m *FingerprintMessage) Keys() []Ordered   { return nil }
 // The peer needs to send back any items it has in the same range bounded
 // by [RangeX, RangeY)
 type RangeContentsMessage struct {
-	RangeX, RangeY types.Hash32
+	RangeX, RangeY CompactHash32
 	NumItems       uint32
 }
 
 var _ SyncMessage = &RangeContentsMessage{}
 
 func (m *RangeContentsMessage) Type() MessageType { return MessageTypeRangeContents }
-func (m *RangeContentsMessage) X() Ordered        { return m.RangeX }
-func (m *RangeContentsMessage) Y() Ordered        { return m.RangeY }
+func (m *RangeContentsMessage) X() Ordered        { return m.RangeX.ToOrdered() }
+func (m *RangeContentsMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
 func (m *RangeContentsMessage) Fingerprint() any  { return nil }
 func (m *RangeContentsMessage) Count() int        { return int(m.NumItems) }
 func (m *RangeContentsMessage) Keys() []Ordered   { return nil }
@@ -111,7 +111,7 @@ func (m *ItemBatchMessage) Keys() []Ordered {
 // ProbeMessage requests bounded range fingerprint and count from the peer,
 // along with a minhash sample if fingerprints differ
 type ProbeMessage struct {
-	RangeX, RangeY   *types.Hash32
+	RangeX, RangeY   CompactHash32
 	RangeFingerprint types.Hash12
 	SampleSize       uint32
 }
@@ -119,22 +119,11 @@ type ProbeMessage struct {
 var _ SyncMessage = &ProbeMessage{}
 
 func (m *ProbeMessage) Type() MessageType { return MessageTypeProbe }
-func (m *ProbeMessage) X() Ordered {
-	if m.RangeX == nil {
-		return nil
-	}
-	return *m.RangeX
-}
-
-func (m *ProbeMessage) Y() Ordered {
-	if m.RangeY == nil {
-		return nil
-	}
-	return *m.RangeY
-}
-func (m *ProbeMessage) Fingerprint() any { return m.RangeFingerprint }
-func (m *ProbeMessage) Count() int       { return int(m.SampleSize) }
-func (m *ProbeMessage) Keys() []Ordered  { return nil }
+func (m *ProbeMessage) X() Ordered        { return m.RangeX.ToOrdered() }
+func (m *ProbeMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
+func (m *ProbeMessage) Fingerprint() any  { return m.RangeFingerprint }
+func (m *ProbeMessage) Count() int        { return int(m.SampleSize) }
+func (m *ProbeMessage) Keys() []Ordered   { return nil }
 
 // MinhashSampleItem represents an item of minhash sample subset
 type MinhashSampleItem uint32
@@ -171,7 +160,7 @@ func MinhashSampleItemFromHash32(h types.Hash32) MinhashSampleItem {
 
 // ProbeResponseMessage is a response to ProbeMessage
 type ProbeResponseMessage struct {
-	RangeX, RangeY   *types.Hash32
+	RangeX, RangeY   CompactHash32
 	RangeFingerprint types.Hash12
 	NumItems         uint32
 	// NOTE: max must be in sync with maxSampleSize in hashsync/rangesync.go
@@ -181,21 +170,10 @@ type ProbeResponseMessage struct {
 var _ SyncMessage = &ProbeResponseMessage{}
 
 func (m *ProbeResponseMessage) Type() MessageType { return MessageTypeProbeResponse }
-func (m *ProbeResponseMessage) X() Ordered {
-	if m.RangeX == nil {
-		return nil
-	}
-	return *m.RangeX
-}
-
-func (m *ProbeResponseMessage) Y() Ordered {
-	if m.RangeY == nil {
-		return nil
-	}
-	return *m.RangeY
-}
-func (m *ProbeResponseMessage) Fingerprint() any { return m.RangeFingerprint }
-func (m *ProbeResponseMessage) Count() int       { return int(m.NumItems) }
+func (m *ProbeResponseMessage) X() Ordered        { return m.RangeX.ToOrdered() }
+func (m *ProbeResponseMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
+func (m *ProbeResponseMessage) Fingerprint() any  { return m.RangeFingerprint }
+func (m *ProbeResponseMessage) Count() int        { return int(m.NumItems) }
 
 func (m *ProbeResponseMessage) Keys() []Ordered {
 	r := make([]Ordered, len(m.Sample))

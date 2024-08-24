@@ -24,6 +24,14 @@ var (
 	numWritten atomic.Int64
 )
 
+func RmmeNumRead() int64 {
+	return numRead.Load()
+}
+
+func RmmeNumWritten() int64 {
+	return numWritten.Load()
+}
+
 type rmmeCountingStream struct {
 	io.ReadWriter
 }
@@ -131,8 +139,8 @@ func (c *wireConduit) send(m sendable) error {
 
 func (c *wireConduit) SendFingerprint(x, y Ordered, fingerprint any, count int) error {
 	return c.send(&FingerprintMessage{
-		RangeX:           x.(types.Hash32),
-		RangeY:           y.(types.Hash32),
+		RangeX:           OrderedToCompactHash32(x),
+		RangeY:           OrderedToCompactHash32(y),
 		RangeFingerprint: fingerprint.(types.Hash12),
 		NumItems:         uint32(count),
 	})
@@ -143,13 +151,16 @@ func (c *wireConduit) SendEmptySet() error {
 }
 
 func (c *wireConduit) SendEmptyRange(x, y Ordered) error {
-	return c.send(&EmptyRangeMessage{RangeX: x.(types.Hash32), RangeY: y.(types.Hash32)})
+	return c.send(&EmptyRangeMessage{
+		RangeX: OrderedToCompactHash32(x),
+		RangeY: OrderedToCompactHash32(y),
+	})
 }
 
 func (c *wireConduit) SendRangeContents(x, y Ordered, count int) error {
 	return c.send(&RangeContentsMessage{
-		RangeX:   x.(types.Hash32),
-		RangeY:   y.(types.Hash32),
+		RangeX:   OrderedToCompactHash32(x),
+		RangeY:   OrderedToCompactHash32(y),
 		NumItems: uint32(count),
 	})
 }
@@ -195,10 +206,8 @@ func (c *wireConduit) SendProbe(x, y Ordered, fingerprint any, sampleSize int) e
 	} else if x == nil || y == nil {
 		panic("BUG: SendProbe: bad range: just one of the bounds is nil")
 	}
-	xh := x.(types.Hash32)
-	yh := y.(types.Hash32)
-	m.RangeX = &xh
-	m.RangeY = &yh
+	m.RangeX = OrderedToCompactHash32(x)
+	m.RangeY = OrderedToCompactHash32(y)
 	return c.send(m)
 }
 
@@ -226,10 +235,8 @@ func (c *wireConduit) SendProbeResponse(x, y Ordered, fingerprint any, count, sa
 	} else if x == nil || y == nil {
 		panic("BUG: SendProbe: bad range: just one of the bounds is nil")
 	}
-	xh := x.(types.Hash32)
-	yh := y.(types.Hash32)
-	m.RangeX = &xh
-	m.RangeY = &yh
+	m.RangeX = OrderedToCompactHash32(x)
+	m.RangeY = OrderedToCompactHash32(y)
 	return c.send(m)
 }
 

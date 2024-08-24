@@ -244,8 +244,8 @@ func TestWireConduit(t *testing.T) {
 			name: "server got 1st request",
 			expectMsgs: []SyncMessage{
 				&FingerprintMessage{
-					RangeX:           hs[0],
-					RangeY:           hs[1],
+					RangeX:           Hash32ToCompact(hs[0]),
+					RangeY:           Hash32ToCompact(hs[1]),
 					RangeFingerprint: fp,
 					NumItems:         4,
 				},
@@ -314,13 +314,13 @@ func TestWireConduit(t *testing.T) {
 			name: "client got 1st response",
 			expectMsgs: []SyncMessage{
 				&RangeContentsMessage{
-					RangeX:   hs[0],
-					RangeY:   hs[3],
+					RangeX:   Hash32ToCompact(hs[0]),
+					RangeY:   Hash32ToCompact(hs[3]),
 					NumItems: 2,
 				},
 				&RangeContentsMessage{
-					RangeX:   hs[3],
-					RangeY:   hs[6],
+					RangeX:   Hash32ToCompact(hs[3]),
+					RangeY:   Hash32ToCompact(hs[6]),
 					NumItems: 2,
 				},
 				&ItemBatchMessage{
@@ -442,6 +442,8 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) Requester {
 		withClientServer(
 			storeA, getRequester, opts,
 			func(ctx context.Context, client Requester, srvPeerID p2p.Peer) {
+				nr := RmmeNumRead()
+				nw := RmmeNumWritten()
 				pss := NewPairwiseStoreSyncer(client, opts)
 				err := pss.SyncStore(ctx, srvPeerID, storeB, nil, nil)
 				require.NoError(t, err)
@@ -450,7 +452,7 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) Requester {
 					t.Logf("numSpecific: %d, bytesSent %d, bytesReceived %d",
 						numSpecific, fr.bytesSent, fr.bytesReceived)
 				}
-				t.Logf("bytes read: %d, bytes written: %d", numRead.Load(), numWritten.Load())
+				t.Logf("bytes read: %d, bytes written: %d", RmmeNumRead()-nr, RmmeNumWritten()-nw)
 			})
 		return true
 	})
