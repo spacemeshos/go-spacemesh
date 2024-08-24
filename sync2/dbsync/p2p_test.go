@@ -36,13 +36,17 @@ func verifyP2P(t *testing.T, itemsA, itemsB, combinedItems []KeyBytes) {
 	proto := "itest"
 	t.Logf("QQQQQ: 2")
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
-	storeA := NewItemStoreAdapter(NewDBItemStore(dbA, "select id from foo", testQuery, 32, maxDepth))
+	st := &SyncedTable{
+		TableName: "foo",
+		IDColumn:  "id",
+	}
+	storeA := NewItemStoreAdapter(NewDBItemStore(dbA, st, 32, maxDepth))
 	t.Logf("QQQQQ: 2.1")
 	require.NoError(t, dbA.WithTx(ctx, func(tx sql.Transaction) error {
 		return storeA.s.EnsureLoaded(WithSQLExec(ctx, tx))
 	}))
 	t.Logf("QQQQQ: 3")
-	storeB := NewItemStoreAdapter(NewDBItemStore(dbB, "select id from foo", testQuery, 32, maxDepth))
+	storeB := NewItemStoreAdapter(NewDBItemStore(dbB, st, 32, maxDepth))
 	t.Logf("QQQQQ: 3.1")
 	var x *types.Hash32
 	require.NoError(t, dbB.WithTx(ctx, func(tx sql.Transaction) error {

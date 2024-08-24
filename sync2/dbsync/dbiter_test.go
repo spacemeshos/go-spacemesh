@@ -8,9 +8,10 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
-	"github.com/stretchr/testify/require"
 )
 
 func TestIncID(t *testing.T) {
@@ -42,19 +43,7 @@ func TestIncID(t *testing.T) {
 }
 
 func createDB(t *testing.T, keyLen int) sql.Database {
-	// QQQQQ: FIXME
-	// tmpDir := t.TempDir()
-	// t.Logf("QQQQQ: temp dir: %s", tmpDir)
-	// db, err := sql.Open(
-	// 	fmt.Sprintf("file:%s/test.db", tmpDir),
-	// 	sql.WithIgnoreSchemaDrift(),
-	// 	sql.WithConnections(16),
-	// )
-	// require.NoError(t, err)
-	db := sql.InMemory(sql.WithNoCheckSchemaDrift(), sql.WithConnections(16))
-	t.Cleanup(func() {
-		require.NoError(t, db.Close())
-	})
+	db := sql.InMemoryTest(t)
 	_, err := db.Exec(fmt.Sprintf("create table foo(id char(%d) not null primary key)", keyLen), nil, nil)
 	require.NoError(t, err)
 	return db
@@ -87,8 +76,6 @@ func populateDB(t *testing.T, keyLen int, content []KeyBytes) sql.Database {
 	insertDBItems(t, db, content)
 	return db
 }
-
-const testQuery = "select id from foo where id >= ? order by id limit ?"
 
 func TestDBRangeIterator(t *testing.T) {
 	db := createDB(t, 4)
@@ -304,8 +291,14 @@ func TestDBRangeIterator(t *testing.T) {
 		deleteDBItems(t, db)
 		insertDBItems(t, db, tc.items)
 		cache := newLRU()
+		st := &SyncedTable{
+			TableName: "foo",
+			IDColumn:  "id",
+		}
+		sts, err := st.snapshot(db)
+		require.NoError(t, err)
 		for maxChunkSize := 1; maxChunkSize < 12; maxChunkSize++ {
-			it := newDBRangeIterator(db, testQuery, tc.from, maxChunkSize, cache)
+			it := newDBRangeIterator(db, sts, tc.from, maxChunkSize, cache)
 			if tc.expErr != nil {
 				_, err := it.Key()
 				require.ErrorIs(t, err, tc.expErr)

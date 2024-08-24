@@ -202,10 +202,14 @@ type fakeIDDBStore struct {
 
 var _ idStore = &fakeIDDBStore{}
 
-const fakeIDQuery = "select id from foo where id >= ? order by id limit ?"
-
-func newFakeATXIDStore(db sql.Database, maxDepth int) *fakeIDDBStore {
-	return &fakeIDDBStore{db: db, sqlIDStore: newSQLIDStore(db, fakeIDQuery, 32)}
+func newFakeATXIDStore(t *testing.T, db sql.Database, maxDepth int) *fakeIDDBStore {
+	st := &SyncedTable{
+		TableName: "foo",
+		IDColumn:  "id",
+	}
+	sts, err := st.snapshot(db)
+	require.NoError(t, err)
+	return &fakeIDDBStore{db: db, sqlIDStore: newSQLIDStore(db, sts, 32)}
 }
 
 func (s *fakeIDDBStore) registerHash(h KeyBytes) error {
@@ -773,7 +777,7 @@ func TestFPTree(t *testing.T) {
 		testFPTree(t, func(maxDepth int) idStore {
 			_, err := db.Exec("delete from foo", nil, nil)
 			require.NoError(t, err)
-			return newFakeATXIDStore(db, maxDepth)
+			return newFakeATXIDStore(t, db, maxDepth)
 		})
 	})
 }
@@ -1201,7 +1205,7 @@ func TestFPTreeManyItems(t *testing.T) {
 		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
 			_, err := db.Exec("delete from foo", nil, nil)
 			require.NoError(t, err)
-			return newFakeATXIDStore(db, maxDepth)
+			return newFakeATXIDStore(t, db, maxDepth)
 		}, false, numItems, maxDepth, repeatOuter, repeatInner)
 	})
 	t.Run("SQL, random bounds", func(t *testing.T) {
@@ -1210,7 +1214,7 @@ func TestFPTreeManyItems(t *testing.T) {
 		repeatTestFPTreeManyItems(t, func(maxDepth int) idStore {
 			_, err := db.Exec("delete from foo", nil, nil)
 			require.NoError(t, err)
-			return newFakeATXIDStore(db, maxDepth)
+			return newFakeATXIDStore(t, db, maxDepth)
 		}, true, numItems, maxDepth, repeatOuter, repeatInner)
 	})
 	// TBD: test limits with both random and non-random bounds
@@ -1437,7 +1441,17 @@ func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
 	var stats1 runtime.MemStats
 	runtime.ReadMemStats(&stats1)
 	// TODO: pass extra bind params to the SQL query
-	store := newSQLIDStore(db, "select id from atxs where id >= ? and epoch = 26 order by id limit ?", 32)
+	st := &SyncedTable{
+		TableName: "atxs",
+		IDColumn:  "id",
+		Filter:    parseSQLExpr(t, "epoch = ?"),
+		Binder: func(stmt *sql.Statement) {
+			stmt.BindInt64(1, 26)
+		},
+	}
+	sts, err := st.snapshot(db)
+	require.NoError(t, err)
+	store := newSQLIDStore(db, sts, 32)
 	ft := newFPTree(&np, store, 32, maxDepth)
 	for _, id := range *hs {
 		ft.addHash(id[:])

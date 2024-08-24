@@ -11,7 +11,11 @@ import (
 
 func TestDBItemStoreEmpty(t *testing.T) {
 	db := populateDB(t, 32, nil)
-	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
+	st := &SyncedTable{
+		TableName: "foo",
+		IDColumn:  "id",
+	}
+	s := NewDBItemStore(db, st, 32, 24)
 	ctx := context.Background()
 	it, err := s.Min(ctx)
 	require.NoError(t, err)
@@ -48,7 +52,11 @@ func TestDBItemStore(t *testing.T) {
 	}
 	ctx := context.Background()
 	db := populateDB(t, 32, ids)
-	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
+	st := &SyncedTable{
+		TableName: "foo",
+		IDColumn:  "id",
+	}
+	s := NewDBItemStore(db, st, 32, 24)
 	it, err := s.Min(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
@@ -137,7 +145,11 @@ func TestDBItemStoreAdd(t *testing.T) {
 		util.FromHex("8888888888888888888888888888888888888888888888888888888888888888"),
 	}
 	db := populateDB(t, 32, ids)
-	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
+	st := &SyncedTable{
+		TableName: "foo",
+		IDColumn:  "id",
+	}
+	s := NewDBItemStore(db, st, 32, 24)
 	ctx := context.Background()
 	it, err := s.Min(ctx)
 	require.NoError(t, err)
@@ -169,7 +181,11 @@ func TestDBItemStoreCopy(t *testing.T) {
 		util.FromHex("8888888888888888888888888888888888888888888888888888888888888888"),
 	}
 	db := populateDB(t, 32, ids)
-	s := NewDBItemStore(db, "select id from foo", testQuery, 32, 24)
+	st := &SyncedTable{
+		TableName: "foo",
+		IDColumn:  "id",
+	}
+	s := NewDBItemStore(db, st, 32, 24)
 	ctx := context.Background()
 	it, err := s.Min(ctx)
 	require.NoError(t, err)

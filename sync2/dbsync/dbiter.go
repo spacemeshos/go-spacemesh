@@ -75,7 +75,7 @@ func newLRU() *lru {
 type dbRangeIterator struct {
 	db           sql.Executor
 	from         KeyBytes
-	query        string
+	sts          *SyncedTableSnapshot
 	chunkSize    int
 	maxChunkSize int
 	chunk        []KeyBytes
@@ -92,7 +92,7 @@ var _ hashsync.Iterator = &dbRangeIterator{}
 // If query returns no rows even after starting from zero ID, errEmptySet error is returned.
 func newDBRangeIterator(
 	db sql.Executor,
-	query string,
+	sts *SyncedTableSnapshot,
 	from KeyBytes,
 	maxChunkSize int,
 	lru *lru,
@@ -106,7 +106,7 @@ func newDBRangeIterator(
 	return &dbRangeIterator{
 		db:           db,
 		from:         from.Clone(),
-		query:        query,
+		sts:          sts,
 		chunkSize:    1,
 		maxChunkSize: maxChunkSize,
 		keyLen:       len(from),
@@ -156,11 +156,8 @@ func (it *dbRangeIterator) load() error {
 	var ierr, err error
 	found, n := it.loadCached(key)
 	if !found {
-		_, err = it.db.Exec(
-			it.query, func(stmt *sql.Statement) {
-				stmt.BindBytes(1, it.from)
-				stmt.BindInt64(2, int64(it.chunkSize))
-			},
+		err := it.sts.loadIDRange(
+			it.db, it.from, it.chunkSize,
 			func(stmt *sql.Statement) bool {
 				if n >= len(it.chunk) {
 					ierr = errors.New("too many rows")

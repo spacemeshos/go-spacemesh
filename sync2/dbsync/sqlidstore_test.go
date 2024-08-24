@@ -15,8 +15,14 @@ func TestDBBackedStore(t *testing.T) {
 		{0, 0, 0, 7, 0, 0, 0, 0},
 	}
 	db := populateDB(t, 8, initialIDs)
+	st := SyncedTable{
+		TableName: "foo",
+		IDColumn:  "id",
+	}
+	sts, err := st.snapshot(db)
+	require.NoError(t, err)
 	verify := func(t *testing.T, ctx context.Context) {
-		store := newDBBackedStore(db, fakeIDQuery, 8)
+		store := newDBBackedStore(db, sts, 8)
 		it := store.iter(ctx, KeyBytes{0, 0, 0, 0, 0, 0, 0, 0})
 		var actualIDs []KeyBytes
 		for range 5 {

@@ -3,6 +3,7 @@ package dbsync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -11,57 +12,52 @@ import (
 )
 
 type DBItemStore struct {
-	loadMtx   sync.Mutex
-	loaded    bool
-	db        sql.Database
-	ft        *fpTree
-	loadQuery string
-	iterQuery string
-	keyLen    int
-	maxDepth  int
+	loadMtx  sync.Mutex
+	db       sql.Database
+	ft       *fpTree
+	st       *SyncedTable
+	keyLen   int
+	maxDepth int
 }
 
 var _ hashsync.ItemStore = &DBItemStore{}
 
 func NewDBItemStore(
 	db sql.Database,
-	loadQuery, iterQuery string,
+	st *SyncedTable,
 	keyLen, maxDepth int,
 ) *DBItemStore {
-	var np nodePool
-	dbStore := newDBBackedStore(db, iterQuery, keyLen)
+	// var np nodePool
+	// dbStore := newDBBackedStore(db, iterQuery, keyLen)
 	return &DBItemStore{
-		db:        db,
-		ft:        newFPTree(&np, dbStore, keyLen, maxDepth),
-		loadQuery: loadQuery,
-		iterQuery: iterQuery,
-		keyLen:    keyLen,
-		maxDepth:  maxDepth,
+		db: db,
+		// ft:       newFPTree(&np, dbStore, keyLen, maxDepth),
+		st:       st,
+		keyLen:   keyLen,
+		maxDepth: maxDepth,
 	}
-}
-
-func (d *DBItemStore) load(ctx context.Context) error {
-	db := ContextSQLExec(ctx, d.db)
-	_, err := db.Exec(d.loadQuery, nil,
-		func(stmt *sql.Statement) bool {
-			id := make(KeyBytes, d.keyLen) // TODO: don't allocate new ID
-			stmt.ColumnBytes(0, id[:])
-			d.ft.addStoredHash(id)
-			return true
-		})
-	return err
 }
 
 func (d *DBItemStore) EnsureLoaded(ctx context.Context) error {
 	d.loadMtx.Lock()
 	defer d.loadMtx.Unlock()
-	if !d.loaded {
-		if err := d.load(ctx); err != nil {
-			return err
-		}
-		d.loaded = true
+	if d.ft != nil {
+		return nil
 	}
-	return nil
+	db := ContextSQLExec(ctx, d.db)
+	sts, err := d.st.snapshot(db)
+	if err != nil {
+		return fmt.Errorf("error taking snapshot: %w", err)
+	}
+	var np nodePool
+	dbStore := newDBBackedStore(db, sts, d.keyLen)
+	d.ft = newFPTree(&np, dbStore, d.keyLen, d.maxDepth)
+	return sts.loadIDs(db, func(stmt *sql.Statement) bool {
+		id := make(KeyBytes, d.keyLen) // TODO: don't allocate new ID
+		stmt.ColumnBytes(0, id[:])
+		d.ft.addStoredHash(id)
+		return true
+	})
 }
 
 // Add implements hashsync.ItemStore.
@@ -180,18 +176,18 @@ func (d *DBItemStore) Min(ctx context.Context) (hashsync.Iterator, error) {
 
 // Copy implements hashsync.ItemStore.
 func (d *DBItemStore) Copy() hashsync.ItemStore {
-	if !d.loaded {
+	d.loadMtx.Lock()
+	d.loadMtx.Unlock()
+	if d.ft == nil {
 		// FIXME
 		panic("BUG: can't copy DBItemStore before it's loaded")
 	}
 	return &DBItemStore{
-		db:        d.db,
-		ft:        d.ft.clone(),
-		loadQuery: d.loadQuery,
-		iterQuery: d.iterQuery,
-		keyLen:    d.keyLen,
-		maxDepth:  d.maxDepth,
-		loaded:    true,
+		db:       d.db,
+		ft:       d.ft.clone(),
+		st:       d.st,
+		keyLen:   d.keyLen,
+		maxDepth: d.maxDepth,
 	}
 }
 

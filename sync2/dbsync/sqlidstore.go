@@ -16,7 +16,7 @@ func WithSQLExec(ctx context.Context, db sql.Executor) context.Context {
 	return context.WithValue(ctx, dbExecKey{}, db)
 }
 
-func ContextSQLExec(ctx context.Context, db sql.Database) sql.Executor {
+func ContextSQLExec(ctx context.Context, db sql.Executor) sql.Executor {
 	v := ctx.Value(dbExecKey{})
 	if v == nil {
 		return db
@@ -31,25 +31,25 @@ func WithSQLTransaction(ctx context.Context, db sql.Database, toCall func(contex
 }
 
 type sqlIDStore struct {
-	db     sql.Database
-	query  string
+	db     sql.Executor
+	sts    *SyncedTableSnapshot
 	keyLen int
 	cache  *lru
 }
 
 var _ idStore = &sqlIDStore{}
 
-func newSQLIDStore(db sql.Database, query string, keyLen int) *sqlIDStore {
+func newSQLIDStore(db sql.Executor, sts *SyncedTableSnapshot, keyLen int) *sqlIDStore {
 	return &sqlIDStore{
 		db:     db,
-		query:  query,
+		sts:    sts,
 		keyLen: keyLen,
 		cache:  newLRU(),
 	}
 }
 
 func (s *sqlIDStore) clone() idStore {
-	return newSQLIDStore(s.db, s.query, s.keyLen)
+	return newSQLIDStore(s.db, s.sts, s.keyLen)
 }
 
 func (s *sqlIDStore) registerHash(h KeyBytes) error {
@@ -66,7 +66,7 @@ func (s *sqlIDStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator 
 	if len(from) != s.keyLen {
 		panic("BUG: invalid key length")
 	}
-	return newDBRangeIterator(ContextSQLExec(ctx, s.db), s.query, from, sqlMaxChunkSize, s.cache)
+	return newDBRangeIterator(ContextSQLExec(ctx, s.db), s.sts, from, sqlMaxChunkSize, s.cache)
 }
 
 type dbBackedStore struct {
@@ -76,9 +76,9 @@ type dbBackedStore struct {
 
 var _ idStore = &dbBackedStore{}
 
-func newDBBackedStore(db sql.Database, query string, keyLen int) *dbBackedStore {
+func newDBBackedStore(db sql.Executor, sts *SyncedTableSnapshot, keyLen int) *dbBackedStore {
 	return &dbBackedStore{
-		sqlIDStore:   newSQLIDStore(db, query, keyLen),
+		sqlIDStore:   newSQLIDStore(db, sts, keyLen),
 		inMemIDStore: newInMemIDStore(keyLen),
 	}
 }
