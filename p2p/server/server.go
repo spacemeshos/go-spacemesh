@@ -255,6 +255,13 @@ type request struct {
 	received time.Time
 }
 
+func (s *Server) peerInfo() peerinfo.PeerInfo {
+	if h, ok := s.h.(PeerInfoHost); ok {
+		return h.PeerInfo()
+	}
+	return nil
+}
+
 func (s *Server) Run(ctx context.Context) error {
 	var eg errgroup.Group
 	for {
@@ -291,8 +298,8 @@ func (s *Server) Run(ctx context.Context) error {
 				}
 				ok := s.queueHandler(ctx, req.stream)
 				duration := time.Since(req.received)
-				if s.h.PeerInfo() != nil {
-					info := s.h.PeerInfo().EnsurePeerInfo(conn.RemotePeer())
+				if s.peerInfo() != nil {
+					info := s.peerInfo().EnsurePeerInfo(conn.RemotePeer())
 					info.ServerStats.RequestDone(duration, ok)
 				}
 				if s.metrics != nil {
@@ -467,8 +474,8 @@ func (s *Server) streamRequest(
 	if err != nil {
 		return nil, nil, err
 	}
-	if s.h.PeerInfo() != nil {
-		info = s.h.PeerInfo().EnsurePeerInfo(stream.Conn().RemotePeer())
+	if s.peerInfo() != nil {
+		info = s.peerInfo().EnsurePeerInfo(stream.Conn().RemotePeer())
 	}
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	defer func() {
