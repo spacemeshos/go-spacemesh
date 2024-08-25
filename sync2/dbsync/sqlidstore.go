@@ -69,6 +69,10 @@ func (s *sqlIDStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator 
 	return newDBRangeIterator(ContextSQLExec(ctx, s.db), s.sts, from, sqlMaxChunkSize, s.cache)
 }
 
+func (s *sqlIDStore) setSnapshot(sts *SyncedTableSnapshot) {
+	s.sts = sts
+}
+
 type dbBackedStore struct {
 	*sqlIDStore
 	*inMemIDStore

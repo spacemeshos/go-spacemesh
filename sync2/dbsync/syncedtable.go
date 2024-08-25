@@ -85,6 +85,28 @@ func (st *SyncedTable) genSelectAllRowIDCutoff() *rsql.SelectStatement {
 	return s
 }
 
+func (st *SyncedTable) genSelectAllRowIDCutoffSince() *rsql.SelectStatement {
+	s := st.genSelectAll()
+	rowIDBetween := &rsql.BinaryExpr{
+		X:  &rsql.Ident{Name: "rowid"},
+		Op: rsql.BETWEEN,
+		Y: &rsql.Range{
+			X: &rsql.BindExpr{Name: "?"},
+			Y: &rsql.BindExpr{Name: "?"},
+		},
+	}
+	if s.WhereExpr != nil {
+		s.WhereExpr = &rsql.BinaryExpr{
+			X:  s.WhereExpr,
+			Op: rsql.AND,
+			Y:  rowIDBetween,
+		}
+	} else {
+		s.WhereExpr = rowIDBetween
+	}
+	return s
+}
+
 func (st *SyncedTable) genSelectIDRangeWithRowIDCutoff() *rsql.SelectStatement {
 	s := st.genSelectIDRange()
 	s.WhereExpr = &rsql.BinaryExpr{
@@ -132,6 +154,25 @@ func (sts *SyncedTableSnapshot) loadIDs(
 				sts.Binder(stmt)
 			}
 			stmt.BindInt64(stmt.BindParamCount(), sts.maxRowID)
+		},
+		dec)
+	return err
+}
+
+func (sts *SyncedTableSnapshot) loadIDsSince(
+	db sql.Executor,
+	prev *SyncedTableSnapshot,
+	dec func(stmt *sql.Statement) bool,
+) error {
+	_, err := db.Exec(
+		sts.genSelectAllRowIDCutoffSince().String(),
+		func(stmt *sql.Statement) {
+			if sts.Binder != nil {
+				sts.Binder(stmt)
+			}
+			nParams := stmt.BindParamCount()
+			stmt.BindInt64(nParams-1, prev.maxRowID+1)
+			stmt.BindInt64(nParams, sts.maxRowID)
 		},
 		dec)
 	return err

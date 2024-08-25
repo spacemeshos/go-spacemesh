@@ -16,6 +16,8 @@ type DBItemStore struct {
 	db       sql.Database
 	ft       *fpTree
 	st       *SyncedTable
+	snapshot *SyncedTableSnapshot
+	dbStore  *dbBackedStore
 	keyLen   int
 	maxDepth int
 }
@@ -38,6 +40,13 @@ func NewDBItemStore(
 	}
 }
 
+func (d *DBItemStore) decodeID(stmt *sql.Statement) bool {
+	id := make(KeyBytes, d.keyLen) // TODO: don't allocate new ID
+	stmt.ColumnBytes(0, id[:])
+	d.ft.addStoredHash(id)
+	return true
+}
+
 func (d *DBItemStore) EnsureLoaded(ctx context.Context) error {
 	d.loadMtx.Lock()
 	defer d.loadMtx.Unlock()
@@ -45,19 +54,15 @@ func (d *DBItemStore) EnsureLoaded(ctx context.Context) error {
 		return nil
 	}
 	db := ContextSQLExec(ctx, d.db)
-	sts, err := d.st.snapshot(db)
+	var err error
+	d.snapshot, err = d.st.snapshot(db)
 	if err != nil {
 		return fmt.Errorf("error taking snapshot: %w", err)
 	}
 	var np nodePool
-	dbStore := newDBBackedStore(db, sts, d.keyLen)
-	d.ft = newFPTree(&np, dbStore, d.keyLen, d.maxDepth)
-	return sts.loadIDs(db, func(stmt *sql.Statement) bool {
-		id := make(KeyBytes, d.keyLen) // TODO: don't allocate new ID
-		stmt.ColumnBytes(0, id[:])
-		d.ft.addStoredHash(id)
-		return true
-	})
+	d.dbStore = newDBBackedStore(db, d.snapshot, d.keyLen)
+	d.ft = newFPTree(&np, d.dbStore, d.keyLen, d.maxDepth)
+	return d.snapshot.loadIDs(db, d.decodeID)
 }
 
 // Add implements hashsync.ItemStore.
@@ -174,13 +179,30 @@ func (d *DBItemStore) Min(ctx context.Context) (hashsync.Iterator, error) {
 	return it, nil
 }
 
+func (d *DBItemStore) Advance(ctx context.Context) error {
+	d.loadMtx.Lock()
+	d.loadMtx.Unlock()
+	if d.ft == nil {
+		// FIXME
+		panic("BUG: can't advance the DBItemStore before it's loaded")
+	}
+	oldSnapshot := d.snapshot
+	var err error
+	d.snapshot, err = d.st.snapshot(ContextSQLExec(ctx, d.db))
+	if err != nil {
+		return fmt.Errorf("error taking snapshot: %w", err)
+	}
+	d.dbStore.setSnapshot(d.snapshot)
+	return d.snapshot.loadIDsSince(d.db, oldSnapshot, d.decodeID)
+}
+
 // Copy implements hashsync.ItemStore.
 func (d *DBItemStore) Copy() hashsync.ItemStore {
 	d.loadMtx.Lock()
 	d.loadMtx.Unlock()
 	if d.ft == nil {
 		// FIXME
-		panic("BUG: can't copy DBItemStore before it's loaded")
+		panic("BUG: can't copy the DBItemStore before it's loaded")
 	}
 	return &DBItemStore{
 		db:       d.db,

@@ -122,6 +122,17 @@ func TestSyncedTable_LoadIDs(t *testing.T) {
 		return ids
 	}
 
+	loadIDsSince := func(stsNew, stsOld *SyncedTableSnapshot) []string {
+		var ids []string
+		require.NoError(t, stsNew.loadIDsSince(db, stsOld, func(stmt *sql.Statement) bool {
+			id := make(KeyBytes, stmt.ColumnLen(0))
+			stmt.ColumnBytes(0, id)
+			ids = append(ids, id.String())
+			return true
+		}))
+		return ids
+	}
+
 	loadIDRange := func(sts *SyncedTableSnapshot, from KeyBytes, limit int) []string {
 		var ids []string
 		require.NoError(t, sts.loadIDRange(
@@ -221,6 +232,11 @@ func TestSyncedTable_LoadIDs(t *testing.T) {
 				"2664e267650ee22dee7d8c987b5cf44ba5596c78df3db5b99fb0ce79cc649d69",
 			},
 			loadIDRange(sts2, fromID, 100))
+		require.ElementsMatch(t,
+			[]string{
+				"2664e267650ee22dee7d8c987b5cf44ba5596c78df3db5b99fb0ce79cc649d69",
+			},
+			loadIDsSince(sts2, sts1))
 	})
 
 	t.Run("filter", func(t *testing.T) {
@@ -295,5 +311,10 @@ func TestSyncedTable_LoadIDs(t *testing.T) {
 				"2664e267650ee22dee7d8c987b5cf44ba5596c78df3db5b99fb0ce79cc649d69",
 			},
 			loadIDRange(sts2, fromID, 100))
+		require.ElementsMatch(t,
+			[]string{
+				"2664e267650ee22dee7d8c987b5cf44ba5596c78df3db5b99fb0ce79cc649d69",
+			},
+			loadIDsSince(sts2, sts1))
 	})
 }

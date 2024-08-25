@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDBItemStoreEmpty(t *testing.T) {
+func TestDBItemStore_Empty(t *testing.T) {
 	db := populateDB(t, 32, nil)
 	st := &SyncedTable{
 		TableName: "foo",
@@ -137,7 +137,7 @@ func TestDBItemStore(t *testing.T) {
 	}
 }
 
-func TestDBItemStoreAdd(t *testing.T) {
+func TestDBItemStore_Add(t *testing.T) {
 	ids := []KeyBytes{
 		util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"),
 		util.FromHex("123456789abcdef0000000000000000000000000000000000000000000000000"),
@@ -173,7 +173,7 @@ func TestDBItemStoreAdd(t *testing.T) {
 	require.Equal(t, ids[0], itKey(t, info.End))
 }
 
-func TestDBItemStoreCopy(t *testing.T) {
+func TestDBItemStore_Copy(t *testing.T) {
 	ids := []KeyBytes{
 		util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"),
 		util.FromHex("123456789abcdef0000000000000000000000000000000000000000000000000"),
@@ -216,5 +216,79 @@ func TestDBItemStoreCopy(t *testing.T) {
 	require.Equal(t, 3, info.Count)
 	require.Equal(t, "761032cfe98ba54ddddddddd", info.Fingerprint.(fmt.Stringer).String())
 	require.Equal(t, ids[2], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
+}
+
+func TestDBItemStore_Advance(t *testing.T) {
+	ids := []KeyBytes{
+		util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"),
+		util.FromHex("123456789abcdef0000000000000000000000000000000000000000000000000"),
+		util.FromHex("5555555555555555555555555555555555555555555555555555555555555555"),
+		util.FromHex("8888888888888888888888888888888888888888888888888888888888888888"),
+	}
+	db := populateDB(t, 32, ids)
+	st := &SyncedTable{
+		TableName: "foo",
+		IDColumn:  "id",
+	}
+	s := NewDBItemStore(db, st, 32, 24)
+	ctx := context.Background()
+	require.NoError(t, s.EnsureLoaded(ctx))
+
+	copy := s.Copy()
+
+	info, err := s.GetRangeInfo(ctx, nil, ids[0], ids[0], -1)
+	require.NoError(t, err)
+	require.Equal(t, 4, info.Count)
+	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.(fmt.Stringer).String())
+	require.Equal(t, ids[0], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
+
+	info, err = copy.GetRangeInfo(ctx, nil, ids[0], ids[0], -1)
+	require.NoError(t, err)
+	require.Equal(t, 4, info.Count)
+	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.(fmt.Stringer).String())
+	require.Equal(t, ids[0], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
+
+	insertDBItems(t, db, []KeyBytes{
+		util.FromHex("abcdef1234567890000000000000000000000000000000000000000000000000"),
+	})
+
+	info, err = s.GetRangeInfo(ctx, nil, ids[0], ids[0], -1)
+	require.NoError(t, err)
+	require.Equal(t, 4, info.Count)
+	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.(fmt.Stringer).String())
+	require.Equal(t, ids[0], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
+
+	info, err = copy.GetRangeInfo(ctx, nil, ids[0], ids[0], -1)
+	require.NoError(t, err)
+	require.Equal(t, 4, info.Count)
+	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.(fmt.Stringer).String())
+	require.Equal(t, ids[0], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
+
+	require.NoError(t, s.Advance(ctx))
+
+	info, err = s.GetRangeInfo(ctx, nil, ids[0], ids[0], -1)
+	require.NoError(t, err)
+	require.Equal(t, 5, info.Count)
+	require.Equal(t, "642464b773377bbddddddddd", info.Fingerprint.(fmt.Stringer).String())
+	require.Equal(t, ids[0], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
+
+	info, err = copy.GetRangeInfo(ctx, nil, ids[0], ids[0], -1)
+	require.NoError(t, err)
+	require.Equal(t, 4, info.Count)
+	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.(fmt.Stringer).String())
+	require.Equal(t, ids[0], itKey(t, info.Start))
+	require.Equal(t, ids[0], itKey(t, info.End))
+
+	info, err = s.Copy().GetRangeInfo(ctx, nil, ids[0], ids[0], -1)
+	require.NoError(t, err)
+	require.Equal(t, 5, info.Count)
+	require.Equal(t, "642464b773377bbddddddddd", info.Fingerprint.(fmt.Stringer).String())
+	require.Equal(t, ids[0], itKey(t, info.Start))
 	require.Equal(t, ids[0], itKey(t, info.End))
 }
