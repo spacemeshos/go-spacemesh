@@ -67,7 +67,7 @@ func (th *TxHandler) HandleGossipTransaction(ctx context.Context, peer p2p.Peer,
 	updateMetrics(err, gossipTxCount)
 	if err != nil {
 		if !errors.Is(err, errDuplicateTX) {
-			th.logger.With(log.ZContext(ctx)).Warn("failed to handle tx", zap.Error(err))
+			th.logger.With(log.ZContext(ctx)).Debug("failed to handle tx", zap.Error(err))
 		}
 		return err
 	}
@@ -122,7 +122,7 @@ func (th *TxHandler) verifyAndCache(ctx context.Context, expHash types.Hash32, m
 		return fmt.Errorf("%w: %s", errVerify, raw.ID)
 	}
 	if err := th.state.AddToCache(ctx, tx, time.Now()); err != nil {
-		th.logger.With(log.ZContext(ctx)).Warn("failed to add tx to conservative cache",
+		th.logger.With(log.ZContext(ctx)).Debug("failed to add tx to conservative cache",
 			zap.Stringer("tx_id", raw.ID),
 			zap.Error(err),
 		)

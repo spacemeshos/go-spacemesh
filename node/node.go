@@ -1983,7 +1983,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	sqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
 	if err != nil {
-		return fmt.Errorf("open sqlite db %w", err)
+		return fmt.Errorf("open sqlite db: %w", err)
 	}
 	app.db = sqlDB
 	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
@@ -2029,7 +2029,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithAllowSchemaDrift(app.Config.DatabaseSchemaAllowDrift),
 	)
 	if err != nil {
-		return fmt.Errorf("open sqlite db %w", err)
+		return fmt.Errorf("open sqlite db: %w", err)
 	}
 	app.localDB = localDB
 	return nil
@@ -2107,6 +2107,14 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 			}
 			return nil
 		})
+		if app.Config.PprofMutexProfile {
+			// this will set the mutex profiling to sample a third of all lock events
+			runtime.SetMutexProfileFraction(3)
+		}
+		if app.Config.PprofBlockProfile {
+			// record block sample for every block event that takes more than 10 milliseconds
+			runtime.SetBlockProfileRate(int(10 * time.Millisecond))
+		}
 	}
 
 	if app.Config.ProfilerURL != "" {
