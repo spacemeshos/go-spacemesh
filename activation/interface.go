@@ -207,3 +207,9 @@ type PostStates interface {
 	Set(id types.NodeID, state types.PostState)
 	Get() map[types.NodeID]types.PostState
 }
+
+type IdentityStates interface {
+	Set(id types.NodeID, state types.IdentityState) error
+	Get(id types.NodeID) (types.IdentityState, error)
+	All() map[types.NodeID]types.IdentityState
+}

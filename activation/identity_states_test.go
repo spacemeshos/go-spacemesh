@@ -1,19 +1,21 @@
-package types
+package activation
 
 import (
 	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestStateSwitch(t *testing.T) {
 	t.Run("invalid initial state", func(t *testing.T) {
 		storage := NewIdentityStateStorage()
-		nodeId := RandomNodeID()
+		nodeId := types.RandomNodeID()
 
 		for state := range validStateSwitch {
-			if state != IdentityStateWaitForATXSyncing && state != IdentityStateWaitForPoetRoundStart {
+			if state != types.IdentityStateWaitForATXSyncing && state != types.IdentityStateWaitForPoetRoundStart {
 				require.ErrorIs(t, storage.Set(nodeId, state), ErrInvalidIdentityStateSwitch)
 			}
 		}
@@ -21,16 +23,16 @@ func TestStateSwitch(t *testing.T) {
 
 	t.Run("verify all possible switches", func(t *testing.T) {
 		storage := NewIdentityStateStorage()
-		nodeId := RandomNodeID()
+		nodeId := types.RandomNodeID()
 
-		require.NoError(t, storage.Set(nodeId, IdentityStateWaitForATXSyncing))
+		require.NoError(t, storage.Set(nodeId, types.IdentityStateWaitForATXSyncing))
 
 		curState, err := storage.Get(nodeId)
 		require.NoError(t, err)
-		require.Equal(t, IdentityStateWaitForATXSyncing, curState)
+		require.Equal(t, types.IdentityStateWaitForATXSyncing, curState)
 
-		metStates := make(map[IdentityState]struct{})
-		metStates[IdentityStateWaitForATXSyncing] = struct{}{}
+		metStates := make(map[types.IdentityState]struct{})
+		metStates[types.IdentityStateWaitForATXSyncing] = struct{}{}
 
 		for len(metStates) != len(validStateSwitch) {
 			for _, possibleStates := range validStateSwitch {

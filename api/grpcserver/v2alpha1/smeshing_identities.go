@@ -21,14 +21,14 @@ const SmeshingIdentities = "smeshing_identities_v2alpha1"
 const poetsMismatchWarning = "poet is not configured, proof will not be fetched"
 
 type SmeshingIdentitiesService struct {
-	db                     sql.Executor
+	db                     sql.StateDatabase
 	states                 identityState
 	signers                map[types.NodeID]struct{}
 	configuredPoetServices map[string]struct{}
 }
 
 func NewSmeshingIdentitiesService(
-	db sql.Executor,
+	db sql.StateDatabase,
 	configuredPoetServices map[string]struct{},
 	states identityState,
 	signers map[types.NodeID]struct{},
@@ -63,62 +63,53 @@ func (s *SmeshingIdentitiesService) String() string {
 }
 
 func (s *SmeshingIdentitiesService) PoetServices(
-	context.Context,
-	*pb.PoetServicesRequest,
+	ctx context.Context,
+	_ *pb.PoetServicesRequest,
 ) (*pb.PoetServicesResponse, error) {
-	states := s.states.IdentityStates()
-
 	pbIdentities := make(map[types.NodeID]*pb.PoetServicesResponse_Identity)
-	nodeIdsToRequest := make([]types.NodeID, 0)
 
-	for desc, state := range states {
-		pbIdentities[desc.NodeID()] = &pb.PoetServicesResponse_Identity{
-			SmesherId: desc.NodeID().Bytes(),
-			Status:    statusMap[state],
-		}
+	err := s.db.WithTx(ctx, func(tx sql.Transaction) error {
+		for desc, state := range s.states.IdentityStates() {
+			pbIdentities[desc.NodeID()] = &pb.PoetServicesResponse_Identity{
+				SmesherId: desc.NodeID().Bytes(),
+				Status:    statusMap[state],
+			}
 
-		if state != types.IdentityStateWaitForPoetRoundEnd {
-			continue
-		}
-		nodeIdsToRequest = append(nodeIdsToRequest, desc.NodeID())
-	}
+			if state != types.IdentityStateWaitForPoetRoundEnd {
+				continue
+			}
 
-	if len(nodeIdsToRequest) != 0 {
-		regInfos, err := s.collectPoetInfos(nodeIdsToRequest)
-		if err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
+			regInfos, err := s.collectPoetInfos(tx, desc.NodeID())
+			if err != nil {
+				return status.Error(codes.Internal, err.Error())
+			}
+			pbIdentities[desc.NodeID()].PoetInfos = maps.Values(regInfos)
 		}
-
-		for nodeId, poetInfos := range regInfos {
-			identity := pbIdentities[nodeId]
-			identity.PoetInfos = maps.Values(poetInfos)
-		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &pb.PoetServicesResponse{Identities: maps.Values(pbIdentities)}, nil
 }
 
-func (s *SmeshingIdentitiesService) collectPoetInfos(nodeIds []types.NodeID) (
-	map[types.NodeID]map[string]*pb.PoetServicesResponse_Identity_PoetInfo,
+func (s *SmeshingIdentitiesService) collectPoetInfos(db sql.Executor, nodeId types.NodeID) (
+	map[string]*pb.PoetServicesResponse_Identity_PoetInfo,
 	error,
 ) {
-	dbRegs, err := nipost.PoetRegistrations(s.db, nodeIds...)
+	dbRegs, err := nipost.PoetRegistrations(db, nodeId)
 	if err != nil {
 		return nil, err
 	}
 
-	identityRegInfos := make(map[types.NodeID]map[string]*pb.PoetServicesResponse_Identity_PoetInfo)
+	identityRegInfos := make(map[string]*pb.PoetServicesResponse_Identity_PoetInfo)
 	for _, reg := range dbRegs {
-		poetInfos, ok := identityRegInfos[reg.NodeId]
-		if !ok {
-			poetInfos = make(map[string]*pb.PoetServicesResponse_Identity_PoetInfo)
-		}
-
 		var (
 			status  pb.RegistrationStatus
 			warning string
 		)
 
-		_, ok = s.configuredPoetServices[reg.Address]
+		_, ok := s.configuredPoetServices[reg.Address]
 		switch {
 		case !ok:
 			status = pb.RegistrationStatus_RESIDUAL_REG
@@ -129,23 +120,19 @@ func (s *SmeshingIdentitiesService) collectPoetInfos(nodeIds []types.NodeID) (
 			status = pb.RegistrationStatus_SUCCESS_REG
 		}
 
-		poetInfos[reg.Address] = &pb.PoetServicesResponse_Identity_PoetInfo{
+		identityRegInfos[reg.Address] = &pb.PoetServicesResponse_Identity_PoetInfo{
 			Url:                reg.Address,
 			PoetRoundEnd:       timestamppb.New(reg.RoundEnd),
 			RegistrationStatus: status,
 			Warning:            warning,
 		}
-
-		identityRegInfos[reg.NodeId] = poetInfos
 	}
 
-	for id, poetInfos := range identityRegInfos {
-		for poetAddr := range s.configuredPoetServices {
-			if _, ok := poetInfos[poetAddr]; !ok {
-				identityRegInfos[id][poetAddr] = &pb.PoetServicesResponse_Identity_PoetInfo{
-					Url:                poetAddr,
-					RegistrationStatus: pb.RegistrationStatus_NO_REG,
-				}
+	for poetAddr := range s.configuredPoetServices {
+		if _, ok := identityRegInfos[poetAddr]; !ok {
+			identityRegInfos[poetAddr] = &pb.PoetServicesResponse_Identity_PoetInfo{
+				Url:                poetAddr,
+				RegistrationStatus: pb.RegistrationStatus_NO_REG,
 			}
 		}
 	}

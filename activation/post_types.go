@@ -10,7 +10,7 @@ import (
 
 type PowDifficulty [32]byte
 
-func (d *PowDifficulty) String() string {
+func (d PowDifficulty) String() string {
 	return hex.EncodeToString(d[:])
 }
 

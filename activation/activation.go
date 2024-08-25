@@ -106,7 +106,7 @@ type Builder struct {
 	postStates PostStates
 
 	// identity states of each known identity
-	identitiesStates types.IdentityStates
+	identitiesStates IdentityStates
 
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
 	// since they (can) modify the fields below.
@@ -172,7 +172,7 @@ func WithPostStates(ps PostStates) BuilderOption {
 	}
 }
 
-func WithIdentityStates(is types.IdentityStates) BuilderOption {
+func WithIdentityStates(is IdentityStates) BuilderOption {
 	return func(b *Builder) {
 		b.identitiesStates = is
 	}
@@ -212,7 +212,7 @@ func NewBuilder(
 		poetRetryInterval: defaultPoetRetryInterval,
 		postValidityDelay: 12 * time.Hour,
 		postStates:        NewPostStates(log),
-		identitiesStates:  types.NewIdentityStateStorage(),
+		identitiesStates:  NewIdentityStateStorage(),
 		versions:          []atxVersion{{0, types.AtxV1}},
 	}
 	for _, opt := range opts {
@@ -262,7 +262,7 @@ func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
 
 // IdentityStates returns the current state of the identity for each smesher.
 func (b *Builder) IdentityStates() map[types.IdentityDescriptor]types.IdentityState {
-	states := b.identitiesStates.GetAll()
+	states := b.identitiesStates.All()
 	res := make(map[types.IdentityDescriptor]types.IdentityState, len(states))
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()

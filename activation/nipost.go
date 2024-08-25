@@ -55,7 +55,7 @@ type NIPostBuilder struct {
 	poetCfg        PoetConfig
 	layerClock     layerClock
 	postStates     PostStates
-	identityStates types.IdentityStates
+	identityStates IdentityStates
 	validator      nipostValidator
 }
 
@@ -76,7 +76,7 @@ func NipostbuilderWithPostStates(ps PostStates) NIPostBuilderOption {
 	}
 }
 
-func NipostbuilderWithIdentityStates(is types.IdentityStates) NIPostBuilderOption {
+func NipostbuilderWithIdentityStates(is IdentityStates) NIPostBuilderOption {
 	return func(nb *NIPostBuilder) {
 		nb.identityStates = is
 	}
@@ -99,7 +99,7 @@ func NewNIPostBuilder(
 		poetCfg:        poetCfg,
 		layerClock:     layerClock,
 		postStates:     NewPostStates(lg),
-		identityStates: types.NewIdentityStateStorage(),
+		identityStates: NewIdentityStateStorage(),
 		validator:      validator,
 	}
 
@@ -405,7 +405,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 		registration.RoundEnd = poetRoundEnd
 
 		if err := nipost.AddPoetRegistration(nb.localDB, registration); err != nil {
-			nb.logger.Warn("failed to save failed poet registration into db",
+			nb.logger.Warn("failed to save unsuccessful poet registration into db",
 				zap.Error(err),
 				log.ZShortStringer("smesherID", nodeID))
 		}

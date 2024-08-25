@@ -582,7 +582,7 @@ func (app *App) initServices(ctx context.Context) error {
 
 	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap())
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
-	idStates := types.NewIdentityStateStorage()
+	idStates := activation.NewIdentityStateStorage()
 
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
