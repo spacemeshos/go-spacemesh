@@ -158,8 +158,8 @@ func MinhashSampleItemFromHash32(h types.Hash32) MinhashSampleItem {
 	return MinhashSampleItem(uint32(h[28])<<24 + uint32(h[29])<<16 + uint32(h[30])<<8 + uint32(h[31]))
 }
 
-// ProbeResponseMessage is a response to ProbeMessage
-type ProbeResponseMessage struct {
+// SampleMessage is a sample of set items
+type SampleMessage struct {
 	RangeX, RangeY   CompactHash32
 	RangeFingerprint types.Hash12
 	NumItems         uint32
@@ -167,15 +167,15 @@ type ProbeResponseMessage struct {
 	Sample []MinhashSampleItem `scale:"max=1000"`
 }
 
-var _ SyncMessage = &ProbeResponseMessage{}
+var _ SyncMessage = &SampleMessage{}
 
-func (m *ProbeResponseMessage) Type() MessageType { return MessageTypeProbeResponse }
-func (m *ProbeResponseMessage) X() Ordered        { return m.RangeX.ToOrdered() }
-func (m *ProbeResponseMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
-func (m *ProbeResponseMessage) Fingerprint() any  { return m.RangeFingerprint }
-func (m *ProbeResponseMessage) Count() int        { return int(m.NumItems) }
+func (m *SampleMessage) Type() MessageType { return MessageTypeSample }
+func (m *SampleMessage) X() Ordered        { return m.RangeX.ToOrdered() }
+func (m *SampleMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
+func (m *SampleMessage) Fingerprint() any  { return m.RangeFingerprint }
+func (m *SampleMessage) Count() int        { return int(m.NumItems) }
 
-func (m *ProbeResponseMessage) Keys() []Ordered {
+func (m *SampleMessage) Keys() []Ordered {
 	r := make([]Ordered, len(m.Sample))
 	for n, item := range m.Sample {
 		r[n] = item

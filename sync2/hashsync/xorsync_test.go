@@ -62,6 +62,7 @@ type xorSyncTestConfig struct {
 func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB ItemStore, numSpecific int, opts []RangeSetReconcilerOption) bool) {
 	opts := []RangeSetReconcilerOption{
 		WithMaxSendRange(cfg.maxSendRange),
+		WithMaxDiff(0.05),
 	}
 	numSpecificA := rand.Intn(cfg.maxNumSpecificA+1-cfg.minNumSpecificA) + cfg.minNumSpecificA
 	numSpecificB := rand.Intn(cfg.maxNumSpecificB+1-cfg.minNumSpecificB) + cfg.minNumSpecificB

@@ -30,7 +30,7 @@ const (
 	MessageTypeRangeContents
 	MessageTypeItemBatch
 	MessageTypeProbe
-	MessageTypeProbeResponse
+	MessageTypeSample
 )
 
 var messageTypes = []string{
@@ -42,7 +42,7 @@ var messageTypes = []string{
 	"rangeContents",
 	"itemBatch",
 	"probe",
-	"probeResponse",
+	"sample",
 }
 
 func (mtype MessageType) String() string {
@@ -132,9 +132,9 @@ type Conduit interface {
 	// the handler must send a sample subset of its items for MinHash
 	// calculation.
 	SendProbe(x, y Ordered, fingerprint any, sampleSize int) error
-	// SendProbeResponse sends probe response. If 'it' is not nil,
-	// the corresponding items are included in the sample
-	SendProbeResponse(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error
+	// SendSample sends a set sample. If 'it' is not nil, the corresponding items are
+	// included in the sample
+	SendSample(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error
 	// ShortenKey shortens the key for minhash calculation
 	ShortenKey(k Ordered) Ordered
 }
@@ -159,6 +159,16 @@ func WithSampleSize(s int) RangeSetReconcilerOption {
 	}
 }
 
+// WithMaxDiff sets maximum estimated relative size of the symmetric difference allowed
+// for recursive reconciliation, with value of 0 meaning equal sets and 1 meaning
+// completely disjoin set. If the estimated value for the sets exceeds MaxDiff value, the
+// whole set is transmitted instead of applying the recursive algorithm.
+func WithMaxDiff(d float64) RangeSetReconcilerOption {
+	return func(r *RangeSetReconciler) {
+		r.maxDiff = d
+	}
+}
+
 // TODO: RangeSetReconciler should sit in a separate package
 // and WithRangeSyncLogger should be named WithLogger
 func WithRangeSyncLogger(log *zap.Logger) RangeSetReconcilerOption {
@@ -178,6 +188,7 @@ type RangeSetReconciler struct {
 	maxSendRange  int
 	itemChunkSize int
 	sampleSize    int
+	maxDiff       float64
 	log           *zap.Logger
 }
 
@@ -187,6 +198,7 @@ func NewRangeSetReconciler(is ItemStore, opts ...RangeSetReconcilerOption) *Rang
 		maxSendRange:  DefaultMaxSendRange,
 		itemChunkSize: DefaultItemChunkSize,
 		sampleSize:    DefaultSampleSize,
+		maxDiff:       -1,
 		log:           zap.NewNop(),
 	}
 	for _, opt := range opts {
@@ -274,7 +286,7 @@ func (rsr *RangeSetReconciler) handleMessage(ctx context.Context, c Conduit, pre
 					HexField("fingerpint", info.Fingerprint),
 					zap.Int("count", info.Count),
 					IteratorField("it", it))
-				if err := c.SendProbeResponse(x, y, info.Fingerprint, info.Count, 0, it); err != nil {
+				if err := c.SendSample(x, y, info.Fingerprint, info.Count, 0, it); err != nil {
 					return false, err
 				}
 			}
@@ -309,6 +321,8 @@ func (rsr *RangeSetReconciler) handleMessage(ctx context.Context, c Conduit, pre
 		// items in the range to us, but there may be some items on our
 		// side. In the latter case, send only the items themselves b/c
 		// the range doesn't need any further handling by the peer.
+		// QQQQQ: TBD: do NOT send items if they're present in the original
+		// range received.
 		if info.Count != 0 {
 			done = false
 			rsr.log.Debug("handleMessage: send items", zap.Int("count", info.Count),
@@ -335,12 +349,30 @@ func (rsr *RangeSetReconciler) handleMessage(ctx context.Context, c Conduit, pre
 			// fmt.Fprintf(os.Stderr, "QQQQQ: fingerprint eq %#v %#v\n",
 			// 	msg.Fingerprint(), info.Fingerprint)
 		}
-		if err := c.SendProbeResponse(x, y, info.Fingerprint, info.Count, sampleSize, it); err != nil {
+		if err := c.SendSample(x, y, info.Fingerprint, info.Count, sampleSize, it); err != nil {
 			return false, err
 		}
 		return true, nil
-	case msg.Type() != MessageTypeFingerprint:
+	case msg.Type() != MessageTypeFingerprint && msg.Type() != MessageTypeSample:
 		return false, fmt.Errorf("unexpected message type %s", msg.Type())
+	case msg.Type() == MessageTypeSample && rsr.maxDiff >= 0:
+		// The peer has sent a sample of its items in the range to check if
+		// recursive reconciliation approach is feasible.
+		pr, err := rsr.handleSample(c, msg, info)
+		if err != nil {
+			return false, err
+		}
+		if 1-pr.Sim > rsr.maxDiff {
+			rsr.log.Debug("handleMessage: maxDiff exceeded, sending full range")
+			if err := c.SendRangeContents(x, y, info.Count); err != nil {
+				return false, err
+			}
+			if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
+				return false, err
+			}
+			break
+		}
+		fallthrough
 	case fingerprintEqual(info.Fingerprint, msg.Fingerprint()):
 		// The range is synced
 	// case (info.Count+1)/2 <= rsr.maxSendRange:
@@ -422,6 +454,8 @@ func (rsr *RangeSetReconciler) Initiate(ctx context.Context, c Conduit) error {
 }
 
 func (rsr *RangeSetReconciler) InitiateBounded(ctx context.Context, c Conduit, x, y Ordered) error {
+	// QQQQQ: TBD: add a possibility to send a sample for probing.
+	// When difference is too high, the remote side should reply with its whole [x, y) range
 	rsr.log.Debug("initiate", HexField("x", x), HexField("y", y))
 	if x == nil {
 		rsr.log.Debug("initiate: send empty set")
@@ -442,6 +476,17 @@ func (rsr *RangeSetReconciler) InitiateBounded(ctx context.Context, c Conduit, x
 				return err
 			}
 			if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
+				return err
+			}
+		case rsr.maxDiff >= 0:
+			// Use minhash to check if syncing this range is feasible
+			rsr.log.Debug("initiate: send sample", zap.Int("count", info.Count),
+				zap.Int("sampleSize", rsr.sampleSize))
+			it, err := rsr.is.Min(ctx)
+			if err != nil {
+				return fmt.Errorf("error getting min element: %v", err)
+			}
+			if err := c.SendSample(x, y, info.Fingerprint, info.Count, 0, it); err != nil {
 				return err
 			}
 		default:
@@ -548,6 +593,21 @@ func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample [
 	return float64(numEq) / float64(maxSampleSize), nil
 }
 
+func (rsr *RangeSetReconciler) handleSample(
+	c Conduit,
+	msg SyncMessage,
+	info RangeInfo,
+) (pr ProbeResult, err error) {
+	pr.FP = msg.Fingerprint()
+	pr.Count = msg.Count()
+	sim, err := rsr.calcSim(c, info, msg.Keys(), msg.Fingerprint())
+	if err != nil {
+		return ProbeResult{}, fmt.Errorf("database error: %w", err)
+	}
+	pr.Sim = sim
+	return pr, nil
+}
+
 func (rsr *RangeSetReconciler) HandleProbeResponse(c Conduit, info RangeInfo) (pr ProbeResult, err error) {
 	// fmt.Fprintf(os.Stderr, "QQQQQ: HandleProbeResponse\n")
 	// defer fmt.Fprintf(os.Stderr, "QQQQQ: HandleProbeResponse done\n")
@@ -571,17 +631,14 @@ func (rsr *RangeSetReconciler) HandleProbeResponse(c Conduit, info RangeInfo) (p
 					return ProbeResult{}, errors.New("no range info received during probe")
 				}
 				return pr, nil
-			case MessageTypeProbeResponse:
+			case MessageTypeSample:
 				if gotRange {
 					return ProbeResult{}, errors.New("single range message expected")
 				}
-				pr.FP = msg.Fingerprint()
-				pr.Count = msg.Count()
-				sim, err := rsr.calcSim(c, info, msg.Keys(), msg.Fingerprint())
+				pr, err = rsr.handleSample(c, msg, info)
 				if err != nil {
-					return ProbeResult{}, fmt.Errorf("database error: %w", err)
+					return ProbeResult{}, err
 				}
-				pr.Sim = sim
 				gotRange = true
 			case MessageTypeEmptySet, MessageTypeEmptyRange:
 				if gotRange {

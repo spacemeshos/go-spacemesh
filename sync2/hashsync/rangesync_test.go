@@ -157,9 +157,9 @@ func (fc *fakeConduit) SendProbe(x, y Ordered, fingerprint any, sampleSize int) 
 	return nil
 }
 
-func (fc *fakeConduit) SendProbeResponse(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error {
+func (fc *fakeConduit) SendSample(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error {
 	msg := rangeMessage{
-		mtype: MessageTypeProbeResponse,
+		mtype: MessageTypeSample,
 		x:     x,
 		y:     y,
 		fp:    fingerprint,

@@ -411,52 +411,96 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 	}
 }
 
-func testWireSync(t *testing.T, getRequester getRequesterFunc) Requester {
-	cfg := xorSyncTestConfig{
-		// large test:
-		// maxSendRange:    1,
-		// numTestHashes:   5000000,
-		// minNumSpecificA: 15000,
-		// maxNumSpecificA: 20000,
-		// minNumSpecificB: 15,
-		// maxNumSpecificB: 20,
+type dumbSyncTracer struct {
+	dumb bool
+}
 
-		// QQQQQ: restore!
-		// maxSendRange:    1,
-		// numTestHashes:   100000,
-		// minNumSpecificA: 4,
-		// maxNumSpecificA: 100,
-		// minNumSpecificB: 4,
-		// maxNumSpecificB: 100,
+var _ Tracer = &dumbSyncTracer{}
 
-		maxSendRange:    1,
-		numTestHashes:   100,
-		minNumSpecificA: 2,
-		maxNumSpecificA: 4,
-		minNumSpecificB: 2,
-		maxNumSpecificB: 4,
-	}
-	var client Requester
-	verifyXORSync(t, cfg, func(storeA, storeB ItemStore, numSpecific int, opts []RangeSetReconcilerOption) bool {
-		opts = append(opts, WithRangeSyncLogger(zaptest.NewLogger(t))) // QQQQQ: TBD: rm
-		withClientServer(
-			storeA, getRequester, opts,
-			func(ctx context.Context, client Requester, srvPeerID p2p.Peer) {
-				nr := RmmeNumRead()
-				nw := RmmeNumWritten()
-				pss := NewPairwiseStoreSyncer(client, opts)
-				err := pss.SyncStore(ctx, srvPeerID, storeB, nil, nil)
-				require.NoError(t, err)
+func (tr *dumbSyncTracer) OnDumbSync() {
+	tr.dumb = true
+}
 
-				if fr, ok := client.(*fakeRequester); ok {
-					t.Logf("numSpecific: %d, bytesSent %d, bytesReceived %d",
-						numSpecific, fr.bytesSent, fr.bytesReceived)
-				}
-				t.Logf("bytes read: %d, bytes written: %d", RmmeNumRead()-nr, RmmeNumWritten()-nw)
+func testWireSync(t *testing.T, getRequester getRequesterFunc) {
+	for _, tc := range []struct {
+		name string
+		cfg  xorSyncTestConfig
+		dumb bool
+	}{
+		{
+			name: "non-dumb sync",
+			cfg: xorSyncTestConfig{
+				maxSendRange:    1,
+				numTestHashes:   1000,
+				minNumSpecificA: 8,
+				maxNumSpecificA: 16,
+				minNumSpecificB: 8,
+				maxNumSpecificB: 16,
+			},
+			dumb: false,
+		},
+		{
+			name: "dumb sync",
+			cfg: xorSyncTestConfig{
+				maxSendRange:    1,
+				numTestHashes:   1000,
+				minNumSpecificA: 400,
+				maxNumSpecificA: 500,
+				minNumSpecificB: 400,
+				maxNumSpecificB: 500,
+			},
+			dumb: true,
+		},
+		{
+			name: "larger sync",
+			cfg: xorSyncTestConfig{
+				// even larger test:
+				// maxSendRange:    1,
+				// numTestHashes:   5000000,
+				// minNumSpecificA: 15000,
+				// maxNumSpecificA: 20000,
+				// minNumSpecificB: 15,
+				// maxNumSpecificB: 20,
+
+				maxSendRange:    1,
+				numTestHashes:   100000,
+				minNumSpecificA: 4,
+				maxNumSpecificA: 100,
+				minNumSpecificB: 4,
+				maxNumSpecificB: 100,
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			verifyXORSync(t, tc.cfg, func(
+				storeA, storeB ItemStore,
+				numSpecific int,
+				opts []RangeSetReconcilerOption,
+			) bool {
+				var tr dumbSyncTracer
+				opts = append(opts,
+					WithTracer(&tr))
+				withClientServer(
+					storeA, getRequester, opts,
+					func(ctx context.Context, client Requester, srvPeerID p2p.Peer) {
+						nr := RmmeNumRead()
+						nw := RmmeNumWritten()
+						pss := NewPairwiseStoreSyncer(client, opts)
+						err := pss.SyncStore(ctx, srvPeerID, storeB, nil, nil)
+						require.NoError(t, err)
+
+						if fr, ok := client.(*fakeRequester); ok {
+							t.Logf("numSpecific: %d, bytesSent %d, bytesReceived %d",
+								numSpecific, fr.bytesSent, fr.bytesReceived)
+						}
+						t.Logf("bytes read: %d, bytes written: %d",
+							RmmeNumRead()-nr, RmmeNumWritten()-nw)
+					})
+				require.Equal(t, tc.dumb, tr.dumb, "dumb sync")
+				return true
 			})
-		return true
-	})
-	return client
+		})
+	}
 }
 
 func TestWireSync(t *testing.T) {

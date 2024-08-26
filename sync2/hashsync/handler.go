@@ -108,8 +108,8 @@ func (c *wireConduit) NextMessage() (SyncMessage, error) {
 			return nil, err
 		}
 		return &m, nil
-	case MessageTypeProbeResponse:
-		var m ProbeResponseMessage
+	case MessageTypeSample:
+		var m SampleMessage
 		if _, err := codec.DecodeFrom(c.stream, &m); err != nil {
 			return nil, err
 		}
@@ -211,8 +211,8 @@ func (c *wireConduit) SendProbe(x, y Ordered, fingerprint any, sampleSize int) e
 	return c.send(m)
 }
 
-func (c *wireConduit) SendProbeResponse(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error {
-	m := &ProbeResponseMessage{
+func (c *wireConduit) SendSample(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error {
+	m := &SampleMessage{
 		RangeFingerprint: fingerprint.(types.Hash12),
 		NumItems:         uint32(count),
 		Sample:           make([]MinhashSampleItem, sampleSize),
@@ -224,7 +224,7 @@ func (c *wireConduit) SendProbeResponse(x, y Ordered, fingerprint any, count, sa
 			return err
 		}
 		m.Sample[n] = MinhashSampleItemFromHash32(k.(types.Hash32))
-		// fmt.Fprintf(os.Stderr, "QQQQQ: m.Sample[%d] = %s\n", n, m.Sample[n])
+		// fmt.Fprintf(os.Stderr, "QQQQQ: SEND: m.Sample[%d] = %s (full %s)\n", n, m.Sample[n], k.(types.Hash32).String())
 		if err := it.Next(); err != nil {
 			return err
 		}

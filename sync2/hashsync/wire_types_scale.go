@@ -322,7 +322,7 @@ func (t *ProbeMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *ProbeResponseMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *SampleMessage) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := t.RangeX.EncodeScale(enc)
 		if err != nil {
@@ -361,7 +361,7 @@ func (t *ProbeResponseMessage) EncodeScale(enc *scale.Encoder) (total int, err e
 	return total, nil
 }
 
-func (t *ProbeResponseMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *SampleMessage) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := t.RangeX.DecodeScale(dec)
 		if err != nil {
