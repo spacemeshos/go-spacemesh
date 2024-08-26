@@ -21,8 +21,8 @@ type ActivationTxV2 struct {
 
 	// only present in initial ATX
 	Initial      *InitialAtxPartsV2
-	PreviousATXs []types.ATXID `scale:"max=256"`
-	NiPosts      []NiPostsV2   `scale:"max=4"`
+	PreviousATXs PrevATXs    `scale:"max=256"`
+	NiPosts      []NiPostsV2 `scale:"max=4"`
 
 	// The VRF nonce must be valid for the collected space of all included IDs.
 	VRFNonce uint64
@@ -79,19 +79,7 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 		tree.AddLeaf(types.EmptyHash32.Bytes())
 	}
 
-	prevATXTree, err := merkle.NewTreeBuilder().
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		panic(err)
-	}
-	for _, prevATX := range atx.PreviousATXs {
-		prevATXTree.AddLeaf(prevATX.Bytes())
-	}
-	for i := len(atx.PreviousATXs); i < 256; i++ {
-		prevATXTree.AddLeaf(types.EmptyATXID.Bytes())
-	}
-	tree.AddLeaf(prevATXTree.Root())
+	tree.AddLeaf(atx.PreviousATXs.Root())
 
 	niPostTree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
@@ -156,14 +144,14 @@ func (atx *ActivationTxV2) TotalNumUnits() uint32 {
 type MarriageCertificates []MarriageCertificate
 
 func (mcs MarriageCertificates) Root() []byte {
-	marriagesTree, err := merkle.NewTreeBuilder().
+	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
 	if err != nil {
 		panic(err)
 	}
-	mcs.merkleTree(marriagesTree)
-	return marriagesTree.Root()
+	mcs.merkleTree(tree)
+	return tree.Root()
 }
 
 func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {
@@ -172,6 +160,28 @@ func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {
 	}
 	for i := len(mcs); i < 256; i++ {
 		tree.AddLeaf(types.EmptyHash32.Bytes())
+	}
+}
+
+type PrevATXs []types.ATXID
+
+func (prevATXs PrevATXs) Root() []byte {
+	tree, err := merkle.NewTreeBuilder().
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		panic(err)
+	}
+	prevATXs.merkleTree(tree)
+	return tree.Root()
+}
+
+func (prevATXs PrevATXs) merkleTree(tree *merkle.Tree) {
+	for _, prevATX := range prevATXs {
+		tree.AddLeaf(prevATX.Bytes())
+	}
+	for i := len(prevATXs); i < 256; i++ {
+		tree.AddLeaf(types.EmptyATXID.Bytes())
 	}
 }
 
@@ -230,6 +240,7 @@ type SubPostV2 struct {
 	// Must be 0 for non-merged ATXs.
 	MarriageIndex uint32
 	PrevATXIndex  uint32 // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
+
 	// Index of the leaf for this ID's challenge in the poet membership tree.
 	// IDs might shared the same index if their nipost challenges are equal.
 	// This happens when the IDs are continuously merged (they share the previous ATX).
