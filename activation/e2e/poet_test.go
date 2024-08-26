@@ -229,3 +229,38 @@ func TestSubmitTooLate(t *testing.T) {
 	)
 	r.ErrorIs(err, activation.ErrInvalidRequest)
 }
+
+func TestInfoWithCertifierInfo(t *testing.T) {
+	t.Parallel()
+	r := require.New(t)
+
+	var eg errgroup.Group
+	poetDir := t.TempDir()
+	t.Cleanup(func() { r.NoError(eg.Wait()) })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c, err := NewHTTPPoetTestHarness(ctx, poetDir, WithCertifier(&registration.CertifierConfig{
+		URL:    "http://localhost:8080",
+		PubKey: []byte("pubkey"),
+	}))
+	r.NoError(err)
+	r.NotNil(c)
+
+	eg.Go(func() error {
+		err := c.Service.Start(ctx)
+		return errors.Join(err, c.Service.Close())
+	})
+
+	client, err := activation.NewHTTPPoetClient(
+		types.PoetServer{Address: c.RestURL().String()},
+		activation.DefaultPoetConfig(),
+		activation.WithLogger(zaptest.NewLogger(t)),
+	)
+	require.NoError(t, err)
+
+	info, err := client.Info(context.Background())
+	r.NoError(err)
+	r.Equal("http://localhost:8080", info.Certifier.Url.String())
+	r.Equal([]byte("pubkey"), info.Certifier.Pubkey)
+}
