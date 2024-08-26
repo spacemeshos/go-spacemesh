@@ -152,8 +152,7 @@ func (fs *fakeSend) send(c Conduit) error {
 	case fs.done:
 		return c.SendDone()
 	case len(fs.items) != 0:
-		items := slices.Clone(fs.items)
-		return c.SendItems(len(items), 2, &sliceIterator{s: items})
+		return c.SendChunk(slices.Clone(fs.items))
 	case fs.x == nil || fs.y == nil:
 		return c.SendEmptySet()
 	case fs.count == 0:
@@ -274,10 +273,7 @@ func TestWireConduit(t *testing.T) {
 			name: "server got 2nd request",
 			expectMsgs: []SyncMessage{
 				&ItemBatchMessage{
-					ContentKeys: []types.Hash32{hs[9], hs[10]},
-				},
-				&ItemBatchMessage{
-					ContentKeys: []types.Hash32{hs[11]},
+					ContentKeys: []types.Hash32{hs[9], hs[10], hs[11]},
 				},
 				&EndRoundMessage{},
 			},
@@ -324,10 +320,7 @@ func TestWireConduit(t *testing.T) {
 					NumItems: 2,
 				},
 				&ItemBatchMessage{
-					ContentKeys: []types.Hash32{hs[4], hs[5]},
-				},
-				&ItemBatchMessage{
-					ContentKeys: []types.Hash32{hs[7], hs[8]},
+					ContentKeys: []types.Hash32{hs[4], hs[5], hs[7], hs[8]},
 				},
 				&EndRoundMessage{},
 			},

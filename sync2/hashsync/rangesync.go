@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -120,8 +119,8 @@ type Conduit interface {
 	// be included in this sync round. The items themselves are sent via
 	// SendItems
 	SendRangeContents(x, y Ordered, count int) error
-	// SendItems sends just items without any message
-	SendItems(count, chunkSize int, it Iterator) error
+	// SendItems sends a chunk of items
+	SendChunk(items []Ordered) error
 	// SendEndRound sends a message that signifies the end of sync round
 	SendEndRound() error
 	// SendDone sends a message that notifies the peer that sync is finished
@@ -159,10 +158,10 @@ func WithSampleSize(s int) RangeSetReconcilerOption {
 	}
 }
 
-// WithMaxDiff sets maximum estimated relative size of the symmetric difference allowed
-// for recursive reconciliation, with value of 0 meaning equal sets and 1 meaning
-// completely disjoin set. If the estimated value for the sets exceeds MaxDiff value, the
-// whole set is transmitted instead of applying the recursive algorithm.
+// WithMaxDiff sets maximum set difference metric (0..1) allowed for recursive
+// reconciliation, with value of 0 meaning equal sets and 1 meaning completely disjoint
+// set. If the difference metric MaxDiff value, the whole set is transmitted instead of
+// applying the recursive algorithm.
 func WithMaxDiff(d float64) RangeSetReconcilerOption {
 	return func(r *RangeSetReconciler) {
 		r.maxDiff = d
@@ -174,6 +173,24 @@ func WithMaxDiff(d float64) RangeSetReconcilerOption {
 func WithRangeSyncLogger(log *zap.Logger) RangeSetReconcilerOption {
 	return func(r *RangeSetReconciler) {
 		r.log = log
+	}
+}
+
+// Tracer tracks the reconciliation process
+type Tracer interface {
+	// OnDumbSync is called when the difference metric exceeds maxDiff and dumb
+	// reconciliation process is used
+	OnDumbSync()
+}
+
+type nullTracer struct{}
+
+func (t nullTracer) OnDumbSync() {}
+
+// WithTracer specifies a tracer for RangeSetReconciler
+func WithTracer(t Tracer) RangeSetReconcilerOption {
+	return func(r *RangeSetReconciler) {
+		r.tracer = t
 	}
 }
 
@@ -189,6 +206,7 @@ type RangeSetReconciler struct {
 	itemChunkSize int
 	sampleSize    int
 	maxDiff       float64
+	tracer        Tracer
 	log           *zap.Logger
 }
 
@@ -199,6 +217,7 @@ func NewRangeSetReconciler(is ItemStore, opts ...RangeSetReconcilerOption) *Rang
 		itemChunkSize: DefaultItemChunkSize,
 		sampleSize:    DefaultSampleSize,
 		maxDiff:       -1,
+		tracer:        nullTracer{},
 		log:           zap.NewNop(),
 	}
 	for _, opt := range opts {
@@ -262,7 +281,60 @@ func (rsr *RangeSetReconciler) processSubrange(c Conduit, x, y Ordered, info Ran
 	return nil
 }
 
-func (rsr *RangeSetReconciler) handleMessage(ctx context.Context, c Conduit, preceding Iterator, msg SyncMessage) (done bool, err error) {
+func (rsr *RangeSetReconciler) sendItems(
+	c Conduit,
+	count, itemChunkSize int,
+	it Iterator,
+	skipKeys []Ordered,
+) error {
+	skipPos := 0
+	for i := 0; i < count; i += itemChunkSize {
+		// TBD: do not use chunks, just stream the contentkeys
+		var keys []Ordered
+		n := min(itemChunkSize, count-i)
+	IN_CHUNK:
+		for n > 0 {
+			k, err := it.Key()
+			if err != nil {
+				return err
+			}
+			for skipPos < len(skipKeys) {
+				cmp := k.Compare(skipKeys[skipPos])
+				if cmp == 0 {
+					// fmt.Fprintf(os.Stderr, "QQQQQ: skip key %s\n", k.(fmt.Stringer).String())
+					// we can skip this item. Advance skipPos as there are no duplicates
+					skipPos++
+					continue IN_CHUNK
+				}
+				if cmp < 0 {
+					// current ley is yet to reach the skipped key at skipPos
+					break
+				}
+				// current item is greater than the skipped key at skipPos,
+				// so skipPos needs to catch up with the iterator
+				skipPos++
+			}
+			keys = append(keys, k)
+			if err := it.Next(); err != nil {
+				return err
+			}
+			n--
+		}
+		if err := c.SendChunk(keys); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (rsr *RangeSetReconciler) handleMessage(
+	ctx context.Context,
+	c Conduit,
+	preceding Iterator,
+	msgs []SyncMessage,
+	msgPos int,
+) (done bool, err error) {
+	msg := msgs[msgPos]
 	rsr.log.Debug("handleMessage", IteratorField("preceding", preceding),
 		zap.String("msg", SyncMessageToString(msg)))
 	x := msg.X()
@@ -321,13 +393,20 @@ func (rsr *RangeSetReconciler) handleMessage(ctx context.Context, c Conduit, pre
 		// items in the range to us, but there may be some items on our
 		// side. In the latter case, send only the items themselves b/c
 		// the range doesn't need any further handling by the peer.
-		// QQQQQ: TBD: do NOT send items if they're present in the original
-		// range received.
 		if info.Count != 0 {
 			done = false
 			rsr.log.Debug("handleMessage: send items", zap.Int("count", info.Count),
 				IteratorField("start", info.Start))
-			if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
+			var skipKeys []Ordered
+			if msg.Type() == MessageTypeRangeContents {
+				for _, m := range msgs[msgPos+1:] {
+					if m.Type() != MessageTypeItemBatch {
+						break
+					}
+					skipKeys = append(skipKeys, m.Keys()...)
+				}
+			}
+			if err := rsr.sendItems(c, info.Count, rsr.itemChunkSize, info.Start, skipKeys); err != nil {
 				return false, err
 			}
 		} else {
@@ -355,6 +434,8 @@ func (rsr *RangeSetReconciler) handleMessage(ctx context.Context, c Conduit, pre
 		return true, nil
 	case msg.Type() != MessageTypeFingerprint && msg.Type() != MessageTypeSample:
 		return false, fmt.Errorf("unexpected message type %s", msg.Type())
+	case fingerprintEqual(info.Fingerprint, msg.Fingerprint()):
+		// The range is synced
 	case msg.Type() == MessageTypeSample && rsr.maxDiff >= 0:
 		// The peer has sent a sample of its items in the range to check if
 		// recursive reconciliation approach is feasible.
@@ -363,18 +444,25 @@ func (rsr *RangeSetReconciler) handleMessage(ctx context.Context, c Conduit, pre
 			return false, err
 		}
 		if 1-pr.Sim > rsr.maxDiff {
-			rsr.log.Debug("handleMessage: maxDiff exceeded, sending full range")
+			done = false
+			rsr.tracer.OnDumbSync()
+			rsr.log.Debug("handleMessage: maxDiff exceeded, sending full range",
+				zap.Float64("sim", pr.Sim),
+				zap.Float64("diff", 1-pr.Sim),
+				zap.Float64("maxDiff", rsr.maxDiff))
 			if err := c.SendRangeContents(x, y, info.Count); err != nil {
 				return false, err
 			}
-			if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
+			if err := rsr.sendItems(c, info.Count, rsr.itemChunkSize, info.Start, nil); err != nil {
 				return false, err
 			}
 			break
 		}
+		rsr.log.Debug("handleMessage: acceptable maxDiff, proceeding with sync",
+			zap.Float64("sim", pr.Sim),
+			zap.Float64("diff", 1-pr.Sim),
+			zap.Float64("maxDiff", rsr.maxDiff))
 		fallthrough
-	case fingerprintEqual(info.Fingerprint, msg.Fingerprint()):
-		// The range is synced
 	// case (info.Count+1)/2 <= rsr.maxSendRange:
 	case info.Count <= rsr.maxSendRange:
 		// The range differs from the peer's version of it, but the it
@@ -388,7 +476,7 @@ func (rsr *RangeSetReconciler) handleMessage(ctx context.Context, c Conduit, pre
 			if err := c.SendRangeContents(x, y, info.Count); err != nil {
 				return false, err
 			}
-			if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
+			if err := rsr.sendItems(c, info.Count, rsr.itemChunkSize, info.Start, nil); err != nil {
 				return false, err
 			}
 		} else {
@@ -475,18 +563,15 @@ func (rsr *RangeSetReconciler) InitiateBounded(ctx context.Context, c Conduit, x
 			if err := c.SendRangeContents(x, y, info.Count); err != nil {
 				return err
 			}
-			if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
+			if err := rsr.sendItems(c, info.Count, rsr.itemChunkSize, info.Start, nil); err != nil {
 				return err
 			}
 		case rsr.maxDiff >= 0:
 			// Use minhash to check if syncing this range is feasible
-			rsr.log.Debug("initiate: send sample", zap.Int("count", info.Count),
+			rsr.log.Debug("initiate: send sample",
+				zap.Int("count", info.Count),
 				zap.Int("sampleSize", rsr.sampleSize))
-			it, err := rsr.is.Min(ctx)
-			if err != nil {
-				return fmt.Errorf("error getting min element: %v", err)
-			}
-			if err := c.SendSample(x, y, info.Fingerprint, info.Count, 0, it); err != nil {
+			if err := c.SendSample(x, y, info.Fingerprint, info.Count, rsr.sampleSize, info.Start); err != nil {
 				return err
 			}
 		default:
@@ -553,17 +638,21 @@ func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample [
 	if info.Start == nil {
 		return 0, nil
 	}
+	// for n, k := range remoteSample {
+	// 	fmt.Fprintf(os.Stderr, "QQQQQ: remoteSample[%d] = %s\n", n, k.(MinhashSampleItem).String())
+	// }
 	sampleSize := min(info.Count, rsr.sampleSize)
 	localSample := make([]Ordered, sampleSize)
 	it := info.Start
 	for n := 0; n < sampleSize; n++ {
-		// fmt.Fprintf(os.Stderr, "QQQQQ: n %d sampleSize %d info.Count %d rsr.sampleSize %d %#v\n",
-		// 	n, sampleSize, info.Count, rsr.sampleSize, it.Key())
 		k, err := it.Key()
 		if err != nil {
 			return 0, err
 		}
 		localSample[n] = c.ShortenKey(k)
+		// fmt.Fprintf(os.Stderr, "QQQQQ: n %d sampleSize %d info.Count %d rsr.sampleSize %d -- %s -> %s\n",
+		// 	n, sampleSize, info.Count, rsr.sampleSize, k.(types.Hash32).String(),
+		// 	localSample[n].(MinhashSampleItem).String())
 		if err := it.Next(); err != nil {
 			return 0, err
 		}
@@ -576,7 +665,8 @@ func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample [
 		d := localSample[m].Compare(remoteSample[n])
 		switch {
 		case d < 0:
-			// fmt.Fprintf(os.Stderr, "QQQQQ: less: %v < %s\n", c.ShortenKey(it.Key()), remoteSample[n])
+			// k, _ := it.Key()
+			// fmt.Fprintf(os.Stderr, "QQQQQ: less: %v < %s\n", c.ShortenKey(k), remoteSample[n])
 			m++
 		case d == 0:
 			// fmt.Fprintf(os.Stderr, "QQQQQ: eq: %v\n", remoteSample[n])
@@ -584,7 +674,8 @@ func (rsr *RangeSetReconciler) calcSim(c Conduit, info RangeInfo, remoteSample [
 			m++
 			n++
 		default:
-			// fmt.Fprintf(os.Stderr, "QQQQQ: gt: %v > %s\n", c.ShortenKey(it.Key()), remoteSample[n])
+			// k, _ := it.Key()
+			// fmt.Fprintf(os.Stderr, "QQQQQ: gt: %v > %s\n", c.ShortenKey(k), remoteSample[n])
 			n++
 		}
 	}
@@ -665,12 +756,12 @@ func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done boo
 	if done {
 		// items already added
 		if len(msgs) != 0 {
-			return false, errors.New("non-item messages with 'done' marker")
+			return false, errors.New("no extra messages expected along with 'done' message")
 		}
 		return done, nil
 	}
 	done = true
-	for _, msg := range msgs {
+	for n, msg := range msgs {
 		if msg.Type() == MessageTypeItemBatch {
 			for _, k := range msg.Keys() {
 				rsr.log.Debug("Process: add item", HexField("item", k))
@@ -691,7 +782,7 @@ func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done boo
 		// breaks if we capture the iterator from handleMessage and
 		// pass it to the next handleMessage call (it shouldn't)
 		var msgDone bool
-		msgDone, err = rsr.handleMessage(ctx, c, nil, msg)
+		msgDone, err = rsr.handleMessage(ctx, c, nil, msgs, n)
 		if !msgDone {
 			done = false
 		}
@@ -748,7 +839,7 @@ func CollectStoreItems[K Ordered](is ItemStore) ([]K, error) {
 			return nil, err
 		}
 		if k == nil {
-			fmt.Fprintf(os.Stderr, "QQQQQ: it: %#v\n", it)
+			// fmt.Fprintf(os.Stderr, "QQQQQ: it: %#v\n", it)
 			panic("BUG: iterator exausted before Count reached")
 		}
 		r = append(r, k.(K))

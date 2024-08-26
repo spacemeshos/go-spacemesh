@@ -165,27 +165,14 @@ func (c *wireConduit) SendRangeContents(x, y Ordered, count int) error {
 	})
 }
 
-func (c *wireConduit) SendItems(count, itemChunkSize int, it Iterator) error {
-	for i := 0; i < count; i += itemChunkSize {
-		// TBD: do not use chunks, just stream the contentkeys
-		var msg ItemBatchMessage
-		n := min(itemChunkSize, count-i)
-		for n > 0 {
-			k, err := it.Key()
-			if err != nil {
-				return err
-			}
-			msg.ContentKeys = append(msg.ContentKeys, k.(types.Hash32))
-			if err := it.Next(); err != nil {
-				return err
-			}
-			n--
-		}
-		if err := c.send(&msg); err != nil {
-			return err
-		}
+func (c *wireConduit) SendChunk(items []Ordered) error {
+	msg := ItemBatchMessage{
+		ContentKeys: make([]types.Hash32, len(items)),
 	}
-	return nil
+	for n, k := range items {
+		msg.ContentKeys[n] = k.(types.Hash32)
+	}
+	return c.send(&msg)
 }
 
 func (c *wireConduit) SendEndRound() error {

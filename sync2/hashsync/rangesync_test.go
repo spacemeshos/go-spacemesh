@@ -113,26 +113,12 @@ func (fc *fakeConduit) SendRangeContents(x, y Ordered, count int) error {
 	return nil
 }
 
-func (fc *fakeConduit) SendItems(count, itemChunkSize int, it Iterator) error {
-	require.Positive(fc.t, count)
-	require.NotZero(fc.t, count)
-	require.NotNil(fc.t, it)
-	for i := 0; i < count; i += itemChunkSize {
-		msg := rangeMessage{mtype: MessageTypeItemBatch}
-		n := min(itemChunkSize, count-i)
-		for n > 0 {
-			k, err := it.Key()
-			if err != nil {
-				return fmt.Errorf("getting item: %w", err)
-			}
-			msg.keys = append(msg.keys, k)
-			if err := it.Next(); err != nil {
-				return err
-			}
-			n--
-		}
-		fc.sendMsg(msg)
-	}
+func (fc *fakeConduit) SendChunk(items []Ordered) error {
+	require.NotEmpty(fc.t, items)
+	fc.sendMsg(rangeMessage{
+		mtype: MessageTypeItemBatch,
+		keys:  items,
+	})
 	return nil
 }
 
