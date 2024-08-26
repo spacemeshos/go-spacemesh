@@ -330,7 +330,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 				var resp server.Response
 				require.NoError(t, codec.Decode(b.Bytes(), &resp))
 				require.Empty(t, resp.Data)
-				require.Contains(t, resp.Error, "exec epoch 11: database: no free connection")
+				require.Contains(t, resp.Error, "exec epoch 11: database closed")
 			})
 		})
 	}

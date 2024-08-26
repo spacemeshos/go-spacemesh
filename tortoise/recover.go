@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
@@ -60,11 +59,7 @@ func Recover(
 		}
 	}
 
-	malicious, err := identities.GetMalicious(db)
-	if err != nil {
-		return nil, fmt.Errorf("recover malicious %w", err)
-	}
-	for _, id := range malicious {
+	for _, id := range atxdata.MaliciousIdentities() {
 		trtl.OnMalfeasance(id)
 	}
 
