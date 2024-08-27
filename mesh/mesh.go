@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -538,6 +539,8 @@ func (msh *Mesh) AddBallot(
 	ctx context.Context,
 	ballot *types.Ballot,
 ) (*wire.MalfeasanceProof, error) {
+	start := time.Now()
+	defer func() { metrics.WriteTime.Add(float64(time.Now().Sub(start))) }()
 	malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
 	if malicious {
 		ballot.SetMalicious()
