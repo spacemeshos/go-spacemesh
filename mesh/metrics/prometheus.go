@@ -19,3 +19,5 @@ var LayerNumBlocks = metrics.NewHistogramWithBuckets(
 	[]string{},
 	prometheus.ExponentialBuckets(1, 2, 16),
 )
+
+// var WriteTime = metrics.
