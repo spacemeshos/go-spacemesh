@@ -11,7 +11,7 @@ import (
 
 func TestCacheGetCopies(t *testing.T) {
 	db := sql.InMemory()
-	ss := core.NewStagedCache(core.DBLoader{db})
+	ss := core.NewStagedCache(core.DBLoader{Executor: db})
 	address := core.Address{1}
 	account, err := ss.Get(address)
 	require.NoError(t, err)
@@ -24,7 +24,7 @@ func TestCacheGetCopies(t *testing.T) {
 
 func TestCacheUpdatePreserveOrder(t *testing.T) {
 	db := sql.InMemory()
-	ss := core.NewStagedCache(core.DBLoader{db})
+	ss := core.NewStagedCache(core.DBLoader{Executor: db})
 	order := []core.Address{{3}, {1}, {2}}
 	for _, address := range order {
 		require.NoError(t, ss.Update(core.Account{Address: address}))
