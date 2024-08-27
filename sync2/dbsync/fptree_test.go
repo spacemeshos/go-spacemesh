@@ -197,6 +197,7 @@ func TestCommonPrefix(t *testing.T) {
 
 type fakeIDDBStore struct {
 	db sql.Database
+	t  *testing.T
 	*sqlIDStore
 }
 
@@ -209,7 +210,7 @@ func newFakeATXIDStore(t *testing.T, db sql.Database, maxDepth int) *fakeIDDBSto
 	}
 	sts, err := st.snapshot(db)
 	require.NoError(t, err)
-	return &fakeIDDBStore{db: db, sqlIDStore: newSQLIDStore(db, sts, 32)}
+	return &fakeIDDBStore{db: db, t: t, sqlIDStore: newSQLIDStore(db, sts, 32)}
 }
 
 func (s *fakeIDDBStore) registerHash(h KeyBytes) error {
@@ -220,6 +221,9 @@ func (s *fakeIDDBStore) registerHash(h KeyBytes) error {
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, h)
 		}, nil)
+	sts, err := s.sqlIDStore.sts.snapshot(s.db)
+	require.NoError(s.t, err)
+	s.sts = sts
 	return err
 }
 
