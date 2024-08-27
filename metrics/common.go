@@ -75,3 +75,17 @@ func ReportMessageLatency(protocol, msgType string, latency time.Duration) {
 	}
 	receivedMessagesLatency.WithLabelValues(protocol, msgType, sign).Observe(seconds)
 }
+
+// NewSimpleCounter creates a simple prometheus counter.
+func NewSimpleCounter(subsystem, name, help string) prometheus.Counter {
+	return promauto.NewCounter(NewCounterOpts(subsystem, name, help))
+}
+
+func NewCounterOpts(ns, name, help string) prometheus.CounterOpts {
+	return prometheus.CounterOpts{
+		Namespace: Namespace,
+		Subsystem: ns,
+		Name:      name,
+		Help:      help,
+	}
+}
