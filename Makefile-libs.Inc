@@ -85,6 +85,7 @@ else
 endif
 
 BINDIR_POSTRS_SETUP_LIBS = $(foreach X,$(POSTRS_SETUP_LIBS),$(BIN_DIR)$(X))
+BINDIR_ATHENA_SETUP_LIBS = $(foreach X,$(ATHENA_SETUP_LIBS),$(BIN_DIR)$(X))
 
 # file marking libpost version
 $(BIN_DIR).libpost.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
@@ -111,9 +112,10 @@ $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV): $(PROJ_DIR)$(ATHENA_SETUP_ARTIFAC
 	mkdir -p $(dir $@)
 	touch $@
 
-$(ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
-	mkdir -p $(BIN_DIR)$(dir $@)
-	tar xzf $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT) -C $(BIN_DIR)$(dir $@) $@
+$(BINDIR_ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
+	mkdir -p $(dir $@)
+	tar xzf $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT) -C $(BIN_DIR) $(subst $(BIN_DIR),,$@)
+	touch $@
 
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
@@ -147,7 +149,7 @@ $(BIN_DIR)$(POSTRS_SERVICE_BIN): $(BIN_DIR).service.version.$(POSTRS_SETUP_REV)
 get-postrs-lib: $(BINDIR_POSTRS_SETUP_LIBS)
 get-postrs-profiler: $(BIN_DIR)$(POSTRS_PROFILER_BIN)
 get-postrs-service: $(BIN_DIR)$(POSTRS_SERVICE_BIN)
-get-athena-lib: $(ATHENA_SETUP_LIBS)
+get-athena-lib: $(BINDIR_ATHENA_SETUP_LIBS)
 
 go-env: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
