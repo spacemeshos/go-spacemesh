@@ -60,7 +60,7 @@ POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/
 POSTRS_SERVICE_ZIP = post-service-$(platform)$(libpost_arch)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
-ATHENA_SETUP_REV = 0.3.0
+ATHENA_SETUP_REV = 0.3.0-simplified-go-bindings
 ATHENA_SETUP_ARTIFACT = athena_vmlib_v$(ATHENA_SETUP_REV)_$(platform)_$(arch).tar.gz
 ATHENA_SETUP_ARTIFACT_URL ?= https://github.com/athenavm/athena/releases/download/v$(ATHENA_SETUP_REV)/$(ATHENA_SETUP_ARTIFACT)
 
@@ -70,14 +70,14 @@ ifeq ($(platform), windows)
 	POSTRS_PROFILER_BIN = profiler.exe
 	POSTRS_SERVICE_BIN = post-service.exe
 
-	ATHENA_SETUP_LIBS = libathena_vmlib.dll lib/loader/loader.c include/athcon/helpers.h include/athcon/athcon.h include/athcon/loader.h
+	ATHENA_SETUP_LIBS = libathena_vmlib.dll include/athcon/helpers.h include/athcon/athcon.h
 else
 	ifeq ($(platform), $(filter $(platform), macos macos-m1))
 		POSTRS_SETUP_LIBS = post.h libpost.dylib
-		ATHENA_SETUP_LIBS = libathena_vmlib.dylib lib/loader/loader.c include/athcon/helpers.h include/athcon/athcon.h include/athcon/loader.h
+		ATHENA_SETUP_LIBS = libathena_vmlib.dylib include/athcon/helpers.h include/athcon/athcon.h
 	else
 		POSTRS_SETUP_LIBS = post.h libpost.so
-		ATHENA_SETUP_LIBS = libathena_vmlib.so lib/loader/loader.c include/athcon/helpers.h include/athcon/athcon.h include/athcon/loader.h
+		ATHENA_SETUP_LIBS = libathena_vmlib.so include/athcon/helpers.h include/athcon/athcon.h
 	endif
 
 	POSTRS_PROFILER_BIN = profiler
