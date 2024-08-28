@@ -556,7 +556,7 @@ func parse(
 		templateAddress = account.TemplateAddress
 		handler = ctx.PrincipalHandler
 	}
-	output, err := ctx.PrincipalHandler.Parse(ctx, method, decoder)
+	output, err := ctx.PrincipalHandler.Parse(method, decoder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
