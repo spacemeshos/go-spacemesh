@@ -61,7 +61,7 @@ POSTRS_SERVICE_ZIP = post-service-$(platform)$(libpost_arch)-v$(POSTRS_SETUP_REV
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
 ATHENA_SETUP_REV = 0.3.0-simplified-go-bindings
-ATHENA_SETUP_ARTIFACT = athena_vmlib_v$(ATHENA_SETUP_REV)_$(platform)_$(arch).tar.gz
+ATHENA_SETUP_ARTIFACT = athena_vmlib_v$(ATHENA_SETUP_REV)_$(GOOS)_$(arch).tar.gz
 ATHENA_SETUP_ARTIFACT_URL ?= https://github.com/athenavm/athena/releases/download/v$(ATHENA_SETUP_REV)/$(ATHENA_SETUP_ARTIFACT)
 
 ifeq ($(platform), windows)
