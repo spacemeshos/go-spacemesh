@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -365,9 +366,7 @@ type lockstepCluster struct {
 
 func (cl *lockstepCluster) addNode(n *node) {
 	n.hare.Start()
-	cl.t.Cleanup(func() {
-		n.hare.Stop()
-	})
+	cl.t.Cleanup(n.hare.Stop)
 	cl.nodes = append(cl.nodes, n)
 }
 
@@ -1211,12 +1210,28 @@ func TestHare_ReconstructForward(t *testing.T) {
 					default:
 						panic("bad")
 					}
-					if err := cluster.nodes[other[0]].hare.
-						Handler(ctx, cluster.nodes[i].peerId(), msg); err != nil {
+					if !assert.Eventually(t, func() bool {
+						cluster.nodes[other[0]].hare.mu.Lock()
+						defer cluster.nodes[other[0]].hare.mu.Unlock()
+						_, registered := cluster.nodes[other[0]].hare.sessions[m.Layer]
+						return registered
+					}, 5*time.Second, 50*time.Millisecond) {
+						panic(fmt.Sprintf("node %d did not register in time", other[0]))
+					}
+					err := cluster.nodes[other[0]].hare.Handler(ctx, cluster.nodes[i].peerId(), msg)
+					if err != nil {
 						panic(err)
 					}
-					if err := cluster.nodes[other[1]].hare.
-						Handler(ctx, cluster.nodes[other[0]].peerId(), msg); err != nil {
+					if !assert.Eventually(t, func() bool {
+						cluster.nodes[other[1]].hare.mu.Lock()
+						defer cluster.nodes[other[1]].hare.mu.Unlock()
+						_, registered := cluster.nodes[other[1]].hare.sessions[m.Layer]
+						return registered
+					}, 5*time.Second, 50*time.Millisecond) {
+						panic(fmt.Sprintf("node %d did not register in time", other[0]))
+					}
+					err = cluster.nodes[other[1]].hare.Handler(ctx, cluster.nodes[other[0]].peerId(), msg)
+					if err != nil {
 						panic(err)
 					}
 					return nil
@@ -1230,8 +1245,8 @@ func TestHare_ReconstructForward(t *testing.T) {
 				return nil
 			}).
 			AnyTimes()
-		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
-			func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
+		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Do(func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
 				for _, other := range cluster.nodes {
 					if other.peerId() == p {
 						b := make([]byte, 0, 1024)
@@ -1245,8 +1260,8 @@ func TestHare_ReconstructForward(t *testing.T) {
 					}
 				}
 				return nil
-			},
-		).AnyTimes()
+			}).
+			AnyTimes()
 	}
 
 	cluster.genProposals(layer, 2)
