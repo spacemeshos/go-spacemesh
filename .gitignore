@@ -19,6 +19,7 @@ temp.js
 *.out
 *.test
 *.zip
+*.tar.gz
 
 /go-spacemesh
 /go-hare
