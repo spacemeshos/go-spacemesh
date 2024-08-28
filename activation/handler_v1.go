@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
+	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -539,6 +540,7 @@ func (h *HandlerV1) storeAtx(
 	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
 	var proof *mwire.MalfeasanceProof
+	start := time.Now()
 	if err := h.cdb.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
 		proof, err = h.checkMalicious(ctx, tx, watx)
@@ -554,7 +556,7 @@ func (h *HandlerV1) storeAtx(
 	}); err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
 	}
-
+	metrics.AtxWriteTime.Add(float64(time.Now().Sub(start)))
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)

@@ -50,3 +50,9 @@ var PostVerificationLatency = metrics.NewHistogramWithBuckets(
 	[]string{},
 	prometheus.ExponentialBuckets(1, 2, 20),
 ).WithLabelValues()
+
+var AtxWriteTime = metrics.NewSimpleCounter(
+	namespace,
+	"atx_write_time",
+	"time spent writing atxs in storeAtx",
+)
