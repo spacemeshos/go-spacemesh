@@ -45,8 +45,6 @@ import (
 
 const layersPerEpoch = 4
 
-var wait = 10 * time.Second
-
 func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	res := m.Run()
@@ -323,7 +321,7 @@ func withProposals(fraction float64) clusterOpt {
 }
 
 // withSigners creates N signers in addition to regular active nodes.
-// this signeres will be partitioned in fair fashion across regular active nodes.
+// this signers will be partitioned in fair fashion across regular active nodes.
 func withSigners(n int) clusterOpt {
 	return func(cluster *lockstepCluster) {
 		cluster.signersCount = n
@@ -451,7 +449,7 @@ func (cl *lockstepCluster) genProposalNode(lid types.LayerID, node int) {
 	active := cl.activeSet()
 	n := cl.nodes[node]
 	if n.atx == nil {
-		panic("shouldnt happen")
+		panic("shouldn't happen")
 	}
 	proposal := &types.Proposal{}
 	proposal.Layer = lid
@@ -655,15 +653,15 @@ func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Dur
 }
 
 func (t *testTracer) waitStopped() types.LayerID {
-	return waitForChan(t.TB, t.stopped, wait, "didn't stop")
+	return waitForChan(t.TB, t.stopped, 10*time.Second, "didn't stop")
 }
 
 func (t *testTracer) waitEligibility() []*types.HareEligibility {
-	return waitForChan(t.TB, t.eligibility, wait, "no eligibility")
+	return waitForChan(t.TB, t.eligibility, 10*time.Second, "no eligibility")
 }
 
 func (t *testTracer) waitSent() *Message {
-	return waitForChan(t.TB, t.sent, wait, "no message")
+	return waitForChan(t.TB, t.sent, 10*time.Second, "no message")
 }
 
 func (*testTracer) OnStart(types.LayerID) {}
@@ -676,21 +674,21 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
-	sendWithTimeout(t.TB, el, t.eligibility, wait, "eligibility can't be sent")
+	sendWithTimeout(t.TB, el, t.eligibility, 10*time.Second, "eligibility can't be sent")
 }
 
 func (t *testTracer) OnMessageSent(m *Message) {
-	sendWithTimeout(t.TB, m, t.sent, wait, "message can't be sent")
+	sendWithTimeout(t.TB, m, t.sent, 10*time.Second, "message can't be sent")
 }
 
 func (*testTracer) OnMessageReceived(*Message) {}
 
 func (t *testTracer) OnCompactIdRequest(*CompactIdRequest) {
-	sendWithTimeout(t.TB, struct{}{}, t.compactReq, wait, "compact req can't be sent")
+	sendWithTimeout(t.TB, struct{}{}, t.compactReq, 10*time.Second, "compact req can't be sent")
 }
 
 func (t *testTracer) OnCompactIdResponse(*CompactIdResponse) {
-	sendWithTimeout(t.TB, struct{}{}, t.compactResp, wait, "compact resp can't be sent")
+	sendWithTimeout(t.TB, struct{}{}, t.compactResp, 10*time.Second, "compact resp can't be sent")
 }
 
 func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterOpt) {

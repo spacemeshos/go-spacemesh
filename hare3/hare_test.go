@@ -276,7 +276,7 @@ func withProposals(fraction float64) clusterOpt {
 }
 
 // withSigners creates N signers in addition to regular active nodes.
-// this signeres will be partitioned in fair fashion across regular active nodes.
+// this signers will be partitioned in fair fashion across regular active nodes.
 func withSigners(n int) clusterOpt {
 	return func(cluster *lockstepCluster) {
 		cluster.signersCount = n
@@ -316,9 +316,7 @@ type lockstepCluster struct {
 
 func (cl *lockstepCluster) addNode(n *node) {
 	n.hare.Start()
-	cl.t.Cleanup(func() {
-		n.hare.Stop()
-	})
+	cl.t.Cleanup(n.hare.Stop)
 	cl.nodes = append(cl.nodes, n)
 }
 
@@ -912,7 +910,9 @@ func TestProposals(t *testing.T) {
 				atxsdata.AddFromAtx(&atx, false)
 			}
 			for _, proposal := range tc.proposals {
-				proposals.Add(proposal)
+				if err := proposals.Add(proposal); err != nil {
+					panic(err)
+				}
 			}
 			for _, id := range tc.malicious {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
