@@ -10,23 +10,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/genvm/core/mocks"
 	"github.com/spacemeshos/go-spacemesh/genvm/registry"
-	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestTransfer(t *testing.T) {
 	t.Run("NoBalance", func(t *testing.T) {
-		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()})}
+		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{statesql.InMemory()})}
 		require.ErrorIs(t, ctx.Transfer(core.Address{}, 100), core.ErrNoBalance)
 	})
 	t.Run("MaxSpend", func(t *testing.T) {
-		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()})}
+		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{statesql.InMemory()})}
 		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 100
 		require.NoError(t, ctx.Transfer(core.Address{1}, 50))
 		require.ErrorIs(t, ctx.Transfer(core.Address{2}, 100), core.ErrMaxSpend)
 	})
 	t.Run("ReducesBalance", func(t *testing.T) {
-		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()})}
+		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{statesql.InMemory()})}
 		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 1000
 		for _, amount := range []uint64{50, 100, 200, 255} {
@@ -67,7 +67,7 @@ func TestConsume(t *testing.T) {
 
 func TestApply(t *testing.T) {
 	t.Run("UpdatesNonce", func(t *testing.T) {
-		ss := core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()})
+		ss := core.NewStagedCache(core.DBLoader{statesql.InMemory()})
 		ctx := core.Context{Loader: ss}
 		ctx.PrincipalAccount.Address = core.Address{1}
 		ctx.Header.Nonce = 10
@@ -80,7 +80,7 @@ func TestApply(t *testing.T) {
 		require.Equal(t, ctx.PrincipalAccount.NextNonce, account.NextNonce)
 	})
 	t.Run("ConsumeMaxGas", func(t *testing.T) {
-		ss := core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()})
+		ss := core.NewStagedCache(core.DBLoader{statesql.InMemory()})
 
 		ctx := core.Context{Loader: ss}
 		ctx.PrincipalAccount.Balance = 1000
@@ -97,7 +97,7 @@ func TestApply(t *testing.T) {
 		require.Equal(t, ctx.Fee(), ctx.Header.MaxGas*ctx.Header.GasPrice)
 	})
 	t.Run("PreserveTransferOrder", func(t *testing.T) {
-		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()})}
+		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{statesql.InMemory()})}
 		ctx.PrincipalAccount.Address = core.Address{1}
 		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 1000
@@ -129,7 +129,7 @@ func TestRelay(t *testing.T) {
 		remote    = core.Address{'r', 'e', 'm'}
 	)
 	t.Run("not spawned", func(t *testing.T) {
-		cache := core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()})
+		cache := core.NewStagedCache(core.DBLoader{statesql.InMemory()})
 		ctx := core.Context{Loader: cache}
 		call := func(remote core.Host) error {
 			require.Fail(t, "not expected to be called")
@@ -138,7 +138,7 @@ func TestRelay(t *testing.T) {
 		require.ErrorIs(t, ctx.Relay(template, remote, call), core.ErrNotSpawned)
 	})
 	t.Run("mismatched template", func(t *testing.T) {
-		cache := core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()})
+		cache := core.NewStagedCache(core.DBLoader{statesql.InMemory()})
 		require.NoError(t, cache.Update(core.Account{
 			Address:         remote,
 			TemplateAddress: &core.Address{'m', 'i', 's'},
@@ -166,7 +166,7 @@ func TestRelay(t *testing.T) {
 				reg := registry.New()
 				reg.Register(template, handler)
 
-				cache := core.NewStagedCache(core.DBLoader{Executor: sql.InMemory()})
+				cache := core.NewStagedCache(core.DBLoader{statesql.InMemory()})
 				receiver2 := core.Address{'f'}
 				const (
 					total   = 1000
