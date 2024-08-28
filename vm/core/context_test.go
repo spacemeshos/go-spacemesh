@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/genvm/core/mocks"
-	"github.com/spacemeshos/go-spacemesh/genvm/registry"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/core/mocks"
+	"github.com/spacemeshos/go-spacemesh/vm/registry"
 )
 
 func TestTransfer(t *testing.T) {

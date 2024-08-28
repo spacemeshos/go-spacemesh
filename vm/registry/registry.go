@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
 // New creates Registry instance.

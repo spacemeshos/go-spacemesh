@@ -12,12 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/genvm/registry"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -26,6 +20,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/registry"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 // Opt is for changing VM during initialization.
@@ -67,9 +64,6 @@ func New(db sql.StateDatabase, opts ...Opt) *VM {
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
-	multisig.Register(vm.registry)
-	vesting.Register(vm.registry)
-	vault.Register(vm.registry)
 	for _, opt := range opts {
 		opt(vm)
 	}

@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
 func TestCacheGetCopies(t *testing.T) {

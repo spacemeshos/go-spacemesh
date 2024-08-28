@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
 func (v *VM) addRewards(
