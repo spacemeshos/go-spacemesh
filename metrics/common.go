@@ -36,6 +36,12 @@ func NewHistogram(name, subsystem, help string, labels []string) *prometheus.His
 	)
 }
 
+func NewHistogramNoLabel(name, subsystem, help string, buckets []float64) prometheus.Histogram {
+	return promauto.NewHistogram(
+		prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Buckets: buckets},
+	)
+}
+
 // NewHistogramWithBuckets creates a Histogram metrics with custom buckets.
 func NewHistogramWithBuckets(
 	name, subsystem, help string,

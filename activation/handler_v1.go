@@ -556,7 +556,9 @@ func (h *HandlerV1) storeAtx(
 	}); err != nil {
 		return nil, fmt.Errorf("store atx: %w", err)
 	}
-	metrics.AtxWriteTime.Add(float64(time.Now().Sub(start)))
+	tdiff := float64(time.Now().Sub(start))
+	metrics.AtxWriteTimeHist.Observe(tdiff)
+	metrics.AtxWriteTime.Add(tdiff)
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
 		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)

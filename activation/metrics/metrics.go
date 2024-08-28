@@ -56,3 +56,10 @@ var AtxWriteTime = metrics.NewSimpleCounter(
 	"atx_write_time",
 	"time spent writing atxs in storeAtx",
 )
+
+var AtxWriteTimeHist = metrics.NewHistogramNoLabel(
+	"atx_write_time_hist",
+	namespace,
+	"time spent writing atxs (histogram)",
+	prometheus.ExponentialBuckets(0.01, 10, 5),
+)
