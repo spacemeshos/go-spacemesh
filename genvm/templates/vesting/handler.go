@@ -30,8 +30,8 @@ type handler struct {
 }
 
 // Parse header and arguments.
-func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
-	return h.multisig.Parse(host, method, decoder)
+func (h *handler) Parse(method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
+	return h.multisig.Parse(method, decoder)
 }
 
 // New instatiates vesting state, note that the state is the same as multisig.

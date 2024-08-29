@@ -3,7 +3,7 @@ PROJ_DIR := $(subst \,/,$(PROJ_DIR))
 BIN_DIR ?= $(PROJ_DIR)build/
 
 export CGO_LDFLAGS := -L$(BIN_DIR)
-export CGO_CFLAGS := -I$(PROJ_DIR)build/
+export CGO_CFLAGS := -I$(BIN_DIR)
 export GOOS
 export GOARCH
 export GOARM
@@ -11,14 +11,12 @@ export BIN_DIR
 
 CGO_TEST_LDFLAGS = $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
 
-ifeq ($(OS),Windows_NT)
-	HOST_OS := windows
-else
-	HOST_OS := $(shell uname | tr [A-Z] [a-z])
-endif
-
 ifeq ($(GOOS),)
-	GOOS := $(HOST_OS)
+	ifeq ($(OS),Windows_NT)
+		GOOS := windows
+	else
+		GOOS := $(shell uname | tr [A-Z] [a-z])
+	endif
 endif
 
 ifeq ($(GOARCH),)
@@ -27,8 +25,7 @@ endif
 
 ifeq ($(GOOS),windows)
 	platform := windows
-	export PATH := $(PATH):$(PROJ_DIR)build
-	EXE := .exe
+	export PATH := $(PATH):$(BIN_DIR)
 	CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-Bstatic -lpthread -Wl,-Bdynamic
 else
 	TEMP := /tmp
@@ -101,12 +98,12 @@ $(PROJ_DIR)$(POSTRS_PROFILER_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_PROFILER_URL) -o $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
 
 # file marking profiler version
-$(BIN_DIR)/.profiler.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
+$(BIN_DIR).profiler.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_PROFILER_ZIP)
 	rm -f $(BIN_DIR).profiler.version.*
 	mkdir -p $(dir $@)
 	touch $@
 
-$(BIN_DIR)$(POSTRS_PROFILER_BIN): $(BIN_DIR)/.profiler.version.$(POSTRS_SETUP_REV)
+$(BIN_DIR)$(POSTRS_PROFILER_BIN): $(BIN_DIR).profiler.version.$(POSTRS_SETUP_REV)
 	unzip -DD -o -j $(PROJ_DIR)$(POSTRS_PROFILER_ZIP) -d $(BIN_DIR)
 	chmod +x $(BIN_DIR)$(POSTRS_PROFILER_BIN)
 
@@ -114,12 +111,12 @@ $(PROJ_DIR)$(POSTRS_SERVICE_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_SERVICE_URL) -o $(PROJ_DIR)$(POSTRS_SERVICE_ZIP)
 
 # file marking post-service version
-$(BIN_DIR)/.service.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_SERVICE_ZIP)
+$(BIN_DIR).service.version.$(POSTRS_SETUP_REV): $(PROJ_DIR)$(POSTRS_SERVICE_ZIP)
 	rm -f $(BIN_DIR).service.version.*
 	mkdir -p $(dir $@)
 	touch $@
 
-$(BIN_DIR)$(POSTRS_SERVICE_BIN): $(BIN_DIR)/.service.version.$(POSTRS_SETUP_REV)
+$(BIN_DIR)$(POSTRS_SERVICE_BIN): $(BIN_DIR).service.version.$(POSTRS_SETUP_REV)
 	unzip -DD -o -j $(PROJ_DIR)$(POSTRS_SERVICE_ZIP) -d $(BIN_DIR)
 	chmod +x $(BIN_DIR)$(POSTRS_SERVICE_BIN)
 

@@ -37,7 +37,7 @@ type handler struct {
 }
 
 // Parse header and arguments.
-func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
+func (h *handler) Parse(method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	var p core.Payload
 	if _, err = p.DecodeScale(decoder); err != nil {
 		err = fmt.Errorf("%w: %w", core.ErrMalformed, err)
