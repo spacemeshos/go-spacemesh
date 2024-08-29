@@ -156,14 +156,14 @@ func (atx *ActivationTxV2) TotalNumUnits() uint32 {
 type MarriageCertificates []MarriageCertificate
 
 func (mcs MarriageCertificates) Root() []byte {
-	marriagesTree, err := merkle.NewTreeBuilder().
+	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
 	if err != nil {
 		panic(err)
 	}
-	mcs.merkleTree(marriagesTree)
-	return marriagesTree.Root()
+	mcs.merkleTree(tree)
+	return tree.Root()
 }
 
 func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {

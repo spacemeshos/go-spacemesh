@@ -1897,7 +1897,7 @@ func Test_CalculatingUnits(t *testing.T) {
 
 func TestContextual_PreviousATX(t *testing.T) {
 	golden := types.RandomATXID()
-	atxHndlr := newV2TestHandler(t, golden)
+	atxHdlr := newV2TestHandler(t, golden)
 	var (
 		signers []*signing.EdSigner
 		eqSet   []types.NodeID
@@ -1909,13 +1909,13 @@ func TestContextual_PreviousATX(t *testing.T) {
 		eqSet = append(eqSet, sig.NodeID())
 	}
 
-	mATX, otherAtxs := marryIDs(t, atxHndlr, signers, golden)
+	mATX, otherAtxs := marryIDs(t, atxHdlr, signers, golden)
 
 	// signer 1 creates a solo ATX
 	soloAtx := newSoloATXv2(t, mATX.PublishEpoch+1, otherAtxs[0].ID(), mATX.ID())
 	soloAtx.Sign(signers[1])
-	atxHndlr.expectAtxV2(soloAtx)
-	err := atxHndlr.processATX(context.Background(), "", soloAtx, time.Now())
+	atxHdlr.expectAtxV2(soloAtx)
+	err := atxHdlr.processATX(context.Background(), "", soloAtx, time.Now())
 	require.NoError(t, err)
 
 	// create a MergedATX for all IDs
@@ -1933,9 +1933,9 @@ func TestContextual_PreviousATX(t *testing.T) {
 	merged.MarriageATX = &matxID
 	merged.Sign(signers[0])
 
-	atxHndlr.expectMergedAtxV2(merged, eqSet, []uint64{100})
-	atxHndlr.mMalPublish.EXPECT().Publish(gomock.Any(), signers[1].NodeID(), gomock.Any())
-	err = atxHndlr.processATX(context.Background(), "", merged, time.Now())
+	atxHdlr.expectMergedAtxV2(merged, eqSet, []uint64{100})
+	atxHdlr.mMalPublish.EXPECT().Publish(gomock.Any(), signers[1].NodeID(), gomock.Any())
+	err = atxHdlr.processATX(context.Background(), "", merged, time.Now())
 	require.NoError(t, err)
 }
 

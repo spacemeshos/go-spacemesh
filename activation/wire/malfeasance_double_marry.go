@@ -58,7 +58,7 @@ func NewDoubleMarryProof(db sql.Executor, atx1, atx2 *ActivationTxV2, nodeID typ
 func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID) (MarryProof, error) {
 	marriageProof, err := marriageProof(atx)
 	if err != nil {
-		return MarryProof{}, fmt.Errorf("failed to create proof for ATX 1: %w", err)
+		return MarryProof{}, fmt.Errorf("create proof for ATX: %w", err)
 	}
 
 	marriageIndex := slices.IndexFunc(atx.Marriages, func(cert MarriageCertificate) bool {
@@ -77,7 +77,7 @@ func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID)
 	}
 	certProof, err := certificateProof(atx.Marriages, uint64(marriageIndex))
 	if err != nil {
-		return MarryProof{}, fmt.Errorf("failed to create certificate proof for ATX 1: %w", err)
+		return MarryProof{}, fmt.Errorf("create certificate proof for ATX: %w", err)
 	}
 
 	proof := MarryProof{
