@@ -832,7 +832,8 @@ func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.ErrorIs(t, tc.Add(context.Background(), tc.db, &spender.Transaction, spender.Received), errInsufficientBalance)
+	err := tc.Add(context.Background(), tc.db, &spender.Transaction, spender.Received)
+	require.ErrorIs(t, err, errInsufficientBalance)
 	checkNoTX(t, tc.Cache, spender.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce+1, ta.balance-mtx.Spending())
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: {mtx}}
@@ -950,8 +951,8 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce+1, largeAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
-
-	require.ErrorIs(t, tc.Add(context.Background(), tc.db, &better.Transaction, better.Received), errInsufficientBalance)
+	err := tc.Add(context.Background(), tc.db, &better.Transaction, better.Received)
+	require.ErrorIs(t, err, errInsufficientBalance)
 	checkNoTX(t, tc.Cache, better.ID)
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	expectedMempool := map[types.Address][]*types.MeshTransaction{ta.principal: mtxs}
