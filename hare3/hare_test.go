@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -211,7 +213,6 @@ func (n *node) withPublisher() *node {
 
 func (n *node) withHare() *node {
 	logger := zaptest.NewLogger(n.t).Named(fmt.Sprintf("hare=%d", n.i))
-
 	n.nclock = &testNodeClock{
 		genesis:       n.t.start,
 		layerDuration: n.t.layerDuration,
@@ -259,6 +260,10 @@ func (n *node) storeAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
+func (n *node) peerId() p2p.Peer {
+	return p2p.Peer(strconv.Itoa(n.i))
+}
+
 type clusterOpt func(*lockstepCluster)
 
 func withUnits(min, max int) clusterOpt {
@@ -284,6 +289,7 @@ func withSigners(n int) clusterOpt {
 }
 
 func newLockstepCluster(t *tester, opts ...clusterOpt) *lockstepCluster {
+	t.Helper()
 	cluster := &lockstepCluster{t: t}
 	cluster.units.min = 10
 	cluster.units.max = 10
@@ -447,7 +453,7 @@ func (cl *lockstepCluster) setup() {
 			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 			Do(func(ctx context.Context, _ string, msg []byte) error {
 				for _, other := range cl.nodes {
-					other.hare.Handler(ctx, "self", msg)
+					other.hare.Handler(ctx, n.peerId(), msg)
 				}
 				return nil
 			}).
@@ -510,7 +516,7 @@ func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failur
 	var value T
 	select {
 	case <-time.After(timeout):
-		builder := strings.Builder{}
+		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
 		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case value = <-ch:
@@ -521,7 +527,7 @@ func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failur
 func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
 	select {
 	case <-time.After(timeout):
-		builder := strings.Builder{}
+		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
 		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case ch <- value:
@@ -560,6 +566,7 @@ func (t *testTracer) OnMessageSent(m *Message) {
 func (*testTracer) OnMessageReceived(*Message) {}
 
 func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterOpt) {
+	t.Helper()
 	cfg := DefaultConfig()
 	cfg.LogStats = true
 	tst := &tester{
@@ -910,9 +917,7 @@ func TestProposals(t *testing.T) {
 				atxsdata.AddFromAtx(&atx, false)
 			}
 			for _, proposal := range tc.proposals {
-				if err := proposals.Add(proposal); err != nil {
-					panic(err)
-				}
+				require.NoError(t, proposals.Add(proposal))
 			}
 			for _, id := range tc.malicious {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))

@@ -15,10 +15,8 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 
@@ -244,7 +242,6 @@ func (n *node) withHare() *node {
 	} else {
 		verify = signing.NewEdVerifier()
 	}
-	z, _ := zap.NewDevelopment()
 	n.hare = New(
 		n.nclock,
 		n.mpublisher,
@@ -261,7 +258,6 @@ func (n *node) withHare() *node {
 		WithWallClock(n.clock),
 		WithTracer(tracer),
 		WithServer(n.mockStreamRequester),
-		WithLogger(z),
 	)
 	n.register(n.signer)
 	return n
@@ -350,7 +346,8 @@ type lockstepCluster struct {
 
 	mockVerify         bool
 	collidingProposals bool
-	units              struct {
+
+	units struct {
 		min, max int
 	}
 	proposals struct {
@@ -448,9 +445,7 @@ func (cl *lockstepCluster) activeSet() types.ATXIDList {
 func (cl *lockstepCluster) genProposalNode(lid types.LayerID, node int) {
 	active := cl.activeSet()
 	n := cl.nodes[node]
-	if n.atx == nil {
-		panic("shouldn't happen")
-	}
+	require.NotNil(cl.t.TB, n.atx)
 	proposal := &types.Proposal{}
 	proposal.Layer = lid
 	proposal.EpochData = &types.EpochData{
@@ -634,7 +629,7 @@ func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failur
 	var value T
 	select {
 	case <-time.After(timeout):
-		builder := strings.Builder{}
+		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
 		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case value = <-ch:
@@ -645,7 +640,7 @@ func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failur
 func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
 	select {
 	case <-time.After(timeout):
-		builder := strings.Builder{}
+		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
 		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case ch <- value:
@@ -883,13 +878,9 @@ func TestHandler(t *testing.T) {
 		p1.Initialize()
 		p2.Initialize()
 
-		if err := n.hare.OnProposal(p1); err != nil {
-			panic(err)
-		}
+		require.NoError(t, n.hare.OnProposal(p1))
+		require.NoError(t, n.hare.OnProposal(p2))
 
-		if err := n.hare.OnProposal(p2); err != nil {
-			panic(err)
-		}
 		msg1 := &Message{}
 		msg1.Layer = layer
 		msg1.Value.Proposals = []types.ProposalID{p1.ID()}
@@ -1085,9 +1076,7 @@ func TestProposals(t *testing.T) {
 				atxsdata.AddFromAtx(&atx, false)
 			}
 			for _, proposal := range tc.proposals {
-				if err := proposals.Add(proposal); err != nil {
-					panic(err)
-				}
+				require.NoError(t, proposals.Add(proposal))
 			}
 			for _, id := range tc.malicious {
 				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
@@ -1162,8 +1151,9 @@ func TestHare_ReconstructForward(t *testing.T) {
 		beacon:        types.Beacon{1, 1, 1, 1},
 		genesis:       types.GetEffectiveGenesis(),
 	}
+	const numNodes = 3
 	cluster := newLockstepCluster(tst).
-		addActive(3)
+		addActive(numNodes)
 	if cluster.signersCount > 0 {
 		cluster = cluster.addSigner(cluster.signersCount)
 		cluster.partitionSigners()
@@ -1173,7 +1163,7 @@ func TestHare_ReconstructForward(t *testing.T) {
 
 	// cluster setup
 	active := cluster.activeSet()
-	for i, n := range cluster.nodes {
+	for _, n := range cluster.nodes {
 		require.NoError(cluster.t, beacons.Add(n.db, cluster.t.genesis.GetEpoch()+1, cluster.t.beacon))
 		for _, other := range append(cluster.nodes, cluster.signers...) {
 			if other.atx == nil {
@@ -1194,55 +1184,28 @@ func TestHare_ReconstructForward(t *testing.T) {
 				m := &Message{}
 				codec.MustDecode(msg, m)
 				if m.Body.IterRound.Round == preround {
-					other := [2]int{0, 0}
-					switch i {
-					case 0:
-						other[0] = 1
-						other[1] = 2
-					case 1:
-						other[0] = 0
-						other[1] = 2
-					case 2:
-						other[0] = 1
-						other[1] = 0
-					default:
-						panic("bad")
-					}
-					if !assert.Eventually(t, func() bool {
-						cluster.nodes[other[0]].hare.mu.Lock()
-						defer cluster.nodes[other[0]].hare.mu.Unlock()
-						_, registered := cluster.nodes[other[0]].hare.sessions[m.Layer]
-						return registered
-					}, 5*time.Second, 50*time.Millisecond) {
-						panic(fmt.Sprintf("node %d did not register in time", other[0]))
-					}
-					err := cluster.nodes[other[0]].hare.Handler(ctx, cluster.nodes[i].peerId(), msg)
-					if err != nil {
-						panic(err)
-					}
-					if !assert.Eventually(t, func() bool {
-						cluster.nodes[other[1]].hare.mu.Lock()
-						defer cluster.nodes[other[1]].hare.mu.Unlock()
-						_, registered := cluster.nodes[other[1]].hare.sessions[m.Layer]
-						return registered
-					}, 5*time.Second, 50*time.Millisecond) {
-						panic(fmt.Sprintf("node %d did not register in time", other[0]))
-					}
-					err = cluster.nodes[other[1]].hare.Handler(ctx, cluster.nodes[other[0]].peerId(), msg)
-					if err != nil {
-						panic(err)
+					for j := 1; j < numNodes; j++ {
+						other := (n.i + j) % numNodes               // other iterates over the other nodes
+						sender := (other - 1 + numNodes) % numNodes // sender is the previous node
+						require.Eventually(t, func() bool {
+							cluster.nodes[other].hare.mu.Lock()
+							defer cluster.nodes[other].hare.mu.Unlock()
+							_, registered := cluster.nodes[other].hare.sessions[m.Layer]
+							return registered
+						}, 5*time.Second, 50*time.Millisecond, fmt.Sprintf("node %d did not register in time", other))
+
+						require.NoError(t, cluster.nodes[other].hare.Handler(ctx, cluster.nodes[sender].peerId(), msg))
 					}
 					return nil
 				}
 
 				for _, other := range cluster.nodes {
-					if err := other.hare.Handler(ctx, n.peerId(), msg); err != nil {
-						panic(err)
-					}
+					require.NoError(t, other.hare.Handler(ctx, n.peerId(), msg))
 				}
 				return nil
 			}).
 			AnyTimes()
+
 		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Do(func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
 				for _, other := range cluster.nodes {
