@@ -68,7 +68,7 @@ type HandlerV2 struct {
 	tortoise        system.Tortoise
 	logger          *zap.Logger
 	fetcher         system.Fetcher
-	malPublisher    malfeasancePublisher
+	malPublisher    atxMalfeasancePublisher
 }
 
 func (h *HandlerV2) processATX(
@@ -528,7 +528,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			return nil, fmt.Errorf("fetching previous atx: %w", err)
 		}
 		if prevAtx.PublishEpoch >= atx.PublishEpoch {
-			err := fmt.Errorf("previous atx is too new (%d >= %d) (%s) ", prevAtx.PublishEpoch, atx.PublishEpoch, prev)
+			err := fmt.Errorf("previous atx (%s) is too new (%d >= %d)", prev, prevAtx.PublishEpoch, atx.PublishEpoch)
 			return nil, err
 		}
 		previousAtxs[i] = prevAtx

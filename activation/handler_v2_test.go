@@ -3,6 +3,7 @@ package activation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"testing"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -1511,7 +1511,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx.Sign(sig)
 
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
-		require.ErrorContains(t, err, "previous atx is too new")
+		require.ErrorContains(t, err, fmt.Sprintf("previous atx (%s) is too new", prev.ID()))
 	})
 	t.Run("previous ATX by different smesher", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
@@ -1721,8 +1721,6 @@ func Test_Marriages(t *testing.T) {
 			nId, err := malProof.Valid(atxHandler.edVerifier)
 			require.NoError(t, err)
 			require.Equal(t, sig.NodeID(), nId)
-			b := codec.MustEncode(malProof)
-			_ = b
 			return nil
 		})
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())

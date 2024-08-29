@@ -1085,31 +1085,31 @@ func (c *MocksyncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{
 	return c
 }
 
-// MockmalfeasancePublisher is a mock of malfeasancePublisher interface.
-type MockmalfeasancePublisher struct {
+// MockatxMalfeasancePublisher is a mock of malfeasancePublisher interface.
+type MockatxMalfeasancePublisher struct {
 	ctrl     *gomock.Controller
 	recorder *MockmalfeasancePublisherMockRecorder
 }
 
 // MockmalfeasancePublisherMockRecorder is the mock recorder for MockmalfeasancePublisher.
 type MockmalfeasancePublisherMockRecorder struct {
-	mock *MockmalfeasancePublisher
+	mock *MockatxMalfeasancePublisher
 }
 
-// NewMockmalfeasancePublisher creates a new mock instance.
-func NewMockmalfeasancePublisher(ctrl *gomock.Controller) *MockmalfeasancePublisher {
-	mock := &MockmalfeasancePublisher{ctrl: ctrl}
+// NewMockatxmalfeasancePublisher creates a new mock instance.
+func NewMockatxmalfeasancePublisher(ctrl *gomock.Controller) *MockatxMalfeasancePublisher {
+	mock := &MockatxMalfeasancePublisher{ctrl: ctrl}
 	mock.recorder = &MockmalfeasancePublisherMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmalfeasancePublisher) EXPECT() *MockmalfeasancePublisherMockRecorder {
+func (m *MockatxMalfeasancePublisher) EXPECT() *MockmalfeasancePublisherMockRecorder {
 	return m.recorder
 }
 
 // Publish mocks base method.
-func (m *MockmalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
+func (m *MockatxMalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Publish", ctx, id, proof)
 	ret0, _ := ret[0].(error)
@@ -1119,7 +1119,7 @@ func (m *MockmalfeasancePublisher) Publish(ctx context.Context, id types.NodeID,
 // Publish indicates an expected call of Publish.
 func (mr *MockmalfeasancePublisherMockRecorder) Publish(ctx, id, proof any) *MockmalfeasancePublisherPublishCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockmalfeasancePublisher)(nil).Publish), ctx, id, proof)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockatxMalfeasancePublisher)(nil).Publish), ctx, id, proof)
 	return &MockmalfeasancePublisherPublishCall{Call: call}
 }
 

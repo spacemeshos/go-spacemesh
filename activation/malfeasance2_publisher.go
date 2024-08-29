@@ -7,10 +7,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// MalfeasancePublisher is the publisher for ATX proofs.
-type MalfeasancePublisher struct{}
+// ATXMalfeasancePublisher is the publisher for ATX proofs.
+type ATXMalfeasancePublisher struct{}
 
-func (p *MalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
+func (p *ATXMalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
 	// TODO(mafa): implement me
 	return nil
 }

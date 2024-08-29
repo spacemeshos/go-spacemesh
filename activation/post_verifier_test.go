@@ -107,9 +107,7 @@ func TestPostVerifierPrioritization(t *testing.T) {
 	verifier := NewMockPostVerifier(gomock.NewController(t))
 	v := newOffloadingPostVerifier(verifier, 2, zaptest.NewLogger(t), nodeID)
 
-	verifier.EXPECT().
-		Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: nodeID.Bytes()}, gomock.Any()).
-		Return(nil)
+	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: nodeID.Bytes()}, gomock.Any())
 
 	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: nodeID.Bytes()})
 	require.NoError(t, err)

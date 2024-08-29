@@ -199,6 +199,9 @@ type MarriageCertificate struct {
 	// An ATX of the ID that marries. It proves that the ID exists.
 	// Note: the reference ATX does not need to be from the previous epoch.
 	// It only needs to prove the existence of the ID.
+	//
+	// In the case of a self signed certificate that is included in the Marriage ATX by the Smesher signing the ATX,
+	// this can be `types.EmptyATXID`.
 	ReferenceAtx types.ATXID
 	// Signature over the other ID that this ID marries with
 	// If Alice marries Bob, then Alice signs Bob's ID
@@ -229,7 +232,7 @@ type SubPostV2 struct {
 	// Can be used to extract the nodeID and verify if it is married with the smesher of the ATX.
 	// Must be 0 for non-merged ATXs.
 	MarriageIndex uint32
-	PrevATXIndex  uint32 // Index of the previous ATX in the `InnerActivationTxV2.PreviousATXs` slice
+	PrevATXIndex  uint32 // Index of the previous ATX in the `ActivationTxV2.PreviousATXs` slice
 	// Index of the leaf for this ID's challenge in the poet membership tree.
 	// IDs might shared the same index if their nipost challenges are equal.
 	// This happens when the IDs are continuously merged (they share the previous ATX).
@@ -245,9 +248,9 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 	if err != nil {
 		panic(err)
 	}
-	marriageIndex := make([]byte, 4)
-	binary.LittleEndian.PutUint32(marriageIndex, sp.MarriageIndex)
-	tree.AddLeaf(marriageIndex)
+	var marriageIndex types.Hash32
+	binary.LittleEndian.PutUint32(marriageIndex[:], sp.MarriageIndex)
+	tree.AddLeaf(marriageIndex.Bytes())
 
 	if int(sp.PrevATXIndex) >= len(prevATXs) {
 		return nil // invalid index, root cannot be generated
@@ -260,9 +263,9 @@ func (sp *SubPostV2) Root(prevATXs []types.ATXID) []byte {
 
 	tree.AddLeaf(sp.Post.Root())
 
-	numUnits := make([]byte, 4)
-	binary.LittleEndian.PutUint32(numUnits, sp.NumUnits)
-	tree.AddLeaf(numUnits)
+	var numUnits types.Hash32
+	binary.LittleEndian.PutUint32(numUnits[:], sp.NumUnits)
+	tree.AddLeaf(numUnits.Bytes())
 	return tree.Root()
 }
 
