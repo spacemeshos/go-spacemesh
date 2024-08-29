@@ -6,17 +6,48 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+Ensure you are running v1.6.x before upgrading to v1.7.0, if you skip v1.6.x your node will not be able to fully migrate
+its local state. Upgrading from v1.6.x to v1.7.0 will require a time consuming database migration that optimizes how
+the node stores at locally and will not allow you to downgrade to v1.6.x again.
+
 The command line flag `--scan-malfeasant-atxs` has been removed. All malfeasant ATXs before 1.6.0 have been marked as
 such and the node will continue to scan new ATXs for their validity.
 
 ### Highlights
 
+Database migrations now use a temporary copy of the existing database to speed up the process. This will require twice
+the local storage space for the duration of the migration.
+
+The node will now continue to try to register at all configured PoETs until the end of the registration window instead
+of giving up on non-responding PoETs after 15-20 minutes.
+
+Various minor improvements have been made to the node to improve performance and reduce the amount of log spam.
+
 ### Features
+
+The node is now stricter with detecting DB schema drifts. For most users this gives additional safety to not lose data
+when upgrading or after a crash. If you are running a node with a custom database schema for instance because you are
+using tools that also write to the nodes database your node might refuse to start. In this case you can take a look
+at [CODING.md](CODING.md#Handling-database-schema-changes) to see how to build a custom node with a modified schema.
+
+The node can also be started with `db-allow-schema-drift` set to true in the main section of the nodes configuration to
+allow the node to start with a different schema. This is not recommended and should only be used if you know what you
+are doing.
 
 ### Improvements
 
+* [#6116](https://github.com/spacemeshos/go-spacemesh/pull/6116) After a restart the node will now try to register at
+  all PoETs it hasn't registered yet at instead of skipping registration when it already has at least one successful
+  registration in the DB.
+
+* [#6003](https://github.com/spacemeshos/go-spacemesh/pull/6003) Improve database schema handling.
+  This includes schema drift detection which may happen after running unreleased versions.
+
 * [#6136](https://github.com/spacemeshos/go-spacemesh/pull/6136) Fixed an issue where the node retried registering
   for the PoET round only for 15-20 minutes instead of continuing until the start of the round.
+
+* [#6085](https://github.com/spacemeshos/go-spacemesh/pull/6085) Database migrations now use `VACUUM INTO` with a
+  temporary copy of the existing database to speed up the process.
 
 * [#6274](https://github.com/spacemeshos/go-spacemesh/pull/6274) Additional queries to PoETs are now cached to reduce
   the number of requests made to PoET servers.
@@ -61,7 +92,8 @@ such and the node will continue to scan new ATXs for their validity.
 
 * [#6198](https://github.com/spacemeshos/go-spacemesh/pull/6198) Configure default TTL for caching poet's /v1/info
 
-* [#6199](https://github.com/spacemeshos/go-spacemesh/pull/6199) Cache poet's /v1/pow_params
+* [#6199](https://github.com/spacemeshos/go-spacemesh/pull/6199) Cache poet's /v1/pow_params to reduce the number of
+  requests made to PoET servers.
 
 ## Release v1.6.5
 
@@ -193,9 +225,6 @@ operating your own PoET and want to use certificate authentication please refer 
 * [#5927](https://github.com/spacemeshos/go-spacemesh/pull/5927) Fixed vulnerability in the way a node handles incoming
   ATXs. This vulnerability allows an attacker to claim rewards for a full tick amount although they should not be
   eligible for them.
-
-* [#6003](https://github.com/spacemeshos/go-spacemesh/pull/6003) Improve database schema handling.
-  This includes schema drift detection which may happen after running unreleased versions.
 
 * [#6031](https://github.com/spacemeshos/go-spacemesh/pull/6031) Fixed an edge case where the storage units might have
   changed after the initial PoST was generated but before the first ATX has been emitted, invalidating the initial PoST.
