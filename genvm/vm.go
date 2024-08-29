@@ -200,7 +200,6 @@ func (v *VM) Apply(
 		)
 	}
 	t1 := time.Now()
-	blockDurationWait.Observe(float64(time.Since(t1)))
 
 	ss := core.NewStagedCache(core.DBLoader{Executor: v.db})
 	results, skipped, fees, err := v.execute(lctx, ss, txs)
@@ -227,6 +226,8 @@ func (v *VM) Apply(
 		return nil, nil, err
 	}
 	defer tx.Release()
+	t4 := time.Now()
+	blockDurationWait.Observe(float64(time.Since(t3)))
 
 	for _, reward := range rewardsResult {
 		if err := rewards.Add(tx, &reward); err != nil {
@@ -274,7 +275,7 @@ func (v *VM) Apply(
 	}
 	hash.PutHasher(hasher)
 
-	blockDurationPersist.Observe(float64(time.Since(t3)))
+	blockDurationPersist.Observe(float64(time.Since(t4)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
 	appliedLayer.Set(float64(lctx.Layer))
