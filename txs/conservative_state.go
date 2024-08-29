@@ -120,7 +120,7 @@ func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationReques
 
 // AddToCache adds the provided transaction to the conservative cache.
 func (cs *ConservativeState) AddToCache(ctx context.Context, tx *types.Transaction, received time.Time) error {
-	if err := cs.cache.Add(ctx, cs.db, tx, received, false); err != nil {
+	if err := cs.cache.Add(ctx, cs.db, tx, received); err != nil {
 		return err
 	}
 	if err := events.ReportNewTx(0, tx); err != nil {

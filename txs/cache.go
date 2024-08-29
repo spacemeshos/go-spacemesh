@@ -558,33 +558,18 @@ func acceptable(err error) bool {
 	return err == nil || errors.Is(err, errTooManyNonce)
 }
 
-func (c *Cache) Add(
-	ctx context.Context,
-	db sql.StateDatabase,
-	tx *types.Transaction,
-	received time.Time,
-	mustPersist bool,
-) error {
+func (c *Cache) Add(ctx context.Context, db sql.StateDatabase, tx *types.Transaction, received time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	principal := tx.Principal
 	c.createAcctIfNotPresent(principal)
 	defer c.cleanupAccounts(principal)
-	logger := c.logger.With(
-		log.ZContext(ctx),
-		zap.Stringer("address", principal),
-	)
-	err := c.pending[principal].add(logger, tx, received)
-	if acceptable(err) {
-		err = nil
-		mempoolTxCount.WithLabelValues(accepted).Inc()
+	logger := c.logger.With(log.ZContext(ctx), zap.Stringer("address", principal))
+	if err := c.pending[principal].add(logger, tx, received); !acceptable(err) {
+		return err
 	}
-	if err == nil || mustPersist {
-		if dbErr := transactions.Add(db, tx, received); dbErr != nil {
-			return dbErr
-		}
-	}
-	return err
+	mempoolTxCount.WithLabelValues(accepted).Inc()
+	return transactions.Add(db, tx, received)
 }
 
 // Get gets a transaction from the cache.
