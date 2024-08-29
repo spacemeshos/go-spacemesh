@@ -8,7 +8,17 @@ import (
 )
 
 // ATXMalfeasancePublisher is the publisher for ATX proofs.
-type ATXMalfeasancePublisher struct{}
+type ATXMalfeasancePublisher struct {
+	malPublisher malfeasancePublisher
+}
+
+func NewATXMalfeasancePublisher(
+	malPublisher malfeasancePublisher,
+) *ATXMalfeasancePublisher {
+	return &ATXMalfeasancePublisher{
+		malPublisher: malPublisher,
+	}
+}
 
 func (p *ATXMalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
 	// TODO(mafa): implement me
