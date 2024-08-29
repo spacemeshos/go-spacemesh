@@ -24,6 +24,46 @@ func New(path string) *KvDb {
 	return &KvDb{db: db}
 }
 
+func (db *KvDb) IterPrefixWithSeekGE(prefix []byte, cb func(k, v []byte) (bool, []byte)) error {
+	iter, err := db.db.NewIter(&pebble.IterOptions{LowerBound: prefix})
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+
+	if !iter.SeekGE(prefix) {
+		return nil
+	}
+
+	if !bytes.HasPrefix(iter.Key(), prefix) {
+		return nil
+	}
+
+	for {
+		stop, seekgepfx := cb(iter.Key(), iter.Value())
+		if stop {
+			return nil
+		}
+		if seekgepfx != nil {
+			if !iter.SeekGE(seekgepfx) {
+				return nil
+			}
+			if !bytes.HasPrefix(iter.Key(), prefix) {
+				return nil
+			}
+			continue
+		}
+		if !iter.Next() {
+			return nil
+		}
+		if !bytes.HasPrefix(iter.Key(), prefix) {
+			return nil
+		}
+	}
+
+	return nil
+}
+
 func (db *KvDb) IterPrefix(prefix []byte, cb func(k, v []byte) bool) error {
 	iter, err := db.db.NewIter(&pebble.IterOptions{LowerBound: prefix})
 	if err != nil {

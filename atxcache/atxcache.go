@@ -229,26 +229,13 @@ func (c *Cache) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 func (c *Cache) EvictEpoch(evict types.EpochID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	// fmt.Println("evicting epoch", evict)
 	if c.isEvicted(evict) {
-		// fmt.Println("evicting epoch return early", evict)
 		return
 	}
 	if c.evicted < evict {
-		// fmt.Println("evicting epoch set evicted", c.evicted, evict)
 		c.evicted = evict
 	}
-	// fmt.Println("delete range")
 	c.db.DeleteRange([]byte{0, 0, 0, 0}, epochPrefix(evict))
-
-	//d.evicted.Store(evict.Uint32())
-	//}
-	//for epoch := range d.epochs {
-	//if epoch <= evict {
-	//delete(d.epochs, epoch)
-	//atxsCounter.DeleteLabelValues(epoch.String())
-	//}
-	//}
 }
 
 func (c *Cache) isEvicted(e types.EpochID) bool {
@@ -373,7 +360,7 @@ func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []
 	// fmt.Println("slice sorted, took", time.Now().Sub(start))
 	var weight uint64
 	i := 0
-	c.db.IterPrefix(epochPrefix(epoch), func(k, v []byte) bool {
+	c.db.IterPrefixWithSeekGE(epochPrefix(epoch), func(k, v []byte) (bool, []byte) {
 	CMP:
 		switch bytes.Compare(k[4:], set[i][:]) {
 		case 0:
@@ -382,22 +369,22 @@ func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []
 			used[i] = true
 			if i == len(set)-1 {
 				// done, tell the iterator to stop
-				return true
+				return true, nil
 			}
 			i++
-			return false
+			return false, nil
 		case -1:
 			// left smaller than right
 			// we need to advance the iterator, since it is "behind"
 			// the key
-			return false
+			return false, key(epoch, set[i])
 		case 1:
 			// right is smaller than iterator, we therefore want to advance i
 			// and then check again
 			i++
 			goto CMP
 		}
-		return false
+		return false, nil
 	})
 
 	return weight, used
