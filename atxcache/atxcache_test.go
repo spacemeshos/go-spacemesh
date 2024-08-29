@@ -197,6 +197,7 @@ func testPebble(tb testing.TB) *pebble.KvDb {
 }
 
 func BenchmarkConcurrentReadWrite(b *testing.B) {
+	b.Skip()
 	c := atxcache.New(testPebble(b))
 	const (
 		epoch = 1
@@ -244,6 +245,8 @@ func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
 	const epoch = 1
 	atxs := make([]types.ATXID, 0, size)
 	rng := rand.New(rand.NewSource(10101))
+	fmt.Println("inserting size", size)
+	start := time.Now()
 	for i := range size {
 		var (
 			node types.NodeID
@@ -254,6 +257,9 @@ func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
 		atxs = append(atxs, atx)
 		c.FastAdd(atx, node, epoch, types.Address{}, 500, 100, 0, 0, false)
 	}
+	c.Flush()
+	fmt.Println("wrote records", size, "took", time.Now().Sub(start))
+
 	rng.Shuffle(size, func(i, j int) {
 		atxs[i], atxs[j] = atxs[j], atxs[i]
 	})
@@ -273,13 +279,14 @@ func BenchmarkWeightForSet(b *testing.B) {
 	for _, bc := range []struct {
 		size, setSize int
 	}{
-		{100_000, 100_000},
-		{200_000, 200_000},
-		{400_000, 400_000},
-		{1_000_000, 100_000},
-		{1_000_000, 200_000},
-		{1_000_000, 400_000},
-		{1_000_000, 1_000_000},
+		//{100_000, 100_000},
+		//{200_000, 200_000},
+		//{400_000, 400_000},
+		//{1_000_000, 100_000},
+		//{1_000_000, 200_000},
+		//{1_000_000, 400_000},
+		//{1_000_000, 1_000_000},
+		{16_000_000, 8_000_000},
 	} {
 		b.Run(fmt.Sprintf("size=%d set_size=%d", bc.size, bc.setSize), func(b *testing.B) {
 			benchmarkkWeightForSet(b, bc.size, bc.setSize)

@@ -23,7 +23,7 @@ import (
 	pebbledb "github.com/cockroachdb/pebble"
 )
 
-const BATCH_FLUSH_SIZE = 10000
+const BATCH_FLUSH_SIZE = 5_000_000
 
 type Cache struct {
 	db          *pebble.KvDb
@@ -60,7 +60,7 @@ func (c *Cache) FastAdd(
 	c.add(c.warmupBatch, id, node, epoch, coinbase, weight, base, height, nonce)
 	if c.warmupBatch.Count() >= BATCH_FLUSH_SIZE {
 		total += c.warmupBatch.Count()
-		// fmt.Println("flushing entries", BATCH_FLUSH_SIZE, "total", total)
+		fmt.Println("flushing entries", BATCH_FLUSH_SIZE, "total", total)
 		if err := c.warmupBatch.Commit(nil); err != nil {
 			panic(err)
 		}
@@ -368,9 +368,9 @@ func compareAtxId(a, b types.ATXID) int {
 // atxs in the set that weren't used.
 func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
 	used := make([]bool, len(set))
-	start := time.Now()
+	// start := time.Now()
 	slices.SortFunc(set, compareAtxId)
-	fmt.Println("slice sorted, took", time.Now().Sub(start))
+	// fmt.Println("slice sorted, took", time.Now().Sub(start))
 	var weight uint64
 	i := 0
 	c.db.IterPrefix(epochPrefix(epoch), func(k, v []byte) bool {
