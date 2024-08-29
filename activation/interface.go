@@ -167,7 +167,7 @@ type certifierClient interface {
 // certifierService is used to certify nodeID for registering in the poet.
 // It holds the certificates and can recertify if needed.
 type certifierService interface {
-	// Acquire a certificate for the ID in the given certifier.
+	// Certificate acquires a certificate for the ID in the given certifier.
 	// The certificate confirms that the ID is verified and it can be later used to submit in poet.
 	Certificate(
 		ctx context.Context,
