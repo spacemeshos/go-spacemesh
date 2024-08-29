@@ -19,7 +19,7 @@ import (
 
 //go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
 
-type AtxReceiver interface {
+type atxReceiver interface {
 	OnAtx(*types.ActivationTx)
 }
 

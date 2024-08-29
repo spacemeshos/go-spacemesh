@@ -96,6 +96,21 @@ CREATE TABLE layers
     aggregated_hash CHAR(32)
 ) WITHOUT ROWID;
 CREATE INDEX layers_by_processed ON layers (processed);
+CREATE TABLE malfeasance
+(
+    pubkey      CHAR(32) PRIMARY KEY,
+    received    INT NOT NULL, 
+
+    
+    married_to  CHAR(32),     
+
+    
+    domain      INT,          
+    proof       BLOB,         
+
+    
+    FOREIGN KEY (married_to) REFERENCES malfeasance(pubkey)
+);
 CREATE TABLE poets
 (
     ref        VARCHAR PRIMARY KEY,

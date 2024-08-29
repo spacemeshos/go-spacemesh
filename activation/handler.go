@@ -106,7 +106,7 @@ func NewHandler(
 	fetcher system.Fetcher,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
-	beacon AtxReceiver,
+	beacon atxReceiver,
 	tortoise system.Tortoise,
 	lg *zap.Logger,
 	opts ...HandlerOption,

@@ -76,7 +76,7 @@ type HandlerV1 struct {
 	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidatorV1
-	beacon          AtxReceiver
+	beacon          atxReceiver
 	tortoise        system.Tortoise
 	logger          *zap.Logger
 	fetcher         system.Fetcher
