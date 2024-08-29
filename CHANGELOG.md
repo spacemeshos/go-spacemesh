@@ -15,8 +15,9 @@ such and the node will continue to scan new ATXs for their validity.
 
 ### Highlights
 
-Database migrations now use a temporary copy of the existing database to speed up the process. This will require twice
-the local storage space for the duration of the migration.
+Larger database migrations will now be done with a temporary copy of the existing database to speed up the process.
+This will require up to the same amount of additional disk space as the DB of the node is using for the duration of the
+migration, after which it will be freed again.
 
 The node will now continue to try to register at all configured PoETs until the end of the registration window instead
 of giving up on non-responding PoETs after 15-20 minutes.
