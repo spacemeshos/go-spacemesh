@@ -2,7 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## v1.7.0
 
 ### Upgrade information
 
@@ -17,6 +17,9 @@ such and the node will continue to scan new ATXs for their validity.
 
 * [#6136](https://github.com/spacemeshos/go-spacemesh/pull/6136) Fixed an issue where the node retried registering
   for the PoET round only for 15-20 minutes instead of continuing until the start of the round.
+
+* [#6274](https://github.com/spacemeshos/go-spacemesh/pull/6274) Additional queries to PoETs are now cached to reduce
+  the number of requests made to PoET servers.
 
 ## Release v1.6.8
 
