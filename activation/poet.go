@@ -34,6 +34,7 @@ var (
 	ErrUnauthorized             = errors.New("unauthorized")
 	ErrCertificatesNotSupported = errors.New("poet doesn't support certificates")
 	ErrIncompatiblePhaseShift   = errors.New("fetched poet phase_shift is incompatible with configured phase_shift")
+	ErrCertifierNotConfigured   = errors.New("certifier service not configured")
 )
 
 type PoetPowParams struct {
@@ -56,7 +57,6 @@ type PoetClient interface {
 	Address() string
 
 	PowParams(ctx context.Context) (*PoetPowParams, error)
-	CertifierInfo(ctx context.Context) (*types.CertifierInfo, error)
 	Submit(
 		ctx context.Context,
 		deadline time.Time,
@@ -204,17 +204,6 @@ func (c *HTTPPoetClient) PowParams(ctx context.Context) (*PoetPowParams, error) 
 		Challenge:  resBody.GetPowParams().GetChallenge(),
 		Difficulty: uint(resBody.GetPowParams().GetDifficulty()),
 	}, nil
-}
-
-func (c *HTTPPoetClient) CertifierInfo(ctx context.Context) (*types.CertifierInfo, error) {
-	info, err := c.Info(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if info.Certifier == nil {
-		return nil, ErrCertificatesNotSupported
-	}
-	return info.Certifier, nil
 }
 
 // Submit registers a challenge in the proving service current open round.
@@ -408,10 +397,8 @@ type poetService struct {
 
 	certifier certifierService
 
-	certifierInfoCache cachedData[*types.CertifierInfo]
-	mtx                sync.Mutex
 	expectedPhaseShift time.Duration
-	fetchedPhaseShift  time.Duration
+	infoCache          cachedData[*types.PoetInfo]
 	powParamsCache     cachedData[*PoetPowParams]
 }
 
@@ -455,7 +442,7 @@ func NewPoetServiceWithClient(
 		logger:             logger,
 		client:             client,
 		requestTimeout:     cfg.RequestTimeout,
-		certifierInfoCache: cachedData[*types.CertifierInfo]{ttl: cfg.CertifierInfoCacheTTL},
+		infoCache:          cachedData[*types.PoetInfo]{ttl: cfg.InfoCacheTTL},
 		powParamsCache:     cachedData[*PoetPowParams]{ttl: cfg.PowParamsCacheTTL},
 		proofMembers:       make(map[string][]types.Hash32, 1),
 		expectedPhaseShift: cfg.PhaseShift,
@@ -479,20 +466,15 @@ func NewPoetServiceWithClient(
 }
 
 func (c *poetService) verifyPhaseShiftConfiguration(ctx context.Context) error {
-	c.mtx.Lock()
-	defer c.mtx.Unlock()
-
-	if c.fetchedPhaseShift != 0 {
-		return nil
-	}
-	resp, err := c.client.Info(ctx)
+	info, err := c.getInfo(ctx)
 	if err != nil {
 		return err
-	} else if resp.PhaseShift != c.expectedPhaseShift {
+	}
+
+	if info.PhaseShift != c.expectedPhaseShift {
 		return ErrIncompatiblePhaseShift
 	}
 
-	c.fetchedPhaseShift = resp.PhaseShift
 	return nil
 }
 
@@ -553,8 +535,8 @@ func (c *poetService) reauthorize(
 	challenge []byte,
 ) (*PoetAuth, error) {
 	if c.certifier != nil {
-		if info, err := c.getCertifierInfo(ctx); err == nil {
-			if err := c.certifier.DeleteCertificate(id, info.Pubkey); err != nil {
+		if info, err := c.getInfo(ctx); err == nil {
+			if err := c.certifier.DeleteCertificate(id, info.Certifier.Pubkey); err != nil {
 				return nil, fmt.Errorf("deleting cert: %w", err)
 			}
 		}
@@ -640,22 +622,27 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 
 func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
 	if c.certifier == nil {
-		return nil, errors.New("certifier not configured")
+		return nil, ErrCertifierNotConfigured
 	}
-	info, err := c.getCertifierInfo(ctx)
+
+	info, err := c.getInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return c.certifier.Certificate(ctx, id, info.Url, info.Pubkey)
+
+	if info.Certifier == nil {
+		return nil, ErrCertificatesNotSupported
+	}
+	return c.certifier.Certificate(ctx, id, info.Certifier.Url, info.Certifier.Pubkey)
 }
 
-func (c *poetService) getCertifierInfo(ctx context.Context) (*types.CertifierInfo, error) {
-	info, err := c.certifierInfoCache.get(func() (*types.CertifierInfo, error) {
-		certifierInfo, err := c.client.CertifierInfo(ctx)
+func (c *poetService) getInfo(ctx context.Context) (*types.PoetInfo, error) {
+	info, err := c.infoCache.get(func() (*types.PoetInfo, error) {
+		info, err := c.client.Info(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("getting certifier info: %w", err)
+			return nil, fmt.Errorf("getting poet info: %w", err)
 		}
-		return certifierInfo, nil
+		return info, nil
 	})
 	if err != nil {
 		return nil, err

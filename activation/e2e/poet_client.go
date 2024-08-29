@@ -67,11 +67,7 @@ func (p *TestPoet) Submit(
 	return &types.PoetRound{ID: strconv.Itoa(round), End: time.Now()}, nil
 }
 
-func (p *TestPoet) CertifierInfo(ctx context.Context) (*types.CertifierInfo, error) {
-	return nil, errors.New("CertifierInfo: not supported")
-}
-
-func (p *TestPoet) Info(ctx context.Context) (*types.PoetInfo, error) {
+func (p *TestPoet) Info(_ context.Context) (*types.PoetInfo, error) {
 	return &types.PoetInfo{
 		PhaseShift: p.poetCfg.PhaseShift,
 		CycleGap:   p.poetCfg.CycleGap,

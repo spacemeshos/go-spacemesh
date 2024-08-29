@@ -230,7 +230,7 @@ func TestSubmitTooLate(t *testing.T) {
 	r.ErrorIs(err, activation.ErrInvalidRequest)
 }
 
-func TestCertifierInfo(t *testing.T) {
+func TestInfoWithCertifierInfo(t *testing.T) {
 	t.Parallel()
 	r := require.New(t)
 
@@ -259,38 +259,8 @@ func TestCertifierInfo(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	certInfo, err := client.CertifierInfo(context.Background())
+	info, err := client.Info(context.Background())
 	r.NoError(err)
-	r.Equal("http://localhost:8080", certInfo.Url.String())
-	r.Equal([]byte("pubkey"), certInfo.Pubkey)
-}
-
-func TestNoCertifierInfo(t *testing.T) {
-	t.Parallel()
-	r := require.New(t)
-
-	var eg errgroup.Group
-	poetDir := t.TempDir()
-	t.Cleanup(func() { r.NoError(eg.Wait()) })
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	c, err := NewHTTPPoetTestHarness(ctx, poetDir)
-	r.NoError(err)
-	r.NotNil(c)
-
-	eg.Go(func() error {
-		err := c.Service.Start(ctx)
-		return errors.Join(err, c.Service.Close())
-	})
-
-	client, err := activation.NewHTTPPoetClient(
-		types.PoetServer{Address: c.RestURL().String()},
-		activation.DefaultPoetConfig(),
-		activation.WithLogger(zaptest.NewLogger(t)),
-	)
-	require.NoError(t, err)
-
-	_, err = client.CertifierInfo(context.Background())
-	r.ErrorContains(err, "poet doesn't support certificates")
+	r.Equal("http://localhost:8080", info.Certifier.Url.String())
+	r.Equal([]byte("pubkey"), info.Certifier.Pubkey)
 }
