@@ -190,7 +190,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 		mValidator:  NewMocknipostValidator(ctrl),
 		mbeacon:     NewMockatxReceiver(ctrl),
 		mtortoise:   mocks.NewMockTortoise(ctrl),
-		mMalPublish: NewMockatxmalfeasancePublisher(ctrl),
+		mMalPublish: NewMockatxMalfeasancePublisher(ctrl),
 	}
 }
 
