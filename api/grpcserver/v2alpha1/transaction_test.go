@@ -241,8 +241,11 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
-	_, _, err := vminst.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
-		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}}, nil)
+	_, _, err := vminst.Apply(
+		types.GetEffectiveGenesis().Add(1),
+		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}},
+		nil,
+	)
 	require.NoError(t, err)
 
 	conn := dialGrpc(t, cfg)
@@ -304,8 +307,11 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
-	_, _, err := vminst.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
-		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}}, nil)
+	_, _, err := vminst.Apply(
+		types.GetEffectiveGenesis().Add(1),
+		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}},
+		nil,
+	)
 	require.NoError(t, err)
 
 	mangled := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
