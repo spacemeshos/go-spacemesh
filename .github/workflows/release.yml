@@ -133,7 +133,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: build-and-upload
     permissions:
-      contents: 'read'
+      contents: 'write'
       id-token: 'write'
     steps:
       - name: Download the artifacts

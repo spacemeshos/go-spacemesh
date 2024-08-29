@@ -25,7 +25,7 @@ func Register(reg *registry.Registry) {
 type handler struct{}
 
 // Parse is noop on vault template.
-func (h *handler) Parse(host core.Host, method uint8, decoder *scale.Decoder) (core.ParseOutput, error) {
+func (h *handler) Parse(method uint8, decoder *scale.Decoder) (core.ParseOutput, error) {
 	return core.ParseOutput{}, nil
 }
 
