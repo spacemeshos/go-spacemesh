@@ -1,6 +1,7 @@
 package atxcache
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -59,7 +60,7 @@ func (c *Cache) FastAdd(
 	c.add(c.warmupBatch, id, node, epoch, coinbase, weight, base, height, nonce)
 	if c.warmupBatch.Count() >= BATCH_FLUSH_SIZE {
 		total += c.warmupBatch.Count()
-		fmt.Println("flushing entries", BATCH_FLUSH_SIZE, "total", total)
+		// fmt.Println("flushing entries", BATCH_FLUSH_SIZE, "total", total)
 		if err := c.warmupBatch.Commit(nil); err != nil {
 			panic(err)
 		}
@@ -228,17 +229,16 @@ func (c *Cache) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 func (c *Cache) EvictEpoch(evict types.EpochID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	fmt.Println("evicting epoch", evict)
+	// fmt.Println("evicting epoch", evict)
 	if c.isEvicted(evict) {
-		fmt.Println("evicting epoch return early", evict)
+		// fmt.Println("evicting epoch return early", evict)
 		return
 	}
 	if c.evicted < evict {
-
-		fmt.Println("evicting epoch set evicted", c.evicted, evict)
+		// fmt.Println("evicting epoch set evicted", c.evicted, evict)
 		c.evicted = evict
 	}
-	fmt.Println("delete range")
+	// fmt.Println("delete range")
 	c.db.DeleteRange([]byte{0, 0, 0, 0}, epochPrefix(evict))
 
 	//d.evicted.Store(evict.Uint32())
@@ -360,21 +360,46 @@ func (c *Cache) SetMalicious(node types.NodeID) {
 	c.malicious[node] = struct{}{}
 }
 
+func compareAtxId(a, b types.ATXID) int {
+	return bytes.Compare(a[:], b[:])
+}
+
 // WeightForSet computes total weight of atxs in the set and returned array with
 // atxs in the set that weren't used.
 func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
 	used := make([]bool, len(set))
-
+	start := time.Now()
+	slices.SortFunc(set, compareAtxId)
+	fmt.Println("slice sorted, took", time.Now().Sub(start))
 	var weight uint64
-	// try with iterator, although perhaps having a map here would be better
-	// instead of the slice
-	for i, id := range set {
-		c.getVisit(epoch, id, func(b []byte) {
-			w := binary.LittleEndian.Uint64(b[32+24:])
+	i := 0
+	c.db.IterPrefix(epochPrefix(epoch), func(k, v []byte) bool {
+	CMP:
+		switch bytes.Compare(k[4:], set[i][:]) {
+		case 0:
+			w := binary.LittleEndian.Uint64(v[32+24:])
 			weight += w
 			used[i] = true
-		})
-	}
+			if i == len(set)-1 {
+				// done, tell the iterator to stop
+				return true
+			}
+			i++
+			return false
+		case -1:
+			// left smaller than right
+			// we need to advance the iterator, since it is "behind"
+			// the key
+			return false
+		case 1:
+			// right is smaller than iterator, we therefore want to advance i
+			// and then check again
+			i++
+			goto CMP
+		}
+		return false
+	})
+
 	return weight, used
 }
 
