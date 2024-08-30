@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 )
@@ -69,7 +69,7 @@ func newTracer(opts ...TraceOpt) *tracer {
 
 type traceRunner struct {
 	opts          []Opt
-	atxdata       *atxsdata.Data
+	atxdata       *atxcache.Cache
 	trt           *Tortoise
 	pending       map[types.BallotID]*DecodedBallot
 	assertOutputs bool
@@ -155,7 +155,7 @@ func (c *ConfigTrace) New() traceEvent {
 func (c *ConfigTrace) Run(r *traceRunner) error {
 	types.SetLayersPerEpoch(c.EpochSize)
 	types.SetEffectiveGenesis(c.EffectiveGenesis)
-	r.atxdata = atxsdata.New()
+	r.atxdata = atxcache.New(nil)
 	trt, err := New(
 		r.atxdata,
 		append(r.opts, WithConfig(Config{
@@ -176,7 +176,7 @@ func (c *ConfigTrace) Run(r *traceRunner) error {
 type AtxTrace struct {
 	ID          types.ATXID   `json:"id"`
 	TargetEpoch types.EpochID `json:"target"`
-	Atx         *atxsdata.ATX `json:",inline"`
+	Atx         *atxcache.ATX `json:",inline"`
 }
 
 func (a *AtxTrace) Type() eventType {

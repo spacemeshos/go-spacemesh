@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -99,7 +99,7 @@ func WithTickSize(tickSize uint64) HandlerOption {
 func NewHandler(
 	local p2p.Peer,
 	cdb *datastore.CachedDB,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	edVerifier *signing.EdVerifier,
 	c layerClock,
 	pub pubsub.Publisher,

@@ -18,7 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -83,7 +83,7 @@ type Builder struct {
 	coinbaseAccount   types.Address
 	conf              Config
 	db                sql.Executor
-	atxsdata          *atxsdata.Data
+	atxsdata          *atxcache.Cache
 	localDB           sql.LocalDatabase
 	publisher         pubsub.Publisher
 	nipostBuilder     nipostBuilder
@@ -179,7 +179,7 @@ func BuilderAtxVersions(v AtxVersions) BuilderOption {
 func NewBuilder(
 	conf Config,
 	db sql.Executor,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	localDB sql.LocalDatabase,
 	publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder,
@@ -1048,7 +1048,7 @@ func (b *Builder) version(publish types.EpochID) types.AtxVersion {
 
 func findFullyValidHighTickAtx(
 	ctx context.Context,
-	atxdata *atxsdata.Data,
+	atxdata *atxcache.Cache,
 	publish types.EpochID,
 	goldenATXID types.ATXID,
 	validator nipostValidator,

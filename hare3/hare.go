@@ -14,7 +14,7 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare4"
@@ -173,7 +173,7 @@ func New(
 	nodeClock nodeClock,
 	pubsub pubsub.PublishSubscriber,
 	db sql.StateDatabase,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	proposals *store.Store,
 	verifier *signing.EdVerifier,
 	oracle oracle,
@@ -235,7 +235,7 @@ type Hare struct {
 	nodeClock nodeClock
 	pubsub    pubsub.PublishSubscriber
 	db        sql.StateDatabase
-	atxsdata  *atxsdata.Data
+	atxsdata  *atxcache.Cache
 	proposals *store.Store
 	verifier  *signing.EdVerifier
 	oracle    *legacyOracle
@@ -539,7 +539,7 @@ func (h *Hare) selectProposals(session *session) []types.ProposalID {
 
 	var (
 		result []types.ProposalID
-		min    *atxsdata.ATX
+		min    *atxcache.ATX
 	)
 	target := session.lid.GetEpoch()
 	publish := target - 1

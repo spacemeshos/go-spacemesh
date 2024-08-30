@@ -8,7 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -109,7 +109,7 @@ func WithTracer(opts ...TraceOpt) Opt {
 }
 
 // New creates Tortoise instance.
-func New(atxdata *atxsdata.Data, opts ...Opt) (*Tortoise, error) {
+func New(atxdata *atxcache.Cache, opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: zap.NewNop(),
@@ -316,7 +316,7 @@ func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
 }
 
 // OnAtx is expected to be called before ballots that use this atx.
-func (t *Tortoise) OnAtx(target types.EpochID, id types.ATXID, atx *atxsdata.ATX) {
+func (t *Tortoise) OnAtx(target types.EpochID, id types.ATXID, atx *atxcache.ATX) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()

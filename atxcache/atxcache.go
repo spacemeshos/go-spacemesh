@@ -113,8 +113,8 @@ func (c *Cache) iteradd(
 	height uint64,
 	nonce types.VRFPostIndex,
 ) bool {
-	fmt.Println("adding", epoch)
-	c.add(c.warmupBatch, id, node, epoch, coinbase, weight, base, height, nonce)
+	// here we intentionally bump the epoch coming from the db
+	c.add(c.warmupBatch, id, node, epoch+1, coinbase, weight, base, height, nonce)
 	if c.warmupBatch.Len() >= BATCH_FLUSH_SIZE {
 		if err := c.warmupBatch.Commit(nil); err != nil {
 			panic(err)

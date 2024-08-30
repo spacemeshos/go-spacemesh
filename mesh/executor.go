@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -29,14 +29,14 @@ var (
 type Executor struct {
 	logger   *zap.Logger
 	db       sql.Executor
-	atxsdata *atxsdata.Data
+	atxsdata *atxcache.Cache
 	vm       vmState
 	cs       conservativeState
 
 	mu sync.Mutex
 }
 
-func NewExecutor(db sql.Executor, atxsdata *atxsdata.Data, vm vmState, cs conservativeState, lg *zap.Logger) *Executor {
+func NewExecutor(db sql.Executor, atxsdata *atxcache.Cache, vm vmState, cs conservativeState, lg *zap.Logger) *Executor {
 	return &Executor{
 		logger:   lg,
 		db:       db,

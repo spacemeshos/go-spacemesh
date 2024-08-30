@@ -14,7 +14,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -70,7 +70,7 @@ type nipostValidatorV1 interface {
 type HandlerV1 struct {
 	local           p2p.Peer
 	cdb             *datastore.CachedDB
-	atxsdata        *atxsdata.Data
+	atxsdata        *atxcache.Cache
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
 	tickSize        uint64
@@ -286,7 +286,7 @@ func (h *HandlerV1) validateNonInitialAtx(
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
+func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxcache.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		malicious, err := identities.IsMalicious(h.cdb, atx.SmesherID)
 		if err != nil {

@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -51,7 +51,7 @@ func getProposalMetadata(
 	ctx context.Context,
 	logger *zap.Logger,
 	db sql.StateDatabase,
-	atxs *atxsdata.Data,
+	atxs *atxcache.Cache,
 	cfg Config,
 	lid types.LayerID,
 	proposals []*types.Proposal,
@@ -233,7 +233,7 @@ func toUint64Slice(b []byte) []uint64 {
 func rewardInfoAndHeight(
 	cfg Config,
 	db sql.StateDatabase,
-	atxs *atxsdata.Data,
+	atxs *atxcache.Cache,
 	props []*types.Proposal,
 ) (uint64, []types.AnyReward, error) {
 	weights := make(map[types.ATXID]*big.Rat)

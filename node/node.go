@@ -38,7 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
@@ -67,6 +67,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/pebble"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/prune"
@@ -95,6 +96,7 @@ import (
 const (
 	genesisFileName = "genesis.json"
 	dbFile          = "state.sql"
+	kvPath          = "atxcache"
 
 	oldLocalDbFile = "node_state.sql"
 	localDbFile    = "local.sql"
@@ -389,8 +391,7 @@ type App struct {
 	proposalListener  *proposals.Handler
 	proposalBuilder   *miner.ProposalBuilder
 	mesh              *mesh.Mesh
-	atxsdata          *atxsdata.Data
-	atxcache          *atxcache.Cache
+	atxsdata          *atxcache.Cache
 	clock             *timesync.NodeClock
 	hare3             *hare3.Hare
 	hare4             *hare4.Hare
@@ -1986,8 +1987,10 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			return err
 		}
 		start := time.Now()
-		data, err := atxsdata.Warm(
+		peb := pebble.New(filepath.Join(dbPath, kvPath))
+		data, err := atxcache.Warm(
 			app.db,
+			peb,
 			app.Config.Tortoise.WindowSizeEpochs(applied),
 			warmupLog,
 		)

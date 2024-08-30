@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -36,7 +36,7 @@ func newActiveSetGenerator(
 	cfg config,
 	log *zap.Logger,
 	db, localdb sql.Executor,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	clock layerClock,
 	opts ...activesetGenOpt,
 ) *activeSetGenerator {
@@ -61,7 +61,7 @@ type activeSetGenerator struct {
 	log *zap.Logger
 
 	db, localdb sql.Executor
-	atxsdata    *atxsdata.Data
+	atxsdata    *atxcache.Cache
 	clock       layerClock
 	wallclock   clockwork.Clock
 
@@ -254,7 +254,7 @@ func activeSetFromGrades(
 	}, nil
 }
 
-func getSetWeight(atxsdata *atxsdata.Data, target types.EpochID, set []types.ATXID) (uint64, error) {
+func getSetWeight(atxsdata *atxcache.Cache, target types.EpochID, set []types.ATXID) (uint64, error) {
 	var setWeight uint64
 	for _, id := range set {
 		atx := atxsdata.Get(target, id)

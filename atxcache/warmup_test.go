@@ -63,13 +63,11 @@ func TestWarmup(t *testing.T) {
 		}
 	})
 	t.Run("no data", func(t *testing.T) {
-		t.Skip()
 		c, err := atxcache.Warm(statesql.InMemoryTest(t), testPebble(t), 1, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		require.NotNil(t, c)
 	})
 	t.Run("closed db", func(t *testing.T) {
-		t.Skip()
 		db := statesql.InMemoryTest(t)
 		require.NoError(t, db.Close())
 		c, err := atxcache.Warm(db, testPebble(t), 1, zaptest.NewLogger(t))
@@ -99,7 +97,6 @@ func TestWarmup(t *testing.T) {
 			}).
 			AnyTimes()
 		for range 3 {
-
 			c := atxcache.New(testPebble(t))
 			require.Error(t, atxcache.Warmup(exec, c, 1, zaptest.NewLogger(t)))
 			fail++

@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/fixed"
 	"go.uber.org/zap"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -46,7 +46,7 @@ type turtle struct {
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
-func newTurtle(logger *zap.Logger, config Config, atxdata *atxsdata.Data) *turtle {
+func newTurtle(logger *zap.Logger, config Config, atxdata *atxcache.Cache) *turtle {
 	t := &turtle{
 		Config: config,
 		state:  newState(atxdata),
@@ -523,10 +523,10 @@ func (t *turtle) computeEpochHeight(lid types.LayerID) {
 	var heights []uint64
 	t.atxsdata.IterateInEpoch(
 		lid.GetEpoch(),
-		func(_ types.ATXID, atx *atxsdata.ATX) {
+		func(_ types.ATXID, atx *atxcache.ATX) {
 			heights = append(heights, atx.Height)
 		},
-		atxsdata.NotMalicious,
+		true,
 	)
 	einfo.height = getMedian(heights)
 	t.logger.Debug(
@@ -649,7 +649,7 @@ func (t *turtle) onOpinionChange(lid types.LayerID, early bool) {
 	}
 }
 
-func (t *turtle) onAtx(target types.EpochID, id types.ATXID, atx *atxsdata.ATX) {
+func (t *turtle) onAtx(target types.EpochID, id types.ATXID, atx *atxcache.ATX) {
 	start := time.Now()
 	epoch := t.epoch(target)
 	mal := t.isMalfeasant(atx.Node)

@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/post/initialization"
 	"go.uber.org/zap"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
@@ -189,7 +189,7 @@ type PostSetupManager struct {
 	cfg         PostConfig
 	logger      *zap.Logger
 	db          sql.Executor
-	atxsdata    *atxsdata.Data
+	atxsdata    *atxcache.Cache
 	goldenATXID types.ATXID
 	validator   nipostValidator
 
@@ -217,7 +217,7 @@ func NewPostSetupManager(
 	cfg PostConfig,
 	logger *zap.Logger,
 	db sql.Executor,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	goldenATXID types.ATXID,
 	syncer syncer,
 	validator nipostValidator,

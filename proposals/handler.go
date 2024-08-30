@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -51,7 +51,7 @@ type Handler struct {
 	cfg    Config
 
 	db                sql.StateDatabase
-	atxsdata          *atxsdata.Data
+	atxsdata          *atxcache.Cache
 	activeSets        *lru.Cache[types.Hash32, uint64]
 	edVerifier        *signing.EdVerifier
 	publisher         pubsub.Publisher
@@ -110,7 +110,7 @@ func WithConfig(cfg Config) Opt {
 // NewHandler creates new Handler.
 func NewHandler(
 	db sql.StateDatabase,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	proposals proposalsConsumer,
 	edVerifier *signing.EdVerifier,
 	p pubsub.Publisher,

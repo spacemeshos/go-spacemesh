@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare4"
@@ -31,7 +31,7 @@ type Generator struct {
 	stop   func()
 
 	db        sql.StateDatabase
-	atxs      *atxsdata.Data
+	atxs      *atxcache.Cache
 	proposals *store.Store
 	msh       meshProvider
 	executor  executor
@@ -85,7 +85,7 @@ func WithHareOutputChan(ch <-chan hare4.ConsensusOutput) GeneratorOpt {
 // NewGenerator creates new block generator.
 func NewGenerator(
 	db sql.StateDatabase,
-	atxs *atxsdata.Data,
+	atxs *atxcache.Cache,
 	proposals *store.Store,
 	exec executor,
 	m meshProvider,

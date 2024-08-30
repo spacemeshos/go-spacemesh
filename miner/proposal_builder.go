@@ -15,7 +15,7 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -62,7 +62,7 @@ type ProposalBuilder struct {
 
 	db        sql.Executor
 	localdb   sql.Executor
-	atxsdata  *atxsdata.Data
+	atxsdata  *atxcache.Cache
 	clock     layerClock
 	publisher pubsub.Publisher
 	conState  conservativeState
@@ -265,7 +265,7 @@ func New(
 	clock layerClock,
 	db sql.Executor,
 	localdb sql.Executor,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	publisher pubsub.Publisher,
 	trtl votesEncoder,
 	syncer system.SyncStateProvider,

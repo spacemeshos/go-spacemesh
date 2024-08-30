@@ -3,7 +3,7 @@ package system
 import (
 	"context"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 )
@@ -20,6 +20,6 @@ type Tortoise interface {
 	Updates() []result.Layer
 	OnApplied(types.LayerID, types.Hash32) bool
 	OnMalfeasance(types.NodeID)
-	OnAtx(types.EpochID, types.ATXID, *atxsdata.ATX)
+	OnAtx(types.EpochID, types.ATXID, *atxcache.ATX)
 	GetMissingActiveSet(types.EpochID, []types.ATXID) []types.ATXID
 }

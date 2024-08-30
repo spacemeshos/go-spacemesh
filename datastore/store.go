@@ -9,7 +9,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/zap"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -37,7 +37,7 @@ type CachedDB struct {
 
 	// cache is optional in tests. It MUST be set for the 'App'
 	// for properly checking malfeasance.
-	atxsdata *atxsdata.Data
+	atxsdata *atxcache.Cache
 
 	atxCache      *lru.Cache[types.ATXID, *types.ActivationTx]
 	vrfNonceCache *lru.Cache[VrfNonceKey, types.VRFPostIndex]
@@ -64,7 +64,7 @@ func DefaultConfig() Config {
 
 type cacheOpts struct {
 	cfg      Config
-	atxsdata *atxsdata.Data
+	atxsdata *atxcache.Cache
 }
 
 type Opt func(*cacheOpts)
@@ -75,7 +75,7 @@ func WithConfig(cfg Config) Opt {
 	}
 }
 
-func WithConsensusCache(c *atxsdata.Data) Opt {
+func WithConsensusCache(c *atxcache.Cache) Opt {
 	return func(o *cacheOpts) {
 		o.atxsdata = c
 	}

@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -37,7 +37,7 @@ import (
 type Mesh struct {
 	logger   *zap.Logger
 	cdb      sql.StateDatabase
-	atxsdata *atxsdata.Data
+	atxsdata *atxcache.Cache
 	clock    layerClock
 
 	executor *Executor
@@ -60,7 +60,7 @@ type Mesh struct {
 // NewMesh creates a new instant of a mesh.
 func NewMesh(
 	db sql.StateDatabase,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	c layerClock,
 	trtl system.Tortoise,
 	exec *Executor,

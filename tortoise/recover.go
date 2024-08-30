@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -20,7 +20,7 @@ import (
 func Recover(
 	ctx context.Context,
 	db sql.Executor,
-	atxdata *atxsdata.Data,
+	atxdata *atxcache.Cache,
 	current types.LayerID,
 	opts ...Opt,
 ) (*Tortoise, error) {
@@ -125,10 +125,10 @@ func Recover(
 	return trtl, nil
 }
 
-func recoverEpoch(target types.EpochID, trtl *Tortoise, db sql.Executor, atxdata *atxsdata.Data) error {
-	atxdata.IterateInEpoch(target, func(id types.ATXID, atx *atxsdata.ATX) {
+func recoverEpoch(target types.EpochID, trtl *Tortoise, db sql.Executor, atxdata *atxcache.Cache) error {
+	atxdata.IterateInEpoch(target, func(id types.ATXID, atx *atxcache.ATX) {
 		trtl.OnAtx(target, id, atx)
-	})
+	}, false)
 
 	beacon, err := beacons.Get(db, target)
 	if err == nil && beacon != types.EmptyBeacon {
@@ -143,7 +143,7 @@ func RecoverLayer(
 	ctx context.Context,
 	trtl *Tortoise,
 	db sql.Executor,
-	atxdata *atxsdata.Data,
+	atxdata *atxcache.Cache,
 	lid types.LayerID,
 	onBallot ballotFunc,
 ) error {

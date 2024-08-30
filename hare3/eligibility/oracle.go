@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -93,7 +93,7 @@ type Oracle struct {
 	synced bool
 
 	beacons        system.BeaconGetter
-	atxsdata       *atxsdata.Data
+	atxsdata       *atxcache.Cache
 	db             sql.Executor
 	vrfVerifier    vrfVerifier
 	layersPerEpoch uint32
@@ -119,7 +119,7 @@ func WithLogger(logger *zap.Logger) Opt {
 func New(
 	beacons system.BeaconGetter,
 	db sql.Executor,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	vrfVerifier vrfVerifier,
 	layersPerEpoch uint32,
 	opts ...Opt,

@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/fixed"
 	"go.uber.org/zap"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/miner/minweight"
@@ -22,7 +22,7 @@ type Validator struct {
 	avgLayerSize       uint32
 	layersPerEpoch     uint32
 	tortoise           tortoiseProvider
-	atxsdata           *atxsdata.Data
+	atxsdata           *atxcache.Cache
 	clock              layerClock
 	beacons            system.BeaconCollector
 	logger             *zap.Logger
@@ -38,7 +38,7 @@ func NewEligibilityValidator(
 	minActiveSetWeight []types.EpochMinimalActiveWeight,
 	clock layerClock,
 	tortoise tortoiseProvider,
-	atxsdata *atxsdata.Data,
+	atxsdata *atxcache.Cache,
 	bc system.BeaconCollector,
 	lg *zap.Logger,
 	vrfVerifier vrfVerifier,

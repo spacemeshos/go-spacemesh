@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -58,7 +58,7 @@ type nipostValidatorV2 interface {
 type HandlerV2 struct {
 	local           p2p.Peer
 	cdb             *datastore.CachedDB
-	atxsdata        *atxsdata.Data
+	atxsdata        *atxcache.Cache
 	edVerifier      *signing.EdVerifier
 	clock           layerClock
 	tickSize        uint64

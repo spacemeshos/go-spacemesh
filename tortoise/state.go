@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/fixed"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/tortoise/opinionhash"
 )
@@ -49,7 +49,7 @@ type (
 		// last evicted layer
 		evicted types.LayerID
 
-		atxsdata *atxsdata.Data
+		atxsdata *atxcache.Cache
 		epochs   map[types.EpochID]*epochInfo
 		layers   layerSlice
 		// ballots should not be referenced by other ballots
@@ -67,7 +67,7 @@ type (
 	}
 )
 
-func newState(atxdata *atxsdata.Data) *state {
+func newState(atxdata *atxcache.Cache) *state {
 	return &state{
 		atxsdata:   atxdata,
 		epochs:     map[types.EpochID]*epochInfo{},
