@@ -70,14 +70,17 @@ ifeq ($(platform), windows)
 	POSTRS_PROFILER_BIN = profiler.exe
 	POSTRS_SERVICE_BIN = post-service.exe
 
-	ATHENA_SETUP_LIBS = libathena_vmlib.dll include/athcon/helpers.h include/athcon/athcon.h
+	ATHENA_LIB = libathena_vmlib.dll
+	ATHENA_SETUP_LIBS = $(ATHENA_LIB) include/athcon/helpers.h include/athcon/athcon.h
 else
 	ifeq ($(platform), $(filter $(platform), macos macos-m1))
 		POSTRS_SETUP_LIBS = post.h libpost.dylib
-		ATHENA_SETUP_LIBS = libathena_vmlib.dylib include/athcon/helpers.h include/athcon/athcon.h
+		ATHENA_LIB = libathena_vmlib.dylib
+		ATHENA_SETUP_LIBS = $(ATHENA_LIB) include/athcon/helpers.h include/athcon/athcon.h
 	else
 		POSTRS_SETUP_LIBS = post.h libpost.so
-		ATHENA_SETUP_LIBS = libathena_vmlib.so include/athcon/helpers.h include/athcon/athcon.h
+		ATHENA_LIB = libathena_vmlib.so
+		ATHENA_SETUP_LIBS = $(ATHENA_LIB) include/athcon/helpers.h include/athcon/athcon.h
 	endif
 
 	POSTRS_PROFILER_BIN = profiler
@@ -118,8 +121,10 @@ $(BINDIR_ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
 	touch $@
 
 # rename athena VM library
-$(BIN_DIR)libathenavmwrapper.so: $(BIN_DIR)libathena_vmlib.so
-	mv $(BIN_DIR)libathena_vmlib.so $@
+ATHENA_LIB_RENAMED := libathenavmwrapper$(suffix $(ATHENA_LIB))
+
+$(BIN_DIR)$(ATHENA_LIB_RENAMED): $(BIN_DIR)$(ATHENA_LIB)
+	mv $(BIN_DIR)$(ATHENA_LIB) $@
 
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
@@ -153,7 +158,7 @@ $(BIN_DIR)$(POSTRS_SERVICE_BIN): $(BIN_DIR).service.version.$(POSTRS_SETUP_REV)
 get-postrs-lib: $(BINDIR_POSTRS_SETUP_LIBS)
 get-postrs-profiler: $(BIN_DIR)$(POSTRS_PROFILER_BIN)
 get-postrs-service: $(BIN_DIR)$(POSTRS_SERVICE_BIN)
-get-athena-lib: $(BINDIR_ATHENA_SETUP_LIBS) $(BIN_DIR)libathenavmwrapper.so
+get-athena-lib: $(BINDIR_ATHENA_SETUP_LIBS) $(BIN_DIR)$(ATHENA_LIB_RENAMED)
 
 go-env: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"

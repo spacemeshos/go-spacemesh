@@ -4,12 +4,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-// get path to build/libathenavmwrapper.so
 func athenaLibPath() string {
 	var err error
 
@@ -17,7 +17,15 @@ func athenaLibPath() string {
 	if err != nil {
 		log.Fatalf("Failed to get current working directory: %v", err)
 	}
-	return filepath.Join(cwd, "../build/libathenavmwrapper.so")
+
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(cwd, "../build/libathenavmwrapper.dll")
+	case "darwin":
+		return filepath.Join(cwd, "../build/libathenavmwrapper.dylib")
+	default:
+		return filepath.Join(cwd, "../build/libathenavmwrapper.so")
+	}
 }
 
 func TestNewHost(t *testing.T) {
