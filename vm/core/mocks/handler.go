@@ -195,18 +195,18 @@ func (c *MockHandlerNewCall) DoAndReturn(f func(any) (core.Template, error)) *Mo
 }
 
 // Parse mocks base method.
-func (m *MockHandler) Parse(arg0 core.Host, arg1 byte, arg2 *scale.Decoder) (core.ParseOutput, error) {
+func (m *MockHandler) Parse(arg0 byte, arg1 *scale.Decoder) (core.ParseOutput, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Parse", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Parse", arg0, arg1)
 	ret0, _ := ret[0].(core.ParseOutput)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Parse indicates an expected call of Parse.
-func (mr *MockHandlerMockRecorder) Parse(arg0, arg1, arg2 any) *MockHandlerParseCall {
+func (mr *MockHandlerMockRecorder) Parse(arg0, arg1 any) *MockHandlerParseCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockHandler)(nil).Parse), arg0, arg1, arg2)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockHandler)(nil).Parse), arg0, arg1)
 	return &MockHandlerParseCall{Call: call}
 }
 
@@ -222,13 +222,13 @@ func (c *MockHandlerParseCall) Return(arg0 core.ParseOutput, arg1 error) *MockHa
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerParseCall) Do(f func(core.Host, byte, *scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
+func (c *MockHandlerParseCall) Do(f func(byte, *scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerParseCall) DoAndReturn(f func(core.Host, byte, *scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
+func (c *MockHandlerParseCall) DoAndReturn(f func(byte, *scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

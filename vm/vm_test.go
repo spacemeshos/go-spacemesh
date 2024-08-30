@@ -28,12 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
-func testContext(lid types.LayerID) ApplyContext {
-	return ApplyContext{
-		Layer: lid,
-	}
-}
-
 func newTester(tb testing.TB) *tester {
 	return &tester{
 		TB: tb,
@@ -1148,11 +1142,10 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 				}
 				lid := next
 				next = next.Add(1)
-				ctx := testContext(lid)
 				if layer.gasLimit > 0 {
 					tt = tt.withGasLimit(layer.gasLimit)
 				}
-				ineffective, results, err := tt.Apply(ctx, notVerified(txs...), tt.rewards(layer.rewards...))
+				ineffective, results, err := tt.Apply(lid, notVerified(txs...), tt.rewards(layer.rewards...))
 				require.NoError(tt, err)
 				if layer.ineffective == nil {
 					require.Empty(tt, ineffective)
@@ -1230,8 +1223,7 @@ func TestWallets(t *testing.T) {
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
 	t.Parallel()
-	skipped, _, err := tt.Apply(testContext(types.GetEffectiveGenesis()),
-		notVerified(tt.selfSpawn(0)), nil)
+	skipped, _, err := tt.Apply(types.GetEffectiveGenesis(), notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -1353,7 +1345,7 @@ func BenchmarkTransactions(b *testing.B) {
 		lid := types.GetEffectiveGenesis().Add(2)
 		for i := 0; i < b.N; i++ {
 			b.StartTimer()
-			ineffective, txs, err := tt.Apply(ApplyContext{Layer: lid}, txs, nil)
+			ineffective, txs, err := tt.Apply(lid, txs, nil)
 			b.StopTimer()
 			require.NoError(b, err)
 			require.Empty(b, ineffective)
@@ -1379,7 +1371,7 @@ func BenchmarkTransactions(b *testing.B) {
 	b.Run("singlesig/spawn", func(b *testing.B) {
 		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
 		ineffective, _, err := tt.Apply(
-			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+			types.GetEffectiveGenesis().Add(1),
 			notVerified(tt.spawnAll()...),
 			nil,
 		)
@@ -1397,7 +1389,7 @@ func BenchmarkTransactions(b *testing.B) {
 	b.Run("singlesig/spend", func(b *testing.B) {
 		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
 		ineffective, _, err := tt.Apply(
-			ApplyContext{Layer: types.GetEffectiveGenesis().Add(1)},
+			types.GetEffectiveGenesis().Add(1),
 			notVerified(tt.spawnAll()...),
 			nil,
 		)
@@ -1416,8 +1408,7 @@ func BenchmarkTransactions(b *testing.B) {
 
 func BenchmarkValidation(b *testing.B) {
 	tt := newTester(b).addSingleSig(2).applyGenesis()
-	skipped, _, err := tt.Apply(ApplyContext{Layer: types.LayerID(3)},
-		notVerified(tt.selfSpawn(0)), nil)
+	skipped, _, err := tt.Apply(types.LayerID(3), notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -1449,7 +1440,7 @@ func BenchmarkValidation(b *testing.B) {
 func TestBeforeEffectiveGenesis(t *testing.T) {
 	// sanity check that layers before effective genesis are not pushed to vm
 	tt := newTester(t)
-	_, _, err := tt.Apply(ApplyContext{Layer: types.GetEffectiveGenesis().Sub(1)}, nil, nil)
+	_, _, err := tt.Apply(types.GetEffectiveGenesis().Sub(1), nil, nil)
 	require.ErrorIs(t, err, core.ErrInternal)
 }
 
@@ -1461,12 +1452,16 @@ func TestStateHashFromUpdatedAccounts(t *testing.T) {
 	require.Equal(t, types.Hash32{}, root)
 
 	lid := types.GetEffectiveGenesis()
-	skipped, _, err := tt.Apply(testContext(lid), notVerified(
-		tt.selfSpawn(0),
-		tt.selfSpawn(1),
-		tt.spend(0, 2, 100),
-		tt.spend(1, 4, 100),
-	), nil)
+	skipped, _, err := tt.Apply(
+		lid,
+		notVerified(
+			tt.selfSpawn(0),
+			tt.selfSpawn(1),
+			tt.spend(0, 2, 100),
+			tt.spend(1, 4, 100),
+		),
+		nil,
+	)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -1502,8 +1497,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 	tt := newTester(b).persistent().
 		addSingleSig(accounts).applyGenesis().withSeed(101)
 	lid := types.LayerID(3)
-	skipped, _, err := tt.Apply(ApplyContext{Layer: lid},
-		notVerified(tt.spawnAll()...), nil)
+	skipped, _, err := tt.Apply(lid, notVerified(tt.spawnAll()...), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
 
@@ -1528,7 +1522,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 
 	for _, txs := range layers {
 		lid = lid.Add(1)
-		skipped, _, err := tt.Apply(testContext(lid), txs, nil)
+		skipped, _, err := tt.Apply(lid, txs, nil)
 		if err != nil {
 			b.Fatal(err)
 		}

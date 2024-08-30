@@ -12,13 +12,13 @@ import (
 )
 
 func (v *VM) addRewards(
-	lctx ApplyContext,
+	layer types.LayerID,
 	ss *core.StagedCache,
 	fees uint64,
 	blockRewards []types.CoinbaseReward,
 ) ([]types.Reward, error) {
 	var (
-		layersAfterEffectiveGenesis = lctx.Layer.Difference(types.FirstEffectiveGenesis())
+		layersAfterEffectiveGenesis = layer.Difference(types.FirstEffectiveGenesis())
 		subsidy                     = rewards.TotalSubsidyAtLayer(layersAfterEffectiveGenesis)
 		total                       = subsidy + fees
 		transferred                 uint64
@@ -51,7 +51,7 @@ func (v *VM) addRewards(
 		}
 
 		v.logger.Debug("rewards for coinbase",
-			zap.Uint32("layer", lctx.Layer.Uint32()),
+			zap.Uint32("layer", layer.Uint32()),
 			zap.Stringer("coinbase", blockReward.Coinbase),
 			zap.Stringer("relative weight", &blockReward.Weight),
 			zap.Uint64("subsidy", subsidyReward.Uint64()),
@@ -59,7 +59,7 @@ func (v *VM) addRewards(
 		)
 
 		reward := types.Reward{
-			Layer:       lctx.Layer,
+			Layer:       layer,
 			Coinbase:    blockReward.Coinbase,
 			SmesherID:   blockReward.SmesherID,
 			TotalReward: totalReward.Uint64(),
@@ -77,7 +77,7 @@ func (v *VM) addRewards(
 		transferred += totalReward.Uint64()
 	}
 	v.logger.Debug("rewards for layer",
-		zap.Uint32("layer", lctx.Layer.Uint32()),
+		zap.Uint32("layer", layer.Uint32()),
 		zap.Uint32("after genesis", layersAfterEffectiveGenesis),
 		zap.Uint64("subsidy estimated", subsidy),
 		zap.Uint64("fee", fees),

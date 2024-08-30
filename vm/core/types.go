@@ -43,7 +43,7 @@ type (
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
 	// Parse header and arguments from the payload.
-	Parse(Host, uint8, *scale.Decoder) (ParseOutput, error)
+	Parse(uint8, *scale.Decoder) (ParseOutput, error)
 	// Args returns method arguments for the method.
 	Args(uint8) scale.Type
 
