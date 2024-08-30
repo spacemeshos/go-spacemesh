@@ -3,7 +3,7 @@ PROJ_DIR := $(subst \,/,$(PROJ_DIR))
 BIN_DIR ?= $(PROJ_DIR)build/
 
 export CGO_LDFLAGS := -L$(BIN_DIR)
-export CGO_CFLAGS := -I$(BIN_DIR)
+export CGO_CFLAGS := -I$(BIN_DIR) -I${BIN_DIR}include
 export GOOS
 export GOARCH
 export GOARM
@@ -117,6 +117,10 @@ $(BINDIR_ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
 	tar xzf $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT) -C $(BIN_DIR) $(subst $(BIN_DIR),,$@)
 	touch $@
 
+# rename athena VM library
+$(BIN_DIR)libathenavmwrapper.so: $(BIN_DIR)libathena_vmlib.so
+	mv $(BIN_DIR)libathena_vmlib.so $@
+
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)
 
@@ -149,7 +153,7 @@ $(BIN_DIR)$(POSTRS_SERVICE_BIN): $(BIN_DIR).service.version.$(POSTRS_SETUP_REV)
 get-postrs-lib: $(BINDIR_POSTRS_SETUP_LIBS)
 get-postrs-profiler: $(BIN_DIR)$(POSTRS_PROFILER_BIN)
 get-postrs-service: $(BIN_DIR)$(POSTRS_SERVICE_BIN)
-get-athena-lib: $(BINDIR_ATHENA_SETUP_LIBS)
+get-athena-lib: $(BINDIR_ATHENA_SETUP_LIBS) $(BIN_DIR)libathenavmwrapper.so
 
 go-env: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"

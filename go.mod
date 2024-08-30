@@ -1,10 +1,11 @@
 module github.com/spacemeshos/go-spacemesh
 
-go 1.22.4
+go 1.22.6
 
 require (
 	cloud.google.com/go/storage v1.43.0
 	github.com/ALTree/bigfloat v0.2.0
+	github.com/athenavm/athena/ffi/athcon/bindings/go v0.0.0-20240827151204-0fbaf7deb845
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240913055630-bfe8736306b4
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
@@ -88,6 +89,7 @@ require (
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
+	github.com/ebitengine/purego v0.7.1 // indirect
 	github.com/elastic/gosigar v0.14.3 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.0 // indirect
 	github.com/ericlagergren/decimal v0.0.0-20221120152707-495c53812d05 // indirect
