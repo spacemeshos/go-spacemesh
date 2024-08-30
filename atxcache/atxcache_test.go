@@ -241,6 +241,7 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 }
 
 func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
+	panic(1)
 	c := atxcache.New(testPebble(b))
 	const epoch = 1
 	atxs := make([]types.ATXID, 0, size)
@@ -275,7 +276,60 @@ func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
 	}
 }
 
+func BenchmarkWeightForSetNew(b *testing.B) {
+	c := atxcache.New(testPebble(b))
+	// generate 2 epochs, each one with 8mil atxs
+	const size = 8_000_000
+	atxs := make([]types.ATXID, 0, size)
+	rng := rand.New(rand.NewSource(10101))
+	fmt.Println("inserting size (twice)", size)
+	start := time.Now()
+	for epoch := 1; epoch < 3; epoch++ {
+		for range 8_000_000 {
+			var (
+				node types.NodeID = types.RandomNodeID()
+				atx  types.ATXID  = types.RandomATXID()
+			)
+			atxs = append(atxs, atx)
+			c.FastAdd(atx, node, types.EpochID(epoch), types.Address{}, 500, 100, 0, 0, false)
+		}
+	}
+	setSize := size
+	const epoch = 1
+	c.Flush()
+	fmt.Println("wrote records", size, "took", time.Now().Sub(start))
+
+	rng.Shuffle(size, func(i, j int) {
+		atxs[i], atxs[j] = atxs[j], atxs[i]
+	})
+	b.ResetTimer()
+	b.Run("Fast ver", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			weight, used := c.WeightForSetFast(epoch, atxs[:setSize])
+			if weight == 0 {
+				b.Fatalf("weight can't be zero")
+			}
+			if len(used) != setSize {
+				b.Fatalf("used should be equal to set size")
+			}
+		}
+	})
+
+	b.Run("Slow ver", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			weight, used := c.WeightForSet(epoch, atxs[:setSize])
+			if weight == 0 {
+				b.Fatalf("weight can't be zero")
+			}
+			if len(used) != setSize {
+				b.Fatalf("used should be equal to set size")
+			}
+		}
+	})
+}
+
 func BenchmarkWeightForSet(b *testing.B) {
+	b.Skip()
 	for _, bc := range []struct {
 		size, setSize int
 	}{

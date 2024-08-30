@@ -353,6 +353,43 @@ func compareAtxId(a, b types.ATXID) int {
 
 // WeightForSet computes total weight of atxs in the set and returned array with
 // atxs in the set that weren't used.
+func (c *Cache) WeightForSetFast(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
+	used := make([]bool, len(set))
+	slices.SortFunc(set, compareAtxId)
+	var weight uint64
+	i := 0
+	c.db.IterPrefix(epochPrefix(epoch), func(k, v []byte) bool {
+	CMP:
+		switch bytes.Compare(k[4:], set[i][:]) {
+		case 0:
+			w := binary.LittleEndian.Uint64(v[32+24:])
+			weight += w
+			used[i] = true
+			if i == len(set)-1 {
+				// done, tell the iterator to stop
+				return true
+			}
+			i++
+			return false
+		case -1:
+			// left smaller than right
+			// we need to advance the iterator, since it is "behind"
+			// the key
+			return false
+		case 1:
+			// right is smaller than iterator, we therefore want to advance i
+			// and then check again
+			i++
+			goto CMP
+		}
+		return false
+	})
+
+	return weight, used
+}
+
+// WeightForSet computes total weight of atxs in the set and returned array with
+// atxs in the set that weren't used.
 func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
 	used := make([]bool, len(set))
 	// start := time.Now()

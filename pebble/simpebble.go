@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/bloom"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -16,7 +17,16 @@ type KvDb struct {
 }
 
 func New(path string) *KvDb {
-	db, err := pebble.Open(path, &pebble.Options{})
+	opts := &pebble.Options{}
+	opts.Levels = make([]pebble.LevelOptions, 1)
+	opts.Levels[0].EnsureDefaults()
+	opts.Levels[0].FilterPolicy = bloom.FilterPolicy(40)
+	opts.Comparer = pebble.DefaultComparer
+	opts.Comparer.Split = func(a []byte) int {
+		return 4
+	}
+
+	db, err := pebble.Open(path, opts)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +55,7 @@ func (db *KvDb) IterPrefixWithSeekGE(prefix []byte, cb func(k, v []byte) (bool, 
 			return nil
 		}
 		if seekgepfx != nil {
-			if !iter.SeekGE(seekgepfx) {
+			if !iter.SeekPrefixGE(seekgepfx) {
 				return nil
 			}
 			if !bytes.HasPrefix(iter.Key(), prefix) {
