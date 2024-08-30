@@ -7,7 +7,6 @@ import (
 	"log"
 
 	"github.com/cockroachdb/pebble"
-	"github.com/cockroachdb/pebble/bloom"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -18,14 +17,6 @@ type KvDb struct {
 
 func New(path string) *KvDb {
 	opts := &pebble.Options{}
-	opts.Levels = make([]pebble.LevelOptions, 1)
-	opts.Levels[0].EnsureDefaults()
-	opts.Levels[0].FilterPolicy = bloom.FilterPolicy(40)
-	opts.Comparer = pebble.DefaultComparer
-	opts.Comparer.Split = func(a []byte) int {
-		return 4
-	}
-
 	db, err := pebble.Open(path, opts)
 	if err != nil {
 		log.Fatal(err)

@@ -60,7 +60,6 @@ func (c *Cache) FastAdd(
 	c.add(c.warmupBatch, id, node, epoch, coinbase, weight, base, height, nonce)
 	if c.warmupBatch.Count() >= BATCH_FLUSH_SIZE {
 		total += c.warmupBatch.Count()
-		fmt.Println("flushing entries", BATCH_FLUSH_SIZE, "total", total)
 		if err := c.warmupBatch.Commit(nil); err != nil {
 			panic(err)
 		}
@@ -116,7 +115,6 @@ func (c *Cache) iteradd(
 ) bool {
 	c.add(c.warmupBatch, id, node, epoch, coinbase, weight, base, height, nonce)
 	if c.warmupBatch.Len() >= BATCH_FLUSH_SIZE {
-		// fmt.Println("flushing entries", BATCH_FLUSH_SIZE)
 		if err := c.warmupBatch.Commit(nil); err != nil {
 			panic(err)
 		}
@@ -155,10 +153,7 @@ func (c *Cache) add(
 	// prefix must be a big-endian integer so that the db arranges rows lexicographicaly
 	binary.BigEndian.PutUint32(key, epoch.Uint32())
 	copy(key[4:], id[:])
-	value, err := atx.MarshalBinary()
-	if err != nil {
-		panic(err)
-	}
+	value := atxToBytes(node, coinbase, weight, base, height, nonce)
 
 	if c.IsEvicted(epoch) {
 		return nil
@@ -218,12 +213,19 @@ func (c *Cache) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 		return false
 	}
 
-	//if _, exists = ecache.index[id]; exists {
-	//return false
-	//}
+	if c.add(c.db,
+		id,
+		atx.Node,
+		target,
+		atx.Coinbase,
+		atx.Weight,
+		atx.BaseHeight,
+		atx.Height,
+		atx.Nonce) != nil {
+		return true
+	}
 
-	// ecache.index[id] = atx
-	return true
+	return false
 }
 
 func (c *Cache) EvictEpoch(evict types.EpochID) {
@@ -353,7 +355,7 @@ func compareAtxId(a, b types.ATXID) int {
 
 // WeightForSet computes total weight of atxs in the set and returned array with
 // atxs in the set that weren't used.
-func (c *Cache) WeightForSetFast(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
+func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
 	used := make([]bool, len(set))
 	slices.SortFunc(set, compareAtxId)
 	var weight uint64
@@ -390,7 +392,7 @@ func (c *Cache) WeightForSetFast(epoch types.EpochID, set []types.ATXID) (uint64
 
 // WeightForSet computes total weight of atxs in the set and returned array with
 // atxs in the set that weren't used.
-func (c *Cache) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
+func (c *Cache) WeightForSetBlooms(epoch types.EpochID, set []types.ATXID) (uint64, []bool) {
 	used := make([]bool, len(set))
 	// start := time.Now()
 	slices.SortFunc(set, compareAtxId)
@@ -434,6 +436,17 @@ type ATX struct {
 	BaseHeight uint64
 	Height     uint64
 	Nonce      types.VRFPostIndex
+}
+
+func atxToBytes(node types.NodeID, coinbase types.Address, weight, base, height uint64, nonce types.VRFPostIndex) []byte {
+	out := make([]byte, 32+24+8+8+8+8)
+	copy(out, node[:])
+	copy(out[32:], coinbase[:])
+	binary.LittleEndian.PutUint64(out[32+24:], weight)
+	binary.LittleEndian.PutUint64(out[32+24+8:], base)
+	binary.LittleEndian.PutUint64(out[32+24+8+8:], height)
+	binary.LittleEndian.PutUint64(out[32+24+8+8+8:], uint64(nonce))
+	return out
 }
 
 func (a *ATX) MarshalBinary() ([]byte, error) {

@@ -303,17 +303,17 @@ func BenchmarkWeightForSetNew(b *testing.B) {
 		atxs[i], atxs[j] = atxs[j], atxs[i]
 	})
 	b.ResetTimer()
-	b.Run("Fast ver", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			weight, used := c.WeightForSetFast(epoch, atxs[:setSize])
-			if weight == 0 {
-				b.Fatalf("weight can't be zero")
-			}
-			if len(used) != setSize {
-				b.Fatalf("used should be equal to set size")
-			}
-		}
-	})
+	//b.Run("Fast ver", func(b *testing.B) {
+	//for i := 0; i < b.N; i++ {
+	//weight, used := c.WeightForSetFast(epoch, atxs[:setSize])
+	//if weight == 0 {
+	//b.Fatalf("weight can't be zero")
+	//}
+	//if len(used) != setSize {
+	//b.Fatalf("used should be equal to set size")
+	//}
+	//}
+	//})
 
 	b.Run("Slow ver", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
