@@ -1,4 +1,4 @@
-package atxsdata
+package atxcache_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/atxcache"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -39,7 +40,7 @@ func gatx(
 func TestWarmup(t *testing.T) {
 	types.SetLayersPerEpoch(3)
 	t.Run("sanity", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		applied := types.LayerID(10)
 		nonce := types.VRFPostIndex(1)
 		data := []types.ActivationTx{
@@ -55,26 +56,26 @@ func TestWarmup(t *testing.T) {
 		}
 		require.NoError(t, layers.SetApplied(db, applied, types.BlockID{1}))
 
-		c, err := Warm(db, 1, zaptest.NewLogger(t))
+		c, err := atxcache.Warm(db, testPebble(t), 1, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		for _, atx := range data[2:] {
 			require.NotNil(t, c.Get(atx.TargetEpoch(), atx.ID()))
 		}
 	})
 	t.Run("no data", func(t *testing.T) {
-		c, err := Warm(statesql.InMemory(), 1, zaptest.NewLogger(t))
+		c, err := atxcache.Warm(statesql.InMemoryTest(t), testPebble(t), 1, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		require.NotNil(t, c)
 	})
 	t.Run("closed db", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		require.NoError(t, db.Close())
-		c, err := Warm(db, 1, zaptest.NewLogger(t))
+		c, err := atxcache.Warm(db, testPebble(t), 1, zaptest.NewLogger(t))
 		require.Error(t, err)
 		require.Nil(t, c)
 	})
 	t.Run("db failures", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		nonce := types.VRFPostIndex(1)
 		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nonce)
 		require.NoError(t, atxs.Add(db, &data, types.AtxBlob{}))
@@ -95,8 +96,9 @@ func TestWarmup(t *testing.T) {
 			}).
 			AnyTimes()
 		for range 3 {
-			c := New()
-			require.Error(t, Warmup(exec, c, 1, zaptest.NewLogger(t)))
+
+			c := atxcache.New(testPebble(t))
+			require.Error(t, atxcache.Warmup(exec, c, 1, zaptest.NewLogger(t)))
 			fail++
 			call = 0
 		}

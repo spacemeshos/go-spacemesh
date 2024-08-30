@@ -114,6 +114,7 @@ func (c *Cache) iteradd(
 	nonce types.VRFPostIndex,
 ) bool {
 	c.add(c.warmupBatch, id, node, epoch, coinbase, weight, base, height, nonce)
+	fmt.Println("adding")
 	if c.warmupBatch.Len() >= BATCH_FLUSH_SIZE {
 		if err := c.warmupBatch.Commit(nil); err != nil {
 			panic(err)
@@ -471,8 +472,8 @@ func (a *ATX) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-func Warm(db sql.StateDatabase, keep types.EpochID, logger *zap.Logger) (*Cache, error) {
-	cache := New(nil)
+func Warm(db sql.StateDatabase, kv *pebble.KvDb, keep types.EpochID, logger *zap.Logger) (*Cache, error) {
+	cache := New(kv)
 	tx, err := db.Tx(context.Background())
 	if err != nil {
 		return nil, err
