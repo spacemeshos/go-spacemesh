@@ -113,8 +113,8 @@ func (c *Cache) iteradd(
 	height uint64,
 	nonce types.VRFPostIndex,
 ) bool {
+	fmt.Println("adding", epoch)
 	c.add(c.warmupBatch, id, node, epoch, coinbase, weight, base, height, nonce)
-	fmt.Println("adding")
 	if c.warmupBatch.Len() >= BATCH_FLUSH_SIZE {
 		if err := c.warmupBatch.Commit(nil); err != nil {
 			panic(err)
@@ -123,7 +123,8 @@ func (c *Cache) iteradd(
 	}
 
 	// never stop
-	return false
+	// this is a sqlite iterator thing - one must return a true value here
+	return true
 }
 
 type setter interface {
@@ -141,6 +142,7 @@ func (c *Cache) add(
 	height uint64,
 	nonce types.VRFPostIndex,
 ) *ATX {
+	fmt.Println("add", epoch, id)
 	atx := &ATX{
 		Node:       node,
 		Coinbase:   coinbase,
@@ -175,6 +177,7 @@ func (c *Cache) getVisit(epoch types.EpochID, atxId types.ATXID, cb func([]byte)
 }
 
 func (c *Cache) Get(epoch types.EpochID, atxId types.ATXID) *ATX {
+	fmt.Println(epoch, atxId)
 	b, err := c.db.Get(key(epoch, atxId))
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
