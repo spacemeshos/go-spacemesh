@@ -10,7 +10,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -161,7 +160,7 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 		mpr.logger.Debug("probe peer", zap.Stringer("peer", p))
 		pr, err := mpr.syncBase.Probe(ctx, p)
 		if err != nil {
-			log.Warning("error probing the peer", zap.Any("peer", p), zap.Error(err))
+			mpr.logger.Warn("error probing the peer", zap.Any("peer", p), zap.Error(err))
 			if errors.Is(err, context.Canceled) {
 				return s, err
 			}
