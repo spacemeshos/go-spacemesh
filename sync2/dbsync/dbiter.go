@@ -77,6 +77,7 @@ type dbRangeIterator struct {
 	from         KeyBytes
 	sts          *SyncedTableSnapshot
 	chunkSize    int
+	ts           int64
 	maxChunkSize int
 	chunk        []KeyBytes
 	pos          int
@@ -94,6 +95,7 @@ func newDBRangeIterator(
 	db sql.Executor,
 	sts *SyncedTableSnapshot,
 	from KeyBytes,
+	ts int64,
 	maxChunkSize int,
 	lru *lru,
 ) hashsync.Iterator {
@@ -108,6 +110,7 @@ func newDBRangeIterator(
 		from:         from.Clone(),
 		sts:          sts,
 		chunkSize:    1,
+		ts:           ts,
 		maxChunkSize: maxChunkSize,
 		keyLen:       len(from),
 		chunk:        make([]KeyBytes, maxChunkSize),
@@ -118,6 +121,9 @@ func newDBRangeIterator(
 }
 
 func (it *dbRangeIterator) loadCached(key dbIDKey) (bool, int) {
+	if it.cache == nil {
+		return false, 0
+	}
 	chunk, ok := it.cache.Get(key)
 	if !ok {
 		// fmt.Fprintf(os.Stderr, "QQQQQ: cache miss\n")
@@ -156,24 +162,27 @@ func (it *dbRangeIterator) load() error {
 	var ierr, err error
 	found, n := it.loadCached(key)
 	if !found {
-		err := it.sts.loadIDRange(
-			it.db, it.from, it.chunkSize,
-			func(stmt *sql.Statement) bool {
-				if n >= len(it.chunk) {
-					ierr = errors.New("too many rows")
-					return false
-				}
-				// we reuse existing slices when possible for retrieving new IDs
-				id := it.chunk[n]
-				if id == nil {
-					id = make([]byte, it.keyLen)
-					it.chunk[n] = id
-				}
-				stmt.ColumnBytes(0, id)
-				n++
-				return true
-			})
-		if err == nil && ierr == nil {
+		dec := func(stmt *sql.Statement) bool {
+			if n >= len(it.chunk) {
+				ierr = errors.New("too many rows")
+				return false
+			}
+			// we reuse existing slices when possible for retrieving new IDs
+			id := it.chunk[n]
+			if id == nil {
+				id = make([]byte, it.keyLen)
+				it.chunk[n] = id
+			}
+			stmt.ColumnBytes(0, id)
+			n++
+			return true
+		}
+		if it.ts <= 0 {
+			err = it.sts.loadIDRange(it.db, it.from, it.chunkSize, dec)
+		} else {
+			err = it.sts.loadRecent(it.db, it.from, it.chunkSize, it.ts, dec)
+		}
+		if err == nil && ierr == nil && it.cache != nil {
 			cached := make([]KeyBytes, n)
 			for n, id := range it.chunk[:n] {
 				cached[n] = slices.Clone(id)

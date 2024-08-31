@@ -57,12 +57,13 @@ type xorSyncTestConfig struct {
 	maxNumSpecificA int
 	minNumSpecificB int
 	maxNumSpecificB int
+	allowReAdd      bool
 }
 
 func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB ItemStore, numSpecific int, opts []RangeSetReconcilerOption) bool) {
 	opts := []RangeSetReconcilerOption{
 		WithMaxSendRange(cfg.maxSendRange),
-		WithMaxDiff(0.05),
+		WithMaxDiff(0.1),
 	}
 	numSpecificA := rand.Intn(cfg.maxNumSpecificA+1-cfg.minNumSpecificA) + cfg.minNumSpecificA
 	numSpecificB := rand.Intn(cfg.maxNumSpecificB+1-cfg.minNumSpecificB) + cfg.minNumSpecificB
@@ -76,7 +77,9 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB
 	for _, h := range sliceA {
 		require.NoError(t, storeA.Add(context.Background(), h))
 	}
-	storeA = &catchTransferTwice{t: t, ItemStore: storeA}
+	if !cfg.allowReAdd {
+		storeA = &catchTransferTwice{t: t, ItemStore: storeA}
+	}
 
 	sliceB := append([]types.Hash32(nil), src[:cfg.numTestHashes-numSpecificB-numSpecificA]...)
 	sliceB = append(sliceB, src[cfg.numTestHashes-numSpecificB:]...)
@@ -84,16 +87,18 @@ func verifyXORSync(t *testing.T, cfg xorSyncTestConfig, sync func(storeA, storeB
 	for _, h := range sliceB {
 		require.NoError(t, storeB.Add(context.Background(), h))
 	}
-	storeB = &catchTransferTwice{t: t, ItemStore: storeB}
+	if !cfg.allowReAdd {
+		storeB = &catchTransferTwice{t: t, ItemStore: storeB}
+	}
 
 	slices.SortFunc(src, func(a, b types.Hash32) int {
 		return a.Compare(b)
 	})
 
 	if sync(storeA, storeB, numSpecificA+numSpecificB, opts) {
-		itemsA, err := CollectStoreItems[types.Hash32](storeA)
+		itemsA, err := CollectStoreItems[types.Hash32](context.Background(), storeA)
 		require.NoError(t, err)
-		itemsB, err := CollectStoreItems[types.Hash32](storeB)
+		itemsB, err := CollectStoreItems[types.Hash32](context.Background(), storeB)
 		require.NoError(t, err)
 		require.Equal(t, itemsA, itemsB)
 		srcKeys := make([]types.Hash32, len(src))

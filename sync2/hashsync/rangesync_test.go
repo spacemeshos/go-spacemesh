@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,6 +21,7 @@ type rangeMessage struct {
 	fp    any
 	count int
 	keys  []Ordered
+	since time.Time
 }
 
 var _ SyncMessage = rangeMessage{}
@@ -30,6 +32,7 @@ func (m rangeMessage) Y() Ordered        { return m.y }
 func (m rangeMessage) Fingerprint() any  { return m.fp }
 func (m rangeMessage) Count() int        { return m.count }
 func (m rangeMessage) Keys() []Ordered   { return m.keys }
+func (m rangeMessage) Since() time.Time  { return m.since }
 
 func (m rangeMessage) String() string {
 	return SyncMessageToString(m)
@@ -162,6 +165,14 @@ func (fc *fakeConduit) SendSample(x, y Ordered, fingerprint any, count, sampleSi
 		}
 	}
 	fc.sendMsg(msg)
+	return nil
+}
+
+func (fc *fakeConduit) SendRecent(since time.Time) error {
+	fc.sendMsg(rangeMessage{
+		mtype: MessageTypeRecent,
+		since: since,
+	})
 	return nil
 }
 
@@ -357,6 +368,10 @@ func (ds *dumbStore) Has(ctx context.Context, k Ordered) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func (ds *dumbStore) Recent(ctx context.Context, since time.Time) (Iterator, int, error) {
+	return nil, 0, nil
 }
 
 type verifiedStoreIterator struct {
@@ -587,6 +602,10 @@ func (vs *verifiedStore) Has(ctx context.Context, k Ordered) (bool, error) {
 	return h2, nil
 }
 
+func (vs *verifiedStore) Recent(ctx context.Context, since time.Time) (Iterator, int, error) {
+	return nil, 0, nil
+}
+
 type storeFactory func(t *testing.T) ItemStore
 
 func makeDumbStore(t *testing.T) ItemStore {
@@ -614,7 +633,7 @@ func makeStore(t *testing.T, f storeFactory, items string) ItemStore {
 }
 
 func storeItemStr(is ItemStore) string {
-	ids, err := CollectStoreItems[sampleID](is)
+	ids, err := CollectStoreItems[sampleID](context.Background(), is)
 	if err != nil {
 		panic("store error")
 	}

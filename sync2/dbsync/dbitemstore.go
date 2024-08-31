@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -231,6 +232,11 @@ func (d *DBItemStore) Has(ctx context.Context, k hashsync.Ordered) (bool, error)
 	return itK.Compare(k) == 0, nil
 }
 
+// Recent implements hashsync.ItemStore.
+func (d *DBItemStore) Recent(ctx context.Context, since time.Time) (hashsync.Iterator, int, error) {
+	return d.dbStore.iterSince(ctx, make(KeyBytes, d.keyLen), since.UnixNano())
+}
+
 // TODO: get rid of ItemStoreAdapter, it shouldn't be needed
 type ItemStoreAdapter struct {
 	s *DBItemStore
@@ -341,6 +347,15 @@ func (a *ItemStoreAdapter) Min(ctx context.Context) (hashsync.Iterator, error) {
 		return nil, err
 	}
 	return a.wrapIterator(it), nil
+}
+
+// Recent implements hashsync.ItemStore.
+func (d *ItemStoreAdapter) Recent(ctx context.Context, since time.Time) (hashsync.Iterator, int, error) {
+	it, count, err := d.s.Recent(ctx, since)
+	if err != nil {
+		return nil, 0, err
+	}
+	return d.wrapIterator(it), count, nil
 }
 
 type iteratorAdapter struct {

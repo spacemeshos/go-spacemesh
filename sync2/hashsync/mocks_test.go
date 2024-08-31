@@ -13,6 +13,7 @@ import (
 	context "context"
 	io "io"
 	reflect "reflect"
+	time "time"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
@@ -370,6 +371,46 @@ func (c *MockItemStoreMinCall) Do(f func(context.Context) (Iterator, error)) *Mo
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockItemStoreMinCall) DoAndReturn(f func(context.Context) (Iterator, error)) *MockItemStoreMinCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Recent mocks base method.
+func (m *MockItemStore) Recent(ctx context.Context, since time.Time) (Iterator, int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Recent", ctx, since)
+	ret0, _ := ret[0].(Iterator)
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Recent indicates an expected call of Recent.
+func (mr *MockItemStoreMockRecorder) Recent(ctx, since any) *MockItemStoreRecentCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Recent", reflect.TypeOf((*MockItemStore)(nil).Recent), ctx, since)
+	return &MockItemStoreRecentCall{Call: call}
+}
+
+// MockItemStoreRecentCall wrap *gomock.Call
+type MockItemStoreRecentCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockItemStoreRecentCall) Return(arg0 Iterator, arg1 int, arg2 error) *MockItemStoreRecentCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockItemStoreRecentCall) Do(f func(context.Context, time.Time) (Iterator, int, error)) *MockItemStoreRecentCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockItemStoreRecentCall) DoAndReturn(f func(context.Context, time.Time) (Iterator, int, error)) *MockItemStoreRecentCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

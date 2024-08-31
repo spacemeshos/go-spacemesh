@@ -4,12 +4,199 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/jonboulle/clockwork"
 	"go.uber.org/zap"
 )
+
+// Interactions:
+//
+// A: empty set; B: empty set
+// A -> B:
+//
+//	EmptySet
+//	EndRound
+//
+// B -> A:
+//
+//	Done
+//
+// A: empty set; B: non-empty set
+// A -> B:
+//
+//	EmptySet
+//	EndRound
+//
+// B -> A:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//
+// A -> B:
+//
+//	Done
+//
+// A: small set (< maxSendRange); B: non-empty set
+// A -> B:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	RangeContents [x, y)
+//	EndRound
+//
+// B -> A:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//
+// A -> B:
+//
+//	Done
+//
+// A: large set; B: non-empty set; maxDiff < 0
+// A -> B:
+//
+//	Fingerprint [x, y)
+//	EndRound
+//
+// B -> A:
+//
+//	Fingerprint [x, m)
+//	Fingerprint [m, y)
+//	EndRound
+//
+// A -> B:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	RangeContents [x, m)
+//	EndRound
+//
+// A -> B:
+//
+//	Done
+//
+// A: large set; B: non-empty set; maxDiff >= 0; differenceMetric <= maxDiff
+// NOTE: Sample includes fingerprint
+// A -> B:
+//
+//	Sample [x, y)
+//	EndRound
+//
+// B -> A:
+//
+//	Fingerprint [x, m)
+//	Fingerprint [m, y)
+//	EndRound
+//
+// A -> B:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	RangeContents [x, m)
+//	EndRound
+//
+// A -> B:
+//
+//	Done
+//
+// A: large set; B: non-empty set; maxDiff >= 0; differenceMetric > maxDiff
+// A -> B:
+//
+//	Sample [x, y)
+//	EndRound
+//
+// B -> A:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	RangeContents [x, y)
+//	EndRound
+//
+// A -> B:
+//
+//	Done
+//
+// A: large set; B: non-empty set; sync priming; maxDiff >= 0; differenceMetric <= maxDiff (after priming)
+// A -> B:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	Recent
+//	EndRound
+//
+// B -> A:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	Sample [x, y)
+//	EndRound
+//
+// A -> B:
+//
+//	Fingerprint [x, m)
+//	Fingerprint [m, y)
+//	EndRound
+//
+// B -> A:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	RangeContents [x, m)
+//	EndRound
+//
+// A -> B:
+//
+//	Done
+//
+// A: large set; B: non-empty set; sync priming; maxDiff < 0
+// A -> B:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	Recent
+//	EndRound
+//
+// B -> A:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	Fingerprint [x, y)
+//	EndRound
+//
+// A -> B:
+//
+//	Fingerprint [x, m)
+//	Fingerprint [m, y)
+//	EndRound
+//
+// B -> A:
+//
+//	ItemBatch
+//	ItemBatch
+//	...
+//	RangeContents [x, m)
+//	EndRound
+//
+// A -> B:
+//
+//	Done
 
 const (
 	DefaultMaxSendRange  = 16
@@ -30,6 +217,7 @@ const (
 	MessageTypeItemBatch
 	MessageTypeProbe
 	MessageTypeSample
+	MessageTypeRecent
 )
 
 var messageTypes = []string{
@@ -42,6 +230,7 @@ var messageTypes = []string{
 	"itemBatch",
 	"probe",
 	"sample",
+	"recent",
 }
 
 func (mtype MessageType) String() string {
@@ -58,6 +247,7 @@ type SyncMessage interface {
 	Fingerprint() any
 	Count() int
 	Keys() []Ordered
+	Since() time.Time
 }
 
 func formatID(v any) string {
@@ -134,6 +324,8 @@ type Conduit interface {
 	// SendSample sends a set sample. If 'it' is not nil, the corresponding items are
 	// included in the sample
 	SendSample(x, y Ordered, fingerprint any, count, sampleSize int, it Iterator) error
+	// SendRecent sends recent items
+	SendRecent(since time.Time) error
 	// ShortenKey shortens the key for minhash calculation
 	ShortenKey(k Ordered) Ordered
 }
@@ -169,10 +361,17 @@ func WithMaxDiff(d float64) RangeSetReconcilerOption {
 }
 
 // TODO: RangeSetReconciler should sit in a separate package
-// and WithRangeSyncLogger should be named WithLogger
-func WithRangeSyncLogger(log *zap.Logger) RangeSetReconcilerOption {
+// and WithRangeReconcilerLogger should be named WithLogger
+func WithRangeReconcilerLogger(log *zap.Logger) RangeSetReconcilerOption {
 	return func(r *RangeSetReconciler) {
 		r.log = log
+	}
+}
+
+// WithRecentTimeSpan specifies the time span for recent items
+func WithRecentTimeSpan(d time.Duration) RangeSetReconcilerOption {
+	return func(r *RangeSetReconciler) {
+		r.recentTimeSpan = d
 	}
 }
 
@@ -181,16 +380,26 @@ type Tracer interface {
 	// OnDumbSync is called when the difference metric exceeds maxDiff and dumb
 	// reconciliation process is used
 	OnDumbSync()
+	// OnRecent is invoked when Recent message is received
+	OnRecent(receivedItems, sentItems int)
 }
 
 type nullTracer struct{}
 
-func (t nullTracer) OnDumbSync() {}
+func (t nullTracer) OnDumbSync()       {}
+func (t nullTracer) OnRecent(int, int) {}
 
 // WithTracer specifies a tracer for RangeSetReconciler
 func WithTracer(t Tracer) RangeSetReconcilerOption {
 	return func(r *RangeSetReconciler) {
 		r.tracer = t
+	}
+}
+
+// TBD: rename
+func WithRangeReconcilerClock(c clockwork.Clock) RangeSetReconcilerOption {
+	return func(r *RangeSetReconciler) {
+		r.clock = c
 	}
 }
 
@@ -201,13 +410,15 @@ type ProbeResult struct {
 }
 
 type RangeSetReconciler struct {
-	is            ItemStore
-	maxSendRange  int
-	itemChunkSize int
-	sampleSize    int
-	maxDiff       float64
-	tracer        Tracer
-	log           *zap.Logger
+	is             ItemStore
+	maxSendRange   int
+	itemChunkSize  int
+	sampleSize     int
+	maxDiff        float64
+	recentTimeSpan time.Duration
+	tracer         Tracer
+	clock          clockwork.Clock
+	log            *zap.Logger
 }
 
 func NewRangeSetReconciler(is ItemStore, opts ...RangeSetReconcilerOption) *RangeSetReconciler {
@@ -218,6 +429,7 @@ func NewRangeSetReconciler(is ItemStore, opts ...RangeSetReconcilerOption) *Rang
 		sampleSize:    DefaultSampleSize,
 		maxDiff:       -1,
 		tracer:        nullTracer{},
+		clock:         clockwork.NewRealClock(),
 		log:           zap.NewNop(),
 	}
 	for _, opt := range opts {
@@ -255,10 +467,10 @@ func (rsr *RangeSetReconciler) processSubrange(c Conduit, x, y Ordered, info Ran
 	// 	// so we can't use SendItemsOnly(), instead we use SendItems,
 	// 	// which includes our items and asks the peer to send any
 	// 	// items it has in the range.
-	// 	if err := c.SendRangeContents(x, y, info.Count); err != nil {
+	// 	if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
 	// 		return nil, err
 	// 	}
-	// 	if err := c.SendItems(info.Count, rsr.itemChunkSize, info.Start); err != nil {
+	// 	if err := c.SendRangeContents(x, y, info.Count); err != nil {
 	// 		return nil, err
 	// 	}
 	case info.Count == 0:
@@ -281,27 +493,87 @@ func (rsr *RangeSetReconciler) processSubrange(c Conduit, x, y Ordered, info Ran
 	return nil
 }
 
+func (rsr *RangeSetReconciler) splitRange(
+	ctx context.Context,
+	c Conduit,
+	preceding Iterator,
+	count int,
+	x, y Ordered,
+) error {
+	count = count / 2
+	rsr.log.Debug("handleMessage: PRE split range",
+		HexField("x", x), HexField("y", y),
+		zap.Int("countArg", count))
+	si, err := rsr.is.SplitRange(ctx, preceding, x, y, count)
+	if err != nil {
+		return err
+	}
+	rsr.log.Debug("handleMessage: split range",
+		HexField("x", x), HexField("y", y),
+		zap.Int("countArg", count),
+		zap.Int("count0", si.Parts[0].Count),
+		HexField("fp0", si.Parts[0].Fingerprint),
+		IteratorField("start0", si.Parts[0].Start),
+		IteratorField("end0", si.Parts[0].End),
+		zap.Int("count1", si.Parts[1].Count),
+		HexField("fp1", si.Parts[1].Fingerprint),
+		IteratorField("start1", si.Parts[1].End),
+		IteratorField("end1", si.Parts[1].End))
+	if err := rsr.processSubrange(c, x, si.Middle, si.Parts[0]); err != nil {
+		return err
+	}
+	// fmt.Fprintf(os.Stderr, "QQQQQ: next=%q\n", qqqqRmmeK(next))
+	if err := rsr.processSubrange(c, si.Middle, y, si.Parts[1]); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (rsr *RangeSetReconciler) sendSmallRange(
+	c Conduit,
+	count int,
+	it Iterator,
+	x, y Ordered,
+) error {
+	if count == 0 {
+		rsr.log.Debug("handleMessage: empty incoming range",
+			HexField("x", x), HexField("y", y))
+		// fmt.Fprintf(os.Stderr, "small incoming range: %s -> empty range msg\n", msg)
+		return c.SendEmptyRange(x, y)
+	}
+	rsr.log.Debug("handleMessage: send small range",
+		HexField("x", x), HexField("y", y),
+		zap.Int("count", count),
+		zap.Int("maxSendRange", rsr.maxSendRange))
+	// fmt.Fprintf(os.Stderr, "small incoming range: %s -> SendItems\n", msg)
+	if err := c.SendRangeContents(x, y, count); err != nil {
+		return err
+	}
+	_, err := rsr.sendItems(c, count, it, nil)
+	return err
+}
+
 func (rsr *RangeSetReconciler) sendItems(
 	c Conduit,
-	count, itemChunkSize int,
+	count int,
 	it Iterator,
 	skipKeys []Ordered,
-) error {
+) (int, error) {
+	nSent := 0
 	skipPos := 0
-	for i := 0; i < count; i += itemChunkSize {
+	for i := 0; i < count; i += rsr.itemChunkSize {
 		// TBD: do not use chunks, just stream the contentkeys
 		var keys []Ordered
-		n := min(itemChunkSize, count-i)
+		n := min(rsr.itemChunkSize, count-i)
 	IN_CHUNK:
 		for n > 0 {
 			k, err := it.Key()
 			if err != nil {
-				return err
+				return nSent, err
 			}
 			for skipPos < len(skipKeys) {
 				cmp := k.Compare(skipKeys[skipPos])
 				if cmp == 0 {
-					// fmt.Fprintf(os.Stderr, "QQQQQ: skip key %s\n", k.(fmt.Stringer).String())
 					// we can skip this item. Advance skipPos as there are no duplicates
 					skipPos++
 					continue IN_CHUNK
@@ -316,31 +588,35 @@ func (rsr *RangeSetReconciler) sendItems(
 			}
 			keys = append(keys, k)
 			if err := it.Next(); err != nil {
-				return err
+				return nSent, err
 			}
 			n--
 		}
 		if err := c.SendChunk(keys); err != nil {
-			return err
+			return nSent, err
 		}
+		nSent += len(keys)
 	}
-	return nil
+	return nSent, nil
 }
 
+// handleMessage handles incoming messages. Note that the set reconciliation protocol is
+// designed to be stateless.
 func (rsr *RangeSetReconciler) handleMessage(
 	ctx context.Context,
 	c Conduit,
 	preceding Iterator,
-	msgs []SyncMessage,
-	msgPos int,
+	msg SyncMessage,
+	receivedKeys []Ordered,
 ) (done bool, err error) {
-	msg := msgs[msgPos]
 	rsr.log.Debug("handleMessage", IteratorField("preceding", preceding),
 		zap.String("msg", SyncMessageToString(msg)))
 	x := msg.X()
 	y := msg.Y()
 	done = true
-	if msg.Type() == MessageTypeEmptySet || (msg.Type() == MessageTypeProbe && x == nil && y == nil) {
+	if msg.Type() == MessageTypeEmptySet ||
+		msg.Type() == MessageTypeRecent ||
+		(msg.Type() == MessageTypeProbe && x == nil && y == nil) {
 		// The peer has no items at all so didn't
 		// even send X & Y (SendEmptySet)
 		it, err := rsr.is.Min(ctx)
@@ -362,6 +638,9 @@ func (rsr *RangeSetReconciler) handleMessage(
 					return false, err
 				}
 			}
+			if msg.Type() == MessageTypeRecent {
+				rsr.tracer.OnRecent(len(receivedKeys), 0)
+			}
 			return true, nil
 		}
 		x, err = it.Key()
@@ -370,7 +649,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 		}
 		y = x
 	} else if x == nil || y == nil {
-		return false, errors.New("bad X or Y")
+		return false, fmt.Errorf("bad X or Y in a message of type %s", msg.Type())
 	}
 	info, err := rsr.is.GetRangeInfo(ctx, preceding, x, y, -1)
 	if err != nil {
@@ -384,6 +663,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 		HexField("fingerprint", info.Fingerprint))
 
 	// fmt.Fprintf(os.Stderr, "QQQQQ msg %s %#v fp %v start %#v end %#v count %d\n", msg.Type(), msg, info.Fingerprint, info.Start, info.End, info.Count)
+	// TODO: do not use done variable
 	switch {
 	case msg.Type() == MessageTypeEmptyRange ||
 		msg.Type() == MessageTypeRangeContents ||
@@ -397,16 +677,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 			done = false
 			rsr.log.Debug("handleMessage: send items", zap.Int("count", info.Count),
 				IteratorField("start", info.Start))
-			var skipKeys []Ordered
-			if msg.Type() == MessageTypeRangeContents {
-				for _, m := range msgs[msgPos+1:] {
-					if m.Type() != MessageTypeItemBatch {
-						break
-					}
-					skipKeys = append(skipKeys, m.Keys()...)
-				}
-			}
-			if err := rsr.sendItems(c, info.Count, rsr.itemChunkSize, info.Start, skipKeys); err != nil {
+			if _, err := rsr.sendItems(c, info.Count, info.Start, receivedKeys); err != nil {
 				return false, err
 			}
 		} else {
@@ -432,6 +703,37 @@ func (rsr *RangeSetReconciler) handleMessage(
 			return false, err
 		}
 		return true, nil
+	case msg.Type() == MessageTypeRecent:
+		it, count, err := rsr.is.Recent(ctx, msg.Since())
+		if err != nil {
+			return false, fmt.Errorf("error getting recent items: %w", err)
+		}
+		nSent := 0
+		if count != 0 {
+			// Do not send back recent items that were received
+			if nSent, err = rsr.sendItems(c, count, it, receivedKeys); err != nil {
+				return false, err
+			}
+		}
+		rsr.log.Debug("handled recent message",
+			zap.Int("receivedCount", len(receivedKeys)),
+			zap.Int("sentCount", nSent))
+		rsr.tracer.OnRecent(len(receivedKeys), nSent)
+		// if x == nil {
+		// 	// FIXME: code duplication
+		// 	it, err := rsr.is.Min(ctx)
+		// 	if err != nil {
+		// 		return false, err
+		// 	}
+		// 	if it != nil {
+		// 		x, err = it.Key()
+		// 		if err != nil {
+		// 			return false, err
+		// 		}
+		// 		y = x
+		// 	}
+		// }
+		return false, rsr.initiateBounded(ctx, c, x, y, false)
 	case msg.Type() != MessageTypeFingerprint && msg.Type() != MessageTypeSample:
 		return false, fmt.Errorf("unexpected message type %s", msg.Type())
 	case fingerprintEqual(info.Fingerprint, msg.Fingerprint()):
@@ -444,84 +746,29 @@ func (rsr *RangeSetReconciler) handleMessage(
 			return false, err
 		}
 		if 1-pr.Sim > rsr.maxDiff {
-			done = false
 			rsr.tracer.OnDumbSync()
 			rsr.log.Debug("handleMessage: maxDiff exceeded, sending full range",
 				zap.Float64("sim", pr.Sim),
 				zap.Float64("diff", 1-pr.Sim),
 				zap.Float64("maxDiff", rsr.maxDiff))
-			if err := c.SendRangeContents(x, y, info.Count); err != nil {
+			if _, err := rsr.sendItems(c, info.Count, info.Start, nil); err != nil {
 				return false, err
 			}
-			if err := rsr.sendItems(c, info.Count, rsr.itemChunkSize, info.Start, nil); err != nil {
-				return false, err
-			}
-			break
+			return false, c.SendRangeContents(x, y, info.Count)
 		}
 		rsr.log.Debug("handleMessage: acceptable maxDiff, proceeding with sync",
 			zap.Float64("sim", pr.Sim),
 			zap.Float64("diff", 1-pr.Sim),
 			zap.Float64("maxDiff", rsr.maxDiff))
-		fallthrough
+		if info.Count > rsr.maxSendRange {
+			return false, rsr.splitRange(ctx, c, preceding, info.Count, x, y)
+		}
+		return false, rsr.sendSmallRange(c, info.Count, info.Start, x, y)
 	// case (info.Count+1)/2 <= rsr.maxSendRange:
 	case info.Count <= rsr.maxSendRange:
-		// The range differs from the peer's version of it, but the it
-		// is small enough (or would be small enough after split) or
-		// empty on our side
-		done = false
-		if info.Count != 0 {
-			rsr.log.Debug("handleMessage: send small range",
-				HexField("x", x), HexField("y", y), zap.Int("count", info.Count))
-			// fmt.Fprintf(os.Stderr, "small incoming range: %s -> SendItems\n", msg)
-			if err := c.SendRangeContents(x, y, info.Count); err != nil {
-				return false, err
-			}
-			if err := rsr.sendItems(c, info.Count, rsr.itemChunkSize, info.Start, nil); err != nil {
-				return false, err
-			}
-		} else {
-			rsr.log.Debug("handleMessage: empty incoming range",
-				HexField("x", x), HexField("y", y))
-			// fmt.Fprintf(os.Stderr, "small incoming range: %s -> empty range msg\n", msg)
-			if err := c.SendEmptyRange(x, y); err != nil {
-				return false, err
-			}
-		}
+		return false, rsr.sendSmallRange(c, info.Count, info.Start, x, y)
 	default:
-		// Need to split the range.
-		// Note that there's no special handling for rollover ranges with x >= y
-		// These need to be handled by ItemStore.GetRangeInfo()
-		// TODO: instead of count-based split, use split between X and Y with
-		// lower bits set to zero to avoid SQL queries on the edges
-		count := (info.Count + 1) / 2
-		rsr.log.Debug("handleMessage: PRE split range",
-			HexField("x", x), HexField("y", y),
-			zap.Int("countArg", count))
-		si, err := rsr.is.SplitRange(ctx, preceding, x, y, count)
-		if err != nil {
-			return false, err
-		}
-		rsr.log.Debug("handleMessage: split range",
-			HexField("x", x), HexField("y", y),
-			zap.Int("countArg", count),
-			zap.Int("count0", si.Parts[0].Count),
-			HexField("fp0", si.Parts[0].Fingerprint),
-			IteratorField("start0", si.Parts[0].Start),
-			IteratorField("end0", si.Parts[0].End),
-			zap.Int("count1", si.Parts[1].Count),
-			HexField("fp1", si.Parts[1].Fingerprint),
-			IteratorField("start1", si.Parts[1].End),
-			IteratorField("end1", si.Parts[1].End))
-		if err := rsr.processSubrange(c, x, si.Middle, si.Parts[0]); err != nil {
-			return false, err
-		}
-		// fmt.Fprintf(os.Stderr, "QQQQQ: next=%q\n", qqqqRmmeK(next))
-		if err := rsr.processSubrange(c, si.Middle, y, si.Parts[1]); err != nil {
-			return false, err
-		}
-		// fmt.Fprintf(os.Stderr, "normal: split X %s - middle %s - Y %s:\n  %s",
-		// 	msg.X(), middle, msg.Y(), msg)
-		done = false
+		return false, rsr.splitRange(ctx, c, preceding, info.Count, x, y)
 	}
 	return done, nil
 }
@@ -542,49 +789,66 @@ func (rsr *RangeSetReconciler) Initiate(ctx context.Context, c Conduit) error {
 }
 
 func (rsr *RangeSetReconciler) InitiateBounded(ctx context.Context, c Conduit, x, y Ordered) error {
-	// QQQQQ: TBD: add a possibility to send a sample for probing.
-	// When difference is too high, the remote side should reply with its whole [x, y) range
+	haveRecent := rsr.recentTimeSpan > 0
+	if err := rsr.initiateBounded(ctx, c, x, y, haveRecent); err != nil {
+		return err
+	}
+	return c.SendEndRound()
+
+}
+func (rsr *RangeSetReconciler) initiateBounded(ctx context.Context, c Conduit, x, y Ordered, haveRecent bool) error {
 	rsr.log.Debug("initiate", HexField("x", x), HexField("y", y))
 	if x == nil {
 		rsr.log.Debug("initiate: send empty set")
-		if err := c.SendEmptySet(); err != nil {
+		return c.SendEmptySet()
+	}
+	info, err := rsr.is.GetRangeInfo(ctx, nil, x, y, -1)
+	if err != nil {
+		return fmt.Errorf("get range info: %w", err)
+	}
+	switch {
+	case info.Count == 0:
+		panic("empty full min-min range")
+	case info.Count < rsr.maxSendRange:
+		rsr.log.Debug("initiate: send whole range", zap.Int("count", info.Count))
+		if _, err := rsr.sendItems(c, info.Count, info.Start, nil); err != nil {
 			return err
 		}
-	} else {
-		info, err := rsr.is.GetRangeInfo(ctx, nil, x, y, -1)
+		return c.SendRangeContents(x, y, info.Count)
+	case haveRecent:
+		rsr.log.Debug("initiate: checking recent items")
+		since := rsr.clock.Now().Add(-rsr.recentTimeSpan)
+		it, count, err := rsr.is.Recent(ctx, since)
 		if err != nil {
+			return fmt.Errorf("error getting recent items: %w", err)
+		}
+		if count != 0 {
+			rsr.log.Debug("initiate: sending recent items", zap.Int("count", count))
+			if n, err := rsr.sendItems(c, count, it, nil); err != nil {
+				return err
+			} else if n != count {
+				panic("BUG: wrong number of items sent")
+			}
+		} else {
+			rsr.log.Debug("initiate: no recent items")
+		}
+		rsr.tracer.OnRecent(0, count)
+		// Send Recent message even if there are no recent items, b/c we want to
+		// receive recent items from the peer, if any.
+		if err := c.SendRecent(since); err != nil {
 			return err
 		}
-		switch {
-		case info.Count == 0:
-			panic("empty full min-min range")
-		case info.Count < rsr.maxSendRange:
-			rsr.log.Debug("initiate: send whole range", zap.Int("count", info.Count))
-			if err := c.SendRangeContents(x, y, info.Count); err != nil {
-				return err
-			}
-			if err := rsr.sendItems(c, info.Count, rsr.itemChunkSize, info.Start, nil); err != nil {
-				return err
-			}
-		case rsr.maxDiff >= 0:
-			// Use minhash to check if syncing this range is feasible
-			rsr.log.Debug("initiate: send sample",
-				zap.Int("count", info.Count),
-				zap.Int("sampleSize", rsr.sampleSize))
-			if err := c.SendSample(x, y, info.Fingerprint, info.Count, rsr.sampleSize, info.Start); err != nil {
-				return err
-			}
-		default:
-			rsr.log.Debug("initiate: send fingerprint", zap.Int("count", info.Count))
-			if err := c.SendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
-				return err
-			}
-		}
+		return nil
+	case rsr.maxDiff >= 0:
+		// Use minhash to check if syncing this range is feasible
+		rsr.log.Debug("initiate: send sample",
+			zap.Int("count", info.Count),
+			zap.Int("sampleSize", rsr.sampleSize))
+		return c.SendSample(x, y, info.Fingerprint, info.Count, rsr.sampleSize, info.Start)
+	default:
+		rsr.log.Debug("initiate: send fingerprint", zap.Int("count", info.Count))
+		return c.SendFingerprint(x, y, info.Fingerprint, info.Count)
 	}
-	if err := c.SendEndRound(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (rsr *RangeSetReconciler) getMessages(c Conduit) (msgs []SyncMessage, done bool, err error) {
@@ -761,13 +1025,15 @@ func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done boo
 		return done, nil
 	}
 	done = true
-	for n, msg := range msgs {
+	var receivedKeys []Ordered
+	for _, msg := range msgs {
 		if msg.Type() == MessageTypeItemBatch {
 			for _, k := range msg.Keys() {
 				rsr.log.Debug("Process: add item", HexField("item", k))
 				if err := rsr.is.Add(ctx, k); err != nil {
 					return false, fmt.Errorf("error adding an item to the store: %w", err)
 				}
+				receivedKeys = append(receivedKeys, k)
 			}
 			continue
 		}
@@ -782,10 +1048,11 @@ func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done boo
 		// breaks if we capture the iterator from handleMessage and
 		// pass it to the next handleMessage call (it shouldn't)
 		var msgDone bool
-		msgDone, err = rsr.handleMessage(ctx, c, nil, msgs, n)
+		msgDone, err = rsr.handleMessage(ctx, c, nil, msg, receivedKeys)
 		if !msgDone {
 			done = false
 		}
+		receivedKeys = nil
 	}
 
 	if err != nil {
@@ -810,40 +1077,64 @@ func fingerprintEqual(a, b any) bool {
 	return reflect.DeepEqual(a, b)
 }
 
-// CollectStoreItems returns the list of items in the given store
-func CollectStoreItems[K Ordered](is ItemStore) ([]K, error) {
-	ctx := context.Background()
-	var r []K
-	it, err := is.Min(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if it == nil {
-		return nil, nil
-	}
-	k, err := it.Key()
-	if err != nil {
-		return nil, err
-	}
-	info, err := is.GetRangeInfo(ctx, nil, k, k, -1)
-	if err != nil {
-		return nil, err
-	}
-	it, err = is.Min(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for n := 0; n < info.Count; n++ {
+type IterEntry[T Ordered] struct {
+	V   T
+	Err error
+}
+
+func IterItems[T Ordered](ctx context.Context, is ItemStore) iter.Seq2[T, error] {
+	return iter.Seq2[T, error](func(yield func(T, error) bool) {
+		var empty T
+		ctx := context.Background()
+		it, err := is.Min(ctx)
+		if err != nil {
+			yield(empty, err)
+			return
+		}
+		if it == nil {
+			return
+		}
 		k, err := it.Key()
+		if err != nil {
+			yield(empty, err)
+			return
+		}
+		info, err := is.GetRangeInfo(ctx, nil, k, k, -1)
+		if err != nil {
+			yield(empty, err)
+			return
+		}
+		it, err = is.Min(ctx)
+		if err != nil {
+			yield(empty, err)
+			return
+		}
+		for n := 0; n < info.Count; n++ {
+			k, err := it.Key()
+			if err != nil {
+				yield(empty, err)
+				return
+			}
+			if k == nil {
+				// fmt.Fprintf(os.Stderr, "QQQQQ: it: %#v\n", it)
+				panic("BUG: iterator exausted before Count reached")
+			}
+			yield(k.(T), nil)
+			if err := it.Next(); err != nil {
+				yield(empty, err)
+				return
+			}
+		}
+	})
+}
+
+// CollectStoreItems returns the list of items in the given store
+func CollectStoreItems[T Ordered](ctx context.Context, is ItemStore) (r []T, err error) {
+	for v, err := range IterItems[T](ctx, is) {
 		if err != nil {
 			return nil, err
 		}
-		if k == nil {
-			// fmt.Fprintf(os.Stderr, "QQQQQ: it: %#v\n", it)
-			panic("BUG: iterator exausted before Count reached")
-		}
-		r = append(r, k.(K))
-		it.Next()
+		r = append(r, v)
 	}
 	return r, nil
 }

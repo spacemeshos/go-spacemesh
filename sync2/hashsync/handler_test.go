@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -383,6 +384,7 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 	require.NoError(t, err)
 	proto := "itest"
 	opts := []server.Opt{
+		server.WithRequestSizeLimit(100_000_000),
 		server.WithTimeout(10 * time.Second),
 		server.WithLog(zaptest.NewLogger(t)),
 	}
@@ -404,21 +406,97 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 	}
 }
 
-type dumbSyncTracer struct {
-	dumb bool
+type syncTracer struct {
+	dumb          bool
+	receivedItems int
+	sentItems     int
 }
 
-var _ Tracer = &dumbSyncTracer{}
+var _ Tracer = &syncTracer{}
 
-func (tr *dumbSyncTracer) OnDumbSync() {
+func (tr *syncTracer) OnDumbSync() {
 	tr.dumb = true
+}
+
+func (tr *syncTracer) OnRecent(receivedItems, sentItems int) {
+	tr.receivedItems += receivedItems
+	tr.sentItems += sentItems
+}
+
+type fakeRecentIterator struct {
+	items []types.Hash32
+	p     int
+}
+
+func (it *fakeRecentIterator) Clone() Iterator {
+	return &fakeRecentIterator{items: it.items}
+}
+
+func (it *fakeRecentIterator) Key() (Ordered, error) {
+	return it.items[it.p], nil
+}
+
+func (it *fakeRecentIterator) Next() error {
+	it.p = (it.p + 1) % len(it.items)
+	return nil
+}
+
+var _ Iterator = &fakeRecentIterator{}
+
+type fakeRecentSet struct {
+	ItemStore
+	timestamps map[types.Hash32]time.Time
+	clock      clockwork.Clock
+}
+
+var _ ItemStore = &fakeRecentSet{}
+
+var startDate = time.Date(2024, 8, 29, 18, 0, 0, 0, time.UTC)
+
+func (frs *fakeRecentSet) registerAll(ctx context.Context) error {
+	frs.timestamps = make(map[types.Hash32]time.Time)
+	t := startDate
+	for v, err := range IterItems[types.Hash32](ctx, frs.ItemStore) {
+		if err != nil {
+			return err
+		}
+		frs.timestamps[v] = t
+		t = t.Add(time.Second)
+	}
+	return nil
+}
+
+func (frs *fakeRecentSet) Add(ctx context.Context, k Ordered) error {
+	if err := frs.ItemStore.Add(ctx, k); err != nil {
+		return err
+	}
+	h := k.(types.Hash32)
+	frs.timestamps[h] = frs.clock.Now()
+	return nil
+}
+
+func (frs *fakeRecentSet) Recent(ctx context.Context, since time.Time) (Iterator, int, error) {
+	var items []types.Hash32
+	for h, err := range IterItems[types.Hash32](ctx, frs.ItemStore) {
+		if err != nil {
+			return nil, 0, err
+		}
+		if !frs.timestamps[h].Before(since) {
+			items = append(items, h)
+		}
+	}
+	return &fakeRecentIterator{items: items}, len(items), nil
 }
 
 func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 	for _, tc := range []struct {
-		name string
-		cfg  xorSyncTestConfig
-		dumb bool
+		name           string
+		cfg            xorSyncTestConfig
+		dumb           bool
+		opts           []RangeSetReconcilerOption
+		advance        time.Duration
+		sentRecent     bool
+		receivedRecent bool
 	}{
 		{
 			name: "non-dumb sync",
@@ -445,6 +523,25 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 			dumb: true,
 		},
 		{
+			name: "recent sync",
+			cfg: xorSyncTestConfig{
+				maxSendRange:    1,
+				numTestHashes:   1000,
+				minNumSpecificA: 400,
+				maxNumSpecificA: 500,
+				minNumSpecificB: 400,
+				maxNumSpecificB: 500,
+				allowReAdd:      true,
+			},
+			dumb: false,
+			opts: []RangeSetReconcilerOption{
+				WithRecentTimeSpan(990 * time.Second),
+			},
+			advance:        1000 * time.Second,
+			sentRecent:     true,
+			receivedRecent: true,
+		},
+		{
 			name: "larger sync",
 			cfg: xorSyncTestConfig{
 				// even larger test:
@@ -462,6 +559,7 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 				minNumSpecificB: 4,
 				maxNumSpecificB: 100,
 			},
+			dumb: false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -470,11 +568,24 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 				numSpecific int,
 				opts []RangeSetReconcilerOption,
 			) bool {
-				var tr dumbSyncTracer
-				opts = append(opts,
-					WithTracer(&tr))
+				clock := clockwork.NewFakeClockAt(startDate)
+				// Note that at this point, the items are already added to the sets
+				// and thus fakeRecentSet.Add is not invoked for them, just underlying
+				// set's Add method
+				frsA := &fakeRecentSet{ItemStore: storeA, clock: clock}
+				require.NoError(t, frsA.registerAll(context.Background()))
+				storeA = frsA
+				frsB := &fakeRecentSet{ItemStore: storeB, clock: clock}
+				require.NoError(t, frsB.registerAll(context.Background()))
+				storeB = frsB
+				var tr syncTracer
+				opts = append(opts, WithTracer(&tr), WithRangeReconcilerClock(clock))
+				opts = append(opts, tc.opts...)
+				opts = opts[0:len(opts):len(opts)]
+				clock.Advance(tc.advance)
 				withClientServer(
-					storeA, getRequester, opts,
+					storeA, getRequester,
+					opts,
 					func(ctx context.Context, client Requester, srvPeerID p2p.Peer) {
 						nr := RmmeNumRead()
 						nw := RmmeNumWritten()
@@ -490,6 +601,8 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 							RmmeNumRead()-nr, RmmeNumWritten()-nw)
 					})
 				require.Equal(t, tc.dumb, tr.dumb, "dumb sync")
+				require.Equal(t, tc.receivedRecent, tr.receivedItems > 0)
+				require.Equal(t, tc.sentRecent, tr.sentItems > 0)
 				return true
 			})
 		})

@@ -88,7 +88,8 @@ func TestP2P(t *testing.T) {
 
 	for _, hsync := range hs {
 		hsync.Stop()
-		actualItems, err := hashsync.CollectStoreItems[types.Hash32](hsync.ItemStore())
+		actualItems, err := hashsync.CollectStoreItems[types.Hash32](
+			context.Background(), hsync.ItemStore())
 		require.NoError(t, err)
 		require.ElementsMatch(t, initialSet, actualItems)
 	}

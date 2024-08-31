@@ -10,16 +10,19 @@ import (
 type Binder func(s *sql.Statement)
 
 type SyncedTable struct {
-	TableName string
-	IDColumn  string
-	Filter    rsql.Expr
-	Binder    Binder
+	TableName       string
+	IDColumn        string
+	TimestampColumn string
+	Filter          rsql.Expr
+	Binder          Binder
 }
 
 func (st *SyncedTable) genSelectAll() *rsql.SelectStatement {
 	return &rsql.SelectStatement{
 		Columns: []*rsql.ResultColumn{
-			{Expr: &rsql.Ident{Name: st.IDColumn}},
+			{
+				Expr: &rsql.Ident{Name: st.IDColumn},
+			},
 		},
 		Source:    &rsql.QualifiedTableName{Name: &rsql.Ident{Name: st.TableName}},
 		WhereExpr: st.Filter,
@@ -117,6 +120,55 @@ func (st *SyncedTable) genSelectIDRangeWithRowIDCutoff() *rsql.SelectStatement {
 	return s
 }
 
+func (st *SyncedTable) genSelectRecentRowIDCutoff() *rsql.SelectStatement {
+	s := st.genSelectIDRangeWithRowIDCutoff()
+	s.WhereExpr = &rsql.BinaryExpr{
+		X:  s.WhereExpr,
+		Op: rsql.AND,
+		Y: &rsql.BinaryExpr{
+			X:  &rsql.Ident{Name: st.TimestampColumn},
+			Op: rsql.GE,
+			Y:  &rsql.BindExpr{Name: "?"},
+		},
+	}
+	return s
+}
+
+func (st *SyncedTable) genRecentCount() *rsql.SelectStatement {
+	where := &rsql.BinaryExpr{
+		X: &rsql.BinaryExpr{
+			X:  &rsql.Ident{Name: "rowid"},
+			Op: rsql.LE,
+			Y:  &rsql.BindExpr{Name: "?"},
+		},
+		Op: rsql.AND,
+		Y: &rsql.BinaryExpr{
+			X:  &rsql.Ident{Name: st.TimestampColumn},
+			Op: rsql.GE,
+			Y:  &rsql.BindExpr{Name: "?"},
+		},
+	}
+	if st.Filter != nil {
+		where = &rsql.BinaryExpr{
+			X:  st.Filter,
+			Op: rsql.AND,
+			Y:  where,
+		}
+	}
+	return &rsql.SelectStatement{
+		Columns: []*rsql.ResultColumn{
+			{
+				Expr: &rsql.Call{
+					Name: &rsql.Ident{Name: "count"},
+					Args: []rsql.Expr{&rsql.Ident{Name: st.IDColumn}},
+				},
+			},
+		},
+		Source:    &rsql.QualifiedTableName{Name: &rsql.Ident{Name: st.TableName}},
+		WhereExpr: where,
+	}
+}
+
 func (st *SyncedTable) loadMaxRowID(db sql.Executor) (maxRowID int64, err error) {
 	nRows, err := db.Exec(
 		st.genSelectMaxRowID().String(), nil,
@@ -191,6 +243,9 @@ func (sts *SyncedTableSnapshot) loadIDRange(
 				sts.Binder(stmt)
 			}
 			nParams := stmt.BindParamCount()
+			// fmt.Fprintf(os.Stderr, "QQQQQ: STMT: %s\nfromID %s maxRowID %d limit %d\n",
+			// 	sts.genSelectIDRangeWithRowIDCutoff().String(),
+			// 	fromID.String(), sts.maxRowID, limit)
 			stmt.BindBytes(nParams-2, fromID)
 			stmt.BindInt64(nParams-1, sts.maxRowID)
 			stmt.BindInt64(nParams, int64(limit))
@@ -199,43 +254,53 @@ func (sts *SyncedTableSnapshot) loadIDRange(
 	return err
 }
 
-// func (st *SyncedTable) bind(s *sql.Statement) int {
-// 	ofs := 0
-// 	if st.Filter != nil {
-// 		var v bindCountVisitor
-// 		if err := rsql.Walk(&v, st.Filter); err != nil {
-// 			panic("BUG: bad filter: " + err.Error())
-// 		}
-// 		ofs = v.numBinds
-// 		switch {
-// 		case ofs == 0 && st.Binder != nil:
-// 			panic("BUG: filter has no binds but a binder is passed")
-// 		case ofs > 0 && st.Binder == nil:
-// 			panic("BUG: filter has binds but no binder is passed")
-// 		}
-// 		st.Binder(s)
-// 	} else if st.Binder != nil {
-// 		panic("BUG: there's no filter but there's a binder")
-// 	}
-// 	return ofs
-// }
+func (sts *SyncedTableSnapshot) loadRecentCount(
+	db sql.Executor,
+	since int64,
+) (int, error) {
+	if sts.TimestampColumn == "" {
+		return 0, fmt.Errorf("no timestamp column")
+	}
+	var count int
+	_, err := db.Exec(
+		sts.genRecentCount().String(),
+		func(stmt *sql.Statement) {
+			if sts.Binder != nil {
+				sts.Binder(stmt)
+			}
+			nParams := stmt.BindParamCount()
+			stmt.BindInt64(nParams-1, sts.maxRowID)
+			stmt.BindInt64(nParams, since)
+		},
+		func(stmt *sql.Statement) bool {
+			count = stmt.ColumnInt(0)
+			return true
+		})
+	return count, err
+}
 
-// type bindCountVisitor struct {
-// 	numBinds int
-// }
-
-// var _ rsql.Visitor = &bindCountVisitor{}
-
-// func (b *bindCountVisitor) Visit(node rsql.Node) (w rsql.Visitor, err error) {
-// 	bExpr, ok := node.(*rsql.BindExpr)
-// 	if !ok {
-// 		return b, nil
-// 	}
-// 	if bExpr.Name != "?" {
-// 		return nil, fmt.Errorf("bad bind %s: only ? binds are supported", bExpr.Name)
-// 	}
-// 	b.numBinds++
-// 	return nil, nil
-// }
-
-// func (b *bindCountVisitor) VisitEnd(node rsql.Node) error { return nil }
+func (sts *SyncedTableSnapshot) loadRecent(
+	db sql.Executor,
+	fromID KeyBytes,
+	limit int,
+	since int64,
+	dec func(stmt *sql.Statement) bool,
+) error {
+	if sts.TimestampColumn == "" {
+		return fmt.Errorf("no timestamp column")
+	}
+	_, err := db.Exec(
+		sts.genSelectRecentRowIDCutoff().String(),
+		func(stmt *sql.Statement) {
+			if sts.Binder != nil {
+				sts.Binder(stmt)
+			}
+			nParams := stmt.BindParamCount()
+			stmt.BindBytes(nParams-3, fromID)
+			stmt.BindInt64(nParams-2, sts.maxRowID)
+			stmt.BindInt64(nParams-1, since)
+			stmt.BindInt64(nParams, int64(limit))
+		},
+		dec)
+	return err
+}

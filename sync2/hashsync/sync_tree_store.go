@@ -3,6 +3,7 @@ package hashsync
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 type syncTreeIterator struct {
@@ -167,4 +168,8 @@ func (sts *SyncTreeStore) Copy() ItemStore {
 func (sts *SyncTreeStore) Has(ctx context.Context, k Ordered) (bool, error) {
 	_, found := sts.st.Lookup(k)
 	return found, nil
+}
+
+func (sts *SyncTreeStore) Recent(ctx context.Context, since time.Time) (Iterator, int, error) {
+	return nil, 0, nil
 }

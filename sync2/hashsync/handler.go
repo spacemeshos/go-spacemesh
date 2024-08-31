@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sync/atomic"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -110,6 +111,12 @@ func (c *wireConduit) NextMessage() (SyncMessage, error) {
 		return &m, nil
 	case MessageTypeSample:
 		var m SampleMessage
+		if _, err := codec.DecodeFrom(c.stream, &m); err != nil {
+			return nil, err
+		}
+		return &m, nil
+	case MessageTypeRecent:
+		var m RecentMessage
 		if _, err := codec.DecodeFrom(c.stream, &m); err != nil {
 			return nil, err
 		}
@@ -225,6 +232,12 @@ func (c *wireConduit) SendSample(x, y Ordered, fingerprint any, count, sampleSiz
 	m.RangeX = OrderedToCompactHash32(x)
 	m.RangeY = OrderedToCompactHash32(y)
 	return c.send(m)
+}
+
+func (c *wireConduit) SendRecent(since time.Time) error {
+	return c.send(&RecentMessage{
+		SinceTime: uint64(since.UnixNano()),
+	})
 }
 
 func (c *wireConduit) withInitialRequest(toCall func(Conduit) error) ([]byte, error) {

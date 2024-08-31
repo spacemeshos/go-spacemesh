@@ -66,7 +66,22 @@ func (s *sqlIDStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator 
 	if len(from) != s.keyLen {
 		panic("BUG: invalid key length")
 	}
-	return newDBRangeIterator(ContextSQLExec(ctx, s.db), s.sts, from, sqlMaxChunkSize, s.cache)
+	return newDBRangeIterator(ContextSQLExec(ctx, s.db), s.sts, from, -1, sqlMaxChunkSize, s.cache)
+}
+
+func (s *sqlIDStore) iterSince(ctx context.Context, from KeyBytes, since int64) (hashsync.Iterator, int, error) {
+	if len(from) != s.keyLen {
+		panic("BUG: invalid key length")
+	}
+	db := ContextSQLExec(ctx, s.db)
+	count, err := s.sts.loadRecentCount(db, since)
+	if err != nil {
+		return nil, 0, err
+	}
+	if count == 0 {
+		return nil, 0, nil
+	}
+	return newDBRangeIterator(db, s.sts, from, since, sqlMaxChunkSize, nil), count, nil
 }
 
 func (s *sqlIDStore) setSnapshot(sts *SyncedTableSnapshot) {

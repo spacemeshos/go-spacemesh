@@ -3,6 +3,7 @@ package hashsync
 import (
 	"cmp"
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -17,6 +18,7 @@ func (*Marker) Y() Ordered       { return nil }
 func (*Marker) Fingerprint() any { return nil }
 func (*Marker) Count() int       { return 0 }
 func (*Marker) Keys() []Ordered  { return nil }
+func (*Marker) Since() time.Time { return time.Time{} }
 
 // DoneMessage is a SyncMessage that denotes the end of the synchronization.
 // The peer should stop any further processing after receiving this message.
@@ -55,6 +57,7 @@ func (m *EmptyRangeMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
 func (m *EmptyRangeMessage) Fingerprint() any  { return nil }
 func (m *EmptyRangeMessage) Count() int        { return 0 }
 func (m *EmptyRangeMessage) Keys() []Ordered   { return nil }
+func (m *EmptyRangeMessage) Since() time.Time  { return time.Time{} }
 
 // FingerprintMessage contains range fingerprint for comparison against the
 // peer's fingerprint of the range with the same bounds [RangeX, RangeY)
@@ -72,6 +75,7 @@ func (m *FingerprintMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
 func (m *FingerprintMessage) Fingerprint() any  { return m.RangeFingerprint }
 func (m *FingerprintMessage) Count() int        { return int(m.NumItems) }
 func (m *FingerprintMessage) Keys() []Ordered   { return nil }
+func (m *FingerprintMessage) Since() time.Time  { return time.Time{} }
 
 // RangeContentsMessage denotes a range for which the set of items has been sent.
 // The peer needs to send back any items it has in the same range bounded
@@ -89,6 +93,7 @@ func (m *RangeContentsMessage) Y() Ordered        { return m.RangeY.ToOrdered() 
 func (m *RangeContentsMessage) Fingerprint() any  { return nil }
 func (m *RangeContentsMessage) Count() int        { return int(m.NumItems) }
 func (m *RangeContentsMessage) Keys() []Ordered   { return nil }
+func (m *RangeContentsMessage) Since() time.Time  { return time.Time{} }
 
 // ItemBatchMessage denotes a batch of items to be added to the peer's set.
 type ItemBatchMessage struct {
@@ -107,6 +112,7 @@ func (m *ItemBatchMessage) Keys() []Ordered {
 	}
 	return r
 }
+func (m *ItemBatchMessage) Since() time.Time { return time.Time{} }
 
 // ProbeMessage requests bounded range fingerprint and count from the peer,
 // along with a minhash sample if fingerprints differ
@@ -124,6 +130,7 @@ func (m *ProbeMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
 func (m *ProbeMessage) Fingerprint() any  { return m.RangeFingerprint }
 func (m *ProbeMessage) Count() int        { return int(m.SampleSize) }
 func (m *ProbeMessage) Keys() []Ordered   { return nil }
+func (m *ProbeMessage) Since() time.Time  { return time.Time{} }
 
 // MinhashSampleItem represents an item of minhash sample subset
 type MinhashSampleItem uint32
@@ -174,7 +181,6 @@ func (m *SampleMessage) X() Ordered        { return m.RangeX.ToOrdered() }
 func (m *SampleMessage) Y() Ordered        { return m.RangeY.ToOrdered() }
 func (m *SampleMessage) Fingerprint() any  { return m.RangeFingerprint }
 func (m *SampleMessage) Count() int        { return int(m.NumItems) }
-
 func (m *SampleMessage) Keys() []Ordered {
 	r := make([]Ordered, len(m.Sample))
 	for n, item := range m.Sample {
@@ -182,5 +188,22 @@ func (m *SampleMessage) Keys() []Ordered {
 	}
 	return r
 }
+func (m *SampleMessage) Since() time.Time { return time.Time{} }
+
+// RecentMessage is a SyncMessage that denotes a set of items that have been
+// added to the peer's set since the specific point in time.
+type RecentMessage struct {
+	SinceTime uint64
+}
+
+var _ SyncMessage = &RecentMessage{}
+
+func (m *RecentMessage) Type() MessageType { return MessageTypeRecent }
+func (m *RecentMessage) X() Ordered        { return nil }
+func (m *RecentMessage) Y() Ordered        { return nil }
+func (m *RecentMessage) Fingerprint() any  { return nil }
+func (m *RecentMessage) Count() int        { return 0 }
+func (m *RecentMessage) Keys() []Ordered   { return nil }
+func (m *RecentMessage) Since() time.Time  { return time.Unix(0, int64(m.SinceTime)) }
 
 // TODO: don't do scalegen for empty types

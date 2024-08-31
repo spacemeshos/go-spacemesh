@@ -3,6 +3,7 @@ package hashsync
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -65,6 +66,10 @@ type ItemStore interface {
 	Copy() ItemStore
 	// Has returns true if the specified key is present in ItemStore
 	Has(ctx context.Context, k Ordered) (bool, error)
+	// Recent returns an Iterator that yields the items added since the specified
+	// timestamp. Some ItemStore implementations may not have Recent implemented, in
+	// which case it should return an error.
+	Recent(ctx context.Context, since time.Time) (Iterator, int, error)
 }
 
 type Requester interface {

@@ -298,7 +298,7 @@ func TestDBRangeIterator(t *testing.T) {
 		sts, err := st.snapshot(db)
 		require.NoError(t, err)
 		for maxChunkSize := 1; maxChunkSize < 12; maxChunkSize++ {
-			it := newDBRangeIterator(db, sts, tc.from, maxChunkSize, cache)
+			it := newDBRangeIterator(db, sts, tc.from, -1, maxChunkSize, cache)
 			if tc.expErr != nil {
 				_, err := it.Key()
 				require.ErrorIs(t, err, tc.expErr)
