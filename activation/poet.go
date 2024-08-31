@@ -29,6 +29,8 @@ import (
 
 //go:generate mockgen -typed -package=activation -destination=poet_mocks.go -source=./poet.go
 
+const CertPublicKeyHintSize = 4 // 4b
+
 var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
@@ -50,6 +52,8 @@ type PoetPoW struct {
 type PoetAuth struct {
 	*PoetPoW
 	*certifier.PoetCert
+
+	CertPubKey []byte
 }
 
 type PoetClient interface {
@@ -233,6 +237,12 @@ func (c *HTTPPoetClient) Submit(
 		request.Certificate = &rpcapi.SubmitRequest_Certificate{
 			Data:      auth.PoetCert.Data,
 			Signature: auth.PoetCert.Signature,
+		}
+
+		if len(auth.CertPubKey) > CertPublicKeyHintSize {
+			request.CertificatePubkeyHint = auth.CertPubKey[:CertPublicKeyHintSize]
+		} else {
+			request.CertificatePubkeyHint = auth.CertPubKey
 		}
 	}
 
@@ -492,7 +502,12 @@ func (c *poetService) authorize(
 	cert, err := c.Certify(ctx, nodeID)
 	switch {
 	case err == nil:
-		return &PoetAuth{PoetCert: cert}, nil
+		info, err := c.getInfo(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return &PoetAuth{PoetCert: cert, CertPubKey: info.ServicePubkey}, nil
 	case errors.Is(err, ErrCertificatesNotSupported):
 		logger.Debug("poet doesn't support certificates")
 	default:

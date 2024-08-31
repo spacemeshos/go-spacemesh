@@ -377,6 +377,95 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestCheckCertifierPublickeyHint(t *testing.T) {
+	const invalidCertMsg = "invalid certificate"
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
+	certifierPubKey := []byte("certifier-pubkey")
+	infoResp, err := protojson.Marshal(&rpcapi.InfoResponse{
+		ServicePubkey: []byte("pubkey"),
+		Certifier: &rpcapi.InfoResponse_Cerifier{
+			Url:    certifierAddress.String(),
+			Pubkey: certifierPubKey,
+		},
+	})
+	require.NoError(t, err)
+
+	submitResp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
+
+	publicKeyHint := certifierPubKey[:CertPublicKeyHintSize]
+	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
+		rawReq, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+			return
+		}
+
+		req := &rpcapi.SubmitRequest{}
+		if err := protojson.Unmarshal(rawReq, req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if len(req.CertificatePubkeyHint) == 0 {
+			http.Error(w, invalidCertMsg, http.StatusUnauthorized)
+			return
+		}
+
+		if !bytes.Equal(publicKeyHint, req.CertificatePubkeyHint) {
+			http.Error(w, invalidCertMsg, http.StatusUnauthorized)
+			return
+		}
+
+		w.Write(submitResp)
+	})
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	server := types.PoetServer{
+		Address: ts.URL,
+		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
+	}
+	cfg := PoetConfig{RequestTimeout: time.Millisecond * 100}
+	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
+	require.NoError(t, err)
+
+	cert := certifier.PoetCert{Data: []byte("abc")}
+	t.Run("public key hint is valid", func(t *testing.T) {
+		_, err = client.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID(), PoetAuth{
+			PoetCert:   &cert,
+			CertPubKey: publicKeyHint,
+		})
+		require.NoError(t, err)
+
+	})
+
+	t.Run("no public key hint", func(t *testing.T) {
+		_, err = client.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID(),
+			PoetAuth{
+				PoetCert: &cert,
+			})
+		require.ErrorContains(t, err, invalidCertMsg)
+	})
+
+	t.Run("public key hint is invalid", func(t *testing.T) {
+		_, err = client.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID(),
+			PoetAuth{
+				PoetCert:   &cert,
+				CertPubKey: []byte{1, 2, 3, 4, 5},
+			})
+		require.ErrorContains(t, err, invalidCertMsg)
+	})
+}
+
 func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
