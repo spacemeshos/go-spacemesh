@@ -29,8 +29,6 @@ import (
 
 //go:generate mockgen -typed -package=activation -destination=poet_mocks.go -source=./poet.go
 
-const CertPublicKeyHintSize = 4 // 4b
-
 var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
@@ -239,8 +237,8 @@ func (c *HTTPPoetClient) Submit(
 			Signature: auth.PoetCert.Signature,
 		}
 
-		if len(auth.CertPubKey) > CertPublicKeyHintSize {
-			request.CertificatePubkeyHint = auth.CertPubKey[:CertPublicKeyHintSize]
+		if len(auth.CertPubKey) > shared.CertPubkeyHintSize {
+			request.CertificatePubkeyHint = auth.CertPubKey[:shared.CertPubkeyHintSize]
 		} else {
 			request.CertificatePubkeyHint = auth.CertPubKey
 		}

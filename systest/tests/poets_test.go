@@ -262,6 +262,7 @@ func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
 	powRegs, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_pow_total", valid)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, powRegs, float64(cl.Smeshers()*epoch))
+
 	powRegsInvalid, err := fetchCounterMetric(tctx, metricsEndpoint, "poet_registration_with_pow_total", invalid)
 	require.ErrorIs(t, err, errMetricNotFound, "metric for invalid PoW registrations value: %v", powRegsInvalid)
 

@@ -14,6 +14,7 @@ import (
 
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/spacemeshos/poet/server"
+	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -378,8 +379,6 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 }
 
 func TestCheckCertifierPublickeyHint(t *testing.T) {
-	const invalidCertMsg = "invalid certificate"
-
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -400,7 +399,7 @@ func TestCheckCertifierPublickeyHint(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
 
-	publicKeyHint := certifierPubKey[:CertPublicKeyHintSize]
+	publicKeyHint := certifierPubKey[:shared.CertPubkeyHintSize]
 	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
 		rawReq, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -414,13 +413,8 @@ func TestCheckCertifierPublickeyHint(t *testing.T) {
 			return
 		}
 
-		if len(req.CertificatePubkeyHint) == 0 {
-			http.Error(w, invalidCertMsg, http.StatusUnauthorized)
-			return
-		}
-
 		if !bytes.Equal(publicKeyHint, req.CertificatePubkeyHint) {
-			http.Error(w, invalidCertMsg, http.StatusUnauthorized)
+			http.Error(w, shared.ErrCertExpired.Error(), http.StatusUnauthorized)
 			return
 		}
 
@@ -440,12 +434,12 @@ func TestCheckCertifierPublickeyHint(t *testing.T) {
 
 	cert := certifier.PoetCert{Data: []byte("abc")}
 	t.Run("public key hint is valid", func(t *testing.T) {
-		_, err = client.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID(), PoetAuth{
-			PoetCert:   &cert,
-			CertPubKey: publicKeyHint,
-		})
+		_, err = client.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID(),
+			PoetAuth{
+				PoetCert:   &cert,
+				CertPubKey: publicKeyHint,
+			})
 		require.NoError(t, err)
-
 	})
 
 	t.Run("no public key hint", func(t *testing.T) {
@@ -453,7 +447,7 @@ func TestCheckCertifierPublickeyHint(t *testing.T) {
 			PoetAuth{
 				PoetCert: &cert,
 			})
-		require.ErrorContains(t, err, invalidCertMsg)
+		require.NoError(t, err)
 	})
 
 	t.Run("public key hint is invalid", func(t *testing.T) {
@@ -462,7 +456,7 @@ func TestCheckCertifierPublickeyHint(t *testing.T) {
 				PoetCert:   &cert,
 				CertPubKey: []byte{1, 2, 3, 4, 5},
 			})
-		require.ErrorContains(t, err, invalidCertMsg)
+		require.ErrorContains(t, err, shared.ErrCertExpired.Error())
 	})
 }
 
