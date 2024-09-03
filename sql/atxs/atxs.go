@@ -258,9 +258,9 @@ func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID
 	}
 
 	if rows, err := db.Exec(`
-		SELECT posts.atxid FROM posts JOIN atxs ON posts.atxid = atxs.id
-		WHERE posts.pubkey = ?1 AND atxs.epoch < ?2
-		ORDER BY atxs.epoch DESC
+		SELECT atxid FROM posts
+		WHERE pubkey = ?1 AND publish_epoch < ?2
+		ORDER BY publish_epoch DESC
 		LIMIT 1;`, enc, dec); err != nil {
 		return types.EmptyATXID, fmt.Errorf("exec nodeID %v, epoch %d: %w", nodeID, pubEpoch, err)
 	} else if rows == 0 {
@@ -678,7 +678,7 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 
 	for id, units := range catx.Units {
 		// FIXME: should a checkpointed ATX reference its real previous ATX?
-		if err := SetPost(db, catx.ID, types.EmptyATXID, 0, id, units); err != nil {
+		if err := SetPost(db, catx.ID, types.EmptyATXID, 0, id, units, catx.Epoch); err != nil {
 			return fmt.Errorf("insert checkpoint ATX units %v: %w", catx.ID, err)
 		}
 	}
@@ -958,9 +958,17 @@ func AllUnits(db sql.Executor, id types.ATXID) (map[types.NodeID]uint32, error) 
 	return units, nil
 }
 
-func SetPost(db sql.Executor, atxID, prev types.ATXID, prevIndex int, id types.NodeID, units uint32) error {
+func SetPost(
+	db sql.Executor,
+	atxID, prev types.ATXID,
+	prevIndex int,
+	id types.NodeID,
+	units uint32,
+	publish types.EpochID,
+) error {
 	_, err := db.Exec(
-		`INSERT INTO posts (atxid, pubkey, prev_atxid, prev_atx_index, units) VALUES (?1, ?2, ?3, ?4, ?5);`,
+		`INSERT INTO posts (atxid, pubkey, prev_atxid, prev_atx_index, units, publish_epoch)
+		 VALUES (?1, ?2, ?3, ?4, ?5, ?6);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, atxID.Bytes())
 			stmt.BindBytes(2, id.Bytes())
@@ -969,6 +977,7 @@ func SetPost(db sql.Executor, atxID, prev types.ATXID, prevIndex int, id types.N
 			}
 			stmt.BindInt64(4, int64(prevIndex))
 			stmt.BindInt64(5, int64(units))
+			stmt.BindInt64(6, int64(publish))
 		},
 		nil,
 	)

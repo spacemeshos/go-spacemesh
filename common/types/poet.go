@@ -16,7 +16,7 @@ import (
 
 type PoetServer struct {
 	Address string    `mapstructure:"address" json:"address"`
-	Pubkey  Base64Enc `mapstructure:"pubkey" json:"pubkey"`
+	Pubkey  Base64Enc `mapstructure:"pubkey"  json:"pubkey"`
 }
 
 type PoetProofRef Hash32
