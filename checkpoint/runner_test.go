@@ -268,7 +268,10 @@ func createMesh(t testing.TB, db sql.StateDatabase, miners []miner, accts []*typ
 	for _, miner := range miners {
 		for _, atx := range miner.atxs {
 			require.NoError(t, atxs.Add(db, atx.ActivationTx, types.AtxBlob{}))
-			require.NoError(t, atxs.SetPost(db, atx.ID(), atx.previous, 0, atx.SmesherID, atx.NumUnits))
+			require.NoError(
+				t,
+				atxs.SetPost(db, atx.ID(), atx.previous, 0, atx.SmesherID, atx.NumUnits, atx.PublishEpoch),
+			)
 		}
 		if proof := miner.malfeasanceProof; len(proof) > 0 {
 			require.NoError(t, identities.SetMalicious(db, miner.atxs[0].SmesherID, proof, time.Now()))
@@ -400,7 +403,7 @@ func TestRunner_Generate_PreservesMarriageATX(t *testing.T) {
 	}
 	atx.SetID(types.RandomATXID())
 	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
-	require.NoError(t, atxs.SetPost(db, atx.ID(), types.EmptyATXID, 0, atx.SmesherID, atx.NumUnits))
+	require.NoError(t, atxs.SetPost(db, atx.ID(), types.EmptyATXID, 0, atx.SmesherID, atx.NumUnits, atx.PublishEpoch))
 
 	fs := afero.NewMemMapFs()
 	dir, err := afero.TempDir(fs, "", "Generate")

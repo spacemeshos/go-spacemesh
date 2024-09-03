@@ -20,7 +20,7 @@ func Test0021Migration(t *testing.T) {
 	schema, err := statesql.Schema()
 	require.NoError(t, err)
 	schema.Migrations = slices.DeleteFunc(schema.Migrations, func(m sql.Migration) bool {
-		return m.Order() == 21
+		return m.Order() >= 21
 	})
 
 	db := sql.InMemory(
