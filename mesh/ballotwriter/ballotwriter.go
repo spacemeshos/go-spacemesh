@@ -26,8 +26,6 @@ type BallotWriter struct {
 	atxMu sync.Mutex
 	timer *time.Ticker
 
-	rmNodeSlice []types.NodeID
-
 	ballotBatch           map[types.BallotID]*types.Ballot // the current
 	ballotBatchIdentities map[types.NodeID]struct{}
 	ballotBatchResult     *batchResult
