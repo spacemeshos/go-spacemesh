@@ -23,9 +23,8 @@ type BallotWriter struct {
 	db     db
 	logger *zap.Logger
 
-	atxMu   sync.Mutex
-	timer   *time.Ticker
-	running bool
+	atxMu sync.Mutex
+	timer *time.Ticker
 
 	// rmSlice is meant to be an ever-growing slice that is reused for deleting items from the map
 	// it is meant to be truncated every time we put the map back to the pool.
@@ -72,7 +71,6 @@ func (w *BallotWriter) Start(ctx context.Context) {
 			// written, as well as the one which would be queued up for the next write.
 			w.atxMu.Lock()
 			startTime := time.Now()
-			w.running = false
 			if len(w.ballotBatch) == 0 {
 				w.atxMu.Unlock()
 				continue
