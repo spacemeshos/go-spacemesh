@@ -26,9 +26,6 @@ type BallotWriter struct {
 	atxMu sync.Mutex
 	timer *time.Ticker
 
-	// rmSlice is meant to be an ever-growing slice that is reused for deleting items from the map
-	// it is meant to be truncated every time we put the map back to the pool.
-	rmSlice     []types.BallotID
 	rmNodeSlice []types.NodeID
 
 	ballotBatch           map[types.BallotID]*types.Ballot // the current
@@ -41,10 +38,9 @@ func New(db db, logger *zap.Logger) *BallotWriter {
 	timer := time.NewTicker(writerDelay)
 	timer.Stop()
 	writer := &BallotWriter{
-		db:      db,
-		logger:  logger,
-		timer:   timer,
-		rmSlice: make([]types.BallotID, 0, 1000),
+		db:     db,
+		logger: logger,
+		timer:  timer,
 		ballotBatchResult: &batchResult{
 			doneC: make(chan struct{}),
 		},
