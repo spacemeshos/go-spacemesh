@@ -1,12 +1,14 @@
 package wire
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"testing"
 
 	fuzz "github.com/google/gofuzz"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -124,4 +126,22 @@ func Test_NoATXv2IDCollisions(t *testing.T) {
 		require.NotContains(t, atxIDs, id, "ATX ID collision")
 		atxIDs = append(atxIDs, id)
 	}
+}
+
+func Test_ATXv2_SupportUpTo4Niposts(t *testing.T) {
+	f := fuzz.New()
+	atx := &ActivationTxV2{}
+	f.Fuzz(atx)
+	for i := range 4 {
+		t.Run(fmt.Sprintf("supports %d poet", i), func(t *testing.T) {
+			atx.NiPosts = make([]NiPostsV2, i)
+			_, err := codec.Encode(atx)
+			require.NoError(t, err)
+		})
+	}
+	t.Run("doesn't support > 5 niposts", func(t *testing.T) {
+		atx.NiPosts = make([]NiPostsV2, 5)
+		_, err := codec.Encode(atx)
+		require.Error(t, err)
+	})
 }

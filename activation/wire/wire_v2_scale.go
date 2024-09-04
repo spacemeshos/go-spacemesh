@@ -45,7 +45,7 @@ func (t *ActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPosts, 2)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPosts, 4)
 		if err != nil {
 			return total, err
 		}
@@ -129,7 +129,7 @@ func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		t.PreviousATXs = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[NiPostsV2](dec, 2)
+		field, n, err := scale.DecodeStructSliceWithLimit[NiPostsV2](dec, 4)
 		if err != nil {
 			return total, err
 		}
