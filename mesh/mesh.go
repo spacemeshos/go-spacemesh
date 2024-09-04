@@ -560,27 +560,36 @@ func (msh *Mesh) AddBallot(
 	ctx context.Context,
 	ballot *types.Ballot,
 ) (*wire.MalfeasanceProof, error) {
-START:
-	initiallyMalfeasant := false
-	msh.addBallotMu.Lock()
-	malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
-	if malicious {
-		ballot.SetMalicious()
-		initiallyMalfeasant = true
-	}
+	var (
+		initiallyMalfeasant bool
+		start               time.Time
+		waitC               <-chan struct{}
+		errFunc             func() error
+	)
+	for {
+		initiallyMalfeasant = false
+		msh.addBallotMu.Lock()
+		malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
+		if malicious {
+			ballot.SetMalicious()
+			initiallyMalfeasant = true
+		}
 
-	// Store should only allow one ballot per node ID per batch.
-	waitC, errFunc, retry := msh.ballotWriter.Store(ballot)
-	msh.addBallotMu.Unlock()
-	start := time.Now()
-	if retry != nil {
+		// Store should only allow one ballot per node ID per batch.
+		var retry func()
+		waitC, errFunc, retry = msh.ballotWriter.Store(ballot)
+		msh.addBallotMu.Unlock()
+		start = time.Now()
+		if retry == nil {
+			break
+		}
 		// this means that we got a ballot from the same smesher in this layer.
 		// while this doesn't directly implicate a node as being malfeasant, it does
 		// force us to retry this operation once the current batch is written to the db
 		retry()
 		metrics.BallotWaitRetry.Observe(time.Since(start).Seconds())
-		goto START
 	}
+
 	var err error
 	select {
 	case <-ctx.Done():
