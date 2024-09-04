@@ -212,8 +212,6 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		activation.WithAtxVersions(atxVersions),
 	)
 
-	idStates := activation.NewIdentityStateStorage()
-
 	nb, err = activation.NewNIPostBuilder(
 		localDB,
 		svc,
