@@ -57,7 +57,6 @@ type Mesh struct {
 	nextProcessedLayers map[types.LayerID]struct{}
 	maxProcessedLayer   types.LayerID
 
-	addBallotMu  sync.Mutex
 	ballotWriter *ballotwriter.BallotWriter
 }
 
@@ -568,7 +567,6 @@ func (msh *Mesh) AddBallot(
 	)
 	for {
 		initiallyMalfeasant = false
-		msh.addBallotMu.Lock()
 		malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
 		if malicious {
 			ballot.SetMalicious()
@@ -578,7 +576,6 @@ func (msh *Mesh) AddBallot(
 		// Store should only allow one ballot per node ID per batch.
 		var retry func()
 		waitC, errFunc, retry = msh.ballotWriter.Store(ballot)
-		msh.addBallotMu.Unlock()
 		start = time.Now()
 		if retry == nil {
 			break
