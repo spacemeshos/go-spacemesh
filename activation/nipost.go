@@ -268,6 +268,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 			zap.Stringer("smesherID", signer.NodeID()),
 			zap.Error(err),
 		)
+		return nil, err
 	}
 
 	poetProofRef, membership, err := nipost.PoetProofRef(nb.localDB, signer.NodeID())
@@ -309,6 +310,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 			zap.Stringer("smesherID", signer.NodeID()),
 			zap.Error(err),
 		)
+		return nil, err
 	}
 
 	nipostState, err := nipost.NIPost(nb.localDB, signer.NodeID())
@@ -418,14 +420,7 @@ func (nb *NIPostBuilder) submitPoetChallenge(
 	registration.RoundEnd = round.End
 	registration.RoundID = round.ID
 
-	err = nipost.AddPoetRegistration(nb.localDB, registration)
-	switch {
-	case err != nil && errors.Is(err, sql.ErrObjectExists):
-		if err := nipost.UpdatePoetRegistration(nb.localDB, registration); err != nil {
-			return nipost.PoETRegistration{}, err
-		}
-
-	case err != nil:
+	if err = nipost.AddPoetRegistration(nb.localDB, registration); err != nil {
 		return nipost.PoETRegistration{}, err
 	}
 	return registration, nil
@@ -610,6 +605,7 @@ func (nb *NIPostBuilder) getBestProof(
 					zap.Stringer("smesherID", nodeID),
 					zap.Error(err),
 				)
+				return nil
 			}
 
 			proof, members, err := client.Proof(ctx, round)

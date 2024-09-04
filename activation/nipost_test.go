@@ -336,6 +336,9 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 	postService := NewMockpostService(ctrl)
 	mclock := defaultLayerClockMock(ctrl)
 
+	idStates := NewMockIdentityStates(ctrl)
+	idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	db := localsql.InMemory()
 
 	nb, err := NewNIPostBuilder(
@@ -345,6 +348,7 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 		PoetConfig{},
 		mclock,
 		nil,
+		NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -382,6 +386,9 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	challenge := types.RandomHash()
 	ctrl := gomock.NewController(t)
 
+	idStates := NewMockIdentityStates(ctrl)
+	idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	poetProvider := defaultPoetServiceMock(t, ctrl, "http://localhost:9999", roundId)
 	poetProvider.EXPECT().Proof(gomock.Any(), roundId).Return(&types.PoetProof{}, []types.Hash32{challenge}, nil)
 
@@ -406,6 +413,7 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 		mclock,
 		nil,
 		WithPoetServices(poetProvider),
+		NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -436,6 +444,9 @@ func TestPostSetup(t *testing.T) {
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
+	idStates := NewMockIdentityStates(ctrl)
+	idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	nb, err := NewNIPostBuilder(
 		localsql.InMemory(),
 		postService,
@@ -444,6 +455,7 @@ func TestPostSetup(t *testing.T) {
 		mclock,
 		nil,
 		WithPoetServices(poetProvider),
+		NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -491,6 +503,9 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil).AnyTimes()
 
+	idStates := NewMockIdentityStates(ctrl)
+	idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	nb, err := NewNIPostBuilder(
 		db,
 		postService,
@@ -499,6 +514,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		mclock,
 		nil,
 		WithPoetServices(poetProver),
+		NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -516,6 +532,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		mclock,
 		nil,
 		WithPoetServices(poetProver),
+		NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -536,8 +553,10 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 		mclock,
 		nil,
 		WithPoetServices(poetProver),
+		NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
+
 	postClient.EXPECT().Proof(gomock.Any(), gomock.Any()).Return(
 		&types.Post{
 			Indices: []byte{1, 2, 3},
@@ -563,6 +582,9 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 
 	ctrl := gomock.NewController(t)
 	mclock := defaultLayerClockMock(ctrl)
+
+	idStates := NewMockIdentityStates(ctrl)
+	idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 	poets := make([]PoetService, 0, 2)
 	{
@@ -617,6 +639,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 		mclock,
 		nil,
 		WithPoetServices(poets...),
+		NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -670,6 +693,9 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
+	idStates := NewMockIdentityStates(ctrl)
+	idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	nb, err := NewNIPostBuilder(
 		localsql.InMemory(),
 		postService,
@@ -678,6 +704,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 		mclock,
 		nil,
 		WithPoetServices(poets...),
+		NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -713,6 +740,9 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetProver.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
 		postService := NewMockpostService(ctrl)
 
+		idStates := NewMockIdentityStates(ctrl)
+		idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 		nb, err := NewNIPostBuilder(
 			localsql.InMemory(),
 			postService,
@@ -721,6 +751,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			mclock,
 			nil,
 			WithPoetServices(poetProver),
+			NipostbuilderWithIdentityStates(idStates),
 		)
 		require.NoError(t, err)
 
@@ -739,6 +770,9 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mclock := defaultLayerClockMock(ctrl)
 		poetProver := NewMockPoetService(ctrl)
+
+		idStates := NewMockIdentityStates(ctrl)
+		idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 		poetProver.EXPECT().
 			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), sig.NodeID()).
@@ -763,6 +797,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			mclock,
 			nil,
 			WithPoetServices(poetProver),
+			NipostbuilderWithIdentityStates(idStates),
 		)
 		require.NoError(t, err)
 
@@ -783,6 +818,9 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		poetProver.EXPECT().Proof(gomock.Any(), roundId).Return(nil, nil, errors.New("failed"))
 		postService := NewMockpostService(ctrl)
 
+		idStates := NewMockIdentityStates(ctrl)
+		idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 		nb, err := NewNIPostBuilder(
 			localsql.InMemory(),
 			postService,
@@ -791,6 +829,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			mclock,
 			nil,
 			WithPoetServices(poetProver),
+			NipostbuilderWithIdentityStates(idStates),
 		)
 		require.NoError(t, err)
 
@@ -809,6 +848,9 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			Return(&types.PoetProof{}, []types.Hash32{}, nil)
 		postService := NewMockpostService(ctrl)
 
+		idStates := NewMockIdentityStates(ctrl)
+		idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 		nb, err := NewNIPostBuilder(
 			localsql.InMemory(),
 			postService,
@@ -817,6 +859,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			mclock,
 			nil,
 			WithPoetServices(poetProver),
+			NipostbuilderWithIdentityStates(idStates),
 		)
 		require.NoError(t, err)
 
@@ -1234,6 +1277,9 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		).AnyTimes()
 		postService := NewMockpostService(ctrl)
 
+		idStates := NewMockIdentityStates(ctrl)
+		idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 		nb, err := NewNIPostBuilder(
 			localsql.InMemory(),
 			postService,
@@ -1242,6 +1288,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			mclock,
 			nil,
 			WithPoetServices(poetProver),
+			NipostbuilderWithIdentityStates(idStates),
 		)
 		require.NoError(t, err)
 
@@ -1263,6 +1310,9 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		db := localsql.InMemory()
+		idStates := NewMockIdentityStates(ctrl)
+		idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 		nb, err := NewNIPostBuilder(
 			db,
 			postService,
@@ -1271,6 +1321,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			mclock,
 			nil,
 			WithPoetServices(poetProver),
+			NipostbuilderWithIdentityStates(idStates),
 		)
 		require.NoError(t, err)
 
@@ -1305,6 +1356,9 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			}).AnyTimes()
 		postService := NewMockpostService(ctrl)
 
+		idStates := NewMockIdentityStates(ctrl)
+		idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 		db := localsql.InMemory()
 		nb, err := NewNIPostBuilder(
 			db,
@@ -1314,6 +1368,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			mclock,
 			nil,
 			WithPoetServices(poetProver),
+			NipostbuilderWithIdentityStates(idStates),
 		)
 		require.NoError(t, err)
 
@@ -1387,6 +1442,9 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
+	idStates := NewMockIdentityStates(ctrl)
+	idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
 	nb, err := NewNIPostBuilder(
 		localsql.InMemory(),
 		postService,
@@ -1395,6 +1453,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		mclock,
 		nil,
 		WithPoetServices(poet),
+		NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 

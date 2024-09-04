@@ -28,33 +28,13 @@ func AddPoetRegistration(
 		stmt.BindInt64(5, registration.RoundEnd.Unix())
 	}
 	if _, err := db.Exec(`
-		insert into poet_registration (id, hash, address, round_id, round_end)
-		values (?1, ?2, ?3, ?4, ?5);`, enc, nil,
+	insert into poet_registration (id, hash, address, round_id, round_end) 
+		values (?1, ?2, ?3, ?4, ?5)
+		on conflict (id, address) 
+		do update set round_id = excluded.round_id, round_end = excluded.round_end;`, enc, nil,
 	); err != nil {
 		return fmt.Errorf("insert poet registration for %s: %w", registration.NodeId, err)
 	}
-	return nil
-}
-
-func UpdatePoetRegistration(db sql.Executor, registration PoETRegistration) error {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindText(1, registration.RoundID)
-		stmt.BindInt64(2, registration.RoundEnd.Unix())
-		stmt.BindBytes(3, registration.NodeId.Bytes())
-		stmt.BindText(4, registration.Address)
-		stmt.BindBytes(5, registration.ChallengeHash.Bytes())
-	}
-
-	query := `
-        update poet_registration 
-        SET round_id = ?1, round_end = ?2
-        where id = ?3 AND address = ?4 AND hash = ?5;`
-
-	_, err := db.Exec(query, enc, nil)
-	if err != nil {
-		return fmt.Errorf("update poet registration for %s: %w", registration.NodeId.String(), err)
-	}
-
 	return nil
 }
 
@@ -77,22 +57,16 @@ func PoetRegistrations(db sql.Executor, nodeID types.NodeID) ([]PoETRegistration
 
 	dec := func(stmt *sql.Statement) bool {
 		registration := PoETRegistration{
-			Address:  stmt.ColumnText(2),
-			RoundID:  stmt.ColumnText(3),
-			RoundEnd: time.Unix(stmt.ColumnInt64(4), 0),
+			Address:  stmt.ColumnText(1),
+			RoundID:  stmt.ColumnText(2),
+			RoundEnd: time.Unix(stmt.ColumnInt64(3), 0),
 		}
-
-		nodeId := make([]byte, types.NodeIDSize)
-		stmt.ColumnBytes(0, nodeId)
-
-		registration.NodeId = types.BytesToNodeID(nodeId)
-
-		stmt.ColumnBytes(1, registration.ChallengeHash[:])
+		stmt.ColumnBytes(0, registration.ChallengeHash[:])
 		registrations = append(registrations, registration)
 		return true
 	}
 
-	query := `SELECT id, hash, address, round_id, round_end FROM poet_registration WHERE id = ?1;`
+	query := `SELECT hash, address, round_id, round_end FROM poet_registration WHERE id = ?1;`
 
 	_, err := db.Exec(query, enc, dec)
 	if err != nil {

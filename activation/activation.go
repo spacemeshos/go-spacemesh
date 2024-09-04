@@ -463,6 +463,14 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	}
 	eg.Wait()
 
+	if err := b.identitiesStates.Set(sig.NodeID(), types.IdentityStateWaitForATXSyncing); err != nil {
+		b.logger.Warn("failed to switch identity state",
+			zap.Stringer("smesherID", sig.NodeID()),
+			zap.Error(err),
+		)
+		return
+	}
+
 	for {
 		err := b.PublishActivationTx(ctx, sig)
 		if err == nil {
@@ -532,13 +540,6 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID))
 
-	if err := b.identitiesStates.Set(nodeID, types.IdentityStateWaitForATXSyncing); err != nil {
-		b.logger.Warn("failed to switch identity state",
-			zap.Stringer("smesherID", nodeID),
-			zap.Error(err),
-		)
-	}
-
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -551,6 +552,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			zap.Stringer("smesherID", nodeID),
 			zap.Error(err),
 		)
+		return nil, err
 	}
 
 	// Try to get existing challenge
