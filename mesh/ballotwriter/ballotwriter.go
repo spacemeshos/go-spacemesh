@@ -140,21 +140,8 @@ func (w *BallotWriter) Start(ctx context.Context) {
 			}
 			cleanupStart := time.Now()
 			w.ballotBatchResult = &batchResult{doneC: make(chan struct{})}
-			for k := range w.ballotBatchIdentities {
-				w.rmNodeSlice = append(w.rmNodeSlice, k)
-			}
-			for _, k := range w.rmNodeSlice {
-				delete(w.ballotBatchIdentities, k)
-			}
-			w.rmNodeSlice = w.rmNodeSlice[:0]
-
-			for k := range batch {
-				w.rmSlice = append(w.rmSlice, k)
-			}
-			for _, k := range w.rmSlice {
-				delete(batch, k)
-			}
-			w.rmSlice = w.rmSlice[:0]
+			clear(w.ballotBatchIdentities)
+			clear(w.ballotBatch)
 			w.atxMu.Unlock()
 			writeTime := time.Since(startTime)
 			WriteTime.Add(float64(writeTime))
