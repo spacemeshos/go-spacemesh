@@ -106,98 +106,98 @@ func TestCombineSeqs(t *testing.T) {
 		result        string
 		startingPoint string
 	}{
-		// {
-		// 	seqs:          []string{"abcd"},
-		// 	indices:       []int{0},
-		// 	result:        "abcd",
-		// 	startingPoint: "a",
-		// },
-		// {
-		// 	seqs:          []string{"abcd"},
-		// 	indices:       []int{0},
-		// 	result:        "abcd",
-		// 	startingPoint: "c",
-		// },
-		// {
-		// 	seqs:          []string{"abcd"},
-		// 	indices:       []int{2},
-		// 	result:        "cdab",
-		// 	startingPoint: "c",
-		// },
-		// {
-		// 	seqs:          []string{"abcd$"},
-		// 	indices:       []int{0},
-		// 	result:        "abcd$",
-		// 	startingPoint: "a",
-		// },
-		// {
-		// 	seqs:          []string{"abcd!"},
-		// 	indices:       []int{0},
-		// 	result:        "abcd!",
-		// 	startingPoint: "a",
-		// },
-		// {
-		// 	seqs:          []string{"abcd", "efgh"},
-		// 	indices:       []int{0, 0},
-		// 	result:        "abcdefgh",
-		// 	startingPoint: "a",
-		// },
-		// {
-		// 	seqs:          []string{"aceg", "bdfh"},
-		// 	indices:       []int{0, 0},
-		// 	result:        "abcdefgh",
-		// 	startingPoint: "a",
-		// },
-		// {
-		// 	seqs:          []string{"abcd$", "efgh$"},
-		// 	indices:       []int{0, 0},
-		// 	result:        "abcdefgh$",
-		// 	startingPoint: "a",
-		// },
-		// {
-		// 	seqs:          []string{"aceg$", "bdfh$"},
-		// 	indices:       []int{0, 0},
-		// 	result:        "abcdefgh$",
-		// 	startingPoint: "a",
-		// },
-		// {
-		// 	seqs:          []string{"abcd!", "efgh!"},
-		// 	indices:       []int{0, 0},
-		// 	result:        "abcd!",
-		// 	startingPoint: "a",
-		// },
-		// {
-		// 	seqs:          []string{"aceg!", "bdfh!"},
-		// 	indices:       []int{0, 0},
-		// 	result:        "abcdefg!",
-		// 	startingPoint: "a",
-		// },
-		// {
-		// 	// wraparound:
-		// 	// "ac"+"bdefgh"
-		// 	// abcdefgh ==>
-		// 	//    defghabc
-		// 	// starting point is d.
-		// 	// Each sequence must either start after the starting point, or
-		// 	// all of its elements are considered to be below the starting
-		// 	// point.  "ac" is considered to be wrapped around initially
-		// 	seqs:          []string{"ac", "bdefgh"},
-		// 	indices:       []int{0, 1},
-		// 	result:        "defghabc",
-		// 	startingPoint: "d",
-		// },
-		// {
-		// 	seqs:          []string{"bc", "ae"},
-		// 	indices:       []int{0, 1},
-		// 	result:        "eabc",
-		// 	startingPoint: "d",
-		// },
-		// {
-		// 	seqs:          []string{"ac", "bfg", "deh"},
-		// 	indices:       []int{0, 0, 0},
-		// 	result:        "abcdefgh",
-		// 	startingPoint: "a",
-		// },
+		{
+			seqs:          []string{"abcd"},
+			indices:       []int{0},
+			result:        "abcd",
+			startingPoint: "a",
+		},
+		{
+			seqs:          []string{"abcd"},
+			indices:       []int{0},
+			result:        "abcd",
+			startingPoint: "c",
+		},
+		{
+			seqs:          []string{"abcd"},
+			indices:       []int{2},
+			result:        "cdab",
+			startingPoint: "c",
+		},
+		{
+			seqs:          []string{"abcd$"},
+			indices:       []int{0},
+			result:        "abcd$",
+			startingPoint: "a",
+		},
+		{
+			seqs:          []string{"abcd!"},
+			indices:       []int{0},
+			result:        "abcd!",
+			startingPoint: "a",
+		},
+		{
+			seqs:          []string{"abcd", "efgh"},
+			indices:       []int{0, 0},
+			result:        "abcdefgh",
+			startingPoint: "a",
+		},
+		{
+			seqs:          []string{"aceg", "bdfh"},
+			indices:       []int{0, 0},
+			result:        "abcdefgh",
+			startingPoint: "a",
+		},
+		{
+			seqs:          []string{"abcd$", "efgh$"},
+			indices:       []int{0, 0},
+			result:        "abcdefgh$",
+			startingPoint: "a",
+		},
+		{
+			seqs:          []string{"aceg$", "bdfh$"},
+			indices:       []int{0, 0},
+			result:        "abcdefgh$",
+			startingPoint: "a",
+		},
+		{
+			seqs:          []string{"abcd!", "efgh!"},
+			indices:       []int{0, 0},
+			result:        "abcd!",
+			startingPoint: "a",
+		},
+		{
+			seqs:          []string{"aceg!", "bdfh!"},
+			indices:       []int{0, 0},
+			result:        "abcdefg!",
+			startingPoint: "a",
+		},
+		{
+			// wraparound:
+			// "ac"+"bdefgh"
+			// abcdefgh ==>
+			//    defghabc
+			// starting point is d.
+			// Each sequence must either start after the starting point, or
+			// all of its elements are considered to be below the starting
+			// point.  "ac" is considered to be wrapped around initially
+			seqs:          []string{"ac", "bdefgh"},
+			indices:       []int{0, 1},
+			result:        "defghabc",
+			startingPoint: "d",
+		},
+		{
+			seqs:          []string{"bc", "ae"},
+			indices:       []int{0, 1},
+			result:        "eabc",
+			startingPoint: "d",
+		},
+		{
+			seqs:          []string{"ac", "bfg", "deh"},
+			indices:       []int{0, 0, 0},
+			result:        "abcdefgh",
+			startingPoint: "a",
+		},
 		{
 			seqs:          []string{"abdefgh", "c"},
 			indices:       []int{0, 0},
