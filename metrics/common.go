@@ -88,10 +88,10 @@ func NewSimpleCounter(subsystem, name, help string) prometheus.Counter {
 	return promauto.NewCounter(NewCounterOpts(subsystem, name, help))
 }
 
-func NewCounterOpts(ns, name, help string) prometheus.CounterOpts {
+func NewCounterOpts(subsystem, name, help string) prometheus.CounterOpts {
 	return prometheus.CounterOpts{
 		Namespace: Namespace,
-		Subsystem: ns,
+		Subsystem: subsystem,
 		Name:      name,
 		Help:      help,
 	}
