@@ -126,7 +126,6 @@ func (w *BallotWriter) Start(ctx context.Context) {
 						return err
 					}
 					ballotAddDur += time.Since(ballotAddStart)
-
 				}
 				return nil
 			}); err != nil {
