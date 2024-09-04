@@ -20,4 +20,11 @@ var LayerNumBlocks = metrics.NewHistogramWithBuckets(
 	prometheus.ExponentialBuckets(1, 2, 16),
 )
 
-var WriteTime = metrics.NewSimpleCounter(Subsystem, "ballot_write_time_old", "time spent writing ballots")
+var (
+	WriteTime     = metrics.NewSimpleCounter(Subsystem, "ballot_write_time_old", "time spent writing ballots")
+	WriteTimeHist = metrics.NewHistogramNoLabel(
+		"ballot_write_time_hist",
+		Subsystem,
+		"time spent writing ballots (in seconds)",
+		prometheus.ExponentialBuckets(0.01, 10, 5))
+)

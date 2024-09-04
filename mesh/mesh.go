@@ -540,7 +540,11 @@ func (msh *Mesh) AddBallot(
 	ballot *types.Ballot,
 ) (*wire.MalfeasanceProof, error) {
 	start := time.Now()
-	defer func() { metrics.WriteTime.Add(float64(time.Now().Sub(start))) }()
+	defer func() {
+		since := time.Since(start)
+		metrics.WriteTime.Add(float64(since))
+		metrics.WriteTimeHist.Observe(since.Seconds())
+	}()
 	malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
 	if malicious {
 		ballot.SetMalicious()
