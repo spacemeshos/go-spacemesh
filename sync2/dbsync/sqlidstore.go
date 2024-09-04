@@ -1,11 +1,10 @@
 package dbsync
 
 import (
-	"bytes"
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
+	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 const sqlMaxChunkSize = 1024
@@ -52,24 +51,24 @@ func (s *sqlIDStore) clone() idStore {
 	return newSQLIDStore(s.db, s.sts, s.keyLen)
 }
 
-func (s *sqlIDStore) registerHash(h KeyBytes) error {
+func (s *sqlIDStore) registerHash(h types.KeyBytes) error {
 	// should be registered by the handler code
 	return nil
 }
 
-func (s *sqlIDStore) start(ctx context.Context) hashsync.Iterator {
+func (s *sqlIDStore) all(ctx context.Context) (types.Seq, error) {
 	// TODO: should probably use a different query to get the first key
-	return s.iter(ctx, make(KeyBytes, s.keyLen))
+	return s.from(ctx, make(types.KeyBytes, s.keyLen))
 }
 
-func (s *sqlIDStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator {
+func (s *sqlIDStore) from(ctx context.Context, from types.KeyBytes) (types.Seq, error) {
 	if len(from) != s.keyLen {
 		panic("BUG: invalid key length")
 	}
-	return newDBRangeIterator(ContextSQLExec(ctx, s.db), s.sts, from, -1, sqlMaxChunkSize, s.cache)
+	return idsFromTable(ContextSQLExec(ctx, s.db), s.sts, from, -1, sqlMaxChunkSize, s.cache), nil
 }
 
-func (s *sqlIDStore) iterSince(ctx context.Context, from KeyBytes, since int64) (hashsync.Iterator, int, error) {
+func (s *sqlIDStore) since(ctx context.Context, from types.KeyBytes, since int64) (types.Seq, int, error) {
 	if len(from) != s.keyLen {
 		panic("BUG: invalid key length")
 	}
@@ -81,7 +80,7 @@ func (s *sqlIDStore) iterSince(ctx context.Context, from KeyBytes, since int64) 
 	if count == 0 {
 		return nil, 0, nil
 	}
-	return newDBRangeIterator(db, s.sts, from, since, sqlMaxChunkSize, nil), count, nil
+	return idsFromTable(db, s.sts, from, since, sqlMaxChunkSize, nil), count, nil
 }
 
 func (s *sqlIDStore) setSnapshot(sts *SyncedTableSnapshot) {
@@ -109,29 +108,30 @@ func (s *dbBackedStore) clone() idStore {
 	}
 }
 
-func (s *dbBackedStore) registerHash(h KeyBytes) error {
+func (s *dbBackedStore) registerHash(h types.KeyBytes) error {
 	return s.inMemIDStore.registerHash(h)
 }
 
-func (s *dbBackedStore) start(ctx context.Context) hashsync.Iterator {
-	dbIt := s.sqlIDStore.start(ctx)
-	memIt := s.inMemIDStore.start(ctx)
-	return combineIterators(nil, dbIt, memIt)
-}
-
-func (s *dbBackedStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator {
-	dbIt := s.sqlIDStore.iter(ctx, from)
-	memIt := s.inMemIDStore.iter(ctx, from)
-	return combineIterators(from, dbIt, memIt)
-}
-
-func idWithinInterval(id, x, y KeyBytes, itype int) bool {
-	switch itype {
-	case 0:
-		return true
-	case -1:
-		return bytes.Compare(id, x) >= 0 && bytes.Compare(id, y) < 0
-	default:
-		return bytes.Compare(id, y) < 0 || bytes.Compare(id, x) >= 0
+func (s *dbBackedStore) all(ctx context.Context) (types.Seq, error) {
+	dbSeq, err := s.sqlIDStore.all(ctx)
+	if err != nil {
+		return nil, err
 	}
+	memSeq, err := s.inMemIDStore.all(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return combineSeqs(nil, dbSeq, memSeq), nil
+}
+
+func (s *dbBackedStore) from(ctx context.Context, from types.KeyBytes) (types.Seq, error) {
+	dbSeq, err := s.sqlIDStore.from(ctx, from)
+	if err != nil {
+		return nil, err
+	}
+	memSeq, err := s.inMemIDStore.from(ctx, from)
+	if err != nil {
+		return nil, err
+	}
+	return combineSeqs(from, dbSeq, memSeq), nil
 }

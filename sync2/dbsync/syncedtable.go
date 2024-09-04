@@ -4,7 +4,9 @@ import (
 	"fmt"
 
 	rsql "github.com/rqlite/sql"
+
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 type Binder func(s *sql.Statement)
@@ -232,7 +234,7 @@ func (sts *SyncedTableSnapshot) loadIDsSince(
 
 func (sts *SyncedTableSnapshot) loadIDRange(
 	db sql.Executor,
-	fromID KeyBytes,
+	fromID types.KeyBytes,
 	limit int,
 	dec func(stmt *sql.Statement) bool,
 ) error {
@@ -281,7 +283,7 @@ func (sts *SyncedTableSnapshot) loadRecentCount(
 
 func (sts *SyncedTableSnapshot) loadRecent(
 	db sql.Executor,
-	fromID KeyBytes,
+	fromID types.KeyBytes,
 	limit int,
 	since int64,
 	dec func(stmt *sql.Statement) bool,

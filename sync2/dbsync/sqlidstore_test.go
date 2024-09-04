@@ -4,8 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 func TestDBBackedStore(t *testing.T) {
@@ -15,23 +17,23 @@ func TestDBBackedStore(t *testing.T) {
 		nil, nil)
 	require.NoError(t, err)
 	for _, row := range []struct {
-		id KeyBytes
+		id types.KeyBytes
 		ts int64
 	}{
 		{
-			id: KeyBytes{0, 0, 0, 1, 0, 0, 0, 0},
+			id: types.KeyBytes{0, 0, 0, 1, 0, 0, 0, 0},
 			ts: 100,
 		},
 		{
-			id: KeyBytes{0, 0, 0, 3, 0, 0, 0, 0},
+			id: types.KeyBytes{0, 0, 0, 3, 0, 0, 0, 0},
 			ts: 200,
 		},
 		{
-			id: KeyBytes{0, 0, 0, 5, 0, 0, 0, 0},
+			id: types.KeyBytes{0, 0, 0, 5, 0, 0, 0, 0},
 			ts: 300,
 		},
 		{
-			id: KeyBytes{0, 0, 0, 7, 0, 0, 0, 0},
+			id: types.KeyBytes{0, 0, 0, 7, 0, 0, 0, 0},
 			ts: 400,
 		},
 	} {
@@ -52,13 +54,11 @@ func TestDBBackedStore(t *testing.T) {
 	require.NoError(t, err)
 	verify := func(t *testing.T, ctx context.Context) {
 		store := newDBBackedStore(db, sts, 8)
-		it := store.iter(ctx, KeyBytes{0, 0, 0, 0, 0, 0, 0, 0})
-		var actualIDs []KeyBytes
-		for range 5 {
-			actualIDs = append(actualIDs, itKey(t, it))
-			require.NoError(t, it.Next())
-		}
-		require.Equal(t, []KeyBytes{
+		seq, err := store.from(ctx, types.KeyBytes{0, 0, 0, 0, 0, 0, 0, 0})
+		require.NoError(t, err)
+		actualIDs, err := types.GetN[types.KeyBytes](seq, 5)
+		require.NoError(t, err)
+		require.Equal(t, []types.KeyBytes{
 			{0, 0, 0, 1, 0, 0, 0, 0},
 			{0, 0, 0, 3, 0, 0, 0, 0},
 			{0, 0, 0, 5, 0, 0, 0, 0},
@@ -66,35 +66,30 @@ func TestDBBackedStore(t *testing.T) {
 			{0, 0, 0, 1, 0, 0, 0, 0}, // wrapped around
 		}, actualIDs)
 
-		it = store.start(ctx)
-		for n := range 5 {
-			require.Equal(t, actualIDs[n], itKey(t, it))
-			require.NoError(t, it.Next())
-		}
+		seq, err = store.all(ctx)
+		require.NoError(t, err)
+		actualIDs1, err := types.GetN[types.KeyBytes](seq, 5)
+		require.NoError(t, err)
+		require.Equal(t, actualIDs, actualIDs1)
 
 		actualIDs = nil
-		it, count, err := store.iterSince(ctx, KeyBytes{0, 0, 0, 0, 0, 0, 0, 0}, 300)
+		seq, count, err := store.since(ctx, types.KeyBytes{0, 0, 0, 0, 0, 0, 0, 0}, 300)
 		require.NoError(t, err)
 		require.Equal(t, 2, count)
-		for range 3 {
-			actualIDs = append(actualIDs, itKey(t, it))
-			require.NoError(t, it.Next())
-		}
-		require.Equal(t, []KeyBytes{
+		actualIDs, err = types.GetN[types.KeyBytes](seq, 3)
+		require.Equal(t, []types.KeyBytes{
 			{0, 0, 0, 5, 0, 0, 0, 0},
 			{0, 0, 0, 7, 0, 0, 0, 0},
 			{0, 0, 0, 5, 0, 0, 0, 0}, // wrapped around
 		}, actualIDs)
 
-		require.NoError(t, store.registerHash(KeyBytes{0, 0, 0, 2, 0, 0, 0, 0}))
-		require.NoError(t, store.registerHash(KeyBytes{0, 0, 0, 9, 0, 0, 0, 0}))
+		require.NoError(t, store.registerHash(types.KeyBytes{0, 0, 0, 2, 0, 0, 0, 0}))
+		require.NoError(t, store.registerHash(types.KeyBytes{0, 0, 0, 9, 0, 0, 0, 0}))
 		actualIDs = nil
-		it = store.iter(ctx, KeyBytes{0, 0, 0, 0, 0, 0, 0, 0})
-		for range 6 {
-			actualIDs = append(actualIDs, itKey(t, it))
-			require.NoError(t, it.Next())
-		}
-		require.Equal(t, []KeyBytes{
+		seq, err = store.from(ctx, types.KeyBytes{0, 0, 0, 0, 0, 0, 0, 0})
+		actualIDs, err = types.GetN[types.KeyBytes](seq, 6)
+		require.NoError(t, err)
+		require.Equal(t, []types.KeyBytes{
 			{0, 0, 0, 1, 0, 0, 0, 0},
 			{0, 0, 0, 2, 0, 0, 0, 0},
 			{0, 0, 0, 3, 0, 0, 0, 0},

@@ -3,8 +3,8 @@ package dbsync
 import (
 	"context"
 
-	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
 	"github.com/spacemeshos/go-spacemesh/sync2/internal/skiplist"
+	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 type inMemIDStore struct {
@@ -30,49 +30,45 @@ func (s *inMemIDStore) clone() idStore {
 	return newStore
 }
 
-func (s *inMemIDStore) registerHash(h KeyBytes) error {
+func (s *inMemIDStore) registerHash(h types.KeyBytes) error {
 	s.sl.Add(h)
 	s.len++
 	return nil
 }
 
-func (s *inMemIDStore) start(ctx context.Context) hashsync.Iterator {
-	return &inMemIDStoreIterator{sl: s.sl, node: s.sl.First()}
-}
-
-func (s *inMemIDStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator {
-	node := s.sl.FindGTENode(from)
-	if node == nil {
-		node = s.sl.First()
-	}
-	return &inMemIDStoreIterator{sl: s.sl, node: node}
-}
-
-type inMemIDStoreIterator struct {
-	sl   *skiplist.SkipList
-	node *skiplist.Node
-}
-
-var _ hashsync.Iterator = &inMemIDStoreIterator{}
-
-func (it *inMemIDStoreIterator) Key() (hashsync.Ordered, error) {
-	if it.node == nil {
-		return nil, errEmptySet
-	}
-	return KeyBytes(it.node.Key()), nil
-}
-
-func (it *inMemIDStoreIterator) Next() error {
-	if it.node = it.node.Next(); it.node == nil {
-		it.node = it.sl.First()
-		if it.node == nil {
-			panic("BUG: iterator returned for an empty skiplist")
+func (s *inMemIDStore) all(ctx context.Context) (types.Seq, error) {
+	return func(yield func(types.Ordered, error) bool) {
+		if s.sl.First() == nil {
+			return
 		}
-	}
-	return nil
+		for node := s.sl.First(); ; node = node.Next() {
+			if node == nil {
+				node = s.sl.First()
+			}
+			if !yield(types.KeyBytes(node.Key()), nil) {
+				return
+			}
+		}
+	}, nil
 }
 
-func (it *inMemIDStoreIterator) Clone() hashsync.Iterator {
-	cloned := *it
-	return &cloned
+func (s *inMemIDStore) from(ctx context.Context, from types.KeyBytes) (types.Seq, error) {
+	return func(yield func(types.Ordered, error) bool) {
+		node := s.sl.FindGTENode(from)
+		if node == nil {
+			node = s.sl.First()
+			if node == nil {
+				return
+			}
+		}
+		for {
+			if !yield(types.KeyBytes(node.Key()), nil) {
+				return
+			}
+			node = node.Next()
+			if node == nil {
+				node = s.sl.First()
+			}
+		}
+	}, nil
 }

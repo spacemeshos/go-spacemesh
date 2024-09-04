@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 func parseSQLExpr(t *testing.T, s string) rsql.Expr {
@@ -110,7 +111,7 @@ func TestSyncedTable_LoadIDs(t *testing.T) {
 
 	mkDecode := func(ids *[]string) func(stmt *sql.Statement) bool {
 		return func(stmt *sql.Statement) bool {
-			id := make(KeyBytes, stmt.ColumnLen(0))
+			id := make(types.KeyBytes, stmt.ColumnLen(0))
 			stmt.ColumnBytes(0, id)
 			*ids = append(*ids, id.String())
 			return true
@@ -129,7 +130,7 @@ func TestSyncedTable_LoadIDs(t *testing.T) {
 		return ids
 	}
 
-	loadIDRange := func(sts *SyncedTableSnapshot, from KeyBytes, limit int) []string {
+	loadIDRange := func(sts *SyncedTableSnapshot, from types.KeyBytes, limit int) []string {
 		var ids []string
 		require.NoError(t, sts.loadIDRange(db, from, limit, mkDecode(&ids)))
 		return ids
@@ -146,7 +147,7 @@ func TestSyncedTable_LoadIDs(t *testing.T) {
 
 	loadRecent := func(
 		sts *SyncedTableSnapshot,
-		from KeyBytes,
+		from types.KeyBytes,
 		limit int,
 		ts int64,
 	) []string {

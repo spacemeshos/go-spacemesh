@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
+	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 func TestP2P(t *testing.T) {
@@ -26,14 +26,14 @@ func TestP2P(t *testing.T) {
 	require.NoError(t, err)
 	type addedKey struct {
 		fromPeer, toPeer p2p.Peer
-		key              hashsync.Ordered
+		key              string
 	}
 	var mtx sync.Mutex
 	synced := make(map[addedKey]struct{})
 	hs := make([]*P2PHashSync, numNodes)
-	initialSet := make([]types.Hash32, numHashes)
+	initialSet := make([]types.KeyBytes, numHashes)
 	for n := range initialSet {
-		initialSet[n] = types.RandomHash()
+		initialSet[n] = types.RandomKeyBytes(32)
 	}
 	for n := range hs {
 		ps := peers.New()
@@ -45,20 +45,21 @@ func TestP2P(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.SyncInterval = 100 * time.Millisecond
 		host := mesh.Hosts()[n]
-		handler := func(ctx context.Context, k hashsync.Ordered, peer p2p.Peer) error {
+		handler := func(ctx context.Context, k types.Ordered, peer p2p.Peer) error {
 			mtx.Lock()
 			defer mtx.Unlock()
 			ak := addedKey{
 				fromPeer: peer,
 				toPeer:   host.ID(),
-				key:      k,
+				key:      string(k.(types.KeyBytes)),
 			}
 			synced[ak] = struct{}{}
 			return nil
 		}
-		hs[n] = NewP2PHashSync(logger, host, "sync2test", ps, handler, cfg)
+		os := rangesync.NewDumbHashSet(true)
+		hs[n] = NewP2PHashSync(logger, host, os, 32, 24, "sync2test", ps, handler, cfg)
 		if n == 0 {
-			is := hs[n].ItemStore()
+			is := hs[n].Set()
 			for _, h := range initialSet {
 				is.Add(context.Background(), h)
 			}
@@ -69,15 +70,17 @@ func TestP2P(t *testing.T) {
 	require.Eventually(t, func() bool {
 		for _, hsync := range hs {
 			// use a snapshot to avoid races
-			is := hsync.ItemStore().Copy()
-			it, err := is.Min(context.Background())
+			os := hsync.Set().Copy()
+			empty, err := os.Empty(context.Background())
 			require.NoError(t, err)
-			if it == nil {
+			if empty {
 				return false
 			}
-			k, err := it.Key()
+			seq, err := os.Items(context.Background())
 			require.NoError(t, err)
-			info, err := is.GetRangeInfo(context.Background(), nil, k, k, -1)
+			k, err := seq.First()
+			require.NoError(t, err)
+			info, err := os.GetRangeInfo(context.Background(), k, k, -1)
 			require.NoError(t, err)
 			if info.Count < numHashes {
 				return false
@@ -88,8 +91,7 @@ func TestP2P(t *testing.T) {
 
 	for _, hsync := range hs {
 		hsync.Stop()
-		actualItems, err := hashsync.CollectStoreItems[types.Hash32](
-			context.Background(), hsync.ItemStore())
+		actualItems, err := rangesync.CollectSetItems[types.KeyBytes](context.Background(), hsync.Set())
 		require.NoError(t, err)
 		require.ElementsMatch(t, initialSet, actualItems)
 	}

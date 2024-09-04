@@ -4,24 +4,24 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"math"
 	"math/rand"
 	"reflect"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
-	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
+	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
+
+func firstKey(t *testing.T, seq types.Seq) types.KeyBytes {
+	k, err := seq.First()
+	require.NoError(t, err)
+	return k.(types.KeyBytes)
+}
 
 func TestPrefix(t *testing.T) {
 	for _, tc := range []struct {
@@ -144,16 +144,10 @@ func TestPrefix(t *testing.T) {
 				require.Equal(t, tc.shift, tc.p.shift())
 			}
 
-			expMinID := types.HexToHash32(tc.minID)
-			var minID types.Hash32
-			tc.p.minID(minID[:])
+			expMinID := types.HexToKeyBytes(tc.minID)
+			minID := make(types.KeyBytes, 32)
+			tc.p.minID(minID)
 			require.Equal(t, expMinID, minID)
-
-			// QQQQQ: TBD: rm (probably with maxid fields?)
-			// expMaxID := types.HexToHash32(tc.maxID)
-			// var maxID types.Hash32
-			// tc.p.maxID(maxID[:])
-			// require.Equal(t, expMaxID, maxID)
 		})
 	}
 }
@@ -189,9 +183,9 @@ func TestCommonPrefix(t *testing.T) {
 			p: 0xabcdef12345678ba,
 		},
 	} {
-		a := types.HexToHash32(tc.a)
-		b := types.HexToHash32(tc.b)
-		require.Equal(t, tc.p, commonPrefix(a[:], b[:]))
+		a := types.HexToKeyBytes(tc.a)
+		b := types.HexToKeyBytes(tc.b)
+		require.Equal(t, tc.p, commonPrefix(a, b))
 	}
 }
 
@@ -213,7 +207,7 @@ func newFakeATXIDStore(t *testing.T, db sql.Database, maxDepth int) *fakeIDDBSto
 	return &fakeIDDBStore{db: db, t: t, sqlIDStore: newSQLIDStore(db, sts, 32)}
 }
 
-func (s *fakeIDDBStore) registerHash(h KeyBytes) error {
+func (s *fakeIDDBStore) registerHash(h types.KeyBytes) error {
 	if err := s.sqlIDStore.registerHash(h); err != nil {
 		return err
 	}
@@ -228,6 +222,12 @@ func (s *fakeIDDBStore) registerHash(h KeyBytes) error {
 }
 
 type idStoreFunc func(maxDepth int) idStore
+
+func requireEmpty(t *testing.T, seq types.Seq) {
+	for _, _ = range seq {
+		require.Fail(t, "expected an empty sequence")
+	}
+}
 
 func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 	type rangeTestCase struct {
@@ -705,17 +705,41 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 				},
 			},
 		},
+		{
+			name:     "ids8",
+			maxDepth: 24,
+			ids: []string{
+				"0e69888877324da35693decc7ded1b2bac16d394ced869af494568d66473a6f0",
+				"3a78db9e386493402561d9c6f69a6b434a62388f61d06d960598ebf29a3a2187",
+				"66c9aa8f3be7da713db66e56cc165a46764f88d3113244dd5964bb0a10ccacc3",
+				"90b25f2d1ee9c9e2d20df5f2226d14ee4223ea27ba565a49aa66a9c44a51c241",
+				"9e11fdb099f1118144738f9b68ca601e74b97280fd7bbc97cfc377f432e9b7b5",
+				"c1690e47798295cca02392cbfc0a86cb5204878c04a29b3ae7701b6b51681128",
+			},
+			ranges: []rangeTestCase{
+				{
+					x:        "9e11fdb099f1118144738f9b68ca601e74b97280fd7bbc97cfc377f432e9b7b5",
+					y:        "0e69880000000000000000000000000000000000000000000000000000000000",
+					limit:    -1,
+					fp:       "5f78f3f7e073844de4501d50",
+					count:    2,
+					itype:    1,
+					startIdx: 4,
+					endIdx:   0,
+				},
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var np nodePool
 			idStore := makeIDStore(tc.maxDepth)
 			ft := newFPTree(&np, idStore, 32, tc.maxDepth)
 			// ft.traceEnabled = true
-			var hs []types.Hash32
+			var hs []types.KeyBytes
 			for _, hex := range tc.ids {
-				h := types.HexToHash32(hex)
+				h := types.HexToKeyBytes(hex)
 				hs = append(hs, h)
-				ft.addHash(h[:])
+				ft.addHash(h)
 			}
 
 			var sb strings.Builder
@@ -725,11 +749,11 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 			checkTree(t, ft, tc.maxDepth)
 
 			for _, rtc := range tc.ranges {
-				var x, y types.Hash32
+				var x, y types.KeyBytes
 				var name string
 				if rtc.x != "" {
-					x = types.HexToHash32(rtc.x)
-					y = types.HexToHash32(rtc.y)
+					x = types.HexToKeyBytes(rtc.x)
+					y = types.HexToKeyBytes(rtc.y)
 					name = fmt.Sprintf("%s-%s_%d", rtc.x, rtc.y, rtc.limit)
 				} else {
 					x = hs[rtc.xIdx]
@@ -739,7 +763,7 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 				t.Run(name, func(t *testing.T) {
 					fpr, err := ft.fingerprintInterval(
 						context.Background(),
-						x[:], y[:], rtc.limit,
+						x, y, rtc.limit,
 					)
 					require.NoError(t, err)
 					assert.Equal(t, rtc.fp, fpr.fp.String(), "fp")
@@ -747,19 +771,19 @@ func testFPTree(t *testing.T, makeIDStore idStoreFunc) {
 					assert.Equal(t, rtc.itype, fpr.itype, "itype")
 
 					if rtc.startIdx == -1 {
-						require.Nil(t, fpr.start, "start")
+						requireEmpty(t, fpr.items)
 					} else {
-						require.NotNil(t, fpr.start, "start")
-						expK := KeyBytes(hs[rtc.startIdx][:])
-						assert.Equal(t, expK, itKey(t, fpr.start), "start")
+						require.NotNil(t, fpr.items, "items")
+						expK := types.KeyBytes(hs[rtc.startIdx])
+						assert.Equal(t, expK, firstKey(t, fpr.items), "items")
 					}
 
 					if rtc.endIdx == -1 {
-						require.Nil(t, fpr.end, "end")
+						require.Nil(t, fpr.next, "next")
 					} else {
-						require.NotNil(t, fpr.end, "end")
-						expK := KeyBytes(hs[rtc.endIdx][:])
-						assert.Equal(t, expK, itKey(t, fpr.end), "end")
+						require.NotNil(t, fpr.next, "next")
+						expK := types.KeyBytes(hs[rtc.endIdx])
+						assert.Equal(t, expK, fpr.next, "next")
 					}
 				})
 			}
@@ -794,34 +818,18 @@ func (noIDStore) clone() idStore {
 	return &noIDStore{}
 }
 
-func (noIDStore) registerHash(h KeyBytes) error {
+func (noIDStore) registerHash(h types.KeyBytes) error {
 	return nil
 }
 
-func (noIDStore) start(ctx context.Context) hashsync.Iterator {
+func (noIDStore) all(ctx context.Context) (types.Seq, error) {
 	panic("no ID store")
 
 }
 
-func (noIDStore) iter(ctx context.Context, from KeyBytes) hashsync.Iterator {
-	return noIter{}
+func (noIDStore) from(ctx context.Context, from types.KeyBytes) (types.Seq, error) {
+	return types.EmptySeq(), nil
 }
-
-type noIter struct{}
-
-func (noIter) Key() (hashsync.Ordered, error) {
-	return make(KeyBytes, 32), nil
-}
-
-func (noIter) Next() error {
-	panic("no ID store")
-}
-
-func (noIter) Clone() hashsync.Iterator {
-	return noIter{}
-}
-
-var _ hashsync.Iterator = &noIter{}
 
 // TestFPTreeNoIDStore tests that an fpTree can avoid using an idStore if X has only
 // 0 bits below max-depth and Y has only 1 bits below max-depth. It also checks that an fpTree
@@ -830,18 +838,18 @@ func TestFPTreeNoIDStore(t *testing.T) {
 	var np nodePool
 	ft := newFPTree(&np, &noIDStore{}, 32, 24)
 	// ft.traceEnabled = true
-	hashes := []KeyBytes{
-		util.FromHex("1111111111111111111111111111111111111111111111111111111111111111"),
-		util.FromHex("2222222222222222222222222222222222222222222222222222222222222222"),
-		util.FromHex("4444444444444444444444444444444444444444444444444444444444444444"),
-		util.FromHex("8888888888888888888888888888888888888888888888888888888888888888"),
+	hashes := []types.KeyBytes{
+		types.HexToKeyBytes("1111111111111111111111111111111111111111111111111111111111111111"),
+		types.HexToKeyBytes("2222222222222222222222222222222222222222222222222222222222222222"),
+		types.HexToKeyBytes("4444444444444444444444444444444444444444444444444444444444444444"),
+		types.HexToKeyBytes("8888888888888888888888888888888888888888888888888888888888888888"),
 	}
 	for _, h := range hashes {
 		ft.addHash(h)
 	}
 
 	for _, tc := range []struct {
-		x, y  KeyBytes
+		x, y  types.KeyBytes
 		limit int
 		fp    string
 		count uint32
@@ -854,15 +862,19 @@ func TestFPTreeNoIDStore(t *testing.T) {
 			count: 4,
 		},
 		{
-			x:     util.FromHex("1111110000000000000000000000000000000000000000000000000000000000"),
-			y:     util.FromHex("1111120000000000000000000000000000000000000000000000000000000000"),
+			x: types.HexToKeyBytes(
+				"1111110000000000000000000000000000000000000000000000000000000000"),
+			y: types.HexToKeyBytes(
+				"1111120000000000000000000000000000000000000000000000000000000000"),
 			limit: -1,
 			fp:    "111111111111111111111111",
 			count: 1,
 		},
 		{
-			x:     util.FromHex("0000000000000000000000000000000000000000000000000000000000000000"),
-			y:     util.FromHex("9000000000000000000000000000000000000000000000000000000000000000"),
+			x: types.HexToKeyBytes(
+				"0000000000000000000000000000000000000000000000000000000000000000"),
+			y: types.HexToKeyBytes(
+				"9000000000000000000000000000000000000000000000000000000000000000"),
 			limit: -1,
 			fp:    "ffffffffffffffffffffffff",
 			count: 4,
@@ -878,16 +890,16 @@ func TestFPTreeNoIDStore(t *testing.T) {
 func TestFPTreeClone(t *testing.T) {
 	var np nodePool
 	ft1 := newFPTree(&np, newInMemIDStore(32), 32, 24)
-	hashes := []types.Hash32{
-		types.HexToHash32("1111111111111111111111111111111111111111111111111111111111111111"),
-		types.HexToHash32("3333333333333333333333333333333333333333333333333333333333333333"),
-		types.HexToHash32("4444444444444444444444444444444444444444444444444444444444444444"),
+	hashes := []types.KeyBytes{
+		types.HexToKeyBytes("1111111111111111111111111111111111111111111111111111111111111111"),
+		types.HexToKeyBytes("3333333333333333333333333333333333333333333333333333333333333333"),
+		types.HexToKeyBytes("4444444444444444444444444444444444444444444444444444444444444444"),
 	}
-	ft1.addHash(hashes[0][:])
-	ft1.addHash(hashes[1][:])
+	ft1.addHash(hashes[0])
+	ft1.addHash(hashes[1])
 
 	ctx := context.Background()
-	fpr, err := ft1.fingerprintInterval(ctx, hashes[0][:], hashes[0][:], -1)
+	fpr, err := ft1.fingerprintInterval(ctx, hashes[0], hashes[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, "222222222222222222222222", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(2), fpr.count, "count")
@@ -908,22 +920,22 @@ func TestFPTreeClone(t *testing.T) {
 	t.Logf("ft2 after-clone:\n%s", sb.String())
 
 	// original tree unchanged --- rmme!!!!
-	fpr, err = ft1.fingerprintInterval(ctx, hashes[0][:], hashes[0][:], -1)
+	fpr, err = ft1.fingerprintInterval(ctx, hashes[0], hashes[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, "222222222222222222222222", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(2), fpr.count, "count")
 	require.Equal(t, 0, fpr.itype, "itype")
 
-	ft2.addHash(hashes[2][:])
+	ft2.addHash(hashes[2])
 
-	fpr, err = ft2.fingerprintInterval(ctx, hashes[0][:], hashes[0][:], -1)
+	fpr, err = ft2.fingerprintInterval(ctx, hashes[0], hashes[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, "666666666666666666666666", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(3), fpr.count, "count")
 	require.Equal(t, 0, fpr.itype, "itype")
 
 	// original tree unchanged
-	fpr, err = ft1.fingerprintInterval(ctx, hashes[0][:], hashes[0][:], -1)
+	fpr, err = ft1.fingerprintInterval(ctx, hashes[0], hashes[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, "222222222222222222222222", fpr.fp.String(), "fp")
 	require.Equal(t, uint32(2), fpr.count, "count")
@@ -943,20 +955,20 @@ func TestFPTreeClone(t *testing.T) {
 	require.Zero(t, np.count())
 }
 
-type hashList []types.Hash32
+type hashList []types.KeyBytes
 
-func (l hashList) findGTE(h types.Hash32) int {
-	p, _ := slices.BinarySearchFunc(l, h, func(a, b types.Hash32) int {
+func (l hashList) findGTE(h types.KeyBytes) int {
+	p, _ := slices.BinarySearchFunc(l, h, func(a, b types.KeyBytes) int {
 		return a.Compare(b)
 	})
 	return p
 }
 
-func (l hashList) keyAt(p int) KeyBytes {
+func (l hashList) keyAt(p int) types.KeyBytes {
 	if p == len(l) {
 		p = 0
 	}
-	return KeyBytes(l[p][:])
+	return types.KeyBytes(l[p])
 }
 
 func checkNode(t *testing.T, ft *fpTree, idx nodeIndex, depth int) {
@@ -967,18 +979,18 @@ func checkNode(t *testing.T, ft *fpTree, idx nodeIndex, depth int) {
 		}
 	} else {
 		require.Less(t, depth, ft.maxDepth)
-		var expFP fingerprint
+		var expFP types.Fingerprint
 		var expCount uint32
 		if node.left != noIndex {
 			checkNode(t, ft, node.left, depth+1)
 			left := ft.np.node(node.left)
-			expFP.update(left.fp[:])
+			expFP.Update(left.fp[:])
 			expCount += left.c
 		}
 		if node.right != noIndex {
 			checkNode(t, ft, node.right, depth+1)
 			right := ft.np.node(node.right)
-			expFP.update(right.fp[:])
+			expFP.Update(right.fp[:])
 			expCount += right.c
 		}
 		require.Equal(t, expFP, node.fp, "node fp at depth %d", depth)
@@ -1006,11 +1018,11 @@ func repeatTestFPTreeManyItems(
 }
 
 type fpResultWithBounds struct {
-	fp    fingerprint
+	fp    types.Fingerprint
 	count uint32
 	itype int
-	start KeyBytes
-	end   KeyBytes
+	start types.KeyBytes
+	next  types.KeyBytes
 }
 
 func toFPResultWithBounds(t *testing.T, fpr fpResult) fpResultWithBounds {
@@ -1018,17 +1030,15 @@ func toFPResultWithBounds(t *testing.T, fpr fpResult) fpResultWithBounds {
 		fp:    fpr.fp,
 		count: fpr.count,
 		itype: fpr.itype,
+		next:  fpr.next,
 	}
-	if fpr.start != nil {
-		r.start = itKey(t, fpr.start)
-	}
-	if fpr.end != nil {
-		r.end = itKey(t, fpr.end)
+	if fpr.items != nil {
+		r.start = firstKey(t, fpr.items)
 	}
 	return r
 }
 
-func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResultWithBounds {
+func dumbFP(hs hashList, x, y types.KeyBytes, limit int) fpResultWithBounds {
 	var fpr fpResultWithBounds
 	l := len(hs)
 	if l == 0 {
@@ -1043,11 +1053,11 @@ func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResultWithBounds {
 		fpr.start = hs.keyAt(p)
 		for {
 			if p >= pY || limit == 0 {
-				fpr.end = hs.keyAt(p)
+				fpr.next = hs.keyAt(p)
 				break
 			}
 			// t.Logf("XOR %s", hs[p].String())
-			fpr.fp.update(hs.keyAt(p))
+			fpr.fp.Update(hs.keyAt(p))
 			limit--
 			fpr.count++
 			p++
@@ -1057,10 +1067,10 @@ func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResultWithBounds {
 		fpr.start = hs.keyAt(p)
 		for {
 			if p >= len(hs) || limit == 0 {
-				fpr.end = hs.keyAt(p)
+				fpr.next = hs.keyAt(p)
 				break
 			}
-			fpr.fp.update(hs.keyAt(p))
+			fpr.fp.Update(hs.keyAt(p))
 			limit--
 			fpr.count++
 			p++
@@ -1072,10 +1082,10 @@ func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResultWithBounds {
 		p = 0
 		for {
 			if p == pY || limit == 0 {
-				fpr.end = hs.keyAt(p)
+				fpr.next = hs.keyAt(p)
 				break
 			}
-			fpr.fp.update(hs.keyAt(p))
+			fpr.fp.Update(hs.keyAt(p))
 			limit--
 			fpr.count++
 			p++
@@ -1084,13 +1094,13 @@ func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResultWithBounds {
 		pX := hs.findGTE(x)
 		p := pX
 		fpr.start = hs.keyAt(p)
-		fpr.end = fpr.start
+		fpr.next = fpr.start
 		for {
 			if limit == 0 {
-				fpr.end = hs.keyAt(p)
+				fpr.next = hs.keyAt(p)
 				break
 			}
-			fpr.fp.update(hs.keyAt(p))
+			fpr.fp.Update(hs.keyAt(p))
 			limit--
 			fpr.count++
 			p = (p + 1) % l
@@ -1102,9 +1112,9 @@ func dumbFP(hs hashList, x, y types.Hash32, limit int) fpResultWithBounds {
 	return fpr
 }
 
-func verifyInterval(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32, limit int) fpResult {
+func verifyInterval(t *testing.T, hs hashList, ft *fpTree, x, y types.KeyBytes, limit int) fpResult {
 	expFPR := dumbFP(hs, x, y, limit)
-	fpr, err := ft.fingerprintInterval(context.Background(), x[:], y[:], limit)
+	fpr, err := ft.fingerprintInterval(context.Background(), x, y, limit)
 	require.NoError(t, err)
 	require.Equal(t, expFPR, toFPResultWithBounds(t, fpr),
 		"x=%s y=%s limit=%d", x.String(), y.String(), limit)
@@ -1127,7 +1137,7 @@ func verifyInterval(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32, li
 	return fpr
 }
 
-func verifySubIntervals(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32, limit, d int) fpResult {
+func verifySubIntervals(t *testing.T, hs hashList, ft *fpTree, x, y types.KeyBytes, limit, d int) fpResult {
 	fpr := verifyInterval(t, hs, ft, x, y, limit)
 	// t.Logf("verifySubIntervals: x=%s y=%s limit=%d => count %d", x.String(), y.String(), limit, fpr.count)
 	if fpr.count > 1 {
@@ -1136,8 +1146,8 @@ func verifySubIntervals(t *testing.T, hs hashList, ft *fpTree, x, y types.Hash32
 			require.Less(t, c, limit)
 		}
 		part := verifyInterval(t, hs, ft, x, y, c)
-		var m types.Hash32
-		copy(m[:], itKey(t, part.end))
+		m := make(types.KeyBytes, len(x))
+		copy(m, part.next)
 		verifySubIntervals(t, hs, ft, x, m, -1, d+1)
 		verifySubIntervals(t, hs, ft, m, y, -1, d+1)
 	}
@@ -1149,30 +1159,30 @@ func testFPTreeManyItems(t *testing.T, idStore idStore, randomXY bool, numItems,
 	ft := newFPTree(&np, idStore, 32, maxDepth)
 	// ft.traceEnabled = true
 	hs := make(hashList, numItems)
-	var fp fingerprint
+	var fp types.Fingerprint
 	for i := range hs {
-		h := types.RandomHash()
+		h := types.RandomKeyBytes(32)
 		hs[i] = h
-		ft.addHash(h[:])
-		fp.update(h[:])
+		ft.addHash(h)
+		fp.Update(h)
 	}
-	slices.SortFunc(hs, func(a, b types.Hash32) int {
+	slices.SortFunc(hs, func(a, b types.KeyBytes) int {
 		return a.Compare(b)
 	})
 
 	checkTree(t, ft, maxDepth)
 
-	fpr, err := ft.fingerprintInterval(context.Background(), hs[0][:], hs[0][:], -1)
+	fpr, err := ft.fingerprintInterval(context.Background(), hs[0], hs[0], -1)
 	require.NoError(t, err)
 	require.Equal(t, fp, fpr.fp, "fp")
 	require.Equal(t, uint32(numItems), fpr.count, "count")
 	require.Equal(t, 0, fpr.itype, "itype")
 	for i := 0; i < repeat; i++ {
 		// TBD: allow reverse order
-		var x, y types.Hash32
+		var x, y types.KeyBytes
 		if randomXY {
-			x = types.RandomHash()
-			y = types.RandomHash()
+			x = types.RandomKeyBytes(32)
+			y = types.RandomKeyBytes(32)
 		} else {
 			x = hs[rand.Intn(numItems)]
 			y = hs[rand.Intn(numItems)]
@@ -1228,7 +1238,7 @@ func TestFPTreeManyItems(t *testing.T) {
 func verifyEasySplit(
 	t *testing.T,
 	ft *fpTree,
-	x, y KeyBytes,
+	x, y types.KeyBytes,
 	depth,
 	maxDepth int,
 ) (
@@ -1241,14 +1251,14 @@ func verifyEasySplit(
 	if fpr.count <= 1 {
 		return
 	}
-	a, err := fpr.start.Key()
+	a := firstKey(t, fpr.items)
 	require.NoError(t, err)
-	b, err := fpr.end.Key()
-	require.NoError(t, err)
+	b := fpr.next
+	require.NotNil(t, b)
 
 	m := fpr.count / 2
 	// t.Logf("--- easy split %s %s %d ---", x.String(), y.String(), m)
-	sr, err := ft.easySplit(context.Background(), x[:], y[:], int(m))
+	sr, err := ft.easySplit(context.Background(), x, y, int(m))
 	if err != nil {
 		require.ErrorIs(t, err, errEasySplitFailed)
 		return 0, 1
@@ -1260,40 +1270,34 @@ func verifyEasySplit(
 	require.Equal(t, fpr.itype, sr.part0.itype)
 	require.Equal(t, fpr.itype, sr.part1.itype)
 	fp := sr.part0.fp
-	fp.update(sr.part1.fp[:])
+	fp.Update(sr.part1.fp[:])
 	require.Equal(t, fpr.fp, fp)
-	require.Equal(t, a, itKey(t, sr.part0.start))
-	require.Equal(t, b, itKey(t, sr.part1.end))
-	precMiddle := itKey(t, sr.part0.end)
-	require.Equal(t, precMiddle, itKey(t, sr.part1.start))
+	require.Equal(t, a, firstKey(t, sr.part0.items))
+	precMiddle := firstKey(t, sr.part1.items)
 
 	fpr11, err := ft.fingerprintInterval(context.Background(), x, precMiddle, -1)
 	require.NoError(t, err)
-	require.Equal(t, sr.part0.fp, fpr11.fp)
 	require.Equal(t, sr.part0.count, fpr11.count)
-	require.Equal(t, a, itKey(t, fpr11.start))
-	require.Equal(t, precMiddle, itKey(t, fpr11.end))
+	require.Equal(t, sr.part0.fp, fpr11.fp)
+	require.Equal(t, a, firstKey(t, fpr11.items))
 
 	fpr12, err := ft.fingerprintInterval(context.Background(), precMiddle, y, -1)
 	require.NoError(t, err)
-	require.Equal(t, sr.part1.fp, fpr12.fp)
 	require.Equal(t, sr.part1.count, fpr12.count)
-	require.Equal(t, precMiddle, itKey(t, fpr12.start))
-	require.Equal(t, b, itKey(t, fpr12.end))
+	require.Equal(t, sr.part1.fp, fpr12.fp)
+	require.Equal(t, precMiddle, firstKey(t, fpr12.items))
 
 	fpr11, err = ft.fingerprintInterval(context.Background(), x, sr.middle, -1)
 	require.NoError(t, err)
-	require.Equal(t, sr.part0.fp, fpr11.fp)
 	require.Equal(t, sr.part0.count, fpr11.count)
-	require.Equal(t, a, itKey(t, fpr11.start))
-	require.Equal(t, precMiddle, itKey(t, fpr11.end))
+	require.Equal(t, sr.part0.fp, fpr11.fp)
+	require.Equal(t, a, firstKey(t, fpr11.items))
 
 	fpr12, err = ft.fingerprintInterval(context.Background(), sr.middle, y, -1)
 	require.NoError(t, err)
-	require.Equal(t, sr.part1.fp, fpr12.fp)
 	require.Equal(t, sr.part1.count, fpr12.count)
-	require.Equal(t, precMiddle, itKey(t, fpr12.start))
-	require.Equal(t, b, itKey(t, fpr12.end))
+	require.Equal(t, sr.part1.fp, fpr12.fp)
+	require.Equal(t, precMiddle, firstKey(t, fpr12.items))
 
 	if depth >= maxDepth {
 		return 1, 0
@@ -1310,13 +1314,13 @@ func TestEasySplit(t *testing.T) {
 		var np nodePool
 		ft := newFPTree(&np, newInMemIDStore(32), 32, maxDepth)
 		for range count {
-			h := types.RandomHash()
+			h := types.RandomKeyBytes(32)
 			// t.Logf("adding hash %s", h.String())
-			ft.addHash(h[:])
+			ft.addHash(h)
 		}
-		k, err := ft.start(context.Background()).Key()
+		seq, err := ft.all(context.Background())
 		require.NoError(t, err)
-		x := k.(KeyBytes)
+		x := firstKey(t, seq)
 		v := load64(x) & ^(1<<(64-maxDepth) - 1)
 		binary.BigEndian.PutUint64(x, v)
 		for i := 8; i < len(x); i++ {
@@ -1335,300 +1339,3 @@ func TestEasySplit(t *testing.T) {
 		require.GreaterOrEqual(t, successRate, 95.0)
 	}
 }
-
-const dbFile = "/Users/ivan4th/Library/Application Support/Spacemesh/node-data/7c8cef2b/state.sql"
-
-// func dumbAggATXs(t *testing.T, db sql.StateDatabase, x, y types.Hash32) fpResult {
-// 	var fp fingerprint
-// 	ts := time.Now()
-// 	nRows, err := db.Exec(
-// 		// BETWEEN is faster than >= and <
-// 		"select id from atxs where id between ? and ? order by id",
-// 		func(stmt *sql.Statement) {
-// 			stmt.BindBytes(1, x[:])
-// 			stmt.BindBytes(2, y[:])
-// 		},
-// 		func(stmt *sql.Statement) bool {
-// 			var id types.Hash32
-// 			stmt.ColumnBytes(0, id[:])
-// 			if id != y {
-// 				fp.update(id[:])
-// 			}
-// 			return true
-// 		},
-// 	)
-// 	require.NoError(t, err)
-// 	t.Logf("QQQQQ: %v: dumb fp between %s and %s", time.Now().Sub(ts), x.String(), y.String())
-// 	return fpResult{
-// 		fp:    fp,
-// 		count: uint32(nRows),
-// 		itype: x.Compare(y),
-// 	}
-// }
-
-func treeStats(t *testing.T, ft *fpTree) {
-	numNodes := 0
-	numCompactable := 0
-	numLeafs := 0
-	numEarlyLeafs := 0
-	minLeafSize := uint32(math.MaxUint32)
-	maxLeafSize := uint32(0)
-	totalLeafSize := uint32(0)
-	var scanNode func(nodeIndex, int) bool
-	scanNode = func(idx nodeIndex, depth int) bool {
-		if idx == noIndex {
-			return false
-		}
-		numNodes++
-		node := ft.np.node(idx)
-		if node.leaf() {
-			minLeafSize = min(minLeafSize, node.c)
-			maxLeafSize = max(maxLeafSize, node.c)
-			totalLeafSize += node.c
-			numLeafs++
-			if depth < ft.maxDepth {
-				numEarlyLeafs++
-			}
-		} else {
-			haveLeft := scanNode(node.left, depth+1)
-			if !scanNode(node.right, depth+1) || !haveLeft {
-				numCompactable++
-			}
-		}
-		return true
-	}
-	scanNode(ft.root, 0)
-	avgLeafSize := float64(totalLeafSize) / float64(numLeafs)
-	t.Logf("tree stats: numNodes=%d numLeafs=%d numEarlyLeafs=%d numCompactable=%d minLeafSize=%d maxLeafSize=%d avgLeafSize=%f",
-		numNodes, numLeafs, numEarlyLeafs, numCompactable, minLeafSize, maxLeafSize, avgLeafSize)
-}
-
-func testATXFP(t *testing.T, maxDepth int, hs *[]types.Hash32) {
-	// t.Skip("slow tmp test")
-	// counts := make(map[uint64]uint64)
-	// prefLens := make(map[int]int)
-	// QQQQQ: TBD: reenable schema drift check
-	db, err := statesql.Open("file:"+dbFile, sql.WithNoCheckSchemaDrift())
-	require.NoError(t, err)
-	defer db.Close()
-	// _, err = db.Exec("PRAGMA cache_size = -2000000", nil, nil)
-	// require.NoError(t, err)
-	// var prev uint64
-	// first := true
-	// where epoch=23
-	var np nodePool
-	if *hs == nil {
-		t.Logf("loading IDs")
-		_, err = db.Exec("select id from atxs where epoch = 26 order by id",
-			nil, func(stmt *sql.Statement) bool {
-				var id types.Hash32
-				stmt.ColumnBytes(0, id[:])
-				*hs = append(*hs, id)
-				// v := load64(id[:])
-				// counts[v>>40]++
-				// if first {
-				// 	first = false
-				// } else {
-				// 	prefLens[bits.LeadingZeros64(prev^v)]++
-				// }
-				// prev = v
-				return true
-			})
-		require.NoError(t, err)
-	}
-
-	// TODO: use testing.B and b.ReportAllocs()
-	for i := 0; i < 3; i++ {
-		runtime.GC()
-		time.Sleep(100 * time.Millisecond)
-	}
-	var stats1 runtime.MemStats
-	runtime.ReadMemStats(&stats1)
-	// TODO: pass extra bind params to the SQL query
-	st := &SyncedTable{
-		TableName: "atxs",
-		IDColumn:  "id",
-		Filter:    parseSQLExpr(t, "epoch = ?"),
-		Binder: func(stmt *sql.Statement) {
-			stmt.BindInt64(1, 26)
-		},
-	}
-	sts, err := st.snapshot(db)
-	require.NoError(t, err)
-	store := newSQLIDStore(db, sts, 32)
-	ft := newFPTree(&np, store, 32, maxDepth)
-	for _, id := range *hs {
-		ft.addHash(id[:])
-	}
-	treeStats(t, ft)
-
-	// countFreq := make(map[uint64]int)
-	// for _, c := range counts {
-	// 	countFreq[c]++
-	// }
-	// ks := maps.Keys(countFreq)
-	// slices.Sort(ks)
-	// for _, c := range ks {
-	// 	t.Logf("%d: %d times", c, countFreq[c])
-	// }
-	// pls := maps.Keys(prefLens)
-	// slices.Sort(pls)
-	// for _, pl := range pls {
-	// 	t.Logf("pl %d: %d times", pl, prefLens[pl])
-	// }
-
-	t.Logf("benchmarking ranges")
-	ts := time.Now()
-	const numIter = 20000
-	for n := 0; n < numIter; n++ {
-		x := types.RandomHash()
-		y := types.RandomHash()
-		ft.fingerprintInterval(context.Background(), x[:], y[:], -1)
-	}
-	elapsed := time.Now().Sub(ts)
-
-	for i := 0; i < 3; i++ {
-		runtime.GC()
-		time.Sleep(100 * time.Millisecond)
-	}
-	var stats2 runtime.MemStats
-	runtime.ReadMemStats(&stats2)
-	t.Logf("range benchmark for maxDepth %d: %v per range, %f ranges/s, heap diff %d",
-		// it's important to use ft pointer here so it doesn't get freed
-		// before we read the mem stats
-		ft.maxDepth,
-		elapsed/numIter,
-		float64(numIter)/elapsed.Seconds(),
-		stats2.HeapInuse-stats1.HeapInuse)
-
-	// TODO: test incomplete ranges (with limit)
-	t.Logf("testing ranges")
-	for n := 0; n < 50; n++ {
-		x := types.RandomHash()
-		y := types.RandomHash()
-		// t.Logf("QQQQQ: x=%s y=%s", x.String(), y.String())
-		expFPResult := dumbFP(*hs, x, y, -1)
-		//expFPResult := dumbAggATXs(t, db, x, y)
-		fpr, err := ft.fingerprintInterval(context.Background(), x[:], y[:], -1)
-		require.NoError(t, err)
-		require.Equal(t, expFPResult, toFPResultWithBounds(t, fpr),
-			"x=%s y=%s", x.String(), y.String())
-
-		limit := 0
-		if fpr.count != 0 {
-			limit = rand.Intn(int(fpr.count))
-		}
-		// t.Logf("QQQQQ: x=%s y=%s limit=%d", x.String(), y.String(), limit)
-		expFPResult = dumbFP(*hs, x, y, limit)
-		fpr, err = ft.fingerprintInterval(context.Background(), x[:], y[:], limit)
-		require.NoError(t, err)
-		require.Equal(t, expFPResult, toFPResultWithBounds(t, fpr),
-			"x=%s y=%s limit=%d", x.String(), y.String(), limit)
-	}
-
-	// x := types.HexToHash32("930a069661bf21b52aa79a4b5149ecc1190282f1386b6b8ae6b738153a7a802d")
-	// y := types.HexToHash32("6c966fc65c07c92e869b7796b2346a33e01c4fe38c25094a480cdcd2e7df1f56")
-	// t.Logf("QQQQQ: maxDepth=%d x=%s y=%s", maxDepth, x.String(), y.String())
-	// expFPResult := dumbFP(*hs, x, y, -1)
-	// //expFPResult := dumbAggATXs(t, db, x, y)
-	// ft.traceEnabled = true
-	// fpr, err := ft.fingerprintInterval(x[:], y[:], -1)
-	// require.NoError(t, err)
-	// require.Equal(t, expFPResult, fpr, "x=%s y=%s", x.String(), y.String())
-}
-
-func TestATXFP(t *testing.T) {
-	t.Skip("slow test")
-	var hs []types.Hash32
-	for maxDepth := 15; maxDepth <= 23; maxDepth++ {
-		for i := 0; i < 3; i++ {
-			testATXFP(t, maxDepth, &hs)
-		}
-	}
-}
-
-// benchmarks
-
-// maxDepth 18: 94.739µs per range, 10555.290991 ranges/s, heap diff 16621568
-// maxDepth 18: 95.837µs per range, 10434.316922 ranges/s, heap diff 16564224
-// maxDepth 18: 95.312µs per range, 10491.834238 ranges/s, heap diff 16588800
-// maxDepth 19: 60.822µs per range, 16441.200726 ranges/s, heap diff 32317440
-// maxDepth 19: 57.86µs per range, 17283.084675 ranges/s, heap diff 32333824
-// maxDepth 19: 58.183µs per range, 17187.139809 ranges/s, heap diff 32342016
-// maxDepth 20: 41.582µs per range, 24048.516680 ranges/s, heap diff 63094784
-// maxDepth 20: 41.384µs per range, 24163.830753 ranges/s, heap diff 63102976
-// maxDepth 20: 42.003µs per range, 23807.631953 ranges/s, heap diff 63053824
-// maxDepth 21: 31.996µs per range, 31253.349138 ranges/s, heap diff 123289600
-// maxDepth 21: 31.926µs per range, 31321.766830 ranges/s, heap diff 123256832
-// maxDepth 21: 31.839µs per range, 31407.657854 ranges/s, heap diff 123256832
-// maxDepth 22: 27.829µs per range, 35933.122150 ranges/s, heap diff 240689152
-// maxDepth 22: 27.524µs per range, 36330.976995 ranges/s, heap diff 240689152
-// maxDepth 22: 27.386µs per range, 36514.410406 ranges/s, heap diff 240689152
-// maxDepth 23: 24.378µs per range, 41020.262869 ranges/s, heap diff 470024192
-// maxDepth 23: 24.605µs per range, 40641.096389 ranges/s, heap diff 470056960
-// maxDepth 23: 24.51µs per range, 40799.444720 ranges/s, heap diff 470040576
-
-// maxDepth 18: 94.518µs per range, 10579.885738 ranges/s, heap diff 16621568
-// maxDepth 18: 95.144µs per range, 10510.332936 ranges/s, heap diff 16572416
-// maxDepth 18: 94.55µs per range, 10576.359829 ranges/s, heap diff 16588800
-// maxDepth 19: 60.463µs per range, 16538.974879 ranges/s, heap diff 32325632
-// maxDepth 19: 60.47µs per range, 16537.108181 ranges/s, heap diff 32358400
-// maxDepth 19: 60.441µs per range, 16544.939001 ranges/s, heap diff 32333824
-// maxDepth 20: 41.131µs per range, 24311.982297 ranges/s, heap diff 63078400
-// maxDepth 20: 41.621µs per range, 24026.119996 ranges/s, heap diff 63086592
-// maxDepth 20: 41.568µs per range, 24056.912641 ranges/s, heap diff 63094784
-// maxDepth 21: 32.234µs per range, 31022.459566 ranges/s, heap diff 123256832
-// maxDepth 21: 30.856µs per range, 32408.240119 ranges/s, heap diff 123248640
-// maxDepth 21: 30.774µs per range, 32494.318758 ranges/s, heap diff 123224064
-// maxDepth 22: 27.476µs per range, 36394.375781 ranges/s, heap diff 240689152
-// maxDepth 22: 27.707µs per range, 36091.188900 ranges/s, heap diff 240705536
-// maxDepth 22: 27.281µs per range, 36654.794863 ranges/s, heap diff 240705536
-// maxDepth 23: 24.394µs per range, 40992.220132 ranges/s, heap diff 470048768
-// maxDepth 23: 24.697µs per range, 40489.695824 ranges/s, heap diff 470040576
-// maxDepth 23: 24.436µs per range, 40923.081488 ranges/s, heap diff 470032384
-
-// maxDepth 15: 529.513µs per range, 1888.524885 ranges/s, heap diff 2293760
-// maxDepth 15: 528.783µs per range, 1891.132520 ranges/s, heap diff 2244608
-// maxDepth 15: 529.458µs per range, 1888.723450 ranges/s, heap diff 2252800
-// maxDepth 16: 281.809µs per range, 3548.498801 ranges/s, heap diff 4390912
-// maxDepth 16: 280.159µs per range, 3569.389929 ranges/s, heap diff 4382720
-// maxDepth 16: 280.449µs per range, 3565.709031 ranges/s, heap diff 4390912
-// maxDepth 17: 157.429µs per range, 6352.037713 ranges/s, heap diff 8527872
-// maxDepth 17: 156.569µs per range, 6386.942961 ranges/s, heap diff 8527872
-// maxDepth 17: 157.158µs per range, 6362.998907 ranges/s, heap diff 8527872
-// maxDepth 18: 94.689µs per range, 10560.886016 ranges/s, heap diff 16547840
-// maxDepth 18: 95.995µs per range, 10417.191145 ranges/s, heap diff 16564224
-// maxDepth 18: 94.469µs per range, 10585.428908 ranges/s, heap diff 16515072
-// maxDepth 19: 61.218µs per range, 16334.822475 ranges/s, heap diff 32342016
-// maxDepth 19: 61.733µs per range, 16198.549404 ranges/s, heap diff 32350208
-// maxDepth 19: 61.269µs per range, 16321.226214 ranges/s, heap diff 32309248
-// maxDepth 20: 42.336µs per range, 23620.054892 ranges/s, heap diff 63053824
-// maxDepth 20: 41.906µs per range, 23862.511368 ranges/s, heap diff 63094784
-// maxDepth 20: 41.647µs per range, 24011.273302 ranges/s, heap diff 63086592
-// maxDepth 21: 32.895µs per range, 30399.444906 ranges/s, heap diff 123256832
-// maxDepth 21: 31.798µs per range, 31447.748207 ranges/s, heap diff 123256832
-// maxDepth 21: 32.008µs per range, 31241.248008 ranges/s, heap diff 123265024
-// maxDepth 22: 27.014µs per range, 37017.223157 ranges/s, heap diff 240689152
-// maxDepth 22: 26.764µs per range, 37363.422097 ranges/s, heap diff 240664576
-// maxDepth 22: 26.938µs per range, 37121.580267 ranges/s, heap diff 240664576
-// maxDepth 23: 24.457µs per range, 40887.173321 ranges/s, heap diff 470040576
-// maxDepth 23: 24.997µs per range, 40003.930386 ranges/s, heap diff 470040576
-// maxDepth 23: 24.741µs per range, 40418.462446 ranges/s, heap diff 470040576
-
-// TODO: QQQQQ: retrieve the end of the interval w/count in fpTree.fingerprintInterval()
-// TODO: QQQQQ: test limits in TestInMemFPTreeManyItems (sep test cases SQL / non-SQL)
-// TODO: the returned RangeInfo.End iterators should be cyclic
-
-// TBD: random off-by-1 failure?
-//             	--- Expected
-//             	+++ Actual
-//             	@@ -2,5 +2,5 @@
-//             	  fp: (dbsync.fingerprint) (len=12) {
-//             	-  00000000  30 d4 db 9d b9 15 dd ad  75 1e 67 fd              |0.......u.g.|
-//             	+  00000000  a3 de 4b 89 7b 93 fc 76  24 88 82 b2              |..K.{..v$...|
-//             	  },
-//             	- count: (uint32) 41784134,
-//             	+ count: (uint32) 41784135,
-//             	  itype: (int) 1
-// Test:       	TestATXFP
-// Messages:   	x=930a069661bf21b52aa79a4b5149ecc1190282f1386b6b8ae6b738153a7a802d y=6c966fc65c07c92e869b7796b2346a33e01c4fe38c25094a480cdcd2e7df1f56

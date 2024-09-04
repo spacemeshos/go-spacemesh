@@ -14,7 +14,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
+	"github.com/spacemeshos/go-spacemesh/sync2/multipeer"
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
 type Config struct {
@@ -33,8 +34,8 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		MaxSendRange:           hashsync.DefaultMaxSendRange,
-		SampleSize:             hashsync.DefaultSampleSize,
+		MaxSendRange:           rangesync.DefaultMaxSendRange,
+		SampleSize:             rangesync.DefaultSampleSize,
 		Timeout:                10 * time.Second,
 		SyncPeerCount:          20,
 		MinSplitSyncPeers:      2,
@@ -50,9 +51,9 @@ func DefaultConfig() Config {
 type P2PHashSync struct {
 	logger     *zap.Logger
 	h          host.Host
-	is         hashsync.ItemStore
-	syncBase   hashsync.SyncBase
-	reconciler *hashsync.MultiPeerReconciler
+	os         rangesync.OrderedSet
+	syncBase   multipeer.SyncBase
+	reconciler *multipeer.MultiPeerReconciler
 	srv        *server.Server
 	cancel     context.CancelFunc
 	eg         errgroup.Group
@@ -63,35 +64,37 @@ type P2PHashSync struct {
 func NewP2PHashSync(
 	logger *zap.Logger,
 	h host.Host,
+	os rangesync.OrderedSet,
+	keyLen, maxDepth int,
 	proto string,
 	peers *peers.Peers,
-	handler hashsync.SyncKeyHandler,
+	handler multipeer.SyncKeyHandler,
 	cfg Config,
 ) *P2PHashSync {
 	s := &P2PHashSync{
 		logger: logger,
 		h:      h,
-		is:     hashsync.NewSyncTreeStore(hashsync.Hash32To12Xor{}),
+		os:     os,
 	}
 	s.srv = server.New(h, proto, s.handle,
 		server.WithTimeout(cfg.Timeout),
 		server.WithLog(logger))
-	ps := hashsync.NewPairwiseStoreSyncer(s.srv, []hashsync.RangeSetReconcilerOption{
-		hashsync.WithMaxSendRange(cfg.MaxSendRange),
-		hashsync.WithSampleSize(cfg.SampleSize),
+	ps := rangesync.NewPairwiseSetSyncer(s.srv, []rangesync.RangeSetReconcilerOption{
+		rangesync.WithMaxSendRange(cfg.MaxSendRange),
+		rangesync.WithSampleSize(cfg.SampleSize),
 	})
-	s.syncBase = hashsync.NewSetSyncBase(ps, s.is, handler)
-	s.reconciler = hashsync.NewMultiPeerReconciler(
-		s.syncBase, peers,
-		hashsync.WithLogger(logger),
-		hashsync.WithSyncPeerCount(cfg.SyncPeerCount),
-		hashsync.WithMinSplitSyncPeers(cfg.MinSplitSyncPeers),
-		hashsync.WithMinSplitSyncCount(cfg.MinSplitSyncCount),
-		hashsync.WithMaxFullDiff(cfg.MaxFullDiff),
-		hashsync.WithSyncInterval(cfg.SyncInterval),
-		hashsync.WithMinCompleteFraction(cfg.MinCompleteFraction),
-		hashsync.WithSplitSyncGracePeriod(time.Minute),
-		hashsync.WithNoPeersRecheckInterval(cfg.NoPeersRecheckInterval))
+	s.syncBase = multipeer.NewSetSyncBase(ps, s.os, handler)
+	s.reconciler = multipeer.NewMultiPeerReconciler(
+		s.syncBase, peers, keyLen, maxDepth,
+		multipeer.WithLogger(logger),
+		multipeer.WithSyncPeerCount(cfg.SyncPeerCount),
+		multipeer.WithMinSplitSyncPeers(cfg.MinSplitSyncPeers),
+		multipeer.WithMinSplitSyncCount(cfg.MinSplitSyncCount),
+		multipeer.WithMaxFullDiff(cfg.MaxFullDiff),
+		multipeer.WithSyncInterval(cfg.SyncInterval),
+		multipeer.WithMinCompleteFraction(cfg.MinCompleteFraction),
+		multipeer.WithSplitSyncGracePeriod(time.Minute),
+		multipeer.WithNoPeersRecheckInterval(cfg.NoPeersRecheckInterval))
 	return s
 }
 
@@ -109,8 +112,8 @@ func (s *P2PHashSync) handle(ctx context.Context, req []byte, stream io.ReadWrit
 	return syncer.Serve(ctx, req, stream)
 }
 
-func (s *P2PHashSync) ItemStore() hashsync.ItemStore {
-	return s.is
+func (s *P2PHashSync) Set() rangesync.OrderedSet {
+	return s.os
 }
 
 func (s *P2PHashSync) Start() {

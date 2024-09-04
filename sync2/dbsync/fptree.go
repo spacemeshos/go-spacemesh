@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -15,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/spacemeshos/go-spacemesh/sync2/hashsync"
+	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 var errEasySplitFailed = errors.New("easy split failed")
@@ -34,8 +33,8 @@ func (t *trace) enter(format string, args ...any) {
 		return
 	}
 	for n, arg := range args {
-		if it, ok := arg.(hashsync.Iterator); ok {
-			args[n] = formatIter(it)
+		if it, ok := arg.(types.Seq); ok {
+			args[n] = formatSeq(it)
 		}
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -55,8 +54,8 @@ func (t *trace) leave(results ...any) {
 			results = []any{fmt.Sprintf("<error: %v>", err)}
 			break
 		}
-		if it, ok := r.(hashsync.Iterator); ok {
-			results[n] = formatIter(it)
+		if it, ok := r.(types.Seq); ok {
+			results[n] = formatSeq(it)
 		}
 	}
 	msg := t.traceStack[len(t.traceStack)-1]
@@ -74,8 +73,8 @@ func (t *trace) leave(results ...any) {
 func (t *trace) log(format string, args ...any) {
 	if t.traceEnabled {
 		for n, arg := range args {
-			if it, ok := arg.(hashsync.Iterator); ok {
-				args[n] = formatIter(it)
+			if it, ok := arg.(types.Seq); ok {
+				args[n] = formatSeq(it)
 			}
 		}
 		msg := fmt.Sprintf(format, args...)
@@ -84,49 +83,13 @@ func (t *trace) log(format string, args ...any) {
 }
 
 const (
-	fingerprintBytes = 12
+	FingerprintSize = types.FingerprintSize
 	// cachedBits       = 24
 	// cachedSize       = 1 << cachedBits
 	// cacheMask        = cachedSize - 1
 	maxIDBytes = 32
 	bit63      = 1 << 63
 )
-
-type fingerprint [fingerprintBytes]byte
-
-func (fp fingerprint) Compare(other fingerprint) int {
-	return bytes.Compare(fp[:], other[:])
-}
-
-func (fp fingerprint) String() string {
-	return hex.EncodeToString(fp[:])
-}
-
-func (fp *fingerprint) update(h []byte) {
-	for n := range *fp {
-		(*fp)[n] ^= h[n]
-	}
-}
-
-func (fp *fingerprint) bitFromLeft(n int) bool {
-	if n > fingerprintBytes*8 {
-		panic("BUG: bad fingerprint bit index")
-	}
-	return (fp[n>>3]>>(7-n&0x7))&1 != 0
-}
-
-func hexToFingerprint(s string) fingerprint {
-	b, err := hex.DecodeString(s)
-	if err != nil {
-		panic("bad hex fingerprint: " + err.Error())
-	}
-	var fp fingerprint
-	if len(b) != len(fp) {
-		panic("bad hex fingerprint")
-	}
-	copy(fp[:], b)
-	return fp
-}
 
 type nodeIndex uint32
 
@@ -136,7 +99,7 @@ type nodePool struct {
 	rcPool[node, nodeIndex]
 }
 
-func (np *nodePool) add(fp fingerprint, c uint32, left, right nodeIndex) nodeIndex {
+func (np *nodePool) add(fp types.Fingerprint, c uint32, left, right nodeIndex) nodeIndex {
 	// panic("TBD: this is invalid, adds unneeded refs")
 	// if left != noIndex {
 	// 	np.rcPool.ref(left)
@@ -168,7 +131,7 @@ func (np *nodePool) node(idx nodeIndex) node {
 // The nodes are immutable except for refCount field, which should
 // only be used directly by nodePool methods
 type node struct {
-	fp          fingerprint
+	fp          types.Fingerprint
 	c           uint32
 	left, right nodeIndex
 }
@@ -233,7 +196,7 @@ func (p prefix) highBit() bool {
 	return p.bits()>>(p.len()-1) != 0
 }
 
-func (p prefix) minID(b KeyBytes) {
+func (p prefix) minID(b types.KeyBytes) {
 	if len(b) < 8 {
 		panic("BUG: id slice too small")
 	}
@@ -244,7 +207,7 @@ func (p prefix) minID(b KeyBytes) {
 	}
 }
 
-func (p prefix) idAfter(b KeyBytes) {
+func (p prefix) idAfter(b types.KeyBytes) {
 	if len(b) < 8 {
 		panic("BUG: id slice too small")
 	}
@@ -264,7 +227,7 @@ func (p prefix) idAfter(b KeyBytes) {
 }
 
 // QQQQQ: rm ?
-// func (p prefix) maxID(b KeyBytes) {
+// func (p prefix) maxID(b types.KeyBytes) {
 // 	if len(b) < 8 {
 // 		panic("BUG: id slice too small")
 // 	}
@@ -289,24 +252,24 @@ func (p prefix) shift() prefix {
 	}
 }
 
-func (p prefix) match(b KeyBytes) bool {
+func (p prefix) match(b types.KeyBytes) bool {
 	return load64(b)>>(64-p.len()) == p.bits()
 }
 
-func load64(h KeyBytes) uint64 {
+func load64(h types.KeyBytes) uint64 {
 	return binary.BigEndian.Uint64(h[:8])
 }
 
-func preFirst0(h KeyBytes) prefix {
+func preFirst0(h types.KeyBytes) prefix {
 	l := min(maxPrefixLen, bits.LeadingZeros64(^load64(h)))
 	return mkprefix((1<<l)-1, l)
 }
 
-func preFirst1(h KeyBytes) prefix {
+func preFirst1(h types.KeyBytes) prefix {
 	return prefix(min(maxPrefixLen, bits.LeadingZeros64(load64(h))))
 }
 
-func commonPrefix(a, b KeyBytes) prefix {
+func commonPrefix(a, b types.KeyBytes) prefix {
 	v1 := load64(a)
 	v2 := load64(b)
 	l := min(maxPrefixLen, bits.LeadingZeros64(v1^v2))
@@ -314,21 +277,23 @@ func commonPrefix(a, b KeyBytes) prefix {
 }
 
 type fpResult struct {
-	fp         fingerprint
-	count      uint32
-	itype      int
-	start, end hashsync.Iterator
+	fp    types.Fingerprint
+	count uint32
+	itype int
+	items types.Seq
+	next  types.KeyBytes
 }
 
 type aggContext struct {
 	ctx                     context.Context
-	x, y                    KeyBytes
-	fp, fp0                 fingerprint
+	x, y                    types.KeyBytes
+	fp, fp0                 types.Fingerprint
 	count, count0           uint32
 	itype                   int
 	limit                   int
 	total                   uint32
-	start, end              hashsync.Iterator
+	items                   types.Seq
+	next                    types.KeyBytes
 	lastPrefix, lastPrefix0 *prefix
 	easySplit               bool
 }
@@ -367,16 +332,16 @@ func (ac *aggContext) prefixBelowY(p prefix) bool {
 	return (p.bits()+1)<<(64-p.len())-1 < load64(ac.y)
 }
 
-func (ac *aggContext) fingreprintAtOrAfterX(fp fingerprint) bool {
-	k := make(KeyBytes, len(ac.x))
+func (ac *aggContext) fingreprintAtOrAfterX(fp types.Fingerprint) bool {
+	k := make(types.KeyBytes, len(ac.x))
 	copy(k, fp[:])
 	return bytes.Compare(k, ac.x) >= 0
 }
 
-func (ac *aggContext) fingreprintBelowY(fp fingerprint) bool {
-	k := make(KeyBytes, len(ac.x))
+func (ac *aggContext) fingreprintBelowY(fp types.Fingerprint) bool {
+	k := make(types.KeyBytes, len(ac.x))
 	copy(k, fp[:])
-	k[:fingerprintBytes].inc() // 1 after max key derived from the fingerprint
+	k[:FingerprintSize].Inc() // 1 after max key derived from the fingerprint
 	return bytes.Compare(k, ac.y) <= 0
 }
 
@@ -404,7 +369,7 @@ func (ac *aggContext) pruneY(node node, p prefix) bool {
 		// to determine if it's below y
 		return false
 	}
-	k := make(KeyBytes, len(ac.y))
+	k := make(types.KeyBytes, len(ac.y))
 	copy(k, node.fp[:])
 	return bytes.Compare(k, ac.y) >= 0
 }
@@ -434,7 +399,7 @@ func (ac *aggContext) maybeIncludeNode(node node, p prefix) bool {
 		ac.lastPrefix = &p
 		return true
 	}
-	ac.fp.update(node.fp[:])
+	ac.fp.Update(node.fp[:])
 	ac.count += node.c
 	ac.lastPrefix = &p
 	if ac.easySplit && ac.limit == 0 {
@@ -453,13 +418,6 @@ func (ac *aggContext) maybeIncludeNode(node node, p prefix) bool {
 		ac.lastPrefix = nil
 	}
 	return true
-}
-
-type idStore interface {
-	clone() idStore
-	registerHash(h KeyBytes) error
-	start(ctx context.Context) hashsync.Iterator
-	iter(ctx context.Context, from KeyBytes) hashsync.Iterator
 }
 
 type fpTree struct {
@@ -520,10 +478,10 @@ func (ft *fpTree) clone() *fpTree {
 	}
 }
 
-func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) nodeIndex {
+func (ft *fpTree) pushDown(fpA, fpB types.Fingerprint, p prefix, curCount uint32) nodeIndex {
 	// ft.log("QQQQQ: pushDown: fpA %s fpB %s p %s", fpA, fpB, p)
 	fpCombined := fpA
-	fpCombined.update(fpB[:])
+	fpCombined.Update(fpB[:])
 	if ft.maxDepth != 0 && p.len() == ft.maxDepth {
 		// ft.log("QQQQQ: pushDown: add at maxDepth")
 		return ft.np.add(fpCombined, curCount+1, noIndex, noIndex)
@@ -531,8 +489,8 @@ func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) node
 	if curCount != 1 {
 		panic("BUG: pushDown of non-1-leaf below maxDepth")
 	}
-	dirA := fpA.bitFromLeft(p.len())
-	dirB := fpB.bitFromLeft(p.len())
+	dirA := fpA.BitFromLeft(p.len())
+	dirB := fpB.BitFromLeft(p.len())
 	// ft.log("QQQQQ: pushDown: bitFromLeft %d: dirA %v dirB %v", p.len(), dirA, dirB)
 	if dirA == dirB {
 		childIdx := ft.pushDown(fpA, fpB, p.dir(dirA), 1)
@@ -560,7 +518,7 @@ func (ft *fpTree) pushDown(fpA, fpB fingerprint, p prefix, curCount uint32) node
 	}
 }
 
-func (ft *fpTree) addValue(fp fingerprint, p prefix, idx nodeIndex) nodeIndex {
+func (ft *fpTree) addValue(fp types.Fingerprint, p prefix, idx nodeIndex) nodeIndex {
 	if idx == noIndex {
 		r := ft.np.add(fp, 1, noIndex, noIndex)
 		// ft.log("QQQQQ: addValue: addNew fp %s p %s => %d", fp, p, r)
@@ -576,8 +534,8 @@ func (ft *fpTree) addValue(fp fingerprint, p prefix, idx nodeIndex) nodeIndex {
 		return r
 	}
 	fpCombined := fp
-	fpCombined.update(node.fp[:])
-	if fp.bitFromLeft(p.len()) {
+	fpCombined.Update(node.fp[:])
+	if fp.BitFromLeft(p.len()) {
 		// ft.log("QQQQQ: addValue: replaceRight fp %s p %s oldIdx %d", fp, p, idx)
 		if node.left != noIndex {
 			ft.np.ref(node.left)
@@ -600,9 +558,9 @@ func (ft *fpTree) addValue(fp fingerprint, p prefix, idx nodeIndex) nodeIndex {
 	}
 }
 
-func (ft *fpTree) addStoredHash(h KeyBytes) {
-	var fp fingerprint
-	fp.update(h)
+func (ft *fpTree) addStoredHash(h types.KeyBytes) {
+	var fp types.Fingerprint
+	fp.Update(h)
 	ft.rootMtx.Lock()
 	defer ft.rootMtx.Unlock()
 	ft.log("addStoredHash: h %s fp %s", h, fp)
@@ -611,7 +569,7 @@ func (ft *fpTree) addStoredHash(h KeyBytes) {
 	ft.releaseNode(oldRoot)
 }
 
-func (ft *fpTree) addHash(h KeyBytes) error {
+func (ft *fpTree) addHash(h types.KeyBytes) error {
 	ft.log("addHash: h %s", h)
 	if err := ft.idStore.registerHash(h); err != nil {
 		return err
@@ -649,7 +607,7 @@ func (ft *fpTree) followPrefix(from nodeIndex, p, followed prefix) (idx nodeInde
 // aggregated items.
 // It returns a boolean indicating whether the limit or the right edge (y) was reached and
 // an error, if any.
-func (ft *fpTree) aggregateEdge(x, y KeyBytes, p prefix, ac *aggContext) (cont bool, err error) {
+func (ft *fpTree) aggregateEdge(x, y types.KeyBytes, p prefix, ac *aggContext) (cont bool, err error) {
 	ft.enter("aggregateEdge: x %s y %s p %s limit %d count %d", x, y, p, ac.limit, ac.count)
 	defer func() {
 		ft.leave(ac.limit, ac.count, cont, err)
@@ -659,63 +617,70 @@ func (ft *fpTree) aggregateEdge(x, y KeyBytes, p prefix, ac *aggContext) (cont b
 		// so we'll have to retry using slower strategy
 		return false, errEasySplitFailed
 	}
-	if ac.limit == 0 && ac.end != nil {
+	if ac.limit == 0 && ac.next != nil {
 		ft.log("aggregateEdge: limit is 0 and end already set")
 		return false, nil
 	}
-	var startFrom KeyBytes
+	var startFrom types.KeyBytes
 	if x == nil {
-		startFrom = make(KeyBytes, ft.keyLen)
+		startFrom = make(types.KeyBytes, ft.keyLen)
 		p.minID(startFrom)
 	} else {
 		startFrom = x
 	}
 	ft.log("aggregateEdge: startFrom %s", startFrom)
-	it := ft.iter(ac.ctx, startFrom)
+	seq, err := ft.from(ac.ctx, startFrom)
+	if err != nil {
+		return false, err
+	}
 	if ac.limit == 0 {
-		ac.end = it.Clone()
-		if x != nil {
-			ft.log("aggregateEdge: limit 0: x is not nil, setting start to %s", ac.start)
-			ac.start = ac.end
-		}
-		ft.log("aggregateEdge: limit is 0 at %s", ac.end)
-		return false, nil
-	}
-	if x != nil {
-		ac.start = it.Clone()
-		ft.log("aggregateEdge: x is not nil, setting start to %s", ac.start)
-	}
-
-	for range ft.np.node(ft.root).c {
-		id, err := it.Key()
+		next, err := seq.First()
 		if err != nil {
 			return false, err
 		}
+		ac.next = next.(types.KeyBytes).Clone()
+		if x != nil {
+			ft.log("aggregateEdge: limit 0: x is not nil, setting start to %s", ac.next.String())
+			ac.items = seq
+		}
+		ft.log("aggregateEdge: limit is 0 at %s", ac.next.String())
+		return false, nil
+	}
+	if x != nil {
+		ac.items = seq
+		ft.log("aggregateEdge: x is not nil, setting start to %s", seq)
+	}
+
+	n := ft.np.node(ft.root).c
+	for id, err := range seq {
+		if err != nil {
+			return false, err
+		}
+		if ac.limit == 0 {
+			ac.next = id.(types.KeyBytes).Clone()
+			ft.log("aggregateEdge: limit exhausted")
+			return false, nil
+		}
+		if n == 0 {
+			break
+		}
 		ft.log("aggregateEdge: ID %s", id)
 		if y != nil && id.Compare(y) >= 0 {
-			ac.end = it
+			ac.next = id.(types.KeyBytes).Clone()
 			ft.log("aggregateEdge: ID is over Y: %s", id)
 			return false, nil
 		}
-		if !p.match(id.(KeyBytes)) {
+		if !p.match(id.(types.KeyBytes)) {
 			ft.log("aggregateEdge: ID doesn't match the prefix: %s", id)
 			ac.lastPrefix = &p
 			return true, nil
 		}
-		ac.fp.update(id.(KeyBytes))
+		ac.fp.Update(id.(types.KeyBytes))
 		ac.count++
 		if ac.limit > 0 {
 			ac.limit--
 		}
-		if err := it.Next(); err != nil {
-			ft.log("aggregateEdge: Next failed: %v", err)
-			return false, err
-		}
-		if ac.limit == 0 {
-			ac.end = it
-			ft.log("aggregateEdge: limit exhausted")
-			return false, nil
-		}
+		n--
 	}
 
 	return true, nil
@@ -1024,17 +989,32 @@ func (ft *fpTree) aggregateInterval(ac *aggContext) (err error) {
 	}
 }
 
-func (ft *fpTree) endIterFromPrefix(ac *aggContext, p prefix) hashsync.Iterator {
-	k := make(KeyBytes, ft.keyLen)
+func (ft *fpTree) startFromPrefix(ac *aggContext, p prefix) (types.Seq, error) {
+	k := make(types.KeyBytes, ft.keyLen)
 	p.idAfter(k)
-	ft.log("endIterFromPrefix: p: %s idAfter: %s", p, k)
-	return ft.iter(ac.ctx, k)
+	ft.log("startFromPrefix: p: %s idAfter: %s", p, k)
+	return ft.from(ac.ctx, k)
 }
 
-func (ft *fpTree) fingerprintInterval(ctx context.Context, x, y KeyBytes, limit int) (fpr fpResult, err error) {
+func (ft *fpTree) nextFromPrefix(ac *aggContext, p prefix) (types.KeyBytes, error) {
+	seq, err := ft.startFromPrefix(ac, p)
+	if err != nil {
+		return nil, err
+	}
+	id, err := seq.First()
+	if err != nil {
+		return nil, err
+	}
+	if id == nil {
+		return nil, nil
+	}
+	return id.(types.KeyBytes).Clone(), nil
+}
+
+func (ft *fpTree) fingerprintInterval(ctx context.Context, x, y types.KeyBytes, limit int) (fpr fpResult, err error) {
 	ft.enter("fingerprintInterval: x %s y %s limit %d", x, y, limit)
 	defer func() {
-		ft.leave(fpr.fp, fpr.count, fpr.itype, fpr.start, fpr.end, err)
+		ft.leave(fpr.fp, fpr.count, fpr.itype, fpr.items, fpr.next, err)
 	}()
 	ac := aggContext{ctx: ctx, x: x, y: y, limit: limit}
 	if err := ft.aggregateInterval(&ac); err != nil {
@@ -1047,29 +1027,47 @@ func (ft *fpTree) fingerprintInterval(ctx context.Context, x, y KeyBytes, limit 
 	}
 
 	if ac.total == 0 {
+		fpr.items = types.EmptySeq()
 		return fpr, nil
 	}
 
-	if ac.start != nil {
-		ft.log("fingerprintInterval: start %s", ac.start)
-		fpr.start = ac.start
+	if ac.items != nil {
+		ft.log("fingerprintInterval: items %s", ac.items)
+		fpr.items = ac.items
 	} else {
-		fpr.start = ft.iter(ac.ctx, x)
-		ft.log("fingerprintInterval: start from x: %s", fpr.start)
+		fpr.items, err = ft.from(ac.ctx, x)
+		if err != nil {
+			return fpResult{}, err
+		}
+		ft.log("fingerprintInterval: start from x: %s", fpr.items)
 	}
 
-	if ac.end != nil {
-		ft.log("fingerprintInterval: end %s", ac.end)
-		fpr.end = ac.end
+	if ac.next != nil {
+		ft.log("fingerprintInterval: next %s", ac.next)
+		fpr.next = ac.next
 	} else if (fpr.itype == 0 && limit < 0) || fpr.count == 0 {
-		fpr.end = fpr.start
-		ft.log("fingerprintInterval: end at start %s", fpr.end)
+		next, err := fpr.items.First()
+		if err != nil {
+			return fpResult{}, err
+		}
+		if next != nil {
+			fpr.next = next.(types.KeyBytes).Clone()
+		}
+		ft.log("fingerprintInterval: next at start %s", fpr.next)
 	} else if ac.lastPrefix != nil {
-		fpr.end = ft.endIterFromPrefix(&ac, *ac.lastPrefix)
-		ft.log("fingerprintInterval: end at lastPrefix %s -> %s", *ac.lastPrefix, fpr.end)
+		fpr.next, err = ft.nextFromPrefix(&ac, *ac.lastPrefix)
+		ft.log("fingerprintInterval: next at lastPrefix %s -> %s", *ac.lastPrefix, fpr.next)
 	} else {
-		fpr.end = ft.iter(ac.ctx, y)
-		ft.log("fingerprintInterval: end at y: %s", fpr.end)
+		seq, err := ft.from(ac.ctx, y)
+		if err != nil {
+			return fpResult{}, err
+		}
+		next, err := seq.First()
+		if err != nil {
+			return fpResult{}, err
+		}
+		fpr.next = next.(types.KeyBytes).Clone()
+		ft.log("fingerprintInterval: next at y: %s", fpr.next)
 	}
 
 	return fpr, nil
@@ -1077,18 +1075,18 @@ func (ft *fpTree) fingerprintInterval(ctx context.Context, x, y KeyBytes, limit 
 
 type splitResult struct {
 	part0, part1 fpResult
-	middle       KeyBytes
+	middle       types.KeyBytes
 }
 
 // easySplit splits an interval in two parts trying to do it in such way that the first
 // part has close to limit items while not making any idStore queries so that the database
 // is not accessed. If the split can't be done, which includes the situation where one of
 // the sides has 0 items, easySplit returns errEasySplitFailed error
-func (ft *fpTree) easySplit(ctx context.Context, x, y KeyBytes, limit int) (sr splitResult, err error) {
+func (ft *fpTree) easySplit(ctx context.Context, x, y types.KeyBytes, limit int) (sr splitResult, err error) {
 	ft.enter("easySplit: x %s y %s limit %d", x, y, limit)
 	defer func() {
-		ft.leave(sr.part0.fp, sr.part0.count, sr.part0.itype, sr.part0.start, sr.part0.end,
-			sr.part1.fp, sr.part1.count, sr.part1.itype, sr.part1.start, sr.part1.end, err)
+		ft.leave(sr.part0.fp, sr.part0.count, sr.part0.itype, sr.part0.items, sr.part0.next,
+			sr.part1.fp, sr.part1.count, sr.part1.itype, sr.part1.items, sr.part1.next, err)
 	}()
 	if limit < 0 {
 		panic("BUG: easySplit with limit < 0")
@@ -1117,21 +1115,32 @@ func (ft *fpTree) easySplit(ctx context.Context, x, y KeyBytes, limit int) (sr s
 
 	// ac.start / ac.end are only set in aggregateEdge which fails with
 	// errEasySplitFailed if easySplit is enabled, so we can ignore them here
-	middle := make(KeyBytes, ft.keyLen)
+	middle := make(types.KeyBytes, ft.keyLen)
 	ac.lastPrefix0.idAfter(middle)
+	ft.log("easySplit: lastPrefix0 %s middle %s", ac.lastPrefix0, middle)
+	items, err := ft.from(ac.ctx, x)
+	if err != nil {
+		return splitResult{}, err
+	}
 	part0 := fpResult{
 		fp:    ac.fp0,
 		count: ac.count0,
 		itype: ac.itype,
-		start: ft.iter(ac.ctx, x),
-		end:   ft.endIterFromPrefix(&ac, *ac.lastPrefix0),
+		items: items,
+		// next is only used for splitting
+		// next:  ft.nextFromPrefix(&ac, *ac.lastPrefix0),
+	}
+	items, err = ft.startFromPrefix(&ac, *ac.lastPrefix0)
+	if err != nil {
+		return splitResult{}, err
 	}
 	part1 := fpResult{
 		fp:    ac.fp,
 		count: ac.count,
 		itype: ac.itype,
-		start: part0.end.Clone(),
-		end:   ft.endIterFromPrefix(&ac, *ac.lastPrefix),
+		items: items,
+		// next is only used for splitting
+		// next:  ft.nextFromPrefix(&ac, *ac.lastPrefix),
 	}
 	return splitResult{
 		part0:  part0,
@@ -1174,22 +1183,24 @@ func (ft *fpTree) count() int {
 	return int(ft.np.node(ft.root).c)
 }
 
-type iterFormatter struct {
-	it hashsync.Iterator
+type seqFormatter struct {
+	seq types.Seq
 }
 
-func (f iterFormatter) String() string {
-	if k, err := f.it.Key(); err != nil {
-		return fmt.Sprintf("<error: %v>", err)
-	} else {
+func (f seqFormatter) String() string {
+	for k, err := range f.seq {
+		if err != nil {
+			return fmt.Sprintf("<error: %v>", err)
+		}
 		return k.(fmt.Stringer).String()
 	}
+	return "<empty>"
 }
 
-func formatIter(it hashsync.Iterator) fmt.Stringer {
-	return iterFormatter{it: it}
+func formatSeq(seq types.Seq) fmt.Stringer {
+	return seqFormatter{seq: seq}
 }
 
 // TBD: optimize, get rid of binary.BigEndian.*
-// TBD: QQQQQ: detect unbalancedness when a ref gets too many items
+// TBD: detect unbalancedness when a ref gets too many items
 // TBD: QQQQQ: ItemStore.Close(): close db conns, also free fpTree instead of using finalizer!
