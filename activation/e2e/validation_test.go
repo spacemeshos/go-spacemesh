@@ -66,6 +66,8 @@ func TestValidator_Validate(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
 	challenge := types.RandomHash()
+	idStates := activation.NewIdentityStateStorage()
+
 	nb, err := activation.NewNIPostBuilder(
 		localsql.InMemory(),
 		svc,
@@ -74,7 +76,14 @@ func TestValidator_Validate(t *testing.T) {
 		mclock,
 		validator,
 		activation.WithPoetServices(poetService),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
+	require.NoError(t, err)
+
+	err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForATXSyncing)
+	require.NoError(t, err)
+
+	err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForPoetRoundStart)
 	require.NoError(t, err)
 
 	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge,

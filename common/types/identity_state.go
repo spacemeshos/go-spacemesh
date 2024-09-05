@@ -10,7 +10,8 @@ var ErrIdentityStateUnknown = errors.New("identity state is unknown")
 type IdentityState int
 
 const (
-	IdentityStateWaitForATXSyncing IdentityState = iota
+	IdentityStateNotSet IdentityState = iota
+	IdentityStateWaitForATXSyncing
 	IdentityStateWaitForPoetRoundStart
 	IdentityStateWaitForPoetRoundEnd
 	IdentityStateFetchingProofs
@@ -29,6 +30,8 @@ func (s IdentityState) String() string {
 		return "fetching_proofs"
 	case IdentityStatePostProving:
 		return "post_proving"
+	case IdentityStateNotSet:
+		return "not_set"
 	default:
 		panic(fmt.Sprintf(ErrIdentityStateUnknown.Error()+" %d", s))
 	}

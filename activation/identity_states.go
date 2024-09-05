@@ -3,7 +3,6 @@ package activation
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"maps"
 	"slices"
 	"sync"
@@ -63,12 +62,13 @@ func (s *IdentityStateStorage) Set(id types.NodeID, newState types.IdentityState
 		if validNextStates, ok := validStateSwitch[currentState]; ok &&
 			slices.Contains(validNextStates, newState) {
 			s.states[id] = newState
-			log.Info("state changed from %s to %s for node id", currentState, newState, id.String())
 			return nil
 		}
 	}
 
-	return fmt.Errorf("%v: state %v can't be switched to %v", ErrInvalidIdentityStateSwitch.Error(), currentState, newState)
+	return fmt.Errorf("%v: state %v can't be switched to %v",
+		ErrInvalidIdentityStateSwitch.Error(),
+		currentState, newState)
 }
 
 func (s *IdentityStateStorage) Get(id types.NodeID) (types.IdentityState, error) {
