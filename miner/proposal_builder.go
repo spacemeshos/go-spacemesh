@@ -98,6 +98,7 @@ type sharedSession struct {
 
 // session per every signing key for the whole epoch.
 type session struct {
+	initialized   bool
 	epoch         types.EpochID
 	atx           types.ATXID
 	atxWeight     uint64
@@ -442,7 +443,7 @@ func (pb *ProposalBuilder) UpdateActiveSet(target types.EpochID, set []types.ATX
 	pb.activeGen.updateFallback(target, set)
 }
 
-func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.LayerID) error {
+func (pb *ProposalBuilder) initSharedData(current types.LayerID) error {
 	if pb.shared.epoch != current.GetEpoch() {
 		pb.shared = sharedSession{epoch: current.GetEpoch()}
 	}
@@ -472,11 +473,7 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 	return nil
 }
 
-func (pb *ProposalBuilder) initSignerData(
-	ctx context.Context,
-	ss *signerSession,
-	lid types.LayerID,
-) error {
+func (pb *ProposalBuilder) initSignerData(ss *signerSession, lid types.LayerID) error {
 	if ss.session.epoch != lid.GetEpoch() {
 		ss.session = session{epoch: lid.GetEpoch()}
 	}
@@ -547,12 +544,13 @@ func (pb *ProposalBuilder) initSignerData(
 			ss.session.eligibilities.proofs,
 		)
 	}
+	ss.session.initialized = true
 	return nil
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	buildStartTime := time.Now()
-	if err := pb.initSharedData(ctx, lid); err != nil {
+	if err := pb.initSharedData(lid); err != nil {
 		return err
 	}
 
@@ -594,12 +592,13 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	})
 
 	// Two stage pipeline, with the stages running in parallel.
-	// 1. Initializes signers and collect elligible to create proposals in this layer.
-	//    Runs limited number of goroutines because the initialization is CPU and DB bound.
-	// 2. Collects eligible signers from the stage 1 and creates and publishes proposals.
+	// 1. Initializes signers. Runs limited number of goroutines because the initialization is CPU and DB bound.
+	// 2. Collects initialized signer's sessions from the stage 1, filters elligible ones in this layer
+	//    and creates and publishes proposals.
 
-	// Used to pass eligible singers from stage 1 → 2.
-	eligibleChan := make(chan *signerSession)
+	// Used to pass initialized singers from stage 1 → 2.
+	// Buffered with capacity for all signers so that writes don't block.
+	initializedSessions := make(chan *signerSession, len(signers))
 
 	// Stage 1
 	// Use a semaphore instead of eg.SetLimit so that the stage 2 starts immediately after
@@ -608,6 +607,10 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	limiter := semaphore.NewWeighted(int64(pb.cfg.workersLimit))
 	var eg errgroup.Group
 	for _, ss := range signers {
+		if ss.session.initialized {
+			initializedSessions <- ss // won't block
+			continue
+		}
 		eg.Go(func() error {
 			if err := limiter.Acquire(ctx, 1); err != nil {
 				return err
@@ -616,7 +619,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 
 			start := time.Now()
 			ss.latency.start = buildStartTime
-			if err := pb.initSignerData(ctx, ss, lid); err != nil {
+			if err := pb.initSignerData(ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
 					ss.log.Debug("smesher doesn't have atx that targets this epoch",
 						log.ZContext(ctx),
@@ -626,69 +629,63 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 					return err
 				}
 			}
-			if lid <= ss.session.prev {
-				return fmt.Errorf(
-					"layer %d was already built by signer %s",
-					lid,
-					ss.signer.NodeID().ShortString(),
-				)
-			}
-			ss.session.prev = lid
 			ss.latency.data = time.Since(start)
-
-			proofs := ss.session.eligibilities.proofs[lid]
-			if len(proofs) == 0 {
-				ss.log.Debug("not eligible for proposal in layer",
-					log.ZContext(ctx),
-					zap.Uint32("layer_id", lid.Uint32()),
-					zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
-				)
-				return nil
-			}
-			ss.log.Debug("eligible for proposals in layer",
-				log.ZContext(ctx),
-				zap.Uint32("layer_id", lid.Uint32()),
-				zap.Int("num proposals", len(proofs)),
-			)
-
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case eligibleChan <- ss:
-				return nil
-			}
+			initializedSessions <- ss // won't block
+			return nil
 		})
 	}
 
 	var stage1Err error
 	go func() {
 		stage1Err = eg.Wait()
-		close(eligibleChan)
+		close(initializedSessions)
 	}()
 
 	// Stage 2
 	eg2 := errgroup.Group{}
-	for ss := range eligibleChan {
+	var stage2Errors error
+	for ss := range initializedSessions {
+		if lid <= ss.session.prev {
+			stage2Errors = errors.Join(stage2Errors, fmt.Errorf(
+				"layer %d was already built by signer %s",
+				lid,
+				ss.signer.NodeID().ShortString(),
+			))
+			continue
+		}
+		ss.session.prev = lid
+		proofs := ss.session.eligibilities.proofs[lid]
+		if len(proofs) == 0 {
+			ss.log.Debug("not eligible for proposal in layer",
+				log.ZContext(ctx),
+				zap.Uint32("layer_id", lid.Uint32()),
+				zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+			)
+			continue
+		}
+		ss.log.Debug("eligible for proposals in layer",
+			log.ZContext(ctx),
+			zap.Uint32("layer_id", lid.Uint32()),
+			zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+			zap.Int("num proposals", len(proofs)),
+		)
+		start := time.Now()
+		opinion, err := encodeVotesOnce()
+		if err != nil {
+			return err
+		}
+		ss.latency.tortoise = time.Since(start)
+
+		start = time.Now()
+		meshHash := calcMeshHashOnce()
+		ss.latency.hash = time.Since(start)
 		eg2.Go(func() error {
-			start := time.Now()
-			opinion, err := encodeVotesOnce()
-			if err != nil {
-				return err
-			}
-			ss.latency.tortoise = time.Since(start)
-
-			start = time.Now()
-			meshHash := calcMeshHashOnce()
-			ss.latency.hash = time.Since(start)
-
 			// needs to be saved before publishing, as we will query it in handler
 			if ss.session.ref == types.EmptyBallotID {
 				if err := persistActiveSetOnce(); err != nil {
 					return err
 				}
 			}
-
-			proofs := ss.session.eligibilities.proofs[lid]
 
 			start = time.Now()
 			txs := pb.conState.SelectProposalTXs(lid, len(proofs))
@@ -729,11 +726,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		})
 	}
 
-	stage2Err := eg2.Wait()
-	if stage1Err != nil {
-		return stage1Err
-	}
-	return stage2Err
+	return errors.Join(stage1Err, stage2Errors, eg2.Wait())
 }
 
 func createProposal(
@@ -789,8 +782,8 @@ func calcEligibilityProofs(
 	slots uint32,
 	layersPerEpoch uint32,
 ) map[types.LayerID][]types.VotingEligibility {
-	proofs := map[types.LayerID][]types.VotingEligibility{}
-	for counter := uint32(0); counter < slots; counter++ {
+	proofs := make(map[types.LayerID][]types.VotingEligibility, slots)
+	for counter := range slots {
 		vrf := signer.Sign(proposals.MustSerializeVRFMessage(beacon, epoch, nonce, counter))
 		layer := proposals.CalcEligibleLayer(epoch, layersPerEpoch, vrf)
 		proofs[layer] = append(proofs[layer], types.VotingEligibility{

@@ -244,6 +244,105 @@ type step struct {
 	expectErr       string
 }
 
+// The test verifies that the proposal builder creates proposals as soon as possible
+// for initialized and eligible signers, especially if the uninitialized ones take
+// long to init or are blocked entirely.
+func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
+	var signers []*signing.EdSigner
+	rng := rand.New(rand.NewSource(10101))
+	for range 2 {
+		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+		require.NoError(t, err)
+		signers = append(signers, signer)
+	}
+
+	var (
+		ctrl      = gomock.NewController(t)
+		conState  = mocks.NewMockconservativeState(ctrl)
+		clock     = mocks.NewMocklayerClock(ctrl)
+		publisher = pmocks.NewMockPublisher(ctrl)
+		trtl      = mocks.NewMockvotesEncoder(ctrl)
+		syncer    = smocks.NewMockSyncStateProvider(ctrl)
+		db        = statesql.InMemoryTest(t)
+		localdb   = localsql.InMemoryTest(t)
+		atxsdata  = atxsdata.New()
+	)
+	opts := []Opt{
+		WithLayerPerEpoch(types.GetLayersPerEpoch()),
+		WithLayerSize(2),
+		WithLogger(zaptest.NewLogger(t)),
+		WithSigners(signers...),
+	}
+	builder := New(clock, db, localdb, atxsdata, publisher, trtl, syncer, conState, opts...)
+	lid := types.LayerID(15)
+
+	// only signer[0] has ATX
+	atx := gatx(types.ATXID{1}, lid.GetEpoch()-1, signers[0].NodeID(), 1, genAtxWithNonce(777))
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+	atxsdata.AddFromAtx(atx, false)
+
+	beacon := types.Beacon{1}
+	require.NoError(t, beacons.Add(db, lid.GetEpoch(), beacon))
+	opinion := types.Opinion{Hash: types.Hash32{1}}
+	txs := []types.TransactionID{{1}, {2}}
+	expectedProposal := expectProposal(
+		signers[0], lid, atx.ID(), opinion,
+		expectEpochData(gactiveset(atx.ID()), 10, beacon),
+		expectTxs(txs),
+		expectCounters(signers[0], 3, beacon, 777, 0, 6, 9),
+	)
+
+	clock.EXPECT().LayerToTime(gomock.Any()).Return(time.Unix(0, 0)).AnyTimes()
+	conState.EXPECT().SelectProposalTXs(lid, gomock.Any()).Return(txs)
+	trtl.EXPECT().TallyVotes(gomock.Any(), lid)
+	trtl.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&opinion, nil)
+	trtl.EXPECT().LatestComplete().Return(lid - 1)
+	publisher.EXPECT().
+		Publish(context.Background(), pubsub.ProposalProtocol, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+			var proposal types.Proposal
+			codec.MustDecode(msg, &proposal)
+			proposal.MustInitialize()
+			require.Equal(t, *expectedProposal, proposal)
+			return nil
+		})
+
+	err := builder.build(context.Background(), lid)
+	require.NoError(t, err)
+
+	// at this point, signer[0] is initialized but signer[1] is not (missing ATX)
+	// build for the next layer with workers limit = 0 so that initializing signer[1] blocks
+	lid += 1
+	builder.cfg.workersLimit = 0
+
+	expectedProposal = expectProposal(
+		signers[0], lid, atx.ID(), opinion,
+		expectEpochData(gactiveset(atx.ID()), 10, beacon),
+		expectTxs(txs),
+		expectCounters(signers[0], 3, beacon, 777, 2, 5),
+	)
+	trtl.EXPECT().TallyVotes(gomock.Any(), lid)
+	trtl.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&opinion, nil)
+	trtl.EXPECT().LatestComplete().Return(lid - 1)
+
+	conState.EXPECT().SelectProposalTXs(lid, gomock.Any()).Return(txs)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	publisher.EXPECT().
+		Publish(ctx, pubsub.ProposalProtocol, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+			var proposal types.Proposal
+			codec.MustDecode(msg, &proposal)
+			proposal.MustInitialize()
+			require.Equal(t, *expectedProposal, proposal)
+			cancel() // unblock the build hang on semaphore acquire for signer[1]
+			return nil
+		})
+
+	err = builder.build(ctx, lid)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
 func TestBuild(t *testing.T) {
 	signers := make([]*signing.EdSigner, 4)
 	rng := rand.New(rand.NewSource(10101))
@@ -852,7 +951,7 @@ func TestBuild(t *testing.T) {
 				err := builder.build(ctx, step.lid)
 				close(decoded)
 				if len(step.expectErr) > 0 {
-					require.ErrorContains(t, err, step.expectErr)
+					require.ErrorContains(t, err, step.expectErr, "expected: %s", step.expectErr)
 				} else {
 					require.NoError(t, err)
 					expect := step.expectProposals
