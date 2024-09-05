@@ -135,3 +135,7 @@ func (s *P2PHashSync) Stop() {
 		s.logger.Error("P2PHashSync terminated with an error", zap.Error(err))
 	}
 }
+
+func (s *P2PHashSync) Synced() bool {
+	return s.reconciler.Synced()
+}

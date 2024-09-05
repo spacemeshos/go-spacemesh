@@ -78,6 +78,23 @@ func WithLogger(logger *zap.Logger) MultiPeerReconcilerOpt {
 	}
 }
 
+// WithMinFullSyncednessCount sets the minimum number of full syncs that must
+// have happened within the fullSyncednessPeriod for the node to be considered
+// fully synced.
+func WithMinFullSyncednessCount(count int) MultiPeerReconcilerOpt {
+	return func(mpr *MultiPeerReconciler) {
+		mpr.minFullSyncednessCount = count
+	}
+}
+
+// WithFullSyncednessPeriod sets the duration within which the minimum number
+// of full syncs must have happened for the node to be considered fully synced.
+func WithFullSyncednessPeriod(d time.Duration) MultiPeerReconcilerOpt {
+	return func(mpr *MultiPeerReconciler) {
+		mpr.fullSyncednessPeriod = d
+	}
+}
+
 func withClock(clock clockwork.Clock) MultiPeerReconcilerOpt {
 	return func(mpr *MultiPeerReconciler) {
 		mpr.clock = clock
@@ -123,6 +140,9 @@ type MultiPeerReconciler struct {
 	keyLen                 int
 	maxDepth               int
 	runner                 syncRunner
+	minFullSyncednessCount int
+	fullSyncednessPeriod   time.Duration
+	sl                     *syncList
 }
 
 func NewMultiPeerReconciler(
@@ -146,6 +166,8 @@ func NewMultiPeerReconciler(
 		clock:                  clockwork.NewRealClock(),
 		keyLen:                 keyLen,
 		maxDepth:               maxDepth,
+		minFullSyncednessCount: 3,
+		fullSyncednessPeriod:   15 * time.Minute,
 	}
 	for _, opt := range opts {
 		opt(mpr)
@@ -153,6 +175,7 @@ func NewMultiPeerReconciler(
 	if mpr.runner == nil {
 		mpr.runner = &runner{mpr: mpr}
 	}
+	mpr.sl = newSyncList(mpr.clock, mpr.minFullSyncednessCount, mpr.fullSyncednessPeriod)
 	return mpr
 }
 
@@ -226,6 +249,7 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 			err := syncer.Sync(ctx, nil, nil)
 			switch {
 			case err == nil:
+				mpr.sl.noteSync()
 			case errors.Is(err, context.Canceled):
 				return err
 			default:
@@ -330,4 +354,10 @@ LOOP:
 	}
 	cancel()
 	return errors.Join(err, mpr.syncBase.Wait())
+}
+
+// Synced returns true if the node is considered synced, that is, the specified
+// number of syncs has happened within the specified duration of time.
+func (mpr *MultiPeerReconciler) Synced() bool {
+	return mpr.sl.synced()
 }

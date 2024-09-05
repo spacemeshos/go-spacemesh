@@ -2,6 +2,7 @@ package sync2
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -57,19 +58,25 @@ func TestP2P(t *testing.T) {
 			return nil
 		}
 		os := rangesync.NewDumbHashSet(true)
-		hs[n] = NewP2PHashSync(logger, host, os, 32, 24, "sync2test", ps, handler, cfg)
+		hs[n] = NewP2PHashSync(
+			logger.Named(fmt.Sprintf("node%d", n)),
+			host, os, 32, 24, "sync2test", ps, handler, cfg)
 		if n == 0 {
 			is := hs[n].Set()
 			for _, h := range initialSet {
 				is.Add(context.Background(), h)
 			}
 		}
+		require.False(t, hs[n].Synced())
 		hs[n].Start()
 	}
 
 	require.Eventually(t, func() bool {
 		for _, hsync := range hs {
 			// use a snapshot to avoid races
+			if !hsync.Synced() {
+				return false
+			}
 			os := hsync.Set().Copy()
 			empty, err := os.Empty(context.Background())
 			require.NoError(t, err)

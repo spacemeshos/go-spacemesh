@@ -161,6 +161,7 @@ func TestMultiPeerSync(t *testing.T) {
 		ctx := mt.start()
 		mt.addPeers(10)
 		mt.syncBase.EXPECT().Count(gomock.Any()).Return(100, nil).AnyTimes()
+		require.False(t, mt.reconciler.Synced())
 		for i := 0; i < numSyncs; i++ {
 			mt.expectProbe(6, rangesync.ProbeResult{
 				FP:    "foo",
@@ -173,6 +174,7 @@ func TestMultiPeerSync(t *testing.T) {
 			mt.clock.Advance(time.Minute)
 			mt.satisfy()
 		}
+		require.True(t, mt.reconciler.Synced())
 		mt.syncBase.EXPECT().Wait()
 	})
 
