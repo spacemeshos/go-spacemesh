@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
@@ -22,6 +21,7 @@ func Test_AddPoetRegistration(t *testing.T) {
 		RoundID:       "round1",
 		RoundEnd:      time.Now().Round(time.Second),
 	}
+
 	reg2 := PoETRegistration{
 		NodeId:        nodeID,
 		ChallengeHash: types.RandomHash(),
@@ -74,7 +74,7 @@ func Test_AddPoetRegistration_NoDuplicates(t *testing.T) {
 	require.Len(t, registrations, 1)
 
 	err = AddPoetRegistration(db, reg)
-	require.ErrorIs(t, err, sql.ErrObjectExists)
+	require.NoError(t, err) // values will be updated
 
 	registrations, err = PoetRegistrations(db, nodeID)
 	require.NoError(t, err)

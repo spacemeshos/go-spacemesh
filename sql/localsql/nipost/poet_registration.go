@@ -57,6 +57,7 @@ func PoetRegistrations(db sql.Executor, nodeID types.NodeID) ([]PoETRegistration
 
 	dec := func(stmt *sql.Statement) bool {
 		registration := PoETRegistration{
+			NodeId:   nodeID,
 			Address:  stmt.ColumnText(1),
 			RoundID:  stmt.ColumnText(2),
 			RoundEnd: time.Unix(stmt.ColumnInt64(3), 0),
