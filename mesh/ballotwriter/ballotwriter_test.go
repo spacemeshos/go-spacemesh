@@ -33,27 +33,17 @@ var testLayer = types.LayerID(5)
 func TestWriteCoalesce_One(t *testing.T) {
 	w, db := newTestBallotWriter(t)
 	ballot := genBallot(t)
-	ch, errfn, retry := w.Store(ballot)
-	require.Nil(t, retry)
-	var err error
-	select {
-	case <-ch:
-		err = errfn()
-	case <-time.After(5 * time.Second):
-		t.Fatal("timeout")
-	}
+	err := w.Store(ballot)
 	require.NoError(t, err)
 	has, err := ballots.Has(db, ballot.ID())
 	require.True(t, has)
 	require.NoError(t, err)
 }
 
-// TestWriteCoalesce_OnePerSmesher tests that we won't accept two ballots
-// from the same smesher in the same batch. This also implicitly tests
-// for writing two different batches.
+// TestWriteCoalesce_TwoPerSmesher tests that we accept two ballots
+// for a smesher (and makes sure that the malfeasance circuit works).
 func TestWriteCoalesce_OnePerSmesher(t *testing.T) {
 	w, db := newTestBallotWriter(t)
-
 	b := types.RandomBallot()
 	b1 := types.RandomBallot()
 	b.Layer = testLayer
@@ -66,36 +56,17 @@ func TestWriteCoalesce_OnePerSmesher(t *testing.T) {
 	b1.SmesherID = sig.NodeID()
 	require.NoError(t, b.Initialize())
 	require.NoError(t, b1.Initialize())
-	ch, errfn, retry := w.Store(b)
-	require.Nil(t, retry)
-	ch1, errfn1, retry1 := w.Store(b1)
-	require.Nil(t, ch1)
-	require.Nil(t, errfn1)
-	require.NotNil(t, retry1)
-	select {
-	case <-ch:
-		err = errfn()
-	case <-time.After(5 * time.Second):
-		t.Fatal("timeout")
-	}
+	err = w.Store(b)
+	require.NoError(t, err)
+	err = w.Store(b1)
 	require.NoError(t, err)
 	has, err := ballots.Has(db, b.ID())
 	require.True(t, has)
 	require.NoError(t, err)
 	has, err = ballots.Has(db, b1.ID())
-	require.False(t, has)
+	require.True(t, has)
 	require.NoError(t, err)
-	retry1()
-	ch1, errfn1, retry1 = w.Store(b1)
-	require.NotNil(t, ch1)
-	require.NotNil(t, errfn1)
-	require.Nil(t, retry1)
-	select {
-	case <-ch1:
-		err = errfn1()
-	case <-time.After(5 * time.Second):
-		t.Fatal("timeout")
-	}
+	err = w.Store(b1)
 	require.NoError(t, err)
 	// check that a corresponding malfeasance proof has been stored
 	proof, err := identities.GetMalfeasanceProof(db, b.SmesherID)

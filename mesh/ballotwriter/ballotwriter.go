@@ -26,9 +26,8 @@ type BallotWriter struct {
 	atxMu sync.Mutex
 	timer *time.Ticker
 
-	ballotBatch           map[types.BallotID]*types.Ballot // the current
-	ballotBatchIdentities map[types.NodeID]struct{}
-	ballotBatchResult     *batchResult
+	ballotBatch       map[types.BallotID]*types.Ballot // the current
+	ballotBatchResult *batchResult
 }
 
 func New(db db, logger *zap.Logger) *BallotWriter {
@@ -42,8 +41,7 @@ func New(db db, logger *zap.Logger) *BallotWriter {
 		ballotBatchResult: &batchResult{
 			doneC: make(chan struct{}),
 		},
-		ballotBatchIdentities: make(map[types.NodeID]struct{}),
-		ballotBatch:           make(map[types.BallotID]*types.Ballot),
+		ballotBatch: make(map[types.BallotID]*types.Ballot),
 	}
 	return writer
 }
@@ -56,13 +54,15 @@ func (w *BallotWriter) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			w.atxMu.Lock()
+			w.ballotBatchResult.err = ctx.Err()
+			close(w.ballotBatchResult.doneC)
+			w.atxMu.Unlock()
+
 			return
 		case <-w.timer.C:
-			// we hang on to this lock for the entire duration of this select case branch.
-			// this is in order to simplify the logic when handling multiple writes from the
-			// same smesher ID. Implementing copy-on-write here comes at a big taxation because
-			// one needs to both keep track of the identities in the batch being currently
-			// written, as well as the one which would be queued up for the next write.
+			// we hang on to this lock for the entire duration of this select case branch
+			// as it simplifies the business logic.
 			w.atxMu.Lock()
 			startTime := time.Now()
 			if len(w.ballotBatch) == 0 {
@@ -133,7 +133,6 @@ func (w *BallotWriter) Start(ctx context.Context) {
 			}
 			cleanupStart := time.Now()
 			w.ballotBatchResult = &batchResult{doneC: make(chan struct{})}
-			clear(w.ballotBatchIdentities)
 			clear(w.ballotBatch)
 			w.atxMu.Unlock()
 			writeTime := time.Since(startTime)
@@ -147,35 +146,22 @@ func (w *BallotWriter) Start(ctx context.Context) {
 	}
 }
 
-// Store a ballot. Returns a channel to wait for the result, a function that returns
-// the error value and a wait function to try again. The retry logic can happen when
-// a node has multiple ballots on the same layer (malfeasant node or duplicate ballot received).
-func (w *BallotWriter) Store(b *types.Ballot) (<-chan struct{}, func() error, func()) {
+// Store a ballot. Will return the error encountered during the
+// write to the db. May also return a context canceled error during
+// shutdown.
+func (w *BallotWriter) Store(b *types.Ballot) error {
 	w.atxMu.Lock()
-	defer w.atxMu.Unlock()
 	br := w.ballotBatchResult
-	if _, ok := w.ballotBatchIdentities[b.SmesherID]; ok {
-		return nil, nil, func() { <-br.doneC }
-	}
 	w.ballotBatch[b.ID()] = b
+	w.atxMu.Unlock()
 
-	// we mark the identity as being "dirty". this is needed
-	// since other Store calls may try to insert multiple ballots
-	// from the same node (malfeasant), resulting in a data race
-	// where multiple ballots received and put into the same batch
-	// may circumvent the malfeasance proof generation circuit.
-	w.ballotBatchIdentities[b.SmesherID] = struct{}{}
-	c := br.doneC
-	return c, br.Error, nil
+	<-br.doneC
+	return br.err
 }
 
 type batchResult struct {
 	doneC chan struct{}
 	err   error
-}
-
-func (b *batchResult) Error() error {
-	return b.err
 }
 
 type db interface {

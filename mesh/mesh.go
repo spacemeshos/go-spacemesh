@@ -562,42 +562,19 @@ func (msh *Mesh) AddBallot(
 	var (
 		initiallyMalfeasant bool
 		start               time.Time
-		waitC               <-chan struct{}
-		errFunc             func() error
 	)
-	for {
-		initiallyMalfeasant = false
-		malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
-		if malicious {
-			ballot.SetMalicious()
-			initiallyMalfeasant = true
-		}
-
-		// Store should only allow one ballot per node ID per batch.
-		var retry func()
-		waitC, errFunc, retry = msh.ballotWriter.Store(ballot)
-		start = time.Now()
-		if retry == nil {
-			break
-		}
-		// this means that we got a ballot from the same smesher in this layer.
-		// while this doesn't directly implicate a node as being malfeasant, it does
-		// force us to retry this operation once the current batch is written to the db
-		retry()
-		metrics.BallotWaitRetry.Observe(time.Since(start).Seconds())
+	initiallyMalfeasant = false
+	malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
+	if malicious {
+		ballot.SetMalicious()
+		initiallyMalfeasant = true
 	}
-
-	var err error
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-waitC:
-		metrics.BallotWaitWrite.Observe(time.Since(start).Seconds())
-		err = errFunc()
-	}
+	start = time.Now()
+	err := msh.ballotWriter.Store(ballot)
 	if err != nil {
 		return nil, fmt.Errorf("batch store: %w", err)
 	}
+	metrics.BallotWaitWrite.Observe(time.Since(start).Seconds())
 	var proof *wire.MalfeasanceProof
 	// if this ballot was the one that turned the identity to be malicious
 	// we call the hooks to notify tortoise and atxsdata
