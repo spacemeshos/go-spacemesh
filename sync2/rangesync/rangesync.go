@@ -835,27 +835,6 @@ func (rsr *RangeSetReconciler) initiateBounded(ctx context.Context, c Conduit, x
 	}
 }
 
-func (rsr *RangeSetReconciler) getMessages(c Conduit) (msgs []SyncMessage, done bool, err error) {
-	for {
-		msg, err := c.NextMessage()
-		switch {
-		case err != nil:
-			return msgs, false, err
-		case msg == nil:
-			return msgs, false, errors.New("no end round marker")
-		default:
-			switch msg.Type() {
-			case MessageTypeEndRound:
-				return msgs, false, nil
-			case MessageTypeDone:
-				return msgs, true, nil
-			default:
-				msgs = append(msgs, msg)
-			}
-		}
-	}
-}
-
 func (rsr *RangeSetReconciler) InitiateProbe(ctx context.Context, c Conduit) (RangeInfo, error) {
 	return rsr.InitiateBoundedProbe(ctx, c, nil, nil)
 }
@@ -997,23 +976,29 @@ func (rsr *RangeSetReconciler) HandleProbeResponse(c Conduit, info RangeInfo) (p
 	}
 }
 
-func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done bool, err error) {
-	var msgs []SyncMessage
-	// All of the round's messages need to be received before processing them, as
-	// processing the messages involves sending more messages back to the peer.
-	// TODO: use proper goroutines in the wireConduit to deal with send/recv blocking.
-	msgs, done, err = rsr.getMessages(c)
-	if done {
-		// items already added
-		if len(msgs) != 0 {
-			return false, errors.New("no extra messages expected along with 'done' message")
-		}
-		return done, nil
-	}
+var errNoEndMarker = errors.New("no end round marker")
+var errEmptyRound = errors.New("empty round")
+
+func (rsr *RangeSetReconciler) doRound(ctx context.Context, c Conduit) (done bool, err error) {
 	done = true
 	var receivedKeys []types.Ordered
-	for _, msg := range msgs {
-		if msg.Type() == MessageTypeItemBatch {
+	nHandled := 0
+RECV_LOOP:
+	for {
+		msg, err := c.NextMessage()
+		switch {
+		case err != nil:
+			return false, err
+		case msg == nil:
+			return false, errNoEndMarker
+		}
+		switch msg.Type() {
+		case MessageTypeEndRound:
+			break RECV_LOOP
+		case MessageTypeDone:
+			return true, nil
+		case MessageTypeItemBatch:
+			nHandled++
 			for _, k := range msg.Keys() {
 				rsr.log.Debug("Process: add item", HexField("item", k))
 				if err := rsr.os.Add(ctx, k); err != nil {
@@ -1024,30 +1009,26 @@ func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done boo
 			continue
 		}
 
-		// If there was an error, just add any items received,
-		// but ignore other messages
-		if err != nil {
-			continue
-		}
-
 		// TODO: pass preceding range. Somehow, currently the code
 		// breaks if we capture the iterator from handleMessage and
 		// pass it to the next handleMessage call (it shouldn't)
-		var msgDone bool
-		msgDone, err = rsr.handleMessage(ctx, c, msg, receivedKeys)
+		msgDone, err := rsr.handleMessage(ctx, c, msg, receivedKeys)
+		if err != nil {
+			return false, err
+		}
+		nHandled++
 		if !msgDone {
 			done = false
 		}
-		receivedKeys = nil
+		receivedKeys = receivedKeys[:0]
 	}
 
-	if err != nil {
-		return false, err
-	}
-
-	if done {
+	switch {
+	case done:
 		err = c.SendDone()
-	} else {
+	case nHandled == 0:
+		err = errEmptyRound
+	default:
 		err = c.SendEndRound()
 	}
 
@@ -1055,6 +1036,18 @@ func (rsr *RangeSetReconciler) Process(ctx context.Context, c Conduit) (done boo
 		return false, err
 	}
 	return done, nil
+}
+
+func (rsr *RangeSetReconciler) Run(ctx context.Context, c Conduit) error {
+	for {
+		// Process() will receive all items and messages from the peer
+		syncDone, err := rsr.doRound(ctx, c)
+		if err != nil {
+			return err
+		} else if syncDone {
+			return nil
+		}
+	}
 }
 
 func fingerprintEqual(a, b any) bool {

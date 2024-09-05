@@ -3,6 +3,7 @@ package rangesync
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -15,6 +16,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
+
+type pipeStream struct {
+	io.ReadCloser
+	io.WriteCloser
+}
+
+func (ps *pipeStream) Close() error {
+	return errors.Join(ps.ReadCloser.Close(), ps.WriteCloser.Close())
+}
 
 type incomingRequest struct {
 	initialRequest []byte
@@ -71,25 +81,22 @@ func (fr *fakeRequester) request(
 	if !found {
 		return fmt.Errorf("bad peer %q", pid)
 	}
-	r, w := io.Pipe()
-	defer r.Close()
-	defer w.Close()
-	stream := struct {
-		io.Reader
-		io.Writer
-	}{
-		Reader: r,
-		Writer: w,
+	rClient, wServer := io.Pipe()
+	rServer, wClient := io.Pipe()
+	for _, s := range []io.Closer{rClient, wClient, rServer, wServer} {
+		defer s.Close()
 	}
+	clientStream := &pipeStream{ReadCloser: rClient, WriteCloser: wClient}
+	serverStream := &pipeStream{ReadCloser: rServer, WriteCloser: wServer}
 	select {
 	case p.reqCh <- incomingRequest{
 		initialRequest: initialRequest,
-		stream:         stream,
+		stream:         serverStream,
 	}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	return callback(ctx, stream)
+	return callback(ctx, clientStream)
 }
 
 func (fr *fakeRequester) StreamRequest(
@@ -111,7 +118,7 @@ type fakeSend struct {
 	done     bool
 }
 
-func (fs *fakeSend) send(c Conduit) error {
+func (fs *fakeSend) send(c Conduit, t *testing.T, name string) error { // QQQQQ: rm t and name
 	switch {
 	case fs.endRound:
 		return c.SendEndRound()
@@ -159,7 +166,7 @@ func (r *fakeRound) handleConversation(t *testing.T, c *wireConduit) error {
 		return err
 	}
 	for _, s := range r.toSend {
-		if err := s.send(c); err != nil {
+		if err := s.send(c, t, r.name); err != nil {
 			return err
 		}
 	}
@@ -185,10 +192,10 @@ func makeTestStreamHandler(t *testing.T, c *wireConduit, rounds []fakeRound) ser
 func makeTestRequestCallback(t *testing.T, c *wireConduit, rounds []fakeRound) server.StreamRequestCallback {
 	return func(ctx context.Context, stream io.ReadWriter) error {
 		if c == nil {
-			c = &wireConduit{stream: stream}
-		} else {
-			c.stream = stream
+			c = &wireConduit{}
 		}
+		c.begin(ctx, stream)
+		defer c.end()
 		for _, round := range rounds {
 			if err := round.handleConversation(t, c); err != nil {
 				return err

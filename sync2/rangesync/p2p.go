@@ -47,8 +47,9 @@ func (pss *PairwiseSetSyncer) Probe(
 		return ProbeResult{}, err
 	}
 	err = pss.r.StreamRequest(ctx, peer, initReq, func(ctx context.Context, stream io.ReadWriter) error {
-		c.stream = stream
 		var err error
+		c.begin(ctx, stream)
+		defer c.end()
 		pr, err = rsr.HandleProbeResponse(&c, info)
 		return err
 	})
@@ -83,7 +84,13 @@ func (pss *PairwiseSetSyncer) Sync(
 		return err
 	}
 	return pss.r.StreamRequest(ctx, peer, initReq, func(ctx context.Context, stream io.ReadWriter) error {
-		return c.handleStream(ctx, stream, rsr)
+		c.begin(ctx, stream)
+		defer c.end()
+		if err := rsr.Run(ctx, &c); err != nil {
+			c.closeStream() // stop the writer
+			return err
+		}
+		return nil
 	})
 }
 
@@ -103,5 +110,11 @@ func (pss *PairwiseSetSyncer) Serve(
 		Reader: io.MultiReader(bytes.NewBuffer(req), stream),
 		Writer: stream,
 	}
-	return c.handleStream(ctx, s, rsr)
+	c.begin(ctx, s)
+	defer c.end()
+	if err := rsr.Run(ctx, &c); err != nil {
+		c.closeStream() // stop the writer
+		return err
+	}
+	return nil
 }

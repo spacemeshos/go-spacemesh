@@ -25,6 +25,9 @@ func (f seqFormatter) String() string {
 }
 
 func SeqField(name string, seq types.Seq) zap.Field {
+	if seq == nil {
+		return zap.String(name, "<nil>")
+	}
 	return zap.Stringer(name, seqFormatter{seq: seq})
 }
 

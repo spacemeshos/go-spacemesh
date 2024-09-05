@@ -10,6 +10,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/sync2/types"
+	"golang.org/x/sync/errgroup"
+)
+
+const (
+	writeQueueSize = 10000
 )
 
 type sendable interface {
@@ -20,9 +25,55 @@ type sendable interface {
 type wireConduit struct {
 	stream     io.ReadWriter
 	initReqBuf *bytes.Buffer
+	eg         errgroup.Group
+	sendCh     chan sendable
 }
 
 var _ Conduit = &wireConduit{}
+
+type deadline interface {
+	SetDeadline(time.Time) error
+}
+
+func (c *wireConduit) closeStream() {
+	if closer, ok := c.stream.(io.Closer); ok {
+		closer.Close()
+	}
+}
+
+func (c *wireConduit) begin(ctx context.Context, s io.ReadWriter) {
+	if c.stream != nil {
+		panic("BUG: wireConduit: begin() already called for this wireConduit")
+	}
+	c.stream = s
+	c.sendCh = make(chan sendable, writeQueueSize)
+	c.eg.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				c.closeStream()
+				return ctx.Err()
+			case m, ok := <-c.sendCh:
+				if !ok {
+					return nil
+				}
+				if err := writeMessage(c.stream, m); err != nil {
+					c.closeStream()
+					return err
+				}
+			}
+		}
+	})
+}
+
+func (c *wireConduit) end() {
+	if c.stream == nil {
+		panic("BUG: wireConduit: end() called without begin()")
+	}
+	close(c.sendCh)
+	c.eg.Wait()
+	c.stream = nil
+}
 
 func (c *wireConduit) NextMessage() (SyncMessage, error) {
 	var b [1]byte
@@ -88,20 +139,11 @@ func (c *wireConduit) NextMessage() (SyncMessage, error) {
 }
 
 func (c *wireConduit) send(m sendable) error {
-	var stream io.Writer
-	if c.initReqBuf != nil {
-		stream = c.initReqBuf
-	} else if c.stream == nil {
-		panic("BUG: wireConduit: no stream")
-	} else {
-		stream = c.stream
+	if c.initReqBuf == nil {
+		c.sendCh <- m
+		return nil
 	}
-	b := []byte{byte(m.Type())}
-	if _, err := stream.Write(b); err != nil {
-		return err
-	}
-	_, err := codec.EncodeTo(stream, m)
-	return err
+	return writeMessage(c.initReqBuf, m)
 }
 
 func (c *wireConduit) SendFingerprint(x, y types.Ordered, fp types.Fingerprint, count int) error {
@@ -214,19 +256,15 @@ func (c *wireConduit) withInitialRequest(toCall func(Conduit) error) ([]byte, er
 	return c.initReqBuf.Bytes(), nil
 }
 
-func (c *wireConduit) handleStream(ctx context.Context, stream io.ReadWriter, rsr *RangeSetReconciler) error {
-	c.stream = stream
-	for {
-		// Process() will receive all items and messages from the peer
-		syncDone, err := rsr.Process(ctx, c)
-		if err != nil {
-			return err
-		} else if syncDone {
-			return nil
-		}
-	}
-}
-
 func (c *wireConduit) ShortenKey(k types.Ordered) types.Ordered {
 	return MinhashSampleItemFromKeyBytes(k.(types.KeyBytes))
+}
+
+func writeMessage(w io.Writer, m sendable) error {
+	b := []byte{byte(m.Type())}
+	if _, err := w.Write(b); err != nil {
+		return err
+	}
+	_, err := codec.EncodeTo(w, m)
+	return err
 }
