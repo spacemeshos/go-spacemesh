@@ -70,13 +70,13 @@ func (st *setSyncBaseTester) expectCopy(ctx context.Context, addedKeys ...types.
 	return copy
 }
 
-func (st *setSyncBaseTester) expectSyncStore(
+func (st *setSyncBaseTester) expectSync(
 	ctx context.Context,
 	p p2p.Peer,
 	ss Syncer,
 	addedKeys ...types.KeyBytes,
 ) {
-	st.ps.EXPECT().SyncStore(ctx, p, ss, nil, nil).
+	st.ps.EXPECT().Sync(ctx, p, ss, nil, nil).
 		DoAndReturn(func(
 			ctx context.Context,
 			p p2p.Peer,
@@ -90,14 +90,19 @@ func (st *setSyncBaseTester) expectSyncStore(
 		})
 }
 
-func (st *setSyncBaseTester) failToSyncStore(
+func (st *setSyncBaseTester) failToSync(
 	ctx context.Context,
 	p p2p.Peer,
 	ss Syncer,
 	err error,
 ) {
-	st.ps.EXPECT().SyncStore(ctx, p, ss, nil, nil).
-		DoAndReturn(func(ctx context.Context, p p2p.Peer, os rangesync.OrderedSet, x, y types.KeyBytes) error {
+	st.ps.EXPECT().Sync(ctx, p, ss, nil, nil).
+		DoAndReturn(func(
+			ctx context.Context,
+			p p2p.Peer,
+			os rangesync.OrderedSet,
+			x, y types.KeyBytes,
+		) error {
 			return err
 		})
 }
@@ -126,8 +131,8 @@ func TestSetSyncBase(t *testing.T) {
 			Count: 42,
 			Sim:   0.99,
 		}
-		store := st.expectCopy(ctx)
-		st.ps.EXPECT().Probe(ctx, p2p.Peer("p1"), store, nil, nil).Return(expPr, nil)
+		set := st.expectCopy(ctx)
+		st.ps.EXPECT().Probe(ctx, p2p.Peer("p1"), set, nil, nil).Return(expPr, nil)
 		pr, err := st.ssb.Probe(ctx, p2p.Peer("p1"))
 		require.NoError(t, err)
 		require.Equal(t, expPr, pr)
@@ -145,12 +150,12 @@ func TestSetSyncBase(t *testing.T) {
 
 		x := types.RandomKeyBytes(32)
 		y := types.RandomKeyBytes(32)
-		st.ps.EXPECT().SyncStore(ctx, p2p.Peer("p1"), ss, x, y)
+		st.ps.EXPECT().Sync(ctx, p2p.Peer("p1"), ss, x, y)
 		require.NoError(t, ss.Sync(ctx, x, y))
 
 		st.os.EXPECT().Has(gomock.Any(), addedKey)
 		st.os.EXPECT().Add(ctx, addedKey)
-		st.expectSyncStore(ctx, p2p.Peer("p1"), ss, addedKey)
+		st.expectSync(ctx, p2p.Peer("p1"), ss, addedKey)
 		require.NoError(t, ss.Sync(ctx, nil, nil))
 		close(st.getWaitCh(addedKey))
 
@@ -173,7 +178,7 @@ func TestSetSyncBase(t *testing.T) {
 		st.os.EXPECT().Add(ctx, addedKey)
 		for i := 0; i < 3; i++ {
 			st.os.EXPECT().Has(gomock.Any(), addedKey)
-			st.expectSyncStore(ctx, p2p.Peer("p1"), ss, addedKey)
+			st.expectSync(ctx, p2p.Peer("p1"), ss, addedKey)
 			require.NoError(t, ss.Sync(ctx, nil, nil))
 		}
 		close(st.getWaitCh(addedKey))
@@ -198,7 +203,7 @@ func TestSetSyncBase(t *testing.T) {
 		st.os.EXPECT().Has(gomock.Any(), k2)
 		st.os.EXPECT().Add(ctx, k1)
 		st.os.EXPECT().Add(ctx, k2)
-		st.expectSyncStore(ctx, p2p.Peer("p1"), ss, k1, k2)
+		st.expectSync(ctx, p2p.Peer("p1"), ss, k1, k2)
 		require.NoError(t, ss.Sync(ctx, nil, nil))
 		close(st.getWaitCh(k1))
 		close(st.getWaitCh(k2))
@@ -223,7 +228,7 @@ func TestSetSyncBase(t *testing.T) {
 		st.os.EXPECT().Has(gomock.Any(), k2)
 		// k1 is not propagated to syncBase due to the handler failure
 		st.os.EXPECT().Add(ctx, k2)
-		st.expectSyncStore(ctx, p2p.Peer("p1"), ss, k1, k2)
+		st.expectSync(ctx, p2p.Peer("p1"), ss, k1, k2)
 		require.NoError(t, ss.Sync(ctx, nil, nil))
 		handlerErr := errors.New("fail")
 		st.getWaitCh(k1) <- handlerErr
@@ -234,7 +239,7 @@ func TestSetSyncBase(t *testing.T) {
 		require.ElementsMatch(t, []types.KeyBytes{k1, k2}, handledKeys)
 	})
 
-	t.Run("synctree based item store", func(t *testing.T) {
+	t.Run("real item set", func(t *testing.T) {
 		t.Parallel()
 		hs := make([]types.KeyBytes, 4)
 		for n := range hs {
