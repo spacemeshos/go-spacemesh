@@ -3,19 +3,12 @@ package dbsync
 import (
 	"testing"
 
-	rsql "github.com/rqlite/sql"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
-
-func parseSQLExpr(t *testing.T, s string) rsql.Expr {
-	expr, err := rsql.ParseExprString(s)
-	require.NoError(t, err)
-	return expr
-}
 
 func TestSyncedTable_GenSQL(t *testing.T) {
 	for _, tc := range []struct {
@@ -47,7 +40,7 @@ func TestSyncedTable_GenSQL(t *testing.T) {
 			st: SyncedTable{
 				TableName:       "atxs",
 				IDColumn:        "id",
-				Filter:          parseSQLExpr(t, "epoch = ?"),
+				Filter:          MustParseSQLExpr("epoch = ?"),
 				TimestampColumn: "received",
 			},
 			allRC:    `SELECT "id" FROM "atxs" WHERE "epoch" = ? AND "rowid" <= ?`,
@@ -296,7 +289,7 @@ func TestSyncedTable_LoadIDs(t *testing.T) {
 			TableName:       "atxs",
 			IDColumn:        "id",
 			TimestampColumn: "received",
-			Filter:          parseSQLExpr(t, "epoch = ?"),
+			Filter:          MustParseSQLExpr("epoch = ?"),
 			Binder: func(stmt *sql.Statement) {
 				stmt.BindInt64(1, 2)
 			},

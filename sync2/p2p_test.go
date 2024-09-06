@@ -44,6 +44,7 @@ func TestP2P(t *testing.T) {
 			}
 		}
 		cfg := DefaultConfig()
+		cfg.EnableActiveSync = true
 		cfg.SyncInterval = 100 * time.Millisecond
 		host := mesh.Hosts()[n]
 		handler := func(ctx context.Context, k types.Ordered, peer p2p.Peer) error {

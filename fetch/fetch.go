@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	corehost "github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -1005,4 +1006,12 @@ func (f *Fetch) SelectBestShuffled(n int) []p2p.Peer {
 		peers[i], peers[j] = peers[j], peers[i]
 	})
 	return peers
+}
+
+func (f *Fetch) Host() corehost.Host {
+	return f.host.(corehost.Host)
+}
+
+func (f *Fetch) Peers() *peers.Peers {
+	return f.peers
 }

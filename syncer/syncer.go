@@ -18,6 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sync2"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -39,6 +41,9 @@ type Config struct {
 	OutOfSyncThresholdLayers uint32         `mapstructure:"out-of-sync-threshold"`
 	AtxSync                  atxsync.Config `mapstructure:"atx-sync"`
 	MalSync                  malsync.Config `mapstructure:"malfeasance-sync"`
+	EnableSyncV2             bool           `mapstructure:"enable-sync-v2"`
+	OldAtxSyncCfg            sync2.Config   `mapstructure:"old-atx-sync"`
+	CurAtxSyncCfg            sync2.Config   `mapstructure:"cur-atx-sync"`
 }
 
 // DefaultConfig for the syncer.
@@ -162,6 +167,9 @@ type Syncer struct {
 
 	eg   errgroup.Group
 	stop context.CancelFunc
+
+	curAtxSyncV2 *sync2.P2PHashSync
+	oldAtxSyncV2 *sync2.P2PHashSync
 }
 
 // NewSyncer creates a new Syncer instance.
@@ -207,6 +215,22 @@ func NewSyncer(
 	s.isBusy.Store(false)
 	s.lastLayerSynced.Store(s.mesh.LatestLayer().Uint32())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch().Uint32() - 1)
+	if s.cfg.EnableSyncV2 {
+		s.curAtxSyncV2 = sync2.NewCurAtxSyncer(
+			s.logger.Named("cur-atx-sync"),
+			s.cfg.CurAtxSyncCfg,
+			cdb.Database.(sql.StateDatabase),
+			fetcher.(sync2.Fetcher),
+			ticker,
+		)
+		s.oldAtxSyncV2 = sync2.NewOldAtxSyncer(
+			s.logger.Named("old-atx-sync"),
+			s.cfg.CurAtxSyncCfg,
+			cdb.Database.(sql.StateDatabase),
+			fetcher.(sync2.Fetcher),
+			ticker,
+		)
+	}
 	return s
 }
 
@@ -471,10 +495,74 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	return success
 }
 
+func (s *Syncer) syncAtxV2(ctx context.Context) error {
+	currentLayer := s.ticker.CurrentLayer()
+	publish := currentLayer.GetEpoch()
+	if publish == 0 {
+		return nil // nothing to sync in epoch 0
+	}
+	if !s.ListenToATXGossip() {
+		// TODO: syncv2
+		s.logger.Debug("syncing atx from genesis",
+			log.ZContext(ctx),
+			zap.Stringer("current layer", currentLayer),
+			zap.Stringer("last epoch", s.lastAtxEpoch()),
+		)
+		s.oldAtxSyncV2.Start()
+		if err := s.oldAtxSyncV2.WaitForSync(ctx); err != nil {
+			return fmt.Errorf("error syncing old ATXs: %w", err)
+		}
+		s.logger.Debug("atxs synced to epoch",
+			log.ZContext(ctx), zap.Stringer("last epoch", s.lastAtxEpoch()))
+
+		// TODO: use syncv2 for malfeasance proofs too
+		s.logger.Info("syncing malicious proofs", log.ZContext(ctx))
+		if err := s.syncMalfeasance(ctx, currentLayer.GetEpoch()); err != nil {
+			return err
+		}
+		s.logger.Info("malicious IDs synced", log.ZContext(ctx))
+		s.setATXSynced()
+	}
+
+	// TODO: advance upon epoch change
+	// if current.OrdinalInEpoch() <= uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
+	// 	// not advancing yet ...
+	// }
+	s.curAtxSyncV2.Start()
+	if !s.malSync.started {
+		s.malSync.started = true
+		s.malSync.eg.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-s.awaitATXSyncedCh:
+				err := s.malsyncer.DownloadLoop(ctx)
+				if err != nil && !errors.Is(err, context.Canceled) {
+					s.logger.Error("malfeasance sync failed", log.ZContext(ctx), zap.Error(err))
+				}
+				return nil
+			}
+		})
+	}
+
+	return nil
+}
+
 func (s *Syncer) syncAtx(ctx context.Context) error {
+	if s.cfg.EnableSyncV2 && s.cfg.OldAtxSyncCfg.EnableActiveSync && s.cfg.CurAtxSyncCfg.EnableActiveSync {
+		return s.syncAtxV2(ctx)
+	} else if s.cfg.EnableSyncV2 {
+		if s.cfg.OldAtxSyncCfg.EnableActiveSync || s.cfg.CurAtxSyncCfg.EnableActiveSync {
+			return errors.New("should enable both old & new atx syncv2 or disable both")
+		}
+		// start server-only syncers
+		s.curAtxSyncV2.Start()
+		s.oldAtxSyncV2.Start()
+	}
 	current := s.ticker.CurrentLayer()
 	// on startup always download all activations that were published before current epoch
 	if !s.ListenToATXGossip() {
+		// TODO: syncv2
 		s.logger.Debug("syncing atx from genesis",
 			log.ZContext(ctx),
 			zap.Stringer("current layer", current),
@@ -511,6 +599,7 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 		s.backgroundSync.epoch.Store(0)
 	}
 	if s.backgroundSync.epoch.Load() == 0 && publish.Uint32() != 0 {
+		// TODO: syncv2
 		s.logger.Debug("download atx for epoch in background", zap.Stringer("publish", publish), log.ZContext(ctx))
 		s.backgroundSync.epoch.Store(publish.Uint32())
 		ctx, cancel := context.WithCancel(ctx)

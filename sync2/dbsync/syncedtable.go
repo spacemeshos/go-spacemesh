@@ -306,3 +306,11 @@ func (sts *SyncedTableSnapshot) loadRecent(
 		dec)
 	return err
 }
+
+func MustParseSQLExpr(s string) rsql.Expr {
+	expr, err := rsql.ParseExprString(s)
+	if err != nil {
+		panic("error parsing SQL expression: " + err.Error())
+	}
+	return expr
+}

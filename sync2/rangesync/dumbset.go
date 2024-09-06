@@ -91,6 +91,10 @@ type dumbSet struct {
 
 var _ OrderedSet = &dumbSet{}
 
+func (ds *dumbSet) EnsureLoaded(ctx context.Context) error {
+	return nil
+}
+
 func (ds *dumbSet) Add(ctx context.Context, k types.Ordered) error {
 	id := k.(types.KeyBytes)
 	if len(ds.keys) == 0 {

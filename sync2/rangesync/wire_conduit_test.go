@@ -118,7 +118,7 @@ type fakeSend struct {
 	done     bool
 }
 
-func (fs *fakeSend) send(c Conduit, t *testing.T, name string) error { // QQQQQ: rm t and name
+func (fs *fakeSend) send(c Conduit) error {
 	switch {
 	case fs.endRound:
 		return c.SendEndRound()
@@ -166,7 +166,7 @@ func (r *fakeRound) handleConversation(t *testing.T, c *wireConduit) error {
 		return err
 	}
 	for _, s := range r.toSend {
-		if err := s.send(c, t, r.name); err != nil {
+		if err := s.send(c); err != nil {
 			return err
 		}
 	}

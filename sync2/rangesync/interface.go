@@ -32,6 +32,10 @@ type SplitInfo struct {
 
 // OrderedSet represents the set that can be synced against a remote peer
 type OrderedSet interface {
+	// EnsureLoaded ensures that the set is loaded and ready for use.
+	// It may do nothing in case of in-memory sets, but may trigger loading
+	// from disk or database in case of on-disk or remote sets.
+	EnsureLoaded(ctx context.Context) error
 	// Add adds a key to the set
 	Add(ctx context.Context, k types.Ordered) error
 	// GetRangeInfo returns RangeInfo for the item range in the tree.
