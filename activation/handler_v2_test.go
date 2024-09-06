@@ -649,7 +649,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		signers         []*signing.EdSigner
 		equivocationSet []types.NodeID
 	)
-	for range 4 {
+	for range 5 {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		signers = append(signers, sig)
@@ -695,7 +695,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		require.Equal(t, sig.NodeID(), atx.SmesherID)
 		require.EqualValues(t, totalNumUnits*poetLeaves/tickSize, atx.Weight)
 	})
-	t.Run("merged IDs on 2 poets", func(t *testing.T) {
+	t.Run("merged IDs on 4 poets", func(t *testing.T) {
 		const tickSize = 33
 		atxHandler := newV2TestHandler(t, golden)
 		atxHandler.tickSize = tickSize
@@ -714,16 +714,18 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 			PositioningATX: mATX.ID(),
 			Coinbase:       types.GenerateAddress([]byte("aaaa")),
 			VRFNonce:       uint64(999),
-			NiPosts:        make([]wire.NiPostsV2, 2),
+			NiPosts:        make([]wire.NiPostsV2, 4),
 		}
 		atxsPerPoet := [][]*wire.ActivationTxV2{
-			append([]*wire.ActivationTxV2{mATX}, otherATXs[:2]...),
-			otherATXs[2:],
+			append([]*wire.ActivationTxV2{mATX}, otherATXs[0]),
+			otherATXs[1:2],
+			otherATXs[2:3],
+			otherATXs[3:4],
 		}
 		var totalNumUnits uint32
-		unitsPerPoet := make([]uint32, 2)
+		unitsPerPoet := make([]uint32, 4)
 		var idx uint32
-		for nipostId := range 2 {
+		for nipostId := range 4 {
 			for _, atx := range atxsPerPoet[nipostId] {
 				post := wire.SubPostV2{
 					MarriageIndex: idx,
@@ -743,7 +745,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.PreviousATXs = previousATXs
 		merged.Sign(sig)
 
-		poetLeaves := []uint64{100, 500}
+		poetLeaves := []uint64{100, 500, 70, 200}
 		minPoetLeaves := slices.Min(poetLeaves)
 
 		atxHandler.expectMergedAtxV2(merged, equivocationSet, poetLeaves)
@@ -760,9 +762,9 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		require.Equal(t, marriageATX.TickHeight()+atx.TickCount, atx.TickHeight())
 		// the total weight is summed weight on each poet
 		var weight uint64
-		for i := range unitsPerPoet {
+		for i, units := range unitsPerPoet {
 			ticks := poetLeaves[i] / tickSize
-			weight += uint64(unitsPerPoet[i]) * ticks
+			weight += uint64(units) * ticks
 		}
 		require.EqualValues(t, weight, atx.Weight)
 	})
@@ -1009,7 +1011,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		}
 
 		merged.MarriageATX = &mATXID
-		merged.PreviousATXs = []types.ATXID{otherATXs[1].ID(), otherATXs[2].ID()}
+		merged.PreviousATXs = []types.ATXID{otherATXs[1].ID(), otherATXs[2].ID(), otherATXs[3].ID()}
 		merged.Sign(signers[2])
 		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
 		// TODO: this could be syntactically validated as all nodes in the network
