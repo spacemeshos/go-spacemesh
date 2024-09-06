@@ -64,7 +64,11 @@ type defaultAtxSearch struct {
 	db sql.Executor
 }
 
-func (p defaultAtxSearch) GetIDByEpochAndNodeID(_ context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+func (p defaultAtxSearch) GetIDByEpochAndNodeID(
+	_ context.Context,
+	epoch types.EpochID,
+	nodeID types.NodeID,
+) (types.ATXID, error) {
 	return atxs.GetIDByEpochAndNodeID(p.db, epoch, nodeID)
 }
 

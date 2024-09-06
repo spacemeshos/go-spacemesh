@@ -250,7 +250,11 @@ type blockedAtxSearch struct {
 	blocked types.NodeID
 }
 
-func (b *blockedAtxSearch) GetIDByEpochAndNodeID(ctx context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+func (b *blockedAtxSearch) GetIDByEpochAndNodeID(
+	ctx context.Context,
+	epoch types.EpochID,
+	nodeID types.NodeID,
+) (types.ATXID, error) {
 	if nodeID == b.blocked {
 		<-ctx.Done()
 		return types.EmptyATXID, ctx.Err()
