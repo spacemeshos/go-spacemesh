@@ -21,11 +21,12 @@ type latencyTracker struct {
 	start time.Time
 	end   time.Time
 
-	data     time.Duration
-	tortoise time.Duration
-	hash     time.Duration
-	txs      time.Duration
-	publish  time.Duration
+	data      time.Duration
+	tortoise  time.Duration
+	hash      time.Duration
+	activeSet time.Duration
+	txs       time.Duration
+	publish   time.Duration
 }
 
 func (lt *latencyTracker) total() time.Duration {
@@ -34,6 +35,7 @@ func (lt *latencyTracker) total() time.Duration {
 
 func (lt *latencyTracker) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddDuration("data", lt.data)
+	encoder.AddDuration("active set", lt.activeSet)
 	encoder.AddDuration("tortoise", lt.tortoise)
 	encoder.AddDuration("hash", lt.hash)
 	encoder.AddDuration("txs", lt.txs)
