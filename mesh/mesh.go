@@ -559,15 +559,10 @@ func (msh *Mesh) AddBallot(
 	ctx context.Context,
 	ballot *types.Ballot,
 ) (*wire.MalfeasanceProof, error) {
-	var (
-		initiallyMalfeasant bool
-		start               time.Time
-	)
-	initiallyMalfeasant = false
+	var start time.Time
 	malicious := msh.atxsdata.IsMalicious(ballot.SmesherID)
 	if malicious {
 		ballot.SetMalicious()
-		initiallyMalfeasant = true
 	}
 	start = time.Now()
 	err := msh.ballotWriter.Store(ballot)
@@ -578,7 +573,7 @@ func (msh *Mesh) AddBallot(
 	var proof *wire.MalfeasanceProof
 	// if this ballot was the one that turned the identity to be malicious
 	// we call the hooks to notify tortoise and atxsdata
-	if !initiallyMalfeasant && ballot.IsMalicious() {
+	if !malicious && ballot.IsMalicious() {
 		// so this is a bit of double work (getting the malfeasance proof right after
 		// we stored it), BUT, probably negligble considering the amount of malfeasant
 		// identities we have. The other way to go about this is to allocate an individual channel
