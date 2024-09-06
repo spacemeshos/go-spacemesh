@@ -357,3 +357,65 @@ func (c *MocklayerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.T
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockatxSearch is a mock of atxSearch interface.
+type MockatxSearch struct {
+	ctrl     *gomock.Controller
+	recorder *MockatxSearchMockRecorder
+}
+
+// MockatxSearchMockRecorder is the mock recorder for MockatxSearch.
+type MockatxSearchMockRecorder struct {
+	mock *MockatxSearch
+}
+
+// NewMockatxSearch creates a new mock instance.
+func NewMockatxSearch(ctrl *gomock.Controller) *MockatxSearch {
+	mock := &MockatxSearch{ctrl: ctrl}
+	mock.recorder = &MockatxSearchMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockatxSearch) EXPECT() *MockatxSearchMockRecorder {
+	return m.recorder
+}
+
+// GetIDByEpochAndNodeID mocks base method.
+func (m *MockatxSearch) GetIDByEpochAndNodeID(ctx context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetIDByEpochAndNodeID", ctx, epoch, nodeID)
+	ret0, _ := ret[0].(types.ATXID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetIDByEpochAndNodeID indicates an expected call of GetIDByEpochAndNodeID.
+func (mr *MockatxSearchMockRecorder) GetIDByEpochAndNodeID(ctx, epoch, nodeID any) *MockatxSearchGetIDByEpochAndNodeIDCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIDByEpochAndNodeID", reflect.TypeOf((*MockatxSearch)(nil).GetIDByEpochAndNodeID), ctx, epoch, nodeID)
+	return &MockatxSearchGetIDByEpochAndNodeIDCall{Call: call}
+}
+
+// MockatxSearchGetIDByEpochAndNodeIDCall wrap *gomock.Call
+type MockatxSearchGetIDByEpochAndNodeIDCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockatxSearchGetIDByEpochAndNodeIDCall) Return(arg0 types.ATXID, arg1 error) *MockatxSearchGetIDByEpochAndNodeIDCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockatxSearchGetIDByEpochAndNodeIDCall) Do(f func(context.Context, types.EpochID, types.NodeID) (types.ATXID, error)) *MockatxSearchGetIDByEpochAndNodeIDCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockatxSearchGetIDByEpochAndNodeIDCall) DoAndReturn(f func(context.Context, types.EpochID, types.NodeID) (types.ATXID, error)) *MockatxSearchGetIDByEpochAndNodeIDCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

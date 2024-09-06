@@ -25,7 +25,6 @@ import (
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -245,23 +244,6 @@ type step struct {
 	expectErr       string
 }
 
-type blockedAtxSearch struct {
-	db      sql.Executor
-	blocked types.NodeID
-}
-
-func (b *blockedAtxSearch) GetIDByEpochAndNodeID(
-	ctx context.Context,
-	epoch types.EpochID,
-	nodeID types.NodeID,
-) (types.ATXID, error) {
-	if nodeID == b.blocked {
-		<-ctx.Done()
-		return types.EmptyATXID, ctx.Err()
-	}
-	return atxs.GetIDByEpochAndNodeID(b.db, epoch, nodeID)
-}
-
 // The test verifies that the proposal builder creates proposals as soon as possible
 // for initialized and eligible signers, especially if the uninitialized ones take
 // long to init or are blocked entirely.
@@ -285,14 +267,14 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 		localdb   = localsql.InMemoryTest(t)
 		atxsdata  = atxsdata.New()
 		// singer[1] is blocked
-		blockedAtxs = &blockedAtxSearch{db: db, blocked: signers[1].NodeID()}
+		atxSearch = mocks.NewMockatxSearch(ctrl)
 	)
 	opts := []Opt{
 		WithLayerPerEpoch(types.GetLayersPerEpoch()),
 		WithLayerSize(2),
 		WithLogger(zaptest.NewLogger(t)),
 		WithSigners(signers...),
-		withAtxSearch(blockedAtxs),
+		withAtxSearch(atxSearch),
 	}
 	builder := New(clock, db, localdb, atxsdata, publisher, trtl, syncer, conState, opts...)
 	lid := types.LayerID(15)
@@ -301,6 +283,17 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 	atx := gatx(types.ATXID{1}, lid.GetEpoch()-1, signers[0].NodeID(), 1, genAtxWithNonce(777))
 	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 	atxsdata.AddFromAtx(atx, false)
+	atxSearch.EXPECT().GetIDByEpochAndNodeID(gomock.Any(), lid.GetEpoch()-1, signers[0].NodeID()).DoAndReturn(
+		func(_ context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+			return atxs.GetIDByEpochAndNodeID(db, epoch, nodeID)
+		},
+	)
+	atxSearch.EXPECT().GetIDByEpochAndNodeID(gomock.Any(), lid.GetEpoch()-1, signers[1].NodeID()).DoAndReturn(
+		func(ctx context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+			<-ctx.Done()
+			return types.EmptyATXID, ctx.Err()
+		},
+	)
 
 	beacon := types.Beacon{1}
 	require.NoError(t, beacons.Add(db, lid.GetEpoch(), beacon))
@@ -334,10 +327,14 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 	require.ErrorIs(t, builder.build(ctx, lid), context.Canceled)
 
 	// Try again in the next layer
-	// signer[1] is still NOT initialized (missing ATX)
-	// it will block again searching for its atx
+	// signer[1] is still NOT initialized (missing ATX) but it won't block this time
 	lid += 1
 	txs = []types.TransactionID{{17}, {22}}
+	atxSearch.EXPECT().GetIDByEpochAndNodeID(gomock.Any(), lid.GetEpoch()-1, signers[1].NodeID()).DoAndReturn(
+		func(_ context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+			return atxs.GetIDByEpochAndNodeID(db, epoch, nodeID)
+		},
+	)
 	expectedProposal = expectProposal(
 		signers[0], lid, atx.ID(), opinion,
 		expectTxs(txs),
@@ -349,11 +346,9 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 	trtl.EXPECT().LatestComplete().Return(lid - 1)
 	conState.EXPECT().SelectProposalTXs(lid, gomock.Any()).Return(txs)
 
-	ctx, cancel = context.WithCancel(context.Background())
 	publisher.EXPECT().
-		Publish(ctx, pubsub.ProposalProtocol, gomock.Any()).
+		Publish(context.Background(), pubsub.ProposalProtocol, gomock.Any()).
 		DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
-			defer cancel() // unblock the build hang on atx lookup for signer[1]
 			var proposal types.Proposal
 			codec.MustDecode(msg, &proposal)
 			proposal.MustInitialize()
@@ -361,7 +356,7 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 			return nil
 		})
 
-	require.ErrorIs(t, builder.build(ctx, lid), context.Canceled)
+	require.NoError(t, builder.build(context.Background(), lid))
 }
 
 func TestBuild(t *testing.T) {
