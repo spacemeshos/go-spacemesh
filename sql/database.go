@@ -199,6 +199,26 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open db %s: %w", uri, err)
 	}
+	drainedConns := []*sqlite.Conn{}
+	pragmas := []string{
+		"pragma mmap_size = 300000000000;",
+		"PRAGMA temp_store = memory;",
+		"PRAGMA journal_size_limit = 0",
+		"PRAGMA wal_autocheckpoint = 256",
+	}
+	for i := 0; i < config.connections; i++ {
+		conn := pool.Get(context.Background())
+		for _, pragma := range pragmas {
+			_, err := exec(conn, pragma, nil, nil)
+			if err != nil {
+				return nil, fmt.Errorf("exec %s: %w", pragma, err)
+			}
+		}
+		drainedConns = append(drainedConns, conn)
+	}
+	for _, conn := range drainedConns {
+		pool.Put(conn)
+	}
 	db := &Database{pool: pool}
 	if config.enableLatency {
 		db.latency = newQueryLatency()

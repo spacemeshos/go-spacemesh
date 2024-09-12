@@ -375,7 +375,7 @@ func (bs *BlobStore) GetBlobSizes(hint Hint, ids [][]byte) (sizes []int, err err
 func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
 	switch hint {
 	case ATXDB:
-		return atxs.Has(bs.DB, types.BytesToATXID(key))
+		return atxs.Has(bs.DB, types.ATXID(types.BytesToHash(key)))
 	case ProposalDB:
 		return bs.proposals.Has(types.ProposalID(types.BytesToHash(key).ToHash20())), nil
 	case BallotDB:

@@ -75,6 +75,64 @@ func load(db sql.Executor, query string, enc sql.Encoder) (*types.ActivationTx, 
 	return v, err
 }
 
+func GetPreviousPositioning(db sql.Executor, prev types.ATXID, prevEmpty bool, positioning types.ATXID, posGolden bool) (
+	*types.PreviousAtxHeader, *types.PositioningAtxHeader, error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, prev.Bytes())
+		stmt.BindBytes(2, positioning.Bytes())
+	}
+	var prevAtx *types.PreviousAtxHeader
+	var posAtx *types.PositioningAtxHeader
+	dec := func(stmt *sql.Statement) bool {
+		id := types.ATXID{}
+		stmt.ColumnBytes(0, id[:])
+		if id == prev && !prevEmpty {
+			prevAtx = &types.PreviousAtxHeader{}
+			prevAtx.ID = id
+			prevAtx.PublishEpoch = types.EpochID(stmt.ColumnInt(1))
+			stmt.ColumnBytes(2, prevAtx.SmesherID[:])
+			prevAtx.Sequence = uint64(stmt.ColumnInt64(3))
+			prevAtx.VRFNonce = uint64(stmt.ColumnInt64(4))
+			prevAtx.NumUnits = uint32(stmt.ColumnInt32(5))
+			stmt.ColumnBytes(7, prevAtx.CommitmentATX[:])
+		}
+		if id == positioning && !posGolden {
+			posAtx = &types.PositioningAtxHeader{}
+			posAtx.ID = id
+			posAtx.BaseTickHeight = uint64(stmt.ColumnInt64(6))
+			posAtx.PublishEpoch = types.EpochID(stmt.ColumnInt(1))
+		}
+		return true
+	}
+	q := `select atxs.id, atxs.epoch, atxs.pubkey, atxs.sequence, atxs.nonce, atxs.effective_num_units,
+		atxs.base_tick_height, atxs.commitment_atx from atxs where id in (?1, ?2);`
+	if _, err := db.Exec(q, enc, dec); err != nil {
+		return nil, nil, fmt.Errorf("get prev ATX for id %v: %w", prev, err)
+	}
+	return prevAtx, posAtx, nil
+}
+
+func GetPrevAtx(db sql.Executor, id types.ATXID) (*types.PreviousAtxHeader, error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}
+	var prev types.PreviousAtxHeader
+	dec := func(stmt *sql.Statement) bool {
+		prev.ID = id
+		prev.PublishEpoch = types.EpochID(stmt.ColumnInt(0))
+		stmt.ColumnBytes(1, prev.SmesherID[:])
+		prev.Sequence = uint64(stmt.ColumnInt64(2))
+		prev.VRFNonce = uint64(stmt.ColumnInt64(3))
+		prev.NumUnits = uint32(stmt.ColumnInt32(4))
+		return true
+	}
+	q := `select epoch, pubkey, sequence, nonce, effective_num_units from atxs where id = ?1;`
+	if _, err := db.Exec(q, enc, dec); err != nil {
+		return nil, fmt.Errorf("get prev ATX for id %v: %w", id, err)
+	}
+	return &prev, nil
+}
+
 // Get gets an ATX by a given ATX ID.
 func Get(db sql.Executor, id types.ATXID) (*types.ActivationTx, error) {
 	enc := func(stmt *sql.Statement) {
@@ -89,6 +147,28 @@ func Get(db sql.Executor, id types.ATXID) (*types.ActivationTx, error) {
 		return nil, fmt.Errorf("get id %s: %w", id.String(), sql.ErrNotFound)
 	}
 	return v, nil
+}
+
+func GetPreviousAndCurrent(db sql.Executor, currentEpoch types.EpochID, nodeID types.NodeID) (current types.ATXID, previous types.ATXID, err error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(currentEpoch))
+		stmt.BindBytes(2, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		fetched := types.EpochID(stmt.ColumnInt(0))
+		if fetched == currentEpoch {
+			stmt.ColumnBytes(1, current[:])
+		} else {
+			stmt.ColumnBytes(1, previous[:])
+		}
+		// visit atmost 1 entry after current epoch
+		return fetched == currentEpoch
+	}
+	q := `select epoch, id from atxs where epoch <= ?1 and pubkey = ?2 order by epoch desc limit 2;`
+	if _, err := db.Exec(q, enc, dec); err != nil {
+		return types.EmptyATXID, types.EmptyATXID, fmt.Errorf("get current and previous ATX for epoch %v: %w", currentEpoch, err)
+	}
+	return current, previous, nil
 }
 
 // GetByEpochAndNodeID gets any ATX by the specified NodeID published in the given epoch.
@@ -128,6 +208,60 @@ func Has(db sql.Executor, id types.ATXID) (bool, error) {
 		return false, fmt.Errorf("exec id %v: %w", id, err)
 	}
 	return rows > 0, nil
+}
+
+// Has checks if an ATX exists by a given ATX ID.
+func HasInEpoch(db sql.Executor, epoch types.EpochID, id types.ATXID) (bool, error) {
+	rows, err := db.Exec("select 1 from atxs where id = ?1 and epoch = ?2;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+			stmt.BindInt64(2, int64(epoch))
+		}, nil,
+	)
+	if err != nil {
+		return false, fmt.Errorf("exec id %v: %w", id, err)
+	}
+	return rows > 0, nil
+}
+
+func GetPositioningAtxHeader(db sql.Executor, id types.ATXID) (*types.PositioningAtxHeader, error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}
+	var header types.PositioningAtxHeader
+	dec := func(stmt *sql.Statement) bool {
+		header.ID = id
+		header.BaseTickHeight = uint64(stmt.ColumnInt64(0))
+		header.PublishEpoch = types.EpochID(stmt.ColumnInt(1))
+		return true
+	}
+	q := `select base_tick_height, epoch from atxs where id = ?1;`
+	if _, err := db.Exec(q, enc, dec); err != nil {
+		return nil, fmt.Errorf("get positioning ATX for id %v: %w", id, err)
+	}
+	return &header, nil
+}
+
+func CommitmentATXFromFirst(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}
+	dec := func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, id[:])
+		return true
+	}
+
+	if rows, err := db.Exec(`
+		select commitment_atx from atxs
+		where pubkey = ?1
+		order by epoch asc
+		limit 1;`, enc, dec); err != nil {
+		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+	} else if rows == 0 {
+		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+	}
+
+	return id, err
 }
 
 func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err error) {

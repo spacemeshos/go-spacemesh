@@ -312,13 +312,13 @@ func (v *Validator) InitialNIPostChallengeV1(
 
 func (*Validator) NIPostChallengeV1(
 	challenge *wire.NIPostChallengeV1,
-	prevATX *types.ActivationTx,
+	prevATX *types.PreviousAtxHeader,
 	nodeID types.NodeID,
 ) error {
 	if prevATX.SmesherID != nodeID {
 		return fmt.Errorf(
 			"previous atx belongs to different miner. nodeID: %v, prevAtx.ID: %v, prevAtx.NodeID: %v",
-			nodeID, prevATX.ID().ShortString(), prevATX.SmesherID,
+			nodeID, prevATX.ID.ShortString(), prevATX.SmesherID,
 		)
 	}
 
@@ -338,24 +338,24 @@ func (*Validator) NIPostChallengeV1(
 
 func (v *Validator) PositioningAtx(
 	id types.ATXID,
-	atxs atxProvider,
+	_ atxProvider,
 	goldenATXID types.ATXID,
 	pubepoch types.EpochID,
-) error {
+) (*types.PositioningAtxHeader, error) {
 	if id == types.EmptyATXID {
-		return errors.New("positioning atx id is empty")
+		return nil, errors.New("positioning atx id is empty")
 	}
 	if id == goldenATXID {
-		return nil
+		return nil, nil
 	}
-	posAtx, err := atxs.GetAtx(id)
+	posAtx, err := atxs.GetPositioningAtxHeader(v.db, id)
 	if err != nil {
-		return &ErrAtxNotFound{Id: id, source: err}
+		return nil, &ErrAtxNotFound{Id: id, source: err}
 	}
 	if posAtx.PublishEpoch >= pubepoch {
-		return fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)
+		return nil, fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)
 	}
-	return nil
+	return posAtx, nil
 }
 
 type verifyChainOpts struct {
@@ -447,7 +447,7 @@ func (v *Validator) getAtxDeps(ctx context.Context, id types.ATXID) (*atxDeps, e
 		if atx.CommitmentATXID != nil {
 			commitment = *atx.CommitmentATXID
 		} else {
-			catx, err := atxs.CommitmentATX(v.db, atx.SmesherID)
+			catx, err := atxs.CommitmentATXFromFirst(v.db, atx.SmesherID)
 			if err != nil {
 				return nil, fmt.Errorf("getting commitment ATX: %w", err)
 			}

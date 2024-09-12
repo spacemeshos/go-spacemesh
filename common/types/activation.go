@@ -166,6 +166,22 @@ type AtxBlob struct {
 	Version AtxVersion
 }
 
+type PreviousAtxHeader struct {
+	ID            ATXID
+	SmesherID     NodeID
+	PublishEpoch  EpochID
+	NumUnits      uint32
+	Sequence      uint64
+	VRFNonce      uint64
+	CommitmentATX ATXID
+}
+
+type PositioningAtxHeader struct {
+	ID             ATXID
+	BaseTickHeight uint64
+	PublishEpoch   EpochID
+}
+
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {

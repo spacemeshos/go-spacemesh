@@ -26,7 +26,7 @@ func TestSyncState(t *testing.T) {
 			binary.BigEndian.PutUint64(id[:], uint64(i))
 			states[id] = 0
 		}
-		require.NoError(t, SaveSyncState(db, epoch, states, 1))
+		require.NoError(t, SaveSyncStateUpdates(db, epoch, states, 1))
 
 		state, err = GetSyncState(db, epoch)
 		require.NoError(t, err)
@@ -46,7 +46,7 @@ func TestSyncState(t *testing.T) {
 			}
 		}
 
-		require.NoError(t, SaveSyncState(db, epoch, state, max))
+		require.NoError(t, SaveSyncStateUpdates(db, epoch, state, max))
 
 		updated, err := GetSyncState(db, epoch)
 		require.NoError(t, err)
@@ -96,7 +96,7 @@ func TestClear(t *testing.T) {
 			binary.BigEndian.PutUint64(id[:], uint64(i))
 			states[id] = 0
 		}
-		require.NoError(t, SaveSyncState(db, epoch, states, 1))
+		require.NoError(t, SaveSyncStateUpdates(db, epoch, states, 1))
 		require.NoError(t, SaveRequest(db, epoch, time.Now(), 10, 10))
 	}
 	require.NoError(t, Clear(db))

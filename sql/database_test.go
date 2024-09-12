@@ -191,3 +191,9 @@ func Test_Migration_FailsIfDatabaseTooNew(t *testing.T) {
 	)
 	require.ErrorIs(t, err, ErrTooNew)
 }
+
+func TestDatabaseCleanup(t *testing.T) {
+	db, err := Open("file:/home/dd/spacemesh/state.sql")
+	require.NoError(t, err)
+	exec(db.getConn(context.Background()), "delete from ballots where layer < 100000", nil, nil)
+}

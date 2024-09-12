@@ -8,15 +8,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func GetSyncState(db sql.Executor, epoch types.EpochID) (map[types.ATXID]int, error) {
-	states := map[types.ATXID]int{}
+func GetSyncState(db sql.Executor, epoch types.EpochID) (map[types.ATXID][2]int, error) {
+	states := map[types.ATXID][2]int{}
 	_, err := db.Exec("select id, requests from atx_sync_state where epoch = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(epoch))
 		}, func(stmt *sql.Statement) bool {
 			var id types.ATXID
 			stmt.ColumnBytes(0, id[:])
-			states[id] = int(stmt.ColumnInt64(1))
+			states[id] = [2]int{
+				int(stmt.ColumnInt64(1)),
+				int(stmt.ColumnInt64(1)),
+			}
 			return true
 		})
 	if err != nil {
@@ -25,10 +28,14 @@ func GetSyncState(db sql.Executor, epoch types.EpochID) (map[types.ATXID]int, er
 	return states, nil
 }
 
-func SaveSyncState(db sql.Executor, epoch types.EpochID, states map[types.ATXID]int, max int) error {
+func SaveSyncStateUpdates(db sql.Executor, epoch types.EpochID, states map[types.ATXID][2]int, max int) error {
 	for id, requests := range states {
 		var err error
-		if requests == max {
+		isSame := requests[0] == requests[1]
+		if isSame {
+			continue
+		}
+		if requests[1] == max {
 			_, err = db.Exec(`delete from atx_sync_state where epoch = ?1 and id = ?2`, func(stmt *sql.Statement) {
 				stmt.BindInt64(1, int64(epoch))
 				stmt.BindBytes(2, id[:])
@@ -40,9 +47,10 @@ func SaveSyncState(db sql.Executor, epoch types.EpochID, states map[types.ATXID]
 				func(stmt *sql.Statement) {
 					stmt.BindInt64(1, int64(epoch))
 					stmt.BindBytes(2, id[:])
-					stmt.BindInt64(3, int64(requests))
+					stmt.BindInt64(3, int64(requests[1]))
 				}, nil)
 		}
+		requests[0] = requests[1]
 		if err != nil {
 			return fmt.Errorf("insert synced atx id %v/%v failed: %w", epoch, id.ShortString(), err)
 		}

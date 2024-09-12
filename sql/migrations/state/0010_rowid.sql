@@ -3,7 +3,7 @@ DROP INDEX atxs_by_epoch_by_pubkey;
 ALTER TABLE atxs RENAME TO atxs_old;
 CREATE TABLE atxs
 (
-    id                  CHAR(32) PRIMARY KEY,
+    id                  BLOB PRIMARY KEY,
     epoch               INT NOT NULL,
     effective_num_units INT NOT NULL,
     commitment_atx      CHAR(32),

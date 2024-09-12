@@ -118,7 +118,7 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloa
 	eg, ctx := errgroup.WithContext(ctx)
 	updates := make(chan epochUpdate, s.cfg.EpochInfoPeers)
 	if len(state) == 0 {
-		state = map[types.ATXID]int{}
+		state = map[types.ATXID][2]int{}
 	} else {
 		updates <- epochUpdate{time: lastSuccess, update: state}
 	}
@@ -193,9 +193,9 @@ func (s *Syncer) downloadEpochInfo(
 			)
 			// adding hashes to fetcher is not useful as they overflow the cache and are not used
 			// so we switch to asking best peers immediately
-			update := make(map[types.ATXID]int, len(epochData.AtxIDs))
+			update := make(map[types.ATXID][2]int, len(epochData.AtxIDs))
 			for _, atx := range epochData.AtxIDs {
-				update[atx] = 0
+				update[atx] = [2]int{0, 0}
 			}
 			select {
 			case <-ctx.Done():
@@ -212,7 +212,7 @@ func (s *Syncer) downloadAtxs(
 	ctx context.Context,
 	publish types.EpochID,
 	downloadUntil time.Time,
-	state map[types.ATXID]int,
+	state map[types.ATXID][2]int,
 	updates <-chan epochUpdate,
 ) error {
 	var (
@@ -275,7 +275,7 @@ func (s *Syncer) downloadAtxs(
 				downloaded[atx] = true
 				continue
 			}
-			if requests >= s.cfg.RequestsLimit {
+			if requests[1] >= s.cfg.RequestsLimit {
 				delete(state, atx)
 				continue
 			}
@@ -315,9 +315,9 @@ func (s *Syncer) downloadAtxs(
 							continue
 						}
 						if errors.Is(err, pubsub.ErrValidationReject) {
-							state[types.ATXID(hash)] = s.cfg.RequestsLimit
+							state[types.ATXID(hash)] = [2]int{state[types.ATXID(hash)][0], s.cfg.RequestsLimit}
 						} else {
-							state[types.ATXID(hash)]++
+							state[types.ATXID(hash)] = [2]int{state[types.ATXID(hash)][0], state[types.ATXID(hash)][1] + 1}
 						}
 					}
 				}
@@ -329,7 +329,7 @@ func (s *Syncer) downloadAtxs(
 			if err != nil {
 				return fmt.Errorf("failed to save request time: %w", err)
 			}
-			return atxsync.SaveSyncState(tx, publish, state, s.cfg.RequestsLimit)
+			return atxsync.SaveSyncStateUpdates(tx, publish, state, s.cfg.RequestsLimit)
 		}); err != nil {
 			return fmt.Errorf("failed to persist state for epoch %v: %w", publish, err)
 		}
@@ -339,5 +339,5 @@ func (s *Syncer) downloadAtxs(
 
 type epochUpdate struct {
 	time   time.Time
-	update map[types.ATXID]int
+	update map[types.ATXID][2]int
 }

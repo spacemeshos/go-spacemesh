@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"sync"
 
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/hash"
@@ -21,13 +22,16 @@ import (
 
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
+	cacheMu sync.Mutex
+	cache   map[types.PoetProofRef]types.PoetProofMessage
+
 	sqlDB  *sql.Database
 	logger *zap.Logger
 }
 
 // NewPoetDb returns a new PoET handler.
 func NewPoetDb(db *sql.Database, log *zap.Logger) *PoetDb {
-	return &PoetDb{sqlDB: db, logger: log}
+	return &PoetDb{sqlDB: db, logger: log, cache: map[types.PoetProofRef]types.PoetProofMessage{}}
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
@@ -135,26 +139,28 @@ func (db *PoetDb) GetProofRef(poetID []byte, roundID string) (types.PoetProofRef
 	return proofRef, nil
 }
 
-// GetProofMessage returns the originally received PoET proof message.
-func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
-	proof, err := poets.Get(db.sqlDB, proofRef)
-	if err != nil {
-		return proof, fmt.Errorf("get proof from store: %w", err)
-	}
-
-	return proof, nil
-}
-
 // Proof returns full proof.
 func (db *PoetDb) Proof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
-	proofMessageBytes, err := db.GetProofMessage(proofRef)
+	// intetionally serializes all poet proof reads
+	// to prevent concurrent multiple concurrent readers
+	// this is because most of the proofs are shared
+	db.cacheMu.Lock()
+	cached, exists := db.cache[proofRef]
+	db.cacheMu.Unlock()
+	if exists {
+		return &cached.PoetProof, &cached.Statement, nil
+	}
+	proofMessageBytes, err := poets.Get(db.sqlDB, proofRef)
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
+		return nil, nil, fmt.Errorf("get proof from store: %w", err)
 	}
 	var proofMessage types.PoetProofMessage
 	if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
 	}
+	db.cacheMu.Lock()
+	db.cache[proofRef] = proofMessage
+	db.cacheMu.Unlock()
 	return &proofMessage.PoetProof, &proofMessage.Statement, nil
 }
 

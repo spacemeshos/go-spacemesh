@@ -18,3 +18,12 @@ func Vacuum(db Executor) error {
 	log.Info("db vacuum completed")
 	return nil
 }
+
+func Analyze(db Executor) error {
+	log.Info("analyzing db...")
+	if _, err := db.Exec("analyze", nil, nil); err != nil {
+		return fmt.Errorf("analyze %w", err)
+	}
+	log.Info("db analyze completed")
+	return nil
+}

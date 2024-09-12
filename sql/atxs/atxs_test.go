@@ -1121,3 +1121,18 @@ func TestCoinbase(t *testing.T) {
 		require.Equal(t, atx2.Coinbase, cb)
 	})
 }
+
+func TestPreviousAndCurrent(t *testing.T) {
+	t.Parallel()
+	db := sql.InMemory()
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	atx1 := newAtx(t, sig, withPublishEpoch(1))
+	atx2 := newAtx(t, sig, withPublishEpoch(2))
+	require.NoError(t, atxs.Add(db, atx1))
+	require.NoError(t, atxs.Add(db, atx2))
+	current, previous, err := atxs.GetPreviousAndCurrent(db, 2, sig.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, atx1.ID(), previous)
+	require.Equal(t, atx2.ID(), current)
+}
