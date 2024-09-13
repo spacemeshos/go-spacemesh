@@ -231,7 +231,8 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	_, err = identities.GetMalfeasanceProof(atxHdlr.cdb, sig.NodeID())
+	var blob sql.Blob
+	err = identities.LoadMalfeasanceBlob(context.Background(), atxHdlr.cdb, sig.NodeID().Bytes(), &blob)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	atx := newInitialATXv1(t, goldenATXID)
@@ -280,10 +281,10 @@ func testHandler_PostMalfeasanceProofs(t *testing.T, synced bool) {
 		require.ErrorIs(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg), errMaliciousATX)
 	}
 
-	proof, err := identities.GetMalfeasanceProof(atxHdlr.cdb, atx.SmesherID)
+	err = identities.LoadMalfeasanceBlob(context.Background(), atxHdlr.cdb, atx.SmesherID.Bytes(), &blob)
 	require.NoError(t, err)
-	require.NotNil(t, proof.Received())
-	proof.SetReceived(time.Time{})
+	proof := &mwire.MalfeasanceProof{}
+	codec.MustDecode(blob.Bytes, proof)
 	if !synced {
 		require.Equal(t, got.MalfeasanceProof, *proof)
 		require.Equal(t, atx.PublishEpoch.FirstLayer(), got.MalfeasanceProof.Layer)
@@ -435,11 +436,12 @@ func testHandler_HandleDoublePublish(t *testing.T, synced bool) {
 		require.ErrorIs(t, hdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg), errMaliciousATX)
 	}
 
-	proof, err := identities.GetMalfeasanceProof(hdlr.cdb, sig.NodeID())
+	var blob sql.Blob
+	err = identities.LoadMalfeasanceBlob(context.Background(), hdlr.cdb, sig.NodeID().Bytes(), &blob)
 	require.NoError(t, err)
-	require.NotNil(t, proof)
+	proof := &mwire.MalfeasanceProof{}
+	codec.MustDecode(blob.Bytes, proof)
 	if !synced {
-		proof.SetReceived(time.Time{})
 		require.Equal(t, got.MalfeasanceProof, *proof)
 	}
 }

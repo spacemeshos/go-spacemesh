@@ -611,7 +611,7 @@ func (s *MeshService) MalfeasanceQuery(
 			fmt.Sprintf("invalid smesher id length (%d), expected (%d)", l, types.NodeIDSize))
 	}
 	id := types.BytesToNodeID(parsed)
-	proof, err := s.cdb.GetMalfeasanceProof(id)
+	proof, err := s.cdb.MalfeasanceProof(id)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, status.Error(codes.Internal, err.Error())
 	}

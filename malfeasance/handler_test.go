@@ -146,9 +146,9 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
 		require.NoError(t, err)
 
-		malProof, err := identities.GetMalfeasanceProof(h.db, nodeID)
-		require.NoError(t, err)
-		require.NotEqual(t, gossip.MalfeasanceProof, *malProof)
+		var blob sql.Blob
+		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
+		require.Equal(t, codec.MustEncode(&gossip.MalfeasanceProof), blob.Bytes)
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {
@@ -187,9 +187,10 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
 		require.ErrorIs(t, ErrKnownProof, err)
 
-		malProof, err := identities.GetMalfeasanceProof(h.db, nodeID)
-		require.NoError(t, err)
-		malProof.SetReceived(time.Time{})
+		var blob sql.Blob
+		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
+		malProof := &wire.MalfeasanceProof{}
+		codec.MustDecode(blob.Bytes, malProof)
 		require.Equal(t, proof, malProof)
 	})
 }
@@ -318,19 +319,15 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				Data: &wire.AtxProof{},
 			},
 		}
+		proofBytes := codec.MustEncode(proof)
 
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
-		err := h.HandleSyncedMalfeasanceProof(
-			context.Background(),
-			types.Hash32(nodeID),
-			"peer",
-			codec.MustEncode(proof),
-		)
+		err := h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(nodeID), "peer", proofBytes)
 		require.NoError(t, err)
 
-		malProof, err := identities.GetMalfeasanceProof(h.db, nodeID)
-		require.NoError(t, err)
-		require.NotEqual(t, proof, *malProof)
+		var blob sql.Blob
+		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
+		require.Equal(t, proofBytes, blob.Bytes)
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {
@@ -344,7 +341,8 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				Data: &wire.BallotProof{},
 			},
 		}
-		identities.SetMalicious(h.db, nodeID, codec.MustEncode(proof), time.Now())
+		proofBytes := codec.MustEncode(proof)
+		identities.SetMalicious(h.db, nodeID, proofBytes, time.Now())
 
 		ctrl := gomock.NewController(t)
 		handler := NewMockHandlerV1(ctrl)
@@ -363,18 +361,14 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				Data: &wire.AtxProof{},
 			},
 		}
+		newProofBytes := codec.MustEncode(newProof)
+		require.NotEqual(t, proofBytes, newProofBytes)
 
-		err := h.HandleSyncedMalfeasanceProof(
-			context.Background(),
-			types.Hash32(nodeID),
-			"peer",
-			codec.MustEncode(newProof),
-		)
+		err := h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(nodeID), "peer", newProofBytes)
 		require.ErrorIs(t, ErrKnownProof, err)
 
-		malProof, err := identities.GetMalfeasanceProof(h.db, nodeID)
-		require.NoError(t, err)
-		malProof.SetReceived(time.Time{})
-		require.Equal(t, proof, malProof)
+		var blob sql.Blob
+		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
+		require.Equal(t, proofBytes, blob.Bytes)
 	})
 }
