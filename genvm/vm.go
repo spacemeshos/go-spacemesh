@@ -29,25 +29,18 @@ import (
 	vmsdk "github.com/spacemeshos/go-spacemesh/vm"
 )
 
-// Opt is for changing VM during initialization.
-type Opt func(*VM)
-
-// WithLogger sets logger for VM.
-func WithLogger(logger *zap.Logger) Opt {
-	return func(vm *VM) {
-		vm.logger = logger
-	}
+// SetLogger sets logger for VM.
+func (v *VM) SetLogger(logger *zap.Logger) {
+	v.logger = logger
 }
 
-// WithConfig updates config on the vm.
-func WithConfig(cfg vmsdk.Config) Opt {
-	return func(vm *VM) {
-		vm.cfg = cfg
-	}
+// SetConfig updates config on the vm.
+func (v *VM) SetConfig(cfg vmsdk.Config) {
+	v.cfg = cfg
 }
 
 // New returns VM instance.
-func New(db sql.StateDatabase, opts ...Opt) *VM {
+func New(db sql.StateDatabase, opts ...vmsdk.Opt) *VM {
 	vm := &VM{
 		logger:   zap.NewNop(),
 		db:       db,

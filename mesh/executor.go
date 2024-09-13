@@ -29,13 +29,13 @@ type Executor struct {
 	logger   *zap.Logger
 	db       sql.Executor
 	atxsdata *atxsdata.Data
-	vm       vmState
+	vm       VmState
 	cs       conservativeState
 
 	mu sync.Mutex
 }
 
-func NewExecutor(db sql.Executor, atxsdata *atxsdata.Data, vm vmState, cs conservativeState, lg *zap.Logger) *Executor {
+func NewExecutor(db sql.Executor, atxsdata *atxsdata.Data, vm VmState, cs conservativeState, lg *zap.Logger) *Executor {
 	return &Executor{
 		logger:   lg,
 		db:       db,

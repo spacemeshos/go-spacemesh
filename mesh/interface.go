@@ -15,7 +15,7 @@ type conservativeState interface {
 	LinkTXsWithBlock(types.LayerID, types.BlockID, []types.TransactionID) error
 }
 
-type vmState interface {
+type VmState interface {
 	GetStateRoot() (types.Hash32, error)
 	Revert(types.LayerID) error
 	Apply(

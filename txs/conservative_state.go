@@ -51,7 +51,7 @@ func WithLogger(logger *zap.Logger) ConservativeStateOpt {
 // ConservativeState provides the conservative version of the VM state by taking into accounts of
 // nonce and balances for pending transactions in un-applied blocks and mempool.
 type ConservativeState struct {
-	vmState
+	VmState
 
 	logger *zap.Logger
 	cfg    CSConfig
@@ -60,9 +60,9 @@ type ConservativeState struct {
 }
 
 // NewConservativeState returns a ConservativeState.
-func NewConservativeState(state vmState, db sql.StateDatabase, opts ...ConservativeStateOpt) *ConservativeState {
+func NewConservativeState(state VmState, db sql.StateDatabase, opts ...ConservativeStateOpt) *ConservativeState {
 	cs := &ConservativeState{
-		vmState: state,
+		VmState: state,
 		cfg:     defaultCSConfig(),
 		logger:  zap.NewNop(),
 		db:      db,
@@ -75,11 +75,11 @@ func NewConservativeState(state vmState, db sql.StateDatabase, opts ...Conservat
 }
 
 func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
-	nonce, err := cs.vmState.GetNonce(addr)
+	nonce, err := cs.VmState.GetNonce(addr)
 	if err != nil {
 		cs.logger.Fatal("failed to get nonce", zap.Error(err))
 	}
-	balance, err := cs.vmState.GetBalance(addr)
+	balance, err := cs.VmState.GetBalance(addr)
 	if err != nil {
 		cs.logger.Fatal("failed to get balance", zap.Error(err))
 	}
@@ -115,7 +115,7 @@ func getProposalTXs(
 
 // Validation initializes validation request.
 func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationRequest {
-	return cs.vmState.Validation(raw)
+	return cs.VmState.Validation(raw)
 }
 
 // AddToCache adds the provided transaction to the conservative cache.

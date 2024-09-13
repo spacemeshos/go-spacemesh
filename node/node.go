@@ -91,6 +91,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
+	athenavm "github.com/spacemeshos/go-spacemesh/vm/athena"
 )
 
 const (
@@ -407,7 +408,7 @@ type App struct {
 	beaconProtocol    *beacon.ProtocolDriver
 	log               log.Log
 	syncLogger        log.Log
-	svm               *vm.VM
+	svm               vm.VM
 	conState          *txs.ConservativeState
 	fetcher           *fetch.Fetch
 	ptimesync         *peersync.Sync
@@ -576,17 +577,18 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-func GetVM() (vm.VM, error) {
-	configValue := os.Getenv("VM_MODULE") // Or read from a config file
-
-	switch configValue {
+func newVM(db sql.StateDatabase, module string, opts ...vm.Opt) (vm.VM, error) {
+	var vm vm.VM
+	switch module {
 	case "genvm":
-		return &genvm.GenVM{}, nil
-	case "alternative":
-		return &module.AlternativeVM{}, nil
+		vm = genvm.New(db, opts...)
+	case "athena":
+		vm = athenavm.New(db, opts...)
 	default:
-		return nil, fmt.Errorf("unknown VM module: %s", configValue)
+		return nil, fmt.Errorf("unknown VM module: %s", module)
 	}
+
+	return vm, nil
 }
 
 func (app *App) initServices(ctx context.Context) error {
@@ -626,9 +628,13 @@ func (app *App) initServices(ctx context.Context) error {
 	cfg := vm.DefaultConfig()
 	cfg.GasLimit = app.Config.BlockGasLimit
 	cfg.GenesisID = app.Config.Genesis.GenesisID()
-	state := vm.New(app.db,
+	state, err := newVM(app.db,
+		cfg.Module,
 		vm.WithConfig(cfg),
 		vm.WithLogger(app.addLogger(VMLogger, lg).Zap()))
+	if err != nil {
+		return fmt.Errorf("create vm: %w", err)
+	}
 	app.conState = txs.NewConservativeState(state, app.db,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:     app.Config.BlockGasLimit,

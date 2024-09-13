@@ -18,7 +18,7 @@ type conservativeState interface {
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 }
 
-type vmState interface {
+type VmState interface {
 	Validation(types.RawTx) system.ValidationRequest
 	GetStateRoot() (types.Hash32, error)
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)

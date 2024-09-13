@@ -20,47 +20,28 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
+	vmsdk "github.com/spacemeshos/go-spacemesh/vm"
 	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
 	"github.com/spacemeshos/go-spacemesh/vm/athena/registry"
 	"github.com/spacemeshos/go-spacemesh/vm/athena/templates/wallet"
 )
 
-// Opt is for changing VM during initialization.
-type Opt func(*VM)
-
-// WithLogger sets logger for VM.
-func WithLogger(logger *zap.Logger) Opt {
-	return func(vm *VM) {
-		vm.logger = logger
-	}
+// SetLogger sets logger for VM.
+func (v *VM) SetLogger(logger *zap.Logger) {
+	v.logger = logger
 }
 
-// Config defines the configuration options for vm.
-type Config struct {
-	GasLimit  uint64
-	GenesisID types.Hash20
-}
-
-// DefaultConfig returns the default RewardConfig.
-func DefaultConfig() Config {
-	return Config{
-		GasLimit: 100_000_000,
-	}
-}
-
-// WithConfig updates config on the vm.
-func WithConfig(cfg Config) Opt {
-	return func(vm *VM) {
-		vm.cfg = cfg
-	}
+// SetConfig updates config on the vm.
+func (v *VM) SetConfig(cfg vmsdk.Config) {
+	v.cfg = cfg
 }
 
 // New returns VM instance.
-func New(db sql.StateDatabase, opts ...Opt) *VM {
+func New(db sql.StateDatabase, opts ...vmsdk.Opt) *VM {
 	vm := &VM{
 		logger:   zap.NewNop(),
 		db:       db,
-		cfg:      DefaultConfig(),
+		cfg:      vmsdk.DefaultConfig(),
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
@@ -74,7 +55,7 @@ func New(db sql.StateDatabase, opts ...Opt) *VM {
 type VM struct {
 	logger   *zap.Logger
 	db       sql.StateDatabase
-	cfg      Config
+	cfg      vmsdk.Config
 	registry *registry.Registry
 }
 
@@ -474,7 +455,7 @@ func parse(
 	lid types.LayerID,
 	reg *registry.Registry,
 	loader core.AccountLoader,
-	cfg Config,
+	cfg vmsdk.Config,
 	raw []byte,
 	decoder *scale.Decoder,
 ) (*core.Header, *core.Context, scale.Encodable, error) {
