@@ -50,7 +50,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	genvm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
@@ -92,6 +91,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
 	athenavm "github.com/spacemeshos/go-spacemesh/vm/athena"
+	genvm "github.com/spacemeshos/go-spacemesh/vm/genvm"
 )
 
 const (

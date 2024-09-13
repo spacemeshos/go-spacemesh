@@ -17,15 +17,15 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	sdkmultisig "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
-	sdkvesting "github.com/spacemeshos/go-spacemesh/genvm/sdk/vesting"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk"
+	sdkmultisig "github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/multisig"
+	sdkvesting "github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/vesting"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vault"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vesting"
 )
 
 func TestSmeshing(t *testing.T) {

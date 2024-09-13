@@ -17,13 +17,13 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/systest/validation"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/wallet"
 )
 
 const ENV_LONGEVITY_TESTS = "LONGEVITY_TESTS"
