@@ -2,14 +2,39 @@ package identities
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+const (
+	// Bloom filter size is < 234 KiB while below 100k identities
+	BloomFilterFalsePositiveRate = 0.0001
+	BloomFilterMinSize           = 100000
+	BloomFilterExtraCoef         = 1.2
+)
+
+// LoadBloomFilter intializes and loads the bloom filter for malicious identities.
+func LoadBloomFilter(db sql.StateDatabase, logger *zap.Logger) (*sql.DBBloomFilter, error) {
+	bf := sql.NewDBBloomFilter(
+		"malicious",
+		`SELECT i1.pubkey FROM identities i1
+ 		LEFT JOIN identities i2 ON i1.marriage_atx = i2.marriage_atx
+		WHERE i1.proof IS NOT NULL OR i2.proof IS NOT NULL`,
+		"i1.pubkey",
+		BloomFilterMinSize, BloomFilterExtraCoef, BloomFilterFalsePositiveRate)
+	if err := bf.Load(db, logger); err != nil {
+		return nil, fmt.Errorf("load bloom filter: %w", err)
+	}
+	db.AddSet(bf)
+	return bf, nil
+}
 
 // SetMalicious records identity as malicious.
 func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received time.Time) error {
@@ -26,11 +51,25 @@ func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received t
 	if err != nil {
 		return fmt.Errorf("set malicious %v: %w", nodeID, err)
 	}
+	ids, err := EquivocationSet(db, nodeID)
+	if err != nil {
+		return fmt.Errorf("get equivocation set for %v: %w", nodeID, err)
+	}
+	for _, id := range ids {
+		sql.AddToSet(db, "malicious", id[:])
+	}
 	return nil
 }
 
 // IsMalicious returns true if identity is known to be malicious.
 func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
+	has, err := sql.Contains(db, "malicious", nodeID[:])
+	if err == nil {
+		return has, nil
+	} else if !errors.Is(err, sql.ErrNoSet) {
+		return false, fmt.Errorf("check if node %s is malicious: %w", nodeID, err)
+	}
+
 	rows, err := db.Exec(`
 	SELECT 1 FROM identities
 	WHERE (
@@ -161,7 +200,15 @@ func Marriage(db sql.Executor, id types.NodeID) (*MarriageData, error) {
 // Set marriage inserts marriage data for given identity.
 // If identity doesn't exist - create it.
 func SetMarriage(db sql.Executor, id types.NodeID, m *MarriageData) error {
-	_, err := db.Exec(`
+	isMalicious1, err := IsMalicious(db, id)
+	if err != nil {
+		return fmt.Errorf("checking if the node is malicious: %w", err)
+	}
+	isMalicious2, err := IsMalicious(db, m.Target)
+	if err != nil {
+		return fmt.Errorf("checking if the target is malicious: %w", err)
+	}
+	_, err = db.Exec(`
 	INSERT INTO identities (pubkey, marriage_atx, marriage_idx, marriage_target, marriage_signature)
 	values (?1, ?2, ?3, ?4, ?5)
 	ON CONFLICT(pubkey) DO UPDATE SET
@@ -180,6 +227,10 @@ func SetMarriage(db sql.Executor, id types.NodeID, m *MarriageData) error {
 	)
 	if err != nil {
 		return fmt.Errorf("setting marriage %v: %w", id, err)
+	}
+	if isMalicious1 || isMalicious2 {
+		sql.AddToSet(db, "malicious", id[:])
+		sql.AddToSet(db, "malicious", m.Target[:])
 	}
 	return nil
 }

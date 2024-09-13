@@ -612,3 +612,14 @@ func TestExclusive(t *testing.T) {
 		})
 	}
 }
+
+func TestNoSet(t *testing.T) {
+	db := InMemoryTest(t)
+	AddToSet(db, "noSuchSet", []byte{42})
+	_, err := Contains(db, "noSuchSet", []byte{42})
+	require.ErrorIs(t, err, ErrNoSet)
+	wrapped := struct{ Executor }{db}
+	AddToSet(wrapped, "noSuchSet", []byte{42})
+	_, err = Contains(wrapped, "noSuchSet", []byte{42})
+	require.ErrorIs(t, err, ErrNoSet)
+}

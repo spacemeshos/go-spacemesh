@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -221,6 +222,14 @@ type Opt func(c *conf)
 func OpenInMemory(opts ...Opt) (*sqliteDatabase, error) {
 	opts = append(opts, WithConnections(1), withForceFresh())
 	return Open("file::memory:?mode=memory", opts...)
+}
+
+// InMemoryTest returns an in-mem database for testing and ensures database is closed
+// during `tb.Cleanup`.
+func InMemoryTest(tb testing.TB, opts ...Opt) Database {
+	db := InMemory(append(opts, WithNoCheckSchemaDrift())...)
+	tb.Cleanup(func() { db.Close() })
+	return db
 }
 
 // InMemory creates an in-memory database for testing and panics if
@@ -550,10 +559,23 @@ func handleIncompleteCopyMigration(config *conf) error {
 // PushIntercept. The query will fail if Interceptor returns an error.
 type Interceptor func(query string) error
 
+// IDSet verifies if the particular ID exists in the database.
+type IDSet interface {
+	Name() string
+	Add(id []byte)
+	Contains(db Executor, id []byte) (bool, error)
+}
+
+type IDSetCollection interface {
+	Contains(name string, id []byte) (bool, error)
+	AddToSet(name string, id []byte)
+}
+
 // Database represents a database.
 type Database interface {
 	Executor
 	QueryCache
+	IDSetCollection
 	Close() error
 	QueryCount() int
 	QueryCache() QueryCache
@@ -563,6 +585,7 @@ type Database interface {
 	WithTxImmediate(ctx context.Context, exec func(Transaction) error) error
 	Intercept(key string, fn Interceptor)
 	RemoveInterceptor(key string)
+	AddSet(c IDSet)
 }
 
 // Transaction represents a transaction.
@@ -584,6 +607,9 @@ type sqliteDatabase struct {
 
 	interceptMtx sync.Mutex
 	interceptors map[string]Interceptor
+
+	setMtx sync.Mutex
+	sets   map[string]IDSet
 }
 
 var _ Database = &sqliteDatabase{}
@@ -981,6 +1007,43 @@ func (db *sqliteDatabase) QueryCache() QueryCache {
 	return db.queryCache
 }
 
+func (db *sqliteDatabase) AddSet(c IDSet) {
+	name := c.Name()
+	db.setMtx.Lock()
+	defer db.setMtx.Unlock()
+	_, found := db.sets[name]
+	if found {
+		panic("set already exists: " + name)
+	}
+	if db.sets == nil {
+		db.sets = make(map[string]IDSet)
+	}
+	db.sets[name] = c
+}
+
+func (db *sqliteDatabase) getSet(name string) IDSet {
+	db.setMtx.Lock()
+	defer db.setMtx.Unlock()
+	return db.sets[name]
+}
+
+func (db *sqliteDatabase) AddToSet(name string, id []byte) {
+	set := db.getSet(name)
+	if set != nil {
+		set.Add(id)
+	}
+}
+
+var ErrNoSet = errors.New("no such set")
+
+func (db *sqliteDatabase) Contains(name string, id []byte) (bool, error) {
+	set := db.getSet(name)
+	if set == nil {
+		return false, ErrNoSet
+	}
+	return set.Contains(db, id)
+}
+
 func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
 	stmt, err := conn.Prepare(query)
 	if err != nil {
@@ -1022,6 +1085,11 @@ type sqliteTx struct {
 	committed bool
 	err       error
 }
+
+var (
+	_ Transaction     = &sqliteTx{}
+	_ IDSetCollection = &sqliteTx{}
+)
 
 func (tx *sqliteTx) begin(initstmt string) error {
 	stmt := tx.conn.Prep(initstmt)
@@ -1068,6 +1136,36 @@ func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 		}()
 	}
 	return exec(tx.conn, query, encoder, decoder)
+}
+
+// AddToSet implements IDSetCollection.
+func (tx *sqliteTx) AddToSet(name string, id []byte) {
+	tx.db.AddToSet(name, id)
+}
+
+// Contains implements IDSetCollection.
+func (tx *sqliteTx) Contains(name string, id []byte) (bool, error) {
+	set := tx.db.getSet(name)
+	if set == nil {
+		return false, ErrNoSet
+	}
+	return set.Contains(tx, id)
+}
+
+// AddToSet registers the ID with the specified set to ensure Contains returns true for
+// it.
+func AddToSet(db Executor, name string, id []byte) {
+	if set, ok := db.(IDSetCollection); ok {
+		set.AddToSet(name, id)
+	}
+}
+
+// Contains verifies that the ID exists within the specified set.
+func Contains(db Executor, name string, id []byte) (bool, error) {
+	if set, ok := db.(IDSetCollection); ok {
+		return set.Contains(name, id)
+	}
+	return false, ErrNoSet
 }
 
 func mapSqliteError(err error) error {
