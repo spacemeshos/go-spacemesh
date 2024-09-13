@@ -6,7 +6,7 @@ import (
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 
-	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
 )
 
 // New returns Wallet instance with SpawnArguments.

@@ -50,7 +50,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
+	genvm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
@@ -90,6 +90,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
 )
 
 const (
@@ -573,6 +574,19 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 	}
 
 	return nil
+}
+
+func GetVM() (vm.VM, error) {
+	configValue := os.Getenv("VM_MODULE") // Or read from a config file
+
+	switch configValue {
+	case "genvm":
+		return &genvm.GenVM{}, nil
+	case "alternative":
+		return &module.AlternativeVM{}, nil
+	default:
+		return nil, fmt.Errorf("unknown VM module: %s", configValue)
+	}
 }
 
 func (app *App) initServices(ctx context.Context) error {

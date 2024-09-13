@@ -26,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
+	vmsdk "github.com/spacemeshos/go-spacemesh/vm"
 )
 
 // Opt is for changing VM during initialization.
@@ -38,21 +39,8 @@ func WithLogger(logger *zap.Logger) Opt {
 	}
 }
 
-// Config defines the configuration options for vm.
-type Config struct {
-	GasLimit  uint64
-	GenesisID types.Hash20
-}
-
-// DefaultConfig returns the default RewardConfig.
-func DefaultConfig() Config {
-	return Config{
-		GasLimit: 100_000_000,
-	}
-}
-
 // WithConfig updates config on the vm.
-func WithConfig(cfg Config) Opt {
+func WithConfig(cfg vmsdk.Config) Opt {
 	return func(vm *VM) {
 		vm.cfg = cfg
 	}
@@ -63,7 +51,7 @@ func New(db sql.StateDatabase, opts ...Opt) *VM {
 	vm := &VM{
 		logger:   zap.NewNop(),
 		db:       db,
-		cfg:      DefaultConfig(),
+		cfg:      vmsdk.DefaultConfig(),
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
@@ -80,7 +68,7 @@ func New(db sql.StateDatabase, opts ...Opt) *VM {
 type VM struct {
 	logger   *zap.Logger
 	db       sql.StateDatabase
-	cfg      Config
+	cfg      vmsdk.Config
 	registry *registry.Registry
 }
 
@@ -480,7 +468,7 @@ func parse(
 	lid types.LayerID,
 	reg *registry.Registry,
 	loader core.AccountLoader,
-	cfg Config,
+	cfg vmsdk.Config,
 	raw []byte,
 	decoder *scale.Decoder,
 ) (*core.Header, *core.Context, scale.Encodable, error) {

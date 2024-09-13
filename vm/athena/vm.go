@@ -20,9 +20,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/vm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/registry"
-	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/registry"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/templates/wallet"
 )
 
 // Opt is for changing VM during initialization.

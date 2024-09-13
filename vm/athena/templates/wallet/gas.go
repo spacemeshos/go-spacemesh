@@ -3,7 +3,7 @@ package wallet
 import (
 	"math"
 
-	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
 )
 
 func BaseGas(method uint8) uint64 {

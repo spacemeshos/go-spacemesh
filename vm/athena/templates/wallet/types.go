@@ -1,7 +1,7 @@
 package wallet
 
 import (
-	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
 )
 
 //go:generate scalegen

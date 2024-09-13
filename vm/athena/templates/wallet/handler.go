@@ -6,8 +6,8 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
-	"github.com/spacemeshos/go-spacemesh/vm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/registry"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/registry"
 )
 
 func init() {
