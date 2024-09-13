@@ -72,7 +72,7 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 		return nil, status.Error(codes.Internal, "couldn't get previous ATXs")
 	}
 
-	proof, err := s.atxProvider.GetMalfeasanceProof(atx.SmesherID)
+	proof, err := s.atxProvider.MalfeasanceProof(atx.SmesherID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		ctxzap.Error(ctx, "failed to get malfeasance proof",
 			zap.Stringer("smesher", atx.SmesherID),

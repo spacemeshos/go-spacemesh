@@ -379,9 +379,10 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	mal, err := identities.IsMalicious(tm.cdb, sig.NodeID())
 	require.NoError(t, err)
 	require.False(t, mal)
-	saved, err := identities.GetMalfeasanceProof(tm.cdb, sig.NodeID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Nil(t, saved)
+
+	malicious, err := identities.IsMalicious(tm.cdb, sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, malicious)
 
 	// second one will create a MalfeasanceProof
 	tm.mockTortoise.EXPECT().OnMalfeasance(sig.NodeID())
