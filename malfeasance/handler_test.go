@@ -189,9 +189,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 
 		var blob sql.Blob
 		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
-		malProof := &wire.MalfeasanceProof{}
-		codec.MustDecode(blob.Bytes, malProof)
-		require.Equal(t, proof, malProof)
+		require.Equal(t, codec.MustEncode(proof), blob.Bytes)
 	})
 }
 
