@@ -22,10 +22,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
-	"github.com/spacemeshos/go-spacemesh/vm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/sdk"
-	sdkwallet "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/sdk"
+	sdkwallet "github.com/spacemeshos/go-spacemesh/vm/athena/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/templates/wallet"
 )
 
 func newTester(tb testing.TB) *tester {

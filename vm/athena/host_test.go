@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
-	"github.com/spacemeshos/go-spacemesh/vm/templates/getbalance"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/templates/getbalance"
 )
 
 func athenaLibPath() string {
@@ -27,11 +27,11 @@ func athenaLibPath() string {
 
 	switch runtime.GOOS {
 	case "windows":
-		return filepath.Join(cwd, "../build/libathenavmwrapper.dll")
+		return filepath.Join(cwd, "../../build/libathenavmwrapper.dll")
 	case "darwin":
-		return filepath.Join(cwd, "../build/libathenavmwrapper.dylib")
+		return filepath.Join(cwd, "../../build/libathenavmwrapper.dylib")
 	default:
-		return filepath.Join(cwd, "../build/libathenavmwrapper.so")
+		return filepath.Join(cwd, "../../build/libathenavmwrapper.so")
 	}
 }
 

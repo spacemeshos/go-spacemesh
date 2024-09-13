@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
 )
 
 func FuzzSpawnArgumentsConsistency(f *testing.F) {

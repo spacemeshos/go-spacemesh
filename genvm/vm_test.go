@@ -37,6 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	vmsdk "github.com/spacemeshos/go-spacemesh/vm"
 )
 
 func newTester(tb testing.TB) *tester {
@@ -44,7 +45,7 @@ func newTester(tb testing.TB) *tester {
 		TB: tb,
 		VM: New(statesql.InMemory(),
 			WithLogger(zaptest.NewLogger(tb)),
-			WithConfig(Config{GasLimit: math.MaxUint64}),
+			WithConfig(vmsdk.Config{GasLimit: math.MaxUint64}),
 		),
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -277,7 +278,7 @@ func (t *tester) persistent() *tester {
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
 	t.VM = New(db, WithLogger(zaptest.NewLogger(t)),
-		WithConfig(Config{GasLimit: math.MaxUint64}))
+		WithConfig(vmsdk.Config{GasLimit: math.MaxUint64}))
 	return t
 }
 
