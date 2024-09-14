@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// Bloom filter size is < 234 KiB while below 100k identities
+	// Bloom filter size is < 234 KiB while below 100k identities.
 	BloomFilterFalsePositiveRate = 0.0001
 	BloomFilterMinSize           = 100000
 	BloomFilterExtraCoef         = 1.2

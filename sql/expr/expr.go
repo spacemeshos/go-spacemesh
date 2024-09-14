@@ -9,7 +9,7 @@ import (
 	rsql "github.com/rqlite/sql"
 )
 
-// SQL operations
+// SQL operations.
 const (
 	NE     = rsql.NE     // !=
 	EQ     = rsql.EQ     // =
@@ -62,7 +62,7 @@ func MustParseStatement(s string) rsql.Statement {
 // If no non-nil expressions are passed, nil is returned.
 // If a single non-nil expression is passed, that single expression is returned.
 // Otherwise, the expressions are joined together with ANDs:
-// a AND b AND c AND d
+// a AND b AND c AND d.
 func MaybeAnd(exprs ...Expr) Expr {
 	var r Expr
 	for _, expr := range exprs {
