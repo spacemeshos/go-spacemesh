@@ -1980,15 +1980,8 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	{
 		warmupLog := app.log.Zap().Named("warmup")
-		app.log.Info("loading Bloom filters")
-		_, err := atxs.LoadBloomFilter(app.db, warmupLog)
-		if err != nil {
-			return fmt.Errorf("loading ATX Bloom filter: %w", err)
-		}
-		_, err = identities.LoadBloomFilter(app.db, warmupLog)
-		if err != nil {
-			return fmt.Errorf("loading malicious identity Bloom filter: %w", err)
-		}
+		atxs.StartBloomFilter(app.db, warmupLog)
+		identities.StartBloomFilter(app.db, warmupLog)
 		app.log.Info("starting cache warmup")
 		applied, err := layers.GetLastApplied(app.db)
 		if err != nil {

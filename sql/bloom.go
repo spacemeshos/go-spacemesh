@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
@@ -8,8 +9,17 @@ import (
 
 	"github.com/bits-and-blooms/bloom/v3"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/sql/expr"
+)
+
+const (
+	// This is how many keys DBBloomFilter.Add() will queue before blocking while the
+	// filter is being loaded. Not many keys are expected during this time b/c not
+	// many new records are usually added during several initial minutes after
+	// go-spacemesh startup.
+	addKeyChSize = 1000
 )
 
 // BloomStats represents bloom filter statistics.
@@ -23,9 +33,10 @@ type BloomStats struct {
 // DBBloomFilter reduces the number of database lookups for the keys that are not in the
 // database.
 type DBBloomFilter struct {
+	logger    *zap.Logger
+	name      string
 	mtx       sync.Mutex
 	f         *bloom.BloomFilter
-	name      string
 	sel       expr.Statement
 	idCol     expr.Expr
 	minSize   int
@@ -35,6 +46,10 @@ type DBBloomFilter struct {
 	loaded    atomic.Int64
 	positive  atomic.Int64
 	negative  atomic.Int64
+	loadOnce  sync.Once
+	eg        errgroup.Group
+	cancel    context.CancelFunc
+	addKeyCh  chan []byte
 }
 
 var _ IDSet = &DBBloomFilter{}
@@ -44,11 +59,13 @@ var _ IDSet = &DBBloomFilter{}
 // the IDs, filter is an optional SQL expression that selects the rows to include in the
 // filter, and falsePositiveRate is the desired false positive rate.
 func NewDBBloomFilter(
+	logger *zap.Logger,
 	name, selectExpr, idCol string,
 	minSize int,
 	extraCoef, falsePositiveRate float64,
 ) *DBBloomFilter {
 	return &DBBloomFilter{
+		logger:    logger,
 		name:      name,
 		sel:       expr.MustParseStatement(selectExpr),
 		idCol:     expr.MustParse(idCol),
@@ -80,22 +97,20 @@ func (bf *DBBloomFilter) hasSQL() string {
 
 // Add adds the specified key to the Bloom filter.
 func (bf *DBBloomFilter) Add(id []byte) {
-	bf.mtx.Lock()
-	defer bf.mtx.Unlock()
-	if bf.f != nil {
-		bf.f.Add(id)
-		bf.added.Add(1)
+	if bf.addKeyCh != nil {
+		bf.addKeyCh <- id
 	}
 }
 
-// Load populates the Bloom filter from the database.
-func (bf *DBBloomFilter) Load(db Executor, logger *zap.Logger) error {
+// Ready returns true if the Bloom filter is started and has finished loading.
+func (bf *DBBloomFilter) Ready() bool {
 	bf.mtx.Lock()
 	defer bf.mtx.Unlock()
-	if bf.f != nil {
-		return nil
-	}
-	logger.Info("estimating Bloom filter size", zap.String("table", bf.name))
+	return bf.f != nil
+}
+
+func (bf *DBBloomFilter) doLoad(db Executor) error {
+	bf.logger.Info("estimating Bloom filter size", zap.String("name", bf.name))
 	count := 0
 	_, err := db.Exec(bf.countSQL(), nil, func(stmt *Statement) bool {
 		count = stmt.ColumnInt(0)
@@ -108,12 +123,12 @@ func (bf *DBBloomFilter) Load(db Executor, logger *zap.Logger) error {
 	if bf.minSize > 0 && size < bf.minSize {
 		size = bf.minSize
 	}
-	bf.f = bloom.NewWithEstimates(uint(size), bf.fp)
-	logger.Info("loading Bloom filter",
-		zap.String("table", bf.name),
+	f := bloom.NewWithEstimates(uint(size), bf.fp)
+	bf.logger.Info("loading Bloom filter",
+		zap.String("name", bf.name),
 		zap.Int("count", count),
 		zap.Int("actualSize", size),
-		zap.Int("bytes", bf.f.BitSet().BinaryStorageSize()),
+		zap.Int("bytes", f.BitSet().BinaryStorageSize()),
 		zap.Float64("falsePositiveRate", bf.fp))
 	var bs []byte
 	nRows, err := db.Exec(bf.loadSQL(), nil, func(stmt *Statement) bool {
@@ -124,22 +139,66 @@ func (bf *DBBloomFilter) Load(db Executor, logger *zap.Logger) error {
 			bs = bs[:l]
 		}
 		stmt.ColumnBytes(0, bs)
-		bf.f.Add(bs)
+		f.Add(bs)
 		bf.loaded.Add(1)
 		return true
 	})
 	if err != nil {
 		return fmt.Errorf("populate Bloom filter for the table %s: %w", bf.name, err)
 	}
-	logger.Info("done loading Bloom filter", zap.String("table", bf.name), zap.Int("rows", nRows))
+	bf.mtx.Lock()
+	bf.f = f
+	bf.mtx.Unlock()
+	bf.logger.Info("done loading Bloom filter", zap.String("name", bf.name), zap.Int("rows", nRows))
 	return nil
 }
 
+// Start starts populating the Bloom filter from the database, and after that starts
+// updating it with new keys.  Once the filter is populated, it begins to be used during
+// Contains() calls. Before the filter is ready, Contains() falls back to the database
+// query.
+// Subsequent calls to Start() are no-ops.
+func (bf *DBBloomFilter) Start(db Database) {
+	bf.loadOnce.Do(func() {
+		var ctx context.Context
+		ctx, bf.cancel = context.WithCancel(context.Background())
+		bf.addKeyCh = make(chan []byte, addKeyChSize)
+		bf.eg.Go(func() error {
+			if err := db.WithTx(ctx, func(tx Transaction) error {
+				return bf.doLoad(tx)
+			}); err != nil {
+				bf.logger.Error("failed to load Bloom filter",
+					zap.String("name", bf.name),
+					zap.Error(err))
+			}
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case id := <-bf.addKeyCh:
+					bf.mtx.Lock()
+					bf.f.Add(id)
+					bf.mtx.Unlock()
+					bf.added.Add(1)
+				}
+			}
+		})
+	})
+}
+
+// Stop stops loading the Bloom filter handler goroutine, if it's running.
+// Subsequent calls to Stop() are no-ops.
+func (bf *DBBloomFilter) Stop() {
+	if bf.cancel != nil {
+		bf.cancel()
+		bf.eg.Wait()
+		bf.cancel = nil
+	}
+}
+
 func (bf *DBBloomFilter) mayHave(id []byte) bool {
-	bf.mtx.Lock()
-	defer bf.mtx.Unlock()
-	if bf.f == nil {
-		return false
+	if !bf.Ready() {
+		return true
 	}
 	if bf.f.Test(id) {
 		bf.positive.Add(1)
@@ -159,7 +218,9 @@ func (bf *DBBloomFilter) inDB(db Executor, id []byte) (bool, error) {
 	return nRows != 0, nil
 }
 
-// Contains returns true if the ID is in the table.
+// Contains returns true if the ID is in the table. It uses the Bloom filter to reduce the
+// number of database lookups after the filter has finished loading, and falls back to the
+// database query before that.
 func (bf *DBBloomFilter) Contains(db Executor, id []byte) (bool, error) {
 	if !bf.mayHave(id) {
 		// no false negatives in the Bloom filter

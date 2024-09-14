@@ -127,16 +127,14 @@ func GetByEpochAndNodeID(
 	return id, nil
 }
 
-// LoadBloomFilter intializes and loads the bloom filter for ATXs.
-func LoadBloomFilter(db sql.StateDatabase, logger *zap.Logger) (*sql.DBBloomFilter, error) {
+// StartBloomFilter intializes and loads the bloom filter for ATXs.
+func StartBloomFilter(db sql.StateDatabase, logger *zap.Logger) *sql.DBBloomFilter {
 	bf := sql.NewDBBloomFilter(
-		"atxs", "select id from atxs", "id",
+		logger, "atxs", "select id from atxs", "id",
 		BloomFilterMinSize, BloomFilterExtraCoef, BloomFilterFalsePositiveRate)
-	if err := bf.Load(db, logger); err != nil {
-		return nil, fmt.Errorf("load bloom filter: %w", err)
-	}
+	bf.Start(db)
 	db.AddSet(bf)
-	return bf, nil
+	return bf
 }
 
 // Has checks if an ATX exists by a given ATX ID.

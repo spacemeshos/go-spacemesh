@@ -340,8 +340,11 @@ func Test_BloomFilter(t *testing.T) {
 
 		addSome()
 
-		bf, err := identities.LoadBloomFilter(db, zaptest.NewLogger(t))
-		require.NoError(t, err)
+		bf := identities.StartBloomFilter(db, zaptest.NewLogger(t))
+		require.Eventually(t, func() bool {
+			return bf.Ready()
+		}, time.Second, 10*time.Millisecond)
+
 		check()
 		require.Equal(t, sql.BloomStats{
 			Loaded:      numBad,
@@ -350,6 +353,9 @@ func Test_BloomFilter(t *testing.T) {
 		}, bf.Stats())
 
 		addSome()
+		require.Eventually(t, func() bool {
+			return bf.Stats().Added == numBad
+		}, time.Second, 10*time.Millisecond)
 		check()
 		require.Equal(t, sql.BloomStats{
 			Loaded:      numBad,
@@ -362,8 +368,10 @@ func Test_BloomFilter(t *testing.T) {
 	t.Run("married", func(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
-		_, err := identities.LoadBloomFilter(db, zaptest.NewLogger(t))
-		require.NoError(t, err)
+		bf := identities.StartBloomFilter(db, zaptest.NewLogger(t))
+		require.Eventually(t, func() bool {
+			return bf.Ready()
+		}, time.Second, 10*time.Millisecond)
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
 			types.RandomNodeID(),
@@ -378,6 +386,10 @@ func Test_BloomFilter(t *testing.T) {
 		// filter, as it has no false negatives and if an ID is absent from the
 		// filter, it's considered not to be malicious.
 		require.NoError(t, identities.SetMalicious(db, ids[0], []byte("proof"), time.Now()))
+
+		require.Eventually(t, func() bool {
+			return bf.Stats().Added == 2
+		}, time.Second, 10*time.Millisecond)
 
 		for _, id := range ids {
 			malicious, err := identities.IsMalicious(db, id)

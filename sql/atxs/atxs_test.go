@@ -1459,8 +1459,10 @@ func Test_BloomFilter(t *testing.T) {
 	}
 
 	addSome()
-	bf, err := atxs.LoadBloomFilter(db, zaptest.NewLogger(t))
-	require.NoError(t, err)
+	bf := atxs.StartBloomFilter(db, zaptest.NewLogger(t))
+	require.Eventually(t, func() bool {
+		return bf.Ready()
+	}, time.Second, 10*time.Millisecond)
 	check()
 	require.Equal(t, sql.BloomStats{
 		Loaded:      3,
@@ -1469,6 +1471,9 @@ func Test_BloomFilter(t *testing.T) {
 	}, bf.Stats())
 
 	addSome()
+	require.Eventually(t, func() bool {
+		return bf.Stats().Added == 3
+	}, time.Second, 10*time.Millisecond)
 	check()
 	require.Equal(t, sql.BloomStats{
 		Loaded:      3,

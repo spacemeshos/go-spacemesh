@@ -20,20 +20,18 @@ const (
 	BloomFilterExtraCoef         = 1.2
 )
 
-// LoadBloomFilter intializes and loads the bloom filter for malicious identities.
-func LoadBloomFilter(db sql.StateDatabase, logger *zap.Logger) (*sql.DBBloomFilter, error) {
+// StartBloomFilter intializes and loads the bloom filter for malicious identities.
+func StartBloomFilter(db sql.StateDatabase, logger *zap.Logger) *sql.DBBloomFilter {
 	bf := sql.NewDBBloomFilter(
-		"malicious",
+		logger, "malicious",
 		`SELECT i1.pubkey FROM identities i1
  		LEFT JOIN identities i2 ON i1.marriage_atx = i2.marriage_atx
 		WHERE i1.proof IS NOT NULL OR i2.proof IS NOT NULL`,
 		"i1.pubkey",
 		BloomFilterMinSize, BloomFilterExtraCoef, BloomFilterFalsePositiveRate)
-	if err := bf.Load(db, logger); err != nil {
-		return nil, fmt.Errorf("load bloom filter: %w", err)
-	}
+	bf.Start(db)
 	db.AddSet(bf)
-	return bf, nil
+	return bf
 }
 
 // SetMalicious records identity as malicious.
