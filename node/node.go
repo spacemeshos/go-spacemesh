@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	usdt "github.com/dshulyak/opentelemetry-go-usdt"
 	"github.com/gofrs/flock"
 	pyroscope "github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
@@ -28,6 +29,8 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
@@ -2020,6 +2023,10 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
+	otel.SetTracerProvider(trace.NewTracerProvider(
+		trace.WithSpanProcessor(usdt.New()),
+	))
+
 	if err := app.verifyVersionUpgrades(); err != nil {
 		return fmt.Errorf("version upgrade verification failed: %w", err)
 	}

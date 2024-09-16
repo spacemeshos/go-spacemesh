@@ -7,6 +7,8 @@ import (
 	"slices"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/singleflight"
@@ -70,6 +72,7 @@ type Handler struct {
 	local     p2p.Peer
 	publisher pubsub.Publisher
 	logger    *zap.Logger
+	tracer    trace.Tracer
 	versions  []atxVersion
 
 	// inProgress is used to avoid processing the same ATX multiple times in parallel.
@@ -115,6 +118,7 @@ func NewHandler(
 		local:     local,
 		publisher: pub,
 		logger:    lg,
+		tracer:    otel.GetTracerProvider().Tracer("activation"),
 		versions:  []atxVersion{{0, types.AtxV1}},
 
 		v1: &HandlerV1{
@@ -171,6 +175,8 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 
 // HandleSyncedAtx handles atxs received by sync.
 func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
+	ctx, span := h.tracer.Start(ctx, "sync_atx")
+	defer span.End()
 	_, err := h.handleAtx(ctx, expHash, peer, data)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
 		h.logger.Warn("failed to process synced atx",
@@ -187,6 +193,8 @@ func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, pee
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	ctx, span := h.tracer.Start(ctx, "gossip_atx")
+	defer span.End()
 	proof, err := h.handleAtx(ctx, types.EmptyHash32, peer, msg)
 	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
 		h.logger.Warn("failed to process atx gossip",
