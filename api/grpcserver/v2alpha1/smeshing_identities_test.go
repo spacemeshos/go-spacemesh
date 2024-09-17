@@ -5,13 +5,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 type idMock struct {
@@ -45,7 +47,7 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	)
 
 	midentityStates := NewMockidentityState(gomock.NewController(t))
-	db := statesql.InMemory()
+	db := localsql.InMemory()
 	ctx := context.Background()
 
 	configuredPoets := map[string]struct{}{

@@ -21,14 +21,14 @@ const SmeshingIdentities = "smeshing_identities_v2alpha1"
 const poetsMismatchWarning = "poet is not configured, proof will not be fetched"
 
 type SmeshingIdentitiesService struct {
-	db                     sql.StateDatabase
+	db                     sql.Database
 	states                 identityState
 	signers                map[types.NodeID]struct{}
 	configuredPoetServices map[string]struct{}
 }
 
 func NewSmeshingIdentitiesService(
-	db sql.StateDatabase,
+	db sql.Database,
 	configuredPoetServices map[string]struct{},
 	states identityState,
 	signers map[types.NodeID]struct{},
