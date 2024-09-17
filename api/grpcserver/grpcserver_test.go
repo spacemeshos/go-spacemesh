@@ -2279,8 +2279,7 @@ func TestEventsReceived(t *testing.T) {
 	rewards := []types.CoinbaseReward{
 		{Coinbase: addr2, Weight: types.RatNum{Num: weight.Num().Uint64(), Denom: weight.Denom().Uint64()}},
 	}
-	svm.Apply(vm.ApplyContext{Layer: types.GetEffectiveGenesis()},
-		[]types.Transaction{*globalTx}, rewards)
+	svm.Apply(types.GetEffectiveGenesis(), []types.Transaction{*globalTx}, rewards)
 
 	txRes, err := txStream.Recv()
 	require.NoError(t, err)
@@ -2335,7 +2334,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(types.LayerID(17), []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()
@@ -2356,7 +2355,7 @@ func TestTransactionsRewards(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
-		_, _, err = svm.Apply(vm.ApplyContext{Layer: types.LayerID(17)}, []types.Transaction{*globalTx}, rewards)
+		_, _, err = svm.Apply(types.LayerID(17), []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
 		data, err := stream.Recv()
@@ -2401,7 +2400,7 @@ func TestVMAccountUpdates(t *testing.T) {
 		})
 	}
 	lid := types.GetEffectiveGenesis().Add(1)
-	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid}, spawns, nil)
+	_, _, err = svm.Apply(lid, spawns, nil)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -2438,7 +2437,7 @@ func TestVMAccountUpdates(t *testing.T) {
 			)),
 		})
 	}
-	_, _, err = svm.Apply(vm.ApplyContext{Layer: lid.Add(1)}, spends, nil)
+	_, _, err = svm.Apply(lid.Add(1), spends, nil)
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 	close(states)

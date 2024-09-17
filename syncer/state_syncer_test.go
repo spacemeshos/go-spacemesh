@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
@@ -192,11 +191,11 @@ func TestProcessLayers_OpinionsNotAdopted(t *testing.T) {
 					certificates.Add(ts.cdb, lid, &types.Certificate{BlockID: tc.localCert}),
 				)
 				require.NoError(t, blocks.SetValid(ts.cdb, tc.localCert))
-				ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, gomock.Any(), gomock.Any())
+				ts.mVm.EXPECT().Apply(lid, gomock.Any(), gomock.Any())
 				ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, tc.localCert, nil, nil)
 				ts.mVm.EXPECT().GetStateRoot()
 			} else {
-				ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, nil, nil)
+				ts.mVm.EXPECT().Apply(lid, nil, nil)
 				ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 				ts.mVm.EXPECT().GetStateRoot()
 			}
@@ -309,7 +308,7 @@ func TestProcessLayers_HareTakesTooLong(t *testing.T) {
 		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
 		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
-		ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lid}, nil, nil)
+		ts.mVm.EXPECT().Apply(lid, nil, nil)
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 		ts.mVm.EXPECT().GetStateRoot()
 	}
@@ -333,7 +332,7 @@ func TestProcessLayers_OpinionsOptional(t *testing.T) {
 	ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lastSynced)))
 	ts.mTortoise.EXPECT().OnApplied(lastSynced, gomock.Any())
 	require.False(t, ts.syncer.stateSynced())
-	ts.mVm.EXPECT().Apply(vm.ApplyContext{Layer: lastSynced}, nil, nil)
+	ts.mVm.EXPECT().Apply(lastSynced, nil, nil)
 	ts.mConState.EXPECT().UpdateCache(gomock.Any(), lastSynced, types.EmptyBlockID, nil, nil)
 	ts.mVm.EXPECT().GetStateRoot()
 	require.NoError(t, ts.syncer.processLayers(context.Background()))

@@ -120,15 +120,16 @@ type MaliciousIDs struct {
 }
 
 type EpochData struct {
-	// When changing this value also check
-	// - the size of `ResponseMessage.Data` above
-	// - the size of `Response.Data` in `p2p/server/server.go`
-	// - the size of `NodeIDs` in `MaliciousIDs` above
-	// - the size of `Set` in `EpochActiveSet` in common/types/activation.go
-	// - the size of `EligibilityProofs` in the type `Ballot` in common/types/ballot.go
-	// - the size of `Rewards` in the type `InnerBlock` in common/types/block.go
-	// - the size of `Ballots` in the type `LayerData` below
-	// - the size of `Proposals` in the type `Value` in hare3/types.go
+	// When changing this value also check the size of
+	// - `ResponseMessage.Data` above
+	// - `Response.Data` in `p2p/server/server.go`
+	// - `NodeIDs` in `MaliciousIDs` above
+	// - `Set` in `EpochActiveSet` in common/types/activation.go
+	// - `EligibilityProofs` in the type `Ballot` in common/types/ballot.go
+	// - `Rewards` in the type `InnerBlock` in common/types/block.go
+	// - `Ballots` in the type `LayerData` below
+	// - `Proposals` in the type `Value` in hare3/types.go
+	// - `Proposals` and `CompactProposals` in the type `Value` in hare4/types.go
 	AtxIDs []types.ATXID `scale:"max=8000000"`
 }
 

@@ -43,7 +43,7 @@ jobs:
         run: |
           git config --global pack.window 1
           git config --global core.compression 0
-          git config --global http.postBuffer 524288000
+          git config --global http.postBuffer 1024M
       - name: Check out Git repository
         uses: actions/checkout@v4
         with:

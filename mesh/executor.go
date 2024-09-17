@@ -13,7 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -94,7 +93,7 @@ func (e *Executor) ExecuteOptimistic(
 	if err != nil {
 		return nil, err
 	}
-	ineffective, executed, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, executable, crewards)
+	ineffective, executed, err := e.vm.Apply(lid, executable, crewards)
 	if err != nil {
 		return nil, fmt.Errorf("apply txs optimistically: %w", err)
 	}
@@ -150,11 +149,7 @@ func (e *Executor) Execute(ctx context.Context, lid types.LayerID, block *types.
 	if err != nil {
 		return err
 	}
-	ineffective, executed, err := e.vm.Apply(
-		vm.ApplyContext{Layer: block.LayerIndex},
-		executable,
-		rewards,
-	)
+	ineffective, executed, err := e.vm.Apply(block.LayerIndex, executable, rewards)
 	if err != nil {
 		return fmt.Errorf("apply block: %w", err)
 	}
@@ -199,7 +194,7 @@ func (e *Executor) convertRewards(lid types.LayerID, rewards []types.AnyReward) 
 
 func (e *Executor) executeEmpty(ctx context.Context, lid types.LayerID) error {
 	start := time.Now()
-	if _, _, err := e.vm.Apply(vm.ApplyContext{Layer: lid}, nil, nil); err != nil {
+	if _, _, err := e.vm.Apply(lid, nil, nil); err != nil {
 		return fmt.Errorf("apply empty layer: %w", err)
 	}
 	if err := e.cs.UpdateCache(ctx, lid, types.EmptyBlockID, nil, nil); err != nil {

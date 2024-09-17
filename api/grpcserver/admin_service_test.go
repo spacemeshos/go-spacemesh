@@ -39,7 +39,7 @@ func newAtx(tb testing.TB, db sql.StateDatabase) {
 	atx.SmesherID = types.BytesToNodeID(types.RandomBytes(20))
 	atx.SetReceived(time.Now().Local())
 	require.NoError(tb, atxs.Add(db, atx, types.AtxBlob{}))
-	require.NoError(tb, atxs.SetPost(db, atx.ID(), types.EmptyATXID, 0, atx.SmesherID, atx.NumUnits))
+	require.NoError(tb, atxs.SetPost(db, atx.ID(), types.EmptyATXID, 0, atx.SmesherID, atx.NumUnits, atx.PublishEpoch))
 }
 
 func createMesh(tb testing.TB, db sql.StateDatabase) {

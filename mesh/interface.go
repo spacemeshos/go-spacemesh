@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
 )
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -20,7 +19,7 @@ type vmState interface {
 	GetStateRoot() (types.Hash32, error)
 	Revert(types.LayerID) error
 	Apply(
-		vm.ApplyContext,
+		types.LayerID,
 		[]types.Transaction,
 		[]types.CoinbaseReward,
 	) ([]types.Transaction, []types.TransactionWithResult, error)
