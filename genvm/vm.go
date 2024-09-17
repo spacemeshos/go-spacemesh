@@ -190,27 +190,26 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 
 // Apply transactions.
 func (v *VM) Apply(
-	lctx ApplyContext,
+	layer types.LayerID,
 	txs []types.Transaction,
 	blockRewards []types.CoinbaseReward,
 ) ([]types.Transaction, []types.TransactionWithResult, error) {
-	if lctx.Layer.Before(types.GetEffectiveGenesis()) {
+	if layer.Before(types.GetEffectiveGenesis()) {
 		return nil, nil, fmt.Errorf("%w: applying layer %s before effective genesis %s",
-			core.ErrInternal, lctx.Layer, types.GetEffectiveGenesis(),
+			core.ErrInternal, layer, types.GetEffectiveGenesis(),
 		)
 	}
 	t1 := time.Now()
-	blockDurationWait.Observe(float64(time.Since(t1)))
 
 	ss := core.NewStagedCache(core.DBLoader{Executor: v.db})
-	results, skipped, fees, err := v.execute(lctx, ss, txs)
+	results, skipped, fees, err := v.execute(layer, ss, txs)
 	if err != nil {
 		return nil, nil, err
 	}
 	t2 := time.Now()
 	blockDurationTxs.Observe(float64(time.Since(t1)))
 
-	rewardsResult, err := v.addRewards(lctx, ss, fees, blockRewards)
+	rewardsResult, err := v.addRewards(layer, ss, fees, blockRewards)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -227,6 +226,8 @@ func (v *VM) Apply(
 		return nil, nil, err
 	}
 	defer tx.Release()
+	t4 := time.Now()
+	blockDurationWait.Observe(float64(time.Since(t3)))
 
 	for _, reward := range rewardsResult {
 		if err := rewards.Add(tx, &reward); err != nil {
@@ -236,7 +237,7 @@ func (v *VM) Apply(
 
 	ss.IterateChanged(func(account *core.Account) bool {
 		total++
-		account.Layer = lctx.Layer
+		account.Layer = layer
 		v.logger.Debug("update account state", zap.Inline(account))
 		err = accounts.Update(tx, account)
 		if err != nil {
@@ -252,7 +253,7 @@ func (v *VM) Apply(
 
 	var hashSum types.Hash32
 	hasher.Sum(hashSum[:0])
-	if err := layers.UpdateStateHash(tx, lctx.Layer, hashSum); err != nil {
+	if err := layers.UpdateStateHash(tx, layer, hashSum); err != nil {
 		return nil, nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -274,13 +275,13 @@ func (v *VM) Apply(
 	}
 	hash.PutHasher(hasher)
 
-	blockDurationPersist.Observe(float64(time.Since(t3)))
+	blockDurationPersist.Observe(float64(time.Since(t4)))
 	blockDuration.Observe(float64(time.Since(t1)))
 	transactionsPerBlock.Observe(float64(len(txs)))
-	appliedLayer.Set(float64(lctx.Layer))
+	appliedLayer.Set(float64(layer))
 
 	v.logger.Debug("applied layer",
-		zap.Uint32("layer", lctx.Layer.Uint32()),
+		zap.Uint32("layer", layer.Uint32()),
 		zap.Int("count", len(txs)-len(skipped)),
 		zap.Duration("duration", time.Since(t1)),
 		zap.Stringer("state_hash", hashSum),
@@ -289,7 +290,7 @@ func (v *VM) Apply(
 }
 
 func (v *VM) execute(
-	lctx ApplyContext,
+	layer types.LayerID,
 	ss *core.StagedCache,
 	txs []types.Transaction,
 ) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
@@ -311,7 +312,7 @@ func (v *VM) execute(
 		req := &Request{
 			vm:      v,
 			cache:   ss,
-			lid:     lctx.Layer,
+			lid:     layer,
 			raw:     tx.GetRaw(),
 			decoder: decoder,
 		}
@@ -389,7 +390,7 @@ func (v *VM) execute(
 		)
 
 		rst := types.TransactionWithResult{}
-		rst.Layer = lctx.Layer
+		rst.Layer = layer
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
@@ -611,9 +612,4 @@ func parse(
 
 func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
 	return ctx.PrincipalTemplate.Verify(ctx, raw, dec)
-}
-
-// ApplyContext has information on layer and block id.
-type ApplyContext struct {
-	Layer types.LayerID
 }

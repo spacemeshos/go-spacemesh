@@ -244,6 +244,121 @@ type step struct {
 	expectErr       string
 }
 
+// The test verifies that the proposal builder creates proposals as soon as possible
+// for initialized and eligible signers, especially if the uninitialized ones take
+// long to init or are blocked entirely.
+func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
+	var signers []*signing.EdSigner
+	rng := rand.New(rand.NewSource(10101))
+	for range 2 {
+		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
+		require.NoError(t, err)
+		signers = append(signers, signer)
+	}
+
+	var (
+		ctrl      = gomock.NewController(t)
+		conState  = mocks.NewMockconservativeState(ctrl)
+		clock     = mocks.NewMocklayerClock(ctrl)
+		publisher = pmocks.NewMockPublisher(ctrl)
+		trtl      = mocks.NewMockvotesEncoder(ctrl)
+		syncer    = smocks.NewMockSyncStateProvider(ctrl)
+		db        = statesql.InMemoryTest(t)
+		localdb   = localsql.InMemoryTest(t)
+		atxsdata  = atxsdata.New()
+		// singer[1] is blocked
+		atxSearch = mocks.NewMockatxSearch(ctrl)
+	)
+	opts := []Opt{
+		WithLayerPerEpoch(types.GetLayersPerEpoch()),
+		WithLayerSize(2),
+		WithLogger(zaptest.NewLogger(t)),
+		WithSigners(signers...),
+		withAtxSearch(atxSearch),
+	}
+	builder := New(clock, db, localdb, atxsdata, publisher, trtl, syncer, conState, opts...)
+	lid := types.LayerID(15)
+
+	// only signer[0] has ATX
+	atx := gatx(types.ATXID{1}, lid.GetEpoch()-1, signers[0].NodeID(), 1, genAtxWithNonce(777))
+	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+	atxsdata.AddFromAtx(atx, false)
+	atxSearch.EXPECT().GetIDByEpochAndNodeID(gomock.Any(), lid.GetEpoch()-1, signers[0].NodeID()).DoAndReturn(
+		func(_ context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+			return atxs.GetIDByEpochAndNodeID(db, epoch, nodeID)
+		},
+	)
+	atxSearch.EXPECT().GetIDByEpochAndNodeID(gomock.Any(), lid.GetEpoch()-1, signers[1].NodeID()).DoAndReturn(
+		func(ctx context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+			<-ctx.Done()
+			return types.EmptyATXID, ctx.Err()
+		},
+	)
+
+	beacon := types.Beacon{1}
+	require.NoError(t, beacons.Add(db, lid.GetEpoch(), beacon))
+	opinion := types.Opinion{Hash: types.Hash32{1}}
+	txs := []types.TransactionID{{1}, {2}}
+	expectedProposal := expectProposal(
+		signers[0], lid, atx.ID(), opinion,
+		expectEpochData(gactiveset(atx.ID()), 10, beacon),
+		expectTxs(txs),
+		expectCounters(signers[0], 3, beacon, 777, 0, 6, 9),
+	)
+
+	clock.EXPECT().LayerToTime(gomock.Any()).Return(time.Unix(0, 0)).AnyTimes()
+	conState.EXPECT().SelectProposalTXs(lid, gomock.Any()).Return(txs)
+	trtl.EXPECT().TallyVotes(gomock.Any(), lid)
+	trtl.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&opinion, nil)
+	trtl.EXPECT().LatestComplete().Return(lid - 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	publisher.EXPECT().
+		Publish(ctx, pubsub.ProposalProtocol, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+			defer cancel() // unblock the build hang on atx lookup for signer[1]
+			var proposal types.Proposal
+			codec.MustDecode(msg, &proposal)
+			proposal.MustInitialize()
+			require.Equal(t, *expectedProposal, proposal)
+			require.NoError(t, ballots.Add(db, &proposal.Ballot))
+			return nil
+		})
+
+	require.ErrorIs(t, builder.build(ctx, lid), context.Canceled)
+
+	// Try again in the next layer
+	// signer[1] is still NOT initialized (missing ATX) but it won't block this time
+	lid += 1
+	txs = []types.TransactionID{{17}, {22}}
+	atxSearch.EXPECT().GetIDByEpochAndNodeID(gomock.Any(), lid.GetEpoch()-1, signers[1].NodeID()).DoAndReturn(
+		func(_ context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+			return atxs.GetIDByEpochAndNodeID(db, epoch, nodeID)
+		},
+	)
+	expectedProposal = expectProposal(
+		signers[0], lid, atx.ID(), opinion,
+		expectTxs(txs),
+		expectCounters(signers[0], 3, beacon, 777, 2, 5),
+		expectRef(expectedProposal.Ballot.ID()),
+	)
+	trtl.EXPECT().TallyVotes(gomock.Any(), lid)
+	trtl.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&opinion, nil)
+	trtl.EXPECT().LatestComplete().Return(lid - 1)
+	conState.EXPECT().SelectProposalTXs(lid, gomock.Any()).Return(txs)
+
+	publisher.EXPECT().
+		Publish(context.Background(), pubsub.ProposalProtocol, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+			var proposal types.Proposal
+			codec.MustDecode(msg, &proposal)
+			proposal.MustInitialize()
+			require.Equal(t, *expectedProposal, proposal)
+			return nil
+		})
+
+	require.NoError(t, builder.build(context.Background(), lid))
+}
+
 func TestBuild(t *testing.T) {
 	signers := make([]*signing.EdSigner, 4)
 	rng := rand.New(rand.NewSource(10101))
@@ -739,6 +854,52 @@ func TestBuild(t *testing.T) {
 				},
 			},
 		},
+		{
+			desc: "publish two proposals in different layers",
+			opts: []Opt{WithLayerSize(2)},
+			steps: []step{
+				{
+					lid:    15,
+					beacon: types.Beacon{1},
+					atxs: []*types.ActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+					},
+
+					activeset:      types.ATXIDList{{1}},
+					txs:            []types.TransactionID{{1}, {2}},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					latestComplete: 8,
+					expectProposal: expectProposal(
+						signer, 15, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectEpochData(gactiveset(types.ATXID{1}), 10, types.Beacon{1}),
+						expectTxs([]types.TransactionID{{1}, {2}}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 0, 6, 9),
+					),
+				},
+				{
+					lid: 16,
+					ballots: []*types.Ballot{
+						gballot(types.BallotID{1}, types.ATXID{1}, signer.NodeID(), 15, &types.EpochData{
+							ActiveSetHash:    types.ATXIDList{{1}}.Hash(),
+							EligibilityCount: 10,
+							Beacon:           types.Beacon{1},
+						}),
+					},
+					txs:            []types.TransactionID{{5}},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					latestComplete: 15,
+					hare:           []types.LayerID{9, 10, 11, 12, 13, 14, 15, 16},
+					aggHashes:      []aggHash{{lid: 15, hash: types.Hash32{9, 9, 9}}},
+					expectProposal: expectProposal(
+						signer, 16, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectRef(types.BallotID{1}),
+						expectTxs([]types.TransactionID{{5}}),
+						expectMeshHash(types.Hash32{9, 9, 9}),
+						expectCounters(signer, 3, types.Beacon{1}, 777, 2, 5),
+					),
+				},
+			},
+		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
@@ -852,7 +1013,7 @@ func TestBuild(t *testing.T) {
 				err := builder.build(ctx, step.lid)
 				close(decoded)
 				if len(step.expectErr) > 0 {
-					require.ErrorContains(t, err, step.expectErr)
+					require.ErrorContains(t, err, step.expectErr, "expected: %s", step.expectErr)
 				} else {
 					require.NoError(t, err)
 					expect := step.expectProposals

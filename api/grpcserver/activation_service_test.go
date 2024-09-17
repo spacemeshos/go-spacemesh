@@ -133,7 +133,7 @@ func TestGet_HappyPath(t *testing.T) {
 	}
 	atx.SetID(id)
 	atxProvider.EXPECT().GetAtx(id).Return(&atx, nil)
-	atxProvider.EXPECT().GetMalfeasanceProof(gomock.Any()).Return(nil, sql.ErrNotFound)
+	atxProvider.EXPECT().MalfeasanceProof(gomock.Any()).Return(nil, sql.ErrNotFound)
 	atxProvider.EXPECT().Previous(id).Return(previous, nil)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
@@ -169,7 +169,7 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	}
 	atx.SetID(id)
 	atxProvider.EXPECT().GetAtx(id).Return(&atx, nil)
-	atxProvider.EXPECT().GetMalfeasanceProof(smesher).Return(proof, nil)
+	atxProvider.EXPECT().MalfeasanceProof(smesher).Return(proof, nil)
 	atxProvider.EXPECT().Previous(id).Return([]types.ATXID{previous}, nil)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})

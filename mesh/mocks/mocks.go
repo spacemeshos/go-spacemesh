@@ -14,7 +14,6 @@ import (
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -217,7 +216,7 @@ func (m *MockvmState) EXPECT() *MockvmStateMockRecorder {
 }
 
 // Apply mocks base method.
-func (m *MockvmState) Apply(arg0 vm.ApplyContext, arg1 []types.Transaction, arg2 []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+func (m *MockvmState) Apply(arg0 types.LayerID, arg1 []types.Transaction, arg2 []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Apply", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]types.Transaction)
@@ -245,13 +244,13 @@ func (c *MockvmStateApplyCall) Return(arg0 []types.Transaction, arg1 []types.Tra
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateApplyCall) Do(f func(vm.ApplyContext, []types.Transaction, []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error)) *MockvmStateApplyCall {
+func (c *MockvmStateApplyCall) Do(f func(types.LayerID, []types.Transaction, []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error)) *MockvmStateApplyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateApplyCall) DoAndReturn(f func(vm.ApplyContext, []types.Transaction, []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error)) *MockvmStateApplyCall {
+func (c *MockvmStateApplyCall) DoAndReturn(f func(types.LayerID, []types.Transaction, []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error)) *MockvmStateApplyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

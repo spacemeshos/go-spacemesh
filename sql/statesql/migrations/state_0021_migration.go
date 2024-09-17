@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type migration0021 struct {
@@ -160,7 +159,7 @@ func (m *migration0021) processBatch(db sql.Executor, offset, size int) (int, er
 
 func (m *migration0021) applyPendingUpdates(db sql.Executor, updates map[types.ATXID]*update) error {
 	for atxID, upd := range updates {
-		if err := atxs.SetPost(db, atxID, upd.prev, 0, upd.id, upd.units); err != nil {
+		if err := setPost(db, atxID, upd.prev, 0, upd.id, upd.units); err != nil {
 			return err
 		}
 	}
@@ -182,4 +181,21 @@ func processATX(blob types.AtxBlob) (*update, error) {
 	default:
 		return nil, fmt.Errorf("unsupported ATX version: %d", blob.Version)
 	}
+}
+
+func setPost(db sql.Executor, atxID, prev types.ATXID, prevIndex int, id types.NodeID, units uint32) error {
+	_, err := db.Exec(
+		`INSERT INTO posts (atxid, pubkey, prev_atxid, prev_atx_index, units) VALUES (?1, ?2, ?3, ?4, ?5);`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, atxID.Bytes())
+			stmt.BindBytes(2, id.Bytes())
+			if prev != types.EmptyATXID {
+				stmt.BindBytes(3, prev.Bytes())
+			}
+			stmt.BindInt64(4, int64(prevIndex))
+			stmt.BindInt64(5, int64(units))
+		},
+		nil,
+	)
+	return err
 }

@@ -912,41 +912,41 @@ func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(types.ATXID) (*types.Acti
 	return c
 }
 
-// GetMalfeasanceProof mocks base method.
-func (m *MockatxProvider) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
+// MalfeasanceProof mocks base method.
+func (m *MockatxProvider) MalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMalfeasanceProof", id)
+	ret := m.ctrl.Call(m, "MalfeasanceProof", id)
 	ret0, _ := ret[0].(*wire.MalfeasanceProof)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetMalfeasanceProof indicates an expected call of GetMalfeasanceProof.
-func (mr *MockatxProviderMockRecorder) GetMalfeasanceProof(id any) *MockatxProviderGetMalfeasanceProofCall {
+// MalfeasanceProof indicates an expected call of MalfeasanceProof.
+func (mr *MockatxProviderMockRecorder) MalfeasanceProof(id any) *MockatxProviderMalfeasanceProofCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProof", reflect.TypeOf((*MockatxProvider)(nil).GetMalfeasanceProof), id)
-	return &MockatxProviderGetMalfeasanceProofCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MalfeasanceProof", reflect.TypeOf((*MockatxProvider)(nil).MalfeasanceProof), id)
+	return &MockatxProviderMalfeasanceProofCall{Call: call}
 }
 
-// MockatxProviderGetMalfeasanceProofCall wrap *gomock.Call
-type MockatxProviderGetMalfeasanceProofCall struct {
+// MockatxProviderMalfeasanceProofCall wrap *gomock.Call
+type MockatxProviderMalfeasanceProofCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxProviderGetMalfeasanceProofCall) Return(arg0 *wire.MalfeasanceProof, arg1 error) *MockatxProviderGetMalfeasanceProofCall {
+func (c *MockatxProviderMalfeasanceProofCall) Return(arg0 *wire.MalfeasanceProof, arg1 error) *MockatxProviderMalfeasanceProofCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderGetMalfeasanceProofCall) Do(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderGetMalfeasanceProofCall {
+func (c *MockatxProviderMalfeasanceProofCall) Do(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderMalfeasanceProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderGetMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderGetMalfeasanceProofCall {
+func (c *MockatxProviderMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderMalfeasanceProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

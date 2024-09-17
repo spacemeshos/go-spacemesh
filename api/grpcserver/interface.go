@@ -58,7 +58,7 @@ type atxProvider interface {
 	GetAtx(id types.ATXID) (*types.ActivationTx, error)
 	Previous(id types.ATXID) ([]types.ATXID, error)
 	MaxHeightAtx() (types.ATXID, error)
-	GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error)
+	MalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error)
 }
 
 type postState interface {

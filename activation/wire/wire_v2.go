@@ -22,7 +22,7 @@ type ActivationTxV2 struct {
 	// only present in initial ATX
 	Initial      *InitialAtxPartsV2
 	PreviousATXs []types.ATXID `scale:"max=256"`
-	NiPosts      []NiPostsV2   `scale:"max=2"`
+	NiPosts      []NiPostsV2   `scale:"max=4"`
 
 	// The VRF nonce must be valid for the collected space of all included IDs.
 	VRFNonce uint64
@@ -102,7 +102,9 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	for _, niPost := range atx.NiPosts {
 		niPostTree.AddLeaf(niPost.Root(atx.PreviousATXs))
 	}
-	for i := len(atx.NiPosts); i < 2; i++ {
+	// Add empty niposts up to the max scale limit.
+	// This must be updated when the max scale limit is changed.
+	for i := len(atx.NiPosts); i < 4; i++ {
 		niPostTree.AddLeaf(types.EmptyHash32.Bytes())
 	}
 	tree.AddLeaf(niPostTree.Root())

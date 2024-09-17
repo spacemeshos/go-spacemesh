@@ -1,4 +1,4 @@
-PRAGMA user_version = 22;
+PRAGMA user_version = 23;
 CREATE TABLE accounts
 (
     address        CHAR(24),
@@ -110,8 +110,9 @@ CREATE TABLE posts (
     prev_atxid CHAR(32),
     prev_atx_index INT,
     units INT NOT NULL
-);
+, publish_epoch UNSIGNED INT);
 CREATE UNIQUE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey);
+CREATE INDEX posts_by_atxid_by_pubkey_epoch ON posts (pubkey, publish_epoch);
 CREATE INDEX posts_by_atxid_by_pubkey_prev_atxid ON posts (atxid, pubkey, prev_atxid);
 CREATE TABLE proposal_transactions
 (

@@ -74,7 +74,7 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	cdb.CacheMalfeasanceProof(nodeID1, proof)
 	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
 
-	got, err := cdb.GetMalfeasanceProof(nodeID1)
+	got, err := cdb.MalfeasanceProof(nodeID1)
 	require.NoError(t, err)
 	require.EqualValues(t, proof, got)
 }

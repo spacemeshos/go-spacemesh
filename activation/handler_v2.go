@@ -871,7 +871,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 			return fmt.Errorf("add atx to db: %w", err)
 		}
 		for id, post := range watx.ids {
-			err = atxs.SetPost(tx, atx.ID(), post.previous, post.previousIndex, id, post.units)
+			err = atxs.SetPost(tx, atx.ID(), post.previous, post.previousIndex, id, post.units, atx.PublishEpoch)
 			if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 				return fmt.Errorf("setting atx units for ID %s: %w", id, err)
 			}
