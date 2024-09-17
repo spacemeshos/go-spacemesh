@@ -111,6 +111,8 @@ or [mingw](https://chocolatey.org/packages/mingw).
 
 Ensure that `$GOPATH` is set correctly and that the `$GOPATH/bin` directory appears in `$PATH`.
 
+Ensure that you have installed [git-lfs](https://git-lfs.com/).
+
 Before building we need to set up the golang environment. Do this by running:
 
 ```bash
