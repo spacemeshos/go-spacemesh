@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"sync"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"
@@ -19,19 +21,58 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 )
 
+// PoetDbOptions are options for PoetDb.
+type PoetDbOptions struct {
+	cacheSize int
+}
+
+type PoetDbOption func(*PoetDbOptions)
+
+// WithCacheSize sets the cache size for PoetDb.
+func WithCacheSize(size int) PoetDbOption {
+	return func(opts *PoetDbOptions) {
+		opts.cacheSize = size
+	}
+}
+
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	sqlDB  sql.StateDatabase
-	logger *zap.Logger
+	sqlDB         sql.StateDatabase
+	singleQueryMu sync.Mutex // see comment where it is used
+	poetProofsLru *lru.Cache[types.PoetProofRef, *types.PoetProofMessage]
+	logger        *zap.Logger
 }
 
 // NewPoetDb returns a new PoET handler.
-func NewPoetDb(db sql.StateDatabase, log *zap.Logger) *PoetDb {
-	return &PoetDb{sqlDB: db, logger: log}
+func NewPoetDb(db sql.StateDatabase, log *zap.Logger, opts ...PoetDbOption) *PoetDb {
+	options := PoetDbOptions{
+		// in last epochs there are 45 proofs per epoch, with each of them nearly 140KB
+		// 200 is set not to keep multiple epochs, but to account for unexpected growth
+		// select round_id, count(*), max(length(poet)) from poets group by round_id;
+		// 25|42|146200
+		// 26|45|145936
+		// 27|45|145738
+		// 28|45|145903
+		cacheSize: 200,
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	poetProofsLru, err := lru.New[types.PoetProofRef, *types.PoetProofMessage](options.cacheSize)
+	if err != nil {
+		log.Panic("failed to create PoET proofs LRU cache", zap.Error(err))
+	}
+	return &PoetDb{
+		sqlDB:         db,
+		poetProofsLru: poetProofsLru,
+		logger:        log}
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
 func (db *PoetDb) HasProof(proofRef types.PoetProofRef) bool {
+	if db.poetProofsLru.Contains(proofRef) {
+		return true
+	}
 	has, err := poets.Has(db.sqlDB, proofRef)
 	return err == nil && has
 }
@@ -99,6 +140,7 @@ func (db *PoetDb) Validate(
 
 // StoreProof saves the poet proof in local db.
 func (db *PoetDb) StoreProof(ctx context.Context, ref types.PoetProofRef, proofMessage *types.PoetProofMessage) error {
+	db.poetProofsLru.Add(ref, proofMessage)
 	messageBytes, err := codec.Encode(proofMessage)
 	if err != nil {
 		return fmt.Errorf("could not marshal proof message: %w", err)
@@ -146,6 +188,16 @@ func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
 
 // Proof returns full proof.
 func (db *PoetDb) Proof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
+	// there is no effective rate limiting on gossip layer, and most of the proofs are reused
+	// hence to avoid excessive reads during atx "storm" we do them sequentially
+	// additionally poet proof can be cached during  ValidateAndStore routine
+	db.singleQueryMu.Lock()
+	defer db.singleQueryMu.Unlock()
+	cachedProof, ok := db.poetProofsLru.Get(proofRef)
+	if ok && cachedProof != nil {
+		return &cachedProof.PoetProof, &cachedProof.Statement, nil
+	}
+
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
@@ -154,6 +206,7 @@ func (db *PoetDb) Proof(proofRef types.PoetProofRef) (*types.PoetProof, *types.H
 	if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
 	}
+	db.poetProofsLru.Add(proofRef, &proofMessage)
 	return &proofMessage.PoetProof, &proofMessage.Statement, nil
 }
 
