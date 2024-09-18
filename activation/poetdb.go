@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/spacemeshos/merkle-tree"
@@ -12,6 +11,7 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -37,10 +37,10 @@ func WithCacheSize(size int) PoetDbOption {
 
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	sqlDB         sql.StateDatabase
-	singleQueryMu sync.Mutex // see comment where it is used
-	poetProofsLru *lru.Cache[types.PoetProofRef, *types.PoetProofMessage]
-	logger        *zap.Logger
+	sqlDB               sql.StateDatabase
+	poetProofsDbRequest singleflight.Group
+	poetProofsLru       *lru.Cache[types.PoetProofRef, *types.PoetProofMessage]
+	logger              *zap.Logger
 }
 
 // NewPoetDb returns a new PoET handler.
@@ -65,7 +65,8 @@ func NewPoetDb(db sql.StateDatabase, log *zap.Logger, opts ...PoetDbOption) *Poe
 	return &PoetDb{
 		sqlDB:         db,
 		poetProofsLru: poetProofsLru,
-		logger:        log}
+		logger:        log,
+	}
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
@@ -188,26 +189,27 @@ func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
 
 // Proof returns full proof.
 func (db *PoetDb) Proof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
-	// there is no effective rate limiting on gossip layer, and most of the proofs are reused
-	// hence to avoid excessive reads during atx "storm" we do them sequentially
-	// additionally poet proof can be cached during  ValidateAndStore routine
-	db.singleQueryMu.Lock()
-	defer db.singleQueryMu.Unlock()
-	cachedProof, ok := db.poetProofsLru.Get(proofRef)
-	if ok && cachedProof != nil {
-		return &cachedProof.PoetProof, &cachedProof.Statement, nil
-	}
-
-	proofMessageBytes, err := db.GetProofMessage(proofRef)
+	response, err, _ := db.poetProofsDbRequest.Do(string(proofRef[:]), func() (any, error) {
+		cachedProof, ok := db.poetProofsLru.Get(proofRef)
+		if ok && cachedProof != nil {
+			return cachedProof, nil
+		}
+		proofMessageBytes, err := db.GetProofMessage(proofRef)
+		if err != nil {
+			return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
+		}
+		var proofMessage types.PoetProofMessage
+		if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
+		}
+		db.poetProofsLru.Add(proofRef, &proofMessage)
+		return &proofMessage, nil
+	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
+		return nil, nil, err
 	}
-	var proofMessage types.PoetProofMessage
-	if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
-	}
-	db.poetProofsLru.Add(proofRef, &proofMessage)
-	return &proofMessage.PoetProof, &proofMessage.Statement, nil
+	proof := response.(*types.PoetProofMessage)
+	return &proof.PoetProof, &proof.Statement, nil
 }
 
 func (db *PoetDb) ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error) {
