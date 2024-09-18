@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/sql/localsql"
-
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
