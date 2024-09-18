@@ -818,7 +818,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 	}
 	var otherAtx wire.ActivationTxV2
 	codec.MustDecode(blob.Bytes, &otherAtx)
-	proof, err := wire.NewDoubleMergeProof(tx, atx.ActivationTxV2, &otherAtx, atx.SmesherID)
+	proof, err := wire.NewDoubleMergeProof(tx, atx.ActivationTxV2, &otherAtx)
 	if err != nil {
 		return true, fmt.Errorf("creating double merge proof: %w", err)
 	}

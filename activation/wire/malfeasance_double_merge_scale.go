@@ -9,7 +9,7 @@ import (
 
 func (t *ProofDoubleMerge) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
+		n, err := scale.EncodeStructArray(enc, t.Proofs[:])
 		if err != nil {
 			return total, err
 		}
@@ -20,7 +20,57 @@ func (t *ProofDoubleMerge) EncodeScale(enc *scale.Encoder) (total int, err error
 
 func (t *ProofDoubleMerge) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
+		n, err := scale.DecodeStructArray(dec, t.Proofs[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *MergeProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *MergeProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
