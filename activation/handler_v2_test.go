@@ -979,7 +979,15 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.Sign(signers[2])
 
 		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
-		atxHandler.mMalPublish.EXPECT().Publish(gomock.Any(), merged.SmesherID, gomock.Any())
+		atxHandler.mMalPublish.EXPECT().
+			Publish(gomock.Any(), merged.SmesherID, gomock.Any()).
+			DoAndReturn(func(ctx context.Context, id types.NodeID, proof wire.Proof) error {
+				malProof := proof.(*wire.ProofDoubleMerge)
+				nId, err := malProof.Valid(atxHandler.edVerifier)
+				require.NoError(t, err)
+				require.Equal(t, merged.SmesherID, nId)
+				return nil
+			})
 		err = atxHandler.processATX(context.Background(), "", merged, time.Now())
 		require.NoError(t, err)
 	})
