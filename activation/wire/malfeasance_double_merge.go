@@ -90,7 +90,7 @@ func NewDoubleMergeProof(db sql.Executor, atx1, atx2 *ActivationTxV2) (*ProofDou
 	if atx2.MarriageATX == nil {
 		return nil, errors.New("ATX 2 have no marriage ATX")
 	}
-	if atx1.MarriageATX != atx2.MarriageATX {
+	if *atx1.MarriageATX != *atx2.MarriageATX {
 		return nil, errors.New("ATXs have different marriage ATXs")
 	}
 

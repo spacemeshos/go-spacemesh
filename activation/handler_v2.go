@@ -808,17 +808,11 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 		zap.Stringer("smesher_id", atx.SmesherID),
 	)
 
-	var blob sql.Blob
-	version, err := atxs.LoadBlob(ctx, tx, other.Bytes(), &blob)
+	otherAtx, err := h.fetchWireAtx(ctx, tx, other)
 	if err != nil {
-		return false, fmt.Errorf("get other atx for double merge proof: %w", err)
+		return false, fmt.Errorf("fetching other ATX: %w", err)
 	}
-	if version != types.AtxV2 {
-		return false, fmt.Errorf("expected ATX V2 for double merge proof (got: %d)", version)
-	}
-	var otherAtx wire.ActivationTxV2
-	codec.MustDecode(blob.Bytes, &otherAtx)
-	proof, err := wire.NewDoubleMergeProof(tx, atx.ActivationTxV2, &otherAtx)
+	proof, err := wire.NewDoubleMergeProof(tx, atx.ActivationTxV2, otherAtx)
 	if err != nil {
 		return true, fmt.Errorf("creating double merge proof: %w", err)
 	}
