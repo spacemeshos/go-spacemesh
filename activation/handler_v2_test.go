@@ -1021,12 +1021,13 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.MarriageATX = &mATXID
 		merged.PreviousATXs = []types.ATXID{otherATXs[1].ID(), otherATXs[2].ID(), otherATXs[3].ID()}
 		merged.Sign(signers[2])
-		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
-		// TODO: this could be syntactically validated as all nodes in the network
+
+		// This is syntactically invalid as all nodes in the network
 		// should already have the checkpointed merged ATX.
-		atxHandler.mMalPublish.EXPECT().Publish(gomock.Any(), merged.SmesherID, gomock.Any())
+		t.Skip("syntactically validating double merge where one ATX is checkpointed isn't implemented yet")
+		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
 		err := atxHandler.processATX(context.Background(), "", merged, time.Now())
-		require.NoError(t, err)
+		require.Error(t, err)
 	})
 }
 

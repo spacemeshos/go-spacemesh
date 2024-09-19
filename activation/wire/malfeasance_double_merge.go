@@ -25,59 +25,53 @@ import (
 //  5. Signers of both ATXs are married - to prevent banning others by
 //     publishing an ATX with the same marriage ATX.
 type ProofDoubleMerge struct {
-	PublishEpoch  types.EpochID
-	Proofs        [2]MergeProof
+	PublishEpoch types.EpochID
+	Proofs       [2]MergeProof
+	// TODO: what if IDs married before checkpoint?
+	// We would not be able to construct marriage proof, but everybody
+	// on the network must agree that both IDs are married (it's persisted in checkpoint)
 	MarriageProof MarriageProof
 }
 
 var _ Proof = &ProofDoubleMerge{}
 
 // Valid implements Proof.Valid.
-func (p *ProofDoubleMerge) Valid(verifier *signing.EdVerifier) (types.NodeID, error) {
+func (p *ProofDoubleMerge) Valid(edVerifier *signing.EdVerifier) (types.NodeID, error) {
 	// 1. The ATXs have different IDs.
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
 		return types.EmptyNodeID, errors.New("ATXs have the same ID")
 	}
 
 	// 2. Both ATXs have a valid signature.
-	if !verifier.Verify(signing.ATX, p.Proofs[0].SmesherID, p.Proofs[0].ATXID.Bytes(), p.Proofs[0].Signature) {
+	if !edVerifier.Verify(signing.ATX, p.Proofs[0].SmesherID, p.Proofs[0].ATXID.Bytes(), p.Proofs[0].Signature) {
 		return types.EmptyNodeID, errors.New("ATX 1 invalid signature")
 	}
 
-	if !verifier.Verify(signing.ATX, p.Proofs[1].SmesherID, p.Proofs[1].ATXID.Bytes(), p.Proofs[1].Signature) {
+	if !edVerifier.Verify(signing.ATX, p.Proofs[1].SmesherID, p.Proofs[1].ATXID.Bytes(), p.Proofs[1].Signature) {
 		return types.EmptyNodeID, errors.New("ATX 2 invalid signature")
 	}
 
 	// 3. and 4. (publish epoch and marriage ATX)
-	valid, err := p.Proofs[0].valid(verifier, p.PublishEpoch, p.MarriageProof.ATXID)
+	err := p.Proofs[0].valid(edVerifier, p.PublishEpoch, p.MarriageProof.ATXID)
 	if err != nil {
 		return types.EmptyNodeID, fmt.Errorf("validating ATX 1 merge proof: %w", err)
 	}
-	if !valid {
-		return types.EmptyNodeID, errors.New("ATX 1 merge proof is invalid")
-	}
 
-	valid, err = p.Proofs[1].valid(verifier, p.PublishEpoch, p.MarriageProof.ATXID)
+	err = p.Proofs[1].valid(edVerifier, p.PublishEpoch, p.MarriageProof.ATXID)
 	if err != nil {
 		return types.EmptyNodeID, fmt.Errorf("validating ATX 2 merge proof: %w", err)
 	}
-	if !valid {
-		return types.EmptyNodeID, errors.New("ATX 2 merge proof is invalid")
-	}
 
 	// 5. signers are married
-	valid, err = p.MarriageProof.valid()
+	err = p.MarriageProof.valid(edVerifier, p.Proofs[0].SmesherID, p.Proofs[1].SmesherID)
 	if err != nil {
 		return types.EmptyNodeID, fmt.Errorf("validating marriage proof: %w", err)
-	}
-	if !valid {
-		return types.EmptyNodeID, errors.New("marriage proof is invalid")
 	}
 
 	return p.Proofs[0].SmesherID, nil
 }
 
-func NewDoubleMergeProof(db sql.Executor, atx1, atx2 *ActivationTxV2) (*ProofDoubleMerge, error) {
+func NewDoubleMergeProof(db sql.Executor, atx1, atx2, marriageATX *ActivationTxV2) (*ProofDoubleMerge, error) {
 	if atx1.PublishEpoch != atx2.PublishEpoch {
 		return nil, fmt.Errorf("ATXs have different publish epoch (%v != %v)", atx1.PublishEpoch, atx2.PublishEpoch)
 	}
@@ -104,13 +98,14 @@ func NewDoubleMergeProof(db sql.Executor, atx1, atx2 *ActivationTxV2) (*ProofDou
 		return nil, fmt.Errorf("creating proof for atx2: %w", err)
 	}
 
+	marriageProof, err := newMarriageProof(db, marriageATX, atx1.SmesherID, atx2.SmesherID)
+	if err != nil {
+		return nil, fmt.Errorf("creating marriage proof: %w", err)
+	}
 	proof := ProofDoubleMerge{
-		PublishEpoch: atx1.PublishEpoch,
-		Proofs:       [2]MergeProof{*proof1, *proof2},
-		MarriageProof: MarriageProof{
-			// TODO: implement marriage proof
-			ATXID: *atx1.MarriageATX,
-		},
+		PublishEpoch:  atx1.PublishEpoch,
+		Proofs:        [2]MergeProof{*proof1, *proof2},
+		MarriageProof: *marriageProof,
 	}
 
 	return &proof, nil
@@ -134,9 +129,9 @@ type MergeProof struct {
 	FieldsProof []types.Hash32 `scale:"max=32"`
 }
 
-func (p *MergeProof) valid(verifier *signing.EdVerifier, publish types.EpochID, marriage types.ATXID) (bool, error) {
+func (p *MergeProof) valid(verifier *signing.EdVerifier, publish types.EpochID, marriage types.ATXID) error {
 	if !verifier.Verify(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
-		return false, nil
+		return errors.New("invalid ATX signature")
 	}
 	proof := make([][]byte, len(p.FieldsProof))
 	for i, h := range p.FieldsProof {
@@ -146,13 +141,17 @@ func (p *MergeProof) valid(verifier *signing.EdVerifier, publish types.EpochID, 
 	var publishEpochLeaf types.Hash32
 	binary.LittleEndian.PutUint32(publishEpochLeaf[:], publish.Uint32())
 
-	return merkle.ValidatePartialTree(
+	ok, err := merkle.ValidatePartialTree(
 		[]uint64{uint64(PublishEpochIndex), uint64(MarriageATXIndex)},
 		[][]byte{publishEpochLeaf.Bytes(), marriage.Bytes()},
 		proof,
 		p.ATXID.Bytes(),
 		atxTreeHash,
 	)
+	if err != nil || !ok {
+		return fmt.Errorf("validating merge proof: %w", err)
+	}
+	return nil
 }
 
 func newMergeProof(atx *ActivationTxV2) (*MergeProof, error) {
@@ -184,8 +183,12 @@ func newMergeProof(atx *ActivationTxV2) (*MergeProof, error) {
 
 // Proof that 2 IDs are married.
 type MarriageProof struct {
-	// ID of marriage ATX
+	// Marriage ATX ID
 	ATXID types.ATXID
+	// Smesher who published the marriage ATX
+	SmesherID types.NodeID
+	// Signature of the marriage ATX
+	Signature types.EdSignature
 
 	// MarriageRoot and its proof that it is contained in the ATX.
 	MarriageRoot  types.Hash32
@@ -196,14 +199,119 @@ type MarriageProof struct {
 	CertificateProof []types.Hash32 `scale:"max=32"`
 }
 
-func (p *MarriageProof) valid() (bool, error) {
-	// TODO: implement
-	return true, nil
+func newMarriageProof(db sql.Executor, marriageATX *ActivationTxV2, id1, id2 types.NodeID) (*MarriageProof, error) {
+	// proof that marriage certificates were included in ATX
+	marriageProof, err := marriageProof(marriageATX)
+	if err != nil {
+		return nil, fmt.Errorf("creating marriage certs proof: %w", err)
+	}
+
+	marriageIdx1, err := findMarriageIndex(db, marriageATX, id1)
+	if err != nil {
+		return nil, fmt.Errorf("finding marriage index for: %w", err)
+	}
+
+	marriageIdx2, err := findMarriageIndex(db, marriageATX, id2)
+	if err != nil {
+		return nil, fmt.Errorf("finding marriage index: %w", err)
+	}
+
+	certsProof, err := certificateProof(marriageATX.Marriages, uint64(marriageIdx1), uint64(marriageIdx2))
+	if err != nil {
+		return nil, fmt.Errorf("creating marriage certs proof: %w", err)
+	}
+
+	proof := &MarriageProof{
+		ATXID:     marriageATX.ID(),
+		SmesherID: marriageATX.SmesherID,
+		Signature: marriageATX.Signature,
+
+		MarriageRoot:  types.Hash32(marriageATX.Marriages.Root()),
+		MarriageProof: marriageProof,
+
+		CertificatesData: [2]MarriageCertificateData{
+			{
+				Certificate: marriageATX.Marriages[marriageIdx1],
+				Index:       uint64(marriageIdx1),
+			},
+			{
+				Certificate: marriageATX.Marriages[marriageIdx2],
+				Index:       uint64(marriageIdx2),
+			},
+		},
+
+		CertificateProof: certsProof,
+	}
+
+	return proof, nil
+}
+
+func (p *MarriageProof) valid(edVerifier *signing.EdVerifier, id1, id2 types.NodeID) error {
+	// 1. Marriage ATX signature
+	if !edVerifier.Verify(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
+		return errors.New("invalid ATX signature")
+	}
+
+	// 2. ID 1 married marriage ATX smesher
+	if !edVerifier.Verify(signing.MARRIAGE, id1, p.SmesherID.Bytes(), p.CertificatesData[0].Certificate.Signature) {
+		return errors.New("invalid certificate signature for id1")
+	}
+
+	// 3. ID 2 married marriage ATX smesher
+	if !edVerifier.Verify(signing.MARRIAGE, id2, p.SmesherID.Bytes(), p.CertificatesData[1].Certificate.Signature) {
+		return errors.New("invalid certificate signature for id1")
+	}
+
+	// 4. Proof that Marriages with given root were part of `marriageATX`
+	proof := make([][]byte, len(p.MarriageProof))
+	for i, h := range p.MarriageProof {
+		proof[i] = h.Bytes()
+	}
+	ok, err := merkle.ValidatePartialTree(
+		[]uint64{uint64(MarriagesRootIndex)},
+		[][]byte{p.MarriageRoot.Bytes()},
+		proof,
+		p.ATXID.Bytes(),
+		atxTreeHash,
+	)
+	if err != nil {
+		return fmt.Errorf("validate marriage proof: %w", err)
+	}
+	if !ok {
+		return errors.New("invalid marriage proof")
+	}
+
+	// 5. Proof that given marriage certificates were part of Marriages that has p.MarriageRoot
+	certProof := make([][]byte, len(p.CertificateProof))
+	for i, h := range p.CertificateProof {
+		certProof[i] = h.Bytes()
+	}
+
+	// indices and respectives leaves must be sorted
+	leafIndices := []uint64{p.CertificatesData[0].Index, p.CertificatesData[1].Index}
+	leaves := [][]byte{p.CertificatesData[0].Certificate.Root(), p.CertificatesData[1].Certificate.Root()}
+	if leafIndices[0] > leafIndices[1] {
+		leafIndices[0], leafIndices[1] = leafIndices[1], leafIndices[0]
+		leaves[0], leaves[1] = leaves[1], leaves[0]
+	}
+	ok, err = merkle.ValidatePartialTree(
+		leafIndices,
+		leaves,
+		certProof,
+		p.MarriageRoot.Bytes(),
+		atxTreeHash,
+	)
+	if err != nil {
+		return fmt.Errorf("validate certificate proof: %w", err)
+	}
+	if !ok {
+		return errors.New("invalid certificate proof")
+	}
+
+	return nil
 }
 
 type MarriageCertificateData struct {
-	Reference types.ATXID
-	Spouse    types.NodeID
-	Signature types.EdSignature
-	Index     uint64
+	Certificate MarriageCertificate
+	Index       uint64
 }

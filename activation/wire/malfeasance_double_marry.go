@@ -61,19 +61,9 @@ func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID)
 		return MarryProof{}, fmt.Errorf("failed to create proof for ATX 1: %w", err)
 	}
 
-	marriageIndex := slices.IndexFunc(atx.Marriages, func(cert MarriageCertificate) bool {
-		if cert.ReferenceAtx == types.EmptyATXID && atx.SmesherID == nodeID {
-			// special case of the self signed certificate of the ATX publisher
-			return true
-		}
-		refATX, err := atxs.Get(db, cert.ReferenceAtx)
-		if err != nil {
-			return false
-		}
-		return refATX.SmesherID == nodeID
-	})
-	if marriageIndex == -1 {
-		return MarryProof{}, fmt.Errorf("does not contain a marriage certificate signed by %s", nodeID.ShortString())
+	marriageIndex, err := findMarriageIndex(db, atx, nodeID)
+	if err != nil {
+		return MarryProof{}, fmt.Errorf("failed to find marriage index: %w", err)
 	}
 	certProof, err := certificateProof(atx.Marriages, uint64(marriageIndex))
 	if err != nil {
@@ -97,6 +87,25 @@ func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID)
 	return proof, nil
 }
 
+func findMarriageIndex(db sql.Executor, marriageATX *ActivationTxV2, id types.NodeID) (int, error) {
+	marriageIndex := slices.IndexFunc(marriageATX.Marriages, func(cert MarriageCertificate) bool {
+		if cert.ReferenceAtx == types.EmptyATXID && marriageATX.SmesherID == id {
+			// special case of the self signed certificate of the ATX publisher
+			return true
+		}
+		refATX, err := atxs.Get(db, cert.ReferenceAtx)
+		if err != nil {
+			return false
+		}
+		return refATX.SmesherID == id
+	})
+	if marriageIndex == -1 {
+		return 0, fmt.Errorf("does not contain a marriage certificate signed by %s", id.ShortString())
+	}
+
+	return marriageIndex, nil
+}
+
 func marriageProof(atx *ActivationTxV2) ([]types.Hash32, error) {
 	tree, err := merkle.NewTreeBuilder().
 		WithLeavesToProve(map[uint64]bool{uint64(MarriagesRootIndex): true}).
@@ -115,9 +124,13 @@ func marriageProof(atx *ActivationTxV2) ([]types.Hash32, error) {
 	return proofHashes, nil
 }
 
-func certificateProof(certs MarriageCertificates, index uint64) ([]types.Hash32, error) {
+func certificateProof(certs MarriageCertificates, indicies ...uint64) ([]types.Hash32, error) {
+	leavesToProve := make(map[uint64]bool, len(indicies))
+	for _, idx := range indicies {
+		leavesToProve[idx] = true
+	}
 	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{index: true}).
+		WithLeavesToProve(leavesToProve).
 		WithHashFunc(atxTreeHash).
 		Build()
 	if err != nil {
