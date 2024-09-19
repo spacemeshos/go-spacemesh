@@ -78,6 +78,9 @@ func NewDoubleMergeProof(db sql.Executor, atx1, atx2, marriageATX *ActivationTxV
 	if atx1.ID() == atx2.ID() {
 		return nil, errors.New("ATXs have the same ID")
 	}
+	if atx1.SmesherID == atx2.SmesherID {
+		return nil, errors.New("ATXs have the same smesher")
+	}
 	if atx1.MarriageATX == nil {
 		return nil, errors.New("ATX 1 have no marriage ATX")
 	}
@@ -200,7 +203,6 @@ type MarriageProof struct {
 }
 
 func newMarriageProof(db sql.Executor, marriageATX *ActivationTxV2, id1, id2 types.NodeID) (*MarriageProof, error) {
-	// proof that marriage certificates were included in ATX
 	marriageProof, err := marriageProof(marriageATX)
 	if err != nil {
 		return nil, fmt.Errorf("creating marriage certs proof: %w", err)

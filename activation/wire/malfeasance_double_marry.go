@@ -63,7 +63,7 @@ func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID)
 
 	marriageIndex, err := findMarriageIndex(db, atx, nodeID)
 	if err != nil {
-		return MarryProof{}, fmt.Errorf("failed to find marriage index: %w", err)
+		return MarryProof{}, err
 	}
 	certProof, err := certificateProof(atx.Marriages, uint64(marriageIndex))
 	if err != nil {
@@ -106,6 +106,7 @@ func findMarriageIndex(db sql.Executor, marriageATX *ActivationTxV2, id types.No
 	return marriageIndex, nil
 }
 
+// proof that marriage certificates were included in ATX.
 func marriageProof(atx *ActivationTxV2) ([]types.Hash32, error) {
 	tree, err := merkle.NewTreeBuilder().
 		WithLeavesToProve(map[uint64]bool{uint64(MarriagesRootIndex): true}).
@@ -124,6 +125,7 @@ func marriageProof(atx *ActivationTxV2) ([]types.Hash32, error) {
 	return proofHashes, nil
 }
 
+// proof that specific certificates were included in marriage certificates list.
 func certificateProof(certs MarriageCertificates, indicies ...uint64) ([]types.Hash32, error) {
 	leavesToProve := make(map[uint64]bool, len(indicies))
 	for _, idx := range indicies {
