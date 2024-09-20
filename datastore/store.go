@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -119,7 +120,7 @@ func (db *CachedDB) MalfeasanceCacheSize() int {
 }
 
 // GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
-func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
+func (db *CachedDB) MalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
 	if id == types.EmptyNodeID {
 		panic("invalid argument to GetMalfeasanceProof")
 	}
@@ -133,10 +134,13 @@ func (db *CachedDB) GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof
 		return proof, nil
 	}
 
-	proof, err := identities.GetMalfeasanceProof(db.Database, id)
+	var blob sql.Blob
+	err := identities.LoadMalfeasanceBlob(context.Background(), db.Database, id.Bytes(), &blob)
 	if err != nil && err != sql.ErrNotFound {
 		return nil, err
 	}
+	proof := &wire.MalfeasanceProof{}
+	codec.MustDecode(blob.Bytes, proof)
 	db.malfeasanceCache.Add(id, proof)
 	return proof, err
 }
@@ -203,7 +207,7 @@ func (db *CachedDB) IterateMalfeasanceProofs(
 		return err
 	}
 	for _, id := range ids {
-		proof, err := db.GetMalfeasanceProof(id)
+		proof, err := db.MalfeasanceProof(id)
 		if err != nil {
 			return err
 		}
