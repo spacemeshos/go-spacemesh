@@ -173,6 +173,7 @@ func MainnetConfig() Config {
 			RequestTimeout:    1100 * time.Second,
 			RequestRetryDelay: 10 * time.Second,
 			MaxRequestRetries: 10,
+			PoetProofsCache:   200,
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   4,
