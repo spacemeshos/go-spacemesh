@@ -125,10 +125,9 @@ func TestSyncer(t *testing.T) {
 		publish := types.EpochID(2)
 		now := time.Now()
 
-		state := map[types.ATXID]int{
-			aid("1"): 0,
-			aid("2"): 0,
-		}
+		state := atxsync.EpochSyncState{}
+		state[aid("1")] = &atxsync.IDSyncState{Tries: 0}
+		state[aid("2")] = &atxsync.IDSyncState{Tries: 0}
 		require.NoError(t, atxsync.SaveSyncState(tester.localdb, publish, state, tester.cfg.AtxsBatch))
 		lastSuccess := now.Add(time.Minute)
 		require.NoError(t, atxsync.SaveRequest(tester.localdb, publish, lastSuccess, 2, 2))
