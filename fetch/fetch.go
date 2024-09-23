@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand/v2"
 	"sync"
@@ -273,7 +274,7 @@ func NewFetch(
 
 	hashPeerCache, err := NewHashPeersCache(cacheSize)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create hash peer cache: %w", err)
 	}
 	f := &Fetch{
 		cfg:         DefaultConfig(),

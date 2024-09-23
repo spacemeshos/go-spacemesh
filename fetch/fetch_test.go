@@ -404,7 +404,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(fetcher.Stop)
 
-	// We set a validatior just for atxs, this validator does not drop connections
+	// We set a validator just for atxs, this validator does not drop connections
 	vf := ValidatorFunc(
 		func(context.Context, types.Hash32, peer.ID, []byte) error { return pubsub.ErrValidationReject },
 	)
