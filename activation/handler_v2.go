@@ -682,6 +682,9 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx 
 	if malicious {
 		return true, nil
 	}
+	if atx.MarriageATX != nil {
+		malicious, err := identities.IsMarriageMalicious(tx, *atx.MarriageATX)
+	}
 
 	malicious, err = h.checkDoubleMarry(ctx, tx, atx)
 	if err != nil {

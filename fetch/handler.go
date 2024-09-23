@@ -46,7 +46,7 @@ func newHandler(
 
 // handleMaliciousIDsReq returns the IDs of all known malicious nodes.
 func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, error) {
-	nodes, err := identities.GetMalicious(h.cdb)
+	nodes, err := identities.GetNodeIDsWithProofs(h.cdb)
 	if err != nil {
 		return nil, fmt.Errorf("getting malicious IDs: %w", err)
 	}
@@ -63,7 +63,7 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, 
 
 func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		nodeIDs, err := identities.GetMalicious(h.cdb)
+		nodeIDs, err := identities.GetNodeIDsWithProofs(h.cdb)
 		if err != nil {
 			return fmt.Errorf("getting malicious IDs: %w", err)
 		}

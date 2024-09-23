@@ -60,7 +60,7 @@ func TestMalicious(t *testing.T) {
 
 func Test_GetMalicious(t *testing.T) {
 	db := statesql.InMemory()
-	got, err := identities.GetMalicious(db)
+	got, err := identities.GetNodeIDsWithProofs(db)
 	require.NoError(t, err)
 	require.Nil(t, got)
 
@@ -71,7 +71,7 @@ func Test_GetMalicious(t *testing.T) {
 		bad = append(bad, nid)
 		require.NoError(t, identities.SetMalicious(db, nid, types.RandomBytes(11), time.Now().Local()))
 	}
-	got, err = identities.GetMalicious(db)
+	got, err = identities.GetNodeIDsWithProofs(db)
 	require.NoError(t, err)
 	require.Equal(t, bad, got)
 }
@@ -250,7 +250,7 @@ func TestEquivocationSet(t *testing.T) {
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, blob.Bytes)
 
-		ids, err := identities.GetMalicious(db)
+		ids, err := identities.GetNodeIDsWithProofs(db)
 		require.NoError(t, err)
 		require.Empty(t, ids)
 	})

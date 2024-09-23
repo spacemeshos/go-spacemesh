@@ -85,7 +85,7 @@ CREATE TABLE identities
 (
     pubkey VARCHAR PRIMARY KEY,
     proof  BLOB
-, received INT DEFAULT 0 NOT NULL, marriage_atx CHAR(32), marriage_idx INTEGER, marriage_target CHAR(32), marriage_signature CHAR(64)) WITHOUT ROWID;
+, received INT DEFAULT 0 NOT NULL, marriage_atx CHAR(32), marriage_idx INTEGER, marriage_target CHAR(32), marriage_signature CHAR(64));
 CREATE TABLE layers
 (
     id              INT PRIMARY KEY DESC,

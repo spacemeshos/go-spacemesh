@@ -202,7 +202,7 @@ func (db *CachedDB) Previous(id types.ATXID) ([]types.ATXID, error) {
 func (db *CachedDB) IterateMalfeasanceProofs(
 	iter func(types.NodeID, *wire.MalfeasanceProof) error,
 ) error {
-	ids, err := identities.GetMalicious(db)
+	ids, err := identities.GetNodeIDsWithProofs(db)
 	if err != nil {
 		return err
 	}

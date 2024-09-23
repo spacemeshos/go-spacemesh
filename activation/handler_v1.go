@@ -286,14 +286,9 @@ func (h *HandlerV1) validateNonInitialAtx(
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
+func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx, isMalicious bool) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
-		malicious, err := identities.IsMalicious(h.cdb, atx.SmesherID)
-		if err != nil {
-			h.logger.Error("failed is malicious read", zap.Error(err), log.ZContext(ctx))
-			return nil
-		}
-		return h.atxsdata.AddFromAtx(atx, malicious)
+		return h.atxsdata.AddFromAtx(atx, isMalicious)
 	}
 	return nil
 }
@@ -450,19 +445,23 @@ func (h *HandlerV1) checkMalicious(
 	ctx context.Context,
 	tx sql.Transaction,
 	watx *wire.ActivationTxV1,
-) (*mwire.MalfeasanceProof, error) {
+) (bool, *mwire.MalfeasanceProof, error) {
 	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
 	if err != nil {
-		return nil, fmt.Errorf("checking if node is malicious: %w", err)
+		return false, nil, fmt.Errorf("checking if node is malicious: %w", err)
 	}
 	if malicious {
-		return nil, nil
+		return true, nil, nil
 	}
 	proof, err := h.checkDoublePublish(ctx, tx, watx)
 	if proof != nil || err != nil {
-		return proof, err
+		return true, proof, err
 	}
-	return h.checkWrongPrevAtx(ctx, tx, watx)
+	proof, err = h.checkWrongPrevAtx(ctx, tx, watx)
+	if err != nil {
+		return false, nil, err
+	}
+	return proof != nil, proof, nil
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
@@ -471,10 +470,13 @@ func (h *HandlerV1) storeAtx(
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	var proof *mwire.MalfeasanceProof
+	var (
+		isMalicious bool
+		proof       *mwire.MalfeasanceProof
+	)
 	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
 		var err error
-		proof, err = h.checkMalicious(ctx, tx, watx)
+		isMalicious, proof, err = h.checkMalicious(ctx, tx, watx)
 		if err != nil {
 			return fmt.Errorf("check malicious: %w", err)
 		}
@@ -499,7 +501,7 @@ func (h *HandlerV1) storeAtx(
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
 
-	added := h.cacheAtx(ctx, atx)
+	added := h.cacheAtx(ctx, atx, isMalicious)
 	h.beacon.OnAtx(atx)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)

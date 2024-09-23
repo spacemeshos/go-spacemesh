@@ -11,11 +11,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// SetMalicious records identity as malicious.
+// SetMalicious records identity as malicious and stores proof with that identity.
+// And it also updates every other identity with the same marriage atx as malicious, without duplicating the proof.
 func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received time.Time) error {
-	_, err := db.Exec(`insert into identities (pubkey, proof, received)
-	values (?1, ?2, ?3)
-	ON CONFLICT(pubkey) DO UPDATE SET proof = excluded.proof
+	_, err := db.Exec(`insert into identities (pubkey, proof, received, is_malicious)
+	values (?1, ?2, ?3, true)
+	ON CONFLICT(pubkey) DO UPDATE SET proof = excluded.proof, is_malicious = true
 	WHERE proof IS NULL;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
@@ -29,20 +30,43 @@ func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received t
 	return nil
 }
 
+// SetMaliciousByMarriage records identity as malicious.
+func SetMaliciousByMarriage(db sql.Executor, nodeID types.NodeID) error {
+	_, err := db.Exec(`insert into identities (pubkey, is_malicious)
+	values (?1, true)
+	ON CONFLICT(pubkey) DO UPDATE SET is_malicious = true
+	WHERE is_malicious IS FALSE;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, nodeID.Bytes())
+		}, nil,
+	)
+	if err != nil {
+		return fmt.Errorf("set malicious %v: %w", nodeID, err)
+	}
+	return nil
+}
+
 // IsMalicious returns true if identity is known to be malicious.
 func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
-	rows, err := db.Exec(`
-	SELECT 1 FROM identities
-	WHERE (
-		marriage_atx = (SELECT marriage_atx FROM identities WHERE pubkey = ?1 AND marriage_atx IS NOT NULL)
-		AND proof IS NOT NULL
-	)
-	OR (pubkey = ?1 AND marriage_atx IS NULL AND proof IS NOT NULL);`,
+	// this query should be served from malicious_identities index
+	rows, err := db.Exec(`SELECT 1 FROM identities WHERE pubkey = ?1 AND is_malicious IS TRUE;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 		}, nil)
 	if err != nil {
 		return false, fmt.Errorf("is malicious %v: %w", nodeID, err)
+	}
+	return rows > 0, nil
+}
+
+// IsMarriageMalicious returns true if the marriage ATX is known to be malicious.
+func IsMarriageMalicious(db sql.Executor, marriage types.ATXID) (bool, error) {
+	rows, err := db.Exec(`SELECT 1 FROM identities WHERE marriage_atx = ?1 AND is_malicious IS TRUE;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, marriage.Bytes())
+		}, nil)
+	if err != nil {
+		return false, fmt.Errorf("is marriage malicious %v: %w", marriage, err)
 	}
 	return rows > 0, nil
 }
@@ -89,8 +113,8 @@ func IterateMalicious(
 	return callbackErr
 }
 
-// GetMalicious retrieves malicious node IDs from the database.
-func GetMalicious(db sql.Executor) (ids []types.NodeID, err error) {
+// GetNodeIDsWithProofs retrieves malicious node IDs from the database.
+func GetNodeIDsWithProofs(db sql.Executor) (ids []types.NodeID, err error) {
 	if err = IterateMalicious(db, func(total int, nid types.NodeID) error {
 		if ids == nil {
 			ids = make([]types.NodeID, 0, total)
