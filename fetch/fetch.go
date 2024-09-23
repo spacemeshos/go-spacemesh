@@ -271,6 +271,7 @@ func NewFetch(
 ) *Fetch {
 	bs := datastore.NewBlobStore(cdb, proposals)
 
+	hashPeerCache, _ := NewHashPeersCache(cacheSize) // only errors if `cacheSize` is zero or negative
 	f := &Fetch{
 		cfg:         DefaultConfig(),
 		logger:      zap.NewNop(),
@@ -279,7 +280,7 @@ func NewFetch(
 		servers:     map[string]requester{},
 		unprocessed: make(map[types.Hash32]*request),
 		ongoing:     make(map[types.Hash32]*request),
-		hashToPeers: NewHashPeersCache(cacheSize),
+		hashToPeers: hashPeerCache,
 	}
 	for _, opt := range opts {
 		opt(f)

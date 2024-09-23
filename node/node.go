@@ -580,10 +580,14 @@ func (app *App) initServices(ctx context.Context) error {
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
 
-	poetDb := activation.NewPoetDb(
+	poetDb, err := activation.NewPoetDb(
 		app.db,
 		app.addLogger(PoetDbLogger, lg).Zap(),
-		activation.WithCacheSize(app.Config.POET.PoetProofsCache))
+		activation.WithCacheSize(app.Config.POET.PoetProofsCache),
+	)
+	if err != nil {
+		return fmt.Errorf("creating poet db: %w", err)
+	}
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
