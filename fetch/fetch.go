@@ -274,7 +274,8 @@ func NewFetch(
 
 	hashPeerCache, err := NewHashPeersCache(cacheSize)
 	if err != nil {
-		return nil, fmt.Errorf("create hash peer cache: %w", err)
+		// this should never happen, since cacheSize is a constant, but just in case
+		panic(fmt.Errorf("create hash peer cache: %w", err))
 	}
 	f := &Fetch{
 		cfg:         DefaultConfig(),
