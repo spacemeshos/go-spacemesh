@@ -78,10 +78,13 @@ func createFetch(tb testing.TB) *testFetch {
 		MaxRetriesForRequest: 3,
 		GetAtxsConcurrency:   DefaultConfig().GetAtxsConcurrency,
 	}
-	lg := zaptest.NewLogger(tb)
 
-	tf.Fetch = NewFetch(datastore.NewCachedDB(statesql.InMemory(), lg), store.New(), nil,
-		WithContext(context.TODO()),
+	lg := zaptest.NewLogger(tb)
+	fetch, err := NewFetch(
+		datastore.NewCachedDB(statesql.InMemory(), lg),
+		store.New(),
+		nil,
+		WithContext(context.Background()),
 		WithConfig(cfg),
 		WithLogger(lg),
 		withServers(map[string]requester{
@@ -92,7 +95,11 @@ func createFetch(tb testing.TB) *testFetch {
 			meshHashProtocol: tf.mMHashS,
 			OpnProtocol:      tf.mOpn2S,
 		}),
-		withHost(tf.mh))
+		withHost(tf.mh),
+	)
+	require.NoError(tb, err)
+
+	tf.Fetch = fetch
 	tf.Fetch.SetValidators(
 		tf.mAtxH,
 		tf.mPoetH,
@@ -117,14 +124,18 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 
 func TestFetch_Start(t *testing.T) {
 	lg := zaptest.NewLogger(t)
-	f := NewFetch(datastore.NewCachedDB(statesql.InMemory(), lg), store.New(), nil,
-		WithContext(context.TODO()),
+	f, err := NewFetch(
+		datastore.NewCachedDB(statesql.InMemory(), lg),
+		store.New(),
+		nil,
+		WithContext(context.Background()),
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
 		withServers(map[string]requester{
 			malProtocol: nil,
 		}),
 	)
+	require.NoError(t, err)
 	require.ErrorIs(t, f.Start(), errValidatorsNotSet)
 }
 
@@ -382,11 +393,15 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	defer eg.Wait()
 
-	fetcher := NewFetch(datastore.NewCachedDB(statesql.InMemory(), lg), store.New(), h,
+	fetcher, err := NewFetch(
+		datastore.NewCachedDB(statesql.InMemory(), lg),
+		store.New(),
+		h,
 		WithContext(ctx),
 		WithConfig(cfg),
 		WithLogger(lg),
 	)
+	require.NoError(t, err)
 	t.Cleanup(fetcher.Stop)
 
 	// We set a validatior just for atxs, this validator does not drop connections

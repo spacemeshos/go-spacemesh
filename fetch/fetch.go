@@ -268,10 +268,13 @@ func NewFetch(
 	proposals *store.Store,
 	host *p2p.Host,
 	opts ...Option,
-) *Fetch {
+) (*Fetch, error) {
 	bs := datastore.NewBlobStore(cdb, proposals)
 
-	hashPeerCache, _ := NewHashPeersCache(cacheSize) // only errors if `cacheSize` is zero or negative
+	hashPeerCache, err := NewHashPeersCache(cacheSize)
+	if err != nil {
+		return nil, err
+	}
 	f := &Fetch{
 		cfg:         DefaultConfig(),
 		logger:      zap.NewNop(),
@@ -342,7 +345,7 @@ func NewFetch(
 		f.registerServer(host, lyrDataProtocol, server.WrapHandler(h.handleLayerDataReq))
 		f.registerServer(host, OpnProtocol, server.WrapHandler(h.handleLayerOpinionsReq2))
 	}
-	return f
+	return f, nil
 }
 
 func (f *Fetch) registerServer(
