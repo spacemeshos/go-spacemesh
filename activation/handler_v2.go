@@ -682,8 +682,13 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx 
 	if malicious {
 		return true, nil
 	}
-	if atx.MarriageATX != nil {
-		receivedProof, err := identities.IsMarriageMalicious(tx, *atx.MarriageATX)
+	marriage := atx.MarriageATX
+	if marriage == nil && len(atx.marriages) > 0 {
+		this := atx.ID()
+		marriage = &this
+	}
+	if marriage != nil {
+		receivedProof, err := identities.IsMarriageMalicious(tx, *marriage)
 		if err != nil {
 			return false, fmt.Errorf("checking if marriage ATX is malicious: %w", err)
 		}
