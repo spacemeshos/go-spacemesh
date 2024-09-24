@@ -58,7 +58,8 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 	syncer := syncedSyncer(t)
 
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
@@ -186,7 +187,8 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	defer newDB.Close()
 
 	// 3. Spawn new ATX handler and builder using the new DB
-	poetDb = activation.NewPoetDb(newDB, logger.Named("poetDb"))
+	poetDb, err = activation.NewPoetDb(newDB, logger.Named("poetDb"))
+	require.NoError(t, err)
 	cdb = datastore.NewCachedDB(newDB, logger)
 	atxdata, err = atxsdata.Warm(newDB, 1, logger)
 	poetService = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)

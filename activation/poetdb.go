@@ -44,7 +44,7 @@ type PoetDb struct {
 }
 
 // NewPoetDb returns a new PoET handler.
-func NewPoetDb(db sql.StateDatabase, log *zap.Logger, opts ...PoetDbOption) *PoetDb {
+func NewPoetDb(db sql.StateDatabase, log *zap.Logger, opts ...PoetDbOption) (*PoetDb, error) {
 	options := PoetDbOptions{
 		// in last epochs there are 45 proofs per epoch, with each of them nearly 140KB
 		// 200 is set not to keep multiple epochs, but to account for unexpected growth
@@ -60,13 +60,13 @@ func NewPoetDb(db sql.StateDatabase, log *zap.Logger, opts ...PoetDbOption) *Poe
 	}
 	poetProofsLru, err := lru.New[types.PoetProofRef, *types.PoetProofMessage](options.cacheSize)
 	if err != nil {
-		log.Panic("failed to create PoET proofs LRU cache", zap.Error(err))
+		return nil, fmt.Errorf("create lru: %w", err)
 	}
 	return &PoetDb{
 		sqlDB:         db,
 		poetProofsLru: poetProofsLru,
 		logger:        log,
-	}
+	}, nil
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
