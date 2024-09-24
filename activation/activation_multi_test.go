@@ -18,7 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	localatxs "github.com/spacemeshos/go-spacemesh/sql/localsql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
@@ -188,46 +188,22 @@ func TestRegossip(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		goldenATXID := types.RandomATXID()
 		tab := newTestBuilder(t, 5)
-		var refAtx *types.ActivationTx
-
+		var (
+			smesher types.NodeID
+			blob    []byte
+		)
 		for _, sig := range tab.signers {
-			atx := newInitialATXv1(t, goldenATXID)
-			atx.PublishEpoch = layer.GetEpoch()
-			atx.Sign(sig)
-			vAtx := toAtx(t, atx)
-			require.NoError(t, atxs.Add(tab.db, vAtx, atx.Blob()))
-
-			if refAtx == nil {
-				refAtx = vAtx
-			}
+			smesher = sig.NodeID()
+			blob = types.RandomBytes(20)
+			localatxs.AddBlob(tab.localDb, layer.GetEpoch(), types.RandomATXID(), smesher, blob)
 		}
-
-		var blob sql.Blob
-		ver, err := atxs.LoadBlob(context.Background(), tab.db, refAtx.ID().Bytes(), &blob)
-		require.NoError(t, err)
-		require.Equal(t, types.AtxV1, ver)
 
 		// atx will be regossiped once (by the smesher)
 		tab.mclock.EXPECT().CurrentLayer().Return(layer)
 		ctx := context.Background()
-		tab.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob.Bytes)
-		require.NoError(t, tab.Regossip(ctx, refAtx.SmesherID))
-	})
-
-	t.Run("checkpointed", func(t *testing.T) {
-		tab := newTestBuilder(t, 5)
-		for _, sig := range tab.signers {
-			atx := atxs.CheckpointAtx{
-				ID:        types.RandomATXID(),
-				Epoch:     layer.GetEpoch(),
-				SmesherID: sig.NodeID(),
-			}
-			require.NoError(t, atxs.AddCheckpointed(tab.db, &atx))
-			tab.mclock.EXPECT().CurrentLayer().Return(layer)
-			require.NoError(t, tab.Regossip(context.Background(), sig.NodeID()))
-		}
+		tab.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob)
+		require.NoError(t, tab.Regossip(ctx, smesher))
 	})
 }
 
