@@ -140,12 +140,12 @@ func TestGenerator_Generate(t *testing.T) {
 			defer ts.Close()
 
 			fs := afero.NewMemMapFs()
+
 			g := NewGenerator(
 				ts.URL,
 				cfg.PublicListener,
 				WithLogger(zaptest.NewLogger(t)),
 				WithFilesystem(fs),
-				WithHttpClient(ts.Client()),
 			)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -181,7 +181,6 @@ func TestGenerator_CheckAPI(t *testing.T) {
 		cfg.PublicListener,
 		WithLogger(lg),
 		WithFilesystem(fs),
-		WithHttpClient(http.DefaultClient),
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
