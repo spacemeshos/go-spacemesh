@@ -1,4 +1,4 @@
-PRAGMA user_version = 23;
+PRAGMA user_version = 24;
 CREATE TABLE accounts
 (
     address        CHAR(24),
@@ -85,8 +85,15 @@ CREATE TABLE identities
 (
     pubkey VARCHAR PRIMARY KEY,
     is_malicious BOOLEAN DEFAULT FALSE NOT NULL,
-    proof  BLOB
-, received INT DEFAULT 0 NOT NULL, marriage_atx CHAR(32), marriage_idx INTEGER, marriage_target CHAR(32), marriage_signature CHAR(64));
+    proof  BLOB,
+    received INT DEFAULT 0 NOT NULL, 
+    marriage_atx CHAR(32), 
+    marriage_idx INTEGER, 
+    marriage_target CHAR(32), 
+    marriage_signature CHAR(64)
+);
+CREATE INDEX identities_marriages ON identities (marriage_atx);
+CREATE INDEX malicious_identities ON identities (pubkey) where is_malicious;
 CREATE TABLE layers
 (
     id              INT PRIMARY KEY DESC,

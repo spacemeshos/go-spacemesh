@@ -4,7 +4,6 @@ CREATE TABLE identities
     pubkey VARCHAR PRIMARY KEY,
     is_malicious BOOLEAN DEFAULT FALSE NOT NULL,
     proof  BLOB,
-    marriage_atx CHAR(32),
     received INT DEFAULT 0 NOT NULL, 
     marriage_atx CHAR(32), 
     marriage_idx INTEGER, 
