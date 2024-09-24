@@ -14,24 +14,44 @@ import (
 // SetMalicious records identity as malicious and stores proof with that identity.
 // And it also updates every other identity with the same marriage atx as malicious, without duplicating the proof.
 func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received time.Time) error {
-	_, err := db.Exec(`insert into identities (pubkey, proof, received, is_malicious)
-	values (?1, ?2, ?3, true)
-	ON CONFLICT(pubkey) DO UPDATE SET proof = excluded.proof, is_malicious = true
-	WHERE proof IS NULL;`,
+	var marriageAtx types.ATXID
+	_, err := db.Exec(`INSERT INTO identities (pubkey, proof, received, is_malicious)
+	VALUES (?1, ?2, ?3, true)
+	ON CONFLICT(pubkey) DO UPDATE SET 
+		proof = excluded.proof, 
+		is_malicious = true
+	WHERE proof IS NULL
+	RETURNING marriage_atx;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, nodeID.Bytes())
 			stmt.BindBytes(2, proof)
 			stmt.BindInt64(3, received.UnixNano())
-		}, nil,
+		},
+		func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, marriageAtx[:])
+			return false
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("set malicious %v: %w", nodeID, err)
 	}
+	if marriageAtx != types.EmptyATXID {
+		_, err = db.Exec(`UPDATE identities SET received = ?1, is_malicious = true 
+						  WHERE marriage_atx = ?2 AND proof IS NULL;`,
+			func(stmt *sql.Statement) {
+				stmt.BindInt64(1, received.UnixNano())
+				stmt.BindBytes(2, marriageAtx.Bytes())
+			}, nil,
+		)
+		if err != nil {
+			return fmt.Errorf("updates by marriage %v: %w", nodeID, err)
+		}
+	}
 	return nil
 }
 
-// SetMaliciousByMarriage records identity as malicious.
-func SetMaliciousByMarriage(db sql.Executor, nodeID types.NodeID) error {
+// SetMaliciousBecauseOfMarriage records identity as malicious because of marriage.
+func SetMaliciousBecauseOfMarriage(db sql.Executor, nodeID types.NodeID, received time.Time) error {
 	_, err := db.Exec(`insert into identities (pubkey, is_malicious)
 	values (?1, true)
 	ON CONFLICT(pubkey) DO UPDATE SET is_malicious = true
@@ -59,16 +79,23 @@ func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
 	return rows > 0, nil
 }
 
-// IsMarriageMalicious returns true if the marriage ATX is known to be malicious.
-func IsMarriageMalicious(db sql.Executor, marriage types.ATXID) (bool, error) {
-	rows, err := db.Exec(`SELECT 1 FROM identities WHERE marriage_atx = ?1 AND is_malicious IS TRUE;`,
+// IsMarriageMalicious returns true if any of the identities in the marriage is known to be malicious.
+func IsMarriageMalicious(db sql.Executor, marriage types.ATXID) (*time.Time, error) {
+	var received *time.Time
+	_, err := db.Exec(`SELECT received FROM identities WHERE marriage_atx = ?1 AND proof IS NOT NULL;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, marriage.Bytes())
-		}, nil)
+		},
+		func(stmt *sql.Statement) bool {
+			tmp := time.Unix(0, stmt.ColumnInt64(0))
+			received = &tmp
+			return false
+		},
+	)
 	if err != nil {
-		return false, fmt.Errorf("is marriage malicious %v: %w", marriage, err)
+		return nil, fmt.Errorf("is marriage malicious %v: %w", marriage, err)
 	}
-	return rows > 0, nil
+	return received, nil
 }
 
 // GetBlobSizes returns the sizes of the blobs corresponding to malfeasance proofs for the

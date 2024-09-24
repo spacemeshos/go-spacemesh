@@ -18,4 +18,4 @@ INSERT INTO identities (pubkey, is_malicious, proof, received, marriage_atx, mar
 DROP TABLE identities_old;
 
 CREATE INDEX malicious_identities ON identities (pubkey) where is_malicious;
-CREATE INDEX malicious_marriages ON identities (marriage_atx) where is_malicious;
+CREATE INDEX identities_marriages ON identities (marriage_atx);

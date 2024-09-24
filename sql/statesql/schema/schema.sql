@@ -84,6 +84,7 @@ CREATE TABLE certificates
 CREATE TABLE identities
 (
     pubkey VARCHAR PRIMARY KEY,
+    is_malicious BOOLEAN DEFAULT FALSE NOT NULL,
     proof  BLOB
 , received INT DEFAULT 0 NOT NULL, marriage_atx CHAR(32), marriage_idx INTEGER, marriage_target CHAR(32), marriage_signature CHAR(64));
 CREATE TABLE layers

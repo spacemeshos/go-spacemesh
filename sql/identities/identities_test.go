@@ -274,6 +274,23 @@ func TestEquivocationSet(t *testing.T) {
 			require.True(t, malicious)
 		}
 	})
+	t.Run("marriage received after equivocation", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemory()
+		atx := types.RandomATXID()
+		first := types.RandomNodeID()
+		require.NoError(t, identities.SetMarriage(db, first, &identities.MarriageData{ATX: atx, Index: 0}))
+		require.NoError(t, identities.SetMalicious(db, first, []byte("proof"), time.Now()))
+
+		second := types.RandomNodeID()
+		require.NoError(t, identities.SetMarriage(db, second, &identities.MarriageData{ATX: atx, Index: 1}))
+		require.NoError(t, identities.SetMaliciousBecauseOfMarriage(db, second, time.Time{}))
+		for _, id := range []types.NodeID{first, second} {
+			malicious, err := identities.IsMalicious(db, id)
+			require.NoError(t, err)
+			require.True(t, malicious)
+		}
+	})
 }
 
 func TestEquivocationSetByMarriageATX(t *testing.T) {

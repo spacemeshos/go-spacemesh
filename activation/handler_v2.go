@@ -683,7 +683,17 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx 
 		return true, nil
 	}
 	if atx.MarriageATX != nil {
-		malicious, err := identities.IsMarriageMalicious(tx, *atx.MarriageATX)
+		receivedProof, err := identities.IsMarriageMalicious(tx, *atx.MarriageATX)
+		if err != nil {
+			return false, fmt.Errorf("checking if marriage ATX is malicious: %w", err)
+		}
+		if receivedProof != nil {
+			err = identities.SetMaliciousBecauseOfMarriage(tx, atx.SmesherID, *receivedProof)
+			if err != nil {
+				return false, fmt.Errorf("setting node as malicious because of marriage: %w", err)
+			}
+			return true, nil
+		}
 	}
 
 	malicious, err = h.checkDoubleMarry(ctx, tx, atx)
