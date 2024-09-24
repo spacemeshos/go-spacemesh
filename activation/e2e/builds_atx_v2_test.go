@@ -198,18 +198,25 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		).Times(2),
 	)
 
+	atxService := activation.NewDBAtxService(
+		db,
+		conf.GoldenATXID,
+		atxsdata,
+		validator,
+		logger,
+	)
+
 	tab := activation.NewBuilder(
 		conf,
-		db,
-		atxsdata,
 		localDB,
+		atxService,
 		mpub,
+		validator,
 		nb,
 		clock,
 		syncedSyncer(t),
 		logger,
 		activation.WithPoetConfig(poetCfg),
-		activation.WithValidator(validator),
 		activation.BuilderAtxVersions(atxVersions),
 	)
 	tab.Register(sig)

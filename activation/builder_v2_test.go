@@ -93,7 +93,6 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	posEpoch += 1
 	layer = posEpoch.FirstLayer()
 	tab.mclock.EXPECT().CurrentLayer().Return(layer).Times(4)
-	tab.mValidator.EXPECT().VerifyChain(gomock.Any(), atx1.ID(), tab.goldenATXID, gomock.Any())
 	var atx2 wire.ActivationTxV2
 	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch,
 		func(_ context.Context, _ string, got []byte) error {

@@ -108,6 +108,15 @@ type atxProvider interface {
 	GetAtx(id types.ATXID) (*types.ActivationTx, error)
 }
 
+// AtxService provides ATXs needed by the ATX Builder.
+type AtxService interface {
+	Atx(ctx context.Context, id types.ATXID) (*types.ActivationTx, error)
+	LastATX(ctx context.Context, nodeID types.NodeID) (*types.ActivationTx, error)
+	// PositioningATX returns atx id with the highest tick height.
+	// The maxPublish epoch is the maximum publish epoch of the returned ATX.
+	PositioningATX(ctx context.Context, maxPublish types.EpochID) (types.ATXID, error)
+}
+
 // PostSetupProvider defines the functionality required for Post setup.
 // This interface is used by the atx builder and currently implemented by the PostSetupManager.
 // Eventually most of the functionality will be moved to the PoSTClient.
