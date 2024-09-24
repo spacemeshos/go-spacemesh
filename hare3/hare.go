@@ -341,7 +341,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		proof := equivocation.ToMalfeasanceProof()
 		err := h.db.WithTx(context.Background(), func(tx sql.Transaction) error {
 			return identities.SetMalicious(
-				h.db, equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now())
+				tx, equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now())
 		})
 		if err != nil {
 			h.log.Error("failed to save malicious identity", zap.Error(err))
