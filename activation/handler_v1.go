@@ -454,8 +454,11 @@ func (h *HandlerV1) checkMalicious(
 		return true, nil, nil
 	}
 	proof, err := h.checkDoublePublish(ctx, tx, watx)
-	if proof != nil || err != nil {
-		return true, proof, err
+	if err != nil {
+		return false, nil, err
+	}
+	if proof != nil {
+		return true, proof, nil
 	}
 	proof, err = h.checkWrongPrevAtx(ctx, tx, watx)
 	if err != nil {
