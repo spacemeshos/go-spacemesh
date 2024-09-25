@@ -33,9 +33,7 @@ include Makefile-libs.Inc
 # and set the correct ulimit command for the OS
 ifeq ($(OS),Windows_NT)
 	EXE := .exe
-	ULIMIT := ""
 else
-	EXE := ""
 	ULIMIT := ulimit -n 4096;
 endif
 
