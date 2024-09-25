@@ -27,7 +27,6 @@ ifeq ($(GOOS),windows)
 	platform := windows
 	export PATH := $(PATH):$(BIN_DIR)
 	CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-Bstatic -lpthread -Wl,-Bdynamic
-	EXE := .exe
 else
 	TEMP := /tmp
 	ifeq ($(GOOS),darwin)
@@ -37,7 +36,6 @@ else
 				platform := macos
 		endif
 		CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,@loader_path
-		ULIMIT := ulimit -n 9999;
 	else
 		ifeq ($(GOARCH),arm64)
 				platform := linux-arm64

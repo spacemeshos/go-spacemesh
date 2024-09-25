@@ -29,6 +29,16 @@ LDFLAGS = -ldflags "$(C_LDFLAGS)"
 
 include Makefile-libs.Inc
 
+# Set the correct extension for the executable based on the OS
+# and set the correct ulimit command for the OS
+ifeq ($(OS),Windows_NT)
+	EXE := .exe
+	ULIMIT := ""
+else
+	EXE := ""
+	ULIMIT := ulimit -n 4096;
+endif
+
 UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v genvm/cmd)
 
 export CGO_ENABLED := 1
