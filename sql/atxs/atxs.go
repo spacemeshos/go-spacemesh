@@ -780,7 +780,8 @@ func IterateAtxsOps(
 	_, err := db.Exec(
 		fullQuery+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
-		decoder(fn))
+		decoder(fn),
+	)
 	return err
 }
 
