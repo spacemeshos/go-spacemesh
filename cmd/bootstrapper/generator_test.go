@@ -166,6 +166,77 @@ func TestGenerator_Generate(t *testing.T) {
 	}
 }
 
+func TestGenerator_Generate_CheckBitcoinAPIResilience(t *testing.T) {
+	targetEpoch := types.EpochID(3)
+	db := statesql.InMemory()
+	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
+	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
+	t.Cleanup(cleanup)
+
+	for _, tc := range []struct {
+		desc                 string
+		statusCode, attempts int
+		shouldFail           bool
+	}{
+		{
+			desc:       "check 2x 500",
+			statusCode: http.StatusInternalServerError,
+			attempts:   2,
+			shouldFail: false,
+		},
+		{
+			desc:       "check 2x 429",
+			statusCode: http.StatusTooManyRequests,
+			attempts:   2,
+			shouldFail: false,
+		},
+		{
+			desc:       "fail on hardcoded genBeacon timeout",
+			statusCode: http.StatusInternalServerError,
+			attempts:   15,
+			shouldFail: true,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+			attempt := 0
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+				attempt += 1
+				if attempt <= tc.attempts {
+					w.WriteHeader(tc.statusCode)
+					return
+				}
+				if strings.HasSuffix(r.URL.String(), "/blocks/782685") {
+					w.Write([]byte(bitcoinResponse2))
+				} else {
+					w.Write([]byte(bitcoinResponse1))
+				}
+			})
+			ts := httptest.NewServer(mux)
+			defer ts.Close()
+
+			fs := afero.NewMemMapFs()
+
+			g := NewGenerator(
+				ts.URL,
+				cfg.PublicListener,
+				WithLogger(zaptest.NewLogger(t)),
+				WithFilesystem(fs),
+			)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			_, err := g.Generate(ctx, targetEpoch, true, false)
+
+			if tc.shouldFail {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestGenerator_CheckAPI(t *testing.T) {
 	t.Parallel()
 	targetEpoch := types.EpochID(3)
