@@ -11,13 +11,14 @@ import (
 type token string
 
 const (
-	Eq    token = "="
-	NotEq token = "!="
-	Gt    token = ">"
-	Gte   token = ">="
-	Lt    token = "<"
-	Lte   token = "<="
-	In    token = "in"
+	Eq        token = "="
+	NotEq     token = "!="
+	Gt        token = ">"
+	Gte       token = ">="
+	Lt        token = "<"
+	Lte       token = "<="
+	In        token = "in"
+	IsNotNull token = "is not null"
 )
 
 type operator string
@@ -37,6 +38,7 @@ const (
 	Layer     field = "layer"
 	Address   field = "address"
 	Principal field = "principal"
+	Proof     field = "proof"
 )
 
 type modifier string

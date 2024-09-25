@@ -3,6 +3,8 @@ package builder
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -16,10 +18,7 @@ func TestFilterFrom_WithSingleFilter(t *testing.T) {
 
 	expected := " where epoch = ?1"
 	actual := FilterFrom(operations)
-
-	if actual != expected {
-		t.Errorf("Expected '%s', but got '%s'", expected, actual)
-	}
+	require.Equal(t, expected, actual)
 }
 
 func TestFilterFrom_WithMultipleFilters(t *testing.T) {
@@ -33,10 +32,7 @@ func TestFilterFrom_WithMultipleFilters(t *testing.T) {
 
 	expected := " where epoch = ?1 and pubkey = ?2"
 	actual := FilterFrom(operations)
-
-	if actual != expected {
-		t.Errorf("Expected '%s', but got '%s'", expected, actual)
-	}
+	require.Equal(t, expected, actual)
 }
 
 func TestFilterFrom_WithGroupFilters(t *testing.T) {
@@ -55,10 +51,7 @@ func TestFilterFrom_WithGroupFilters(t *testing.T) {
 
 	expected := " where ( epoch = ?1 and pubkey = ?2 )"
 	actual := FilterFrom(operations)
-
-	if actual != expected {
-		t.Errorf("Expected '%s', but got '%s'", expected, actual)
-	}
+	require.Equal(t, expected, actual)
 }
 
 func TestFilterFrom_WithInToken(t *testing.T) {
@@ -71,10 +64,7 @@ func TestFilterFrom_WithInToken(t *testing.T) {
 
 	expected := " where epoch in (?1, ?2)"
 	actual := FilterFrom(operations)
-
-	if actual != expected {
-		t.Errorf("Expected '%s', but got '%s'", expected, actual)
-	}
+	require.Equal(t, expected, actual)
 }
 
 func TestFilterFrom_WithModifiers(t *testing.T) {
@@ -91,8 +81,5 @@ func TestFilterFrom_WithModifiers(t *testing.T) {
 
 	expected := " where epoch = ?1 order by epoch limit 10"
 	actual := FilterFrom(operations)
-
-	if actual != expected {
-		t.Errorf("Expected '%s', but got '%s'", expected, actual)
-	}
+	require.Equal(t, expected, actual)
 }
