@@ -1150,11 +1150,11 @@ func (app *App) initServices(ctx context.Context) error {
 		nodeIDs,
 		trtl,
 	)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleATXs, activationMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleBallots, meshMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.HareEquivocation, hareMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPostIndex, invalidPostMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPrevATX, invalidPrevMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.MultipleATXs, activationMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.MultipleBallots, meshMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.HareEquivocation, hareMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.InvalidPostIndex, invalidPostMH)
+	malfeasanceHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(

@@ -89,8 +89,8 @@ type MockHandlerV1MockRecorder struct {
 	mock *MockHandlerV1
 }
 
-// NewMockHandlerV1 creates a new mock instance.
-func NewMockHandlerV1(ctrl *gomock.Controller) *MockHandlerV1 {
+// NewMockMalfeasanceHandler creates a new mock instance.
+func NewMockMalfeasanceHandler(ctrl *gomock.Controller) *MockHandlerV1 {
 	mock := &MockHandlerV1{ctrl: ctrl}
 	mock.recorder = &MockHandlerV1MockRecorder{mock}
 	return mock
