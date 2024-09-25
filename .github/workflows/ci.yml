@@ -14,6 +14,8 @@ env:
   TD_QUEUE_ZONE: ${{ secrets.TD_QUEUE_ZONE }}
   DUMP_QUEUE_NAME: ${{ secrets.DUMP_QUEUE_NAME }}
   DUMP_QUEUE_ZONE: ${{ secrets.DUMP_QUEUE_ZONE }}
+  # TODO: need to remove GOEXPERIMENT=rangefunc after updating to Go 1.23
+  GOEXPERIMENT: rangefunc
   # If needed the variable GOPRIVATE can be set in the repository settings :: Secrets and Variables > action > Variables : GOPRIVATE
 
 # Trigger the workflow on all pull requests, and on push to specific branches
