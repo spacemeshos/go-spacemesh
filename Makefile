@@ -7,6 +7,9 @@ GOTESTSUM_VERSION := v1.12.0
 GOSCALE_VERSION := v1.2.0
 MOCKGEN_VERSION := v0.4.0
 
+# TODO: need to remove this after updating to Go 1.23
+export GOEXPERIMENT = rangefunc
+
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
     BRANCH = $(SHA)
