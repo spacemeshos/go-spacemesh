@@ -563,7 +563,7 @@ func TestSchemaDrift(t *testing.T) {
 		WithLogger(logger),
 	)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "newtbl")
+	require.ErrorContains(t, err, "newtbl")
 	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
 
 	db, err = Open("file:"+dbFile,
