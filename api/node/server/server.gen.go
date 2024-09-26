@@ -45,6 +45,9 @@ type ServerInterface interface {
 	// Get Positioning ATX ID with given maximum publish epoch
 	// (GET /activation/positioning_atx/{publish_epoch})
 	GetActivationPositioningAtxPublishEpoch(w http.ResponseWriter, r *http.Request, publishEpoch externalRef0.EpochID)
+	// Store PoET proof
+	// (POST /poet)
+	PostPoet(w http.ResponseWriter, r *http.Request)
 	// Publish a blob in the given p2p protocol
 	// (POST /publish/{protocol})
 	PostPublishProtocol(w http.ResponseWriter, r *http.Request, protocol PostPublishProtocolParamsProtocol)
@@ -125,6 +128,20 @@ func (siw *ServerInterfaceWrapper) GetActivationPositioningAtxPublishEpoch(w htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetActivationPositioningAtxPublishEpoch(w, r, publishEpoch)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostPoet operation middleware
+func (siw *ServerInterfaceWrapper) PostPoet(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostPoet(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -282,6 +299,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/activation/atx/{atx_id}", wrapper.GetActivationAtxAtxId)
 	m.HandleFunc("GET "+options.BaseURL+"/activation/last_atx/{node_id}", wrapper.GetActivationLastAtxNodeId)
 	m.HandleFunc("GET "+options.BaseURL+"/activation/positioning_atx/{publish_epoch}", wrapper.GetActivationPositioningAtxPublishEpoch)
+	m.HandleFunc("POST "+options.BaseURL+"/poet", wrapper.PostPoet)
 	m.HandleFunc("POST "+options.BaseURL+"/publish/{protocol}", wrapper.PostPublishProtocol)
 
 	return m
@@ -375,6 +393,41 @@ func (response GetActivationPositioningAtxPublishEpoch200JSONResponse) VisitGetA
 	return json.NewEncoder(w).Encode(response)
 }
 
+type PostPoetRequestObject struct {
+	Body io.Reader
+}
+
+type PostPoetResponseObject interface {
+	VisitPostPoetResponse(w http.ResponseWriter) error
+}
+
+type PostPoet200Response struct {
+}
+
+func (response PostPoet200Response) VisitPostPoetResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type PostPoet400PlaintextResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response PostPoet400PlaintextResponse) VisitPostPoetResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "plain/text")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(400)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
 type PostPublishProtocolRequestObject struct {
 	Protocol PostPublishProtocolParamsProtocol `json:"protocol"`
 	Body     io.Reader
@@ -403,6 +456,9 @@ type StrictServerInterface interface {
 	// Get Positioning ATX ID with given maximum publish epoch
 	// (GET /activation/positioning_atx/{publish_epoch})
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, request GetActivationPositioningAtxPublishEpochRequestObject) (GetActivationPositioningAtxPublishEpochResponseObject, error)
+	// Store PoET proof
+	// (POST /poet)
+	PostPoet(ctx context.Context, request PostPoetRequestObject) (PostPoetResponseObject, error)
 	// Publish a blob in the given p2p protocol
 	// (POST /publish/{protocol})
 	PostPublishProtocol(ctx context.Context, request PostPublishProtocolRequestObject) (PostPublishProtocolResponseObject, error)
@@ -508,6 +564,32 @@ func (sh *strictHandler) GetActivationPositioningAtxPublishEpoch(w http.Response
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetActivationPositioningAtxPublishEpochResponseObject); ok {
 		if err := validResponse.VisitGetActivationPositioningAtxPublishEpochResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PostPoet operation middleware
+func (sh *strictHandler) PostPoet(w http.ResponseWriter, r *http.Request) {
+	var request PostPoetRequestObject
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PostPoet(ctx, request.(PostPoetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PostPoet")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PostPoetResponseObject); ok {
+		if err := validResponse.VisitPostPoetResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -13,19 +13,21 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-type nodeService struct {
+type NodeService struct {
 	client *ClientWithResponses
 	logger *zap.Logger
 }
 
 var (
-	_ activation.AtxService = (*nodeService)(nil)
-	_ pubsub.Publisher      = (*nodeService)(nil)
+	_ activation.AtxService   = (*NodeService)(nil)
+	_ activation.PoetDbStorer = (*NodeService)(nil)
+	_ pubsub.Publisher        = (*NodeService)(nil)
 )
 
 type Config struct {
@@ -34,7 +36,7 @@ type Config struct {
 	RetryMax     int           // Maximum number of retries
 }
 
-func NewNodeServiceClient(server string, logger *zap.Logger, cfg *Config) (*nodeService, error) {
+func NewNodeServiceClient(server string, logger *zap.Logger, cfg *Config) (*NodeService, error) {
 	retryableClient := retryablehttp.Client{
 		Logger:       &retryableHttpLogger{logger},
 		RetryWaitMin: cfg.RetryWaitMin,
@@ -47,13 +49,13 @@ func NewNodeServiceClient(server string, logger *zap.Logger, cfg *Config) (*node
 	if err != nil {
 		return nil, err
 	}
-	return &nodeService{
+	return &NodeService{
 		client: client,
 		logger: logger,
 	}, nil
 }
 
-func (s *nodeService) Atx(ctx context.Context, id types.ATXID) (*types.ActivationTx, error) {
+func (s *NodeService) Atx(ctx context.Context, id types.ATXID) (*types.ActivationTx, error) {
 	resp, err := s.client.GetActivationAtxAtxIdWithResponse(ctx, hex.EncodeToString(id.Bytes()))
 	if err != nil {
 		return nil, err
@@ -68,7 +70,7 @@ func (s *nodeService) Atx(ctx context.Context, id types.ATXID) (*types.Activatio
 	return models.ParseATX(resp.JSON200)
 }
 
-func (s *nodeService) LastATX(ctx context.Context, nodeID types.NodeID) (*types.ActivationTx, error) {
+func (s *NodeService) LastATX(ctx context.Context, nodeID types.NodeID) (*types.ActivationTx, error) {
 	resp, err := s.client.GetActivationLastAtxNodeIdWithResponse(ctx, hex.EncodeToString(nodeID.Bytes()))
 	if err != nil {
 		return nil, err
@@ -83,7 +85,7 @@ func (s *nodeService) LastATX(ctx context.Context, nodeID types.NodeID) (*types.
 	return models.ParseATX(resp.JSON200)
 }
 
-func (s *nodeService) PositioningATX(ctx context.Context, maxPublish types.EpochID) (types.ATXID, error) {
+func (s *NodeService) PositioningATX(ctx context.Context, maxPublish types.EpochID) (types.ATXID, error) {
 	resp, err := s.client.GetActivationPositioningAtxPublishEpochWithResponse(ctx, maxPublish.Uint32())
 	if err != nil {
 		return types.ATXID{}, err
@@ -96,10 +98,24 @@ func (s *nodeService) PositioningATX(ctx context.Context, maxPublish types.Epoch
 }
 
 // Publish implements pubsub.Publisher.
-func (s *nodeService) Publish(ctx context.Context, proto string, blob []byte) error {
+func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) error {
 	buf := bytes.NewBuffer(blob)
 	protocol := PostPublishProtocolParamsProtocol(proto)
 	resp, err := s.client.PostPublishProtocolWithBody(ctx, protocol, "application/octet-stream", buf)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	return nil
+}
+
+// StorePoetProof implements activation.PoetDbStorer.
+func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProofMessage) error {
+	blob := codec.MustEncode(proof)
+	buf := bytes.NewBuffer(blob)
+	resp, err := s.client.PostPoetWithBody(ctx, "application/octet-stream", buf)
 	if err != nil {
 		return err
 	}

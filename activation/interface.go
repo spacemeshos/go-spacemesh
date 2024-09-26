@@ -188,6 +188,10 @@ type certifierService interface {
 	DeleteCertificate(id types.NodeID, pubkey []byte) error
 }
 
+type PoetDbStorer interface {
+	StorePoetProof(ctx context.Context, proofMessage *types.PoetProofMessage) error
+}
+
 type poetDbAPI interface {
 	Proof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
 	ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error)

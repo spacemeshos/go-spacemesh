@@ -14,24 +14,38 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
+//go:generate mockgen -typed -package=server -destination=mocks.go -source=server.go
+
+type poetDB interface {
+	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
+}
+
 type Server struct {
-	activationService activation.AtxService
-	publisher         pubsub.Publisher
-	logger            *zap.Logger
+	atxService activation.AtxService
+	publisher  pubsub.Publisher
+	poetDB     poetDB
+	logger     *zap.Logger
 }
 
 var _ StrictServerInterface = (*Server)(nil)
 
-func NewServer(activationService activation.AtxService, publisher pubsub.PubSub, logger *zap.Logger) *Server {
+func NewServer(
+	atxService activation.AtxService,
+	publisher pubsub.Publisher,
+	poetDB poetDB,
+	logger *zap.Logger,
+) *Server {
 	return &Server{
-		activationService: activationService,
-		publisher:         publisher,
-		logger:            logger,
+		atxService: atxService,
+		publisher:  publisher,
+		poetDB:     poetDB,
+		logger:     logger,
 	}
 }
 
@@ -77,7 +91,7 @@ func (s *Server) GetActivationAtxAtxId(
 		return nil, err
 	}
 	id := types.BytesToATXID(idBytes)
-	atx, err := s.activationService.Atx(ctx, id)
+	atx, err := s.atxService.Atx(ctx, id)
 	switch {
 	case errors.Is(err, common.ErrNotFound):
 		return GetActivationAtxAtxId404Response{}, nil
@@ -110,7 +124,7 @@ func (s *Server) GetActivationLastAtxNodeId(
 		}, nil
 	}
 
-	atxid, err := s.activationService.LastATX(ctx, id)
+	atxid, err := s.atxService.LastATX(ctx, id)
 	switch {
 	case errors.Is(err, common.ErrNotFound):
 		return GetActivationLastAtxNodeId404Response{}, nil
@@ -134,7 +148,7 @@ func (s *Server) GetActivationPositioningAtxPublishEpoch(
 	ctx context.Context,
 	request GetActivationPositioningAtxPublishEpochRequestObject,
 ) (GetActivationPositioningAtxPublishEpochResponseObject, error) {
-	id, err := s.activationService.PositioningATX(ctx, types.EpochID(request.PublishEpoch))
+	id, err := s.atxService.PositioningATX(ctx, types.EpochID(request.PublishEpoch))
 	if err != nil {
 		return nil, err
 	}
@@ -156,4 +170,30 @@ func (s *Server) PostPublishProtocol(
 
 	s.publisher.Publish(ctx, string(request.Protocol), blob)
 	return PostPublishProtocol200Response{}, nil
+}
+
+// PostPoet implements StrictServerInterface.
+func (s *Server) PostPoet(ctx context.Context, request PostPoetRequestObject) (PostPoetResponseObject, error) {
+	var proof types.PoetProofMessage
+	blob, err := io.ReadAll(request.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := codec.Decode(blob, &proof); err != nil {
+		msg := err.Error()
+		return PostPoet400PlaintextResponse{
+			Body:          bytes.NewBuffer([]byte(msg)),
+			ContentLength: int64(len(msg)),
+		}, nil
+	}
+
+	if err := s.poetDB.ValidateAndStore(ctx, &proof); err != nil {
+		msg := err.Error()
+		return PostPoet400PlaintextResponse{
+			Body:          bytes.NewBuffer([]byte(msg)),
+			ContentLength: int64(len(msg)),
+		}, nil
+	}
+	return PostPoet200Response{}, nil
 }

@@ -38,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
+	"github.com/spacemeshos/go-spacemesh/api/node/client"
 	nodeclient "github.com/spacemeshos/go-spacemesh/api/node/client"
 	nodeserver "github.com/spacemeshos/go-spacemesh/api/node/server"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -583,7 +584,26 @@ func (app *App) initServices(ctx context.Context) error {
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
 
-	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap())
+	var nodeServiceClient *client.NodeService
+	if server := app.Config.BaseConfig.NodeServiceAddress; server != "" {
+		logger := app.log.Zap().Named("node-svc-client")
+		cfg := &nodeclient.Config{
+			RetryWaitMin: time.Millisecond * 500,
+			RetryWaitMax: time.Second,
+			RetryMax:     10,
+		}
+		var err error
+		nodeServiceClient, err = nodeclient.NewNodeServiceClient(server, logger, cfg)
+		if err != nil {
+			return fmt.Errorf("creating node service client: %w", err)
+		}
+	}
+
+	var poetDbOpts []activation.PoetDbOption
+	if nodeServiceClient != nil {
+		poetDbOpts = append(poetDbOpts, activation.WithRemotePoetStorer(nodeServiceClient))
+	}
+	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap(), poetDbOpts...)
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
@@ -1067,17 +1087,7 @@ func (app *App) initServices(ctx context.Context) error {
 		atxService    activation.AtxService
 		atxPublisher  pubsub.Publisher
 	)
-	if server := app.Config.BaseConfig.NodeServiceAddress; server != "" {
-		logger := app.log.Zap().Named("node-svc-client")
-		cfg := &nodeclient.Config{
-			RetryWaitMin: time.Millisecond * 500,
-			RetryWaitMax: time.Second,
-			RetryMax:     10,
-		}
-		nodeServiceClient, err := nodeclient.NewNodeServiceClient(server, logger, cfg)
-		if err != nil {
-			return fmt.Errorf("creating node service client: %w", err)
-		}
+	if nodeServiceClient != nil {
 		atxService = nodeServiceClient
 		atxPublisher = nodeServiceClient
 	} else {
@@ -1855,7 +1865,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		golden := types.ATXID(app.Config.Genesis.GoldenATX())
 		logger := app.log.Zap().Named("atx-service")
 		actSvc := activation.NewDBAtxService(app.db, golden, app.atxsdata, app.validator, logger)
-		server := nodeserver.NewServer(actSvc, app.host, logger)
+		server := nodeserver.NewServer(actSvc, app.host, app.poetDb, logger)
 
 		app.nodeServiceServer = &http.Server{
 			Handler: server.IntoHandler(http.NewServeMux()),

@@ -101,3 +101,24 @@ paths:
       responses:
         "200":
           description: Successfully published the blob
+  /poet:
+    post:
+      summary: Store PoET proof
+      tags:
+        - "Poet"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Successfully stored the proof
+        "400":
+          description: Bad request
+          content:
+            plain/text:
+              schema:
+                type: string

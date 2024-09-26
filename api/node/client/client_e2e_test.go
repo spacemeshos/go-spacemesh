@@ -16,14 +16,28 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/node/server"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 )
 
 const retries = 3
 
-func setupE2E(t *testing.T) (activation.AtxService, *activation.MockAtxService) {
+type mocks struct {
+	atxService *activation.MockAtxService
+	poetDb     *server.MockpoetDB
+	publisher  *pubsub.MockPublisher
+}
+
+func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 	log := zaptest.NewLogger(t)
-	actServiceMock := activation.NewMockAtxService(gomock.NewController(t))
-	activationServiceServer := server.NewServer(actServiceMock, nil, log.Named("server"))
+
+	ctrl := gomock.NewController(t)
+	m := &mocks{
+		atxService: activation.NewMockAtxService(ctrl),
+		poetDb:     server.NewMockpoetDB(ctrl),
+		publisher:  pubsub.NewMockPublisher(ctrl),
+	}
+
+	activationServiceServer := server.NewServer(m.atxService, m.publisher, m.poetDb, log.Named("server"))
 
 	listener, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)
@@ -42,7 +56,7 @@ func setupE2E(t *testing.T) (activation.AtxService, *activation.MockAtxService) 
 	}
 	svc, err := client.NewNodeServiceClient("http://"+listener.Addr().String(), log.Named("server"), cfg)
 	require.NoError(t, err)
-	return svc, actServiceMock
+	return svc, m
 }
 
 func Test_ActivationService_Atx(t *testing.T) {
@@ -51,7 +65,7 @@ func Test_ActivationService_Atx(t *testing.T) {
 	atxid := types.ATXID{1, 2, 3, 4}
 
 	t.Run("not found", func(t *testing.T) {
-		mock.EXPECT().Atx(gomock.Any(), atxid).Return(nil, common.ErrNotFound)
+		mock.atxService.EXPECT().Atx(gomock.Any(), atxid).Return(nil, common.ErrNotFound)
 		_, err := svc.Atx(context.Background(), atxid)
 		require.ErrorIs(t, err, common.ErrNotFound)
 	})
@@ -59,14 +73,14 @@ func Test_ActivationService_Atx(t *testing.T) {
 	t.Run("found", func(t *testing.T) {
 		atx := &types.ActivationTx{}
 		atx.SetID(atxid)
-		mock.EXPECT().Atx(gomock.Any(), atxid).Return(atx, nil)
+		mock.atxService.EXPECT().Atx(gomock.Any(), atxid).Return(atx, nil)
 		gotAtx, err := svc.Atx(context.Background(), atxid)
 		require.NoError(t, err)
 		require.Equal(t, atx, gotAtx)
 	})
 
 	t.Run("backend errors", func(t *testing.T) {
-		mock.EXPECT().
+		mock.atxService.EXPECT().
 			Atx(gomock.Any(), atxid).
 			Times(retries+1).
 			Return(nil, errors.New("ops"))
@@ -80,14 +94,14 @@ func Test_ActivationService_PositioningATX(t *testing.T) {
 
 	t.Run("found", func(t *testing.T) {
 		posAtx := types.RandomATXID()
-		mock.EXPECT().PositioningATX(gomock.Any(), types.EpochID(77)).Return(posAtx, nil)
+		mock.atxService.EXPECT().PositioningATX(gomock.Any(), types.EpochID(77)).Return(posAtx, nil)
 		gotAtx, err := svc.PositioningATX(context.Background(), 77)
 		require.NoError(t, err)
 		require.Equal(t, posAtx, gotAtx)
 	})
 
 	t.Run("backend errors", func(t *testing.T) {
-		mock.EXPECT().
+		mock.atxService.EXPECT().
 			PositioningATX(gomock.Any(), types.EpochID(77)).
 			Times(retries+1).
 			Return(types.EmptyATXID, errors.New("ops"))
@@ -103,7 +117,7 @@ func Test_ActivationService_LastATX(t *testing.T) {
 	nodeid := types.NodeID{5, 6, 7, 8}
 
 	t.Run("not found", func(t *testing.T) {
-		mock.EXPECT().LastATX(gomock.Any(), nodeid).Return(nil, common.ErrNotFound)
+		mock.atxService.EXPECT().LastATX(gomock.Any(), nodeid).Return(nil, common.ErrNotFound)
 		_, err := svc.LastATX(context.Background(), nodeid)
 		require.ErrorIs(t, err, common.ErrNotFound)
 	})
@@ -111,18 +125,28 @@ func Test_ActivationService_LastATX(t *testing.T) {
 	t.Run("found", func(t *testing.T) {
 		atx := &types.ActivationTx{}
 		atx.SetID(atxid)
-		mock.EXPECT().LastATX(gomock.Any(), nodeid).Return(atx, nil)
+		mock.atxService.EXPECT().LastATX(gomock.Any(), nodeid).Return(atx, nil)
 		gotAtx, err := svc.LastATX(context.Background(), nodeid)
 		require.NoError(t, err)
 		require.Equal(t, atx, gotAtx)
 	})
 
 	t.Run("backend errors", func(t *testing.T) {
-		mock.EXPECT().
+		mock.atxService.EXPECT().
 			LastATX(gomock.Any(), nodeid).
 			Times(retries+1).
 			Return(nil, errors.New("ops"))
 		_, err := svc.LastATX(context.Background(), nodeid)
 		require.Error(t, err)
 	})
+}
+
+func Test_StoringPoetProof(t *testing.T) {
+	svc, mocks := setupE2E(t)
+
+	proof := types.PoetProofMessage{
+		RoundID: "some round",
+	}
+	mocks.poetDb.EXPECT().ValidateAndStore(gomock.Any(), &proof)
+	svc.StorePoetProof(context.Background(), &proof)
 }

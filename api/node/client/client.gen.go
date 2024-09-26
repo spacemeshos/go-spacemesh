@@ -115,6 +115,9 @@ type ClientInterface interface {
 	// GetActivationPositioningAtxPublishEpoch request
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostPoetWithBody request with any body
+	PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostPublishProtocolWithBody request with any body
 	PostPublishProtocolWithBody(ctx context.Context, protocol PostPublishProtocolParamsProtocol, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
@@ -145,6 +148,18 @@ func (c *Client) GetActivationLastAtxNodeId(ctx context.Context, nodeId external
 
 func (c *Client) GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetActivationPositioningAtxPublishEpochRequest(c.Server, publishEpoch)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostPoetRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -269,6 +284,35 @@ func NewGetActivationPositioningAtxPublishEpochRequest(server string, publishEpo
 	return req, nil
 }
 
+// NewPostPoetRequestWithBody generates requests for PostPoet with any type of body
+func NewPostPoetRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/poet")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewPostPublishProtocolRequestWithBody generates requests for PostPublishProtocol with any type of body
 func NewPostPublishProtocolRequestWithBody(server string, protocol PostPublishProtocolParamsProtocol, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
@@ -357,6 +401,9 @@ type ClientWithResponsesInterface interface {
 	// GetActivationPositioningAtxPublishEpochWithResponse request
 	GetActivationPositioningAtxPublishEpochWithResponse(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetActivationPositioningAtxPublishEpochResponse, error)
 
+	// PostPoetWithBodyWithResponse request with any body
+	PostPoetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPoetResponse, error)
+
 	// PostPublishProtocolWithBodyWithResponse request with any body
 	PostPublishProtocolWithBodyWithResponse(ctx context.Context, protocol PostPublishProtocolParamsProtocol, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPublishProtocolResponse, error)
 }
@@ -429,6 +476,27 @@ func (r GetActivationPositioningAtxPublishEpochResponse) StatusCode() int {
 	return 0
 }
 
+type PostPoetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r PostPoetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostPoetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PostPublishProtocolResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -475,6 +543,15 @@ func (c *ClientWithResponses) GetActivationPositioningAtxPublishEpochWithRespons
 		return nil, err
 	}
 	return ParseGetActivationPositioningAtxPublishEpochResponse(rsp)
+}
+
+// PostPoetWithBodyWithResponse request with arbitrary body returning *PostPoetResponse
+func (c *ClientWithResponses) PostPoetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPoetResponse, error) {
+	rsp, err := c.PostPoetWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostPoetResponse(rsp)
 }
 
 // PostPublishProtocolWithBodyWithResponse request with arbitrary body returning *PostPublishProtocolResponse
@@ -561,6 +638,22 @@ func ParseGetActivationPositioningAtxPublishEpochResponse(rsp *http.Response) (*
 		}
 		response.JSON200 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParsePostPoetResponse parses an HTTP response from a PostPoetWithResponse call
+func ParsePostPoetResponse(rsp *http.Response) (*PostPoetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostPoetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil

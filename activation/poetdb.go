@@ -21,13 +21,26 @@ import (
 
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	sqlDB  sql.StateDatabase
-	logger *zap.Logger
+	sqlDB        sql.StateDatabase
+	logger       *zap.Logger
+	remoteStorer PoetDbStorer
+}
+
+type PoetDbOption func(*PoetDb)
+
+func WithRemotePoetStorer(storer PoetDbStorer) PoetDbOption {
+	return func(pd *PoetDb) {
+		pd.remoteStorer = storer
+	}
 }
 
 // NewPoetDb returns a new PoET handler.
-func NewPoetDb(db sql.StateDatabase, log *zap.Logger) *PoetDb {
-	return &PoetDb{sqlDB: db, logger: log}
+func NewPoetDb(db sql.StateDatabase, log *zap.Logger, opts ...PoetDbOption) *PoetDb {
+	poetdb := &PoetDb{sqlDB: db, logger: log}
+	for _, opt := range opts {
+		opt(poetdb)
+	}
+	return poetdb
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
@@ -55,6 +68,13 @@ func (db *PoetDb) ValidateAndStore(ctx context.Context, proofMessage *types.Poet
 		proofMessage.Signature,
 	); err != nil {
 		return err
+	}
+
+	if db.remoteStorer != nil {
+		err := db.remoteStorer.StorePoetProof(ctx, proofMessage)
+		if err != nil {
+			db.logger.Warn("failed to store the poet proof in remote store", zap.Error(err))
+		}
 	}
 
 	return db.StoreProof(ctx, ref, proofMessage)
@@ -135,25 +155,26 @@ func (db *PoetDb) GetProofRef(poetID []byte, roundID string) (types.PoetProofRef
 }
 
 // GetProofMessage returns the originally received PoET proof message.
-func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
+func (db *PoetDb) ProofMessage(proofRef types.PoetProofRef) (*types.PoetProofMessage, error) {
 	proof, err := poets.Get(db.sqlDB, proofRef)
 	if err != nil {
-		return proof, fmt.Errorf("get proof from store: %w", err)
+		return nil, fmt.Errorf("get proof from store: %w", err)
+	}
+	var proofMessage types.PoetProofMessage
+	if err := codec.Decode(proof, &proofMessage); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
 	}
 
-	return proof, nil
+	return &proofMessage, nil
 }
 
 // Proof returns full proof.
 func (db *PoetDb) Proof(proofRef types.PoetProofRef) (*types.PoetProof, *types.Hash32, error) {
-	proofMessageBytes, err := db.GetProofMessage(proofRef)
+	proofMessage, err := db.ProofMessage(proofRef)
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
+		return nil, nil, err
 	}
-	var proofMessage types.PoetProofMessage
-	if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
-	}
+
 	return &proofMessage.PoetProof, &proofMessage.Statement, nil
 }
 

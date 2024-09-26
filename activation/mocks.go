@@ -2113,6 +2113,67 @@ func (c *MockcertifierServiceDeleteCertificateCall) DoAndReturn(f func(types.Nod
 	return c
 }
 
+// MockPoetDbStorer is a mock of PoetDbStorer interface.
+type MockPoetDbStorer struct {
+	ctrl     *gomock.Controller
+	recorder *MockPoetDbStorerMockRecorder
+}
+
+// MockPoetDbStorerMockRecorder is the mock recorder for MockPoetDbStorer.
+type MockPoetDbStorerMockRecorder struct {
+	mock *MockPoetDbStorer
+}
+
+// NewMockPoetDbStorer creates a new mock instance.
+func NewMockPoetDbStorer(ctrl *gomock.Controller) *MockPoetDbStorer {
+	mock := &MockPoetDbStorer{ctrl: ctrl}
+	mock.recorder = &MockPoetDbStorerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPoetDbStorer) EXPECT() *MockPoetDbStorerMockRecorder {
+	return m.recorder
+}
+
+// StorePoetProof mocks base method.
+func (m *MockPoetDbStorer) StorePoetProof(ctx context.Context, proofMessage *types.PoetProofMessage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StorePoetProof", ctx, proofMessage)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StorePoetProof indicates an expected call of StorePoetProof.
+func (mr *MockPoetDbStorerMockRecorder) StorePoetProof(ctx, proofMessage any) *MockPoetDbStorerStorePoetProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StorePoetProof", reflect.TypeOf((*MockPoetDbStorer)(nil).StorePoetProof), ctx, proofMessage)
+	return &MockPoetDbStorerStorePoetProofCall{Call: call}
+}
+
+// MockPoetDbStorerStorePoetProofCall wrap *gomock.Call
+type MockPoetDbStorerStorePoetProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockPoetDbStorerStorePoetProofCall) Return(arg0 error) *MockPoetDbStorerStorePoetProofCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockPoetDbStorerStorePoetProofCall) Do(f func(context.Context, *types.PoetProofMessage) error) *MockPoetDbStorerStorePoetProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockPoetDbStorerStorePoetProofCall) DoAndReturn(f func(context.Context, *types.PoetProofMessage) error) *MockPoetDbStorerStorePoetProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockpoetDbAPI is a mock of poetDbAPI interface.
 type MockpoetDbAPI struct {
 	ctrl     *gomock.Controller
