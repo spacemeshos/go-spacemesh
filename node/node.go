@@ -1560,19 +1560,11 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Malfeasance:
-		service := v2alpha1.NewMalfeasanceService(
-			app.db,
-			app.addLogger(MalfeasanceLogger, lg).Zap(),
-			app.malfeasanceHandler,
-		)
+		service := v2alpha1.NewMalfeasanceService(app.db, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.MalfeasanceStream:
-		service := v2alpha1.NewMalfeasanceStreamService(
-			app.db,
-			app.addLogger(MalfeasanceLogger, lg).Zap(),
-			app.malfeasanceHandler,
-		)
+		service := v2alpha1.NewMalfeasanceStreamService(app.db, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Network:

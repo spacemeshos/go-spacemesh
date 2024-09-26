@@ -1,18 +1,26 @@
 package v2alpha1
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
+	"slices"
 	"strconv"
 	"time"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -27,22 +35,16 @@ type malfeasanceInfo interface {
 	Info(data []byte) (map[string]string, error)
 }
 
-func NewMalfeasanceService(
-	db sql.Executor,
-	logger *zap.Logger,
-	malfeasanceHandler malfeasanceInfo,
-) *MalfeasanceService {
+func NewMalfeasanceService(db sql.Executor, malfeasanceHandler malfeasanceInfo) *MalfeasanceService {
 	return &MalfeasanceService{
-		db:     db,
-		logger: logger,
-		info:   malfeasanceHandler,
+		db:   db,
+		info: malfeasanceHandler,
 	}
 }
 
 type MalfeasanceService struct {
-	db     sql.Executor
-	logger *zap.Logger
-	info   malfeasanceInfo
+	db   sql.Executor
+	info malfeasanceInfo
 }
 
 func (s *MalfeasanceService) RegisterService(server *grpc.Server) {
@@ -73,74 +75,31 @@ func (s *MalfeasanceService) List(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	rst := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, request.Limit)
+	proofs := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, request.Limit)
 	if err := identities.IterateMaliciousOps(s.db, ops, func(id types.NodeID, proof []byte, received time.Time) bool {
-		result := s.toProof(id, proof)
-		if result == nil {
+		rst := toProof(ctx, s.info, id, proof)
+		if rst == nil {
 			return true
 		}
-		rst = append(rst, result)
+		proofs = append(proofs, rst)
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return &spacemeshv2alpha1.MalfeasanceList{Proofs: rst}, nil
+	return &spacemeshv2alpha1.MalfeasanceList{Proofs: proofs}, nil
 }
 
-func (s *MalfeasanceService) toProof(id types.NodeID, proof []byte) *spacemeshv2alpha1.MalfeasanceProof {
-	properties, err := s.info.Info(proof)
-	if err != nil {
-		s.logger.Debug("failed to get malfeasance info",
-			zap.String("smesher", id.String()),
-			zap.Error(err),
-		)
-		return nil
-	}
-	domain, err := strconv.ParseUint(properties["domain"], 10, 64)
-	if err != nil {
-		s.logger.Debug("failed to parse proof domain",
-			zap.String("smesher", id.String()),
-			zap.String("domain", properties["domain"]),
-			zap.Error(err),
-		)
-		return nil
-	}
-	delete(properties, "domain")
-	proofType, err := strconv.ParseUint(properties["type"], 10, 32)
-	if err != nil {
-		s.logger.Debug("failed to parse proof type",
-			zap.String("smesher", id.String()),
-			zap.String("type", properties["type"]),
-			zap.Error(err),
-		)
-		return nil
-	}
-	delete(properties, "type")
-	return &spacemeshv2alpha1.MalfeasanceProof{
-		Smesher:    id.Bytes(),
-		Domain:     spacemeshv2alpha1.MalfeasanceProof_MalfeasanceDomain(domain),
-		Type:       uint32(proofType),
-		Properties: properties,
-	}
-}
-
-func NewMalfeasanceStreamService(
-	db sql.Executor,
-	logger *zap.Logger,
-	malfeasanceHandler malfeasanceInfo,
-) *MalfeasanceStreamService {
+func NewMalfeasanceStreamService(db sql.Executor, malfeasanceHandler malfeasanceInfo) *MalfeasanceStreamService {
 	return &MalfeasanceStreamService{
-		db:     db,
-		logger: logger,
-		info:   malfeasanceHandler,
+		db:   db,
+		info: malfeasanceHandler,
 	}
 }
 
 type MalfeasanceStreamService struct {
-	db     sql.Executor
-	logger *zap.Logger
-	info   malfeasanceInfo
+	db   sql.Executor
+	info malfeasanceInfo
 }
 
 func (s *MalfeasanceStreamService) RegisterService(server *grpc.Server) {
@@ -159,7 +118,155 @@ func (s *MalfeasanceStreamService) Stream(
 	request *spacemeshv2alpha1.MalfeasanceStreamRequest,
 	stream spacemeshv2alpha1.MalfeasanceStreamService_StreamServer,
 ) error {
-	return nil
+	var sub *events.BufferedSubscription[events.EventMalfeasance]
+	if request.Watch {
+		matcher := malfeasanceMatcher{request}
+		var err error
+		sub, err = events.SubscribeMatched(matcher.match)
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		defer sub.Close()
+		if err := stream.SendHeader(metadata.MD{}); err != nil {
+			return status.Errorf(codes.Unavailable, "can't send header")
+		}
+	}
+
+	dbChan := make(chan *spacemeshv2alpha1.MalfeasanceProof, 100)
+	errChan := make(chan error, 1)
+
+	ops, err := toMalfeasanceOps(&spacemeshv2alpha1.MalfeasanceRequest{
+		SmesherId: request.SmesherId,
+	})
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	// send db data to chan to avoid buffer overflow
+	go func() {
+		defer close(dbChan)
+		if err := identities.IterateMaliciousOps(s.db, ops,
+			func(id types.NodeID, proof []byte, received time.Time) bool {
+				rst := toProof(stream.Context(), s.info, id, proof)
+				if rst == nil {
+					return true
+				}
+
+				select {
+				case dbChan <- rst:
+					return true
+				case <-stream.Context().Done():
+					// exit if the stream is canceled
+					return false
+				}
+			},
+		); err != nil {
+			errChan <- status.Error(codes.Internal, err.Error())
+			return
+		}
+	}()
+
+	var eventsOut <-chan events.EventMalfeasance
+	var eventsFull <-chan struct{}
+	if sub != nil {
+		eventsOut = sub.Out()
+		eventsFull = sub.Full()
+	}
+
+	for {
+		select {
+		case rst := <-eventsOut:
+			proof := toProof(stream.Context(), s.info, rst.Smesher, codec.MustEncode(rst.Proof))
+			if proof == nil {
+				continue
+			}
+			err = stream.Send(proof)
+			switch {
+			case errors.Is(err, io.EOF):
+				return nil
+			case err != nil:
+				return status.Error(codes.Internal, err.Error())
+			}
+		default:
+			select {
+			case rst := <-eventsOut:
+				proof := toProof(stream.Context(), s.info, rst.Smesher, codec.MustEncode(rst.Proof))
+				if err == nil {
+					continue
+				}
+				err = stream.Send(proof)
+				switch {
+				case errors.Is(err, io.EOF):
+					return nil
+				case err != nil:
+					return status.Error(codes.Internal, err.Error())
+				}
+			case <-eventsFull:
+				return status.Error(codes.Canceled, "buffer overflow")
+			case rst, ok := <-dbChan:
+				if !ok {
+					dbChan = nil
+					if sub == nil {
+						return nil
+					}
+					continue
+				}
+				err = stream.Send(rst)
+				switch {
+				case errors.Is(err, io.EOF):
+					return nil
+				case err != nil:
+					return status.Error(codes.Internal, err.Error())
+				}
+			case err := <-errChan:
+				return err
+			case <-stream.Context().Done():
+				return nil
+			}
+		}
+	}
+}
+
+func toProof(
+	ctx context.Context,
+	info malfeasanceInfo,
+	id types.NodeID,
+	proof []byte,
+) *spacemeshv2alpha1.MalfeasanceProof {
+	properties, err := info.Info(proof)
+	if err != nil {
+		ctxzap.Debug(ctx, "failed to get malfeasance info",
+			zap.String("smesher", id.String()),
+			zap.Error(err),
+		)
+		return nil
+	}
+	domain, err := strconv.ParseUint(properties["domain"], 10, 64)
+	if err != nil {
+		ctxzap.Debug(ctx, "failed to parse proof domain",
+			zap.String("smesher", id.String()),
+			zap.String("domain", properties["domain"]),
+			zap.Error(err),
+		)
+		return nil
+	}
+	delete(properties, "domain")
+	proofType, err := strconv.ParseUint(properties["type"], 10, 32)
+	if err != nil {
+		ctxzap.Debug(ctx, "failed to parse proof type",
+			zap.String("smesher", id.String()),
+			zap.String("type", properties["type"]),
+			zap.Error(err),
+		)
+		return nil
+	}
+	delete(properties, "type")
+	return &spacemeshv2alpha1.MalfeasanceProof{
+		Smesher:    id.Bytes(),
+		Domain:     spacemeshv2alpha1.MalfeasanceProof_MalfeasanceDomain(domain),
+		Type:       uint32(proofType),
+		Properties: properties,
+	}
 }
 
 func toMalfeasanceOps(filter *spacemeshv2alpha1.MalfeasanceRequest) (builder.Operations, error) {
@@ -199,4 +306,18 @@ func toMalfeasanceOps(filter *spacemeshv2alpha1.MalfeasanceRequest) (builder.Ope
 	}
 
 	return ops, nil
+}
+
+type malfeasanceMatcher struct {
+	*spacemeshv2alpha1.MalfeasanceStreamRequest
+}
+
+func (m *malfeasanceMatcher) match(event *events.EventMalfeasance) bool {
+	if len(m.SmesherId) > 0 {
+		idx := slices.IndexFunc(m.SmesherId, func(id []byte) bool { return bytes.Equal(id, event.Smesher.Bytes()) })
+		if idx == -1 {
+			return false
+		}
+	}
+	return true
 }
