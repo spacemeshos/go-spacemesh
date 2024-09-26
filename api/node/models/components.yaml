@@ -1,0 +1,44 @@
+components:
+  schemas:
+    ActivationTx:
+      type: object
+      properties:
+        ID:
+          type: string
+        SmesherID:
+          type: string
+        PublishEpoch:
+          type: integer
+          format: uint32
+        NumUnits:
+          type: integer
+          format: uint32
+        TickCount:
+          type: integer
+          format: uint64
+        Weight:
+          type: integer
+          format: uint64
+        Sequence:
+          type: integer
+          format: uint64
+      required:
+        - PublishEpoch
+        - NumUnits
+        - TickCount
+        - SmesherID
+        - ID
+        - Weight
+    NodeID:
+      type: string
+      format: hex
+      minLength: 64
+      maxLength: 64
+    ATXID:
+      type: string
+      format: hex
+      minLength: 64
+      maxLength: 64
+    EpochID:
+      type: integer
+      format: uint32

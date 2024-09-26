@@ -6,6 +6,7 @@ GOLANGCI_LINT_VERSION := v1.59.0
 GOTESTSUM_VERSION := v1.12.0
 GOSCALE_VERSION := v1.2.0
 MOCKGEN_VERSION := v0.4.0
+OAPI_CODEGEN_VERSION := v2.4.0
 
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
@@ -60,6 +61,7 @@ install:
 	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+	go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION)
 .PHONY: install
 
 build: go-spacemesh get-profiler get-postrs-service

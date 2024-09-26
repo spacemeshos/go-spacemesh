@@ -38,6 +38,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
+	nodeclient "github.com/spacemeshos/go-spacemesh/api/node/client"
+	nodeserver "github.com/spacemeshos/go-spacemesh/api/node/server"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -382,6 +384,7 @@ type App struct {
 	grpcPostServer    *grpcserver.Server
 	grpcTLSServer     *grpcserver.Server
 	jsonAPIServer     *grpcserver.JSONHTTPServer
+	nodeServiceServer *http.Server
 	grpcServices      map[grpcserver.Service]grpcserver.ServiceAPI
 	pprofService      *http.Server
 	profilerService   *pyroscope.Profiler
@@ -1059,20 +1062,41 @@ func (app *App) initServices(ctx context.Context) error {
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 
-	atxBuilderLog := app.addLogger(ATXBuilderLogger, lg).Zap()
-	atxService := activation.NewDBAtxService(
-		app.db,
-		goldenATXID,
-		app.atxsdata,
-		app.validator,
-		atxBuilderLog,
-		activation.WithPostValidityDelay(app.Config.PostValidDelay),
+	var (
+		atxBuilderLog = app.addLogger(ATXBuilderLogger, lg).Zap()
+		atxService    activation.AtxService
+		atxPublisher  pubsub.Publisher
 	)
+	if server := app.Config.BaseConfig.NodeServiceAddress; server != "" {
+		logger := app.log.Zap().Named("node-svc-client")
+		cfg := &nodeclient.Config{
+			RetryWaitMin: time.Millisecond * 500,
+			RetryWaitMax: time.Second,
+			RetryMax:     10,
+		}
+		nodeServiceClient, err := nodeclient.NewNodeServiceClient(server, logger, cfg)
+		if err != nil {
+			return fmt.Errorf("creating node service client: %w", err)
+		}
+		atxService = nodeServiceClient
+		atxPublisher = nodeServiceClient
+	} else {
+		atxService = activation.NewDBAtxService(
+			app.db,
+			goldenATXID,
+			app.atxsdata,
+			app.validator,
+			atxBuilderLog,
+			activation.WithPostValidityDelay(app.Config.PostValidDelay),
+		)
+		atxPublisher = app.host
+	}
+
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
 		app.localDB,
 		atxService,
-		app.host,
+		atxPublisher,
 		app.validator,
 		nipostBuilder,
 		app.clock,
@@ -1821,6 +1845,24 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			})),
 		)
 	}
+
+	if len(app.Config.API.NodeServiceListener) > 0 {
+		app.log.Zap().Info("starting node service", zap.String("address", app.Config.API.NodeServiceListener))
+		lis, err := net.Listen("tcp", app.Config.API.NodeServiceListener)
+		if err != nil {
+			return err
+		}
+		golden := types.ATXID(app.Config.Genesis.GoldenATX())
+		logger := app.log.Zap().Named("atx-service")
+		actSvc := activation.NewDBAtxService(app.db, golden, app.atxsdata, app.validator, logger)
+		server := nodeserver.NewServer(actSvc, app.host, logger)
+
+		app.nodeServiceServer = &http.Server{
+			Handler: server.IntoHandler(http.NewServeMux()),
+		}
+		app.eg.Go(func() error { return app.nodeServiceServer.Serve(lis) })
+	}
+
 	return nil
 }
 

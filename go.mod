@@ -30,6 +30,7 @@ require (
 	github.com/multiformats/go-multiaddr v0.13.0
 	github.com/multiformats/go-varint v0.0.7
 	github.com/natefinch/atomic v1.0.1
+	github.com/oapi-codegen/runtime v1.1.1
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
 	github.com/prometheus/client_golang v1.20.4
 	github.com/prometheus/client_model v0.6.1
@@ -78,6 +79,7 @@ require (
 	github.com/anacrolix/missinggo v1.2.1 // indirect
 	github.com/anacrolix/missinggo/perf v1.0.0 // indirect
 	github.com/anacrolix/sync v0.3.0 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/c0mm4nd/go-ripemd v0.0.0-20200326052756-bd1759ad7d10 // indirect
