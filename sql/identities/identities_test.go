@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,7 +17,7 @@ import (
 )
 
 func TestMalicious(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	nodeID := types.NodeID{1, 1, 1, 1}
 	mal, err := identities.IsMalicious(db, nodeID)
@@ -59,7 +60,7 @@ func TestMalicious(t *testing.T) {
 }
 
 func Test_GetMalicious(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	got, err := identities.GetMalicious(db)
 	require.NoError(t, err)
 	require.Nil(t, got)
@@ -77,7 +78,7 @@ func Test_GetMalicious(t *testing.T) {
 }
 
 func TestLoadMalfeasanceBlob(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 
 	nid1 := types.RandomNodeID()
@@ -122,7 +123,7 @@ func TestMarriageATX(t *testing.T) {
 	t.Parallel()
 	t.Run("not married", func(t *testing.T) {
 		t.Parallel()
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 
 		id := types.RandomNodeID()
 		_, err := identities.MarriageATX(db, id)
@@ -130,7 +131,7 @@ func TestMarriageATX(t *testing.T) {
 	})
 	t.Run("married", func(t *testing.T) {
 		t.Parallel()
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 
 		id := types.RandomNodeID()
 		marriage := identities.MarriageData{
@@ -149,7 +150,7 @@ func TestMarriageATX(t *testing.T) {
 func TestMarriage(t *testing.T) {
 	t.Parallel()
 
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	id := types.RandomNodeID()
 	marriage := identities.MarriageData{
@@ -168,7 +169,7 @@ func TestEquivocationSet(t *testing.T) {
 	t.Parallel()
 	t.Run("equivocation set of married IDs", func(t *testing.T) {
 		t.Parallel()
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
@@ -195,7 +196,7 @@ func TestEquivocationSet(t *testing.T) {
 	})
 	t.Run("equivocation set for unmarried ID contains itself only", func(t *testing.T) {
 		t.Parallel()
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		id := types.RandomNodeID()
 		set, err := identities.EquivocationSet(db, id)
 		require.NoError(t, err)
@@ -203,7 +204,7 @@ func TestEquivocationSet(t *testing.T) {
 	})
 	t.Run("can't escape the marriage", func(t *testing.T) {
 		t.Parallel()
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
 			types.RandomNodeID(),
@@ -236,7 +237,7 @@ func TestEquivocationSet(t *testing.T) {
 		}
 	})
 	t.Run("married doesn't become malicious immediately", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		atx := types.RandomATXID()
 		id := types.RandomNodeID()
 		require.NoError(t, identities.SetMarriage(db, id, &identities.MarriageData{ATX: atx}))
@@ -256,7 +257,7 @@ func TestEquivocationSet(t *testing.T) {
 	})
 	t.Run("all IDs in equivocation set are malicious if one is", func(t *testing.T) {
 		t.Parallel()
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		atx := types.RandomATXID()
 		ids := []types.NodeID{
 			types.RandomNodeID(),
@@ -280,7 +281,7 @@ func TestEquivocationSetByMarriageATX(t *testing.T) {
 	t.Parallel()
 
 	t.Run("married IDs", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		ids := []types.NodeID{
 			types.RandomNodeID(),
 			types.RandomNodeID(),
@@ -296,9 +297,104 @@ func TestEquivocationSetByMarriageATX(t *testing.T) {
 		require.Equal(t, ids, set)
 	})
 	t.Run("empty set", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		set, err := identities.EquivocationSetByMarriageATX(db, types.RandomATXID())
 		require.NoError(t, err)
 		require.Empty(t, set)
+	})
+}
+
+func Test_BloomFilter(t *testing.T) {
+	t.Run("not married", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+		got, err := identities.GetMalicious(db)
+		require.NoError(t, err)
+		require.Nil(t, got)
+
+		const numBad = 11
+		bad := make([]types.NodeID, 0, numBad*2)
+		addSome := func() {
+			for i := 0; i < numBad; i++ {
+				nid := types.NodeID{byte(i + 1)}
+				bad = append(bad, nid)
+				require.NoError(t, identities.SetMalicious(
+					db, nid, types.RandomBytes(11), time.Now().Local()))
+			}
+		}
+
+		check := func() {
+			for _, nodeID := range bad {
+				has, err := identities.IsMalicious(db, nodeID)
+				require.NoError(t, err)
+				require.True(t, has)
+			}
+			n := db.QueryCount()
+			for range 5 {
+				has, err := identities.IsMalicious(db, types.RandomNodeID())
+				require.NoError(t, err)
+				require.False(t, has)
+			}
+			require.Equal(t, n, db.QueryCount())
+		}
+
+		addSome()
+
+		bf := identities.StartBloomFilter(db, zaptest.NewLogger(t))
+		require.Eventually(t, func() bool {
+			return bf.Ready()
+		}, time.Second, 10*time.Millisecond)
+
+		check()
+		require.Equal(t, sql.BloomStats{
+			Loaded:      numBad,
+			NumPositive: numBad,
+			NumNegative: 5,
+		}, bf.Stats())
+
+		addSome()
+		require.Eventually(t, func() bool {
+			return bf.Stats().Added == numBad
+		}, time.Second, 10*time.Millisecond)
+		check()
+		require.Equal(t, sql.BloomStats{
+			Loaded:      numBad,
+			Added:       numBad,
+			NumPositive: numBad * 3, // 2nd pass rechecks the initial set of IDs
+			NumNegative: 10,
+		}, bf.Stats())
+	})
+
+	t.Run("married", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+		bf := identities.StartBloomFilter(db, zaptest.NewLogger(t))
+		require.Eventually(t, func() bool {
+			return bf.Ready()
+		}, time.Second, 10*time.Millisecond)
+		atx := types.RandomATXID()
+		ids := []types.NodeID{
+			types.RandomNodeID(),
+			types.RandomNodeID(),
+		}
+		for i, id := range ids {
+			require.NoError(t, identities.SetMarriage(
+				db, id, &identities.MarriageData{ATX: atx, Index: i}))
+		}
+
+		// Each member of the equivocation set needs to be added to the Bloom
+		// filter, as it has no false negatives and if an ID is absent from the
+		// filter, it's considered not to be malicious.
+		require.NoError(t, identities.SetMalicious(db, ids[0], []byte("proof"), time.Now()))
+
+		require.Eventually(t, func() bool {
+			return bf.Stats().Added == 2
+		}, time.Second, 10*time.Millisecond)
+
+		for _, id := range ids {
+			malicious, err := identities.IsMalicious(db, id)
+			require.NoError(t, err)
+			require.True(t, malicious)
+		}
 	})
 }

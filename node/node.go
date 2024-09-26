@@ -74,6 +74,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	localmigrations "github.com/spacemeshos/go-spacemesh/sql/localsql/migrations"
@@ -1989,6 +1990,8 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	{
 		warmupLog := app.log.Zap().Named("warmup")
+		atxs.StartBloomFilter(app.db, warmupLog)
+		identities.StartBloomFilter(app.db, warmupLog)
 		app.log.Info("starting cache warmup")
 		applied, err := layers.GetLastApplied(app.db)
 		if err != nil {

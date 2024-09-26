@@ -2,10 +2,12 @@ package atxs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -15,6 +17,11 @@ import (
 const (
 	CacheKindEpochATXs sql.QueryCacheKind = "epoch-atxs"
 	CacheKindATXBlob   sql.QueryCacheKind = "atx-blob"
+	// Bloom filter size is < 115 MiB while below 100M ATXs.
+	// TODO: adjust Bloom filter settings after ATX merge & checkpointing.
+	BloomFilterFalsePositiveRate = 0.01
+	BloomFilterMinSize           = 100_000_000
+	BloomFilterExtraCoef         = 1.2
 )
 
 // Query to retrieve ATXs.
@@ -120,8 +127,26 @@ func GetByEpochAndNodeID(
 	return id, nil
 }
 
+// StartBloomFilter intializes and loads the bloom filter for ATXs.
+func StartBloomFilter(db sql.StateDatabase, logger *zap.Logger) *sql.DBBloomFilter {
+	bf := sql.NewDBBloomFilter(
+		logger, "atxs", "select id from atxs", "id",
+		BloomFilterMinSize, BloomFilterExtraCoef, BloomFilterFalsePositiveRate)
+	bf.Start(db)
+	db.AddSet(bf)
+	return bf
+}
+
 // Has checks if an ATX exists by a given ATX ID.
+// It tries to do so using Bloom filter first, and falls back to a direct query if the filter is not available.
 func Has(db sql.Executor, id types.ATXID) (bool, error) {
+	has, err := sql.Contains(db, "atxs", id[:])
+	if err == nil {
+		return has, nil
+	} else if !errors.Is(err, sql.ErrNoSet) {
+		return false, fmt.Errorf("check if have id %s: %w", id, err)
+	}
+
 	rows, err := db.Exec("select 1 from atxs where id = ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
@@ -486,7 +511,12 @@ func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
 
-	return AddBlob(db, atx.ID(), blob.Blob, blob.Version)
+	if err := AddBlob(db, atx.ID(), blob.Blob, blob.Version); err != nil {
+		return err
+	}
+
+	sql.AddToSet(db, "atxs", atx.ID().Bytes())
+	return err
 }
 
 func AddBlob(db sql.Executor, id types.ATXID, blob []byte, version types.AtxVersion) error {

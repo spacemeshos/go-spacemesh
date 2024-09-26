@@ -5,6 +5,7 @@ go 1.22.4
 require (
 	cloud.google.com/go/storage v1.43.0
 	github.com/ALTree/bigfloat v0.2.0
+	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240913055630-bfe8736306b4
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
@@ -35,6 +36,7 @@ require (
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.59.1
 	github.com/quic-go/quic-go v0.46.0
+	github.com/rqlite/sql v0.0.0-20240312185922-ffac88a740bd
 	github.com/rs/cors v1.11.1
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
@@ -80,6 +82,7 @@ require (
 	github.com/anacrolix/sync v0.3.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bits-and-blooms/bitset v1.10.0 // indirect
 	github.com/c0mm4nd/go-ripemd v0.0.0-20200326052756-bd1759ad7d10 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
