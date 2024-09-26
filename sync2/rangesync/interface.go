@@ -9,8 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go -exclude_interfaces=SyncMessage,Conduit
-
 // RangeInfo contains information about a range of items in the OrderedSet as returned by
 // OrderedSet.GetRangeInfo.
 type RangeInfo struct {
