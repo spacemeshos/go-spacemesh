@@ -83,3 +83,17 @@ func TestFilterFrom_WithModifiers(t *testing.T) {
 	actual := FilterFrom(operations)
 	require.Equal(t, expected, actual)
 }
+
+func TestFilterFrom_NotNull(t *testing.T) {
+	t.Parallel()
+	operations := Operations{
+		Filter: []Op{
+			{Field: Proof, Token: IsNotNull},
+			{Field: Id, Token: Eq, Value: 1},
+		},
+	}
+
+	expected := " where proof is not null and id = ?1"
+	actual := FilterFrom(operations)
+	require.Equal(t, expected, actual)
+}

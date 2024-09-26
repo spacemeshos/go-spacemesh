@@ -164,14 +164,18 @@ func (s *MalfeasanceStreamService) Stream(
 
 func toMalfeasanceOps(filter *spacemeshv2alpha1.MalfeasanceRequest) (builder.Operations, error) {
 	ops := builder.Operations{}
-	if filter == nil {
-		return ops, nil
-	}
-
 	ops.Filter = append(ops.Filter, builder.Op{
 		Field: builder.Proof,
 		Token: builder.IsNotNull,
 	})
+	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+		Key:   builder.OrderBy,
+		Value: builder.Smesher,
+	})
+
+	if filter == nil {
+		return ops, nil
+	}
 
 	if len(filter.SmesherId) > 0 {
 		ops.Filter = append(ops.Filter, builder.Op{
@@ -180,11 +184,6 @@ func toMalfeasanceOps(filter *spacemeshv2alpha1.MalfeasanceRequest) (builder.Ope
 			Value: filter.SmesherId,
 		})
 	}
-
-	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
-		Key:   builder.OrderBy,
-		Value: "id",
-	})
 
 	if filter.Limit != 0 {
 		ops.Modifiers = append(ops.Modifiers, builder.Modifier{

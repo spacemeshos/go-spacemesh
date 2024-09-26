@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
@@ -301,4 +302,97 @@ func TestEquivocationSetByMarriageATX(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, set)
 	})
+}
+
+func Test_IterateMaliciousOps(t *testing.T) {
+	db := statesql.InMemory()
+	tt := []struct {
+		id    types.NodeID
+		proof []byte
+	}{
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+	}
+
+	for _, tc := range tt {
+		err := identities.SetMalicious(db, tc.id, tc.proof, time.Now())
+		require.NoError(t, err)
+	}
+
+	var got []struct {
+		id    types.NodeID
+		proof []byte
+	}
+	err := identities.IterateMaliciousOps(db, builder.Operations{},
+		func(id types.NodeID, proof []byte, _ time.Time) bool {
+			got = append(got, struct {
+				id    types.NodeID
+				proof []byte
+			}{id, proof})
+			return true
+		})
+	require.NoError(t, err)
+	require.ElementsMatch(t, tt, got)
+}
+
+func Test_IterateMaliciousOpsWithFilter(t *testing.T) {
+	db := statesql.InMemory()
+	tt := []struct {
+		id    types.NodeID
+		proof []byte
+	}{
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+		{
+			types.RandomNodeID(),
+			nil,
+		},
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+	}
+
+	for _, tc := range tt {
+		err := identities.SetMalicious(db, tc.id, tc.proof, time.Now())
+		require.NoError(t, err)
+	}
+
+	var got []struct {
+		id    types.NodeID
+		proof []byte
+	}
+	ops := builder.Operations{}
+	ops.Filter = append(ops.Filter, builder.Op{
+		Field: builder.Smesher,
+		Token: builder.In,
+		Value: [][]byte{tt[0].id.Bytes(), tt[1].id.Bytes()}, // first two ids
+	})
+	ops.Filter = append(ops.Filter, builder.Op{
+		Field: builder.Proof,
+		Token: builder.IsNotNull, // only entries which have a proof
+	})
+
+	err := identities.IterateMaliciousOps(db, ops, func(id types.NodeID, proof []byte, _ time.Time) bool {
+		got = append(got, struct {
+			id    types.NodeID
+			proof []byte
+		}{id, proof})
+		return true
+	})
+	require.NoError(t, err)
+	// only the first element should be in the result
+	require.ElementsMatch(t, tt[:1], got)
 }

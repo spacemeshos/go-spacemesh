@@ -69,7 +69,7 @@ func IterateMaliciousOps(
 	fn func(types.NodeID, []byte, time.Time) bool,
 ) error {
 	_, err := db.Exec(
-		"select id, proof, received from identities"+builder.FilterFrom(operations),
+		"select pubkey, proof, received from identities"+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
 		func(stmt *sql.Statement) bool {
 			var id types.NodeID

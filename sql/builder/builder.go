@@ -137,22 +137,26 @@ func FilterFrom(operations Operations) string {
 				}
 			}
 			queryBuilder.WriteString(" )")
-		} else {
-			if op.Token == In {
-				values, ok := op.Value.([][]byte)
-				if !ok {
-					panic("value for 'In' token must be a slice of []byte")
-				}
-				params := make([]string, len(values))
-				for j := range values {
-					params[j] = fmt.Sprintf("?%d", bindIndex)
-					bindIndex++
-				}
-				fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", op.Prefix, op.Field, op.Token, strings.Join(params, ", "))
-			} else {
-				fmt.Fprintf(&queryBuilder, " %s%s %s ?%d", op.Prefix, op.Field, op.Token, bindIndex)
+			continue
+		}
+
+		switch op.Token {
+		case In:
+			values, ok := op.Value.([][]byte)
+			if !ok {
+				panic("value for 'In' token must be a slice of []byte")
+			}
+			params := make([]string, len(values))
+			for j := range values {
+				params[j] = fmt.Sprintf("?%d", bindIndex)
 				bindIndex++
 			}
+			fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", op.Prefix, op.Field, op.Token, strings.Join(params, ", "))
+		case IsNotNull:
+			fmt.Fprintf(&queryBuilder, " %s%s %s", op.Prefix, op.Field, op.Token)
+		default:
+			fmt.Fprintf(&queryBuilder, " %s%s %s ?%d", op.Prefix, op.Field, op.Token, bindIndex)
+			bindIndex++
 		}
 	}
 
@@ -193,6 +197,8 @@ func bindValue(stmt *sql.Statement, bindIndex int, value any) int {
 			stmt.BindBytes(bindIndex, v)
 			bindIndex++
 		}
+	case nil:
+		// do nothing
 	default:
 		panic(fmt.Sprintf("unexpected type %T", value))
 	}
