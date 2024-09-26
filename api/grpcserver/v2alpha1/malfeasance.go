@@ -85,7 +85,7 @@ func (s *MalfeasanceService) List(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return &spacemeshv2alpha1.MalfeasanceList{Malfeasances: rst}, nil
+	return &spacemeshv2alpha1.MalfeasanceList{Proofs: rst}, nil
 }
 
 func (s *MalfeasanceService) toProof(id types.NodeID, proof []byte) *spacemeshv2alpha1.MalfeasanceProof {
