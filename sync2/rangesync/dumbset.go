@@ -125,7 +125,7 @@ func (ds *dumbSet) Add(ctx context.Context, id types.KeyBytes) error {
 }
 
 func (ds *dumbSet) seq(n int) types.Seq {
-	if n < -0 || n > len(ds.keys) {
+	if n < 0 || n > len(ds.keys) {
 		panic("bad index")
 	}
 	return types.Seq(func(yield func(types.KeyBytes, error) bool) {
