@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"go.uber.org/zap"
@@ -90,6 +91,24 @@ func (h *Handler) countProof(mp *wire.MalfeasanceProof) {
 
 func (h *Handler) countInvalidProof(p *wire.MalfeasanceProof) {
 	h.handlers[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
+}
+
+func (h *Handler) Info(data []byte) (map[string]string, error) {
+	var p wire.MalfeasanceProof
+	if err := codec.Decode(data, &p); err != nil {
+		return nil, fmt.Errorf("decode malfeasance proof: %w", err)
+	}
+	mh, ok := h.handlers[MalfeasanceType(p.Proof.Type)]
+	if !ok {
+		return nil, fmt.Errorf("unknown malfeasance type %d", p.Proof.Type)
+	}
+	properties, err := mh.Info(p.Proof.Data)
+	if err != nil {
+		return nil, fmt.Errorf("malfeasance info: %w", err)
+	}
+	properties["domain"] = "0" // for malfeasance V1 there are no domains
+	properties["type"] = strconv.FormatUint(uint64(p.Proof.Type), 10)
+	return properties, nil
 }
 
 // HandleSyncedMalfeasanceProof is the sync validator for MalfeasanceProof.

@@ -17,6 +17,7 @@ type tortoise interface {
 
 type MalfeasanceHandler interface {
 	Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error)
+	Info(data wire.ProofData) (map[string]string, error)
 	ReportProof(vec *prometheus.CounterVec)
 	ReportInvalidProof(vec *prometheus.CounterVec)
 }

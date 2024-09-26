@@ -2,10 +2,12 @@ package v2alpha1
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,12 +18,31 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
-func NewMalfeasanceService(db sql.Executor) *MalfeasanceService {
-	return &MalfeasanceService{db: db}
+const (
+	Malfeasance       = "malfeasance_v2alpha1"
+	MalfeasanceStream = "malfeasance_stream_v2alpha1"
+)
+
+type malfeasanceInfo interface {
+	Info(data []byte) (map[string]string, error)
+}
+
+func NewMalfeasanceService(
+	db sql.Executor,
+	logger *zap.Logger,
+	malfeasanceHandler malfeasanceInfo,
+) *MalfeasanceService {
+	return &MalfeasanceService{
+		db:     db,
+		logger: logger,
+		info:   malfeasanceHandler,
+	}
 }
 
 type MalfeasanceService struct {
-	db sql.Executor
+	db     sql.Executor
+	logger *zap.Logger
+	info   malfeasanceInfo
 }
 
 func (s *MalfeasanceService) RegisterService(server *grpc.Server) {
@@ -54,15 +75,11 @@ func (s *MalfeasanceService) List(
 
 	rst := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, request.Limit)
 	if err := identities.IterateMaliciousOps(s.db, ops, func(id types.NodeID, proof []byte, received time.Time) bool {
-		// TODO (mafa): fetch info about proof from malfeasance service
-		proofType := uint32(0)
-		properties := make(map[string]string)
-		rst = append(rst, &spacemeshv2alpha1.MalfeasanceProof{
-			Smesher:    id.Bytes(),
-			Domain:     spacemeshv2alpha1.MalfeasanceProof_DOMAIN_UNSPECIFIED,
-			Type:       proofType,
-			Properties: properties,
-		})
+		result := s.toProof(id, proof)
+		if result == nil {
+			return true
+		}
+		rst = append(rst, result)
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -71,12 +88,59 @@ func (s *MalfeasanceService) List(
 	return &spacemeshv2alpha1.MalfeasanceList{Malfeasances: rst}, nil
 }
 
-func NewMalfeasanceStreamService(db sql.Executor) *MalfeasanceStreamService {
-	return &MalfeasanceStreamService{db: db}
+func (s *MalfeasanceService) toProof(id types.NodeID, proof []byte) *spacemeshv2alpha1.MalfeasanceProof {
+	properties, err := s.info.Info(proof)
+	if err != nil {
+		s.logger.Debug("failed to get malfeasance info",
+			zap.String("smesher", id.String()),
+			zap.Error(err),
+		)
+		return nil
+	}
+	domain, err := strconv.ParseUint(properties["domain"], 10, 64)
+	if err != nil {
+		s.logger.Debug("failed to parse proof domain",
+			zap.String("smesher", id.String()),
+			zap.String("domain", properties["domain"]),
+			zap.Error(err),
+		)
+		return nil
+	}
+	delete(properties, "domain")
+	proofType, err := strconv.ParseUint(properties["type"], 10, 32)
+	if err != nil {
+		s.logger.Debug("failed to parse proof type",
+			zap.String("smesher", id.String()),
+			zap.String("type", properties["type"]),
+			zap.Error(err),
+		)
+		return nil
+	}
+	delete(properties, "type")
+	return &spacemeshv2alpha1.MalfeasanceProof{
+		Smesher:    id.Bytes(),
+		Domain:     spacemeshv2alpha1.MalfeasanceProof_MalfeasanceDomain(domain),
+		Type:       uint32(proofType),
+		Properties: properties,
+	}
+}
+
+func NewMalfeasanceStreamService(
+	db sql.Executor,
+	logger *zap.Logger,
+	malfeasanceHandler malfeasanceInfo,
+) *MalfeasanceStreamService {
+	return &MalfeasanceStreamService{
+		db:     db,
+		logger: logger,
+		info:   malfeasanceHandler,
+	}
 }
 
 type MalfeasanceStreamService struct {
-	db sql.Executor
+	db     sql.Executor
+	logger *zap.Logger
+	info   malfeasanceInfo
 }
 
 func (s *MalfeasanceStreamService) RegisterService(server *grpc.Server) {
