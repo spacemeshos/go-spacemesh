@@ -22,6 +22,8 @@ type Config struct {
 	JSONListener           string    `mapstructure:"grpc-json-listener"`
 	JSONCorsAllowedOrigins []string  `mapstructure:"grpc-cors-allowed-origins"`
 
+	NodeServiceListener string `mapstructure:"node-service-listener"`
+
 	SmesherStreamInterval time.Duration `mapstructure:"smesherstreaminterval"`
 }
 

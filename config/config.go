@@ -151,6 +151,10 @@ type BaseConfig struct {
 	// Note: There is always one valid version at any given time.
 	// ATX V1 starts with epoch 0 unless configured otherwise.
 	AtxVersions activation.AtxVersions `mapstructure:"atx-versions"`
+
+	// Address of the node serivce
+	// TODO: add better description.
+	NodeServiceAddress string `mapstructure:"node-service-address"`
 }
 
 type DatabaseQueryCacheSizes struct {

@@ -1,0 +1,24 @@
+version: '3'
+
+services:
+  activation-service:
+    image: spacemeshos/go-spacemesh-dev:activation-service-poc.0
+    command: ["-c", "/config.json", "--node-service-address", "http://node-service:9099"]
+    volumes:
+      - /tmp/spacemesh-client:/tmp/spacemesh-client
+      - ./config.standalone.client.json:/config.json
+    networks:
+      - spacemesh-net
+
+  node-service:
+    image: spacemeshos/go-spacemesh-dev:activation-service-poc.0
+    command: ["-c", "/config.json"]
+    volumes:
+      - /tmp/spacemesh-node-service:/tmp/spacemesh-node-service
+      - ./config.standalone.node-service.json:/config.json
+    networks:
+      - spacemesh-net
+
+networks:
+  spacemesh-net:
+    driver: bridge

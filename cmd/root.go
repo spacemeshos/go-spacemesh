@@ -84,6 +84,8 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.BoolVar(&cfg.NoMainOverride, "no-main-override",
 		cfg.NoMainOverride, "force 'nomain' builds to run on the mainnet")
 
+	flagSet.StringVar(&cfg.NodeServiceAddress, "node-service-address", "", "address of the Node Service to connect to")
+
 	/** ======================== P2P Flags ========================== **/
 
 	flagSet.Var(flags.NewAddressListValue(cfg.P2P.Listen, &cfg.P2P.Listen),
