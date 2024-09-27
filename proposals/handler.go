@@ -490,7 +490,7 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Bal
 	decoded, err := h.tortoise.DecodeBallot(b.ToTortoiseData())
 	if err != nil {
 		return nil, fmt.Errorf(
-			"%w: failed to decode ballot id %s. %v",
+			"%w: failed to decode ballot id %s: %v",
 			fetch.ErrIgnore,
 			b.ID().AsHash32().ShortString(),
 			err,

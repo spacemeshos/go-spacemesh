@@ -8,7 +8,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 Ensure you are running v1.6.x before upgrading to v1.7.0, if you skip v1.6.x your node will not be able to fully migrate
 its local state. Upgrading from v1.6.x to v1.7.0 will require a time consuming database migration that optimizes how
-the node stores at locally and will not allow you to downgrade to v1.6.x again.
+the node stores state locally and will not allow you to downgrade to v1.6.x again. The upgrade process requires you
+to have at least the same amount of free disk space as your current database size for the duration of the migration.
 
 The command line flag `--scan-malfeasant-atxs` has been removed. All malfeasant ATXs before 1.6.0 have been marked as
 such and the node will continue to scan new ATXs for their validity.
@@ -22,7 +23,7 @@ migration, after which it will be freed again.
 The node will now continue to try to register at all configured PoETs until the end of the registration window instead
 of giving up on non-responding PoETs after 15-20 minutes.
 
-Various minor improvements have been made to the node to improve performance and reduce the amount of log spam.
+Various smaller improvements have been made to the node to improve performance and reduce the amount of log spam.
 
 ### Features
 
@@ -52,6 +53,9 @@ are doing.
 
 * [#6274](https://github.com/spacemeshos/go-spacemesh/pull/6274) Additional queries to PoETs are now cached to reduce
   the number of requests made to PoET servers.
+
+* [#6317](https://github.com/spacemeshos/go-spacemesh/pull/6317) Improved the proposal building process. This will
+  reduce the likelihood of nodes publishing proposals late in 1:N setups.
 
 ## Release v1.6.8
 

@@ -292,7 +292,7 @@ func (h *Hare) Running() int {
 	return len(h.sessions)
 }
 
-func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
+func (h *Hare) Handler(ctx context.Context, _ p2p.Peer, buf []byte) error {
 	msg := &Message{}
 	if err := codec.Decode(buf, msg); err != nil {
 		malformedError.Inc()

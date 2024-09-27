@@ -25,7 +25,8 @@ func getCachedEntry(cache *HashPeersCache, hash types.Hash32) (HashPeers, bool) 
 func TestAdd(t *testing.T) {
 	t.Parallel()
 	t.Run("1Hash3Peers", func(t *testing.T) {
-		cache := NewHashPeersCache(10)
+		cache, err := NewHashPeersCache(10)
+		require.NoError(t, err)
 		hash := types.RandomHash()
 		peer1 := p2p.Peer("test_peer_1")
 		peer2 := p2p.Peer("test_peer_2")
@@ -49,7 +50,8 @@ func TestAdd(t *testing.T) {
 		require.Len(t, hashPeers, 3)
 	})
 	t.Run("2Hashes1Peer", func(t *testing.T) {
-		cache := NewHashPeersCache(10)
+		cache, err := NewHashPeersCache(10)
+		require.NoError(t, err)
 		hash1 := types.RandomHash()
 		hash2 := types.RandomHash()
 		peer := p2p.Peer("test_peer")
@@ -74,7 +76,8 @@ func TestAdd(t *testing.T) {
 func TestGetRandom(t *testing.T) {
 	t.Parallel()
 	t.Run("no hash peers", func(t *testing.T) {
-		cache := NewHashPeersCache(10)
+		cache, err := NewHashPeersCache(10)
+		require.NoError(t, err)
 		hash := types.RandomHash()
 		var seed [32]byte
 		binary.LittleEndian.PutUint64(seed[:], uint64(time.Now().UnixNano()))
@@ -83,7 +86,8 @@ func TestGetRandom(t *testing.T) {
 		require.Empty(t, peers)
 	})
 	t.Run("1Hash3Peers", func(t *testing.T) {
-		cache := NewHashPeersCache(10)
+		cache, err := NewHashPeersCache(10)
+		require.NoError(t, err)
 		hash := types.RandomHash()
 		peer1 := p2p.Peer("test_peer_1")
 		peer2 := p2p.Peer("test_peer_2")
@@ -110,7 +114,8 @@ func TestGetRandom(t *testing.T) {
 		require.ElementsMatch(t, []p2p.Peer{peer1, peer2, peer3}, peers)
 	})
 	t.Run("2Hashes1Peer", func(t *testing.T) {
-		cache := NewHashPeersCache(10)
+		cache, err := NewHashPeersCache(10)
+		require.NoError(t, err)
 		hash1 := types.RandomHash()
 		hash2 := types.RandomHash()
 		peer := p2p.Peer("test_peer")
@@ -138,7 +143,8 @@ func TestGetRandom(t *testing.T) {
 func TestRegisterPeerHashes(t *testing.T) {
 	t.Parallel()
 	t.Run("1Hash2Peers", func(t *testing.T) {
-		cache := NewHashPeersCache(10)
+		cache, err := NewHashPeersCache(10)
+		require.NoError(t, err)
 		hash1 := types.RandomHash()
 		hash2 := types.RandomHash()
 		hash3 := types.RandomHash()
@@ -154,7 +160,8 @@ func TestRegisterPeerHashes(t *testing.T) {
 }
 
 func TestRace(t *testing.T) {
-	cache := NewHashPeersCache(10)
+	cache, err := NewHashPeersCache(10)
+	require.NoError(t, err)
 	hash := types.RandomHash()
 	peer1 := p2p.Peer("test_peer_1")
 	peer2 := p2p.Peer("test_peer_2")

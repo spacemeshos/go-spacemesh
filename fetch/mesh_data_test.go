@@ -1003,11 +1003,12 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			client := server.New(wrapHost(mesh.Hosts()[0]), hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
-			f := NewFetch(cdb, store.New(), host,
+			f, err := NewFetch(cdb, store.New(), host,
 				WithContext(context.Background()),
 				withServers(map[string]requester{hashProtocol: client}),
 				WithConfig(cfg),
 			)
+			require.NoError(t, err)
 
 			atxValidatorMock := mocks.NewMockSyncValidator(gomock.NewController(t))
 			f.validators = &dataValidators{
