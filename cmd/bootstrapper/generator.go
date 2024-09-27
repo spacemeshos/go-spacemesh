@@ -14,6 +14,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
 	"go.uber.org/zap"
@@ -37,7 +38,7 @@ func PersistedFilename(epoch types.EpochID, suffix string) string {
 type Generator struct {
 	logger      *zap.Logger
 	fs          afero.Fs
-	client      *http.Client
+	client      *retryablehttp.Client
 	btcEndpoint string
 	smEndpoint  string
 }
@@ -56,23 +57,24 @@ func WithFilesystem(fs afero.Fs) Opt {
 	}
 }
 
-func WithHttpClient(c *http.Client) Opt {
-	return func(g *Generator) {
-		g.client = c
-	}
-}
-
 func NewGenerator(btcEndpoint, smEndpoint string, opts ...Opt) *Generator {
+	client := retryablehttp.NewClient()
+	client.RetryWaitMin = 500 * time.Millisecond
+	client.RetryWaitMax = time.Second
+	client.Backoff = retryablehttp.LinearJitterBackoff
+
 	g := &Generator{
 		logger:      zap.NewNop(),
 		fs:          afero.NewOsFs(),
-		client:      &http.Client{},
+		client:      client,
 		btcEndpoint: btcEndpoint,
 		smEndpoint:  smEndpoint,
 	}
+
 	for _, opt := range opts {
 		opt(g)
 	}
+
 	return g
 }
 
@@ -145,7 +147,7 @@ func (g *Generator) genBeacon(ctx context.Context, logger *zap.Logger) (types.Be
 func bitcoinHash(
 	ctx context.Context,
 	logger *zap.Logger,
-	client *http.Client,
+	client *retryablehttp.Client,
 	targetUrl string,
 ) (*BitcoinResponse, error) {
 	latest, err := queryBitcoin(ctx, client, targetUrl)
@@ -164,12 +166,12 @@ func bitcoinHash(
 	return confirmed, nil
 }
 
-func queryBitcoin(ctx context.Context, client *http.Client, targetUrl string) (*BitcoinResponse, error) {
+func queryBitcoin(ctx context.Context, client *retryablehttp.Client, targetUrl string) (*BitcoinResponse, error) {
 	resource, err := url.Parse(targetUrl)
 	if err != nil {
 		return nil, fmt.Errorf("parse btc url: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
+	req, err := retryablehttp.NewRequestWithContext(ctx, http.MethodGet, resource.String(), nil)
 	// some apis got over sensitive without UA set
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:125.0) Gecko/20100101 Firefox/125.0")
 	if err != nil {
@@ -178,6 +180,9 @@ func queryBitcoin(ctx context.Context, client *http.Client, targetUrl string) (*
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("http get latest bitcoin block: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetching bitcoin block unsuccessful: %s", resp.Status)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)

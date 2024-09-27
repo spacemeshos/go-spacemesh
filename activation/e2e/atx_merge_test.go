@@ -220,7 +220,8 @@ func Test_MarryAndMerge(t *testing.T) {
 	verifier, err := activation.NewPostVerifier(cfg, logger, activation.WithVerifyingOpts(verifyingOpts))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
 	eg, ctx := errgroup.WithContext(context.Background())

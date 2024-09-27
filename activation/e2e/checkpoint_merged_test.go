@@ -57,7 +57,8 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	verifier, err := activation.NewPostVerifier(cfg, logger, activation.WithVerifyingOpts(verifyingOpts))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
 	eg, ctx := errgroup.WithContext(context.Background())
@@ -290,7 +291,8 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	require.Equal(t, marriageATX.ID(), *checkpointedMerged.MarriageATX)
 
 	// 4. Spawn new ATX handler and builder using the new DB
-	poetDb = activation.NewPoetDb(newDB, logger.Named("poetDb"))
+	poetDb, err = activation.NewPoetDb(newDB, logger.Named("poetDb"))
+	require.NoError(t, err)
 	cdb = datastore.NewCachedDB(newDB, logger)
 
 	poetSvc = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)

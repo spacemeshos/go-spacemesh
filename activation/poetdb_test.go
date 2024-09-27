@@ -63,7 +63,8 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 func TestPoetDbHappyFlow(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	poetDb, err := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	r.NoError(err)
 
 	r.NoError(poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
 	ref, err := msg.Ref()
@@ -83,10 +84,11 @@ func TestPoetDbHappyFlow(t *testing.T) {
 func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	poetDb, err := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	r.NoError(err)
 	msg.PoetProof.Root = []byte("some other root")
 
-	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
+	err = poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
 	r.EqualError(
 		err,
 		fmt.Sprintf(
@@ -99,10 +101,11 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 func TestPoetDbInvalidPoetStatement(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	poetDb, err := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	r.NoError(err)
 	msg.Statement = types.CalcHash32([]byte("some other statement"))
 
-	err := poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
+	err = poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
 	r.EqualError(
 		err,
 		fmt.Sprintf(
@@ -115,9 +118,10 @@ func TestPoetDbInvalidPoetStatement(t *testing.T) {
 func TestPoetDbNonExistingKeys(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	poetDb, err := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	r.NoError(err)
 
-	_, err := poetDb.GetProofRef(msg.PoetServiceID, "0")
+	_, err = poetDb.GetProofRef(msg.PoetServiceID, "0")
 	r.EqualError(
 		err,
 		fmt.Sprintf(

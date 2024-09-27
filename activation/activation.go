@@ -54,6 +54,7 @@ type PoetConfig struct {
 	InfoCacheTTL                   time.Duration `mapstructure:"info-cache-ttl"`
 	PowParamsCacheTTL              time.Duration `mapstructure:"pow-params-cache-ttl"`
 	MaxRequestRetries              int           `mapstructure:"retry-max"`
+	PoetProofsCache                int           `mapstructure:"poet-proofs-cache"`
 }
 
 func DefaultPoetConfig() PoetConfig {
@@ -62,6 +63,7 @@ func DefaultPoetConfig() PoetConfig {
 		MaxRequestRetries: 10,
 		InfoCacheTTL:      5 * time.Minute,
 		PowParamsCacheTTL: 5 * time.Minute,
+		PoetProofsCache:   200,
 	}
 }
 

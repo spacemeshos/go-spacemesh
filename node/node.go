@@ -580,7 +580,14 @@ func (app *App) initServices(ctx context.Context) error {
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
 
-	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap())
+	poetDb, err := activation.NewPoetDb(
+		app.db,
+		app.addLogger(PoetDbLogger, lg).Zap(),
+		activation.WithCacheSize(app.Config.POET.PoetProofsCache),
+	)
+	if err != nil {
+		return fmt.Errorf("creating poet db: %w", err)
+	}
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	idStates := activation.NewIdentityStateStorage()
 
@@ -811,11 +818,14 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 
 	flog := app.addLogger(Fetcher, lg)
-	fetcher := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
+	fetcher, err := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog.Zap()),
 	)
+	if err != nil {
+		return fmt.Errorf("create fetcher: %w", err)
+	}
 	fetcherWrapped.Fetcher = fetcher
 	app.eg.Go(func() error {
 		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)

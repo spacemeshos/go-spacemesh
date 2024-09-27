@@ -120,7 +120,7 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloa
 	eg, ctx := errgroup.WithContext(ctx)
 	updates := make(chan epochUpdate, s.cfg.EpochInfoPeers)
 	if len(state) == 0 {
-		state = map[types.ATXID]int{}
+		state = atxsync.EpochSyncState{}
 	} else {
 		updates <- epochUpdate{time: lastSuccess, update: state}
 	}
@@ -195,9 +195,9 @@ func (s *Syncer) downloadEpochInfo(
 			)
 			// adding hashes to fetcher is not useful as they overflow the cache and are not used
 			// so we switch to asking best peers immediately
-			update := make(map[types.ATXID]int, len(epochData.AtxIDs))
+			update := make(atxsync.EpochSyncState, len(epochData.AtxIDs))
 			for _, atx := range epochData.AtxIDs {
-				update[atx] = 0
+				update[atx] = &atxsync.IDSyncState{Tries: 0}
 			}
 			select {
 			case <-ctx.Done():
@@ -214,7 +214,7 @@ func (s *Syncer) downloadAtxs(
 	ctx context.Context,
 	publish types.EpochID,
 	downloadUntil time.Time,
-	state map[types.ATXID]int,
+	state atxsync.EpochSyncState,
 	updates <-chan epochUpdate,
 ) error {
 	var (
@@ -277,7 +277,8 @@ func (s *Syncer) downloadAtxs(
 				downloaded[atx] = true
 				continue
 			}
-			if requests >= s.cfg.RequestsLimit {
+			// drop from memory if we already persisted info that this atx is not available
+			if requests.Tries >= s.cfg.RequestsLimit && requests.TriesPersisted() {
 				delete(state, atx)
 				continue
 			}
@@ -317,9 +318,10 @@ func (s *Syncer) downloadAtxs(
 							continue
 						}
 						if errors.Is(err, pubsub.ErrValidationReject) {
-							state[types.ATXID(hash)] = s.cfg.RequestsLimit
+							// if atx invalid there is no pointing in re-downloading it again
+							state[types.ATXID(hash)].Tries = s.cfg.RequestsLimit
 						} else {
-							state[types.ATXID(hash)]++
+							state[types.ATXID(hash)].Tries++
 						}
 					}
 				}
@@ -341,5 +343,5 @@ func (s *Syncer) downloadAtxs(
 
 type epochUpdate struct {
 	time   time.Time
-	update map[types.ATXID]int
+	update atxsync.EpochSyncState
 }

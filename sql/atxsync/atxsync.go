@@ -8,15 +8,43 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func GetSyncState(db sql.Executor, epoch types.EpochID) (map[types.ATXID]int, error) {
-	states := map[types.ATXID]int{}
+type EpochSyncState = map[types.ATXID]*IDSyncState
+
+func fromDatabase(tries int) *IDSyncState {
+	return &IDSyncState{
+		Tries:          tries,
+		persisted:      true,
+		persistedTries: tries,
+	}
+}
+
+// IDSyncState tracks how many times we tried to sync an ATX.
+type IDSyncState struct {
+	Tries          int
+	persisted      bool
+	persistedTries int
+}
+
+// TriesPersisted returns true if the number of tries is equal to the number of persisted tries.
+func (s *IDSyncState) TriesPersisted() bool {
+	return s.persisted && s.persistedTries == s.Tries
+}
+
+// SetPersisted sets the number of tries to the number of persisted tries.
+func (s *IDSyncState) setPersisted() {
+	s.persisted = true
+	s.persistedTries = s.Tries
+}
+
+func GetSyncState(db sql.Executor, epoch types.EpochID) (EpochSyncState, error) {
+	states := EpochSyncState{}
 	_, err := db.Exec("select id, requests from atx_sync_state where epoch = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(epoch))
 		}, func(stmt *sql.Statement) bool {
 			var id types.ATXID
 			stmt.ColumnBytes(0, id[:])
-			states[id] = int(stmt.ColumnInt64(1))
+			states[id] = fromDatabase(stmt.ColumnInt(1))
 			return true
 		})
 	if err != nil {
@@ -25,24 +53,25 @@ func GetSyncState(db sql.Executor, epoch types.EpochID) (map[types.ATXID]int, er
 	return states, nil
 }
 
-func SaveSyncState(db sql.Executor, epoch types.EpochID, states map[types.ATXID]int, max int) error {
+func SaveSyncState(db sql.Executor, epoch types.EpochID, states EpochSyncState, max int) error {
 	for id, requests := range states {
 		var err error
-		if requests == max {
+		if requests.Tries == max {
 			_, err = db.Exec(`delete from atx_sync_state where epoch = ?1 and id = ?2`, func(stmt *sql.Statement) {
 				stmt.BindInt64(1, int64(epoch))
 				stmt.BindBytes(2, id[:])
 			}, nil)
-		} else {
-			_, err = db.Exec(`insert into atx_sync_state 
+		} else if !requests.TriesPersisted() {
+			_, err = db.Exec(`insert into atx_sync_state
 		(epoch, id, requests) values (?1, ?2, ?3)
 		on conflict(epoch, id) do update set requests = ?3;`,
 				func(stmt *sql.Statement) {
 					stmt.BindInt64(1, int64(epoch))
 					stmt.BindBytes(2, id[:])
-					stmt.BindInt64(3, int64(requests))
+					stmt.BindInt64(3, int64(requests.Tries))
 				}, nil)
 		}
+		requests.setPersisted()
 		if err != nil {
 			return fmt.Errorf("insert synced atx id %v/%v failed: %w", epoch, id.ShortString(), err)
 		}
@@ -51,7 +80,7 @@ func SaveSyncState(db sql.Executor, epoch types.EpochID, states map[types.ATXID]
 }
 
 func SaveRequest(db sql.Executor, epoch types.EpochID, timestamp time.Time, total, downloaded int64) error {
-	_, err := db.Exec(`insert into atx_sync_requests 
+	_, err := db.Exec(`insert into atx_sync_requests
 	(epoch, timestamp, total, downloaded) values (?1, ?2, ?3, ?4)
 	on conflict(epoch) do update set timestamp = ?2, total = ?3, downloaded = ?4;`,
 		func(stmt *sql.Statement) {

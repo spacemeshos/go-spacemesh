@@ -117,7 +117,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	)
 	certClient := activation.NewCertifierClient(db, localDB, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDB, logger, certClient)
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	client, err := poetProver.Client(poetDb, poetCfg, logger, activation.WithCertifier(certifier))
 	require.NoError(t, err)
 
