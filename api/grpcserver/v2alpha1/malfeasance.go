@@ -31,10 +31,6 @@ const (
 	MalfeasanceStream = "malfeasance_stream_v2alpha1"
 )
 
-type malfeasanceInfo interface {
-	Info(data []byte) (map[string]string, error)
-}
-
 func NewMalfeasanceService(db sql.Executor, malfeasanceHandler malfeasanceInfo) *MalfeasanceService {
 	return &MalfeasanceService{
 		db:   db,
@@ -169,7 +165,7 @@ func (s *MalfeasanceStreamService) Stream(
 			select {
 			case rst := <-eventsOut:
 				proof := toProof(stream.Context(), s.info, rst.Smesher, codec.MustEncode(rst.Proof))
-				if err == nil {
+				if proof == nil {
 					continue
 				}
 				err = stream.Send(proof)
