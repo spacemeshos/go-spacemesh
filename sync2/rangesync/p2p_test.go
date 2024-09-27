@@ -117,8 +117,8 @@ func (frs *fakeRecentSet) registerAll(ctx context.Context) error {
 	return nil
 }
 
-func (frs *fakeRecentSet) Add(ctx context.Context, k types.KeyBytes) error {
-	if err := frs.OrderedSet.Add(ctx, k); err != nil {
+func (frs *fakeRecentSet) Receive(ctx context.Context, k types.KeyBytes) error {
+	if err := frs.OrderedSet.Receive(ctx, k); err != nil {
 		return err
 	}
 	frs.timestamps[string(k)] = frs.clock.Now()
@@ -237,7 +237,7 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 			require.Equal(t, tc.dumb, tr.dumb, "dumb sync")
 			require.Equal(t, tc.receivedRecent, tr.receivedItems > 0)
 			require.Equal(t, tc.sentRecent, tr.sentItems > 0)
-			st.verify()
+			st.verify(st.setA, st.setB)
 		})
 	}
 }

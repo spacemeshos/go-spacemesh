@@ -20,6 +20,7 @@ type fakeConduit struct {
 	t    *testing.T
 	msgs []SyncMessage
 	resp []SyncMessage
+	rec  []SyncMessage
 }
 
 var _ Conduit = &fakeConduit{}
@@ -49,13 +50,14 @@ func (fc *fakeConduit) NextMessage() (SyncMessage, error) {
 
 func (fc *fakeConduit) Send(msg SyncMessage) error {
 	fc.resp = append(fc.resp, msg)
+	fc.rec = append(fc.rec, msg)
 	return nil
 }
 
 func makeSet(t *testing.T, items string) *dumbSet {
 	var s dumbSet
 	for _, c := range []byte(items) {
-		require.NoError(t, s.Add(context.Background(), types.KeyBytes{c}))
+		require.NoError(t, s.Receive(context.Background(), types.KeyBytes{c}))
 	}
 	return &s
 }
@@ -414,14 +416,14 @@ func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 	sliceA := st.src[:cfg.numTestHashes-st.numSpecificB]
 	st.setA = NewDumbHashSet(!cfg.allowReAdd)
 	for _, h := range sliceA {
-		require.NoError(t, st.setA.Add(context.Background(), h))
+		require.NoError(t, st.setA.Receive(context.Background(), h))
 	}
 
 	sliceB := slices.Clone(st.src[:cfg.numTestHashes-st.numSpecificB-st.numSpecificA])
 	sliceB = append(sliceB, st.src[cfg.numTestHashes-st.numSpecificB:]...)
 	st.setB = NewDumbHashSet(!cfg.allowReAdd)
 	for _, h := range sliceB {
-		require.NoError(t, st.setB.Add(context.Background(), h))
+		require.NoError(t, st.setB.Receive(context.Background(), h))
 	}
 
 	slices.SortFunc(st.src, func(a, b types.KeyBytes) int {
@@ -431,10 +433,10 @@ func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 	return st
 }
 
-func (st *hashSyncTester) verify() {
-	itemsA, err := CollectSetItems(context.Background(), st.setA)
+func (st *hashSyncTester) verify(setA, setB OrderedSet) {
+	itemsA, err := CollectSetItems(context.Background(), setA)
 	require.NoError(st.t, err)
-	itemsB, err := CollectSetItems(context.Background(), st.setB)
+	itemsB, err := CollectSetItems(context.Background(), setB)
 	require.NoError(st.t, err)
 	require.Equal(st.t, itemsA, itemsB)
 	require.Equal(st.t, st.src, itemsA)
@@ -445,9 +447,9 @@ func TestSyncHash(t *testing.T) {
 		maxSendRange:    1,
 		numTestHashes:   10000,
 		minNumSpecificA: 4,
-		maxNumSpecificA: 100,
+		maxNumSpecificA: 90,
 		minNumSpecificB: 4,
-		maxNumSpecificB: 100,
+		maxNumSpecificB: 90,
 	})
 	syncA := NewRangeSetReconciler(st.setA, st.opts...)
 	syncB := NewRangeSetReconciler(st.setB, st.opts...)
@@ -456,5 +458,45 @@ func TestSyncHash(t *testing.T) {
 	itemCoef := float64(nItems) / float64(numSpecific)
 	t.Logf("numSpecific: %d, nRounds: %d, nMsg: %d, nItems: %d, itemCoef: %.2f",
 		numSpecific, nRounds, nMsg, nItems, itemCoef)
-	st.verify()
+	st.verify(st.setA, st.setB)
+}
+
+func TestDeferredAdd(t *testing.T) {
+	st := newHashSyncTester(t, hashSyncTestConfig{
+		maxSendRange:    1,
+		numTestHashes:   10000,
+		minNumSpecificA: 4,
+		maxNumSpecificA: 90,
+		minNumSpecificB: 4,
+		maxNumSpecificB: 90,
+	})
+	opts := append(st.opts, WithMaxDiff(0.9))
+	var msgLists [][]SyncMessage
+
+	sync := func(setA, setB OrderedSet) {
+		syncA := NewRangeSetReconciler(setA, opts...)
+		syncB := NewRangeSetReconciler(setB, opts...)
+		fc := &fakeConduit{t: t}
+		require.NoError(t, syncA.Initiate(context.Background(), fc, nil, nil))
+		nRounds, nMsg, nItems := doRunSync(fc, syncA, syncB, 100)
+		numSpecific := st.numSpecificA + st.numSpecificB
+		itemCoef := float64(nItems) / float64(numSpecific)
+		t.Logf("numSpecific: %d, nRounds: %d, nMsg: %d, nItems: %d, itemCoef: %.2f",
+			numSpecific, nRounds, nMsg, nItems, itemCoef)
+		msgLists = append(msgLists, fc.rec)
+	}
+
+	setA := st.setA.Copy()
+	setB := st.setB.Copy()
+	sync(setA, setB)
+	st.verify(setA, setB)
+
+	dSetA := &deferredAddSet{OrderedSet: st.setA.Copy()}
+	dSetB := &deferredAddSet{OrderedSet: st.setB.Copy()}
+	sync(dSetA, dSetB)
+	dSetA.addAll()
+	dSetB.addAll()
+	st.verify(dSetA, dSetB)
+
+	require.Equal(t, msgLists[0], msgLists[1])
 }

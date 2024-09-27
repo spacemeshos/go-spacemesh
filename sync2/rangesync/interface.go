@@ -30,8 +30,10 @@ type SplitInfo struct {
 
 // OrderedSet represents the set that can be synced against a remote peer.
 type OrderedSet interface {
-	// Add adds a key to the set.
-	Add(ctx context.Context, k types.KeyBytes) error
+	// Receive handles a new key received from the peer.
+	// It may or may not add it to the set immediately; this doesn't affect set
+	// reconciliation operation.
+	Receive(ctx context.Context, k types.KeyBytes) error
 	// GetRangeInfo returns RangeInfo for the item range in the ordered set,
 	// bounded by [x, y).
 	// x == y indicates the whole set.

@@ -95,7 +95,7 @@ type dumbSet struct {
 
 var _ OrderedSet = &dumbSet{}
 
-func (ds *dumbSet) Add(ctx context.Context, id types.KeyBytes) error {
+func (ds *dumbSet) Receive(ctx context.Context, id types.KeyBytes) error {
 	if len(ds.keys) == 0 {
 		ds.keys = []types.KeyBytes{id}
 		return nil
@@ -260,4 +260,27 @@ func NewDumbHashSet(disableReAdd bool) OrderedSet {
 			return r
 		},
 	}
+}
+
+type deferredAddSet struct {
+	OrderedSet
+	added map[string]struct{}
+}
+
+func (das *deferredAddSet) Receive(ctx context.Context, id types.KeyBytes) error {
+	if das.added == nil {
+		das.added = make(map[string]struct{})
+	}
+	das.added[string(id)] = struct{}{}
+	return nil
+}
+
+func (das *deferredAddSet) addAll() error {
+	ctx := context.Background()
+	for k := range das.added {
+		if err := das.OrderedSet.Receive(ctx, types.KeyBytes(k)); err != nil {
+			return err
+		}
+	}
+	return nil
 }

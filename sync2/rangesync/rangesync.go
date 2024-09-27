@@ -242,13 +242,12 @@ func (rsr *RangeSetReconciler) sendItems(
 	s sender,
 	count int,
 	seq types.Seq,
-	skipKeys []types.KeyBytes,
+	skipKeys map[string]struct{},
 ) (int, error) {
 	if count == 0 {
 		return 0, nil
 	}
 	nSent := 0
-	skipPos := 0
 	if rsr.itemChunkSize == 0 {
 		panic("BUG: zero item chunk size")
 	}
@@ -258,29 +257,16 @@ func (rsr *RangeSetReconciler) sendItems(
 		if err != nil {
 			return nSent, err
 		}
-		for skipPos < len(skipKeys) {
-			cmp := k.Compare(skipKeys[skipPos])
-			if cmp == 0 {
-				// we can skip this item. Advance skipPos as there are no duplicates
-				skipPos++
-				continue
+		if _, found := skipKeys[string(k)]; !found {
+			if len(keys) == rsr.itemChunkSize {
+				if err := s.sendChunk(keys); err != nil {
+					return nSent, err
+				}
+				nSent += len(keys)
+				keys = keys[:0]
 			}
-			if cmp < 0 {
-				// current ley is yet to reach the skipped key at skipPos
-				break
-			}
-			// current item is greater than the skipped key at skipPos,
-			// so skipPos needs to catch up with the iterator
-			skipPos++
+			keys = append(keys, k)
 		}
-		if len(keys) == rsr.itemChunkSize {
-			if err := s.sendChunk(keys); err != nil {
-				return nSent, err
-			}
-			nSent += len(keys)
-			keys = keys[:0]
-		}
-		keys = append(keys, k)
 		n--
 		if n == 0 {
 			break
@@ -374,7 +360,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 	ctx context.Context,
 	s sender,
 	msg SyncMessage,
-	receivedKeys []types.KeyBytes,
+	receivedKeys map[string]struct{},
 ) (done bool, err error) {
 	rsr.log.Debug("handleMessage", zap.String("msg", SyncMessageToString(msg)))
 
@@ -417,10 +403,13 @@ func (rsr *RangeSetReconciler) handleMessage(
 		// the range doesn't need any further handling by the peer.
 		if info.Count != 0 {
 			rsr.log.Debug("handleMessage: send items", zap.Int("count", info.Count),
-				SeqField("items", info.Items))
-			if _, err := rsr.sendItems(s, info.Count, info.Items, receivedKeys); err != nil {
+				SeqField("items", info.Items),
+				zap.Int("receivedCount", len(receivedKeys)))
+			nSent, err := rsr.sendItems(s, info.Count, info.Items, receivedKeys)
+			if err != nil {
 				return false, err
 			}
+			rsr.log.Debug("handleMessage: sent items", zap.Int("count", nSent))
 			return false, nil
 		}
 		rsr.log.Debug("handleMessage: local range is empty")
@@ -639,7 +628,7 @@ var errEmptyRound = errors.New("empty round")
 
 func (rsr *RangeSetReconciler) doRound(ctx context.Context, s sender) (done bool, err error) {
 	done = true
-	var receivedKeys []types.KeyBytes
+	receivedKeys := make(map[string]struct{})
 	nHandled := 0
 RECV_LOOP:
 	for {
@@ -658,11 +647,10 @@ RECV_LOOP:
 		case MessageTypeItemBatch:
 			nHandled++
 			for _, k := range msg.Keys() {
-				// rsr.log.Debug("Process: add item", HexField("item", k))
-				if err := rsr.os.Add(ctx, k); err != nil {
+				if err := rsr.os.Receive(ctx, k); err != nil {
 					return false, fmt.Errorf("error adding an item to the set: %w", err)
 				}
-				receivedKeys = append(receivedKeys, k)
+				receivedKeys[string(k)] = struct{}{}
 			}
 			continue
 		}
@@ -675,7 +663,7 @@ RECV_LOOP:
 		if !msgDone {
 			done = false
 		}
-		receivedKeys = receivedKeys[:0]
+		clear(receivedKeys)
 	}
 
 	switch {
