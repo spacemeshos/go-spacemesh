@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
+	"math/rand"
 	"testing"
 
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
@@ -20,6 +23,7 @@ import (
 
 type testAccount struct {
 	Address          types.Address
+	TemplateAddress  types.Address
 	BalanceCurrent   uint64
 	BalanceProjected uint64
 	CounterCurrent   uint64
@@ -37,8 +41,14 @@ func TestAccountService_List(t *testing.T) {
 		addr := types.Address{}
 		binary.BigEndian.PutUint64(addr[:], uint64(i))
 
+		template := wallet.TemplateAddress
+		if rand.New(rand.NewSource(int64(i))).Intn(2) == 0 {
+			template = multisig.TemplateAddress
+		}
+
 		accs[i] = testAccount{
 			Address:          addr,
+			TemplateAddress:  template,
 			BalanceCurrent:   uint64(1 + i),
 			BalanceProjected: uint64(100 + i),
 			CounterCurrent:   uint64(1000 + i),
@@ -46,10 +56,11 @@ func TestAccountService_List(t *testing.T) {
 		}
 
 		require.NoError(t, accounts.Update(db, &types.Account{
-			Layer:     1,
-			Address:   addr,
-			NextNonce: accs[i].CounterCurrent,
-			Balance:   accs[i].BalanceCurrent,
+			Layer:           1,
+			Address:         addr,
+			TemplateAddress: &template,
+			NextNonce:       accs[i].CounterCurrent,
+			Balance:         accs[i].BalanceCurrent,
 		}))
 	}
 
@@ -133,5 +144,15 @@ func TestAccountService_List(t *testing.T) {
 		require.Equal(t, accs[1].CounterProjected, list.Accounts[1].Projected.Counter)
 		require.Equal(t, accs[1].BalanceCurrent, list.Accounts[1].Current.Balance)
 		require.Equal(t, accs[1].CounterCurrent, list.Accounts[1].Current.Counter)
+	})
+
+	t.Run("template address", func(t *testing.T) {
+		list, err := client.List(ctx, &spacemeshv2alpha1.AccountRequest{
+			Addresses: []string{accs[0].Address.String()},
+			Limit:     10,
+		})
+		require.NoError(t, err)
+		require.Len(t, list.Accounts, 1)
+		require.Equal(t, accs[0].TemplateAddress.String(), list.Accounts[0].Template)
 	})
 }
