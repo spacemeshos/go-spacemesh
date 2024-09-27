@@ -77,11 +77,11 @@ func (h *Handler) RegisterHandler(malfeasanceType MalfeasanceType, handler Malfe
 	h.handlers[malfeasanceType] = handler
 }
 
-func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *wire.MalfeasanceProof) {
+func (h *Handler) reportMalfeasance(smesher types.NodeID, proof []byte) {
 	h.tortoise.OnMalfeasance(smesher)
-	events.ReportMalfeasance(smesher, mp)
+	events.ReportMalfeasance(smesher, proof)
 	if slices.Contains(h.nodeIDs, smesher) {
-		events.EmitOwnMalfeasanceProof(smesher, mp)
+		events.EmitOwnMalfeasanceProof(smesher, proof)
 	}
 }
 
@@ -154,7 +154,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 			h.countInvalidProof(&p.MalfeasanceProof)
 			return err
 		}
-		h.reportMalfeasance(id, &p.MalfeasanceProof)
+		h.reportMalfeasance(id, codec.MustEncode(&p.MalfeasanceProof))
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
 		h.countProof(&p.MalfeasanceProof)
@@ -175,6 +175,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 		h.countInvalidProof(p)
 		return types.EmptyNodeID, errors.Join(err, pubsub.ErrValidationReject)
 	}
+	proofBytes := codec.MustEncode(p)
 	if err := h.cdb.WithTx(ctx, func(dbtx sql.Transaction) error {
 		malicious, err := identities.IsMalicious(dbtx, nodeID)
 		if err != nil {
@@ -184,7 +185,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 			h.logger.Debug("known malicious identity", log.ZContext(ctx), zap.Stringer("smesher", nodeID))
 			return ErrKnownProof
 		}
-		if err := identities.SetMalicious(dbtx, nodeID, codec.MustEncode(p), time.Now()); err != nil {
+		if err := identities.SetMalicious(dbtx, nodeID, proofBytes, time.Now()); err != nil {
 			return fmt.Errorf("add malfeasance proof: %w", err)
 		}
 		return nil
@@ -199,8 +200,8 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 		}
 		return nodeID, err
 	}
-	h.reportMalfeasance(nodeID, p)
-	h.cdb.CacheMalfeasanceProof(nodeID, p)
+	h.reportMalfeasance(nodeID, proofBytes)
+	h.cdb.CacheMalfeasanceProof(nodeID, proofBytes)
 	h.countProof(p)
 	h.logger.Debug("new malfeasance proof",
 		log.ZContext(ctx),

@@ -56,19 +56,7 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
 	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
-	// a bad guy
-	proof := &mwire.MalfeasanceProof{
-		Layer: types.LayerID(11),
-		Proof: mwire.Proof{
-			Type: mwire.MultipleBallots,
-			Data: &mwire.BallotProof{
-				Messages: [2]mwire.BallotProofMsg{
-					{},
-					{},
-				},
-			},
-		},
-	}
+	proof := types.RandomBytes(100)
 
 	nodeID1 := types.NodeID{1}
 	cdb.CacheMalfeasanceProof(nodeID1, proof)

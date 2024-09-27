@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -169,7 +170,7 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	}
 	atx.SetID(id)
 	atxProvider.EXPECT().GetAtx(id).Return(&atx, nil)
-	atxProvider.EXPECT().MalfeasanceProof(smesher).Return(proof, nil)
+	atxProvider.EXPECT().MalfeasanceProof(smesher).Return(codec.MustEncode(proof), nil)
 	atxProvider.EXPECT().Previous(id).Return([]types.ATXID{previous}, nil)
 
 	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
@@ -184,5 +185,5 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	require.Equal(t, previous.Bytes(), response.Atx.PreviousAtxs[0].Id)
 	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)
 	require.Equal(t, atx.Sequence, response.Atx.Sequence)
-	require.Equal(t, events.ToMalfeasancePB(smesher, proof, false), response.MalfeasanceProof)
+	require.Equal(t, events.ToMalfeasancePB(smesher, codec.MustEncode(proof), false), response.MalfeasanceProof)
 }

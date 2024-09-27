@@ -18,7 +18,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -150,7 +149,7 @@ func (s *MalfeasanceStreamService) Stream(
 		select {
 		// process events first
 		case rst := <-eventsOut:
-			proof := toProof(stream.Context(), s.info, rst.Smesher, codec.MustEncode(rst.Proof))
+			proof := toProof(stream.Context(), s.info, rst.Smesher, rst.Proof)
 			if proof == nil {
 				continue
 			}
@@ -164,7 +163,7 @@ func (s *MalfeasanceStreamService) Stream(
 		default:
 			select {
 			case rst := <-eventsOut:
-				proof := toProof(stream.Context(), s.info, rst.Smesher, codec.MustEncode(rst.Proof))
+				proof := toProof(stream.Context(), s.info, rst.Smesher, rst.Proof)
 				if proof == nil {
 					continue
 				}

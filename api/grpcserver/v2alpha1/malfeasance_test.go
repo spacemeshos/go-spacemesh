@@ -16,10 +16,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -177,28 +175,14 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			smesher := types.RandomNodeID()
 			streamed = append(streamed, &events.EventMalfeasance{
 				Smesher: smesher,
-				Proof: &wire.MalfeasanceProof{
-					Proof: wire.Proof{
-						Type: wire.MultipleATXs,
-						Data: &wire.AtxProof{
-							Messages: [2]wire.AtxProofMsg{
-								{
-									SmesherID: smesher,
-								},
-								{
-									SmesherID: smesher,
-								},
-							},
-						},
-					},
-				},
+				Proof:   types.RandomBytes(100),
 			})
 			properties := map[string]string{
 				"domain":                "0",
 				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
-			info.EXPECT().Info(codec.MustEncode(streamed[i].Proof)).Return(properties, nil).AnyTimes()
+			info.EXPECT().Info(streamed[i].Proof).Return(properties, nil).AnyTimes()
 		}
 
 		request := &spacemeshv2alpha1.MalfeasanceStreamRequest{
