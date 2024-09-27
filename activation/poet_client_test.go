@@ -613,7 +613,8 @@ func TestPoetService_CachesCertifierInfo(t *testing.T) {
 
 			cfg := DefaultPoetConfig()
 			cfg.InfoCacheTTL = tc.ttl
-			db := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+			db, err := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+			require.NoError(t, err)
 
 			url := &url.URL{Host: "certifier.hello"}
 			pubkey := []byte("pubkey")

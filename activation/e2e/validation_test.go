@@ -50,7 +50,8 @@ func TestValidator_Validate(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 
-	poetDb := activation.NewPoetDb(statesql.InMemory(), logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(statesql.InMemory(), logger.Named("poetDb"))
+	require.NoError(t, err)
 	client := ae2e.NewTestPoetClient(1, poetCfg)
 	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 

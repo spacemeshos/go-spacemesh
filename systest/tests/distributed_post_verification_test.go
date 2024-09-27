@@ -160,7 +160,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	localDb := localsql.InMemory()
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
-	poetDb := activation.NewPoetDb(db, zap.NewNop())
+	poetDb, err := activation.NewPoetDb(db, zap.NewNop())
+	require.NoError(t, err)
 	poetService, err := activation.NewPoetService(
 		poetDb,
 		types.PoetServer{
