@@ -24,7 +24,7 @@ import (
 
 func TestLayerService_List(t *testing.T) {
 	setup := func(t *testing.T) spacemeshv2alpha1.LayerServiceClient {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 
 		lrs := make([]layers.Layer, 90)
 		r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -128,7 +128,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 		events.InitializeReporter()
 		t.Cleanup(events.CloseEventReporter)
 
-		client, lrs := setup(t, statesql.InMemory())
+		client, lrs := setup(t, statesql.InMemoryTest(t))
 
 		stream, err := client.Stream(context.Background(), &spacemeshv2alpha1.LayerStreamRequest{})
 		require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 		events.InitializeReporter()
 		t.Cleanup(events.CloseEventReporter)
 
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		client, _ := setup(t, db)
 
 		const (

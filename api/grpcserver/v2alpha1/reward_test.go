@@ -21,7 +21,7 @@ import (
 
 func TestRewardService_List(t *testing.T) {
 	setup := func(t *testing.T) (spacemeshv2alpha1.RewardServiceClient, []types.Reward) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 
 		gen := fixture.NewRewardsGenerator().WithAddresses(90).WithUniqueCoinbase()
 		rwds := make([]types.Reward, 90)
@@ -111,7 +111,7 @@ func TestRewardService_List(t *testing.T) {
 
 func TestRewardStreamService_Stream(t *testing.T) {
 	setup := func(t *testing.T) spacemeshv2alpha1.RewardStreamServiceClient {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 
 		gen := fixture.NewRewardsGenerator()
 		rwds := make([]types.Reward, 100)

@@ -22,26 +22,28 @@ import (
 )
 
 func TestActivationService_List(t *testing.T) {
-	db := statesql.InMemory()
-	ctx := context.Background()
+	setup := func(t *testing.T) (spacemeshv2alpha1.ActivationServiceClient, []types.ActivationTx) {
+		db := statesql.InMemoryTest(t)
 
-	gen := fixture.NewAtxsGenerator()
-	activations := make([]types.ActivationTx, 100)
-	for i := range activations {
-		atx := gen.Next()
-		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
-		activations[i] = *atx
+		gen := fixture.NewAtxsGenerator()
+		activations := make([]types.ActivationTx, 100)
+		for i := range activations {
+			atx := gen.Next()
+			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+			activations[i] = *atx
+		}
+
+		svc := NewActivationService(db)
+		cfg, cleanup := launchServer(t, svc)
+		t.Cleanup(cleanup)
+
+		conn := dialGrpc(t, cfg)
+		return spacemeshv2alpha1.NewActivationServiceClient(conn), activations
 	}
 
-	svc := NewActivationService(db)
-	cfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	conn := dialGrpc(t, cfg)
-	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
-
 	t.Run("limit set too high", func(t *testing.T) {
-		_, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{Limit: 200})
+		client, _ := setup(t)
+		_, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{Limit: 200})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -51,7 +53,8 @@ func TestActivationService_List(t *testing.T) {
 	})
 
 	t.Run("no limit set", func(t *testing.T) {
-		_, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{})
+		client, _ := setup(t)
+		_, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -61,7 +64,8 @@ func TestActivationService_List(t *testing.T) {
 	})
 
 	t.Run("limit and offset", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{
+		client, _ := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{
 			Limit:  25,
 			Offset: 50,
 		})
@@ -70,13 +74,15 @@ func TestActivationService_List(t *testing.T) {
 	})
 
 	t.Run("all", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{Limit: 100})
+		client, activations := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Equal(t, len(activations), len(list.Activations))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{
+		client, activations := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{
 			Limit:    1,
 			Coinbase: activations[3].Coinbase.String(),
 		})
@@ -85,7 +91,8 @@ func TestActivationService_List(t *testing.T) {
 	})
 
 	t.Run("smesherId", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{
+		client, activations := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{
 			Limit:     1,
 			SmesherId: [][]byte{activations[1].SmesherID.Bytes()},
 		})
@@ -94,7 +101,8 @@ func TestActivationService_List(t *testing.T) {
 	})
 
 	t.Run("id", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.ActivationRequest{
+		client, activations := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{
 			Limit: 1,
 			Id:    [][]byte{activations[3].ID().Bytes()},
 		})
@@ -216,7 +224,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 }
 
 func TestActivationService_ActivationsCount(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 
 	genEpoch3 := fixture.NewAtxsGenerator().WithEpochs(3, 1)
