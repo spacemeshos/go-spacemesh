@@ -27,7 +27,7 @@ type testAccount struct {
 }
 
 func TestAccountService_List(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	ctrl, ctx := gomock.WithContext(context.Background(), t)
 	conState := NewMockaccountConState(ctrl)

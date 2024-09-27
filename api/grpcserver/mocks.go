@@ -18,7 +18,6 @@ import (
 	multiaddr "github.com/multiformats/go-multiaddr"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	peerinfo "github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
@@ -913,10 +912,10 @@ func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(types.ATXID) (*types.Acti
 }
 
 // MalfeasanceProof mocks base method.
-func (m *MockatxProvider) MalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
+func (m *MockatxProvider) MalfeasanceProof(id types.NodeID) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MalfeasanceProof", id)
-	ret0, _ := ret[0].(*wire.MalfeasanceProof)
+	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -934,19 +933,19 @@ type MockatxProviderMalfeasanceProofCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxProviderMalfeasanceProofCall) Return(arg0 *wire.MalfeasanceProof, arg1 error) *MockatxProviderMalfeasanceProofCall {
+func (c *MockatxProviderMalfeasanceProofCall) Return(arg0 []byte, arg1 error) *MockatxProviderMalfeasanceProofCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderMalfeasanceProofCall) Do(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderMalfeasanceProofCall {
+func (c *MockatxProviderMalfeasanceProofCall) Do(f func(types.NodeID) ([]byte, error)) *MockatxProviderMalfeasanceProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderMalfeasanceProofCall {
+func (c *MockatxProviderMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) ([]byte, error)) *MockatxProviderMalfeasanceProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
