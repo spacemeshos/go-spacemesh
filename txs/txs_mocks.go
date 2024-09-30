@@ -234,31 +234,31 @@ func (c *MockconservativeStateValidationCall) DoAndReturn(f func(types.RawTx) sy
 	return c
 }
 
-// MockvmState is a mock of vmState interface.
-type MockvmState struct {
+// MockVmState is a mock of VmState interface.
+type MockVmState struct {
 	ctrl     *gomock.Controller
-	recorder *MockvmStateMockRecorder
+	recorder *MockVmStateMockRecorder
 }
 
-// MockvmStateMockRecorder is the mock recorder for MockvmState.
-type MockvmStateMockRecorder struct {
-	mock *MockvmState
+// MockVmStateMockRecorder is the mock recorder for MockVmState.
+type MockVmStateMockRecorder struct {
+	mock *MockVmState
 }
 
-// NewMockvmState creates a new mock instance.
-func NewMockvmState(ctrl *gomock.Controller) *MockvmState {
-	mock := &MockvmState{ctrl: ctrl}
-	mock.recorder = &MockvmStateMockRecorder{mock}
+// NewMockVmState creates a new mock instance.
+func NewMockVmState(ctrl *gomock.Controller) *MockVmState {
+	mock := &MockVmState{ctrl: ctrl}
+	mock.recorder = &MockVmStateMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockvmState) EXPECT() *MockvmStateMockRecorder {
+func (m *MockVmState) EXPECT() *MockVmStateMockRecorder {
 	return m.recorder
 }
 
 // GetAllAccounts mocks base method.
-func (m *MockvmState) GetAllAccounts() ([]*types.Account, error) {
+func (m *MockVmState) GetAllAccounts() ([]*types.Account, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAllAccounts")
 	ret0, _ := ret[0].([]*types.Account)
@@ -267,37 +267,37 @@ func (m *MockvmState) GetAllAccounts() ([]*types.Account, error) {
 }
 
 // GetAllAccounts indicates an expected call of GetAllAccounts.
-func (mr *MockvmStateMockRecorder) GetAllAccounts() *MockvmStateGetAllAccountsCall {
+func (mr *MockVmStateMockRecorder) GetAllAccounts() *MockVmStateGetAllAccountsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllAccounts", reflect.TypeOf((*MockvmState)(nil).GetAllAccounts))
-	return &MockvmStateGetAllAccountsCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllAccounts", reflect.TypeOf((*MockVmState)(nil).GetAllAccounts))
+	return &MockVmStateGetAllAccountsCall{Call: call}
 }
 
-// MockvmStateGetAllAccountsCall wrap *gomock.Call
-type MockvmStateGetAllAccountsCall struct {
+// MockVmStateGetAllAccountsCall wrap *gomock.Call
+type MockVmStateGetAllAccountsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateGetAllAccountsCall) Return(arg0 []*types.Account, arg1 error) *MockvmStateGetAllAccountsCall {
+func (c *MockVmStateGetAllAccountsCall) Return(arg0 []*types.Account, arg1 error) *MockVmStateGetAllAccountsCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateGetAllAccountsCall) Do(f func() ([]*types.Account, error)) *MockvmStateGetAllAccountsCall {
+func (c *MockVmStateGetAllAccountsCall) Do(f func() ([]*types.Account, error)) *MockVmStateGetAllAccountsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateGetAllAccountsCall) DoAndReturn(f func() ([]*types.Account, error)) *MockvmStateGetAllAccountsCall {
+func (c *MockVmStateGetAllAccountsCall) DoAndReturn(f func() ([]*types.Account, error)) *MockVmStateGetAllAccountsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetBalance mocks base method.
-func (m *MockvmState) GetBalance(arg0 types.Address) (uint64, error) {
+func (m *MockVmState) GetBalance(arg0 types.Address) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
 	ret0, _ := ret[0].(uint64)
@@ -306,37 +306,37 @@ func (m *MockvmState) GetBalance(arg0 types.Address) (uint64, error) {
 }
 
 // GetBalance indicates an expected call of GetBalance.
-func (mr *MockvmStateMockRecorder) GetBalance(arg0 any) *MockvmStateGetBalanceCall {
+func (mr *MockVmStateMockRecorder) GetBalance(arg0 any) *MockVmStateGetBalanceCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBalance", reflect.TypeOf((*MockvmState)(nil).GetBalance), arg0)
-	return &MockvmStateGetBalanceCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBalance", reflect.TypeOf((*MockVmState)(nil).GetBalance), arg0)
+	return &MockVmStateGetBalanceCall{Call: call}
 }
 
-// MockvmStateGetBalanceCall wrap *gomock.Call
-type MockvmStateGetBalanceCall struct {
+// MockVmStateGetBalanceCall wrap *gomock.Call
+type MockVmStateGetBalanceCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateGetBalanceCall) Return(arg0 uint64, arg1 error) *MockvmStateGetBalanceCall {
+func (c *MockVmStateGetBalanceCall) Return(arg0 uint64, arg1 error) *MockVmStateGetBalanceCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateGetBalanceCall) Do(f func(types.Address) (uint64, error)) *MockvmStateGetBalanceCall {
+func (c *MockVmStateGetBalanceCall) Do(f func(types.Address) (uint64, error)) *MockVmStateGetBalanceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateGetBalanceCall) DoAndReturn(f func(types.Address) (uint64, error)) *MockvmStateGetBalanceCall {
+func (c *MockVmStateGetBalanceCall) DoAndReturn(f func(types.Address) (uint64, error)) *MockVmStateGetBalanceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetLayerApplied mocks base method.
-func (m *MockvmState) GetLayerApplied(arg0 types.TransactionID) (types.LayerID, error) {
+func (m *MockVmState) GetLayerApplied(arg0 types.TransactionID) (types.LayerID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLayerApplied", arg0)
 	ret0, _ := ret[0].(types.LayerID)
@@ -345,37 +345,37 @@ func (m *MockvmState) GetLayerApplied(arg0 types.TransactionID) (types.LayerID, 
 }
 
 // GetLayerApplied indicates an expected call of GetLayerApplied.
-func (mr *MockvmStateMockRecorder) GetLayerApplied(arg0 any) *MockvmStateGetLayerAppliedCall {
+func (mr *MockVmStateMockRecorder) GetLayerApplied(arg0 any) *MockVmStateGetLayerAppliedCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerApplied", reflect.TypeOf((*MockvmState)(nil).GetLayerApplied), arg0)
-	return &MockvmStateGetLayerAppliedCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerApplied", reflect.TypeOf((*MockVmState)(nil).GetLayerApplied), arg0)
+	return &MockVmStateGetLayerAppliedCall{Call: call}
 }
 
-// MockvmStateGetLayerAppliedCall wrap *gomock.Call
-type MockvmStateGetLayerAppliedCall struct {
+// MockVmStateGetLayerAppliedCall wrap *gomock.Call
+type MockVmStateGetLayerAppliedCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateGetLayerAppliedCall) Return(arg0 types.LayerID, arg1 error) *MockvmStateGetLayerAppliedCall {
+func (c *MockVmStateGetLayerAppliedCall) Return(arg0 types.LayerID, arg1 error) *MockVmStateGetLayerAppliedCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateGetLayerAppliedCall) Do(f func(types.TransactionID) (types.LayerID, error)) *MockvmStateGetLayerAppliedCall {
+func (c *MockVmStateGetLayerAppliedCall) Do(f func(types.TransactionID) (types.LayerID, error)) *MockVmStateGetLayerAppliedCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateGetLayerAppliedCall) DoAndReturn(f func(types.TransactionID) (types.LayerID, error)) *MockvmStateGetLayerAppliedCall {
+func (c *MockVmStateGetLayerAppliedCall) DoAndReturn(f func(types.TransactionID) (types.LayerID, error)) *MockVmStateGetLayerAppliedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetLayerStateRoot mocks base method.
-func (m *MockvmState) GetLayerStateRoot(arg0 types.LayerID) (types.Hash32, error) {
+func (m *MockVmState) GetLayerStateRoot(arg0 types.LayerID) (types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLayerStateRoot", arg0)
 	ret0, _ := ret[0].(types.Hash32)
@@ -384,37 +384,37 @@ func (m *MockvmState) GetLayerStateRoot(arg0 types.LayerID) (types.Hash32, error
 }
 
 // GetLayerStateRoot indicates an expected call of GetLayerStateRoot.
-func (mr *MockvmStateMockRecorder) GetLayerStateRoot(arg0 any) *MockvmStateGetLayerStateRootCall {
+func (mr *MockVmStateMockRecorder) GetLayerStateRoot(arg0 any) *MockVmStateGetLayerStateRootCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerStateRoot", reflect.TypeOf((*MockvmState)(nil).GetLayerStateRoot), arg0)
-	return &MockvmStateGetLayerStateRootCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerStateRoot", reflect.TypeOf((*MockVmState)(nil).GetLayerStateRoot), arg0)
+	return &MockVmStateGetLayerStateRootCall{Call: call}
 }
 
-// MockvmStateGetLayerStateRootCall wrap *gomock.Call
-type MockvmStateGetLayerStateRootCall struct {
+// MockVmStateGetLayerStateRootCall wrap *gomock.Call
+type MockVmStateGetLayerStateRootCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateGetLayerStateRootCall) Return(arg0 types.Hash32, arg1 error) *MockvmStateGetLayerStateRootCall {
+func (c *MockVmStateGetLayerStateRootCall) Return(arg0 types.Hash32, arg1 error) *MockVmStateGetLayerStateRootCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateGetLayerStateRootCall) Do(f func(types.LayerID) (types.Hash32, error)) *MockvmStateGetLayerStateRootCall {
+func (c *MockVmStateGetLayerStateRootCall) Do(f func(types.LayerID) (types.Hash32, error)) *MockVmStateGetLayerStateRootCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateGetLayerStateRootCall) DoAndReturn(f func(types.LayerID) (types.Hash32, error)) *MockvmStateGetLayerStateRootCall {
+func (c *MockVmStateGetLayerStateRootCall) DoAndReturn(f func(types.LayerID) (types.Hash32, error)) *MockVmStateGetLayerStateRootCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetNonce mocks base method.
-func (m *MockvmState) GetNonce(arg0 types.Address) (types.Nonce, error) {
+func (m *MockVmState) GetNonce(arg0 types.Address) (types.Nonce, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNonce", arg0)
 	ret0, _ := ret[0].(types.Nonce)
@@ -423,37 +423,37 @@ func (m *MockvmState) GetNonce(arg0 types.Address) (types.Nonce, error) {
 }
 
 // GetNonce indicates an expected call of GetNonce.
-func (mr *MockvmStateMockRecorder) GetNonce(arg0 any) *MockvmStateGetNonceCall {
+func (mr *MockVmStateMockRecorder) GetNonce(arg0 any) *MockVmStateGetNonceCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockvmState)(nil).GetNonce), arg0)
-	return &MockvmStateGetNonceCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockVmState)(nil).GetNonce), arg0)
+	return &MockVmStateGetNonceCall{Call: call}
 }
 
-// MockvmStateGetNonceCall wrap *gomock.Call
-type MockvmStateGetNonceCall struct {
+// MockVmStateGetNonceCall wrap *gomock.Call
+type MockVmStateGetNonceCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateGetNonceCall) Return(arg0 types.Nonce, arg1 error) *MockvmStateGetNonceCall {
+func (c *MockVmStateGetNonceCall) Return(arg0 types.Nonce, arg1 error) *MockVmStateGetNonceCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateGetNonceCall) Do(f func(types.Address) (types.Nonce, error)) *MockvmStateGetNonceCall {
+func (c *MockVmStateGetNonceCall) Do(f func(types.Address) (types.Nonce, error)) *MockVmStateGetNonceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateGetNonceCall) DoAndReturn(f func(types.Address) (types.Nonce, error)) *MockvmStateGetNonceCall {
+func (c *MockVmStateGetNonceCall) DoAndReturn(f func(types.Address) (types.Nonce, error)) *MockVmStateGetNonceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetStateRoot mocks base method.
-func (m *MockvmState) GetStateRoot() (types.Hash32, error) {
+func (m *MockVmState) GetStateRoot() (types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStateRoot")
 	ret0, _ := ret[0].(types.Hash32)
@@ -462,37 +462,37 @@ func (m *MockvmState) GetStateRoot() (types.Hash32, error) {
 }
 
 // GetStateRoot indicates an expected call of GetStateRoot.
-func (mr *MockvmStateMockRecorder) GetStateRoot() *MockvmStateGetStateRootCall {
+func (mr *MockVmStateMockRecorder) GetStateRoot() *MockVmStateGetStateRootCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockvmState)(nil).GetStateRoot))
-	return &MockvmStateGetStateRootCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockVmState)(nil).GetStateRoot))
+	return &MockVmStateGetStateRootCall{Call: call}
 }
 
-// MockvmStateGetStateRootCall wrap *gomock.Call
-type MockvmStateGetStateRootCall struct {
+// MockVmStateGetStateRootCall wrap *gomock.Call
+type MockVmStateGetStateRootCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateGetStateRootCall) Return(arg0 types.Hash32, arg1 error) *MockvmStateGetStateRootCall {
+func (c *MockVmStateGetStateRootCall) Return(arg0 types.Hash32, arg1 error) *MockVmStateGetStateRootCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateGetStateRootCall) Do(f func() (types.Hash32, error)) *MockvmStateGetStateRootCall {
+func (c *MockVmStateGetStateRootCall) Do(f func() (types.Hash32, error)) *MockVmStateGetStateRootCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateGetStateRootCall) DoAndReturn(f func() (types.Hash32, error)) *MockvmStateGetStateRootCall {
+func (c *MockVmStateGetStateRootCall) DoAndReturn(f func() (types.Hash32, error)) *MockVmStateGetStateRootCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Validation mocks base method.
-func (m *MockvmState) Validation(arg0 types.RawTx) system.ValidationRequest {
+func (m *MockVmState) Validation(arg0 types.RawTx) system.ValidationRequest {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validation", arg0)
 	ret0, _ := ret[0].(system.ValidationRequest)
@@ -500,31 +500,31 @@ func (m *MockvmState) Validation(arg0 types.RawTx) system.ValidationRequest {
 }
 
 // Validation indicates an expected call of Validation.
-func (mr *MockvmStateMockRecorder) Validation(arg0 any) *MockvmStateValidationCall {
+func (mr *MockVmStateMockRecorder) Validation(arg0 any) *MockVmStateValidationCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validation", reflect.TypeOf((*MockvmState)(nil).Validation), arg0)
-	return &MockvmStateValidationCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validation", reflect.TypeOf((*MockVmState)(nil).Validation), arg0)
+	return &MockVmStateValidationCall{Call: call}
 }
 
-// MockvmStateValidationCall wrap *gomock.Call
-type MockvmStateValidationCall struct {
+// MockVmStateValidationCall wrap *gomock.Call
+type MockVmStateValidationCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateValidationCall) Return(arg0 system.ValidationRequest) *MockvmStateValidationCall {
+func (c *MockVmStateValidationCall) Return(arg0 system.ValidationRequest) *MockVmStateValidationCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateValidationCall) Do(f func(types.RawTx) system.ValidationRequest) *MockvmStateValidationCall {
+func (c *MockVmStateValidationCall) Do(f func(types.RawTx) system.ValidationRequest) *MockVmStateValidationCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateValidationCall) DoAndReturn(f func(types.RawTx) system.ValidationRequest) *MockvmStateValidationCall {
+func (c *MockVmStateValidationCall) DoAndReturn(f func(types.RawTx) system.ValidationRequest) *MockVmStateValidationCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

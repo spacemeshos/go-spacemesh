@@ -3,6 +3,7 @@ package accounts
 import (
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
@@ -19,6 +20,8 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 			stmt.ColumnBytes(3, account.TemplateAddress[:])
 			account.State = make([]byte, stmt.ColumnLen(4))
 			stmt.ColumnBytes(4, account.State)
+			// TODO: error handling here
+			codec.DecodeFrom(stmt.ColumnReader(5), account.Storage)
 		}
 		return false
 	})
@@ -42,7 +45,7 @@ func Has(db sql.Executor, address types.Address) (bool, error) {
 	return rows > 0, nil
 }
 
-// Latest latest account data for an address.
+// Latest account data for an address.
 func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	account, err := load(
 		db,
@@ -138,9 +141,13 @@ func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 
 // Update account state at a certain layer.
 func Update(db sql.Executor, to *types.Account) error {
-	_, err := db.Exec(`insert into 
-	accounts (address, balance, next_nonce, layer_updated, template, state) 
-	values (?1, ?2, ?3, ?4, ?5, ?6);`, func(stmt *sql.Statement) {
+	storage, err := codec.Encode(to.Storage)
+	if err != nil {
+		return fmt.Errorf("failed to encode storage: %w", err)
+	}
+	_, err = db.Exec(`insert into 
+	accounts (address, balance, next_nonce, layer_updated, template, state, storage) 
+	values (?1, ?2, ?3, ?4, ?5, ?6, ?7);`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, to.Address.Bytes())
 		stmt.BindInt64(2, int64(to.Balance))
 		stmt.BindInt64(3, int64(to.NextNonce))
@@ -148,9 +155,11 @@ func Update(db sql.Executor, to *types.Account) error {
 		if to.TemplateAddress == nil {
 			stmt.BindNull(5)
 			stmt.BindNull(6)
+			stmt.BindNull(7)
 		} else {
 			stmt.BindBytes(5, to.TemplateAddress[:])
 			stmt.BindBytes(6, to.State[:])
+			stmt.BindBytes(7, storage[:])
 		}
 	}, nil)
 	if err != nil {

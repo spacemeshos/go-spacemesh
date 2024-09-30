@@ -50,6 +50,13 @@ func (t *Account) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Storage, 1000)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -100,6 +107,14 @@ func (t *Account) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.State = field
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[StorageItem](dec, 1000)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Storage = field
 	}
 	return total, nil
 }

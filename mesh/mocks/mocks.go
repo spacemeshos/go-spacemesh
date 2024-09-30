@@ -192,31 +192,31 @@ func (c *MockconservativeStateUpdateCacheCall) DoAndReturn(f func(context.Contex
 	return c
 }
 
-// MockvmState is a mock of vmState interface.
-type MockvmState struct {
+// MockVmState is a mock of VmState interface.
+type MockVmState struct {
 	ctrl     *gomock.Controller
-	recorder *MockvmStateMockRecorder
+	recorder *MockVmStateMockRecorder
 }
 
-// MockvmStateMockRecorder is the mock recorder for MockvmState.
-type MockvmStateMockRecorder struct {
-	mock *MockvmState
+// MockVmStateMockRecorder is the mock recorder for MockVmState.
+type MockVmStateMockRecorder struct {
+	mock *MockVmState
 }
 
-// NewMockvmState creates a new mock instance.
-func NewMockvmState(ctrl *gomock.Controller) *MockvmState {
-	mock := &MockvmState{ctrl: ctrl}
-	mock.recorder = &MockvmStateMockRecorder{mock}
+// NewMockVmState creates a new mock instance.
+func NewMockVmState(ctrl *gomock.Controller) *MockVmState {
+	mock := &MockVmState{ctrl: ctrl}
+	mock.recorder = &MockVmStateMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockvmState) EXPECT() *MockvmStateMockRecorder {
+func (m *MockVmState) EXPECT() *MockVmStateMockRecorder {
 	return m.recorder
 }
 
 // Apply mocks base method.
-func (m *MockvmState) Apply(arg0 types.LayerID, arg1 []types.Transaction, arg2 []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
+func (m *MockVmState) Apply(arg0 types.LayerID, arg1 []types.Transaction, arg2 []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Apply", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]types.Transaction)
@@ -226,37 +226,37 @@ func (m *MockvmState) Apply(arg0 types.LayerID, arg1 []types.Transaction, arg2 [
 }
 
 // Apply indicates an expected call of Apply.
-func (mr *MockvmStateMockRecorder) Apply(arg0, arg1, arg2 any) *MockvmStateApplyCall {
+func (mr *MockVmStateMockRecorder) Apply(arg0, arg1, arg2 any) *MockVmStateApplyCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockvmState)(nil).Apply), arg0, arg1, arg2)
-	return &MockvmStateApplyCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockVmState)(nil).Apply), arg0, arg1, arg2)
+	return &MockVmStateApplyCall{Call: call}
 }
 
-// MockvmStateApplyCall wrap *gomock.Call
-type MockvmStateApplyCall struct {
+// MockVmStateApplyCall wrap *gomock.Call
+type MockVmStateApplyCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateApplyCall) Return(arg0 []types.Transaction, arg1 []types.TransactionWithResult, arg2 error) *MockvmStateApplyCall {
+func (c *MockVmStateApplyCall) Return(arg0 []types.Transaction, arg1 []types.TransactionWithResult, arg2 error) *MockVmStateApplyCall {
 	c.Call = c.Call.Return(arg0, arg1, arg2)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateApplyCall) Do(f func(types.LayerID, []types.Transaction, []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error)) *MockvmStateApplyCall {
+func (c *MockVmStateApplyCall) Do(f func(types.LayerID, []types.Transaction, []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error)) *MockVmStateApplyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateApplyCall) DoAndReturn(f func(types.LayerID, []types.Transaction, []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error)) *MockvmStateApplyCall {
+func (c *MockVmStateApplyCall) DoAndReturn(f func(types.LayerID, []types.Transaction, []types.CoinbaseReward) ([]types.Transaction, []types.TransactionWithResult, error)) *MockVmStateApplyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // GetStateRoot mocks base method.
-func (m *MockvmState) GetStateRoot() (types.Hash32, error) {
+func (m *MockVmState) GetStateRoot() (types.Hash32, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStateRoot")
 	ret0, _ := ret[0].(types.Hash32)
@@ -265,37 +265,37 @@ func (m *MockvmState) GetStateRoot() (types.Hash32, error) {
 }
 
 // GetStateRoot indicates an expected call of GetStateRoot.
-func (mr *MockvmStateMockRecorder) GetStateRoot() *MockvmStateGetStateRootCall {
+func (mr *MockVmStateMockRecorder) GetStateRoot() *MockVmStateGetStateRootCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockvmState)(nil).GetStateRoot))
-	return &MockvmStateGetStateRootCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockVmState)(nil).GetStateRoot))
+	return &MockVmStateGetStateRootCall{Call: call}
 }
 
-// MockvmStateGetStateRootCall wrap *gomock.Call
-type MockvmStateGetStateRootCall struct {
+// MockVmStateGetStateRootCall wrap *gomock.Call
+type MockVmStateGetStateRootCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateGetStateRootCall) Return(arg0 types.Hash32, arg1 error) *MockvmStateGetStateRootCall {
+func (c *MockVmStateGetStateRootCall) Return(arg0 types.Hash32, arg1 error) *MockVmStateGetStateRootCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateGetStateRootCall) Do(f func() (types.Hash32, error)) *MockvmStateGetStateRootCall {
+func (c *MockVmStateGetStateRootCall) Do(f func() (types.Hash32, error)) *MockVmStateGetStateRootCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateGetStateRootCall) DoAndReturn(f func() (types.Hash32, error)) *MockvmStateGetStateRootCall {
+func (c *MockVmStateGetStateRootCall) DoAndReturn(f func() (types.Hash32, error)) *MockVmStateGetStateRootCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Revert mocks base method.
-func (m *MockvmState) Revert(arg0 types.LayerID) error {
+func (m *MockVmState) Revert(arg0 types.LayerID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Revert", arg0)
 	ret0, _ := ret[0].(error)
@@ -303,31 +303,31 @@ func (m *MockvmState) Revert(arg0 types.LayerID) error {
 }
 
 // Revert indicates an expected call of Revert.
-func (mr *MockvmStateMockRecorder) Revert(arg0 any) *MockvmStateRevertCall {
+func (mr *MockVmStateMockRecorder) Revert(arg0 any) *MockVmStateRevertCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Revert", reflect.TypeOf((*MockvmState)(nil).Revert), arg0)
-	return &MockvmStateRevertCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Revert", reflect.TypeOf((*MockVmState)(nil).Revert), arg0)
+	return &MockVmStateRevertCall{Call: call}
 }
 
-// MockvmStateRevertCall wrap *gomock.Call
-type MockvmStateRevertCall struct {
+// MockVmStateRevertCall wrap *gomock.Call
+type MockVmStateRevertCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateRevertCall) Return(arg0 error) *MockvmStateRevertCall {
+func (c *MockVmStateRevertCall) Return(arg0 error) *MockVmStateRevertCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateRevertCall) Do(f func(types.LayerID) error) *MockvmStateRevertCall {
+func (c *MockVmStateRevertCall) Do(f func(types.LayerID) error) *MockVmStateRevertCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateRevertCall) DoAndReturn(f func(types.LayerID) error) *MockvmStateRevertCall {
+func (c *MockVmStateRevertCall) DoAndReturn(f func(types.LayerID) error) *MockVmStateRevertCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
