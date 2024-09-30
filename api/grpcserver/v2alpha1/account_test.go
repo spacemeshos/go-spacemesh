@@ -42,7 +42,7 @@ func TestAccountService_List(t *testing.T) {
 		binary.BigEndian.PutUint64(addr[:], uint64(i))
 
 		template := wallet.TemplateAddress
-		if rand.New(rand.NewSource(int64(i))).Intn(2) == 0 {
+		if (i % 2) == 0 {
 			template = multisig.TemplateAddress
 		}
 
