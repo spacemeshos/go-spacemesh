@@ -19,12 +19,12 @@ func TestSyncState(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, state)
 
-		states := map[types.ATXID]int{}
+		states := EpochSyncState{}
 		const size = 100
 		for i := 0; i < size; i++ {
 			id := types.ATXID{}
 			binary.BigEndian.PutUint64(id[:], uint64(i))
-			states[id] = 0
+			states[id] = &IDSyncState{Tries: 0}
 		}
 		require.NoError(t, SaveSyncState(db, epoch, states, 1))
 
@@ -38,11 +38,11 @@ func TestSyncState(t *testing.T) {
 			binary.BigEndian.PutUint64(id[:], uint64(i))
 			requests, exists := state[id]
 			require.True(t, exists)
-			require.Equal(t, 0, requests)
+			require.Equal(t, 0, requests.Tries)
 			if i < size/2 {
-				state[id] = 1
+				state[id].Tries = 1
 			} else {
-				state[id] = max
+				state[id].Tries = max
 			}
 		}
 
@@ -58,8 +58,33 @@ func TestSyncState(t *testing.T) {
 			}
 		}
 		require.Equal(t, state, updated)
-
 	}
+}
+
+func TestNoRedundantUpdates(t *testing.T) {
+	db := localsql.InMemory()
+	epochState := EpochSyncState{}
+	epochState[types.ATXID{1}] = &IDSyncState{Tries: 0}
+	epochState[types.ATXID{2}] = &IDSyncState{Tries: 0}
+	require.NoError(t, SaveSyncState(db, types.EpochID(1), epochState, 10))
+	for _, requests := range epochState {
+		require.True(t, requests.TriesPersisted())
+	}
+	// clear database to test that the next update won't happen
+	require.NoError(t, Clear(db))
+	require.NoError(t, SaveSyncState(db, types.EpochID(1), epochState, 10))
+	loaded, err := GetSyncState(db, types.EpochID(1))
+	require.NoError(t, err)
+	require.Empty(t, loaded)
+
+	// now update epoch state and check that the update happens
+	for _, requests := range epochState {
+		requests.Tries = 1
+	}
+	require.NoError(t, SaveSyncState(db, types.EpochID(1), epochState, 10))
+	loaded, err = GetSyncState(db, types.EpochID(1))
+	require.NoError(t, err)
+	require.Equal(t, epochState, loaded)
 }
 
 func TestRequestTime(t *testing.T) {
@@ -89,12 +114,12 @@ func TestClear(t *testing.T) {
 	db := localsql.InMemory()
 	// add some state
 	for epoch := types.EpochID(1); epoch < types.EpochID(5); epoch++ {
-		states := map[types.ATXID]int{}
+		states := EpochSyncState{}
 		const size = 100
 		for i := 0; i < size; i++ {
 			id := types.ATXID{}
 			binary.BigEndian.PutUint64(id[:], uint64(i))
-			states[id] = 0
+			states[id] = fromDatabase(1)
 		}
 		require.NoError(t, SaveSyncState(db, epoch, states, 1))
 		require.NoError(t, SaveRequest(db, epoch, time.Now(), 10, 10))

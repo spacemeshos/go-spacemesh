@@ -126,6 +126,7 @@ func testnet() config.Config {
 
 			InfoCacheTTL:      5 * time.Minute,
 			PowParamsCacheTTL: 5 * time.Minute,
+			PoetProofsCache:   200,
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   2,

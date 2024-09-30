@@ -101,8 +101,6 @@ type Proof struct {
 
 type ProofData interface {
 	scale.Type
-
-	isProof()
 }
 
 func (e *Proof) EncodeScale(enc *scale.Encoder) (int, error) {
@@ -199,8 +197,6 @@ type AtxProof struct {
 	Messages [2]AtxProofMsg
 }
 
-func (ap *AtxProof) isProof() {}
-
 func (ap *AtxProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddObject("first", &ap.Messages[0].InnerMsg)
 	encoder.AddObject("second", &ap.Messages[1].InnerMsg)
@@ -211,8 +207,6 @@ type BallotProof struct {
 	Messages [2]BallotProofMsg
 }
 
-func (bp *BallotProof) isProof() {}
-
 func (bp *BallotProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddObject("first", &bp.Messages[0].InnerMsg)
 	encoder.AddObject("second", &bp.Messages[1].InnerMsg)
@@ -222,8 +216,6 @@ func (bp *BallotProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 type HareProof struct {
 	Messages [2]HareProofMsg
 }
-
-func (hp *HareProof) isProof() {}
 
 func (hp *HareProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddObject("first", &hp.Messages[0].InnerMsg)
@@ -259,8 +251,6 @@ type InvalidPostIndexProof struct {
 	// Which index in POST is invalid
 	InvalidIdx uint32
 }
-
-func (p *InvalidPostIndexProof) isProof() {}
 
 type BallotProofMsg struct {
 	InnerMsg types.BallotMetadata
@@ -321,8 +311,6 @@ type InvalidPrevATXProof struct {
 	Atx1 wire.ActivationTxV1
 	Atx2 wire.ActivationTxV1
 }
-
-func (p *InvalidPrevATXProof) isProof() {}
 
 func MalfeasanceInfo(smesher types.NodeID, mp *MalfeasanceProof) string {
 	var b strings.Builder

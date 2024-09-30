@@ -111,6 +111,8 @@ or [mingw](https://chocolatey.org/packages/mingw).
 
 Ensure that `$GOPATH` is set correctly and that the `$GOPATH/bin` directory appears in `$PATH`.
 
+Ensure that you have installed [git-lfs](https://git-lfs.com/).
+
 Before building we need to set up the golang environment. Do this by running:
 
 ```bash
@@ -124,9 +126,10 @@ make go-env-test
 ```
 
 **CGO_CFLAGS** must be set to "-I<absolute_path_to_repo>/go-spacemesh/build/ -DSQLITE_ENABLE_DBSTAT_VTAB=1"
+
 **CGO_LDFLAGS** must be set to "-L<absolute_path_to_repo>/go-spacemesh/build/ -Wl,-rpath,$ORIGIN -Wl,-rpath,<absolute_path_to_repo>/go-spacemesh/build/"
 
-Make sure you have **OpenCL** library installed
+Make sure you have **OpenCL** library installed.
 
 To check if setup was configured successfully, try to run: 
 ```bash
@@ -178,7 +181,7 @@ The environment variables can be printed by running either `make print-env` or
 
 They can be set in 3 ways:
 
-_Note: we need to use eval to interpret the commands since there are spaces in
+_Note: we need to use `eval` to interpret the commands since there are spaces in
 the values of the variables so the shell can't correctly split them as
 arguments._
 
@@ -243,7 +246,7 @@ behavior and override default values.
 
 1. Run go-spacemesh to join a testnet without mining (see above).
 2. Run the CLI Wallet to create a coinbase account. Save your coinbase account public address - you'll need it later.
-3. Stop go-spacemesh and start it with the following params:
+3. Stop go-spacemesh and start it with the following parameters:
 
     ```bash
     ./go-spacemesh --listen [a_multiaddr] --config [configFileLocation] -d [nodeDataFilesPath] \
@@ -297,7 +300,7 @@ To disable the internal PoST service and disable smeshing on your node you can u
 
 or use the `--smeshing-start=false` flag. Additionally rename the `local.key` in your `data/identities` folder to a
 unique name for your node (e.g. `nodeA.key`). This will disable smeshing on your node causing, i.e. it will not generate
-any PoST proofs until a remote post service connects. Be aware that you still need to set your coinbase via
+any PoST proofs until a remote post service connects. Be aware that you still need to set your coinbase via:
 
 ```json
 "smeshing": {

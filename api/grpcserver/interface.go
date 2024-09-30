@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -58,7 +57,7 @@ type atxProvider interface {
 	GetAtx(id types.ATXID) (*types.ActivationTx, error)
 	Previous(id types.ATXID) ([]types.ATXID, error)
 	MaxHeightAtx() (types.ATXID, error)
-	GetMalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error)
+	MalfeasanceProof(id types.NodeID) ([]byte, error)
 }
 
 type postState interface {

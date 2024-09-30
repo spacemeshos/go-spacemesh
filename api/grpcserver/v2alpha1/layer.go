@@ -60,29 +60,14 @@ func (s *LayerStreamService) Stream(
 		}
 	}
 
-	dbChan := make(chan *spacemeshv2alpha1.Layer, 100)
-	errChan := make(chan error, 1)
-
 	ops, err := toLayerOperations(toLayerRequest(request))
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
-	// send db data to chan to avoid buffer overflow
-	go func() {
-		defer close(dbChan)
-		if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
-			select {
-			case dbChan <- toLayer(layer):
-				return true
-			case <-ctx.Done():
-				// exit if the stream context is canceled
-				return false
-			}
-		}); err != nil {
-			errChan <- status.Error(codes.Internal, err.Error())
-			return
-		}
-	}()
+
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+	dbChan, errChan := s.fetchFromDB(ctx, ops)
 
 	var eventsOut <-chan events.LayerUpdate
 	var eventsFull <-chan struct{}
@@ -153,6 +138,31 @@ func (s *LayerStreamService) Stream(
 			}
 		}
 	}
+}
+
+func (s *LayerStreamService) fetchFromDB(
+	ctx context.Context,
+	ops builder.Operations,
+) (<-chan *spacemeshv2alpha1.Layer, <-chan error) {
+	dbChan := make(chan *spacemeshv2alpha1.Layer, 100)
+	errChan := make(chan error, 1) // buffered to avoid blocking, routine should exit immediately after sending an error
+
+	go func() {
+		defer close(dbChan)
+		if err := layers.IterateLayersWithBlockOps(s.db, ops, func(layer *layers.Layer) bool {
+			select {
+			case dbChan <- toLayer(layer):
+				return true
+			case <-ctx.Done():
+				// exit if the stream context is canceled
+				return false
+			}
+		}); err != nil {
+			errChan <- status.Error(codes.Internal, err.Error())
+		}
+	}()
+
+	return dbChan, errChan
 }
 
 func toLayerRequest(filter *spacemeshv2alpha1.LayerStreamRequest) *spacemeshv2alpha1.LayerRequest {

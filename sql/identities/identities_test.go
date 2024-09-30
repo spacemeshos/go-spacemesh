@@ -1,4 +1,4 @@
-package identities
+package identities_test
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -18,7 +20,7 @@ func TestMalicious(t *testing.T) {
 	db := statesql.InMemory()
 
 	nodeID := types.NodeID{1, 1, 1, 1}
-	mal, err := IsMalicious(db, nodeID)
+	mal, err := identities.IsMalicious(db, nodeID)
 	require.NoError(t, err)
 	require.False(t, mal)
 
@@ -40,29 +42,26 @@ func TestMalicious(t *testing.T) {
 			Data: &ballotProof,
 		},
 	}
-	now := time.Now()
-	data, err := codec.Encode(proof)
-	require.NoError(t, err)
-	require.NoError(t, SetMalicious(db, nodeID, data, now))
+	require.NoError(t, identities.SetMalicious(db, nodeID, codec.MustEncode(proof), time.Now()))
 
-	mal, err = IsMalicious(db, nodeID)
+	mal, err = identities.IsMalicious(db, nodeID)
 	require.NoError(t, err)
 	require.True(t, mal)
 
-	mal, err = IsMalicious(db, types.RandomNodeID())
+	mal, err = identities.IsMalicious(db, types.RandomNodeID())
 	require.NoError(t, err)
 	require.False(t, mal)
 
-	got, err := GetMalfeasanceProof(db, nodeID)
-	require.NoError(t, err)
-	require.Equal(t, now.UTC(), got.Received().UTC())
-	got.SetReceived(time.Time{})
-	require.EqualValues(t, proof, got)
+	var blob sql.Blob
+	require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), db, nodeID.Bytes(), &blob))
+	got := &wire.MalfeasanceProof{}
+	codec.MustDecode(blob.Bytes, got)
+	require.Equal(t, proof, got)
 }
 
 func Test_GetMalicious(t *testing.T) {
 	db := statesql.InMemory()
-	got, err := GetMalicious(db)
+	got, err := identities.GetMalicious(db)
 	require.NoError(t, err)
 	require.Nil(t, got)
 
@@ -71,9 +70,9 @@ func Test_GetMalicious(t *testing.T) {
 	for i := 0; i < numBad; i++ {
 		nid := types.NodeID{byte(i + 1)}
 		bad = append(bad, nid)
-		require.NoError(t, SetMalicious(db, nid, types.RandomBytes(11), time.Now().Local()))
+		require.NoError(t, identities.SetMalicious(db, nid, types.RandomBytes(11), time.Now().Local()))
 	}
-	got, err = GetMalicious(db)
+	got, err = identities.GetMalicious(db)
 	require.NoError(t, err)
 	require.Equal(t, bad, got)
 }
@@ -84,24 +83,24 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 
 	nid1 := types.RandomNodeID()
 	proof1 := types.RandomBytes(11)
-	SetMalicious(db, nid1, proof1, time.Now().Local())
+	identities.SetMalicious(db, nid1, proof1, time.Now().Local())
 
 	var blob1 sql.Blob
-	require.NoError(t, LoadMalfeasanceBlob(ctx, db, nid1.Bytes(), &blob1))
+	require.NoError(t, identities.LoadMalfeasanceBlob(ctx, db, nid1.Bytes(), &blob1))
 	require.Equal(t, proof1, blob1.Bytes)
 
-	blobSizes, err := GetBlobSizes(db, [][]byte{nid1.Bytes()})
+	blobSizes, err := identities.GetBlobSizes(db, [][]byte{nid1.Bytes()})
 	require.NoError(t, err)
 	require.Equal(t, []int{len(blob1.Bytes)}, blobSizes)
 
 	nid2 := types.RandomNodeID()
 	proof2 := types.RandomBytes(12)
-	SetMalicious(db, nid2, proof2, time.Now().Local())
+	identities.SetMalicious(db, nid2, proof2, time.Now().Local())
 
 	var blob2 sql.Blob
-	require.NoError(t, LoadMalfeasanceBlob(ctx, db, nid2.Bytes(), &blob2))
+	require.NoError(t, identities.LoadMalfeasanceBlob(ctx, db, nid2.Bytes(), &blob2))
 	require.Equal(t, proof2, blob2.Bytes)
-	blobSizes, err = GetBlobSizes(db, [][]byte{
+	blobSizes, err = identities.GetBlobSizes(db, [][]byte{
 		nid1.Bytes(),
 		nid2.Bytes(),
 	})
@@ -109,9 +108,9 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 	require.Equal(t, []int{len(blob1.Bytes), len(blob2.Bytes)}, blobSizes)
 
 	noSuchID := types.RandomATXID()
-	require.ErrorIs(t, LoadMalfeasanceBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
+	require.ErrorIs(t, identities.LoadMalfeasanceBlob(ctx, db, noSuchID[:], &sql.Blob{}), sql.ErrNotFound)
 
-	blobSizes, err = GetBlobSizes(db, [][]byte{
+	blobSizes, err = identities.GetBlobSizes(db, [][]byte{
 		nid1.Bytes(),
 		noSuchID.Bytes(),
 		nid2.Bytes(),
@@ -127,7 +126,7 @@ func TestMarriageATX(t *testing.T) {
 		db := statesql.InMemory()
 
 		id := types.RandomNodeID()
-		_, err := MarriageATX(db, id)
+		_, err := identities.MarriageATX(db, id)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 	t.Run("married", func(t *testing.T) {
@@ -135,14 +134,14 @@ func TestMarriageATX(t *testing.T) {
 		db := statesql.InMemory()
 
 		id := types.RandomNodeID()
-		marriage := MarriageData{
+		marriage := identities.MarriageData{
 			ATX:       types.RandomATXID(),
 			Signature: types.RandomEdSignature(),
 			Index:     2,
 			Target:    types.RandomNodeID(),
 		}
-		require.NoError(t, SetMarriage(db, id, &marriage))
-		got, err := MarriageATX(db, id)
+		require.NoError(t, identities.SetMarriage(db, id, &marriage))
+		got, err := identities.MarriageATX(db, id)
 		require.NoError(t, err)
 		require.Equal(t, marriage.ATX, got)
 	})
@@ -154,14 +153,14 @@ func TestMarriage(t *testing.T) {
 	db := statesql.InMemory()
 
 	id := types.RandomNodeID()
-	marriage := MarriageData{
+	marriage := identities.MarriageData{
 		ATX:       types.RandomATXID(),
 		Signature: types.RandomEdSignature(),
 		Index:     2,
 		Target:    types.RandomNodeID(),
 	}
-	require.NoError(t, SetMarriage(db, id, &marriage))
-	got, err := Marriage(db, id)
+	require.NoError(t, identities.SetMarriage(db, id, &marriage))
+	got, err := identities.Marriage(db, id)
 	require.NoError(t, err)
 	require.Equal(t, marriage, *got)
 }
@@ -179,7 +178,7 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 		}
 		for i, id := range ids {
-			err := SetMarriage(db, id, &MarriageData{
+			err := identities.SetMarriage(db, id, &identities.MarriageData{
 				ATX:   atx,
 				Index: i,
 			})
@@ -187,10 +186,10 @@ func TestEquivocationSet(t *testing.T) {
 		}
 
 		for _, id := range ids {
-			mAtx, err := MarriageATX(db, id)
+			mAtx, err := identities.MarriageATX(db, id)
 			require.NoError(t, err)
 			require.Equal(t, atx, mAtx)
-			set, err := EquivocationSet(db, id)
+			set, err := identities.EquivocationSet(db, id)
 			require.NoError(t, err)
 			require.ElementsMatch(t, ids, set)
 		}
@@ -199,7 +198,7 @@ func TestEquivocationSet(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemory()
 		id := types.RandomNodeID()
-		set, err := EquivocationSet(db, id)
+		set, err := identities.EquivocationSet(db, id)
 		require.NoError(t, err)
 		require.Equal(t, []types.NodeID{id}, set)
 	})
@@ -212,7 +211,7 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 		}
 		for i, id := range ids {
-			err := SetMarriage(db, id, &MarriageData{
+			err := identities.SetMarriage(db, id, &identities.MarriageData{
 				ATX:   atx,
 				Index: i,
 			})
@@ -220,19 +219,19 @@ func TestEquivocationSet(t *testing.T) {
 		}
 
 		for _, id := range ids {
-			set, err := EquivocationSet(db, id)
+			set, err := identities.EquivocationSet(db, id)
 			require.NoError(t, err)
 			require.ElementsMatch(t, ids, set)
 		}
 
 		// try to marry via another random ATX
 		// the set should remain intact
-		err := SetMarriage(db, ids[0], &MarriageData{
+		err := identities.SetMarriage(db, ids[0], &identities.MarriageData{
 			ATX: types.RandomATXID(),
 		})
 		require.NoError(t, err)
 		for _, id := range ids {
-			set, err := EquivocationSet(db, id)
+			set, err := identities.EquivocationSet(db, id)
 			require.NoError(t, err)
 			require.ElementsMatch(t, ids, set)
 		}
@@ -241,17 +240,18 @@ func TestEquivocationSet(t *testing.T) {
 		db := statesql.InMemory()
 		atx := types.RandomATXID()
 		id := types.RandomNodeID()
-		require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx}))
+		require.NoError(t, identities.SetMarriage(db, id, &identities.MarriageData{ATX: atx}))
 
-		malicious, err := IsMalicious(db, id)
+		malicious, err := identities.IsMalicious(db, id)
 		require.NoError(t, err)
 		require.False(t, malicious)
 
-		proof, err := GetMalfeasanceProof(db, id)
+		var blob sql.Blob
+		err = identities.LoadMalfeasanceBlob(context.Background(), db, id.Bytes(), &blob)
 		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Nil(t, proof)
+		require.Nil(t, blob.Bytes)
 
-		ids, err := GetMalicious(db)
+		ids, err := identities.GetMalicious(db)
 		require.NoError(t, err)
 		require.Empty(t, ids)
 	})
@@ -264,13 +264,13 @@ func TestEquivocationSet(t *testing.T) {
 			types.RandomNodeID(),
 		}
 		for i, id := range ids {
-			require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx, Index: i}))
+			require.NoError(t, identities.SetMarriage(db, id, &identities.MarriageData{ATX: atx, Index: i}))
 		}
 
-		require.NoError(t, SetMalicious(db, ids[0], []byte("proof"), time.Now()))
+		require.NoError(t, identities.SetMalicious(db, ids[0], []byte("proof"), time.Now()))
 
 		for _, id := range ids {
-			malicious, err := IsMalicious(db, id)
+			malicious, err := identities.IsMalicious(db, id)
 			require.NoError(t, err)
 			require.True(t, malicious)
 		}
@@ -290,16 +290,109 @@ func TestEquivocationSetByMarriageATX(t *testing.T) {
 		}
 		atx := types.RandomATXID()
 		for i, id := range ids {
-			require.NoError(t, SetMarriage(db, id, &MarriageData{ATX: atx, Index: i}))
+			require.NoError(t, identities.SetMarriage(db, id, &identities.MarriageData{ATX: atx, Index: i}))
 		}
-		set, err := EquivocationSetByMarriageATX(db, atx)
+		set, err := identities.EquivocationSetByMarriageATX(db, atx)
 		require.NoError(t, err)
 		require.Equal(t, ids, set)
 	})
 	t.Run("empty set", func(t *testing.T) {
 		db := statesql.InMemory()
-		set, err := EquivocationSetByMarriageATX(db, types.RandomATXID())
+		set, err := identities.EquivocationSetByMarriageATX(db, types.RandomATXID())
 		require.NoError(t, err)
 		require.Empty(t, set)
 	})
+}
+
+func Test_IterateMaliciousOps(t *testing.T) {
+	db := statesql.InMemory()
+	tt := []struct {
+		id    types.NodeID
+		proof []byte
+	}{
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+	}
+
+	for _, tc := range tt {
+		err := identities.SetMalicious(db, tc.id, tc.proof, time.Now())
+		require.NoError(t, err)
+	}
+
+	var got []struct {
+		id    types.NodeID
+		proof []byte
+	}
+	err := identities.IterateMaliciousOps(db, builder.Operations{},
+		func(id types.NodeID, proof []byte, _ time.Time) bool {
+			got = append(got, struct {
+				id    types.NodeID
+				proof []byte
+			}{id, proof})
+			return true
+		})
+	require.NoError(t, err)
+	require.ElementsMatch(t, tt, got)
+}
+
+func Test_IterateMaliciousOpsWithFilter(t *testing.T) {
+	db := statesql.InMemory()
+	tt := []struct {
+		id    types.NodeID
+		proof []byte
+	}{
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+		{
+			types.RandomNodeID(),
+			nil,
+		},
+		{
+			types.RandomNodeID(),
+			types.RandomBytes(11),
+		},
+	}
+
+	for _, tc := range tt {
+		err := identities.SetMalicious(db, tc.id, tc.proof, time.Now())
+		require.NoError(t, err)
+	}
+
+	var got []struct {
+		id    types.NodeID
+		proof []byte
+	}
+	ops := builder.Operations{}
+	ops.Filter = append(ops.Filter, builder.Op{
+		Field: builder.Smesher,
+		Token: builder.In,
+		Value: [][]byte{tt[0].id.Bytes(), tt[1].id.Bytes()}, // first two ids
+	})
+	ops.Filter = append(ops.Filter, builder.Op{
+		Field: builder.Proof,
+		Token: builder.IsNotNull, // only entries which have a proof
+	})
+
+	err := identities.IterateMaliciousOps(db, ops, func(id types.NodeID, proof []byte, _ time.Time) bool {
+		got = append(got, struct {
+			id    types.NodeID
+			proof []byte
+		}{id, proof})
+		return true
+	})
+	require.NoError(t, err)
+	// only the first element should be in the result
+	require.ElementsMatch(t, tt[:1], got)
 }
