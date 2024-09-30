@@ -584,6 +584,7 @@ func (msh *Mesh) AddBallot(
 		err := identities.LoadMalfeasanceBlob(ctx, msh.cdb, ballot.SmesherID.Bytes(), &blob)
 		switch err {
 		case nil:
+			proof = new(wire.MalfeasanceProof)
 			codec.MustDecode(blob.Bytes, proof)
 			msh.atxsdata.SetMalicious(ballot.SmesherID)
 			msh.trtl.OnMalfeasance(ballot.SmesherID)
