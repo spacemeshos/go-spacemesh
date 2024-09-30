@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -579,9 +580,16 @@ func (msh *Mesh) AddBallot(
 		// identities we have. The other way to go about this is to allocate an individual channel
 		// for every write (so that every writer gets its own response with the potential proof)
 		// However I find that more costly than this approach.
-		proof, _ = identities.GetMalfeasanceProof(msh.cdb, ballot.SmesherID)
-		msh.atxsdata.SetMalicious(ballot.SmesherID)
-		msh.trtl.OnMalfeasance(ballot.SmesherID)
+		var blob sql.Blob
+		err := identities.LoadMalfeasanceBlob(ctx, msh.cdb, ballot.SmesherID.Bytes(), &blob)
+		switch err {
+		case nil:
+			codec.MustDecode(blob.Bytes, proof)
+			msh.atxsdata.SetMalicious(ballot.SmesherID)
+			msh.trtl.OnMalfeasance(ballot.SmesherID)
+		default:
+			return nil, fmt.Errorf("load malfeasance blob: %w", err)
+		}
 	}
 	return proof, nil
 }

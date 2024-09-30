@@ -69,9 +69,10 @@ func TestWriteCoalesce_OnePerSmesher(t *testing.T) {
 	err = w.Store(b1)
 	require.NoError(t, err)
 	// check that a corresponding malfeasance proof has been stored
-	proof, err := identities.GetMalfeasanceProof(db, b.SmesherID)
+	var blob sql.Blob
+	err = identities.LoadMalfeasanceBlob(context.Background(), db, b.SmesherID.Bytes(), &blob)
 	require.NoError(t, err)
-	require.NotNil(t, proof)
+	require.NotNil(t, blob.Bytes)
 }
 
 func BenchmarkWriteCoalesing(b *testing.B) {
