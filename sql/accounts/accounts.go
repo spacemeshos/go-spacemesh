@@ -82,8 +82,8 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 func All(db sql.Executor) ([]*types.Account, error) {
 	var rst []*types.Account
 	_, err := db.Exec(
-		"select address, balance, next_nonce, max(layer_updated), template, state, storage
-		from accounts group by address;",
+		`select address, balance, next_nonce, max(layer_updated), template, state, storage
+		from accounts group by address;`,
 		nil,
 		func(stmt *sql.Statement) bool {
 			var account types.Account
