@@ -17,7 +17,7 @@ type IdentityStateStorage struct {
 	states map[types.NodeID]types.IdentityState
 }
 
-func NewIdentityStateStorage() IdentityStates {
+func NewIdentityStateStorage() *IdentityStateStorage {
 	return &IdentityStateStorage{
 		states: make(map[types.NodeID]types.IdentityState),
 	}
@@ -66,9 +66,12 @@ func (s *IdentityStateStorage) Set(id types.NodeID, newState types.IdentityState
 		}
 	}
 
-	return fmt.Errorf("%v: state %v can't be switched to %v",
-		ErrInvalidIdentityStateSwitch.Error(),
-		currentState, newState)
+	return fmt.Errorf(
+		"%w: state %v can't be switched to %v",
+		ErrInvalidIdentityStateSwitch,
+		currentState,
+		newState,
+	)
 }
 
 func (s *IdentityStateStorage) Get(id types.NodeID) (types.IdentityState, error) {
