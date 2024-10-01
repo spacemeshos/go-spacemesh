@@ -937,7 +937,6 @@ func (app *App) initServices(ctx context.Context) error {
 			)
 			return nil
 		})
-		panic("hare4 still not enabled")
 	}
 
 	propHare := &proposalConsumerHare{
