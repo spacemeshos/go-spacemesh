@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"go.uber.org/zap"
@@ -32,31 +33,22 @@ var (
 type MalfeasanceType byte
 
 const (
-	// V1 types.
 	MultipleATXs     MalfeasanceType = MalfeasanceType(wire.MultipleATXs)
 	MultipleBallots                  = MalfeasanceType(wire.MultipleBallots)
 	HareEquivocation                 = MalfeasanceType(wire.HareEquivocation)
 	InvalidPostIndex                 = MalfeasanceType(wire.InvalidPostIndex)
 	InvalidPrevATX                   = MalfeasanceType(wire.InvalidPrevATX)
-
-	// V2 types
-	// TODO(mafa): for future use.
-	InvalidActivation MalfeasanceType = iota + 10
-	InvalidBallot
-	InvalidHareMsg
 )
 
 // Handler processes MalfeasanceProof from gossip and, if deems it valid, propagates it to peers.
 type Handler struct {
-	logger *zap.Logger
-	cdb    *datastore.CachedDB
-
-	handlersV1 map[MalfeasanceType]HandlerV1
-	handlersV2 map[MalfeasanceType]HandlerV2
-
+	logger   *zap.Logger
+	cdb      *datastore.CachedDB
 	self     p2p.Peer
 	nodeIDs  []types.NodeID
 	tortoise tortoise
+
+	handlers map[MalfeasanceType]MalfeasanceHandler
 }
 
 func NewHandler(
@@ -73,33 +65,50 @@ func NewHandler(
 		nodeIDs:  nodeID,
 		tortoise: tortoise,
 
-		handlersV1: make(map[MalfeasanceType]HandlerV1),
-		handlersV2: make(map[MalfeasanceType]HandlerV2),
+		handlers: make(map[MalfeasanceType]MalfeasanceHandler),
 	}
 }
 
-func (h *Handler) RegisterHandlerV1(malfeasanceType MalfeasanceType, handler HandlerV1) {
-	h.handlersV1[malfeasanceType] = handler
+func (h *Handler) RegisterHandler(malfeasanceType MalfeasanceType, handler MalfeasanceHandler) {
+	if _, ok := h.handlers[malfeasanceType]; ok {
+		h.logger.Panic("handler already registered", zap.Int("malfeasanceType", int(malfeasanceType)))
+	}
+
+	h.handlers[malfeasanceType] = handler
 }
 
-func (h *Handler) RegisterHandlerV2(malfeasanceType MalfeasanceType, handler HandlerV2) {
-	h.handlersV2[malfeasanceType] = handler
-}
-
-func (h *Handler) reportMalfeasance(smesher types.NodeID, mp *wire.MalfeasanceProof) {
+func (h *Handler) reportMalfeasance(smesher types.NodeID, proof []byte) {
 	h.tortoise.OnMalfeasance(smesher)
-	events.ReportMalfeasance(smesher, mp)
+	events.ReportMalfeasance(smesher, proof)
 	if slices.Contains(h.nodeIDs, smesher) {
-		events.EmitOwnMalfeasanceProof(smesher, mp)
+		events.EmitOwnMalfeasanceProof(smesher, proof)
 	}
 }
 
 func (h *Handler) countProof(mp *wire.MalfeasanceProof) {
-	h.handlersV1[MalfeasanceType(mp.Proof.Type)].ReportProof(numProofs)
+	h.handlers[MalfeasanceType(mp.Proof.Type)].ReportProof(numProofs)
 }
 
 func (h *Handler) countInvalidProof(p *wire.MalfeasanceProof) {
-	h.handlersV1[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
+	h.handlers[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
+}
+
+func (h *Handler) Info(data []byte) (map[string]string, error) {
+	var p wire.MalfeasanceProof
+	if err := codec.Decode(data, &p); err != nil {
+		return nil, fmt.Errorf("decode malfeasance proof: %w", err)
+	}
+	mh, ok := h.handlers[MalfeasanceType(p.Proof.Type)]
+	if !ok {
+		return nil, fmt.Errorf("unknown malfeasance type %d", p.Proof.Type)
+	}
+	properties, err := mh.Info(p.Proof.Data)
+	if err != nil {
+		return nil, fmt.Errorf("malfeasance info: %w", err)
+	}
+	properties["domain"] = "0" // for malfeasance V1 there are no domains
+	properties["type"] = strconv.FormatUint(uint64(p.Proof.Type), 10)
+	return properties, nil
 }
 
 // HandleSyncedMalfeasanceProof is the sync validator for MalfeasanceProof.
@@ -115,7 +124,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 		h.logger.Error("malformed message (sync)", log.ZContext(ctx), zap.Error(err))
 		return errMalformedData
 	}
-	nodeID, err := h.validateAndSave(ctx, &wire.MalfeasanceGossip{MalfeasanceProof: p})
+	nodeID, err := h.validateAndSave(ctx, &p)
 	if err == nil && types.Hash32(nodeID) != expHash {
 		return fmt.Errorf(
 			"%w: malfeasance proof want %s, got %s",
@@ -135,52 +144,48 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		h.logger.Error("malformed message", log.ZContext(ctx), zap.Error(err))
 		return errMalformedData
 	}
+	if p.Eligibility != nil {
+		numMalformed.Inc()
+		return fmt.Errorf("%w: eligibility field was deprecated with hare3", pubsub.ErrValidationReject)
+	}
 	if peer == h.self {
-		id, err := h.Validate(ctx, &p)
+		id, err := h.Validate(ctx, &p.MalfeasanceProof)
 		if err != nil {
 			h.countInvalidProof(&p.MalfeasanceProof)
 			return err
 		}
-		h.reportMalfeasance(id, &p.MalfeasanceProof)
+		h.reportMalfeasance(id, codec.MustEncode(&p.MalfeasanceProof))
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
 		h.countProof(&p.MalfeasanceProof)
 		return nil
 	}
-	_, err := h.validateAndSave(ctx, &p)
+	_, err := h.validateAndSave(ctx, &p.MalfeasanceProof)
 	return err
 }
 
-func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, error) {
-	if p.Eligibility != nil {
-		numMalformed.Inc()
-		return types.EmptyNodeID, fmt.Errorf(
-			"%w: eligibility field was deprecated with hare3",
-			pubsub.ErrValidationReject,
-		)
-	}
+func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof) (types.NodeID, error) {
+	p.SetReceived(time.Now())
 	nodeID, err := h.Validate(ctx, p)
 	switch {
 	case errors.Is(err, errUnknownProof):
 		numMalformed.Inc()
 		return types.EmptyNodeID, err
 	case err != nil:
-		h.countInvalidProof(&p.MalfeasanceProof)
+		h.countInvalidProof(p)
 		return types.EmptyNodeID, errors.Join(err, pubsub.ErrValidationReject)
 	}
+	proofBytes := codec.MustEncode(p)
 	if err := h.cdb.WithTx(ctx, func(dbtx sql.Transaction) error {
 		malicious, err := identities.IsMalicious(dbtx, nodeID)
 		if err != nil {
 			return fmt.Errorf("check known malicious: %w", err)
-		} else if malicious {
+		}
+		if malicious {
 			h.logger.Debug("known malicious identity", log.ZContext(ctx), zap.Stringer("smesher", nodeID))
 			return ErrKnownProof
 		}
-		encoded, err := codec.Encode(&p.MalfeasanceProof)
-		if err != nil {
-			h.logger.Panic("failed to encode MalfeasanceProof", zap.Error(err))
-		}
-		if err := identities.SetMalicious(dbtx, nodeID, encoded, time.Now()); err != nil {
+		if err := identities.SetMalicious(dbtx, nodeID, proofBytes, time.Now()); err != nil {
 			return fmt.Errorf("add malfeasance proof: %w", err)
 		}
 		return nil
@@ -193,11 +198,11 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 				zap.Error(err),
 			)
 		}
-		return types.EmptyNodeID, err
+		return nodeID, err
 	}
-	h.reportMalfeasance(nodeID, &p.MalfeasanceProof)
-	h.cdb.CacheMalfeasanceProof(nodeID, &p.MalfeasanceProof)
-	h.countProof(&p.MalfeasanceProof)
+	h.reportMalfeasance(nodeID, proofBytes)
+	h.cdb.CacheMalfeasanceProof(nodeID, proofBytes)
+	h.countProof(p)
 	h.logger.Debug("new malfeasance proof",
 		log.ZContext(ctx),
 		zap.Stringer("smesher", nodeID),
@@ -206,8 +211,8 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceGossip
 	return nodeID, nil
 }
 
-func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceGossip) (types.NodeID, error) {
-	mh, ok := h.handlersV1[MalfeasanceType(p.Proof.Type)]
+func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceProof) (types.NodeID, error) {
+	mh, ok := h.handlers[MalfeasanceType(p.Proof.Type)]
 	if !ok {
 		return types.EmptyNodeID, fmt.Errorf("%w: unknown malfeasance type", errUnknownProof)
 	}

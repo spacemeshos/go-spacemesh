@@ -256,14 +256,14 @@ func EmitProposal(nodeID types.NodeID, layer types.LayerID, proposal types.Propo
 	)
 }
 
-func EmitOwnMalfeasanceProof(nodeID types.NodeID, mp *wire.MalfeasanceProof) {
+func EmitOwnMalfeasanceProof(nodeID types.NodeID, proof []byte) {
 	const help = "Node committed malicious behavior. Identity will be canceled."
 	emitUserEvent(
 		help,
 		false,
 		&pb.Event_Malfeasance{
 			Malfeasance: &pb.EventMalfeasance{
-				Proof: ToMalfeasancePB(nodeID, mp, false),
+				Proof: ToMalfeasancePB(nodeID, proof, false),
 			},
 		},
 	)
@@ -284,8 +284,9 @@ func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 	}
 }
 
-func ToMalfeasancePB(nodeID types.NodeID, mp *wire.MalfeasanceProof, includeProof bool) *pb.MalfeasanceProof {
-	if mp == nil {
+func ToMalfeasancePB(nodeID types.NodeID, proof []byte, includeProof bool) *pb.MalfeasanceProof {
+	mp := &wire.MalfeasanceProof{}
+	if err := codec.Decode(proof, mp); err != nil {
 		return &pb.MalfeasanceProof{}
 	}
 	kind := pb.MalfeasanceProof_MALFEASANCE_UNSPECIFIED
@@ -308,8 +309,7 @@ func ToMalfeasancePB(nodeID types.NodeID, mp *wire.MalfeasanceProof, includeProo
 		DebugInfo: wire.MalfeasanceInfo(nodeID, mp),
 	}
 	if includeProof {
-		data, _ := codec.Encode(mp)
-		result.Proof = data
+		result.Proof = proof
 	}
 	return result
 }

@@ -79,7 +79,7 @@ func TestGlobalStateService(t *testing.T) {
 
 		_, err := c.AccountDataQuery(ctx, &pb.AccountDataQueryRequest{})
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "`Filter` must be provided")
+		require.ErrorContains(t, err, "`Filter` must be provided")
 	})
 	t.Run("AccountDataQuery_MissingFlags", func(t *testing.T) {
 		t.Parallel()
@@ -91,7 +91,7 @@ func TestGlobalStateService(t *testing.T) {
 			},
 		})
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "`Filter.AccountMeshDataFlags` must set at least one")
+		require.ErrorContains(t, err, "`Filter.AccountMeshDataFlags` must set at least one")
 	})
 	t.Run("AccountDataQuery_BadOffset", func(t *testing.T) {
 		t.Parallel()

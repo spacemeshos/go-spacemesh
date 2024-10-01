@@ -16,6 +16,68 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
+// MockmalfeasanceInfo is a mock of malfeasanceInfo interface.
+type MockmalfeasanceInfo struct {
+	ctrl     *gomock.Controller
+	recorder *MockmalfeasanceInfoMockRecorder
+}
+
+// MockmalfeasanceInfoMockRecorder is the mock recorder for MockmalfeasanceInfo.
+type MockmalfeasanceInfoMockRecorder struct {
+	mock *MockmalfeasanceInfo
+}
+
+// NewMockmalfeasanceInfo creates a new mock instance.
+func NewMockmalfeasanceInfo(ctrl *gomock.Controller) *MockmalfeasanceInfo {
+	mock := &MockmalfeasanceInfo{ctrl: ctrl}
+	mock.recorder = &MockmalfeasanceInfoMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmalfeasanceInfo) EXPECT() *MockmalfeasanceInfoMockRecorder {
+	return m.recorder
+}
+
+// Info mocks base method.
+func (m *MockmalfeasanceInfo) Info(data []byte) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Info", data)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Info indicates an expected call of Info.
+func (mr *MockmalfeasanceInfoMockRecorder) Info(data any) *MockmalfeasanceInfoInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockmalfeasanceInfo)(nil).Info), data)
+	return &MockmalfeasanceInfoInfoCall{Call: call}
+}
+
+// MockmalfeasanceInfoInfoCall wrap *gomock.Call
+type MockmalfeasanceInfoInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmalfeasanceInfoInfoCall) Return(arg0 map[string]string, arg1 error) *MockmalfeasanceInfoInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmalfeasanceInfoInfoCall) Do(f func([]byte) (map[string]string, error)) *MockmalfeasanceInfoInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmalfeasanceInfoInfoCall) DoAndReturn(f func([]byte) (map[string]string, error)) *MockmalfeasanceInfoInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockidentityState is a mock of identityState interface.
 type MockidentityState struct {
 	ctrl     *gomock.Controller
