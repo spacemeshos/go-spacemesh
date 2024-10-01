@@ -717,6 +717,11 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("create mesh: %w", err)
 	}
 
+	app.eg.Go(func() error {
+		msh.Start(ctx)
+		return nil
+	})
+
 	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog))
 	if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
 		return fmt.Errorf("pruner %w", err)
