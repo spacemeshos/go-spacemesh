@@ -21,7 +21,7 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 			account.State = make([]byte, stmt.ColumnLen(4))
 			stmt.ColumnBytes(4, account.State)
 			// TODO: error handling here
-			codec.DecodeFrom(stmt.ColumnReader(5), account.Storage)
+			codec.DecodeFrom(stmt.ColumnReader(5), &account.Storage)
 		}
 		return false
 	})
