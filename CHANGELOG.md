@@ -4,14 +4,30 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ## v1.7.2
 
-### Highlights
+### Upgrade information
 
-### Features
+This version adds new and updates existing `v2alpha1` API endpoints and does not require any special upgrade steps.
+Additionally performance improvements were made to the node.
 
 ### Improvements
 
 * [#6289](https://github.com/spacemeshos/go-spacemesh/pull/6289) Added write coalescing for ballots, reducing the
   amount of time and CPU we're spending on writing ballots.
+
+* [#6353](https://github.com/spacemeshos/go-spacemesh/pull/6353) Add new malfeasance API.
+
+* [#6357](https://github.com/spacemeshos/go-spacemesh/pull/6353) Add template address to account service.
+
+## v1.7.1
+
+### Upgrade information
+
+This version has no code changes to v1.7.0, only the release process was updated to fix a problem with the windows
+build.
+
+### Improvements
+
+* [#6351](https://github.com/spacemeshos/go-spacemesh/pull/6351) Fixed filenames of windows builds.
 
 ## v1.7.0
 
