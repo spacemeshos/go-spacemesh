@@ -50,8 +50,8 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	account, err := load(
 		db,
 		address,
-		`select balance, next_nonce, layer_updated, template, state from accounts where address = ?1 
-		order by layer_updated desc;`,
+		`select balance, next_nonce, layer_updated, template, state, storage
+		from accounts where address = ?1 order by layer_updated desc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 		},
@@ -65,7 +65,7 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 // Get account data that was valid at the specified layer.
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
 	account, err := load(db, address,
-		`select balance, next_nonce, layer_updated, template, state
+		`select balance, next_nonce, layer_updated, template, state, storage
 		 from accounts where address = ?1 and layer_updated <= ?2 order by layer_updated desc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
@@ -82,7 +82,8 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 func All(db sql.Executor) ([]*types.Account, error) {
 	var rst []*types.Account
 	_, err := db.Exec(
-		"select address, balance, next_nonce, max(layer_updated), template, state from accounts group by address;",
+		"select address, balance, next_nonce, max(layer_updated), template, state, storage
+		from accounts group by address;",
 		nil,
 		func(stmt *sql.Statement) bool {
 			var account types.Account
@@ -96,6 +97,7 @@ func All(db sql.Executor) ([]*types.Account, error) {
 				account.TemplateAddress = &template
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
+				codec.DecodeFrom(stmt.ColumnReader(6), &account.Storage)
 			}
 			rst = append(rst, &account)
 			return true
@@ -110,9 +112,8 @@ func All(db sql.Executor) ([]*types.Account, error) {
 func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 	var rst []*types.Account
 	if rows, err := db.Exec(`
-			select address, balance, next_nonce, max(layer_updated), template, state from accounts 
-			where layer_updated <= ?1
-			group by address order by address asc;`,
+			select address, balance, next_nonce, max(layer_updated), template, state, storage
+			from accounts where layer_updated <= ?1 group by address order by address asc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(layer))
 		},
@@ -128,6 +129,7 @@ func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 				account.TemplateAddress = &template
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
+				codec.DecodeFrom(stmt.ColumnReader(6), &account.Storage)
 			}
 			rst = append(rst, &account)
 			return true
@@ -185,7 +187,8 @@ func IterateAccountsOps(
 	operations builder.Operations,
 	fn func(account *types.Account) bool,
 ) error {
-	_, err := db.Exec(`select address, balance, next_nonce, max(layer_updated), template, state from accounts`+
+	_, err := db.Exec(`select address, balance, next_nonce, max(layer_updated), template, state,
+	storage from accounts`+
 		builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
 		func(stmt *sql.Statement) bool {
@@ -200,6 +203,7 @@ func IterateAccountsOps(
 				account.TemplateAddress = &template
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
+				codec.DecodeFrom(stmt.ColumnReader(6), &account.Storage)
 			}
 			return fn(&account)
 		},
