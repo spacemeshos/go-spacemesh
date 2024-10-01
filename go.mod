@@ -39,7 +39,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.12.0
-	github.com/spacemeshos/api/release/go v1.53.1-0.20241001141906-a1f36b016002
+	github.com/spacemeshos/api/release/go v1.54.1-0.20241001142818-50e3b4247535
 	github.com/spacemeshos/economics v0.1.3
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.2.0
