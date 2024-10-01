@@ -14,10 +14,10 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/wallet"
 )
 
 type testAccount struct {

@@ -42,7 +42,7 @@ type testMesh struct {
 	cdb          *datastore.CachedDB
 	atxsdata     *atxsdata.Data
 	mockClock    *mocks.MocklayerClock
-	mockVM       *mocks.MockvmState
+	mockVM       *mocks.MockVmState
 	mockState    *mocks.MockconservativeState
 	mockTortoise *smocks.MockTortoise
 }
@@ -59,7 +59,7 @@ func createTestMesh(t *testing.T) *testMesh {
 		cdb:          datastore.NewCachedDB(db, lg),
 		atxsdata:     atxsdata,
 		mockClock:    mocks.NewMocklayerClock(ctrl),
-		mockVM:       mocks.NewMockvmState(ctrl),
+		mockVM:       mocks.NewMockVmState(ctrl),
 		mockState:    mocks.NewMockconservativeState(ctrl),
 		mockTortoise: smocks.NewMockTortoise(ctrl),
 	}

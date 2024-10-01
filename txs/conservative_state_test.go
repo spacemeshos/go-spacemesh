@@ -74,7 +74,7 @@ type testConState struct {
 	*ConservativeState
 	logger *zap.Logger
 	db     sql.StateDatabase
-	mvm    *MockvmState
+	mvm    *MockVmState
 
 	id peer.ID
 }
@@ -85,7 +85,7 @@ func (t *testConState) handler() *TxHandler {
 
 func createTestState(t *testing.T, gasLimit uint64) *testConState {
 	ctrl := gomock.NewController(t)
-	mvm := NewMockvmState(ctrl)
+	mvm := NewMockVmState(ctrl)
 	db := statesql.InMemory()
 	cfg := CSConfig{
 		BlockGasLimit:     gasLimit,

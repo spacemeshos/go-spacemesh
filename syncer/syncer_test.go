@@ -76,7 +76,7 @@ type testSyncer struct {
 	mMalSyncer   *mocks.MockmalSyncer
 	mBeacon      *smocks.MockBeaconGetter
 	mLyrPatrol   *mocks.MocklayerPatrol
-	mVm          *mmocks.MockvmState
+	mVm          *mmocks.MockVmState
 	mConState    *mmocks.MockconservativeState
 	mTortoise    *smocks.MockTortoise
 	mCertHdr     *mocks.MockcertHandler
@@ -121,7 +121,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 		mMalSyncer:   mocks.NewMockmalSyncer(ctrl),
 		mBeacon:      smocks.NewMockBeaconGetter(ctrl),
 		mLyrPatrol:   mocks.NewMocklayerPatrol(ctrl),
-		mVm:          mmocks.NewMockvmState(ctrl),
+		mVm:          mmocks.NewMockVmState(ctrl),
 		mConState:    mmocks.NewMockconservativeState(ctrl),
 		mTortoise:    smocks.NewMockTortoise(ctrl),
 		mCertHdr:     mocks.NewMockcertHandler(ctrl),

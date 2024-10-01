@@ -36,7 +36,7 @@ type testExecutor struct {
 	db       sql.StateDatabase
 	atxsdata *atxsdata.Data
 	mcs      *mocks.MockconservativeState
-	mvm      *mocks.MockvmState
+	mvm      *mocks.MockVmState
 }
 
 func newTestExecutor(t *testing.T) *testExecutor {
@@ -45,7 +45,7 @@ func newTestExecutor(t *testing.T) *testExecutor {
 		tb:       t,
 		db:       statesql.InMemory(),
 		atxsdata: atxsdata.New(),
-		mvm:      mocks.NewMockvmState(ctrl),
+		mvm:      mocks.NewMockVmState(ctrl),
 		mcs:      mocks.NewMockconservativeState(ctrl),
 	}
 	te.exec = mesh.NewExecutor(te.db, te.atxsdata, te.mvm, te.mcs, zaptest.NewLogger(t))
