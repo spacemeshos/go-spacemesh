@@ -12,12 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/registry"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vault"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vesting"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -27,6 +21,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 	vmsdk "github.com/spacemeshos/go-spacemesh/vm"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/registry"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vault"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vesting"
+	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/wallet"
 )
 
 // SetLogger sets logger for VM.
