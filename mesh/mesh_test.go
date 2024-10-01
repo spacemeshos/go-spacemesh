@@ -51,7 +51,7 @@ func createTestMesh(t *testing.T) *testMesh {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
 	lg := zaptest.NewLogger(t)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	atxsdata := atxsdata.New()
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
@@ -66,6 +66,14 @@ func createTestMesh(t *testing.T) *testMesh {
 	exec := NewExecutor(db, atxsdata, tm.mockVM, tm.mockState, lg)
 	msh, err := NewMesh(db, atxsdata, tm.mockClock, tm.mockTortoise, exec, tm.mockState, lg)
 	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		msh.Start(ctx)
+		close(done)
+	}()
+	t.Cleanup(func() { <-done })
+	t.Cleanup(cancel)
 	gLid := types.GetEffectiveGenesis()
 	checkLastAppliedInDB(t, msh, gLid)
 	checkProcessedInDB(t, msh, gLid)
@@ -163,6 +171,7 @@ func createLayerBallots(tb testing.TB, mesh *Mesh, lyrID types.LayerID) []*types
 		malProof, err := mesh.AddBallot(context.Background(), ballot)
 		require.NoError(tb, err)
 		require.Nil(tb, malProof)
+		require.False(tb, ballot.IsMalicious())
 	}
 	return blts
 }
