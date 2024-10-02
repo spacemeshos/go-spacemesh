@@ -808,7 +808,6 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 }
 
 func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
-
 	s := sim.New()
 	s.Setup()
 	simState := s.GetState(0)
@@ -833,7 +832,6 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 }
 
 func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
-
 	t.Run("AllNotDecoded", func(t *testing.T) {
 		s := sim.New()
 		s.Setup()
@@ -1053,7 +1051,6 @@ func TestOnBeacon(t *testing.T) {
 }
 
 func TestBaseBallotGenesis(t *testing.T) {
-
 	s := sim.New()
 	cfg := defaultTestConfig()
 	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg),
