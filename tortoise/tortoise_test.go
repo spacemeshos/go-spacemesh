@@ -989,8 +989,8 @@ func olderExceptions(rng *rand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	return voting
 }
 
-// outOfWindowBaseBallot creates VotesGenerator with a specific window.
-// vote generator will produce one block that uses base ballot outside the sliding window.
+// OutOfWindowBaseBallot creates VotesGenerator with a specific window.
+// Vote generator will produce one block that uses base ballot outside the sliding window.
 // NOTE that it will produce blocks as if it didn't know about blocks from higher layers.
 func outOfWindowBaseBallot(n, window int) sim.VotesGenerator {
 	return func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
@@ -1020,7 +1020,7 @@ type voter interface {
 // tortoiseVoting is for testing that protocol makes progress using heuristic that we are
 // using for the network.
 func tortoiseVoting(tortoise voter) sim.VotesGenerator {
-	return func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
+	return func(rng *rand.Rand, layers []*types.Layer, _ int) sim.Voting {
 		votes, err := tortoise.EncodeVotes(context.Background())
 		if err != nil {
 			panic(err)
@@ -1030,7 +1030,7 @@ func tortoiseVoting(tortoise voter) sim.VotesGenerator {
 }
 
 func tortoiseVotingWithCurrent(tortoise voter) sim.VotesGenerator {
-	return func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
+	return func(rng *rand.Rand, layers []*types.Layer, _ int) sim.Voting {
 		current := types.GetEffectiveGenesis().Add(1)
 		if len(layers) > 0 {
 			current = layers[len(layers)-1].Index().Add(1)
@@ -3110,7 +3110,7 @@ func TestMultipleTargets(t *testing.T) {
 	)
 	heights := []uint64{1, 2}
 	id := types.BlockID{'t'}
-	multi := func(rng *rand.Rand, layers []*types.Layer, i int) sim.Voting {
+	multi := func(_ *rand.Rand, layers []*types.Layer, i int) sim.Voting {
 		prev := layers[len(layers)-1]
 		require.NotEmpty(t, prev.BallotIDs())
 		return sim.Voting{

@@ -400,10 +400,10 @@ func (pb *ProposalBuilder) runPrepare(ctx context.Context, current types.LayerID
 	pb.activeGen.ensure(ctx, nextEpoch)
 }
 
-// only output the mesh hash in the proposal when the following conditions are met:
+// Only output the mesh hash in the proposal when the following conditions are met:
 // - tortoise has verified every layer i < N-hdist.
 // - the node has hare output for every layer i such that N-hdist <= i <= N.
-// this is done such that when the node is generating the block based on hare output,
+// This is done such that when the node is generating the block based on hare output,
 // it can do optimistic filtering if the majority of the proposals agreed on the mesh hash.
 func (pb *ProposalBuilder) decideMeshHash(ctx context.Context, current types.LayerID) types.Hash32 {
 	var minVerified types.LayerID

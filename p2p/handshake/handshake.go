@@ -68,13 +68,6 @@ func WithTimeout(t time.Duration) Option {
 	}
 }
 
-// WithLog specifies handshake retry interval.
-func WithRetryInterval(i time.Duration) Option {
-	return func(w *transportWrapper) {
-		w.retryInterval = i
-	}
-}
-
 // WithAttempts specifies handshake retry count.
 func WithAttempts(n int) Option {
 	return func(w *transportWrapper) {
@@ -84,11 +77,10 @@ func WithAttempts(n int) Option {
 
 type transportWrapper struct {
 	transport.Transport
-	nc            NetworkCookie
-	logger        *zap.Logger
-	timeout       time.Duration
-	retryInterval time.Duration
-	attempts      int
+	nc       NetworkCookie
+	logger   *zap.Logger
+	timeout  time.Duration
+	attempts int
 }
 
 var (
@@ -104,12 +96,11 @@ func MaybeWrapTransport(t transport.Transport, nc NetworkCookie, opts ...Option)
 		return t
 	}
 	tr := &transportWrapper{
-		Transport:     t,
-		nc:            nc,
-		logger:        zap.NewNop(),
-		timeout:       handshakeTimeout,
-		retryInterval: handshakeRetryInterval,
-		attempts:      handshakeAttempts,
+		Transport: t,
+		nc:        nc,
+		logger:    zap.NewNop(),
+		timeout:   handshakeTimeout,
+		attempts:  handshakeAttempts,
 	}
 	for _, opt := range opts {
 		opt(tr)

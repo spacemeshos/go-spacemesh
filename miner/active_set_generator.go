@@ -270,9 +270,9 @@ func getSetWeight(atxsdata *atxsdata.Data, target types.EpochID, set []types.ATX
 // https://community.spacemesh.io/t/grading-atxs-for-the-active-set/335
 //
 // let s be the start of the epoch, and δ the network propagation time.
-// grade 0: ATX was received at time t >= s-3δ, or an equivocation proof was received by time s-δ.
-// grade 1: ATX was received at time t < s-3δ before the start of the epoch, and no equivocation proof by time s-δ.
-// grade 2: ATX was received at time t < s-4δ, and no equivocation proof was received for that id until time s.
+// Grade 0: ATX was received at time t >= s-3δ, or an equivocation proof was received by time s-δ.
+// Grade 1: ATX was received at time t < s-3δ before the start of the epoch, and no equivocation proof by time s-δ.
+// Grade 2: ATX was received at time t < s-4δ, and no equivocation proof was received for that id until time s.
 type atxGrade int
 
 const (

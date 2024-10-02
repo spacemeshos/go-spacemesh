@@ -40,7 +40,7 @@ func (np *NetworkParam) updateActiveSetTime(targetEpoch types.EpochID) time.Time
 }
 
 // Server is used to serve bootstrap update data during systest. NOT intended for production use.
-// in particular, it does not protect against data loss and will serve whatever is the latest
+// In particular, it does not protect against data loss and will serve whatever is the latest
 // one on disk, even tho it's for an old epoch.
 type Server struct {
 	*http.Server
@@ -199,7 +199,7 @@ func (s *Server) genWithRetry(ctx context.Context, epoch types.EpochID, maxRetri
 }
 
 // in systests, we want to be sure the nodes use the fallback data unconditionally.
-// use a fixed known value for beacon to be sure that fallback is used during testing.
+// Use a fixed known value for beacon to be sure that fallback is used during testing.
 func epochBeacon(epoch types.EpochID) types.Beacon {
 	b := make([]byte, types.BeaconSize)
 	binary.LittleEndian.PutUint32(b, uint32(epoch))

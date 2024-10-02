@@ -123,7 +123,7 @@ const (
 	poetConfigMapName      = "poet"
 	spacemeshConfigMapName = "spacemesh"
 
-	// smeshers are split in 10 approximately equal buckets
+	// Smeshers are split in 10 approximately equal buckets
 	// to enable running chaos mesh tasks on the different parts of the cluster.
 	buckets = 10
 )

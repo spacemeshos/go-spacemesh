@@ -23,23 +23,19 @@ var errNoPeers = errors.New("no peers")
 type DataFetch struct {
 	fetcher
 
-	logger   *zap.Logger
-	msh      meshProvider
-	tortoise system.Tortoise
+	logger *zap.Logger
 }
 
 // NewDataFetch creates a new DataFetch instance.
 func NewDataFetch(
-	msh meshProvider,
+	_ meshProvider,
 	fetch fetcher,
-	tortoise system.Tortoise,
+	_ system.Tortoise,
 	lg *zap.Logger,
 ) *DataFetch {
 	return &DataFetch{
-		fetcher:  fetch,
-		logger:   lg,
-		msh:      msh,
-		tortoise: tortoise,
+		fetcher: fetch,
+		logger:  lg,
 	}
 }
 

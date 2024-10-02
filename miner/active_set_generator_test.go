@@ -83,25 +83,21 @@ func newTesterActiveSetGenerator(tb testing.TB, cfg config) *testerActiveSetGene
 		)
 	)
 	return &testerActiveSetGenerator{
-		tb:        tb,
 		gen:       gen,
 		db:        db,
 		localdb:   localdb,
 		atxsdata:  atxsdata,
-		ctrl:      ctrl,
 		clock:     clock,
 		wallclock: wallclock,
 	}
 }
 
 type testerActiveSetGenerator struct {
-	tb  testing.TB
 	gen *activeSetGenerator
 
 	db        sql.StateDatabase
 	localdb   sql.LocalDatabase
 	atxsdata  *atxsdata.Data
-	ctrl      *gomock.Controller
 	clock     *mocks.MocklayerClock
 	wallclock clockwork.FakeClock
 }

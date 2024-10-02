@@ -63,9 +63,9 @@ const (
 	// notSynced is the state where the node is outOfSyncThreshold layers or more behind the current layer.
 	notSynced syncState = iota
 	// gossipSync is the state in which a node listens to at least one full layer of gossip before participating
-	// in the protocol. this is to protect the node from participating in the consensus without full information.
-	// for example, when a node wakes up in the middle of layer N, since it didn't receive all relevant messages and
-	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all
+	// in the protocol. This is to protect the node from participating in the consensus without full information.
+	// For example, when a node wakes up in the middle of layer N, since it didn't receive all relevant messages and
+	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. It instead listens to gossip for all
 	// through layer N+1 and starts producing blocks and participates in hare committee in layer N+2.
 	gossipSync
 	// synced is the state where the node is in sync with its peers.
@@ -341,7 +341,7 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 }
 
 // setSyncerBusy returns false if the syncer is already running a sync process.
-// otherwise it sets syncer to be busy and returns true.
+// Otherwise it sets syncer to be busy and returns true.
 func (s *Syncer) setSyncerBusy() bool {
 	return s.isBusy.CompareAndSwap(false, true)
 }
@@ -367,8 +367,8 @@ func (s *Syncer) lastAtxEpoch() types.EpochID {
 	return types.EpochID(s.lastEpochSynced.Load())
 }
 
-// synchronize sync data up to the currentLayer-1 and wait for the layers to be validated.
-// it returns false if the data sync failed.
+// Synchronize sync data up to the currentLayer-1 and wait for the layers to be validated.
+// It returns false if the data sync failed.
 func (s *Syncer) synchronize(ctx context.Context) bool {
 	ctx = log.WithNewSessionID(ctx)
 

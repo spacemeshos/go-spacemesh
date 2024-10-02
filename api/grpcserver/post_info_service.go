@@ -18,8 +18,6 @@ var statusMap map[types.PostState]pb.PostState_State = map[types.PostState]pb.Po
 
 // PostInfoService provides information about connected PostServices.
 type PostInfoService struct {
-	log *zap.Logger
-
 	states postState
 }
 
@@ -38,9 +36,8 @@ func (s *PostInfoService) String() string {
 }
 
 // NewPostInfoService creates a new instance of the post info grpc service.
-func NewPostInfoService(log *zap.Logger, states postState) *PostInfoService {
+func NewPostInfoService(_ *zap.Logger, states postState) *PostInfoService {
 	return &PostInfoService{
-		log:    log,
 		states: states,
 	}
 }

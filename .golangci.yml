@@ -4,122 +4,6 @@
 # This file is not a configuration example,
 # it contains the exhaustive configuration with explanations of the options.
 
-# Options for analysis running.
-run:
-  # Number of operating system threads (`GOMAXPROCS`) that can execute golangci-lint simultaneously.
-  # If it is explicitly set to 0 (i.e. not the default) then golangci-lint will automatically set the value to match Linux container CPU quota.
-  # Default: the number of logical CPUs in the machine
-  # concurrency: 4
-
-  # Timeout for analysis, e.g. 30s, 5m.
-  # Default: 1m
-  timeout: 5m
-
-  # Exit code when at least one issue was found.
-  # Default: 1
-  # issues-exit-code: 1
-
-  # Include test files or not.
-  # Default: true
-  # tests: true
-
-  # List of build tags, all linters use it.
-  # Default: []
-  # build-tags:
-  #  - mytag
-
-  # If set, we pass it to "go list -mod={option}". From "go help modules":
-  # If invoked with -mod=readonly, the go command is disallowed from the implicit
-  # automatic updating of go.mod described above. Instead, it fails when any changes
-  # to go.mod are needed. This setting is most useful to check that go.mod does
-  # not need updates, such as in a continuous integration and testing system.
-  # If invoked with -mod=vendor, the go command assumes that the vendor
-  # directory holds the correct copies of dependencies and ignores
-  # the dependency descriptions in go.mod.
-  #
-  # Allowed values: readonly|vendor|mod
-  # Default: ""
-  modules-download-mode: readonly
-
-  # Allow multiple parallel golangci-lint instances running.
-  # If false, golangci-lint acquires file lock on start.
-  # Default: false
-  # allow-parallel-runners: true
-
-  # Allow multiple golangci-lint instances running, but serialize them around a lock.
-  # If false, golangci-lint exits with an error if it fails to acquire file lock on start.
-  # Default: false
-  # allow-serial-runners: true
-
-  # Define the Go version limit.
-  # Mainly related to generics support since go1.18.
-  # Default: use Go version from the go.mod file, fallback on the env var `GOVERSION`, fallback on 1.17
-  # go: '1.19'
-
-# output configuration options
-output:
-  # The formats used to render issues.
-  # Format: `colored-line-number`, `line-number`, `json`, `colored-tab`, `tab`, `checkstyle`, `code-climate`, `junit-xml`, `github-actions`, `teamcity`
-  # Output path can be either `stdout`, `stderr` or path to the file to write to.
-  #
-  # For the CLI flag (`--out-format`), multiple formats can be specified by separating them by comma.
-  # The output can be specified for each of them by separating format name and path by colon symbol.
-  # Example: "--out-format=checkstyle:report.xml,json:stdout,colored-line-number"
-  # The CLI flag (`--out-format`) override the configuration file.
-  #
-  # Default:
-  #   formats:
-  #     - format: colored-line-number
-  #       path: stdout
-  formats:
-    # - format: json
-    #   path: stderr
-    # - format: checkstyle
-    #   path: report.xml
-    - format: colored-line-number
-
-  # Print lines of code with issue.
-  # Default: true
-  # print-issued-lines: false
-
-  # Print linter name in the end of issue text.
-  # Default: true
-  # print-linter-name: false
-
-  # Make issues output unique by line.
-  # Default: true
-  # uniq-by-line: false
-
-  # Add a prefix to the output file references.
-  # Default: ""
-  # path-prefix: ""
-
-  # Sort results by the order defined in `sort-order`.
-  # Default: false
-  sort-results: true
-
-  # Order to use when sorting results.
-  # Require `sort-results` to `true`.
-  # Possible values: `file`, `linter`, and `severity`.
-  #
-  # If the severity values are inside the following list, they are ordered in this order:
-  #   1. error
-  #   2. warning
-  #   3. high
-  #   4. medium
-  #   5. low
-  # Either they are sorted alphabetically.
-  #
-  # Default: ["file"]
-  sort-order:
-    - linter
-    - severity
-    - file # filepath, line, and column.
-
-  # Show statistics per linter.
-  # Default: false
-  # show-stats: true
-
 linters:
   # Disable all linters.
   # Default: false
@@ -131,6 +15,7 @@ linters:
     # - asciicheck
     # - bidichk
     # - bodyclose
+    - canonicalheader
     # - containedctx
     # - contextcheck
     - copyloopvar
@@ -141,6 +26,7 @@ linters:
     # - dupl
     # - dupword
     # - durationcheck
+    # - err113
     # - errcheck
     # - errchkjson
     # - errname
@@ -149,6 +35,7 @@ linters:
     # - exhaustive
     # - exhaustruct
     # - exportloopref
+    - fatcontext
     # - forbidigo
     # - forcetypeassert
     # - funlen
@@ -164,12 +51,10 @@ linters:
     # - gocyclo
     - godot
     # - godox
-    # - goerr113
     - gofmt
     - gofumpt
     # - goheader
     # - goimports
-    # - gomnd
     # - gomoddirectives
     # - gomodguard
     # - goprintffuncname
@@ -190,6 +75,7 @@ linters:
     # - makezero
     # - mirror
     - misspell
+    # - mnd
     # - musttag
     - nakedret
     - nestif
@@ -222,11 +108,10 @@ linters:
     # - testpackage
     # - thelper
     # - tparallel
-    - typecheck
     # - unconvert
     # - unparam
     - unused
-    # - usestdlibvars
+    - usestdlibvars
     # - varnamelen
     # - wastedassign
     # - whitespace
@@ -244,6 +129,7 @@ linters:
   #   - asciicheck
   #   - bidichk
   #   - bodyclose
+  #   - canonicalheader
   #   - containedctx
   #   - contextcheck
   #   - copyloopvar
@@ -254,6 +140,7 @@ linters:
   #   - dupl
   #   - dupword
   #   - durationcheck
+  #   - err113
   #   - errcheck
   #   - errchkjson
   #   - errname
@@ -262,6 +149,7 @@ linters:
   #   - exhaustive
   #   - exhaustruct
   #   - exportloopref
+  #   - fatcontext
   #   - forbidigo
   #   - forcetypeassert
   #   - funlen
@@ -277,12 +165,10 @@ linters:
   #   - gocyclo
   #   - godot
   #   - godox
-  #   - goerr113
   #   - gofmt
   #   - gofumpt
   #   - goheader
   #   - goimports
-  #   - gomnd
   #   - gomoddirectives
   #   - gomodguard
   #   - goprintffuncname
@@ -303,6 +189,7 @@ linters:
   #   - makezero
   #   - mirror
   #   - misspell
+  #   - mnd
   #   - musttag
   #   - nakedret
   #   - nestif
@@ -335,7 +222,6 @@ linters:
   #   - testpackage
   #   - thelper
   #   - tparallel
-  #   - typecheck
   #   - unconvert
   #   - unparam
   #   - unused
@@ -346,6 +232,17 @@ linters:
   #   - wrapcheck
   #   - wsl
   #   - zerologlint
+  #   - deadcode # Deprecated
+  #   - exhaustivestruct # Deprecated
+  #   - golint # Deprecated
+  #   - ifshort # Deprecated
+  #   - interfacer # Deprecated
+  #   - maligned # Deprecated
+  #   - gomnd # Deprecated
+  #   - nosnakecase # Deprecated
+  #   - scopelint # Deprecated
+  #   - structcheck # Deprecated
+  #   - varcheck # Deprecated
 
   # Enable presets.
   # https://golangci-lint.run/usage/linters
@@ -369,8 +266,14 @@ linters:
   # Default: false
   # fast: true
 
+
 # All available settings of specific linters.
 linters-settings:
+  copyloopvar:
+    # Check all assigning the loop variable to another variable.
+    # Default: false
+    check-alias: true
+
   depguard:
     # Rules to apply.
     #
@@ -418,16 +321,17 @@ linters-settings:
   gci:
     # Section configuration to compare against.
     # Section names are case-insensitive and may contain parameters in ().
-    # The default order of sections is `standard > default > custom > blank > dot > alias`,
+    # The default order of sections is `standard > default > custom > blank > dot > alias > localmodule`,
     # If `custom-order` is `true`, it follows the order of `sections` option.
     # Default: ["standard", "default"]
     sections:
-      - standard # Standard section: captures all standard packages.
-      - default # Default section: contains all imports that could not be matched to another section type.
+      - standard                                    # Standard section: captures all standard packages.
+      - default                                     # Default section: contains all imports that could not be matched to another section type.
       - prefix(github.com/spacemeshos/go-spacemesh) # Custom section: groups all imports with the specified Prefix.
-      # - blank                          # Blank section: contains all blank imports. This section is not present unless explicitly enabled.
-      # - dot                            # Dot section: contains all dot imports. This section is not present unless explicitly enabled.
-      # - alias                          # Alias section: contains all alias imports. This section is not present unless explicitly enabled.
+      # - blank                                     # Blank section: contains all blank imports. This section is not present unless explicitly enabled.
+      # - dot                                       # Dot section: contains all dot imports. This section is not present unless explicitly enabled.
+      # - alias                                     # Alias section: contains all alias imports. This section is not present unless explicitly enabled.
+      # - localmodule                               # Local module section: contains all local packages. This section is not present unless explicitly enabled.
 
     # Skip generated files.
     # Default: true
@@ -438,6 +342,27 @@ linters-settings:
     # Default: false
     # custom-order: true
 
+    # Drops lexical ordering for custom sections.
+    # Default: false
+    # no-lex-order: true
+
+  godot:
+    # Comments to be checked: `declarations`, `toplevel`, or `all`.
+    # Default: declarations
+    # scope: toplevel
+    # List of regexps for excluding particular comment lines from check.
+    # Default: []
+    exclude:
+      # Exclude todo and fixme comments.
+      - "^fixme:"
+      - "^todo:"
+    # Check that each sentence ends with a period.
+    # Default: true
+    # period: false
+    # Check that each sentence starts with a capital letter.
+    # Default: false
+    # capital: true
+
   gofmt:
     # Simplify code: gofmt with `-s` option.
     # Default: true
@@ -446,10 +371,10 @@ linters-settings:
     # https://pkg.go.dev/cmd/gofmt
     # Default: []
     rewrite-rules:
-      - pattern: "interface{}"
-        replacement: "any"
-      - pattern: "a[b:len(a)]"
-        replacement: "a[b:]"
+      - pattern: 'interface{}'
+        replacement: 'any'
+      - pattern: 'a[b:len(a)]'
+        replacement: 'a[b:]'
 
   gofumpt:
     # Module path which contains the source code being formatted.
@@ -463,39 +388,12 @@ linters-settings:
   gosimple:
     # Sxxxx checks in https://staticcheck.io/docs/configuration/options/#checks
     # Default: ["*"]
-    checks: ["all"]
-
-  govet:
-    # Disable all analyzers.
-    # Default: false
-    disable-all: false
-    # Enable analyzers by name.
-    # (in addition to default:
-    #   appends, asmdecl, assign, atomic, bools, buildtag, cgocall, composites, copylocks, defers, directive, errorsas,
-    #   framepointer, httpresponse, ifaceassert, loopclosure, lostcancel, nilfunc, printf, shift, sigchanyzer, slog,
-    #   stdmethods, stringintconv, structtag, testinggoroutine, tests, timeformat, unmarshal, unreachable, unsafeptr,
-    #   unusedresult
-    # ).
-    # Run `GL_DEBUG=govet golangci-lint run --enable=govet` to see default, all available analyzers, and enabled analyzers.
-    # Default: []
-    # enable:
-
-    # Enable all analyzers.
-    # Default: false
-    enable-all: false
-    # Disable analyzers by name.
-    # (in addition to default
-    #   atomicalign, deepequalerrors, fieldalignment, findcall, nilness, reflectvaluecompare, shadow, sortslice,
-    #   timeformat, unusedwrite
-    # ).
-    # Run `GL_DEBUG=govet golangci-lint run --enable=govet` to see default, all available analyzers, and enabled analyzers.
-    # Default: []
-    # disable:
+    checks: [ "all" ]
 
   importas:
     # Do not allow unaliased imports of aliased packages.
     # Default: false
-    # no-unaliased: true
+    no-unaliased: true
     # Do not allow non-required aliases.
     # Default: false
     # no-extra-aliases: true
@@ -583,11 +481,6 @@ linters-settings:
     # Default: ""
     mode: restricted
 
-  nakedret:
-    # Make an issue if func has more lines of code than this setting, and it has naked returns.
-    # Default: 30
-    max-func-lines: 30
-
   nestif:
     # Minimal complexity of if statements to report.
     # Default: 5
@@ -633,7 +526,7 @@ linters-settings:
     # Sets the default failure confidence.
     # This means that linting errors with less than 0.8 confidence will be ignored.
     # Default: 0.8
-    # confidence: 0.8
+    # confidence: 0.1
 
   spancheck:
     # Checks to enable.
@@ -652,11 +545,17 @@ linters-settings:
     # Default: []
     ignore-check-signatures:
       - "telemetry.RecordError"
-
+    # A list of regexes for additional function signatures that create spans.
+    # This is useful if you have a utility method to create spans.
+    # Each entry should be of the form `<regex>:<telemetry-type>`, where `telemetry-type` can be `opentelemetry` or `opencensus`.
+    # https://github.com/jjti/go-spancheck#extra-start-span-signatures
+    # Default: []
+    # extra-start-span-signatures:
+    #   - "github.com/user/repo/telemetry/trace.Start:opentelemetry"
   staticcheck:
     # SAxxxx checks in https://staticcheck.io/docs/configuration/options/#checks
     # Default: ["*"]
-    checks: ["all"]
+    checks: [ "all" ]
 
   testifylint:
     # Enable all checkers (https://github.com/Antonboom/testifylint#checkers).
@@ -674,13 +573,17 @@ linters-settings:
     #   - error-is-as
     #   - error-nil
     #   - expected-actual
-    #   - go-require
     #   - float-compare
+    #   - formatter
+    #   - go-require
     #   - len
+    #   - negative-positive
     #   - nil-compare
     #   - require-error
+    #   - suite-broken-parallel
     #   - suite-dont-use-pkg
     #   - suite-extra-assert-call
+    #   - suite-subtest-run
     #   - suite-thelper
     #   - useless-assert
 
@@ -690,7 +593,8 @@ linters-settings:
     # Enable checkers by name
     # (in addition to default
     #   blank-import, bool-compare, compares, empty, error-is-as, error-nil, expected-actual, go-require, float-compare,
-    #   len, nil-compare, require-error, suite-dont-use-pkg, suite-extra-assert-call, useless-assert
+    #   formatter, len, negative-positive, nil-compare, require-error, suite-broken-parallel, suite-dont-use-pkg,
+    #   suite-extra-assert-call, suite-subtest-run, useless-assert
     # ).
     # enable:
     #   - blank-import
@@ -700,19 +604,71 @@ linters-settings:
     #   - error-is-as
     #   - error-nil
     #   - expected-actual
-    #   - go-require
     #   - float-compare
+    #   - formatter
+    #   - go-require
     #   - len
+    #   - negative-positive
     #   - nil-compare
     #   - require-error
+    #   - suite-broken-parallel
     #   - suite-dont-use-pkg
     #   - suite-extra-assert-call
+    #   - suite-subtest-run
     #   - suite-thelper
     #   - useless-assert
 
+  usestdlibvars:
+    # Suggest the use of http.MethodXX.
+    # Default: true
+    http-method: false
+    # Suggest the use of http.StatusXX.
+    # Default: true
+    http-status-code: false
+    # Suggest the use of time.Weekday.String().
+    # Default: true
+    time-weekday: true
+    # Suggest the use of time.Month.String().
+    # Default: false
+    time-month: true
+    # Suggest the use of time.Layout.
+    # Default: false
+    time-layout: true
+    # Suggest the use of crypto.Hash.String().
+    # Default: false
+    crypto-hash: true
+    # Suggest the use of rpc.DefaultXXPath.
+    # Default: false
+    default-rpc-path: true
+    # Suggest the use of sql.LevelXX.String().
+    # Default: false
+    sql-isolation-level: true
+    # Suggest the use of tls.SignatureScheme.String().
+    # Default: false
+    tls-signature-scheme: true
+    # Suggest the use of constant.Kind.String().
+    # Default: false
+    constant-kind: true
+
   unused:
+    # Mark all struct fields that have been written to as used.
+    # Default: true
+    field-writes-are-uses: false
+    # Treat IncDec statement (e.g. `i++` or `i--`) as both read and write operation instead of just write.
+    # Default: false
+    # post-statements-are-reads: true
+    # Mark all exported fields as used.
+    # default: true
     exported-fields-are-used: false
+    # Mark all function parameters as used.
+    # default: true
+    # parameters-are-used: false
+    # Mark all local variables as used.
+    # default: true
     local-variables-are-used: false
+    # Mark all identifiers inside generated files as used.
+    # Default: true
+    # generated-is-used: false
 
 issues:
   # List of regexps of issue texts to exclude.
@@ -727,6 +683,36 @@ issues:
 
   # Excluding configuration per-path, per-linter, per-text and per-source
   # exclude-rules:
+  #   # Exclude some linters from running on tests files.
+  #   - path: _test\.go
+  #     linters:
+  #       - gocyclo
+  #       - errcheck
+  #       - dupl
+  #       - gosec
+
+  #   # Run some linter only for test files by excluding its issues for everything else.
+  #   - path-except: _test\.go
+  #     linters:
+  #       - forbidigo
+
+  #   # Exclude known linters from partially hard-vendored code,
+  #   # which is impossible to exclude via `nolint` comments.
+  #   # `/` will be replaced by current OS file path separator to properly work on Windows.
+  #   - path: internal/hmac/
+  #     text: "weak cryptographic primitive"
+  #     linters:
+  #       - gosec
+
+  #   # Exclude some `staticcheck` messages.
+  #   - linters:
+  #       - staticcheck
+  #     text: "SA9003:"
+
+  #   # Exclude `lll` issues for long lines with `go:generate`.
+  #   - linters:
+  #       - lll
+  #     source: "^//go:generate "
 
   # Independently of option `exclude` we use default exclude patterns,
   # it can be disabled by this option.
@@ -759,20 +745,21 @@ issues:
   # If it's not, please let us know.
   # "/" will be replaced by current OS file path separator to properly work on Windows.
   # Default: []
-  exclude-files:
-    - "^mock_*\\.go$"
+  # exclude-files:
+  #   - ".*\\.my\\.go$"
+  #   - lib/bad.go
 
-  # To follow strictly the Go generated file convention.
+  # Mode of the generated files analysis.
   #
-  # If set to true, source files that have lines matching only the following regular expression will be excluded:
-  #   `^// Code generated .* DO NOT EDIT\.$`
-  # This line must appear before the first non-comment, non-blank text in the file.
-  # https://go.dev/s/generatedcode
+  # - `strict`: sources are excluded by following strictly the Go generated file convention.
+  #    Source files that have lines matching only the following regular expression will be excluded: `^// Code generated .* DO NOT EDIT\.$`
+  #    This line must appear before the first non-comment, non-blank text in the file.
+  #    https://go.dev/s/generatedcode
+  # - `lax`: sources are excluded if they contain lines `autogenerated file`, `code generated`, `do not edit`, etc.
+  # - `disable`: disable the generated files exclusion.
   #
-  # By default, a lax pattern is applied:
-  # sources are excluded if they contain lines `autogenerated file`, `code generated`, `do not edit`, etc.
-  # Default: false
-  # exclude-generated-strict: true
+  # Default: lax
+  # exclude-generated: strict
 
   # The list of ids of default excludes to include or disable.
   # https://golangci-lint.run/usage/false-positives/#default-exclusions
@@ -821,13 +808,13 @@ issues:
   # Default: ""
   # new-from-patch: path/to/patch/file
 
-  # Fix found issues (if it's supported by the linter).
-  # Default: false
-  # fix: true
-
   # Show issues in any part of update files (requires new-from-rev or new-from-patch).
   # Default: false
   whole-files: true
+
+  # Fix found issues (if it's supported by the linter).
+  # Default: false
+  # fix: true
 
 severity:
   # Set the default severity for issues.
@@ -862,3 +849,132 @@ severity:
   #   - linters:
   #       - dupl
   #     severity: info
+
+  # Options for analysis running.
+run:
+  # Timeout for analysis, e.g. 30s, 5m.
+  # Default: 1m
+  timeout: 5m
+
+  # Exit code when at least one issue was found.
+  # Default: 1
+  # issues-exit-code: 2
+
+  # Include test files or not.
+  # Default: true
+  # tests: false
+
+  # List of build tags, all linters use it.
+  # Default: []
+  # build-tags:
+  #   - mytag
+
+  # If set, we pass it to "go list -mod={option}". From "go help modules":
+  # If invoked with -mod=readonly, the go command is disallowed from the implicit
+  # automatic updating of go.mod described above. Instead, it fails when any changes
+  # to go.mod are needed. This setting is most useful to check that go.mod does
+  # not need updates, such as in a continuous integration and testing system.
+  # If invoked with -mod=vendor, the go command assumes that the vendor
+  # directory holds the correct copies of dependencies and ignores
+  # the dependency descriptions in go.mod.
+  #
+  # Allowed values: readonly|vendor|mod
+  # Default: ""
+  modules-download-mode: readonly
+
+  # Allow multiple parallel golangci-lint instances running.
+  # If false, golangci-lint acquires file lock on start.
+  # Default: false
+  # allow-parallel-runners: true
+
+  # Allow multiple golangci-lint instances running, but serialize them around a lock.
+  # If false, golangci-lint exits with an error if it fails to acquire file lock on start.
+  # Default: false
+  # allow-serial-runners: true
+
+  # Define the Go version limit.
+  # Mainly related to generics support since go1.18.
+  # Default: use Go version from the go.mod file, fallback on the env var `GOVERSION`, fallback on 1.17
+  go: '1.19'
+
+  # Number of operating system threads (`GOMAXPROCS`) that can execute golangci-lint simultaneously.
+  # If it is explicitly set to 0 (i.e. not the default) then golangci-lint will automatically set the value to match Linux container CPU quota.
+  # Default: the number of logical CPUs in the machine
+  concurrency: 4
+
+# output configuration options
+output:
+  # The formats used to render issues.
+  # Formats:
+  # - `colored-line-number`
+  # - `line-number`
+  # - `json`
+  # - `colored-tab`
+  # - `tab`
+  # - `html`
+  # - `checkstyle`
+  # - `code-climate`
+  # - `junit-xml`
+  # - `junit-xml-extended`
+  # - `github-actions`
+  # - `teamcity`
+  # - `sarif`
+  # Output path can be either `stdout`, `stderr` or path to the file to write to.
+  #
+  # For the CLI flag (`--out-format`), multiple formats can be specified by separating them by comma.
+  # The output can be specified for each of them by separating format name and path by colon symbol.
+  # Example: "--out-format=checkstyle:report.xml,json:stdout,colored-line-number"
+  # The CLI flag (`--out-format`) override the configuration file.
+  #
+  # Default:
+  #   formats:
+  #     - format: colored-line-number
+  #       path: stdout
+  formats:
+    # - format: json
+    #   path: stderr
+    # - format: checkstyle
+    #   path: report.xml
+    - format: colored-line-number
+
+  # Print lines of code with issue.
+  # Default: true
+  # print-issued-lines: false
+
+  # Print linter name in the end of issue text.
+  # Default: true
+  # print-linter-name: false
+
+  # Make issues output unique by line.
+  # Default: true
+  # uniq-by-line: false
+
+  # Add a prefix to the output file references.
+  # Default: ""
+  # path-prefix: ""
+
+  # Sort results by the order defined in `sort-order`.
+  # Default: false
+  sort-results: true
+
+  # Order to use when sorting results.
+  # Require `sort-results` to `true`.
+  # Possible values: `file`, `linter`, and `severity`.
+  #
+  # If the severity values are inside the following list, they are ordered in this order:
+  #   1. error
+  #   2. warning
+  #   3. high
+  #   4. medium
+  #   5. low
+  # Either they are sorted alphabetically.
+  #
+  # Default: ["file"]
+  sort-order:
+    - linter
+    - severity
+    - file # filepath, line, and column.
+
+  # Show statistics per linter.
+  # Default: false
+  # show-stats: true

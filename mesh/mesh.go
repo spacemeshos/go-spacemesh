@@ -40,7 +40,6 @@ type Mesh struct {
 	logger   *zap.Logger
 	cdb      sql.StateDatabase
 	atxsdata *atxsdata.Data
-	clock    layerClock
 
 	executor *Executor
 	conState conservativeState
@@ -65,7 +64,7 @@ type Mesh struct {
 func NewMesh(
 	db sql.StateDatabase,
 	atxsdata *atxsdata.Data,
-	c layerClock,
+	_ layerClock,
 	trtl system.Tortoise,
 	exec *Executor,
 	state conservativeState,
@@ -75,7 +74,6 @@ func NewMesh(
 		logger:              logger,
 		cdb:                 db,
 		atxsdata:            atxsdata,
-		clock:               c,
 		trtl:                trtl,
 		executor:            exec,
 		conState:            state,

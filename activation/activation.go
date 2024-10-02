@@ -78,7 +78,7 @@ type Config struct {
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
-// it is responsible for initializing post, receiving poet proof and orchestrating nipost. after which it will
+// it is responsible for initializing post, receiving poet proof and orchestrating nipost after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
 	accountLock       sync.RWMutex
@@ -142,7 +142,8 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 // WithContext modifies parent context for background job.
 func WithContext(ctx context.Context) BuilderOption {
 	return func(b *Builder) {
-		b.parentCtx = ctx
+		// TODO(mafa): fix this
+		b.parentCtx = ctx // nolint:fatcontext
 	}
 }
 
@@ -913,8 +914,8 @@ func (b *Builder) broadcast(ctx context.Context, atx scale.Encodable) (int, erro
 	return len(buf), nil
 }
 
-// searchPositioningAtx returns atx id with the highest tick height.
-// publish epoch is used for caching the positioning atx.
+// SearchPositioningAtx returns atx id with the highest tick height.
+// Publish epoch is used for caching the positioning atx.
 func (b *Builder) searchPositioningAtx(
 	ctx context.Context,
 	nodeID types.NodeID,

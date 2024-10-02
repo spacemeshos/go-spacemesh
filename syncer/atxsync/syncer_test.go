@@ -48,23 +48,19 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	fetcher := mocks.NewMockfetcher(ctrl)
 	syncer := New(fetcher, db, localdb, WithConfig(cfg), WithLogger(zaptest.NewLogger(tb)))
 	return &tester{
-		tb:      tb,
 		syncer:  syncer,
 		localdb: localdb,
 		db:      db,
 		cfg:     cfg,
-		ctrl:    ctrl,
 		fetcher: fetcher,
 	}
 }
 
 type tester struct {
-	tb      testing.TB
 	syncer  *Syncer
 	localdb sql.LocalDatabase
 	db      sql.StateDatabase
 	cfg     Config
-	ctrl    *gomock.Controller
 	fetcher *mocks.Mockfetcher
 }
 

@@ -602,7 +602,7 @@ func (h *Handler) getActiveSetWeight(ctx context.Context, id types.Hash32) (uint
 }
 
 func (h *Handler) checkBallotDataIntegrity(ctx context.Context, b *types.Ballot) (uint64, error) {
-	//nolint:nestif
+	// nolint:nestif
 	if b.RefBallot == types.EmptyBallotID {
 		// this is the smesher's first Ballot in this epoch, should contain EpochData
 		if b.EpochData == nil {

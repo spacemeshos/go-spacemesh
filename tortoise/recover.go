@@ -140,7 +140,7 @@ func recoverEpoch(target types.EpochID, trtl *Tortoise, db sql.Executor, atxdata
 type ballotFunc func(*types.BallotTortoiseData)
 
 func RecoverLayer(
-	ctx context.Context,
+	_ context.Context,
 	trtl *Tortoise,
 	db sql.Executor,
 	atxdata *atxsdata.Data,

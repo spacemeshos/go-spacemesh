@@ -40,13 +40,12 @@ func createIdentity(tb testing.TB, db sql.Executor, sig *signing.EdSigner) {
 type testMalfeasanceHandler struct {
 	*MalfeasanceHandler
 
-	observedLogs *observer.ObservedLogs
-	db           sql.StateDatabase
+	db sql.StateDatabase
 }
 
 func newTestMalfeasanceHandler(tb testing.TB) *testMalfeasanceHandler {
 	db := statesql.InMemory()
-	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	observer, _ := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -57,8 +56,7 @@ func newTestMalfeasanceHandler(tb testing.TB) *testMalfeasanceHandler {
 	return &testMalfeasanceHandler{
 		MalfeasanceHandler: h,
 
-		observedLogs: observedLogs,
-		db:           db,
+		db: db,
 	}
 }
 
@@ -237,14 +235,12 @@ func TestMalfeasanceHandler_Validate(t *testing.T) {
 type testInvalidPostIndexHandler struct {
 	*InvalidPostIndexHandler
 
-	observedLogs     *observer.ObservedLogs
-	db               sql.StateDatabase
 	mockPostVerifier *MockPostVerifier
 }
 
 func newTestInvalidPostIndexHandler(tb testing.TB) *testInvalidPostIndexHandler {
 	db := statesql.InMemory()
-	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	observer, _ := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -258,8 +254,6 @@ func newTestInvalidPostIndexHandler(tb testing.TB) *testInvalidPostIndexHandler 
 	return &testInvalidPostIndexHandler{
 		InvalidPostIndexHandler: h,
 
-		observedLogs:     observedLogs,
-		db:               db,
 		mockPostVerifier: postVerifier,
 	}
 }
@@ -428,13 +422,12 @@ func TestInvalidPostIndexHandler_Validate(t *testing.T) {
 type testInvalidPrevATXHandler struct {
 	*InvalidPrevATXHandler
 
-	observedLogs *observer.ObservedLogs
-	db           sql.StateDatabase
+	db sql.StateDatabase
 }
 
 func newTestInvalidPrevATXHandler(tb testing.TB) *testInvalidPrevATXHandler {
 	db := statesql.InMemory()
-	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	observer, _ := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -445,8 +438,7 @@ func newTestInvalidPrevATXHandler(tb testing.TB) *testInvalidPrevATXHandler {
 	return &testInvalidPrevATXHandler{
 		InvalidPrevATXHandler: h,
 
-		observedLogs: observedLogs,
-		db:           db,
+		db: db,
 	}
 }
 
