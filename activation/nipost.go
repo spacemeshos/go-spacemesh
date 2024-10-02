@@ -444,7 +444,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 
 	successRegistrations := make(map[string]nipost.PoETRegistration)
 	validRegistrations := make(map[string]nipost.PoETRegistration)
-	missingRegistrations := []PoetService{}
+	missingRegistrations := make([]PoetService, 0)
 	residualRegistrations := make([]string, 0)
 
 	for _, reg := range registrations {
