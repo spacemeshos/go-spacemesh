@@ -1,6 +1,6 @@
 module github.com/spacemeshos/go-spacemesh
 
-go 1.22.4
+go 1.23.2
 
 require (
 	cloud.google.com/go/storage v1.43.0
