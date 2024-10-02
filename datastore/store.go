@@ -32,7 +32,6 @@ type VrfNonceKey struct {
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	sql.Database
-	logger *zap.Logger
 
 	// cache is optional in tests. It MUST be set for the 'App'
 	// for properly checking malfeasance.
@@ -105,7 +104,6 @@ func NewCachedDB(db sql.StateDatabase, lg *zap.Logger, opts ...Opt) *CachedDB {
 
 	return &CachedDB{
 		Database:         db,
-		logger:           lg,
 		atxsdata:         o.atxsdata,
 		atxCache:         atxHdrCache,
 		malfeasanceCache: malfeasanceCache,

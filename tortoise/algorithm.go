@@ -76,7 +76,6 @@ func (c *Config) WindowSizeEpochs(applied types.LayerID) types.EpochID {
 // Tortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
 type Tortoise struct {
 	logger *zap.Logger
-	ctx    context.Context
 	cfg    Config
 
 	mu     sync.Mutex
@@ -111,7 +110,6 @@ func WithTracer(opts ...TraceOpt) Opt {
 // New creates Tortoise instance.
 func New(atxdata *atxsdata.Data, opts ...Opt) (*Tortoise, error) {
 	t := &Tortoise{
-		ctx:    context.Background(),
 		logger: zap.NewNop(),
 		cfg:    DefaultConfig(),
 	}
@@ -256,8 +254,8 @@ type EncodeVotesOpts func(*encodeConf)
 // EncodeVotesWithCurrent changes last known layer that will be used for encoding votes.
 //
 // NOTE(dshulyak) why do we need this?
-// tortoise computes threshold from last non-verified till the last known layer,
-// since we dont download atxs before starting tortoise we won't be able to compute threshold
+// Tortoise computes threshold from last non-verified till the last known layer,
+// since we don't download atxs before starting tortoise we won't be able to compute threshold
 // based on the last clock layer (see https://github.com/spacemeshos/go-spacemesh/issues/3003)
 func EncodeVotesWithCurrent(current types.LayerID) EncodeVotesOpts {
 	return func(conf *encodeConf) {
@@ -265,7 +263,7 @@ func EncodeVotesWithCurrent(current types.LayerID) EncodeVotesOpts {
 	}
 }
 
-// EncodeVotes chooses a base ballot and creates a differences list. needs the hare results for latest layers.
+// EncodeVotes chooses a base ballot and creates a differences list. Needs the hare results for latest layers.
 func (t *Tortoise) EncodeVotes(
 	ctx context.Context,
 	opts ...EncodeVotesOpts,
@@ -302,13 +300,13 @@ func (t *Tortoise) EncodeVotes(
 }
 
 // TallyVotes up to the specified layer.
-func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
+func (t *Tortoise) TallyVotes(lid types.LayerID) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	start = time.Now()
-	t.trtl.tallyVotes(ctx, lid)
+	t.trtl.tallyVotes(lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	if t.tracer != nil {
 		t.tracer.On(&TallyTrace{Layer: lid})
@@ -539,7 +537,7 @@ func (t *Tortoise) GetMissingActiveSet(target types.EpochID, atxs []types.ATXID)
 
 // OnApplied compares stored opinion with computed opinion and sets
 // pending layer to the layer above equal layer.
-// this method is meant to be used only in recovery from disk codepath.
+// This method is meant to be used only in recovery from disk codepath.
 func (t *Tortoise) OnApplied(lid types.LayerID, opinion types.Hash32) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -568,7 +566,7 @@ func (t *Tortoise) OnApplied(lid types.LayerID, opinion types.Hash32) bool {
 
 // latestsResults returns at most N latest results from process layer.
 //
-// private as it meant to be used for metering.
+// Private as it meant to be used for metering.
 func (t *Tortoise) latestsResults(n uint32) []result.Layer {
 	t.mu.Lock()
 	defer t.mu.Unlock()

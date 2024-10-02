@@ -54,7 +54,6 @@ type testNIPostBuilder struct {
 
 	mDb          sql.LocalDatabase
 	mLogger      *zap.Logger
-	mPoetDb      *MockpoetDbAPI
 	mClock       *MocklayerClock
 	mPostService *MockpostService
 	mPostClient  *MockPostClient
@@ -84,7 +83,6 @@ func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
 		eventSub:     sub.Out(),
 
 		mDb:          localsql.InMemory(),
-		mPoetDb:      NewMockpoetDbAPI(ctrl),
 		mPostService: NewMockpostService(ctrl),
 		mPostClient:  NewMockPostClient(ctrl),
 		mLogger:      logger,

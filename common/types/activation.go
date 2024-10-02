@@ -203,7 +203,7 @@ func (atx *ActivationTx) TargetEpoch() EpochID {
 }
 
 // Golden returns true if atx is from a checkpoint snapshot.
-// a golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
+// A golden ATX is not verifiable, and is only allowed to be prev atx or positioning atx.
 func (atx *ActivationTx) Golden() bool {
 	return atx.golden
 }

@@ -16,7 +16,7 @@ import (
 )
 
 // Validator validates the eligibility of a Ballot.
-// the validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
+// The validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
 type Validator struct {
 	minActiveSetWeight []types.EpochMinimalActiveWeight
 	avgLayerSize       uint32

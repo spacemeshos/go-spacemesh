@@ -26,19 +26,18 @@ type recoveryAdapter struct {
 	next types.LayerID
 }
 
-func (a *recoveryAdapter) TallyVotes(ctx context.Context, current types.LayerID) {
+func (a *recoveryAdapter) TallyVotes(current types.LayerID) {
 	genesis := types.GetEffectiveGenesis()
 	if a.next == 0 {
 		a.next = genesis
 	}
 	for ; a.next <= current; a.next++ {
-		require.NoError(a, RecoverLayer(ctx, a.Tortoise, a.db, a.atxdata, a.next, a.OnBallot))
-		a.Tortoise.TallyVotes(ctx, a.next)
+		require.NoError(a, RecoverLayer(a.Tortoise, a.db, a.atxdata, a.next, a.OnBallot))
+		a.Tortoise.TallyVotes(a.next)
 	}
 }
 
 func TestRecoverState(t *testing.T) {
-	ctx := context.Background()
 	const size = 10
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
@@ -51,7 +50,7 @@ func TestRecoverState(t *testing.T) {
 	var last, verified types.LayerID
 	for i := 0; i < 50; i++ {
 		last = s.Next()
-		tortoise.TallyVotes(ctx, last)
+		tortoise.TallyVotes(last)
 		verified = tortoise.LatestComplete()
 	}
 	require.Equal(t, last.Sub(1), verified)
@@ -68,7 +67,7 @@ func TestRecoverState(t *testing.T) {
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
 	tortoiseFromSimState(t, s.GetState(0), WithLogger(lg), WithConfig(cfg))
-	tortoise2.TallyVotes(ctx, last)
+	tortoise2.TallyVotes(last)
 	verified = tortoise2.LatestComplete()
 	require.Equal(t, last.Sub(1), verified)
 }
@@ -103,7 +102,7 @@ func TestRecoverWithOpinion(t *testing.T) {
 
 	trt := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg), WithLogger(lg))
 	for _, lid := range sim.GenLayers(s, sim.WithSequence(10)) {
-		trt.TallyVotes(context.Background(), lid)
+		trt.TallyVotes(lid)
 	}
 	var last result.Layer
 	for _, rst := range trt.Updates() {
@@ -146,7 +145,7 @@ func TestResetPending(t *testing.T) {
 	var last types.LayerID
 	for _, lid := range sim.GenLayers(s, sim.WithSequence(n)) {
 		last = lid
-		trt.TallyVotes(context.Background(), lid)
+		trt.TallyVotes(lid)
 	}
 	updates1 := trt.Updates()
 	require.Len(t, updates1, n+1)
@@ -193,7 +192,7 @@ func TestWindowRecovery(t *testing.T) {
 	var last types.LayerID
 	for _, lid := range sim.GenLayers(s, sim.WithSequence(n)) {
 		last = lid
-		trt.TallyVotes(context.Background(), lid)
+		trt.TallyVotes(lid)
 	}
 	updates1 := trt.Updates()
 	require.Len(t, updates1, n+1)
@@ -236,7 +235,7 @@ func TestRecoverOnlyAtxs(t *testing.T) {
 	// this creates a layer without any ballots, so we will also won't have them in the database
 	for _, lid := range sim.GenLayers(s, sim.WithSequence(10, sim.WithLayerSizeOverwrite(0))) {
 		last = lid
-		trt.TallyVotes(context.Background(), lid)
+		trt.TallyVotes(lid)
 	}
 	future := last + 1000
 	recovered, err := Recover(context.Background(), s.GetState(0).DB.Database, s.GetState(0).Atxdata, future,

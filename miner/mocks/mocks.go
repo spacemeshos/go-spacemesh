@@ -186,15 +186,15 @@ func (c *MockvotesEncoderLatestCompleteCall) DoAndReturn(f func() types.LayerID)
 }
 
 // TallyVotes mocks base method.
-func (m *MockvotesEncoder) TallyVotes(arg0 context.Context, arg1 types.LayerID) {
+func (m *MockvotesEncoder) TallyVotes(arg0 types.LayerID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "TallyVotes", arg0, arg1)
+	m.ctrl.Call(m, "TallyVotes", arg0)
 }
 
 // TallyVotes indicates an expected call of TallyVotes.
-func (mr *MockvotesEncoderMockRecorder) TallyVotes(arg0, arg1 any) *MockvotesEncoderTallyVotesCall {
+func (mr *MockvotesEncoderMockRecorder) TallyVotes(arg0 any) *MockvotesEncoderTallyVotesCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TallyVotes", reflect.TypeOf((*MockvotesEncoder)(nil).TallyVotes), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TallyVotes", reflect.TypeOf((*MockvotesEncoder)(nil).TallyVotes), arg0)
 	return &MockvotesEncoderTallyVotesCall{Call: call}
 }
 
@@ -210,13 +210,13 @@ func (c *MockvotesEncoderTallyVotesCall) Return() *MockvotesEncoderTallyVotesCal
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvotesEncoderTallyVotesCall) Do(f func(context.Context, types.LayerID)) *MockvotesEncoderTallyVotesCall {
+func (c *MockvotesEncoderTallyVotesCall) Do(f func(types.LayerID)) *MockvotesEncoderTallyVotesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvotesEncoderTallyVotesCall) DoAndReturn(f func(context.Context, types.LayerID)) *MockvotesEncoderTallyVotesCall {
+func (c *MockvotesEncoderTallyVotesCall) DoAndReturn(f func(types.LayerID)) *MockvotesEncoderTallyVotesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

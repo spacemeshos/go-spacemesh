@@ -2,7 +2,7 @@ VERSION ?= $(shell git describe --tags)
 COMMIT = $(shell git rev-parse HEAD)
 BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
-GOLANGCI_LINT_VERSION := v1.59.0
+GOLANGCI_LINT_VERSION := v1.61.0
 GOTESTSUM_VERSION := v1.12.0
 GOSCALE_VERSION := v1.2.0
 MOCKGEN_VERSION := v0.4.0
@@ -141,10 +141,6 @@ lint: get-libs
 lint-fix: get-libs
 	./bin/golangci-lint run --config .golangci.yml --fix
 .PHONY: lint-fix
-
-lint-github-action: get-libs
-	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
-.PHONY: lint-github-action
 
 cover: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS)

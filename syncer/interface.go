@@ -17,12 +17,8 @@ type layerTicker interface {
 	LayerToTime(types.LayerID) time.Time
 }
 
-type meshProvider interface {
-	SetZeroBlockLayer(context.Context, types.LayerID)
-}
-
 // fetchLogic is the interface between syncer and low-level fetching.
-// it handles all data fetching related logic (for layer or for epoch, from all peers or from any random peer ...etc).
+// It handles all data fetching related logic (for layer or for epoch, from all peers or from any random peer ...etc).
 type fetchLogic interface {
 	fetcher
 

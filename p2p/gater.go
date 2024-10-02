@@ -9,7 +9,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 var _ connmgr.ConnectionGater = (*gater)(nil)
@@ -61,7 +61,7 @@ func (g *gater) InterceptPeerDial(pid peer.ID) bool {
 	return len(g.h.Network().Peers()) <= g.outbound
 }
 
-func (g *gater) InterceptAddrDial(pid peer.ID, m multiaddr.Multiaddr) bool {
+func (g *gater) InterceptAddrDial(pid peer.ID, m ma.Multiaddr) bool {
 	if _, exist := g.direct[pid]; exist {
 		return true
 	}
@@ -80,14 +80,14 @@ func (*gater) InterceptUpgraded(_ network.Conn) (allow bool, reason control.Disc
 	return true, 0
 }
 
-func (g *gater) allowed(m multiaddr.Multiaddr) bool {
+func (g *gater) allowed(m ma.Multiaddr) bool {
 	allow := true
-	multiaddr.ForEach(m, func(c multiaddr.Component) bool {
+	ma.ForEach(m, func(c ma.Component) bool {
 		switch c.Protocol().Code {
-		case multiaddr.P_IP4:
+		case ma.P_IP4:
 			allow = !inAddrRange(net.IP(c.RawValue()), g.ip4blocklist)
 			return false
-		case multiaddr.P_IP6:
+		case ma.P_IP6:
 			allow = !inAddrRange(net.IP(c.RawValue()), g.ip6blocklist)
 			return false
 		}

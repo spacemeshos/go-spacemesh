@@ -71,7 +71,7 @@ func (pq *priorityQueue) update(it *item, ntx *NanoTX) {
 }
 
 // mempoolIterator holds the best transaction from the conservative state mempool.
-// not thread-safe.
+// Not thread-safe.
 type mempoolIterator struct {
 	logger       *zap.Logger
 	gasRemaining uint64

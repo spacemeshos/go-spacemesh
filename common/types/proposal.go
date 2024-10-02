@@ -16,7 +16,7 @@ import (
 const (
 	// ProposalIDSize in bytes.
 	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
-	// probably required for fetching by hash between peers.
+	// Probably required for fetching by hash between peers.
 	ProposalIDSize = Hash32Length
 )
 
@@ -51,7 +51,7 @@ func (id *ProposalID) DecodeScale(d *scale.Decoder) (int, error) {
 }
 
 // Proposal contains the smesher's signed content proposal for a given layer and vote on the mesh history.
-// Proposal is ephemeral and will be discarded after the unified content block is created. the Ballot within
+// Proposal is ephemeral and will be discarded after the unified content block is created. The Ballot within
 // the Proposal will remain in the mesh.
 type Proposal struct {
 	// the content proposal for a given layer and the votes on the mesh history
@@ -70,7 +70,7 @@ func (p Proposal) Equal(other Proposal) bool {
 }
 
 // InnerProposal contains a smesher's content proposal for layer and its votes on the mesh history.
-// this structure is serialized and signed to produce the signature in Proposal.
+// This structure is serialized and signed to produce the signature in Proposal.
 type InnerProposal struct {
 	// smesher's votes on the mesh history
 	Ballot
@@ -85,7 +85,7 @@ type InnerProposal struct {
 }
 
 // Initialize calculates and sets the Proposal's cached proposalID.
-// this should be called once all the other fields of the Proposal are set.
+// This should be called once all the other fields of the Proposal are set.
 func (p *Proposal) Initialize() error {
 	if p.proposalID != EmptyProposalID {
 		return errors.New("proposal already initialized")

@@ -29,14 +29,13 @@ import (
 type testMalfeasanceHandler struct {
 	*Handler
 
-	observedLogs *observer.ObservedLogs
-	db           sql.StateDatabase
-	mockTrt      *Mocktortoise
+	db      sql.StateDatabase
+	mockTrt *Mocktortoise
 }
 
 func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	db := statesql.InMemory()
-	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	observer, _ := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -57,9 +56,8 @@ func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	return &testMalfeasanceHandler{
 		Handler: h,
 
-		observedLogs: observedLogs,
-		db:           db,
-		mockTrt:      trt,
+		db:      db,
+		mockTrt: trt,
 	}
 }
 

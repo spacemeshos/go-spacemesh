@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
-	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +26,7 @@ func TestGater(t *testing.T) {
 		{address: "/ip4/95.217.200.84/tcp/8000", allowed: true},
 	} {
 		t.Run(tc.address, func(t *testing.T) {
-			addr, err := multiaddr.NewMultiaddr(tc.address)
+			addr, err := ma.NewMultiaddr(tc.address)
 			require.NoError(t, err)
 			require.Equal(t, tc.allowed, gater.InterceptAddrDial("", addr))
 		})

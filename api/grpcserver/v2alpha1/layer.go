@@ -45,10 +45,9 @@ func (s *LayerStreamService) Stream(
 	request *spacemeshv2alpha1.LayerStreamRequest,
 	stream spacemeshv2alpha1.LayerStreamService_StreamServer,
 ) error {
-	ctx := stream.Context()
 	var sub *events.BufferedSubscription[events.LayerUpdate]
 	if request.Watch {
-		matcher := layersMatcher{request, ctx}
+		matcher := layersMatcher{request}
 		var err error
 		sub, err = events.SubscribeMatched(matcher.match)
 		if err != nil {
@@ -305,7 +304,6 @@ func toLayer(layer *layers.Layer) *spacemeshv2alpha1.Layer {
 
 type layersMatcher struct {
 	*spacemeshv2alpha1.LayerStreamRequest
-	ctx context.Context
 }
 
 func (m *layersMatcher) match(l *events.LayerUpdate) bool {

@@ -5,7 +5,6 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,8 +17,6 @@ var statusMap = map[types.PostState]pb.PostState_State{
 
 // PostInfoService provides information about connected PostServices.
 type PostInfoService struct {
-	log *zap.Logger
-
 	states postState
 }
 
@@ -38,9 +35,8 @@ func (s *PostInfoService) String() string {
 }
 
 // NewPostInfoService creates a new instance of the post info grpc service.
-func NewPostInfoService(log *zap.Logger, states postState) *PostInfoService {
+func NewPostInfoService(states postState) *PostInfoService {
 	return &PostInfoService{
-		log:    log,
 		states: states,
 	}
 }

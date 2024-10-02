@@ -51,7 +51,7 @@ func createEpochState(
 	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch] = newState(pd.logger, pd.config, nil, epochWeight, minerAtxs, checker)
+	pd.states[epoch] = newState(pd.logger, nil, epochWeight, minerAtxs, checker)
 	return pd.states[epoch]
 }
 
