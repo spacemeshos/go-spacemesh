@@ -138,10 +138,8 @@ func malData(ids ...string) []types.NodeID {
 type tester struct {
 	tb           testing.TB
 	syncer       *Syncer
-	localdb      sql.LocalDatabase
 	db           sql.StateDatabase
 	cfg          Config
-	ctrl         *gomock.Controller
 	fetcher      *mocks.Mockfetcher
 	clock        clockwork.FakeClock
 	received     map[types.NodeID]bool
@@ -166,10 +164,8 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	return &tester{
 		tb:           tb,
 		syncer:       syncer,
-		localdb:      localdb,
 		db:           db,
 		cfg:          cfg,
-		ctrl:         ctrl,
 		fetcher:      fetcher,
 		clock:        clock,
 		received:     make(map[types.NodeID]bool),

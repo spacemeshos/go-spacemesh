@@ -442,7 +442,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 		tpd.recordBeacon(thisEpoch, &b, beacon2, fixed.New64(1))
 
 		count := layer.OrdinalInEpoch() + 1
-		//nolint:lll
+		// nolint:lll
 		expected := fmt.Sprintf(`
 			# HELP spacemesh_beacons_beacon_observed_total Number of beacons collected from blocks for each epoch and value
 			# TYPE spacemesh_beacons_beacon_observed_total counter
@@ -460,7 +460,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 		require.NoError(t, err)
 
 		weight := layer.OrdinalInEpoch() + 1
-		//nolint:lll
+		// nolint:lll
 		expected = fmt.Sprintf(`
 			# HELP spacemesh_beacons_beacon_observed_weight Weight of beacons collected from blocks for each epoch and value
 			# TYPE spacemesh_beacons_beacon_observed_weight counter
@@ -984,7 +984,7 @@ func TestBeacon_atxThreshold(t *testing.T) {
 
 	kappa := 40
 	q := big.NewRat(1, 3)
-	//nolint:lll
+	// nolint:lll
 	tt := []struct {
 		name      string
 		w         int

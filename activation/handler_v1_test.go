@@ -658,7 +658,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		require.NotNil(t, proof)
 		require.Equal(t, mwire.InvalidPrevATX, proof.Proof.Type)
 
-		mh := NewInvalidPrevATXHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier)
+		mh := NewInvalidPrevATXHandler(atxHdlr.cdb, atxHdlr.edVerifier)
 		nodeID, err := mh.Validate(context.Background(), proof.Proof.Data)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)

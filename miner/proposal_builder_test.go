@@ -308,7 +308,7 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 
 	clock.EXPECT().LayerToTime(gomock.Any()).Return(time.Unix(0, 0)).AnyTimes()
 	conState.EXPECT().SelectProposalTXs(lid, gomock.Any()).Return(txs)
-	trtl.EXPECT().TallyVotes(gomock.Any(), lid)
+	trtl.EXPECT().TallyVotes(lid)
 	trtl.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&opinion, nil)
 	trtl.EXPECT().LatestComplete().Return(lid - 1)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -341,7 +341,7 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 		expectCounters(signers[0], 3, beacon, 777, 2, 5),
 		expectRef(expectedProposal.Ballot.ID()),
 	)
-	trtl.EXPECT().TallyVotes(gomock.Any(), lid)
+	trtl.EXPECT().TallyVotes(lid)
 	trtl.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&opinion, nil)
 	trtl.EXPECT().LatestComplete().Return(lid - 1)
 	conState.EXPECT().SelectProposalTXs(lid, gomock.Any()).Return(txs)
@@ -971,7 +971,7 @@ func TestBuild(t *testing.T) {
 				}
 				{
 					if step.opinion != nil {
-						tortoise.EXPECT().TallyVotes(ctx, step.lid)
+						tortoise.EXPECT().TallyVotes(step.lid)
 						tortoise.EXPECT().
 							EncodeVotes(ctx, gomock.Any()).
 							Return(step.opinion, step.encodeVotesErr)

@@ -55,7 +55,7 @@ func failMinority(failures []int, groups map[string][]int) {
 		sameSize int
 	)
 	for _, group := range groups {
-		//nolint:copyloopvar
+		// nolint:copyloopvar
 		failed := group
 		if len(group) > len(largest) {
 			failed = largest

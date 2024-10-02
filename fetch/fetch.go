@@ -204,9 +204,10 @@ func randomPeer(peers []p2p.Peer) p2p.Peer {
 type Option func(*Fetch)
 
 // WithContext configures the shutdown context for the fetcher.
-func WithContext(c context.Context) Option {
+func WithContext(ctx context.Context) Option {
 	return func(f *Fetch) {
-		f.shutdownCtx, f.cancel = context.WithCancel(c)
+		// TODO(mafa): fix this
+		f.shutdownCtx, f.cancel = context.WithCancel(ctx) // nolint:fatcontext
 	}
 }
 

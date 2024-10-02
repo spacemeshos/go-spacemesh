@@ -14,7 +14,7 @@ type Voting = types.Votes
 type VotesGenerator func(rng *rand.Rand, layers []*types.Layer, i int) Voting
 
 // PerfectVoting selects base ballot from previous layer and supports all blocks from previous layer.
-// used by default.
+// Used by default.
 func PerfectVoting(rng *rand.Rand, layers []*types.Layer, _ int) Voting {
 	baseLayer := layers[len(layers)-1]
 	ballots := baseLayer.Ballots()

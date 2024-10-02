@@ -101,8 +101,7 @@ func (mh *MalfeasanceHandler) ReportInvalidProof(numInvalidProofs *prometheus.Co
 }
 
 type InvalidPostIndexHandler struct {
-	logger *zap.Logger
-	db     sql.Executor
+	db sql.Executor
 
 	edVerifier   *signing.EdVerifier
 	postVerifier PostVerifier
@@ -110,13 +109,11 @@ type InvalidPostIndexHandler struct {
 
 func NewInvalidPostIndexHandler(
 	db sql.Executor,
-	logger *zap.Logger,
 	edVerifier *signing.EdVerifier,
 	postVerifier PostVerifier,
 ) *InvalidPostIndexHandler {
 	return &InvalidPostIndexHandler{
-		db:     db,
-		logger: logger,
+		db: db,
 
 		edVerifier:   edVerifier,
 		postVerifier: postVerifier,
@@ -181,20 +178,14 @@ func (mh *InvalidPostIndexHandler) ReportInvalidProof(numInvalidProofs *promethe
 }
 
 type InvalidPrevATXHandler struct {
-	logger *zap.Logger
-	db     sql.Executor
+	db sql.Executor
 
 	edVerifier *signing.EdVerifier
 }
 
-func NewInvalidPrevATXHandler(
-	db sql.Executor,
-	logger *zap.Logger,
-	edVerifier *signing.EdVerifier,
-) *InvalidPrevATXHandler {
+func NewInvalidPrevATXHandler(db sql.Executor, edVerifier *signing.EdVerifier) *InvalidPrevATXHandler {
 	return &InvalidPrevATXHandler{
-		db:     db,
-		logger: logger,
+		db: db,
 
 		edVerifier: edVerifier,
 	}
