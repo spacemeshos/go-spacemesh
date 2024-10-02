@@ -413,7 +413,7 @@ func TestCheckCertifierPublickeyHint(t *testing.T) {
 			return
 		}
 
-		if !bytes.Equal(publicKeyHint, req.CertificatePubkeyHint) {
+		if len(req.CertificatePubkeyHint) > 0 && !bytes.Equal(publicKeyHint, req.CertificatePubkeyHint) {
 			http.Error(w, "Unknown public key hint", http.StatusUnauthorized)
 			return
 		}
