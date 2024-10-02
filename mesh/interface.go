@@ -24,7 +24,3 @@ type VmState interface {
 		[]types.CoinbaseReward,
 	) ([]types.Transaction, []types.TransactionWithResult, error)
 }
-
-type layerClock interface {
-	CurrentLayer() types.LayerID
-}

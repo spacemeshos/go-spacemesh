@@ -524,7 +524,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// If there's an error in the args, it will return immediately.
 	var wg sync.WaitGroup
 	wg.Add(1)
-	//nolint:testifylint
+	// nolint:testifylint
 	go func() {
 		str, err := testArgs(ctx, cmdWithRun(run))
 		require.Empty(t, str)
@@ -565,7 +565,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// TODO(dshulyak) synchronization below is messed up
 	var wg2 sync.WaitGroup
 	wg2.Add(1)
-	//nolint:testifylint
+	// nolint:testifylint
 	go func() {
 		defer wg2.Done()
 

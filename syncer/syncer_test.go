@@ -132,7 +132,7 @@ func newTestSyncer(t *testing.T, interval time.Duration) *testSyncer {
 	var err error
 	atxsdata := atxsdata.New()
 	exec := mesh.NewExecutor(ts.cdb, atxsdata, ts.mVm, ts.mConState, lg)
-	ts.msh, err = mesh.NewMesh(db, atxsdata, ts.mTicker, ts.mTortoise, exec, ts.mConState, lg)
+	ts.msh, err = mesh.NewMesh(db, atxsdata, ts.mTortoise, exec, ts.mConState, lg)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -256,7 +256,7 @@ func advanceState(t testing.TB, ts *testSyncer, from, to types.LayerID) {
 		if lid.Add(ts.syncer.cfg.SyncCertDistance) > ts.mTicker.CurrentLayer() {
 			ts.mDataFetcher.EXPECT().PollLayerOpinions(gomock.Any(), lid, false, gomock.Any())
 		}
-		ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lid)
+		ts.mTortoise.EXPECT().TallyVotes(lid)
 		ts.mTortoise.EXPECT().OnApplied(lid, gomock.Any())
 		ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lid)))
 		ts.mVm.EXPECT().Apply(gomock.Any(), gomock.Any(), gomock.Any())
@@ -711,7 +711,7 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts.expectMalEnsureInSync(current)
 
 	// simulate hare advancing the mesh forward
-	ts.mTortoise.EXPECT().TallyVotes(gomock.Any(), lyr)
+	ts.mTortoise.EXPECT().TallyVotes(lyr)
 	ts.mTortoise.EXPECT().Updates().Return(fixture.RLayers(fixture.RLayer(lyr)))
 	ts.mTortoise.EXPECT().OnApplied(lyr, gomock.Any())
 	ts.mVm.EXPECT().Apply(gomock.Any(), nil, nil)

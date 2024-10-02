@@ -17,9 +17,7 @@ func init() {
 
 // Register template.
 func Register(registry *registry.Registry) {
-	registry.Register(TemplateAddress, &handler{
-		address: TemplateAddress,
-	})
+	registry.Register(TemplateAddress, &handler{})
 }
 
 var (
@@ -28,13 +26,11 @@ var (
 )
 
 // NewHandler instantiates multisig handler with a particular configuration.
-func NewHandler(address core.Address) core.Handler {
-	return &handler{address: address}
+func NewHandler() core.Handler {
+	return &handler{}
 }
 
-type handler struct {
-	address core.Address
-}
+type handler struct{}
 
 // Parse header and arguments.
 func (h *handler) Parse(method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {

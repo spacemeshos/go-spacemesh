@@ -93,8 +93,6 @@ type Certifier struct {
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
 	certCount   map[types.EpochID]int
-
-	collector *collector
 }
 
 // NewCertifier creates new block certifier.
@@ -126,8 +124,6 @@ func NewCertifier(
 	for _, opt := range opts {
 		opt(c)
 	}
-	c.collector = newCollector(c)
-
 	return c
 }
 
@@ -146,7 +142,8 @@ func (c *Certifier) Register(sig *signing.EdSigner) {
 // Start starts the background goroutine for periodic pruning.
 func (c *Certifier) Start(ctx context.Context) {
 	c.once.Do(func() {
-		ctx, c.stop = context.WithCancel(ctx)
+		// TODO(mafa): fix this
+		ctx, c.stop = context.WithCancel(ctx) // nolint:fatcontext
 		c.eg.Go(func() error {
 			return c.run(ctx)
 		})

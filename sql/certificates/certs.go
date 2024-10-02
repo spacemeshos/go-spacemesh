@@ -30,7 +30,7 @@ func setHareOutput(db sql.Executor, lid types.LayerID, bid types.BlockID, valid 
 }
 
 // GetHareOutput returns the block that's valid as hare output for the specified layer.
-// if there are more than one valid blocks, return types.EmptyBlockID.
+// If there are more than one valid blocks, return types.EmptyBlockID.
 func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
 	var (
 		result types.BlockID

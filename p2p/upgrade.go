@@ -43,13 +43,6 @@ func WithConfig(cfg Config) Opt {
 	}
 }
 
-// WithContext set context for Host.
-func WithContext(ctx context.Context) Opt {
-	return func(fh *Host) {
-		fh.ctx = ctx
-	}
-}
-
 // WithNodeReporter updates reporter that is notified every time when
 // node added or removed a peer.
 func WithNodeReporter(reporter func() error) Opt {
@@ -167,7 +160,6 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}
 	dopts := []discovery.Opt{
 		discovery.WithMinPeers(cfg.MinPeers),
-		discovery.WithHighPeers(cfg.HighPeers),
 		discovery.WithDir(cfg.DataDir),
 		discovery.WithBootnodes(bootnodes),
 		discovery.WithLogger(fh.logger),

@@ -284,7 +284,7 @@ func (t *turtle) encodeVotes(
 }
 
 // getFullVote unlike getLocalVote will vote according to the counted votes on blocks that are
-// outside of hdist. if opinion is undecided according to the votes it will use coinflip recorded
+// outside of hdist. If opinion is undecided according to the votes it will use coinflip recorded
 // in the current layer.
 func (t *turtle) getFullVote(verified, current types.LayerID, block *blockInfo) (sign, voteReason, error) {
 	if !block.data {
@@ -320,7 +320,7 @@ func (t *turtle) updateLast(last types.LayerID) {
 	}
 }
 
-func (t *turtle) tallyVotes(ctx context.Context, last types.LayerID) {
+func (t *turtle) tallyVotes(last types.LayerID) {
 	defer t.evict()
 
 	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))
@@ -744,11 +744,7 @@ func (t *turtle) decodeBallot(ballot *types.BallotTortoiseData) (*ballotInfo, ty
 	}
 
 	binfo := &ballotInfo{
-		id: ballot.ID,
-		base: baseInfo{
-			id:    base.id,
-			layer: base.layer,
-		},
+		id:        ballot.ID,
 		reference: refinfo,
 		layer:     ballot.Layer,
 		malicious: ballot.Malicious || t.isMalfeasant(ballot.Smesher),

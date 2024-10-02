@@ -234,8 +234,8 @@ func (cs *ConservativeState) GetTransactionsByAddress(
 }
 
 // ShuffleWithNonceOrder perform a Fisher-Yates shuffle on the transactions.
-// note that after shuffling, the original list of transactions are no longer in nonce order
-// within the same principal. we simply check which principal occupies the spot after
+// Note that after shuffling, the original list of transactions are no longer in nonce order
+// within the same principal. We simply check which principal occupies the spot after
 // the shuffle and retrieve their transactions in nonce order.
 func ShuffleWithNonceOrder(
 	logger *zap.Logger,
