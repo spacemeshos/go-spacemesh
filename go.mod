@@ -39,7 +39,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.13.0
-	github.com/spacemeshos/api/release/go v1.54.1-0.20241001142818-50e3b4247535
+	github.com/spacemeshos/api/release/go v1.54.1-0.20241002153152-9eb9c6c77814
 	github.com/spacemeshos/economics v0.1.3
 	github.com/spacemeshos/fixed v0.1.1
 	github.com/spacemeshos/go-scale v1.2.0
@@ -233,7 +233,7 @@ require (
 	gonum.org/v1/gonum v0.15.0 // indirect
 	google.golang.org/api v0.187.0 // indirect
 	google.golang.org/genproto v0.0.0-20240624140628-dc46fd24d27d // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240930140551-af27646dc61f // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
