@@ -105,7 +105,7 @@ Building is supported on:
 
 FreeBSD is not officially supported.
 
-Install [Go 3 or later](https://golang.org/dl/) for your platform, if you haven't already.
+Install [Go 1.23 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
 On Windows you need to install `make` via [msys2](https://www.msys2.org/), [MingGW-w64](http://mingw-w64.org/doku.php)
 or [mingw](https://chocolatey.org/packages/mingw).
