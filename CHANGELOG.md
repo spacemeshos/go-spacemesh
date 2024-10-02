@@ -2,6 +2,16 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.7.3
+
+### Upgrade information
+
+This release prepares the node for enabling hare4 in the near future. No special upgrade steps are required.
+
+### Improvements
+
+* [#6360](https://github.com/spacemeshos/go-spacemesh/pull/6360) Prepare node for hare4.
+
 ## v1.7.2
 
 ### Upgrade information
