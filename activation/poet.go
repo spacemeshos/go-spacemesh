@@ -505,7 +505,7 @@ func (c *poetService) authorize(
 			return nil, err
 		}
 
-		return &PoetAuth{PoetCert: cert, CertPubKey: info.ServicePubkey}, nil
+		return &PoetAuth{PoetCert: cert, CertPubKey: info.Certifier.Pubkey}, nil
 	case errors.Is(err, ErrCertificatesNotSupported):
 		logger.Debug("poet doesn't support certificates")
 	default:
