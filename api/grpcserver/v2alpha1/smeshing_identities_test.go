@@ -55,20 +55,18 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 		poetAddr3: {},
 	}
 
-	nodeId1 := types.RandomNodeID()
-	nodeId2 := types.RandomNodeID()
-	nodeId3 := types.RandomNodeID()
-	nodeId4 := types.RandomNodeID()
-	nodeId5 := types.RandomNodeID()
-	nodeId6 := types.RandomNodeID()
+	nodeIDs := make([]types.NodeID, 0, 6)
+	for range 6 {
+		nodeIDs = append(nodeIDs, types.RandomNodeID())
+	}
 
 	existingIdentityStates := map[types.IdentityDescriptor]activation.IdentityState{
-		newIdMock(nodeId1, nodeId1.String()): activation.IdentityStateWaitForATXSyncing,
-		newIdMock(nodeId2, nodeId2.String()): activation.IdentityStateWaitForPoetRoundStart,
-		newIdMock(nodeId3, nodeId3.String()): activation.IdentityStateWaitForPoetRoundEnd,
-		newIdMock(nodeId4, nodeId4.String()): activation.IdentityStateWaitForPoetRoundEnd,
-		newIdMock(nodeId5, nodeId5.String()): activation.IdentityStateFetchingProofs,
-		newIdMock(nodeId6, nodeId5.String()): activation.IdentityStatePostProving,
+		newIdMock(nodeIDs[0], nodeIDs[0].String()): activation.IdentityStateWaitForATXSyncing,
+		newIdMock(nodeIDs[1], nodeIDs[1].String()): activation.IdentityStateWaitForPoetRoundStart,
+		newIdMock(nodeIDs[2], nodeIDs[2].String()): activation.IdentityStateWaitForPoetRoundEnd,
+		newIdMock(nodeIDs[3], nodeIDs[3].String()): activation.IdentityStateWaitForPoetRoundEnd,
+		newIdMock(nodeIDs[4], nodeIDs[4].String()): activation.IdentityStateFetchingProofs,
+		newIdMock(nodeIDs[5], nodeIDs[5].String()): activation.IdentityStatePostProving,
 	}
 	midentityStates.EXPECT().IdentityStates().Return(existingIdentityStates)
 
@@ -78,7 +76,7 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	// 1. successful registrations:
 	for _, poet := range []string{poetAddr1, poetAddr2} {
 		err := nipost.AddPoetRegistration(db, nipost.PoETRegistration{
-			NodeId:        nodeId3,
+			NodeId:        nodeIDs[2],
 			ChallengeHash: challengeHash,
 			Address:       poet,
 			RoundID:       roundId,
@@ -90,7 +88,7 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	// 2. successful + residual registrations:
 	for _, poet := range []string{poetAddr3, poetAddr4} {
 		err := nipost.AddPoetRegistration(db, nipost.PoETRegistration{
-			NodeId:        nodeId4,
+			NodeId:        nodeIDs[3],
 			ChallengeHash: challengeHash,
 			Address:       poet,
 			RoundID:       roundId,
@@ -101,7 +99,7 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 
 	// 3. registrations, which will not be returned because of
 	// wrong node state
-	for _, nodeId := range []types.NodeID{nodeId2, nodeId5, nodeId6} {
+	for _, nodeId := range []types.NodeID{nodeIDs[1], nodeIDs[4], nodeIDs[5]} {
 		err := nipost.AddPoetRegistration(db, nipost.PoETRegistration{
 			NodeId:        nodeId,
 			ChallengeHash: challengeHash,
@@ -114,7 +112,7 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 
 	// 4. failed registration:
 	err := nipost.AddPoetRegistration(db, nipost.PoETRegistration{
-		NodeId:        nodeId3,
+		NodeId:        nodeIDs[2],
 		ChallengeHash: challengeHash,
 		Address:       poetAddr3,
 	})
@@ -130,16 +128,16 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 		status    pb.IdentityStatus
 		poetInfos map[string]*pb.PoetServicesResponse_Identity_PoetInfo
 	}{
-		nodeId1.String(): {
-			smesherId: nodeId1.Bytes(),
+		nodeIDs[0].String(): {
+			smesherId: nodeIDs[0].Bytes(),
 			status:    pb.IdentityStatus_IS_SYNCING,
 		},
-		nodeId2.String(): {
-			smesherId: nodeId2.Bytes(),
+		nodeIDs[1].String(): {
+			smesherId: nodeIDs[1].Bytes(),
 			status:    pb.IdentityStatus_WAIT_FOR_POET_ROUND_START,
 		},
-		nodeId3.String(): {
-			smesherId: nodeId3.Bytes(),
+		nodeIDs[2].String(): {
+			smesherId: nodeIDs[2].Bytes(),
 			status:    pb.IdentityStatus_WAIT_FOR_POET_ROUND_END,
 			poetInfos: map[string]*pb.PoetServicesResponse_Identity_PoetInfo{
 				poetAddr1: {
@@ -156,8 +154,8 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 				},
 			},
 		},
-		nodeId4.String(): {
-			smesherId: nodeId4.Bytes(),
+		nodeIDs[3].String(): {
+			smesherId: nodeIDs[3].Bytes(),
 			status:    pb.IdentityStatus_WAIT_FOR_POET_ROUND_END,
 			poetInfos: map[string]*pb.PoetServicesResponse_Identity_PoetInfo{
 				poetAddr1: {
@@ -179,12 +177,12 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 				},
 			},
 		},
-		nodeId5.String(): {
-			smesherId: nodeId5.Bytes(),
+		nodeIDs[4].String(): {
+			smesherId: nodeIDs[4].Bytes(),
 			status:    pb.IdentityStatus_FETCHING_PROOFS,
 		},
-		nodeId6.String(): {
-			smesherId: nodeId6.Bytes(),
+		nodeIDs[5].String(): {
+			smesherId: nodeIDs[5].Bytes(),
 			status:    pb.IdentityStatus_POST_PROVING,
 		},
 	}

@@ -121,7 +121,5 @@ func (s *IdentityStateStorage) Get(id types.NodeID) (IdentityState, error) {
 func (s *IdentityStateStorage) All() map[types.NodeID]IdentityState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	copy := make(map[types.NodeID]IdentityState, len(s.states))
-	maps.Copy(copy, s.states)
-	return copy
+	return maps.Clone(s.states)
 }
