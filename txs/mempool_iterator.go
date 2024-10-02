@@ -70,7 +70,7 @@ func (pq *priorityQueue) update(it *item, ntx *NanoTX) {
 	heap.Fix(pq, it.index)
 }
 
-// MempoolIterator holds the best transaction from the conservative state mempool.
+// mempoolIterator holds the best transaction from the conservative state mempool.
 // Not thread-safe.
 type mempoolIterator struct {
 	logger       *zap.Logger
