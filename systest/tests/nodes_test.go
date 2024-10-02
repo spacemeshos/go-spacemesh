@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -16,9 +17,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	// systest runs with `fastnet` preset. this init need to generate addresses with same hrp network prefix as fastnet.
 	types.SetNetworkHRP("stest")
+	res := m.Run()
+	os.Exit(res)
 }
 
 func TestAddNodes(t *testing.T) {

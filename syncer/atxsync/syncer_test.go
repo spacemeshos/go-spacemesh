@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -23,8 +24,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	types.SetLayersPerEpoch(10)
+	res := m.Run()
+	os.Exit(res)
 }
 
 func aid(id string) types.ATXID {
