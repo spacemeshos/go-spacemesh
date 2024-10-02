@@ -248,7 +248,7 @@ func (c *HTTPPoetClient) Submit(
 	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody, c.submitChallengeClient); err != nil {
 		return nil, fmt.Errorf("submitting challenge: %w", err)
 	}
-	roundEnd := time.Time{}
+	var roundEnd time.Time
 	if resBody.RoundEnd != nil {
 		roundEnd = time.Now().Add(resBody.RoundEnd.AsDuration())
 	}

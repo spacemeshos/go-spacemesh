@@ -183,8 +183,21 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 }
 
 func TestPoetClient_CachesProof(t *testing.T) {
-	var proofsCalled atomic.Uint64
+	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
+	certifierPubKey := []byte("certifier-pubkey")
+	infoResp, err := protojson.Marshal(&rpcapi.InfoResponse{
+		ServicePubkey: []byte("pubkey"),
+		Certifier: &rpcapi.InfoResponse_Cerifier{
+			Url:    certifierAddress.String(),
+			Pubkey: certifierPubKey,
+		},
+	})
+	require.NoError(t, err)
+
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
+
+	var proofsCalled atomic.Uint64
 	mux.HandleFunc("GET /v1/proofs/", func(w http.ResponseWriter, r *http.Request) {
 		proofsCalled.Add(1)
 		resp, err := protojson.Marshal(&rpcapi.ProofResponse{})
@@ -210,7 +223,7 @@ func TestPoetClient_CachesProof(t *testing.T) {
 	require.NoError(t, err)
 	poet := NewPoetServiceWithClient(db, client, DefaultPoetConfig(), zaptest.NewLogger(t))
 
-	eg := errgroup.Group{}
+	var eg errgroup.Group
 	for range 20 {
 		eg.Go(func() error {
 			_, _, err := poet.Proof(ctx, "1")
