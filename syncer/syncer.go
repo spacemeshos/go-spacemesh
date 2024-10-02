@@ -197,7 +197,7 @@ func NewSyncer(
 	}
 
 	if s.dataFetcher == nil {
-		s.dataFetcher = NewDataFetch(mesh, fetcher, tortoise, s.logger)
+		s.dataFetcher = NewDataFetch(fetcher, s.logger)
 	}
 	if s.forkFinder == nil {
 		s.forkFinder = NewForkFinder(s.logger, cdb, fetcher, s.cfg.MaxStaleDuration)
@@ -367,7 +367,7 @@ func (s *Syncer) lastAtxEpoch() types.EpochID {
 	return types.EpochID(s.lastEpochSynced.Load())
 }
 
-// Synchronize sync data up to the currentLayer-1 and wait for the layers to be validated.
+// synchronize sync data up to the currentLayer-1 and wait for the layers to be validated.
 // It returns false if the data sync failed.
 func (s *Syncer) synchronize(ctx context.Context) bool {
 	ctx = log.WithNewSessionID(ctx)

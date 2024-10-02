@@ -202,7 +202,7 @@ func (ps *PostSupervisor) Stop(deleteFiles bool) error {
 	}
 }
 
-// CaptureCmdOutput returns a function that reads from the given pipe and logs the output.
+// captureCmdOutput returns a function that reads from the given pipe and logs the output.
 // It returns when the pipe is closed.
 func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser, smesherId types.NodeID) func() error {
 	return func() error {

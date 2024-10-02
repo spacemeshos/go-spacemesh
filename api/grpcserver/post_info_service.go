@@ -5,7 +5,6 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -36,7 +35,7 @@ func (s *PostInfoService) String() string {
 }
 
 // NewPostInfoService creates a new instance of the post info grpc service.
-func NewPostInfoService(_ *zap.Logger, states postState) *PostInfoService {
+func NewPostInfoService(states postState) *PostInfoService {
 	return &PostInfoService{
 		states: states,
 	}

@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 )
 
 func TestRerunRevertNonverifiedLayers(t *testing.T) {
-	ctx := context.Background()
 	const (
 		size = 10
 		good = 10
@@ -32,7 +30,7 @@ func TestRerunRevertNonverifiedLayers(t *testing.T) {
 		sim.WithSequence(good),
 		sim.WithSequence(5, sim.WithVoteGenerator(splitVoting(size))),
 	) {
-		tortoise.TallyVotes(ctx, last)
+		tortoise.TallyVotes(last)
 		verified = tortoise.LatestComplete()
 	}
 	expected := types.GetEffectiveGenesis().Add(good - 1)
@@ -47,7 +45,6 @@ func TestWindowSizeVoteCounting(t *testing.T) {
 
 func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expectedValidity bool) {
 	genesis := types.GetEffectiveGenesis()
-	ctx := context.Background()
 	const size = 4
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup(sim.WithSetupMinerRange(size, size))
@@ -78,7 +75,7 @@ func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expected
 		),
 		sim.WithSequence(10, sim.WithEmptyHareOutput(), sim.WithNumBlocks(1)),
 	) {
-		tortoise.TallyVotes(ctx, last)
+		tortoise.TallyVotes(last)
 		processBlockUpdates(tb, tortoise, s.GetState(0).DB)
 	}
 	require.Equal(tb, last.Sub(1), tortoise.LatestComplete())
@@ -128,7 +125,6 @@ func benchmarkTallyVotes(b *testing.B, size int, windowsize uint32, opts ...sim.
 	)
 	s.Setup()
 
-	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = layerSize
 	cfg.WindowSize = windowsize
@@ -143,12 +139,12 @@ func benchmarkTallyVotes(b *testing.B, size int, windowsize uint32, opts ...sim.
 	}
 	b.Log("generated state", time.Since(start))
 	// count ballots and form initial opinion
-	tortoise.TallyVotes(ctx, last)
+	tortoise.TallyVotes(last)
 	b.Log("loaded state", time.Since(start))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// benchmark how long it takes to recheck all layers within the sliding window
-		tortoise.TallyVotes(ctx, last)
+		tortoise.TallyVotes(last)
 	}
 }

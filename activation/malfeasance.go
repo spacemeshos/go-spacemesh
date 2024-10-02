@@ -109,7 +109,6 @@ type InvalidPostIndexHandler struct {
 
 func NewInvalidPostIndexHandler(
 	db sql.Executor,
-	_ *zap.Logger,
 	edVerifier *signing.EdVerifier,
 	postVerifier PostVerifier,
 ) *InvalidPostIndexHandler {
@@ -184,11 +183,7 @@ type InvalidPrevATXHandler struct {
 	edVerifier *signing.EdVerifier
 }
 
-func NewInvalidPrevATXHandler(
-	db sql.Executor,
-	_ *zap.Logger,
-	edVerifier *signing.EdVerifier,
-) *InvalidPrevATXHandler {
+func NewInvalidPrevATXHandler(db sql.Executor, edVerifier *signing.EdVerifier) *InvalidPrevATXHandler {
 	return &InvalidPrevATXHandler{
 		db: db,
 

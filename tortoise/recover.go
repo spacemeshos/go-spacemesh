@@ -85,7 +85,7 @@ func Recover(
 			return nil, ctx.Err()
 		default:
 		}
-		if err := RecoverLayer(ctx, trtl, db, atxdata, lid, trtl.OnRecoveredBallot); err != nil {
+		if err := RecoverLayer(trtl, db, atxdata, lid, trtl.OnRecoveredBallot); err != nil {
 			return nil, fmt.Errorf("failed to load tortoise state at layer %d: %w", lid, err)
 		}
 	}
@@ -108,7 +108,7 @@ func Recover(
 	if last < start {
 		return trtl, nil
 	}
-	trtl.TallyVotes(ctx, last)
+	trtl.TallyVotes(last)
 	// find topmost layer that was already applied with same result
 	// and reset pending so that result for that layer is not returned
 	for prev := valid; prev >= start; prev-- {
@@ -140,7 +140,6 @@ func recoverEpoch(target types.EpochID, trtl *Tortoise, db sql.Executor, atxdata
 type ballotFunc func(*types.BallotTortoiseData)
 
 func RecoverLayer(
-	_ context.Context,
 	trtl *Tortoise,
 	db sql.Executor,
 	atxdata *atxsdata.Data,

@@ -313,7 +313,7 @@ func withProposals(fraction float64) clusterOpt {
 	}
 }
 
-// WithSigners creates N signers in addition to regular active nodes.
+// withSigners creates N signers in addition to regular active nodes.
 // This signers will be partitioned in fair fashion across regular active nodes.
 func withSigners(n int) clusterOpt {
 	return func(cluster *lockstepCluster) {

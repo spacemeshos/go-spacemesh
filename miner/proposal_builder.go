@@ -46,7 +46,7 @@ type conservativeState interface {
 
 type votesEncoder interface {
 	LatestComplete() types.LayerID
-	TallyVotes(context.Context, types.LayerID)
+	TallyVotes(types.LayerID)
 	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Opinion, error)
 }
 
@@ -582,7 +582,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	pb.signers.mu.Unlock()
 
 	encodeVotesOnce := sync.OnceValues(func() (*types.Opinion, error) {
-		pb.tortoise.TallyVotes(ctx, lid)
+		pb.tortoise.TallyVotes(lid)
 		// TODO(dshulyak) get rid from the EncodeVotesWithCurrent option in a followup
 		// there are some dependencies in the tests
 		opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(lid))

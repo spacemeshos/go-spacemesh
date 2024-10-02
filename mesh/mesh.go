@@ -64,7 +64,6 @@ type Mesh struct {
 func NewMesh(
 	db sql.StateDatabase,
 	atxsdata *atxsdata.Data,
-	_ layerClock,
 	trtl system.Tortoise,
 	exec *Executor,
 	state conservativeState,
@@ -304,7 +303,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, lid types.LayerID) error {
 	msh.mu.Lock()
 	defer msh.mu.Unlock()
 
-	msh.trtl.TallyVotes(ctx, lid)
+	msh.trtl.TallyVotes(lid)
 
 	if err := msh.setProcessedLayer(lid); err != nil {
 		return err

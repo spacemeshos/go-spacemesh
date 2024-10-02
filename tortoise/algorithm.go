@@ -300,13 +300,13 @@ func (t *Tortoise) EncodeVotes(
 }
 
 // TallyVotes up to the specified layer.
-func (t *Tortoise) TallyVotes(ctx context.Context, lid types.LayerID) {
+func (t *Tortoise) TallyVotes(lid types.LayerID) {
 	start := time.Now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	waitTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	start = time.Now()
-	t.trtl.tallyVotes(ctx, lid)
+	t.trtl.tallyVotes(lid)
 	executeTallyVotes.Observe(float64(time.Since(start).Nanoseconds()))
 	if t.tracer != nil {
 		t.tracer.On(&TallyTrace{Layer: lid})

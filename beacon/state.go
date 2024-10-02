@@ -16,7 +16,7 @@ type minerInfo struct {
 	malicious bool
 }
 
-// State does the data management for epoch specific data for the protocol.
+// state does the data management for epoch specific data for the protocol.
 // Not thread-safe. It relies on ProtocolDriver's thread-safety mechanism.
 type state struct {
 	logger      *zap.Logger
@@ -38,7 +38,6 @@ type state struct {
 
 func newState(
 	logger *zap.Logger,
-	_ Config,
 	active map[types.NodeID]participant,
 	epochWeight uint64,
 	miners map[types.NodeID]*minerInfo,

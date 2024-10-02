@@ -198,7 +198,7 @@ func (s *Server) genWithRetry(ctx context.Context, epoch types.EpochID, maxRetri
 	}
 }
 
-// in systests, we want to be sure the nodes use the fallback data unconditionally.
+// In systests, we want to be sure the nodes use the fallback data unconditionally.
 // Use a fixed known value for beacon to be sure that fallback is used during testing.
 func epochBeacon(epoch types.EpochID) types.Beacon {
 	b := make([]byte, types.BeaconSize)

@@ -320,7 +320,7 @@ func (t *turtle) updateLast(last types.LayerID) {
 	}
 }
 
-func (t *turtle) tallyVotes(_ context.Context, last types.LayerID) {
+func (t *turtle) tallyVotes(last types.LayerID) {
 	defer t.evict()
 
 	t.logger.Debug("on layer", zap.Uint32("last", last.Uint32()))

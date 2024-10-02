@@ -120,65 +120,6 @@ func (c *MocklayerTickerLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.
 	return c
 }
 
-// MockmeshProvider is a mock of meshProvider interface.
-type MockmeshProvider struct {
-	ctrl     *gomock.Controller
-	recorder *MockmeshProviderMockRecorder
-}
-
-// MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
-type MockmeshProviderMockRecorder struct {
-	mock *MockmeshProvider
-}
-
-// NewMockmeshProvider creates a new mock instance.
-func NewMockmeshProvider(ctrl *gomock.Controller) *MockmeshProvider {
-	mock := &MockmeshProvider{ctrl: ctrl}
-	mock.recorder = &MockmeshProviderMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
-	return m.recorder
-}
-
-// SetZeroBlockLayer mocks base method.
-func (m *MockmeshProvider) SetZeroBlockLayer(arg0 context.Context, arg1 types.LayerID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetZeroBlockLayer", arg0, arg1)
-}
-
-// SetZeroBlockLayer indicates an expected call of SetZeroBlockLayer.
-func (mr *MockmeshProviderMockRecorder) SetZeroBlockLayer(arg0, arg1 any) *MockmeshProviderSetZeroBlockLayerCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBlockLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBlockLayer), arg0, arg1)
-	return &MockmeshProviderSetZeroBlockLayerCall{Call: call}
-}
-
-// MockmeshProviderSetZeroBlockLayerCall wrap *gomock.Call
-type MockmeshProviderSetZeroBlockLayerCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockmeshProviderSetZeroBlockLayerCall) Return() *MockmeshProviderSetZeroBlockLayerCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockmeshProviderSetZeroBlockLayerCall) Do(f func(context.Context, types.LayerID)) *MockmeshProviderSetZeroBlockLayerCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmeshProviderSetZeroBlockLayerCall) DoAndReturn(f func(context.Context, types.LayerID)) *MockmeshProviderSetZeroBlockLayerCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // MockfetchLogic is a mock of fetchLogic interface.
 type MockfetchLogic struct {
 	ctrl     *gomock.Controller

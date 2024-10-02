@@ -240,17 +240,11 @@ type testInvalidPostIndexHandler struct {
 
 func newTestInvalidPostIndexHandler(tb testing.TB) *testInvalidPostIndexHandler {
 	db := statesql.InMemory()
-	observer, _ := observer.New(zapcore.WarnLevel)
-	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
-		func(core zapcore.Core) zapcore.Core {
-			return zapcore.NewTee(core, observer)
-		},
-	)))
 
 	ctrl := gomock.NewController(tb)
 	postVerifier := NewMockPostVerifier(ctrl)
 
-	h := NewInvalidPostIndexHandler(db, logger, signing.NewEdVerifier(), postVerifier)
+	h := NewInvalidPostIndexHandler(db, signing.NewEdVerifier(), postVerifier)
 	return &testInvalidPostIndexHandler{
 		InvalidPostIndexHandler: h,
 
@@ -427,14 +421,8 @@ type testInvalidPrevATXHandler struct {
 
 func newTestInvalidPrevATXHandler(tb testing.TB) *testInvalidPrevATXHandler {
 	db := statesql.InMemory()
-	observer, _ := observer.New(zapcore.WarnLevel)
-	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
-		func(core zapcore.Core) zapcore.Core {
-			return zapcore.NewTee(core, observer)
-		},
-	)))
 
-	h := NewInvalidPrevATXHandler(db, logger, signing.NewEdVerifier())
+	h := NewInvalidPrevATXHandler(db, signing.NewEdVerifier())
 	return &testInvalidPrevATXHandler{
 		InvalidPrevATXHandler: h,
 

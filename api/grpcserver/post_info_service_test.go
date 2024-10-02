@@ -7,7 +7,6 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -33,9 +32,8 @@ func (i idMock) Name() string {
 }
 
 func TestPostInfoService(t *testing.T) {
-	log := zaptest.NewLogger(t)
 	mpostStates := NewMockpostState(gomock.NewController(t))
-	svc := NewPostInfoService(log, mpostStates)
+	svc := NewPostInfoService(mpostStates)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 

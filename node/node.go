@@ -708,7 +708,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(ExecutorLogger, lg).Zap(),
 	)
 	mlog := app.addLogger(MeshLogger, lg).Zap()
-	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.db, app.atxsdata, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
@@ -1130,15 +1130,10 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	invalidPostMH := activation.NewInvalidPostIndexHandler(
 		app.cachedDB,
-		malfeasanceLogger,
 		app.edVerifier,
 		app.postVerifier,
 	)
-	invalidPrevMH := activation.NewInvalidPrevATXHandler(
-		app.cachedDB,
-		malfeasanceLogger,
-		app.edVerifier,
-	)
+	invalidPrevMH := activation.NewInvalidPrevATXHandler(app.cachedDB, app.edVerifier)
 
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	for _, s := range app.signers {
@@ -1521,7 +1516,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.PostInfo:
-		service := grpcserver.NewPostInfoService(app.addLogger(PostInfoServiceLogger, lg).Zap(), app.atxBuilder)
+		service := grpcserver.NewPostInfoService(app.atxBuilder)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Transaction:

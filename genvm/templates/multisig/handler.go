@@ -26,7 +26,7 @@ var (
 )
 
 // NewHandler instantiates multisig handler with a particular configuration.
-func NewHandler(_ core.Address) core.Handler {
+func NewHandler() core.Handler {
 	return &handler{}
 }
 

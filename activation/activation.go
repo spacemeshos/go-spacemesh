@@ -914,7 +914,7 @@ func (b *Builder) broadcast(ctx context.Context, atx scale.Encodable) (int, erro
 	return len(buf), nil
 }
 
-// SearchPositioningAtx returns atx id with the highest tick height.
+// searchPositioningAtx returns atx id with the highest tick height.
 // Publish epoch is used for caching the positioning atx.
 func (b *Builder) searchPositioningAtx(
 	ctx context.Context,
