@@ -114,7 +114,7 @@ jobs:
       - name: setup env
         run: make install
       - name: lint
-        run: make lint-github-action
+        run: make lint
 
   build:
     runs-on: ${{ matrix.os }}

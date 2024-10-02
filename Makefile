@@ -142,10 +142,6 @@ lint-fix: get-libs
 	./bin/golangci-lint run --config .golangci.yml --fix
 .PHONY: lint-fix
 
-lint-github-action: get-libs
-	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
-.PHONY: lint-github-action
-
 cover: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS)
 .PHONY: cover
