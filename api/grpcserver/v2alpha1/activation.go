@@ -67,30 +67,14 @@ func (s *ActivationStreamService) Stream(
 		}
 	}
 
-	dbChan := make(chan *types.ActivationTx, 100)
-	errChan := make(chan error, 1)
-
 	ops, err := toAtxOperations(toAtxRequest(request))
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	// send db data to chan to avoid buffer overflow
-	go func() {
-		defer close(dbChan)
-		if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.ActivationTx) bool {
-			select {
-			case dbChan <- atx:
-				return true
-			case <-ctx.Done():
-				// exit if the stream context is canceled
-				return false
-			}
-		}); err != nil {
-			errChan <- status.Error(codes.Internal, err.Error())
-			return
-		}
-	}()
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+	dbChan, errChan := s.fetchFromDB(ctx, ops)
 
 	var eventsOut <-chan events.ActivationTx
 	var eventsFull <-chan struct{}
@@ -143,6 +127,31 @@ func (s *ActivationStreamService) Stream(
 			}
 		}
 	}
+}
+
+func (s *ActivationStreamService) fetchFromDB(
+	ctx context.Context,
+	ops builder.Operations,
+) (<-chan *types.ActivationTx, <-chan error) {
+	dbChan := make(chan *types.ActivationTx)
+	errChan := make(chan error, 1) // buffered to avoid blocking, routine should exit immediately after sending an error
+
+	go func() {
+		defer close(dbChan)
+		if err := atxs.IterateAtxsOps(s.db, ops, func(atx *types.ActivationTx) bool {
+			select {
+			case dbChan <- atx:
+				return true
+			case <-ctx.Done():
+				// exit if the context is canceled
+				return false
+			}
+		}); err != nil {
+			errChan <- status.Error(codes.Internal, err.Error())
+		}
+	}()
+
+	return dbChan, errChan
 }
 
 func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {

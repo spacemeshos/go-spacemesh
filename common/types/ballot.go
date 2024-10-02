@@ -109,7 +109,7 @@ func (m *BallotMetadata) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	return nil
 }
 
-// InnerBallot contains all info about a smeshers votes on the mesh history. this structure is
+// InnerBallot contains all info about a smeshers votes on the mesh history. This structure is
 // serialized and signed to produce the signature in Ballot.
 type InnerBallot struct {
 	Layer LayerID
@@ -128,7 +128,7 @@ type InnerBallot struct {
 
 // Votes is for encoding local votes to send over the wire.
 //
-// a smesher creates votes in the following steps:
+// A smesher creates votes in the following steps:
 // - select a Ballot in the past as a base Ballot
 // - calculate the opinion difference on history between the smesher and the base Ballot
 // - encode the opinion difference in 3 list:
@@ -249,7 +249,7 @@ type EpochData struct {
 }
 
 // Initialize calculates and sets the Ballot's cached ballotID and smesherID.
-// this should be called once all the other fields of the Ballot are set.
+// This should be called once all the other fields of the Ballot are set.
 func (b *Ballot) Initialize() error {
 	if b.ID() != EmptyBallotID {
 		return errors.New("ballot already initialized")

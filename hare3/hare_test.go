@@ -116,7 +116,6 @@ type node struct {
 	nclock     *testNodeClock
 	signer     *signing.EdSigner
 	registered []*signing.EdSigner
-	vrfsigner  *signing.VRFSigner
 	atx        *types.ActivationTx
 	oracle     *eligibility.Oracle
 	db         sql.StateDatabase
@@ -140,13 +139,11 @@ func (n *node) withSigner() *node {
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(n.t.rng))
 	require.NoError(n.t, err)
 	n.signer = signer
-	n.vrfsigner = signer.VRFSigner()
 	return n
 }
 
 func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 	n.signer = signer
-	n.vrfsigner = signer.VRFSigner()
 	return n
 }
 
@@ -281,7 +278,7 @@ func withProposals(fraction float64) clusterOpt {
 }
 
 // withSigners creates N signers in addition to regular active nodes.
-// this signers will be partitioned in fair fashion across regular active nodes.
+// This signers will be partitioned in fair fashion across regular active nodes.
 func withSigners(n int) clusterOpt {
 	return func(cluster *lockstepCluster) {
 		cluster.signersCount = n

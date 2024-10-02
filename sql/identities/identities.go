@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 // SetMalicious records identity as malicious.
@@ -59,6 +60,26 @@ func LoadMalfeasanceBlob(_ context.Context, db sql.Executor, nodeID []byte, blob
 	if err == nil && len(blob.Bytes) == 0 {
 		return sql.ErrNotFound
 	}
+	return err
+}
+
+func IterateMaliciousOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(types.NodeID, []byte, time.Time) bool,
+) error {
+	_, err := db.Exec(
+		"select pubkey, proof, received from identities"+builder.FilterFrom(operations),
+		builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			var id types.NodeID
+			stmt.ColumnBytes(0, id[:])
+			proof := make([]byte, stmt.ColumnLen(1))
+			stmt.ColumnBytes(1, proof)
+			received := time.Unix(0, stmt.ColumnInt64(2))
+			return fn(id, proof, received)
+		},
+	)
 	return err
 }
 

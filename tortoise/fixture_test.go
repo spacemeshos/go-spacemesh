@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"context"
 	"fmt"
 	"math/rand/v2"
 	"sort"
@@ -428,7 +427,7 @@ func (t *tallyAction) String() string {
 }
 
 func (t *tallyAction) execute(trt *Tortoise) {
-	trt.TallyVotes(context.Background(), types.LayerID(t.lid))
+	trt.TallyVotes(types.LayerID(t.lid))
 }
 
 func (s *session) tally(lid int) {

@@ -33,7 +33,7 @@ func init() {
 }
 
 const (
-	// score thresholds.
+	// Score thresholds,
 	// see details https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md#score-thresholds
 
 	// GossipScoreThreshold when a peer's score drops below this threshold, no gossip is emitted towards that peer

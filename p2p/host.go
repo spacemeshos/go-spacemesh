@@ -28,7 +28,7 @@ import (
 	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/quicreuse"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
-	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -347,7 +347,7 @@ func New(
 	if len(cfg.AdvertiseAddress) > 0 {
 		lopts = append(
 			lopts,
-			libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
+			libp2p.AddrsFactory(func([]ma.Multiaddr) []ma.Multiaddr {
 				return cfg.AdvertiseAddress
 			}),
 		)
