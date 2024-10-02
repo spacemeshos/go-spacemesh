@@ -306,7 +306,7 @@ func (c *CertifierClient) Certify(
 		Signature: certResponse.Signature,
 	}
 
-	cert, err := shared.VerifyCertificate(opaqueCert, [][]byte{pubkey}, id.Bytes())
+	cert, err := shared.VerifyCertificate(opaqueCert, pubkey, id.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("verifying certificate: %w", err)
 	}

@@ -237,8 +237,8 @@ func (c *HTTPPoetClient) Submit(
 			Signature: auth.PoetCert.Signature,
 		}
 
-		if len(auth.CertPubKey) > shared.CertPubkeyHintSize {
-			request.CertificatePubkeyHint = auth.CertPubKey[:shared.CertPubkeyHintSize]
+		if len(auth.CertPubKey) > shared.CertKeyHintSize {
+			request.CertificatePubkeyHint = auth.CertPubKey[:shared.CertKeyHintSize]
 		} else {
 			request.CertificatePubkeyHint = auth.CertPubKey
 		}

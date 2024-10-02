@@ -399,7 +399,7 @@ func TestCheckCertifierPublickeyHint(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
 
-	publicKeyHint := certifierPubKey[:shared.CertPubkeyHintSize]
+	publicKeyHint := certifierPubKey[:shared.CertKeyHintSize]
 	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
 		rawReq, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -414,7 +414,7 @@ func TestCheckCertifierPublickeyHint(t *testing.T) {
 		}
 
 		if !bytes.Equal(publicKeyHint, req.CertificatePubkeyHint) {
-			http.Error(w, shared.ErrCertExpired.Error(), http.StatusUnauthorized)
+			http.Error(w, "Unknown public key hint", http.StatusUnauthorized)
 			return
 		}
 
@@ -456,7 +456,7 @@ func TestCheckCertifierPublickeyHint(t *testing.T) {
 				PoetCert:   &cert,
 				CertPubKey: []byte{1, 2, 3, 4, 5},
 			})
-		require.ErrorContains(t, err, shared.ErrCertExpired.Error())
+		require.ErrorIs(t, err, ErrUnauthorized)
 	})
 }
 
