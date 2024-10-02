@@ -220,10 +220,10 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	challenge := types.RandomHash()
 
 	// set up proper identity state
-	err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForATXSyncing)
+	err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForATXSyncing)
 	require.NoError(t, err)
 
-	err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForPoetRoundStart)
+	err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
 	require.NoError(t, err)
 
 	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})
@@ -322,10 +322,10 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 			err = nipost.AddPost(localDB, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
 			require.NoError(t, err)
 
-			err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForATXSyncing)
+			err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForATXSyncing)
 			require.NoError(t, err)
 
-			err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForPoetRoundStart)
+			err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
 			require.NoError(t, err)
 
 			nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})

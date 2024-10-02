@@ -15,7 +15,7 @@ func TestStateSwitch(t *testing.T) {
 		nodeId := types.RandomNodeID()
 
 		for state := range validStateSwitch {
-			if state != types.IdentityStateWaitForATXSyncing && state != types.IdentityStateWaitForPoetRoundStart {
+			if state != IdentityStateWaitForATXSyncing && state != IdentityStateWaitForPoetRoundStart {
 				require.ErrorIs(t, storage.Set(nodeId, state), ErrInvalidIdentityStateSwitch)
 			}
 		}
@@ -25,14 +25,14 @@ func TestStateSwitch(t *testing.T) {
 		storage := NewIdentityStateStorage()
 		nodeId := types.RandomNodeID()
 
-		require.NoError(t, storage.Set(nodeId, types.IdentityStateWaitForATXSyncing))
+		require.NoError(t, storage.Set(nodeId, IdentityStateWaitForATXSyncing))
 
 		curState, err := storage.Get(nodeId)
 		require.NoError(t, err)
-		require.Equal(t, types.IdentityStateWaitForATXSyncing, curState)
+		require.Equal(t, IdentityStateWaitForATXSyncing, curState)
 
-		metStates := make(map[types.IdentityState]struct{})
-		metStates[types.IdentityStateWaitForATXSyncing] = struct{}{}
+		metStates := make(map[IdentityState]struct{})
+		metStates[IdentityStateWaitForATXSyncing] = struct{}{}
 
 		for len(metStates) != len(validStateSwitch) {
 			for _, possibleStates := range validStateSwitch {

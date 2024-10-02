@@ -12,6 +12,7 @@ package v2alpha1
 import (
 	reflect "reflect"
 
+	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -102,10 +103,10 @@ func (m *MockidentityState) EXPECT() *MockidentityStateMockRecorder {
 }
 
 // IdentityStates mocks base method.
-func (m *MockidentityState) IdentityStates() map[types.IdentityDescriptor]types.IdentityState {
+func (m *MockidentityState) IdentityStates() map[types.IdentityDescriptor]activation.IdentityState {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IdentityStates")
-	ret0, _ := ret[0].(map[types.IdentityDescriptor]types.IdentityState)
+	ret0, _ := ret[0].(map[types.IdentityDescriptor]activation.IdentityState)
 	return ret0
 }
 
@@ -122,19 +123,19 @@ type MockidentityStateIdentityStatesCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockidentityStateIdentityStatesCall) Return(arg0 map[types.IdentityDescriptor]types.IdentityState) *MockidentityStateIdentityStatesCall {
+func (c *MockidentityStateIdentityStatesCall) Return(arg0 map[types.IdentityDescriptor]activation.IdentityState) *MockidentityStateIdentityStatesCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockidentityStateIdentityStatesCall) Do(f func() map[types.IdentityDescriptor]types.IdentityState) *MockidentityStateIdentityStatesCall {
+func (c *MockidentityStateIdentityStatesCall) Do(f func() map[types.IdentityDescriptor]activation.IdentityState) *MockidentityStateIdentityStatesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockidentityStateIdentityStatesCall) DoAndReturn(f func() map[types.IdentityDescriptor]types.IdentityState) *MockidentityStateIdentityStatesCall {
+func (c *MockidentityStateIdentityStatesCall) DoAndReturn(f func() map[types.IdentityDescriptor]activation.IdentityState) *MockidentityStateIdentityStatesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

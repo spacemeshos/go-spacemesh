@@ -148,10 +148,10 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 			challenge := wire.NIPostChallengeToWireV2(postChallenge).Hash()
 
 			// set up proper state for each signer
-			err = idStates.Set(signer.NodeID(), types.IdentityStateWaitForATXSyncing)
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForATXSyncing)
 			require.NoError(t, err)
 
-			err = idStates.Set(signer.NodeID(), types.IdentityStateWaitForPoetRoundStart)
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
 			require.NoError(t, err)
 
 			nipost, err := nb.BuildNIPost(context.Background(), signer, challenge, postChallenge)
@@ -333,10 +333,10 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	eg, ctx = errgroup.WithContext(context.Background())
 	for i, sig := range signers {
 		// set up proper state for each signer
-		err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForATXSyncing)
+		err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForATXSyncing)
 		require.NoError(t, err)
 
-		err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForPoetRoundStart)
+		err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
 		require.NoError(t, err)
 
 		eg.Go(func() error {

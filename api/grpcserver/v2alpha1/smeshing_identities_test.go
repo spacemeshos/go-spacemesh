@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -61,22 +62,13 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	nodeId5 := types.RandomNodeID()
 	nodeId6 := types.RandomNodeID()
 
-	nodeIds := map[types.NodeID]struct{}{
-		nodeId1: {},
-		nodeId2: {},
-		nodeId3: {},
-		nodeId4: {},
-		nodeId5: {},
-		nodeId6: {},
-	}
-
-	existingIdentityStates := map[types.IdentityDescriptor]types.IdentityState{
-		newIdMock(nodeId1, nodeId1.String()): types.IdentityStateWaitForATXSyncing,
-		newIdMock(nodeId2, nodeId2.String()): types.IdentityStateWaitForPoetRoundStart,
-		newIdMock(nodeId3, nodeId3.String()): types.IdentityStateWaitForPoetRoundEnd,
-		newIdMock(nodeId4, nodeId4.String()): types.IdentityStateWaitForPoetRoundEnd,
-		newIdMock(nodeId5, nodeId5.String()): types.IdentityStateFetchingProofs,
-		newIdMock(nodeId6, nodeId5.String()): types.IdentityStatePostProving,
+	existingIdentityStates := map[types.IdentityDescriptor]activation.IdentityState{
+		newIdMock(nodeId1, nodeId1.String()): activation.IdentityStateWaitForATXSyncing,
+		newIdMock(nodeId2, nodeId2.String()): activation.IdentityStateWaitForPoetRoundStart,
+		newIdMock(nodeId3, nodeId3.String()): activation.IdentityStateWaitForPoetRoundEnd,
+		newIdMock(nodeId4, nodeId4.String()): activation.IdentityStateWaitForPoetRoundEnd,
+		newIdMock(nodeId5, nodeId5.String()): activation.IdentityStateFetchingProofs,
+		newIdMock(nodeId6, nodeId5.String()): activation.IdentityStatePostProving,
 	}
 	midentityStates.EXPECT().IdentityStates().Return(existingIdentityStates)
 
@@ -128,7 +120,7 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	svc := NewSmeshingIdentitiesService(db, configuredPoets, midentityStates, nodeIds)
+	svc := NewSmeshingIdentitiesService(db, configuredPoets, midentityStates)
 
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)

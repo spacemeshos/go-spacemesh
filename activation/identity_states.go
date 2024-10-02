@@ -10,48 +10,81 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-var ErrInvalidIdentityStateSwitch = errors.New("invalid identity state switch")
+var (
+	ErrIdentityStateUnknown       = errors.New("identity state is unknown")
+	ErrInvalidIdentityStateSwitch = errors.New("invalid identity state switch")
+)
+
+type IdentityState int
+
+const (
+	IdentityStateNotSet IdentityState = iota
+	IdentityStateWaitForATXSyncing
+	IdentityStateWaitForPoetRoundStart
+	IdentityStateWaitForPoetRoundEnd
+	IdentityStateFetchingProofs
+	IdentityStatePostProving
+)
+
+func (s IdentityState) String() string {
+	switch s {
+	case IdentityStateWaitForATXSyncing:
+		return "wait_for_atx_syncing"
+	case IdentityStateWaitForPoetRoundStart:
+		return "wait_for_poet_round_start"
+	case IdentityStateWaitForPoetRoundEnd:
+		return "wait_for_poet_round_end"
+	case IdentityStateFetchingProofs:
+		return "fetching_proofs"
+	case IdentityStatePostProving:
+		return "post_proving"
+	case IdentityStateNotSet:
+		return "not_set"
+	default:
+		panic(fmt.Sprintf(ErrIdentityStateUnknown.Error()+" %d", s))
+	}
+}
 
 type IdentityStateStorage struct {
 	mu     sync.RWMutex
-	states map[types.NodeID]types.IdentityState
+	states map[types.NodeID]IdentityState
 }
 
 func NewIdentityStateStorage() *IdentityStateStorage {
 	return &IdentityStateStorage{
-		states: make(map[types.NodeID]types.IdentityState),
+		states: make(map[types.NodeID]IdentityState),
 	}
 }
 
-var validStateSwitch = map[types.IdentityState][]types.IdentityState{
-	types.IdentityStateWaitForATXSyncing: {
-		types.IdentityStateWaitForPoetRoundStart,
+var validStateSwitch = map[IdentityState][]IdentityState{
+	IdentityStateWaitForATXSyncing: {
+		IdentityStateWaitForPoetRoundStart,
 	},
-	types.IdentityStatePostProving: {
-		types.IdentityStateWaitForPoetRoundStart,
+	IdentityStatePostProving: {
+		IdentityStateWaitForPoetRoundStart,
 	},
-	types.IdentityStateWaitForPoetRoundStart: {
-		types.IdentityStateWaitForPoetRoundEnd,
-		types.IdentityStateWaitForATXSyncing,
+	IdentityStateWaitForPoetRoundStart: {
+		IdentityStateWaitForPoetRoundEnd,
+		IdentityStateWaitForATXSyncing,
 	},
-	types.IdentityStateWaitForPoetRoundEnd: {
-		types.IdentityStateFetchingProofs,
-		types.IdentityStateWaitForPoetRoundStart,
+	IdentityStateWaitForPoetRoundEnd: {
+		IdentityStateFetchingProofs,
+		IdentityStateWaitForPoetRoundStart,
 	},
-	types.IdentityStateFetchingProofs: {
-		types.IdentityStatePostProving,
-		types.IdentityStateWaitForPoetRoundStart,
+	IdentityStateFetchingProofs: {
+		IdentityStatePostProving,
+		IdentityStateWaitForPoetRoundStart,
 	},
 }
 
-func (s *IdentityStateStorage) Set(id types.NodeID, newState types.IdentityState) error {
+func (s *IdentityStateStorage) Set(id types.NodeID, newState IdentityState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	currentState, exists := s.states[id]
 	switch {
 	case !exists:
-		if newState == types.IdentityStateWaitForATXSyncing {
+		if newState == IdentityStateWaitForATXSyncing {
 			s.states[id] = newState
 			return nil
 		}
@@ -74,21 +107,21 @@ func (s *IdentityStateStorage) Set(id types.NodeID, newState types.IdentityState
 	)
 }
 
-func (s *IdentityStateStorage) Get(id types.NodeID) (types.IdentityState, error) {
+func (s *IdentityStateStorage) Get(id types.NodeID) (IdentityState, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	state, exists := s.states[id]
 	if !exists {
-		return 0, types.ErrIdentityStateUnknown
+		return 0, ErrIdentityStateUnknown
 	}
 	return state, nil
 }
 
-func (s *IdentityStateStorage) All() map[types.NodeID]types.IdentityState {
+func (s *IdentityStateStorage) All() map[types.NodeID]IdentityState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	copy := make(map[types.NodeID]types.IdentityState, len(s.states))
+	copy := make(map[types.NodeID]IdentityState, len(s.states))
 	maps.Copy(copy, s.states)
 	return copy
 }

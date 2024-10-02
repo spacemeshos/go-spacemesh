@@ -116,7 +116,7 @@ func (nb *NIPostBuilder) ResetState(nodeId types.NodeID) error {
 	if err := nipost.RemoveNIPost(nb.localDB, nodeId); err != nil {
 		return fmt.Errorf("remove nipost: %w", err)
 	}
-	if err := nb.identityStates.Set(nodeId, types.IdentityStateWaitForPoetRoundStart); err != nil {
+	if err := nb.identityStates.Set(nodeId, IdentityStateWaitForPoetRoundStart); err != nil {
 		return fmt.Errorf("set up node id state: %w", err)
 	}
 	return nil
@@ -263,7 +263,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	}
 
 	// Stage 1: query PoET services for proofs
-	if err := nb.identityStates.Set(signer.NodeID(), types.IdentityStateWaitForPoetRoundEnd); err != nil {
+	if err := nb.identityStates.Set(signer.NodeID(), IdentityStateWaitForPoetRoundEnd); err != nil {
 		nb.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", signer.NodeID()),
 			zap.Error(err),
@@ -305,7 +305,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	}
 
 	// Stage 2: Post execution.
-	if err := nb.identityStates.Set(signer.NodeID(), types.IdentityStatePostProving); err != nil {
+	if err := nb.identityStates.Set(signer.NodeID(), IdentityStatePostProving); err != nil {
 		nb.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", signer.NodeID()),
 			zap.Error(err),
@@ -600,7 +600,7 @@ func (nb *NIPostBuilder) getBestProof(
 			case <-time.After(time.Until(waitDeadline)):
 			}
 
-			if err := nb.identityStates.Set(nodeID, types.IdentityStateFetchingProofs); err != nil {
+			if err := nb.identityStates.Set(nodeID, IdentityStateFetchingProofs); err != nil {
 				nb.logger.Warn("failed to switch identity state",
 					zap.Stringer("smesherID", nodeID),
 					zap.Error(err),

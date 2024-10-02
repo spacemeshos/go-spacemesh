@@ -315,10 +315,10 @@ func Test_MarryAndMerge(t *testing.T) {
 			}
 			challenge := wire.NIPostChallengeToWireV2(postChallenge).Hash()
 
-			err = idStates.Set(signer.NodeID(), types.IdentityStateWaitForATXSyncing)
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForATXSyncing)
 			require.NoError(t, err)
 
-			err = idStates.Set(signer.NodeID(), types.IdentityStateWaitForPoetRoundStart)
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
 			require.NoError(t, err)
 
 			nipost, err := nb.BuildNIPost(context.Background(), signer, challenge, postChallenge)

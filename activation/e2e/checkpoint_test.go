@@ -159,7 +159,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		},
 	)
 
-	err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForATXSyncing)
+	err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForATXSyncing)
 	require.NoError(t, err)
 
 	require.NoError(t, tab.BuildInitialPost(ctx, sig.NodeID()))

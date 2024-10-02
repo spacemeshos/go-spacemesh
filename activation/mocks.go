@@ -2457,10 +2457,10 @@ func (m *MockIdentityStates) EXPECT() *MockIdentityStatesMockRecorder {
 }
 
 // All mocks base method.
-func (m *MockIdentityStates) All() map[types.NodeID]types.IdentityState {
+func (m *MockIdentityStates) All() map[types.NodeID]IdentityState {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "All")
-	ret0, _ := ret[0].(map[types.NodeID]types.IdentityState)
+	ret0, _ := ret[0].(map[types.NodeID]IdentityState)
 	return ret0
 }
 
@@ -2477,28 +2477,28 @@ type MockIdentityStatesAllCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockIdentityStatesAllCall) Return(arg0 map[types.NodeID]types.IdentityState) *MockIdentityStatesAllCall {
+func (c *MockIdentityStatesAllCall) Return(arg0 map[types.NodeID]IdentityState) *MockIdentityStatesAllCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockIdentityStatesAllCall) Do(f func() map[types.NodeID]types.IdentityState) *MockIdentityStatesAllCall {
+func (c *MockIdentityStatesAllCall) Do(f func() map[types.NodeID]IdentityState) *MockIdentityStatesAllCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockIdentityStatesAllCall) DoAndReturn(f func() map[types.NodeID]types.IdentityState) *MockIdentityStatesAllCall {
+func (c *MockIdentityStatesAllCall) DoAndReturn(f func() map[types.NodeID]IdentityState) *MockIdentityStatesAllCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Get mocks base method.
-func (m *MockIdentityStates) Get(id types.NodeID) (types.IdentityState, error) {
+func (m *MockIdentityStates) Get(id types.NodeID) (IdentityState, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", id)
-	ret0, _ := ret[0].(types.IdentityState)
+	ret0, _ := ret[0].(IdentityState)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -2516,25 +2516,25 @@ type MockIdentityStatesGetCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockIdentityStatesGetCall) Return(arg0 types.IdentityState, arg1 error) *MockIdentityStatesGetCall {
+func (c *MockIdentityStatesGetCall) Return(arg0 IdentityState, arg1 error) *MockIdentityStatesGetCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockIdentityStatesGetCall) Do(f func(types.NodeID) (types.IdentityState, error)) *MockIdentityStatesGetCall {
+func (c *MockIdentityStatesGetCall) Do(f func(types.NodeID) (IdentityState, error)) *MockIdentityStatesGetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockIdentityStatesGetCall) DoAndReturn(f func(types.NodeID) (types.IdentityState, error)) *MockIdentityStatesGetCall {
+func (c *MockIdentityStatesGetCall) DoAndReturn(f func(types.NodeID) (IdentityState, error)) *MockIdentityStatesGetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Set mocks base method.
-func (m *MockIdentityStates) Set(id types.NodeID, state types.IdentityState) error {
+func (m *MockIdentityStates) Set(id types.NodeID, state IdentityState) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Set", id, state)
 	ret0, _ := ret[0].(error)
@@ -2560,13 +2560,13 @@ func (c *MockIdentityStatesSetCall) Return(arg0 error) *MockIdentityStatesSetCal
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockIdentityStatesSetCall) Do(f func(types.NodeID, types.IdentityState) error) *MockIdentityStatesSetCall {
+func (c *MockIdentityStatesSetCall) Do(f func(types.NodeID, IdentityState) error) *MockIdentityStatesSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockIdentityStatesSetCall) DoAndReturn(f func(types.NodeID, types.IdentityState) error) *MockIdentityStatesSetCall {
+func (c *MockIdentityStatesSetCall) DoAndReturn(f func(types.NodeID, IdentityState) error) *MockIdentityStatesSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

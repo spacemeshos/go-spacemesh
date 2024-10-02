@@ -1604,7 +1604,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			configuredPoets[server.Address] = struct{}{}
 		}
 
-		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, app.atxBuilder, nodeIds)
+		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, app.atxBuilder)
 		app.grpcServices[svc] = service
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)

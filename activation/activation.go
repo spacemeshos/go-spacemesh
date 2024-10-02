@@ -264,9 +264,9 @@ func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
 }
 
 // IdentityStates returns the current state of the identity for each smesher.
-func (b *Builder) IdentityStates() map[types.IdentityDescriptor]types.IdentityState {
+func (b *Builder) IdentityStates() map[types.IdentityDescriptor]IdentityState {
 	states := b.identitiesStates.All()
-	res := make(map[types.IdentityDescriptor]types.IdentityState, len(states))
+	res := make(map[types.IdentityDescriptor]IdentityState, len(states))
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 	for id, state := range states {
@@ -466,7 +466,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	}
 	eg.Wait()
 
-	if err := b.identitiesStates.Set(sig.NodeID(), types.IdentityStateWaitForATXSyncing); err != nil {
+	if err := b.identitiesStates.Set(sig.NodeID(), IdentityStateWaitForATXSyncing); err != nil {
 		b.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", sig.NodeID()),
 			zap.Error(err),
@@ -550,7 +550,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	}
 	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()
 
-	if err := b.identitiesStates.Set(nodeID, types.IdentityStateWaitForPoetRoundStart); err != nil {
+	if err := b.identitiesStates.Set(nodeID, IdentityStateWaitForPoetRoundStart); err != nil {
 		b.logger.Warn("failed to switch identity state",
 			zap.Stringer("smesherID", nodeID),
 			zap.Error(err),

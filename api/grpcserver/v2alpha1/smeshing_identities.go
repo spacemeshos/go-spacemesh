@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -23,7 +24,6 @@ const poetsMismatchWarning = "poet is not configured, proof will not be fetched"
 type SmeshingIdentitiesService struct {
 	db                     sql.Database
 	states                 identityState
-	signers                map[types.NodeID]struct{}
 	configuredPoetServices map[string]struct{}
 }
 
@@ -31,22 +31,20 @@ func NewSmeshingIdentitiesService(
 	db sql.Database,
 	configuredPoetServices map[string]struct{},
 	states identityState,
-	signers map[types.NodeID]struct{},
 ) *SmeshingIdentitiesService {
 	return &SmeshingIdentitiesService{
 		db:                     db,
 		configuredPoetServices: configuredPoetServices,
 		states:                 states,
-		signers:                signers,
 	}
 }
 
-var statusMap = map[types.IdentityState]pb.IdentityStatus{
-	types.IdentityStateWaitForATXSyncing:     pb.IdentityStatus_IS_SYNCING,
-	types.IdentityStateWaitForPoetRoundStart: pb.IdentityStatus_WAIT_FOR_POET_ROUND_START,
-	types.IdentityStateWaitForPoetRoundEnd:   pb.IdentityStatus_WAIT_FOR_POET_ROUND_END,
-	types.IdentityStateFetchingProofs:        pb.IdentityStatus_FETCHING_PROOFS,
-	types.IdentityStatePostProving:           pb.IdentityStatus_POST_PROVING,
+var statusMap = map[activation.IdentityState]pb.IdentityStatus{
+	activation.IdentityStateWaitForATXSyncing:     pb.IdentityStatus_IS_SYNCING,
+	activation.IdentityStateWaitForPoetRoundStart: pb.IdentityStatus_WAIT_FOR_POET_ROUND_START,
+	activation.IdentityStateWaitForPoetRoundEnd:   pb.IdentityStatus_WAIT_FOR_POET_ROUND_END,
+	activation.IdentityStateFetchingProofs:        pb.IdentityStatus_FETCHING_PROOFS,
+	activation.IdentityStatePostProving:           pb.IdentityStatus_POST_PROVING,
 }
 
 func (s *SmeshingIdentitiesService) RegisterService(server *grpc.Server) {
@@ -75,7 +73,7 @@ func (s *SmeshingIdentitiesService) PoetServices(
 				Status:    statusMap[state],
 			}
 
-			if state != types.IdentityStateWaitForPoetRoundEnd {
+			if state != activation.IdentityStateWaitForPoetRoundEnd {
 				continue
 			}
 

@@ -81,10 +81,10 @@ func TestValidator_Validate(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForATXSyncing)
+	err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForATXSyncing)
 	require.NoError(t, err)
 
-	err = idStates.Set(sig.NodeID(), types.IdentityStateWaitForPoetRoundStart)
+	err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
 	require.NoError(t, err)
 
 	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge,
