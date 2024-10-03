@@ -27,6 +27,7 @@ type dbAtxService struct {
 type dbAtxServiceConfig struct {
 	// delay before PoST in ATX is considered valid (counting from the time it was received)
 	postValidityDelay time.Duration
+	trusted           []types.NodeID
 }
 
 type dbAtxServiceOption func(*dbAtxServiceConfig)
@@ -34,6 +35,12 @@ type dbAtxServiceOption func(*dbAtxServiceConfig)
 func WithPostValidityDelay(delay time.Duration) dbAtxServiceOption {
 	return func(cfg *dbAtxServiceConfig) {
 		cfg.postValidityDelay = delay
+	}
+}
+
+func WithTrustedIDs(ids ...types.NodeID) dbAtxServiceOption {
+	return func(cfg *dbAtxServiceConfig) {
+		cfg.trusted = ids
 	}
 }
 
@@ -91,7 +98,7 @@ func (s *dbAtxService) PositioningATX(ctx context.Context, maxPublish types.Epoc
 		s.golden,
 		s.validator, s.logger,
 		VerifyChainOpts.AssumeValidBefore(time.Now().Add(-s.cfg.postValidityDelay)),
-		// VerifyChainOpts.WithTrustedID(nodeID),
+		VerifyChainOpts.WithTrustedIDs(s.cfg.trusted...),
 		VerifyChainOpts.WithLogger(s.logger),
 	)
 	if err != nil {

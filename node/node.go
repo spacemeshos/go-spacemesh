@@ -1080,6 +1080,11 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	atxBuilderLog := app.addLogger(ATXBuilderLogger, lg).Zap()
+	trustedIDs := make([]types.NodeID, 0, len(app.signers))
+	for _, sig := range app.signers {
+		trustedIDs = append(trustedIDs, sig.NodeID())
+	}
+
 	atxService := activation.NewDBAtxService(
 		app.db,
 		goldenATXID,
@@ -1087,6 +1092,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.validator,
 		atxBuilderLog,
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
+		activation.WithTrustedIDs(trustedIDs...),
 	)
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
