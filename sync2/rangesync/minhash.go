@@ -44,22 +44,19 @@ func MinhashSampleItemFromKeyBytes(h types.KeyBytes) MinhashSampleItem {
 
 // Sample retrieves min(count, sampleSize) items friom the ordered sequence, extracting
 // MinhashSampleItem from each value.
-func Sample(seq types.Seq, count, sampleSize int) ([]MinhashSampleItem, error) {
+func Sample(sr types.SeqResult, count, sampleSize int) ([]MinhashSampleItem, error) {
 	sampleSize = min(count, sampleSize)
 	if sampleSize == 0 {
 		return nil, nil
 	}
 	items := make([]MinhashSampleItem, 0, sampleSize)
-	for k, err := range seq {
-		if err != nil {
-			return nil, err
-		}
+	for k := range sr.Seq {
 		items = append(items, MinhashSampleItemFromKeyBytes(k))
 		if len(items) == sampleSize {
 			break
 		}
 	}
-	return items, nil
+	return items, sr.Error()
 }
 
 // CalcSim estimates the Jaccard similarity coefficient between two sets based on the

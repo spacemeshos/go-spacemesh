@@ -11,19 +11,25 @@ import (
 
 var errBadItem = errors.New("bad item")
 
-func mkFakeSeq(items []string) types.Seq {
-	return func(yield func(types.KeyBytes, error) bool) {
-		for {
-			for _, item := range items {
-				if item == "ERROR" {
-					yield(nil, errBadItem)
-					return
-				}
-				if !yield(types.KeyBytes(item), nil) {
-					return
+func mkFakeSeq(items []string) types.SeqResult {
+	var err error
+	return types.SeqResult{
+		Seq: func(yield func(types.KeyBytes) bool) {
+			for {
+				for _, item := range items {
+					if item == "ERROR" {
+						err = errBadItem
+						return
+					}
+					if !yield(types.KeyBytes(item)) {
+						return
+					}
 				}
 			}
-		}
+		},
+		Error: func() error {
+			return err
+		},
 	}
 }
 

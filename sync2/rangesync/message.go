@@ -153,9 +153,9 @@ func (s sender) sendSample(
 	x, y types.KeyBytes,
 	fp types.Fingerprint,
 	count, sampleSize int,
-	seq types.Seq,
+	sr types.SeqResult,
 ) error {
-	items, err := Sample(seq, count, sampleSize)
+	items, err := Sample(sr, count, sampleSize)
 	if err != nil {
 		return err
 	}

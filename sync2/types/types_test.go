@@ -1,75 +1,25 @@
 package types
 
 import (
-	"errors"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-var fakeSeq Seq = func(yield func(KeyBytes, error) bool) {
-	items := []KeyBytes{
-		{1},
-		{2},
-		{3},
-		{4},
-	}
-	for {
-		for _, item := range items {
-			if !yield(item, nil) {
-				return
-			}
-		}
-	}
-}
-
-var fakeErr = errors.New("fake error")
-
-var fakeErrSeq Seq = func(yield func(KeyBytes, error) bool) {
-	items := []KeyBytes{
-		{1},
-		{2},
-	}
-	for _, item := range items {
-		if !yield(item, nil) {
-			return
-		}
-	}
-	yield(nil, fakeErr)
-}
-
-var fakeErrOnlySeq Seq = func(yield func(KeyBytes, error) bool) {
-	yield(nil, fakeErr)
-}
-
 func TestFirst(t *testing.T) {
-	k, err := fakeSeq.First()
-	require.NoError(t, err)
-	require.Equal(t, KeyBytes{1}, k)
-	k, err = fakeErrSeq.First()
-	require.NoError(t, err)
-	require.Equal(t, KeyBytes{1}, k)
-	k, err = fakeErrOnlySeq.First()
-	require.Equal(t, fakeErr, err)
-	require.Nil(t, k)
+	seq := Seq(slices.Values([]KeyBytes{{1}, {2}, {3}, {4}}))
+	require.Equal(t, KeyBytes{1}, seq.First())
 }
 
 func TestGetN(t *testing.T) {
-	actual, err := GetN(fakeSeq, 2)
-	require.NoError(t, err)
-	require.Equal(t, []KeyBytes{{1}, {2}}, actual)
-	actual, err = GetN(fakeSeq, 5)
-	require.NoError(t, err)
-	require.Equal(t, []KeyBytes{{1}, {2}, {3}, {4}, {1}}, actual)
-	actual, err = GetN(fakeErrSeq, 2)
-	require.NoError(t, err)
-	require.Equal(t, []KeyBytes{{1}, {2}}, actual)
-	actual, err = GetN(fakeErrSeq, 5)
-	require.Equal(t, fakeErr, err)
-	require.Nil(t, actual)
-	actual, err = GetN(fakeErrOnlySeq, 2)
-	require.Equal(t, fakeErr, err)
-	require.Nil(t, actual)
+	seq := Seq(slices.Values([]KeyBytes{{1}, {2}, {3}, {4}}))
+	require.Empty(t, seq.GetN(0))
+	require.Equal(t, []KeyBytes{{1}}, seq.GetN(1))
+	require.Equal(t, []KeyBytes{{1}, {2}}, seq.GetN(2))
+	require.Equal(t, []KeyBytes{{1}, {2}, {3}}, seq.GetN(3))
+	require.Equal(t, []KeyBytes{{1}, {2}, {3}, {4}}, seq.GetN(4))
+	require.Equal(t, []KeyBytes{{1}, {2}, {3}, {4}}, seq.GetN(5))
 }
 
 func TestIncID(t *testing.T) {

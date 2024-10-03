@@ -106,7 +106,7 @@ var startDate = time.Date(2024, 8, 29, 18, 0, 0, 0, time.UTC)
 func (frs *fakeRecentSet) registerAll(ctx context.Context) error {
 	frs.timestamps = make(map[string]time.Time)
 	t := startDate
-	items, err := CollectSetItems(ctx, frs.OrderedSet)
+	items, err := CollectSetItems(frs.OrderedSet)
 	if err != nil {
 		return err
 	}
@@ -117,32 +117,35 @@ func (frs *fakeRecentSet) registerAll(ctx context.Context) error {
 	return nil
 }
 
-func (frs *fakeRecentSet) Receive(ctx context.Context, k types.KeyBytes) error {
-	if err := frs.OrderedSet.Receive(ctx, k); err != nil {
+func (frs *fakeRecentSet) Receive(k types.KeyBytes) error {
+	if err := frs.OrderedSet.Receive(k); err != nil {
 		return err
 	}
 	frs.timestamps[string(k)] = frs.clock.Now()
 	return nil
 }
 
-func (frs *fakeRecentSet) Recent(ctx context.Context, since time.Time) (types.Seq, int, error) {
+func (frs *fakeRecentSet) Recent(since time.Time) (types.SeqResult, int) {
 	var items []types.KeyBytes
-	items, err := CollectSetItems(ctx, frs.OrderedSet)
+	items, err := CollectSetItems(frs.OrderedSet)
 	if err != nil {
-		return nil, 0, err
+		return types.ErrorSeqResult(err), 0
 	}
 	for _, k := range items {
 		if !frs.timestamps[string(k)].Before(since) {
 			items = append(items, k)
 		}
 	}
-	return func(yield func(types.KeyBytes, error) bool) {
-		for _, h := range items {
-			if !yield(h, nil) {
-				return
+	return types.SeqResult{
+		Seq: func(yield func(types.KeyBytes) bool) {
+			for _, h := range items {
+				if !yield(h) {
+					return
+				}
 			}
-		}
-	}, len(items), nil
+		},
+		Error: types.NoSeqError,
+	}, len(items)
 }
 
 func testWireSync(t *testing.T, getRequester getRequesterFunc) {
@@ -262,11 +265,10 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 	})
 	cst, ctx := newClientServerTester(t, st.setA, getRequester, st.opts, nil)
 	pss := NewPairwiseSetSyncer(cst.client, "test", st.opts, nil)
-	itemsA, err := st.setA.Items(ctx)
-	require.NoError(t, err)
+	itemsA := st.setA.Items()
 	kA, err := itemsA.First()
 	require.NoError(t, err)
-	infoA, err := st.setA.GetRangeInfo(ctx, kA, kA, -1)
+	infoA, err := st.setA.GetRangeInfo(kA, kA, -1)
 	require.NoError(t, err)
 	prA, err := pss.Probe(ctx, cst.srvPeerID, st.setB, nil, nil)
 	require.NoError(t, err)
@@ -274,26 +276,24 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 	require.Equal(t, infoA.Count, prA.Count)
 	require.InDelta(t, 0.98, prA.Sim, 0.05, "sim")
 
-	itemsA, err = st.setA.Items(ctx)
+	itemsA = st.setA.Items()
 	require.NoError(t, err)
 	kA, err = itemsA.First()
 	require.NoError(t, err)
-	partInfoA, err := st.setA.GetRangeInfo(ctx, kA, kA, infoA.Count/2)
+	partInfoA, err := st.setA.GetRangeInfo(kA, kA, infoA.Count/2)
 	require.NoError(t, err)
 	x, err := partInfoA.Items.First()
 	require.NoError(t, err)
 	var y types.KeyBytes
 	n := partInfoA.Count + 1
-	for k, err := range partInfoA.Items {
-		if err != nil {
-			break
-		}
+	for k := range partInfoA.Items.Seq {
 		y = k
 		n--
 		if n == 0 {
 			break
 		}
 	}
+	require.NoError(t, partInfoA.Items.Error())
 	prA, err = pss.Probe(ctx, cst.srvPeerID, st.setB, x, y)
 	require.NoError(t, err)
 	require.Equal(t, partInfoA.Fingerprint, prA.FP)

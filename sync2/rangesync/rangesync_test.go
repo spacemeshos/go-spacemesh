@@ -1,7 +1,6 @@
 package rangesync
 
 import (
-	"context"
 	"math/rand"
 	"slices"
 	"strings"
@@ -57,13 +56,13 @@ func (fc *fakeConduit) Send(msg SyncMessage) error {
 func makeSet(t *testing.T, items string) *dumbSet {
 	var s dumbSet
 	for _, c := range []byte(items) {
-		require.NoError(t, s.Receive(context.Background(), types.KeyBytes{c}))
+		require.NoError(t, s.Receive(types.KeyBytes{c}))
 	}
 	return &s
 }
 
 func setStr(os OrderedSet) string {
-	ids, err := CollectSetItems(context.Background(), os)
+	ids, err := CollectSetItems(os)
 	if err != nil {
 		panic("set error: " + err.Error())
 	}
@@ -97,7 +96,7 @@ func runSync(
 	maxRounds int,
 ) (nRounds, nMsg, nItems int) {
 	fc := &fakeConduit{t: t}
-	require.NoError(t, syncA.Initiate(context.Background(), fc, x, y))
+	require.NoError(t, syncA.Initiate(fc, x, y))
 	return doRunSync(fc, syncA, syncB, maxRounds)
 }
 
@@ -114,7 +113,7 @@ func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int)
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
 		var err error
-		bDone, err = syncB.doRound(context.Background(), sender{fc})
+		bDone, err = syncB.doRound(sender{fc})
 		require.NoError(fc.t, err)
 		// a party should never send anything in response to the "done" message
 		require.False(fc.t, aDone && !bDone, "A is done but B after that is not")
@@ -127,7 +126,7 @@ func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int)
 		fc.gotoResponse()
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
-		aDone, err = syncA.doRound(context.Background(), sender{fc})
+		aDone, err = syncA.doRound(sender{fc})
 		require.NoError(fc.t, err)
 		dumpRangeMessages(fc.t, fc.msgs, "A %q --> B %q:", setStr(syncB.os), setStr(syncA.os))
 		dumpRangeMessages(fc.t, fc.resp, "A -> B:")
@@ -142,7 +141,7 @@ func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int)
 
 func runProbe(t *testing.T, from, to *RangeSetReconciler, x, y types.KeyBytes) ProbeResult {
 	fc := &fakeConduit{t: t}
-	info, err := from.InitiateProbe(context.Background(), fc, x, y)
+	info, err := from.InitiateProbe(fc, x, y)
 	require.NoError(t, err)
 	return doRunProbe(fc, from, to, info)
 }
@@ -150,7 +149,7 @@ func runProbe(t *testing.T, from, to *RangeSetReconciler, x, y types.KeyBytes) P
 func doRunProbe(fc *fakeConduit, from, to *RangeSetReconciler, info RangeInfo) ProbeResult {
 	require.NotEmpty(fc.t, fc.resp, "empty initial round")
 	fc.gotoResponse()
-	done, err := to.doRound(context.Background(), sender{fc})
+	done, err := to.doRound(sender{fc})
 	require.True(fc.t, done)
 	require.NoError(fc.t, err)
 	fc.gotoResponse()
@@ -388,7 +387,6 @@ type hashSyncTestConfig struct {
 
 type hashSyncTester struct {
 	t            *testing.T
-	cfg          hashSyncTestConfig
 	src          []types.KeyBytes
 	setA, setB   OrderedSet
 	opts         []RangeSetReconcilerOption
@@ -399,7 +397,6 @@ type hashSyncTester struct {
 func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 	st := &hashSyncTester{
 		t:   t,
-		cfg: cfg,
 		src: make([]types.KeyBytes, cfg.numTestHashes),
 		opts: []RangeSetReconcilerOption{
 			WithMaxSendRange(cfg.maxSendRange),
@@ -416,14 +413,14 @@ func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 	sliceA := st.src[:cfg.numTestHashes-st.numSpecificB]
 	st.setA = NewDumbHashSet(!cfg.allowReAdd)
 	for _, h := range sliceA {
-		require.NoError(t, st.setA.Receive(context.Background(), h))
+		require.NoError(t, st.setA.Receive(h))
 	}
 
 	sliceB := slices.Clone(st.src[:cfg.numTestHashes-st.numSpecificB-st.numSpecificA])
 	sliceB = append(sliceB, st.src[cfg.numTestHashes-st.numSpecificB:]...)
 	st.setB = NewDumbHashSet(!cfg.allowReAdd)
 	for _, h := range sliceB {
-		require.NoError(t, st.setB.Receive(context.Background(), h))
+		require.NoError(t, st.setB.Receive(h))
 	}
 
 	slices.SortFunc(st.src, func(a, b types.KeyBytes) int {
@@ -434,9 +431,9 @@ func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 }
 
 func (st *hashSyncTester) verify(setA, setB OrderedSet) {
-	itemsA, err := CollectSetItems(context.Background(), setA)
+	itemsA, err := CollectSetItems(setA)
 	require.NoError(st.t, err)
-	itemsB, err := CollectSetItems(context.Background(), setB)
+	itemsB, err := CollectSetItems(setB)
 	require.NoError(st.t, err)
 	require.Equal(st.t, itemsA, itemsB)
 	require.Equal(st.t, st.src, itemsA)
@@ -477,7 +474,7 @@ func TestDeferredAdd(t *testing.T) {
 		syncA := NewRangeSetReconciler(setA, opts...)
 		syncB := NewRangeSetReconciler(setB, opts...)
 		fc := &fakeConduit{t: t}
-		require.NoError(t, syncA.Initiate(context.Background(), fc, nil, nil))
+		require.NoError(t, syncA.Initiate(fc, nil, nil))
 		nRounds, nMsg, nItems := doRunSync(fc, syncA, syncB, 100)
 		numSpecific := st.numSpecificA + st.numSpecificB
 		itemCoef := float64(nItems) / float64(numSpecific)
@@ -486,13 +483,13 @@ func TestDeferredAdd(t *testing.T) {
 		msgLists = append(msgLists, fc.rec)
 	}
 
-	setA := st.setA.Copy()
-	setB := st.setB.Copy()
+	setA := st.setA.Copy(true)
+	setB := st.setB.Copy(true)
 	sync(setA, setB)
 	st.verify(setA, setB)
 
-	dSetA := &deferredAddSet{OrderedSet: st.setA.Copy()}
-	dSetB := &deferredAddSet{OrderedSet: st.setB.Copy()}
+	dSetA := &deferredAddSet{OrderedSet: st.setA.Copy(true)}
+	dSetB := &deferredAddSet{OrderedSet: st.setB.Copy(true)}
 	sync(dSetA, dSetB)
 	dSetA.addAll()
 	dSetB.addAll()

@@ -56,7 +56,7 @@ func (pss *PairwiseSetSyncer) Probe(
 				c.stop()
 				pss.updateCounts(c)
 			}()
-			info, err := rsr.InitiateProbe(ctx, c, x, y)
+			info, err := rsr.InitiateProbe(c, x, y)
 			if err != nil {
 				return fmt.Errorf("error initiating probe: %w", err)
 			}
@@ -89,10 +89,10 @@ func (pss *PairwiseSetSyncer) Sync(
 				c.stop()
 				pss.updateCounts(c)
 			}()
-			if err := rsr.Initiate(ctx, c, x, y); err != nil {
+			if err := rsr.Initiate(c, x, y); err != nil {
 				return fmt.Errorf("error initiating sync: %w", err)
 			}
-			if err := rsr.Run(ctx, c); err != nil {
+			if err := rsr.Run(c); err != nil {
 				return fmt.Errorf("error running sync: %w", err)
 			}
 			c.end()
@@ -104,7 +104,7 @@ func (pss *PairwiseSetSyncer) Serve(ctx context.Context, stream io.ReadWriter, o
 	c := startWireConduit(ctx, stream, pss.conduitOpts...)
 	defer c.stop()
 	rsr := NewRangeSetReconciler(os, pss.opts...)
-	if err := rsr.Run(ctx, c); err != nil {
+	if err := rsr.Run(c); err != nil {
 		return err
 	}
 	c.end()

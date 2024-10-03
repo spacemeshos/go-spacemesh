@@ -1,7 +1,6 @@
 package rangesync
 
 import (
-	"context"
 	"crypto/md5"
 	"errors"
 	"slices"
@@ -95,7 +94,7 @@ type dumbSet struct {
 
 var _ OrderedSet = &dumbSet{}
 
-func (ds *dumbSet) Receive(ctx context.Context, id types.KeyBytes) error {
+func (ds *dumbSet) Receive(id types.KeyBytes) error {
 	if len(ds.keys) == 0 {
 		ds.keys = []types.KeyBytes{id}
 		return nil
@@ -124,22 +123,25 @@ func (ds *dumbSet) Receive(ctx context.Context, id types.KeyBytes) error {
 	return nil
 }
 
-func (ds *dumbSet) seq(n int) types.Seq {
+func (ds *dumbSet) seq(n int) types.SeqResult {
 	if n < 0 || n > len(ds.keys) {
 		panic("bad index")
 	}
-	return types.Seq(func(yield func(types.KeyBytes, error) bool) {
-		n := n // make the sequence reusable
-		for {
-			if !yield(ds.keys[n], nil) {
-				break
+	return types.SeqResult{
+		Seq: types.Seq(func(yield func(types.KeyBytes) bool) {
+			n := n // make the sequence reusable
+			for {
+				if !yield(ds.keys[n]) {
+					break
+				}
+				n = (n + 1) % len(ds.keys)
 			}
-			n = (n + 1) % len(ds.keys)
-		}
-	})
+		}),
+		Error: types.NoSeqError,
+	}
 }
 
-func (ds *dumbSet) seqFor(s types.KeyBytes) types.Seq {
+func (ds *dumbSet) seqFor(s types.KeyBytes) types.SeqResult {
 	n := slices.IndexFunc(ds.keys, func(k types.KeyBytes) bool {
 		return k.Compare(s) == 0
 	})
@@ -150,7 +152,6 @@ func (ds *dumbSet) seqFor(s types.KeyBytes) types.Seq {
 }
 
 func (ds *dumbSet) getRangeInfo(
-	_ context.Context,
 	x, y types.KeyBytes,
 	count int,
 ) (r RangeInfo, end types.KeyBytes, err error) {
@@ -179,35 +180,29 @@ func (ds *dumbSet) getRangeInfo(
 			panic("empty start/end from naiveRange")
 		}
 		r.Items = ds.seqFor(start)
+	} else {
+		r.Items = types.EmptySeqResult()
 	}
 	return r, end, nil
 }
 
-func (ds *dumbSet) GetRangeInfo(
-	ctx context.Context,
-	x, y types.KeyBytes,
-	count int,
-) (RangeInfo, error) {
-	ri, _, err := ds.getRangeInfo(ctx, x, y, count)
+func (ds *dumbSet) GetRangeInfo(x, y types.KeyBytes, count int) (RangeInfo, error) {
+	ri, _, err := ds.getRangeInfo(x, y, count)
 	return ri, err
 }
 
-func (ds *dumbSet) SplitRange(
-	ctx context.Context,
-	x, y types.KeyBytes,
-	count int,
-) (SplitInfo, error) {
+func (ds *dumbSet) SplitRange(x, y types.KeyBytes, count int) (SplitInfo, error) {
 	if count <= 0 {
 		panic("BUG: bad split count")
 	}
-	part0, middle, err := ds.getRangeInfo(ctx, x, y, count)
+	part0, middle, err := ds.getRangeInfo(x, y, count)
 	if err != nil {
 		return SplitInfo{}, err
 	}
 	if part0.Count == 0 {
 		return SplitInfo{}, errors.New("can't split empty range")
 	}
-	part1, err := ds.GetRangeInfo(ctx, middle, y, -1)
+	part1, err := ds.GetRangeInfo(middle, y, -1)
 	if err != nil {
 		return SplitInfo{}, err
 	}
@@ -217,23 +212,23 @@ func (ds *dumbSet) SplitRange(
 	}, nil
 }
 
-func (ds *dumbSet) Empty(ctx context.Context) (bool, error) {
+func (ds *dumbSet) Empty() (bool, error) {
 	return len(ds.keys) == 0, nil
 }
 
-func (ds *dumbSet) Items(ctx context.Context) (types.Seq, error) {
+func (ds *dumbSet) Items() types.SeqResult {
 	if len(ds.keys) == 0 {
-		return types.EmptySeq(), nil
+		return types.EmptySeqResult()
 	}
-	return ds.seq(0), nil
+	return ds.seq(0)
 }
 
-func (ds *dumbSet) Copy() OrderedSet {
+func (ds *dumbSet) Copy(syncScope bool) OrderedSet {
 	return &dumbSet{keys: slices.Clone(ds.keys)}
 }
 
-func (ds *dumbSet) Recent(ctx context.Context, since time.Time) (types.Seq, int, error) {
-	return nil, 0, nil
+func (ds *dumbSet) Recent(since time.Time) (types.SeqResult, int) {
+	return types.EmptySeqResult(), 0
 }
 
 var hashPool = &sync.Pool{
@@ -267,7 +262,7 @@ type deferredAddSet struct {
 	added map[string]struct{}
 }
 
-func (das *deferredAddSet) Receive(ctx context.Context, id types.KeyBytes) error {
+func (das *deferredAddSet) Receive(id types.KeyBytes) error {
 	if das.added == nil {
 		das.added = make(map[string]struct{})
 	}
@@ -276,9 +271,8 @@ func (das *deferredAddSet) Receive(ctx context.Context, id types.KeyBytes) error
 }
 
 func (das *deferredAddSet) addAll() error {
-	ctx := context.Background()
 	for k := range das.added {
-		if err := das.OrderedSet.Receive(ctx, types.KeyBytes(k)); err != nil {
+		if err := das.OrderedSet.Receive(types.KeyBytes(k)); err != nil {
 			return err
 		}
 	}

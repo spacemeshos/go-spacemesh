@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"iter"
 	"slices"
+
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -14,40 +16,112 @@ const (
 )
 
 // Seq represents an ordered sequence of elements.
-// Each element which is yielded is paired with en error, which, if non-nil, indicates
-// that an error has occurred while acquiring the next element, such as a database error.
 // Unless the sequence is empty or an error occurs while iterating, it yields elements
 // endlessly, wrapping around to the first element after the last one.
-type Seq iter.Seq2[KeyBytes, error]
+type Seq iter.Seq[KeyBytes]
+
+var _ zapcore.ArrayMarshaler = Seq(nil)
 
 // First returns the first element from the sequence, if any.
 // If the sequence is empty, it returns nil.
-func (s Seq) First() (KeyBytes, error) {
-	for k, err := range s {
-		return k, err
+func (s Seq) First() KeyBytes {
+	for k := range s {
+		return k
 	}
-	return nil, nil
+	return nil
 }
 
-// GetN returns the first n elements from the sequence, converting them to the specified
-// type T.
-func GetN(s Seq, n int) ([]KeyBytes, error) {
+// GetN returns the first n elements from the sequence.
+func (s Seq) GetN(n int) []KeyBytes {
 	res := make([]KeyBytes, 0, n)
-	for k, err := range s {
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, k)
+	for k := range s {
 		if len(res) == n {
 			break
 		}
+		res = append(res, k)
 	}
-	return res, nil
+	return res
+}
+
+// MarshalLogArray implements zapcore.ArrayMarshaler.
+func (s Seq) MarshalLogArray(enc zapcore.ArrayEncoder) error {
+	if s == nil {
+		return nil
+	}
+	n := 0
+	for k := range s {
+		if n == 3 {
+			enc.AppendString("...")
+			break
+		}
+		enc.AppendString(k.ShortString())
+		n++
+	}
+	return nil
 }
 
 // EmptySeq returns an empty sequence.
 func EmptySeq() Seq {
-	return Seq(func(yield func(KeyBytes, error) bool) {})
+	return Seq(func(yield func(KeyBytes) bool) {})
+}
+
+// SeqErrorFunc is a function that returns an error that happened during iteration, if
+// any.
+type SeqErrorFunc func() error
+
+// NoSeqError is a SeqErrorFunc that always returns nil (no error).
+var NoSeqError SeqErrorFunc = func() error { return nil }
+
+// SeqError returns a SeqErrorFunc that always returns the given error.
+func SeqError(err error) SeqErrorFunc {
+	return func() error { return err }
+}
+
+// SeqResult represents the result of a function that returns a sequence.
+// Error method most be called to check if an error occurred after
+// processing the sequence.
+// Error is reset at the beginning of each Seq call (iteration over the sequence).
+type SeqResult struct {
+	Seq   Seq
+	Error SeqErrorFunc
+}
+
+// MarshalLogArray implements zapcore.ArrayMarshaler.
+func (s SeqResult) MarshalLogArray(enc zapcore.ArrayEncoder) error {
+	s.Seq.MarshalLogArray(enc) // never returns an error
+	return s.Error()
+}
+
+// First returns the first element from the result's sequence, if any.
+// If the sequence is empty, it returns nil.
+func (s SeqResult) First() (KeyBytes, error) {
+	var r KeyBytes
+	for r = range s.Seq {
+		break
+	}
+	return r, s.Error()
+}
+
+// GetN returns the first n elements from the result's sequence.
+func (s SeqResult) GetN(n int) ([]KeyBytes, error) {
+	items := s.Seq.GetN(n)
+	return items, s.Error()
+}
+
+// EmptySeqResult returns an empty sequence result.
+func EmptySeqResult() SeqResult {
+	return SeqResult{
+		Seq:   EmptySeq(),
+		Error: func() error { return nil },
+	}
+}
+
+// ErrorSeqResult returns a sequence result with an empty sequence and an error.
+func ErrorSeqResult(err error) SeqResult {
+	return SeqResult{
+		Seq:   EmptySeq(),
+		Error: SeqError(err),
+	}
 }
 
 // KeyBytes represents an item (key) in a reconciliable set.
@@ -56,6 +130,14 @@ type KeyBytes []byte
 // String implements fmt.Stringer.
 func (k KeyBytes) String() string {
 	return hex.EncodeToString(k)
+}
+
+// String implements log.ShortString.
+func (k KeyBytes) ShortString() string {
+	if len(k) < 5 {
+		return k.String()
+	}
+	return hex.EncodeToString(k[:5])
 }
 
 // Clone returns a copy of the key.
@@ -121,19 +203,9 @@ func HexToKeyBytes(s string) KeyBytes {
 // The fingerprint is obtained by XORing together the keys in the set.
 type Fingerprint [FingerprintSize]byte
 
-// RandomFingerprint generates a random fingerprint.
-func RandomFingerprint() Fingerprint {
-	var fp Fingerprint
-	_, err := rand.Read(fp[:])
-	if err != nil {
-		panic("failed to generate random fingerprint: " + err.Error())
-	}
-	return fp
-}
-
-// EmptyFingerprint returns an empty fingerprint.
-func EmptyFingerprint() Fingerprint {
-	return Fingerprint{}
+// String implements log.ShortString.
+func (fp Fingerprint) ShortString() string {
+	return hex.EncodeToString(fp[:5])
 }
 
 // Compare compares two fingerprints.
@@ -159,6 +231,21 @@ func (fp *Fingerprint) BitFromLeft(n int) bool {
 		panic("BUG: bad fingerprint bit index")
 	}
 	return (fp[n>>3]>>(7-n&0x7))&1 != 0
+}
+
+// RandomFingerprint generates a random fingerprint.
+func RandomFingerprint() Fingerprint {
+	var fp Fingerprint
+	_, err := rand.Read(fp[:])
+	if err != nil {
+		panic("failed to generate random fingerprint: " + err.Error())
+	}
+	return fp
+}
+
+// EmptyFingerprint returns an empty fingerprint.
+func EmptyFingerprint() Fingerprint {
+	return Fingerprint{}
 }
 
 // HexToFingerprint converts a hex string to Fingerprint.

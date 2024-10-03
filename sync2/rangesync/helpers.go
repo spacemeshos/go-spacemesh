@@ -1,22 +1,14 @@
 package rangesync
 
 import (
-	"context"
-
 	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 // CollectSetItems returns the list of items in the given set.
-func CollectSetItems(ctx context.Context, os OrderedSet) (r []types.KeyBytes, err error) {
-	items, err := os.Items(ctx)
-	if err != nil {
-		return nil, err
-	}
+func CollectSetItems(os OrderedSet) (r []types.KeyBytes, err error) {
+	items := os.Items()
 	var first types.KeyBytes
-	for v, err := range items {
-		if err != nil {
-			return nil, err
-		}
+	for v := range items.Seq {
 		if first == nil {
 			first = v
 		} else if v.Compare(first) == 0 {
@@ -24,5 +16,5 @@ func CollectSetItems(ctx context.Context, os OrderedSet) (r []types.KeyBytes, er
 		}
 		r = append(r, v)
 	}
-	return r, nil
+	return r, items.Error()
 }

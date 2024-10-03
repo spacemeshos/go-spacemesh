@@ -17,7 +17,7 @@ type RangeInfo struct {
 	// Number of items in the interval
 	Count int
 	// Items is the sequence of set elements in the interval.
-	Items types.Seq
+	Items types.SeqResult
 }
 
 // SplitInfo contains information about range split in two.
@@ -33,7 +33,7 @@ type OrderedSet interface {
 	// Receive handles a new key received from the peer.
 	// It may or may not add it to the set immediately; this doesn't affect set
 	// reconciliation operation.
-	Receive(ctx context.Context, k types.KeyBytes) error
+	Receive(k types.KeyBytes) error
 	// GetRangeInfo returns RangeInfo for the item range in the ordered set,
 	// bounded by [x, y).
 	// x == y indicates the whole set.
@@ -44,20 +44,24 @@ type OrderedSet interface {
 	// is returned for the corresponding subrange of the requested range.
 	// If both x and y are nil, the information for the entire set is returned.
 	// If any of x or y is nil, the other one must be nil as well.
-	GetRangeInfo(ctx context.Context, x, y types.KeyBytes, count int) (RangeInfo, error)
+	GetRangeInfo(x, y types.KeyBytes, count int) (RangeInfo, error)
 	// SplitRange splits the range roughly after the specified count of items,
 	// returning RangeInfo for the first half and the second half of the range.
-	SplitRange(ctx context.Context, x, y types.KeyBytes, count int) (SplitInfo, error)
+	SplitRange(x, y types.KeyBytes, count int) (SplitInfo, error)
 	// Items returns the sequence of items in the set.
-	Items(ctx context.Context) (types.Seq, error)
+	Items() types.SeqResult
 	// Empty returns true if the set is empty.
-	Empty(ctx context.Context) (bool, error)
+	Empty() (bool, error)
 	// Copy makes a shallow copy of the OrderedSet.
-	Copy() OrderedSet
+	// syncScope argument is a hint that can be used to optimize resource usage.
+	// If syncScope is true, then the copy is intended to be used for the duration of
+	// a synchronization run.
+	// If syncScope if false, then the lifetime of the copy is not clearly defined.
+	Copy(syncScope bool) OrderedSet
 	// Recent returns an Iterator that yields the items added since the specified
 	// timestamp. Some OrderedSet implementations may not have Recent implemented, in
-	// which case it should return an error.
-	Recent(ctx context.Context, since time.Time) (types.Seq, int, error)
+	// which case it should return an empty sequence.
+	Recent(since time.Time) (types.SeqResult, int)
 }
 
 type Requester interface {

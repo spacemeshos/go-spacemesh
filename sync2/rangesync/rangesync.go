@@ -1,7 +1,6 @@
 package rangesync
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -9,6 +8,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
@@ -142,33 +142,29 @@ func NewRangeSetReconciler(os OrderedSet, opts ...RangeSetReconcilerOption) *Ran
 	return rsr
 }
 
-func (rsr *RangeSetReconciler) defaultRange(ctx context.Context) (x, y types.KeyBytes, err error) {
-	if empty, err := rsr.os.Empty(ctx); err != nil {
+func (rsr *RangeSetReconciler) defaultRange() (x, y types.KeyBytes, err error) {
+	if empty, err := rsr.os.Empty(); err != nil {
 		return nil, nil, fmt.Errorf("checking for empty set: %w", err)
 	} else if empty {
 		return nil, nil, nil
 	}
 
-	seq, err := rsr.os.Items(ctx)
+	x, err = rsr.os.Items().First()
 	if err != nil {
 		return nil, nil, fmt.Errorf("get items: %w", err)
-	}
-	x, err = seq.First()
-	if err != nil {
-		return nil, nil, fmt.Errorf("get first item: %w", err)
 	}
 
 	return x, x, nil
 }
 
 func (rsr *RangeSetReconciler) processSubrange(s sender, x, y types.KeyBytes, info RangeInfo) error {
-	rsr.log.Debug("processSubrange", HexField("x", x), HexField("y", y),
-		zap.Int("count", info.Count), HexField("fingerprint", info.Fingerprint))
+	rsr.log.Debug("processSubrange", log.ZShortStringer("x", x), log.ZShortStringer("y", y),
+		zap.Int("count", info.Count), log.ZShortStringer("fingerprint", info.Fingerprint))
 
 	if info.Count == 0 {
 		// We have no more items in this subrange.
 		// Ask peer to send any items it has in the range
-		rsr.log.Debug("processSubrange: send empty range", HexField("x", x), HexField("y", y))
+		rsr.log.Debug("processSubrange: send empty range", log.ZShortStringer("x", x), log.ZShortStringer("y", y))
 		if err := s.sendEmptyRange(x, y); err != nil {
 			return err
 		}
@@ -176,7 +172,7 @@ func (rsr *RangeSetReconciler) processSubrange(s sender, x, y types.KeyBytes, in
 
 	// The range is non-empty and large enough.
 	// Send fingerprint so that the peer can further subdivide it.
-	rsr.log.Debug("processSubrange: send fingerprint", HexField("x", x), HexField("y", y),
+	rsr.log.Debug("processSubrange: send fingerprint", log.ZShortStringer("x", x), log.ZShortStringer("y", y),
 		zap.Int("count", info.Count))
 	if err := s.sendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
 		return err
@@ -185,29 +181,24 @@ func (rsr *RangeSetReconciler) processSubrange(s sender, x, y types.KeyBytes, in
 	return nil
 }
 
-func (rsr *RangeSetReconciler) splitRange(
-	ctx context.Context,
-	s sender,
-	count int,
-	x, y types.KeyBytes,
-) error {
+func (rsr *RangeSetReconciler) splitRange(s sender, count int, x, y types.KeyBytes) error {
 	count = count / 2
 	rsr.log.Debug("handleMessage: PRE split range",
-		HexField("x", x), HexField("y", y),
+		log.ZShortStringer("x", x), log.ZShortStringer("y", y),
 		zap.Int("countArg", count))
-	si, err := rsr.os.SplitRange(ctx, x, y, count)
+	si, err := rsr.os.SplitRange(x, y, count)
 	if err != nil {
 		return err
 	}
 	rsr.log.Debug("handleMessage: split range",
-		HexField("x", x), HexField("y", y),
+		log.ZShortStringer("x", x), log.ZShortStringer("y", y),
 		zap.Int("countArg", count),
 		zap.Int("count0", si.Parts[0].Count),
-		HexField("fp0", si.Parts[0].Fingerprint),
-		SeqField("start0", si.Parts[0].Items),
+		log.ZShortStringer("fp0", si.Parts[0].Fingerprint),
+		zap.Array("start0", si.Parts[0].Items),
 		zap.Int("count1", si.Parts[1].Count),
-		HexField("fp1", si.Parts[1].Fingerprint),
-		SeqField("start1", si.Parts[1].Items))
+		log.ZShortStringer("fp1", si.Parts[1].Fingerprint),
+		zap.Array("start1", si.Parts[1].Items))
 	if err := rsr.processSubrange(s, x, si.Middle, si.Parts[0]); err != nil {
 		return err
 	}
@@ -220,19 +211,19 @@ func (rsr *RangeSetReconciler) splitRange(
 func (rsr *RangeSetReconciler) sendSmallRange(
 	s sender,
 	count int,
-	seq types.Seq,
+	sr types.SeqResult,
 	x, y types.KeyBytes,
 ) error {
 	if count == 0 {
 		rsr.log.Debug("handleMessage: empty incoming range",
-			HexField("x", x), HexField("y", y))
+			log.ZShortStringer("x", x), log.ZShortStringer("y", y))
 		return s.sendEmptyRange(x, y)
 	}
 	rsr.log.Debug("handleMessage: send small range",
-		HexField("x", x), HexField("y", y),
+		log.ZShortStringer("x", x), log.ZShortStringer("y", y),
 		zap.Int("count", count),
 		zap.Int("maxSendRange", rsr.maxSendRange))
-	if _, err := rsr.sendItems(s, count, seq, nil); err != nil {
+	if _, err := rsr.sendItems(s, count, sr, nil); err != nil {
 		return err
 	}
 	return s.sendRangeContents(x, y, count)
@@ -241,7 +232,7 @@ func (rsr *RangeSetReconciler) sendSmallRange(
 func (rsr *RangeSetReconciler) sendItems(
 	s sender,
 	count int,
-	seq types.Seq,
+	sr types.SeqResult,
 	skipKeys map[string]struct{},
 ) (int, error) {
 	if count == 0 {
@@ -253,10 +244,7 @@ func (rsr *RangeSetReconciler) sendItems(
 	}
 	var keys []types.KeyBytes
 	n := count
-	for k, err := range seq {
-		if err != nil {
-			return nSent, err
-		}
+	for k := range sr.Seq {
 		if _, found := skipKeys[string(k)]; !found {
 			if len(keys) == rsr.itemChunkSize {
 				if err := s.sendChunk(keys); err != nil {
@@ -272,6 +260,10 @@ func (rsr *RangeSetReconciler) sendItems(
 			break
 		}
 	}
+	if err := sr.Error(); err != nil {
+		return nSent, err
+	}
+
 	if len(keys) != 0 {
 		if err := s.sendChunk(keys); err != nil {
 			return nSent, err
@@ -282,7 +274,6 @@ func (rsr *RangeSetReconciler) sendItems(
 }
 
 func (rsr *RangeSetReconciler) handleFingerprint(
-	ctx context.Context,
 	s sender,
 	msg SyncMessage,
 	x, y types.KeyBytes,
@@ -316,7 +307,7 @@ func (rsr *RangeSetReconciler) handleFingerprint(
 			zap.Float64("diff", 1-pr.Sim),
 			zap.Float64("maxDiff", rsr.maxDiff))
 		if info.Count > rsr.maxSendRange {
-			return false, rsr.splitRange(ctx, s, info.Count, x, y)
+			return false, rsr.splitRange(s, info.Count, x, y)
 		}
 		return false, rsr.sendSmallRange(s, info.Count, info.Items, x, y)
 
@@ -324,12 +315,11 @@ func (rsr *RangeSetReconciler) handleFingerprint(
 		return false, rsr.sendSmallRange(s, info.Count, info.Items, x, y)
 
 	default:
-		return false, rsr.splitRange(ctx, s, info.Count, x, y)
+		return false, rsr.splitRange(s, info.Count, x, y)
 	}
 }
 
 func (rsr *RangeSetReconciler) messageRange(
-	ctx context.Context,
 	msg SyncMessage,
 ) (x, y types.KeyBytes, err error) {
 	x, y = msg.X(), msg.Y()
@@ -341,10 +331,10 @@ func (rsr *RangeSetReconciler) messageRange(
 		if x != nil {
 			return nil, nil, errors.New("EmptySet message should not contain a range")
 		}
-		return rsr.defaultRange(ctx)
+		return rsr.defaultRange()
 	case MessageTypeProbe, MessageTypeRecent:
 		if x == nil {
-			return rsr.defaultRange(ctx)
+			return rsr.defaultRange()
 		}
 	default:
 		if x == nil {
@@ -357,14 +347,13 @@ func (rsr *RangeSetReconciler) messageRange(
 // handleMessage handles incoming messages. Note that the set reconciliation protocol is
 // designed to be stateless.
 func (rsr *RangeSetReconciler) handleMessage(
-	ctx context.Context,
 	s sender,
 	msg SyncMessage,
 	receivedKeys map[string]struct{},
 ) (done bool, err error) {
 	rsr.log.Debug("handleMessage", zap.String("msg", SyncMessageToString(msg)))
 
-	x, y, err := rsr.messageRange(ctx, msg)
+	x, y, err := rsr.messageRange(msg)
 	if err != nil {
 		return false, err
 	}
@@ -374,7 +363,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 		case MessageTypeProbe:
 			rsr.log.Debug("handleMessage: send empty probe response")
 			if err := s.sendSample(
-				x, y, types.EmptyFingerprint(), 0, 0, types.EmptySeq(),
+				x, y, types.EmptyFingerprint(), 0, 0, types.EmptySeqResult(),
 			); err != nil {
 				return false, err
 			}
@@ -384,15 +373,15 @@ func (rsr *RangeSetReconciler) handleMessage(
 		return true, nil
 	}
 
-	info, err := rsr.os.GetRangeInfo(ctx, x, y, -1)
+	info, err := rsr.os.GetRangeInfo(x, y, -1)
 	if err != nil {
 		return false, err
 	}
 	rsr.log.Debug("handleMessage: range info",
-		HexField("x", x), HexField("y", y),
-		SeqField("items", info.Items),
+		log.ZShortStringer("x", x), log.ZShortStringer("y", y),
+		zap.Array("items", info.Items),
 		zap.Int("count", info.Count),
-		HexField("fingerprint", info.Fingerprint))
+		log.ZShortStringer("fingerprint", info.Fingerprint))
 
 	switch msg.Type() {
 	case MessageTypeEmptyRange, MessageTypeRangeContents, MessageTypeEmptySet:
@@ -403,7 +392,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 		// the range doesn't need any further handling by the peer.
 		if info.Count != 0 {
 			rsr.log.Debug("handleMessage: send items", zap.Int("count", info.Count),
-				SeqField("items", info.Items),
+				zap.Array("items", info.Items),
 				zap.Int("receivedCount", len(receivedKeys)))
 			nSent, err := rsr.sendItems(s, info.Count, info.Items, receivedKeys)
 			if err != nil {
@@ -426,7 +415,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 		items := info.Items
 		if msg.Fingerprint() == info.Fingerprint {
 			// no need to send MinHash items if fingerprints match
-			items = types.EmptySeq()
+			items = types.EmptySeqResult()
 			sampleSize = 0
 		}
 		if err := s.sendSample(x, y, info.Fingerprint, info.Count, sampleSize, items); err != nil {
@@ -435,14 +424,11 @@ func (rsr *RangeSetReconciler) handleMessage(
 		return true, nil
 
 	case MessageTypeRecent:
-		it, count, err := rsr.os.Recent(ctx, msg.Since())
-		if err != nil {
-			return false, fmt.Errorf("error getting recent items: %w", err)
-		}
+		sr, count := rsr.os.Recent(msg.Since())
 		nSent := 0
 		if count != 0 {
 			// Do not send back recent items that were received
-			if nSent, err = rsr.sendItems(s, count, it, receivedKeys); err != nil {
+			if nSent, err = rsr.sendItems(s, count, sr, receivedKeys); err != nil {
 				return false, err
 			}
 		}
@@ -450,10 +436,10 @@ func (rsr *RangeSetReconciler) handleMessage(
 			zap.Int("receivedCount", len(receivedKeys)),
 			zap.Int("sentCount", nSent))
 		rsr.tracer.OnRecent(len(receivedKeys), nSent)
-		return false, rsr.initiate(ctx, s, x, y, false)
+		return false, rsr.initiate(s, x, y, false)
 
 	case MessageTypeFingerprint, MessageTypeSample:
-		return rsr.handleFingerprint(ctx, s, msg, x, y, info)
+		return rsr.handleFingerprint(s, msg, x, y, info)
 
 	default:
 		return false, fmt.Errorf("unexpected message type %s", msg.Type())
@@ -463,11 +449,11 @@ func (rsr *RangeSetReconciler) handleMessage(
 // Initiate initiates the reconciliation process with the peer.
 // If x and y are non-nil, [x, y) range is reconciled.  If x and y are nil, the whole
 // range is reconciled.
-func (rsr *RangeSetReconciler) Initiate(ctx context.Context, c Conduit, x, y types.KeyBytes) error {
+func (rsr *RangeSetReconciler) Initiate(c Conduit, x, y types.KeyBytes) error {
 	s := sender{c}
 	if x == nil && y == nil {
 		var err error
-		x, y, err = rsr.defaultRange(ctx)
+		x, y, err = rsr.defaultRange()
 		if err != nil {
 			return err
 		}
@@ -475,19 +461,19 @@ func (rsr *RangeSetReconciler) Initiate(ctx context.Context, c Conduit, x, y typ
 		panic("BUG: bad range")
 	}
 	haveRecent := rsr.recentTimeSpan > 0
-	if err := rsr.initiate(ctx, s, x, y, haveRecent); err != nil {
+	if err := rsr.initiate(s, x, y, haveRecent); err != nil {
 		return err
 	}
 	return s.sendEndRound()
 }
 
-func (rsr *RangeSetReconciler) initiate(ctx context.Context, s sender, x, y types.KeyBytes, haveRecent bool) error {
-	rsr.log.Debug("initiate", HexField("x", x), HexField("y", y))
+func (rsr *RangeSetReconciler) initiate(s sender, x, y types.KeyBytes, haveRecent bool) error {
+	rsr.log.Debug("initiate", log.ZShortStringer("x", x), log.ZShortStringer("y", y))
 	if x == nil {
 		rsr.log.Debug("initiate: send empty set")
 		return s.sendEmptySet()
 	}
-	info, err := rsr.os.GetRangeInfo(ctx, x, y, -1)
+	info, err := rsr.os.GetRangeInfo(x, y, -1)
 	if err != nil {
 		return fmt.Errorf("get range info: %w", err)
 	}
@@ -504,13 +490,10 @@ func (rsr *RangeSetReconciler) initiate(ctx context.Context, s sender, x, y type
 	case haveRecent:
 		rsr.log.Debug("initiate: checking recent items")
 		since := rsr.clock.Now().Add(-rsr.recentTimeSpan)
-		it, count, err := rsr.os.Recent(ctx, since)
-		if err != nil {
-			return fmt.Errorf("error getting recent items: %w", err)
-		}
+		items, count := rsr.os.Recent(since)
 		if count != 0 {
 			rsr.log.Debug("initiate: sending recent items", zap.Int("count", count))
-			if n, err := rsr.sendItems(s, count, it, nil); err != nil {
+			if n, err := rsr.sendItems(s, count, items, nil); err != nil {
 				return err
 			} else if n != count {
 				panic("BUG: wrong number of items sent")
@@ -540,12 +523,11 @@ func (rsr *RangeSetReconciler) initiate(ctx context.Context, s sender, x, y type
 // InitiateProbe initiates a probe to retrieve the item count and Jaccard similarity
 // coefficient from the peer.
 func (rsr *RangeSetReconciler) InitiateProbe(
-	ctx context.Context,
 	c Conduit,
 	x, y types.KeyBytes,
 ) (RangeInfo, error) {
 	s := sender{c}
-	info, err := rsr.os.GetRangeInfo(ctx, x, y, -1)
+	info, err := rsr.os.GetRangeInfo(x, y, -1)
 	if err != nil {
 		return RangeInfo{}, err
 	}
@@ -626,7 +608,7 @@ var errNoEndMarker = errors.New("no end round marker")
 
 var errEmptyRound = errors.New("empty round")
 
-func (rsr *RangeSetReconciler) doRound(ctx context.Context, s sender) (done bool, err error) {
+func (rsr *RangeSetReconciler) doRound(s sender) (done bool, err error) {
 	done = true
 	receivedKeys := make(map[string]struct{})
 	nHandled := 0
@@ -647,7 +629,7 @@ RECV_LOOP:
 		case MessageTypeItemBatch:
 			nHandled++
 			for _, k := range msg.Keys() {
-				if err := rsr.os.Receive(ctx, k); err != nil {
+				if err := rsr.os.Receive(k); err != nil {
 					return false, fmt.Errorf("error adding an item to the set: %w", err)
 				}
 				receivedKeys[string(k)] = struct{}{}
@@ -655,7 +637,7 @@ RECV_LOOP:
 			continue
 		}
 
-		msgDone, err := rsr.handleMessage(ctx, s, msg, receivedKeys)
+		msgDone, err := rsr.handleMessage(s, msg, receivedKeys)
 		if err != nil {
 			return false, err
 		}
@@ -683,13 +665,13 @@ RECV_LOOP:
 
 // Run performs sync reconciliation run using specified Conduit to send and receive
 // messages.
-func (rsr *RangeSetReconciler) Run(ctx context.Context, c Conduit) error {
+func (rsr *RangeSetReconciler) Run(c Conduit) error {
 	rsr.log.Debug("begin set reconciliation")
 	defer rsr.log.Debug("end set reconciliation")
 	s := sender{c}
 	for {
 		// Process() will receive all items and messages from the peer
-		syncDone, err := rsr.doRound(ctx, s)
+		syncDone, err := rsr.doRound(s)
 		if err != nil {
 			return err
 		} else if syncDone {
