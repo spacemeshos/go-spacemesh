@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/spacemeshos/merkle-tree"
@@ -360,7 +361,7 @@ func (v *Validator) PositioningAtx(
 
 type verifyChainOpts struct {
 	assumedValidTime time.Time
-	trustedNodeID    types.NodeID
+	trustedNodeID    []types.NodeID
 	logger           *zap.Logger
 }
 
@@ -377,8 +378,8 @@ func (verifyChainOptsNs) AssumeValidBefore(val time.Time) VerifyChainOption {
 	}
 }
 
-// WithTrustedID configures the validator to assume that ATXs created by the given node ID are valid.
-func (verifyChainOptsNs) WithTrustedID(val types.NodeID) VerifyChainOption {
+// WithTrustedIDs configures the validator to assume that ATXs created by the given node IDs are valid.
+func (verifyChainOptsNs) WithTrustedIDs(val ...types.NodeID) VerifyChainOption {
 	return func(o *verifyChainOpts) {
 		o.trustedNodeID = val
 	}
@@ -533,7 +534,7 @@ func (v *Validator) verifyChainWithOpts(
 			zap.Time("valid_before", opts.assumedValidTime),
 		)
 		return nil
-	case atx.SmesherID == opts.trustedNodeID:
+	case slices.Contains(opts.trustedNodeID, atx.SmesherID):
 		log.Debug("not verifying ATX chain", zap.Stringer("atx_id", id), zap.String("reason", "trusted"))
 		return nil
 	}

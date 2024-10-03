@@ -113,14 +113,16 @@ type Builder struct {
 	stop          context.CancelFunc
 }
 
+type foundPosAtx struct {
+	id         types.ATXID
+	forPublish types.EpochID
+}
+
 type positioningAtxFinder struct {
 	finding sync.Mutex
-	found   *struct {
-		id         types.ATXID
-		forPublish types.EpochID
-	}
-	golden types.ATXID
-	logger *zap.Logger
+	found   *foundPosAtx
+	golden  types.ATXID
+	logger  *zap.Logger
 }
 
 type BuilderOption func(*Builder)
@@ -926,19 +928,13 @@ func (f *positioningAtxFinder) find(
 	id, err := atxs.PositioningATX(ctx, publish-1)
 	if err != nil {
 		logger.Warn("failed to get positioning ATX - falling back to golden", zap.Error(err))
-		f.found = &struct {
-			id         types.ATXID
-			forPublish types.EpochID
-		}{f.golden, publish}
+		f.found = &foundPosAtx{f.golden, publish}
 		return f.golden
 	}
 
 	logger.Debug("found candidate positioning atx", log.ZShortStringer("id", id))
 
-	f.found = &struct {
-		id         types.ATXID
-		forPublish types.EpochID
-	}{id, publish}
+	f.found = &foundPosAtx{id, publish}
 	return id
 }
 
