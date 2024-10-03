@@ -84,7 +84,7 @@ func (a *AdminService) CheckpointStream(
 	}
 	err := checkpoint.Generate(stream.Context(), afero.NewOsFs(), a.db, a.dataDir, snapshot, numAtxs)
 	if err != nil {
-		return status.Errorf(codes.Internal, "failed to create checkpoint: %s", err.Error())
+		return status.Errorf(codes.Internal, fmt.Sprintf("failed to create checkpoint: %s", err.Error()))
 	}
 	fname := checkpoint.SelfCheckpointFilename(a.dataDir, snapshot)
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
@@ -92,7 +92,7 @@ func (a *AdminService) CheckpointStream(
 	}
 	f, err := os.Open(fname)
 	if err != nil {
-		return status.Errorf(codes.Internal, "failed to open file %s: %s", fname, err.Error())
+		return status.Errorf(codes.Internal, fmt.Sprintf("failed to open file %s: %s", fname, err.Error()))
 	}
 	defer f.Close()
 	var (
@@ -109,7 +109,7 @@ func (a *AdminService) CheckpointStream(
 				if errors.Is(err, io.EOF) {
 					return nil
 				}
-				return status.Errorf(codes.Internal, "failed to read from file %s: %s", fname, err.Error())
+				return status.Errorf(codes.Internal, fmt.Sprintf("failed to read from file %s: %s", fname, err.Error()))
 			}
 			if err = stream.Send(&pb.CheckpointStreamResponse{Data: buf[:chunk]}); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
@@ -127,7 +127,7 @@ func (a *AdminService) Recover(ctx context.Context, _ *pb.RecoverRequest) (*empt
 func (a *AdminService) EventsStream(_ *pb.EventStreamRequest, stream pb.AdminService_EventsStreamServer) error {
 	sub, buf, err := events.SubscribeUserEvents(events.WithBuffer(1000))
 	if err != nil {
-		return status.Error(codes.FailedPrecondition, err.Error())
+		return status.Errorf(codes.FailedPrecondition, err.Error())
 	}
 	defer sub.Close()
 	// send empty header after subscribing to the channel.
