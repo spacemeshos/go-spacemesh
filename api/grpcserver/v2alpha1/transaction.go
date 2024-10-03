@@ -49,13 +49,11 @@ type transactionValidator interface {
 	VerifyAndCacheTx(context.Context, []byte) error
 }
 
-func NewTransactionStreamService(db sql.Executor) *TransactionStreamService {
-	return &TransactionStreamService{db: db}
+func NewTransactionStreamService() *TransactionStreamService {
+	return &TransactionStreamService{}
 }
 
-type TransactionStreamService struct {
-	db sql.Executor
-}
+type TransactionStreamService struct{}
 
 func (s *TransactionStreamService) RegisterService(server *grpc.Server) {
 	spacemeshv2alpha1.RegisterTransactionStreamServiceServer(server, s)

@@ -10,9 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -34,7 +32,6 @@ type VrfNonceKey struct {
 // CachedDB is simply a database injected with cache.
 type CachedDB struct {
 	sql.Database
-	logger *zap.Logger
 
 	// cache is optional in tests. It MUST be set for the 'App'
 	// for properly checking malfeasance.
@@ -45,7 +42,7 @@ type CachedDB struct {
 
 	// used to coordinate db update and cache
 	mu               sync.Mutex
-	malfeasanceCache *lru.Cache[types.NodeID, *wire.MalfeasanceProof]
+	malfeasanceCache *lru.Cache[types.NodeID, []byte]
 }
 
 type Config struct {
@@ -95,7 +92,7 @@ func NewCachedDB(db sql.StateDatabase, lg *zap.Logger, opts ...Opt) *CachedDB {
 		lg.Fatal("failed to create atx cache", zap.Error(err))
 	}
 
-	malfeasanceCache, err := lru.New[types.NodeID, *wire.MalfeasanceProof](o.cfg.MalfeasanceSize)
+	malfeasanceCache, err := lru.New[types.NodeID, []byte](o.cfg.MalfeasanceSize)
 	if err != nil {
 		lg.Fatal("failed to create malfeasance cache", zap.Error(err))
 	}
@@ -107,7 +104,6 @@ func NewCachedDB(db sql.StateDatabase, lg *zap.Logger, opts ...Opt) *CachedDB {
 
 	return &CachedDB{
 		Database:         db,
-		logger:           lg,
 		atxsdata:         o.atxsdata,
 		atxCache:         atxHdrCache,
 		malfeasanceCache: malfeasanceCache,
@@ -120,7 +116,7 @@ func (db *CachedDB) MalfeasanceCacheSize() int {
 }
 
 // GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
-func (db *CachedDB) MalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
+func (db *CachedDB) MalfeasanceProof(id types.NodeID) ([]byte, error) {
 	if id == types.EmptyNodeID {
 		panic("invalid argument to GetMalfeasanceProof")
 	}
@@ -139,13 +135,11 @@ func (db *CachedDB) MalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, e
 	if err != nil && err != sql.ErrNotFound {
 		return nil, err
 	}
-	proof := &wire.MalfeasanceProof{}
-	codec.MustDecode(blob.Bytes, proof)
-	db.malfeasanceCache.Add(id, proof)
-	return proof, err
+	db.malfeasanceCache.Add(id, blob.Bytes)
+	return blob.Bytes, err
 }
 
-func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof *wire.MalfeasanceProof) {
+func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof []byte) {
 	if id == types.EmptyNodeID {
 		panic("invalid argument to CacheMalfeasanceProof")
 	}
@@ -200,7 +194,7 @@ func (db *CachedDB) Previous(id types.ATXID) ([]types.ATXID, error) {
 }
 
 func (db *CachedDB) IterateMalfeasanceProofs(
-	iter func(types.NodeID, *wire.MalfeasanceProof) error,
+	iter func(types.NodeID, []byte) error,
 ) error {
 	ids, err := identities.GetMalicious(db)
 	if err != nil {

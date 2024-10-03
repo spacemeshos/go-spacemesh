@@ -240,7 +240,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 		if err := identities.SetMalicious(h.cdb, atx.SmesherID, encodedProof, time.Now()); err != nil {
 			return 0, 0, nil, fmt.Errorf("adding malfeasance proof: %w", err)
 		}
-		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, encodedProof)
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 		return 0, 0, proof, nil
 	}
@@ -495,7 +495,7 @@ func (h *HandlerV1) storeAtx(
 
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
-		h.cdb.CacheMalfeasanceProof(atx.SmesherID, proof)
+		h.cdb.CacheMalfeasanceProof(atx.SmesherID, codec.MustEncode(proof))
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
 

@@ -10,7 +10,6 @@
 package mocks
 
 import (
-	context "context"
 	reflect "reflect"
 
 	atxsdata "github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -337,15 +336,15 @@ func (c *MockTortoiseOnWeakCoinCall) DoAndReturn(f func(types.LayerID, bool)) *M
 }
 
 // TallyVotes mocks base method.
-func (m *MockTortoise) TallyVotes(arg0 context.Context, arg1 types.LayerID) {
+func (m *MockTortoise) TallyVotes(arg0 types.LayerID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "TallyVotes", arg0, arg1)
+	m.ctrl.Call(m, "TallyVotes", arg0)
 }
 
 // TallyVotes indicates an expected call of TallyVotes.
-func (mr *MockTortoiseMockRecorder) TallyVotes(arg0, arg1 any) *MockTortoiseTallyVotesCall {
+func (mr *MockTortoiseMockRecorder) TallyVotes(arg0 any) *MockTortoiseTallyVotesCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TallyVotes", reflect.TypeOf((*MockTortoise)(nil).TallyVotes), arg0, arg1)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TallyVotes", reflect.TypeOf((*MockTortoise)(nil).TallyVotes), arg0)
 	return &MockTortoiseTallyVotesCall{Call: call}
 }
 
@@ -361,13 +360,13 @@ func (c *MockTortoiseTallyVotesCall) Return() *MockTortoiseTallyVotesCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTortoiseTallyVotesCall) Do(f func(context.Context, types.LayerID)) *MockTortoiseTallyVotesCall {
+func (c *MockTortoiseTallyVotesCall) Do(f func(types.LayerID)) *MockTortoiseTallyVotesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTortoiseTallyVotesCall) DoAndReturn(f func(context.Context, types.LayerID)) *MockTortoiseTallyVotesCall {
+func (c *MockTortoiseTallyVotesCall) DoAndReturn(f func(types.LayerID)) *MockTortoiseTallyVotesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

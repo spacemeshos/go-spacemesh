@@ -44,8 +44,8 @@ func (n *NanoTX) combinedHash(blockSeed []byte) []byte {
 }
 
 // Better returns true if this transaction takes priority than `other`.
-// when the block seed is non-empty, this tx is being considered for a block.
-// the block seed then is used to tie-break (deterministically) transactions for
+// When the block seed is non-empty, this tx is being considered for a block.
+// The block seed then is used to tie-break (deterministically) transactions for
 // the same account/nonce.
 func (n *NanoTX) Better(other *NanoTX, blockSeed []byte) bool {
 	if n.Principal != other.Principal ||

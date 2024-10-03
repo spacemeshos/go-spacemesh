@@ -370,52 +370,49 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock          *flock.Flock
-	signers           []*signing.EdSigner
-	Config            *config.Config
-	db                sql.StateDatabase
-	cachedDB          *datastore.CachedDB
-	dbMetrics         *dbmetrics.DBMetricsCollector
-	localDB           sql.LocalDatabase
-	grpcPublicServer  *grpcserver.Server
-	grpcPrivateServer *grpcserver.Server
-	grpcPostServer    *grpcserver.Server
-	grpcTLSServer     *grpcserver.Server
-	jsonAPIServer     *grpcserver.JSONHTTPServer
-	grpcServices      map[grpcserver.Service]grpcserver.ServiceAPI
-	pprofService      *http.Server
-	profilerService   *pyroscope.Profiler
-	syncer            *syncer.Syncer
-	proposalListener  *proposals.Handler
-	proposalBuilder   *miner.ProposalBuilder
-	mesh              *mesh.Mesh
-	atxsdata          *atxsdata.Data
-	clock             *timesync.NodeClock
-	hare3             *hare3.Hare
-	hare4             *hare4.Hare
-	hareResultsChan   chan hare4.ConsensusOutput
-	hOracle           *eligibility.Oracle
-	blockGen          *blocks.Generator
-	certifier         *blocks.Certifier
-	atxBuilder        *activation.Builder
-	nipostBuilder     *activation.NIPostBuilder
-	atxHandler        *activation.Handler
-	txHandler         *txs.TxHandler
-	validator         *activation.Validator
-	edVerifier        *signing.EdVerifier
-	beaconProtocol    *beacon.ProtocolDriver
-	log               log.Log
-	syncLogger        log.Log
-	svm               *vm.VM
-	conState          *txs.ConservativeState
-	fetcher           *fetch.Fetch
-	ptimesync         *peersync.Sync
-	tortoise          *tortoise.Tortoise
-	updater           *bootstrap.Updater
-	poetDb            *activation.PoetDb
-	postVerifier      activation.PostVerifier
-	postSupervisor    *activation.PostSupervisor
-	errCh             chan error
+	fileLock           *flock.Flock
+	signers            []*signing.EdSigner
+	Config             *config.Config
+	db                 sql.StateDatabase
+	cachedDB           *datastore.CachedDB
+	dbMetrics          *dbmetrics.DBMetricsCollector
+	localDB            sql.LocalDatabase
+	grpcPublicServer   *grpcserver.Server
+	grpcPrivateServer  *grpcserver.Server
+	grpcPostServer     *grpcserver.Server
+	grpcTLSServer      *grpcserver.Server
+	jsonAPIServer      *grpcserver.JSONHTTPServer
+	grpcServices       map[grpcserver.Service]grpcserver.ServiceAPI
+	pprofService       *http.Server
+	profilerService    *pyroscope.Profiler
+	syncer             *syncer.Syncer
+	proposalBuilder    *miner.ProposalBuilder
+	mesh               *mesh.Mesh
+	atxsdata           *atxsdata.Data
+	clock              *timesync.NodeClock
+	hare3              *hare3.Hare
+	hare4              *hare4.Hare
+	hareResultsChan    chan hare4.ConsensusOutput
+	hOracle            *eligibility.Oracle
+	blockGen           *blocks.Generator
+	certifier          *blocks.Certifier
+	atxBuilder         *activation.Builder
+	atxHandler         *activation.Handler
+	txHandler          *txs.TxHandler
+	validator          *activation.Validator
+	edVerifier         *signing.EdVerifier
+	beaconProtocol     *beacon.ProtocolDriver
+	log                log.Log
+	syncLogger         log.Log
+	conState           *txs.ConservativeState
+	fetcher            *fetch.Fetch
+	ptimesync          *peersync.Sync
+	updater            *bootstrap.Updater
+	poetDb             *activation.PoetDb
+	postVerifier       activation.PostVerifier
+	postSupervisor     *activation.PostSupervisor
+	malfeasanceHandler *malfeasance.Handler
+	errCh              chan error
 
 	host *p2p.Host
 
@@ -711,10 +708,15 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(ExecutorLogger, lg).Zap(),
 	)
 	mlog := app.addLogger(MeshLogger, lg).Zap()
-	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.db, app.atxsdata, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
+
+	app.eg.Go(func() error {
+		msh.Start(ctx)
+		return nil
+	})
 
 	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog))
 	if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
@@ -931,7 +933,6 @@ func (app *App) initServices(ctx context.Context) error {
 			)
 			return nil
 		})
-		panic("hare4 still not enabled")
 	}
 
 	propHare := &proposalConsumerHare{
@@ -1129,32 +1130,27 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	invalidPostMH := activation.NewInvalidPostIndexHandler(
 		app.cachedDB,
-		malfeasanceLogger,
 		app.edVerifier,
 		app.postVerifier,
 	)
-	invalidPrevMH := activation.NewInvalidPrevATXHandler(
-		app.cachedDB,
-		malfeasanceLogger,
-		app.edVerifier,
-	)
+	invalidPrevMH := activation.NewInvalidPrevATXHandler(app.cachedDB, app.edVerifier)
 
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	for _, s := range app.signers {
 		nodeIDs = append(nodeIDs, s.NodeID())
 	}
-	malfeasanceHandler := malfeasance.NewHandler(
+	app.malfeasanceHandler = malfeasance.NewHandler(
 		app.cachedDB,
 		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
 		trtl,
 	)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleATXs, activationMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleBallots, meshMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.HareEquivocation, hareMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPostIndex, invalidPostMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPrevATX, invalidPrevMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.MultipleATXs, activationMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.MultipleBallots, meshMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.HareEquivocation, hareMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.InvalidPostIndex, invalidPostMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
@@ -1199,7 +1195,7 @@ func (app *App) initServices(ctx context.Context) error {
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
-				malfeasanceHandler.HandleSyncedMalfeasanceProof,
+				app.malfeasanceHandler.HandleSyncedMalfeasanceProof,
 				app.host,
 				lg.Zap(),
 			),
@@ -1260,21 +1256,17 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
-		pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof),
+		pubsub.ChainGossipHandler(atxSyncHandler, app.malfeasanceHandler.HandleMalfeasanceProof),
 	)
 
 	app.proposalBuilder = proposalBuilder
-	app.proposalListener = proposalListener
 	app.mesh = msh
 	app.syncer = newSyncer
-	app.svm = state
 	app.atxBuilder = atxBuilder
-	app.nipostBuilder = nipostBuilder
 	app.atxHandler = atxHandler
 	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
-	app.tortoise = trtl
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
 			app.host,
@@ -1524,7 +1516,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.PostInfo:
-		service := grpcserver.NewPostInfoService(app.addLogger(PostInfoServiceLogger, lg).Zap(), app.atxBuilder)
+		service := grpcserver.NewPostInfoService(app.atxBuilder)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Transaction:
@@ -1558,10 +1550,19 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewRewardStreamService(app.db)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.Malfeasance:
+		service := v2alpha1.NewMalfeasanceService(app.db, app.malfeasanceHandler)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.MalfeasanceStream:
+		service := v2alpha1.NewMalfeasanceStreamService(app.db, app.malfeasanceHandler)
+		app.grpcServices[svc] = service
+		return service, nil
 	case v2alpha1.Network:
 		service := v2alpha1.NewNetworkService(
 			app.clock.GenesisTime(),
-			app.Config)
+			app.Config,
+		)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Node:
@@ -1581,7 +1582,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.TransactionStream:
-		service := v2alpha1.NewTransactionStreamService(app.db)
+		service := v2alpha1.NewTransactionStreamService()
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Account:

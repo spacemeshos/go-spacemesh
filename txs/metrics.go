@@ -9,7 +9,7 @@ import (
 const (
 	namespace = "txs"
 
-	// labels for tx acceptance state by the cache.
+	// Labels for tx acceptance state by the cache.
 	duplicate           = "dupe"
 	saved               = "saved"
 	savedNoHdr          = "savedNoHdr"
@@ -20,7 +20,7 @@ const (
 	RawFromDB           = "raw"
 	updated             = "updated"
 
-	// label for tx acceptance state by the mempool.
+	// Label for tx acceptance state by the mempool.
 	mempool         = "mempool"
 	balanceTooSmall = "balance"
 	tooManyNonce    = "too_many"

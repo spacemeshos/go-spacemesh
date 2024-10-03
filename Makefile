@@ -32,6 +32,14 @@ LDFLAGS = -ldflags "$(C_LDFLAGS)"
 
 include Makefile-libs.Inc
 
+# Set the correct extension for the executable based on the OS
+# and set the correct ulimit command for the OS
+ifeq ($(OS),Windows_NT)
+	EXE := .exe
+else
+	ULIMIT := ulimit -n 4096;
+endif
+
 UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v genvm/cmd)
 
 export CGO_ENABLED := 1
@@ -136,10 +144,6 @@ lint: get-libs
 lint-fix: get-libs
 	./bin/golangci-lint run --config .golangci.yml --fix
 .PHONY: lint-fix
-
-lint-github-action: get-libs
-	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
-.PHONY: lint-github-action
 
 cover: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS)

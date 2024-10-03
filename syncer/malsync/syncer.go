@@ -283,7 +283,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 			case <-ctx.Done():
 				return nil
 				// TODO(ivan4th) this has to be randomized in a followup
-				// when sync will be schedulled in advance, in order to smooth out request rate across the network
+				// when sync will be scheduled in advance, in order to smooth out request rate across the network
 			case <-s.clock.After(interval):
 			}
 		}

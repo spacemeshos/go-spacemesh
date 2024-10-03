@@ -97,14 +97,15 @@ Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activat
 
 ### Setting Up Local Dev Environment
 
-Building is supported on: 
+Building is supported on:
+
 - Linux, GLIBC 2.34+ is required
 - MacOS 13 (Intel) and MacOS 14 (Arm) and newer
 - Windows 10 and newer
 
 FreeBSD is not officially supported.
 
-Install [Go 1.22 or later](https://golang.org/dl/) for your platform, if you haven't already.
+Install [Go 1.23 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
 On Windows you need to install `make` via [msys2](https://www.msys2.org/), [MingGW-w64](http://mingw-w64.org/doku.php)
 or [mingw](https://chocolatey.org/packages/mingw).
@@ -131,7 +132,8 @@ make go-env-test
 
 Make sure you have **OpenCL** library installed.
 
-To check if setup was configured successfully, try to run: 
+To check if setup was configured successfully, try to run:
+
 ```bash
 make test
 ```

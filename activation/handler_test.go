@@ -290,7 +290,7 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		msg := codec.MustEncode(atx)
 
 		postVerifier := NewMockPostVerifier(gomock.NewController(t))
-		mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier, postVerifier)
+		mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
 		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).
 			DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 				var got mwire.MalfeasanceGossip

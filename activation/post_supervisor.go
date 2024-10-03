@@ -203,7 +203,7 @@ func (ps *PostSupervisor) Stop(deleteFiles bool) error {
 }
 
 // captureCmdOutput returns a function that reads from the given pipe and logs the output.
-// it returns when the pipe is closed.
+// It returns when the pipe is closed.
 func (ps *PostSupervisor) captureCmdOutput(pipe io.ReadCloser, smesherId types.NodeID) func() error {
 	return func() error {
 		scanner := bufio.NewScanner(pipe)

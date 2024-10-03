@@ -12,7 +12,7 @@ const (
 	TransactionSuccess TransactionStatus = iota
 	// TransactionFailure is a status for failed but consumed transaction.
 	TransactionFailure
-	// TODO(dshulyak) what about TransactionSkipped? we shouldn't store such state
+	// TODO(dshulyak) what about TransactionSkipped? We shouldn't store such state
 	// but it might be useful to stream it.
 )
 

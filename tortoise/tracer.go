@@ -348,7 +348,7 @@ func (t *TallyTrace) New() traceEvent {
 }
 
 func (t *TallyTrace) Run(r *traceRunner) error {
-	r.trt.TallyVotes(context.Background(), t.Layer)
+	r.trt.TallyVotes(t.Layer)
 	return nil
 }
 

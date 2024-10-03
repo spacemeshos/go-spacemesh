@@ -93,7 +93,6 @@ var (
 	meshAPIMock     = &MeshAPIMock{}
 	conStateAPI     = &ConStateAPIMock{
 		returnTx:      make(map[types.TransactionID]*types.Transaction),
-		layerApplied:  make(map[types.TransactionID]*types.LayerID),
 		balances:      make(map[types.Address]*big.Int),
 		nonces:        make(map[types.Address]uint64),
 		poolByAddress: make(map[types.Address]types.TransactionID),
@@ -279,10 +278,9 @@ func (m *MeshAPIMock) MeshHash(types.LayerID) (types.Hash32, error) {
 }
 
 type ConStateAPIMock struct {
-	returnTx     map[types.TransactionID]*types.Transaction
-	layerApplied map[types.TransactionID]*types.LayerID
-	balances     map[types.Address]*big.Int
-	nonces       map[types.Address]uint64
+	returnTx map[types.TransactionID]*types.Transaction
+	balances map[types.Address]*big.Int
+	nonces   map[types.Address]uint64
 
 	// In the real txs.txPool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data

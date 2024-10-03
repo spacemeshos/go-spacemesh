@@ -31,14 +31,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
+// nolint:unused
 type blobKey struct {
 	kind string
 	id   types.Hash32
 }
 
 type testP2PFetch struct {
-	t        *testing.T
-	clientDB sql.StateDatabase
+	t *testing.T
 	// client proposals
 	clientPDB   *store.Store
 	clientCDB   *datastore.CachedDB
@@ -115,7 +115,6 @@ func createP2PFetch(
 	serverDB := statesql.InMemory(sqlOpts...)
 	tpf := &testP2PFetch{
 		t:            t,
-		clientDB:     clientDB,
 		clientPDB:    store.New(store.WithLogger(lg)),
 		clientCDB:    datastore.NewCachedDB(clientDB, lg),
 		serverID:     serverHost.ID(),

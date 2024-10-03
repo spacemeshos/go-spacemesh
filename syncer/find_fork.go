@@ -30,9 +30,9 @@ type layerHash struct {
 }
 
 // boundary is used to define the to and from layers in the hash mesh requests to peers.
-// the hashes of the boundary layers are known to the node and are used to double-check that
+// The hashes of the boundary layers are known to the node and are used to double-check that
 // the peer has not changed its opinions on those layers.
-// if the boundary hashes change during a fork-finding session, the session is aborted.
+// If the boundary hashes change during a fork-finding session, the session is aborted.
 type boundary struct {
 	from, to *layerHash
 }
@@ -245,8 +245,8 @@ func (ff *ForkFinder) updateAgreement(peer p2p.Peer, update *layerHash, created 
 }
 
 // setupBoundary sets up the boundary for the hash requests.
-// boundary.from contains the latest layer node and peer agree on hash.
-// boundary.to contains the oldest layer node and peer disagree on hash.
+// - boundary.from contains the latest layer node and peer agree on hash.
+// - boundary.to contains the oldest layer node and peer disagree on hash.
 func (ff *ForkFinder) setupBoundary(peer p2p.Peer, oldestDiff *layerHash) (*boundary, error) {
 	ff.mu.Lock()
 	defer ff.mu.Unlock()
@@ -281,9 +281,9 @@ func (ff *ForkFinder) setupBoundary(peer p2p.Peer, oldestDiff *layerHash) (*boun
 	return &bnd, nil
 }
 
-// get layer hashes from peers in the range defined by the boundary.
-// if the number of hashes is less than maxHashesInReq, then request every hash.
-// otherwise, set appropriate params such that the number of hashes requested is maxHashesInReq
+// Get layer hashes from peers in the range defined by the boundary.
+// If the number of hashes is less than maxHashesInReq, then request every hash.
+// Otherwise, set appropriate params such that the number of hashes requested is maxHashesInReq
 // while ensuring hashes for the boundary layers are requested.
 func (ff *ForkFinder) sendRequest(
 	ctx context.Context,

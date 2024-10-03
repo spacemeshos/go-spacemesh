@@ -42,7 +42,7 @@ func FirstEffectiveGenesis() LayerID {
 }
 
 // GetEffectiveGenesis returns the last layer of genesis.
-// this value can change after a checkpoint recovery.
+// This value can change after a checkpoint recovery.
 func GetEffectiveGenesis() LayerID {
 	return LayerID(atomic.LoadUint32(&effectiveGenesis))
 }

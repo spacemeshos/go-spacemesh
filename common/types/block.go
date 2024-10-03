@@ -17,7 +17,7 @@ import (
 const (
 	// BlockIDSize in bytes.
 	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
-	// probably required for fetching by hash between peers.
+	// Probably required for fetching by hash between peers.
 	BlockIDSize = Hash32Length
 )
 
@@ -91,7 +91,7 @@ type InnerBlock struct {
 // RatNum represents a rational number with the numerator and denominator.
 // note: RatNum aims to be a generic representation of a rational number and parse-able by
 // different programming languages.
-// for doing math around weight inside go-spacemesh codebase, use util.Weight.
+// For doing math around weight inside go-spacemesh codebase, use util.Weight.
 type RatNum struct {
 	Num, Denom uint64
 }

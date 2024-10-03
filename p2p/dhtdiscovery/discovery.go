@@ -57,12 +57,6 @@ func WithMinPeers(minPeers int) Opt {
 	}
 }
 
-func WithHighPeers(peers int) Opt {
-	return func(d *Discovery) {
-		d.highPeers = peers
-	}
-}
-
 func WithBootnodes(bootnodes []peer.AddrInfo) Opt {
 	return func(d *Discovery) {
 		d.bootnodes = bootnodes
@@ -189,7 +183,6 @@ func New(h DiscoveryHost, opts ...Opt) (*Discovery, error) {
 		timeout:             30 * time.Second,
 		bootstrapDuration:   30 * time.Second,
 		minPeers:            20,
-		highPeers:           40,
 		advertiseInterval:   time.Minute,
 		advertiseRetryDelay: time.Minute,
 		findPeersRetryDelay: time.Minute,
@@ -240,7 +233,7 @@ type Discovery struct {
 	// timeout used for connections
 	timeout                 time.Duration
 	bootstrapDuration       time.Duration
-	minPeers, highPeers     int
+	minPeers                int
 	backup, bootnodes       []peer.AddrInfo
 	advertiseDelay          time.Duration
 	advertiseInterval       time.Duration
