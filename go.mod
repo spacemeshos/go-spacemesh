@@ -41,7 +41,7 @@ require (
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/spacemeshos/api/release/go v1.54.0
 	github.com/spacemeshos/economics v0.1.3
-	github.com/spacemeshos/fixed v0.1.1
+	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.0
 	github.com/spacemeshos/merkle-tree v0.2.3
 	github.com/spacemeshos/poet v0.10.4
