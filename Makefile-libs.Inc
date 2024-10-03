@@ -36,7 +36,6 @@ else
 				platform := macos
 		endif
 		CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,@loader_path
-		ULIMIT := ulimit -n 9999;
 	else
 		ifeq ($(GOARCH),arm64)
 				platform := linux-arm64
@@ -47,7 +46,7 @@ else
 	endif
 endif
 
-POSTRS_SETUP_REV = 0.7.11
+POSTRS_SETUP_REV = 0.7.13
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
 

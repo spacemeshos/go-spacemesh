@@ -51,7 +51,7 @@ func createEpochState(
 	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch] = newState(pd.logger, pd.config, nil, epochWeight, minerAtxs, checker)
+	pd.states[epoch] = newState(pd.logger, nil, epochWeight, minerAtxs, checker)
 	return pd.states[epoch]
 }
 
@@ -1095,7 +1095,7 @@ func Test_HandleFirstVotes_FailedToVerifySig(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.HandleFirstVotes(context.Background(), "peerID", msgBytes)
-	require.Contains(t, got.Error(), fmt.Sprintf("verify signature %s: failed", msg.Signature))
+	require.ErrorContains(t, got, fmt.Sprintf("verify signature %s: failed", msg.Signature))
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, types.FirstRound, false)
 	checkFirstIncomingVotes(t, tpd.ProtocolDriver, epoch, map[types.NodeID]proposalList{})
 }
@@ -1366,7 +1366,7 @@ func Test_handleFollowingVotes_FailedToVerifySig(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
 	tpd.mClock.EXPECT().LayerToTime(gomock.Any()).Return(time.Now()).AnyTimes()
 	got := tpd.HandleFollowingVotes(context.Background(), "peerID", msgBytes)
-	require.Contains(t, got.Error(), fmt.Sprintf("verify signature %s: failed", msg.Signature))
+	require.ErrorContains(t, got, fmt.Sprintf("verify signature %s: failed", msg.Signature))
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }

@@ -23,29 +23,31 @@ import (
 )
 
 func TestLayerService_List(t *testing.T) {
-	db := statesql.InMemory()
-	ctx := context.Background()
+	setup := func(t *testing.T) spacemeshv2alpha1.LayerServiceClient {
+		db := statesql.InMemoryTest(t)
 
-	lrs := make([]layers.Layer, 100)
-	r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
-	r2 := rand.New(rand.NewSource(time.Now().UnixNano() + 1))
-	for i := range lrs {
-		processed := r1.Intn(2) == 0
-		withBlock := r2.Intn(2) == 0
-		l, err := generateLayer(db, types.LayerID(i), layerGenProcessed(processed), layerGenWithBlock(withBlock))
-		require.NoError(t, err)
-		lrs[i] = *l
+		lrs := make([]layers.Layer, 90)
+		r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
+		r2 := rand.New(rand.NewSource(time.Now().UnixNano() + 1))
+		for i := range lrs {
+			processed := r1.Intn(2) == 0
+			withBlock := r2.Intn(2) == 0
+			l, err := generateLayer(db, types.LayerID(i), layerGenProcessed(processed), layerGenWithBlock(withBlock))
+			require.NoError(t, err)
+			lrs[i] = *l
+		}
+
+		svc := NewLayerService(db)
+		cfg, cleanup := launchServer(t, svc)
+		t.Cleanup(cleanup)
+
+		conn := dialGrpc(t, cfg)
+		return spacemeshv2alpha1.NewLayerServiceClient(conn)
 	}
 
-	svc := NewLayerService(db)
-	cfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	conn := dialGrpc(t, cfg)
-	client := spacemeshv2alpha1.NewLayerServiceClient(conn)
-
 	t.Run("limit set too high", func(t *testing.T) {
-		_, err := client.List(ctx, &spacemeshv2alpha1.LayerRequest{Limit: 200})
+		client := setup(t)
+		_, err := client.List(context.Background(), &spacemeshv2alpha1.LayerRequest{Limit: 200})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -55,7 +57,8 @@ func TestLayerService_List(t *testing.T) {
 	})
 
 	t.Run("no limit set", func(t *testing.T) {
-		_, err := client.List(ctx, &spacemeshv2alpha1.LayerRequest{})
+		client := setup(t)
+		_, err := client.List(context.Background(), &spacemeshv2alpha1.LayerRequest{})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -65,7 +68,8 @@ func TestLayerService_List(t *testing.T) {
 	})
 
 	t.Run("limit and offset", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.LayerRequest{
+		client := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.LayerRequest{
 			Limit:  25,
 			Offset: 50,
 		})
@@ -74,13 +78,14 @@ func TestLayerService_List(t *testing.T) {
 	})
 
 	t.Run("all", func(t *testing.T) {
-		ls, err := client.List(ctx, &spacemeshv2alpha1.LayerRequest{
+		client := setup(t)
+		ls, err := client.List(context.Background(), &spacemeshv2alpha1.LayerRequest{
 			StartLayer: 0,
 			EndLayer:   100,
 			Limit:      100,
 		})
 		require.NoError(t, err)
-		require.Len(t, lrs, len(ls.Layers))
+		require.Len(t, ls.Layers, 90)
 	})
 }
 
@@ -99,32 +104,33 @@ func TestLayerConvertEventStatus(t *testing.T) {
 }
 
 func TestLayerStreamService_Stream(t *testing.T) {
-	db := statesql.InMemory()
-	ctx := context.Background()
+	setup := func(t *testing.T, db sql.StateDatabase) (spacemeshv2alpha1.LayerStreamServiceClient, []layers.Layer) {
+		lrs := make([]layers.Layer, 100)
+		r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
+		r2 := rand.New(rand.NewSource(time.Now().UnixNano() + 1))
+		for i := range lrs {
+			processed := r1.Intn(2) == 0
+			withBlock := r2.Intn(2) == 0
+			l, err := generateLayer(db, types.LayerID(i), layerGenProcessed(processed), layerGenWithBlock(withBlock))
+			require.NoError(t, err)
+			lrs[i] = *l
+		}
 
-	lrs := make([]layers.Layer, 100)
-	r1 := rand.New(rand.NewSource(time.Now().UnixNano()))
-	r2 := rand.New(rand.NewSource(time.Now().UnixNano() + 1))
-	for i := range lrs {
-		processed := r1.Intn(2) == 0
-		withBlock := r2.Intn(2) == 0
-		l, err := generateLayer(db, types.LayerID(i), layerGenProcessed(processed), layerGenWithBlock(withBlock))
-		require.NoError(t, err)
-		lrs[i] = *l
+		svc := NewLayerStreamService(db)
+		cfg, cleanup := launchServer(t, svc)
+		t.Cleanup(cleanup)
+
+		conn := dialGrpc(t, cfg)
+		return spacemeshv2alpha1.NewLayerStreamServiceClient(conn), lrs
 	}
-
-	svc := NewLayerStreamService(db)
-	cfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	conn := dialGrpc(t, cfg)
-	client := spacemeshv2alpha1.NewLayerStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {
 		events.InitializeReporter()
 		t.Cleanup(events.CloseEventReporter)
 
-		stream, err := client.Stream(ctx, &spacemeshv2alpha1.LayerStreamRequest{})
+		client, lrs := setup(t, statesql.InMemoryTest(t))
+
+		stream, err := client.Stream(context.Background(), &spacemeshv2alpha1.LayerStreamRequest{})
 		require.NoError(t, err)
 
 		var i int
@@ -133,7 +139,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			assert.Equal(t, toLayer(&lrs[i]).String(), l.String())
+			require.Equal(t, toLayer(&lrs[i]).String(), l.String())
 			i++
 		}
 		require.Len(t, lrs, i)
@@ -142,6 +148,9 @@ func TestLayerStreamService_Stream(t *testing.T) {
 	t.Run("watch", func(t *testing.T) {
 		events.InitializeReporter()
 		t.Cleanup(events.CloseEventReporter)
+
+		db := statesql.InMemoryTest(t)
+		client, _ := setup(t, db)
 
 		const (
 			start = 100
@@ -169,7 +178,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 			},
 		} {
 			t.Run(tc.desc, func(t *testing.T) {
-				stream, err := client.Stream(ctx, tc.request)
+				stream, err := client.Stream(context.Background(), tc.request)
 				require.NoError(t, err)
 				_, err = stream.Header()
 				require.NoError(t, err)
@@ -191,7 +200,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 					}
 
 					require.NoError(t, events.ReportLayerUpdate(lu))
-					matcher := layersMatcher{tc.request, ctx}
+					matcher := layersMatcher{tc.request}
 					if matcher.match(&lu) {
 						expect = append(expect, &rst)
 					}

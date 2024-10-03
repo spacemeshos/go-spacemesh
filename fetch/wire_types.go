@@ -47,7 +47,7 @@ type RequestBatch struct {
 	Requests []RequestMessage `scale:"max=100"`
 }
 
-// ResponseBatch is the response struct send for a RequestBatch. the ResponseBatch ID must be the same
+// ResponseBatch is the response struct send for a RequestBatch. The ResponseBatch ID must be the same
 // as stated in RequestBatch even if not all Data is present.
 type ResponseBatch struct {
 	ID types.Hash32

@@ -188,7 +188,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 
 	postClient, err := svc.Client(sig.NodeID())
 	require.NoError(t, err)
@@ -271,7 +272,8 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	client := ae2e.NewTestPoetClient(len(signers), poetCfg)
 	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 

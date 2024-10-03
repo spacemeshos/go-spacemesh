@@ -808,7 +808,7 @@ func TestBallot_DecodeBeforeVotesConsistency(t *testing.T) {
 	th.md.EXPECT().DecodeBallot(decoded.BallotTortoiseData).Return(decoded, expected)
 	err := th.HandleSyncedBallot(context.Background(), b.ID().AsHash32(), peer, data)
 	require.ErrorIs(t, err, fetch.ErrIgnore)
-	require.Contains(t, err.Error(), expected.Error())
+	require.ErrorContains(t, err, expected.Error())
 }
 
 func TestBallot_DecodedStoreFailure(t *testing.T) {

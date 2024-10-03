@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/post/shared"
@@ -42,6 +43,19 @@ func NewMalfeasanceHandler(
 
 		edVerifier: edVerifier,
 	}
+}
+
+func (mh *MalfeasanceHandler) Info(data wire.ProofData) (map[string]string, error) {
+	ap, ok := data.(*wire.AtxProof)
+	if !ok {
+		return nil, errors.New("wrong message type for multiple ATXs")
+	}
+	return map[string]string{
+		"atx1":          ap.Messages[0].InnerMsg.MsgHash.String(),
+		"atx2":          ap.Messages[1].InnerMsg.MsgHash.String(),
+		"publish_epoch": strconv.FormatUint(uint64(ap.Messages[0].InnerMsg.PublishEpoch), 10),
+		"smesher_id":    ap.Messages[0].SmesherID.String(),
+	}, nil
 }
 
 func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
@@ -87,8 +101,7 @@ func (mh *MalfeasanceHandler) ReportInvalidProof(numInvalidProofs *prometheus.Co
 }
 
 type InvalidPostIndexHandler struct {
-	logger *zap.Logger
-	db     sql.Executor
+	db sql.Executor
 
 	edVerifier   *signing.EdVerifier
 	postVerifier PostVerifier
@@ -96,17 +109,27 @@ type InvalidPostIndexHandler struct {
 
 func NewInvalidPostIndexHandler(
 	db sql.Executor,
-	logger *zap.Logger,
 	edVerifier *signing.EdVerifier,
 	postVerifier PostVerifier,
 ) *InvalidPostIndexHandler {
 	return &InvalidPostIndexHandler{
-		db:     db,
-		logger: logger,
+		db: db,
 
 		edVerifier:   edVerifier,
 		postVerifier: postVerifier,
 	}
+}
+
+func (mh *InvalidPostIndexHandler) Info(data wire.ProofData) (map[string]string, error) {
+	pp, ok := data.(*wire.InvalidPostIndexProof)
+	if !ok {
+		return nil, errors.New("wrong message type for invalid post index")
+	}
+	return map[string]string{
+		"atx":        pp.Atx.ID().String(),
+		"index":      strconv.FormatUint(uint64(pp.InvalidIdx), 10),
+		"smesher_id": pp.Atx.SmesherID.String(),
+	}, nil
 }
 
 func (mh *InvalidPostIndexHandler) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
@@ -155,23 +178,30 @@ func (mh *InvalidPostIndexHandler) ReportInvalidProof(numInvalidProofs *promethe
 }
 
 type InvalidPrevATXHandler struct {
-	logger *zap.Logger
-	db     sql.Executor
+	db sql.Executor
 
 	edVerifier *signing.EdVerifier
 }
 
-func NewInvalidPrevATXHandler(
-	db sql.Executor,
-	logger *zap.Logger,
-	edVerifier *signing.EdVerifier,
-) *InvalidPrevATXHandler {
+func NewInvalidPrevATXHandler(db sql.Executor, edVerifier *signing.EdVerifier) *InvalidPrevATXHandler {
 	return &InvalidPrevATXHandler{
-		db:     db,
-		logger: logger,
+		db: db,
 
 		edVerifier: edVerifier,
 	}
+}
+
+func (mh *InvalidPrevATXHandler) Info(data wire.ProofData) (map[string]string, error) {
+	pp, ok := data.(*wire.InvalidPrevATXProof)
+	if !ok {
+		return nil, errors.New("wrong message type for invalid previous ATX")
+	}
+	return map[string]string{
+		"atx1":       pp.Atx1.ID().String(),
+		"atx2":       pp.Atx2.ID().String(),
+		"prev_atx":   pp.Atx1.PrevATXID.String(),
+		"smesher_id": pp.Atx1.SmesherID.String(),
+	}, nil
 }
 
 func (mh *InvalidPrevATXHandler) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {

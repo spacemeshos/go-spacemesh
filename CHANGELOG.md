@@ -2,13 +2,51 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.7.3
+
+### Upgrade information
+
+This release prepares the node for enabling hare4 in the near future. No special upgrade steps are required.
+
+### Improvements
+
+* [#6360](https://github.com/spacemeshos/go-spacemesh/pull/6360) Prepare node for hare4.
+
+## v1.7.2
+
+### Upgrade information
+
+This version adds new and updates existing `v2alpha1` API endpoints and does not require any special upgrade steps.
+Additionally performance improvements were made to the node.
+
+### Improvements
+
+* [#6289](https://github.com/spacemeshos/go-spacemesh/pull/6289) Added write coalescing for ballots, reducing the
+  amount of time and CPU we're spending on writing ballots.
+
+* [#6353](https://github.com/spacemeshos/go-spacemesh/pull/6353) Add new malfeasance API.
+
+* [#6357](https://github.com/spacemeshos/go-spacemesh/pull/6353) Add template address to account service.
+
+## v1.7.1
+
+### Upgrade information
+
+This version has no code changes to v1.7.0, only the release process was updated to fix a problem with the windows
+build.
+
+### Improvements
+
+* [#6351](https://github.com/spacemeshos/go-spacemesh/pull/6351) Fixed filenames of windows builds.
+
 ## v1.7.0
 
 ### Upgrade information
 
 Ensure you are running v1.6.x before upgrading to v1.7.0, if you skip v1.6.x your node will not be able to fully migrate
 its local state. Upgrading from v1.6.x to v1.7.0 will require a time consuming database migration that optimizes how
-the node stores at locally and will not allow you to downgrade to v1.6.x again.
+the node stores state locally and will not allow you to downgrade to v1.6.x again. The upgrade process requires you
+to have at least the same amount of free disk space as your current database size for the duration of the migration.
 
 The command line flag `--scan-malfeasant-atxs` has been removed. All malfeasant ATXs before 1.6.0 have been marked as
 such and the node will continue to scan new ATXs for their validity.
@@ -22,7 +60,7 @@ migration, after which it will be freed again.
 The node will now continue to try to register at all configured PoETs until the end of the registration window instead
 of giving up on non-responding PoETs after 15-20 minutes.
 
-Various minor improvements have been made to the node to improve performance and reduce the amount of log spam.
+Various smaller improvements have been made to the node to improve performance and reduce the amount of log spam.
 
 ### Features
 
@@ -52,6 +90,9 @@ are doing.
 
 * [#6274](https://github.com/spacemeshos/go-spacemesh/pull/6274) Additional queries to PoETs are now cached to reduce
   the number of requests made to PoET servers.
+
+* [#6317](https://github.com/spacemeshos/go-spacemesh/pull/6317) Improved the proposal building process. This will
+  reduce the likelihood of nodes publishing proposals late in 1:N setups.
 
 ## Release v1.6.8
 

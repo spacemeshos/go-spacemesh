@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var errNoPeers = errors.New("no peers")
@@ -23,23 +22,17 @@ var errNoPeers = errors.New("no peers")
 type DataFetch struct {
 	fetcher
 
-	logger   *zap.Logger
-	msh      meshProvider
-	tortoise system.Tortoise
+	logger *zap.Logger
 }
 
 // NewDataFetch creates a new DataFetch instance.
 func NewDataFetch(
-	msh meshProvider,
 	fetch fetcher,
-	tortoise system.Tortoise,
 	lg *zap.Logger,
 ) *DataFetch {
 	return &DataFetch{
-		fetcher:  fetch,
-		logger:   lg,
-		msh:      msh,
-		tortoise: tortoise,
+		fetcher: fetch,
+		logger:  lg,
 	}
 }
 

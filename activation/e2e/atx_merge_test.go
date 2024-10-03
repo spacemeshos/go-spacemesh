@@ -189,7 +189,7 @@ var units = [2]uint32{2, 3}
 
 // Keys were preselected to give IDs whose VRF nonces satisfy the combined storage requirement for the above `units`.
 //
-//nolint:lll
+// nolint:lll
 var singerKeys = [2]string{
 	"1f2b77052ecc193038156d5c32f08d449742e7dda81fa172f8ac90839d34c76935a5d9365d1317c3002838126409e138321c57a5651d758485336c1e7e5af101",
 	"6f385445a53d8af57874acd2dd98023858df7aa62f0b6e91ffdd51198036e2c331d2a7c55ba1e29312ac71dd419b4edc019b6406960cfc8ffb3d7550dde2ca1b",
@@ -220,7 +220,8 @@ func Test_MarryAndMerge(t *testing.T) {
 	verifier, err := activation.NewPostVerifier(cfg, logger, activation.WithVerifyingOpts(verifyingOpts))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
 	eg, ctx := errgroup.WithContext(context.Background())

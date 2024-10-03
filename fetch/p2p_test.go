@@ -31,14 +31,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
+// nolint:unused
 type blobKey struct {
 	kind string
 	id   types.Hash32
 }
 
 type testP2PFetch struct {
-	t        *testing.T
-	clientDB sql.StateDatabase
+	t *testing.T
 	// client proposals
 	clientPDB   *store.Store
 	clientCDB   *datastore.CachedDB
@@ -115,7 +115,6 @@ func createP2PFetch(
 	serverDB := statesql.InMemory(sqlOpts...)
 	tpf := &testP2PFetch{
 		t:            t,
-		clientDB:     clientDB,
 		clientPDB:    store.New(store.WithLogger(lg)),
 		clientCDB:    datastore.NewCachedDB(clientDB, lg),
 		serverID:     serverHost.ID(),
@@ -125,10 +124,16 @@ func createP2PFetch(
 		receivedData: make(map[blobKey][]byte),
 	}
 
-	tpf.serverFetch = NewFetch(tpf.serverCDB, tpf.serverPDB, serverHost,
+	fetcher, err := NewFetch(
+		tpf.serverCDB,
+		tpf.serverPDB,
+		serverHost,
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(serverStreaming)),
-		WithLogger(lg))
+		WithLogger(lg),
+	)
+	require.NoError(t, err)
+	tpf.serverFetch = fetcher
 	vf := ValidatorFunc(
 		func(context.Context, types.Hash32, peer.ID, []byte) error { return nil },
 	)
@@ -140,10 +145,16 @@ func createP2PFetch(
 		return len(serverHost.Mux().Protocols()) != 0
 	}, 10*time.Second, 10*time.Millisecond)
 
-	tpf.clientFetch = NewFetch(tpf.clientCDB, tpf.clientPDB, clientHost,
+	fetcher, err = NewFetch(
+		tpf.clientCDB,
+		tpf.clientPDB,
+		clientHost,
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(clientStreaming)),
-		WithLogger(lg))
+		WithLogger(lg),
+	)
+	require.NoError(t, err)
+	tpf.clientFetch = fetcher
 	tpf.clientFetch.SetValidators(
 		mkFakeValidator(tpf, "atx"),
 		mkFakeValidator(tpf, "poet"),

@@ -65,7 +65,8 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 	initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })

@@ -41,7 +41,6 @@ type testMesh struct {
 	// it is used in malfeasence.Validate, which is called in the tests
 	cdb          *datastore.CachedDB
 	atxsdata     *atxsdata.Data
-	mockClock    *mocks.MocklayerClock
 	mockVM       *mocks.MockvmState
 	mockState    *mocks.MockconservativeState
 	mockTortoise *smocks.MockTortoise
@@ -51,21 +50,28 @@ func createTestMesh(t *testing.T) *testMesh {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
 	lg := zaptest.NewLogger(t)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	atxsdata := atxsdata.New()
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
 		db:           db,
 		cdb:          datastore.NewCachedDB(db, lg),
 		atxsdata:     atxsdata,
-		mockClock:    mocks.NewMocklayerClock(ctrl),
 		mockVM:       mocks.NewMockvmState(ctrl),
 		mockState:    mocks.NewMockconservativeState(ctrl),
 		mockTortoise: smocks.NewMockTortoise(ctrl),
 	}
 	exec := NewExecutor(db, atxsdata, tm.mockVM, tm.mockState, lg)
-	msh, err := NewMesh(db, atxsdata, tm.mockClock, tm.mockTortoise, exec, tm.mockState, lg)
+	msh, err := NewMesh(db, atxsdata, tm.mockTortoise, exec, tm.mockState, lg)
 	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		msh.Start(ctx)
+		close(done)
+	}()
+	t.Cleanup(func() { <-done })
+	t.Cleanup(cancel)
 	gLid := types.GetEffectiveGenesis()
 	checkLastAppliedInDB(t, msh, gLid)
 	checkProcessedInDB(t, msh, gLid)
@@ -163,6 +169,7 @@ func createLayerBallots(tb testing.TB, mesh *Mesh, lyrID types.LayerID) []*types
 		malProof, err := mesh.AddBallot(context.Background(), ballot)
 		require.NoError(tb, err)
 		require.Nil(tb, malProof)
+		require.False(tb, ballot.IsMalicious())
 	}
 	return blts
 }
@@ -201,7 +208,6 @@ func TestMesh_WakeUpWhileGenesis(t *testing.T) {
 	msh, err := NewMesh(
 		tm.db,
 		tm.atxsdata,
-		tm.mockClock,
 		tm.mockTortoise,
 		tm.executor,
 		tm.mockState,
@@ -239,7 +245,6 @@ func TestMesh_WakeUp(t *testing.T) {
 	msh, err := NewMesh(
 		tm.db,
 		tm.atxsdata,
-		tm.mockClock,
 		tm.mockTortoise,
 		tm.executor,
 		tm.mockState,
@@ -725,7 +730,7 @@ func TestProcessLayer(t *testing.T) {
 			t.Parallel()
 
 			tm := createTestMesh(t)
-			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
+			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any()).AnyTimes()
 			tm.mockVM.EXPECT().GetStateRoot().AnyTimes()
 			tm.mockVM.EXPECT().Revert(gomock.Any()).AnyTimes()
 			tm.mockState.EXPECT().RevertCache(gomock.Any()).AnyTimes()
@@ -936,7 +941,7 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			tm := createTestMesh(t)
-			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any(), gomock.Any()).AnyTimes()
+			tm.mockTortoise.EXPECT().TallyVotes(gomock.Any()).AnyTimes()
 			tm.mockTortoise.EXPECT().
 				Updates().
 				Return(nil).

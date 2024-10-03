@@ -16,24 +16,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 type testDataFetch struct {
 	*syncer.DataFetch
-	mMesh     *mocks.MockmeshProvider
-	mFetcher  *mocks.Mockfetcher
-	mTortoise *smocks.MockTortoise
+	mFetcher *mocks.Mockfetcher
 }
 
 func newTestDataFetch(t *testing.T) *testDataFetch {
 	ctrl := gomock.NewController(t)
 	tl := &testDataFetch{
-		mMesh:     mocks.NewMockmeshProvider(ctrl),
-		mFetcher:  mocks.NewMockfetcher(ctrl),
-		mTortoise: smocks.NewMockTortoise(ctrl),
+		mFetcher: mocks.NewMockfetcher(ctrl),
 	}
-	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mTortoise, zaptest.NewLogger(t))
+	tl.DataFetch = syncer.NewDataFetch(tl.mFetcher, zaptest.NewLogger(t))
 	return tl
 }
 
