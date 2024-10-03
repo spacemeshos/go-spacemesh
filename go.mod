@@ -43,7 +43,7 @@ require (
 	github.com/spacemeshos/economics v0.1.3
 	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.0
-	github.com/spacemeshos/merkle-tree v0.2.3
+	github.com/spacemeshos/merkle-tree v0.2.4
 	github.com/spacemeshos/poet v0.10.4
 	github.com/spacemeshos/post v0.12.9
 	github.com/spf13/afero v1.11.0
