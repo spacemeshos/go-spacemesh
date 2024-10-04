@@ -463,17 +463,15 @@ func parse(
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
 	}
-	if version != 0 {
+	// legacy spacemesh txs are version 0
+	// athena-compatible txs are version 1
+	if version != 1 {
 		return nil, nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
 	}
 
 	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
 		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
-	}
-	method, _, err := scale.DecodeCompact8(decoder)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
 	}
 	account, err := loader.Get(principal)
 	if err != nil {
@@ -494,6 +492,8 @@ func parse(
 		LayerID:          lid,
 	}
 
+	// TODO(lane): do not allow self-spawn, for now. require that the principal is spawned
+	// and that it have a template address.
 	if account.TemplateAddress != nil {
 		ctx.PrincipalHandler = reg.Get(*account.TemplateAddress)
 		if ctx.PrincipalHandler == nil {

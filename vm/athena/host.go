@@ -36,6 +36,7 @@ func (h *Host) Execute(
 	gas int64,
 	recipient, sender types.Address,
 	input []byte,
+	method []byte,
 	value [32]byte,
 	code []byte,
 ) (output []byte, gasLeft int64, err error) {
@@ -52,6 +53,7 @@ func (h *Host) Execute(
 		athcon.Address(recipient),
 		athcon.Address(sender),
 		input,
+		method,
 		athcon.Bytes32(value),
 		code,
 	)
@@ -66,6 +68,8 @@ type hostContext struct {
 	layer types.LayerID
 	db    sql.Executor
 }
+
+var _ athcon.HostContext = (*hostContext)(nil)
 
 func (h *hostContext) AccountExists(addr athcon.Address) bool {
 	has, err := accounts.Has(h.db, types.Address(addr))
@@ -115,8 +119,17 @@ func (h *hostContext) Call(
 	sender athcon.Address,
 	value athcon.Bytes32,
 	input []byte,
+	method []byte,
 	gas int64,
 	depth int,
 ) (output []byte, gasLeft int64, createAddr athcon.Address, err error) {
 	panic("not implemented")
+}
+
+func (h *hostContext) Deploy(blob []byte) athcon.Address {
+	panic("not implemented")
+}
+
+func (h *hostContext) Spawn(blob []byte) athcon.Address {
+	panic("unimplemented")
 }

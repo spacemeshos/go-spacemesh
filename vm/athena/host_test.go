@@ -62,6 +62,7 @@ func TestGetBalance(t *testing.T) {
 		account.Address,
 		account.Address,
 		nil,
+		nil,
 		[32]byte{},
 		getbalance.PROGRAM,
 	)
@@ -82,6 +83,7 @@ func TestNotEnoughGas(t *testing.T) {
 		10,
 		types.Address{1, 2, 3, 4},
 		types.Address{1, 2, 3, 4},
+		nil,
 		nil,
 		[32]byte{},
 		getbalance.PROGRAM,

@@ -9,7 +9,6 @@ import "go.uber.org/zap/zapcore"
 type TxHeader struct {
 	Principal       Address
 	TemplateAddress Address
-	Method          uint8
 	Nonce           Nonce
 	LayerLimits     LayerLimits
 	MaxGas          uint64
