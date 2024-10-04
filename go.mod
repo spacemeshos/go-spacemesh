@@ -1,20 +1,12 @@
 module github.com/spacemeshos/go-spacemesh
 
-<<<<<<< HEAD
-go 1.22.6
-=======
 go 1.23.2
->>>>>>> develop
 
 require (
 	cloud.google.com/go/storage v1.43.0
 	github.com/ALTree/bigfloat v0.2.0
-<<<<<<< HEAD
 	github.com/athenavm/athena/ffi/athcon/bindings/go v0.0.0-20240827151204-0fbaf7deb845
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240920071034-f8a0da9e5068
-=======
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240930092556-24ddcc087ee2
->>>>>>> develop
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
 	github.com/gofrs/flock v0.12.1
