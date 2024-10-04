@@ -5,7 +5,7 @@ go 1.23.2
 require (
 	cloud.google.com/go/storage v1.44.0
 	github.com/ALTree/bigfloat v0.2.0
-	github.com/athenavm/athena/ffi/athcon/bindings/go v0.3.0-try-uintptr-for-hostcontext
+	github.com/athenavm/athena/ffi/athcon/bindings/go v0.3.0-pass-ptr-to-handle-for-host-context
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240930092556-24ddcc087ee2
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
