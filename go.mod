@@ -5,7 +5,7 @@ go 1.23.2
 require (
 	cloud.google.com/go/storage v1.44.0
 	github.com/ALTree/bigfloat v0.2.0
-	github.com/athenavm/athena/ffi/athcon/bindings/go v0.0.0-20240827151204-0fbaf7deb845
+	github.com/athenavm/athena/ffi/athcon/bindings/go v0.0.0-20241004131549-c5e2eb9d21c6
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240930092556-24ddcc087ee2
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
