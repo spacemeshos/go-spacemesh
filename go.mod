@@ -40,7 +40,7 @@ require (
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/spacemeshos/api/release/go v1.54.0
-	github.com/spacemeshos/economics v0.1.3
+	github.com/spacemeshos/economics v0.1.4
 	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.0
 	github.com/spacemeshos/merkle-tree v0.2.4
@@ -99,7 +99,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
 	github.com/envoyproxy/go-control-plane v0.13.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.1.0 // indirect
-	github.com/ericlagergren/decimal v0.0.0-20221120152707-495c53812d05 // indirect
+	github.com/ericlagergren/decimal v0.0.0-20240411145413-00de7ca16731 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
