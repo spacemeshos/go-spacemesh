@@ -67,6 +67,8 @@ type hostContext struct {
 	db    sql.Executor
 }
 
+var _ athcon.HostContext = (*hostContext)(nil)
+
 func (h *hostContext) AccountExists(addr athcon.Address) bool {
 	has, err := accounts.Has(h.db, types.Address(addr))
 	return err != nil && has
@@ -119,4 +121,12 @@ func (h *hostContext) Call(
 	depth int,
 ) (output []byte, gasLeft int64, createAddr athcon.Address, err error) {
 	panic("not implemented")
+}
+
+func (h *hostContext) Deploy(blob []byte) athcon.Address {
+	panic("not implemented")
+}
+
+func (h *hostContext) Spawn(blob []byte) athcon.Address {
+	panic("unimplemented")
 }
