@@ -22,19 +22,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
-	vmsdk "github.com/spacemeshos/go-spacemesh/vm"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/sdk"
-	sdkwallet "github.com/spacemeshos/go-spacemesh/vm/athena/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	sdkwallet "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 func newTester(tb testing.TB) *tester {
 	return &tester{
 		TB: tb,
 		VM: New(statesql.InMemory(),
-			vmsdk.WithLogger(zaptest.NewLogger(tb)),
-			vmsdk.WithConfig(vmsdk.Config{GasLimit: math.MaxUint64}),
+			WithLogger(zaptest.NewLogger(tb)),
+			WithConfig(Config{GasLimit: math.MaxUint64}),
 		),
 		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
@@ -117,8 +116,8 @@ func (t *tester) persistent() *tester {
 	db, err := statesql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	require.NoError(t, err)
-	t.VM = New(db, vmsdk.WithLogger(zaptest.NewLogger(t)),
-		vmsdk.WithConfig(vmsdk.Config{GasLimit: math.MaxUint64}))
+	t.VM = New(db, WithLogger(zaptest.NewLogger(t)),
+		WithConfig(Config{GasLimit: math.MaxUint64}))
 	return t
 }
 

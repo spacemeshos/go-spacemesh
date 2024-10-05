@@ -20,28 +20,47 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/vm"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/registry"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
-// SetLogger sets logger for VM.
-func (v *VM) SetLogger(logger *zap.Logger) {
-	v.logger = logger
+// Opt is for changing VM during initialization.
+type Opt func(*VM)
+
+// WithLogger sets logger for VM.
+func WithLogger(logger *zap.Logger) Opt {
+	return func(vm *VM) {
+		vm.logger = logger
+	}
 }
 
-// SetConfig updates config on the vm.
-func (v *VM) SetConfig(cfg vm.Config) {
-	v.cfg = cfg
+// Config defines the configuration options for vm.
+type Config struct {
+	GasLimit  uint64
+	GenesisID types.Hash20
+}
+
+// DefaultConfig returns the default RewardConfig.
+func DefaultConfig() Config {
+	return Config{
+		GasLimit: 100_000_000,
+	}
+}
+
+// WithConfig updates config on the vm.
+func WithConfig(cfg Config) Opt {
+	return func(vm *VM) {
+		vm.cfg = cfg
+	}
 }
 
 // New returns VM instance.
-func New(db sql.StateDatabase, opts ...vm.Opt) *VM {
+func New(db sql.StateDatabase, opts ...Opt) *VM {
 	vm := &VM{
 		logger:   zap.NewNop(),
 		db:       db,
-		cfg:      vm.DefaultConfig(),
+		cfg:      DefaultConfig(),
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
@@ -55,7 +74,7 @@ func New(db sql.StateDatabase, opts ...vm.Opt) *VM {
 type VM struct {
 	logger   *zap.Logger
 	db       sql.StateDatabase
-	cfg      vm.Config
+	cfg      Config
 	registry *registry.Registry
 }
 
@@ -455,7 +474,7 @@ func parse(
 	lid types.LayerID,
 	reg *registry.Registry,
 	loader core.AccountLoader,
-	cfg vm.Config,
+	cfg Config,
 	raw []byte,
 	decoder *scale.Decoder,
 ) (*core.Header, *core.Context, scale.Encodable, error) {
@@ -463,15 +482,17 @@ func parse(
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
 	}
-	// legacy spacemesh txs are version 0
-	// athena-compatible txs are version 1
-	if version != 1 {
+	if version != 0 {
 		return nil, nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
 	}
 
 	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
 		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
+	}
+	method, _, err := scale.DecodeCompact8(decoder)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
 	}
 	account, err := loader.Get(principal)
 	if err != nil {
@@ -492,8 +513,6 @@ func parse(
 		LayerID:          lid,
 	}
 
-	// TODO(lane): do not allow self-spawn, for now. require that the principal is spawned
-	// and that it have a template address.
 	if account.TemplateAddress != nil {
 		ctx.PrincipalHandler = reg.Get(*account.TemplateAddress)
 		if ctx.PrincipalHandler == nil {

@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/templates/getbalance"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/getbalance"
 )
 
 func athenaLibPath() string {

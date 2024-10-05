@@ -13,7 +13,7 @@ import (
 	reflect "reflect"
 
 	scale "github.com/spacemeshos/go-scale"
-	core "github.com/spacemeshos/go-spacemesh/vm/athena/core"
+	core "github.com/spacemeshos/go-spacemesh/vm/core"
 	gomock "go.uber.org/mock/gomock"
 )
 
