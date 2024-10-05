@@ -90,8 +90,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
-	athenavm "github.com/spacemeshos/go-spacemesh/vm/athena"
-	genvm "github.com/spacemeshos/go-spacemesh/vm/genvm"
 )
 
 const (
@@ -574,20 +572,6 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-func newVM(db sql.StateDatabase, module string, opts ...vm.Opt) (vm.VM, error) {
-	var vm vm.VM
-	switch module {
-	case "genvm":
-		vm = genvm.New(db, opts...)
-	case "athena":
-		vm = athenavm.New(db, opts...)
-	default:
-		return nil, fmt.Errorf("unknown VM module: %s", module)
-	}
-
-	return vm, nil
-}
-
 func (app *App) initServices(ctx context.Context) error {
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
@@ -632,13 +616,9 @@ func (app *App) initServices(ctx context.Context) error {
 	cfg := vm.DefaultConfig()
 	cfg.GasLimit = app.Config.BlockGasLimit
 	cfg.GenesisID = app.Config.Genesis.GenesisID()
-	state, err := newVM(app.db,
-		cfg.Module,
+	state = vm.New(app.db,
 		vm.WithConfig(cfg),
 		vm.WithLogger(app.addLogger(VMLogger, lg).Zap()))
-	if err != nil {
-		return fmt.Errorf("create vm: %w", err)
-	}
 	app.conState = txs.NewConservativeState(state, app.db,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:     app.Config.BlockGasLimit,
