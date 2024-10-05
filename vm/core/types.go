@@ -38,7 +38,7 @@ type (
 	LayerID = types.LayerID
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/handler.go github.com/spacemeshos/go-spacemesh/vm/athena/core Handler
+//go:generate mockgen -typed -package=mocks -destination=./mocks/handler.go github.com/spacemeshos/go-spacemesh/vm/core Handler
 
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
@@ -56,7 +56,7 @@ type Handler interface {
 	Load([]byte) (Template, error)
 }
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/athena/core Template
+//go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template
 
 // Template is a concrete Template type initialized with mutable and immutable state.
 type Template interface {
@@ -81,7 +81,7 @@ type AccountLoader interface {
 	Get(Address) (Account, error)
 }
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/updater.go github.com/spacemeshos/go-spacemesh/vm/athena/core AccountUpdater
+//go:generate mockgen -typed -package=mocks -destination=./mocks/updater.go github.com/spacemeshos/go-spacemesh/vm/core AccountUpdater
 
 // AccountUpdater is an interface for updating accounts.
 type AccountUpdater interface {
