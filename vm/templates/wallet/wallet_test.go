@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
 func FuzzVerify(f *testing.F) {

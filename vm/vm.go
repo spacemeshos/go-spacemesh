@@ -20,10 +20,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
-	vmsdk "github.com/spacemeshos/go-spacemesh/vm"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/registry"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/registry"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 // SetLogger sets logger for VM.
@@ -32,16 +32,16 @@ func (v *VM) SetLogger(logger *zap.Logger) {
 }
 
 // SetConfig updates config on the vm.
-func (v *VM) SetConfig(cfg vmsdk.Config) {
+func (v *VM) SetConfig(cfg vm.Config) {
 	v.cfg = cfg
 }
 
 // New returns VM instance.
-func New(db sql.StateDatabase, opts ...vmsdk.Opt) *VM {
+func New(db sql.StateDatabase, opts ...vm.Opt) *VM {
 	vm := &VM{
 		logger:   zap.NewNop(),
 		db:       db,
-		cfg:      vmsdk.DefaultConfig(),
+		cfg:      vm.DefaultConfig(),
 		registry: registry.New(),
 	}
 	wallet.Register(vm.registry)
@@ -55,7 +55,7 @@ func New(db sql.StateDatabase, opts ...vmsdk.Opt) *VM {
 type VM struct {
 	logger   *zap.Logger
 	db       sql.StateDatabase
-	cfg      vmsdk.Config
+	cfg      vm.Config
 	registry *registry.Registry
 }
 
@@ -455,7 +455,7 @@ func parse(
 	lid types.LayerID,
 	reg *registry.Registry,
 	loader core.AccountLoader,
-	cfg vmsdk.Config,
+	cfg vm.Config,
 	raw []byte,
 	decoder *scale.Decoder,
 ) (*core.Header, *core.Context, scale.Encodable, error) {

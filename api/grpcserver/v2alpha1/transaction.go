@@ -21,12 +21,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/registry"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vault"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vesting"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/registry"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/vault"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/vesting"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 const (

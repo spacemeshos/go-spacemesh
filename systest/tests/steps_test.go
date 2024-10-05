@@ -22,8 +22,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/systest/validation"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 const ENV_LONGEVITY_TESTS = "LONGEVITY_TESTS"

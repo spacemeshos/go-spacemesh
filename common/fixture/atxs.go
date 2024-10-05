@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 // NewAtxsGenerator with some random parameters.

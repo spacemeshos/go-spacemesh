@@ -24,8 +24,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
-	vm "github.com/spacemeshos/go-spacemesh/vm/genvm"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 func TestTransactionService_StreamResults(t *testing.T) {

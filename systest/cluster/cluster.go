@@ -25,7 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 var errNotInitialized = errors.New("cluster: not initialized")

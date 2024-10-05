@@ -8,9 +8,9 @@ import (
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/core"
-	wallet2 "github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	wallet2 "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 // NewTransactionResultGenerator with some random parameters.

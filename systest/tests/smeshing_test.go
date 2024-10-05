@@ -19,13 +19,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk"
-	sdkmultisig "github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/multisig"
-	sdkvesting "github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/vesting"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vault"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/templates/vesting"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	sdkmultisig "github.com/spacemeshos/go-spacemesh/vm/sdk/multisig"
+	sdkvesting "github.com/spacemeshos/go-spacemesh/vm/sdk/vesting"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/vault"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/vesting"
 )
 
 func TestSmeshing(t *testing.T) {

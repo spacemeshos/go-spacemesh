@@ -51,10 +51,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
 	vmsdk "github.com/spacemeshos/go-spacemesh/vm"
-	vm "github.com/spacemeshos/go-spacemesh/vm/genvm"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/vm/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 const (

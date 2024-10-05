@@ -8,9 +8,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/core"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/sdk"
-	"github.com/spacemeshos/go-spacemesh/vm/athena/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 func encode(fields ...scale.Encodable) []byte {
