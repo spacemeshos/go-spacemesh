@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
@@ -50,6 +51,20 @@ func NewMalfeasanceHandler(
 		o(mh)
 	}
 	return mh
+}
+
+func (mh *MalfeasanceHandler) Info(data wire.ProofData) (map[string]string, error) {
+	hp, ok := data.(*wire.HareProof)
+	if !ok {
+		return nil, errors.New("wrong message type for hare equivocation")
+	}
+	return map[string]string{
+		"msg1":       hp.Messages[0].InnerMsg.MsgHash.String(),
+		"msg2":       hp.Messages[1].InnerMsg.MsgHash.String(),
+		"layer":      hp.Messages[0].InnerMsg.Layer.String(),
+		"round":      strconv.FormatUint(uint64(hp.Messages[0].InnerMsg.Round), 10),
+		"smesher_id": hp.Messages[0].SmesherID.String(),
+	}, nil
 }
 
 func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {

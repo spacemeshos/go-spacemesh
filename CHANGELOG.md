@@ -2,6 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.7.4
+
+### Improvements
+
+* [#6370](https://github.com/spacemeshos/go-spacemesh/pull/6370) Fix an issue in v2alpha1 account service API.
+
 ## v1.7.3
 
 ### Upgrade information
