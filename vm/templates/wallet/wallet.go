@@ -22,15 +22,16 @@ type Wallet struct {
 }
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.
-func (s *Wallet) MaxSpend(method uint8, args any) (uint64, error) {
-	switch method {
-	case core.MethodSpawn:
-		return 0, nil
-	case core.MethodSpend:
-		return args.(*SpendArguments).Amount, nil
-	default:
-		return 0, fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
-	}
+func (s *Wallet) MaxSpend(args any) (uint64, error) {
+	// TODO(lane): rewrite to use the VM
+	// switch method {
+	// case core.MethodSpawn:
+	// 	return 0, nil
+	// case core.MethodSpend:
+	// 	return args.(*SpendArguments).Amount, nil
+	// default:
+	return 0, fmt.Errorf("%w: unknown method", core.ErrMalformed)
+	// }
 }
 
 // Verify that transaction is signed by the owner of the PublicKey using ed25519.
@@ -52,14 +53,14 @@ func (s *Wallet) Spend(host core.Host, args *SpendArguments) error {
 	return host.Transfer(args.Destination, args.Amount)
 }
 
-func (s *Wallet) BaseGas(method uint8) uint64 {
-	return BaseGas(method)
+func (s *Wallet) BaseGas() uint64 {
+	return BaseGas()
 }
 
 func (s *Wallet) LoadGas() uint64 {
 	return LoadGas()
 }
 
-func (s *Wallet) ExecGas(method uint8) uint64 {
-	return ExecGas(method)
+func (s *Wallet) ExecGas() uint64 {
+	return ExecGas()
 }

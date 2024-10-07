@@ -388,7 +388,7 @@ func (v *VM) execute(
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
-			err = ctx.PrincipalHandler.Exec(ctx, ctx.Header.Method, args)
+			err = ctx.PrincipalHandler.Exec(ctx, args)
 		}
 		if err != nil {
 			logger.Debug("transaction failed",
@@ -490,10 +490,6 @@ func parse(
 	if _, err := principal.DecodeScale(decoder); err != nil {
 		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
 	}
-	method, _, err := scale.DecodeCompact8(decoder)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
-	}
 	account, err := loader.Get(principal)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf(
@@ -528,75 +524,77 @@ func parse(
 		templateAddress *core.Address
 		handler         core.Handler
 	)
-	if method == core.MethodSpawn {
-		// the transaction is either spawn or self-spawn
-		templateAddress = &core.Address{}
-		if _, err := templateAddress.DecodeScale(decoder); err != nil {
-			return nil, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
-		}
-		handler = reg.Get(*templateAddress)
-		if handler == nil {
-			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
-		}
-		if ctx.PrincipalHandler == nil {
-			// spawn is not possible if principal is not spawned
-			// so this must be self-spawn, but we can't tell before decoding arguments
-			ctx.PrincipalHandler = handler
-		}
-	} else {
-		// this is any other call transaction
-		if account.TemplateAddress == nil {
-			return nil, nil, nil, core.ErrNotSpawned
-		}
-		templateAddress = account.TemplateAddress
-		handler = ctx.PrincipalHandler
+	// TODO(lane): rewrite to use VM
+	// if method == core.MethodSpawn {
+	// 	// the transaction is either spawn or self-spawn
+	// 	templateAddress = &core.Address{}
+	// 	if _, err := templateAddress.DecodeScale(decoder); err != nil {
+	// 		return nil, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
+	// 	}
+	// 	handler = reg.Get(*templateAddress)
+	// 	if handler == nil {
+	// 		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
+	// 	}
+	// 	if ctx.PrincipalHandler == nil {
+	// 		// spawn is not possible if principal is not spawned
+	// 		// so this must be self-spawn, but we can't tell before decoding arguments
+	// 		ctx.PrincipalHandler = handler
+	// 	}
+	// } else {
+	// this is any other call transaction
+	if account.TemplateAddress == nil {
+		return nil, nil, nil, core.ErrNotSpawned
 	}
-	output, err := ctx.PrincipalHandler.Parse(method, decoder)
+	templateAddress = account.TemplateAddress
+	handler = ctx.PrincipalHandler
+	// }
+	output, err := ctx.PrincipalHandler.Parse(decoder)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	args := handler.Args(method)
+	args := handler.Args()
 	if args == nil {
-		return nil, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
+		return nil, nil, nil, fmt.Errorf("%w: unknown method %s", core.ErrMalformed, *templateAddress)
 	}
 	if _, err := args.DecodeScale(decoder); err != nil {
 		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
 	}
-	if method == core.MethodSpawn {
-		if core.ComputePrincipal(*templateAddress, args) == principal {
-			// this is a self spawn. if it fails validation - discard it immediately
-			ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(args)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(method)
-		} else if account.TemplateAddress == nil {
-			return nil, nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
-		} else {
-			target, err := handler.New(args)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-			ctx.Gas.FixedGas += target.ExecGas(method)
-		}
-	} else {
-		ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-		ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas(method)
-	}
-	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas(method)
+	// TODO(lane): rewrite to use VM
+	// if method == core.MethodSpawn {
+	// 	if core.ComputePrincipal(*templateAddress, args) == principal {
+	// 		// this is a self spawn. if it fails validation - discard it immediately
+	// 		panic("self-spawn not implemented")
+	// 		// ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(args)
+	// 		// if err != nil {
+	// 		// 	return nil, nil, nil, err
+	// 		// }
+	// 		// ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
+	// 	} else if account.TemplateAddress == nil {
+	// 		return nil, nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
+	// 	} else {
+	// 		target, err := handler.New(args)
+	// 		if err != nil {
+	// 			return nil, nil, nil, err
+	// 		}
+	// 		ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
+	// 		ctx.Gas.FixedGas += target.ExecGas()
+	// 	}
+	// } else {
+	ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
+	ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
+	// }
+	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
 
 	ctx.ParseOutput = output
 
 	ctx.Header.Principal = principal
 	ctx.Header.TemplateAddress = *templateAddress
-	ctx.Header.Method = method
 	ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 	ctx.Args = args
 
-	maxspend, err := ctx.PrincipalTemplate.MaxSpend(ctx.Header.Method, args)
+	maxspend, err := ctx.PrincipalTemplate.MaxSpend(args)
 	if err != nil {
 		return nil, nil, nil, err
 	}

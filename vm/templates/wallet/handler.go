@@ -28,7 +28,7 @@ var (
 type handler struct{}
 
 // Parse header and arguments.
-func (*handler) Parse(method uint8, decoder *scale.Decoder) (output core.ParseOutput, err error) {
+func (*handler) Parse(decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	var p core.Payload
 	if _, err = p.DecodeScale(decoder); err != nil {
 		err = fmt.Errorf("%w: %w", core.ErrMalformed, err)
@@ -55,29 +55,30 @@ func (*handler) Load(state []byte) (core.Template, error) {
 }
 
 // Exec spawn or spend based on the method selector.
-func (*handler) Exec(host core.Host, method uint8, args scale.Encodable) error {
-	switch method {
-	case core.MethodSpawn:
-		if err := host.Spawn(args); err != nil {
-			return err
-		}
-	case core.MethodSpend:
-		if err := host.Template().(*Wallet).Spend(host, args.(*SpendArguments)); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("%w: unknown method %d", core.ErrMalformed, method)
-	}
-	return nil
+func (*handler) Exec(host core.Host, args scale.Encodable) error {
+	// TODO(lane): rewrite to use the VM
+	// switch method {
+	// case core.MethodSpawn:
+	// 	if err := host.Spawn(args); err != nil {
+	// 		return err
+	// 	}
+	// case core.MethodSpend:
+	// 	if err := host.Template().(*Wallet).Spend(host, args.(*SpendArguments)); err != nil {
+	// 		return err
+	// 	}
+	// default:
+	return fmt.Errorf("%w: unknown method", core.ErrMalformed)
+	// }
+	// return nil
 }
 
 // Args ...
-func (h *handler) Args(method uint8) scale.Type {
-	switch method {
-	case core.MethodSpawn:
-		return &SpawnArguments{}
-	case core.MethodSpend:
-		return &SpendArguments{}
-	}
+func (h *handler) Args() scale.Type {
+	// switch method {
+	// case core.MethodSpawn:
+	// 	return &SpawnArguments{}
+	// case core.MethodSpend:
+	// 	return &SpendArguments{}
+	// }
 	return nil
 }

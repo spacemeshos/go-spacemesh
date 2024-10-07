@@ -36,12 +36,12 @@ type (
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
 	// Parse header and arguments from the payload.
-	Parse(uint8, *scale.Decoder) (ParseOutput, error)
+	Parse(*scale.Decoder) (ParseOutput, error)
 	// Args returns method arguments for the method.
-	Args(uint8) scale.Type
+	Args() scale.Type
 
 	// Exec dispatches execution request based on the method selector.
-	Exec(Host, uint8, scale.Encodable) error
+	Exec(Host, scale.Encodable) error
 
 	// New instantiates Template from spawn arguments.
 	New(any) (Template, error)
@@ -57,14 +57,14 @@ type Template interface {
 	scale.Encodable
 	// MaxSpend decodes MaxSpend value for the transaction. Transaction will fail
 	// if it spends more than that.
-	MaxSpend(uint8, any) (uint64, error)
+	MaxSpend(any) (uint64, error)
 	// BaseGas is an intrinsic cost for executing a transaction. If this cost is not covered
 	// transaction will be ineffective.
-	BaseGas(uint8) uint64
+	BaseGas() uint64
 	// LoadGas is a cost to load account from disk.
 	LoadGas() uint64
 	// ExecGas is a cost to execution a method.
-	ExecGas(uint8) uint64
+	ExecGas() uint64
 	// Verify security of the transaction.
 	Verify(Host, []byte, *scale.Decoder) bool
 }

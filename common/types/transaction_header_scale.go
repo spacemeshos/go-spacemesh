@@ -23,13 +23,6 @@ func (t *TxHeader) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact8(enc, uint8(t.Method))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.Nonce))
 		if err != nil {
 			return total, err
@@ -81,14 +74,6 @@ func (t *TxHeader) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-	}
-	{
-		field, n, err := scale.DecodeCompact8(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Method = uint8(field)
 	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)

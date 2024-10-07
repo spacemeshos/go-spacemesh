@@ -48,9 +48,9 @@ type testAccount interface {
 	spawn(template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte
 	spawnArgs() scale.Encodable
 
-	baseGas(uint8) int
+	baseGas() int
 	loadGas() int
-	execGas(uint8) int
+	execGas() int
 }
 
 type singlesigAccount struct {
@@ -89,16 +89,16 @@ func (a *singlesigAccount) spawnArgs() scale.Encodable {
 	return &args
 }
 
-func (a *singlesigAccount) baseGas(method uint8) int {
-	return int(wallet.BaseGas(method))
+func (a *singlesigAccount) baseGas() int {
+	return int(wallet.BaseGas())
 }
 
 func (a *singlesigAccount) loadGas() int {
 	return int(wallet.LoadGas())
 }
 
-func (a *singlesigAccount) execGas(method uint8) int {
-	return int(wallet.ExecGas(method))
+func (a *singlesigAccount) execGas() int {
+	return int(wallet.ExecGas())
 }
 
 type tester struct {
@@ -235,8 +235,8 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 func (t *tester) estimateSpawnGas(principal, target int) int {
 	args := t.accounts[target].spawnArgs()
 	tx := t.accounts[principal].spawn(t.accounts[target].getTemplate(), args, 0)
-	gas := t.accounts[principal].baseGas(core.MethodSpawn) +
-		t.accounts[target].execGas(core.MethodSpawn) +
+	gas := t.accounts[principal].baseGas() +
+		t.accounts[target].execGas() +
 		int(core.TxDataGas(len(tx)))
 	if principal != target {
 		gas += t.accounts[principal].loadGas()
@@ -246,9 +246,9 @@ func (t *tester) estimateSpawnGas(principal, target int) int {
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
 	tx := t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce)
-	return t.accounts[principal].baseGas(core.MethodSpend) +
+	return t.accounts[principal].baseGas() +
 		t.accounts[principal].loadGas() +
-		t.accounts[principal].execGas(core.MethodSpend) +
+		t.accounts[principal].execGas() +
 		int(core.TxDataGas(len(tx)))
 }
 
@@ -1244,7 +1244,6 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.selfSpawn(1),
 			header: &core.Header{
 				Principal:       tt.accounts[1].getAddress(),
-				Method:          core.MethodSpawn,
 				TemplateAddress: template,
 				GasPrice:        1,
 				MaxGas:          uint64(tt.estimateSpawnGas(1, 1)),
@@ -1260,7 +1259,6 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.spend(0, 1, 100),
 			header: &core.Header{
 				Principal:       tt.accounts[0].getAddress(),
-				Method:          core.MethodSpend,
 				TemplateAddress: template,
 				GasPrice:        1,
 				Nonce:           1,
