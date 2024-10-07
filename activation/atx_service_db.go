@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -71,12 +72,19 @@ func NewDBAtxService(
 }
 
 func (s *dbAtxService) Atx(_ context.Context, id types.ATXID) (*types.ActivationTx, error) {
-	return atxs.Get(s.db, id)
+	atx, err := atxs.Get(s.db, id)
+	if errors.Is(err, sql.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return atx, err
 }
 
 func (s *dbAtxService) LastATX(ctx context.Context, id types.NodeID) (*types.ActivationTx, error) {
 	atxid, err := atxs.GetLastIDByNodeID(s.db, id)
-	if err != nil {
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return nil, ErrNotFound
+	case err != nil:
 		return nil, fmt.Errorf("getting last ATXID: %w", err)
 	}
 	return atxs.Get(s.db, atxid)
