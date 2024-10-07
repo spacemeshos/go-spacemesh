@@ -67,9 +67,8 @@ func (s *AccountService) List(
 	rst := make([]*spacemeshv2alpha1.Account, 0, request.Limit)
 	if err := accounts.IterateAccountsOps(s.db, ops, func(account *types.Account) bool {
 		counterProjected, balanceProjected := s.conState.GetProjection(account.Address)
-		rst = append(rst, &spacemeshv2alpha1.Account{
-			Address:  account.Address.String(),
-			Template: account.TemplateAddress.String(),
+		item := &spacemeshv2alpha1.Account{
+			Address: account.Address.String(),
 			Current: &spacemeshv2alpha1.AccountState{
 				Counter: account.NextNonce,
 				Balance: account.Balance,
@@ -79,7 +78,11 @@ func (s *AccountService) List(
 				Counter: counterProjected,
 				Balance: balanceProjected,
 			},
-		})
+		}
+		if account.TemplateAddress != nil {
+			item.Template = account.TemplateAddress.String()
+		}
+		rst = append(rst, item)
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
