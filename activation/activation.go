@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -31,10 +30,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
-var (
-	ErrNotFound    = errors.New("not found")
-	errNilVrfNonce = errors.New("nil VRF nonce")
-)
+var errNilVrfNonce = errors.New("nil VRF nonce")
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
@@ -351,7 +347,7 @@ func (b *Builder) BuildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	case err == nil:
 		b.logger.Info("load initial post from db")
 		return nil
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, sql.ErrNotFound):
 		b.logger.Info("creating initial post")
 	default:
 		return fmt.Errorf("get initial post: %w", err)
@@ -527,7 +523,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	switch {
 	case err == nil:
 		currentEpochId = max(currentEpochId, prevAtx.PublishEpoch)
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, ErrNotFound):
 		// no previous ATX
 	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
@@ -576,7 +572,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 
 	var challenge *types.NIPostChallenge
 	switch {
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, ErrNotFound):
 		logger.Info("no previous ATX found, creating an initial nipost challenge")
 
 		challenge, err = b.buildInitialNIPostChallenge(ctx, logger, nodeID, publishEpochId)
@@ -614,7 +610,7 @@ func (b *Builder) getExistingChallenge(
 	challenge, err := nipost.Challenge(b.localDB, nodeID)
 
 	switch {
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, sql.ErrNotFound):
 		return nil, nil
 
 	case err != nil:
@@ -986,7 +982,7 @@ func (b *Builder) getPositioningAtx(
 func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	epoch := b.layerClock.CurrentLayer().GetEpoch()
 	id, blob, err := atxs.AtxBlob(b.localDB, epoch, nodeID)
-	if errors.Is(err, common.ErrNotFound) {
+	if errors.Is(err, sql.ErrNotFound) {
 		return nil
 	} else if err != nil {
 		return err

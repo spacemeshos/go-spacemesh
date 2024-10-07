@@ -894,7 +894,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	}
 	posAtx.SetID(types.RandomATXID())
 	atxSvc.EXPECT().PositioningATX(gomock.Any(), gomock.Any()).Return(posAtx.ID(), nil)
-	atxSvc.EXPECT().LastATX(gomock.Any(), sig.NodeID()).Return(nil, sql.ErrNotFound).Times(2)
+	atxSvc.EXPECT().LastATX(gomock.Any(), sig.NodeID()).Return(nil, ErrNotFound).Times(2)
 
 	// Act & Assert
 	tab.msync.EXPECT().RegisterForATXSynced().DoAndReturn(closedChan).AnyTimes()
