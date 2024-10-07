@@ -11,8 +11,8 @@ type Account struct {
 	NextNonce       uint64
 	Balance         uint64
 	TemplateAddress *Address
-	State           []byte       `scale:"max=10000"`
-	Storage         StorageItems `scale:"max=1000"`
+	State           []byte        `scale:"max=10000"`
+	Storage         []StorageItem `scale:"max=1000"`
 }
 
 // MarshalLogObject implements encoding for the account state.

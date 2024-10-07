@@ -4,7 +4,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
 // Opt modifies Options.
@@ -38,9 +37,4 @@ func WithGenesisID(id types.Hash20) Opt {
 var (
 	// TxVersion is the only version supported at genesis.
 	TxVersion = scale.U8(0)
-
-	// MethodSpawn ...
-	MethodSpawn = scale.U8(core.MethodSpawn)
-	// MethodSpend ...
-	MethodSpend = scale.U8(core.MethodSpend)
 )

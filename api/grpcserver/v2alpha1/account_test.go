@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
-	// "github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -45,9 +44,6 @@ func TestAccountService_List(t *testing.T) {
 		if (i % 2) == 0 {
 			template = &wallet.TemplateAddress
 		}
-		// if (i % 3) == 0 {
-		// 	template = &multisig.TemplateAddress
-		// }
 
 		accs[i] = testAccount{
 			Address:          addr,

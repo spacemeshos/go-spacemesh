@@ -158,7 +158,7 @@ func TestStorage(t *testing.T) {
 	db := statesql.InMemory()
 	address := types.Address{1, 2, 3}
 	templateAddress := types.Address{4, 5, 6}
-	storage := types.StorageItems{
+	storage := []types.StorageItem{
 		{Key: types.Hash32{1, 2, 3}, Value: types.Hash32{4, 5, 6}},
 		{Key: types.Hash32{4, 5, 6}, Value: types.Hash32{7, 8, 9}},
 	}

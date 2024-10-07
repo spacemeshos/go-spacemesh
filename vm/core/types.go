@@ -6,13 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-const (
-	// MethodSpawn ...
-	MethodSpawn = 0
-	// MethodSpend ...
-	MethodSpend = 16
-)
-
 const TxSizeLimit = 1024
 
 type (

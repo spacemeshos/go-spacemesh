@@ -52,7 +52,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
-	vmsdk "github.com/spacemeshos/go-spacemesh/vm"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
@@ -2269,7 +2268,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	lg := zaptest.NewLogger(t)
-	svm := vm.New(statesql.InMemory(), vmsdk.WithLogger(lg))
+	svm := vm.New(statesql.InMemory(), vm.WithLogger(lg))
 	conState := txs.NewConservativeState(svm, statesql.InMemory(), txs.WithLogger(lg.Named("conState")))
 	conState.AddToCache(context.Background(), globalTx, time.Now())
 
@@ -2332,7 +2331,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(statesql.InMemory(), vmsdk.WithLogger(zaptest.NewLogger(t)))
+		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(types.LayerID(17), []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2353,7 +2352,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(statesql.InMemory(), vmsdk.WithLogger(zaptest.NewLogger(t)))
+		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(types.LayerID(17), []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2375,7 +2374,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	db, err := statesql.Open("file:" + filepath.Join(t.TempDir(), "test.sql"))
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	svm := vm.New(db, vmsdk.WithLogger(zaptest.NewLogger(t)))
+	svm := vm.New(db, vm.WithLogger(zaptest.NewLogger(t)))
 	cfg, cleanup := launchServer(t, NewGlobalStateService(nil, txs.NewConservativeState(svm, db)))
 	t.Cleanup(cleanup)
 

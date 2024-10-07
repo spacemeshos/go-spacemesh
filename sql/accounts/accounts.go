@@ -20,8 +20,11 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 			stmt.ColumnBytes(3, account.TemplateAddress[:])
 			account.State = make([]byte, stmt.ColumnLen(4))
 			stmt.ColumnBytes(4, account.State)
-			// TODO: error handling here
-			codec.DecodeFrom(stmt.ColumnReader(5), &account.Storage)
+			var err error
+			account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
+			if err != nil {
+				panic(fmt.Sprintf("decoding account storage: %v", err))
+			}
 		}
 		return false
 	})
@@ -97,7 +100,11 @@ func All(db sql.Executor) ([]*types.Account, error) {
 				account.TemplateAddress = &template
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
-				codec.DecodeFrom(stmt.ColumnReader(6), &account.Storage)
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(6))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
 			}
 			rst = append(rst, &account)
 			return true
@@ -129,7 +136,11 @@ func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 				account.TemplateAddress = &template
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
-				codec.DecodeFrom(stmt.ColumnReader(6), &account.Storage)
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(6))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
 			}
 			rst = append(rst, &account)
 			return true
@@ -143,7 +154,7 @@ func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 
 // Update account state at a certain layer.
 func Update(db sql.Executor, to *types.Account) error {
-	storage, err := codec.Encode(to.Storage)
+	storage, err := codec.EncodeSlice(to.Storage)
 	if err != nil {
 		return fmt.Errorf("failed to encode storage: %w", err)
 	}
@@ -203,7 +214,11 @@ func IterateAccountsOps(
 				account.TemplateAddress = &template
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
-				codec.DecodeFrom(stmt.ColumnReader(6), &account.Storage)
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(6))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
 			}
 			return fn(&account)
 		},

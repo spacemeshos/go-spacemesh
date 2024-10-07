@@ -236,7 +236,6 @@ func castTransaction(t *types.Transaction) *pb.Transaction {
 		tx.Template = &pb.AccountId{
 			Address: t.TemplateAddress.String(),
 		}
-		tx.Method = uint32(t.Method)
 		tx.Nonce = &pb.Nonce{
 			Counter: t.Nonce,
 		}
