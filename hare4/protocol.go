@@ -114,6 +114,7 @@ func (p *protocol) OnInitial(proposals []types.ProposalID) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.initial = proposals
+	fmt.Println("protocol on initial proposals", len(p.initial))
 }
 
 func (p *protocol) OnInput(msg *input) (bool, *wire.HareProof) {

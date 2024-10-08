@@ -705,6 +705,7 @@ func (h *Hare) run(session *session) error {
 }
 
 func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
+	h.log.Info("hare onOutput", zap.Int("vrfs", len(session.vrfs)))
 	for i, vrf := range session.vrfs {
 		if vrf == nil || out.message == nil {
 			continue
@@ -715,9 +716,15 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 		msg.Sender = session.signers[i].NodeID()
 		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
 		if ir.Round == preround {
+			h.log.Info("hare onoutput compacting proposals", zap.Int("proposals", len(out.message.Body.Value.Proposals)))
 			var err error
 			msg.Body.Value.CompactProposals, err = h.compactProposalIds(msg.Layer,
 				out.message.Body.Value.Proposals)
+
+			h.log.Info("hare onoutput compacted  proposals",
+				zap.Int("proposals", len(out.message.Body.Value.Proposals)),
+				zap.Int("compactProposals", len(out.message.Body.Value.CompactProposals)),
+			)
 			if err != nil {
 				h.log.Debug("failed to compact proposals", zap.Error(err))
 				continue
@@ -731,6 +738,9 @@ func (h *Hare) onOutput(session *session, ir IterRound, out output) error {
 			h.mu.Unlock()
 			msg.Body.Value.Proposals = []types.ProposalID{}
 		}
+
+		h.log.Info("hare onoutput sending message", zap.Inline(&msg))
+
 		if err := h.pubsub.Publish(h.ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {
 			h.log.Error("failed to publish", zap.Inline(&msg), zap.Error(err))
 		}
@@ -797,6 +807,7 @@ func (h *Hare) selectProposals(session *session) []types.ProposalID {
 	for _, p := range candidates {
 		atxs[p.AtxID]++
 	}
+	h.log.Info("selectProposals got candidates for layer", zap.Int("candidates", len(candidates)), zap.Int("layer", int(session.lid)))
 	for _, p := range candidates {
 		if h.atxsdata.IsMalicious(p.SmesherID) || p.IsMalicious() {
 			h.log.Warn("not voting on proposal from malicious identity",
@@ -841,6 +852,8 @@ func (h *Hare) selectProposals(session *session) []types.ProposalID {
 			)
 		}
 	}
+
+	h.log.Info("hare selectProposals returning proposals", zap.Int("count", len(result)))
 	return result
 }
 
