@@ -38,12 +38,9 @@ else
 		CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,@loader_path
 	else
 		ifeq ($(GOARCH),arm64)
-				platform := linux
-				arch := arm64
-				libpost_arch := -arm64
+				platform := linux-arm64
 		else
 				platform := linux
-				arch := amd64
 		endif
 		CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$$ORIGIN
 	endif
@@ -53,10 +50,10 @@ POSTRS_SETUP_REV = 0.7.13
 POSTRS_SETUP_ZIP = libpost-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SETUP_URL_ZIP ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SETUP_ZIP)
 
-POSTRS_PROFILER_ZIP = profiler-$(platform)$(libpost_arch)-v$(POSTRS_SETUP_REV).zip
+POSTRS_PROFILER_ZIP = profiler-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_PROFILER_ZIP)
 
-POSTRS_SERVICE_ZIP = post-service-$(platform)$(libpost_arch)-v$(POSTRS_SETUP_REV).zip
+POSTRS_SERVICE_ZIP = post-service-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
 ATHENA_SETUP_REV = 0.4.1
