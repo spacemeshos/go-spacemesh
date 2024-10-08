@@ -14,8 +14,7 @@ func New(args *SpawnArguments) *Wallet {
 //go:generate scalegen
 
 // Wallet is a single-key wallet.
-type Wallet struct {
-}
+type Wallet struct{}
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.
 func (s *Wallet) MaxSpend(args any) (uint64, error) {
