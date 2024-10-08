@@ -4,7 +4,6 @@ package types
 
 // StorageItem represents a single item of account storage.
 type StorageItem struct {
-	// not actually a hash, just 32 bytes
-	Key   Hash32
+	Key   [32]byte
 	Value Hash32
 }
