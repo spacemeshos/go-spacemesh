@@ -153,3 +153,22 @@ func TestIterateAccountsOps(t *testing.T) {
 		require.Len(t, accs, 1)
 	})
 }
+
+func TestStorage(t *testing.T) {
+	db := statesql.InMemory()
+	address := types.Address{1, 2, 3}
+	templateAddress := types.Address{4, 5, 6}
+	storage := []types.StorageItem{
+		{Key: types.Hash32{1, 2, 3}, Value: types.Hash32{4, 5, 6}},
+		{Key: types.Hash32{4, 5, 6}, Value: types.Hash32{7, 8, 9}},
+	}
+	require.NoError(t, Update(db, &types.Account{
+		Address:         address,
+		TemplateAddress: &templateAddress,
+		Storage:         storage,
+	}))
+
+	latest, err := Latest(db, address)
+	require.NoError(t, err)
+	require.Equal(t, storage, latest.Storage)
+}
