@@ -116,32 +116,3 @@ func (c *Context) Updated() []types.Address {
 	rst = append(rst, c.touched...)
 	return rst
 }
-
-func (c *Context) load(address types.Address) (*Account, error) {
-	if address == c.Principal() {
-		return &c.PrincipalAccount, nil
-	}
-	if c.changed == nil {
-		c.changed = map[Address]*Account{}
-	}
-	account, exist := c.changed[address]
-	if !exist {
-		loaded, err := c.Loader.Get(address)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", ErrInternal, err)
-		}
-		account = &loaded
-	}
-	return account, nil
-}
-
-func (c *Context) change(account *Account) {
-	if account.Address == c.Principal() {
-		return
-	}
-	_, exist := c.changed[account.Address]
-	if !exist {
-		c.touched = append(c.touched, account.Address)
-	}
-	c.changed[account.Address] = account
-}

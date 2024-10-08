@@ -99,9 +99,6 @@ type HandlerRegistry interface {
 // Host API with methods and data that are required by templates.
 type Host interface {
 	Consume(uint64) error
-	Spawn(scale.Encodable) error
-	Transfer(Address, uint64) error
-	Relay(expectedTemplate, address Address, call func(Host) error) error
 
 	Principal() Address
 	Handler() Handler
