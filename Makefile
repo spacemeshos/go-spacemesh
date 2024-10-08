@@ -73,7 +73,7 @@ install:
 build: go-spacemesh get-profiler get-postrs-service
 .PHONY: build
 
-get-libs: get-postrs-lib get-postrs-service
+get-libs: get-postrs-lib get-postrs-service get-athena-lib
 
 get-profiler: get-postrs-profiler
 
