@@ -8,13 +8,15 @@ import (
 
 // New returns Wallet instance with SpawnArguments.
 func New(args *SpawnArguments) *Wallet {
-	return &Wallet{}
+	return &Wallet{PublicKey: args.PublicKey}
 }
 
 //go:generate scalegen
 
 // Wallet is a single-key wallet.
-type Wallet struct{}
+type Wallet struct {
+	PublicKey core.PublicKey
+}
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.
 func (s *Wallet) MaxSpend(args any) (uint64, error) {
