@@ -147,25 +147,6 @@ func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {
 	return nodeIDs, nil
 }
 
-// MarriageATX obtains the marriage ATX for given ID.
-func MarriageATX(db sql.Executor, id types.NodeID) (types.ATXID, error) {
-	var atx types.ATXID
-	rows, err := db.Exec("SELECT marriage_atx FROM marriages WHERE pubkey = ?1;",
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id.Bytes())
-		}, func(stmt *sql.Statement) bool {
-			stmt.ColumnBytes(0, atx[:])
-			return false
-		})
-	if err != nil {
-		return types.EmptyATXID, fmt.Errorf("get marriage ATX for %v: %w", id, err)
-	}
-	if rows == 0 {
-		return atx, sql.ErrNotFound
-	}
-	return atx, nil
-}
-
 func Iterate(db sql.Executor, cb func(data Info) bool) error {
 	_, err := db.Exec(`
 		SELECT id, pubkey, marriage_atx, marriage_idx, marriage_target, marriage_sig
