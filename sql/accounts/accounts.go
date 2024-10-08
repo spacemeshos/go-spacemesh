@@ -3,6 +3,7 @@ package accounts
 import (
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
@@ -19,6 +20,11 @@ func load(db sql.Executor, address types.Address, query string, enc sql.Encoder)
 			stmt.ColumnBytes(3, account.TemplateAddress[:])
 			account.State = make([]byte, stmt.ColumnLen(4))
 			stmt.ColumnBytes(4, account.State)
+			var err error
+			account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
+			if err != nil {
+				panic(fmt.Sprintf("decoding account storage: %v", err))
+			}
 		}
 		return false
 	})
@@ -42,13 +48,13 @@ func Has(db sql.Executor, address types.Address) (bool, error) {
 	return rows > 0, nil
 }
 
-// Latest latest account data for an address.
+// Latest account data for an address.
 func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	account, err := load(
 		db,
 		address,
-		`select balance, next_nonce, layer_updated, template, state from accounts where address = ?1 
-		order by layer_updated desc;`,
+		`select balance, next_nonce, layer_updated, template, state, storage
+		from accounts where address = ?1 order by layer_updated desc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 		},
@@ -62,7 +68,7 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 // Get account data that was valid at the specified layer.
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
 	account, err := load(db, address,
-		`select balance, next_nonce, layer_updated, template, state
+		`select balance, next_nonce, layer_updated, template, state, storage
 		 from accounts where address = ?1 and layer_updated <= ?2 order by layer_updated desc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
@@ -79,7 +85,8 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 func All(db sql.Executor) ([]*types.Account, error) {
 	var rst []*types.Account
 	_, err := db.Exec(
-		"select address, balance, next_nonce, max(layer_updated), template, state from accounts group by address;",
+		`select address, balance, next_nonce, max(layer_updated), template, state, storage
+		from accounts group by address;`,
 		nil,
 		func(stmt *sql.Statement) bool {
 			var account types.Account
@@ -93,6 +100,11 @@ func All(db sql.Executor) ([]*types.Account, error) {
 				account.TemplateAddress = &template
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(6))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
 			}
 			rst = append(rst, &account)
 			return true
@@ -107,9 +119,8 @@ func All(db sql.Executor) ([]*types.Account, error) {
 func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 	var rst []*types.Account
 	if rows, err := db.Exec(`
-			select address, balance, next_nonce, max(layer_updated), template, state from accounts 
-			where layer_updated <= ?1
-			group by address order by address asc;`,
+			select address, balance, next_nonce, max(layer_updated), template, state, storage
+			from accounts where layer_updated <= ?1 group by address order by address asc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(layer))
 		},
@@ -125,6 +136,11 @@ func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 				account.TemplateAddress = &template
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(6))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
 			}
 			rst = append(rst, &account)
 			return true
@@ -138,9 +154,13 @@ func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 
 // Update account state at a certain layer.
 func Update(db sql.Executor, to *types.Account) error {
-	_, err := db.Exec(`insert into 
-	accounts (address, balance, next_nonce, layer_updated, template, state) 
-	values (?1, ?2, ?3, ?4, ?5, ?6);`, func(stmt *sql.Statement) {
+	storage, err := codec.EncodeSlice(to.Storage)
+	if err != nil {
+		return fmt.Errorf("failed to encode storage: %w", err)
+	}
+	_, err = db.Exec(`insert into 
+	accounts (address, balance, next_nonce, layer_updated, template, state, storage) 
+	values (?1, ?2, ?3, ?4, ?5, ?6, ?7);`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, to.Address.Bytes())
 		stmt.BindInt64(2, int64(to.Balance))
 		stmt.BindInt64(3, int64(to.NextNonce))
@@ -148,9 +168,11 @@ func Update(db sql.Executor, to *types.Account) error {
 		if to.TemplateAddress == nil {
 			stmt.BindNull(5)
 			stmt.BindNull(6)
+			stmt.BindNull(7)
 		} else {
 			stmt.BindBytes(5, to.TemplateAddress[:])
 			stmt.BindBytes(6, to.State[:])
+			stmt.BindBytes(7, storage[:])
 		}
 	}, nil)
 	if err != nil {
@@ -176,7 +198,8 @@ func IterateAccountsOps(
 	operations builder.Operations,
 	fn func(account *types.Account) bool,
 ) error {
-	_, err := db.Exec(`select address, balance, next_nonce, max(layer_updated), template, state from accounts`+
+	_, err := db.Exec(`select address, balance, next_nonce, max(layer_updated), template, state,
+	storage from accounts`+
 		builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
 		func(stmt *sql.Statement) bool {
@@ -191,6 +214,11 @@ func IterateAccountsOps(
 				account.TemplateAddress = &template
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(6))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
 			}
 			return fn(&account)
 		},

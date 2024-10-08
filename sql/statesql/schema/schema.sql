@@ -1,4 +1,4 @@
-PRAGMA user_version = 23;
+PRAGMA user_version = 24;
 CREATE TABLE accounts
 (
     address        CHAR(24),
@@ -6,7 +6,7 @@ CREATE TABLE accounts
     next_nonce     UNSIGNED LONG INT,
     layer_updated  UNSIGNED LONG INT,
     template       CHAR(24),
-    state          BLOB,
+    state          BLOB, storage BLOB,
     PRIMARY KEY (address, layer_updated DESC)
 );
 CREATE INDEX accounts_by_layer_updated ON accounts (layer_updated);

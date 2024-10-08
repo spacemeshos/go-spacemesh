@@ -1,0 +1,18 @@
+[workspace]
+[package]
+version = "0.1.0"
+name = "wallet-script"
+edition = "2021"
+default-run = "execute"
+
+[[bin]]
+name = "execute"
+path = "src/bin/execute.rs"
+
+[dependencies]
+athena-interface = { git = "https://github.com/athenavm/athena.git", branch = "main" }
+athena-sdk = { git = "https://github.com/athenavm/athena.git", branch = "main" }
+clap = { version = "4.0", features = ["derive", "env"] }
+
+[build-dependencies]
+athena-helper = { git = "https://github.com/athenavm/athena.git", branch = "main" }
