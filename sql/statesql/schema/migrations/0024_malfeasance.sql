@@ -19,7 +19,7 @@ CREATE TABLE malfeasance
     marriage_id INT,                  -- id of the marriage set that the identity is part of (or NULL if none)
     received    INT NOT NULL,         -- unix timestamp of when the proof was received/detected
     
-    -- values below are at least once per marriage_id
+    -- values below are set least once per marriage_id
     domain      INT,                  -- domain of the proof
     proof       BLOB                  -- proof of the identity to be malicious
 );

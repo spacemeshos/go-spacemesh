@@ -364,14 +364,14 @@ func TestDropIncompleteMigration(t *testing.T) {
 	migration1 := &sqlMigration{
 		order:   1,
 		name:    "0001_initial.sql",
-		content: "create table foo(x int)",
+		content: "create table foo(x int);",
 	}
 	migration2 := &faultyMigration{
 		panic: true,
 		sqlMigration: &sqlMigration{
 			order:   2,
 			name:    "0002_test.sql",
-			content: "create table bar(y int)",
+			content: "create table bar(y int);",
 		},
 	}
 
