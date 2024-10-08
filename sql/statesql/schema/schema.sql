@@ -85,23 +85,23 @@ CREATE TABLE layers
 ) WITHOUT ROWID;
 CREATE TABLE malfeasance
 (
-    pubkey      CHAR(32) NOT NULL, 
-    marriage_id INT,               
-    received    INT NOT NULL,      
+    pubkey      CHAR(32) PRIMARY KEY, 
+    marriage_id INT,                  
+    received    INT NOT NULL,         
     
-    domain      INT,               
-    proof       BLOB               
+    
+    domain      INT,                  
+    proof       BLOB                  
 );
 CREATE TABLE marriages
 (
-    id              INT NOT NULL,       
-    pubkey          CHAR(32) NOT NULL,  
-    marriage_atx    CHAR(32) NOT NULL,  
-    marriage_idx    INT NOT NULL,       
-    marriage_target CHAR(32) NOT NULL,  
-    marriage_sig    BLOB NOT NULL,      
+    pubkey          CHAR(32) PRIMARY KEY,   
+    id              INT NOT NULL,           
+    marriage_atx    CHAR(32) NOT NULL,      
+    marriage_idx    INT NOT NULL,           
+    marriage_target CHAR(32) NOT NULL,      
+    marriage_sig    BLOB NOT NULL,          
 
-    UNIQUE (pubkey),                    
     UNIQUE (marriage_atx, marriage_idx) 
 );
 CREATE TABLE poets
@@ -186,8 +186,15 @@ BEGIN
     SELECT RAISE(ABORT, 'marriage_id does not exist in marriages table')
     WHERE NOT EXISTS (SELECT 1 FROM marriages WHERE id = NEW.marriage_id);
 END;
-CREATE INDEX marriage_atx_by_pubkey ON marriages (pubkey, marriage_atx);
-CREATE INDEX marriage_id_by_pubkey ON marriages (pubkey, id);
+CREATE TRIGGER malfeasance_check_proof_exists
+BEFORE INSERT ON malfeasance
+FOR EACH ROW
+WHEN NEW.marriage_id IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'proof must be provided for malfeasance entry without marriage_id')
+    WHERE NEW.proof IS NULL OR NEW.domain IS NULL;
+END;
+CREATE INDEX marriage_atxs ON marriages (marriage_atx);
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
 CREATE UNIQUE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey);
 CREATE INDEX posts_by_atxid_by_pubkey_epoch ON posts (pubkey, publish_epoch);
