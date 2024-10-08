@@ -286,13 +286,8 @@ func (h *HandlerV1) validateNonInitialAtx(
 
 // cacheAtx caches the atx in the atxsdata cache.
 // Returns true if the atx was cached, false otherwise.
-func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx) *atxsdata.ATX {
+func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx, malicious bool) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
-		malicious, err := identities.IsMalicious(h.cdb, atx.SmesherID)
-		if err != nil {
-			h.logger.Error("failed is malicious read", zap.Error(err), log.ZContext(ctx))
-			return nil
-		}
 		return h.atxsdata.AddFromAtx(atx, malicious)
 	}
 	return nil
@@ -451,13 +446,6 @@ func (h *HandlerV1) checkMalicious(
 	tx sql.Transaction,
 	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	malicious, err := identities.IsMalicious(tx, watx.SmesherID)
-	if err != nil {
-		return nil, fmt.Errorf("checking if node is malicious: %w", err)
-	}
-	if malicious {
-		return nil, nil
-	}
 	proof, err := h.checkDoublePublish(ctx, tx, watx)
 	if proof != nil || err != nil {
 		return proof, err
@@ -471,12 +459,21 @@ func (h *HandlerV1) storeAtx(
 	atx *types.ActivationTx,
 	watx *wire.ActivationTxV1,
 ) (*mwire.MalfeasanceProof, error) {
-	var proof *mwire.MalfeasanceProof
+	var (
+		proof     *mwire.MalfeasanceProof
+		malicious bool
+	)
 	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
 		var err error
-		proof, err = h.checkMalicious(ctx, tx, watx)
+		malicious, err = identities.IsMalicious(tx, atx.SmesherID)
 		if err != nil {
-			return fmt.Errorf("check malicious: %w", err)
+			return fmt.Errorf("check if node is malicious: %w", err)
+		}
+		if !malicious {
+			proof, err = h.checkMalicious(ctx, tx, watx)
+			if err != nil {
+				return fmt.Errorf("check malicious: %w", err)
+			}
 		}
 
 		err = atxs.Add(tx, atx, watx.Blob())
@@ -499,7 +496,7 @@ func (h *HandlerV1) storeAtx(
 		h.tortoise.OnMalfeasance(atx.SmesherID)
 	}
 
-	added := h.cacheAtx(ctx, atx)
+	added := h.cacheAtx(ctx, atx, malicious || proof != nil)
 	h.beacon.OnAtx(atx)
 	if added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
