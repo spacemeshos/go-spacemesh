@@ -16,7 +16,6 @@ CREATE INDEX marriage_id_by_pubkey ON marriages (pubkey, id);
 CREATE INDEX marriage_atx_by_pubkey ON marriages (pubkey, marriage_atx);
 
 -- adds new table for v2 malfeasance proofs
--- TODO(mafa): add a migration to convert old malfeasance proofs to the new format and copy to this table
 CREATE TABLE malfeasance
 (
     pubkey      CHAR(32) NOT NULL, -- pubkey of identity that was proven to be malicious
@@ -45,3 +44,10 @@ BEGIN
     SELECT RAISE(ABORT, 'marriage_id does not exist in marriages table')
     WHERE NOT EXISTS (SELECT 1 FROM marriages WHERE id = NEW.marriage_id);
 END;
+
+ALTER TABLE identities DROP COLUMN marriage_atx;
+ALTER TABLE identities DROP COLUMN marriage_idx;
+ALTER TABLE identities DROP COLUMN marriage_target;
+ALTER TABLE identities DROP COLUMN marriage_signature;
+
+-- TODO(mafa): add a migration to convert old malfeasance proofs to the new format and copy to this table
