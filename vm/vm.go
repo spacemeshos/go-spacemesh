@@ -500,7 +500,7 @@ func parse(
 			err,
 		)
 	}
-	logger.Debug("loaded account state", zap.Inline(&account))
+	logger.Debug("loaded principal account state", zap.Inline(&account))
 
 	ctx := &core.Context{
 		GenesisID:        cfg.GenesisID,
