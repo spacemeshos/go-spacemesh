@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 )
 
 func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
@@ -35,6 +36,22 @@ func AddProof(db sql.Executor, nodeID types.NodeID, proof []byte, domain int, re
 	}, nil)
 	if err != nil {
 		return fmt.Errorf("add proof %v: %w", nodeID, err)
+	}
+	return nil
+}
+
+func SetMalicious(db sql.Executor, nodeID types.NodeID, marriageID marriage.ID, received time.Time) error {
+	_, err := db.Exec(`
+		INSERT INTO malfeasance (pubkey, marriage_id, received)
+		VALUES (?1, ?2, ?3)
+		ON CONFLICT DO NOTHING
+	`, func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+		stmt.BindInt64(2, int64(marriageID))
+		stmt.BindInt64(3, received.UnixNano())
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("set malicious %v: %w", nodeID, err)
 	}
 	return nil
 }

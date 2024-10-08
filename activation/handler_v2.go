@@ -853,21 +853,41 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
 	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
-			id, err := marriage.NewID(tx)
+			marriageID, err := marriage.NewID(tx)
 			if err != nil {
 				return fmt.Errorf("creating marriage ID: %w", err)
 			}
 			info := marriage.Info{
-				ID:     id,
+				ID:     marriageID,
 				ATX:    atx.ID(),
 				Target: atx.SmesherID,
 			}
+			malicious := false
 			for i, m := range watx.marriages {
 				info.NodeID = m.id
 				info.MarriageIndex = i
 				info.Signature = m.signature
-				if err := marriage.Add(tx, info); err != nil {
-					return err
+				err := marriage.Add(tx, info)
+				switch {
+				case errors.Is(err, sql.ErrConflict):
+					// TODO(mafa): nodeID is already married - update marriage IDs accordingly
+					continue
+				case err != nil:
+					return fmt.Errorf("adding marriage: %w", err)
+				}
+				if malicious {
+					continue
+				}
+				malicious, err = malfeasance.IsMalicious(tx, m.id)
+				if err != nil {
+					return fmt.Errorf("checking if node is malicious: %w", err)
+				}
+			}
+			if malicious {
+				for _, m := range watx.marriages {
+					if err := malfeasance.SetMalicious(tx, m.id, marriageID, time.Now()); err != nil {
+						return fmt.Errorf("marking node as malicious: %w", err)
+					}
 				}
 			}
 		}

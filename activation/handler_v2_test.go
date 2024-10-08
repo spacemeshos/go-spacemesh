@@ -1767,26 +1767,13 @@ func Test_MarryingMalicious(t *testing.T) {
 	golden := types.RandomATXID()
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
+
 	otherSig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	tt := []struct {
-		name      string
-		malicious types.NodeID
-	}{
-		{
-			name:      "owner is malicious",
-			malicious: sig.NodeID(),
-		}, {
-			name:      "other is malicious",
-			malicious: otherSig.NodeID(),
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
+	tc := func(malicious types.NodeID) func(t *testing.T) {
+		return func(t *testing.T) {
 			atxHandler := newV2TestHandler(t, golden)
-
 			othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
 
 			atx := newInitialATXv2(t, golden)
@@ -1799,7 +1786,7 @@ func Test_MarryingMalicious(t *testing.T) {
 				},
 			}
 			atx.Sign(sig)
-			require.NoError(t, malfeasance.AddProof(atxHandler.cdb, tc.malicious, []byte("proof"), 0, time.Now()))
+			require.NoError(t, malfeasance.AddProof(atxHandler.cdb, malicious, []byte("proof"), 0, time.Now()))
 
 			atxHandler.expectInitialAtxV2(atx)
 			err := atxHandler.processATX(context.Background(), "", atx, time.Now())
@@ -1814,11 +1801,14 @@ func Test_MarryingMalicious(t *testing.T) {
 			for _, id := range []types.NodeID{sig.NodeID(), otherSig.NodeID()} {
 				m, err := malfeasance.IsMalicious(atxHandler.cdb, id)
 				require.NoError(t, err)
-				require.True(t, m, "expected %s to be malicious", id.ShortString())
-				t.Logf("%s is malicious", id.ShortString())
+				require.True(t, m, "expected %s to be malicious, owner %s other %s", id, sig, otherSig)
 			}
-		})
+		}
 	}
+
+	t.Run("owner is malicious", tc(sig.NodeID()))
+
+	t.Run("other is malicious", tc(otherSig.NodeID()))
 }
 
 func TestContextualValidation_DoublePost(t *testing.T) {
