@@ -23,7 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	localmigrations "github.com/spacemeshos/go-spacemesh/sql/localsql/migrations"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -199,7 +198,7 @@ func RecoverWithDb(
 type recoveryData struct {
 	accounts  []*types.Account
 	atxs      []*atxs.CheckpointAtx
-	marriages map[types.NodeID]*identities.MarriageData
+	marriages map[marriage.ID]marriage.Info
 }
 
 func RecoverFromLocalFile(
@@ -307,10 +306,9 @@ func RecoverFromLocalFile(
 				log.ZShortStringer("smesherID", cAtx.SmesherID),
 			)
 		}
-		for id, marriage := range data.marriages {
-			marriage.NodeID = id
-			if err = marriage.Add(tx, id, marriage); err != nil {
-				return fmt.Errorf("add marriage for %s: %w", id.String(), err)
+		for _, info := range data.marriages {
+			if err = marriage.Add(tx, info); err != nil {
+				return fmt.Errorf("add marriage for %s: %w", info.NodeID.String(), err)
 			}
 		}
 
@@ -388,17 +386,17 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		cAtx.Units = atx.Units
 		allAtxs = append(allAtxs, &cAtx)
 	}
-	marriages := make(map[types.NodeID]*identities.MarriageData, len(checkpoint.Data.Marriages))
-	for atx, ms := range checkpoint.Data.Marriages {
+	marriages := make(map[marriage.ID]marriage.Info, len(checkpoint.Data.Marriages))
+	for id, ms := range checkpoint.Data.Marriages {
 		for _, m := range ms {
-			marriage := marriage.Info{
+			info := marriage.Info{
 				NodeID:        types.BytesToNodeID(m.Signer),
-				ATX:           atx,
+				ATX:           types.ATXID(m.ATX),
 				MarriageIndex: m.Index,
 				Signature:     types.EdSignature(m.Signature),
 				Target:        types.BytesToNodeID(m.MarriedTo),
 			}
-			marriages[types.BytesToNodeID(m.Signer)] = &marriage
+			marriages[marriage.ID(id)] = info
 		}
 	}
 

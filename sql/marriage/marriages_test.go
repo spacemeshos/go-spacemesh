@@ -216,3 +216,54 @@ func TestNodeIDsByID(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, nodeIDs)
 }
+
+func TestIterate(t *testing.T) {
+	db := statesql.InMemoryTest(t)
+
+	id1, err := marriage.NewID(db)
+	require.NoError(t, err)
+	require.NotZero(t, id1)
+
+	infos := make([]marriage.Info, 0, 10)
+	for i := range 5 {
+		info := marriage.Info{
+			ID:            id1,
+			NodeID:        types.RandomNodeID(),
+			ATX:           types.RandomATXID(),
+			MarriageIndex: i,
+			Target:        types.RandomNodeID(),
+			Signature:     types.RandomEdSignature(),
+		}
+		err = marriage.Add(db, info)
+		require.NoError(t, err)
+
+		infos = append(infos, info)
+	}
+
+	id2, err := marriage.NewID(db)
+	require.NoError(t, err)
+	require.NotZero(t, id2)
+	require.NotEqual(t, id1, id2)
+
+	for range 5 {
+		info := marriage.Info{
+			ID:            id2,
+			NodeID:        types.RandomNodeID(),
+			ATX:           types.RandomATXID(),
+			MarriageIndex: rand.N(256),
+			Target:        types.RandomNodeID(),
+			Signature:     types.RandomEdSignature(),
+		}
+		err = marriage.Add(db, info)
+		require.NoError(t, err)
+
+		infos = append(infos, info)
+	}
+
+	res := make([]marriage.Info, 0, 10)
+	marriage.Iterate(db, func(info marriage.Info) bool {
+		res = append(res, info)
+		return true
+	})
+	require.ElementsMatch(t, infos, res)
+}

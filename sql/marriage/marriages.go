@@ -150,3 +150,20 @@ func MarriageATX(db sql.Executor, id types.NodeID) (types.ATXID, error) {
 	}
 	return atx, nil
 }
+
+func Iterate(db sql.Executor, cb func(data Info) bool) error {
+	_, err := db.Exec(`
+		SELECT id, pubkey, marriage_atx, marriage_idx, marriage_target, marriage_sig
+		FROM marriages
+	`, nil, func(stmt *sql.Statement) bool {
+		var data Info
+		data.ID = ID(stmt.ColumnInt64(0))
+		stmt.ColumnBytes(1, data.NodeID[:])
+		stmt.ColumnBytes(2, data.ATX[:])
+		data.MarriageIndex = int(stmt.ColumnInt64(3))
+		stmt.ColumnBytes(4, data.Target[:])
+		stmt.ColumnBytes(5, data.Signature[:])
+		return cb(data)
+	})
+	return err
+}

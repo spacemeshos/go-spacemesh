@@ -22,7 +22,7 @@ func Test_Transaction_Isolation(t *testing.T) {
 		WithConnections(10),
 		WithLatencyMetering(true),
 		WithDatabaseSchema(&Schema{
-			Script: `create table testing1 (
+			Script: `CREATE TABLE testing1 (
 				id varchar primary key,
 				field int
 			);`,
@@ -195,7 +195,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 			require.NotContains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
 			require.Equal(t, "wal", execSQL(t, db, "PRAGMA journal_mode", 0))
 			require.Equal(t, "1", execSQL(t, db, "PRAGMA synchronous", 0)) // NORMAL
-			execSQL(t, db, "create table foo(x int)", -1)
+			execSQL(t, db, "CREATE TABLE foo(x int)", -1)
 			return nil
 		}).Times(1)
 
@@ -211,7 +211,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 			// Synchronous is off for the temp database as it is deleted in case
 			// of migration failure.
 			require.Equal(t, "0", execSQL(t, db, "PRAGMA synchronous", 0)) // OFF
-			execSQL(t, db, "create table bar(y int)", -1)
+			execSQL(t, db, "CREATE TABLE bar(y int)", -1)
 			return nil
 		}).Times(1)
 
@@ -273,7 +273,7 @@ func TestDatabaseVacuumStateError(t *testing.T) {
 	migration1 := &sqlMigration{
 		order:   1,
 		name:    "0001_initial.sql",
-		content: "create table foo(x int)",
+		content: "CREATE TABLE foo(x int);",
 	}
 
 	fail := true
@@ -285,7 +285,7 @@ func TestDatabaseVacuumStateError(t *testing.T) {
 			if fail {
 				return errors.New("migration failed")
 			}
-			execSQL(t, db, "create table bar(y int)", -1)
+			execSQL(t, db, "CREATE TABLE bar(y int)", -1)
 			return nil
 		}).Times(2)
 
@@ -364,14 +364,14 @@ func TestDropIncompleteMigration(t *testing.T) {
 	migration1 := &sqlMigration{
 		order:   1,
 		name:    "0001_initial.sql",
-		content: "create table foo(x int);",
+		content: "CREATE TABLE foo(x int);",
 	}
 	migration2 := &faultyMigration{
 		panic: true,
 		sqlMigration: &sqlMigration{
 			order:   2,
 			name:    "0002_test.sql",
-			content: "create table bar(y int);",
+			content: "CREATE TABLE bar(y int);",
 		},
 	}
 
@@ -428,7 +428,7 @@ func TestResumeCopyMigration(t *testing.T) {
 	migration1 := &sqlMigration{
 		order:   1,
 		name:    "0001_initial.sql",
-		content: "create table foo(x int)",
+		content: "CREATE TABLE foo(x int);",
 	}
 	// This migration will panic when VACUUM INTO is attempted to copy
 	// the migrated database to the source database location.
@@ -437,7 +437,7 @@ func TestResumeCopyMigration(t *testing.T) {
 		sqlMigration: &sqlMigration{
 			order:   2,
 			name:    "0002_test.sql",
-			content: "create table bar(y int)",
+			content: "CREATE TABLE bar(y int);",
 		},
 	}
 
@@ -552,7 +552,7 @@ func TestSchemaDrift(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = db.Exec("create table newtbl (id int)", nil, nil)
+	_, err = db.Exec("CREATE TABLE newtbl (id int)", nil, nil)
 	require.NoError(t, err)
 
 	require.NoError(t, db.Close())
