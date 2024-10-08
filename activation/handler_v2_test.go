@@ -25,7 +25,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -1381,7 +1382,7 @@ func Test_ValidateMarriages(t *testing.T) {
 
 		set, err := atxHandler.equivocationSet(atx)
 		require.NoError(t, err)
-		require.Equal(t, expectedSet, set)
+		require.ElementsMatch(t, expectedSet, set)
 	})
 }
 
@@ -1625,15 +1626,17 @@ func Test_Marriages(t *testing.T) {
 		err = atxHandler.processInitial(t, atx)
 		require.NoError(t, err)
 
-		mAtx, err := identities.MarriageATX(atxHandler.cdb, sig.NodeID())
+		info, err := marriage.FindByNodeID(atxHandler.cdb, sig.NodeID())
 		require.NoError(t, err)
-		require.Equal(t, atx.ID(), mAtx)
+		require.Equal(t, atx.ID(), info.ATX)
 
-		mAtx, err = identities.MarriageATX(atxHandler.cdb, otherSig.NodeID())
+		info, err = marriage.FindByNodeID(atxHandler.cdb, otherSig.NodeID())
 		require.NoError(t, err)
-		require.Equal(t, atx.ID(), mAtx)
+		require.Equal(t, atx.ID(), info.ATX)
 
-		set, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
+		id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+		require.NoError(t, err)
+		set, err := marriage.NodeIDsByID(atxHandler.cdb, id)
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, set)
 	})
@@ -1729,7 +1732,9 @@ func Test_Marriages(t *testing.T) {
 		require.NoError(t, err)
 
 		// The equivocation set of sig and otherSig didn't grow
-		equiv, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
+		id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+		require.NoError(t, err)
+		equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
 	})
@@ -1794,20 +1799,23 @@ func Test_MarryingMalicious(t *testing.T) {
 				},
 			}
 			atx.Sign(sig)
-			require.NoError(t, identities.SetMalicious(atxHandler.cdb, tc.malicious, []byte("proof"), time.Now()))
+			require.NoError(t, malfeasance.AddProof(atxHandler.cdb, tc.malicious, []byte("proof"), 0, time.Now()))
 
 			atxHandler.expectInitialAtxV2(atx)
 			err := atxHandler.processATX(context.Background(), "", atx, time.Now())
 			require.NoError(t, err)
 
-			equiv, err := identities.EquivocationSet(atxHandler.cdb, sig.NodeID())
+			id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
 			require.NoError(t, err)
 			require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
 
 			for _, id := range []types.NodeID{sig.NodeID(), otherSig.NodeID()} {
-				m, err := identities.IsMalicious(atxHandler.cdb, id)
+				m, err := malfeasance.IsMalicious(atxHandler.cdb, id)
 				require.NoError(t, err)
-				require.True(t, m)
+				require.True(t, m, "expected %s to be malicious", id.ShortString())
+				t.Logf("%s is malicious", id.ShortString())
 			}
 		})
 	}
@@ -1899,7 +1907,7 @@ func Test_CalculatingUnits(t *testing.T) {
 
 func TestContextual_PreviousATX(t *testing.T) {
 	golden := types.RandomATXID()
-	atxHndlr := newV2TestHandler(t, golden)
+	atxHdlr := newV2TestHandler(t, golden)
 	var (
 		signers []*signing.EdSigner
 		eqSet   []types.NodeID
@@ -1911,13 +1919,13 @@ func TestContextual_PreviousATX(t *testing.T) {
 		eqSet = append(eqSet, sig.NodeID())
 	}
 
-	mATX, otherAtxs := marryIDs(t, atxHndlr, signers, golden)
+	mATX, otherAtxs := marryIDs(t, atxHdlr, signers, golden)
 
 	// signer 1 creates a solo ATX
 	soloAtx := newSoloATXv2(t, mATX.PublishEpoch+1, otherAtxs[0].ID(), mATX.ID())
 	soloAtx.Sign(signers[1])
-	atxHndlr.expectAtxV2(soloAtx)
-	err := atxHndlr.processATX(context.Background(), "", soloAtx, time.Now())
+	atxHdlr.expectAtxV2(soloAtx)
+	err := atxHdlr.processATX(context.Background(), "", soloAtx, time.Now())
 	require.NoError(t, err)
 
 	// create a MergedATX for all IDs
@@ -1935,9 +1943,9 @@ func TestContextual_PreviousATX(t *testing.T) {
 	merged.MarriageATX = &matxID
 	merged.Sign(signers[0])
 
-	atxHndlr.expectMergedAtxV2(merged, eqSet, []uint64{100})
-	atxHndlr.mMalPublish.EXPECT().Publish(gomock.Any(), signers[1].NodeID(), gomock.Any())
-	err = atxHndlr.processATX(context.Background(), "", merged, time.Now())
+	atxHdlr.expectMergedAtxV2(merged, eqSet, []uint64{100})
+	atxHdlr.mMalPublish.EXPECT().Publish(gomock.Any(), signers[1].NodeID(), gomock.Any())
+	err = atxHdlr.processATX(context.Background(), "", merged, time.Now())
 	require.NoError(t, err)
 }
 

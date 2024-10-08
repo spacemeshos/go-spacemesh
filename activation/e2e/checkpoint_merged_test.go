@@ -27,8 +27,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -268,10 +268,10 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 
 	// 3.3 Verify IDs are still married
 	for i, signer := range signers {
-		marriage, err := identities.Marriage(newDB, signer.NodeID())
+		info, err := marriage.FindByNodeID(newDB, signer.NodeID())
 		require.NoError(t, err)
-		require.Equal(t, marriageATX.ID(), marriage.ATX)
-		require.Equal(t, i, marriage.Index)
+		require.Equal(t, marriageATX.ID(), info.ATX)
+		require.Equal(t, i, info.MarriageIndex)
 	}
 
 	checkpointedMerged, err := atxs.Get(newDB, mergedATX.ID())

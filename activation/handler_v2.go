@@ -28,7 +28,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -367,7 +368,7 @@ func (h *HandlerV2) validatePositioningAtx(publish types.EpochID, golden, positi
 	return posAtx.TickHeight(), nil
 }
 
-type marriage struct {
+type marriageInfo struct {
 	id        types.NodeID
 	signature types.EdSignature
 }
@@ -375,12 +376,12 @@ type marriage struct {
 // Validate marriages and return married IDs.
 // Note: The order of returned IDs is important and must match the order of the marriage certificates.
 // The MarriageIndex in PoST proof matches the index in this marriage slice.
-func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]marriage, error) {
+func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]marriageInfo, error) {
 	if len(atx.Marriages) == 0 {
 		return nil, nil
 	}
 	marryingIDsSet := make(map[types.NodeID]struct{}, len(atx.Marriages))
-	var marryingIDs []marriage
+	var marryingIDs []marriageInfo
 	for i, m := range atx.Marriages {
 		var id types.NodeID
 		if m.ReferenceAtx == types.EmptyATXID {
@@ -400,7 +401,7 @@ func (h *HandlerV2) validateMarriages(atx *wire.ActivationTxV2) ([]marriage, err
 			return nil, fmt.Errorf("more than 1 marriage certificate for ID %s", id)
 		}
 		marryingIDsSet[id] = struct{}{}
-		marryingIDs = append(marryingIDs, marriage{
+		marryingIDs = append(marryingIDs, marriageInfo{
 			id:        id,
 			signature: m.Signature,
 		})
@@ -413,7 +414,7 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 	if atx.MarriageATX == nil {
 		return []types.NodeID{atx.SmesherID}, nil
 	}
-	marriageAtxID, err := identities.MarriageATX(h.cdb, atx.SmesherID)
+	info, err := marriage.FindByNodeID(h.cdb, atx.SmesherID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		return nil, errors.New("smesher is not married")
@@ -421,8 +422,8 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 		return nil, fmt.Errorf("fetching smesher's marriage atx ID: %w", err)
 	}
 
-	if *atx.MarriageATX != marriageAtxID {
-		return nil, fmt.Errorf("smesher's marriage ATX ID mismatch: %s != %s", *atx.MarriageATX, marriageAtxID)
+	if *atx.MarriageATX != info.ATX {
+		return nil, fmt.Errorf("smesher's marriage ATX ID mismatch: %s != %s", *atx.MarriageATX, info.ATX)
 	}
 
 	marriageAtx, err := atxs.Get(h.cdb, *atx.MarriageATX)
@@ -436,8 +437,7 @@ func (h *HandlerV2) equivocationSet(atx *wire.ActivationTxV2) ([]types.NodeID, e
 			marriageAtx.PublishEpoch,
 		)
 	}
-
-	return identities.EquivocationSetByMarriageATX(h.cdb, *atx.MarriageATX)
+	return marriage.NodeIDsByID(h.cdb, info.ID)
 }
 
 type idData struct {
@@ -452,7 +452,7 @@ type activationTx struct {
 	weight         uint64
 	effectiveUnits uint32
 	ids            map[types.NodeID]idData
-	marriages      []marriage
+	marriages      []marriageInfo
 }
 
 type nipostSize struct {
@@ -675,7 +675,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 }
 
 func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
-	malicious, err := identities.IsMalicious(tx, atx.SmesherID)
+	malicious, err := malfeasance.IsMalicious(tx, atx.SmesherID)
 	if err != nil {
 		return malicious, fmt.Errorf("checking if node is malicious: %w", err)
 	}
@@ -735,19 +735,19 @@ func (h *HandlerV2) fetchWireAtx(
 
 func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
 	for _, m := range atx.marriages {
-		mATXID, err := identities.MarriageATX(tx, m.id)
+		info, err := marriage.FindByNodeID(tx, m.id)
 		if err != nil {
 			return false, fmt.Errorf("checking if ID is married: %w", err)
 		}
-		if mATXID == atx.ID() {
+		if info.ATX == atx.ID() {
 			continue
 		}
 
-		otherAtx, err := h.fetchWireAtx(ctx, tx, mATXID)
+		otherAtx, err := h.fetchWireAtx(ctx, tx, info.ATX)
 		switch {
 		case errors.Is(err, errAtxNotV2):
 			h.logger.Fatal("Failed to create double marry malfeasance proof: ATX is not v2",
-				zap.Stringer("atx_id", mATXID),
+				zap.Stringer("atx_id", info.ATX),
 			)
 		case err != nil:
 			return false, fmt.Errorf("fetching other ATX: %w", err)
@@ -853,14 +853,20 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
 	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
-			marriageData := identities.MarriageData{
+			id, err := marriage.NewID(tx)
+			if err != nil {
+				return fmt.Errorf("creating marriage ID: %w", err)
+			}
+			info := marriage.Info{
+				ID:     id,
 				ATX:    atx.ID(),
 				Target: atx.SmesherID,
 			}
 			for i, m := range watx.marriages {
-				marriageData.Signature = m.signature
-				marriageData.Index = i
-				if err := identities.SetMarriage(tx, m.id, &marriageData); err != nil {
+				info.NodeID = m.id
+				info.MarriageIndex = i
+				info.Signature = m.signature
+				if err := marriage.Add(tx, info); err != nil {
 					return err
 				}
 			}

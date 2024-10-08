@@ -10,11 +10,12 @@ import (
 type ID int
 
 type Info struct {
-	NodeID         types.NodeID
-	MarriageATX    types.ATXID
-	MarriageIndex  int
-	MarriageTarget types.NodeID
-	MarriageSig    types.EdSignature
+	ID            ID
+	NodeID        types.NodeID
+	ATX           types.ATXID
+	MarriageIndex int
+	Target        types.NodeID
+	Signature     types.EdSignature
 }
 
 // NewID returns a new unique ID for a marriage. The ID is unique across all marriages.
@@ -36,7 +37,7 @@ func NewID(db sql.Executor) (ID, error) {
 // Add inserts a nodeID to the marriages table for the given MarriageID.
 // If the nodeID already exists in the table, it is updated.
 // Updates cannot change the MarriageID.
-func Add(db sql.Executor, id ID, marriage Info) error {
+func Add(db sql.Executor, marriage Info) error {
 	rows, err := db.Exec(`
 		INSERT INTO marriages (id, pubkey, marriage_atx, marriage_idx, marriage_target, marriage_sig)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -48,12 +49,12 @@ func Add(db sql.Executor, id ID, marriage Info) error {
 		WHERE id = $1
 		RETURNING 1
 	`, func(s *sql.Statement) {
-		s.BindInt64(1, int64(id))
+		s.BindInt64(1, int64(marriage.ID))
 		s.BindBytes(2, marriage.NodeID.Bytes())
-		s.BindBytes(3, marriage.MarriageATX.Bytes())
+		s.BindBytes(3, marriage.ATX.Bytes())
 		s.BindInt64(4, int64(marriage.MarriageIndex))
-		s.BindBytes(5, marriage.MarriageTarget.Bytes())
-		s.BindBytes(6, marriage.MarriageSig.Bytes())
+		s.BindBytes(5, marriage.Target.Bytes())
+		s.BindBytes(6, marriage.Signature.Bytes())
 	}, nil)
 	if err != nil {
 		return fmt.Errorf("updating marriage set: %w", err)
@@ -95,10 +96,11 @@ func FindByNodeID(db sql.Executor, nodeID types.NodeID) (Info, error) {
 		s.BindBytes(1, nodeID.Bytes())
 	}, func(s *sql.Statement) bool {
 		m.NodeID = nodeID
-		s.ColumnBytes(1, m.MarriageATX[:])
+		m.ID = ID(s.ColumnInt64(0))
+		s.ColumnBytes(1, m.ATX[:])
 		m.MarriageIndex = int(s.ColumnInt64(2))
-		s.ColumnBytes(3, m.MarriageTarget[:])
-		s.ColumnBytes(4, m.MarriageSig[:])
+		s.ColumnBytes(3, m.Target[:])
+		s.ColumnBytes(4, m.Signature[:])
 		return false
 	})
 	if err != nil {
@@ -113,9 +115,9 @@ func FindByNodeID(db sql.Executor, nodeID types.NodeID) (Info, error) {
 func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {
 	var nodeIDs []types.NodeID
 	_, err := db.Exec(`
-	SELECT pubkey
-	FROM marriages
-	WHERE id = $1
+		SELECT pubkey
+		FROM marriages
+		WHERE id = $1
 	`, func(s *sql.Statement) {
 		s.BindInt64(1, int64(id))
 	}, func(s *sql.Statement) bool {
@@ -125,7 +127,26 @@ func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {
 		return true
 	})
 	if err != nil {
-		return nil, fmt.Errorf("selecting node IDs: %w", err)
+		return nil, fmt.Errorf("select node IDs: %w", err)
 	}
 	return nodeIDs, nil
+}
+
+// MarriageATX obtains the marriage ATX for given ID.
+func MarriageATX(db sql.Executor, id types.NodeID) (types.ATXID, error) {
+	var atx types.ATXID
+	rows, err := db.Exec("SELECT marriage_atx FROM marriages WHERE pubkey = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, atx[:])
+			return false
+		})
+	if err != nil {
+		return types.EmptyATXID, fmt.Errorf("get marriage ATX for %v: %w", id, err)
+	}
+	if rows == 0 {
+		return atx, sql.ErrNotFound
+	}
+	return atx, nil
 }

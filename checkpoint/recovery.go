@@ -28,6 +28,7 @@ import (
 	localmigrations "github.com/spacemeshos/go-spacemesh/sql/localsql/migrations"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -307,7 +308,8 @@ func RecoverFromLocalFile(
 			)
 		}
 		for id, marriage := range data.marriages {
-			if err = identities.SetMarriage(tx, id, marriage); err != nil {
+			marriage.NodeID = id
+			if err = marriage.Add(tx, id, marriage); err != nil {
 				return fmt.Errorf("add marriage for %s: %w", id.String(), err)
 			}
 		}
@@ -389,11 +391,12 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 	marriages := make(map[types.NodeID]*identities.MarriageData, len(checkpoint.Data.Marriages))
 	for atx, ms := range checkpoint.Data.Marriages {
 		for _, m := range ms {
-			marriage := identities.MarriageData{
-				ATX:       atx,
-				Index:     m.Index,
-				Signature: types.EdSignature(m.Signature),
-				Target:    types.BytesToNodeID(m.MarriedTo),
+			marriage := marriage.Info{
+				NodeID:        types.BytesToNodeID(m.Signer),
+				ATX:           atx,
+				MarriageIndex: m.Index,
+				Signature:     types.EdSignature(m.Signature),
+				Target:        types.BytesToNodeID(m.MarriedTo),
 			}
 			marriages[types.BytesToNodeID(m.Signer)] = &marriage
 		}

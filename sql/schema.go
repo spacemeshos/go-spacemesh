@@ -34,12 +34,12 @@ func LoadDBSchemaScript(db Executor) (string, error) {
 	if _, err = db.Exec(`
 		SELECT tbl_name, sql || ';'
 		FROM sqlite_master
-        WHERE sql IS NOT NULL AND tbl_name NOT LIKE 'sqlite_%'
-        ORDER BY
+		WHERE sql IS NOT NULL AND tbl_name NOT LIKE 'sqlite_%'
+		ORDER BY
 			CASE WHEN type = 'table' THEN 1 ELSE 2 END, -- ensures tables are first
 			tbl_name,									-- tables are sorted by name, then all other objects
 			name										-- (indexes, triggers, etc.) also by name
-		`, nil, func(st *Statement) bool {
+	`, nil, func(st *Statement) bool {
 		fmt.Fprintln(&sb, st.ColumnText(1))
 		return true
 	}); err != nil {

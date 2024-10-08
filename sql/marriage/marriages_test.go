@@ -15,24 +15,25 @@ import (
 func TestFindByNodeID(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
-	info := marriage.Info{
-		NodeID:         types.RandomNodeID(),
-		MarriageATX:    types.RandomATXID(),
-		MarriageIndex:  rand.N(256),
-		MarriageTarget: types.RandomNodeID(),
-		MarriageSig:    types.RandomEdSignature(),
-	}
-
 	id1, err := marriage.NewID(db)
 	require.NoError(t, err)
 	require.NotZero(t, id1)
 
-	err = marriage.Add(db, id1, info)
+	info := marriage.Info{
+		ID:            id1,
+		NodeID:        types.RandomNodeID(),
+		ATX:           types.RandomATXID(),
+		MarriageIndex: rand.N(256),
+		Target:        types.RandomNodeID(),
+		Signature:     types.RandomEdSignature(),
+	}
+	err = marriage.Add(db, info)
 	require.NoError(t, err)
 
 	id, err := marriage.FindIDByNodeID(db, info.NodeID)
 	require.NoError(t, err)
 	require.Equal(t, id1, id)
+	info.ID = id1
 
 	res, err := marriage.FindByNodeID(db, info.NodeID)
 	require.NoError(t, err)
@@ -48,24 +49,25 @@ func TestFindByNodeID(t *testing.T) {
 func TestAdd(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
-	info := marriage.Info{
-		NodeID:         types.RandomNodeID(),
-		MarriageATX:    types.RandomATXID(),
-		MarriageIndex:  rand.N(256),
-		MarriageTarget: types.RandomNodeID(),
-		MarriageSig:    types.RandomEdSignature(),
-	}
-
 	id1, err := marriage.NewID(db)
 	require.NoError(t, err)
 	require.NotZero(t, id1)
 
-	err = marriage.Add(db, id1, info)
+	info := marriage.Info{
+		ID:            id1,
+		NodeID:        types.RandomNodeID(),
+		ATX:           types.RandomATXID(),
+		MarriageIndex: rand.N(256),
+		Target:        types.RandomNodeID(),
+		Signature:     types.RandomEdSignature(),
+	}
+	err = marriage.Add(db, info)
 	require.NoError(t, err)
 
 	id, err := marriage.FindIDByNodeID(db, info.NodeID)
 	require.NoError(t, err)
 	require.Equal(t, id1, id)
+	info.ID = id1
 
 	res, err := marriage.FindByNodeID(db, info.NodeID)
 	require.NoError(t, err)
@@ -81,19 +83,20 @@ func TestAdd(t *testing.T) {
 func TestAddUpdatesExisting(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
-	info := marriage.Info{
-		NodeID:         types.RandomNodeID(),
-		MarriageATX:    types.RandomATXID(),
-		MarriageIndex:  rand.N(256),
-		MarriageTarget: types.RandomNodeID(),
-		MarriageSig:    types.RandomEdSignature(),
-	}
-
 	id1, err := marriage.NewID(db)
 	require.NoError(t, err)
 	require.NotZero(t, id1)
 
-	err = marriage.Add(db, id1, info)
+	info := marriage.Info{
+		ID:            id1,
+		NodeID:        types.RandomNodeID(),
+		ATX:           types.RandomATXID(),
+		MarriageIndex: rand.N(256),
+		Target:        types.RandomNodeID(),
+		Signature:     types.RandomEdSignature(),
+	}
+
+	err = marriage.Add(db, info)
 	require.NoError(t, err)
 
 	id2, err := marriage.NewID(db)
@@ -101,16 +104,16 @@ func TestAddUpdatesExisting(t *testing.T) {
 	require.NotZero(t, id2)
 	require.NotEqual(t, id1, id2)
 
-	info = marriage.Info{
-		NodeID:         info.NodeID,
-		MarriageATX:    types.RandomATXID(),
-		MarriageIndex:  rand.N(256),
-		MarriageTarget: types.RandomNodeID(),
-		MarriageSig:    types.RandomEdSignature(),
-	}
-
 	// this updates the existing entry (e.g. when `nodeID` married a second time)
-	err = marriage.Add(db, id1, info)
+	info = marriage.Info{
+		ID:            id1,
+		NodeID:        info.NodeID,
+		ATX:           types.RandomATXID(),
+		MarriageIndex: rand.N(256),
+		Target:        types.RandomNodeID(),
+		Signature:     types.RandomEdSignature(),
+	}
+	err = marriage.Add(db, info)
 	require.NoError(t, err)
 
 	res, err := marriage.FindByNodeID(db, info.NodeID)
@@ -118,7 +121,8 @@ func TestAddUpdatesExisting(t *testing.T) {
 	require.Equal(t, info, res)
 
 	// this would assign nodeID to a different marriage set and should fail
-	err = marriage.Add(db, id2, info)
+	info.ID = id2
+	err = marriage.Add(db, info)
 	require.ErrorIs(t, err, sql.ErrConflict)
 	require.ErrorContains(t, err, info.NodeID.String())
 }
@@ -126,19 +130,19 @@ func TestAddUpdatesExisting(t *testing.T) {
 func TestAddUniqueConstraints(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
-	info := marriage.Info{
-		NodeID:         types.RandomNodeID(),
-		MarriageATX:    types.RandomATXID(),
-		MarriageIndex:  1,
-		MarriageTarget: types.RandomNodeID(),
-		MarriageSig:    types.RandomEdSignature(),
-	}
-
 	id1, err := marriage.NewID(db)
 	require.NoError(t, err)
 	require.NotZero(t, id1)
 
-	err = marriage.Add(db, id1, info)
+	info := marriage.Info{
+		ID:            id1,
+		NodeID:        types.RandomNodeID(),
+		ATX:           types.RandomATXID(),
+		MarriageIndex: 1,
+		Target:        types.RandomNodeID(),
+		Signature:     types.RandomEdSignature(),
+	}
+	err = marriage.Add(db, info)
 	require.NoError(t, err)
 
 	// same node can't be married twice
@@ -147,25 +151,27 @@ func TestAddUniqueConstraints(t *testing.T) {
 	require.NotZero(t, id1)
 	require.NotEqual(t, id1, id2)
 
-	err = marriage.Add(db, id2, info)
+	info.ID = id2
+	err = marriage.Add(db, info)
 	require.ErrorIs(t, err, sql.ErrConflict)
 
 	// different nodeID, same marriageATX with different index should be allowed
+	info.ID = id1
 	info.NodeID = types.RandomNodeID()
 	info.MarriageIndex = 2
-	err = marriage.Add(db, id1, info)
+	err = marriage.Add(db, info)
 	require.NoError(t, err)
 
 	// different nodeID, same marriageATX with same index should fail
 	info.NodeID = types.RandomNodeID()
-	err = marriage.Add(db, id1, info)
+	err = marriage.Add(db, info)
 	require.ErrorIs(t, err, sql.ErrObjectExists)
 
 	// different nodeID, different marriageATX with same index should be allowed
 	info.NodeID = types.RandomNodeID()
-	info.MarriageATX = types.RandomATXID()
+	info.ATX = types.RandomATXID()
 	info.MarriageIndex = 2
-	err = marriage.Add(db, id1, info)
+	err = marriage.Add(db, info)
 	require.NoError(t, err)
 }
 
@@ -174,9 +180,9 @@ func TestNodeIDsByID(t *testing.T) {
 
 	nodeIDs := make([]types.NodeID, 3)
 	info := marriage.Info{
-		MarriageATX:    types.RandomATXID(),
-		MarriageTarget: types.RandomNodeID(),
-		MarriageSig:    types.RandomEdSignature(),
+		ATX:       types.RandomATXID(),
+		Target:    types.RandomNodeID(),
+		Signature: types.RandomEdSignature(),
 	}
 
 	id1, err := marriage.NewID(db)
@@ -185,19 +191,20 @@ func TestNodeIDsByID(t *testing.T) {
 
 	for i := range nodeIDs {
 		nodeIDs[i] = types.RandomNodeID()
-		err = marriage.Add(db, id1, marriage.Info{
-			NodeID:         nodeIDs[i],
-			MarriageATX:    info.MarriageATX,
-			MarriageIndex:  i,
-			MarriageTarget: info.MarriageTarget,
-			MarriageSig:    info.MarriageSig,
+		err = marriage.Add(db, marriage.Info{
+			ID:            id1,
+			NodeID:        nodeIDs[i],
+			ATX:           info.ATX,
+			MarriageIndex: i,
+			Target:        info.Target,
+			Signature:     info.Signature,
 		})
 		require.NoError(t, err)
 	}
 
 	res, err := marriage.NodeIDsByID(db, id1)
 	require.NoError(t, err)
-	require.Equal(t, nodeIDs, res)
+	require.ElementsMatch(t, nodeIDs, res)
 
 	// NewID should return a different ID
 	id2, err := marriage.NewID(db)
