@@ -30,6 +30,8 @@ var (
 	ErrNotFound = errors.New("database: not found")
 	// ErrObjectExists is returned if database constraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
+	// ErrConflict is returned if database constraints didn't allow to update an object.
+	ErrConflict = errors.New("database: conflict")
 	// ErrTooNew is returned if database version is newer than expected.
 	ErrTooNew = errors.New("database version is too new")
 	// ErrOldSchema is returned when the database version differs from the expected one
