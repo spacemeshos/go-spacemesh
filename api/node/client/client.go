@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -13,9 +14,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
+	externalRef0 "github.com/spacemeshos/go-spacemesh/api/node/models"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -122,5 +125,24 @@ func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProof
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status: %s", resp.Status)
 	}
+	return nil
+}
+
+func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.Round) ([]byte, error) {
+	resp, err := s.client.GetHareRoundTemplateLayerRoundWithBody(ctx, externalRef0.LayerID(layer), externalRef0.HareRound(round), "application/octet-stream", nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read all: %w", err)
+	}
+	return bytes, nil
+}
+
+func (s *NodeService) PublishHareMessage(ctx context.Context, msg []byte) error {
 	return nil
 }

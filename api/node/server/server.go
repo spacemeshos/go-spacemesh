@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -26,10 +27,15 @@ type poetDB interface {
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 
+type hare interface {
+	RoundMessage(layer types.LayerID, round hare3.Round) *hare3.Message
+}
+
 type Server struct {
 	atxService activation.AtxService
 	publisher  pubsub.Publisher
 	poetDB     poetDB
+	hare       hare
 	logger     *zap.Logger
 }
 
@@ -196,4 +202,30 @@ func (s *Server) PostPoet(ctx context.Context, request PostPoetRequestObject) (P
 		}, nil
 	}
 	return PostPoet200Response{}, nil
+}
+
+type hareResponse struct {
+	message []byte
+}
+
+func (h *hareResponse) VisitGetHareRoundTemplateLayerRoundResponse(w http.ResponseWriter) error {
+	if h.message == nil {
+		w.WriteHeader(204) // no content
+		return nil
+	}
+	w.Header().Add("content-type", "application/octet-stream")
+	w.WriteHeader(200)
+	_, err := w.Write(h.message)
+	return err
+}
+
+func (s *Server) GetHareRoundTemplateLayerRound(ctx context.Context, request GetHareRoundTemplateLayerRoundRequestObject) (GetHareRoundTemplateLayerRoundResponseObject, error) {
+	msg := s.hare.RoundMessage(types.LayerID(request.Layer), hare3.Round(request.Round))
+	if msg == nil {
+		return &hareResponse{}, nil
+	}
+
+	return &hareResponse{
+		message: codec.MustEncode(msg),
+	}, nil
 }

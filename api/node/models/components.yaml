@@ -42,3 +42,9 @@ components:
     EpochID:
       type: integer
       format: uint32
+    LayerID:
+      type: integer
+      format: uint64
+    HareRound:
+      type: integer
+      format: uint8

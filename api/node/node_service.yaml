@@ -122,3 +122,51 @@ paths:
             plain/text:
               schema:
                 type: string
+  /hare/round_template/{layer}/{round}:
+    get:
+      summary: Get a hare message to sign
+      tags:
+        - "hare"
+      parameters:
+        - in: path
+          name: layer 
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/LayerID"
+        - in: path
+          name: round
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/HareRound"
+      requestBody:
+        required: false
+      responses:
+        "200":
+          description: successfully found the message to return to client
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: did not find a message to retrieve
+  /hare/publish:
+    post:
+      summary: Publish a signed hare message
+      tags:
+        - "hare"
+      requestBody:
+        required: true
+        description: hare message to publish serialize in binary form
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "202":
+          description: successfully accepted the message and queued it to be published over pubsub
+        "500":
+          description: could not process request
+
+

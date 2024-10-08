@@ -115,6 +115,12 @@ type ClientInterface interface {
 	// GetActivationPositioningAtxPublishEpoch request
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostHarePublishWithBody request with any body
+	PostHarePublishWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetHareRoundTemplateLayerRoundWithBody request with any body
+	GetHareRoundTemplateLayerRoundWithBody(ctx context.Context, layer externalRef0.LayerID, round externalRef0.HareRound, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostPoetWithBody request with any body
 	PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -148,6 +154,30 @@ func (c *Client) GetActivationLastAtxNodeId(ctx context.Context, nodeId external
 
 func (c *Client) GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetActivationPositioningAtxPublishEpochRequest(c.Server, publishEpoch)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostHarePublishWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostHarePublishRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetHareRoundTemplateLayerRoundWithBody(ctx context.Context, layer externalRef0.LayerID, round externalRef0.HareRound, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHareRoundTemplateLayerRoundRequestWithBody(c.Server, layer, round, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -284,6 +314,78 @@ func NewGetActivationPositioningAtxPublishEpochRequest(server string, publishEpo
 	return req, nil
 }
 
+// NewPostHarePublishRequestWithBody generates requests for PostHarePublish with any type of body
+func NewPostHarePublishRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/hare/publish")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetHareRoundTemplateLayerRoundRequestWithBody generates requests for GetHareRoundTemplateLayerRound with any type of body
+func NewGetHareRoundTemplateLayerRoundRequestWithBody(server string, layer externalRef0.LayerID, round externalRef0.HareRound, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "layer", runtime.ParamLocationPath, layer)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "round", runtime.ParamLocationPath, round)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/hare/round_template/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewPostPoetRequestWithBody generates requests for PostPoet with any type of body
 func NewPostPoetRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
@@ -401,6 +503,12 @@ type ClientWithResponsesInterface interface {
 	// GetActivationPositioningAtxPublishEpochWithResponse request
 	GetActivationPositioningAtxPublishEpochWithResponse(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetActivationPositioningAtxPublishEpochResponse, error)
 
+	// PostHarePublishWithBodyWithResponse request with any body
+	PostHarePublishWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostHarePublishResponse, error)
+
+	// GetHareRoundTemplateLayerRoundWithBodyWithResponse request with any body
+	GetHareRoundTemplateLayerRoundWithBodyWithResponse(ctx context.Context, layer externalRef0.LayerID, round externalRef0.HareRound, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GetHareRoundTemplateLayerRoundResponse, error)
+
 	// PostPoetWithBodyWithResponse request with any body
 	PostPoetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPoetResponse, error)
 
@@ -476,6 +584,48 @@ func (r GetActivationPositioningAtxPublishEpochResponse) StatusCode() int {
 	return 0
 }
 
+type PostHarePublishResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r PostHarePublishResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostHarePublishResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetHareRoundTemplateLayerRoundResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r GetHareRoundTemplateLayerRoundResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetHareRoundTemplateLayerRoundResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PostPoetResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -543,6 +693,24 @@ func (c *ClientWithResponses) GetActivationPositioningAtxPublishEpochWithRespons
 		return nil, err
 	}
 	return ParseGetActivationPositioningAtxPublishEpochResponse(rsp)
+}
+
+// PostHarePublishWithBodyWithResponse request with arbitrary body returning *PostHarePublishResponse
+func (c *ClientWithResponses) PostHarePublishWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostHarePublishResponse, error) {
+	rsp, err := c.PostHarePublishWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostHarePublishResponse(rsp)
+}
+
+// GetHareRoundTemplateLayerRoundWithBodyWithResponse request with arbitrary body returning *GetHareRoundTemplateLayerRoundResponse
+func (c *ClientWithResponses) GetHareRoundTemplateLayerRoundWithBodyWithResponse(ctx context.Context, layer externalRef0.LayerID, round externalRef0.HareRound, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GetHareRoundTemplateLayerRoundResponse, error) {
+	rsp, err := c.GetHareRoundTemplateLayerRoundWithBody(ctx, layer, round, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetHareRoundTemplateLayerRoundResponse(rsp)
 }
 
 // PostPoetWithBodyWithResponse request with arbitrary body returning *PostPoetResponse
@@ -638,6 +806,38 @@ func ParseGetActivationPositioningAtxPublishEpochResponse(rsp *http.Response) (*
 		}
 		response.JSON200 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParsePostHarePublishResponse parses an HTTP response from a PostHarePublishWithResponse call
+func ParsePostHarePublishResponse(rsp *http.Response) (*PostHarePublishResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostHarePublishResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetHareRoundTemplateLayerRoundResponse parses an HTTP response from a GetHareRoundTemplateLayerRoundWithResponse call
+func ParseGetHareRoundTemplateLayerRoundResponse(rsp *http.Response) (*GetHareRoundTemplateLayerRoundResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetHareRoundTemplateLayerRoundResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil
