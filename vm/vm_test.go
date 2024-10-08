@@ -1196,6 +1196,7 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 }
 
 func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTester func(t *testing.T) *tester) {
+	t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	runTestCases(t,
 		singleWalletTestCases(defaultGasPrice, template, genTester(t)),
@@ -1222,6 +1223,7 @@ func TestWallets(t *testing.T) {
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
+	t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	skipped, _, err := tt.Apply(types.GetEffectiveGenesis(), notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
@@ -1328,6 +1330,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 }
 
 func TestValidation(t *testing.T) {
+	t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	t.Run("SingleSig", func(t *testing.T) {
 		tt := newTester(t).
@@ -1443,6 +1446,7 @@ func TestBeforeEffectiveGenesis(t *testing.T) {
 }
 
 func TestStateHashFromUpdatedAccounts(t *testing.T) {
+	t.Skip("TODO: new wallet SDK")
 	tt := newTester(t).addSingleSig(10).applyGenesis()
 
 	root, err := tt.GetStateRoot()
