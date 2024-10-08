@@ -198,7 +198,7 @@ func RecoverWithDb(
 type recoveryData struct {
 	accounts  []*types.Account
 	atxs      []*atxs.CheckpointAtx
-	marriages map[marriage.ID]marriage.Info
+	marriages []marriage.Info
 }
 
 func RecoverFromLocalFile(
@@ -386,17 +386,18 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		cAtx.Units = atx.Units
 		allAtxs = append(allAtxs, &cAtx)
 	}
-	marriages := make(map[marriage.ID]marriage.Info, len(checkpoint.Data.Marriages))
+	marriages := make([]marriage.Info, 0, len(checkpoint.Data.Marriages))
 	for id, ms := range checkpoint.Data.Marriages {
 		for _, m := range ms {
 			info := marriage.Info{
+				ID:            marriage.ID(id),
 				NodeID:        types.BytesToNodeID(m.Signer),
 				ATX:           types.ATXID(m.ATX),
 				MarriageIndex: m.Index,
 				Signature:     types.EdSignature(m.Signature),
 				Target:        types.BytesToNodeID(m.MarriedTo),
 			}
-			marriages[marriage.ID(id)] = info
+			marriages = append(marriages, info)
 		}
 	}
 
