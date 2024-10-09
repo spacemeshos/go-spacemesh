@@ -71,7 +71,9 @@ func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonc
 }
 
 func (a *singlesigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
-	return sdkwallet.SelfSpawn(a.pk, nonce, opts...)
+	// TODO(lane): rewrite to use spawn, not selfspawn
+	// return sdkwallet.SelfSpawn(a.pk, nonce, opts...)
+	panic("TODO: self spawn not yet implemented")
 }
 
 func (a *singlesigAccount) spawn(

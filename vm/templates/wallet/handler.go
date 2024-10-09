@@ -26,7 +26,7 @@ var (
 
 type handler struct{}
 
-// Parse header and arguments.
+// Parse header.
 func (*handler) Parse(decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	var p core.Payload
 	if _, err = p.DecodeScale(decoder); err != nil {
@@ -66,15 +66,4 @@ func (*handler) Exec(host core.Host, args []byte) error {
 	return fmt.Errorf("%w: unknown method", core.ErrMalformed)
 	// }
 	// return nil
-}
-
-// Args ...
-func (h *handler) Args() scale.Type {
-	// switch method {
-	// case core.MethodSpawn:
-	// 	return &SpawnArguments{}
-	// case core.MethodSpend:
-	// 	return &SpendArguments{}
-	// }
-	return nil
 }

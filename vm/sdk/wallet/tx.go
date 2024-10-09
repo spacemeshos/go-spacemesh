@@ -25,12 +25,6 @@ func encode(fields ...scale.Encodable) []byte {
 	return buf.Bytes()
 }
 
-// SelfSpawn creates a self-spawn transaction.
-func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
-	// TODO(lane): self-spawn has not yet been implemented for Athena
-	panic("self-spawn not yet implemented")
-}
-
 // Spawn creates a spawn transaction.
 func Spawn(
 	pk signing.PrivateKey,
