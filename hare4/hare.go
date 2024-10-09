@@ -474,11 +474,13 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	if msg.IterRound.Round == preround {
 		// this will mutate the message to conform to the (hopefully)
 		// original sent message for signature validation to occur
+		h.log.Info("got preround message with compacts", zap.Int("nr compacts", len(compacts)), zap.Inline(msg))
 		compacts = msg.Value.CompactProposals
 		messageCompactsCounter.Add(float64(len(compacts)))
 		err := h.reconstructProposals(ctx, peer, msgId, msg)
 		switch {
 		case errors.Is(err, errCannotMatchProposals):
+			h.log.Info("preround message but couldn't reconstruct", zap.Int("nr compacts", len(compacts)), zap.Inline(msg))
 			msg.Value.Proposals, err = h.fetchFull(ctx, peer, msgId)
 			if err != nil {
 				return fmt.Errorf("fetch full: %w", err)
@@ -487,6 +489,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 			msg.Value.CompactProposals = []types.CompactProposalID{}
 			fetched = true
 		case err != nil:
+			h.log.Info("preround message reconstruct failed", zap.Error(err))
 			return fmt.Errorf("reconstruct proposals: %w", err)
 		}
 	}
