@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -46,16 +45,13 @@ func (*handler) New(args any) (core.Template, error) {
 
 // Load single sig wallet from stored state.
 func (*handler) Load(state []byte) (core.Template, error) {
-	decoder := scale.NewDecoder(bytes.NewReader(state))
+	// TODO(lane): pass blob into VM to instantiate the template instance (program)
 	var wallet Wallet
-	if _, err := wallet.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("%w: malformed state %w", core.ErrInternal, err)
-	}
 	return &wallet, nil
 }
 
 // Exec spawn or spend based on the method selector.
-func (*handler) Exec(host core.Host, args scale.Encodable) error {
+func (*handler) Exec(host core.Host, args []byte) error {
 	// TODO(lane): rewrite to use the VM
 	// switch method {
 	// case core.MethodSpawn:

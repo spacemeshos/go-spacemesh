@@ -37,13 +37,9 @@ type (
 type Handler interface {
 	// Parse header and arguments from the payload.
 	Parse(*scale.Decoder) (ParseOutput, error)
-	// TODO(lane): update to use the VM
-	// Args returns method arguments for the method.
-	Args() scale.Type
 
-	// TODO(lane): update to use the VM
 	// Exec dispatches execution request based on the method selector.
-	Exec(Host, scale.Encodable) error
+	Exec(Host, []byte) error
 
 	// New instantiates Template from spawn arguments.
 	New(any) (Template, error)

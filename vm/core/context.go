@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 
-	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -22,13 +21,11 @@ type Context struct {
 	PrincipalTemplate Template
 	PrincipalAccount  Account
 
-	ParseOutput ParseOutput
-	Gas         struct {
+	Gas struct {
 		BaseGas  uint64
 		FixedGas uint64
 	}
 	Header Header
-	Args   scale.Encodable
 
 	// consumed is in gas units and will be used
 	consumed uint64
