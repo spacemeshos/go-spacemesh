@@ -27,6 +27,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
+const (
+	testTickSize = 1
+)
+
 func Test_HTTPPoetClient_ParsesURL(t *testing.T) {
 	cfg := server.DefaultRoundConfig()
 
@@ -207,7 +211,7 @@ func TestPoetClient_CachesProof(t *testing.T) {
 
 	client, err := NewHTTPPoetClient(server, DefaultPoetConfig(), withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
-	poet := NewPoetServiceWithClient(db, client, DefaultPoetConfig(), zaptest.NewLogger(t))
+	poet := NewPoetServiceWithClient(db, client, DefaultPoetConfig(), zaptest.NewLogger(t), testTickSize)
 
 	eg := errgroup.Group{}
 	for range 20 {
@@ -235,7 +239,7 @@ func TestPoetClient_QueryProofTimeout(t *testing.T) {
 	client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{
 		PhaseShift: cfg.PhaseShift,
 	}, nil)
-	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize)
 
 	// any additional call on Info will block
 	client.EXPECT().Proof(gomock.Any(), "1").DoAndReturn(
@@ -299,7 +303,8 @@ func TestPoetClient_Certify(t *testing.T) {
 
 		client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 		require.NoError(t, err)
-		poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+		poet := NewPoetServiceWithClient(
+			nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 
 		got, err := poet.Certify(context.Background(), sig.NodeID())
 		require.NoError(t, err)
@@ -328,7 +333,8 @@ func TestPoetClient_Certify(t *testing.T) {
 		client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 		require.NoError(t, err)
 
-		poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+		poet := NewPoetServiceWithClient(
+			nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 		_, err = poet.Certify(context.Background(), sig.NodeID())
 		require.ErrorIs(t, err, ErrCertificatesNotSupported)
 	})
@@ -371,7 +377,7 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 
 	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
-	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 
 	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
@@ -434,7 +440,7 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 
 	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
-	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 
 	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
@@ -509,7 +515,7 @@ func TestPoetClient_FallbacksToPowWhenCannotRecertify(t *testing.T) {
 	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), WithCertifier(mCertifier))
+	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 
 	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
@@ -541,7 +547,7 @@ func TestPoetService_CachesCertifierInfo(t *testing.T) {
 			client.EXPECT().Address().Return("some_addr").AnyTimes()
 			client.EXPECT().Info(gomock.Any()).Return(poetInfoResp, nil)
 
-			poet := NewPoetServiceWithClient(db, client, cfg, zaptest.NewLogger(t))
+			poet := NewPoetServiceWithClient(db, client, cfg, zaptest.NewLogger(t), testTickSize)
 
 			if tc.ttl == 0 {
 				client.EXPECT().Info(gomock.Any()).Times(5).Return(poetInfoResp, nil)
@@ -575,7 +581,7 @@ func TestPoetService_CachesPowParams(t *testing.T) {
 			client.EXPECT().Info(gomock.Any()).Return(&types.PoetInfo{}, nil)
 			client.EXPECT().Address().Return("some_address").AnyTimes()
 
-			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize)
 
 			params := PoetPowParams{
 				Challenge:  types.RandomBytes(10),
@@ -609,7 +615,7 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 				PhaseShift: phaseShift,
 			}, nil)
 
-			NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize)
 		})
 
 	t.Run("poet service created: phase shift is not fetched",
@@ -621,7 +627,7 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 			client.EXPECT().Address().Return("some_addr").AnyTimes()
 			client.EXPECT().Info(gomock.Any()).Return(nil, errors.New("some error"))
 
-			NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize)
 		})
 
 	t.Run("poet service creation failed: expected and fetched phase shift are not matching",
@@ -636,7 +642,7 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 			}, nil)
 
 			log := zaptest.NewLogger(t).WithOptions(zap.WithFatalHook(calledFatal(t)))
-			NewPoetServiceWithClient(nil, client, cfg, log)
+			NewPoetServiceWithClient(nil, client, cfg, log, testTickSize)
 		})
 
 	t.Run("fetch phase shift before submitting challenge: success",
@@ -648,7 +654,7 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 			client.EXPECT().Address().Return("some_addr").AnyTimes()
 			client.EXPECT().Info(gomock.Any()).Return(nil, errors.New("some error"))
 
-			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize)
 			sig, err := signing.NewEdSigner()
 			require.NoError(t, err)
 
@@ -673,7 +679,7 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 			client.EXPECT().Address().Return("some_addr").AnyTimes()
 			client.EXPECT().Info(gomock.Any()).Return(nil, errors.New("some error"))
 
-			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t))
+			poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize)
 			sig, err := signing.NewEdSigner()
 			require.NoError(t, err)
 
@@ -694,7 +700,7 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 			client.EXPECT().Info(gomock.Any()).Return(nil, errors.New("some error"))
 
 			log := zaptest.NewLogger(t).WithOptions(zap.WithFatalHook(calledFatal(t)))
-			poet := NewPoetServiceWithClient(nil, client, cfg, log)
+			poet := NewPoetServiceWithClient(nil, client, cfg, log, testTickSize)
 			sig, err := signing.NewEdSigner()
 			require.NoError(t, err)
 

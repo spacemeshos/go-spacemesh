@@ -168,6 +168,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
 		}, cfg.POET,
 		logger,
+		1,
 		activation.WithCertifier(certifier),
 	)
 	require.NoError(t, err)

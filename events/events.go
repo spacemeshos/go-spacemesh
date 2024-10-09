@@ -74,6 +74,53 @@ func EmitInitComplete(nodeID types.NodeID) {
 	)
 }
 
+func EmitRegisteredInPoet(nodeID types.NodeID, url, roundID string) {
+	const help = "Registered in PoET."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_RegisteredInPoet{
+			RegisteredInPoet: &pb.EventRegisteredInPoet{
+				Url:     url,
+				RoundId: roundID,
+				Smesher: nodeID.Bytes(),
+			},
+		},
+	)
+}
+
+func EmitProofDownloadedFromPoet(url, roundID string, ticks uint64) {
+	const help = "Downloaded proof from PoET."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_ProofDownloadedFromPoet{
+			ProofDownloadedFromPoet: &pb.EventProofDownloadedFromPoet{
+				Url:     url,
+				Ticks:   ticks,
+				RoundId: roundID,
+			},
+		},
+	)
+}
+
+func EmitBestProofSelected(nodeID types.NodeID, url, roundID string, ticks uint64) {
+	const help = "Best PoET proof selected."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_BestProofSelected{
+			BestProofSelected: &pb.EventBestProofSelected{
+				Url:     url,
+				Ticks:   ticks,
+				RoundId: roundID,
+				Smesher: nodeID.Bytes(),
+			},
+		},
+	)
+}
+
+// Deprecation. Will be removed soon in favor of EmitWaitingForPoETRegistrationWindow.
 func EmitPoetWaitRound(nodeID types.NodeID, current, publish types.EpochID, wait time.Time) {
 	const help = "Node is waiting for PoET registration window in current epoch to open. " +
 		"After this it will submit challenge and wait until PoET round ends in publish epoch."
@@ -90,6 +137,24 @@ func EmitPoetWaitRound(nodeID types.NodeID, current, publish types.EpochID, wait
 	)
 }
 
+func EmitWaitingForPoETRegistrationWindow(nodeID types.NodeID, current, publish types.EpochID, roundEnd time.Time) {
+	const help = "Node is waiting for PoET registration window in current epoch to open. " +
+		"After this it will submit challenge and wait until PoET round ends in publish epoch."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_WaitingForPoetRegistrationWindow{
+			WaitingForPoetRegistrationWindow: &pb.EventWaitingForPoETRegistrationWindow{
+				Current:  current.Uint32(),
+				Publish:  publish.Uint32(),
+				RoundEnd: timestamppb.New(roundEnd),
+				Smesher:  nodeID.Bytes(),
+			},
+		},
+	)
+}
+
+// Deprecation. Will be removed soon in favor of EmitWaitingForPoETRegistrationWindow.
 func EmitPoetWaitProof(nodeID types.NodeID, publish types.EpochID, wait time.Time) {
 	const help = "Node is waiting for PoET to complete. " +
 		"After it's complete, the node will fetch the PoET proof, generate a PoST proof, " +
@@ -104,6 +169,24 @@ func EmitPoetWaitProof(nodeID types.NodeID, publish types.EpochID, wait time.Tim
 				Wait:    durationpb.New(time.Until(wait)),
 				Until:   timestamppb.New(wait),
 				Smesher: nodeID.Bytes(),
+			},
+		},
+	)
+}
+
+func EmitWaitingForPoETRoundEnd(nodeID types.NodeID, publish types.EpochID, roundEnd time.Time) {
+	const help = "Node is waiting for PoET to complete. " +
+		"After it's complete, the node will fetch the PoET proof, generate a PoST proof, " +
+		"and finally publish an ATX to establish eligibility for rewards in the target epoch."
+	emitUserEvent(
+		help,
+		false,
+		&pb.Event_WaitingForPoetRoundEnd{
+			WaitingForPoetRoundEnd: &pb.EventWaitingForPoETRoundEnd{
+				Publish:  publish.Uint32(),
+				Target:   publish.Add(1).Uint32(),
+				RoundEnd: timestamppb.New(roundEnd),
+				Smesher:  nodeID.Bytes(),
 			},
 		},
 	)

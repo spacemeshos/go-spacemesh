@@ -200,7 +200,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	require.NoError(t, err)
 
 	client := ae2e.NewTestPoetClient(1, poetCfg)
-	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
@@ -275,7 +275,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
 	require.NoError(t, err)
 	client := ae2e.NewTestPoetClient(len(signers), poetCfg)
-	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
