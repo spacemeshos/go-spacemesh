@@ -93,7 +93,7 @@ type sender struct {
 	Conduit
 }
 
-func (s sender) sendFingerprint(x, y KeyBytes, fp Fingerprint, count int) error {
+func (s sender) SendFingerprint(x, y KeyBytes, fp Fingerprint, count int) error {
 	return s.Send(&FingerprintMessage{
 		RangeX:           chash(x),
 		RangeY:           chash(y),
@@ -102,18 +102,18 @@ func (s sender) sendFingerprint(x, y KeyBytes, fp Fingerprint, count int) error 
 	})
 }
 
-func (s sender) sendEmptySet() error {
+func (s sender) SendEmptySet() error {
 	return s.Send(&EmptySetMessage{})
 }
 
-func (s sender) sendEmptyRange(x, y KeyBytes) error {
+func (s sender) SendEmptyRange(x, y KeyBytes) error {
 	return s.Send(&EmptyRangeMessage{
 		RangeX: chash(x),
 		RangeY: chash(y),
 	})
 }
 
-func (s sender) sendRangeContents(x, y KeyBytes, count int) error {
+func (s sender) SendRangeContents(x, y KeyBytes, count int) error {
 	return s.Send(&RangeContentsMessage{
 		RangeX:   chash(x),
 		RangeY:   chash(y),
@@ -121,7 +121,7 @@ func (s sender) sendRangeContents(x, y KeyBytes, count int) error {
 	})
 }
 
-func (s sender) sendChunk(items []KeyBytes) error {
+func (s sender) SendChunk(items []KeyBytes) error {
 	msg := ItemBatchMessage{
 		ContentKeys: KeyCollection{
 			Keys: slices.Clone(items),
@@ -130,15 +130,15 @@ func (s sender) sendChunk(items []KeyBytes) error {
 	return s.Send(&msg)
 }
 
-func (s sender) sendEndRound() error {
+func (s sender) SendEndRound() error {
 	return s.Send(&EndRoundMessage{})
 }
 
-func (s sender) sendDone() error {
+func (s sender) SendDone() error {
 	return s.Send(&DoneMessage{})
 }
 
-func (s sender) sendProbe(x, y KeyBytes, fp Fingerprint, sampleSize int) error {
+func (s sender) SendProbe(x, y KeyBytes, fp Fingerprint, sampleSize int) error {
 	return s.Send(&ProbeMessage{
 		RangeFingerprint: fp,
 		SampleSize:       uint32(sampleSize),
@@ -147,7 +147,7 @@ func (s sender) sendProbe(x, y KeyBytes, fp Fingerprint, sampleSize int) error {
 	})
 }
 
-func (s sender) sendSample(
+func (s sender) SendSample(
 	x, y KeyBytes,
 	fp Fingerprint,
 	count, sampleSize int,
@@ -166,7 +166,7 @@ func (s sender) sendSample(
 	})
 }
 
-func (s sender) sendRecent(since time.Time) error {
+func (s sender) SendRecent(since time.Time) error {
 	return s.Send(&RecentMessage{
 		SinceTime: uint64(since.UnixNano()),
 	})

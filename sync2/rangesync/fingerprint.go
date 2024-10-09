@@ -33,11 +33,12 @@ func (fp *Fingerprint) Update(h []byte) {
 }
 
 // BitFromLeft returns the n-th bit from the left in the fingerprint.
-func (fp *Fingerprint) BitFromLeft(n int) bool {
-	if n > FingerprintSize*8 {
+func (fp *Fingerprint) BitFromLeft(i int) bool {
+	bi := i / 8
+	if bi > FingerprintSize {
 		panic("BUG: bad fingerprint bit index")
 	}
-	return (fp[n>>3]>>(7-n&0x7))&1 != 0
+	return fp[bi]&(0x1<<uint(7-i%8)) != 0
 }
 
 // RandomFingerprint generates a random fingerprint.
@@ -55,8 +56,8 @@ func EmptyFingerprint() Fingerprint {
 	return Fingerprint{}
 }
 
-// HexToFingerprint converts a hex string to Fingerprint.
-func HexToFingerprint(s string) Fingerprint {
+// MustParseHexFingerprint converts a hex string to Fingerprint.
+func MustParseHexFingerprint(s string) Fingerprint {
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		panic("bad hex fingerprint: " + err.Error())

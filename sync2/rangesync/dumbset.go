@@ -10,12 +10,16 @@ import (
 	"github.com/zeebo/blake3"
 )
 
+// stringToFP conversts a string to a Fingerprint.
+// It is only used in tests.
 func stringToFP(s string) Fingerprint {
 	h := md5.New()
 	h.Write([]byte(s))
 	return Fingerprint(h.Sum(nil))
 }
 
+// gtePos returns the position of the first item in the given list that is greater than or
+// equal to the given item. If no such item is found, it returns the length of the list.
 func gtePos(all []KeyBytes, item KeyBytes) int {
 	n := slices.IndexFunc(all, func(v KeyBytes) bool {
 		return v.Compare(item) >= 0
@@ -26,6 +30,9 @@ func gtePos(all []KeyBytes, item KeyBytes) int {
 	return len(all)
 }
 
+// naiveRange returns the items in the range [x, y) from the given list of items,
+// supporting wraparound (x > y) and full (x == y) ranges.
+// It also returns the first and last item falling within the range.
 func naiveRange(
 	all []KeyBytes,
 	x, y KeyBytes,
@@ -83,15 +90,18 @@ var naiveFPFunc = func(items []KeyBytes) Fingerprint {
 	return stringToFP(s)
 }
 
+// dumbSet is a simple OrderedSet implementation that doesn't include any optimizations.
+// It is intended to be only used in tests.
 type dumbSet struct {
 	keys         []KeyBytes
-	disableReAdd bool
+	DisableReAdd bool
 	added        map[string]bool
 	fpFunc       func(items []KeyBytes) Fingerprint
 }
 
 var _ OrderedSet = &dumbSet{}
 
+// Receive implements the OrderedSet.
 func (ds *dumbSet) Receive(id KeyBytes) error {
 	if len(ds.keys) == 0 {
 		ds.keys = []KeyBytes{id}
@@ -104,7 +114,7 @@ func (ds *dumbSet) Receive(id KeyBytes) error {
 	case p < 0:
 		ds.keys = append(ds.keys, id)
 	case id.Compare(ds.keys[p]) == 0:
-		if ds.disableReAdd {
+		if ds.DisableReAdd {
 			if ds.added[string(id)] {
 				panic("hash sent twice: " + id.String())
 			}
@@ -121,6 +131,7 @@ func (ds *dumbSet) Receive(id KeyBytes) error {
 	return nil
 }
 
+// seq returns an endless sequence as a SeqResult starting from the given index.
 func (ds *dumbSet) seq(n int) SeqResult {
 	if n < 0 || n > len(ds.keys) {
 		panic("bad index")
@@ -139,6 +150,8 @@ func (ds *dumbSet) seq(n int) SeqResult {
 	}
 }
 
+// seqFor returns an endless sequence as a SeqResult starting from the given key, or the
+// lowest key greater than the given key if the key is not present in the set.
 func (ds *dumbSet) seqFor(s KeyBytes) SeqResult {
 	n := slices.IndexFunc(ds.keys, func(k KeyBytes) bool {
 		return k.Compare(s) == 0
@@ -184,11 +197,13 @@ func (ds *dumbSet) getRangeInfo(
 	return r, end, nil
 }
 
+// GetRangeInfo implements OrderedSet.
 func (ds *dumbSet) GetRangeInfo(x, y KeyBytes, count int) (RangeInfo, error) {
 	ri, _, err := ds.getRangeInfo(x, y, count)
 	return ri, err
 }
 
+// SplitRange implements OrderedSet.
 func (ds *dumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
 	if count <= 0 {
 		panic("BUG: bad split count")
@@ -210,10 +225,12 @@ func (ds *dumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
 	}, nil
 }
 
+// Empty implements OrderedSet.
 func (ds *dumbSet) Empty() (bool, error) {
 	return len(ds.keys) == 0, nil
 }
 
+// Items implements OrderedSet.
 func (ds *dumbSet) Items() SeqResult {
 	if len(ds.keys) == 0 {
 		return EmptySeqResult()
@@ -221,10 +238,12 @@ func (ds *dumbSet) Items() SeqResult {
 	return ds.seq(0)
 }
 
+// Copy implements OrderedSet.
 func (ds *dumbSet) Copy(syncScope bool) OrderedSet {
 	return &dumbSet{keys: slices.Clone(ds.keys)}
 }
 
+// Recent implements OrderedSet.
 func (ds *dumbSet) Recent(since time.Time) (SeqResult, int) {
 	return EmptySeqResult(), 0
 }
@@ -235,9 +254,11 @@ var hashPool = &sync.Pool{
 	},
 }
 
-func NewDumbHashSet(disableReAdd bool) OrderedSet {
+// NewDumbSet creates a new dumbSet instance.
+// If disableReAdd is true, the set will panic if the same item is received twice.
+func NewDumbSet(disableReAdd bool) OrderedSet {
 	return &dumbSet{
-		disableReAdd: disableReAdd,
+		DisableReAdd: disableReAdd,
 		fpFunc: func(items []KeyBytes) (r Fingerprint) {
 			hasher := hashPool.Get().(*blake3.Hasher)
 			defer func() {
@@ -253,26 +274,4 @@ func NewDumbHashSet(disableReAdd bool) OrderedSet {
 			return r
 		},
 	}
-}
-
-type deferredAddSet struct {
-	OrderedSet
-	added map[string]struct{}
-}
-
-func (das *deferredAddSet) Receive(id KeyBytes) error {
-	if das.added == nil {
-		das.added = make(map[string]struct{})
-	}
-	das.added[string(id)] = struct{}{}
-	return nil
-}
-
-func (das *deferredAddSet) addAll() error {
-	for k := range das.added {
-		if err := das.OrderedSet.Receive(KeyBytes(k)); err != nil {
-			return err
-		}
-	}
-	return nil
 }

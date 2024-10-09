@@ -73,8 +73,8 @@ func RandomKeyBytes(size int) KeyBytes {
 	return b
 }
 
-// HexToKeyBytes converts a hex string to KeyBytes.
-func HexToKeyBytes(s string) KeyBytes {
+// MustParseHexKeyBytes converts a hex string to KeyBytes.
+func MustParseHexKeyBytes(s string) KeyBytes {
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		panic("bad hex key bytes: " + err.Error())

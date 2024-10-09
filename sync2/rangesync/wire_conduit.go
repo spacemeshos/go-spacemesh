@@ -37,6 +37,8 @@ func WithMessageLimit(limit int) ConduitOption {
 	}
 }
 
+// wireConduit is an implementation of the Conduit interface that sends and receives
+// messages over a stream represented by an io.ReadWriter.
 type wireConduit struct {
 	stream       io.ReadWriter
 	eg           errgroup.Group
@@ -52,6 +54,7 @@ type wireConduit struct {
 
 var _ Conduit = &wireConduit{}
 
+// startWireConduit sets up a new wireConduit using the given context, stream and options.
 func startWireConduit(ctx context.Context, s io.ReadWriter, opts ...ConduitOption) *wireConduit {
 	c := &wireConduit{
 		stream: s,
@@ -94,17 +97,21 @@ func (c *wireConduit) closeStream() {
 	}
 }
 
-func (c *wireConduit) stop() {
+// Stop stops the wireConduit's background sender, but doesn't wait for it to finish
+// sending pending messages.
+func (c *wireConduit) Stop() {
 	if c.stream == nil {
 		return
 	}
 	// if there was in error, there's no point in waiting for the send
 	// goroutine to finish, so we interrupt it by closing the stream
 	c.closeStream()
-	c.end()
+	c.End()
 }
 
-func (c *wireConduit) end() {
+// End stops the wireConduit's background sender, waiting for it to finish sending pending
+// messages.
+func (c *wireConduit) End() {
 	if c.stream == nil {
 		return
 	}
@@ -113,6 +120,7 @@ func (c *wireConduit) end() {
 	c.stream = nil
 }
 
+// checkLimits checks if the traffic or message limits have been exceeded.
 func (c *wireConduit) checkLimits() error {
 	if c.trafficLimit > 0 && c.bytesSent()+c.bytesReceived() > c.trafficLimit {
 		return ErrLimitExceeded
@@ -123,6 +131,7 @@ func (c *wireConduit) checkLimits() error {
 	return nil
 }
 
+// NextMessage implements Conduit.
 func (c *wireConduit) NextMessage() (SyncMessage, error) {
 	msg, n, err := c.nextMessage()
 	c.nBytesRecv.Add(int64(n))
@@ -171,6 +180,7 @@ func (c *wireConduit) nextMessage() (SyncMessage, int, error) {
 	}
 }
 
+// Send implements Conduit.
 func (c *wireConduit) Send(m SyncMessage) error {
 	select {
 	case <-c.stopCh:
@@ -180,18 +190,22 @@ func (c *wireConduit) Send(m SyncMessage) error {
 	}
 }
 
+// bytesSent returns the total number of bytes sent.
 func (c *wireConduit) bytesSent() int {
 	return int(c.nBytesSent.Load())
 }
 
+// bytesReceived returns the total number of bytes received.
 func (c *wireConduit) bytesReceived() int {
 	return int(c.nBytesRecv.Load())
 }
 
+// messagesSent returns the total number of messages sent.
 func (c *wireConduit) messagesSent() int {
 	return int(c.nMsgsSent.Load())
 }
 
+// messagesReceived returns the total number of messages received.
 func (c *wireConduit) messagesReceived() int {
 	return int(c.nMsgsRecv.Load())
 }

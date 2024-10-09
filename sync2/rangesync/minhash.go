@@ -15,8 +15,8 @@ func (m MinhashSampleItem) String() string {
 	return fmt.Sprintf("0x%08x", uint32(m))
 }
 
-func (m MinhashSampleItem) Compare(other any) int {
-	return cmp.Compare(m, other.(MinhashSampleItem))
+func (m MinhashSampleItem) Compare(other MinhashSampleItem) int {
+	return cmp.Compare(m, other)
 }
 
 // EncodeScale implements scale.Encodable.

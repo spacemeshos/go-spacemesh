@@ -164,7 +164,7 @@ func (rsr *RangeSetReconciler) processSubrange(s sender, x, y KeyBytes, info Ran
 		// We have no more items in this subrange.
 		// Ask peer to send any items it has in the range
 		rsr.log.Debug("processSubrange: send empty range", log.ZShortStringer("x", x), log.ZShortStringer("y", y))
-		if err := s.sendEmptyRange(x, y); err != nil {
+		if err := s.SendEmptyRange(x, y); err != nil {
 			return err
 		}
 	}
@@ -173,7 +173,7 @@ func (rsr *RangeSetReconciler) processSubrange(s sender, x, y KeyBytes, info Ran
 	// Send fingerprint so that the peer can further subdivide it.
 	rsr.log.Debug("processSubrange: send fingerprint", log.ZShortStringer("x", x), log.ZShortStringer("y", y),
 		zap.Int("count", info.Count))
-	if err := s.sendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
+	if err := s.SendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
 		return err
 	}
 
@@ -216,7 +216,7 @@ func (rsr *RangeSetReconciler) sendSmallRange(
 	if count == 0 {
 		rsr.log.Debug("handleMessage: empty incoming range",
 			log.ZShortStringer("x", x), log.ZShortStringer("y", y))
-		return s.sendEmptyRange(x, y)
+		return s.SendEmptyRange(x, y)
 	}
 	rsr.log.Debug("handleMessage: send small range",
 		log.ZShortStringer("x", x), log.ZShortStringer("y", y),
@@ -225,7 +225,7 @@ func (rsr *RangeSetReconciler) sendSmallRange(
 	if _, err := rsr.sendItems(s, count, sr, nil); err != nil {
 		return err
 	}
-	return s.sendRangeContents(x, y, count)
+	return s.SendRangeContents(x, y, count)
 }
 
 func (rsr *RangeSetReconciler) sendItems(
@@ -246,7 +246,7 @@ func (rsr *RangeSetReconciler) sendItems(
 	for k := range sr.Seq {
 		if _, found := skipKeys[string(k)]; !found {
 			if len(keys) == rsr.itemChunkSize {
-				if err := s.sendChunk(keys); err != nil {
+				if err := s.SendChunk(keys); err != nil {
 					return nSent, err
 				}
 				nSent += len(keys)
@@ -264,7 +264,7 @@ func (rsr *RangeSetReconciler) sendItems(
 	}
 
 	if len(keys) != 0 {
-		if err := s.sendChunk(keys); err != nil {
+		if err := s.SendChunk(keys); err != nil {
 			return nSent, err
 		}
 		nSent += len(keys)
@@ -299,7 +299,7 @@ func (rsr *RangeSetReconciler) handleFingerprint(
 			if _, err := rsr.sendItems(s, info.Count, info.Items, nil); err != nil {
 				return false, err
 			}
-			return false, s.sendRangeContents(x, y, info.Count)
+			return false, s.SendRangeContents(x, y, info.Count)
 		}
 		rsr.log.Debug("handleMessage: acceptable maxDiff, proceeding with sync",
 			zap.Float64("sim", pr.Sim),
@@ -361,7 +361,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 		switch msg.Type() {
 		case MessageTypeProbe:
 			rsr.log.Debug("handleMessage: send empty probe response")
-			if err := s.sendSample(
+			if err := s.SendSample(
 				x, y, EmptyFingerprint(), 0, 0, EmptySeqResult(),
 			); err != nil {
 				return false, err
@@ -417,7 +417,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 			items = EmptySeqResult()
 			sampleSize = 0
 		}
-		if err := s.sendSample(x, y, info.Fingerprint, info.Count, sampleSize, items); err != nil {
+		if err := s.SendSample(x, y, info.Fingerprint, info.Count, sampleSize, items); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -463,14 +463,14 @@ func (rsr *RangeSetReconciler) Initiate(c Conduit, x, y KeyBytes) error {
 	if err := rsr.initiate(s, x, y, haveRecent); err != nil {
 		return err
 	}
-	return s.sendEndRound()
+	return s.SendEndRound()
 }
 
 func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool) error {
 	rsr.log.Debug("initiate", log.ZShortStringer("x", x), log.ZShortStringer("y", y))
 	if x == nil {
 		rsr.log.Debug("initiate: send empty set")
-		return s.sendEmptySet()
+		return s.SendEmptySet()
 	}
 	info, err := rsr.os.GetRangeInfo(x, y, -1)
 	if err != nil {
@@ -479,13 +479,13 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 	switch {
 	case info.Count == 0:
 		rsr.log.Debug("initiate: send empty set")
-		return s.sendEmptyRange(x, y)
+		return s.SendEmptyRange(x, y)
 	case info.Count < rsr.maxSendRange:
 		rsr.log.Debug("initiate: send whole range", zap.Int("count", info.Count))
 		if _, err := rsr.sendItems(s, info.Count, info.Items, nil); err != nil {
 			return err
 		}
-		return s.sendRangeContents(x, y, info.Count)
+		return s.SendRangeContents(x, y, info.Count)
 	case haveRecent:
 		rsr.log.Debug("initiate: checking recent items")
 		since := rsr.clock.Now().Add(-rsr.recentTimeSpan)
@@ -503,7 +503,7 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 		rsr.tracer.OnRecent(0, count)
 		// Send Recent message even if there are no recent items, b/c we want to
 		// receive recent items from the peer, if any.
-		if err := s.sendRecent(since); err != nil {
+		if err := s.SendRecent(since); err != nil {
 			return err
 		}
 		return nil
@@ -512,10 +512,10 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 		rsr.log.Debug("initiate: send sample",
 			zap.Int("count", info.Count),
 			zap.Int("sampleSize", rsr.sampleSize))
-		return s.sendSample(x, y, info.Fingerprint, info.Count, rsr.sampleSize, info.Items)
+		return s.SendSample(x, y, info.Fingerprint, info.Count, rsr.sampleSize, info.Items)
 	default:
 		rsr.log.Debug("initiate: send fingerprint", zap.Int("count", info.Count))
-		return s.sendFingerprint(x, y, info.Fingerprint, info.Count)
+		return s.SendFingerprint(x, y, info.Fingerprint, info.Count)
 	}
 }
 
@@ -530,10 +530,10 @@ func (rsr *RangeSetReconciler) InitiateProbe(
 	if err != nil {
 		return RangeInfo{}, err
 	}
-	if err := s.sendProbe(x, y, info.Fingerprint, rsr.sampleSize); err != nil {
+	if err := s.SendProbe(x, y, info.Fingerprint, rsr.sampleSize); err != nil {
 		return RangeInfo{}, err
 	}
-	if err := s.sendEndRound(); err != nil {
+	if err := s.SendEndRound(); err != nil {
 		return RangeInfo{}, err
 	}
 	return info, nil
@@ -649,11 +649,11 @@ RECV_LOOP:
 
 	switch {
 	case done:
-		err = s.sendDone()
+		err = s.SendDone()
 	case nHandled == 0:
 		err = errEmptyRound
 	default:
-		err = s.sendEndRound()
+		err = s.SendEndRound()
 	}
 
 	if err != nil {

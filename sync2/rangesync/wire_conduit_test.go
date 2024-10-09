@@ -1,4 +1,4 @@
-package rangesync
+package rangesync_test
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
 type pipeStream struct {
@@ -36,9 +37,9 @@ type fakeRequester struct {
 	reqCh   chan incomingRequest
 }
 
-var _ Requester = &fakeRequester{}
+var _ rangesync.Requester = &fakeRequester{}
 
-func newFakeRequester(id p2p.Peer, handler server.StreamHandler, peers ...Requester) *fakeRequester {
+func newFakeRequester(id p2p.Peer, handler server.StreamHandler, peers ...rangesync.Requester) *fakeRequester {
 	fr := &fakeRequester{
 		id:      id,
 		handler: handler,
@@ -98,7 +99,7 @@ func (fr *fakeRequester) StreamRequest(
 	return callback(ctx, clientStream)
 }
 
-func runRequester(t *testing.T, r Requester) context.Context {
+func runRequester(t *testing.T, r rangesync.Requester) context.Context {
 	var eg errgroup.Group
 	ctx, cancel := context.WithCancel(context.Background())
 	eg.Go(func() error {
@@ -111,8 +112,8 @@ func runRequester(t *testing.T, r Requester) context.Context {
 	return ctx
 }
 
-func getMsgs(t *testing.T, c Conduit, n int) []SyncMessage {
-	msgs := make([]SyncMessage, n)
+func getMsgs(t *testing.T, c rangesync.Conduit, n int) []rangesync.SyncMessage {
+	msgs := make([]rangesync.SyncMessage, n)
 	for i := 0; i < n; i++ {
 		var err error
 		msgs[i], err = c.NextMessage()
@@ -122,41 +123,41 @@ func getMsgs(t *testing.T, c Conduit, n int) []SyncMessage {
 }
 
 func TestWireConduit(t *testing.T) {
-	hs := make([]KeyBytes, 16)
+	hs := make([]rangesync.KeyBytes, 16)
 	for n := range hs {
-		hs[n] = RandomKeyBytes(32)
+		hs[n] = rangesync.RandomKeyBytes(32)
 	}
-	fp := Fingerprint(hs[2][:12])
+	fp := rangesync.Fingerprint(hs[2][:12])
 	srv := newFakeRequester(
 		"srv",
 		func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
 			require.Equal(t, []byte("hello"), initialRequest)
-			c := startWireConduit(ctx, stream)
-			defer c.stop()
-			s := sender{c}
-			require.Equal(t, []SyncMessage{
-				&FingerprintMessage{
-					RangeX:           chash(hs[0]),
-					RangeY:           chash(hs[1]),
+			c := rangesync.StartWireConduit(ctx, stream)
+			defer c.Stop()
+			s := rangesync.Sender{c}
+			require.Equal(t, []rangesync.SyncMessage{
+				&rangesync.FingerprintMessage{
+					RangeX:           rangesync.CHash(hs[0]),
+					RangeY:           rangesync.CHash(hs[1]),
 					RangeFingerprint: fp,
 					NumItems:         4,
 				},
-				&EndRoundMessage{},
+				&rangesync.EndRoundMessage{},
 			}, getMsgs(t, c, 2))
-			require.NoError(t, s.sendRangeContents(hs[0], hs[3], 2))
-			require.NoError(t, s.sendRangeContents(hs[3], hs[6], 2))
-			require.NoError(t, s.sendChunk([]KeyBytes{hs[4], hs[5], hs[7], hs[8]}))
-			require.NoError(t, s.sendEndRound())
-			require.Equal(t, []SyncMessage{
-				&ItemBatchMessage{
-					ContentKeys: KeyCollection{
-						Keys: []KeyBytes{hs[9], hs[10], hs[11]},
+			require.NoError(t, s.SendRangeContents(hs[0], hs[3], 2))
+			require.NoError(t, s.SendRangeContents(hs[3], hs[6], 2))
+			require.NoError(t, s.SendChunk([]rangesync.KeyBytes{hs[4], hs[5], hs[7], hs[8]}))
+			require.NoError(t, s.SendEndRound())
+			require.Equal(t, []rangesync.SyncMessage{
+				&rangesync.ItemBatchMessage{
+					ContentKeys: rangesync.KeyCollection{
+						Keys: []rangesync.KeyBytes{hs[9], hs[10], hs[11]},
 					},
 				},
-				&EndRoundMessage{},
+				&rangesync.EndRoundMessage{},
 			}, getMsgs(t, c, 2))
-			require.NoError(t, s.sendDone())
-			c.end()
+			require.NoError(t, s.SendDone())
+			c.End()
 			return nil
 		})
 
@@ -165,35 +166,35 @@ func TestWireConduit(t *testing.T) {
 	client := newFakeRequester("client", nil, srv)
 	require.NoError(t, client.StreamRequest(context.Background(), "srv", []byte("hello"),
 		func(ctx context.Context, stream io.ReadWriter) error {
-			c := startWireConduit(ctx, stream)
-			defer c.stop()
-			s := sender{c}
-			require.NoError(t, s.sendFingerprint(hs[0], hs[1], fp, 4))
-			require.NoError(t, s.sendEndRound())
-			require.Equal(t, []SyncMessage{
-				&RangeContentsMessage{
-					RangeX:   chash(hs[0]),
-					RangeY:   chash(hs[3]),
+			c := rangesync.StartWireConduit(ctx, stream)
+			defer c.Stop()
+			s := rangesync.Sender{c}
+			require.NoError(t, s.SendFingerprint(hs[0], hs[1], fp, 4))
+			require.NoError(t, s.SendEndRound())
+			require.Equal(t, []rangesync.SyncMessage{
+				&rangesync.RangeContentsMessage{
+					RangeX:   rangesync.CHash(hs[0]),
+					RangeY:   rangesync.CHash(hs[3]),
 					NumItems: 2,
 				},
-				&RangeContentsMessage{
-					RangeX:   chash(hs[3]),
-					RangeY:   chash(hs[6]),
+				&rangesync.RangeContentsMessage{
+					RangeX:   rangesync.CHash(hs[3]),
+					RangeY:   rangesync.CHash(hs[6]),
 					NumItems: 2,
 				},
-				&ItemBatchMessage{
-					ContentKeys: KeyCollection{
-						Keys: []KeyBytes{hs[4], hs[5], hs[7], hs[8]},
+				&rangesync.ItemBatchMessage{
+					ContentKeys: rangesync.KeyCollection{
+						Keys: []rangesync.KeyBytes{hs[4], hs[5], hs[7], hs[8]},
 					},
 				},
-				&EndRoundMessage{},
+				&rangesync.EndRoundMessage{},
 			}, getMsgs(t, c, 4))
-			require.NoError(t, s.sendChunk([]KeyBytes{hs[9], hs[10], hs[11]}))
-			require.NoError(t, s.sendEndRound())
-			require.Equal(t, []SyncMessage{
-				&DoneMessage{},
+			require.NoError(t, s.SendChunk([]rangesync.KeyBytes{hs[9], hs[10], hs[11]}))
+			require.NoError(t, s.SendEndRound())
+			require.Equal(t, []rangesync.SyncMessage{
+				&rangesync.DoneMessage{},
 			}, getMsgs(t, c, 1))
-			c.end()
+			c.End()
 			return nil
 		}))
 }
@@ -201,22 +202,25 @@ func TestWireConduit(t *testing.T) {
 func TestWireConduit_Limits(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
-		opts  []ConduitOption
+		opts  []rangesync.ConduitOption
 		error bool
 	}{
 		{
 			name:  "message limit hit",
-			opts:  []ConduitOption{WithMessageLimit(10)},
+			opts:  []rangesync.ConduitOption{rangesync.WithMessageLimit(10)},
 			error: true,
 		},
 		{
 			name:  "traffic limit hit",
-			opts:  []ConduitOption{WithTrafficLimit(100)},
+			opts:  []rangesync.ConduitOption{rangesync.WithTrafficLimit(100)},
 			error: true,
 		},
 		{
-			name:  "limits not hit",
-			opts:  []ConduitOption{WithMessageLimit(1000), WithTrafficLimit(10000)},
+			name: "limits not hit",
+			opts: []rangesync.ConduitOption{
+				rangesync.WithMessageLimit(1000),
+				rangesync.WithTrafficLimit(10000),
+			},
 			error: false,
 		},
 	} {
@@ -225,8 +229,8 @@ func TestWireConduit_Limits(t *testing.T) {
 			srv := newFakeRequester(
 				"srv",
 				func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
-					c := startWireConduit(ctx, stream, tc.opts...)
-					defer c.stop()
+					c := rangesync.StartWireConduit(ctx, stream, tc.opts...)
+					defer c.Stop()
 					for range 11 {
 						msg, err := c.NextMessage()
 						if err != nil {
@@ -238,8 +242,8 @@ func TestWireConduit_Limits(t *testing.T) {
 						}
 					}
 					errCh <- nil
-					s := sender{c}
-					return s.sendDone()
+					s := rangesync.Sender{c}
+					return s.SendDone()
 				})
 
 			runRequester(t, srv)
@@ -254,13 +258,14 @@ func TestWireConduit_Limits(t *testing.T) {
 			eg.Go(func() error {
 				client.StreamRequest(ctx, "srv", []byte("hello"),
 					func(ctx context.Context, stream io.ReadWriter) error {
-						c := startWireConduit(ctx, stream)
-						defer c.stop()
-						s := sender{c}
+						c := rangesync.StartWireConduit(ctx, stream)
+						defer c.Stop()
+						s := rangesync.Sender{c}
 						for i := 0; i < 11; i++ {
-							s.sendFingerprint(
-								RandomKeyBytes(32), RandomKeyBytes(32),
-								Fingerprint{}, 1)
+							s.SendFingerprint(
+								rangesync.RandomKeyBytes(32),
+								rangesync.RandomKeyBytes(32),
+								rangesync.Fingerprint{}, 1)
 						}
 						c.NextMessage()
 						return nil
@@ -269,7 +274,7 @@ func TestWireConduit_Limits(t *testing.T) {
 			})
 
 			if tc.error {
-				require.ErrorIs(t, <-errCh, ErrLimitExceeded)
+				require.ErrorIs(t, <-errCh, rangesync.ErrLimitExceeded)
 			} else {
 				require.NoError(t, <-errCh)
 			}
@@ -295,15 +300,15 @@ func TestWireConduit_StopSend(t *testing.T) {
 	defer cancel()
 	client.StreamRequest(ctx, "srv", []byte("hello"),
 		func(ctx context.Context, stream io.ReadWriter) error {
-			c := startWireConduit(ctx, stream)
-			s := sender{c}
+			c := rangesync.StartWireConduit(ctx, stream)
+			s := rangesync.Sender{c}
 			// The actual message is enqueued but not sent
-			s.sendDone()
+			s.SendDone()
 			select {
 			case <-ctx.Done():
 			case <-started:
 			}
-			c.stop() // stop the sender and wait for it to terminate
+			c.Stop() // stop the sender and wait for it to terminate
 			return nil
 		})
 	require.NoError(t, ctx.Err(), "the context should not be canceled")

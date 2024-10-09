@@ -52,7 +52,7 @@ func (pss *PairwiseSetSyncer) Probe(
 			defer func() {
 				// If the conduit is not closed by this point, stop it
 				// interrupting any ongoing send operations
-				c.stop()
+				c.Stop()
 				pss.updateCounts(c)
 			}()
 			info, err := rsr.InitiateProbe(c, x, y)
@@ -64,7 +64,7 @@ func (pss *PairwiseSetSyncer) Probe(
 				return fmt.Errorf("error handling probe response: %w", err)
 			}
 			// Wait for the messages to be sent before closing the conduit
-			c.end()
+			c.End()
 			return nil
 		}); err != nil {
 		return ProbeResult{}, err
@@ -85,7 +85,7 @@ func (pss *PairwiseSetSyncer) Sync(
 		func(ctx context.Context, stream io.ReadWriter) (err error) {
 			c := startWireConduit(ctx, stream, pss.conduitOpts...)
 			defer func() {
-				c.stop()
+				c.Stop()
 				pss.updateCounts(c)
 			}()
 			if err := rsr.Initiate(c, x, y); err != nil {
@@ -94,19 +94,19 @@ func (pss *PairwiseSetSyncer) Sync(
 			if err := rsr.Run(c); err != nil {
 				return fmt.Errorf("error running sync: %w", err)
 			}
-			c.end()
+			c.End()
 			return nil
 		})
 }
 
 func (pss *PairwiseSetSyncer) Serve(ctx context.Context, stream io.ReadWriter, os OrderedSet) error {
 	c := startWireConduit(ctx, stream, pss.conduitOpts...)
-	defer c.stop()
+	defer c.Stop()
 	rsr := NewRangeSetReconciler(os, pss.opts...)
 	if err := rsr.Run(c); err != nil {
 		return err
 	}
-	c.end()
+	c.End()
 	return nil
 }
 

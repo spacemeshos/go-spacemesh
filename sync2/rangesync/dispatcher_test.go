@@ -1,4 +1,4 @@
-package rangesync
+package rangesync_test
 
 import (
 	"bytes"
@@ -12,16 +12,17 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
-func makeFakeDispHandler(n int) Handler {
+func makeFakeDispHandler(n int) rangesync.Handler {
 	return func(ctx context.Context, stream io.ReadWriter) error {
-		x := KeyBytes(bytes.Repeat([]byte{byte(n)}, 32))
-		c := startWireConduit(ctx, stream)
-		defer c.end()
-		s := sender{c}
-		s.sendRangeContents(x, x, n)
-		s.sendEndRound()
+		x := rangesync.KeyBytes(bytes.Repeat([]byte{byte(n)}, 32))
+		c := rangesync.StartWireConduit(ctx, stream)
+		defer c.End()
+		s := rangesync.Sender{c}
+		s.SendRangeContents(x, x, n)
+		s.SendEndRound()
 		return nil
 	}
 }
@@ -30,7 +31,7 @@ func TestDispatcher(t *testing.T) {
 	mesh, err := mocknet.FullMeshConnected(2)
 	require.NoError(t, err)
 
-	d := NewDispatcher(zaptest.NewLogger(t))
+	d := rangesync.NewDispatcher(zaptest.NewLogger(t))
 	d.Register("a", makeFakeDispHandler(42))
 	d.Register("b", makeFakeDispHandler(43))
 	d.Register("c", makeFakeDispHandler(44))
@@ -58,18 +59,18 @@ func TestDispatcher(t *testing.T) {
 			require.NoError(t, c.StreamRequest(
 				context.Background(), srvPeerID, []byte(tt.name),
 				func(ctx context.Context, stream io.ReadWriter) error {
-					c := startWireConduit(ctx, stream)
-					defer c.end()
+					c := rangesync.StartWireConduit(ctx, stream)
+					defer c.End()
 					m, err := c.NextMessage()
 					require.NoError(t, err)
-					require.Equal(t, MessageTypeRangeContents, m.Type())
-					exp := KeyBytes(bytes.Repeat([]byte{byte(tt.want)}, 32))
+					require.Equal(t, rangesync.MessageTypeRangeContents, m.Type())
+					exp := rangesync.KeyBytes(bytes.Repeat([]byte{byte(tt.want)}, 32))
 					require.Equal(t, exp, m.X())
 					require.Equal(t, exp, m.Y())
 					require.Equal(t, tt.want, m.Count())
 					m, err = c.NextMessage()
 					require.NoError(t, err)
-					require.Equal(t, MessageTypeEndRound, m.Type())
+					require.Equal(t, rangesync.MessageTypeEndRound, m.Type())
 					return nil
 				}))
 		})

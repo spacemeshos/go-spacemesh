@@ -7,6 +7,15 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
+const (
+	compactHashTypeNil  = 0
+	compactHashType32   = 1
+	compactHashSizeBits = 6
+	maxCompactHashSize  = 32
+)
+
+var errInvalidCompactHash = errors.New("invalid compact hash")
+
 // CompactHash encodes hashes in a compact form, skipping trailing zeroes.
 // It also supports a nil hash (no value).
 // The encoding format is as follows:
@@ -21,21 +30,11 @@ import (
 // 0:    nil hash
 // 1:    32-byte hash
 // 2,3:  reserved
-
+//
 // NOTE: when adding new hash types, we need to add a mechanism that makes sure that every
 // received hash is of the expected type. Alternatively, we need to add some kind of
 // context to the scale.Decoder / scale.Encoder, which may contain the size of hashes to
 // be used.
-
-const (
-	compactHashTypeNil  = 0
-	compactHashType32   = 1
-	compactHashSizeBits = 6
-	maxCompactHashSize  = 32
-)
-
-var errInvalidCompactHash = errors.New("invalid compact hash")
-
 type CompactHash struct {
 	H KeyBytes
 }

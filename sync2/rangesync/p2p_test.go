@@ -1,4 +1,4 @@
-package rangesync
+package rangesync_test
 
 import (
 	"context"
@@ -12,29 +12,37 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
-type getRequesterFunc func(name string, handler server.StreamHandler, peers ...Requester) (Requester, p2p.Peer)
+type getRequesterFunc func(
+	name string,
+	handler server.StreamHandler,
+	peers ...rangesync.Requester,
+) (
+	rangesync.Requester,
+	p2p.Peer,
+)
 
 type clientServerTester struct {
-	client    Requester
+	client    rangesync.Requester
 	srvPeerID p2p.Peer
-	pss       *PairwiseSetSyncer
+	pss       *rangesync.PairwiseSetSyncer
 }
 
 func newClientServerTester(
 	t *testing.T,
-	set OrderedSet,
+	set rangesync.OrderedSet,
 	getRequester getRequesterFunc,
-	opts []RangeSetReconcilerOption,
-	conduitOpts []ConduitOption,
+	opts []rangesync.RangeSetReconcilerOption,
+	conduitOpts []rangesync.ConduitOption,
 ) (*clientServerTester, context.Context) {
 	var (
 		cst clientServerTester
-		srv Requester
+		srv rangesync.Requester
 	)
-	d := NewDispatcher(zaptest.NewLogger(t))
-	cst.pss = NewPairwiseSetSyncer(nil, "test", opts, conduitOpts)
+	d := rangesync.NewDispatcher(zaptest.NewLogger(t))
+	cst.pss = rangesync.NewPairwiseSetSyncer(nil, "test", opts, conduitOpts)
 	cst.pss.Register(d, set)
 	srv, cst.srvPeerID = getRequester("srv", d.Dispatch)
 	ctx := runRequester(t, srv)
@@ -43,7 +51,11 @@ func newClientServerTester(
 }
 
 func fakeRequesterGetter() getRequesterFunc {
-	return func(name string, handler server.StreamHandler, peers ...Requester) (Requester, p2p.Peer) {
+	return func(
+		name string,
+		handler server.StreamHandler,
+		peers ...rangesync.Requester,
+	) (rangesync.Requester, p2p.Peer) {
 		pid := p2p.Peer(name)
 		return newFakeRequester(pid, handler, peers...), pid
 	}
@@ -58,7 +70,11 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 		server.WithTimeout(10 * time.Second),
 		server.WithLog(zaptest.NewLogger(t)),
 	}
-	return func(name string, handler server.StreamHandler, peers ...Requester) (Requester, p2p.Peer) {
+	return func(
+		name string,
+		handler server.StreamHandler,
+		peers ...rangesync.Requester,
+	) (rangesync.Requester, p2p.Peer) {
 		if len(peers) == 0 {
 			return server.New(mesh.Hosts()[0], proto, handler, opts...), mesh.Hosts()[0].ID()
 		}
@@ -81,7 +97,7 @@ type syncTracer struct {
 	sentItems     int
 }
 
-var _ Tracer = &syncTracer{}
+var _ rangesync.Tracer = &syncTracer{}
 
 func (tr *syncTracer) OnDumbSync() {
 	tr.dumb = true
@@ -92,20 +108,24 @@ func (tr *syncTracer) OnRecent(receivedItems, sentItems int) {
 	tr.sentItems += sentItems
 }
 
+// fakeRecentSet is a wrapper around OrderedSet that keeps track of the time when each
+// item was added to the set according to the specified clock.
+// It is used to test recent sync.
 type fakeRecentSet struct {
-	OrderedSet
+	rangesync.OrderedSet
 	timestamps map[string]time.Time
 	clock      clockwork.Clock
 }
 
-var _ OrderedSet = &fakeRecentSet{}
+var _ rangesync.OrderedSet = &fakeRecentSet{}
 
 var startDate = time.Date(2024, 8, 29, 18, 0, 0, 0, time.UTC)
 
-func (frs *fakeRecentSet) registerAll(ctx context.Context) error {
+// registerAll assigns timestamps to all the items currently in the set.
+func (frs *fakeRecentSet) registerAll(_ context.Context) error {
 	frs.timestamps = make(map[string]time.Time)
 	t := startDate
-	items, err := CollectSetItems(frs.OrderedSet)
+	items, err := rangesync.CollectSetItems(frs.OrderedSet)
 	if err != nil {
 		return err
 	}
@@ -116,7 +136,8 @@ func (frs *fakeRecentSet) registerAll(ctx context.Context) error {
 	return nil
 }
 
-func (frs *fakeRecentSet) Receive(k KeyBytes) error {
+// Receive implements OrderedSet.
+func (frs *fakeRecentSet) Receive(k rangesync.KeyBytes) error {
 	if err := frs.OrderedSet.Receive(k); err != nil {
 		return err
 	}
@@ -124,26 +145,27 @@ func (frs *fakeRecentSet) Receive(k KeyBytes) error {
 	return nil
 }
 
-func (frs *fakeRecentSet) Recent(since time.Time) (SeqResult, int) {
-	var items []KeyBytes
-	items, err := CollectSetItems(frs.OrderedSet)
+// Recent implements OrderedSet.
+func (frs *fakeRecentSet) Recent(since time.Time) (rangesync.SeqResult, int) {
+	var items []rangesync.KeyBytes
+	items, err := rangesync.CollectSetItems(frs.OrderedSet)
 	if err != nil {
-		return ErrorSeqResult(err), 0
+		return rangesync.ErrorSeqResult(err), 0
 	}
 	for _, k := range items {
 		if !frs.timestamps[string(k)].Before(since) {
 			items = append(items, k)
 		}
 	}
-	return SeqResult{
-		Seq: func(yield func(KeyBytes) bool) {
+	return rangesync.SeqResult{
+		Seq: func(yield func(rangesync.KeyBytes) bool) {
 			for _, h := range items {
 				if !yield(h) {
 					return
 				}
 			}
 		},
-		Error: NoSeqError,
+		Error: rangesync.NoSeqError,
 	}, len(items)
 }
 
@@ -152,7 +174,7 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 		name           string
 		cfg            hashSyncTestConfig
 		dumb           bool
-		opts           []RangeSetReconcilerOption
+		opts           []rangesync.RangeSetReconcilerOption
 		advance        time.Duration
 		sentRecent     bool
 		receivedRecent bool
@@ -193,8 +215,8 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 				allowReAdd:      true,
 			},
 			dumb: false,
-			opts: []RangeSetReconcilerOption{
-				WithRecentTimeSpan(990 * time.Second),
+			opts: []rangesync.RangeSetReconcilerOption{
+				rangesync.WithRecentTimeSpan(990 * time.Second),
 			},
 			advance:        1000 * time.Second,
 			sentRecent:     true,
@@ -224,12 +246,12 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 			setB := &fakeRecentSet{OrderedSet: st.setB, clock: clock}
 			require.NoError(t, setB.registerAll(context.Background()))
 			var tr syncTracer
-			opts := append(st.opts, WithTracer(&tr), WithClock(clock))
+			opts := append(st.opts, rangesync.WithTracer(&tr), rangesync.WithClock(clock))
 			opts = append(opts, tc.opts...)
 			opts = opts[0:len(opts):len(opts)]
 			clock.Advance(tc.advance)
 			cst, ctx := newClientServerTester(t, setA, getRequester, opts, nil)
-			pss := NewPairwiseSetSyncer(cst.client, "test", opts, nil)
+			pss := rangesync.NewPairwiseSetSyncer(cst.client, "test", opts, nil)
 			err := pss.Sync(ctx, cst.srvPeerID, setB, nil, nil)
 			require.NoError(t, err)
 
@@ -263,7 +285,7 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 		maxNumSpecificB: 130,
 	})
 	cst, ctx := newClientServerTester(t, st.setA, getRequester, st.opts, nil)
-	pss := NewPairwiseSetSyncer(cst.client, "test", st.opts, nil)
+	pss := rangesync.NewPairwiseSetSyncer(cst.client, "test", st.opts, nil)
 	itemsA := st.setA.Items()
 	kA, err := itemsA.First()
 	require.NoError(t, err)
@@ -283,7 +305,7 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 	require.NoError(t, err)
 	x, err := partInfoA.Items.First()
 	require.NoError(t, err)
-	var y KeyBytes
+	var y rangesync.KeyBytes
 	n := partInfoA.Count + 1
 	for k := range partInfoA.Items.Seq {
 		y = k
@@ -312,39 +334,39 @@ func TestWireProbe(t *testing.T) {
 func TestPairwiseSyncerLimits(t *testing.T) {
 	for _, tc := range []struct {
 		name              string
-		clientConduitOpts []ConduitOption
-		serverConduitOpts []ConduitOption
+		clientConduitOpts []rangesync.ConduitOption
+		serverConduitOpts []rangesync.ConduitOption
 		error             bool
 	}{
 		{
 			name:              "client traffic limit hit",
-			clientConduitOpts: []ConduitOption{WithTrafficLimit(100)},
+			clientConduitOpts: []rangesync.ConduitOption{rangesync.WithTrafficLimit(100)},
 			error:             true,
 		},
 		{
 			name:              "client message limit hit",
-			clientConduitOpts: []ConduitOption{WithTrafficLimit(10)},
+			clientConduitOpts: []rangesync.ConduitOption{rangesync.WithTrafficLimit(10)},
 			error:             true,
 		},
 		{
 			name:              "server traffic limit hit",
-			serverConduitOpts: []ConduitOption{WithTrafficLimit(100)},
+			serverConduitOpts: []rangesync.ConduitOption{rangesync.WithTrafficLimit(100)},
 			error:             true,
 		},
 		{
 			name:              "server message limit hit",
-			serverConduitOpts: []ConduitOption{WithTrafficLimit(10)},
+			serverConduitOpts: []rangesync.ConduitOption{rangesync.WithTrafficLimit(10)},
 			error:             true,
 		},
 		{
 			name: "reasonable limits",
-			clientConduitOpts: []ConduitOption{
-				WithTrafficLimit(100_000),
-				WithMessageLimit(1000),
+			clientConduitOpts: []rangesync.ConduitOption{
+				rangesync.WithTrafficLimit(100_000),
+				rangesync.WithMessageLimit(1000),
 			},
-			serverConduitOpts: []ConduitOption{
-				WithTrafficLimit(100_000),
-				WithMessageLimit(1000),
+			serverConduitOpts: []rangesync.ConduitOption{
+				rangesync.WithTrafficLimit(100_000),
+				rangesync.WithMessageLimit(1000),
 			},
 			error: false,
 		},
@@ -360,12 +382,12 @@ func TestPairwiseSyncerLimits(t *testing.T) {
 			})
 			clock := clockwork.NewFakeClockAt(startDate)
 			var tr syncTracer
-			opts := append(st.opts, WithTracer(&tr), WithClock(clock))
+			opts := append(st.opts, rangesync.WithTracer(&tr), rangesync.WithClock(clock))
 			opts = opts[0:len(opts):len(opts)]
 			cst, ctx := newClientServerTester(
 				t, st.setA, p2pRequesterGetter(t), opts,
 				tc.serverConduitOpts)
-			pss := NewPairwiseSetSyncer(cst.client, "test", opts, tc.clientConduitOpts)
+			pss := rangesync.NewPairwiseSetSyncer(cst.client, "test", opts, tc.clientConduitOpts)
 			err := pss.Sync(ctx, cst.srvPeerID, st.setB, nil, nil)
 			if tc.error {
 				require.Error(t, err)

@@ -1,25 +1,27 @@
-package rangesync
+package rangesync_test
 
 import (
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
 var errBadItem = errors.New("bad item")
 
-func mkFakeSeq(items []string) SeqResult {
+func mkFakeSeq(items []string) rangesync.SeqResult {
 	var err error
-	return SeqResult{
-		Seq: func(yield func(KeyBytes) bool) {
+	return rangesync.SeqResult{
+		Seq: func(yield func(rangesync.KeyBytes) bool) {
 			for {
 				for _, item := range items {
 					if item == "ERROR" {
 						err = errBadItem
 						return
 					}
-					if !yield(KeyBytes(item)) {
+					if !yield(rangesync.KeyBytes(item)) {
 						return
 					}
 				}
@@ -99,20 +101,20 @@ func TestMinHash(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sampleA, err := Sample(mkFakeSeq(tc.a), len(tc.a), tc.sampleSize)
+			sampleA, err := rangesync.Sample(mkFakeSeq(tc.a), len(tc.a), tc.sampleSize)
 			if tc.errA != nil {
 				require.ErrorIs(t, err, tc.errA)
 			} else {
 				require.NoError(t, err)
 			}
-			sampleB, err := Sample(mkFakeSeq(tc.b), len(tc.b), tc.sampleSize)
+			sampleB, err := rangesync.Sample(mkFakeSeq(tc.b), len(tc.b), tc.sampleSize)
 			if tc.errB != nil {
 				require.ErrorIs(t, err, tc.errB)
 			} else {
 				require.NoError(t, err)
 			}
 			if tc.errA == nil && tc.errB == nil {
-				require.InDelta(t, tc.sim, CalcSim(sampleA, sampleB), 1e-9)
+				require.InDelta(t, tc.sim, rangesync.CalcSim(sampleA, sampleB), 1e-9)
 			}
 		})
 	}
