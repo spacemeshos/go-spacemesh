@@ -73,7 +73,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 	client := ae2e.NewTestPoetClient(1, poetCfg)
-	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
@@ -191,7 +191,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	require.NoError(t, err)
 	cdb = datastore.NewCachedDB(newDB, logger)
 	atxdata, err = atxsdata.Warm(newDB, 1, logger, sig)
-	poetService = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetService = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)
 	atxHdlr = activation.NewHandler(

@@ -1823,6 +1823,44 @@ func (c *MockPoetServiceSubmitCall) DoAndReturn(f func(context.Context, time.Tim
 	return c
 }
 
+// TickSize mocks base method.
+func (m *MockPoetService) TickSize() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TickSize")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// TickSize indicates an expected call of TickSize.
+func (mr *MockPoetServiceMockRecorder) TickSize() *MockPoetServiceTickSizeCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TickSize", reflect.TypeOf((*MockPoetService)(nil).TickSize))
+	return &MockPoetServiceTickSizeCall{Call: call}
+}
+
+// MockPoetServiceTickSizeCall wrap *gomock.Call
+type MockPoetServiceTickSizeCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockPoetServiceTickSizeCall) Return(arg0 uint64) *MockPoetServiceTickSizeCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockPoetServiceTickSizeCall) Do(f func() uint64) *MockPoetServiceTickSizeCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockPoetServiceTickSizeCall) DoAndReturn(f func() uint64) *MockPoetServiceTickSizeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockcertifierClient is a mock of certifierClient interface.
 type MockcertifierClient struct {
 	ctrl     *gomock.Controller
