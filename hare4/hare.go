@@ -908,7 +908,7 @@ func (h *Hare) compactProposals(layer types.LayerID,
 	for i, prop := range proposals {
 		vrf := prop.EligibilityProofs[0].Sig
 		var c types.CompactProposalID
-		copy(c[:], vrf[:2])
+		copy(c[:], vrf[:1])
 		compactProposals[i] = c
 	}
 	return compactProposals

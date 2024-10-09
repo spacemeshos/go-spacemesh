@@ -28,7 +28,7 @@ type ProposalID Hash20
 // EmptyProposalID is a canonical empty ProposalID.
 var EmptyProposalID = ProposalID{}
 
-type CompactProposalID [2]byte
+type CompactProposalID [1]byte
 
 // EncodeScale implements scale codec interface.
 func (id *CompactProposalID) EncodeScale(e *scale.Encoder) (int, error) {
