@@ -474,8 +474,8 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	if msg.IterRound.Round == preround {
 		// this will mutate the message to conform to the (hopefully)
 		// original sent message for signature validation to occur
-		h.log.Info("got preround message with compacts", zap.Int("nr compacts", len(compacts)), zap.Inline(msg))
 		compacts = msg.Value.CompactProposals
+		h.log.Info("got preround message with compacts", zap.Int("nr compacts", len(compacts)), zap.Inline(msg))
 		messageCompactsCounter.Add(float64(len(compacts)))
 		err := h.reconstructProposals(ctx, peer, msgId, msg)
 		switch {
