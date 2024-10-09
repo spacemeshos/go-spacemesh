@@ -6,8 +6,6 @@ import (
 	"slices"
 
 	"github.com/spacemeshos/go-scale"
-
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 // MinhashSampleItem represents an item of minhash sample subset.
@@ -34,9 +32,9 @@ func (m *MinhashSampleItem) DecodeScale(d *scale.Decoder) (int, error) {
 }
 
 // MinhashSampleItemFromKeyBytes uses lower 32 bits of a hash as a MinhashSampleItem.
-func MinhashSampleItemFromKeyBytes(h types.KeyBytes) MinhashSampleItem {
+func MinhashSampleItemFromKeyBytes(h KeyBytes) MinhashSampleItem {
 	if len(h) < 4 {
-		h = append(h, make(types.KeyBytes, 4-len(h))...)
+		h = append(h, make(KeyBytes, 4-len(h))...)
 	}
 	l := len(h)
 	return MinhashSampleItem(uint32(h[l-4])<<24 + uint32(h[l-3])<<16 + uint32(h[l-2])<<8 + uint32(h[l-1]))
@@ -44,7 +42,7 @@ func MinhashSampleItemFromKeyBytes(h types.KeyBytes) MinhashSampleItem {
 
 // Sample retrieves min(count, sampleSize) items friom the ordered sequence, extracting
 // MinhashSampleItem from each value.
-func Sample(sr types.SeqResult, count, sampleSize int) ([]MinhashSampleItem, error) {
+func Sample(sr SeqResult, count, sampleSize int) ([]MinhashSampleItem, error) {
 	sampleSize = min(count, sampleSize)
 	if sampleSize == 0 {
 		return nil, nil

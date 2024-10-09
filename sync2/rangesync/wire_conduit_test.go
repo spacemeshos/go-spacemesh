@@ -13,7 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 type pipeStream struct {
@@ -123,11 +122,11 @@ func getMsgs(t *testing.T, c Conduit, n int) []SyncMessage {
 }
 
 func TestWireConduit(t *testing.T) {
-	hs := make([]types.KeyBytes, 16)
+	hs := make([]KeyBytes, 16)
 	for n := range hs {
-		hs[n] = types.RandomKeyBytes(32)
+		hs[n] = RandomKeyBytes(32)
 	}
-	fp := types.Fingerprint(hs[2][:12])
+	fp := Fingerprint(hs[2][:12])
 	srv := newFakeRequester(
 		"srv",
 		func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
@@ -146,12 +145,12 @@ func TestWireConduit(t *testing.T) {
 			}, getMsgs(t, c, 2))
 			require.NoError(t, s.sendRangeContents(hs[0], hs[3], 2))
 			require.NoError(t, s.sendRangeContents(hs[3], hs[6], 2))
-			require.NoError(t, s.sendChunk([]types.KeyBytes{hs[4], hs[5], hs[7], hs[8]}))
+			require.NoError(t, s.sendChunk([]KeyBytes{hs[4], hs[5], hs[7], hs[8]}))
 			require.NoError(t, s.sendEndRound())
 			require.Equal(t, []SyncMessage{
 				&ItemBatchMessage{
 					ContentKeys: KeyCollection{
-						Keys: []types.KeyBytes{hs[9], hs[10], hs[11]},
+						Keys: []KeyBytes{hs[9], hs[10], hs[11]},
 					},
 				},
 				&EndRoundMessage{},
@@ -184,12 +183,12 @@ func TestWireConduit(t *testing.T) {
 				},
 				&ItemBatchMessage{
 					ContentKeys: KeyCollection{
-						Keys: []types.KeyBytes{hs[4], hs[5], hs[7], hs[8]},
+						Keys: []KeyBytes{hs[4], hs[5], hs[7], hs[8]},
 					},
 				},
 				&EndRoundMessage{},
 			}, getMsgs(t, c, 4))
-			require.NoError(t, s.sendChunk([]types.KeyBytes{hs[9], hs[10], hs[11]}))
+			require.NoError(t, s.sendChunk([]KeyBytes{hs[9], hs[10], hs[11]}))
 			require.NoError(t, s.sendEndRound())
 			require.Equal(t, []SyncMessage{
 				&DoneMessage{},
@@ -260,8 +259,8 @@ func TestWireConduit_Limits(t *testing.T) {
 						s := sender{c}
 						for i := 0; i < 11; i++ {
 							s.sendFingerprint(
-								types.RandomKeyBytes(32), types.RandomKeyBytes(32),
-								types.Fingerprint{}, 1)
+								RandomKeyBytes(32), RandomKeyBytes(32),
+								Fingerprint{}, 1)
 						}
 						c.NextMessage()
 						return nil

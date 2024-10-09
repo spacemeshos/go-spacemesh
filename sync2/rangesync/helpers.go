@@ -1,13 +1,9 @@
 package rangesync
 
-import (
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
-)
-
 // CollectSetItems returns the list of items in the given set.
-func CollectSetItems(os OrderedSet) (r []types.KeyBytes, err error) {
+func CollectSetItems(os OrderedSet) (r []KeyBytes, err error) {
 	items := os.Items()
-	var first types.KeyBytes
+	var first KeyBytes
 	for v := range items.Seq {
 		if first == nil {
 			first = v

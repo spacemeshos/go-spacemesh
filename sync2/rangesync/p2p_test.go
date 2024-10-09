@@ -12,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 type getRequesterFunc func(name string, handler server.StreamHandler, peers ...Requester) (Requester, p2p.Peer)
@@ -117,7 +116,7 @@ func (frs *fakeRecentSet) registerAll(ctx context.Context) error {
 	return nil
 }
 
-func (frs *fakeRecentSet) Receive(k types.KeyBytes) error {
+func (frs *fakeRecentSet) Receive(k KeyBytes) error {
 	if err := frs.OrderedSet.Receive(k); err != nil {
 		return err
 	}
@@ -125,26 +124,26 @@ func (frs *fakeRecentSet) Receive(k types.KeyBytes) error {
 	return nil
 }
 
-func (frs *fakeRecentSet) Recent(since time.Time) (types.SeqResult, int) {
-	var items []types.KeyBytes
+func (frs *fakeRecentSet) Recent(since time.Time) (SeqResult, int) {
+	var items []KeyBytes
 	items, err := CollectSetItems(frs.OrderedSet)
 	if err != nil {
-		return types.ErrorSeqResult(err), 0
+		return ErrorSeqResult(err), 0
 	}
 	for _, k := range items {
 		if !frs.timestamps[string(k)].Before(since) {
 			items = append(items, k)
 		}
 	}
-	return types.SeqResult{
-		Seq: func(yield func(types.KeyBytes) bool) {
+	return SeqResult{
+		Seq: func(yield func(KeyBytes) bool) {
 			for _, h := range items {
 				if !yield(h) {
 					return
 				}
 			}
 		},
-		Error: types.NoSeqError,
+		Error: NoSeqError,
 	}, len(items)
 }
 
@@ -284,7 +283,7 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 	require.NoError(t, err)
 	x, err := partInfoA.Items.First()
 	require.NoError(t, err)
-	var y types.KeyBytes
+	var y KeyBytes
 	n := partInfoA.Count + 1
 	for k := range partInfoA.Items.Seq {
 		y = k

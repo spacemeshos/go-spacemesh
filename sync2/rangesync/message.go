@@ -5,8 +5,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 // MessageType specifies the type of a sync message.
@@ -81,7 +79,7 @@ func SyncMessageToString(m SyncMessage) string {
 	if count := m.Count(); count != 0 {
 		fmt.Fprintf(&sb, " Count=%d", count)
 	}
-	if fp := m.Fingerprint(); fp != types.EmptyFingerprint() {
+	if fp := m.Fingerprint(); fp != EmptyFingerprint() {
 		sb.WriteString(" FP=" + fp.String())
 	}
 	for _, k := range m.Keys() {
@@ -95,7 +93,7 @@ type sender struct {
 	Conduit
 }
 
-func (s sender) sendFingerprint(x, y types.KeyBytes, fp types.Fingerprint, count int) error {
+func (s sender) sendFingerprint(x, y KeyBytes, fp Fingerprint, count int) error {
 	return s.Send(&FingerprintMessage{
 		RangeX:           chash(x),
 		RangeY:           chash(y),
@@ -108,14 +106,14 @@ func (s sender) sendEmptySet() error {
 	return s.Send(&EmptySetMessage{})
 }
 
-func (s sender) sendEmptyRange(x, y types.KeyBytes) error {
+func (s sender) sendEmptyRange(x, y KeyBytes) error {
 	return s.Send(&EmptyRangeMessage{
 		RangeX: chash(x),
 		RangeY: chash(y),
 	})
 }
 
-func (s sender) sendRangeContents(x, y types.KeyBytes, count int) error {
+func (s sender) sendRangeContents(x, y KeyBytes, count int) error {
 	return s.Send(&RangeContentsMessage{
 		RangeX:   chash(x),
 		RangeY:   chash(y),
@@ -123,7 +121,7 @@ func (s sender) sendRangeContents(x, y types.KeyBytes, count int) error {
 	})
 }
 
-func (s sender) sendChunk(items []types.KeyBytes) error {
+func (s sender) sendChunk(items []KeyBytes) error {
 	msg := ItemBatchMessage{
 		ContentKeys: KeyCollection{
 			Keys: slices.Clone(items),
@@ -140,7 +138,7 @@ func (s sender) sendDone() error {
 	return s.Send(&DoneMessage{})
 }
 
-func (s sender) sendProbe(x, y types.KeyBytes, fp types.Fingerprint, sampleSize int) error {
+func (s sender) sendProbe(x, y KeyBytes, fp Fingerprint, sampleSize int) error {
 	return s.Send(&ProbeMessage{
 		RangeFingerprint: fp,
 		SampleSize:       uint32(sampleSize),
@@ -150,10 +148,10 @@ func (s sender) sendProbe(x, y types.KeyBytes, fp types.Fingerprint, sampleSize 
 }
 
 func (s sender) sendSample(
-	x, y types.KeyBytes,
-	fp types.Fingerprint,
+	x, y KeyBytes,
+	fp Fingerprint,
 	count, sampleSize int,
-	sr types.SeqResult,
+	sr SeqResult,
 ) error {
 	items, err := Sample(sr, count, sampleSize)
 	if err != nil {
@@ -178,13 +176,13 @@ func (s sender) sendRecent(since time.Time) error {
 
 type Marker struct{}
 
-func (*Marker) X() types.KeyBytes              { return nil }
-func (*Marker) Y() types.KeyBytes              { return nil }
-func (*Marker) Fingerprint() types.Fingerprint { return types.EmptyFingerprint() }
-func (*Marker) Count() int                     { return 0 }
-func (*Marker) Keys() []types.KeyBytes         { return nil }
-func (*Marker) Since() time.Time               { return time.Time{} }
-func (*Marker) Sample() []MinhashSampleItem    { return nil }
+func (*Marker) X() KeyBytes                 { return nil }
+func (*Marker) Y() KeyBytes                 { return nil }
+func (*Marker) Fingerprint() Fingerprint    { return EmptyFingerprint() }
+func (*Marker) Count() int                  { return 0 }
+func (*Marker) Keys() []KeyBytes            { return nil }
+func (*Marker) Since() time.Time            { return time.Time{} }
+func (*Marker) Sample() []MinhashSampleItem { return nil }
 
 // DoneMessage is a SyncMessage that denotes the end of the synchronization.
 // The peer should stop any further processing after receiving this message.

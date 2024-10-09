@@ -5,8 +5,6 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
-
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 // CompactHash encodes hashes in a compact form, skipping trailing zeroes.
@@ -39,7 +37,7 @@ const (
 var errInvalidCompactHash = errors.New("invalid compact hash")
 
 type CompactHash struct {
-	H types.KeyBytes
+	H KeyBytes
 }
 
 // DecodeScale implements scale.Decodable.
@@ -93,14 +91,14 @@ func (c *CompactHash) EncodeScale(enc *scale.Encoder) (int, error) {
 	return total, err
 }
 
-func (c *CompactHash) ToOrdered() types.KeyBytes {
+func (c *CompactHash) ToOrdered() KeyBytes {
 	if c.H == nil {
 		return nil
 	}
 	return c.H
 }
 
-func chash(h types.KeyBytes) CompactHash {
+func chash(h KeyBytes) CompactHash {
 	if h == nil {
 		return CompactHash{}
 	}
@@ -113,7 +111,7 @@ const (
 
 // KeyCollection represents a collection of keys of the same size.
 type KeyCollection struct {
-	Keys []types.KeyBytes
+	Keys []KeyBytes
 }
 
 // DecodeScale implements scale.Decodable.
@@ -134,7 +132,7 @@ func (c *KeyCollection) DecodeScale(dec *scale.Decoder) (int, error) {
 	if hashType != compactHashType32 {
 		return total, errInvalidCompactHash
 	}
-	c.Keys = make([]types.KeyBytes, size)
+	c.Keys = make([]KeyBytes, size)
 	for p := range size {
 		var h [maxCompactHashSize]byte
 		n, err := scale.DecodeByteArray(dec, h[:])

@@ -5,23 +5,21 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 var errBadItem = errors.New("bad item")
 
-func mkFakeSeq(items []string) types.SeqResult {
+func mkFakeSeq(items []string) SeqResult {
 	var err error
-	return types.SeqResult{
-		Seq: func(yield func(types.KeyBytes) bool) {
+	return SeqResult{
+		Seq: func(yield func(KeyBytes) bool) {
 			for {
 				for _, item := range items {
 					if item == "ERROR" {
 						err = errBadItem
 						return
 					}
-					if !yield(types.KeyBytes(item)) {
+					if !yield(KeyBytes(item)) {
 						return
 					}
 				}

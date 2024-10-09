@@ -12,12 +12,11 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 func makeFakeDispHandler(n int) Handler {
 	return func(ctx context.Context, stream io.ReadWriter) error {
-		x := types.KeyBytes(bytes.Repeat([]byte{byte(n)}, 32))
+		x := KeyBytes(bytes.Repeat([]byte{byte(n)}, 32))
 		c := startWireConduit(ctx, stream)
 		defer c.end()
 		s := sender{c}
@@ -64,7 +63,7 @@ func TestDispatcher(t *testing.T) {
 					m, err := c.NextMessage()
 					require.NoError(t, err)
 					require.Equal(t, MessageTypeRangeContents, m.Type())
-					exp := types.KeyBytes(bytes.Repeat([]byte{byte(tt.want)}, 32))
+					exp := KeyBytes(bytes.Repeat([]byte{byte(tt.want)}, 32))
 					require.Equal(t, exp, m.X())
 					require.Equal(t, exp, m.Y())
 					require.Equal(t, tt.want, m.Count())

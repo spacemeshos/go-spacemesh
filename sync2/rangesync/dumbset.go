@@ -8,18 +8,16 @@ import (
 	"time"
 
 	"github.com/zeebo/blake3"
-
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
-func stringToFP(s string) types.Fingerprint {
+func stringToFP(s string) Fingerprint {
 	h := md5.New()
 	h.Write([]byte(s))
-	return types.Fingerprint(h.Sum(nil))
+	return Fingerprint(h.Sum(nil))
 }
 
-func gtePos(all []types.KeyBytes, item types.KeyBytes) int {
-	n := slices.IndexFunc(all, func(v types.KeyBytes) bool {
+func gtePos(all []KeyBytes, item KeyBytes) int {
+	n := slices.IndexFunc(all, func(v KeyBytes) bool {
 		return v.Compare(item) >= 0
 	})
 	if n >= 0 {
@@ -29,12 +27,12 @@ func gtePos(all []types.KeyBytes, item types.KeyBytes) int {
 }
 
 func naiveRange(
-	all []types.KeyBytes,
-	x, y types.KeyBytes,
+	all []KeyBytes,
+	x, y KeyBytes,
 	stopCount int,
 ) (
-	items []types.KeyBytes,
-	startID, endID types.KeyBytes,
+	items []KeyBytes,
+	startID, endID KeyBytes,
 ) {
 	if len(all) == 0 {
 		return nil, nil, nil
@@ -77,7 +75,7 @@ func naiveRange(
 	}
 }
 
-var naiveFPFunc = func(items []types.KeyBytes) types.Fingerprint {
+var naiveFPFunc = func(items []KeyBytes) Fingerprint {
 	s := ""
 	for _, k := range items {
 		s += string(k)
@@ -86,20 +84,20 @@ var naiveFPFunc = func(items []types.KeyBytes) types.Fingerprint {
 }
 
 type dumbSet struct {
-	keys         []types.KeyBytes
+	keys         []KeyBytes
 	disableReAdd bool
 	added        map[string]bool
-	fpFunc       func(items []types.KeyBytes) types.Fingerprint
+	fpFunc       func(items []KeyBytes) Fingerprint
 }
 
 var _ OrderedSet = &dumbSet{}
 
-func (ds *dumbSet) Receive(id types.KeyBytes) error {
+func (ds *dumbSet) Receive(id KeyBytes) error {
 	if len(ds.keys) == 0 {
-		ds.keys = []types.KeyBytes{id}
+		ds.keys = []KeyBytes{id}
 		return nil
 	}
-	p := slices.IndexFunc(ds.keys, func(other types.KeyBytes) bool {
+	p := slices.IndexFunc(ds.keys, func(other KeyBytes) bool {
 		return other.Compare(id) >= 0
 	})
 	switch {
@@ -123,12 +121,12 @@ func (ds *dumbSet) Receive(id types.KeyBytes) error {
 	return nil
 }
 
-func (ds *dumbSet) seq(n int) types.SeqResult {
+func (ds *dumbSet) seq(n int) SeqResult {
 	if n < 0 || n > len(ds.keys) {
 		panic("bad index")
 	}
-	return types.SeqResult{
-		Seq: types.Seq(func(yield func(types.KeyBytes) bool) {
+	return SeqResult{
+		Seq: Seq(func(yield func(KeyBytes) bool) {
 			n := n // make the sequence reusable
 			for {
 				if !yield(ds.keys[n]) {
@@ -137,12 +135,12 @@ func (ds *dumbSet) seq(n int) types.SeqResult {
 				n = (n + 1) % len(ds.keys)
 			}
 		}),
-		Error: types.NoSeqError,
+		Error: NoSeqError,
 	}
 }
 
-func (ds *dumbSet) seqFor(s types.KeyBytes) types.SeqResult {
-	n := slices.IndexFunc(ds.keys, func(k types.KeyBytes) bool {
+func (ds *dumbSet) seqFor(s KeyBytes) SeqResult {
+	n := slices.IndexFunc(ds.keys, func(k KeyBytes) bool {
 		return k.Compare(s) == 0
 	})
 	if n == -1 {
@@ -152,13 +150,13 @@ func (ds *dumbSet) seqFor(s types.KeyBytes) types.SeqResult {
 }
 
 func (ds *dumbSet) getRangeInfo(
-	x, y types.KeyBytes,
+	x, y KeyBytes,
 	count int,
-) (r RangeInfo, end types.KeyBytes, err error) {
+) (r RangeInfo, end KeyBytes, err error) {
 	if x == nil && y == nil {
 		if len(ds.keys) == 0 {
 			return RangeInfo{
-				Fingerprint: types.EmptyFingerprint(),
+				Fingerprint: EmptyFingerprint(),
 			}, nil, nil
 		}
 		x = ds.keys[0]
@@ -181,17 +179,17 @@ func (ds *dumbSet) getRangeInfo(
 		}
 		r.Items = ds.seqFor(start)
 	} else {
-		r.Items = types.EmptySeqResult()
+		r.Items = EmptySeqResult()
 	}
 	return r, end, nil
 }
 
-func (ds *dumbSet) GetRangeInfo(x, y types.KeyBytes, count int) (RangeInfo, error) {
+func (ds *dumbSet) GetRangeInfo(x, y KeyBytes, count int) (RangeInfo, error) {
 	ri, _, err := ds.getRangeInfo(x, y, count)
 	return ri, err
 }
 
-func (ds *dumbSet) SplitRange(x, y types.KeyBytes, count int) (SplitInfo, error) {
+func (ds *dumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
 	if count <= 0 {
 		panic("BUG: bad split count")
 	}
@@ -216,9 +214,9 @@ func (ds *dumbSet) Empty() (bool, error) {
 	return len(ds.keys) == 0, nil
 }
 
-func (ds *dumbSet) Items() types.SeqResult {
+func (ds *dumbSet) Items() SeqResult {
 	if len(ds.keys) == 0 {
-		return types.EmptySeqResult()
+		return EmptySeqResult()
 	}
 	return ds.seq(0)
 }
@@ -227,8 +225,8 @@ func (ds *dumbSet) Copy(syncScope bool) OrderedSet {
 	return &dumbSet{keys: slices.Clone(ds.keys)}
 }
 
-func (ds *dumbSet) Recent(since time.Time) (types.SeqResult, int) {
-	return types.EmptySeqResult(), 0
+func (ds *dumbSet) Recent(since time.Time) (SeqResult, int) {
+	return EmptySeqResult(), 0
 }
 
 var hashPool = &sync.Pool{
@@ -240,7 +238,7 @@ var hashPool = &sync.Pool{
 func NewDumbHashSet(disableReAdd bool) OrderedSet {
 	return &dumbSet{
 		disableReAdd: disableReAdd,
-		fpFunc: func(items []types.KeyBytes) (r types.Fingerprint) {
+		fpFunc: func(items []KeyBytes) (r Fingerprint) {
 			hasher := hashPool.Get().(*blake3.Hasher)
 			defer func() {
 				hasher.Reset()
@@ -262,7 +260,7 @@ type deferredAddSet struct {
 	added map[string]struct{}
 }
 
-func (das *deferredAddSet) Receive(id types.KeyBytes) error {
+func (das *deferredAddSet) Receive(id KeyBytes) error {
 	if das.added == nil {
 		das.added = make(map[string]struct{})
 	}
@@ -272,7 +270,7 @@ func (das *deferredAddSet) Receive(id types.KeyBytes) error {
 
 func (das *deferredAddSet) addAll() error {
 	for k := range das.added {
-		if err := das.OrderedSet.Receive(types.KeyBytes(k)); err != nil {
+		if err := das.OrderedSet.Receive(KeyBytes(k)); err != nil {
 			return err
 		}
 	}

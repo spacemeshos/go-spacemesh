@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 const (
@@ -142,7 +141,7 @@ func NewRangeSetReconciler(os OrderedSet, opts ...RangeSetReconcilerOption) *Ran
 	return rsr
 }
 
-func (rsr *RangeSetReconciler) defaultRange() (x, y types.KeyBytes, err error) {
+func (rsr *RangeSetReconciler) defaultRange() (x, y KeyBytes, err error) {
 	if empty, err := rsr.os.Empty(); err != nil {
 		return nil, nil, fmt.Errorf("checking for empty set: %w", err)
 	} else if empty {
@@ -157,7 +156,7 @@ func (rsr *RangeSetReconciler) defaultRange() (x, y types.KeyBytes, err error) {
 	return x, x, nil
 }
 
-func (rsr *RangeSetReconciler) processSubrange(s sender, x, y types.KeyBytes, info RangeInfo) error {
+func (rsr *RangeSetReconciler) processSubrange(s sender, x, y KeyBytes, info RangeInfo) error {
 	rsr.log.Debug("processSubrange", log.ZShortStringer("x", x), log.ZShortStringer("y", y),
 		zap.Int("count", info.Count), log.ZShortStringer("fingerprint", info.Fingerprint))
 
@@ -181,7 +180,7 @@ func (rsr *RangeSetReconciler) processSubrange(s sender, x, y types.KeyBytes, in
 	return nil
 }
 
-func (rsr *RangeSetReconciler) splitRange(s sender, count int, x, y types.KeyBytes) error {
+func (rsr *RangeSetReconciler) splitRange(s sender, count int, x, y KeyBytes) error {
 	count = count / 2
 	rsr.log.Debug("handleMessage: PRE split range",
 		log.ZShortStringer("x", x), log.ZShortStringer("y", y),
@@ -211,8 +210,8 @@ func (rsr *RangeSetReconciler) splitRange(s sender, count int, x, y types.KeyByt
 func (rsr *RangeSetReconciler) sendSmallRange(
 	s sender,
 	count int,
-	sr types.SeqResult,
-	x, y types.KeyBytes,
+	sr SeqResult,
+	x, y KeyBytes,
 ) error {
 	if count == 0 {
 		rsr.log.Debug("handleMessage: empty incoming range",
@@ -232,7 +231,7 @@ func (rsr *RangeSetReconciler) sendSmallRange(
 func (rsr *RangeSetReconciler) sendItems(
 	s sender,
 	count int,
-	sr types.SeqResult,
+	sr SeqResult,
 	skipKeys map[string]struct{},
 ) (int, error) {
 	if count == 0 {
@@ -242,7 +241,7 @@ func (rsr *RangeSetReconciler) sendItems(
 	if rsr.itemChunkSize == 0 {
 		panic("BUG: zero item chunk size")
 	}
-	var keys []types.KeyBytes
+	var keys []KeyBytes
 	n := count
 	for k := range sr.Seq {
 		if _, found := skipKeys[string(k)]; !found {
@@ -276,7 +275,7 @@ func (rsr *RangeSetReconciler) sendItems(
 func (rsr *RangeSetReconciler) handleFingerprint(
 	s sender,
 	msg SyncMessage,
-	x, y types.KeyBytes,
+	x, y KeyBytes,
 	info RangeInfo,
 ) (done bool, err error) {
 	switch {
@@ -321,7 +320,7 @@ func (rsr *RangeSetReconciler) handleFingerprint(
 
 func (rsr *RangeSetReconciler) messageRange(
 	msg SyncMessage,
-) (x, y types.KeyBytes, err error) {
+) (x, y KeyBytes, err error) {
 	x, y = msg.X(), msg.Y()
 	if (x == nil || y == nil) && (x != nil && y != nil) {
 		return nil, nil, fmt.Errorf("bad X or Y in a message of type %s", msg.Type())
@@ -363,7 +362,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 		case MessageTypeProbe:
 			rsr.log.Debug("handleMessage: send empty probe response")
 			if err := s.sendSample(
-				x, y, types.EmptyFingerprint(), 0, 0, types.EmptySeqResult(),
+				x, y, EmptyFingerprint(), 0, 0, EmptySeqResult(),
 			); err != nil {
 				return false, err
 			}
@@ -415,7 +414,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 		items := info.Items
 		if msg.Fingerprint() == info.Fingerprint {
 			// no need to send MinHash items if fingerprints match
-			items = types.EmptySeqResult()
+			items = EmptySeqResult()
 			sampleSize = 0
 		}
 		if err := s.sendSample(x, y, info.Fingerprint, info.Count, sampleSize, items); err != nil {
@@ -449,7 +448,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 // Initiate initiates the reconciliation process with the peer.
 // If x and y are non-nil, [x, y) range is reconciled.  If x and y are nil, the whole
 // range is reconciled.
-func (rsr *RangeSetReconciler) Initiate(c Conduit, x, y types.KeyBytes) error {
+func (rsr *RangeSetReconciler) Initiate(c Conduit, x, y KeyBytes) error {
 	s := sender{c}
 	if x == nil && y == nil {
 		var err error
@@ -467,7 +466,7 @@ func (rsr *RangeSetReconciler) Initiate(c Conduit, x, y types.KeyBytes) error {
 	return s.sendEndRound()
 }
 
-func (rsr *RangeSetReconciler) initiate(s sender, x, y types.KeyBytes, haveRecent bool) error {
+func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool) error {
 	rsr.log.Debug("initiate", log.ZShortStringer("x", x), log.ZShortStringer("y", y))
 	if x == nil {
 		rsr.log.Debug("initiate: send empty set")
@@ -524,7 +523,7 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y types.KeyBytes, haveRecen
 // coefficient from the peer.
 func (rsr *RangeSetReconciler) InitiateProbe(
 	c Conduit,
-	x, y types.KeyBytes,
+	x, y KeyBytes,
 ) (RangeInfo, error) {
 	s := sender{c}
 	info, err := rsr.os.GetRangeInfo(x, y, -1)

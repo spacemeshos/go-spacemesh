@@ -6,7 +6,6 @@ import (
 	"io"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 type PairwiseSetSyncer struct {
@@ -41,7 +40,7 @@ func (pss *PairwiseSetSyncer) Probe(
 	ctx context.Context,
 	peer p2p.Peer,
 	os OrderedSet,
-	x, y types.KeyBytes,
+	x, y KeyBytes,
 ) (ProbeResult, error) {
 	var pr ProbeResult
 	rsr := NewRangeSetReconciler(os, pss.opts...)
@@ -77,7 +76,7 @@ func (pss *PairwiseSetSyncer) Sync(
 	ctx context.Context,
 	peer p2p.Peer,
 	os OrderedSet,
-	x, y types.KeyBytes,
+	x, y KeyBytes,
 ) error {
 	rsr := NewRangeSetReconciler(os, pss.opts...)
 	initReq := []byte(pss.name)

@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/exp/maps"
-
-	"github.com/spacemeshos/go-spacemesh/sync2/types"
 )
 
 // fakeConduit is a fake Conduit for testing purposes that connects two
@@ -56,7 +54,7 @@ func (fc *fakeConduit) Send(msg SyncMessage) error {
 func makeSet(t *testing.T, items string) *dumbSet {
 	var s dumbSet
 	for _, c := range []byte(items) {
-		require.NoError(t, s.Receive(types.KeyBytes{c}))
+		require.NoError(t, s.Receive(KeyBytes{c}))
 	}
 	return &s
 }
@@ -92,7 +90,7 @@ func dumpRangeMessages(t *testing.T, msgs []SyncMessage, fmt string, args ...any
 func runSync(
 	t *testing.T,
 	syncA, syncB *RangeSetReconciler,
-	x, y types.KeyBytes,
+	x, y KeyBytes,
 	maxRounds int,
 ) (nRounds, nMsg, nItems int) {
 	fc := &fakeConduit{t: t}
@@ -139,7 +137,7 @@ func doRunSync(fc *fakeConduit, syncA, syncB *RangeSetReconciler, maxRounds int)
 	return i + 1, nMsg, nItems
 }
 
-func runProbe(t *testing.T, from, to *RangeSetReconciler, x, y types.KeyBytes) ProbeResult {
+func runProbe(t *testing.T, from, to *RangeSetReconciler, x, y KeyBytes) ProbeResult {
 	fc := &fakeConduit{t: t}
 	info, err := from.InitiateProbe(fc, x, y)
 	require.NoError(t, err)
@@ -166,7 +164,7 @@ func TestRangeSync(t *testing.T) {
 		finalA, finalB string
 		x, y           string
 		countA, countB int
-		fpA, fpB       types.Fingerprint
+		fpA, fpB       Fingerprint
 		maxRounds      [4]int
 		sim            float64
 	}{
@@ -178,8 +176,8 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "",
 			countA:    0,
 			countB:    0,
-			fpA:       types.EmptyFingerprint(),
-			fpB:       types.EmptyFingerprint(),
+			fpA:       EmptyFingerprint(),
+			fpB:       EmptyFingerprint(),
 			maxRounds: [4]int{1, 1, 1, 1},
 			sim:       1,
 		},
@@ -191,7 +189,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcd",
 			countA:    0,
 			countB:    4,
-			fpA:       types.EmptyFingerprint(),
+			fpA:       EmptyFingerprint(),
 			fpB:       stringToFP("abcd"),
 			maxRounds: [4]int{2, 2, 2, 2},
 			sim:       0,
@@ -205,7 +203,7 @@ func TestRangeSync(t *testing.T) {
 			countA:    4,
 			countB:    0,
 			fpA:       stringToFP("abcd"),
-			fpB:       types.EmptyFingerprint(),
+			fpB:       EmptyFingerprint(),
 			maxRounds: [4]int{2, 2, 2, 2},
 			sim:       0,
 		},
@@ -300,10 +298,10 @@ func TestRangeSync(t *testing.T) {
 					nRounds    int
 					prBA, prAB ProbeResult
 				)
-				var x, y types.KeyBytes
+				var x, y KeyBytes
 				if tc.x != "" {
-					x = types.KeyBytes(tc.x)
-					y = types.KeyBytes(tc.y)
+					x = KeyBytes(tc.x)
+					y = KeyBytes(tc.y)
 				}
 				prBA = runProbe(t, syncB, syncA, x, y)
 				prAB = runProbe(t, syncA, syncB, x, y)
@@ -387,7 +385,7 @@ type hashSyncTestConfig struct {
 
 type hashSyncTester struct {
 	t            *testing.T
-	src          []types.KeyBytes
+	src          []KeyBytes
 	setA, setB   OrderedSet
 	opts         []RangeSetReconcilerOption
 	numSpecificA int
@@ -397,7 +395,7 @@ type hashSyncTester struct {
 func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 	st := &hashSyncTester{
 		t:   t,
-		src: make([]types.KeyBytes, cfg.numTestHashes),
+		src: make([]KeyBytes, cfg.numTestHashes),
 		opts: []RangeSetReconcilerOption{
 			WithMaxSendRange(cfg.maxSendRange),
 			WithMaxDiff(0.1),
@@ -407,7 +405,7 @@ func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 	}
 
 	for n := range st.src {
-		st.src[n] = types.RandomKeyBytes(32)
+		st.src[n] = RandomKeyBytes(32)
 	}
 
 	sliceA := st.src[:cfg.numTestHashes-st.numSpecificB]
@@ -423,7 +421,7 @@ func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 		require.NoError(t, st.setB.Receive(h))
 	}
 
-	slices.SortFunc(st.src, func(a, b types.KeyBytes) int {
+	slices.SortFunc(st.src, func(a, b KeyBytes) int {
 		return a.Compare(b)
 	})
 
