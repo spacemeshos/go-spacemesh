@@ -23,16 +23,28 @@ func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
 	return rows > 0, nil
 }
 
-func AddProof(db sql.Executor, nodeID types.NodeID, proof []byte, domain int, received time.Time) error {
+func AddProof(
+	db sql.Executor,
+	nodeID types.NodeID,
+	marriageID *marriage.ID,
+	proof []byte,
+	domain int,
+	received time.Time,
+) error {
 	_, err := db.Exec(`
-		INSERT INTO malfeasance (pubkey, proof, domain, received)
-		VALUES (?1, ?2, ?3, ?4)
-		ON CONFLICT DO NOTHING
+		INSERT INTO malfeasance (pubkey, marriage_id, proof, domain, received)
+		VALUES (?1, ?2, ?3, ?4, ?5)
+		ON CONFLICT(pubkey) DO NOTHING
 	`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
-		stmt.BindBytes(2, proof)
-		stmt.BindInt64(3, int64(domain))
-		stmt.BindInt64(4, received.UnixNano())
+		if marriageID != nil {
+			stmt.BindInt64(2, int64(*marriageID))
+		} else {
+			stmt.BindNull(2)
+		}
+		stmt.BindBytes(3, proof)
+		stmt.BindInt64(4, int64(domain))
+		stmt.BindInt64(5, received.UnixNano())
 	}, nil)
 	if err != nil {
 		return fmt.Errorf("add proof %v: %w", nodeID, err)
@@ -44,7 +56,8 @@ func SetMalicious(db sql.Executor, nodeID types.NodeID, marriageID marriage.ID, 
 	_, err := db.Exec(`
 		INSERT INTO malfeasance (pubkey, marriage_id, received)
 		VALUES (?1, ?2, ?3)
-		ON CONFLICT DO NOTHING
+		ON CONFLICT(pubkey) DO UPDATE SET
+			marriage_id = ?2
 	`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
 		stmt.BindInt64(2, int64(marriageID))

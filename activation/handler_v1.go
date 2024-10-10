@@ -343,11 +343,7 @@ func (h *HandlerV1) checkDoublePublish(
 			Data: &atxProof,
 		},
 	}
-	encoded, err := codec.Encode(proof)
-	if err != nil {
-		h.logger.Panic("failed to encode malfeasance proof", zap.Error(err))
-	}
-	if err := identities.SetMalicious(tx, atx.SmesherID, encoded, time.Now()); err != nil {
+	if err := identities.SetMalicious(tx, atx.SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
 		return nil, fmt.Errorf("add malfeasance proof: %w", err)
 	}
 

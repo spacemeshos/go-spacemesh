@@ -853,16 +853,17 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
 	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
-			marriageID, err := marriage.NewID(tx)
+			newMarriageID, err := marriage.NewID(tx)
 			if err != nil {
 				return fmt.Errorf("creating marriage ID: %w", err)
 			}
 			info := marriage.Info{
-				ID:     marriageID,
+				ID:     newMarriageID,
 				ATX:    atx.ID(),
 				Target: atx.SmesherID,
 			}
 			malicious := false
+			marriageIDs := make([]marriage.ID, 0)
 			for i, m := range watx.marriages {
 				info.NodeID = m.id
 				info.MarriageIndex = i
@@ -870,7 +871,11 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				err := marriage.Add(tx, info)
 				switch {
 				case errors.Is(err, sql.ErrConflict):
-					// TODO(mafa): nodeID is already married - update marriage IDs accordingly
+					id, err := marriage.FindIDByNodeID(tx, m.id)
+					if err != nil {
+						return fmt.Errorf("find marriage ID for node ID %s: %w", m.id.ShortString(), err)
+					}
+					marriageIDs = append(marriageIDs, id)
 					continue
 				case err != nil:
 					return fmt.Errorf("adding marriage: %w", err)
@@ -883,9 +888,21 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 					return fmt.Errorf("checking if node is malicious: %w", err)
 				}
 			}
+			if len(marriageIDs) != 0 {
+				marriageIDs := append(marriageIDs, newMarriageID)
+				combinedID := slices.Min(marriageIDs)
+				for _, id := range marriageIDs {
+					if id != combinedID {
+						if err := marriage.UpdateID(tx, id, combinedID); err != nil {
+							return fmt.Errorf("updating marriage ID for %d: %w", id, err)
+						}
+					}
+				}
+				newMarriageID = combinedID
+			}
 			if malicious {
 				for _, m := range watx.marriages {
-					if err := malfeasance.SetMalicious(tx, m.id, marriageID, time.Now()); err != nil {
+					if err := malfeasance.SetMalicious(tx, m.id, newMarriageID, time.Now()); err != nil {
 						return fmt.Errorf("marking node as malicious: %w", err)
 					}
 				}

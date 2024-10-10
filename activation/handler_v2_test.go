@@ -17,7 +17,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -1719,24 +1718,78 @@ func Test_Marriages(t *testing.T) {
 				_, ok := data.(*wire.ProofDoubleMarry)
 				return ok
 			}),
-		).DoAndReturn(func(ctx context.Context, id types.NodeID, proof wire.Proof) error {
+		).DoAndReturn(func(_ context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofDoubleMarry)
 			nId, err := malProof.Valid(atxHandler.edVerifier)
 			require.NoError(t, err)
 			require.Equal(t, sig.NodeID(), nId)
-			b := codec.MustEncode(malProof)
-			_ = b
 			return nil
 		})
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
 
-		// The equivocation set of sig and otherSig didn't grow
+		// The equivocation set of sig and otherSig were merged
 		id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
 		require.NoError(t, err)
 		equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
 		require.NoError(t, err)
-		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, equiv)
+		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
+	})
+	t.Run("marring into existing malicious equivocation set sets identity as malicious", func(t *testing.T) {
+		t.Parallel()
+		atxHandler := newV2TestHandler(t, golden)
+
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
+
+		atx := newInitialATXv2(t, golden)
+		atx.Marriages = []wire.MarriageCertificate{
+			{
+				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+			},
+			{
+				ReferenceAtx: othersAtx.ID(),
+				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+			},
+		}
+		atx.Sign(sig)
+
+		atxHandler.expectInitialAtxV2(atx)
+		err = atxHandler.processATX(context.Background(), "", atx, time.Now())
+		require.NoError(t, err)
+
+		// sig becomes malicious in some way and with it otherSig
+		id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+		require.NoError(t, err)
+		require.NoError(t, malfeasance.AddProof(atxHandler.cdb, sig.NodeID(), &id, []byte("proof"), 0, time.Now()))
+		require.NoError(t, malfeasance.SetMalicious(atxHandler.cdb, otherSig.NodeID(), id, time.Now()))
+
+		// otherSig2 cannot marry sig, trying to extend its set.
+		otherSig2, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		others2Atx := atxHandler.createAndProcessInitial(t, otherSig2)
+		atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
+		atx2.Marriages = []wire.MarriageCertificate{
+			{
+				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+			},
+			{
+				ReferenceAtx: others2Atx.ID(),
+				Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+			},
+		}
+		atx2.Sign(sig)
+		atxHandler.expectAtxV2(atx2)
+		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
+		require.NoError(t, err)
+
+		// The equivocation set of sig and otherSig were merged
+		id, err = marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+		require.NoError(t, err)
+		equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
 	})
 	t.Run("signer must marry self", func(t *testing.T) {
 		t.Parallel()
@@ -1786,7 +1839,7 @@ func Test_MarryingMalicious(t *testing.T) {
 				},
 			}
 			atx.Sign(sig)
-			require.NoError(t, malfeasance.AddProof(atxHandler.cdb, malicious, []byte("proof"), 0, time.Now()))
+			require.NoError(t, malfeasance.AddProof(atxHandler.cdb, malicious, nil, []byte("proof"), 0, time.Now()))
 
 			atxHandler.expectInitialAtxV2(atx)
 			err := atxHandler.processATX(context.Background(), "", atx, time.Now())

@@ -65,14 +65,14 @@ func Add(db sql.Executor, marriage Info) error {
 	return nil
 }
 
-func UpdateID(db sql.Executor, nodeID types.NodeID, id ID) error {
+func UpdateID(db sql.Executor, oldID, newID ID) error {
 	_, err := db.Exec(`
 		UPDATE marriages
 		SET id = $1
-		WHERE pubkey = $2
+		WHERE id = $2
 	`, func(s *sql.Statement) {
-		s.BindInt64(1, int64(id))
-		s.BindBytes(2, nodeID.Bytes())
+		s.BindInt64(1, int64(newID))
+		s.BindInt64(2, int64(oldID))
 	}, nil)
 	if err != nil {
 		return fmt.Errorf("updating marriage id: %w", err)
