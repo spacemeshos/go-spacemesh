@@ -168,14 +168,9 @@ func (h *RemoteHare) run(session *session) error {
 		}
 		start := time.Now()
 		// TODO this still has the prerequisite of handling the proposals construction correctly
-		// session.proto.OnInitial(h.selectProposals(session))
 		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
-
-	//if err := h.onOutput(session, current, session.proto.Next()); err != nil {
-	//return err
-	//}
-	//result := false
+	onRound(session.proto)
 	for {
 		walltime = walltime.Add(h.config.RoundDuration)
 		current = session.proto.IterRound
@@ -190,7 +185,6 @@ func (h *RemoteHare) run(session *session) error {
 				session.vrfs[i] = nil
 			}
 		}
-		// h.tracer.OnActive(session.vrfs)
 		activeLatency.Observe(time.Since(start).Seconds())
 
 		select {
@@ -205,6 +199,7 @@ func (h *RemoteHare) run(session *session) error {
 				msgBytes, err := h.svc.GetHareMessage(context.Background(), session.lid, session.proto.IterRound.Round)
 				if err != nil {
 					h.log.Error("get hare message", zap.Error(err))
+					onRound(session.proto) // advance the protocol state before continuing
 					continue
 				}
 				msg := &Message{}
@@ -212,23 +207,8 @@ func (h *RemoteHare) run(session *session) error {
 					h.log.Error("decode remote hare message", zap.Error(err))
 				}
 				h.signPub(session, msg)
+				onRound(session.proto) // advance the protocol state before continuing
 			}
-			//out := session.proto.Next()
-			//if out.result != nil {
-			//result = true
-			//}
-			//if err := h.onOutput(session, current, out); err != nil {
-			//return err
-			//}
-			//if out.terminated {
-			//if !result {
-			//return errors.New("terminated without result")
-			//}
-			//return nil
-			//}
-			//if current.Iter == h.config.IterationsLimit {
-			//return fmt.Errorf("hare failed to reach consensus in %d iterations", h.config.IterationsLimit)
-			//}
 		case <-h.ctx.Done():
 			return nil
 		}
@@ -251,7 +231,7 @@ func (h *RemoteHare) signPub(session *session, message *Message) {
 	}
 }
 
-func (h *RemoteHare) onRound(p *protocol) {
+func onRound(p *protocol) {
 	if p.Round == preround && p.Iter == 0 {
 		// skips hardlock unlike softlock in the paper.
 		// this makes no practical difference from correctness.
