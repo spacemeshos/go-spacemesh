@@ -35,8 +35,10 @@ type (
 
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
-	// Parse header and arguments from the payload.
+	// Parse header from the payload.
 	Parse(*scale.Decoder) (ParseOutput, error)
+	// Args returns method arguments for the method.
+	Args([]byte) scale.Type
 
 	// Exec dispatches execution request based on the method selector.
 	Exec(Host, []byte) error
@@ -45,14 +47,15 @@ type Handler interface {
 	New(any) (Template, error)
 	// Load template with stored immutable state.
 	Load([]byte) (Template, error)
+
+	// Whether or not this tx is a spawn transaction.
+	IsSpawn([]byte) bool
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template
 
 // Template is a concrete Template type initialized with mutable and immutable state.
 type Template interface {
-	// Template needs to implement scale.Encodable as mutable and immutable state will be stored as a blob of bytes.
-	scale.Encodable
 	// MaxSpend decodes MaxSpend value for the transaction. Transaction will fail
 	// if it spends more than that.
 	MaxSpend(any) (uint64, error)

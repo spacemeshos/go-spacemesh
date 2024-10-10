@@ -71,9 +71,7 @@ func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonc
 }
 
 func (a *singlesigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
-	// TODO(lane): rewrite to use spawn, not selfspawn
-	// return sdkwallet.SelfSpawn(a.pk, nonce, opts...)
-	panic("TODO: self spawn not yet implemented")
+	return sdkwallet.SelfSpawn(a.pk, nonce, opts...)
 }
 
 func (a *singlesigAccount) spawn(
@@ -1225,7 +1223,7 @@ func TestWallets(t *testing.T) {
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
-	t.Skip("TODO: new wallet SDK")
+	// t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	skipped, _, err := tt.Apply(types.GetEffectiveGenesis(), notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
@@ -1332,7 +1330,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 }
 
 func TestValidation(t *testing.T) {
-	t.Skip("TODO: new wallet SDK")
+	// t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	t.Run("SingleSig", func(t *testing.T) {
 		tt := newTester(t).

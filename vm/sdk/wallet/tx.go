@@ -25,6 +25,13 @@ func encode(fields ...scale.Encodable) []byte {
 	return buf.Bytes()
 }
 
+// SelfSpawn creates a self-spawn transaction.
+func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	args := wallet.SpawnArguments{}
+	copy(args.PublicKey[:], signing.Public(pk))
+	return Spawn(pk, wallet.TemplateAddress, &args, nonce, opts...)
+}
+
 // Spawn creates a spawn transaction.
 func Spawn(
 	pk signing.PrivateKey,

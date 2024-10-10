@@ -50,7 +50,7 @@ func (*handler) Load(state []byte) (core.Template, error) {
 	return &wallet, nil
 }
 
-// Exec spawn or spend based on the method selector.
+// Pass the transaction into the VM for execution.
 func (*handler) Exec(host core.Host, args []byte) error {
 	// TODO(lane): rewrite to use the VM
 	// switch method {
@@ -64,6 +64,26 @@ func (*handler) Exec(host core.Host, args []byte) error {
 	// 	}
 	// default:
 	return fmt.Errorf("%w: unknown method", core.ErrMalformed)
+	// }
+	// return nil
+}
+
+func (h *handler) IsSpawn(payload []byte) bool {
+	// TODO(lane): rewrite to use the VM
+	// mock for now
+	return true
+}
+
+// Args ...
+func (h *handler) Args(payload []byte) scale.Type {
+	// TODO(lane): rewrite to use the VM
+	// mock for now
+	return &SpawnArguments{}
+	// switch method {
+	// case core.MethodSpawn:
+	// 	return &SpawnArguments{}
+	// case core.MethodSpend:
+	// 	return &SpendArguments{}
 	// }
 	// return nil
 }
