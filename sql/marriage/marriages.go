@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 type ID int
@@ -65,7 +66,7 @@ func Add(db sql.Executor, marriage Info) error {
 	return nil
 }
 
-func UpdateID(db sql.Executor, oldID, newID ID) error {
+func UpdateMarriageID(db sql.Executor, oldID, newID ID) error {
 	_, err := db.Exec(`
 		UPDATE marriages
 		SET id = $1
@@ -147,19 +148,25 @@ func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {
 	return nodeIDs, nil
 }
 
-func Iterate(db sql.Executor, cb func(data Info) bool) error {
+func IterateOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(Info) bool,
+) error {
 	_, err := db.Exec(`
 		SELECT id, pubkey, marriage_atx, marriage_idx, marriage_target, marriage_sig
 		FROM marriages
-	`, nil, func(stmt *sql.Statement) bool {
-		var data Info
-		data.ID = ID(stmt.ColumnInt64(0))
-		stmt.ColumnBytes(1, data.NodeID[:])
-		stmt.ColumnBytes(2, data.ATX[:])
-		data.MarriageIndex = int(stmt.ColumnInt64(3))
-		stmt.ColumnBytes(4, data.Target[:])
-		stmt.ColumnBytes(5, data.Signature[:])
-		return cb(data)
-	})
+	`+builder.FilterFrom(operations), builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			var data Info
+			data.ID = ID(stmt.ColumnInt64(0))
+			stmt.ColumnBytes(1, data.NodeID[:])
+			stmt.ColumnBytes(2, data.ATX[:])
+			data.MarriageIndex = int(stmt.ColumnInt64(3))
+			stmt.ColumnBytes(4, data.Target[:])
+			stmt.ColumnBytes(5, data.Signature[:])
+			return fn(data)
+		},
+	)
 	return err
 }

@@ -199,7 +199,7 @@ func (db *CachedDB) IterateMalfeasanceProofs(
 	iter func(types.NodeID, []byte) error,
 ) error {
 	var callbackErr error
-	if err := identities.IterateMaliciousOps(db, builder.Operations{},
+	if err := identities.IterateOps(db, builder.Operations{},
 		func(id types.NodeID, proof []byte, _ time.Time) bool {
 			callbackErr = iter(id, proof)
 			return callbackErr == nil

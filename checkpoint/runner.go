@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 )
@@ -117,7 +118,7 @@ func checkpointDB(
 		}
 		checkpoint.Data.Accounts = append(checkpoint.Data.Accounts, a)
 	}
-	err = marriage.Iterate(tx, func(info marriage.Info) bool {
+	err = marriage.IterateOps(tx, builder.Operations{}, func(info marriage.Info) bool {
 		snapshot := types.MarriageSnapshot{
 			ATX:       info.ATX.Bytes(),
 			Index:     info.MarriageIndex,

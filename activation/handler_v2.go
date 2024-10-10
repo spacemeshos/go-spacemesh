@@ -893,7 +893,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				combinedID := slices.Min(marriageIDs)
 				for _, id := range marriageIDs {
 					if id != combinedID {
-						if err := marriage.UpdateID(tx, id, combinedID); err != nil {
+						if err := marriage.UpdateMarriageID(tx, id, combinedID); err != nil {
 							return fmt.Errorf("updating marriage ID for %d: %w", id, err)
 						}
 					}

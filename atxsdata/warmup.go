@@ -83,7 +83,7 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID, logger *zap.Logger
 	}
 	logger.Info("Finished reading ATXs. Starting reading malfeasance", zap.Duration("duration", time.Since(start)))
 	start = time.Now()
-	err = identities.IterateMaliciousOps(db, builder.Operations{}, func(id types.NodeID, _ []byte, _ time.Time) bool {
+	err = identities.IterateOps(db, builder.Operations{}, func(id types.NodeID, _ []byte, _ time.Time) bool {
 		cache.SetMalicious(id)
 		return true
 	})

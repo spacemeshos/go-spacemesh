@@ -148,7 +148,7 @@ func Test_IterateMaliciousOps(t *testing.T) {
 		id    types.NodeID
 		proof []byte
 	}
-	err := identities.IterateMaliciousOps(db, builder.Operations{},
+	err := identities.IterateOps(db, builder.Operations{},
 		func(id types.NodeID, proof []byte, _ time.Time) bool {
 			got = append(got, struct {
 				id    types.NodeID
@@ -200,7 +200,7 @@ func Test_IterateMaliciousOpsWithFilter(t *testing.T) {
 		Token: builder.IsNotNull, // only entries which have a proof
 	})
 
-	err := identities.IterateMaliciousOps(db, ops, func(id types.NodeID, proof []byte, _ time.Time) bool {
+	err := identities.IterateOps(db, ops, func(id types.NodeID, proof []byte, _ time.Time) bool {
 		got = append(got, struct {
 			id    types.NodeID
 			proof []byte

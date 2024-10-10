@@ -53,7 +53,7 @@ func LoadMalfeasanceBlob(_ context.Context, db sql.Executor, nodeID []byte, blob
 	return sql.LoadBlob(db, "SELECT proof FROM identities WHERE pubkey = ?1;", nodeID, blob)
 }
 
-func IterateMaliciousOps(
+func IterateOps(
 	db sql.Executor,
 	operations builder.Operations,
 	fn func(types.NodeID, []byte, time.Time) bool,

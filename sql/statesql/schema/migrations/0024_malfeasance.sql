@@ -53,9 +53,16 @@ BEGIN
     WHERE NEW.proof IS NULL OR NEW.domain IS NULL;
 END;
 
-ALTER TABLE identities DROP COLUMN marriage_atx;
-ALTER TABLE identities DROP COLUMN marriage_idx;
-ALTER TABLE identities DROP COLUMN marriage_target;
-ALTER TABLE identities DROP COLUMN marriage_signature;
+CREATE TABLE identities_new
+(
+    pubkey   CHAR(32) PRIMARY KEY,
+    proof    BLOB NOT NULL,
+    received INT NOT NULL
+);
 
--- TODO(mafa): add a migration to convert old malfeasance proofs to the new format and copy to this table
+INSERT INTO identities_new (pubkey, proof, received)
+SELECT pubkey, proof, received
+FROM identities;
+
+DROP TABLE identities;
+ALTER TABLE identities_new RENAME TO identities;

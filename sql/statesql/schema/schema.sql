@@ -69,11 +69,12 @@ CREATE TABLE certificates
     valid bool NOT NULL,
     PRIMARY KEY (layer, block)
 );
-CREATE TABLE identities
+CREATE TABLE "identities"
 (
-    pubkey VARCHAR PRIMARY KEY,
-    proof  BLOB
-, received INT DEFAULT 0 NOT NULL) WITHOUT ROWID;
+    pubkey   CHAR(32) PRIMARY KEY,
+    proof    BLOB NOT NULL,
+    received INT NOT NULL
+);
 CREATE TABLE layers
 (
     id              INT PRIMARY KEY DESC,

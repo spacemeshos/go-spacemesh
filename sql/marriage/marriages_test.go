@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
@@ -217,7 +218,7 @@ func TestNodeIDsByID(t *testing.T) {
 	require.Empty(t, nodeIDs)
 }
 
-func TestIterate(t *testing.T) {
+func TestIterateOps(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
 	id1, err := marriage.NewID(db)
@@ -261,7 +262,7 @@ func TestIterate(t *testing.T) {
 	}
 
 	res := make([]marriage.Info, 0, 10)
-	marriage.Iterate(db, func(info marriage.Info) bool {
+	marriage.IterateOps(db, builder.Operations{}, func(info marriage.Info) bool {
 		res = append(res, info)
 		return true
 	})
