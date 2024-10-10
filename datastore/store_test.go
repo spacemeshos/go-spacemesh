@@ -3,6 +3,7 @@ package datastore_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -65,6 +66,37 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	got, err := cdb.MalfeasanceProof(nodeID1)
 	require.NoError(t, err)
 	require.EqualValues(t, proof, got)
+}
+
+func TestIterateMalfeasanceProofs(t *testing.T) {
+	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
+
+	proofs := map[types.NodeID][]byte{
+		{1}: types.RandomBytes(100),
+		{2}: types.RandomBytes(100),
+		{3}: types.RandomBytes(100),
+	}
+	for id, proof := range proofs {
+		require.NoError(t, identities.SetMalicious(db, id, proof, time.Now()))
+	}
+
+	gotProofs := make(map[types.NodeID][]byte)
+	require.NoError(t, cdb.IterateMalfeasanceProofs(func(id types.NodeID, proof []byte) error {
+		gotProofs[id] = proof
+		return nil
+	}))
+	require.Equal(t, proofs, gotProofs)
+
+	// stop early
+	gotProofs = make(map[types.NodeID][]byte)
+	callbackErr := errors.New("stop")
+	err := cdb.IterateMalfeasanceProofs(func(id types.NodeID, proof []byte) error {
+		gotProofs[id] = proof
+		return callbackErr
+	})
+	require.ErrorIs(t, err, callbackErr)
 }
 
 func TestBlobStore_GetATXBlob(t *testing.T) {

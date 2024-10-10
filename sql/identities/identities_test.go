@@ -61,7 +61,7 @@ func TestMalicious(t *testing.T) {
 
 func Test_GetMalicious(t *testing.T) {
 	db := statesql.InMemory()
-	got, err := identities.GetMalicious(db)
+	got, err := identities.All(db)
 	require.NoError(t, err)
 	require.Nil(t, got)
 
@@ -72,7 +72,7 @@ func Test_GetMalicious(t *testing.T) {
 		bad = append(bad, nid)
 		require.NoError(t, identities.SetMalicious(db, nid, types.RandomBytes(11), time.Now().Local()))
 	}
-	got, err = identities.GetMalicious(db)
+	got, err = identities.All(db)
 	require.NoError(t, err)
 	require.Equal(t, bad, got)
 }

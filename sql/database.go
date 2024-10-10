@@ -1151,15 +1151,18 @@ func GetBlobSizes(db Executor, cmd string, ids [][]byte) (sizes []int, err error
 
 // LoadBlob loads an encoded blob.
 func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
-	if rows, err := db.Exec(cmd,
+	rows, err := db.Exec(cmd,
 		func(stmt *Statement) {
 			stmt.BindBytes(1, id)
 		}, func(stmt *Statement) bool {
 			blob.FromColumn(stmt, 0)
 			return true
-		}); err != nil {
+		},
+	)
+	if err != nil {
 		return fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
-	} else if rows == 0 {
+	}
+	if rows == 0 {
 		return fmt.Errorf("%w: object %s", ErrNotFound, hex.EncodeToString(id))
 	}
 	return nil
