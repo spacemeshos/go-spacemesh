@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -27,7 +26,7 @@ var (
 
 type handler struct{}
 
-// Parse header and arguments.
+// Parse header.
 func (*handler) Parse(decoder *scale.Decoder) (output core.ParseOutput, err error) {
 	var p core.Payload
 	if _, err = p.DecodeScale(decoder); err != nil {
@@ -46,16 +45,13 @@ func (*handler) New(args any) (core.Template, error) {
 
 // Load single sig wallet from stored state.
 func (*handler) Load(state []byte) (core.Template, error) {
-	decoder := scale.NewDecoder(bytes.NewReader(state))
+	// TODO(lane): pass blob into VM to instantiate the template instance (program)
 	var wallet Wallet
-	if _, err := wallet.DecodeScale(decoder); err != nil {
-		return nil, fmt.Errorf("%w: malformed state %w", core.ErrInternal, err)
-	}
 	return &wallet, nil
 }
 
-// Exec spawn or spend based on the method selector.
-func (*handler) Exec(host core.Host, args scale.Encodable) error {
+// Pass the transaction into the VM for execution.
+func (*handler) Exec(host core.Host, args []byte) error {
 	// TODO(lane): rewrite to use the VM
 	// switch method {
 	// case core.MethodSpawn:
@@ -72,13 +68,22 @@ func (*handler) Exec(host core.Host, args scale.Encodable) error {
 	// return nil
 }
 
+func (h *handler) IsSpawn(payload []byte) bool {
+	// TODO(lane): rewrite to use the VM
+	// mock for now
+	return true
+}
+
 // Args ...
-func (h *handler) Args() scale.Type {
+func (h *handler) Args(payload []byte) scale.Type {
+	// TODO(lane): rewrite to use the VM
+	// mock for now
+	return &SpawnArguments{}
 	// switch method {
 	// case core.MethodSpawn:
 	// 	return &SpawnArguments{}
 	// case core.MethodSpend:
 	// 	return &SpendArguments{}
 	// }
-	return nil
+	// return nil
 }
