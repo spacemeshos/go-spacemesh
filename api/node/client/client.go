@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -144,5 +145,18 @@ func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, r
 }
 
 func (s *NodeService) PublishHareMessage(ctx context.Context, msg []byte) error {
-	return nil
+	buf := bytes.NewBuffer(msg)
+	resp, err := s.client.PostHarePublishWithBody(ctx, "application/octet-stream", buf)
+	if err != nil {
+		return fmt.Errorf("publish hare: %w", err)
+	}
+
+	switch resp.StatusCode {
+	case 202:
+		return nil
+	case 500:
+		return errors.New("error processing send")
+	default:
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 }
