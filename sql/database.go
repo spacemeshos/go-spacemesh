@@ -311,10 +311,7 @@ func prepareDB(logger *zap.Logger, db *sqliteDatabase, config *conf, freshDB boo
 	if config.enableLatency {
 		db.latency = newQueryLatency()
 	}
-	if _, err := db.Exec("PRAGMA foreign_keys = ON;", nil, nil); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("enable foreign keys: %w", err)
-	}
+
 	if config.temp {
 		// Temporary database is used for migration and is deleted if migrations
 		// fail, so we make it faster by disabling journaling and synchronous
