@@ -130,7 +130,7 @@ func FindByNodeID(db sql.Executor, nodeID types.NodeID) (Info, error) {
 
 func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {
 	var nodeIDs []types.NodeID
-	_, err := db.Exec(`
+	rows, err := db.Exec(`
 		SELECT pubkey
 		FROM marriages
 		WHERE id = $1
@@ -144,6 +144,9 @@ func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("select node IDs: %w", err)
+	}
+	if rows == 0 {
+		return nil, sql.ErrNotFound
 	}
 	return nodeIDs, nil
 }

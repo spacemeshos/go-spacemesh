@@ -39,11 +39,11 @@ func AddProof(
 		stmt.BindBytes(1, nodeID.Bytes())
 		if marriageID != nil {
 			stmt.BindInt64(2, int64(*marriageID))
-		} else {
-			stmt.BindNull(2)
 		}
-		stmt.BindBytes(3, proof)
-		stmt.BindInt64(4, int64(domain))
+		if proof != nil {
+			stmt.BindBytes(3, proof)
+			stmt.BindInt64(4, int64(domain))
+		}
 		stmt.BindInt64(5, received.UnixNano())
 	}, nil)
 	if err != nil {

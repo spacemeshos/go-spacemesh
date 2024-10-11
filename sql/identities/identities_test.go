@@ -17,7 +17,7 @@ import (
 )
 
 func TestMalicious(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	nodeID := types.NodeID{1, 1, 1, 1}
 	mal, err := identities.IsMalicious(db, nodeID)
@@ -60,7 +60,7 @@ func TestMalicious(t *testing.T) {
 }
 
 func Test_GetMalicious(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	got, err := identities.All(db)
 	require.NoError(t, err)
 	require.Nil(t, got)
@@ -78,7 +78,7 @@ func Test_GetMalicious(t *testing.T) {
 }
 
 func TestLoadMalfeasanceBlob(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 
 	nid1 := types.RandomNodeID()
@@ -120,7 +120,7 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 }
 
 func Test_IterateMaliciousOps(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	tt := []struct {
 		id    types.NodeID
 		proof []byte
@@ -161,7 +161,7 @@ func Test_IterateMaliciousOps(t *testing.T) {
 }
 
 func Test_IterateMaliciousOpsWithFilter(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	tt := []struct {
 		id    types.NodeID
 		proof []byte

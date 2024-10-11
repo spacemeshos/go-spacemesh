@@ -17,7 +17,7 @@ import (
 func TestCollectingDeps(t *testing.T) {
 	golden := types.RandomATXID()
 	t.Run("collect marriage ATXs", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 
 		marriageATX := &wire.ActivationTxV1{
 			InnerActivationTxV1: wire.InnerActivationTxV1{
