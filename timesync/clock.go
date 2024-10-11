@@ -1,7 +1,6 @@
 package timesync
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -185,7 +184,6 @@ func (t *NodeClock) AwaitLayer(layerID types.LayerID) <-chan struct{} {
 		ch = make(chan struct{})
 		t.layerChannels[layerID] = ch
 	}
-	fmt.Println("node clock waiting for layer", layerID)
 	if t.minLayer.After(layerID) {
 		t.minLayer = layerID
 	}

@@ -71,9 +71,6 @@ func (h *RemoteHare) Start() {
 	enableLayer := types.LayerID(0)
 	enabled := max(current, enableLayer /* h.config.EnableLayer*/, types.GetEffectiveGenesis()+1)
 	disabled := types.LayerID(math.MaxUint32)
-	//if h.config.DisableLayer > 0 {
-	//disabled = h.config.DisableLayer
-	//}
 	h.log.Info("started",
 		zap.Inline(&h.config),
 		zap.Uint32("enabled", enabled.Uint32()),
@@ -88,6 +85,7 @@ func (h *RemoteHare) Start() {
 				h.log.Debug("notified", zap.Uint32("layer", next.Uint32()))
 				h.onLayer(next)
 			case <-h.ctx.Done():
+				h.log.Info("remote hare processing layer - context done")
 				return nil
 			}
 		}
