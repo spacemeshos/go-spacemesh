@@ -158,3 +158,18 @@ func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uin
 	}
 	return strconv.ParseUint(string(bytes), 10, 64)
 }
+
+func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node types.NodeID) (uint64, error) {
+	resp, err := s.client.GetHareWeightNodeIdLayer(ctx, node.String(), uint32(layer))
+	if err != nil {
+		return 0, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("read all: %w", err)
+	}
+	return strconv.ParseUint(string(bytes), 10, 64)
+}

@@ -31,6 +31,7 @@ type poetDB interface {
 type hare interface {
 	RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message
 	TotalWeight(ctx context.Context, layer types.LayerID) uint64
+	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64
 }
 
 type Server struct {
@@ -247,4 +248,24 @@ func (t *totalWeightResp) VisitGetHareTotalWeightLayerResponse(w http.ResponseWr
 
 func (s *Server) GetHareTotalWeightLayer(ctx context.Context, req GetHareTotalWeightLayerRequestObject) (GetHareTotalWeightLayerResponseObject, error) {
 	return &totalWeightResp{s.hare.TotalWeight(ctx, types.LayerID(req.Layer))}, nil
+}
+
+type nodeWeightResp struct {
+	val uint64
+}
+
+func (n *nodeWeightResp) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
+	w.Header().Add("content-type", "application/octet-stream")
+	w.WriteHeader(200)
+	_, err := w.Write([]byte(fmt.Sprintf("%d", n.val)))
+	return err
+}
+
+func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context, request GetHareWeightNodeIdLayerRequestObject) (GetHareWeightNodeIdLayerResponseObject, error) {
+	id := &types.NodeID{}
+	err := id.UnmarshalText([]byte(request.NodeId))
+	if err != nil {
+		panic(err)
+	}
+	return &nodeWeightResp{val: s.hare.MinerWeight(ctx, *id, types.LayerID(request.Layer))}, nil
 }

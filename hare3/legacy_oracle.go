@@ -15,6 +15,7 @@ type oracle interface {
 	Validate(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature, uint16) (bool, error)
 	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)
 	TotalWeight(ctx context.Context, layer types.LayerID) uint64
+	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64
 }
 
 type legacyOracle struct {

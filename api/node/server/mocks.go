@@ -141,17 +141,17 @@ func (c *MockhareRoundMessageCall) DoAndReturn(f func(types.LayerID, hare3.IterR
 }
 
 // TotalWeight mocks base method.
-func (m *Mockhare) TotalWeight() uint64 {
+func (m *Mockhare) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TotalWeight")
+	ret := m.ctrl.Call(m, "TotalWeight", ctx, layer)
 	ret0, _ := ret[0].(uint64)
 	return ret0
 }
 
 // TotalWeight indicates an expected call of TotalWeight.
-func (mr *MockhareMockRecorder) TotalWeight() *MockhareTotalWeightCall {
+func (mr *MockhareMockRecorder) TotalWeight(ctx, layer any) *MockhareTotalWeightCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TotalWeight", reflect.TypeOf((*Mockhare)(nil).TotalWeight))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TotalWeight", reflect.TypeOf((*Mockhare)(nil).TotalWeight), ctx, layer)
 	return &MockhareTotalWeightCall{Call: call}
 }
 
@@ -167,13 +167,13 @@ func (c *MockhareTotalWeightCall) Return(arg0 uint64) *MockhareTotalWeightCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareTotalWeightCall) Do(f func() uint64) *MockhareTotalWeightCall {
+func (c *MockhareTotalWeightCall) Do(f func(context.Context, types.LayerID) uint64) *MockhareTotalWeightCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareTotalWeightCall) DoAndReturn(f func() uint64) *MockhareTotalWeightCall {
+func (c *MockhareTotalWeightCall) DoAndReturn(f func(context.Context, types.LayerID) uint64) *MockhareTotalWeightCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

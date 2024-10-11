@@ -675,3 +675,7 @@ func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
 func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
 	return h.oracle.oracle.TotalWeight(ctx, layer)
 }
+
+func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, layer types.LayerID) uint64 {
+	return h.oracle.oracle.MinerWeight(ctx, miner, layer)
+}

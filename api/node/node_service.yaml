@@ -175,4 +175,31 @@ paths:
                 format: binary
         "204":
           description: did not find a message to retrieve
+  /hare/weight/{node_id}/{layer}:
+    get:
+      summary: Get the miner weight in layer
+      tags:
+        - "hare"
+      parameters:
+        - in: path
+          name: node_id
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/NodeID"
+        - in: path
+          name: layer
+          required: true
+          schema:
+            type: integer
+            format: uint32
+      responses:
+        "200":
+          description: successfully found the total weight to return to client
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: did not find a message to retrieve
 

@@ -783,7 +783,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.host.ID(),
 		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
-
+	var extraOpts []eligibility.Opt
+	if nodeServiceClient != nil {
+		extraOpts = append(extraOpts, eligibility.WithTotalWeightFunc(nodeServiceClient.TotalWeight))
+		extraOpts = append(extraOpts, eligibility.WithMinerWeightFunc(nodeServiceClient.MinerWeight))
+	}
 	app.hOracle = eligibility.New(
 		beaconProtocol,
 		app.db,

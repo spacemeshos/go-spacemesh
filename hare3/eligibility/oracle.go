@@ -591,3 +591,11 @@ func (o *Oracle) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
 	}
 	return totalWeight
 }
+
+func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64 {
+	minerWeight, err := o.minerWeightFn(ctx, layer, node)
+	if err != nil {
+		panic(err)
+	}
+	return minerWeight
+}
