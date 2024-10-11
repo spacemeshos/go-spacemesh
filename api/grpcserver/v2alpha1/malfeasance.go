@@ -71,7 +71,7 @@ func (s *MalfeasanceService) List(
 	}
 
 	proofs := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, request.Limit)
-	if err := identities.IterateMaliciousOps(s.db, ops, func(id types.NodeID, proof []byte, received time.Time) bool {
+	if err := identities.IterateOps(s.db, ops, func(id types.NodeID, proof []byte, received time.Time) bool {
 		rst := toProof(ctx, s.info, id, proof)
 		if rst == nil {
 			return true
@@ -209,7 +209,7 @@ func (s *MalfeasanceStreamService) fetchFromDB(
 
 	go func() {
 		defer close(dbChan)
-		if err := identities.IterateMaliciousOps(s.db, ops,
+		if err := identities.IterateOps(s.db, ops,
 			func(id types.NodeID, proof []byte, received time.Time) bool {
 				rst := toProof(ctx, s.info, id, proof)
 				if rst == nil {
