@@ -49,7 +49,7 @@ func NewRemoteHare(config Config, nodeClock nodeClock, nodeService nodeService, 
 		eg:        errgroup.Group{},
 		ctx:       context.Background(),
 		svc:       nodeService,
-
+		log:       log,
 		wallClock: clockwork.NewRealClock(),
 	}
 }
