@@ -614,19 +614,19 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 }
 
 func marryIDs(
-	t testing.TB,
+	tb testing.TB,
 	atxHandler *v2TestHandler,
 	signers []*signing.EdSigner,
 	golden types.ATXID,
 ) (marriage *wire.ActivationTxV2, other []*wire.ActivationTxV2) {
 	sig := signers[0]
-	mATX := newInitialATXv2(t, golden)
+	mATX := newInitialATXv2(tb, golden)
 	mATX.Marriages = []wire.MarriageCertificate{{
 		Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
 	}}
 
 	for _, signer := range signers[1:] {
-		atx := atxHandler.createAndProcessInitial(t, signer)
+		atx := atxHandler.createAndProcessInitial(tb, signer)
 		other = append(other, atx)
 		mATX.Marriages = append(mATX.Marriages, wire.MarriageCertificate{
 			ReferenceAtx: atx.ID(),
@@ -637,7 +637,7 @@ func marryIDs(
 	mATX.Sign(sig)
 	atxHandler.expectInitialAtxV2(mATX)
 	err := atxHandler.processATX(context.Background(), "", mATX, time.Now())
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return mATX, other
 }
@@ -1280,29 +1280,14 @@ func Test_ValidateMarriages(t *testing.T) {
 	t.Run("marriage ATX must be published 2 epochs prior merging IDs", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
-		otherSigner, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		otherAtx := atxHandler.createAndProcessInitial(t, otherSigner)
 
-		marriage := newInitialATXv2(t, golden)
-		marriage.PublishEpoch = 1
-		marriage.Marriages = []wire.MarriageCertificate{
-			{
-				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-			{
-				ReferenceAtx: otherAtx.ID(),
-				Signature:    otherSigner.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-		}
-		marriage.Sign(sig)
-
-		atxHandler.expectInitialAtxV2(marriage)
-		err = atxHandler.processATX(context.Background(), "", marriage, time.Now())
+		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		atx := newSoloATXv2(t, marriage.PublishEpoch+1, types.RandomATXID(), golden)
-		marriageATXID := marriage.ID()
+		marriageATX, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
+
+		atx := newSoloATXv2(t, marriageATX.PublishEpoch+1, types.RandomATXID(), golden)
+		marriageATXID := marriageATX.ID()
 		atx.MarriageATX = &marriageATXID
 		atx.Sign(sig)
 
@@ -1313,28 +1298,12 @@ func Test_ValidateMarriages(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
 
-		otherSigner, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		otherAtx := atxHandler.createAndProcessInitial(t, otherSigner)
-
-		marriage := newInitialATXv2(t, golden)
-		marriage.PublishEpoch = 1
-		marriage.Marriages = []wire.MarriageCertificate{
-			{
-				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-			{
-				ReferenceAtx: otherAtx.ID(),
-				Signature:    otherSigner.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-		}
-		marriage.Sign(sig)
-
-		atxHandler.expectInitialAtxV2(marriage)
-		err = atxHandler.processATX(context.Background(), "", marriage, time.Now())
+		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		atx := newSoloATXv2(t, marriage.PublishEpoch+1, types.RandomATXID(), golden)
+		marriageATX, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
+
+		atx := newSoloATXv2(t, marriageATX.PublishEpoch+1, types.RandomATXID(), golden)
 		marriageATXID := types.RandomATXID()
 		atx.MarriageATX = &marriageATXID
 		atx.Sign(sig)
@@ -1608,22 +1577,7 @@ func Test_Marriages(t *testing.T) {
 
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
-
-		atx := newInitialATXv2(t, golden)
-		atx.Marriages = []wire.MarriageCertificate{
-			{
-				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-			{
-				ReferenceAtx: othersAtx.ID(),
-				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-		}
-		atx.Sign(sig)
-
-		err = atxHandler.processInitial(t, atx)
-		require.NoError(t, err)
+		atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
 
 		info, err := marriage.FindByNodeID(atxHandler.cdb, sig.NodeID())
 		require.NoError(t, err)
@@ -1677,23 +1631,7 @@ func Test_Marriages(t *testing.T) {
 
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
-
-		atx := newInitialATXv2(t, golden)
-		atx.Marriages = []wire.MarriageCertificate{
-			{
-				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-			{
-				ReferenceAtx: othersAtx.ID(),
-				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-		}
-		atx.Sign(sig)
-
-		atxHandler.expectInitialAtxV2(atx)
-		err = atxHandler.processATX(context.Background(), "", atx, time.Now())
-		require.NoError(t, err)
+		atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
 
 		// otherSig2 cannot marry sig, trying to extend its set.
 		otherSig2, err := signing.NewEdSigner()
@@ -1741,23 +1679,7 @@ func Test_Marriages(t *testing.T) {
 
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
-
-		atx := newInitialATXv2(t, golden)
-		atx.Marriages = []wire.MarriageCertificate{
-			{
-				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-			{
-				ReferenceAtx: othersAtx.ID(),
-				Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-		}
-		atx.Sign(sig)
-
-		atxHandler.expectInitialAtxV2(atx)
-		err = atxHandler.processATX(context.Background(), "", atx, time.Now())
-		require.NoError(t, err)
+		atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
 
 		// sig becomes malicious in some way and with it otherSig
 		id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
