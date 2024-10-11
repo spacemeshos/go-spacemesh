@@ -38,13 +38,18 @@ type RemoteHare struct {
 }
 
 // type remote
-func NewRemoteHare(config Config, nodeClock nodeClock, nodeService nodeService, log *zap.Logger) *RemoteHare {
+func NewRemoteHare(config Config, nodeClock nodeClock, nodeService nodeService, oracle oracle, log *zap.Logger) *RemoteHare {
 	return &RemoteHare{
 		config:    config,
 		nodeClock: nodeClock,
 		beacons:   make(map[types.EpochID]types.Beacon),
 		signers:   make(map[string]*signing.EdSigner),
-		oracle:    nil,
+		oracle: &legacyOracle{
+			log:    zap.NewNop(),
+			oracle: oracle,
+			config: DefaultConfig(),
+		},
+
 		sessions:  make(map[types.LayerID]*protocol),
 		eg:        errgroup.Group{},
 		ctx:       context.Background(),
