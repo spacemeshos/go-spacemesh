@@ -153,14 +153,21 @@ paths:
                 format: binary
         "204":
           description: did not find a message to retrieve
-  /hare/total_weight:
+  /hare/total_weight/{layer}:
     get:
-      summary: Get the current total weight
+      summary: Get the total weight for layer
       tags:
         - "hare"
+      parameters:
+        - in: path
+          name: layer
+          required: true
+          schema:
+            type: integer
+            format: uint32
       responses:
         "200":
-          description: successfully found the message to return to client
+          description: successfully found the total weight to return to client
           content:
             application/octet-stream:
               schema:

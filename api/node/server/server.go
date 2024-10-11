@@ -30,7 +30,7 @@ type poetDB interface {
 
 type hare interface {
 	RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message
-	TotalWeight() uint64
+	TotalWeight(ctx context.Context, layer types.LayerID) uint64
 }
 
 type Server struct {
@@ -238,13 +238,13 @@ type totalWeightResp struct {
 	w uint64
 }
 
-func (t *totalWeightResp) VisitGetHareTotalWeightResponse(w http.ResponseWriter) error {
+func (t *totalWeightResp) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
 	w.Header().Add("content-type", "application/octet-stream")
 	w.WriteHeader(200)
 	_, err := w.Write([]byte(fmt.Sprintf("%d", t.w)))
 	return err
 }
 
-func (s *Server) GetHareTotalWeight(ctx context.Context, _ GetHareTotalWeightRequestObject) (GetHareTotalWeightResponseObject, error) {
-	return &totalWeightResp{s.hare.TotalWeight()}, nil
+func (s *Server) GetHareTotalWeightLayer(ctx context.Context, req GetHareTotalWeightLayerRequestObject) (GetHareTotalWeightLayerResponseObject, error) {
+	return &totalWeightResp{s.hare.TotalWeight(ctx, types.LayerID(req.Layer))}, nil
 }

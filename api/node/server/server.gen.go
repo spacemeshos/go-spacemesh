@@ -48,9 +48,9 @@ type ServerInterface interface {
 	// Get a hare message to sign
 	// (GET /hare/round_template/{layer}/{iter}/{round})
 	GetHareRoundTemplateLayerIterRound(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound)
-	// Get the current total weight
-	// (GET /hare/total_weight)
-	GetHareTotalWeight(w http.ResponseWriter, r *http.Request)
+	// Get the total weight for layer
+	// (GET /hare/total_weight/{layer})
+	GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request, layer uint32)
 	// Store PoET proof
 	// (POST /poet)
 	PostPoet(w http.ResponseWriter, r *http.Request)
@@ -186,11 +186,22 @@ func (siw *ServerInterfaceWrapper) GetHareRoundTemplateLayerIterRound(w http.Res
 	handler.ServeHTTP(w, r)
 }
 
-// GetHareTotalWeight operation middleware
-func (siw *ServerInterfaceWrapper) GetHareTotalWeight(w http.ResponseWriter, r *http.Request) {
+// GetHareTotalWeightLayer operation middleware
+func (siw *ServerInterfaceWrapper) GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "layer" -------------
+	var layer uint32
+
+	err = runtime.BindStyledParameterWithOptions("simple", "layer", r.PathValue("layer"), &layer, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "layer", Err: err})
+		return
+	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetHareTotalWeight(w, r)
+		siw.Handler.GetHareTotalWeightLayer(w, r, layer)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -363,7 +374,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/activation/last_atx/{node_id}", wrapper.GetActivationLastAtxNodeId)
 	m.HandleFunc("GET "+options.BaseURL+"/activation/positioning_atx/{publish_epoch}", wrapper.GetActivationPositioningAtxPublishEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/round_template/{layer}/{iter}/{round}", wrapper.GetHareRoundTemplateLayerIterRound)
-	m.HandleFunc("GET "+options.BaseURL+"/hare/total_weight", wrapper.GetHareTotalWeight)
+	m.HandleFunc("GET "+options.BaseURL+"/hare/total_weight/{layer}", wrapper.GetHareTotalWeightLayer)
 	m.HandleFunc("POST "+options.BaseURL+"/poet", wrapper.PostPoet)
 	m.HandleFunc("POST "+options.BaseURL+"/publish/{protocol}", wrapper.PostPublishProtocol)
 
@@ -495,19 +506,20 @@ func (response GetHareRoundTemplateLayerIterRound204Response) VisitGetHareRoundT
 	return nil
 }
 
-type GetHareTotalWeightRequestObject struct {
+type GetHareTotalWeightLayerRequestObject struct {
+	Layer uint32 `json:"layer"`
 }
 
-type GetHareTotalWeightResponseObject interface {
-	VisitGetHareTotalWeightResponse(w http.ResponseWriter) error
+type GetHareTotalWeightLayerResponseObject interface {
+	VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error
 }
 
-type GetHareTotalWeight200ApplicationoctetStreamResponse struct {
+type GetHareTotalWeightLayer200ApplicationoctetStreamResponse struct {
 	Body          io.Reader
 	ContentLength int64
 }
 
-func (response GetHareTotalWeight200ApplicationoctetStreamResponse) VisitGetHareTotalWeightResponse(w http.ResponseWriter) error {
+func (response GetHareTotalWeightLayer200ApplicationoctetStreamResponse) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
@@ -521,10 +533,10 @@ func (response GetHareTotalWeight200ApplicationoctetStreamResponse) VisitGetHare
 	return err
 }
 
-type GetHareTotalWeight204Response struct {
+type GetHareTotalWeightLayer204Response struct {
 }
 
-func (response GetHareTotalWeight204Response) VisitGetHareTotalWeightResponse(w http.ResponseWriter) error {
+func (response GetHareTotalWeightLayer204Response) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
 	return nil
 }
@@ -595,9 +607,9 @@ type StrictServerInterface interface {
 	// Get a hare message to sign
 	// (GET /hare/round_template/{layer}/{iter}/{round})
 	GetHareRoundTemplateLayerIterRound(ctx context.Context, request GetHareRoundTemplateLayerIterRoundRequestObject) (GetHareRoundTemplateLayerIterRoundResponseObject, error)
-	// Get the current total weight
-	// (GET /hare/total_weight)
-	GetHareTotalWeight(ctx context.Context, request GetHareTotalWeightRequestObject) (GetHareTotalWeightResponseObject, error)
+	// Get the total weight for layer
+	// (GET /hare/total_weight/{layer})
+	GetHareTotalWeightLayer(ctx context.Context, request GetHareTotalWeightLayerRequestObject) (GetHareTotalWeightLayerResponseObject, error)
 	// Store PoET proof
 	// (POST /poet)
 	PostPoet(ctx context.Context, request PostPoetRequestObject) (PostPoetResponseObject, error)
@@ -741,23 +753,25 @@ func (sh *strictHandler) GetHareRoundTemplateLayerIterRound(w http.ResponseWrite
 	}
 }
 
-// GetHareTotalWeight operation middleware
-func (sh *strictHandler) GetHareTotalWeight(w http.ResponseWriter, r *http.Request) {
-	var request GetHareTotalWeightRequestObject
+// GetHareTotalWeightLayer operation middleware
+func (sh *strictHandler) GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request, layer uint32) {
+	var request GetHareTotalWeightLayerRequestObject
+
+	request.Layer = layer
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetHareTotalWeight(ctx, request.(GetHareTotalWeightRequestObject))
+		return sh.ssi.GetHareTotalWeightLayer(ctx, request.(GetHareTotalWeightLayerRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetHareTotalWeight")
+		handler = middleware(handler, "GetHareTotalWeightLayer")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetHareTotalWeightResponseObject); ok {
-		if err := validResponse.VisitGetHareTotalWeightResponse(w); err != nil {
+	} else if validResponse, ok := response.(GetHareTotalWeightLayerResponseObject); ok {
+		if err := validResponse.VisitGetHareTotalWeightLayerResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

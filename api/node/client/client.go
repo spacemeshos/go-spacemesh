@@ -144,8 +144,8 @@ func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, r
 	return bytes, nil
 }
 
-func (s *NodeService) TotalWeight(ctx context.Context) (uint64, error) {
-	resp, err := s.client.GetHareTotalWeight(ctx)
+func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
+	resp, err := s.client.GetHareTotalWeightLayer(ctx, uint32(layer))
 	if err != nil {
 		return 0, err
 	}

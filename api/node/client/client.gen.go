@@ -118,8 +118,8 @@ type ClientInterface interface {
 	// GetHareRoundTemplateLayerIterRound request
 	GetHareRoundTemplateLayerIterRound(ctx context.Context, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetHareTotalWeight request
-	GetHareTotalWeight(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetHareTotalWeightLayer request
+	GetHareTotalWeightLayer(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostPoetWithBody request with any body
 	PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -176,8 +176,8 @@ func (c *Client) GetHareRoundTemplateLayerIterRound(ctx context.Context, layer e
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetHareTotalWeight(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetHareTotalWeightRequest(c.Server)
+func (c *Client) GetHareTotalWeightLayer(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHareTotalWeightLayerRequest(c.Server, layer)
 	if err != nil {
 		return nil, err
 	}
@@ -362,16 +362,23 @@ func NewGetHareRoundTemplateLayerIterRoundRequest(server string, layer externalR
 	return req, nil
 }
 
-// NewGetHareTotalWeightRequest generates requests for GetHareTotalWeight
-func NewGetHareTotalWeightRequest(server string) (*http.Request, error) {
+// NewGetHareTotalWeightLayerRequest generates requests for GetHareTotalWeightLayer
+func NewGetHareTotalWeightLayerRequest(server string, layer uint32) (*http.Request, error) {
 	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "layer", runtime.ParamLocationPath, layer)
+	if err != nil {
+		return nil, err
+	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/hare/total_weight")
+	operationPath := fmt.Sprintf("/hare/total_weight/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -509,8 +516,8 @@ type ClientWithResponsesInterface interface {
 	// GetHareRoundTemplateLayerIterRoundWithResponse request
 	GetHareRoundTemplateLayerIterRoundWithResponse(ctx context.Context, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound, reqEditors ...RequestEditorFn) (*GetHareRoundTemplateLayerIterRoundResponse, error)
 
-	// GetHareTotalWeightWithResponse request
-	GetHareTotalWeightWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHareTotalWeightResponse, error)
+	// GetHareTotalWeightLayerWithResponse request
+	GetHareTotalWeightLayerWithResponse(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error)
 
 	// PostPoetWithBodyWithResponse request with any body
 	PostPoetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPoetResponse, error)
@@ -608,13 +615,13 @@ func (r GetHareRoundTemplateLayerIterRoundResponse) StatusCode() int {
 	return 0
 }
 
-type GetHareTotalWeightResponse struct {
+type GetHareTotalWeightLayerResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 }
 
 // Status returns HTTPResponse.Status
-func (r GetHareTotalWeightResponse) Status() string {
+func (r GetHareTotalWeightLayerResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -622,7 +629,7 @@ func (r GetHareTotalWeightResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetHareTotalWeightResponse) StatusCode() int {
+func (r GetHareTotalWeightLayerResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -707,13 +714,13 @@ func (c *ClientWithResponses) GetHareRoundTemplateLayerIterRoundWithResponse(ctx
 	return ParseGetHareRoundTemplateLayerIterRoundResponse(rsp)
 }
 
-// GetHareTotalWeightWithResponse request returning *GetHareTotalWeightResponse
-func (c *ClientWithResponses) GetHareTotalWeightWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHareTotalWeightResponse, error) {
-	rsp, err := c.GetHareTotalWeight(ctx, reqEditors...)
+// GetHareTotalWeightLayerWithResponse request returning *GetHareTotalWeightLayerResponse
+func (c *ClientWithResponses) GetHareTotalWeightLayerWithResponse(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error) {
+	rsp, err := c.GetHareTotalWeightLayer(ctx, layer, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetHareTotalWeightResponse(rsp)
+	return ParseGetHareTotalWeightLayerResponse(rsp)
 }
 
 // PostPoetWithBodyWithResponse request with arbitrary body returning *PostPoetResponse
@@ -830,15 +837,15 @@ func ParseGetHareRoundTemplateLayerIterRoundResponse(rsp *http.Response) (*GetHa
 	return response, nil
 }
 
-// ParseGetHareTotalWeightResponse parses an HTTP response from a GetHareTotalWeightWithResponse call
-func ParseGetHareTotalWeightResponse(rsp *http.Response) (*GetHareTotalWeightResponse, error) {
+// ParseGetHareTotalWeightLayerResponse parses an HTTP response from a GetHareTotalWeightLayerWithResponse call
+func ParseGetHareTotalWeightLayerResponse(rsp *http.Response) (*GetHareTotalWeightLayerResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetHareTotalWeightResponse{
+	response := &GetHareTotalWeightLayerResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
