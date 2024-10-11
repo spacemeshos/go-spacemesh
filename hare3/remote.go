@@ -70,17 +70,18 @@ func (h *RemoteHare) Start() {
 	//disabled = h.config.DisableLayer
 	//}
 	h.log.Info("started",
-		// zap.Inline(&h.config),
+		zap.Inline(&h.config),
 		zap.Uint32("enabled", enabled.Uint32()),
 		zap.Uint32("disabled", disabled.Uint32()),
 	)
 	h.eg.Go(func() error {
+		h.log.Info("remote hare processing starting")
 		for next := enabled; next < disabled; next++ {
+			h.log.Info("remote hare processing layer", zap.Int("next", int(next)))
 			select {
 			case <-h.nodeClock.AwaitLayer(next):
 				h.log.Debug("notified", zap.Uint32("layer", next.Uint32()))
 				h.onLayer(next)
-				// h.cleanMessageCache(next - 1)
 			case <-h.ctx.Done():
 				return nil
 			}
@@ -101,6 +102,7 @@ func (h *RemoteHare) beacon(e types.EpochID) types.Beacon {
 }
 
 func (h *RemoteHare) onLayer(layer types.LayerID) {
+	h.log.Debug("remote hare: on layer", zap.Int("layer", int(layer)))
 	beacon := h.beacon(layer.GetEpoch())
 	if beacon == types.EmptyBeacon {
 		h.log.Debug("no beacon",
@@ -118,8 +120,7 @@ func (h *RemoteHare) onLayer(layer types.LayerID) {
 		beacon:  beacon,
 		signers: maps.Values(h.signers),
 		vrfs:    make([]*types.HareEligibility, len(h.signers)),
-		// proto:   newProtocol(h.config.CommitteeFor(layer)/2 + 1),
-		proto: newProtocol(123),
+		proto:   newProtocol(h.config.CommitteeFor(layer)/2 + 1),
 	}
 	h.sessions[layer] = s.proto
 	h.mu.Unlock()
