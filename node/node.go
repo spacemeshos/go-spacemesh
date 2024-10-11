@@ -895,6 +895,7 @@ func (app *App) initServices(ctx context.Context) error {
 			app.Config.HARE3,
 			app.clock,
 			nodeServiceClient,
+			logger,
 			// app.host,
 			// app.db,
 			// app.atxsdata,

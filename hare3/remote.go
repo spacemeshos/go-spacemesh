@@ -38,7 +38,7 @@ type RemoteHare struct {
 }
 
 // type remote
-func NewRemoteHare(config Config, nodeClock nodeClock, nodeService nodeService) *RemoteHare {
+func NewRemoteHare(config Config, nodeClock nodeClock, nodeService nodeService, log *zap.Logger) *RemoteHare {
 	return &RemoteHare{
 		config:    config,
 		nodeClock: nodeClock,
