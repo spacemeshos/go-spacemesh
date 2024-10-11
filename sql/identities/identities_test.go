@@ -172,7 +172,7 @@ func Test_IterateMaliciousOpsWithFilter(t *testing.T) {
 		},
 		{
 			types.RandomNodeID(),
-			nil,
+			types.RandomBytes(11),
 		},
 		{
 			types.RandomNodeID(),
@@ -195,10 +195,6 @@ func Test_IterateMaliciousOpsWithFilter(t *testing.T) {
 		Token: builder.In,
 		Value: [][]byte{tt[0].id.Bytes(), tt[1].id.Bytes()}, // first two ids
 	})
-	ops.Filter = append(ops.Filter, builder.Op{
-		Field: builder.Proof,
-		Token: builder.IsNotNull, // only entries which have a proof
-	})
 
 	err := identities.IterateOps(db, ops, func(id types.NodeID, proof []byte, _ time.Time) bool {
 		got = append(got, struct {
@@ -208,6 +204,6 @@ func Test_IterateMaliciousOpsWithFilter(t *testing.T) {
 		return true
 	})
 	require.NoError(t, err)
-	// only the first element should be in the result
-	require.ElementsMatch(t, tt[:1], got)
+	// only the first two elements should be in the result
+	require.ElementsMatch(t, tt[:2], got)
 }

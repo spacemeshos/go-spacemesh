@@ -15,7 +15,7 @@ func SetMalicious(db sql.Executor, nodeID types.NodeID, proof []byte, received t
 	_, err := db.Exec(`
 		INSERT INTO identities (pubkey, proof, received)
 		VALUES (?1, ?2, ?3)
-		ON CONFLICT DO NOTHING
+		ON CONFLICT(pubkey) DO NOTHING
 	`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
 		stmt.BindBytes(2, proof)
