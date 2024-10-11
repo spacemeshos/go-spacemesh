@@ -10,6 +10,8 @@ CREATE TABLE marriages
     UNIQUE (marriage_atx, marriage_idx) -- every index is unique per marriage atx
 );
 
+CREATE INDEX marriages_by_id ON marriages (id);
+
 -- adds new table for v2 malfeasance proofs
 CREATE TABLE malfeasance
 (
@@ -51,16 +53,17 @@ BEGIN
     WHERE NEW.proof IS NULL OR NEW.domain IS NULL;
 END;
 
-CREATE TABLE identities_new
+ALTER TABLE identities RENAME TO identities_old;
+
+CREATE TABLE identities
 (
     pubkey   CHAR(32) PRIMARY KEY,
     proof    BLOB NOT NULL,
     received INT NOT NULL
 );
 
-INSERT INTO identities_new (pubkey, proof, received)
+INSERT INTO identities (pubkey, proof, received)
 SELECT pubkey, proof, received
-FROM identities;
+FROM identities_old;
 
-DROP TABLE identities;
-ALTER TABLE identities_new RENAME TO identities;
+DROP TABLE identities_old;

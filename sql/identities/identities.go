@@ -74,8 +74,8 @@ func IterateOps(
 	return err
 }
 
-// All retrieves malicious node IDs from the database.
-func All(db sql.Executor) ([]types.NodeID, error) {
+// AllMalicious retrieves malicious node IDs from the database.
+func AllMalicious(db sql.Executor) ([]types.NodeID, error) {
 	var ids []types.NodeID
 	if _, err := db.Exec(`
 		SELECT (SELECT COUNT(*) FROM identities) AS total, pubkey

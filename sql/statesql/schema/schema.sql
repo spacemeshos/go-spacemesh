@@ -69,7 +69,7 @@ CREATE TABLE certificates
     valid bool NOT NULL,
     PRIMARY KEY (layer, block)
 );
-CREATE TABLE "identities"
+CREATE TABLE identities
 (
     pubkey   CHAR(32) PRIMARY KEY,
     proof    BLOB NOT NULL,
@@ -195,6 +195,7 @@ BEGIN
     SELECT RAISE(ABORT, 'proof must be provided for malfeasance entry without marriage_id')
     WHERE NEW.proof IS NULL OR NEW.domain IS NULL;
 END;
+CREATE INDEX marriages_by_id ON marriages (id);
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
 CREATE UNIQUE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey);
 CREATE INDEX posts_by_atxid_by_pubkey_epoch ON posts (pubkey, publish_epoch);
