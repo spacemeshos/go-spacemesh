@@ -195,7 +195,6 @@ BEGIN
     SELECT RAISE(ABORT, 'proof must be provided for malfeasance entry without marriage_id')
     WHERE NEW.proof IS NULL OR NEW.domain IS NULL;
 END;
-CREATE INDEX marriage_atxs ON marriages (marriage_atx);
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);
 CREATE UNIQUE INDEX posts_by_atxid_by_pubkey ON posts (atxid, pubkey);
 CREATE INDEX posts_by_atxid_by_pubkey_epoch ON posts (pubkey, publish_epoch);

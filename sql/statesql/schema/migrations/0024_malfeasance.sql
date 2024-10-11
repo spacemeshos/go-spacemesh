@@ -10,8 +10,6 @@ CREATE TABLE marriages
     UNIQUE (marriage_atx, marriage_idx) -- every index is unique per marriage atx
 );
 
-CREATE INDEX marriage_atxs ON marriages (marriage_atx);
-
 -- adds new table for v2 malfeasance proofs
 CREATE TABLE malfeasance
 (
