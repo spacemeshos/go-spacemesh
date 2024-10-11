@@ -4,153 +4,197 @@ import (
 	"testing"
 	"time"
 
-	sqlite "github.com/go-llsqlite/crawshaw"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestAdd(t *testing.T) {
 	t.Parallel()
 
-	db := statesql.InMemoryTest(t)
+	t.Run("without proof and marriage ID fails", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
 
-	id := types.RandomNodeID()
-	domain := byte(1)
-	proof := []byte{1, 2, 3}
-	received := time.Now()
+		err := malfeasance.AddProof(db, types.RandomNodeID(), nil, nil, 0, time.Now())
+		require.Error(t, err)
+	})
 
-	require.NoError(t, malfeasance.Add(db, id, domain, proof, received))
+	t.Run("with proof and without marriage ID succeeds", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
 
-	mal, err := malfeasance.IsMalicious(db, id)
-	require.NoError(t, err)
-	require.True(t, mal)
+		err := malfeasance.AddProof(db, types.RandomNodeID(), nil, types.RandomBytes(100), 0, time.Now())
+		require.NoError(t, err)
+	})
+
+	t.Run("without proof and with unknown marriage ID fails", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		id := marriage.ID(100)
+		err := malfeasance.AddProof(db, types.RandomNodeID(), &id, nil, 0, time.Now())
+		require.Error(t, err)
+	})
+
+	t.Run("without proof and with known marriage ID succeeds", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		id, err := marriage.NewID(db)
+		require.NoError(t, err)
+
+		nodeID := types.RandomNodeID()
+		err = marriage.Add(db, marriage.Info{
+			ID:            id,
+			NodeID:        nodeID,
+			ATX:           types.RandomATXID(),
+			MarriageIndex: 0,
+			Target:        types.RandomNodeID(),
+			Signature:     types.RandomEdSignature(),
+		})
+		require.NoError(t, err)
+
+		err = malfeasance.AddProof(db, types.RandomNodeID(), &id, nil, 0, time.Now())
+		require.NoError(t, err)
+	})
+
+	t.Run("with proof and with known marriage ID succeeds", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		id, err := marriage.NewID(db)
+		require.NoError(t, err)
+
+		nodeID := types.RandomNodeID()
+		err = marriage.Add(db, marriage.Info{
+			ID:            id,
+			NodeID:        nodeID,
+			ATX:           types.RandomATXID(),
+			MarriageIndex: 0,
+			Target:        types.RandomNodeID(),
+			Signature:     types.RandomEdSignature(),
+		})
+		require.NoError(t, err)
+
+		err = malfeasance.AddProof(db, types.RandomNodeID(), &id, types.RandomBytes(100), 0, time.Now())
+		require.NoError(t, err)
+	})
 }
 
-func TestAddMarried(t *testing.T) {
+func TestIsMalicious(t *testing.T) {
 	t.Parallel()
 
-	db := statesql.InMemoryTest(t)
+	t.Run("unknown node is not malicious", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
 
-	id := types.RandomNodeID()
-	marriedTo := types.RandomNodeID()
-	received := time.Now()
+		mal, err := malfeasance.IsMalicious(db, types.RandomNodeID())
+		require.NoError(t, err)
+		require.False(t, mal)
+	})
 
-	require.NoError(t, malfeasance.Add(db, marriedTo, 1, []byte{1, 2, 3}, received))
+	t.Run("known node is malicious", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
 
-	require.NoError(t, malfeasance.AddMarried(db, id, marriedTo, received))
+		nodeID := types.RandomNodeID()
+		err := malfeasance.AddProof(db, nodeID, nil, types.RandomBytes(100), 0, time.Now())
+		require.NoError(t, err)
 
-	mal, err := malfeasance.IsMalicious(db, id)
-	require.NoError(t, err)
-	require.True(t, mal)
-
-	mal, err = malfeasance.IsMalicious(db, marriedTo)
-	require.NoError(t, err)
-	require.True(t, mal)
+		mal, err := malfeasance.IsMalicious(db, nodeID)
+		require.NoError(t, err)
+		require.True(t, mal)
+	})
 }
 
-func TestAddMarriedMissing(t *testing.T) {
+func TestSetMalicious(t *testing.T) {
 	t.Parallel()
 
-	db := statesql.InMemoryTest(t)
+	t.Run("identity cannot be set malicious with unknown marriage ID", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
 
-	id := types.RandomNodeID()
-	marriedTo := types.RandomNodeID()
-	received := time.Now()
+		nodeID := types.RandomNodeID()
+		err := malfeasance.SetMalicious(db, nodeID, marriage.ID(0), time.Now())
+		require.Error(t, err)
 
-	err := malfeasance.AddMarried(db, id, marriedTo, received)
-	sqlError := &sqlite.Error{}
-	require.ErrorAs(t, err, sqlError)
-	require.Equal(t, sqlite.SQLITE_CONSTRAINT_FOREIGNKEY, sqlError.Code)
+		mal, err := malfeasance.IsMalicious(db, nodeID)
+		require.NoError(t, err)
+		require.False(t, mal)
+	})
 
-	mal, err := malfeasance.IsMalicious(db, id)
-	require.NoError(t, err)
-	require.False(t, mal)
+	t.Run("identity can be set malicious with known marriage ID", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
 
-	mal, err = malfeasance.IsMalicious(db, marriedTo)
-	require.NoError(t, err)
-	require.False(t, mal)
-}
+		id, err := marriage.NewID(db)
+		require.NoError(t, err)
 
-func TestProof(t *testing.T) {
-	t.Parallel()
+		nodeID := types.RandomNodeID()
+		err = marriage.Add(db, marriage.Info{
+			ID:            id,
+			NodeID:        nodeID,
+			ATX:           types.RandomATXID(),
+			MarriageIndex: 0,
+			Target:        types.RandomNodeID(),
+			Signature:     types.RandomEdSignature(),
+		})
+		require.NoError(t, err)
 
-	db := statesql.InMemoryTest(t)
+		err = malfeasance.SetMalicious(db, nodeID, id, time.Now())
+		require.NoError(t, err)
 
-	id := types.RandomNodeID()
-	domain := byte(1)
-	proof := []byte{1, 2, 3}
-	received := time.Now()
+		mal, err := malfeasance.IsMalicious(db, nodeID)
+		require.NoError(t, err)
+		require.True(t, mal)
+	})
 
-	gotId, gotDomain, gotProof, err := malfeasance.Proof(db, id)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-	require.Zero(t, gotId)
-	require.Zero(t, gotDomain)
-	require.Nil(t, gotProof)
+	t.Run("malfeasants marriage ID cannot be updated with SetMalicious to unknown ID", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
 
-	require.NoError(t, malfeasance.Add(db, id, domain, proof, received))
+		nodeID := types.RandomNodeID()
+		err := malfeasance.AddProof(db, nodeID, nil, types.RandomBytes(100), 0, time.Now())
+		require.NoError(t, err)
 
-	gotId, gotDomain, gotProof, err = malfeasance.Proof(db, id)
-	require.NoError(t, err)
-	require.Equal(t, id, gotId)
-	require.Equal(t, domain, gotDomain)
-	require.Equal(t, proof, gotProof)
-}
+		err = malfeasance.SetMalicious(db, nodeID, marriage.ID(0), time.Now())
+		require.Error(t, err)
 
-func TestProofMarried(t *testing.T) {
-	t.Parallel()
+		mal, err := malfeasance.IsMalicious(db, nodeID)
+		require.NoError(t, err)
+		require.True(t, mal)
+	})
 
-	db := statesql.InMemoryTest(t)
+	t.Run("malfeasants marriage ID can be updated with SetMalicious to known ID", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
 
-	id := types.RandomNodeID()
-	marriedTo := types.RandomNodeID()
-	domain := byte(1)
-	proof := []byte{1, 2, 3}
-	received := time.Now()
+		id, err := marriage.NewID(db)
+		require.NoError(t, err)
 
-	require.NoError(t, malfeasance.Add(db, marriedTo, domain, proof, received))
+		nodeID := types.RandomNodeID()
+		err = malfeasance.AddProof(db, nodeID, nil, types.RandomBytes(100), 0, time.Now())
+		require.NoError(t, err)
 
-	require.NoError(t, malfeasance.AddMarried(db, id, marriedTo, received))
+		err = marriage.Add(db, marriage.Info{
+			ID:            id,
+			NodeID:        types.RandomNodeID(),
+			ATX:           types.RandomATXID(),
+			MarriageIndex: 0,
+			Target:        types.RandomNodeID(),
+			Signature:     types.RandomEdSignature(),
+		})
+		require.NoError(t, err)
 
-	gotId, gotDomain, gotProof, err := malfeasance.Proof(db, marriedTo)
-	require.NoError(t, err)
-	require.Equal(t, marriedTo, gotId)
-	require.Equal(t, domain, gotDomain)
-	require.Equal(t, proof, gotProof)
+		err = malfeasance.SetMalicious(db, nodeID, id, time.Now())
+		require.NoError(t, err)
 
-	gotId, gotDomain, gotProof, err = malfeasance.Proof(db, id)
-	require.NoError(t, err)
-	require.Equal(t, marriedTo, gotId)
-	require.Equal(t, domain, gotDomain)
-	require.Equal(t, proof, gotProof)
-}
-
-func TestAll(t *testing.T) {
-	t.Parallel()
-
-	db := statesql.InMemoryTest(t)
-
-	ids := make([]types.NodeID, 3)
-	domain := byte(1)
-	proof := []byte{1, 2, 3}
-	received := time.Now()
-
-	for i := range ids {
-		ids[i] = types.RandomNodeID()
-		require.NoError(t, malfeasance.Add(db, ids[i], domain, proof, received))
-	}
-
-	marriedIds := make([]types.NodeID, 3)
-	for i := range marriedIds {
-		marriedIds[i] = types.RandomNodeID()
-		require.NoError(t, malfeasance.AddMarried(db, marriedIds[i], ids[i], received))
-	}
-
-	expected := append(ids, marriedIds...)
-	all, err := malfeasance.All(db)
-	require.NoError(t, err)
-	require.ElementsMatch(t, expected, all)
+		mal, err := malfeasance.IsMalicious(db, nodeID)
+		require.NoError(t, err)
+		require.True(t, mal)
+	})
 }

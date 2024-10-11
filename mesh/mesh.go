@@ -573,7 +573,7 @@ func (msh *Mesh) AddBallot(
 	// we call the hooks to notify tortoise and atxsdata
 	if !malicious && ballot.IsMalicious() {
 		// so this is a bit of double work (getting the malfeasance proof right after
-		// we stored it), BUT, probably negligble considering the amount of malfeasant
+		// we stored it), BUT, probably negligible considering the amount of malicious
 		// identities we have. The other way to go about this is to allocate an individual channel
 		// for every write (so that every writer gets its own response with the potential proof)
 		// However I find that more costly than this approach.

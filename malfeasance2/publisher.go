@@ -11,8 +11,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 )
 
 type Publisher struct {
@@ -46,10 +46,11 @@ func (p *Publisher) PublishV2ATXProof(
 	allMalicious := make(map[types.NodeID]struct{})
 
 	for _, id := range smesherIDs {
-		set, err := identities.EquivocationSet(p.cdb, id)
+		marriageID, err := marriage.FindIDByNodeID(p.cdb, id)
 		if err != nil {
 			return fmt.Errorf("getting equivocation set: %w", err)
 		}
+		set, err := marriage.NodeIDsByID(p.cdb, marriageID)
 		for _, id := range set {
 			allMalicious[id] = struct{}{}
 		}
@@ -59,7 +60,7 @@ func (p *Publisher) PublishV2ATXProof(
 	}
 
 	for id := range allMalicious {
-		if err := malfeasance.Add(p.cdb, id, byte(domain), proof, time.Now()); err != nil {
+		if err := malfeasance.AddProof(p.cdb, id, nil, proof, byte(domain), time.Now()); err != nil {
 			return fmt.Errorf("setting malfeasance proof: %w", err)
 		}
 		// TODO(mafa): cache proof
