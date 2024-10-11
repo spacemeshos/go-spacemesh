@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
@@ -82,9 +83,9 @@ func Warmup(db sql.Executor, cache *Data, keep types.EpochID, logger *zap.Logger
 	}
 	logger.Info("Finished reading ATXs. Starting reading malfeasance", zap.Duration("duration", time.Since(start)))
 	start = time.Now()
-	err = identities.IterateMalicious(db, func(_ int, id types.NodeID) error {
+	err = identities.IterateOps(db, builder.Operations{}, func(id types.NodeID, _ []byte, _ time.Time) bool {
 		cache.SetMalicious(id)
-		return nil
+		return true
 	})
 	if err != nil {
 		return fmt.Errorf("warming up atxdata with malfeasance: %w", err)

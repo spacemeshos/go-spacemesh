@@ -296,19 +296,15 @@ func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, m
 }
 
 func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (types.NodeID, error) {
-	messageBytes, err := codec.Encode(&m.FirstVotingMessageBody)
-	if err != nil {
-		pd.logger.Fatal("failed to serialize first voting message",
-			log.ZContext(ctx),
-			zap.Uint32("epoch", m.EpochID.Uint32()),
-			zap.Uint32("round", uint32(types.FirstRound)),
-			zap.Error(err),
-		)
-	}
-	if !pd.edVerifier.Verify(signing.BEACON_FIRST_MSG, m.SmesherID, messageBytes, m.Signature) {
+	if !pd.edVerifier.Verify(
+		signing.BEACON_FIRST_MSG,
+		m.SmesherID,
+		codec.MustEncode(&m.FirstVotingMessageBody),
+		m.Signature,
+	) {
 		return types.EmptyNodeID, fmt.Errorf("[round %v] verify signature %s: failed", types.FirstRound, m.Signature)
 	}
-	if err = pd.registerVoted(m.EpochID, m.SmesherID, types.FirstRound); err != nil {
+	if err := pd.registerVoted(m.EpochID, m.SmesherID, types.FirstRound); err != nil {
 		return types.EmptyNodeID, fmt.Errorf(
 			"[round %v] register proposal (miner ID %v): %w",
 			types.FirstRound,
