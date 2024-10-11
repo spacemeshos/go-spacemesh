@@ -103,7 +103,7 @@ func (m *Mockhare) EXPECT() *MockhareMockRecorder {
 }
 
 // RoundMessage mocks base method.
-func (m *Mockhare) RoundMessage(layer types.LayerID, round hare3.Round) *hare3.Message {
+func (m *Mockhare) RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RoundMessage", layer, round)
 	ret0, _ := ret[0].(*hare3.Message)
@@ -129,13 +129,13 @@ func (c *MockhareRoundMessageCall) Return(arg0 *hare3.Message) *MockhareRoundMes
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareRoundMessageCall) Do(f func(types.LayerID, hare3.Round) *hare3.Message) *MockhareRoundMessageCall {
+func (c *MockhareRoundMessageCall) Do(f func(types.LayerID, hare3.IterRound) *hare3.Message) *MockhareRoundMessageCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareRoundMessageCall) DoAndReturn(f func(types.LayerID, hare3.Round) *hare3.Message) *MockhareRoundMessageCall {
+func (c *MockhareRoundMessageCall) DoAndReturn(f func(types.LayerID, hare3.IterRound) *hare3.Message) *MockhareRoundMessageCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

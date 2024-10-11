@@ -189,7 +189,7 @@ func New(
 		coins:        make(chan hare4.WeakCoinOutput, 32),
 		signers:      map[string]*signing.EdSigner{},
 		sessions:     map[types.LayerID]*protocol{},
-		layerResults: make(map[types.LayerID]map[Round]output),
+		layerResults: make(map[types.LayerID]map[IterRound]output),
 
 		config:    DefaultConfig(),
 		log:       zap.NewNop(),
@@ -226,7 +226,7 @@ type Hare struct {
 	mu           sync.Mutex
 	signers      map[string]*signing.EdSigner
 	sessions     map[types.LayerID]*protocol
-	layerResults map[types.LayerID]map[Round]output
+	layerResults map[types.LayerID]map[IterRound]output
 
 	// options
 	config    Config
@@ -418,9 +418,9 @@ func (h *Hare) layerResult(layer types.LayerID, iter IterRound, out output) {
 
 	_, ok := h.layerResults[layer]
 	if !ok {
-		h.layerResults[layer] = make(map[Round]output)
+		h.layerResults[layer] = make(map[IterRound]output)
 	}
-	h.layerResults[layer][iter.Round] = out
+	h.layerResults[layer][iter] = out
 }
 
 func (h *Hare) run(session *session) error {
@@ -655,4 +655,19 @@ type session struct {
 	beacon  types.Beacon
 	signers []*signing.EdSigner
 	vrfs    []*types.HareEligibility
+}
+
+func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	l, ok := h.layerResults[layer]
+	if !ok {
+		return nil
+	}
+	r, ok := l[round]
+	if !ok {
+		return nil
+	}
+	return r.message
 }

@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -129,8 +129,8 @@ func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProof
 	return nil
 }
 
-func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.Round) ([]byte, error) {
-	resp, err := s.client.GetHareRoundTemplateLayerRoundWithBody(ctx, externalRef0.LayerID(layer), externalRef0.HareRound(round), "application/octet-stream", nil)
+func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.IterRound) ([]byte, error) {
+	resp, err := s.client.GetHareRoundTemplateLayerIterRound(ctx, externalRef0.LayerID(layer), externalRef0.HareIter(round.Iter), externalRef0.HareRound(round.Round))
 	if err != nil {
 		return nil, err
 	}
@@ -144,19 +144,17 @@ func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, r
 	return bytes, nil
 }
 
-func (s *NodeService) PublishHareMessage(ctx context.Context, msg []byte) error {
-	buf := bytes.NewBuffer(msg)
-	resp, err := s.client.PostHarePublishWithBody(ctx, "application/octet-stream", buf)
+func (s *NodeService) TotalWeight(ctx context.Context) (uint64, error) {
+	resp, err := s.client.GetHareTotalWeight(ctx)
 	if err != nil {
-		return fmt.Errorf("publish hare: %w", err)
+		return 0, err
 	}
-
-	switch resp.StatusCode {
-	case 202:
-		return nil
-	case 500:
-		return errors.New("error processing send")
-	default:
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("read all: %w", err)
+	}
+	return strconv.ParseUint(string(bytes), 10, 64)
 }

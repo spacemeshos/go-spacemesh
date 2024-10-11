@@ -9,7 +9,6 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"go.uber.org/zap"
@@ -18,30 +17,39 @@ import (
 )
 
 type nodeService interface {
-	GetHareMessage(ctx context.Context, layer types.LayerID, round Round) ([]byte, error)
-	PublishHareMessage(ctx context.Context, msg []byte) error
+	GetHareMessage(ctx context.Context, layer types.LayerID, round IterRound) ([]byte, error)
+	Publish(ctx context.Context, proto string, blob []byte) error
 }
 
 type RemoteHare struct {
-	config      Config
-	eligibility *eligibility.Oracle
-	wallClock   clockwork.Clock
-	nodeClock   nodeClock
-	mu          sync.Mutex
-	beacons     map[types.EpochID]types.Beacon
-	signers     map[string]*signing.EdSigner
-	oracle      *legacyOracle
-	sessions    map[types.LayerID]*protocol
-	eg          errgroup.Group
-	ctx         context.Context
-	svc         nodeService
+	config    Config
+	wallClock clockwork.Clock
+	nodeClock nodeClock
+	mu        sync.Mutex
+	beacons   map[types.EpochID]types.Beacon
+	signers   map[string]*signing.EdSigner
+	oracle    *legacyOracle
+	sessions  map[types.LayerID]*protocol
+	eg        errgroup.Group
+	ctx       context.Context
+	svc       nodeService
 
 	log *zap.Logger
 }
 
 // type remote
-func NewRemoteHare() *RemoteHare {
+func NewRemoteHare(config Config, nodeClock nodeClock, nodeService nodeService) *RemoteHare {
 	return &RemoteHare{
+		config:    config,
+		nodeClock: nodeClock,
+		beacons:   make(map[types.EpochID]types.Beacon),
+		signers:   make(map[string]*signing.EdSigner),
+		oracle:    nil,
+		sessions:  make(map[types.LayerID]*protocol),
+		eg:        errgroup.Group{},
+		ctx:       context.Background(),
+		svc:       nodeService,
+
 		wallClock: clockwork.NewRealClock(),
 	}
 }
@@ -172,6 +180,10 @@ func (h *RemoteHare) run(session *session) error {
 	}
 	onRound(session.proto)
 	for {
+		if session.proto.IterRound.Iter > h.config.IterationsLimit {
+			return nil
+		}
+
 		walltime = walltime.Add(h.config.RoundDuration)
 		current = session.proto.IterRound
 		start = time.Now()
@@ -196,7 +208,7 @@ func (h *RemoteHare) run(session *session) error {
 			)
 
 			if eligible {
-				msgBytes, err := h.svc.GetHareMessage(context.Background(), session.lid, session.proto.IterRound.Round)
+				msgBytes, err := h.svc.GetHareMessage(context.Background(), session.lid, session.proto.IterRound)
 				if err != nil {
 					h.log.Error("get hare message", zap.Error(err))
 					onRound(session.proto) // advance the protocol state before continuing
@@ -225,7 +237,7 @@ func (h *RemoteHare) signPub(session *session, message *Message) {
 		msg.Eligibility = *vrf
 		msg.Sender = session.signers[i].NodeID()
 		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
-		if err := h.svc.PublishHareMessage(h.ctx, msg.ToBytes()); err != nil {
+		if err := h.svc.Publish(h.ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {
 			h.log.Error("failed to publish", zap.Inline(&msg), zap.Error(err))
 		}
 	}

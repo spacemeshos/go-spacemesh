@@ -20,6 +20,9 @@ type ActivationTx struct {
 // EpochID defines model for EpochID.
 type EpochID = uint32
 
+// HareIter defines model for HareIter.
+type HareIter = uint8
+
 // HareRound defines model for HareRound.
 type HareRound = uint8
 

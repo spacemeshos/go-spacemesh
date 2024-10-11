@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -28,7 +29,8 @@ type poetDB interface {
 }
 
 type hare interface {
-	RoundMessage(layer types.LayerID, round hare3.Round) *hare3.Message
+	RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message
+	TotalWeight() uint64
 }
 
 type Server struct {
@@ -45,12 +47,14 @@ func NewServer(
 	atxService activation.AtxService,
 	publisher pubsub.Publisher,
 	poetDB poetDB,
+	hare hare,
 	logger *zap.Logger,
 ) *Server {
 	return &Server{
 		atxService: atxService,
 		publisher:  publisher,
 		poetDB:     poetDB,
+		hare:       hare,
 		logger:     logger,
 	}
 }
@@ -208,7 +212,7 @@ type hareResponse struct {
 	message []byte
 }
 
-func (h *hareResponse) VisitGetHareRoundTemplateLayerRoundResponse(w http.ResponseWriter) error {
+func (h *hareResponse) VisitGetHareRoundTemplateLayerIterRoundResponse(w http.ResponseWriter) error {
 	if h.message == nil {
 		w.WriteHeader(204) // no content
 		return nil
@@ -219,8 +223,8 @@ func (h *hareResponse) VisitGetHareRoundTemplateLayerRoundResponse(w http.Respon
 	return err
 }
 
-func (s *Server) GetHareRoundTemplateLayerRound(ctx context.Context, request GetHareRoundTemplateLayerRoundRequestObject) (GetHareRoundTemplateLayerRoundResponseObject, error) {
-	msg := s.hare.RoundMessage(types.LayerID(request.Layer), hare3.Round(request.Round))
+func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context, request GetHareRoundTemplateLayerIterRoundRequestObject) (GetHareRoundTemplateLayerIterRoundResponseObject, error) {
+	msg := s.hare.RoundMessage(types.LayerID(request.Layer), hare3.IterRound{Round: hare3.Round(request.Round), Iter: (request.Iter)})
 	if msg == nil {
 		return &hareResponse{}, nil
 	}
@@ -228,4 +232,19 @@ func (s *Server) GetHareRoundTemplateLayerRound(ctx context.Context, request Get
 	return &hareResponse{
 		message: codec.MustEncode(msg),
 	}, nil
+}
+
+type totalWeightResp struct {
+	w uint64
+}
+
+func (t *totalWeightResp) VisitGetHareTotalWeightResponse(w http.ResponseWriter) error {
+	w.Header().Add("content-type", "application/octet-stream")
+	w.WriteHeader(200)
+	_, err := w.Write([]byte(fmt.Sprintf("%d", t.w)))
+	return err
+}
+
+func (s *Server) GetHareTotalWeight(ctx context.Context, _ GetHareTotalWeightRequestObject) (GetHareTotalWeightResponseObject, error) {
+	return &totalWeightResp{s.hare.TotalWeight()}, nil
 }
