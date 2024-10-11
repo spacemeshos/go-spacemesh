@@ -50,7 +50,6 @@ CREATE TABLE poet_certificates
     certificate  BLOB NOT NULL,
     signature    BLOB NOT NULL
 );
-CREATE UNIQUE INDEX idx_poet_certificates ON poet_certificates (node_id, certifier_id);
 CREATE TABLE poet_registration
 (
     id            CHAR(32) NOT NULL,
@@ -81,3 +80,4 @@ CREATE TABLE prepared_activeset
     data          BLOB NOT NULL,
     PRIMARY KEY (kind, epoch)
 ) WITHOUT ROWID;
+CREATE UNIQUE INDEX idx_poet_certificates ON poet_certificates (node_id, certifier_id);
