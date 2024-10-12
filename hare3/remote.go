@@ -190,7 +190,7 @@ func (h *RemoteHare) run(session *session) error {
 	}
 	onRound(session.proto)
 	for {
-		if session.proto.IterRound.Iter > h.config.IterationsLimit {
+		if session.proto.IterRound.Iter >= h.config.IterationsLimit {
 			return nil
 		}
 
@@ -211,13 +211,13 @@ func (h *RemoteHare) run(session *session) error {
 
 		select {
 		case <-h.wallClock.After(walltime.Sub(h.wallClock.Now())):
-			h.log.Debug("execute round",
-				zap.Uint32("lid", session.lid.Uint32()),
-				zap.Uint8("iter", session.proto.Iter), zap.Stringer("round", session.proto.Round),
-				zap.Bool("active", active),
-			)
-
 			if active {
+				h.log.Debug("execute round",
+					zap.Uint32("lid", session.lid.Uint32()),
+					zap.Uint8("iter", session.proto.Iter), zap.Stringer("round", session.proto.Round),
+					zap.Bool("active", active),
+				)
+
 				msgBytes, err := h.svc.GetHareMessage(context.Background(), session.lid, session.proto.IterRound)
 				if err != nil {
 					h.log.Error("get hare message", zap.Error(err))
