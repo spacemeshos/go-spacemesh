@@ -181,6 +181,7 @@ func New(
 	patrol *layerpatrol.LayerPatrol,
 	opts ...Opt,
 ) *Hare {
+	log.Info("new hare3")
 	ctx, cancel := context.WithCancel(context.Background())
 	hr := &Hare{
 		ctx:          ctx,
