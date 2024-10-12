@@ -14,6 +14,9 @@
         "proposalBuilder": "ERROR",
         "hare": "DEBUG"
     },
+    "hare3": {
+        "enable": true
+    },
     "main": {
         "data-folder": "/tmp/spacemesh-node-service",
         "filelock": "/tmp/spacemesh-node-service/node.lock"
