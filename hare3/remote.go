@@ -18,6 +18,7 @@ import (
 
 type nodeService interface {
 	GetHareMessage(ctx context.Context, layer types.LayerID, round IterRound) ([]byte, error)
+	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 	Publish(ctx context.Context, proto string, blob []byte) error
 }
 
@@ -98,7 +99,13 @@ func (h *RemoteHare) beacon(e types.EpochID) types.Beacon {
 	defer h.mu.Unlock()
 	b, ok := h.beacons[e]
 	if !ok {
-		return types.EmptyBeacon
+		bcn, err := h.svc.Beacon(context.Background(), e)
+		if err != nil {
+			h.log.Error("error getting beacon", zap.Error(err))
+			return types.EmptyBeacon
+		}
+		h.beacons[e] = bcn
+		return bcn
 	}
 
 	return b

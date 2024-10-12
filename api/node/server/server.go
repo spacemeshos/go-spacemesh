@@ -32,6 +32,7 @@ type hare interface {
 	RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message
 	TotalWeight(ctx context.Context, layer types.LayerID) uint64
 	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64
+	Beacon(ctx context.Context, epoch types.EpochID) types.Beacon
 }
 
 type Server struct {
@@ -268,4 +269,18 @@ func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context, request GetHareWe
 		panic(err)
 	}
 	return &nodeWeightResp{val: s.hare.MinerWeight(ctx, *id, types.LayerID(request.Layer))}, nil
+}
+
+type beaconResp struct{ b types.Beacon }
+
+func (b *beaconResp) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
+	w.Header().Add("content-type", "application/octet-stream")
+	w.WriteHeader(200)
+	_, err := w.Write(b.b[:])
+	return err
+}
+
+func (s *Server) GetHareBeaconEpoch(ctx context.Context, request GetHareBeaconEpochRequestObject) (GetHareBeaconEpochResponseObject, error) {
+	beacon := s.hare.Beacon(ctx, types.EpochID(request.Epoch))
+	return &beaconResp{b: beacon}, nil
 }

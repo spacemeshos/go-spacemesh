@@ -202,4 +202,25 @@ paths:
                 format: binary
         "204":
           description: did not find a message to retrieve
+  /hare/beacon/{epoch}:
+    get:
+      summary: Get the beacon value for an epoch
+      tags:
+        - "hare"
+      parameters:
+        - in: path
+          name: epoch
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/EpochID"
+      responses:
+        "200":
+          description: successfully found the epoch id
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: did not find a message to retrieve
 

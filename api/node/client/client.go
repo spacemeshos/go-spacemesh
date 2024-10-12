@@ -173,3 +173,20 @@ func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node
 	}
 	return strconv.ParseUint(string(bytes), 10, 64)
 }
+
+func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
+	v := types.Beacon{}
+	resp, err := s.client.GetHareBeaconEpoch(ctx, externalRef0.EpochID(epoch))
+	if err != nil {
+		return v, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return v, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return v, fmt.Errorf("read all: %w", err)
+	}
+	copy(v[:], bytes)
+	return v, nil
+}

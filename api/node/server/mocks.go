@@ -102,6 +102,44 @@ func (m *Mockhare) EXPECT() *MockhareMockRecorder {
 	return m.recorder
 }
 
+// MinerWeight mocks base method.
+func (m *Mockhare) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MinerWeight", ctx, node, layer)
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// MinerWeight indicates an expected call of MinerWeight.
+func (mr *MockhareMockRecorder) MinerWeight(ctx, node, layer any) *MockhareMinerWeightCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinerWeight", reflect.TypeOf((*Mockhare)(nil).MinerWeight), ctx, node, layer)
+	return &MockhareMinerWeightCall{Call: call}
+}
+
+// MockhareMinerWeightCall wrap *gomock.Call
+type MockhareMinerWeightCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockhareMinerWeightCall) Return(arg0 uint64) *MockhareMinerWeightCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockhareMinerWeightCall) Do(f func(context.Context, types.NodeID, types.LayerID) uint64) *MockhareMinerWeightCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockhareMinerWeightCall) DoAndReturn(f func(context.Context, types.NodeID, types.LayerID) uint64) *MockhareMinerWeightCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // RoundMessage mocks base method.
 func (m *Mockhare) RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message {
 	m.ctrl.T.Helper()

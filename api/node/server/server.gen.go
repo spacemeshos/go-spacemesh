@@ -45,6 +45,9 @@ type ServerInterface interface {
 	// Get Positioning ATX ID with given maximum publish epoch
 	// (GET /activation/positioning_atx/{publish_epoch})
 	GetActivationPositioningAtxPublishEpoch(w http.ResponseWriter, r *http.Request, publishEpoch externalRef0.EpochID)
+	// Get the beacon value for an epoch
+	// (GET /hare/beacon/{epoch})
+	GetHareBeaconEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
 	// Get a hare message to sign
 	// (GET /hare/round_template/{layer}/{iter}/{round})
 	GetHareRoundTemplateLayerIterRound(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound)
@@ -137,6 +140,31 @@ func (siw *ServerInterfaceWrapper) GetActivationPositioningAtxPublishEpoch(w htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetActivationPositioningAtxPublishEpoch(w, r, publishEpoch)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHareBeaconEpoch operation middleware
+func (siw *ServerInterfaceWrapper) GetHareBeaconEpoch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "epoch" -------------
+	var epoch externalRef0.EpochID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHareBeaconEpoch(w, r, epoch)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -410,6 +438,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/activation/atx/{atx_id}", wrapper.GetActivationAtxAtxId)
 	m.HandleFunc("GET "+options.BaseURL+"/activation/last_atx/{node_id}", wrapper.GetActivationLastAtxNodeId)
 	m.HandleFunc("GET "+options.BaseURL+"/activation/positioning_atx/{publish_epoch}", wrapper.GetActivationPositioningAtxPublishEpoch)
+	m.HandleFunc("GET "+options.BaseURL+"/hare/beacon/{epoch}", wrapper.GetHareBeaconEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/round_template/{layer}/{iter}/{round}", wrapper.GetHareRoundTemplateLayerIterRound)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/total_weight/{layer}", wrapper.GetHareTotalWeightLayer)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/weight/{node_id}/{layer}", wrapper.GetHareWeightNodeIdLayer)
@@ -505,6 +534,41 @@ func (response GetActivationPositioningAtxPublishEpoch200JSONResponse) VisitGetA
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
+}
+
+type GetHareBeaconEpochRequestObject struct {
+	Epoch externalRef0.EpochID `json:"epoch"`
+}
+
+type GetHareBeaconEpochResponseObject interface {
+	VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error
+}
+
+type GetHareBeaconEpoch200ApplicationoctetStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetHareBeaconEpoch200ApplicationoctetStreamResponse) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetHareBeaconEpoch204Response struct {
+}
+
+func (response GetHareBeaconEpoch204Response) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
 }
 
 type GetHareRoundTemplateLayerIterRoundRequestObject struct {
@@ -678,6 +742,9 @@ type StrictServerInterface interface {
 	// Get Positioning ATX ID with given maximum publish epoch
 	// (GET /activation/positioning_atx/{publish_epoch})
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, request GetActivationPositioningAtxPublishEpochRequestObject) (GetActivationPositioningAtxPublishEpochResponseObject, error)
+	// Get the beacon value for an epoch
+	// (GET /hare/beacon/{epoch})
+	GetHareBeaconEpoch(ctx context.Context, request GetHareBeaconEpochRequestObject) (GetHareBeaconEpochResponseObject, error)
 	// Get a hare message to sign
 	// (GET /hare/round_template/{layer}/{iter}/{round})
 	GetHareRoundTemplateLayerIterRound(ctx context.Context, request GetHareRoundTemplateLayerIterRoundRequestObject) (GetHareRoundTemplateLayerIterRoundResponseObject, error)
@@ -795,6 +862,32 @@ func (sh *strictHandler) GetActivationPositioningAtxPublishEpoch(w http.Response
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetActivationPositioningAtxPublishEpochResponseObject); ok {
 		if err := validResponse.VisitGetActivationPositioningAtxPublishEpochResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetHareBeaconEpoch operation middleware
+func (sh *strictHandler) GetHareBeaconEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID) {
+	var request GetHareBeaconEpochRequestObject
+
+	request.Epoch = epoch
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetHareBeaconEpoch(ctx, request.(GetHareBeaconEpochRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetHareBeaconEpoch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetHareBeaconEpochResponseObject); ok {
+		if err := validResponse.VisitGetHareBeaconEpochResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

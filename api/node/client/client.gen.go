@@ -115,6 +115,9 @@ type ClientInterface interface {
 	// GetActivationPositioningAtxPublishEpoch request
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetHareBeaconEpoch request
+	GetHareBeaconEpoch(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetHareRoundTemplateLayerIterRound request
 	GetHareRoundTemplateLayerIterRound(ctx context.Context, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -157,6 +160,18 @@ func (c *Client) GetActivationLastAtxNodeId(ctx context.Context, nodeId external
 
 func (c *Client) GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetActivationPositioningAtxPublishEpochRequest(c.Server, publishEpoch)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetHareBeaconEpoch(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHareBeaconEpochRequest(c.Server, epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -312,6 +327,40 @@ func NewGetActivationPositioningAtxPublishEpochRequest(server string, publishEpo
 	}
 
 	operationPath := fmt.Sprintf("/activation/positioning_atx/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetHareBeaconEpochRequest generates requests for GetHareBeaconEpoch
+func NewGetHareBeaconEpochRequest(server string, epoch externalRef0.EpochID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "epoch", runtime.ParamLocationPath, epoch)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/hare/beacon/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -569,6 +618,9 @@ type ClientWithResponsesInterface interface {
 	// GetActivationPositioningAtxPublishEpochWithResponse request
 	GetActivationPositioningAtxPublishEpochWithResponse(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetActivationPositioningAtxPublishEpochResponse, error)
 
+	// GetHareBeaconEpochWithResponse request
+	GetHareBeaconEpochWithResponse(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetHareBeaconEpochResponse, error)
+
 	// GetHareRoundTemplateLayerIterRoundWithResponse request
 	GetHareRoundTemplateLayerIterRoundWithResponse(ctx context.Context, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound, reqEditors ...RequestEditorFn) (*GetHareRoundTemplateLayerIterRoundResponse, error)
 
@@ -647,6 +699,27 @@ func (r GetActivationPositioningAtxPublishEpochResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetActivationPositioningAtxPublishEpochResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetHareBeaconEpochResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r GetHareBeaconEpochResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetHareBeaconEpochResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -785,6 +858,15 @@ func (c *ClientWithResponses) GetActivationPositioningAtxPublishEpochWithRespons
 	return ParseGetActivationPositioningAtxPublishEpochResponse(rsp)
 }
 
+// GetHareBeaconEpochWithResponse request returning *GetHareBeaconEpochResponse
+func (c *ClientWithResponses) GetHareBeaconEpochWithResponse(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetHareBeaconEpochResponse, error) {
+	rsp, err := c.GetHareBeaconEpoch(ctx, epoch, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetHareBeaconEpochResponse(rsp)
+}
+
 // GetHareRoundTemplateLayerIterRoundWithResponse request returning *GetHareRoundTemplateLayerIterRoundResponse
 func (c *ClientWithResponses) GetHareRoundTemplateLayerIterRoundWithResponse(ctx context.Context, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound, reqEditors ...RequestEditorFn) (*GetHareRoundTemplateLayerIterRoundResponse, error) {
 	rsp, err := c.GetHareRoundTemplateLayerIterRound(ctx, layer, iter, round, reqEditors...)
@@ -905,6 +987,22 @@ func ParseGetActivationPositioningAtxPublishEpochResponse(rsp *http.Response) (*
 		}
 		response.JSON200 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetHareBeaconEpochResponse parses an HTTP response from a GetHareBeaconEpochWithResponse call
+func ParseGetHareBeaconEpochResponse(rsp *http.Response) (*GetHareBeaconEpochResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetHareBeaconEpochResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil
