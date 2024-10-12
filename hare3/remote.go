@@ -69,7 +69,6 @@ func (h *RemoteHare) Register(sig *signing.EdSigner) {
 
 func (h *RemoteHare) Start() {
 	current := h.nodeClock.CurrentLayer() + 1
-	enableLayer := types.LayerID(0)
 	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
 	disabled := types.LayerID(math.MaxUint32)
 	h.log.Info("started",
@@ -218,7 +217,7 @@ func (h *RemoteHare) run(session *session) error {
 				zap.Bool("active", active),
 			)
 
-			if eligible {
+			if active {
 				msgBytes, err := h.svc.GetHareMessage(context.Background(), session.lid, session.proto.IterRound)
 				if err != nil {
 					h.log.Error("get hare message", zap.Error(err))
