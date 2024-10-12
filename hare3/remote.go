@@ -70,7 +70,7 @@ func (h *RemoteHare) Register(sig *signing.EdSigner) {
 func (h *RemoteHare) Start() {
 	current := h.nodeClock.CurrentLayer() + 1
 	enableLayer := types.LayerID(0)
-	enabled := max(current, enableLayer /* h.config.EnableLayer*/, types.GetEffectiveGenesis()+1)
+	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
 	disabled := types.LayerID(math.MaxUint32)
 	h.log.Info("started",
 		zap.Inline(&h.config),
@@ -198,12 +198,12 @@ func (h *RemoteHare) run(session *session) error {
 		walltime = walltime.Add(h.config.RoundDuration)
 		current = session.proto.IterRound
 		start = time.Now()
-		eligible := false
+		active := false
 
 		for i := range session.signers {
 			if current.IsMessageRound() {
 				session.vrfs[i] = h.oracle.active(session.signers[i], session.beacon, session.lid, current)
-				eligible = eligible || (session.vrfs[i] != nil)
+				active = active || (session.vrfs[i] != nil)
 			} else {
 				session.vrfs[i] = nil
 			}
@@ -230,8 +230,9 @@ func (h *RemoteHare) run(session *session) error {
 					h.log.Error("decode remote hare message", zap.Error(err))
 				}
 				h.signPub(session, msg)
-				onRound(session.proto) // advance the protocol state before continuing
 			}
+
+			onRound(session.proto) // advance the protocol state before continuing
 		case <-h.ctx.Done():
 			return nil
 		}
