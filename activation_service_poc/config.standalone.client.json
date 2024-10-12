@@ -11,7 +11,8 @@
         "trtl": "WARN",
         "beacon": "ERROR",
         "proposalBuilder": "ERROR",
-        "atxBuilder": "DEBUG"
+        "atxBuilder": "DEBUG",
+        "hare": "DEBUG"
     },
     "main": {
         "node-service-address": "http://0.0.0.0:9099",

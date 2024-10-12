@@ -11,7 +11,8 @@
     "logging": {
         "trtl": "WARN",
         "beacon": "ERROR",
-        "proposalBuilder": "ERROR"
+        "proposalBuilder": "ERROR",
+        "hare": "DEBUG"
     },
     "main": {
         "data-folder": "/tmp/spacemesh-node-service",
