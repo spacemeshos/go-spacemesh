@@ -7,7 +7,6 @@ CREATE TABLE atx_blobs
     atx        BLOB,
     version    INTEGER
 );
-CREATE UNIQUE INDEX atx_blobs_epoch_pubkey ON atx_blobs (epoch, pubkey);
 CREATE TABLE atx_sync_requests 
 (
     epoch     INT NOT NULL,
@@ -89,4 +88,5 @@ CREATE TABLE prepared_activeset
     data          BLOB NOT NULL,
     PRIMARY KEY (kind, epoch)
 ) WITHOUT ROWID;
+CREATE UNIQUE INDEX atx_blobs_epoch_pubkey ON atx_blobs (epoch, pubkey);
 CREATE UNIQUE INDEX idx_poet_certificates ON poet_certificates (node_id, certifier_id);

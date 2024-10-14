@@ -99,7 +99,7 @@ func (s *dbAtxService) PositioningATX(ctx context.Context, maxPublish types.Epoc
 
 	// positioning ATX publish epoch must be lower than the publish epoch of built ATX
 	positioningAtxPublished := min(latestPublished, maxPublish)
-	id, err := findFullyValidHighTickAtx(
+	return findFullyValidHighTickAtx(
 		ctx,
 		s.atxsdata,
 		positioningAtxPublished,
@@ -109,12 +109,6 @@ func (s *dbAtxService) PositioningATX(ctx context.Context, maxPublish types.Epoc
 		VerifyChainOpts.WithTrustedIDs(s.cfg.trusted...),
 		VerifyChainOpts.WithLogger(s.logger),
 	)
-	if err != nil {
-		s.logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
-		id = s.golden
-	}
-
-	return id, nil
 }
 
 func findFullyValidHighTickAtx(
