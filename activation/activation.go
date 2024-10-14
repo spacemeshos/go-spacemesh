@@ -26,7 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/localatxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
@@ -731,7 +731,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	case <-b.layerClock.AwaitLayer(challenge.PublishEpoch.FirstLayer()):
 	}
 
-	err = atxs.AddBlob(b.localDB, challenge.PublishEpoch, atx.ID(), sig.NodeID(), codec.MustEncode(atx))
+	err = localatxs.AddBlob(b.localDB, challenge.PublishEpoch, atx.ID(), sig.NodeID(), codec.MustEncode(atx))
 	if err != nil {
 		b.logger.Warn("failed to persist built ATX into the local DB - regossiping won't work", zap.Error(err))
 	}
@@ -981,7 +981,7 @@ func (b *Builder) getPositioningAtx(
 
 func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	epoch := b.layerClock.CurrentLayer().GetEpoch()
-	id, blob, err := atxs.AtxBlob(b.localDB, epoch, nodeID)
+	id, blob, err := localatxs.AtxBlob(b.localDB, epoch, nodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		return nil
 	} else if err != nil {

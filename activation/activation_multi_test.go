@@ -18,7 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	localatxs "github.com/spacemeshos/go-spacemesh/sql/localsql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/localatxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 

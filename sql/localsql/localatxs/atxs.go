@@ -1,4 +1,4 @@
-package atxs
+package localatxs
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"

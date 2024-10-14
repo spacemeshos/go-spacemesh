@@ -73,10 +73,8 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, vValidAtx.ID(), posAtxID)
 
-	// it returns the golden ATX if couldn't find a better one
-	posAtxID, err = atxSvc.PositioningATX(context.Background(), validAtx.PublishEpoch-1)
-	require.NoError(t, err)
-	require.Equal(t, atxSvc.golden, posAtxID)
+	_, err = atxSvc.PositioningATX(context.Background(), validAtx.PublishEpoch-1)
+	require.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestFindFullyValidHighTickAtx(t *testing.T) {
