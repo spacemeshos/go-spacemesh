@@ -127,7 +127,7 @@ func EmitPoetWaitRound(nodeID types.NodeID, current, publish types.EpochID, wait
 	emitUserEvent(
 		help,
 		false,
-		&pb.Event_PoetWaitRound{PoetWaitRound: &pb.EventPoetWaitRound{
+		&pb.Event_PoetWaitRound{PoetWaitRound: &pb.EventPoetWaitRound{ // nolint:staticcheck // SA1019 (deprecated)
 			Current: current.Uint32(),
 			Publish: publish.Uint32(),
 			Wait:    durationpb.New(time.Until(wait)),
@@ -163,7 +163,7 @@ func EmitPoetWaitProof(nodeID types.NodeID, publish types.EpochID, wait time.Tim
 		help,
 		false,
 		&pb.Event_PoetWaitProof{
-			PoetWaitProof: &pb.EventPoetWaitProof{
+			PoetWaitProof: &pb.EventPoetWaitProof{ // nolint:staticcheck // SA1019 (deprecated)
 				Publish: publish.Uint32(),
 				Target:  publish.Add(1).Uint32(),
 				Wait:    durationpb.New(time.Until(wait)),
