@@ -10,7 +10,7 @@ import (
 )
 
 func TestCodedMigrations(t *testing.T) {
-	schema, err := SchemaWithInCodeMigrations(nil)
+	schema, err := SchemaWithInCodeMigrations()
 	require.NoError(t, err)
 
 	db := sql.InMemory(

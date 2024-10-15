@@ -2,6 +2,22 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#6378](https://github.com/spacemeshos/go-spacemesh/pull/6387) Improved handling of malicious identities. This reduces
+  the number of DB queries needed during ATX validation.
+
+* [#6387](https://github.com/spacemeshos/go-spacemesh/pull/6387) Fix an issue were in rare cases invalid proofs for
+  malicious identities were created.
+
 ## v1.7.4
 
 ### Improvements

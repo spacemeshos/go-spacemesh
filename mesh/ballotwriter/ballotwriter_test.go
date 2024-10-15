@@ -20,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
 )
 
 func init() {
@@ -75,8 +74,8 @@ func TestWriteCoalesce_OnePerSmesher(t *testing.T) {
 	require.NotNil(t, blob.Bytes)
 }
 
-func BenchmarkWriteCoalesing(b *testing.B) {
-	a := make([]*types.Ballot, 100000)
+func BenchmarkWriteCoalescing(b *testing.B) {
+	a := make([]*types.Ballot, 1000000)
 	for i := 0; i < len(a); i++ {
 		a[i] = genBallot(b)
 	}
@@ -119,7 +118,8 @@ func BenchmarkWriteCoalesing(b *testing.B) {
 		return nil
 	}
 	b.ResetTimer()
-	b.Run("No Coalesing", func(b *testing.B) {
+
+	b.Run("No Coalescing", func(b *testing.B) {
 		db := newDiskSqlite(b)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -134,13 +134,10 @@ func BenchmarkWriteCoalesing(b *testing.B) {
 		}
 	})
 
-	// with the coalesing tests, one must take the "ns/op" metrics and divide it
-	// by the number of entries written together to see how many items we're doing
-	// per time unit.
-	b.Run("Coalesing 1000 entries", func(b *testing.B) {
+	b.Run("Coalescing 1000 entries", func(b *testing.B) {
 		db := newDiskSqlite(b)
 		b.ResetTimer()
-		for j := 0; j < b.N; j++ {
+		for j := 0; j < b.N/1000; j++ {
 			if err := db.WithTx(context.Background(), func(tx sql.Transaction) error {
 				var err error
 				for i := (j * 1000); i < (j*1000)+1000; i++ {
@@ -155,10 +152,10 @@ func BenchmarkWriteCoalesing(b *testing.B) {
 		}
 	})
 
-	b.Run("Coalesing 5000 entries", func(b *testing.B) {
+	b.Run("Coalescing 5000 entries", func(b *testing.B) {
 		db := newDiskSqlite(b)
 		b.ResetTimer()
-		for j := 0; j < b.N; j++ {
+		for j := 0; j < b.N/5000; j++ {
 			if err := db.WithTx(context.Background(), func(tx sql.Transaction) error {
 				var err error
 				for i := (j * 5000); i < (j*5000)+5000; i++ {
@@ -206,15 +203,9 @@ func newTestBallotWriter(t testing.TB) (*ballotwriter.BallotWriter, sql.Database
 
 func newDiskSqlite(tb testing.TB) sql.Database {
 	tb.Helper()
-	schema, err := migrations.SchemaWithInCodeMigrations()
-	require.NoError(tb, err)
 
-	dbopts := []sql.Opt{
-		sql.WithDatabaseSchema(schema),
-		sql.WithForceMigrations(true),
-	}
 	dir := tb.TempDir()
-	sqlDB, err := sql.Open("file:"+filepath.Join(dir, "sql.sql"), dbopts...)
+	sqlDB, err := statesql.Open("file:" + filepath.Join(dir, "state.sql"))
 	if err != nil {
 		tb.Fatal(err)
 	}
