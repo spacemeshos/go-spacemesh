@@ -11,5 +11,5 @@ type (
 	DumbSet = dumbSet
 )
 
-func DoRound(rsr *RangeSetReconciler, s Sender) (done bool, err error) { return rsr.doRound(s) }
-func ReconcilerOrderedSet(rsr *RangeSetReconciler) OrderedSet          { return rsr.os }
+func (rsr *RangeSetReconciler) DoRound(s Sender) (done bool, err error) { return rsr.doRound(s) }
+func (rsr *RangeSetReconciler) Set() OrderedSet                         { return rsr.os }

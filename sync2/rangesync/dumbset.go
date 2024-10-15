@@ -4,10 +4,9 @@ import (
 	"crypto/md5"
 	"errors"
 	"slices"
-	"sync"
 	"time"
 
-	"github.com/zeebo/blake3"
+	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
 // stringToFP conversts a string to a Fingerprint.
@@ -215,7 +214,7 @@ func (ds *dumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
 	if part0.Count == 0 {
 		return SplitInfo{}, errors.New("can't split empty range")
 	}
-	part1, err := ds.GetRangeInfo(middle, y, -1)
+	part1, _, err := ds.getRangeInfo(middle, y, -1)
 	if err != nil {
 		return SplitInfo{}, err
 	}
@@ -248,22 +247,16 @@ func (ds *dumbSet) Recent(since time.Time) (SeqResult, int) {
 	return EmptySeqResult(), 0
 }
 
-var hashPool = &sync.Pool{
-	New: func() any {
-		return blake3.New()
-	},
-}
-
 // NewDumbSet creates a new dumbSet instance.
 // If disableReAdd is true, the set will panic if the same item is received twice.
 func NewDumbSet(disableReAdd bool) OrderedSet {
 	return &dumbSet{
 		DisableReAdd: disableReAdd,
 		fpFunc: func(items []KeyBytes) (r Fingerprint) {
-			hasher := hashPool.Get().(*blake3.Hasher)
+			hasher := hash.GetHasher()
 			defer func() {
 				hasher.Reset()
-				hashPool.Put(hasher)
+				hash.PutHasher(hasher)
 			}()
 			var hashRes [32]byte
 			for _, h := range items {

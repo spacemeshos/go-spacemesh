@@ -29,8 +29,8 @@ func (k KeyBytes) Clone() KeyBytes {
 }
 
 // Compare compares two keys.
-func (k KeyBytes) Compare(other any) int {
-	return bytes.Compare(k, other.(KeyBytes))
+func (k KeyBytes) Compare(other KeyBytes) int {
+	return bytes.Compare(k, other)
 }
 
 // Inc returns the key with the same number of bytes as this one, obtained by incrementing

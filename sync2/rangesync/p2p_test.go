@@ -125,7 +125,7 @@ var startDate = time.Date(2024, 8, 29, 18, 0, 0, 0, time.UTC)
 func (frs *fakeRecentSet) registerAll(_ context.Context) error {
 	frs.timestamps = make(map[string]time.Time)
 	t := startDate
-	items, err := rangesync.CollectSetItems(frs.OrderedSet)
+	items, err := frs.OrderedSet.Items().Collect()
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (frs *fakeRecentSet) Receive(k rangesync.KeyBytes) error {
 // Recent implements OrderedSet.
 func (frs *fakeRecentSet) Recent(since time.Time) (rangesync.SeqResult, int) {
 	var items []rangesync.KeyBytes
-	items, err := rangesync.CollectSetItems(frs.OrderedSet)
+	items, err := frs.OrderedSet.Items().Collect()
 	if err != nil {
 		return rangesync.ErrorSeqResult(err), 0
 	}

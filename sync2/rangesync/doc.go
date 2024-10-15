@@ -1,4 +1,4 @@
-// rangesync package implements pairwise set reconciliation protocol.
+// Package rangesync implements pairwise set reconciliation protocol.
 //
 // The protocol is based on this paper:
 // Range-Based Set Reconciliation by Aljoscha Meyer

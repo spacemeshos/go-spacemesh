@@ -16,10 +16,10 @@ func TestFirst(t *testing.T) {
 
 func TestGetN(t *testing.T) {
 	seq := rangesync.Seq(slices.Values([]rangesync.KeyBytes{{1}, {2}, {3}, {4}}))
-	require.Empty(t, seq.GetN(0))
-	require.Equal(t, []rangesync.KeyBytes{{1}}, seq.GetN(1))
-	require.Equal(t, []rangesync.KeyBytes{{1}, {2}}, seq.GetN(2))
-	require.Equal(t, []rangesync.KeyBytes{{1}, {2}, {3}}, seq.GetN(3))
-	require.Equal(t, []rangesync.KeyBytes{{1}, {2}, {3}, {4}}, seq.GetN(4))
-	require.Equal(t, []rangesync.KeyBytes{{1}, {2}, {3}, {4}}, seq.GetN(5))
+	require.Empty(t, seq.FirstN(0))
+	require.Equal(t, []rangesync.KeyBytes{{1}}, seq.FirstN(1))
+	require.Equal(t, []rangesync.KeyBytes{{1}, {2}}, seq.FirstN(2))
+	require.Equal(t, []rangesync.KeyBytes{{1}, {2}, {3}}, seq.FirstN(3))
+	require.Equal(t, []rangesync.KeyBytes{{1}, {2}, {3}, {4}}, seq.FirstN(4))
+	require.Equal(t, []rangesync.KeyBytes{{1}, {2}, {3}, {4}}, seq.FirstN(5))
 }

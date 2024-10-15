@@ -165,7 +165,7 @@ func (rsr *RangeSetReconciler) processSubrange(s sender, x, y KeyBytes, info Ran
 		// Ask peer to send any items it has in the range
 		rsr.log.Debug("processSubrange: send empty range", log.ZShortStringer("x", x), log.ZShortStringer("y", y))
 		if err := s.SendEmptyRange(x, y); err != nil {
-			return err
+			return fmt.Errorf("send empty range: %w", err)
 		}
 	}
 
@@ -174,7 +174,7 @@ func (rsr *RangeSetReconciler) processSubrange(s sender, x, y KeyBytes, info Ran
 	rsr.log.Debug("processSubrange: send fingerprint", log.ZShortStringer("x", x), log.ZShortStringer("y", y),
 		zap.Int("count", info.Count))
 	if err := s.SendFingerprint(x, y, info.Fingerprint, info.Count); err != nil {
-		return err
+		return fmt.Errorf("send fingerprint: %w", err)
 	}
 
 	return nil
@@ -187,7 +187,7 @@ func (rsr *RangeSetReconciler) splitRange(s sender, count int, x, y KeyBytes) er
 		zap.Int("countArg", count))
 	si, err := rsr.os.SplitRange(x, y, count)
 	if err != nil {
-		return err
+		return fmt.Errorf("split range: %w", err)
 	}
 	rsr.log.Debug("handleMessage: split range",
 		log.ZShortStringer("x", x), log.ZShortStringer("y", y),
@@ -199,10 +199,10 @@ func (rsr *RangeSetReconciler) splitRange(s sender, count int, x, y KeyBytes) er
 		log.ZShortStringer("fp1", si.Parts[1].Fingerprint),
 		zap.Array("start1", si.Parts[1].Items))
 	if err := rsr.processSubrange(s, x, si.Middle, si.Parts[0]); err != nil {
-		return err
+		return fmt.Errorf("process subrange after split: %w", err)
 	}
 	if err := rsr.processSubrange(s, si.Middle, y, si.Parts[1]); err != nil {
-		return err
+		return fmt.Errorf("process subrange after split: %w", err)
 	}
 	return nil
 }
@@ -223,7 +223,7 @@ func (rsr *RangeSetReconciler) sendSmallRange(
 		zap.Int("count", count),
 		zap.Int("maxSendRange", rsr.maxSendRange))
 	if _, err := rsr.sendItems(s, count, sr, nil); err != nil {
-		return err
+		return fmt.Errorf("send items: %w", err)
 	}
 	return s.SendRangeContents(x, y, count)
 }
@@ -483,7 +483,7 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 	case info.Count < rsr.maxSendRange:
 		rsr.log.Debug("initiate: send whole range", zap.Int("count", info.Count))
 		if _, err := rsr.sendItems(s, info.Count, info.Items, nil); err != nil {
-			return err
+			return fmt.Errorf("send items: %w", err)
 		}
 		return s.SendRangeContents(x, y, info.Count)
 	case haveRecent:
@@ -493,7 +493,7 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 		if count != 0 {
 			rsr.log.Debug("initiate: sending recent items", zap.Int("count", count))
 			if n, err := rsr.sendItems(s, count, items, nil); err != nil {
-				return err
+				return fmt.Errorf("send recent items: %w", err)
 			} else if n != count {
 				panic("BUG: wrong number of items sent")
 			}
@@ -504,7 +504,7 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 		// Send Recent message even if there are no recent items, b/c we want to
 		// receive recent items from the peer, if any.
 		if err := s.SendRecent(since); err != nil {
-			return err
+			return fmt.Errorf("send recent message: %w", err)
 		}
 		return nil
 	case rsr.maxDiff >= 0:
@@ -629,7 +629,7 @@ RECV_LOOP:
 			nHandled++
 			for _, k := range msg.Keys() {
 				if err := rsr.os.Receive(k); err != nil {
-					return false, fmt.Errorf("error adding an item to the set: %w", err)
+					return false, fmt.Errorf("adding an item to the set: %w", err)
 				}
 				receivedKeys[string(k)] = struct{}{}
 			}

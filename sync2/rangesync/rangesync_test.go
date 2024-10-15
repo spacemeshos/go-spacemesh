@@ -62,7 +62,7 @@ func makeSet(t *testing.T, items string) *rangesync.DumbSet {
 }
 
 func setStr(os rangesync.OrderedSet) string {
-	ids, err := rangesync.CollectSetItems(os)
+	ids, err := os.Items().Collect()
 	if err != nil {
 		panic("set error: " + err.Error())
 	}
@@ -104,8 +104,8 @@ func doRunSync(fc *fakeConduit, syncA, syncB *rangesync.RangeSetReconciler, maxR
 	var i int
 	aDone, bDone := false, false
 	dumpRangeMessages(fc.t, fc.resp, "A %q -> B %q (init):",
-		setStr(rangesync.ReconcilerOrderedSet(syncA)),
-		setStr(rangesync.ReconcilerOrderedSet(syncB)))
+		setStr(syncA.Set()),
+		setStr(syncB.Set()))
 	dumpRangeMessages(fc.t, fc.resp, "A -> B (init):")
 	for i = 0; ; i++ {
 		if i == maxRounds {
@@ -115,13 +115,13 @@ func doRunSync(fc *fakeConduit, syncA, syncB *rangesync.RangeSetReconciler, maxR
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
 		var err error
-		bDone, err = rangesync.DoRound(syncB, rangesync.Sender{fc})
+		bDone, err = syncB.DoRound(rangesync.Sender{fc})
 		require.NoError(fc.t, err)
 		// a party should never send anything in response to the "done" message
 		require.False(fc.t, aDone && !bDone, "A is done but B after that is not")
 		dumpRangeMessages(fc.t, fc.resp, "B %q -> A %q:",
-			setStr(rangesync.ReconcilerOrderedSet(syncA)),
-			setStr(rangesync.ReconcilerOrderedSet(syncB)))
+			setStr(syncA.Set()),
+			setStr(syncB.Set()))
 		dumpRangeMessages(fc.t, fc.resp, "B -> A:")
 		if aDone && bDone {
 			require.Empty(fc.t, fc.resp, "got messages from B in response to done msg from A")
@@ -130,11 +130,11 @@ func doRunSync(fc *fakeConduit, syncA, syncB *rangesync.RangeSetReconciler, maxR
 		fc.gotoResponse()
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
-		aDone, err = rangesync.DoRound(syncA, rangesync.Sender{fc})
+		aDone, err = syncA.DoRound(rangesync.Sender{fc})
 		require.NoError(fc.t, err)
 		dumpRangeMessages(fc.t, fc.msgs, "A %q --> B %q:",
-			setStr(rangesync.ReconcilerOrderedSet(syncA)),
-			setStr(rangesync.ReconcilerOrderedSet(syncB)))
+			setStr(syncA.Set()),
+			setStr(syncB.Set()))
 		dumpRangeMessages(fc.t, fc.resp, "A -> B:")
 		require.False(fc.t, bDone && !aDone, "B is done but A after that is not")
 		if aDone && bDone {
@@ -159,7 +159,7 @@ func doRunProbe(
 ) rangesync.ProbeResult {
 	require.NotEmpty(fc.t, fc.resp, "empty initial round")
 	fc.gotoResponse()
-	done, err := rangesync.DoRound(to, rangesync.Sender{fc})
+	done, err := to.DoRound(rangesync.Sender{fc})
 	require.True(fc.t, done)
 	require.NoError(fc.t, err)
 	fc.gotoResponse()
@@ -378,7 +378,6 @@ func TestRandomSync(t *testing.T) {
 			rangesync.WithItemChunkSize(3))
 
 		runSync(t, syncA, syncB, nil, nil, max(len(expectedSet), 2))
-		// t.Logf("maxSendRange %d a %d b %d n %d", maxSendRange, len(bytesA), len(bytesB), n)
 		require.Equal(t, setStr(setA), setStr(setB))
 		require.Equal(t, string(expectedSet), setStr(setA),
 			"expected set for %q<->%q", bytesA, bytesB)
@@ -405,6 +404,7 @@ type hashSyncTester struct {
 }
 
 func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
+	t.Helper()
 	st := &hashSyncTester{
 		t:   t,
 		src: make([]rangesync.KeyBytes, cfg.numTestHashes),
@@ -441,9 +441,9 @@ func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 }
 
 func (st *hashSyncTester) verify(setA, setB rangesync.OrderedSet) {
-	itemsA, err := rangesync.CollectSetItems(setA)
+	itemsA, err := setA.Items().Collect()
 	require.NoError(st.t, err)
-	itemsB, err := rangesync.CollectSetItems(setB)
+	itemsB, err := setB.Items().Collect()
 	require.NoError(st.t, err)
 	require.Equal(st.t, itemsA, itemsB)
 	require.Equal(st.t, st.src, itemsA)

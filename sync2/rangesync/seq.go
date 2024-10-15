@@ -6,11 +6,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-const (
-	// FingerprintSize is the size of a fingerprint in bytes.
-	FingerprintSize = 12
-)
-
 // Seq represents an ordered sequence of elements.
 // Unless the sequence is empty or an error occurs while iterating, it yields elements
 // endlessly, wrapping around to the first element after the last one.
@@ -27,8 +22,8 @@ func (s Seq) First() KeyBytes {
 	return nil
 }
 
-// GetN returns the first n elements from the sequence.
-func (s Seq) GetN(n int) []KeyBytes {
+// FirstN returns the first n elements from the sequence.
+func (s Seq) FirstN(n int) []KeyBytes {
 	res := make([]KeyBytes, 0, n)
 	for k := range s {
 		if len(res) == n {
@@ -37,6 +32,25 @@ func (s Seq) GetN(n int) []KeyBytes {
 		res = append(res, k)
 	}
 	return res
+}
+
+// Collect returns all elements in the sequence as a slice.
+// It may not be very efficient due to reallocations, and thus it should only be used for
+// small sequences or for testing.
+func (s Seq) Collect() []KeyBytes {
+	var (
+		first KeyBytes
+		r     []KeyBytes
+	)
+	for v := range s {
+		if first == nil {
+			first = v
+		} else if v.Compare(first) == 0 {
+			break
+		}
+		r = append(r, v)
+	}
+	return r
 }
 
 // MarshalLogArray implements zapcore.ArrayMarshaler.
@@ -98,10 +112,17 @@ func (s SeqResult) First() (KeyBytes, error) {
 	return r, s.Error()
 }
 
-// GetN returns the first n elements from the result's sequence.
-func (s SeqResult) GetN(n int) ([]KeyBytes, error) {
-	items := s.Seq.GetN(n)
+// FirstN returns the first n elements from the result's sequence.
+func (s SeqResult) FirstN(n int) ([]KeyBytes, error) {
+	items := s.Seq.FirstN(n)
 	return items, s.Error()
+}
+
+// Collect returns all elements in the result's sequence as a slice.
+// It may not be very efficient due to reallocations, and thus it should only be used for
+// small sequences or for testing.
+func (s SeqResult) Collect() ([]KeyBytes, error) {
+	return s.Seq.Collect(), s.Error()
 }
 
 // EmptySeqResult returns an empty sequence result.

@@ -6,6 +6,11 @@ import (
 	"encoding/hex"
 )
 
+const (
+	// FingerprintSize is the size of a fingerprint in bytes.
+	FingerprintSize = 12
+)
+
 // Fingerprint represents a fingerprint of a set of keys.
 // The fingerprint is obtained by XORing together the keys in the set.
 type Fingerprint [FingerprintSize]byte
