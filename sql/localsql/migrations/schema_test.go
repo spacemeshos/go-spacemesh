@@ -7,13 +7,12 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 )
 
 func TestCodedMigrations(t *testing.T) {
-	schema, err := statesql.Schema(
-		New0021Migration(1_000_000),
-		New0025Migration(nil),
+	schema, err := localsql.Schema(
+	// add coded migrations here
 	)
 	require.NoError(t, err)
 

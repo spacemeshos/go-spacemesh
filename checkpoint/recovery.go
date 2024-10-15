@@ -24,14 +24,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
-	localmigrations "github.com/spacemeshos/go-spacemesh/sql/localsql/migrations"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
-	statemigrations "github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
 )
 
 const recoveryDir = "recovery"
@@ -123,25 +121,17 @@ func Recover(
 		return nil, errors.New("restore layer not set")
 	}
 	logger.Info("recovering from checkpoint", zap.String("url", cfg.Uri), zap.Stringer("restore", cfg.Restore))
-	schema, err := statemigrations.SchemaWithInCodeMigrations()
-	if err != nil {
-		return nil, fmt.Errorf("error loading db schema: %w", err)
-	}
 	db, err := statesql.Open(
 		"file:"+cfg.DbPath(),
-		sql.WithDatabaseSchema(schema),
+		sql.WithMigrationsDisabled(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open old database: %w", err)
 	}
 	defer db.Close()
-	lSchema, err := localmigrations.SchemaWithInCodeMigrations()
-	if err != nil {
-		return nil, fmt.Errorf("get schema with in-code migrations: %w", err)
-	}
 	localDB, err := localsql.Open(
 		"file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile),
-		sql.WithDatabaseSchema(lSchema),
+		sql.WithMigrationsDisabled(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open old local database: %w", err)
