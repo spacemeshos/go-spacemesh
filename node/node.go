@@ -108,6 +108,7 @@ const (
 	PostServiceLogger      = "postService"
 	PostInfoServiceLogger  = "postInfoService"
 	StateDbLogger          = "stateDb"
+	ApiStateDBLogger       = "apiStateDB"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
@@ -374,6 +375,7 @@ type App struct {
 	signers            []*signing.EdSigner
 	Config             *config.Config
 	db                 sql.StateDatabase
+	apiDB              sql.StateDatabase
 	cachedDB           *datastore.CachedDB
 	dbMetrics          *dbmetrics.DBMetricsCollector
 	localDB            sql.LocalDatabase
@@ -1535,27 +1537,27 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Activation:
-		service := v2alpha1.NewActivationService(app.db)
+		service := v2alpha1.NewActivationService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.ActivationStream:
-		service := v2alpha1.NewActivationStreamService(app.db)
+		service := v2alpha1.NewActivationStreamService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Reward:
-		service := v2alpha1.NewRewardService(app.db)
+		service := v2alpha1.NewRewardService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.RewardStream:
-		service := v2alpha1.NewRewardStreamService(app.db)
+		service := v2alpha1.NewRewardStreamService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Malfeasance:
-		service := v2alpha1.NewMalfeasanceService(app.db, app.malfeasanceHandler)
+		service := v2alpha1.NewMalfeasanceService(app.apiDB, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.MalfeasanceStream:
-		service := v2alpha1.NewMalfeasanceStreamService(app.db, app.malfeasanceHandler)
+		service := v2alpha1.NewMalfeasanceStreamService(app.apiDB, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Network:
@@ -1570,15 +1572,15 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Layer:
-		service := v2alpha1.NewLayerService(app.db)
+		service := v2alpha1.NewLayerService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.LayerStream:
-		service := v2alpha1.NewLayerStreamService(app.db)
+		service := v2alpha1.NewLayerStreamService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Transaction:
-		service := v2alpha1.NewTransactionService(app.db, app.conState, app.syncer, app.txHandler, app.host)
+		service := v2alpha1.NewTransactionService(app.apiDB, app.conState, app.syncer, app.txHandler, app.host)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.TransactionStream:
@@ -1586,7 +1588,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Account:
-		service := v2alpha1.NewAccountService(app.db, app.conState)
+		service := v2alpha1.NewAccountService(app.apiDB, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
 	}
@@ -1980,6 +1982,19 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("open sqlite db: %w", err)
 	}
 	app.db = sqlDB
+
+	apiDBLog := app.addLogger(ApiStateDBLogger, lg).Zap()
+	apiSqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile), []sql.Opt{
+		sql.WithReadOnly(),
+		sql.WithLogger(apiDBLog),
+		sql.WithConnections(app.Config.API.DatabaseConnections),
+		sql.WithMigrationsDisabled(),
+	}...)
+	if err != nil {
+		return fmt.Errorf("open sqlite db: %w", err)
+	}
+	app.apiDB = apiSqlDB
+
 	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
 			ctx,
