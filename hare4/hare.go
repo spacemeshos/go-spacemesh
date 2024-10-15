@@ -351,6 +351,7 @@ func (h *Hare) fetchFull(ctx context.Context, peer p2p.Peer, msgId types.Hash32)
 
 	err := h.p2p.StreamRequest(ctx, peer, reqBytes, cb)
 	if err != nil {
+		h.log.Error("hare4 stream request errored!", zap.Error(err))
 		requestCompactErrorCounter.Inc()
 		return nil, fmt.Errorf("stream request: %w", err)
 	}
@@ -478,6 +479,9 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 		h.log.Info("got preround message with compacts", zap.Int("nr compacts", len(compacts)), zap.Inline(msg))
 		messageCompactsCounter.Add(float64(len(compacts)))
 		err := h.reconstructProposals(ctx, peer, msgId, msg)
+		if err != nil {
+			h.log.Error("hare4 reconstruct proposals error", zap.Error(err))
+		}
 		switch {
 		case errors.Is(err, errCannotMatchProposals):
 			h.log.Info("preround message but couldn't reconstruct", zap.Int("nr compacts", len(compacts)), zap.Inline(msg))
@@ -489,7 +493,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 			msg.Value.CompactProposals = []types.CompactProposalID{}
 			fetched = true
 		case err != nil:
-			h.log.Info("preround message reconstruct failed", zap.Error(err))
+			h.log.Error("preround message reconstruct failed", zap.Error(err))
 			return fmt.Errorf("reconstruct proposals: %w", err)
 		}
 	}
@@ -503,12 +507,15 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 			var err error
 			msg.Body.Value.Proposals, err = h.fetchFull(ctx, peer, msgId)
 			if err != nil {
+				h.log.Error("hare4 fetch full error", zap.Error(err))
 				return fmt.Errorf("signature verify: fetch full: %w", err)
 			}
 			if len(msg.Body.Value.Proposals) != len(compacts) {
+				h.log.Error("hare4 proposals length mistmatch error")
 				return fmt.Errorf("signature verify: proposals mismatch: %w", err)
 			}
 			if !h.verifier.Verify(signing.HARE, msg.Sender, msg.ToMetadata().ToBytes(), msg.Signature) {
+				h.log.Error("hare4 signature error")
 				signatureError.Inc()
 				return fmt.Errorf("%w: signature verify: invalid signature", pubsub.ErrValidationReject)
 			}
