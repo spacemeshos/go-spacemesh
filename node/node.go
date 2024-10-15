@@ -1989,12 +1989,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	app.db = sqlDB
 
 	apiDBLog := app.addLogger(ApiStateDBLogger, lg).Zap()
-	apiSqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile), []sql.Opt{
+	apiSqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile),
 		sql.WithReadOnly(),
 		sql.WithLogger(apiDBLog),
 		sql.WithConnections(app.Config.API.DatabaseConnections),
 		sql.WithMigrationsDisabled(),
-	}...)
+	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db: %w", err)
 	}
