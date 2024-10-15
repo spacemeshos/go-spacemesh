@@ -58,7 +58,7 @@ func Has(db sql.Executor, id types.BlockID) (bool, error) {
 }
 
 // GetBlobSizes returns the sizes of the blobs corresponding to blocks with specified
-// ids. For non-existent balots, the corresponding items are set to -1.
+// ids. For non-existent ballots, the corresponding items are set to -1.
 func GetBlobSizes(db sql.Executor, ids [][]byte) (sizes []int, err error) {
 	return sql.GetBlobSizes(db, "select id, length(block) from blocks where id in", ids)
 }

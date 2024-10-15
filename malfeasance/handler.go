@@ -23,11 +23,11 @@ import (
 )
 
 var (
-	ErrKnownProof = errors.New("known proof")
-
+	errKnownProof    = errors.New("known proof")
 	errMalformedData = fmt.Errorf("%w: malformed data", pubsub.ErrValidationReject)
 	errWrongHash     = fmt.Errorf("%w: incorrect hash", pubsub.ErrValidationReject)
 	errUnknownProof  = fmt.Errorf("%w: unknown proof type", pubsub.ErrValidationReject)
+	errInvalidProof  = fmt.Errorf("%w: invalid proof", pubsub.ErrValidationReject)
 )
 
 type MalfeasanceType byte
@@ -115,7 +115,7 @@ func (h *Handler) Info(data []byte) (map[string]string, error) {
 func (h *Handler) HandleSyncedMalfeasanceProof(
 	ctx context.Context,
 	expHash types.Hash32,
-	_ p2p.Peer,
+	peer p2p.Peer,
 	data []byte,
 ) error {
 	var p wire.MalfeasanceProof
@@ -126,12 +126,23 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 	}
 	nodeID, err := h.validateAndSave(ctx, &p)
 	if err == nil && types.Hash32(nodeID) != expHash {
+		// we log & return because libp2p will ignore the message if we return an error,
+		// but only log "validation ignored" instead of the error we return
+		h.logger.Warn("malfeasance proof for wrong identity",
+			log.ZContext(ctx),
+			log.ZShortStringer("expected", expHash),
+			log.ZShortStringer("got", nodeID),
+			zap.Stringer("peer", peer),
+		)
 		return fmt.Errorf(
 			"%w: malfeasance proof want %s, got %s",
 			errWrongHash,
 			expHash.ShortString(),
 			nodeID.ShortString(),
 		)
+	}
+	if errors.Is(err, errKnownProof) {
+		return nil
 	}
 	return err
 }
@@ -151,8 +162,13 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 	if peer == h.self {
 		id, err := h.Validate(ctx, &p.MalfeasanceProof)
 		if err != nil {
+			h.logger.Warn("malfeasance proof failed validation during publish",
+				log.ZContext(ctx),
+				zap.Inline(&p.MalfeasanceProof),
+				zap.Error(err),
+			)
 			h.countInvalidProof(&p.MalfeasanceProof)
-			return err
+			return fmt.Errorf("%w: %s", pubsub.ErrValidationReject, err)
 		}
 		h.reportMalfeasance(id, codec.MustEncode(&p.MalfeasanceProof))
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
@@ -161,6 +177,9 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 		return nil
 	}
 	_, err := h.validateAndSave(ctx, &p.MalfeasanceProof)
+	if errors.Is(err, errKnownProof) {
+		return nil
+	}
 	return err
 }
 
@@ -183,14 +202,14 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 		}
 		if malicious {
 			h.logger.Debug("known malicious identity", log.ZContext(ctx), zap.Stringer("smesher", nodeID))
-			return ErrKnownProof
+			return errKnownProof
 		}
 		if err := identities.SetMalicious(dbtx, nodeID, proofBytes, time.Now()); err != nil {
 			return fmt.Errorf("add malfeasance proof: %w", err)
 		}
 		return nil
 	}); err != nil {
-		if !errors.Is(err, ErrKnownProof) {
+		if !errors.Is(err, errKnownProof) {
 			h.logger.Error("failed to save MalfeasanceProof",
 				log.ZContext(ctx),
 				zap.Stringer("smesher", nodeID),
@@ -221,10 +240,5 @@ func (h *Handler) Validate(ctx context.Context, p *wire.MalfeasanceProof) (types
 	if err == nil {
 		return nodeID, nil
 	}
-	h.logger.Debug("malfeasance proof failed validation",
-		log.ZContext(ctx),
-		zap.Inline(p),
-		zap.Error(err),
-	)
-	return nodeID, err
+	return nodeID, fmt.Errorf("%w: %v", errInvalidProof, err)
 }
