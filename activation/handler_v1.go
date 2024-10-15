@@ -226,6 +226,13 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 			zap.Stringer("atx_id", atx.ID()),
 			zap.Int("index", invalidIdx.Index),
 		)
+		malicious, err := identities.IsMalicious(h.cdb, atx.SmesherID)
+		if err != nil {
+			return 0, 0, nil, fmt.Errorf("check if smesher is malicious: %w", err)
+		}
+		if malicious {
+			return 0, 0, nil, fmt.Errorf("smesher %s is known malfeasant", atx.SmesherID.ShortString())
+		}
 		proof := &mwire.MalfeasanceProof{
 			Layer: atx.PublishEpoch.FirstLayer(),
 			Proof: mwire.Proof{
@@ -261,10 +268,11 @@ func (h *HandlerV1) validateNonInitialAtx(
 		return err
 	}
 
-	needRecheck := atx.VRFNonce != nil || atx.NumUnits > previous.NumUnits
-	if atx.VRFNonce == nil {
-		atx.VRFNonce = new(uint64)
-		*atx.VRFNonce = uint64(previous.VRFNonce)
+	vrfNonce := atx.VRFNonce
+	needRecheck := vrfNonce != nil || atx.NumUnits > previous.NumUnits
+	if vrfNonce == nil {
+		vrfNonce = new(uint64)
+		*vrfNonce = uint64(previous.VRFNonce)
 	}
 
 	if needRecheck {
@@ -274,8 +282,13 @@ func (h *HandlerV1) validateNonInitialAtx(
 			zap.Bool("post increased", atx.NumUnits > previous.NumUnits),
 			zap.Stringer("smesher", atx.SmesherID),
 		)
-		err := h.nipostValidator.
-			VRFNonce(atx.SmesherID, commitment, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
+		err := h.nipostValidator.VRFNonce(
+			atx.SmesherID,
+			commitment,
+			*vrfNonce,
+			atx.NIPost.PostMetadata.LabelsPerUnit,
+			atx.NumUnits,
+		)
 		if err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
@@ -517,7 +530,7 @@ func (h *HandlerV1) processATX(
 
 	existing, _ := h.cdb.GetAtx(watx.ID())
 	if existing != nil {
-		return nil, fmt.Errorf("%w atx %s", errKnownAtx, watx.ID())
+		return nil, fmt.Errorf("%w: %s", errKnownAtx, watx.ID())
 	}
 
 	h.logger.Debug("processing atx",
