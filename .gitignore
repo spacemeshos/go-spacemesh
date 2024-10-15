@@ -17,6 +17,7 @@ temp.js
 .vagrant
 
 *.out
+*.sql*
 *.test
 *.zip
 

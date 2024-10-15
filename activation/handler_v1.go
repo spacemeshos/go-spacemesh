@@ -268,10 +268,11 @@ func (h *HandlerV1) validateNonInitialAtx(
 		return err
 	}
 
-	needRecheck := atx.VRFNonce != nil || atx.NumUnits > previous.NumUnits
-	if atx.VRFNonce == nil {
-		atx.VRFNonce = new(uint64)
-		*atx.VRFNonce = uint64(previous.VRFNonce)
+	vrfNonce := atx.VRFNonce
+	needRecheck := vrfNonce != nil || atx.NumUnits > previous.NumUnits
+	if vrfNonce == nil {
+		vrfNonce = new(uint64)
+		*vrfNonce = uint64(previous.VRFNonce)
 	}
 
 	if needRecheck {
@@ -281,8 +282,13 @@ func (h *HandlerV1) validateNonInitialAtx(
 			zap.Bool("post increased", atx.NumUnits > previous.NumUnits),
 			zap.Stringer("smesher", atx.SmesherID),
 		)
-		err := h.nipostValidator.
-			VRFNonce(atx.SmesherID, commitment, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
+		err := h.nipostValidator.VRFNonce(
+			atx.SmesherID,
+			commitment,
+			*vrfNonce,
+			atx.NIPost.PostMetadata.LabelsPerUnit,
+			atx.NumUnits,
+		)
 		if err != nil {
 			return fmt.Errorf("invalid vrf nonce: %w", err)
 		}
