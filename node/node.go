@@ -1923,6 +1923,11 @@ func (app *App) stopServices(ctx context.Context) {
 			app.log.With().Warning("db exited with error", log.Err(err))
 		}
 	}
+	if app.apiDB != nil {
+		if err := app.apiDB.Close(); err != nil {
+			app.log.With().Warning("api db exited with error", log.Err(err))
+		}
+	}
 	if app.dbMetrics != nil {
 		app.dbMetrics.Close()
 	}
