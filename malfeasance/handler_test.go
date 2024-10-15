@@ -185,7 +185,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		}
 
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
-		require.ErrorIs(t, ErrKnownProof, err)
+		require.NoError(t, err)
 
 		var blob sql.Blob
 		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
@@ -363,7 +363,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		require.NotEqual(t, proofBytes, newProofBytes)
 
 		err := h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(nodeID), "peer", newProofBytes)
-		require.ErrorIs(t, ErrKnownProof, err)
+		require.NoError(t, err)
 
 		var blob sql.Blob
 		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
