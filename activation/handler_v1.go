@@ -226,6 +226,13 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 			zap.Stringer("atx_id", atx.ID()),
 			zap.Int("index", invalidIdx.Index),
 		)
+		malicious, err := identities.IsMalicious(h.cdb, atx.SmesherID)
+		if err != nil {
+			return 0, 0, nil, fmt.Errorf("check if smesher is malicious: %w", err)
+		}
+		if malicious {
+			return 0, 0, nil, fmt.Errorf("smesher %s is known malfeasant", atx.SmesherID.ShortString())
+		}
 		proof := &mwire.MalfeasanceProof{
 			Layer: atx.PublishEpoch.FirstLayer(),
 			Proof: mwire.Proof{
@@ -517,7 +524,7 @@ func (h *HandlerV1) processATX(
 
 	existing, _ := h.cdb.GetAtx(watx.ID())
 	if existing != nil {
-		return nil, fmt.Errorf("%w atx %s", errKnownAtx, watx.ID())
+		return nil, fmt.Errorf("%w: %s", errKnownAtx, watx.ID())
 	}
 
 	h.logger.Debug("processing atx",
