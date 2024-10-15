@@ -1,1 +1,1 @@
--- Migration is done entirely in code
+-- Migration is done entirely in code and doesn't change the schema.
