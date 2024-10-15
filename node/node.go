@@ -76,6 +76,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	localmigrations "github.com/spacemeshos/go-spacemesh/sql/localsql/migrations"
 	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	statemigrations "github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
@@ -1953,10 +1954,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 	dbLog := app.addLogger(StateDbLogger, lg).Zap()
-	schema, err := statesql.Schema(
-		statemigrations.New0021Migration(1_000_000),
-		statemigrations.New0025Migration(app.malfeasanceHandler),
-	)
+	schema, err := statemigrations.SchemaWithInCodeMigrations(app.malfeasanceHandler)
 	if err != nil {
 		return fmt.Errorf("error loading db schema: %w", err)
 	}
@@ -2014,9 +2012,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConsensusCache(app.atxsdata),
 	)
 
-	lSchema, err := localsql.Schema(
-	// add coded migrations here
-	)
+	lSchema, err := localmigrations.SchemaWithInCodeMigrations()
 	if err != nil {
 		return fmt.Errorf("error loading db schema: %w", err)
 	}
