@@ -183,12 +183,13 @@ func New(
 ) *Hare {
 	ctx, cancel := context.WithCancel(context.Background())
 	hr := &Hare{
-		ctx:      ctx,
-		cancel:   cancel,
-		results:  make(chan hare4.ConsensusOutput, 32),
-		coins:    make(chan hare4.WeakCoinOutput, 32),
-		signers:  map[string]*signing.EdSigner{},
-		sessions: map[types.LayerID]*protocol{},
+		ctx:          ctx,
+		cancel:       cancel,
+		results:      make(chan hare4.ConsensusOutput, 32),
+		coins:        make(chan hare4.WeakCoinOutput, 32),
+		signers:      map[string]*signing.EdSigner{},
+		sessions:     map[types.LayerID]*protocol{},
+		layerResults: make(map[types.LayerID]map[IterRound]output),
 
 		config:    DefaultConfig(),
 		log:       zap.NewNop(),
@@ -217,14 +218,15 @@ func New(
 
 type Hare struct {
 	// state
-	ctx      context.Context
-	cancel   context.CancelFunc
-	eg       errgroup.Group
-	results  chan hare4.ConsensusOutput
-	coins    chan hare4.WeakCoinOutput
-	mu       sync.Mutex
-	signers  map[string]*signing.EdSigner
-	sessions map[types.LayerID]*protocol
+	ctx          context.Context
+	cancel       context.CancelFunc
+	eg           errgroup.Group
+	results      chan hare4.ConsensusOutput
+	coins        chan hare4.WeakCoinOutput
+	mu           sync.Mutex
+	signers      map[string]*signing.EdSigner
+	sessions     map[types.LayerID]*protocol
+	layerResults map[types.LayerID]map[IterRound]output
 
 	// options
 	config    Config
@@ -361,6 +363,8 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		return
 	}
 	beacon, err := beacons.Get(h.db, layer.GetEpoch())
+	fmt.Println("beacon value get result", beacon)
+	h.log.Info("hare tried to get beacon value", zap.Error(err))
 	if err != nil || beacon == types.EmptyBeacon {
 		h.log.Debug("no beacon",
 			zap.Uint32("epoch", layer.GetEpoch().Uint32()),
@@ -370,7 +374,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		return
 	}
 	h.patrol.SetHareInCharge(layer)
-
+	fmt.Println("continuing hare")
 	h.mu.Lock()
 	// signer can't join mid session
 	s := &session{
@@ -410,6 +414,17 @@ func (h *Hare) onLayer(layer types.LayerID) {
 	})
 }
 
+func (h *Hare) layerResult(layer types.LayerID, iter IterRound, out output) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	_, ok := h.layerResults[layer]
+	if !ok {
+		h.layerResults[layer] = make(map[IterRound]output)
+	}
+	h.layerResults[layer][iter] = out
+}
+
 func (h *Hare) run(session *session) error {
 	// oracle may load non-negligible amount of data from disk
 	// we do it before preround starts, so that load can have some slack time
@@ -439,7 +454,10 @@ func (h *Hare) run(session *session) error {
 		session.proto.OnInitial(h.selectProposals(session))
 		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
-	if err := h.onOutput(session, current, session.proto.Next()); err != nil {
+
+	out := session.proto.Next()
+	h.layerResult(session.lid, current, out)
+	if err := h.onOutput(session, current, out); err != nil {
 		return err
 	}
 	result := false
@@ -469,6 +487,9 @@ func (h *Hare) run(session *session) error {
 			if out.result != nil {
 				result = true
 			}
+
+			h.layerResult(session.lid, current, out)
+
 			if err := h.onOutput(session, current, out); err != nil {
 				return err
 			}
@@ -636,4 +657,35 @@ type session struct {
 	beacon  types.Beacon
 	signers []*signing.EdSigner
 	vrfs    []*types.HareEligibility
+}
+
+func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	l, ok := h.layerResults[layer]
+	if !ok {
+		return nil
+	}
+	r, ok := l[round]
+	if !ok {
+		return nil
+	}
+	return r.message
+}
+
+func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
+	return h.oracle.oracle.TotalWeight(ctx, layer)
+}
+
+func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, layer types.LayerID) uint64 {
+	return h.oracle.oracle.MinerWeight(ctx, miner, layer)
+}
+
+func (h *Hare) Beacon(ctx context.Context, epoch types.EpochID) types.Beacon {
+	beacon, err := beacons.Get(h.db, epoch)
+	if err != nil {
+		panic(err)
+	}
+	return beacon
 }

@@ -94,6 +94,8 @@ type Oracle struct {
 
 	beacons        system.BeaconGetter
 	atxsdata       *atxsdata.Data
+	minerWeightFn  func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
+	totalWeightFn  func(ctx context.Context, layer types.LayerID) (uint64, error)
 	db             sql.Executor
 	vrfVerifier    vrfVerifier
 	layersPerEpoch uint32
@@ -102,6 +104,18 @@ type Oracle struct {
 }
 
 type Opt func(*Oracle)
+
+func WithMinerWeightFunc(f func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)) Opt {
+	return func(o *Oracle) {
+		o.minerWeightFn = f
+	}
+}
+
+func WithTotalWeightFunc(f func(ctx context.Context, layer types.LayerID) (uint64, error)) Opt {
+	return func(o *Oracle) {
+		o.totalWeightFn = f
+	}
+}
 
 func WithConfig(config Config) Opt {
 	return func(o *Oracle) {
@@ -139,6 +153,8 @@ func New(
 		cfg:            DefaultConfig(),
 		log:            zap.NewNop(),
 	}
+	oracle.minerWeightFn = oracle.minerWeight
+	oracle.totalWeightFn = oracle.totalWeight
 	for _, opt := range opts {
 		opt(oracle)
 	}
@@ -235,7 +251,7 @@ func (o *Oracle) prepareEligibilityCheck(
 
 	// calc hash & check threshold
 	// this is cheap in case the node is not eligible
-	minerWeight, err := o.minerWeight(ctx, layer, id)
+	minerWeight, err := o.minerWeightFn(ctx, layer, id)
 	if err != nil {
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
@@ -253,7 +269,7 @@ func (o *Oracle) prepareEligibilityCheck(
 	}
 
 	// get active set size
-	totalWeight, err := o.totalWeight(ctx, layer)
+	totalWeight, err := o.totalWeightFn(ctx, layer)
 	if err != nil {
 		logger.Error("failed to get total weight", zap.Error(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
@@ -566,4 +582,20 @@ func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
 		return
 	}
 	o.fallback[epoch] = activeSet
+}
+
+func (o *Oracle) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
+	totalWeight, err := o.totalWeightFn(ctx, layer)
+	if err != nil {
+		panic(err)
+	}
+	return totalWeight
+}
+
+func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64 {
+	minerWeight, err := o.minerWeightFn(ctx, layer, node)
+	if err != nil {
+		panic(err)
+	}
+	return minerWeight
 }

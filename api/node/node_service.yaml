@@ -122,3 +122,105 @@ paths:
             plain/text:
               schema:
                 type: string
+  /hare/round_template/{layer}/{iter}/{round}:
+    get:
+      summary: Get a hare message to sign
+      tags:
+        - "hare"
+      parameters:
+        - in: path
+          name: layer 
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/LayerID"
+        - in: path
+          name: iter
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/HareIter"
+        - in: path
+          name: round
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/HareRound"
+      responses:
+        "200":
+          description: successfully found the message to return to client
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: did not find a message to retrieve
+  /hare/total_weight/{layer}:
+    get:
+      summary: Get the total weight for layer
+      tags:
+        - "hare"
+      parameters:
+        - in: path
+          name: layer
+          required: true
+          schema:
+            type: integer
+            format: uint32
+      responses:
+        "200":
+          description: successfully found the total weight to return to client
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: did not find a message to retrieve
+  /hare/weight/{node_id}/{layer}:
+    get:
+      summary: Get the miner weight in layer
+      tags:
+        - "hare"
+      parameters:
+        - in: path
+          name: node_id
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/NodeID"
+        - in: path
+          name: layer
+          required: true
+          schema:
+            type: integer
+            format: uint32
+      responses:
+        "200":
+          description: successfully found the total weight to return to client
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: did not find a message to retrieve
+  /hare/beacon/{epoch}:
+    get:
+      summary: Get the beacon value for an epoch
+      tags:
+        - "hare"
+      parameters:
+        - in: path
+          name: epoch
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/EpochID"
+      responses:
+        "200":
+          description: successfully found the epoch id
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: did not find a message to retrieve
+

@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -13,9 +15,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
+	externalRef0 "github.com/spacemeshos/go-spacemesh/api/node/models"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -123,4 +127,66 @@ func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProof
 		return fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 	return nil
+}
+
+func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.IterRound) ([]byte, error) {
+	resp, err := s.client.GetHareRoundTemplateLayerIterRound(ctx, externalRef0.LayerID(layer), externalRef0.HareIter(round.Iter), externalRef0.HareRound(round.Round))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read all: %w", err)
+	}
+	return bytes, nil
+}
+
+func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
+	resp, err := s.client.GetHareTotalWeightLayer(ctx, uint32(layer))
+	if err != nil {
+		return 0, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("read all: %w", err)
+	}
+	return strconv.ParseUint(string(bytes), 10, 64)
+}
+
+func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node types.NodeID) (uint64, error) {
+	resp, err := s.client.GetHareWeightNodeIdLayer(ctx, node.String(), uint32(layer))
+	if err != nil {
+		return 0, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("read all: %w", err)
+	}
+	return strconv.ParseUint(string(bytes), 10, 64)
+}
+
+func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
+	v := types.Beacon{}
+	resp, err := s.client.GetHareBeaconEpoch(ctx, externalRef0.EpochID(epoch))
+	if err != nil {
+		return v, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return v, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return v, fmt.Errorf("read all: %w", err)
+	}
+	copy(v[:], bytes)
+	return v, nil
 }

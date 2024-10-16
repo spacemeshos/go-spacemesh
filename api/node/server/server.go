@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -26,10 +28,18 @@ type poetDB interface {
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 
+type hare interface {
+	RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message
+	TotalWeight(ctx context.Context, layer types.LayerID) uint64
+	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64
+	Beacon(ctx context.Context, epoch types.EpochID) types.Beacon
+}
+
 type Server struct {
 	atxService activation.AtxService
 	publisher  pubsub.Publisher
 	poetDB     poetDB
+	hare       hare
 	logger     *zap.Logger
 }
 
@@ -39,12 +49,14 @@ func NewServer(
 	atxService activation.AtxService,
 	publisher pubsub.Publisher,
 	poetDB poetDB,
+	hare hare,
 	logger *zap.Logger,
 ) *Server {
 	return &Server{
 		atxService: atxService,
 		publisher:  publisher,
 		poetDB:     poetDB,
+		hare:       hare,
 		logger:     logger,
 	}
 }
@@ -196,4 +208,79 @@ func (s *Server) PostPoet(ctx context.Context, request PostPoetRequestObject) (P
 		}, nil
 	}
 	return PostPoet200Response{}, nil
+}
+
+type hareResponse struct {
+	message []byte
+}
+
+func (h *hareResponse) VisitGetHareRoundTemplateLayerIterRoundResponse(w http.ResponseWriter) error {
+	if h.message == nil {
+		w.WriteHeader(204) // no content
+		return nil
+	}
+	w.Header().Add("content-type", "application/octet-stream")
+	w.WriteHeader(200)
+	_, err := w.Write(h.message)
+	return err
+}
+
+func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context, request GetHareRoundTemplateLayerIterRoundRequestObject) (GetHareRoundTemplateLayerIterRoundResponseObject, error) {
+	msg := s.hare.RoundMessage(types.LayerID(request.Layer), hare3.IterRound{Round: hare3.Round(request.Round), Iter: (request.Iter)})
+	if msg == nil {
+		return &hareResponse{}, nil
+	}
+
+	return &hareResponse{
+		message: codec.MustEncode(msg),
+	}, nil
+}
+
+type totalWeightResp struct {
+	w uint64
+}
+
+func (t *totalWeightResp) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
+	w.Header().Add("content-type", "application/octet-stream")
+	w.WriteHeader(200)
+	_, err := w.Write([]byte(fmt.Sprintf("%d", t.w)))
+	return err
+}
+
+func (s *Server) GetHareTotalWeightLayer(ctx context.Context, req GetHareTotalWeightLayerRequestObject) (GetHareTotalWeightLayerResponseObject, error) {
+	return &totalWeightResp{s.hare.TotalWeight(ctx, types.LayerID(req.Layer))}, nil
+}
+
+type nodeWeightResp struct {
+	val uint64
+}
+
+func (n *nodeWeightResp) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
+	w.Header().Add("content-type", "application/octet-stream")
+	w.WriteHeader(200)
+	_, err := w.Write([]byte(fmt.Sprintf("%d", n.val)))
+	return err
+}
+
+func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context, request GetHareWeightNodeIdLayerRequestObject) (GetHareWeightNodeIdLayerResponseObject, error) {
+	hexBuf, err := hex.DecodeString(request.NodeId)
+	if err != nil {
+		panic(err)
+	}
+	id := types.BytesToNodeID(hexBuf)
+	return &nodeWeightResp{val: s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))}, nil
+}
+
+type beaconResp struct{ b types.Beacon }
+
+func (b *beaconResp) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
+	w.Header().Add("content-type", "application/octet-stream")
+	w.WriteHeader(200)
+	_, err := w.Write(b.b[:])
+	return err
+}
+
+func (s *Server) GetHareBeaconEpoch(ctx context.Context, request GetHareBeaconEpochRequestObject) (GetHareBeaconEpochResponseObject, error) {
+	beacon := s.hare.Beacon(ctx, types.EpochID(request.Epoch))
+	return &beaconResp{b: beacon}, nil
 }
