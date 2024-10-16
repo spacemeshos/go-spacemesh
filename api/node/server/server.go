@@ -263,12 +263,12 @@ func (n *nodeWeightResp) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWr
 }
 
 func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context, request GetHareWeightNodeIdLayerRequestObject) (GetHareWeightNodeIdLayerResponseObject, error) {
-	id := &types.NodeID{}
-	err := id.UnmarshalText([]byte(request.NodeId))
+	hexBuf, err := hex.DecodeString(request.NodeId)
 	if err != nil {
 		panic(err)
 	}
-	return &nodeWeightResp{val: s.hare.MinerWeight(ctx, *id, types.LayerID(request.Layer))}, nil
+	id := types.BytesToNodeID(hexBuf)
+	return &nodeWeightResp{val: s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))}, nil
 }
 
 type beaconResp struct{ b types.Beacon }
