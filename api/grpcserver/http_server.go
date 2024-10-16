@@ -82,8 +82,26 @@ func (s *JSONHTTPServer) StartService(
 		return errors.New("no services provided")
 	}
 
+	// setup metrics middleware
+	var mdlws []runtime.Middleware
+	if s.collectMetrics {
+		mdlw := middleware.New(middleware.Config{
+			Recorder: metricsProm.NewRecorder(metricsProm.Config{
+				Prefix: metrics.Namespace + "_api",
+			}),
+		})
+		mdlws = append(mdlws, func(next runtime.HandlerFunc) runtime.HandlerFunc {
+			return func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+				wrappedNext := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					next(w, r, pathParams)
+				})
+				std.Handler("", mdlw, wrappedNext).ServeHTTP(w, r)
+			}
+		})
+	}
+
 	// register each individual, enabled service
-	mux := runtime.NewServeMux()
+	mux := runtime.NewServeMux(runtime.WithMiddlewares(mdlws...))
 
 	for _, svc := range services {
 		if err := svc.RegisterHandlerService(mux); err != nil {
@@ -96,17 +114,6 @@ func (s *JSONHTTPServer) StartService(
 		AllowedOrigins: s.origins,
 	})
 
-	// mdlw is the middleware stack for the http server
-	handler := c.Handler(mux)
-	if s.collectMetrics {
-		mdlw := middleware.New(middleware.Config{
-			Recorder: metricsProm.NewRecorder(metricsProm.Config{
-				Prefix: metrics.Namespace + "_api",
-			}),
-		})
-		handler = c.Handler(std.Handler("", mdlw, mux))
-	}
-
 	s.logger.Info("starting grpc gateway server", zap.String("address", s.listener))
 	lis, err := net.Listen("tcp", s.listener)
 	if err != nil {
@@ -117,7 +124,7 @@ func (s *JSONHTTPServer) StartService(
 		MaxHeaderBytes: 1 << 21,
 		ReadTimeout:    15 * time.Second,
 		WriteTimeout:   15 * time.Second,
-		Handler:        handler,
+		Handler:        c.Handler(mux),
 	}
 	s.eg.Go(func() error {
 		if err := s.server.Serve(lis); err != nil {
