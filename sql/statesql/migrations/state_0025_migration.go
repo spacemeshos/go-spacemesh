@@ -1,30 +1,34 @@
 package migrations
 
 import (
-	"context"
 	"encoding/hex"
+	"errors"
 	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 type migration0025 struct {
-	handler malfeasanceValidator
+	edVerifier *signing.EdVerifier
 }
 
 var _ sql.Migration = &migration0025{}
 
-func New0025Migration(handler malfeasanceValidator) *migration0025 {
+func New0025Migration(config config.Config) *migration0025 {
 	return &migration0025{
-		handler: handler,
+		edVerifier: signing.NewEdVerifier(
+			signing.WithVerifierPrefix(config.Genesis.GenesisID().Bytes()),
+		),
 	}
 }
 
@@ -47,23 +51,18 @@ func (m *migration0025) Apply(db sql.Executor, logger *zap.Logger) error {
 		proof := &wire.MalfeasanceProof{}
 		codec.MustDecode(bytes, proof)
 
-		id, err := m.handler.Validate(context.Background(), proof)
+		if proof.Proof.Type != wire.InvalidPrevATX {
+			// we only care about invalid prev ATX proofs
+			return true
+		}
+
+		id, err := m.Validate(proof.Proof.Data)
 		if err == nil && id == nodeID {
 			logger.Debug("Proof is valid", log.ZShortStringer("smesherID", nodeID))
 			return true
 		}
-
-		if proof.Proof.Type != wire.InvalidPrevATX {
-			logger.Warn("Found invalid proof during migration that cannot be fixed",
-				log.ZShortStringer("smesherID", nodeID),
-				zap.String("proof", hex.EncodeToString(bytes)),
-				zap.Error(err),
-			)
-			return true
-		}
-
 		proof.Proof.Data.(*wire.InvalidPrevATXProof).Atx1.VRFNonce = nil
-		id, err = m.handler.Validate(context.Background(), proof)
+		id, err = m.Validate(proof.Proof.Data)
 		if err == nil && id == nodeID {
 			updates[nodeID] = codec.MustEncode(proof)
 			return true
@@ -97,4 +96,33 @@ func (m *migration0025) Apply(db sql.Executor, logger *zap.Logger) error {
 		)
 	}
 	return nil
+}
+
+func (m *migration0025) Validate(data wire.ProofData) (types.NodeID, error) {
+	proof, ok := data.(*wire.InvalidPrevATXProof)
+	if !ok {
+		return types.EmptyNodeID, errors.New("wrong message type for invalid previous ATX")
+	}
+
+	atx1 := proof.Atx1
+	if !m.edVerifier.Verify(signing.ATX, atx1.SmesherID, atx1.SignedBytes(), atx1.Signature) {
+		return types.EmptyNodeID, errors.New("atx1: invalid signature")
+	}
+
+	atx2 := proof.Atx2
+	if atx1.SmesherID != atx2.SmesherID {
+		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: smesher IDs are different")
+	}
+
+	if !m.edVerifier.Verify(signing.ATX, atx2.SmesherID, atx2.SignedBytes(), atx2.Signature) {
+		return types.EmptyNodeID, errors.New("atx2: invalid signature")
+	}
+
+	if atx1.ID() == atx2.ID() {
+		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: ATX IDs are the same")
+	}
+	if atx1.PrevATXID != atx2.PrevATXID {
+		return types.EmptyNodeID, errors.New("invalid old prev ATX malfeasance proof: prev ATX IDs are different")
+	}
+	return atx1.SmesherID, nil
 }
