@@ -783,7 +783,10 @@ func (app *App) initServices(ctx context.Context) error {
 		app.host.ID(),
 		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
-	var extraOpts []eligibility.Opt
+	extraOpts := []eligibility.Opt{
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
+	}
 	if nodeServiceClient != nil {
 		extraOpts = append(extraOpts, eligibility.WithTotalWeightFunc(nodeServiceClient.TotalWeight))
 		extraOpts = append(extraOpts, eligibility.WithMinerWeightFunc(nodeServiceClient.MinerWeight))
@@ -794,8 +797,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.atxsdata,
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
-		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
+		extraOpts...,
 	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
