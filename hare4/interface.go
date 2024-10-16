@@ -12,6 +12,7 @@ import (
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type streamRequester interface {
+	Run(ctx context.Context) error
 	StreamRequest(context.Context, p2p.Peer, []byte, server.StreamRequestCallback, ...string) error
 }
 
