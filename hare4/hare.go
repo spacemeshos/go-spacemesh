@@ -238,7 +238,7 @@ func New(
 	}
 
 	if host != nil {
-		hr.p2p = server.New(host, PROTOCOL_NAME, hr.handleProposalsStream)
+		hr.p2p = server.New(host, PROTOCOL_NAME, hr.handleProposalsStream, server.WithLog(hr.log))
 	}
 	return hr
 }
