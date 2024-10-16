@@ -1954,7 +1954,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 	dbLog := app.addLogger(StateDbLogger, lg).Zap()
-	schema, err := statemigrations.SchemaWithInCodeMigrations(app.malfeasanceHandler)
+	schema, err := statemigrations.SchemaWithInCodeMigrations(*app.Config)
 	if err != nil {
 		return fmt.Errorf("error loading db schema: %w", err)
 	}
