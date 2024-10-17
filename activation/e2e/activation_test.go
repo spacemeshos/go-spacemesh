@@ -142,6 +142,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		verifier,
 	)
 
+	idStates := activation.NewIdentityStateStorage()
+
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -150,6 +152,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		clock,
 		validator,
 		activation.WithPoetServices(client),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -202,6 +205,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),
 		activation.WithPoets(client),
+		activation.WithIdentityStates(idStates),
 	)
 	for _, sig := range signers {
 		tab.Register(sig)
@@ -225,7 +229,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 				err := validator.VRFNonce(
 					sig.NodeID(),
 					commitment,
-					uint64(*atx.VRFNonce),
+					*atx.VRFNonce,
 					atx.NIPost.PostMetadata.LabelsPerUnit,
 					atx.NumUnits,
 				)
