@@ -268,7 +268,6 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 		syncer    = smocks.NewMockSyncStateProvider(ctrl)
 		db        = statesql.InMemoryTest(t)
 		localdb   = localsql.InMemoryTest(t)
-		data      = atxsdata.New()
 		// singer[1] is blocked
 		dataMock = mocks.NewMockatxsData(ctrl)
 	)
@@ -284,10 +283,17 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 	// only signer[0] has ATX
 	atx := gatx(types.ATXID{1}, lid.GetEpoch()-1, signers[0].NodeID(), 1, genAtxWithNonce(777))
 	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
-	data.AddFromAtx(atx, false)
+	atxdata := &atxsdata.ATX{
+		Node:       atx.SmesherID,
+		Coinbase:   atx.Coinbase,
+		Weight:     atx.Weight,
+		BaseHeight: atx.BaseTickHeight,
+		Height:     atx.TickHeight(),
+		Nonce:      atx.VRFNonce,
+	}
 	dataMock.EXPECT().GetByEpochAndNodeID(lid.GetEpoch(), signers[0].NodeID()).DoAndReturn(
 		func(epoch types.EpochID, nodeID types.NodeID) (types.ATXID, *atxsdata.ATX) {
-			return data.GetByEpochAndNodeID(epoch, nodeID)
+			return atx.ID(), atxdata
 		},
 	)
 	stop := make(chan struct{})
@@ -334,7 +340,7 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 	txs = []types.TransactionID{{17}, {22}}
 	dataMock.EXPECT().GetByEpochAndNodeID(lid.GetEpoch(), signers[1].NodeID()).DoAndReturn(
 		func(epoch types.EpochID, nodeID types.NodeID) (types.ATXID, *atxsdata.ATX) {
-			return data.GetByEpochAndNodeID(epoch, nodeID)
+			return types.EmptyATXID, nil
 		},
 	)
 	expectedProposal = expectProposal(
