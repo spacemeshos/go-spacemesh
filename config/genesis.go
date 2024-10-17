@@ -17,15 +17,53 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// GenesisConfig contains immutable parameters for the protocol.
-type GenesisConfig struct {
-	GenesisTime string            `mapstructure:"genesis-time"`
-	ExtraData   string            `mapstructure:"genesis-extra-data"`
-	Accounts    map[string]uint64 `mapstructure:"accounts"`
+type Genesis time.Time
+
+func (g Genesis) Time() time.Time {
+	return time.Time(g)
 }
 
-func (g *GenesisConfig) Time() (time.Time, error) {
-	return time.Parse(time.RFC3339, g.GenesisTime)
+func (g Genesis) MarshalJSON() ([]byte, error) {
+	return json.Marshal(g.Time())
+}
+
+func (g *Genesis) UnmarshalJSON(data []byte) error {
+	var t time.Time
+	if err := json.Unmarshal(data, &t); err != nil {
+		return err
+	}
+	*g = Genesis(t)
+	return nil
+}
+
+func (g Genesis) Equal(other Genesis) bool {
+	return time.Time(g).Equal(time.Time(other))
+}
+
+func (g Genesis) String() string {
+	return g.Time().String()
+}
+
+// Set implements pflag.Value.Set.
+func (g *Genesis) Set(value string) error {
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return err
+	}
+	*g = Genesis(t)
+	return nil
+}
+
+// Type implements pflag.Value.Type.
+func (Genesis) Type() string {
+	return "Genesis"
+}
+
+// GenesisConfig contains immutable parameters for the protocol.
+type GenesisConfig struct {
+	GenesisTime Genesis           `mapstructure:"genesis-time"`
+	ExtraData   string            `mapstructure:"genesis-extra-data"`
+	Accounts    map[string]uint64 `mapstructure:"accounts"`
 }
 
 // GenesisID computes genesis id from GenesisTime and ExtraData.
@@ -36,11 +74,7 @@ func (g *GenesisConfig) GenesisID() types.Hash20 {
 func (g *GenesisConfig) GoldenATX() types.Hash32 {
 	hh := hash.GetHasher()
 	defer hash.PutHasher(hh)
-	parsed, err := g.Time()
-	if err != nil {
-		panic("code should have run Validate before this method")
-	}
-	hh.Write([]byte(strconv.FormatInt(parsed.Unix(), 10)))
+	hh.Write([]byte(strconv.FormatInt(g.GenesisTime.Time().Unix(), 10)))
 	hh.Write([]byte(g.ExtraData))
 	return types.BytesToHash(hh.Sum(nil))
 }
@@ -52,10 +86,6 @@ func (g *GenesisConfig) Validate() error {
 	}
 	if len(g.ExtraData) > 255 {
 		return fmt.Errorf("extra-data is longer than 255 symbols: %s", g.ExtraData)
-	}
-	_, err := g.Time()
-	if err != nil {
-		return fmt.Errorf("can't parse genesis time %s using time.RFC3339(%s) %w", g.GenesisTime, time.RFC3339, err)
 	}
 	return nil
 }
@@ -114,7 +144,7 @@ func DefaultGenesisConfig() GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return GenesisConfig{
 		ExtraData:   "mainnet",
-		GenesisTime: time.Now().Format(time.RFC3339),
+		GenesisTime: Genesis(time.Now()),
 		Accounts:    generateGenesisAccounts(),
 	}
 }
@@ -124,7 +154,7 @@ func DefaultTestGenesisConfig() GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return GenesisConfig{
 		ExtraData:   "testnet",
-		GenesisTime: time.Now().Format(time.RFC3339),
+		GenesisTime: Genesis(time.Now()),
 		Accounts:    generateGenesisAccounts(),
 	}
 }

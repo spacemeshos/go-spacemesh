@@ -598,7 +598,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	eligible := make(chan *signerSession, len(signers))
 
 	// Stage 1
-	// we use a semaphore instead of eg.SetLimit so that the stage 2 starts immediately after
+	// We use a semaphore instead of eg.SetLimit so that the stage 2 starts immediately after
 	// scheduling all signers in the stage 1. Otherwise, stage 2 would wait for all stage 1
 	// goroutines to at least start, which is not what we want. We want to start stage 2 as soon as possible.
 	var eg errgroup.Group

@@ -54,21 +54,21 @@ func TestWarmup(t *testing.T) {
 		}
 		require.NoError(t, layers.SetApplied(db, applied, types.BlockID{1}))
 
-		c, err := Warm(db, 1, zaptest.NewLogger(t), nil)
+		c, err := Warm(db, 1, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		for _, atx := range data[2:] {
 			require.NotNil(t, c.Get(atx.TargetEpoch(), atx.ID()))
 		}
 	})
 	t.Run("no data", func(t *testing.T) {
-		c, err := Warm(statesql.InMemoryTest(t), 1, zaptest.NewLogger(t), nil)
+		c, err := Warm(statesql.InMemoryTest(t), 1, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		require.NotNil(t, c)
 	})
 	t.Run("closed db", func(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 		require.NoError(t, db.Close())
-		c, err := Warm(db, 1, zaptest.NewLogger(t), nil)
+		c, err := Warm(db, 1, zaptest.NewLogger(t))
 		require.Error(t, err)
 		require.Nil(t, c)
 	})
@@ -83,6 +83,7 @@ func TestWarmup(t *testing.T) {
 		fail := 0
 		tx, err := db.Tx(context.Background())
 		require.NoError(t, err)
+		defer tx.Release()
 		exec.EXPECT().
 			Exec(gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(q string, enc sql.Encoder, dec sql.Decoder) (int, error) {

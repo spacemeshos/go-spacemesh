@@ -190,7 +190,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	poetDb, err = activation.NewPoetDb(newDB, logger.Named("poetDb"))
 	require.NoError(t, err)
 	cdb = datastore.NewCachedDB(newDB, logger)
-	atxdata, err = atxsdata.Warm(newDB, 1, logger, []*signing.EdSigner{sig})
+	atxdata, err = atxsdata.Warm(newDB, 1, logger, sig)
 	poetService = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)

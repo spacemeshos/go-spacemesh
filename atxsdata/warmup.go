@@ -16,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-func Warm(db sql.StateDatabase, keep types.EpochID, logger *zap.Logger, signers []*signing.EdSigner) (*Data, error) {
+func Warm(db sql.StateDatabase, keep types.EpochID, logger *zap.Logger, signers ...*signing.EdSigner) (*Data, error) {
 	cache := New()
 	for _, sig := range signers {
 		cache.Register(sig)

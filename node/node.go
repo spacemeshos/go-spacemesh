@@ -290,6 +290,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		mapstructureutil.AddressListDecodeFunc(),
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
+		mapstructureutil.GenesisDecodeFunc(),
 		mapstructureutil.DeprecatedHook(),
 		mapstructureutil.AtxVersionsDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
@@ -1314,9 +1315,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 
 	cfg.RawRESTListener = parsed.Host
 	cfg.RawRPCListener = parsed.Hostname() + ":0"
-	if err := cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime); err != nil {
-		return err
-	}
+	cfg.Genesis = server.Genesis(app.Config.Genesis.GenesisTime)
 	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Round.CycleGap = app.Config.POET.CycleGap
 	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
@@ -2020,7 +2019,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.db,
 			app.Config.Tortoise.WindowSizeEpochs(applied),
 			warmupLog,
-			app.signers,
+			app.signers...,
 		)
 		if err != nil {
 			return err
@@ -2154,15 +2153,10 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	/* Initialize all protocol services */
-
-	gTime, err := app.Config.Genesis.Time()
-	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
-	}
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(gTime),
+		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(app.addLogger(ClockLogger, logger).Zap()),
 	)
 	if err != nil {
