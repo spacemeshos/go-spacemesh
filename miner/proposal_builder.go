@@ -41,7 +41,8 @@ var errAtxNotAvailable = errors.New("atx not available")
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./proposal_builder.go
 
 type conservativeState interface {
-	SelectProposalTXs(types.LayerID, int) []types.TransactionID
+	SelectProposalTXs(types.LayerID, int, bool) []types.TransactionID
+	PredictBlock(types.LayerID) []types.TransactionID
 }
 
 type votesEncoder interface {
@@ -568,6 +569,209 @@ func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession
 		)
 	}
 	return nil
+}
+
+func (pb *ProposalBuilder) initSignerDataFor(ctx context.Context, ss *signerSession, lid types.LayerID, nodeID types.NodeID) error {
+	if ss.session.epoch != lid.GetEpoch() {
+		ss.session = session{epoch: lid.GetEpoch()}
+	}
+	if ss.session.atx == types.EmptyATXID {
+		atxid, err := pb.atxs.GetIDByEpochAndNodeID(ctx, ss.session.epoch-1, nodeID)
+		switch {
+		case errors.Is(err, sql.ErrNotFound):
+			return errAtxNotAvailable
+		case err != nil:
+			return fmt.Errorf("get atx in epoch %v: %w", ss.session.epoch-1, err)
+		}
+		atx := pb.atxsdata.Get(ss.session.epoch, atxid)
+		if atx == nil {
+			return fmt.Errorf("missing atx in atxsdata %v", atxid)
+		}
+		ss.session.atx = atxid
+		ss.session.atxWeight = atx.Weight
+		ss.session.nonce = atx.Nonce
+	}
+	if ss.session.prev == 0 {
+		prev, err := ballots.LastInEpoch(pb.db, ss.session.atx, ss.session.epoch)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return err
+		}
+		if err == nil {
+			ss.session.prev = prev.Layer
+		}
+	}
+	if ss.session.ref == types.EmptyBallotID {
+		ballot, err := ballots.FirstInEpoch(pb.db, ss.session.atx, ss.session.epoch)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return fmt.Errorf("get refballot %w", err)
+		}
+		if errors.Is(err, sql.ErrNotFound) {
+			ss.session.beacon = pb.shared.beacon
+			ss.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(
+				ss.session.atxWeight,
+				minweight.Select(lid.GetEpoch(), pb.cfg.minActiveSetWeight),
+				pb.shared.active.weight,
+				pb.cfg.layerSize,
+				pb.cfg.layersPerEpoch,
+			)
+		} else {
+			if ballot.EpochData == nil {
+				return fmt.Errorf("atx %d created invalid first ballot", ss.session.atx)
+			}
+			ss.session.ref = ballot.ID()
+			ss.session.beacon = ballot.EpochData.Beacon
+			ss.session.eligibilities.slots = ballot.EpochData.EligibilityCount
+		}
+	}
+	return nil
+}
+
+func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, nodeID types.NodeID) error {
+	if err := pb.initSharedData(lid); err != nil {
+		return err
+	}
+
+	// don't accept registration in the middle of computing proposals
+	// pb.signers.mu.Lock()
+	// signers := maps.Values(pb.signers.signers)
+	// pb.signers.mu.Unlock()
+	signer := &signerSession{}
+	encodeVotesOnce := sync.OnceValues(func() (*types.Opinion, error) {
+		pb.tortoise.TallyVotes(ctx, lid)
+		// TODO(dshulyak) get rid from the EncodeVotesWithCurrent option in a followup
+		// there are some dependencies in the tests
+		opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(lid))
+		if err != nil {
+			return nil, fmt.Errorf("encoding votes: %w", err)
+		}
+		return opinion, nil
+	})
+
+	calcMeshHashOnce := sync.OnceValue(func() types.Hash32 {
+		meshHash := pb.decideMeshHash(ctx, lid)
+		return meshHash
+	})
+
+	persistActiveSetOnce := sync.OnceValue(func() error {
+		err := activesets.Add(pb.db, pb.shared.active.id, &types.EpochActiveSet{
+			Epoch: pb.shared.epoch,
+			Set:   pb.shared.active.set,
+		})
+		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return err
+		}
+		return nil
+	})
+
+	// Two stage pipeline, with the stages running in parallel.
+	// 1. Initializes signers. Runs limited number of goroutines because the initialization is CPU and DB bound.
+	// 2. Collects eligible signers' sessions from the stage 1 and creates and publishes proposals.
+
+	// Used to pass eligible singers from stage 1 → 2.
+	// Buffered with capacity for all signers so that writes don't block.
+	eligible := make(chan *signerSession, 2)
+
+	// Stage 1
+	// Use a semaphore instead of eg.SetLimit so that the stage 2 starts immediately after
+	// scheduling all signers in the stage 1. Otherwise, stage 2 would wait for all stage 1
+	// goroutines to at least start, which is not what we want. We want to start stage 2 as soon as possible.
+	// limiter := semaphore.NewWeighted(int64(pb.cfg.workersLimit))
+	var eg errgroup.Group
+	// for _, ss := range signers {
+	eg.Go(func() error {
+		if err := pb.initSignerDataFor(ctx, signer, lid, nodeID); err != nil {
+			if errors.Is(err, errAtxNotAvailable) {
+				pb.logger.Debug("smesher doesn't have atx that targets this epoch",
+					log.ZContext(ctx),
+					zap.Uint32("epoch_id", signer.session.epoch.Uint32()),
+				)
+			} else {
+				return err
+			}
+		}
+		if lid <= signer.session.prev {
+			return fmt.Errorf("layer %d was already built by signer %s", lid, nodeID.ShortString())
+		}
+		signer.session.prev = lid
+		proofs := signer.session.eligibilities.slots
+		if proofs == 0 {
+			pb.logger.Debug("not eligible for proposal in layer",
+				log.ZContext(ctx),
+				zap.Uint32("layer_id", lid.Uint32()),
+				zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+			)
+			return nil
+		}
+		pb.logger.Debug("eligible for proposals in layer",
+			log.ZContext(ctx),
+			zap.Uint32("layer_id", lid.Uint32()),
+			zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+			zap.Int("num proposals", int(proofs)),
+		)
+		eligible <- signer // won't block
+		return nil
+	})
+	//}
+
+	var stage1Err error
+	go func() {
+		stage1Err = eg.Wait()
+		close(eligible)
+	}()
+
+	// Stage 2
+	eg2 := errgroup.Group{}
+	for ss := range eligible {
+		opinion, err := encodeVotesOnce()
+		if err != nil {
+			return err
+		}
+
+		meshHash := calcMeshHashOnce()
+
+		eg2.Go(func() error {
+			// needs to be saved before publishing, as we will query it in handler
+			if ss.session.ref == types.EmptyBallotID {
+				if err := persistActiveSetOnce(); err != nil {
+					return err
+				}
+			}
+			slots := ss.session.eligibilities.slots
+
+			txs := pb.conState.SelectProposalTXs(lid, int(slots))
+
+			proposal := createPartialProposal(
+				&ss.session,
+				pb.shared.beacon,
+				pb.shared.active.set,
+				ss.signer,
+				lid,
+				txs,
+				opinion,
+				meshHash,
+			)
+			if err := pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
+				pb.logger.Error("failed to publish proposal",
+					log.ZContext(ctx),
+					zap.Uint32("lid", proposal.Layer.Uint32()),
+					zap.Stringer("id", proposal.ID()),
+					zap.Error(err),
+				)
+			} else {
+				pb.logger.Info("proposal created",
+					log.ZContext(ctx),
+					zap.Inline(proposal),
+					zap.Object("latency", &ss.latency),
+				)
+				proposalBuild.Observe(ss.latency.total().Seconds())
+				events.EmitProposal(ss.signer.NodeID(), lid, proposal.ID())
+				events.ReportProposal(events.ProposalCreated, proposal)
+			}
+			return nil
+		})
+	}
+
+	return errors.Join(stage1Err, eg2.Wait())
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
