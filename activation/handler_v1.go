@@ -57,12 +57,7 @@ type nipostValidatorV1 interface {
 		opts ...validatorOption,
 	) error
 
-	VRFNonce(
-		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
-		vrfNonce, labelsPerUnit uint64,
-		numUnits uint32,
-	) error
+	VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce, labelsPerUnit uint64, numUnits uint32) error
 	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
 }
 
@@ -76,7 +71,7 @@ type HandlerV1 struct {
 	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidatorV1
-	beacon          AtxReceiver
+	beacon          atxReceiver
 	tortoise        system.Tortoise
 	logger          *zap.Logger
 	fetcher         system.Fetcher

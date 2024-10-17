@@ -117,7 +117,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	edVerifier := signing.NewEdVerifier()
 	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
-	mBeacon := activation.NewMockAtxReceiver(ctrl)
+	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
 	atxHdlr := activation.NewHandler(
