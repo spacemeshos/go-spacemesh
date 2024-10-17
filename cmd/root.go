@@ -47,8 +47,12 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 		"poet-servers",
 		"JSON-encoded list of poet servers (address and pubkey)",
 	)
-	flagSet.StringVar(&cfg.Genesis.GenesisTime, "genesis-time",
-		cfg.Genesis.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
+	flagSet.AddFlag(&pflag.Flag{
+		Name:     "genesis-time",
+		Value:    &cfg.Genesis.GenesisTime,
+		DefValue: cfg.Genesis.GenesisTime.String(),
+		Usage:    "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format",
+	})
 	flagSet.StringVar(&cfg.Genesis.ExtraData, "genesis-extra-data",
 		cfg.Genesis.ExtraData, "genesis extra-data will be committed to the genesis id")
 	flagSet.DurationVar(&cfg.LayerDuration, "layer-duration",

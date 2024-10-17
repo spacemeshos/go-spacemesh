@@ -32,6 +32,11 @@ import (
 )
 
 func MainnetConfig() Config {
+	genesisTime, err := time.Parse(time.RFC3339, "2023-07-14T08:00:00Z")
+	if err != nil {
+		panic(err)
+	}
+
 	var postPowDifficulty activation.PowDifficulty
 	difficulty := []byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")
 	if err := postPowDifficulty.UnmarshalText(difficulty); err != nil {
@@ -121,7 +126,7 @@ func MainnetConfig() Config {
 			PprofHTTPServerListener: "localhost:6060",
 		},
 		Genesis: GenesisConfig{
-			GenesisTime: "2023-07-14T08:00:00Z",
+			GenesisTime: Genesis(genesisTime),
 			ExtraData:   "00000000000000000001a6bc150307b5c1998045752b3c87eccf3c013036f3cc",
 			Accounts:    MainnetAccounts(),
 		},

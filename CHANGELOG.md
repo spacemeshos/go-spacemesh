@@ -18,6 +18,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#6387](https://github.com/spacemeshos/go-spacemesh/pull/6387) Fix an issue were in rare cases invalid proofs for
   malicious identities were created.
 
+* [#6393](https://github.com/spacemeshos/go-spacemesh/pull/6393) Further improved proposal building process to avoid
+  late proposals in 1:N setups and during cyclegap.
+
 ## v1.7.4
 
 ### Improvements

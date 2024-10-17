@@ -27,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
@@ -56,20 +55,9 @@ type layerClock interface {
 	LayerToTime(types.LayerID) time.Time
 }
 
-type atxSearch interface {
-	GetIDByEpochAndNodeID(ctx context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error)
-}
-
-type defaultAtxSearch struct {
-	db sql.Executor
-}
-
-func (p defaultAtxSearch) GetIDByEpochAndNodeID(
-	_ context.Context,
-	epoch types.EpochID,
-	nodeID types.NodeID,
-) (types.ATXID, error) {
-	return atxs.GetIDByEpochAndNodeID(p.db, epoch, nodeID)
+type atxsData interface {
+	Get(types.EpochID, types.ATXID) *atxsdata.ATX
+	GetByEpochAndNodeID(types.EpochID, types.NodeID) (types.ATXID, *atxsdata.ATX)
 }
 
 // ProposalBuilder builds Proposals for a miner.
@@ -79,20 +67,21 @@ type ProposalBuilder struct {
 
 	db        sql.Executor
 	localdb   sql.Executor
-	atxsdata  *atxsdata.Data
+	atxsdata  atxsData
 	clock     layerClock
 	publisher pubsub.Publisher
 	conState  conservativeState
 	tortoise  votesEncoder
 	syncer    system.SyncStateProvider
 	activeGen *activeSetGenerator
-	atxs      atxSearch
 
 	signers struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
 	shared sharedSession
+
+	limiter *semaphore.Weighted
 }
 
 type signerSession struct {
@@ -278,18 +267,12 @@ func WithActivesetPreparation(prep ActiveSetPreparation) Opt {
 	}
 }
 
-func withAtxSearch(p atxSearch) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.atxs = p
-	}
-}
-
 // New creates a struct of block builder type.
 func New(
 	clock layerClock,
 	db sql.Executor,
 	localdb sql.Executor,
-	atxsdata *atxsdata.Data,
+	atxsdata atxsData,
 	publisher pubsub.Publisher,
 	trtl votesEncoder,
 	syncer system.SyncStateProvider,
@@ -310,7 +293,6 @@ func New(
 		tortoise:  trtl,
 		syncer:    syncer,
 		conState:  conState,
-		atxs:      defaultAtxSearch{db},
 		signers: struct {
 			mu      sync.Mutex
 			signers map[types.NodeID]*signerSession
@@ -321,6 +303,7 @@ func New(
 	for _, opt := range opts {
 		opt(pb)
 	}
+	pb.limiter = semaphore.NewWeighted(int64(pb.cfg.workersLimit))
 	pb.activeGen = newActiveSetGenerator(pb.cfg, pb.logger, pb.db, pb.localdb, pb.atxsdata, pb.clock)
 	return pb
 }
@@ -496,23 +479,16 @@ func (pb *ProposalBuilder) initSharedData(current types.LayerID) error {
 	return nil
 }
 
-func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession, lid types.LayerID) error {
+func (pb *ProposalBuilder) initSignerData(ss *signerSession, lid types.LayerID) error {
 	if ss.session.epoch != lid.GetEpoch() {
 		ss.session = session{epoch: lid.GetEpoch()}
 	}
 	if ss.session.atx == types.EmptyATXID {
-		atxid, err := pb.atxs.GetIDByEpochAndNodeID(ctx, ss.session.epoch-1, ss.signer.NodeID())
-		switch {
-		case errors.Is(err, sql.ErrNotFound):
+		id, atx := pb.atxsdata.GetByEpochAndNodeID(ss.session.epoch, ss.signer.NodeID())
+		if id == types.EmptyATXID {
 			return errAtxNotAvailable
-		case err != nil:
-			return fmt.Errorf("get atx in epoch %v: %w", ss.session.epoch-1, err)
 		}
-		atx := pb.atxsdata.Get(ss.session.epoch, atxid)
-		if atx == nil {
-			return fmt.Errorf("missing atx in atxsdata %v", atxid)
-		}
-		ss.session.atx = atxid
+		ss.session.atx = id
 		ss.session.atxWeight = atx.Weight
 		ss.session.nonce = atx.Nonce
 	}
@@ -622,21 +598,20 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	eligible := make(chan *signerSession, len(signers))
 
 	// Stage 1
-	// Use a semaphore instead of eg.SetLimit so that the stage 2 starts immediately after
+	// We use a semaphore instead of eg.SetLimit so that the stage 2 starts immediately after
 	// scheduling all signers in the stage 1. Otherwise, stage 2 would wait for all stage 1
 	// goroutines to at least start, which is not what we want. We want to start stage 2 as soon as possible.
-	limiter := semaphore.NewWeighted(int64(pb.cfg.workersLimit))
 	var eg errgroup.Group
 	for _, ss := range signers {
 		eg.Go(func() error {
-			if err := limiter.Acquire(ctx, 1); err != nil {
+			if err := pb.limiter.Acquire(ctx, 1); err != nil {
 				return err
 			}
-			defer limiter.Release(1)
+			defer pb.limiter.Release(1)
 
 			start := time.Now()
 			ss.latency.start = buildStartTime
-			if err := pb.initSignerData(ctx, ss, lid); err != nil {
+			if err := pb.initSignerData(ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
 					ss.log.Debug("smesher doesn't have atx that targets this epoch",
 						log.ZContext(ctx),
@@ -671,76 +646,75 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 		})
 	}
 
-	var stage1Err error
-	go func() {
-		stage1Err = eg.Wait()
-		close(eligible)
-	}()
-
 	// Stage 2
-	eg2 := errgroup.Group{}
-	for ss := range eligible {
-		start := time.Now()
-		opinion, err := encodeVotesOnce()
-		if err != nil {
-			return err
-		}
-		ss.latency.tortoise = time.Since(start)
+	var eg2 errgroup.Group
+	eg2.Go(func() error {
+		for ss := range eligible {
+			start := time.Now()
+			opinion, err := encodeVotesOnce()
+			if err != nil {
+				return err
+			}
+			ss.latency.tortoise = time.Since(start)
 
-		start = time.Now()
-		meshHash := calcMeshHashOnce()
-		ss.latency.hash = time.Since(start)
+			start = time.Now()
+			meshHash := calcMeshHashOnce()
+			ss.latency.hash = time.Since(start)
 
-		eg2.Go(func() error {
-			// needs to be saved before publishing, as we will query it in handler
-			if ss.session.ref == types.EmptyBallotID {
-				start := time.Now()
-				if err := persistActiveSetOnce(); err != nil {
-					return err
+			eg2.Go(func() error {
+				// needs to be saved before publishing, as we will query it in handler
+				if ss.session.ref == types.EmptyBallotID {
+					start := time.Now()
+					if err := persistActiveSetOnce(); err != nil {
+						return err
+					}
+					ss.latency.activeSet = time.Since(start)
 				}
-				ss.latency.activeSet = time.Since(start)
-			}
-			proofs := ss.session.eligibilities.proofs[lid]
+				proofs := ss.session.eligibilities.proofs[lid]
 
-			start = time.Now()
-			txs := pb.conState.SelectProposalTXs(lid, len(proofs))
-			ss.latency.txs = time.Since(start)
+				start = time.Now()
+				txs := pb.conState.SelectProposalTXs(lid, len(proofs))
+				ss.latency.txs = time.Since(start)
 
-			start = time.Now()
-			proposal := createProposal(
-				&ss.session,
-				pb.shared.beacon,
-				pb.shared.active.set,
-				ss.signer,
-				lid,
-				txs,
-				opinion,
-				proofs,
-				meshHash,
-			)
-			if err := pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
-				ss.log.Error("failed to publish proposal",
-					log.ZContext(ctx),
-					zap.Uint32("lid", proposal.Layer.Uint32()),
-					zap.Stringer("id", proposal.ID()),
-					zap.Error(err),
+				start = time.Now()
+				proposal := createProposal(
+					&ss.session,
+					pb.shared.beacon,
+					pb.shared.active.set,
+					ss.signer,
+					lid,
+					txs,
+					opinion,
+					proofs,
+					meshHash,
 				)
-			} else {
-				ss.latency.publish = time.Since(start)
-				ss.latency.end = time.Now()
-				ss.log.Info("proposal created",
-					log.ZContext(ctx),
-					zap.Inline(proposal),
-					zap.Object("latency", &ss.latency),
-				)
-				proposalBuild.Observe(ss.latency.total().Seconds())
-				events.EmitProposal(ss.signer.NodeID(), lid, proposal.ID())
-				events.ReportProposal(events.ProposalCreated, proposal)
-			}
-			return nil
-		})
-	}
+				if err := pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
+					ss.log.Error("failed to publish proposal",
+						log.ZContext(ctx),
+						zap.Uint32("lid", proposal.Layer.Uint32()),
+						zap.Stringer("id", proposal.ID()),
+						zap.Error(err),
+					)
+				} else {
+					ss.latency.publish = time.Since(start)
+					ss.latency.end = time.Now()
+					ss.log.Info("proposal created",
+						log.ZContext(ctx),
+						zap.Inline(proposal),
+						zap.Object("latency", &ss.latency),
+					)
+					proposalBuild.Observe(ss.latency.total().Seconds())
+					events.EmitProposal(ss.signer.NodeID(), lid, proposal.ID())
+					events.ReportProposal(events.ProposalCreated, proposal)
+				}
+				return nil
+			})
+		}
+		return nil
+	})
 
+	stage1Err := eg.Wait()
+	close(eligible)
 	return errors.Join(stage1Err, eg2.Wait())
 }
 

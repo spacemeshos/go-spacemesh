@@ -797,7 +797,7 @@ func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint3
 	return
 }
 
-// IterateForGrading selects every atx from publish epoch and joins identities to load malfeasence proofs if they exist.
+// IterateForGrading selects every atx from publish epoch and joins identities to load malfeasance proofs if they exist.
 func IterateForGrading(
 	db sql.Executor,
 	epoch types.EpochID,
