@@ -1208,6 +1208,146 @@ func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(types.ATXID) (*types.Acti
 	return c
 }
 
+// MockAtxService is a mock of AtxService interface.
+type MockAtxService struct {
+	ctrl     *gomock.Controller
+	recorder *MockAtxServiceMockRecorder
+}
+
+// MockAtxServiceMockRecorder is the mock recorder for MockAtxService.
+type MockAtxServiceMockRecorder struct {
+	mock *MockAtxService
+}
+
+// NewMockAtxService creates a new mock instance.
+func NewMockAtxService(ctrl *gomock.Controller) *MockAtxService {
+	mock := &MockAtxService{ctrl: ctrl}
+	mock.recorder = &MockAtxServiceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockAtxService) EXPECT() *MockAtxServiceMockRecorder {
+	return m.recorder
+}
+
+// Atx mocks base method.
+func (m *MockAtxService) Atx(ctx context.Context, id types.ATXID) (*types.ActivationTx, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Atx", ctx, id)
+	ret0, _ := ret[0].(*types.ActivationTx)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Atx indicates an expected call of Atx.
+func (mr *MockAtxServiceMockRecorder) Atx(ctx, id any) *MockAtxServiceAtxCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Atx", reflect.TypeOf((*MockAtxService)(nil).Atx), ctx, id)
+	return &MockAtxServiceAtxCall{Call: call}
+}
+
+// MockAtxServiceAtxCall wrap *gomock.Call
+type MockAtxServiceAtxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockAtxServiceAtxCall) Return(arg0 *types.ActivationTx, arg1 error) *MockAtxServiceAtxCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockAtxServiceAtxCall) Do(f func(context.Context, types.ATXID) (*types.ActivationTx, error)) *MockAtxServiceAtxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockAtxServiceAtxCall) DoAndReturn(f func(context.Context, types.ATXID) (*types.ActivationTx, error)) *MockAtxServiceAtxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// LastATX mocks base method.
+func (m *MockAtxService) LastATX(ctx context.Context, nodeID types.NodeID) (*types.ActivationTx, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastATX", ctx, nodeID)
+	ret0, _ := ret[0].(*types.ActivationTx)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LastATX indicates an expected call of LastATX.
+func (mr *MockAtxServiceMockRecorder) LastATX(ctx, nodeID any) *MockAtxServiceLastATXCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastATX", reflect.TypeOf((*MockAtxService)(nil).LastATX), ctx, nodeID)
+	return &MockAtxServiceLastATXCall{Call: call}
+}
+
+// MockAtxServiceLastATXCall wrap *gomock.Call
+type MockAtxServiceLastATXCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockAtxServiceLastATXCall) Return(arg0 *types.ActivationTx, arg1 error) *MockAtxServiceLastATXCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockAtxServiceLastATXCall) Do(f func(context.Context, types.NodeID) (*types.ActivationTx, error)) *MockAtxServiceLastATXCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockAtxServiceLastATXCall) DoAndReturn(f func(context.Context, types.NodeID) (*types.ActivationTx, error)) *MockAtxServiceLastATXCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// PositioningATX mocks base method.
+func (m *MockAtxService) PositioningATX(ctx context.Context, maxPublish types.EpochID) (types.ATXID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PositioningATX", ctx, maxPublish)
+	ret0, _ := ret[0].(types.ATXID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PositioningATX indicates an expected call of PositioningATX.
+func (mr *MockAtxServiceMockRecorder) PositioningATX(ctx, maxPublish any) *MockAtxServicePositioningATXCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositioningATX", reflect.TypeOf((*MockAtxService)(nil).PositioningATX), ctx, maxPublish)
+	return &MockAtxServicePositioningATXCall{Call: call}
+}
+
+// MockAtxServicePositioningATXCall wrap *gomock.Call
+type MockAtxServicePositioningATXCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockAtxServicePositioningATXCall) Return(arg0 types.ATXID, arg1 error) *MockAtxServicePositioningATXCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockAtxServicePositioningATXCall) Do(f func(context.Context, types.EpochID) (types.ATXID, error)) *MockAtxServicePositioningATXCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockAtxServicePositioningATXCall) DoAndReturn(f func(context.Context, types.EpochID) (types.ATXID, error)) *MockAtxServicePositioningATXCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockpostSetupProvider is a mock of postSetupProvider interface.
 type MockpostSetupProvider struct {
 	ctrl     *gomock.Controller

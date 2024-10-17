@@ -122,18 +122,25 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		activation.WithAtxVersions(atxVersions),
 	)
 
+	atxService := activation.NewDBAtxService(
+		db,
+		goldenATX,
+		atxdata,
+		validator,
+		logger,
+	)
+
 	tab := activation.NewBuilder(
 		activation.Config{GoldenATXID: goldenATX},
-		db,
-		atxdata,
 		localDB,
+		atxService,
 		mpub,
+		validator,
 		nb,
 		clock,
 		syncer,
 		logger,
 		activation.WithPoetConfig(poetCfg),
-		activation.WithValidator(validator),
 		activation.BuilderAtxVersions(atxVersions),
 	)
 	tab.Register(sig)
@@ -221,18 +228,25 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	atxService = activation.NewDBAtxService(
+		newDB,
+		goldenATX,
+		atxdata,
+		validator,
+		logger,
+	)
+
 	tab = activation.NewBuilder(
 		activation.Config{GoldenATXID: goldenATX},
-		newDB,
-		atxdata,
 		localDB,
+		atxService,
 		mpub,
+		validator,
 		nb,
 		clock,
 		syncer,
 		logger,
 		activation.WithPoetConfig(poetCfg),
-		activation.WithValidator(validator),
 		activation.BuilderAtxVersions(atxVersions),
 	)
 	tab.Register(sig)

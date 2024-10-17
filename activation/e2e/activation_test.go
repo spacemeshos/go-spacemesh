@@ -189,18 +189,26 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	).Times(totalAtxs)
 
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
+
+	atxService := activation.NewDBAtxService(
+		db,
+		conf.GoldenATXID,
+		data,
+		validator,
+		logger,
+	)
+
 	tab := activation.NewBuilder(
 		conf,
-		db,
-		data,
 		localDB,
+		atxService,
 		mpub,
+		validator,
 		nb,
 		clock,
 		syncedSyncer(t),
 		logger,
 		activation.WithPoetConfig(poetCfg),
-		activation.WithValidator(validator),
 		activation.WithPoets(client),
 	)
 	for _, sig := range signers {

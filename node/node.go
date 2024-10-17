@@ -1071,22 +1071,36 @@ func (app *App) initServices(ctx context.Context) error {
 		GoldenATXID:      goldenATXID,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
+
+	atxBuilderLog := app.addLogger(ATXBuilderLogger, lg).Zap()
+	trustedIDs := make([]types.NodeID, 0, len(app.signers))
+	for _, sig := range app.signers {
+		trustedIDs = append(trustedIDs, sig.NodeID())
+	}
+
+	atxService := activation.NewDBAtxService(
+		app.db,
+		goldenATXID,
+		app.atxsdata,
+		app.validator,
+		atxBuilderLog,
+		activation.WithPostValidityDelay(app.Config.PostValidDelay),
+		activation.WithTrustedIDs(trustedIDs...),
+	)
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.db,
-		app.atxsdata,
 		app.localDB,
+		atxService,
 		app.host,
+		app.validator,
 		nipostBuilder,
 		app.clock,
 		newSyncer,
-		app.addLogger(ATXBuilderLogger, lg).Zap(),
+		atxBuilderLog,
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
-		activation.WithValidator(app.validator),
-		activation.WithPostValidityDelay(app.Config.PostValidDelay),
 		activation.WithPostStates(postStates),
 		activation.WithPoets(poetClients...),
 		activation.BuilderAtxVersions(app.Config.AtxVersions),
