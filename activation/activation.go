@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
@@ -115,9 +116,8 @@ type foundPosAtx struct {
 }
 
 type positioningAtxFinder struct {
-	finding sync.Mutex
-	found   *foundPosAtx
-	golden  types.ATXID
+	finding singleflight.Group
+	found   foundPosAtx
 	logger  *zap.Logger
 }
 
@@ -193,7 +193,6 @@ func NewBuilder(
 		postStates:        NewPostStates(log),
 		versions:          []atxVersion{{0, types.AtxV1}},
 		posAtxFinder: positioningAtxFinder{
-			golden: conf.GoldenATXID,
 			logger: log,
 		},
 	}
@@ -910,28 +909,26 @@ func (f *positioningAtxFinder) find(
 	ctx context.Context,
 	atxs AtxService,
 	publish types.EpochID,
-) types.ATXID {
+) (types.ATXID, error) {
 	logger := f.logger.With(zap.Uint32("publish epoch", publish.Uint32()))
 
-	f.finding.Lock()
-	defer f.finding.Unlock()
+	atx, err, _ := f.finding.Do(publish.String(), func() (any, error) {
+		if f.found.forPublish == publish {
+			logger.Debug("using cached positioning atx", log.ZShortStringer("atx_id", f.found.id))
+			return f.found.id, nil
+		}
 
-	if found := f.found; found != nil && found.forPublish == publish {
-		logger.Debug("using cached positioning atx", log.ZShortStringer("atx_id", found.id))
-		return found.id
-	}
+		id, err := atxs.PositioningATX(ctx, publish-1)
+		if err != nil {
+			return types.EmptyATXID, err
+		}
 
-	id, err := atxs.PositioningATX(ctx, publish-1)
-	if err != nil {
-		logger.Warn("failed to get positioning ATX - falling back to golden", zap.Error(err))
-		f.found = &foundPosAtx{f.golden, publish}
-		return f.golden
-	}
+		logger.Debug("found candidate positioning atx", log.ZShortStringer("id", id))
+		f.found = foundPosAtx{id, publish}
+		return id, nil
+	})
 
-	logger.Debug("found candidate positioning atx", log.ZShortStringer("id", id))
-
-	f.found = &foundPosAtx{id, publish}
-	return id
+	return atx.(types.ATXID), err
 }
 
 // getPositioningAtx returns the positioning ATX.
@@ -943,7 +940,11 @@ func (b *Builder) getPositioningAtx(
 	publish types.EpochID,
 	previous *types.ActivationTx,
 ) (types.ATXID, error) {
-	id := b.posAtxFinder.find(ctx, b.atxSvc, publish)
+	id, err := b.posAtxFinder.find(ctx, b.atxSvc, publish)
+	if err != nil {
+		b.logger.Warn("failed to find positioning ATX - falling back to golden", zap.Error(err))
+		id = b.conf.GoldenATXID
+	}
 
 	if previous == nil {
 		b.logger.Info("selected positioning atx",
@@ -963,7 +964,8 @@ func (b *Builder) getPositioningAtx(
 
 	candidate, err := b.atxSvc.Atx(ctx, id)
 	if err != nil {
-		return types.EmptyATXID, fmt.Errorf("get candidate pos ATX %s: %w", id.ShortString(), err)
+		b.logger.Warn("failed to get candidate pos ATX - falling back to previous", zap.Error(err))
+		return previous.ID(), nil
 	}
 
 	if previous.TickHeight() >= candidate.TickHeight() {

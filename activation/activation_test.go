@@ -1350,6 +1350,22 @@ func TestGetPositioningAtx(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, tab.goldenATXID, posATX)
 	})
+	t.Run("picks previous when querying candidate fails and previous is available", func(t *testing.T) {
+		t.Parallel()
+		atxSvc := NewMockAtxService(gomock.NewController(t))
+		tab := newTestBuilder(t, 1)
+		tab.atxSvc = atxSvc
+
+		atxID := types.RandomATXID()
+		atxSvc.EXPECT().PositioningATX(gomock.Any(), types.EpochID(98)).Return(atxID, nil)
+		atxSvc.EXPECT().Atx(context.Background(), atxID).Return(nil, errors.New("failed"))
+
+		previous := types.ActivationTx{}
+		previous.SetID(types.RandomATXID())
+		posATX, err := tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, &previous)
+		require.NoError(t, err)
+		require.Equal(t, previous.ID(), posATX)
+	})
 	t.Run("picks golden if no ATXs", func(t *testing.T) {
 		tab := newTestBuilder(t, 1)
 		atx, err := tab.getPositioningAtx(context.Background(), types.EmptyNodeID, 99, nil)
