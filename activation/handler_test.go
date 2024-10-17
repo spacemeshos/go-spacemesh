@@ -126,7 +126,7 @@ type handlerMocks struct {
 	mValidator  *MocknipostValidator
 	mbeacon     *MockAtxReceiver
 	mtortoise   *mocks.MockTortoise
-	mMalPublish *MockmalfeasancePublisher
+	mMalPublish *MockatxMalfeasancePublisher
 }
 
 type testHandler struct {
@@ -190,7 +190,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 		mValidator:  NewMocknipostValidator(ctrl),
 		mbeacon:     NewMockAtxReceiver(ctrl),
 		mtortoise:   mocks.NewMockTortoise(ctrl),
-		mMalPublish: NewMockmalfeasancePublisher(ctrl),
+		mMalPublish: NewMockatxMalfeasancePublisher(ctrl),
 	}
 }
 
