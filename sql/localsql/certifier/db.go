@@ -12,10 +12,10 @@ type PoetCert struct {
 	Signature []byte
 }
 
-func AddCertificate(db sql.Executor, nodeID types.NodeID, cert PoetCert, cerifierID []byte) error {
+func AddCertificate(db sql.Executor, nodeID types.NodeID, cert PoetCert, certifierID []byte) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
-		stmt.BindBytes(2, cerifierID)
+		stmt.BindBytes(2, certifierID)
 		stmt.BindBytes(3, cert.Data)
 		stmt.BindBytes(4, cert.Signature)
 	}
@@ -23,7 +23,7 @@ func AddCertificate(db sql.Executor, nodeID types.NodeID, cert PoetCert, cerifie
 		REPLACE INTO poet_certificates (node_id, certifier_id, certificate, signature)
 		VALUES (?1, ?2, ?3, ?4);`, enc, nil,
 	); err != nil {
-		return fmt.Errorf("storing poet certificate for (%s; %x): %w", nodeID.ShortString(), cerifierID, err)
+		return fmt.Errorf("storing poet certificate for (%s; %x): %w", nodeID.ShortString(), certifierID, err)
 	}
 	return nil
 }

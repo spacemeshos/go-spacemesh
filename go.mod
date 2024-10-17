@@ -44,7 +44,7 @@ require (
 	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.1
 	github.com/spacemeshos/merkle-tree v0.2.4
-	github.com/spacemeshos/poet v0.10.4
+	github.com/spacemeshos/poet v0.10.6
 	github.com/spacemeshos/post v0.12.9
 	github.com/spf13/afero v1.11.0
 	github.com/spf13/cobra v1.8.1
@@ -246,7 +246,7 @@ require (
 	gonum.org/v1/gonum v0.15.0 // indirect
 	google.golang.org/api v0.197.0 // indirect
 	google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240903143218-8af14fe29dc1 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240930140551-af27646dc61f // indirect
 	google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
