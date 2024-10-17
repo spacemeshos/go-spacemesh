@@ -217,7 +217,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	gTime, err := app.Config.Genesis.Time()
 	require.NoError(t, err)
 
 	app.clock, err = timesync.NewClock(
@@ -265,7 +265,7 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	gTime, err := app.Config.Genesis.Time()
 	require.NoError(t, err)
 
 	app.clock, err = timesync.NewClock(
@@ -300,7 +300,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	cfg.API.PrivateServices = nil
 	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	gTime, err := app.Config.Genesis.Time()
 	require.NoError(t, err)
 
 	app.clock, err = timesync.NewClock(

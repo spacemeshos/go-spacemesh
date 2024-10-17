@@ -194,7 +194,7 @@ func expectProposal(
 	return p
 }
 
-func gidentity(id types.NodeID, received time.Time) identity {
+func testIdentity(id types.NodeID, received time.Time) identity {
 	return identity{
 		id: id,
 		// kind of proof is irrelevant for this test, we want to avoid validation failing
@@ -265,33 +265,33 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 		syncer    = smocks.NewMockSyncStateProvider(ctrl)
 		db        = statesql.InMemoryTest(t)
 		localdb   = localsql.InMemoryTest(t)
-		atxsdata  = atxsdata.New()
+		data      = atxsdata.New()
 		// singer[1] is blocked
-		atxSearch = mocks.NewMockatxSearch(ctrl)
+		dataMock = mocks.NewMockatxsData(ctrl)
 	)
 	opts := []Opt{
 		WithLayerPerEpoch(types.GetLayersPerEpoch()),
 		WithLayerSize(2),
 		WithLogger(zaptest.NewLogger(t)),
 		WithSigners(signers...),
-		withAtxSearch(atxSearch),
 	}
-	builder := New(clock, db, localdb, atxsdata, publisher, trtl, syncer, conState, opts...)
+	builder := New(clock, db, localdb, dataMock, publisher, trtl, syncer, conState, opts...)
 	lid := types.LayerID(15)
 
 	// only signer[0] has ATX
 	atx := gatx(types.ATXID{1}, lid.GetEpoch()-1, signers[0].NodeID(), 1, genAtxWithNonce(777))
 	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
-	atxsdata.AddFromAtx(atx, false)
-	atxSearch.EXPECT().GetIDByEpochAndNodeID(gomock.Any(), lid.GetEpoch()-1, signers[0].NodeID()).DoAndReturn(
-		func(_ context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
-			return atxs.GetIDByEpochAndNodeID(db, epoch, nodeID)
+	data.AddFromAtx(atx, false)
+	dataMock.EXPECT().GetByEpochAndNodeID(lid.GetEpoch(), signers[0].NodeID()).DoAndReturn(
+		func(epoch types.EpochID, nodeID types.NodeID) (types.ATXID, *atxsdata.ATX) {
+			return data.GetByEpochAndNodeID(epoch, nodeID)
 		},
 	)
-	atxSearch.EXPECT().GetIDByEpochAndNodeID(gomock.Any(), lid.GetEpoch()-1, signers[1].NodeID()).DoAndReturn(
-		func(ctx context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
-			<-ctx.Done()
-			return types.EmptyATXID, ctx.Err()
+	stop := make(chan struct{})
+	dataMock.EXPECT().GetByEpochAndNodeID(lid.GetEpoch(), signers[1].NodeID()).DoAndReturn(
+		func(epoch types.EpochID, nodeID types.NodeID) (types.ATXID, *atxsdata.ATX) {
+			<-stop
+			return types.EmptyATXID, nil
 		},
 	)
 
@@ -311,11 +311,10 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 	trtl.EXPECT().TallyVotes(lid)
 	trtl.EXPECT().EncodeVotes(gomock.Any(), gomock.Any()).Return(&opinion, nil)
 	trtl.EXPECT().LatestComplete().Return(lid - 1)
-	ctx, cancel := context.WithCancel(context.Background())
 	publisher.EXPECT().
-		Publish(ctx, pubsub.ProposalProtocol, gomock.Any()).
+		Publish(gomock.Any(), pubsub.ProposalProtocol, gomock.Any()).
 		DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
-			defer cancel() // unblock the build hang on atx lookup for signer[1]
+			defer close(stop) // unblock the build hang on atx lookup for signer[1]
 			var proposal types.Proposal
 			codec.MustDecode(msg, &proposal)
 			proposal.MustInitialize()
@@ -324,15 +323,15 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 			return nil
 		})
 
-	require.ErrorIs(t, builder.build(ctx, lid), context.Canceled)
+	require.NoError(t, builder.build(context.Background(), lid))
 
 	// Try again in the next layer
 	// signer[1] is still NOT initialized (missing ATX) but it won't block this time
 	lid += 1
 	txs = []types.TransactionID{{17}, {22}}
-	atxSearch.EXPECT().GetIDByEpochAndNodeID(gomock.Any(), lid.GetEpoch()-1, signers[1].NodeID()).DoAndReturn(
-		func(_ context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
-			return atxs.GetIDByEpochAndNodeID(db, epoch, nodeID)
+	dataMock.EXPECT().GetByEpochAndNodeID(lid.GetEpoch(), signers[1].NodeID()).DoAndReturn(
+		func(epoch types.EpochID, nodeID types.NodeID) (types.ATXID, *atxsdata.ATX) {
+			return data.GetByEpochAndNodeID(epoch, nodeID)
 		},
 	)
 	expectedProposal = expectProposal(

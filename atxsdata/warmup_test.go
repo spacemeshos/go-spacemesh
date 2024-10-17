@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/sql/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -79,7 +78,7 @@ func TestWarmup(t *testing.T) {
 		data := gatx(types.ATXID{1, 1}, 1, types.NodeID{1}, nonce)
 		require.NoError(t, atxs.Add(db, &data, types.AtxBlob{}))
 
-		exec := mocks.NewMockExecutor(gomock.NewController(t))
+		exec := sql.NewMockExecutor(gomock.NewController(t))
 		call := 0
 		fail := 0
 		tx, err := db.Tx(context.Background())

@@ -24,6 +24,10 @@ type GenesisConfig struct {
 	Accounts    map[string]uint64 `mapstructure:"accounts"`
 }
 
+func (g *GenesisConfig) Time() (time.Time, error) {
+	return time.Parse(time.RFC3339, g.GenesisTime)
+}
+
 // GenesisID computes genesis id from GenesisTime and ExtraData.
 func (g *GenesisConfig) GenesisID() types.Hash20 {
 	return g.GoldenATX().ToHash20()
@@ -32,7 +36,7 @@ func (g *GenesisConfig) GenesisID() types.Hash20 {
 func (g *GenesisConfig) GoldenATX() types.Hash32 {
 	hh := hash.GetHasher()
 	defer hash.PutHasher(hh)
-	parsed, err := time.Parse(time.RFC3339, g.GenesisTime)
+	parsed, err := g.Time()
 	if err != nil {
 		panic("code should have run Validate before this method")
 	}
@@ -49,10 +53,9 @@ func (g *GenesisConfig) Validate() error {
 	if len(g.ExtraData) > 255 {
 		return fmt.Errorf("extra-data is longer than 255 symbols: %s", g.ExtraData)
 	}
-	_, err := time.Parse(time.RFC3339, g.GenesisTime)
+	_, err := g.Time()
 	if err != nil {
-		return fmt.Errorf("can't parse genesis time %s using time.RFC3339(%s) %w",
-			g.GenesisTime, time.RFC3339, err)
+		return fmt.Errorf("can't parse genesis time %s using time.RFC3339(%s) %w", g.GenesisTime, time.RFC3339, err)
 	}
 	return nil
 }

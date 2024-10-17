@@ -44,13 +44,6 @@ const (
 	beginImmediate = "BEGIN IMMEDIATE;"
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/sql Executor
-
-// Executor is an interface for executing raw statement.
-type Executor interface {
-	Exec(string, Encoder, Decoder) (int, error)
-}
-
 // Statement is an sqlite statement.
 type Statement = sqlite.Stmt
 

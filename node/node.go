@@ -2154,7 +2154,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 
 	/* Initialize all protocol services */
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
+	gTime, err := app.Config.Genesis.Time()
 	if err != nil {
 		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
 	}

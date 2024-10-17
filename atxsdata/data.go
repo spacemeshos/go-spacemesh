@@ -171,6 +171,21 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	return data
 }
 
+func (d *Data) GetByEpochAndNodeID(epoch types.EpochID, node types.NodeID) (types.ATXID, *ATX) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	ecache, exists := d.epochs[epoch]
+	if !exists {
+		return types.EmptyATXID, nil
+	}
+	for id, atx := range ecache.index {
+		if atx.Node == node {
+			return id, atx
+		}
+	}
+	return types.EmptyATXID, nil
+}
+
 func (d *Data) Size(target types.EpochID) int {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
