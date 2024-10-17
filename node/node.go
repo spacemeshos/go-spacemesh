@@ -2020,6 +2020,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.db,
 			app.Config.Tortoise.WindowSizeEpochs(applied),
 			warmupLog,
+			app.signers,
 		)
 		if err != nil {
 			return err

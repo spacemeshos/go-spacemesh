@@ -3,9 +3,12 @@ package miner
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
@@ -1202,4 +1205,80 @@ func TestGradeAtx(t *testing.T) {
 			)
 		})
 	}
+}
+
+func BenchmarkCache(b *testing.B) {
+	runtime.GC()
+	cache := make(map[types.ATXID]*atxsdata.ATX, 10_000_000)
+
+	for range 10_000_000 {
+		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
+		cache[atxID] = &atxsdata.ATX{
+			Node: nodeID,
+		}
+	}
+
+	nodeID := types.RandomNodeID() // random node id, that isn't in the cache (slowest possible case)
+	var found types.ATXID
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for id, data := range cache {
+			if data.Node == nodeID {
+				found = id
+			}
+		}
+	}
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Println("heap:", m.HeapInuse)
+	fmt.Println("stack:", m.StackInuse)
+
+	require.Equal(b, types.EmptyATXID, found)
+}
+
+func BenchmarkDoubleCache(b *testing.B) {
+	runtime.GC()
+	cache := make(map[types.ATXID]*atxsdata.ATX, 10_000_000)
+	cache2 := make(map[types.NodeID]types.ATXID, 10_000_000)
+
+	for range 10_000_000 {
+		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
+		cache[atxID] = &atxsdata.ATX{
+			Node: nodeID,
+		}
+		cache2[nodeID] = atxID
+	}
+
+	nodeID := types.RandomNodeID() // random node id, that isn't in the cache (slowest possible case)
+	var found types.ATXID
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		found = cache2[nodeID]
+	}
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Println("heap:", m.HeapInuse)
+	fmt.Println("stack:", m.StackInuse)
+
+	require.Equal(b, types.EmptyATXID, found)
+}
+
+func BenchmarkDB(b *testing.B) {
+	db, err := statesql.Open("file:state.sql")
+	require.NoError(b, err)
+	defer db.Close()
+
+	bytes, err := hex.DecodeString("00003ce28800fadd692c522f7b1db219f675b49108aec7f818e2c4fd935573f6")
+	require.NoError(b, err)
+	nodeID := types.BytesToNodeID(bytes)
+	var found types.ATXID
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		found, _ = atxs.GetByEpochAndNodeID(db, 30, nodeID)
+	}
+	require.NotEqual(b, types.EmptyATXID, found)
 }
