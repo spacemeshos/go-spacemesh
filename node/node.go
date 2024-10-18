@@ -1045,6 +1045,7 @@ func (app *App) initServices(ctx context.Context) error {
 			server,
 			app.Config.POET,
 			lg.Zap().Named("poet"),
+			app.Config.TickSize,
 			activation.WithCertifier(certifier),
 		)
 		if err != nil {
