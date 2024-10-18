@@ -290,7 +290,6 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		mapstructureutil.AddressListDecodeFunc(),
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
-		mapstructureutil.GenesisDecodeFunc(),
 		mapstructureutil.DeprecatedHook(),
 		mapstructureutil.AtxVersionsDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),

@@ -973,7 +973,6 @@ func loadSmesherConfig(ctx *testcontext.Context) (*config.Config, error) {
 		mapstructureutil.AddressListDecodeFunc(),
 		mapstructureutil.BigRatDecodeFunc(),
 		mapstructureutil.PostProviderIDDecodeFunc(),
-		mapstructureutil.GenesisDecodeFunc(),
 		mapstructureutil.DeprecatedHook(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)

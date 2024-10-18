@@ -36,10 +36,17 @@ func (g *Genesis) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalText implements encoding.TextUnmarshaler and is needed for viper.
+func (g *Genesis) UnmarshalText(text []byte) error {
+	return g.Set(string(text))
+}
+
+// Equal is needed for go-cmp.
 func (g Genesis) Equal(other Genesis) bool {
 	return time.Time(g).Equal(time.Time(other))
 }
 
+// String implements fmt.Stringer.
 func (g Genesis) String() string {
 	return g.Time().String()
 }

@@ -33,6 +33,17 @@ func TestGenesisJsonEncode(t *testing.T) {
 	})
 }
 
+func TestGenesisTextUnmarshal(t *testing.T) {
+	tString := "2023-03-15T18:00:00Z"
+	t1, err := time.Parse(time.RFC3339, tString)
+	require.NoError(t, err)
+
+	var g Genesis
+	err = g.UnmarshalText([]byte(tString))
+	require.NoError(t, err)
+	require.Equal(t, t1, g.Time())
+}
+
 func TestGenesisID(t *testing.T) {
 	t1, err := time.Parse(time.RFC3339, "2023-03-15T18:00:00Z")
 	require.NoError(t, err)
