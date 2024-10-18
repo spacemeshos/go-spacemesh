@@ -20,6 +20,7 @@ import (
 type MockExecutor struct {
 	ctrl     *gomock.Controller
 	recorder *MockExecutorMockRecorder
+	isgomock struct{}
 }
 
 // MockExecutorMockRecorder is the mock recorder for MockExecutor.
@@ -82,6 +83,7 @@ func (c *MockExecutorExecCall) DoAndReturn(f func(string, Encoder, Decoder) (int
 type MockMigration struct {
 	ctrl     *gomock.Controller
 	recorder *MockMigrationMockRecorder
+	isgomock struct{}
 }
 
 // MockMigrationMockRecorder is the mock recorder for MockMigration.

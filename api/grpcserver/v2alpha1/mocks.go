@@ -19,6 +19,7 @@ import (
 type MockmalfeasanceInfo struct {
 	ctrl     *gomock.Controller
 	recorder *MockmalfeasanceInfoMockRecorder
+	isgomock struct{}
 }
 
 // MockmalfeasanceInfoMockRecorder is the mock recorder for MockmalfeasanceInfo.

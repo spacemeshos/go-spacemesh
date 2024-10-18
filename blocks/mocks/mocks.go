@@ -21,6 +21,7 @@ import (
 type MocklayerPatrol struct {
 	ctrl     *gomock.Controller
 	recorder *MocklayerPatrolMockRecorder
+	isgomock struct{}
 }
 
 // MocklayerPatrolMockRecorder is the mock recorder for MocklayerPatrol.
@@ -80,6 +81,7 @@ func (c *MocklayerPatrolCompleteHareCall) DoAndReturn(f func(types.LayerID)) *Mo
 type MockmeshProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockmeshProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
@@ -217,6 +219,7 @@ func (c *MockmeshProviderProcessedLayerCall) DoAndReturn(f func() types.LayerID)
 type Mockexecutor struct {
 	ctrl     *gomock.Controller
 	recorder *MockexecutorMockRecorder
+	isgomock struct{}
 }
 
 // MockexecutorMockRecorder is the mock recorder for Mockexecutor.
@@ -279,6 +282,7 @@ func (c *MockexecutorExecuteOptimisticCall) DoAndReturn(f func(context.Context, 
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
 	recorder *MocklayerClockMockRecorder
+	isgomock struct{}
 }
 
 // MocklayerClockMockRecorder is the mock recorder for MocklayerClock.
@@ -378,6 +382,7 @@ func (c *MocklayerClockCurrentLayerCall) DoAndReturn(f func() types.LayerID) *Mo
 type Mockcertifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockcertifierMockRecorder
+	isgomock struct{}
 }
 
 // MockcertifierMockRecorder is the mock recorder for Mockcertifier.
@@ -477,6 +482,7 @@ func (c *MockcertifierRegisterForCertCall) DoAndReturn(f func(context.Context, t
 type MocktortoiseProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MocktortoiseProviderMockRecorder
+	isgomock struct{}
 }
 
 // MocktortoiseProviderMockRecorder is the mock recorder for MocktortoiseProvider.

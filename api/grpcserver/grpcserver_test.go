@@ -575,14 +575,14 @@ func TestSmesherService(t *testing.T) {
 		c.smeshingProvider.EXPECT().StartSmeshing(gomock.Any()).Return(nil)
 		c.postSupervisor.EXPECT().Start(gomock.Any(),
 			gomock.All(
-				gomock.Cond(func(postOpts any) bool {
-					return postOpts.(activation.PostSetupOpts).DataDir == opts.DataDir
+				gomock.Cond(func(postOpts activation.PostSetupOpts) bool {
+					return postOpts.DataDir == opts.DataDir
 				}),
-				gomock.Cond(func(postOpts any) bool {
-					return postOpts.(activation.PostSetupOpts).NumUnits == opts.NumUnits
+				gomock.Cond(func(postOpts activation.PostSetupOpts) bool {
+					return postOpts.NumUnits == opts.NumUnits
 				}),
-				gomock.Cond(func(postOpts any) bool {
-					return postOpts.(activation.PostSetupOpts).MaxFileSize == opts.MaxFileSize
+				gomock.Cond(func(postOpts activation.PostSetupOpts) bool {
+					return postOpts.MaxFileSize == opts.MaxFileSize
 				}),
 			), sig).Return(nil)
 		c.grpcPostService.EXPECT().AllowConnections(true)
