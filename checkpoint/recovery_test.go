@@ -298,7 +298,7 @@ func validateAndPreserveData(
 		} else {
 			mvalidator.EXPECT().NIPostChallengeV1(
 				&atx.NIPostChallengeV1,
-				gomock.Cond(func(prev types.ActivationTx) bool {
+				gomock.Cond(func(prev *types.ActivationTx) bool {
 					return prev.ID() == atx.PrevATXID
 				}),
 				atx.SmesherID,
