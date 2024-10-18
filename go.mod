@@ -53,7 +53,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/zeebo/blake3 v0.2.4
-	go.uber.org/mock v0.4.0
+	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
 	golang.org/x/sync v0.8.0
