@@ -535,8 +535,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx.Sign(sig)
 		atx := toAtx(t, watx)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx.PublishEpoch+1, watx.ID(), gomock.Any())
 		proof, err := atxHdlr.storeAtx(context.Background(), atx, watx)
@@ -556,16 +556,16 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx.Sign(sig)
 		atx := toAtx(t, watx)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx.PublishEpoch+1, watx.ID(), gomock.Any())
 		proof, err := atxHdlr.storeAtx(context.Background(), atx, watx)
 		require.NoError(t, err)
 		require.Nil(t, proof)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx.ID()
 		}))
 		// Note: tortoise is not informed about the same ATX again
 		proof, err = atxHdlr.storeAtx(context.Background(), atx, watx)
@@ -584,8 +584,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx.Sign(sig)
 		atx := toAtx(t, watx)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx.PublishEpoch+1, watx.ID(), gomock.Any())
 		proof, err := atxHdlr.storeAtx(context.Background(), atx, watx)
@@ -605,8 +605,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx0.Sign(sig)
 		atx0 := toAtx(t, watx0)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx0.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx0.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx0.PublishEpoch+1, watx0.ID(), gomock.Any())
 		proof, err := atxHdlr.storeAtx(context.Background(), atx0, watx0)
@@ -618,8 +618,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx1.Sign(sig)
 		atx1 := toAtx(t, watx1)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx1.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx1.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx1.PublishEpoch+1, watx1.ID(), gomock.Any())
 		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
@@ -646,8 +646,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx0.Sign(sig)
 		atx0 := toAtx(t, watx0)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx0.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx0.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx0.PublishEpoch+1, watx0.ID(), gomock.Any())
 		proof, err := atxHdlr.storeAtx(context.Background(), atx0, watx0)
@@ -678,8 +678,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		initialATX.Sign(sig)
 		wInitialATX := toAtx(t, initialATX)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == initialATX.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == initialATX.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(initialATX.PublishEpoch+1, initialATX.ID(), gomock.Any())
 		proof, err := atxHdlr.storeAtx(context.Background(), wInitialATX, initialATX)
@@ -691,8 +691,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx1.Sign(sig)
 		atx1 := toAtx(t, watx1)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx1.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx1.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx1.PublishEpoch+1, watx1.ID(), gomock.Any())
 		proof, err = atxHdlr.storeAtx(context.Background(), atx1, watx1)
@@ -703,8 +703,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx2.Sign(sig)
 		atx2 := toAtx(t, watx2)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx2.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx2.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx2.PublishEpoch+1, watx2.ID(), gomock.Any())
 		proof, err = atxHdlr.storeAtx(context.Background(), atx2, watx2)
@@ -717,8 +717,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx3.Sign(sig)
 		atx3 := toAtx(t, watx3)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx3.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx3.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx3.PublishEpoch+1, watx3.ID(), gomock.Any())
 		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
@@ -742,8 +742,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		wInitialATX.Sign(sig)
 		initialAtx := toAtx(t, wInitialATX)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == wInitialATX.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == wInitialATX.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(wInitialATX.PublishEpoch+1, wInitialATX.ID(), gomock.Any())
 		proof, err := atxHdlr.storeAtx(context.Background(), initialAtx, wInitialATX)
@@ -755,8 +755,8 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		watx1.Sign(sig)
 		atx1 := toAtx(t, watx1)
 
-		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx any) bool {
-			return atx.(*types.ActivationTx).ID() == watx1.ID()
+		atxHdlr.mbeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx1.ID()
 		}))
 		atxHdlr.mtortoise.EXPECT().OnAtx(watx1.PublishEpoch+1, watx1.ID(), gomock.Any())
 		proof, err = atxHdlr.storeAtx(context.Background(), atx1, watx1)

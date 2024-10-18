@@ -23,6 +23,7 @@ import (
 type MockconservativeState struct {
 	ctrl     *gomock.Controller
 	recorder *MockconservativeStateMockRecorder
+	isgomock struct{}
 }
 
 // MockconservativeStateMockRecorder is the mock recorder for MockconservativeState.
@@ -84,6 +85,7 @@ func (c *MockconservativeStateSelectProposalTXsCall) DoAndReturn(f func(types.La
 type MockvotesEncoder struct {
 	ctrl     *gomock.Controller
 	recorder *MockvotesEncoderMockRecorder
+	isgomock struct{}
 }
 
 // MockvotesEncoderMockRecorder is the mock recorder for MockvotesEncoder.
@@ -225,6 +227,7 @@ func (c *MockvotesEncoderTallyVotesCall) DoAndReturn(f func(types.LayerID)) *Moc
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
 	recorder *MocklayerClockMockRecorder
+	isgomock struct{}
 }
 
 // MocklayerClockMockRecorder is the mock recorder for MocklayerClock.
@@ -362,6 +365,7 @@ func (c *MocklayerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.T
 type MockatxSearch struct {
 	ctrl     *gomock.Controller
 	recorder *MockatxSearchMockRecorder
+	isgomock struct{}
 }
 
 // MockatxSearchMockRecorder is the mock recorder for MockatxSearch.
