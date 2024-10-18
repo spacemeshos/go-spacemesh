@@ -1,30 +1,52 @@
 package vm
 
 import (
-	"encoding/binary"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/accounts"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
+func athenaLibPath() string {
+	var err error
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current working directory: %v", err)
+	}
+
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(cwd, "../build/libathenavmwrapper.dll")
+	case "darwin":
+		return filepath.Join(cwd, "../build/libathenavmwrapper.dylib")
+	default:
+		return filepath.Join(cwd, "../build/libathenavmwrapper.so")
+	}
+}
+
 type Host struct {
-	vm *athcon.VM
-	db sql.Executor
+	vm      *athcon.VM
+	host    core.Host
+	loader  core.AccountLoader
+	updater core.AccountUpdater
 }
 
 // Load the VM from the shared library and returns an instance of a Host.
 // It is the caller's responsibility to call Destroy when it
 // is no longer needed.
-func NewHost(path string, db sql.Executor) (*Host, error) {
+func NewHost(path string, host core.Host, loader core.AccountLoader, updater core.AccountUpdater) (*Host, error) {
 	vm, err := athcon.Load(path)
 	if err != nil {
 		return nil, fmt.Errorf("loading Athena VM: %w", err)
 	}
-	return &Host{vm, db}, nil
+	return &Host{vm, host, loader, updater}, nil
 }
 
 func (h *Host) Destroy() {
@@ -42,7 +64,9 @@ func (h *Host) Execute(
 ) (output []byte, gasLeft int64, err error) {
 	hostCtx := &hostContext{
 		layer,
-		h.db,
+		h.host,
+		h.loader,
+		h.updater,
 	}
 	r, err := h.vm.Execute(
 		hostCtx,
@@ -65,19 +89,28 @@ func (h *Host) Execute(
 }
 
 type hostContext struct {
-	layer types.LayerID
-	db    sql.Executor
+	layer   types.LayerID
+	host    core.Host
+	loader  core.AccountLoader
+	updater core.AccountUpdater
 }
 
 var _ athcon.HostContext = (*hostContext)(nil)
 
 func (h *hostContext) AccountExists(addr athcon.Address) bool {
-	has, err := accounts.Has(h.db, types.Address(addr))
-	return err != nil && has
+	return h.loader.Has(types.Address(addr))
 }
 
 func (h *hostContext) GetStorage(addr athcon.Address, key athcon.Bytes32) athcon.Bytes32 {
-	panic("not implemented")
+	if account, err := h.loader.Get(types.Address(addr)); err == nil {
+		// TODO(lane): make this more efficient
+		for _, item := range account.Storage {
+			if item.Key == key {
+				return item.Value
+			}
+		}
+	}
+	return [32]byte{}
 }
 
 func (h *hostContext) SetStorage(
@@ -85,15 +118,27 @@ func (h *hostContext) SetStorage(
 	key athcon.Bytes32,
 	value athcon.Bytes32,
 ) athcon.StorageStatus {
-	panic("not implemented")
+	if account, err := h.loader.Get(types.Address(addr)); err == nil {
+		// TODO(lane): make this more efficient
+		for i, item := range account.Storage {
+			if item.Key == key {
+				account.Storage[i].Value = value
+				_ = h.updater.Update(account)
+				return athcon.StorageModified
+			}
+		}
+		account.Storage = append(account.Storage, types.StorageItem{Key: key, Value: value})
+		_ = h.updater.Update(account)
+		return athcon.StorageAdded
+	}
+	panic("account not found")
 }
 
-func (h *hostContext) GetBalance(addr athcon.Address) athcon.Bytes32 {
-	var balance athcon.Bytes32
-	if account, err := accounts.Get(h.db, types.Address(addr), h.layer); err == nil {
-		binary.LittleEndian.PutUint64(balance[:], account.Balance)
+func (h *hostContext) GetBalance(addr athcon.Address) uint64 {
+	if account, err := h.loader.Get(types.Address(addr)); err == nil {
+		return account.Balance
 	}
-	return balance
+	return 0
 }
 
 func (h *hostContext) GetTxContext() athcon.TxContext {
@@ -131,5 +176,8 @@ func (h *hostContext) Deploy(blob []byte) athcon.Address {
 }
 
 func (h *hostContext) Spawn(blob []byte) athcon.Address {
+	// make sure the account isn't already spawned
+
+	// create a new account with the code
 	panic("unimplemented")
 }

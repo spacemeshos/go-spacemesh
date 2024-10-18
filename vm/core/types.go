@@ -74,6 +74,7 @@ type Template interface {
 
 // AccountLoader is an interface for loading accounts.
 type AccountLoader interface {
+	Has(Address) bool
 	Get(Address) (Account, error)
 }
 

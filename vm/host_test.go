@@ -2,10 +2,6 @@ package vm
 
 import (
 	"encoding/binary"
-	"log"
-	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
@@ -16,24 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/getbalance"
 )
-
-func athenaLibPath() string {
-	var err error
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("Failed to get current working directory: %v", err)
-	}
-
-	switch runtime.GOOS {
-	case "windows":
-		return filepath.Join(cwd, "../build/libathenavmwrapper.dll")
-	case "darwin":
-		return filepath.Join(cwd, "../build/libathenavmwrapper.dylib")
-	default:
-		return filepath.Join(cwd, "../build/libathenavmwrapper.so")
-	}
-}
 
 func TestNewHost(t *testing.T) {
 	host, err := NewHost(athenaLibPath(), statesql.InMemoryTest(t))
