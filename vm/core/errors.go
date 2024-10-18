@@ -21,7 +21,7 @@ var (
 	// ErrSpawned raised if account already spawned.
 	ErrSpawned = errors.New("account already spawned")
 	// ErrNotSpawned raised if account is not spawned.
-	ErrNotSpawned = errors.New("account is not spawned")
+	ErrNotSpawned = errors.New("principal account is not spawned")
 	// ErrTemplateMismatch raised if target account doesn't match template account.
 	ErrTemplateMismatch = errors.New("relay template mismatch")
 	// ErrTxLimit overflows max tx size.

@@ -27,8 +27,9 @@ func encode(fields ...scale.Encodable) []byte {
 
 // SelfSpawn creates a self-spawn transaction.
 func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
-	// self-spawn has not yet been implemented for Athena
-	panic("self-spawn not yet implemented")
+	args := wallet.SpawnArguments{}
+	copy(args.PublicKey[:], signing.Public(pk))
+	return Spawn(pk, wallet.TemplateAddress, &args, nonce, opts...)
 }
 
 // Spawn creates a spawn transaction.
@@ -53,8 +54,10 @@ func Spawn(
 	// note that principal is computed from pk
 	principal := core.ComputePrincipal(wallet.TemplateAddress, public)
 
-	// TODO(lane): fix encoding
+	// TODO(lane): depends on https://github.com/athenavm/athena/issues/131
+	// mock for now
 	tx := encode(&sdk.TxVersion, &principal, &template, &payload, args)
+
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	return append(tx, sig...)
 }
@@ -78,8 +81,10 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	args.Destination = to
 	args.Amount = amount
 
-	// TODO(lane): fix encoding
+	// TODO(lane): depends on https://github.com/athenavm/athena/issues/131
+	// mock for now
 	tx := encode(&sdk.TxVersion, &principal, &payload, &args)
+
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	return append(tx, sig...)
 }

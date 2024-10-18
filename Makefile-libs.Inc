@@ -56,7 +56,7 @@ POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/
 POSTRS_SERVICE_ZIP = post-service-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
-ATHENA_SETUP_REV = 0.4.1
+ATHENA_SETUP_REV = 0.5.0
 ATHENA_SETUP_ARTIFACT = athena_vmlib_v$(ATHENA_SETUP_REV)_$(GOOS)_$(GOARCH).tar.gz
 ATHENA_SETUP_ARTIFACT_URL ?= https://github.com/athenavm/athena/releases/download/v$(ATHENA_SETUP_REV)/$(ATHENA_SETUP_ARTIFACT)
 

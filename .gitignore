@@ -18,6 +18,7 @@ temp.js
 
 *.out
 *.test
+*.tar.gz
 *.zip
 
 /go-spacemesh
