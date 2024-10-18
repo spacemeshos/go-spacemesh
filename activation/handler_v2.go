@@ -808,7 +808,33 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 		zap.Stringer("smesher_id", atx.SmesherID),
 	)
 
-	var proof wire.Proof
+	// TODO: Support a double merged ATX published in a checkpointed epoch.
+	// In this case, the other ATX is golden and the whole network is guaranteed to see it.
+	// Such double merged ATX should be considered syntactically invalid.
+	// However, to properly detect this, we should move this check before storing the ATX
+	// and return an error w/o storing the ATX.
+
+	otherAtx, err := h.fetchWireAtx(ctx, tx, other)
+	if err != nil {
+		return false, fmt.Errorf("fetching other ATX: %w", err)
+	}
+
+	// Get the marriage ATX to prove that both IDs are married.
+	// TODO: what if IDs married before checkpoint?
+	// In this case, the blob for the marriage ATX is not available and it's not possible
+	// to construct proof that Smeshers who published both ATXs are married.
+	// However, everybody on the network know they are married because this information
+	// is persisted in the checkpoint. This should probably supported in a slightly different implementation
+	// of a malfeasance proof (without a marriage proof).
+
+	marriageAtx, err := h.fetchWireAtx(ctx, tx, *atx.MarriageATX)
+	if err != nil {
+		return false, fmt.Errorf("fetching other ATX: %w", err)
+	}
+	proof, err := wire.NewDoubleMergeProof(tx, atx.ActivationTxV2, otherAtx, marriageAtx)
+	if err != nil {
+		return true, fmt.Errorf("creating double merge proof: %w", err)
+	}
 	return true, h.malPublisher.Publish(ctx, atx.SmesherID, proof)
 }
 
