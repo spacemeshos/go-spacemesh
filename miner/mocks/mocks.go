@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	atxsdata "github.com/spacemeshos/go-spacemesh/atxsdata"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	tortoise "github.com/spacemeshos/go-spacemesh/tortoise"
 	gomock "go.uber.org/mock/gomock"
@@ -361,65 +362,103 @@ func (c *MocklayerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.T
 	return c
 }
 
-// MockatxSearch is a mock of atxSearch interface.
-type MockatxSearch struct {
+// MockatxsData is a mock of atxsData interface.
+type MockatxsData struct {
 	ctrl     *gomock.Controller
-	recorder *MockatxSearchMockRecorder
+	recorder *MockatxsDataMockRecorder
 	isgomock struct{}
 }
 
-// MockatxSearchMockRecorder is the mock recorder for MockatxSearch.
-type MockatxSearchMockRecorder struct {
-	mock *MockatxSearch
+// MockatxsDataMockRecorder is the mock recorder for MockatxsData.
+type MockatxsDataMockRecorder struct {
+	mock *MockatxsData
 }
 
-// NewMockatxSearch creates a new mock instance.
-func NewMockatxSearch(ctrl *gomock.Controller) *MockatxSearch {
-	mock := &MockatxSearch{ctrl: ctrl}
-	mock.recorder = &MockatxSearchMockRecorder{mock}
+// NewMockatxsData creates a new mock instance.
+func NewMockatxsData(ctrl *gomock.Controller) *MockatxsData {
+	mock := &MockatxsData{ctrl: ctrl}
+	mock.recorder = &MockatxsDataMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockatxSearch) EXPECT() *MockatxSearchMockRecorder {
+func (m *MockatxsData) EXPECT() *MockatxsDataMockRecorder {
 	return m.recorder
 }
 
-// GetIDByEpochAndNodeID mocks base method.
-func (m *MockatxSearch) GetIDByEpochAndNodeID(ctx context.Context, epoch types.EpochID, nodeID types.NodeID) (types.ATXID, error) {
+// Get mocks base method.
+func (m *MockatxsData) Get(arg0 types.EpochID, arg1 types.ATXID) *atxsdata.ATX {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetIDByEpochAndNodeID", ctx, epoch, nodeID)
-	ret0, _ := ret[0].(types.ATXID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "Get", arg0, arg1)
+	ret0, _ := ret[0].(*atxsdata.ATX)
+	return ret0
 }
 
-// GetIDByEpochAndNodeID indicates an expected call of GetIDByEpochAndNodeID.
-func (mr *MockatxSearchMockRecorder) GetIDByEpochAndNodeID(ctx, epoch, nodeID any) *MockatxSearchGetIDByEpochAndNodeIDCall {
+// Get indicates an expected call of Get.
+func (mr *MockatxsDataMockRecorder) Get(arg0, arg1 any) *MockatxsDataGetCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIDByEpochAndNodeID", reflect.TypeOf((*MockatxSearch)(nil).GetIDByEpochAndNodeID), ctx, epoch, nodeID)
-	return &MockatxSearchGetIDByEpochAndNodeIDCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockatxsData)(nil).Get), arg0, arg1)
+	return &MockatxsDataGetCall{Call: call}
 }
 
-// MockatxSearchGetIDByEpochAndNodeIDCall wrap *gomock.Call
-type MockatxSearchGetIDByEpochAndNodeIDCall struct {
+// MockatxsDataGetCall wrap *gomock.Call
+type MockatxsDataGetCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxSearchGetIDByEpochAndNodeIDCall) Return(arg0 types.ATXID, arg1 error) *MockatxSearchGetIDByEpochAndNodeIDCall {
-	c.Call = c.Call.Return(arg0, arg1)
+func (c *MockatxsDataGetCall) Return(arg0 *atxsdata.ATX) *MockatxsDataGetCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxSearchGetIDByEpochAndNodeIDCall) Do(f func(context.Context, types.EpochID, types.NodeID) (types.ATXID, error)) *MockatxSearchGetIDByEpochAndNodeIDCall {
+func (c *MockatxsDataGetCall) Do(f func(types.EpochID, types.ATXID) *atxsdata.ATX) *MockatxsDataGetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxSearchGetIDByEpochAndNodeIDCall) DoAndReturn(f func(context.Context, types.EpochID, types.NodeID) (types.ATXID, error)) *MockatxSearchGetIDByEpochAndNodeIDCall {
+func (c *MockatxsDataGetCall) DoAndReturn(f func(types.EpochID, types.ATXID) *atxsdata.ATX) *MockatxsDataGetCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// GetByEpochAndNodeID mocks base method.
+func (m *MockatxsData) GetByEpochAndNodeID(arg0 types.EpochID, arg1 types.NodeID) (types.ATXID, *atxsdata.ATX) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByEpochAndNodeID", arg0, arg1)
+	ret0, _ := ret[0].(types.ATXID)
+	ret1, _ := ret[1].(*atxsdata.ATX)
+	return ret0, ret1
+}
+
+// GetByEpochAndNodeID indicates an expected call of GetByEpochAndNodeID.
+func (mr *MockatxsDataMockRecorder) GetByEpochAndNodeID(arg0, arg1 any) *MockatxsDataGetByEpochAndNodeIDCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByEpochAndNodeID", reflect.TypeOf((*MockatxsData)(nil).GetByEpochAndNodeID), arg0, arg1)
+	return &MockatxsDataGetByEpochAndNodeIDCall{Call: call}
+}
+
+// MockatxsDataGetByEpochAndNodeIDCall wrap *gomock.Call
+type MockatxsDataGetByEpochAndNodeIDCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockatxsDataGetByEpochAndNodeIDCall) Return(arg0 types.ATXID, arg1 *atxsdata.ATX) *MockatxsDataGetByEpochAndNodeIDCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockatxsDataGetByEpochAndNodeIDCall) Do(f func(types.EpochID, types.NodeID) (types.ATXID, *atxsdata.ATX)) *MockatxsDataGetByEpochAndNodeIDCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockatxsDataGetByEpochAndNodeIDCall) DoAndReturn(f func(types.EpochID, types.NodeID) (types.ATXID, *atxsdata.ATX)) *MockatxsDataGetByEpochAndNodeIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

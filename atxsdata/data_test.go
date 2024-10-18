@@ -8,10 +8,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	fuzz "github.com/google/gofuzz"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestData(t *testing.T) {
@@ -21,11 +21,8 @@ func TestData(t *testing.T) {
 			ids    = 100
 		)
 		c := New()
-		f := fuzz.New()
-		f.RandSource(rand.NewSource(101))
 		atxids := [epochs][ids]types.ATXID{}
 		data := [epochs][ids]ATX{}
-		f.Fuzz(&data)
 
 		for repeat := 0; repeat < 10; repeat++ {
 			for epoch := 0; epoch < epochs; epoch++ {
@@ -49,6 +46,66 @@ func TestData(t *testing.T) {
 			for epoch := 0; epoch < epochs; epoch++ {
 				for i := range atxids[epoch] {
 					atx := c.Get(types.EpochID(epoch)+1, atxids[epoch][i])
+					require.Equal(t, &data[epoch][i], atx)
+					id, atx := c.GetByEpochAndNodeID(types.EpochID(epoch)+1, data[epoch][i].Node)
+					require.Equal(t, atxids[epoch][i], id)
+					require.Equal(t, &data[epoch][i], atx)
+					require.False(t, c.IsMalicious(atx.Node))
+				}
+			}
+		}
+	})
+	t.Run("managed", func(t *testing.T) {
+		const (
+			epochs = 10
+			ids    = 100
+		)
+		c := New()
+		atxids := [epochs][ids]types.ATXID{}
+		data := [epochs][ids]ATX{}
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		c.Register(sig)
+
+		for repeat := 0; repeat < 10; repeat++ {
+			for epoch := 0; epoch < epochs; epoch++ {
+				atxids[epoch][0] = types.ATXID{byte(epoch), 0}
+				data[epoch][0].Node = sig.NodeID()
+				d := data[epoch][0]
+				c.Add(
+					types.EpochID(epoch)+1,
+					d.Node,
+					d.Coinbase,
+					atxids[epoch][0],
+					d.Weight,
+					d.BaseHeight,
+					d.Height,
+					d.Nonce,
+					false,
+				)
+				for i := 1; i < len(atxids[epoch]); i++ {
+					atxids[epoch][i] = types.ATXID{byte(epoch), byte(i)}
+					data[epoch][i].Node = types.NodeID{byte(epoch), byte(i)}
+					d := data[epoch][i]
+					c.Add(
+						types.EpochID(epoch)+1,
+						d.Node,
+						d.Coinbase,
+						atxids[epoch][i],
+						d.Weight,
+						d.BaseHeight,
+						d.Height,
+						d.Nonce,
+						false,
+					)
+				}
+			}
+			for epoch := 0; epoch < epochs; epoch++ {
+				for i := range atxids[epoch] {
+					atx := c.Get(types.EpochID(epoch)+1, atxids[epoch][i])
+					require.Equal(t, &data[epoch][i], atx)
+					id, atx := c.GetByEpochAndNodeID(types.EpochID(epoch)+1, data[epoch][i].Node)
+					require.Equal(t, atxids[epoch][i], id)
 					require.Equal(t, &data[epoch][i], atx)
 					require.False(t, c.IsMalicious(atx.Node))
 				}
@@ -210,34 +267,34 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 	})
 }
 
-func benchmarkkWeightForSet(b *testing.B, size, setSize int) {
+func benchmarkCache(b *testing.B, size int, sigs ...*signing.EdSigner) (*Data, types.EpochID, []types.ATXID) {
 	c := New()
 	const epoch = 1
+	nodeIDs := make([]types.NodeID, 0, size)
 	atxs := make([]types.ATXID, 0, size)
 	rng := rand.New(rand.NewSource(10101))
 	for i := range size {
 		var (
-			node types.NodeID
-			atx  types.ATXID
+			nodeID types.NodeID
+			atxID  types.ATXID
 		)
-		binary.PutUvarint(node[:], uint64(i+1))
-		binary.PutUvarint(atx[:], uint64(i+1))
-		atxs = append(atxs, atx)
-		c.Add(epoch, node, types.Address{}, atx, 500, 100, 0, 0, false)
+		binary.PutUvarint(nodeID[:], uint64(i+1))
+		nodeIDs = append(nodeIDs, nodeID)
+		binary.PutUvarint(atxID[:], uint64(i+1))
+		atxs = append(atxs, atxID)
+	}
+	for i, sig := range sigs {
+		c.Register(sig)
+		nodeIDs[i] = sig.NodeID()
+	}
+	for i := range size {
+		c.Add(epoch, nodeIDs[i], types.Address{}, atxs[i], 500, 100, 0, 0, false)
 	}
 	rng.Shuffle(size, func(i, j int) {
 		atxs[i], atxs[j] = atxs[j], atxs[i]
 	})
 	b.ResetTimer()
-	for range b.N {
-		weight, used := c.WeightForSet(epoch, atxs[:setSize])
-		if weight == 0 {
-			b.Fatalf("weight can't be zero")
-		}
-		if len(used) != setSize {
-			b.Fatalf("used should be equal to set size")
-		}
-	}
+	return c, epoch, atxs
 }
 
 func BenchmarkWeightForSet(b *testing.B) {
@@ -253,7 +310,72 @@ func BenchmarkWeightForSet(b *testing.B) {
 		{1_000_000, 1_000_000},
 	} {
 		b.Run(fmt.Sprintf("size=%d set_size=%d", bc.size, bc.setSize), func(b *testing.B) {
-			benchmarkkWeightForSet(b, bc.size, bc.setSize)
+			c, epoch, atxs := benchmarkCache(b, bc.size)
+
+			b.ResetTimer()
+			for range b.N {
+				weight, used := c.WeightForSet(epoch, atxs[:bc.setSize])
+				if weight == 0 {
+					b.Fatalf("weight can't be zero")
+				}
+				if len(used) != bc.setSize {
+					b.Fatalf("used should be equal to set size")
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkGetByNodeID(b *testing.B) {
+	for _, bc := range []struct {
+		size int
+	}{
+		{100_000},
+		{200_000},
+		{400_000},
+		{1_000_000},
+	} {
+		b.Run(fmt.Sprintf("size=%d", bc.size), func(b *testing.B) {
+			c, epoch, _ := benchmarkCache(b, bc.size)
+			var nodeID types.NodeID
+			binary.PutUvarint(nodeID[:], uint64(10+1))
+
+			var id types.ATXID
+			var atx *ATX
+			b.ResetTimer()
+			for range b.N {
+				id, atx = c.GetByEpochAndNodeID(epoch, nodeID)
+			}
+			require.NotEqual(b, types.EmptyATXID, id)
+			require.NotNil(b, atx)
+		})
+	}
+}
+
+func BenchmarkGetByNodeID_Managed(b *testing.B) {
+	for _, bc := range []struct {
+		size int
+	}{
+		{100_000},
+		{200_000},
+		{400_000},
+		{1_000_000},
+	} {
+		b.Run(fmt.Sprintf("size=%d", bc.size), func(b *testing.B) {
+			sig, err := signing.NewEdSigner()
+			require.NoError(b, err)
+
+			c, epoch, _ := benchmarkCache(b, bc.size, sig)
+			nodeID := sig.NodeID()
+
+			var id types.ATXID
+			var atx *ATX
+			b.ResetTimer()
+			for range b.N {
+				id, atx = c.GetByEpochAndNodeID(epoch, nodeID)
+			}
+			require.NotEqual(b, types.EmptyATXID, id)
+			require.NotNil(b, atx)
 		})
 	}
 }

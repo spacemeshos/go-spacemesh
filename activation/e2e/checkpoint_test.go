@@ -46,7 +46,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := testPostConfig()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
 
 	opts := testPostSetupOpts(t)
@@ -86,7 +86,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	localDB := localsql.InMemory()
+	localDB := localsql.InMemoryTest(t)
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -190,7 +190,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	poetDb, err = activation.NewPoetDb(newDB, logger.Named("poetDb"))
 	require.NoError(t, err)
 	cdb = datastore.NewCachedDB(newDB, logger)
-	atxdata, err = atxsdata.Warm(newDB, 1, logger)
+	atxdata, err = atxsdata.Warm(newDB, 1, logger, sig)
 	poetService = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)
