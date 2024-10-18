@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -8,6 +9,29 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
+
+func TestGenesisJsonEncode(t *testing.T) {
+	tString := "2023-03-15T18:00:00Z"
+	t1, err := time.Parse(time.RFC3339, tString)
+	require.NoError(t, err)
+
+	t.Run("marshal", func(t *testing.T) {
+		g := Genesis(t1)
+		b, err := g.MarshalJSON()
+		require.NoError(t, err)
+		expected, err := json.Marshal(tString)
+		require.NoError(t, err)
+		require.Equal(t, expected, b)
+	})
+	t.Run("unmarshal", func(t *testing.T) {
+		reference, err := json.Marshal(tString)
+		require.NoError(t, err)
+		var g Genesis
+		err = g.UnmarshalJSON([]byte(reference))
+		require.NoError(t, err)
+		require.Equal(t, t1, g.Time())
+	})
+}
 
 func TestGenesisID(t *testing.T) {
 	t1, err := time.Parse(time.RFC3339, "2023-03-15T18:00:00Z")
