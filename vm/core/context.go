@@ -85,14 +85,14 @@ func (c *Context) Spawn(args scale.Encodable) error {
 		return fmt.Errorf("%w: spawn is called with unknown handler", ErrInternal)
 	}
 	buf := bytes.NewBuffer(nil)
-	instance, err := handler.New(args)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrMalformed, err)
-	}
-	_, err = instance.EncodeScale(scale.NewEncoder(buf))
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrInternal, err)
-	}
+	// instance, err := handler.New(args)
+	// if err != nil {
+	// 	return fmt.Errorf("%w: %w", ErrMalformed, err)
+	// }
+	// _, err = instance.EncodeScale(scale.NewEncoder(buf))
+	// if err != nil {
+	// 	return fmt.Errorf("%w: %w", ErrInternal, err)
+	// }
 	account.State = buf.Bytes()
 	account.TemplateAddress = &c.Header.TemplateAddress
 	c.change(account)

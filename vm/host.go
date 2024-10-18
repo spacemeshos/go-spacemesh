@@ -58,8 +58,7 @@ func (h *Host) Execute(
 	gas int64,
 	recipient, sender types.Address,
 	input []byte,
-	method []byte,
-	value [32]byte,
+	value uint64,
 	code []byte,
 ) (output []byte, gasLeft int64, err error) {
 	hostCtx := &hostContext{
@@ -77,8 +76,7 @@ func (h *Host) Execute(
 		athcon.Address(recipient),
 		athcon.Address(sender),
 		input,
-		method,
-		athcon.Bytes32(value),
+		value,
 		code,
 	)
 	if err != nil {
@@ -98,7 +96,10 @@ type hostContext struct {
 var _ athcon.HostContext = (*hostContext)(nil)
 
 func (h *hostContext) AccountExists(addr athcon.Address) bool {
-	return h.loader.Has(types.Address(addr))
+	if has, err := h.loader.Has(types.Address(addr)); !has || err != nil {
+		return false
+	}
+	return true
 }
 
 func (h *hostContext) GetStorage(addr athcon.Address, key athcon.Bytes32) athcon.Bytes32 {
@@ -144,7 +145,7 @@ func (h *hostContext) GetBalance(addr athcon.Address) uint64 {
 func (h *hostContext) GetTxContext() athcon.TxContext {
 	// TODO: implement
 	return athcon.TxContext{
-		GasPrice:    [32]byte{},
+		GasPrice:    0,
 		Origin:      [24]byte{},
 		Coinbase:    [24]byte{},
 		BlockHeight: 0,
@@ -162,9 +163,8 @@ func (h *hostContext) Call(
 	kind athcon.CallKind,
 	recipient athcon.Address,
 	sender athcon.Address,
-	value athcon.Bytes32,
+	value uint64,
 	input []byte,
-	method []byte,
 	gas int64,
 	depth int,
 ) (output []byte, gasLeft int64, createAddr athcon.Address, err error) {
