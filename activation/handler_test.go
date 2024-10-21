@@ -37,15 +37,15 @@ import (
 
 const layersPerEpochBig = 1000
 
-func newMerkleProof(t testing.TB, leafs []types.Hash32) (types.MerkleProof, types.Hash32) {
-	t.Helper()
+func newMerkleProof(tb testing.TB, leafs []types.Hash32) (types.MerkleProof, types.Hash32) {
+	tb.Helper()
 	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(poetShared.HashMembershipTreeNode).
 		WithLeavesToProve(map[uint64]bool{0: true}).
 		Build()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	for _, m := range leafs {
-		require.NoError(t, tree.AddLeaf(m[:]))
+		require.NoError(tb, tree.AddLeaf(m[:]))
 	}
 	root, nodes := tree.RootAndProof()
 	nodesH32 := make([]types.Hash32, 0, len(nodes))
@@ -57,9 +57,9 @@ func newMerkleProof(t testing.TB, leafs []types.Hash32) (types.MerkleProof, type
 	}, types.BytesToHash(root)
 }
 
-func newNIPostWithPoet(t testing.TB, poetRef []byte) *nipost.NIPostState {
-	t.Helper()
-	proof, _ := newMerkleProof(t, []types.Hash32{
+func newNIPostWithPoet(tb testing.TB, poetRef []byte) *nipost.NIPostState {
+	tb.Helper()
+	proof, _ := newMerkleProof(tb, []types.Hash32{
 		types.BytesToHash([]byte("challenge")),
 		types.BytesToHash([]byte("leaf2")),
 		types.BytesToHash([]byte("leaf3")),
@@ -83,9 +83,9 @@ func newNIPostWithPoet(t testing.TB, poetRef []byte) *nipost.NIPostState {
 	}
 }
 
-func newNIPosV1tWithPoet(t testing.TB, poetRef []byte) *wire.NIPostV1 {
-	t.Helper()
-	proof, _ := newMerkleProof(t, []types.Hash32{
+func newNIPosV1tWithPoet(tb testing.TB, poetRef []byte) *wire.NIPostV1 {
+	tb.Helper()
+	proof, _ := newMerkleProof(tb, []types.Hash32{
 		types.BytesToHash([]byte("challenge")),
 		types.BytesToHash([]byte("leaf2")),
 		types.BytesToHash([]byte("leaf3")),
@@ -108,8 +108,8 @@ func newNIPosV1tWithPoet(t testing.TB, poetRef []byte) *wire.NIPostV1 {
 	}
 }
 
-func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
-	t.Helper()
+func toAtx(tb testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
+	tb.Helper()
 	atx := wire.ActivationTxFromWireV1(watx)
 	atx.SetReceived(time.Now())
 	atx.BaseTickHeight = uint64(atx.PublishEpoch)
@@ -196,7 +196,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(statesql.InMemory(), lg)
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)
