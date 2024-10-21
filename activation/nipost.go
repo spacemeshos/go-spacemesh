@@ -291,7 +291,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		}
 
 		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, poetRoundEnd)
-
+		events.EmitWaitingForPoETRoundEnd(signer.NodeID(), postChallenge.PublishEpoch, poetRoundEnd)
 		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, submittedRegistrations)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
@@ -568,6 +568,9 @@ func (nb *NIPostBuilder) getBestProof(
 	type poetProof struct {
 		poet       *types.PoetProof
 		membership *types.MerkleProof
+		round      string
+		url        string
+		ticks      uint64
 	}
 	proofs := make(chan *poetProof, len(registrations))
 
@@ -623,6 +626,9 @@ func (nb *NIPostBuilder) getBestProof(
 			proofs <- &poetProof{
 				poet:       proof,
 				membership: membership,
+				round:      round,
+				url:        client.Address(),
+				ticks:      proof.LeafCount / client.TickSize(),
 			}
 			return nil
 		})
@@ -654,6 +660,12 @@ func (nb *NIPostBuilder) getBestProof(
 			zap.Uint64("leafCount", bestProof.poet.LeafCount),
 			zap.Binary("ref", ref[:]),
 			log.ZShortStringer("smesherID", nodeID),
+		)
+		events.EmitBestProofSelected(
+			nodeID,
+			bestProof.url,
+			bestProof.round,
+			bestProof.ticks,
 		)
 		return ref, bestProof.membership, nil
 	}

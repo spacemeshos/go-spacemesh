@@ -6,6 +6,10 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
+New event types introduced in the API of the node, see [API #382](https://github.com/spacemeshos/api/pull/382) and 2
+previously existing events where renamed. Old events were marked as deprecated. Please update your automations to use
+new event types.
+
 ### Highlights
 
 ### Features
@@ -17,6 +21,11 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6387](https://github.com/spacemeshos/go-spacemesh/pull/6387) Fix an issue were in rare cases invalid proofs for
   malicious identities were created.
+
+* [#6393](https://github.com/spacemeshos/go-spacemesh/pull/6393) Further improved proposal building process to avoid
+  late proposals in 1:N setups and during cyclegap.
+
+* [#6382](https://github.com/spacemeshos/go-spacemesh/pull/6382) Improve visibility around poet registrations in events.
 
 ## v1.7.4
 

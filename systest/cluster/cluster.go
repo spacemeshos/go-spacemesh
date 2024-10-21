@@ -964,7 +964,7 @@ func (c *Cluster) NodeConfig(ctx *testcontext.Context) (*config.Config, error) {
 		return nil, err
 	}
 	cfg.Genesis = config.GenesisConfig{
-		GenesisTime: c.Genesis().Format(time.RFC3339),
+		GenesisTime: config.Genesis(c.Genesis()),
 		ExtraData:   c.GenesisExtraData(),
 	}
 	cfg.LayersPerEpoch = uint32(testcontext.LayersPerEpoch.Get(ctx.Parameters))

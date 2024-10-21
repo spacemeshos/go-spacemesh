@@ -47,6 +47,7 @@ func (h *HTTPPoetTestHarness) Client(
 		h.ServerCfg(),
 		cfg,
 		logger,
+		1,
 		opts...,
 	)
 }

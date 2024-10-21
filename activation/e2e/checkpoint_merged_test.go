@@ -83,7 +83,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	}
 
 	client := ae2e.NewTestPoetClient(2, poetCfg)
-	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
@@ -295,7 +295,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	require.NoError(t, err)
 	cdb = datastore.NewCachedDB(newDB, logger)
 
-	poetSvc = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetSvc = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)
 	atxHdlr = activation.NewHandler(

@@ -23,6 +23,7 @@ import (
 type Mocktortoise struct {
 	ctrl     *gomock.Controller
 	recorder *MocktortoiseMockRecorder
+	isgomock struct{}
 }
 
 // MocktortoiseMockRecorder is the mock recorder for Mocktortoise.
@@ -82,6 +83,7 @@ func (c *MocktortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *Mockt
 type MockMalfeasanceHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockMalfeasanceHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockMalfeasanceHandlerMockRecorder is the mock recorder for MockMalfeasanceHandler.

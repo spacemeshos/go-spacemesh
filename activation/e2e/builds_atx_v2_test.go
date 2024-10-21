@@ -94,7 +94,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	t.Cleanup(clock.Close)
 
 	client := ae2e.NewTestPoetClient(1, poetCfg)
-	poetClient := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetClient := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	localDB := localsql.InMemory()
 	idStates := activation.NewIdentityStateStorage()

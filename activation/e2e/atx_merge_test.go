@@ -37,6 +37,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+const (
+	testTickSize = 1
+)
+
 func constructMerkleProof(t testing.TB, members []types.Hash32, ids map[uint64]bool) wire.MerkleProofV2 {
 	t.Helper()
 
@@ -248,7 +252,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	}
 
 	client := ae2e.NewTestPoetClient(2, poetCfg)
-	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),

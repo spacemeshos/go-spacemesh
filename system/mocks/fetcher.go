@@ -23,6 +23,7 @@ import (
 type MockFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockFetcherMockRecorder is the mock recorder for MockFetcher.
@@ -391,6 +392,7 @@ func (c *MockFetcherRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types
 type MockBlockFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockBlockFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockBlockFetcherMockRecorder is the mock recorder for MockBlockFetcher.
@@ -452,6 +454,7 @@ func (c *MockBlockFetcherGetBlocksCall) DoAndReturn(f func(context.Context, []ty
 type MockAtxFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockAtxFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockAtxFetcherMockRecorder is the mock recorder for MockAtxFetcher.
@@ -518,6 +521,7 @@ func (c *MockAtxFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.
 type MockTxFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockTxFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockTxFetcherMockRecorder is the mock recorder for MockTxFetcher.
@@ -617,6 +621,7 @@ func (c *MockTxFetcherGetProposalTxsCall) DoAndReturn(f func(context.Context, []
 type MockPoetProofFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockPoetProofFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockPoetProofFetcherMockRecorder is the mock recorder for MockPoetProofFetcher.
@@ -678,6 +683,7 @@ func (c *MockPoetProofFetcherGetPoetProofCall) DoAndReturn(f func(context.Contex
 type MockBallotFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockBallotFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockBallotFetcherMockRecorder is the mock recorder for MockBallotFetcher.
@@ -739,6 +745,7 @@ func (c *MockBallotFetcherGetBallotsCall) DoAndReturn(f func(context.Context, []
 type MockProposalFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockProposalFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockProposalFetcherMockRecorder is the mock recorder for MockProposalFetcher.
@@ -800,6 +807,7 @@ func (c *MockProposalFetcherGetProposalsCall) DoAndReturn(f func(context.Context
 type MockActiveSetFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockActiveSetFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockActiveSetFetcherMockRecorder is the mock recorder for MockActiveSetFetcher.
@@ -861,6 +869,7 @@ func (c *MockActiveSetFetcherGetActiveSetCall) DoAndReturn(f func(context.Contex
 type MockMalfeasanceProofFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockMalfeasanceProofFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockMalfeasanceProofFetcherMockRecorder is the mock recorder for MockMalfeasanceProofFetcher.
@@ -922,6 +931,7 @@ func (c *MockMalfeasanceProofFetcherGetMalfeasanceProofsCall) DoAndReturn(f func
 type MockPeerTracker struct {
 	ctrl     *gomock.Controller
 	recorder *MockPeerTrackerMockRecorder
+	isgomock struct{}
 }
 
 // MockPeerTrackerMockRecorder is the mock recorder for MockPeerTracker.

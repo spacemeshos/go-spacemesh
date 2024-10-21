@@ -40,12 +40,10 @@ func TestReplayMainnet(t *testing.T) {
 		tortoise.WithConfig(cfg.Tortoise),
 	}
 
-	genesis, err := time.Parse(time.RFC3339, cfg.Genesis.GenesisTime)
-	require.NoError(t, err)
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(genesis),
+		timesync.WithGenesisTime(cfg.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(zap.NewNop()),
 	)
 	require.NoError(t, err)

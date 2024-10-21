@@ -602,6 +602,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			zap.Time("waiting until", wait),
 		)
 		events.EmitPoetWaitRound(nodeID, currentEpochId, publishEpochId, wait)
+		events.EmitWaitingForPoETRegistrationWindow(nodeID, currentEpochId, publishEpochId, wait)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()

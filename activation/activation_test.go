@@ -32,7 +32,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
-	sqlmocks "github.com/spacemeshos/go-spacemesh/sql/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -1456,7 +1455,7 @@ func TestGetPositioningAtx(t *testing.T) {
 		t.Parallel()
 		tab := newTestBuilder(t, 1)
 
-		db := sqlmocks.NewMockExecutor(gomock.NewController(t))
+		db := sql.NewMockExecutor(gomock.NewController(t))
 		tab.Builder.db = db
 		expected := errors.New("db error")
 		db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)
