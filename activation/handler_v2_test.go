@@ -124,7 +124,9 @@ func (h *handlerMocks) expectVerifyNIPoSTs(
 }
 
 func (h *handlerMocks) expectStoreAtxV2(atx *wire.ActivationTxV2) {
-	h.mbeacon.EXPECT().OnAtx(gomock.Cond(func(a any) bool { return a.(*types.ActivationTx).ID() == atx.ID() }))
+	h.mbeacon.EXPECT().OnAtx(gomock.Cond(func(a *types.ActivationTx) bool {
+		return a.ID() == atx.ID()
+	}))
 	h.mtortoise.EXPECT().OnAtx(atx.PublishEpoch+1, atx.ID(), gomock.Any())
 	h.mValidator.EXPECT().IsVerifyingFullPost().Return(false)
 }
@@ -1653,7 +1655,7 @@ func Test_Marriages(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
-			gomock.Cond(func(data any) bool {
+			gomock.Cond(func(data wire.Proof) bool {
 				_, ok := data.(*wire.ProofDoubleMarry)
 				return ok
 			}),

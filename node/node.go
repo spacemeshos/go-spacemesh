@@ -108,6 +108,7 @@ const (
 	PostServiceLogger      = "postService"
 	PostInfoServiceLogger  = "postInfoService"
 	StateDbLogger          = "stateDb"
+	ApiStateDBLogger       = "apiStateDB"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
@@ -374,6 +375,7 @@ type App struct {
 	signers            []*signing.EdSigner
 	Config             *config.Config
 	db                 sql.StateDatabase
+	apiDB              sql.StateDatabase
 	cachedDB           *datastore.CachedDB
 	dbMetrics          *dbmetrics.DBMetricsCollector
 	localDB            sql.LocalDatabase
@@ -1065,6 +1067,7 @@ func (app *App) initServices(ctx context.Context) error {
 			server,
 			app.Config.POET,
 			lg.Zap().Named("poet"),
+			app.Config.TickSize,
 			activation.WithCertifier(certifier),
 		)
 		if err != nil {
@@ -1337,9 +1340,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 
 	cfg.RawRESTListener = parsed.Host
 	cfg.RawRPCListener = parsed.Hostname() + ":0"
-	if err := cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime); err != nil {
-		return err
-	}
+	cfg.Genesis = server.Genesis(app.Config.Genesis.GenesisTime)
 	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Round.CycleGap = app.Config.POET.CycleGap
 	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
@@ -1560,27 +1561,27 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Activation:
-		service := v2alpha1.NewActivationService(app.db)
+		service := v2alpha1.NewActivationService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.ActivationStream:
-		service := v2alpha1.NewActivationStreamService(app.db)
+		service := v2alpha1.NewActivationStreamService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Reward:
-		service := v2alpha1.NewRewardService(app.db)
+		service := v2alpha1.NewRewardService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.RewardStream:
-		service := v2alpha1.NewRewardStreamService(app.db)
+		service := v2alpha1.NewRewardStreamService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Malfeasance:
-		service := v2alpha1.NewMalfeasanceService(app.db, app.malfeasanceHandler)
+		service := v2alpha1.NewMalfeasanceService(app.apiDB, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.MalfeasanceStream:
-		service := v2alpha1.NewMalfeasanceStreamService(app.db, app.malfeasanceHandler)
+		service := v2alpha1.NewMalfeasanceStreamService(app.apiDB, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Network:
@@ -1595,15 +1596,15 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Layer:
-		service := v2alpha1.NewLayerService(app.db)
+		service := v2alpha1.NewLayerService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.LayerStream:
-		service := v2alpha1.NewLayerStreamService(app.db)
+		service := v2alpha1.NewLayerStreamService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Transaction:
-		service := v2alpha1.NewTransactionService(app.db, app.conState, app.syncer, app.txHandler, app.host)
+		service := v2alpha1.NewTransactionService(app.apiDB, app.conState, app.syncer, app.txHandler, app.host)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.TransactionStream:
@@ -1611,7 +1612,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Account:
-		service := v2alpha1.NewAccountService(app.db, app.conState)
+		service := v2alpha1.NewAccountService(app.apiDB, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
 	}
@@ -1946,6 +1947,11 @@ func (app *App) stopServices(ctx context.Context) {
 			app.log.With().Warning("db exited with error", log.Err(err))
 		}
 	}
+	if app.apiDB != nil {
+		if err := app.apiDB.Close(); err != nil {
+			app.log.With().Warning("api db exited with error", log.Err(err))
+		}
+	}
 	if app.dbMetrics != nil {
 		app.dbMetrics.Close()
 	}
@@ -1979,7 +1985,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 	dbLog := app.addLogger(StateDbLogger, lg).Zap()
-	schema, err := statemigrations.SchemaWithInCodeMigrations(app.malfeasanceHandler)
+	schema, err := statemigrations.SchemaWithInCodeMigrations(*app.Config)
 	if err != nil {
 		return fmt.Errorf("error loading db schema: %w", err)
 	}
@@ -2005,6 +2011,19 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("open sqlite db: %w", err)
 	}
 	app.db = sqlDB
+
+	apiDBLog := app.addLogger(ApiStateDBLogger, lg).Zap()
+	apiSqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile),
+		sql.WithReadOnly(),
+		sql.WithLogger(apiDBLog),
+		sql.WithConnections(app.Config.API.DatabaseConnections),
+		sql.WithMigrationsDisabled(),
+	)
+	if err != nil {
+		return fmt.Errorf("open sqlite db: %w", err)
+	}
+	app.apiDB = apiSqlDB
+
 	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
 			ctx,
@@ -2025,6 +2044,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.db,
 			app.Config.Tortoise.WindowSizeEpochs(applied),
 			warmupLog,
+			app.signers...,
 		)
 		if err != nil {
 			return err
@@ -2158,15 +2178,10 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	/* Initialize all protocol services */
-
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
-	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
-	}
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(gTime),
+		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(app.addLogger(ClockLogger, logger).Zap()),
 	)
 	if err != nil {

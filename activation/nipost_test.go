@@ -32,6 +32,7 @@ func defaultPoetServiceMock(t *testing.T, ctrl *gomock.Controller, address strin
 		AnyTimes().
 		Return(&types.PoetRound{}, nil)
 	poet.EXPECT().Address().AnyTimes().Return(address).AnyTimes()
+	poet.EXPECT().TickSize().AnyTimes().Return(uint64(1)).AnyTimes()
 	return poet
 }
 
@@ -582,6 +583,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 			Proof(gomock.Any(), gomock.Any()).
 			Return(proof, []types.Hash32{challenge}, nil)
 		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9998")
+		poet.EXPECT().TickSize().AnyTimes().Return(uint64(1)).AnyTimes()
 		poets = append(poets, poet)
 	}
 
@@ -639,6 +641,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 			Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(&types.PoetRound{}, nil)
 		poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
+		poet.EXPECT().TickSize().AnyTimes().Return(uint64(1)).AnyTimes()
 		poet.EXPECT().Proof(gomock.Any(), "").Return(proofWorse, []types.Hash32{challenge}, nil)
 		poets = append(poets, poet)
 	}
@@ -1274,6 +1277,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 		})
 	poet.EXPECT().Proof(gomock.Any(), "").Return(proof, []types.Hash32{challenge}, nil)
 	poet.EXPECT().Address().AnyTimes().Return("http://localhost:9999")
+	poet.EXPECT().TickSize().AnyTimes().Return(uint64(1))
 
 	poetCfg := PoetConfig{
 		PhaseShift: layerDuration * layersPerEpoch / 2,

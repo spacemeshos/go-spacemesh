@@ -17,9 +17,58 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+type Genesis time.Time
+
+func (g Genesis) Time() time.Time {
+	return time.Time(g)
+}
+
+func (g Genesis) MarshalJSON() ([]byte, error) {
+	return json.Marshal(g.Time())
+}
+
+func (g *Genesis) UnmarshalJSON(data []byte) error {
+	var t time.Time
+	if err := json.Unmarshal(data, &t); err != nil {
+		return err
+	}
+	*g = Genesis(t)
+	return nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler and is needed for viper.
+func (g *Genesis) UnmarshalText(text []byte) error {
+	return g.Set(string(text))
+}
+
+// Equal is needed for go-cmp.
+func (g Genesis) Equal(other Genesis) bool {
+	return time.Time(g).Equal(time.Time(other))
+}
+
+// String implements fmt.Stringer.
+func (g Genesis) String() string {
+	return g.Time().String()
+}
+
+// Set implements pflag.Value.Set.
+func (g *Genesis) Set(value string) error {
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return err
+	}
+	*g = Genesis(t)
+	return nil
+}
+
+// Type implements pflag.Value.Type.
+func (Genesis) Type() string {
+	return "Genesis"
+}
+
 // GenesisConfig contains immutable parameters for the protocol.
 type GenesisConfig struct {
-	GenesisTime string            `mapstructure:"genesis-time"`
+	GenesisTime Genesis           `mapstructure:"genesis-time"`
 	ExtraData   string            `mapstructure:"genesis-extra-data"`
 	Accounts    map[string]uint64 `mapstructure:"accounts"`
 }
@@ -32,11 +81,7 @@ func (g *GenesisConfig) GenesisID() types.Hash20 {
 func (g *GenesisConfig) GoldenATX() types.Hash32 {
 	hh := hash.GetHasher()
 	defer hash.PutHasher(hh)
-	parsed, err := time.Parse(time.RFC3339, g.GenesisTime)
-	if err != nil {
-		panic("code should have run Validate before this method")
-	}
-	hh.Write([]byte(strconv.FormatInt(parsed.Unix(), 10)))
+	hh.Write([]byte(strconv.FormatInt(g.GenesisTime.Time().Unix(), 10)))
 	hh.Write([]byte(g.ExtraData))
 	return types.BytesToHash(hh.Sum(nil))
 }
@@ -48,11 +93,6 @@ func (g *GenesisConfig) Validate() error {
 	}
 	if len(g.ExtraData) > 255 {
 		return fmt.Errorf("extra-data is longer than 255 symbols: %s", g.ExtraData)
-	}
-	_, err := time.Parse(time.RFC3339, g.GenesisTime)
-	if err != nil {
-		return fmt.Errorf("can't parse genesis time %s using time.RFC3339(%s) %w",
-			g.GenesisTime, time.RFC3339, err)
 	}
 	return nil
 }
@@ -111,7 +151,7 @@ func DefaultGenesisConfig() GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return GenesisConfig{
 		ExtraData:   "mainnet",
-		GenesisTime: time.Now().Format(time.RFC3339),
+		GenesisTime: Genesis(time.Now()),
 		Accounts:    generateGenesisAccounts(),
 	}
 }
@@ -121,7 +161,7 @@ func DefaultTestGenesisConfig() GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return GenesisConfig{
 		ExtraData:   "testnet",
-		GenesisTime: time.Now().Format(time.RFC3339),
+		GenesisTime: Genesis(time.Now()),
 		Accounts:    generateGenesisAccounts(),
 	}
 }
