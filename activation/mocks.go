@@ -2494,6 +2494,7 @@ func (c *MockPostStatesSetCall) DoAndReturn(f func(types.NodeID, types.PostState
 type MockIdentityStates struct {
 	ctrl     *gomock.Controller
 	recorder *MockIdentityStatesMockRecorder
+	isgomock struct{}
 }
 
 // MockIdentityStatesMockRecorder is the mock recorder for MockIdentityStates.

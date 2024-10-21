@@ -84,6 +84,7 @@ func (c *MockmalfeasanceInfoInfoCall) DoAndReturn(f func([]byte) (map[string]str
 type MockidentityState struct {
 	ctrl     *gomock.Controller
 	recorder *MockidentityStateMockRecorder
+	isgomock struct{}
 }
 
 // MockidentityStateMockRecorder is the mock recorder for MockidentityState.
