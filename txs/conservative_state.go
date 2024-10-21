@@ -87,12 +87,25 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 }
 
 // SelectProposalTXs picks a specific number of random txs for miner to pack in a proposal.
-func (cs *ConservativeState) SelectProposalTXs(lid types.LayerID, numEligibility int, shuffle bool) []types.TransactionID {
+func (cs *ConservativeState) SelectProposalTXs(lid types.LayerID, numEligibility int) []types.TransactionID {
 	logger := cs.logger.With(zap.Uint32("layer_id", lid.Uint32()))
 	mi := newMempoolIterator(logger, cs.cache, cs.cfg.BlockGasLimit)
 	predictedBlock, byAddrAndNonce := mi.PopAll()
 	numTXs := numEligibility * cs.cfg.NumTXsPerProposal
 	return getProposalTXs(logger, numTXs, predictedBlock, byAddrAndNonce)
+}
+
+func (cs *ConservativeState) PredictBlock(lid types.LayerID, numEligibility int) []types.TransactionID {
+	logger := cs.logger.With(zap.Uint32("layer_id", lid.Uint32()))
+	mi := newMempoolIterator(logger, cs.cache, cs.cfg.BlockGasLimit)
+	predictedBlock, _ := mi.PopAll()
+	numTXs := numEligibility * cs.cfg.NumTXsPerProposal
+	n := min(numTXs, len(predictedBlock))
+	txs := make([]types.TransactionID, 0, n)
+	for i, tx := range predictedBlock[:n] {
+		txs[i] = tx.ID
+	}
+	return txs
 }
 
 func getProposalTXs(

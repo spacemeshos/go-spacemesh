@@ -41,8 +41,8 @@ var errAtxNotAvailable = errors.New("atx not available")
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./proposal_builder.go
 
 type conservativeState interface {
-	SelectProposalTXs(types.LayerID, int, bool) []types.TransactionID
-	PredictBlock(types.LayerID) []types.TransactionID
+	SelectProposalTXs(types.LayerID, int) []types.TransactionID
+	PredictBlock(types.LayerID, int) []types.TransactionID
 }
 
 type votesEncoder interface {
@@ -626,9 +626,9 @@ func (pb *ProposalBuilder) initSignerDataFor(ctx context.Context, ss *signerSess
 	return nil
 }
 
-func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, nodeID types.NodeID) error {
+func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, nodeID types.NodeID) (*types.Proposal, error) {
 	if err := pb.initSharedData(lid); err != nil {
-		return err
+		return nil, err
 	}
 
 	// don't accept registration in the middle of computing proposals
@@ -719,12 +719,13 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, node
 		close(eligible)
 	}()
 
+	var prop *types.Proposal
 	// Stage 2
 	eg2 := errgroup.Group{}
 	for ss := range eligible {
 		opinion, err := encodeVotesOnce()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		meshHash := calcMeshHashOnce()
@@ -738,40 +739,28 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, node
 			}
 			slots := ss.session.eligibilities.slots
 
-			txs := pb.conState.SelectProposalTXs(lid, int(slots))
+			txs := pb.conState.PredictBlock(lid, int(slots))
 
-			proposal := createPartialProposal(
+			prop = createPartialProposal(
 				&ss.session,
 				pb.shared.beacon,
 				pb.shared.active.set,
-				ss.signer,
+				nodeID,
 				lid,
 				txs,
 				opinion,
 				meshHash,
 			)
-			if err := pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
-				pb.logger.Error("failed to publish proposal",
-					log.ZContext(ctx),
-					zap.Uint32("lid", proposal.Layer.Uint32()),
-					zap.Stringer("id", proposal.ID()),
-					zap.Error(err),
-				)
-			} else {
-				pb.logger.Info("proposal created",
-					log.ZContext(ctx),
-					zap.Inline(proposal),
-					zap.Object("latency", &ss.latency),
-				)
-				proposalBuild.Observe(ss.latency.total().Seconds())
-				events.EmitProposal(ss.signer.NodeID(), lid, proposal.ID())
-				events.ReportProposal(events.ProposalCreated, proposal)
-			}
+			pb.logger.Info("proposal created",
+				log.ZContext(ctx),
+				zap.Inline(prop),
+				zap.Object("latency", &ss.latency),
+			)
 			return nil
 		})
 	}
-
-	return errors.Join(stage1Err, eg2.Wait())
+	err := errors.Join(stage1Err, eg2.Wait())
+	return prop, err
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
@@ -946,6 +935,44 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	}
 
 	return errors.Join(stage1Err, eg2.Wait())
+}
+
+func createPartialProposal(
+	session *session,
+	beacon types.Beacon,
+	activeset types.ATXIDList,
+	smesher types.NodeID,
+	lid types.LayerID,
+	txs []types.TransactionID,
+	opinion *types.Opinion,
+	meshHash types.Hash32,
+) *types.Proposal {
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: types.Ballot{
+				InnerBallot: types.InnerBallot{
+					Layer:       lid,
+					AtxID:       session.atx,
+					OpinionHash: opinion.Hash,
+				},
+				Votes: opinion.Votes,
+				// EligibilityProofs: eligibility,
+			},
+			TxIDs:    txs,
+			MeshHash: meshHash,
+		},
+	}
+	if session.ref == types.EmptyBallotID {
+		p.Ballot.RefBallot = types.EmptyBallotID
+		p.Ballot.EpochData = &types.EpochData{
+			ActiveSetHash: activeset.Hash(),
+			Beacon:        beacon,
+		}
+	} else {
+		p.Ballot.RefBallot = session.ref
+	}
+	p.SmesherID = smesher
+	return p
 }
 
 func createProposal(
