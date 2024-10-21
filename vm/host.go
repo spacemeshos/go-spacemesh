@@ -9,6 +9,7 @@ import (
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
+	"github.com/ChainSafe/gossamer/pkg/scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
@@ -31,22 +32,44 @@ func athenaLibPath() string {
 	}
 }
 
+// static context is fixed for the lifetime of one transaction
+type StaticContext struct {
+	principal   types.Address
+	destination types.Address
+	nonce       uint64
+}
+
+// dynamic context may change with each call frame
+type DynamicContext struct {
+	template types.Address
+	callee   types.Address
+}
+
 type Host struct {
-	vm      *athcon.VM
-	host    core.Host
-	loader  core.AccountLoader
-	updater core.AccountUpdater
+	vm             *athcon.VM
+	host           core.Host
+	loader         core.AccountLoader
+	updater        core.AccountUpdater
+	staticContext  StaticContext
+	dynamicContext DynamicContext
 }
 
 // Load the VM from the shared library and returns an instance of a Host.
 // It is the caller's responsibility to call Destroy when it
 // is no longer needed.
-func NewHost(path string, host core.Host, loader core.AccountLoader, updater core.AccountUpdater) (*Host, error) {
+func NewHost(
+	path string,
+	host core.Host,
+	loader core.AccountLoader,
+	updater core.AccountUpdater,
+	staticContext StaticContext,
+	dynamicContext DynamicContext,
+) (*Host, error) {
 	vm, err := athcon.Load(path)
 	if err != nil {
 		return nil, fmt.Errorf("loading Athena VM: %w", err)
 	}
-	return &Host{vm, host, loader, updater}, nil
+	return &Host{vm, host, loader, updater, staticContext, dynamicContext}, nil
 }
 
 func (h *Host) Destroy() {
@@ -66,6 +89,9 @@ func (h *Host) Execute(
 		h.host,
 		h.loader,
 		h.updater,
+		h.staticContext,
+		h.dynamicContext,
+		h.vm,
 	}
 	r, err := h.vm.Execute(
 		hostCtx,
@@ -87,10 +113,13 @@ func (h *Host) Execute(
 }
 
 type hostContext struct {
-	layer   types.LayerID
-	host    core.Host
-	loader  core.AccountLoader
-	updater core.AccountUpdater
+	layer          types.LayerID
+	host           core.Host
+	loader         core.AccountLoader
+	updater        core.AccountUpdater
+	staticContext  StaticContext
+	dynamicContext DynamicContext
+	vm             *athcon.VM
 }
 
 var _ athcon.HostContext = (*hostContext)(nil)
@@ -168,7 +197,86 @@ func (h *hostContext) Call(
 	gas int64,
 	depth int,
 ) (output []byte, gasLeft int64, createAddr athcon.Address, err error) {
-	panic("not implemented")
+	// check call depth
+	if depth > 10 {
+		return nil, 0, [24]byte{}, athcon.CallDepthExceeded
+	}
+
+	// take snapshot of state
+	// TODO: implement me
+
+	// read origin account information
+	senderAccount, err := h.loader.Get(types.Address(sender))
+	if err != nil {
+		return nil, 0, [24]byte{}, fmt.Errorf("loading sender account: %w", err)
+	}
+	destinationAccount, err := h.loader.Get(types.Address(recipient))
+	if err != nil {
+		return nil, 0, [24]byte{}, fmt.Errorf("loading recipient account: %w", err)
+	}
+
+	// if there is input data, then the destination account must exist and must be spawned
+	template := destinationAccount.TemplateAddress
+	state := destinationAccount.State
+	var templateAccount types.Account
+	if len(input) > 0 && (template == nil || len(state) == 0) {
+		return nil, 0, [24]byte{}, fmt.Errorf("missing template information")
+	} else {
+		// read template code
+		templateAccount, err = h.loader.Get(types.Address(*template))
+		if err != nil || len(templateAccount.State) == 0 {
+			return nil, 0, [24]byte{}, fmt.Errorf("loading template account: %w", err)
+		}
+	}
+
+	// balance transfer
+	// this does not depend upon the recipient account status
+
+	// safe math
+	if senderAccount.Balance < value {
+		return nil, 0, [24]byte{}, athcon.InsufficientBalance
+	}
+	if destinationAccount.Balance+value < destinationAccount.Balance {
+		return nil, 0, [24]byte{}, fmt.Errorf("account balance overflow")
+	}
+	senderAccount.Balance -= value
+	destinationAccount.Balance += value
+	h.updater.Update(senderAccount)
+	h.updater.Update(destinationAccount)
+
+	// construct and save context
+	oldContext := h.dynamicContext
+	h.dynamicContext = DynamicContext{
+		template: types.Address(sender),
+		callee:   types.Address(recipient),
+	}
+
+	// replace context at end
+	defer func() {
+		h.dynamicContext = oldContext
+	}()
+
+	// enrich the message with the method selector and account state
+	if len(input) > 0 {
+		input, err = scale.Marshal(athcon.ExecutionPayload{
+			// TODO: figure out when to provide a state here
+			State:   []byte{},
+			Payload: input,
+		})
+		if err != nil {
+			return nil, 0, [24]byte{}, fmt.Errorf("marshalling input: %w", err)
+		}
+	}
+
+	// execute the call
+	res, err := h.vm.Execute(h, athcon.Frontier, kind, depth+1, gas, recipient, sender, input, value, templateAccount.State)
+	if err != nil {
+		// rollback the state in case of failure/revert
+		// TODO: implement me
+
+		return nil, 0, [24]byte{}, err
+	}
+	return res.Output, res.GasLeft, [24]byte{}, nil
 }
 
 func (h *hostContext) Deploy(blob []byte) athcon.Address {

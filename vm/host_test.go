@@ -10,7 +10,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/templates/getbalance"
+	"github.com/spacemeshos/go-spacemesh/vm/programs/getbalance"
+	hostprogram "github.com/spacemeshos/go-spacemesh/vm/programs/host"
 )
 
 func TestNewHost(t *testing.T) {
@@ -71,8 +72,40 @@ func TestNotEnoughGas(t *testing.T) {
 		getbalance.PROGRAM,
 	)
 
-	// FIXME: export more errors in athcon
-	// 3 is "out of gas"
-	require.ErrorIs(t, err, athcon.Error(3))
+	require.ErrorIs(t, err, athcon.OutOfGas)
 	require.Zero(t, gasLeft)
+}
+
+func TestSetGetStorge(t *testing.T) {
+	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
+	ctx := &core.Context{Loader: cache}
+	host, err := NewHost(athenaLibPath(), ctx, cache, cache)
+	require.NoError(t, err)
+	defer host.Destroy()
+
+	storageKey := athcon.Bytes32{0xc0, 0xff, 0xee}
+	storageValue := athcon.Bytes32{0xde, 0xad, 0xbe, 0xef}
+
+	address := types.Address{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+	account := types.Account{
+		Address: address,
+		Storage: []types.StorageItem{
+			{Key: storageKey, Value: storageValue},
+		},
+	}
+	err = cache.Update(account)
+	require.NoError(t, err)
+
+	_, gasLeft, err := host.Execute(
+		account.Layer,
+		10000,
+		account.Address,
+		account.Address,
+		nil,
+		0,
+		hostprogram.PROGRAM,
+	)
+
+	require.NoError(t, err)
+	require.NotZero(t, gasLeft)
 }
