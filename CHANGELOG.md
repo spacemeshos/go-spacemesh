@@ -2,7 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## v1.7.5
 
 ### Upgrade information
 
@@ -10,14 +10,13 @@ New event types introduced in the API of the node, see [API #382](https://github
 previously existing events where renamed. Old events were marked as deprecated. Please update your automations to use
 new event types.
 
-### Highlights
-
-### Features
-
 ### Improvements
 
 * [#6378](https://github.com/spacemeshos/go-spacemesh/pull/6387) Improved handling of malicious identities. This reduces
   the number of DB queries needed during ATX validation.
+
+* [#6386](https://github.com/spacemeshos/go-spacemesh/pull/6386) The API of the node now has its own DB connection pool
+  to reduce the load on the main DB connection pool.
 
 * [#6387](https://github.com/spacemeshos/go-spacemesh/pull/6387) Fix an issue were in rare cases invalid proofs for
   malicious identities were created.
