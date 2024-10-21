@@ -208,24 +208,38 @@ func (h *hostContext) Call(
 	// read origin account information
 	senderAccount, err := h.loader.Get(types.Address(sender))
 	if err != nil {
-		return nil, 0, [24]byte{}, fmt.Errorf("loading sender account: %w", err)
+		return nil, 0, [24]byte{}, athcon.Error{
+			Code: athcon.InternalError.Code,
+			Err:  fmt.Errorf("loading sender account: %w", err),
+		}
 	}
 	destinationAccount, err := h.loader.Get(types.Address(recipient))
 	if err != nil {
-		return nil, 0, [24]byte{}, fmt.Errorf("loading recipient account: %w", err)
+		return nil, 0, [24]byte{}, athcon.Error{
+			Code: athcon.InternalError.Code,
+			Err:  fmt.Errorf("loading recipient account: %w", err),
+		}
 	}
 
 	// if there is input data, then the destination account must exist and must be spawned
 	template := destinationAccount.TemplateAddress
 	state := destinationAccount.State
 	var templateAccount types.Account
-	if len(input) > 0 && (template == nil || len(state) == 0) {
-		return nil, 0, [24]byte{}, fmt.Errorf("missing template information")
-	} else {
+	if len(input) > 0 {
+		if template == nil || len(state) == 0 {
+			return nil, 0, [24]byte{}, athcon.Error{
+				Code: athcon.InternalError.Code,
+				Err:  fmt.Errorf("missing template information"),
+			}
+		}
+
 		// read template code
 		templateAccount, err = h.loader.Get(types.Address(*template))
 		if err != nil || len(templateAccount.State) == 0 {
-			return nil, 0, [24]byte{}, fmt.Errorf("loading template account: %w", err)
+			return nil, 0, [24]byte{}, athcon.Error{
+				Code: athcon.InternalError.Code,
+				Err:  fmt.Errorf("loading template account: %w", err),
+			}
 		}
 	}
 
@@ -237,12 +251,34 @@ func (h *hostContext) Call(
 		return nil, 0, [24]byte{}, athcon.InsufficientBalance
 	}
 	if destinationAccount.Balance+value < destinationAccount.Balance {
-		return nil, 0, [24]byte{}, fmt.Errorf("account balance overflow")
+		return nil, 0, [24]byte{}, athcon.Error{
+			Code: athcon.InternalError.Code,
+			Err:  fmt.Errorf("account balance overflow"),
+		}
 	}
 	senderAccount.Balance -= value
 	destinationAccount.Balance += value
 	h.updater.Update(senderAccount)
 	h.updater.Update(destinationAccount)
+
+	if len(input) == 0 {
+		// short-circuit and return if this is a simple balance transfer
+		return nil, gas, [24]byte{}, nil
+	}
+
+	// enrich the message with the method selector and account state, then execute the call.
+	// note: we skip this step if there's no input (i.e., this is a simple balance transfer).
+	input, err = scale.Marshal(athcon.ExecutionPayload{
+		// TODO: figure out when to provide a state here
+		State:   []byte{},
+		Payload: input,
+	})
+	if err != nil {
+		return nil, 0, [24]byte{}, athcon.Error{
+			Code: athcon.InternalError.Code,
+			Err:  fmt.Errorf("marshalling input: %w", err),
+		}
+	}
 
 	// construct and save context
 	oldContext := h.dynamicContext
@@ -256,23 +292,13 @@ func (h *hostContext) Call(
 		h.dynamicContext = oldContext
 	}()
 
-	// enrich the message with the method selector and account state
-	if len(input) > 0 {
-		input, err = scale.Marshal(athcon.ExecutionPayload{
-			// TODO: figure out when to provide a state here
-			State:   []byte{},
-			Payload: input,
-		})
-		if err != nil {
-			return nil, 0, [24]byte{}, fmt.Errorf("marshalling input: %w", err)
-		}
-	}
-
 	// execute the call
 	res, err := h.vm.Execute(h, athcon.Frontier, kind, depth+1, gas, recipient, sender, input, value, templateAccount.State)
 	if err != nil {
-		// rollback the state in case of failure/revert
+		// rollback in case of failure/revert
 		// TODO: implement me
+		// rollback balance transfer
+		// rollback storage changes
 
 		return nil, 0, [24]byte{}, err
 	}

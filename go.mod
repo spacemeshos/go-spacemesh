@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/storage v1.44.0
 	github.com/ALTree/bigfloat v0.2.0
 	github.com/ChainSafe/gossamer v0.9.0
-	github.com/athenavm/athena/ffi/athcon/bindings/go v0.4.2-0.20241020002621-7d74bed0ffb1
+	github.com/athenavm/athena/ffi/athcon/bindings/go v0.4.2-0.20241021224807-578f0f40e8a7
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240930092556-24ddcc087ee2
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5

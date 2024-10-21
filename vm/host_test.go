@@ -14,21 +14,32 @@ import (
 	hostprogram "github.com/spacemeshos/go-spacemesh/vm/programs/host"
 )
 
-func TestNewHost(t *testing.T) {
+func getHost(t *testing.T) (*Host, *core.StagedCache) {
 	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
 	ctx := &core.Context{Loader: cache}
-	host, err := NewHost(athenaLibPath(), ctx, cache, cache)
+	staticContext := StaticContext{
+		principal:   types.Address{1, 2, 3, 4},
+		destination: types.Address{5, 6, 7, 8},
+		nonce:       10,
+	}
+	dynamicContext := DynamicContext{
+		template: types.Address{11, 12, 13, 14},
+		callee:   types.Address{15, 16, 17, 18},
+	}
+	host, err := NewHost(athenaLibPath(), ctx, cache, cache, staticContext, dynamicContext)
 	require.NoError(t, err)
+	return host, cache
+}
+
+func TestNewHost(t *testing.T) {
+	host, _ := getHost(t)
 	defer host.Destroy()
 
 	require.Equal(t, "Athena", host.vm.Name())
 }
 
 func TestGetBalance(t *testing.T) {
-	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
-	ctx := &core.Context{Loader: cache}
-	host, err := NewHost(athenaLibPath(), ctx, cache, cache)
-	require.NoError(t, err)
+	host, cache := getHost(t)
 	defer host.Destroy()
 
 	account := types.Account{
@@ -36,7 +47,7 @@ func TestGetBalance(t *testing.T) {
 		Address: types.Address{1, 2, 3, 4},
 		Balance: 100,
 	}
-	err = cache.Update(account)
+	err := cache.Update(account)
 	require.NoError(t, err)
 
 	out, gasLeft, err := host.Execute(
@@ -56,10 +67,7 @@ func TestGetBalance(t *testing.T) {
 }
 
 func TestNotEnoughGas(t *testing.T) {
-	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
-	ctx := &core.Context{Loader: cache}
-	host, err := NewHost(athenaLibPath(), ctx, cache, cache)
-	require.NoError(t, err)
+	host, _ := getHost(t)
 	defer host.Destroy()
 
 	_, gasLeft, err := host.Execute(
@@ -76,11 +84,25 @@ func TestNotEnoughGas(t *testing.T) {
 	require.Zero(t, gasLeft)
 }
 
+func TestEmptyCode(t *testing.T) {
+	host, _ := getHost(t)
+	defer host.Destroy()
+
+	_, _, err := host.Execute(
+		10,
+		10,
+		types.Address{1, 2, 3, 4},
+		types.Address{1, 2, 3, 4},
+		nil,
+		0,
+		[]byte{},
+	)
+
+	require.Equal(t, athcon.Failure, err)
+}
+
 func TestSetGetStorge(t *testing.T) {
-	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
-	ctx := &core.Context{Loader: cache}
-	host, err := NewHost(athenaLibPath(), ctx, cache, cache)
-	require.NoError(t, err)
+	host, cache := getHost(t)
 	defer host.Destroy()
 
 	storageKey := athcon.Bytes32{0xc0, 0xff, 0xee}
@@ -89,16 +111,17 @@ func TestSetGetStorge(t *testing.T) {
 	address := types.Address{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
 	account := types.Account{
 		Address: address,
+		Balance: 1000000,
 		Storage: []types.StorageItem{
 			{Key: storageKey, Value: storageValue},
 		},
 	}
-	err = cache.Update(account)
+	err := cache.Update(account)
 	require.NoError(t, err)
 
 	_, gasLeft, err := host.Execute(
 		account.Layer,
-		10000,
+		100000,
 		account.Address,
 		account.Address,
 		nil,
