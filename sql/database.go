@@ -44,13 +44,6 @@ const (
 	beginImmediate = "BEGIN IMMEDIATE;"
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/sql Executor
-
-// Executor is an interface for executing raw statement.
-type Executor interface {
-	Exec(string, Encoder, Decoder) (int, error)
-}
-
 // Statement is an sqlite statement.
 type Statement = sqlite.Stmt
 
@@ -95,6 +88,7 @@ type conf struct {
 	temp                       bool
 	handleIncompleteMigrations bool
 	exclusive                  bool
+	readOnly                   bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -216,6 +210,13 @@ func WithExclusive() Opt {
 	}
 }
 
+// WithReadOnly specifies that the database is to be open in read-only mode.
+func WithReadOnly() Opt {
+	return func(c *conf) {
+		c.readOnly = true
+	}
+}
+
 // Opt for configuring database.
 type Opt func(c *conf)
 
@@ -258,8 +259,7 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 	logger := config.logger.With(zap.String("uri", config.uri))
 	var flags sqlite.OpenFlags
 	if !config.forceFresh {
-		flags = sqlite.SQLITE_OPEN_READWRITE |
-			sqlite.SQLITE_OPEN_URI |
+		flags = sqlite.SQLITE_OPEN_URI |
 			sqlite.SQLITE_OPEN_NOMUTEX
 		if !config.temp {
 			// Note that SQLITE_OPEN_WAL is not handled by SQLITE api itself,
@@ -269,7 +269,13 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 			// using any journal
 			flags |= sqlite.SQLITE_OPEN_WAL
 		}
+		if !config.readOnly {
+			flags |= sqlite.SQLITE_OPEN_READWRITE
+		} else {
+			flags |= sqlite.SQLITE_OPEN_READONLY
+		}
 	}
+
 	freshDB := config.forceFresh
 	if config.exclusive {
 		config.connections = 1

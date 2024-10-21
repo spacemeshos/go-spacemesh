@@ -217,13 +217,10 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
-	require.NoError(t, err)
-
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(gTime),
+		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(zaptest.NewLogger(t)))
 	require.NoError(t, err)
 
@@ -265,13 +262,10 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
-	require.NoError(t, err)
-
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(gTime),
+		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(zaptest.NewLogger(t)))
 	require.NoError(t, err)
 
@@ -300,13 +294,11 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	cfg.API.PrivateServices = nil
 	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
-	require.NoError(t, err)
-
+	var err error
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(gTime),
+		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(zaptest.NewLogger(t)))
 	require.NoError(t, err)
 
@@ -505,7 +497,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.HARE3.RoundDuration = 100 * time.Millisecond
 
 		app.Config.Genesis = config.GenesisConfig{
-			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
+			GenesisTime: config.Genesis(time.Now().Add(20 * time.Second)),
 			Accounts: map[string]uint64{
 				address.String(): 100_000_000,
 			},
@@ -883,10 +875,7 @@ func TestGenesisConfig(t *testing.T) {
 		t.Cleanup(func() { app.Cleanup(context.Background()) })
 
 		var existing config.GenesisConfig
-		require.NoError(
-			t,
-			existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)),
-		)
+		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
 		require.Empty(t, existing.Diff(&app.Config.Genesis))
 	})
 
@@ -912,14 +901,6 @@ func TestGenesisConfig(t *testing.T) {
 		app.Cleanup(context.Background())
 		err := app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
-	})
-
-	t.Run("not valid time", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		cfg.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
-		app := New(WithConfig(cfg))
-
-		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
 	})
 
 	t.Run("long extra data", func(t *testing.T) {
@@ -975,7 +956,7 @@ func TestAdminEvents(t *testing.T) {
 	cfg.SMESHING.Start = true
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
-	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+	cfg.Genesis.GenesisTime = config.Genesis(time.Now().Add(5 * time.Second))
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	logger := logtest.New(t, zapcore.DebugLevel)
@@ -1025,7 +1006,12 @@ func TestAdminEvents(t *testing.T) {
 			&pb.Event_PostStart{},
 			&pb.Event_PostComplete{},
 			&pb.Event_PoetWaitRound{},
+			&pb.Event_WaitingForPoetRegistrationWindow{},
+			&pb.Event_RegisteredInPoet{},
 			&pb.Event_PoetWaitProof{},
+			&pb.Event_WaitingForPoetRoundEnd{},
+			&pb.Event_ProofDownloadedFromPoet{},
+			&pb.Event_BestProofSelected{},
 			&pb.Event_PostStart{},
 			&pb.Event_PostComplete{},
 			&pb.Event_AtxPublished{},
@@ -1052,7 +1038,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	cfg.API.PostListener = "0.0.0.0:10094"
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
-	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+	cfg.Genesis.GenesisTime = config.Genesis(time.Now().Add(5 * time.Second))
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	logger := zaptest.NewLogger(t)

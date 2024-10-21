@@ -8,6 +8,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // SAFETY: all exported fields are read-only and are safe to read concurrently.
@@ -23,7 +24,10 @@ type ATX struct {
 func New() *Data {
 	return &Data{
 		malicious: map[types.NodeID]struct{}{},
-		epochs:    map[types.EpochID]epochCache{},
+		epochs:    map[types.EpochID]map[types.ATXID]*ATX{},
+
+		signers: map[types.NodeID]struct{}{},
+		managed: map[types.EpochID]map[types.NodeID]types.ATXID{},
 	}
 }
 
@@ -32,11 +36,26 @@ type Data struct {
 
 	mu        sync.RWMutex
 	malicious map[types.NodeID]struct{}
-	epochs    map[types.EpochID]epochCache
+	epochs    map[types.EpochID]map[types.ATXID]*ATX
+
+	signers map[types.NodeID]struct{}
+	managed map[types.EpochID]map[types.NodeID]types.ATXID
 }
 
-type epochCache struct {
-	index map[types.ATXID]*ATX
+func (d *Data) Register(sig *signing.EdSigner) {
+	if _, exists := d.signers[sig.NodeID()]; exists {
+		return
+	}
+	d.signers[sig.NodeID()] = struct{}{}
+
+	// update quick access for newly registered signer
+	for epoch, ecache := range d.epochs {
+		for id, atx := range ecache {
+			if atx.Node == sig.NodeID() {
+				d.managed[epoch][sig.NodeID()] = id
+			}
+		}
+	}
 }
 
 func (d *Data) Evicted() types.EpochID {
@@ -57,6 +76,11 @@ func (d *Data) EvictEpoch(evict types.EpochID) {
 	}
 	if d.evicted.Load() < evict.Uint32() {
 		d.evicted.Store(evict.Uint32())
+	}
+	for epoch := range d.managed {
+		if epoch <= evict {
+			delete(d.managed, epoch)
+		}
 	}
 	for epoch := range d.epochs {
 		if epoch <= evict {
@@ -92,19 +116,23 @@ func (d *Data) AddAtx(target types.EpochID, id types.ATXID, atx *ATX) bool {
 	}
 	ecache, exists := d.epochs[target]
 	if !exists {
-		ecache = epochCache{
-			index: map[types.ATXID]*ATX{},
-		}
-		d.epochs[target] = ecache
+		d.epochs[target] = map[types.ATXID]*ATX{}
+		ecache = d.epochs[target]
 	}
-
-	if _, exists = ecache.index[id]; exists {
+	if _, exists = ecache[id]; exists {
 		return false
 	}
 
 	atxsCounter.WithLabelValues(target.String()).Inc()
-
-	ecache.index[id] = atx
+	ecache[id] = atx
+	if _, exists = d.signers[atx.Node]; exists {
+		managedCache, exists := d.managed[target]
+		if !exists {
+			d.managed[target] = map[types.NodeID]types.ATXID{}
+			managedCache = d.managed[target]
+		}
+		managedCache[atx.Node] = id
+	}
 	return true
 }
 
@@ -164,11 +192,38 @@ func (d *Data) Get(epoch types.EpochID, atx types.ATXID) *ATX {
 	if !exists {
 		return nil
 	}
-	data, exists := ecache.index[atx]
+	data, exists := ecache[atx]
 	if !exists {
 		return nil
 	}
 	return data
+}
+
+// GetByEpochAndNodeID returns atx data by epoch and node id. This query will be slow for nodeIDs that
+// are not managed by the node.
+func (d *Data) GetByEpochAndNodeID(epoch types.EpochID, node types.NodeID) (types.ATXID, *ATX) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	atxcache, exists := d.managed[epoch]
+	if exists {
+		if atxid, exists := atxcache[node]; exists {
+			atx, exists := d.epochs[epoch][atxid]
+			if exists {
+				return atxid, atx
+			}
+		}
+	}
+
+	ecache, exists := d.epochs[epoch]
+	if !exists {
+		return types.EmptyATXID, nil
+	}
+	for id, atx := range ecache {
+		if atx.Node == node {
+			return id, atx
+		}
+	}
+	return types.EmptyATXID, nil
 }
 
 func (d *Data) Size(target types.EpochID) int {
@@ -178,7 +233,7 @@ func (d *Data) Size(target types.EpochID) int {
 	if !exists {
 		return 0
 	}
-	return len(ecache.index)
+	return len(ecache)
 }
 
 type lockGuard struct{}
@@ -203,7 +258,7 @@ func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), f
 	if !exists {
 		return
 	}
-	for id, atx := range ecache.index {
+	for id, atx := range ecache {
 		ok := true
 		for _, filter := range filters {
 			ok = ok && filter(d, atx, lockGuard{})
@@ -250,7 +305,7 @@ func (d *Data) MissingInEpoch(epoch types.EpochID, atxs []types.ATXID) []types.A
 	}
 	var missing []types.ATXID
 	for _, id := range atxs {
-		if _, exists := ecache.index[id]; !exists {
+		if _, exists := ecache[id]; !exists {
 			missing = append(missing, id)
 		}
 	}
@@ -271,7 +326,7 @@ func (d *Data) WeightForSet(epoch types.EpochID, set []types.ATXID) (uint64, []b
 	}
 	var weight uint64
 	for i, id := range set {
-		if data, exists := ecache.index[id]; exists {
+		if data, exists := ecache[id]; exists {
 			weight += data.Weight
 			used[i] = true
 		}

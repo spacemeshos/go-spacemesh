@@ -291,6 +291,7 @@ func (h *Hare) Coins() <-chan WeakCoinOutput {
 
 func (h *Hare) Start() {
 	h.pubsub.Register(h.config.ProtocolName, h.Handler, pubsub.WithValidatorInline(true))
+	h.eg.Go(func() error { return h.p2p.Run(h.ctx) })
 	current := h.nodeClock.CurrentLayer() + 1
 	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
 	disabled := types.LayerID(math.MaxUint32)

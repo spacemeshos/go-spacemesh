@@ -22,6 +22,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
@@ -253,7 +254,10 @@ func (c *HTTPPoetClient) Submit(
 		roundEnd = time.Now().Add(resBody.RoundEnd.AsDuration())
 	}
 
-	return &types.PoetRound{ID: resBody.RoundId, End: roundEnd}, nil
+	round := types.PoetRound{ID: resBody.RoundId, End: roundEnd}
+	events.EmitRegisteredInPoet(nodeID, c.Address(), round.ID)
+
+	return &round, nil
 }
 
 func (c *HTTPPoetClient) Info(ctx context.Context) (*types.PoetInfo, error) {
@@ -408,6 +412,9 @@ type poetService struct {
 	expectedPhaseShift time.Duration
 	infoCache          cachedData[*types.PoetInfo]
 	powParamsCache     cachedData[*PoetPowParams]
+
+	// Used to calculate ticks from PoetProof.LeafCount.
+	tickSize uint64
 }
 
 type PoetServiceOpt func(*poetService)
@@ -423,6 +430,7 @@ func NewPoetService(
 	server types.PoetServer,
 	cfg PoetConfig,
 	logger *zap.Logger,
+	tickSize uint64,
 	opts ...PoetServiceOpt,
 ) (*poetService, error) {
 	client, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
@@ -434,6 +442,7 @@ func NewPoetService(
 		client,
 		cfg,
 		logger,
+		tickSize,
 		opts...,
 	), nil
 }
@@ -443,6 +452,7 @@ func NewPoetServiceWithClient(
 	client PoetClient,
 	cfg PoetConfig,
 	logger *zap.Logger,
+	tickSize uint64,
 	opts ...PoetServiceOpt,
 ) *poetService {
 	service := &poetService{
@@ -454,6 +464,7 @@ func NewPoetServiceWithClient(
 		powParamsCache:     cachedData[*PoetPowParams]{ttl: cfg.PowParamsCacheTTL},
 		proofMembers:       make(map[string][]types.Hash32, 1),
 		expectedPhaseShift: cfg.PhaseShift,
+		tickSize:           tickSize,
 	}
 	for _, opt := range opts {
 		opt(service)
@@ -471,6 +482,10 @@ func NewPoetServiceWithClient(
 		)
 	}
 	return service
+}
+
+func (c *poetService) TickSize() uint64 {
+	return c.tickSize
 }
 
 func (c *poetService) verifyPhaseShiftConfiguration(ctx context.Context) error {
@@ -629,6 +644,8 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 	}
 	clear(c.proofMembers)
 	c.proofMembers[roundID] = members
+
+	events.EmitProofDownloadedFromPoet(c.Address(), proof.RoundID, proof.LeafCount/c.tickSize)
 
 	return &proof.PoetProof, members, nil
 }

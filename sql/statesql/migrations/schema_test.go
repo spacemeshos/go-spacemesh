@@ -6,11 +6,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func TestCodedMigrations(t *testing.T) {
-	schema, err := SchemaWithInCodeMigrations(nil)
+	schema, err := SchemaWithInCodeMigrations(config.DefaultConfig())
 	require.NoError(t, err)
 
 	db := sql.InMemory(

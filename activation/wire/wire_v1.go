@@ -25,8 +25,8 @@ type ActivationTxV1 struct {
 	blob []byte
 }
 
-// InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
-// structure is serialized and signed.
+// InnerActivationTxV1 is the set of all fields of an ATX that are used to calculate the ATX ID. It contains all fields
+// besides the Signature and the Smesher ID.
 type InnerActivationTxV1 struct {
 	NIPostChallengeV1
 

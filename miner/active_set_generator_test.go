@@ -168,7 +168,7 @@ func TestActiveSetGenerate(t *testing.T) {
 				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
 			},
 			malfeasent: []identity{
-				gidentity(types.NodeID{3}, time.Unix(29, 0)),
+				testIdentity(types.NodeID{3}, time.Unix(29, 0)),
 			},
 			epochStart:     unixPtr(30, 0),
 			networkDelay:   2 * time.Second,
@@ -184,7 +184,7 @@ func TestActiveSetGenerate(t *testing.T) {
 				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
 			},
 			malfeasent: []identity{
-				gidentity(types.NodeID{3}, time.Unix(31, 0)),
+				testIdentity(types.NodeID{3}, time.Unix(31, 0)),
 			},
 			epochStart:     unixPtr(30, 0),
 			networkDelay:   2 * time.Second,
