@@ -632,9 +632,6 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, node
 	}
 
 	// don't accept registration in the middle of computing proposals
-	// pb.signers.mu.Lock()
-	// signers := maps.Values(pb.signers.signers)
-	// pb.signers.mu.Unlock()
 	signer := &signerSession{}
 	encodeVotesOnce := sync.OnceValues(func() (*types.Opinion, error) {
 		pb.tortoise.TallyVotes(ctx, lid)

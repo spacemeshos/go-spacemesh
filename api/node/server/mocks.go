@@ -102,6 +102,44 @@ func (m *Mockhare) EXPECT() *MockhareMockRecorder {
 	return m.recorder
 }
 
+// Beacon mocks base method.
+func (m *Mockhare) Beacon(ctx context.Context, epoch types.EpochID) types.Beacon {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Beacon", ctx, epoch)
+	ret0, _ := ret[0].(types.Beacon)
+	return ret0
+}
+
+// Beacon indicates an expected call of Beacon.
+func (mr *MockhareMockRecorder) Beacon(ctx, epoch any) *MockhareBeaconCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Beacon", reflect.TypeOf((*Mockhare)(nil).Beacon), ctx, epoch)
+	return &MockhareBeaconCall{Call: call}
+}
+
+// MockhareBeaconCall wrap *gomock.Call
+type MockhareBeaconCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockhareBeaconCall) Return(arg0 types.Beacon) *MockhareBeaconCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockhareBeaconCall) Do(f func(context.Context, types.EpochID) types.Beacon) *MockhareBeaconCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockhareBeaconCall) DoAndReturn(f func(context.Context, types.EpochID) types.Beacon) *MockhareBeaconCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MinerWeight mocks base method.
 func (m *Mockhare) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64 {
 	m.ctrl.T.Helper()

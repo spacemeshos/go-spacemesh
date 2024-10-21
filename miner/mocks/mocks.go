@@ -42,6 +42,44 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
+// PredictBlock mocks base method.
+func (m *MockconservativeState) PredictBlock(arg0 types.LayerID, arg1 int) []types.TransactionID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PredictBlock", arg0, arg1)
+	ret0, _ := ret[0].([]types.TransactionID)
+	return ret0
+}
+
+// PredictBlock indicates an expected call of PredictBlock.
+func (mr *MockconservativeStateMockRecorder) PredictBlock(arg0, arg1 any) *MockconservativeStatePredictBlockCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PredictBlock", reflect.TypeOf((*MockconservativeState)(nil).PredictBlock), arg0, arg1)
+	return &MockconservativeStatePredictBlockCall{Call: call}
+}
+
+// MockconservativeStatePredictBlockCall wrap *gomock.Call
+type MockconservativeStatePredictBlockCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockconservativeStatePredictBlockCall) Return(arg0 []types.TransactionID) *MockconservativeStatePredictBlockCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockconservativeStatePredictBlockCall) Do(f func(types.LayerID, int) []types.TransactionID) *MockconservativeStatePredictBlockCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockconservativeStatePredictBlockCall) DoAndReturn(f func(types.LayerID, int) []types.TransactionID) *MockconservativeStatePredictBlockCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // SelectProposalTXs mocks base method.
 func (m *MockconservativeState) SelectProposalTXs(arg0 types.LayerID, arg1 int) []types.TransactionID {
 	m.ctrl.T.Helper()
