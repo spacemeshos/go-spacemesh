@@ -27,7 +27,7 @@ This testing setup can run on top of any k8s installation. The instructions belo
     chaos-mesh is used for some tests. See <https://chaos-mesh.org/docs/quick-start/> for more up-to-date instructions.
 
     ```bash
-    curl -sSL https://mirrors.chaos-mesh.org/v2.5.1/install.sh | bash
+    curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash
     ```
 
 4. Install `loki` to use grafana dashboard.
@@ -39,13 +39,18 @@ This testing setup can run on top of any k8s installation. The instructions belo
     helm repo update
     helm upgrade --install loki grafana/loki-stack  --set grafana.enabled=true,prometheus.enabled=true,prometheus.alertmanager.persistentVolume.enabled=false,prometheus.server.persistentVolume.enabled=false,loki.persistence.enabled=true,loki.persistence.storageClassName=standard,loki.persistence.size=20Gi
     ```
+
 5. Install `gomplate`
 
     In linux amd64 use:
+
+    <!-- markdownlint-disable MD013 -->
     ```bash
     curl -o /usr/local/bin/gomplate -sSL https://github.com/hairyhenderson/gomplate/releases/download/v4.1.0/gomplate_linux-amd64 
     chmod 755 /usr/local/bin/gomplate
     ```
+    <!-- markdownlint-enable MD013 -->
+
     For other OS, please refer to the [releases](https://github.com/hairyhenderson/gomplate/releases) page.
 
 ### Using Grafana and Loki
@@ -155,6 +160,7 @@ poet     0/1     Pending   0          9m13s
 
 then please see more details with
 
+<!-- markdownlint-disable MD013 -->
 ```bash
 ➜  ~ kubectl describe pods poet -n test-adno
 Name:         poet
@@ -166,21 +172,22 @@ Events:
   ----     ------            ----                ----               -------
   Warning  FailedScheduling  69s (x11 over 11m)  default-scheduler  0/1 nodes are available: 1 Insufficient cpu, 1 Insufficient memory.
 ```
+<!-- markdownlint-enable MD013 -->
 
-Most likely you have insufficient CPU or memory and need to make `size` smaller in your `make run` command.
-This is related to minikube setup though and shouldn't be an issue for Kubernetes cluster running in the cloud.
+Most likely you have insufficient CPU or memory and need to make `size` smaller in your `make run` command. This is
+related to minikube setup though and shouldn't be an issue for Kubernetes cluster running in the cloud.
 
 ### Note
 
 * If you are switching between remote and local k8s, you have to run `minikube start` before running the tests locally.
 * If you did `make clean`, you will have to install `loki` again for grafana to be installed.
-* If the code changes in the codebase and you'd like to test the changed code, you must rebuild all images again. E.g. `make dockerbuild-go && make dockerbuild-bs && cd systest && make docker`
+* If the code changes in the codebase and you'd like to test the changed code, you must rebuild all images again. E.g.
+  `make dockerbuild-go && make dockerbuild-bs && cd systest && make docker`
 
 ## Parametrizable tests
 
-Tests are parametrized using configmap that must be created in the same namespace
-where test pod is running. Name of the configmap by default will match name of the pod where
-tests are running.
+Tests are parametrized using configmap that must be created in the same namespace where test pod is running. Name of the
+configmap by default will match name of the pod where tests are running.
 
 Developer can replace configmap that is used in tests by creating a custom one, and updating `configname` variable.
 
@@ -205,9 +212,11 @@ make run properties=properties.env test_name=TestStepCreate
 
 ## Longevity testing
 
-These tests test the clusters over a long period of time. They are therefore disabled by default so that the CI doesn't run them.
+These tests test the clusters over a long period of time. They are therefore disabled by default so that the CI doesn't
+run them.
 
 In order to run them, please define the `LONGEVITY_TEST` environment variable, otherwise they will be skipped:
+
 ```bash
 export LONGEVITY_TESTS=1
 ```
@@ -223,8 +232,8 @@ export namespace=qqq
 make run test_name=TestStepCreate size=10 bootstrap=1m keep=true
 ```
 
-Once that step completes user is able to apply different tasks that either modify the cluster, asserts some
-expectations or enables chaos conditions.
+Once that step completes user is able to apply different tasks that either modify the cluster, asserts some expectations
+or enables chaos conditions.
 
 For example creating a batch of transactions:
 
@@ -250,8 +259,8 @@ All such individual steps can be found in `systest/steps_test.go`.
 
 ### Scheduler
 
-Individual steps may be also scheduled by any software. For simplicity the first version of scheduler is implemented
-in golang (see TestScheduleBasic).
+Individual steps may be also scheduled by any software. For simplicity the first version of scheduler is implemented in
+golang (see TestScheduleBasic).
 
 It launches a test that will execute sub-tests to create transactions, add nodes, verify consistency of the mesh and
 that nodes are eventually synced.
@@ -269,8 +278,8 @@ See available storage classes using:
 kubectl get sc
 ```
 
-For longevity tests standard storage class is not sufficiently fast, and has low amount of allocated resources (iops
-and throughput). Allocated resource also depend on the disk size.
+For longevity tests standard storage class is not sufficiently fast, and has low amount of allocated resources (iops and
+throughput). Allocated resource also depend on the disk size.
 
 On gke for the network with a moderate load `premium-rwo` storage class with 10Gi disk size can be used. It will
 provision ssd disks.
@@ -281,9 +290,8 @@ export storage=premium-rwo=10Gi
 
 ### Schedule chaos tasks for longevity network
 
-Chaos-mesh tasks are scheduled using native chaos-mesh api for flexibility.
-After cluster was created and all pods of the cluster have spawned it is possible to apply
-a predefined set of tasks using kubectl
+Chaos-mesh tasks are scheduled using native chaos-mesh api for flexibility. After cluster was created and all pods of
+the cluster have spawned it is possible to apply a predefined set of tasks using kubectl
 
 ```bash
 kubectl apply -n <namespace> -f ./parameters/chaos

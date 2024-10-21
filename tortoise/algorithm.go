@@ -17,7 +17,7 @@ import (
 // Config for protocol parameters.
 type Config struct {
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
-	Hdist                uint32 `mapstructure:"tortoise-hdist"`       // hare output lookback distance
+	Hdist                uint32 `mapstructure:"tortoise-hdist"`       // hare output look back distance
 	Zdist                uint32 `mapstructure:"tortoise-zdist"`       // hare result wait distance
 	WindowSize           uint32 `mapstructure:"tortoise-window-size"` // size of the tortoise sliding window (in layers)
 	HistoricalWindowSize []WindowSizeInterval
@@ -424,12 +424,12 @@ type DecodedBallot struct {
 }
 
 type BallotData struct {
-	ID           types.BallotID
-	Layer        types.LayerID
-	ATXID        types.ATXID
-	Smesher      types.NodeID
-	Beacon       types.Beacon
-	Eligiblities uint32
+	ID            types.BallotID
+	Layer         types.LayerID
+	ATXID         types.ATXID
+	Smesher       types.NodeID
+	Beacon        types.Beacon
+	Eligibilities uint32
 }
 
 func (t *Tortoise) GetBallot(id types.BallotID) *BallotData {
@@ -440,12 +440,12 @@ func (t *Tortoise) GetBallot(id types.BallotID) *BallotData {
 		return nil
 	}
 	return &BallotData{
-		ID:           id,
-		Layer:        info.layer,
-		ATXID:        info.reference.atxid,
-		Smesher:      info.reference.smesher,
-		Beacon:       info.reference.beacon,
-		Eligiblities: info.reference.expectedBallots,
+		ID:            id,
+		Layer:         info.layer,
+		ATXID:         info.reference.atxid,
+		Smesher:       info.reference.smesher,
+		Beacon:        info.reference.beacon,
+		Eligibilities: info.reference.expectedBallots,
 	}
 }
 

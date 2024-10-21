@@ -424,7 +424,7 @@ type App struct {
 }
 
 func (app *App) loadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, error) {
-	var nodeIDs []types.NodeID
+	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	if app.Config.Recovery.PreserveOwnAtx {
 		for _, sig := range app.signers {
 			nodeIDs = append(nodeIDs, sig.NodeID())
