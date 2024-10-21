@@ -110,7 +110,7 @@ func createTestHandler(t *testing.T) *testHandler {
 		}
 		if ballot.EpochData != nil {
 			data.Beacon = ballot.EpochData.Beacon
-			data.Eligiblities = ballot.EpochData.EligibilityCount
+			data.Eligibilities = ballot.EpochData.EligibilityCount
 		}
 		return data
 	})
