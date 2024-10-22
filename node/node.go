@@ -1034,6 +1034,10 @@ func (app *App) initServices(ctx context.Context) error {
 	var remoteProposalBuilder *miner.RemoteProposalBuilder
 	if nodeServiceClient != nil {
 		remoteProposalBuilder = miner.NewRemoteBuilder(app.clock, nodeServiceClient, nodeServiceClient)
+		for _, sig := range app.signers {
+			remoteProposalBuilder.Register(sig)
+		}
+
 		app.remoteProposalBuilder = remoteProposalBuilder
 	} else {
 		proposalBuilder = miner.New(
