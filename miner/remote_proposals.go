@@ -128,6 +128,7 @@ func NewRemoteBuilder(
 	svc nodeService,
 	layerSize uint32,
 	layersPerEpoch uint32,
+	logger *zap.Logger,
 ) *RemoteProposalBuilder {
 	pb := &RemoteProposalBuilder{
 		cfg: config{
@@ -136,7 +137,7 @@ func NewRemoteBuilder(
 			layerSize:      layerSize,
 			layersPerEpoch: layersPerEpoch,
 		},
-		logger:    zap.NewNop(),
+		logger:    logger,
 		clock:     clock,
 		publisher: publisher,
 		nodeSvc:   svc,
@@ -146,6 +147,9 @@ func NewRemoteBuilder(
 		}{
 			signers: map[types.NodeID]*signerSession{},
 		},
+	}
+	if logger == nil {
+		pb.logger = zap.NewNop()
 	}
 	return pb
 }
@@ -215,7 +219,7 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
 		}
-
+		fmt.Println("remote proposal builder got proposal and nonce", proposal, nonce, err)
 		if proposal == nil {
 			// this node signer isn't eligible this epoch, continue
 			pb.logger.Info("node not eligible on this layer. will try next")

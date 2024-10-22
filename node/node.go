@@ -1033,7 +1033,7 @@ func (app *App) initServices(ctx context.Context) error {
 	var proposalBuilder *miner.ProposalBuilder
 	var remoteProposalBuilder *miner.RemoteProposalBuilder
 	if nodeServiceClient != nil {
-		remoteProposalBuilder = miner.NewRemoteBuilder(app.clock, nodeServiceClient, nodeServiceClient, layerSize, layersPerEpoch)
+		remoteProposalBuilder = miner.NewRemoteBuilder(app.clock, nodeServiceClient, nodeServiceClient, layerSize, layersPerEpoch, app.addLogger(ProposalBuilderLogger, lg).Zap())
 		for _, sig := range app.signers {
 			remoteProposalBuilder.Register(sig)
 		}
