@@ -324,42 +324,59 @@ func (h *Hare) Running() int {
 	return len(h.sessions)
 }
 
+const RETRIES = 3
+
+var retrySleep = 500 * time.Millisecond
+
 // fetchFull will fetch the full list of proposal IDs from the provided peer.
 func (h *Hare) fetchFull(ctx context.Context, peer p2p.Peer, msgId types.Hash32) (
 	[]types.ProposalID, error,
 ) {
-	ctx, cancel := context.WithTimeout(ctx, fetchFullTimeout)
-	defer cancel()
-
-	requestCompactCounter.Inc()
+	resp := &CompactIdResponse{}
 	req := &CompactIdRequest{MsgId: msgId}
 	reqBytes := codec.MustEncode(req)
-	resp := &CompactIdResponse{}
-	cb := func(ctx context.Context, rw io.ReadWriter) error {
-		respLen, _, err := codec.DecodeLen(rw)
+
+	reqFn := func() ([]types.ProposalID, error) {
+		ctx, cancel := context.WithTimeout(ctx, fetchFullTimeout)
+		defer cancel()
+
+		requestCompactCounter.Inc()
+		cb := func(ctx context.Context, rw io.ReadWriter) error {
+			respLen, _, err := codec.DecodeLen(rw)
+			if err != nil {
+				return fmt.Errorf("decode length: %w", err)
+			}
+			if respLen >= MAX_EXCHANGE_SIZE {
+				return errResponseTooBig
+			}
+			b, err := codec.DecodeFrom(rw, resp)
+			if err != nil || b != int(respLen) {
+				return fmt.Errorf("decode response: %w", err)
+			}
+			return nil
+		}
+
+		err := h.p2p.StreamRequest(ctx, peer, reqBytes, cb)
 		if err != nil {
-			return fmt.Errorf("decode length: %w", err)
+			h.log.Error("hare4 stream request errored!", zap.Error(err))
+			requestCompactErrorCounter.Inc()
+			return nil, fmt.Errorf("stream request: %w", err)
 		}
-		if respLen >= MAX_EXCHANGE_SIZE {
-			return errResponseTooBig
-		}
-		b, err := codec.DecodeFrom(rw, resp)
-		if err != nil || b != int(respLen) {
-			return fmt.Errorf("decode response: %w", err)
-		}
-		return nil
+		h.tracer.OnCompactIdResponse(resp)
+		return resp.Ids, nil
 	}
 
-	err := h.p2p.StreamRequest(ctx, peer, reqBytes, cb)
-	if err != nil {
-		h.log.Error("hare4 stream request errored!", zap.Error(err))
-		requestCompactErrorCounter.Inc()
-		return nil, fmt.Errorf("stream request: %w", err)
+	for retry := range RETRIES {
+		res, err := reqFn()
+		if err == nil {
+			return res, nil
+		}
+		if err != nil && retry == RETRIES-1 {
+			return nil, err
+		}
+		time.Sleep(retrySleep)
 	}
-
-	h.tracer.OnCompactIdResponse(resp)
-
-	return resp.Ids, nil
+	return nil, errors.New("fetch full exhausted retries")
 }
 
 func (h *Hare) handleProposalsStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
