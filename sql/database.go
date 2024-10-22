@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -233,6 +234,15 @@ func InMemory(opts ...Opt) *sqliteDatabase {
 	if err != nil {
 		panic(err)
 	}
+	return db
+}
+
+// InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
+func InMemoryTest(tb testing.TB, opts ...Opt) *sqliteDatabase {
+	// When using empty DB schema, we don't want to check for schema drift due to
+	// "PRAGMA user_version = 0;" in the initial schema retrieved from the DB.
+	db := InMemory(append(opts, WithNoCheckSchemaDrift())...)
+	tb.Cleanup(func() { db.Close() })
 	return db
 }
 
