@@ -95,7 +95,7 @@ import (
 //}
 
 type nodeService interface {
-	Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, error)
+	Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error)
 }
 type RemoteProposalBuilder struct {
 	logger *zap.Logger
@@ -242,7 +242,7 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 	pb.signers.mu.Unlock()
 
 	for _, signer := range signers {
-		proposal, err := pb.nodeSvc.Proposal(ctx, layer, signer.signer.NodeID())
+		proposal, nonce, err := pb.nodeSvc.Proposal(ctx, layer, signer.signer.NodeID())
 		if err != nil {
 			return fmt.Errorf("get partial proposal: %w", err)
 		}
@@ -256,7 +256,7 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 			signer.signer.VRFSigner(),
 			layer.GetEpoch(),
 			proposal.Ballot.EpochData.Beacon,
-			111, //	ss.session.nonce, // atx nonce
+			types.VRFPostIndex(nonce), //	ss.session.nonce, // atx nonce
 			proposal.Ballot.EpochData.EligibilityCount,
 			pb.cfg.layersPerEpoch,
 		)

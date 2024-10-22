@@ -36,7 +36,7 @@ type hare interface {
 }
 
 type proposalBuilder interface {
-	BuildFor(layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error)
+	BuildFor(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error)
 }
 
 type Server struct {
@@ -298,7 +298,7 @@ type proposalResp struct {
 }
 
 func (p *proposalResp) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
-	if buf == nil {
+	if p.buf == nil {
 		w.WriteHeader(204)
 		return nil
 	}
@@ -316,7 +316,7 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 	}
 	id := types.BytesToNodeID(hexBuf)
 
-	proposal, nonce, err := s.proposals.BuildFor(types.LayerID(request.Layer), id)
+	proposal, nonce, err := s.proposals.BuildFor(ctx, types.LayerID(request.Layer), id)
 	if err != nil {
 		return &proposalResp{}, err
 	}

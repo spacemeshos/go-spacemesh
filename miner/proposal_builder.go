@@ -626,9 +626,9 @@ func (pb *ProposalBuilder) initSignerDataFor(ctx context.Context, ss *signerSess
 	return nil
 }
 
-func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, nodeID types.NodeID) (*types.Proposal, error) {
+func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, nodeID types.NodeID) (*types.Proposal, types.VRFPostIndex, error) {
 	if err := pb.initSharedData(lid); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// don't accept registration in the middle of computing proposals
@@ -722,7 +722,7 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, node
 	for ss := range eligible {
 		opinion, err := encodeVotesOnce()
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		meshHash := calcMeshHashOnce()
@@ -757,7 +757,7 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, node
 		})
 	}
 	err := errors.Join(stage1Err, eg2.Wait())
-	return prop, err
+	return prop, 0, err
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {

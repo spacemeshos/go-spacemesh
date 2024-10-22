@@ -373,54 +373,55 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock          *flock.Flock
-	signers           []*signing.EdSigner
-	Config            *config.Config
-	db                sql.StateDatabase
-	cachedDB          *datastore.CachedDB
-	dbMetrics         *dbmetrics.DBMetricsCollector
-	localDB           sql.LocalDatabase
-	grpcPublicServer  *grpcserver.Server
-	grpcPrivateServer *grpcserver.Server
-	grpcPostServer    *grpcserver.Server
-	grpcTLSServer     *grpcserver.Server
-	jsonAPIServer     *grpcserver.JSONHTTPServer
-	nodeServiceServer *http.Server
-	grpcServices      map[grpcserver.Service]grpcserver.ServiceAPI
-	pprofService      *http.Server
-	profilerService   *pyroscope.Profiler
-	syncer            *syncer.Syncer
-	proposalListener  *proposals.Handler
-	proposalBuilder   *miner.ProposalBuilder
-	mesh              *mesh.Mesh
-	atxsdata          *atxsdata.Data
-	clock             *timesync.NodeClock
-	hare3             *hare3.Hare
-	hare4             *hare4.Hare
-	remoteHare        *hare3.RemoteHare
-	hareResultsChan   chan hare4.ConsensusOutput
-	hOracle           *eligibility.Oracle
-	blockGen          *blocks.Generator
-	certifier         *blocks.Certifier
-	atxBuilder        *activation.Builder
-	nipostBuilder     *activation.NIPostBuilder
-	atxHandler        *activation.Handler
-	txHandler         *txs.TxHandler
-	validator         *activation.Validator
-	edVerifier        *signing.EdVerifier
-	beaconProtocol    *beacon.ProtocolDriver
-	log               log.Log
-	syncLogger        log.Log
-	svm               *vm.VM
-	conState          *txs.ConservativeState
-	fetcher           *fetch.Fetch
-	ptimesync         *peersync.Sync
-	tortoise          *tortoise.Tortoise
-	updater           *bootstrap.Updater
-	poetDb            *activation.PoetDb
-	postVerifier      activation.PostVerifier
-	postSupervisor    *activation.PostSupervisor
-	errCh             chan error
+	fileLock              *flock.Flock
+	signers               []*signing.EdSigner
+	Config                *config.Config
+	db                    sql.StateDatabase
+	cachedDB              *datastore.CachedDB
+	dbMetrics             *dbmetrics.DBMetricsCollector
+	localDB               sql.LocalDatabase
+	grpcPublicServer      *grpcserver.Server
+	grpcPrivateServer     *grpcserver.Server
+	grpcPostServer        *grpcserver.Server
+	grpcTLSServer         *grpcserver.Server
+	jsonAPIServer         *grpcserver.JSONHTTPServer
+	nodeServiceServer     *http.Server
+	grpcServices          map[grpcserver.Service]grpcserver.ServiceAPI
+	pprofService          *http.Server
+	profilerService       *pyroscope.Profiler
+	syncer                *syncer.Syncer
+	proposalListener      *proposals.Handler
+	proposalBuilder       *miner.ProposalBuilder
+	remoteProposalBuilder *miner.RemoteProposalBuilder
+	mesh                  *mesh.Mesh
+	atxsdata              *atxsdata.Data
+	clock                 *timesync.NodeClock
+	hare3                 *hare3.Hare
+	hare4                 *hare4.Hare
+	remoteHare            *hare3.RemoteHare
+	hareResultsChan       chan hare4.ConsensusOutput
+	hOracle               *eligibility.Oracle
+	blockGen              *blocks.Generator
+	certifier             *blocks.Certifier
+	atxBuilder            *activation.Builder
+	nipostBuilder         *activation.NIPostBuilder
+	atxHandler            *activation.Handler
+	txHandler             *txs.TxHandler
+	validator             *activation.Validator
+	edVerifier            *signing.EdVerifier
+	beaconProtocol        *beacon.ProtocolDriver
+	log                   log.Log
+	syncLogger            log.Log
+	svm                   *vm.VM
+	conState              *txs.ConservativeState
+	fetcher               *fetch.Fetch
+	ptimesync             *peersync.Sync
+	tortoise              *tortoise.Tortoise
+	updater               *bootstrap.Updater
+	poetDb                *activation.PoetDb
+	postVerifier          activation.PostVerifier
+	postSupervisor        *activation.PostSupervisor
+	errCh                 chan error
 
 	host *p2p.Host
 
@@ -1029,26 +1030,34 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.MinerGoodAtxsPercent > 0 {
 		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
-	proposalBuilder := miner.New(
-		app.clock,
-		app.db,
-		app.localDB,
-		app.atxsdata,
-		app.host,
-		trtl,
-		newSyncer,
-		app.conState,
-		miner.WithLayerSize(layerSize),
-		miner.WithLayerPerEpoch(layersPerEpoch),
-		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
-		miner.WithHdist(app.Config.Tortoise.Hdist),
-		miner.WithNetworkDelay(app.Config.ATXGradeDelay),
-		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
-		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg).Zap()),
-		miner.WithActivesetPreparation(app.Config.ActiveSet),
-	)
-	for _, sig := range app.signers {
-		proposalBuilder.Register(sig)
+	var proposalBuilder *miner.ProposalBuilder
+	var remoteProposalBuilder *miner.RemoteProposalBuilder
+	if nodeServiceClient != nil {
+		remoteProposalBuilder = miner.NewRemoteBuilder(app.clock, nodeServiceClient, nodeServiceClient)
+		app.remoteProposalBuilder = remoteProposalBuilder
+	} else {
+		proposalBuilder = miner.New(
+			app.clock,
+			app.db,
+			app.localDB,
+			app.atxsdata,
+			app.host,
+			trtl,
+			newSyncer,
+			app.conState,
+			miner.WithLayerSize(layerSize),
+			miner.WithLayerPerEpoch(layersPerEpoch),
+			miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
+			miner.WithHdist(app.Config.Tortoise.Hdist),
+			miner.WithNetworkDelay(app.Config.ATXGradeDelay),
+			miner.WithMinGoodAtxPercent(minerGoodAtxPct),
+			miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg).Zap()),
+			miner.WithActivesetPreparation(app.Config.ActiveSet),
+		)
+		for _, sig := range app.signers {
+			proposalBuilder.Register(sig)
+		}
+		app.proposalBuilder = proposalBuilder
 	}
 
 	postSetupMgr, err := activation.NewPostSetupManager(
@@ -1487,7 +1496,16 @@ func (app *App) startServices(ctx context.Context) error {
 	app.blockGen.Start(ctx)
 	app.certifier.Start(ctx)
 	app.eg.Go(func() error {
-		return app.proposalBuilder.Run(ctx)
+		if app.proposalBuilder != nil {
+			return app.proposalBuilder.Run(ctx)
+		}
+		return nil
+	})
+	app.eg.Go(func() error {
+		if app.remoteProposalBuilder != nil {
+			return app.remoteProposalBuilder.Run(ctx)
+		}
+		return nil
 	})
 
 	if app.Config.SMESHING.CoinbaseAccount != "" {
@@ -1896,7 +1914,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		golden := types.ATXID(app.Config.Genesis.GoldenATX())
 		logger := app.log.Zap().Named("atx-service")
 		actSvc := activation.NewDBAtxService(app.db, golden, app.atxsdata, app.validator, logger)
-		server := nodeserver.NewServer(actSvc, app.host, app.poetDb, app.hare3, logger)
+		server := nodeserver.NewServer(actSvc, app.host, app.poetDb, app.hare3, app.proposalBuilder, logger)
 
 		app.nodeServiceServer = &http.Server{
 			Handler: server.IntoHandler(http.NewServeMux()),
