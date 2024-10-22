@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -200,42 +201,6 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 	}
 }
 
-/*
-	p := &types.Proposal{
-		InnerProposal: types.InnerProposal{
-			Ballot: types.Ballot{
-				InnerBallot: types.InnerBallot{
-					Layer:       lid,
-					AtxID:       session.atx,
-					OpinionHash: opinion.Hash,
-				},
-				Votes: opinion.Votes,
-				// EligibilityProofs: eligibility,
-			},
-			TxIDs:    txs,
-			MeshHash: meshHash,
-		},
-	}
-
-	if session.ref == types.EmptyBallotID {
-		p.Ballot.RefBallot = types.EmptyBallotID
-		p.Ballot.EpochData = &types.EpochData{
-			ActiveSetHash:    activeset.Hash(),
-			Beacon:           beacon,
-			EligibilityCount: session.eligibilities.slots,
-		}
-	} else {
-
-		p.Ballot.RefBallot = session.ref
-	}
-
-p.SmesherID = smesher
-// p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
-// p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
-// p.MustInitialize()
-
-return p
-*/
 func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID) error {
 	pb.signers.mu.Lock()
 	signers := maps.Values(pb.signers.signers)
@@ -256,13 +221,29 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 			signer.signer.VRFSigner(),
 			layer.GetEpoch(),
 			proposal.Ballot.EpochData.Beacon,
-			types.VRFPostIndex(nonce), //	ss.session.nonce, // atx nonce
+			types.VRFPostIndex(nonce),
 			proposal.Ballot.EpochData.EligibilityCount,
 			pb.cfg.layersPerEpoch,
 		)
 
-		fmt.Println(proofs)
+		eligibilities, ok := proofs[layer]
+		if !ok {
+			// not eligible in this layer, continue
+			continue
+		}
 
+		proposal.EligibilityProofs = eligibilities
+		proposal.Ballot.Signature = signer.signer.Sign(signing.BALLOT, proposal.Ballot.SignedBytes())
+		proposal.Signature = signer.signer.Sign(signing.PROPOSAL, proposal.SignedBytes())
+		proposal.MustInitialize()
+		if err := pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
+			pb.logger.Error("failed to publish proposal",
+				log.ZContext(ctx),
+				zap.Uint32("lid", proposal.Layer.Uint32()),
+				zap.Stringer("id", proposal.ID()),
+				zap.Error(err),
+			)
+		}
 	}
 	return nil
 }

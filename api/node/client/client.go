@@ -216,10 +216,12 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 
 	atxNonce := resp.Header.Get("x-spacemesh-atx-nonce")
 	if atxNonce == "" {
+		panic("no nonce")
 		return nil, 0, errors.New("atx nonce header not found")
 	}
 	nonce, err := strconv.ParseUint(atxNonce, 10, 64)
 	if err != nil {
+		panic("bad atx integer parse")
 		return nil, 0, fmt.Errorf("nonce parse: %w", err)
 	}
 	return &prop, nonce, nil
