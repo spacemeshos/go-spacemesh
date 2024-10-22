@@ -43,9 +43,24 @@ type Context struct {
 	changed map[Address]*Account
 }
 
-// Principal returns address of the account that signed transaction.
+// Principal returns address of the account that signed the transaction and pays for the gas.
 func (c *Context) Principal() Address {
 	return c.PrincipalAccount.Address
+}
+
+// Nonce returns the transaction nonce.
+func (c *Context) Nonce() uint64 {
+	return c.ParseOutput.Nonce
+}
+
+// TemplateAddress returns the address of the principal account template.
+func (c *Context) TemplateAddress() Address {
+	return c.Header.TemplateAddress
+}
+
+// MaxGas returns the maximum amount of gas that can be consumed by the transaction.
+func (c *Context) MaxGas() uint64 {
+	return c.Header.MaxGas
 }
 
 // Layer returns block layer id.
@@ -58,7 +73,7 @@ func (c *Context) GetGenesisID() Hash20 {
 	return c.GenesisID
 }
 
-// Balance returns the account balance.
+// Balance returns the principal account balance.
 func (c *Context) Balance() uint64 { return c.PrincipalAccount.Balance }
 
 // Template of the principal account.

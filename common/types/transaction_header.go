@@ -12,11 +12,11 @@ import (
 // TxHeader is a transaction header, with some of the fields defined directly in the tx
 // and the rest is computed by the template based on immutable state and method arguments.
 type TxHeader struct {
-	Principal Address
-
-	// TODO(lane): TemplateAddress and Method are unused by the Athena VM, and should be removed.
+	Principal       Address
 	TemplateAddress Address
-	Method          uint8
+
+	// TODO(lane): Method is unused by the Athena VM, and should be removed.
+	Method uint8
 
 	Nonce       Nonce
 	LayerLimits LayerLimits
@@ -36,12 +36,6 @@ func (h *TxHeader) Fee() uint64 {
 // Spending is Fee() + MaxSpend.
 func (h *TxHeader) Spending() uint64 {
 	return h.Fee() + h.MaxSpend
-}
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // MarshalLogObject implements encoding for the tx header.

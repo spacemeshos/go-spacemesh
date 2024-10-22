@@ -1,4 +1,4 @@
-package vm
+package host
 
 import (
 	"fmt"
@@ -34,15 +34,15 @@ func athenaLibPath() string {
 
 // static context is fixed for the lifetime of one transaction
 type StaticContext struct {
-	principal   types.Address
-	destination types.Address
-	nonce       uint64
+	Principal   types.Address
+	Destination types.Address
+	Nonce       uint64
 }
 
 // dynamic context may change with each call frame
 type DynamicContext struct {
-	template types.Address
-	callee   types.Address
+	Template types.Address
+	Callee   types.Address
 }
 
 type Host struct {
@@ -282,8 +282,8 @@ func (h *hostContext) Call(
 	// construct and save context
 	oldContext := h.dynamicContext
 	h.dynamicContext = DynamicContext{
-		template: types.Address(sender),
-		callee:   types.Address(recipient),
+		Template: types.Address(sender),
+		Callee:   types.Address(recipient),
 	}
 
 	// replace context at end
