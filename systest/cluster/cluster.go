@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/node"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -959,7 +960,8 @@ func fillNetworkConfig(ctx *testcontext.Context, node *NodeClient) error {
 }
 
 func (c *Cluster) NodeConfig(ctx *testcontext.Context) (*config.Config, error) {
-	cfg, err := loadSmesherConfig(ctx)
+	cfg := config.MainnetConfig()
+	err := node.LoadConfig(&cfg, "", strings.NewReader(smesherConfig.Get(ctx.Parameters)))
 	if err != nil {
 		return nil, err
 	}
@@ -969,5 +971,5 @@ func (c *Cluster) NodeConfig(ctx *testcontext.Context) (*config.Config, error) {
 	}
 	cfg.LayersPerEpoch = uint32(testcontext.LayersPerEpoch.Get(ctx.Parameters))
 	cfg.LayerDuration = testcontext.LayerDuration.Get(ctx.Parameters)
-	return cfg, nil
+	return &cfg, nil
 }

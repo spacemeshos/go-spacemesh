@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -244,30 +245,35 @@ func GetCommand() *cobra.Command {
 }
 
 func configure(c *cobra.Command, configPath string, conf *config.Config) error {
-	preset := conf.Preset // might be set via CLI flag
-	if err := loadConfig(conf, preset, configPath); err != nil {
+	f, err := os.Open(configPath)
+	if err != nil {
+		return fmt.Errorf("opening config file: %w", err)
+	}
+	defer f.Close()
+	if err := LoadConfig(conf, conf.Preset, f); err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("closing config file: %w", err)
 	}
 	// apply CLI args to config
 	if err := c.ParseFlags(os.Args[1:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
 	}
-
 	if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
 		return errors.New("this is a testnet-only build not intended for mainnet")
 	}
-
 	return nil
 }
 
 var grpcLog = grpc_logsettable.ReplaceGrpcLoggerV2()
 
-// loadConfig loads config and preset (if provided) into the provided config.
+// LoadConfig loads config and preset (if provided) into the provided config.
 // It first loads the preset and then overrides it with values from the config file.
-func loadConfig(cfg *config.Config, preset, path string) error {
+func LoadConfig(cfg *config.Config, preset string, src io.Reader) error {
 	v := viper.New()
-	// read in config from file
-	if err := config.LoadConfig(path, v); err != nil {
+	// read in config from src
+	if err := config.LoadConfig(src, v); err != nil {
 		return err
 	}
 
@@ -283,7 +289,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		*cfg = p
 	}
 
-	// Unmarshall config file into config struct
+	// Unmarshal config file into config struct
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
@@ -294,15 +300,12 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		mapstructureutil.AtxVersionsDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
-
 	opts := []viper.DecoderConfigOption{
 		viper.DecodeHook(hook),
 		WithZeroFields(),
 		WithIgnoreUntagged(),
 		WithErrorUnused(),
 	}
-
-	// load config if it was loaded to the viper
 	if err := v.Unmarshal(cfg, opts...); err != nil {
 		return fmt.Errorf("unmarshal config: %w", err)
 	}

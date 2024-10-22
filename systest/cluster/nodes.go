@@ -13,9 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -32,9 +30,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/node"
-	"github.com/spacemeshos/go-spacemesh/node/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters/fastnet"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -950,43 +946,6 @@ func deployNode(
 	return nil
 }
 
-func loadSmesherConfig(ctx *testcontext.Context) (*config.Config, error) {
-	// TODO(poszu): this is mostly a copy of the code in cmd/node.go
-	// refactor the code below to reuse it after https://github.com/spacemeshos/go-spacemesh/pull/5485 lands.
-	vip := viper.New()
-	vip.SetConfigType("json")
-	if err := vip.ReadConfig(strings.NewReader(smesherConfig.Get(ctx.Parameters))); err != nil {
-		return nil, fmt.Errorf("reading config: %w", err)
-	}
-	conf := config.MainnetConfig()
-	if name := vip.GetString("preset"); len(name) > 0 {
-		preset, err := presets.Get(name)
-		if err != nil {
-			return nil, err
-		}
-		conf = preset
-	}
-
-	hook := mapstructure.ComposeDecodeHookFunc(
-		mapstructure.StringToTimeDurationHookFunc(),
-		mapstructure.StringToSliceHookFunc(","),
-		mapstructureutil.AddressListDecodeFunc(),
-		mapstructureutil.BigRatDecodeFunc(),
-		mapstructureutil.PostProviderIDDecodeFunc(),
-		mapstructureutil.DeprecatedHook(),
-		mapstructure.TextUnmarshallerHookFunc(),
-	)
-	opts := []viper.DecoderConfigOption{
-		viper.DecodeHook(hook),
-		node.WithZeroFields(),
-		node.WithIgnoreUntagged(),
-	}
-	if err := vip.Unmarshal(&conf, opts...); err != nil {
-		return nil, fmt.Errorf("unmarshaling config: %w", err)
-	}
-	return &conf, nil
-}
-
 func deployPostService(
 	ctx *testcontext.Context,
 	id string,
@@ -996,8 +955,8 @@ func deployPostService(
 	goldenAtxId string,
 ) error {
 	ctx.Log.Debugw("deploying post service", "id", id)
-	conf, err := loadSmesherConfig(ctx)
-	if err != nil {
+	conf := config.MainnetConfig()
+	if err := node.LoadConfig(&conf, "", strings.NewReader(smesherConfig.Get(ctx.Parameters))); err != nil {
 		return fmt.Errorf("loading smesher config: %w", err)
 	}
 	args := []string{
@@ -1064,7 +1023,7 @@ func deployPostService(
 				),
 			),
 		)
-	_, err = ctx.Client.AppsV1().
+	_, err := ctx.Client.AppsV1().
 		Deployments(ctx.Namespace).
 		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {

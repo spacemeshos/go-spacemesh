@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -276,13 +277,13 @@ func defaultTestConfig() BaseConfig {
 }
 
 // LoadConfig load the config file.
-func LoadConfig(config string, vip *viper.Viper) error {
-	if config == "" {
+func LoadConfig(src io.Reader, vip *viper.Viper) error {
+	if src == nil {
 		return nil
 	}
-	vip.SetConfigFile(config)
-	if err := vip.ReadInConfig(); err != nil {
-		return fmt.Errorf("can't load config at %s: %w", config, err)
+	vip.SetConfigType("json")
+	if err := vip.ReadConfig(src); err != nil {
+		return fmt.Errorf("can't load config: %w", err)
 	}
 	return nil
 }
