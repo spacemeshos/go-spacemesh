@@ -2,7 +2,6 @@ package miner
 
 import (
 	"context"
-	"fmt"
 	"runtime"
 	"sync"
 
@@ -197,7 +196,6 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 			if current <= types.GetEffectiveGenesis() {
 				continue
 			}
-			fmt.Println("remote proposal builder going to build. layer", current.Uint32())
 			if err := pb.build(ctx, current); err != nil {
 				pb.logger.Warn("failed to build proposal",
 					log.ZContext(ctx),
@@ -213,13 +211,11 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 	pb.signers.mu.Lock()
 	signers := maps.Values(pb.signers.signers)
 	pb.signers.mu.Unlock()
-	fmt.Println("remote proposal builder got some signers", signers)
 	for _, signer := range signers {
 		proposal, nonce, err := pb.nodeSvc.Proposal(ctx, layer, signer.signer.NodeID())
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
 		}
-		fmt.Println("remote proposal builder got proposal and nonce", proposal, nonce, err)
 		if proposal == nil {
 			// this node signer isn't eligible this epoch, continue
 			pb.logger.Info("node not eligible on this layer. will try next")

@@ -199,14 +199,11 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	}
 	switch resp.StatusCode {
 	case http.StatusOK:
-		fmt.Println("client got OK for proposal")
 	case http.StatusNoContent:
 		// special case - no error but also no proposal, means
 		// we're no eligibile this epoch with this node ID
-		fmt.Println("client not eligible for proposal")
 		return nil, 0, nil
 	default:
-		fmt.Println("client got unexpected status code")
 		return nil, 0, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
@@ -215,20 +212,15 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 		return nil, 0, fmt.Errorf("read all: %w", err)
 	}
 
-	fmt.Println("client going for decode")
 	prop := types.Proposal{}
 	codec.MustDecode(bytes, &prop)
-	fmt.Println("client decoded proposal")
 	atxNonce := resp.Header.Get("x-spacemesh-atx-nonce")
 	if atxNonce == "" {
-		panic("no nonce")
 		return nil, 0, errors.New("atx nonce header not found")
 	}
 	nonce, err := strconv.ParseUint(atxNonce, 10, 64)
 	if err != nil {
-		panic("bad atx integer parse")
 		return nil, 0, fmt.Errorf("nonce parse: %w", err)
 	}
-	fmt.Println("client returning proposal with nonce", prop, nonce)
 	return &prop, nonce, nil
 }

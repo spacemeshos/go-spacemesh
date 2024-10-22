@@ -299,7 +299,6 @@ type proposalResp struct {
 
 func (p *proposalResp) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
 	if p.buf == nil {
-		fmt.Println("writing no content to requester")
 		w.WriteHeader(204)
 		return nil
 	}
@@ -324,6 +323,5 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 	if proposal.Ballot.EpochData.EligibilityCount == 0 {
 		return &proposalResp{}, nil
 	}
-	fmt.Println("writing response to client")
 	return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, err
 }

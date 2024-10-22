@@ -1507,7 +1507,6 @@ func (app *App) startServices(ctx context.Context) error {
 	})
 	app.eg.Go(func() error {
 		if app.remoteProposalBuilder != nil {
-			fmt.Println("starting remote proposal building")
 			return app.remoteProposalBuilder.Run(ctx)
 		}
 		return nil
