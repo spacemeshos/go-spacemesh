@@ -597,6 +597,7 @@ func (cl *lockstepCluster) drainInteractiveMessages() {
 				case <-n.tracer.compactReq:
 				case <-n.tracer.compactResp:
 				case <-done:
+					return
 				}
 			}
 		}()
