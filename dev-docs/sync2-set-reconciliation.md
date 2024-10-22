@@ -533,18 +533,24 @@ This message is used for [Recent sync](#recent-sync). It is sent as
 the initial message when recent sync is enabled.
 
 `Recent` message is preceded by a number of `ItemChunk` messages
-carrying the actual items (keys).
+carrying the actual items (keys). The items in immediately preceding
+`ItemChunk` message must be added to the set immediately before
+proceeding with further reconciliation.
 
 Parameters:
 * `SinceTime`: nanoseconds since Unix epoch marking the beginning of
   recent items that were sent, according to the local timestamp.
+  If `SinceTime` is zero, this indicates a response to another Recent
+  message.
 
 As a response to `Recent` message, the local items starting from
 `SinceTime` according to their local timestamp are sent to the peer
-via a number of `ItemChunk` messages. After that the sync sequence
-without further `Recent` message but with or without MinHash probing
-is initiated, depending on whether a positive `maxDiff` value is set
-via the `WithMaxDiff` option.
+via a number of `ItemChunk` messages, followed by `Recent` message
+with zero timestamp, indicating that the items need to be added to the
+set immediately before proceeding with further reconciliation. After
+that the sync sequence without further `Recent` message but with or
+without MinHash probing is initiated, depending on whether a positive
+`maxDiff` value is set via the `WithMaxDiff` option.
 
 ```mermaid
 sequenceDiagram
@@ -557,6 +563,7 @@ sequenceDiagram
   loop
     B->>A: ItemChunk <br/> (Items)
   end
+  B->>A: Recent <br/> (Since=0)
   Note over B: The sample is taken <br/> after consuming <br/> the recent items from A
   B->>A: Sample <br/> (X, Y, Count, Fingerprint, Items)
 ```

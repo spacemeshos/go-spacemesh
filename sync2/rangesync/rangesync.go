@@ -343,6 +343,43 @@ func (rsr *RangeSetReconciler) messageRange(
 	return x, y, nil
 }
 
+func (rsr *RangeSetReconciler) handleRecent(
+	s sender,
+	msg SyncMessage,
+	x, y KeyBytes,
+	receivedKeys map[string]struct{},
+) error {
+	since := msg.Since()
+	if since.IsZero() {
+		// This is a response to a Recent message with timestamp.
+		// It is only needed so that we add the received items to the set
+		// immediately, which is already done above.
+		return nil
+	}
+
+	sr, count := rsr.os.Recent(msg.Since())
+	nSent := 0
+	if count != 0 {
+		// Do not send back recent items that were received
+		var err error
+		if nSent, err = rsr.sendItems(s, count, sr, receivedKeys); err != nil {
+			return err
+		}
+	}
+	// Following the items, we send Recent message with zero time.
+	// The peer will see this as the indicator that it needs to add the
+	// received items to its set immediately, before proceeding with further
+	// reconciliation steps.
+	if err := s.SendRecent(time.Time{}); err != nil {
+		return fmt.Errorf("sending recent: %w", err)
+	}
+	rsr.log.Debug("handled recent message",
+		zap.Int("receivedCount", len(receivedKeys)),
+		zap.Int("sentCount", nSent))
+	rsr.tracer.OnRecent(len(receivedKeys), nSent)
+	return rsr.initiate(s, x, y, false)
+}
+
 // handleMessage handles incoming messages. Note that the set reconciliation protocol is
 // designed to be stateless.
 func (rsr *RangeSetReconciler) handleMessage(
@@ -357,6 +394,18 @@ func (rsr *RangeSetReconciler) handleMessage(
 		return false, err
 	}
 
+	if msg.Type() == MessageTypeRecent {
+		for k := range receivedKeys {
+			// Add received items to the set. Receive() was already
+			// called on these items, but we also need them to
+			// be present in the set before we proceed with further
+			// reconciliation.
+			if err := rsr.os.Add(KeyBytes(k)); err != nil {
+				return false, fmt.Errorf("adding an item to the set: %w", err)
+			}
+		}
+	}
+
 	if x == nil {
 		switch msg.Type() {
 		case MessageTypeProbe:
@@ -367,12 +416,12 @@ func (rsr *RangeSetReconciler) handleMessage(
 				return false, err
 			}
 		case MessageTypeRecent:
-			rsr.tracer.OnRecent(len(receivedKeys), 0)
+			return false, rsr.handleRecent(s, msg, x, y, receivedKeys)
 		}
 		return true, nil
 	}
 
-	info, err := rsr.os.GetRangeInfo(x, y, -1)
+	info, err := rsr.os.GetRangeInfo(x, y)
 	if err != nil {
 		return false, err
 	}
@@ -423,19 +472,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 		return true, nil
 
 	case MessageTypeRecent:
-		sr, count := rsr.os.Recent(msg.Since())
-		nSent := 0
-		if count != 0 {
-			// Do not send back recent items that were received
-			if nSent, err = rsr.sendItems(s, count, sr, receivedKeys); err != nil {
-				return false, err
-			}
-		}
-		rsr.log.Debug("handled recent message",
-			zap.Int("receivedCount", len(receivedKeys)),
-			zap.Int("sentCount", nSent))
-		rsr.tracer.OnRecent(len(receivedKeys), nSent)
-		return false, rsr.initiate(s, x, y, false)
+		return false, rsr.handleRecent(s, msg, x, y, receivedKeys)
 
 	case MessageTypeFingerprint, MessageTypeSample:
 		return rsr.handleFingerprint(s, msg, x, y, info)
@@ -472,7 +509,7 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 		rsr.log.Debug("initiate: send empty set")
 		return s.SendEmptySet()
 	}
-	info, err := rsr.os.GetRangeInfo(x, y, -1)
+	info, err := rsr.os.GetRangeInfo(x, y)
 	if err != nil {
 		return fmt.Errorf("get range info: %w", err)
 	}
@@ -526,7 +563,7 @@ func (rsr *RangeSetReconciler) InitiateProbe(
 	x, y KeyBytes,
 ) (RangeInfo, error) {
 	s := sender{c}
-	info, err := rsr.os.GetRangeInfo(x, y, -1)
+	info, err := rsr.os.GetRangeInfo(x, y)
 	if err != nil {
 		return RangeInfo{}, err
 	}

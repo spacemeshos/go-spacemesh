@@ -2,6 +2,8 @@ package rangesync_test
 
 import (
 	"context"
+	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -50,14 +52,14 @@ func newClientServerTester(
 	return &cst, ctx
 }
 
-func fakeRequesterGetter() getRequesterFunc {
+func fakeRequesterGetter(t *testing.T) getRequesterFunc {
 	return func(
 		name string,
 		handler server.StreamHandler,
 		peers ...rangesync.Requester,
 	) (rangesync.Requester, p2p.Peer) {
 		pid := p2p.Peer(name)
-		return newFakeRequester(pid, handler, peers...), pid
+		return newFakeRequester(t, pid, handler, peers...), pid
 	}
 }
 
@@ -92,7 +94,7 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 }
 
 type syncTracer struct {
-	dumb          bool
+	dumb          atomic.Bool
 	receivedItems int
 	sentItems     int
 }
@@ -100,7 +102,7 @@ type syncTracer struct {
 var _ rangesync.Tracer = &syncTracer{}
 
 func (tr *syncTracer) OnDumbSync() {
-	tr.dumb = true
+	tr.dumb.Store(true)
 }
 
 func (tr *syncTracer) OnRecent(receivedItems, sentItems int) {
@@ -152,19 +154,11 @@ func (frs *fakeRecentSet) Recent(since time.Time) (rangesync.SeqResult, int) {
 	if err != nil {
 		return rangesync.ErrorSeqResult(err), 0
 	}
-	for _, k := range items {
-		if !frs.timestamps[string(k)].Before(since) {
-			items = append(items, k)
-		}
-	}
+	items = slices.DeleteFunc(items, func(k rangesync.KeyBytes) bool {
+		return frs.timestamps[string(k)].Before(since)
+	})
 	return rangesync.SeqResult{
-		Seq: func(yield func(rangesync.KeyBytes) bool) {
-			for _, h := range items {
-				if !yield(h) {
-					return
-				}
-			}
-		},
+		Seq:   rangesync.Seq(slices.Values(items)),
 		Error: rangesync.NoSeqError,
 	}, len(items)
 }
@@ -212,7 +206,6 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 				maxNumSpecificA: 500,
 				minNumSpecificB: 400,
 				maxNumSpecificB: 500,
-				allowReAdd:      true,
 			},
 			dumb: false,
 			opts: []rangesync.RangeSetReconcilerOption{
@@ -254,11 +247,13 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 			pss := rangesync.NewPairwiseSetSyncer(cst.client, "test", opts, nil)
 			err := pss.Sync(ctx, cst.srvPeerID, setB, nil, nil)
 			require.NoError(t, err)
+			st.setA.AddReceived()
+			st.setB.AddReceived()
 
 			t.Logf("numSpecific: %d, bytesSent %d, bytesReceived %d",
 				st.numSpecificA+st.numSpecificB,
 				cst.pss.Sent(), cst.pss.Received())
-			require.Equal(t, tc.dumb, tr.dumb, "dumb sync")
+			require.Equal(t, tc.dumb, tr.dumb.Load(), "dumb sync")
 			require.Equal(t, tc.receivedRecent, tr.receivedItems > 0)
 			require.Equal(t, tc.sentRecent, tr.sentItems > 0)
 			st.verify(st.setA, st.setB)
@@ -268,7 +263,7 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 
 func TestWireSync(t *testing.T) {
 	t.Run("fake requester", func(t *testing.T) {
-		testWireSync(t, fakeRequesterGetter())
+		testWireSync(t, fakeRequesterGetter(t))
 	})
 	t.Run("p2p", func(t *testing.T) {
 		testWireSync(t, p2pRequesterGetter(t))
@@ -287,9 +282,9 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 	cst, ctx := newClientServerTester(t, st.setA, getRequester, st.opts, nil)
 	pss := rangesync.NewPairwiseSetSyncer(cst.client, "test", st.opts, nil)
 	itemsA := st.setA.Items()
-	kA, err := itemsA.First()
+	x, err := itemsA.First()
 	require.NoError(t, err)
-	infoA, err := st.setA.GetRangeInfo(kA, kA, -1)
+	infoA, err := st.setA.GetRangeInfo(x, x)
 	require.NoError(t, err)
 	prA, err := pss.Probe(ctx, cst.srvPeerID, st.setB, nil, nil)
 	require.NoError(t, err)
@@ -297,34 +292,18 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 	require.Equal(t, infoA.Count, prA.Count)
 	require.InDelta(t, 0.98, prA.Sim, 0.05, "sim")
 
-	itemsA = st.setA.Items()
+	splitInfo, err := st.setA.SplitRange(x, x, infoA.Count/2)
 	require.NoError(t, err)
-	kA, err = itemsA.First()
+	prA, err = pss.Probe(ctx, cst.srvPeerID, st.setB, x, splitInfo.Middle)
 	require.NoError(t, err)
-	partInfoA, err := st.setA.GetRangeInfo(kA, kA, infoA.Count/2)
-	require.NoError(t, err)
-	x, err := partInfoA.Items.First()
-	require.NoError(t, err)
-	var y rangesync.KeyBytes
-	n := partInfoA.Count + 1
-	for k := range partInfoA.Items.Seq {
-		y = k
-		n--
-		if n == 0 {
-			break
-		}
-	}
-	require.NoError(t, partInfoA.Items.Error())
-	prA, err = pss.Probe(ctx, cst.srvPeerID, st.setB, x, y)
-	require.NoError(t, err)
-	require.Equal(t, partInfoA.Fingerprint, prA.FP)
-	require.Equal(t, partInfoA.Count, prA.Count)
+	require.Equal(t, splitInfo.Parts[0].Fingerprint, prA.FP)
+	require.Equal(t, splitInfo.Parts[0].Count, prA.Count)
 	require.InDelta(t, 0.98, prA.Sim, 0.1, "sim")
 }
 
 func TestWireProbe(t *testing.T) {
 	t.Run("fake requester", func(t *testing.T) {
-		testWireProbe(t, fakeRequesterGetter())
+		testWireProbe(t, fakeRequesterGetter(t))
 	})
 	t.Run("p2p", func(t *testing.T) {
 		testWireProbe(t, p2pRequesterGetter(t))

@@ -29,10 +29,15 @@ type SplitInfo struct {
 
 // OrderedSet represents the set that can be synced against a remote peer.
 type OrderedSet interface {
+	// Add adds a new key to the set.
+	// It should not perform any additional actions related to handling
+	// the received key.
+	Add(k KeyBytes) error
 	// Receive handles a new key received from the peer.
-	// It may or may not add it to the set immediately; this doesn't affect set
-	// reconciliation operation.
+	// It should not add the key to the set.
 	Receive(k KeyBytes) error
+	// Received returns the sequence containing all the items received from the peer.
+	Received() SeqResult
 	// GetRangeInfo returns RangeInfo for the item range in the ordered set,
 	// bounded by [x, y).
 	// x == y indicates the whole set.
@@ -43,7 +48,7 @@ type OrderedSet interface {
 	// is returned for the corresponding subrange of the requested range.
 	// If both x and y are nil, the information for the entire set is returned.
 	// If any of x or y is nil, the other one must be nil as well.
-	GetRangeInfo(x, y KeyBytes, count int) (RangeInfo, error)
+	GetRangeInfo(x, y KeyBytes) (RangeInfo, error)
 	// SplitRange splits the range roughly after the specified count of items,
 	// returning RangeInfo for the first half and the second half of the range.
 	SplitRange(x, y KeyBytes, count int) (SplitInfo, error)
@@ -56,6 +61,7 @@ type OrderedSet interface {
 	// If syncScope is true, then the copy is intended to be used for the duration of
 	// a synchronization run.
 	// If syncScope if false, then the lifetime of the copy is not clearly defined.
+	// The list of received items as returned by Received is also inherited by the copy.
 	Copy(syncScope bool) OrderedSet
 	// Recent returns an Iterator that yields the items added since the specified
 	// timestamp. Some OrderedSet implementations may not have Recent implemented, in

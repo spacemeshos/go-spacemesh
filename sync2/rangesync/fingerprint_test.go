@@ -38,4 +38,9 @@ func TestFingerprint(t *testing.T) {
 	f2 := rangesync.RandomFingerprint()
 	f3 := rangesync.RandomFingerprint()
 	require.NotEqual(t, f2, f3)
+
+	f4 := rangesync.MustParseHexFingerprint("0102030405060708090a0b0c")
+	f5 := rangesync.MustParseHexFingerprint("1112131415161718191a1b1c")
+	combined := rangesync.CombineFingerprints(f4, f5)
+	require.Equal(t, "101010101010101010101010", combined.String())
 }
