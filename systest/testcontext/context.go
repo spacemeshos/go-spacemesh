@@ -66,12 +66,17 @@ var (
 	imageFlag = parameters.String(
 		"image",
 		"go-spacemesh image",
-		"spacemeshos/go-spacemesh-dev:2beaf443f",
+		"spacemeshos/go-spacemesh-dev:v1.7.6", // repo doesn't have a `latest` tag we can default to
+	)
+	oldImageFlag = parameters.String(
+		"old-image",
+		"old go-spacemesh image to test compatibility against",
+		"spacemeshos/go-spacemesh-dev:v1.7.4", // repo doesn't have a `latest` tag we can default to
 	)
 	bsImage = parameters.String(
 		"bs-image",
 		"bootstrapper image",
-		"spacemeshos/spacemesh-dev-bs:2beaf443f",
+		"spacemeshos/spacemesh-dev-bs:v1.7.6", // repo doesn't have a `latest` tag we can default to
 	)
 	certifierImage = parameters.String(
 		"certifier-image",
@@ -81,17 +86,17 @@ var (
 	poetImage = parameters.String(
 		"poet-image",
 		"poet server image",
-		"spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4",
+		"spacemeshos/poet:latest",
 	)
 	postServiceImage = parameters.String(
 		"post-service-image",
 		"post service image",
-		"spacemeshos/post-service:v0.6.5",
+		"spacemeshos/post-service:latest",
 	)
 	postInitImage = parameters.String(
 		"post-init-image",
 		"post init image",
-		"spacemeshos/postcli:v0.10.4",
+		"spacemeshos/postcli:latest",
 	)
 	namespaceFlag = parameters.String(
 		"namespace",
@@ -172,6 +177,7 @@ type Context struct {
 	Keep              bool
 	Namespace         string
 	Image             string
+	OldImage          string
 	BootstrapperImage string
 	CertifierImage    string
 	PoetImage         string
@@ -354,6 +360,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		PoetSize:          poetSize.Get(p),
 		BootstrapperSize:  bsSize.Get(p),
 		Image:             imageFlag.Get(p),
+		OldImage:          oldImageFlag.Get(p),
 		BootstrapperImage: bsImage.Get(p),
 		CertifierImage:    certifierImage.Get(p),
 		PoetImage:         poetImage.Get(p),

@@ -10,7 +10,9 @@ poet_image ?= $(org)/poet:v0.10.3
 post_service_image ?= $(org)/post-service:v0.7.13
 post_init_image ?= $(org)/postcli:v0.12.5
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
+old_smesher_image ?= $(org)/go-spacemesh-dev:v1.7.4
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
+
 test_id ?= systest-$(version_info)
 test_job_name ?= systest-$(version_info)-$(date)
 keep ?= false
@@ -62,6 +64,7 @@ template:
 	@echo storage=$(storage) >> $(tmpfile)
 	@echo node-selector=$(node_selector) >> $(tmpfile)
 	@echo image=$(smesher_image) >> $(tmpfile)
+	@echo old-image=$(old_smesher_image) >> $(tmpfile)
 	@echo bs-image=$(bs_image) >> $(tmpfile)
 	@echo certifier-image=$(certifier_image) >> $(tmpfile)
 	@echo poet-image=$(poet_image) >> $(tmpfile)
