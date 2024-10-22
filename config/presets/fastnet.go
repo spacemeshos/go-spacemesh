@@ -26,7 +26,7 @@ func fastnet() config.Config {
 	// set for systest TestEquivocation
 	conf.BaseConfig.MinerGoodAtxsPercent = 50
 
-	// node will select atxs that were received atleast 4 seconds before start of the epoch
+	// node will select atxs that were received at least 4 seconds before start of the epoch
 	// for activeset.
 	// if some atxs weren't received on time it will skew eligibility distribution
 	// and will make some tests fail.

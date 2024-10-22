@@ -174,13 +174,11 @@ func watchLayers(
 	})
 }
 
-type layerCollector func(*pb.LayerStreamResponse) (bool, error)
-
 func layersStream(
 	ctx context.Context,
 	node *cluster.NodeClient,
 	logger *zap.Logger,
-	collector layerCollector,
+	collector func(*pb.LayerStreamResponse) (bool, error),
 ) error {
 	retries := 0
 BACKOFF:
@@ -212,6 +210,18 @@ BACKOFF:
 	}
 }
 
+func watchMalfeasance(
+	ctx context.Context,
+	eg *errgroup.Group,
+	node *cluster.NodeClient,
+	logger *zap.Logger,
+	collector func(*pb.MalfeasanceStreamResponse) (bool, error),
+) {
+	eg.Go(func() error {
+		return malfeasanceStream(ctx, node, logger, collector)
+	})
+}
+
 func malfeasanceStream(
 	ctx context.Context,
 	node *cluster.NodeClient,
@@ -220,14 +230,13 @@ func malfeasanceStream(
 ) error {
 	retries := 0
 BACKOFF:
-
 	meshapi := pb.NewMeshServiceClient(node.PubConn())
-	layers, err := meshapi.MalfeasanceStream(ctx, &pb.MalfeasanceStreamRequest{IncludeProof: true})
+	proofs, err := meshapi.MalfeasanceStream(ctx, &pb.MalfeasanceStreamRequest{IncludeProof: true})
 	if err != nil {
 		return err
 	}
 	for {
-		proof, err := layers.Recv()
+		proof, err := proofs.Recv()
 		s, ok := status.FromError(err)
 		if ok && s.Code() != codes.OK {
 			logger.Warn("malfeasance stream error",

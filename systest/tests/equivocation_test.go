@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"context"
+	"maps"
 	"sync"
 	"testing"
 
@@ -12,10 +14,12 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+// TestEquivocation runs a network where ~40% of nodes are expected to be equivocated due to shared keys.
 func TestEquivocation(t *testing.T) {
 	t.Parallel()
 	const bootnodes = 2
@@ -55,7 +59,10 @@ func TestEquivocation(t *testing.T) {
 		eg      errgroup.Group
 		mu      sync.Mutex
 		results = map[string]map[int]string{}
+		proofs  = map[string]map[types.NodeID]struct{}{}
 	)
+	ctx, cancel := context.WithCancel(cctx)
+	defer cancel()
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		results[client.Name] = map[int]string{}
@@ -64,6 +71,7 @@ func TestEquivocation(t *testing.T) {
 				return true, nil
 			}
 			if resp.Layer.Number.Number > stopTest {
+				cancel()
 				return false, nil
 			}
 			num := int(resp.Layer.Number.Number)
@@ -78,11 +86,29 @@ func TestEquivocation(t *testing.T) {
 			mu.Unlock()
 			return true, nil
 		})
+		proofs[client.Name] = map[types.NodeID]struct{}{}
+		watchMalfeasance(ctx, &eg, client, cctx.Log.Desugar(), func(msr *pb.MalfeasanceStreamResponse) (bool, error) {
+			malfeasant := types.BytesToNodeID(msr.Proof.SmesherId.Id)
+			mu.Lock()
+			proofs[client.Name][malfeasant] = struct{}{}
+			mu.Unlock()
+			return true, nil
+		})
 	}
 	eg.Wait()
 	reference := results[cl.Client(0).Name]
 	for i := 1; i < cl.Total(); i++ {
 		assert.Equal(t, reference, results[cl.Client(i).Name],
-			"reference: %v, client: %v", cl.Client(0).Name, cl.Client(i).Name)
+			"reference: %v, client: %v", cl.Client(0).Name, cl.Client(i).Name,
+		)
+	}
+
+	for i := 0; i < honest; i++ {
+		malfeasants := maps.Keys(proofs[cl.Client(i).Name])
+		for _, key := range keys[honest:] {
+			assert.Contains(t, malfeasants, types.NodeID(signing.Public(key)),
+				"client: %v, malfeasant: %v", cl.Client(i).Name, types.NodeID(signing.Public(key)),
+			)
+		}
 	}
 }
