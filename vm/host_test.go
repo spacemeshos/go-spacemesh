@@ -26,7 +26,7 @@ func getHost(t *testing.T) (*Host, *core.StagedCache) {
 		template: types.Address{11, 12, 13, 14},
 		callee:   types.Address{15, 16, 17, 18},
 	}
-	host, err := NewHost(athenaLibPath(), ctx, cache, cache, staticContext, dynamicContext)
+	host, err := NewHost(AthenaLibPath(), ctx, cache, cache, staticContext, dynamicContext)
 	require.NoError(t, err)
 	return host, cache
 }

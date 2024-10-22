@@ -58,14 +58,13 @@ type Host struct {
 // It is the caller's responsibility to call Destroy when it
 // is no longer needed.
 func NewHost(
-	path string,
 	host core.Host,
 	loader core.AccountLoader,
 	updater core.AccountUpdater,
 	staticContext StaticContext,
 	dynamicContext DynamicContext,
 ) (*Host, error) {
-	vm, err := athcon.Load(path)
+	vm, err := athcon.Load(athenaLibPath())
 	if err != nil {
 		return nil, fmt.Errorf("loading Athena VM: %w", err)
 	}

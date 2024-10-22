@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/vm"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/registry"
 )
@@ -51,8 +52,13 @@ func (*handler) Load(state []byte) (core.Template, error) {
 }
 
 // Pass the transaction into the VM for execution.
-func (*handler) Exec(host core.Host, payload []byte) error {
+func (*handler) Exec(host core.Host, cache *core.StagedCache, payload []byte) error {
+	// Construct the context
+	staticContext := vm.StaticContext{}
+	dynamicContext := vm.DynamicContext{}
+
 	// Instantiate the VM
+	vmhost, err := vm.NewHost(host, cache, cache, staticContext, dynamicContext)
 
 	// TODO(lane): rewrite to use the VM
 	return fmt.Errorf("%w: unknown method", core.ErrMalformed)

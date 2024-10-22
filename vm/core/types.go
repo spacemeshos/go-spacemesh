@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
 const TxSizeLimit = 1024
@@ -41,7 +42,7 @@ type Handler interface {
 	Args([]byte) scale.Type
 
 	// Exec dispatches execution request based on the method selector.
-	Exec(Host, []byte) error
+	Exec(Host, *core.StagedCache, []byte) error
 
 	// New instantiates Template from spawn arguments.
 	New(any) (Template, error)
