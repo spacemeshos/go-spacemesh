@@ -247,6 +247,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        "204":
+          description: no eligibilities for this node in this epoch
         "500":
           description: could not generate proposal
 

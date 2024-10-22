@@ -962,13 +962,18 @@ func createPartialProposal(
 	if session.ref == types.EmptyBallotID {
 		p.Ballot.RefBallot = types.EmptyBallotID
 		p.Ballot.EpochData = &types.EpochData{
-			ActiveSetHash: activeset.Hash(),
-			Beacon:        beacon,
+			ActiveSetHash:    activeset.Hash(),
+			Beacon:           beacon,
+			EligibilityCount: session.eligibilities.slots,
 		}
 	} else {
 		p.Ballot.RefBallot = session.ref
 	}
 	p.SmesherID = smesher
+	// p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	// p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
+	// p.MustInitialize()
+
 	return p
 }
 

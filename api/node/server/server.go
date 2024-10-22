@@ -35,11 +35,16 @@ type hare interface {
 	Beacon(ctx context.Context, epoch types.EpochID) types.Beacon
 }
 
+type proposalBuilder interface {
+	BuildFor(layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error)
+}
+
 type Server struct {
 	atxService activation.AtxService
 	publisher  pubsub.Publisher
 	poetDB     poetDB
 	hare       hare
+	proposals  proposalBuilder
 	logger     *zap.Logger
 }
 
@@ -50,6 +55,7 @@ func NewServer(
 	publisher pubsub.Publisher,
 	poetDB poetDB,
 	hare hare,
+	proposals proposalBuilder,
 	logger *zap.Logger,
 ) *Server {
 	return &Server{
@@ -57,6 +63,7 @@ func NewServer(
 		publisher:  publisher,
 		poetDB:     poetDB,
 		hare:       hare,
+		proposals:  proposals,
 		logger:     logger,
 	}
 }
@@ -283,4 +290,38 @@ func (b *beaconResp) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) erro
 func (s *Server) GetHareBeaconEpoch(ctx context.Context, request GetHareBeaconEpochRequestObject) (GetHareBeaconEpochResponseObject, error) {
 	beacon := s.hare.Beacon(ctx, types.EpochID(request.Epoch))
 	return &beaconResp{b: beacon}, nil
+}
+
+type proposalResp struct {
+	buf   []byte
+	nonce types.VRFPostIndex
+}
+
+func (p *proposalResp) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
+	if buf == nil {
+		w.WriteHeader(204)
+		return nil
+	}
+	w.Header().Add("content-type", "application/octet-stream")
+	w.Header().Add("x-spacemesh-atx-nonce", fmt.Sprintf("%d", p.nonce))
+	w.WriteHeader(200)
+	_, err := w.Write(p.buf)
+	return err
+}
+
+func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (GetProposalLayerNodeResponseObject, error) {
+	hexBuf, err := hex.DecodeString(request.Node)
+	if err != nil {
+		return &proposalResp{}, err
+	}
+	id := types.BytesToNodeID(hexBuf)
+
+	proposal, nonce, err := s.proposals.BuildFor(types.LayerID(request.Layer), id)
+	if err != nil {
+		return &proposalResp{}, err
+	}
+	if proposal.Ballot.EpochData.EligibilityCount == 0 {
+		return &proposalResp{}, nil
+	}
+	return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, err
 }

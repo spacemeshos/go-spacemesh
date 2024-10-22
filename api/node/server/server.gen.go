@@ -780,6 +780,14 @@ func (response GetProposalLayerNode200ApplicationoctetStreamResponse) VisitGetPr
 	return err
 }
 
+type GetProposalLayerNode204Response struct {
+}
+
+func (response GetProposalLayerNode204Response) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
 type GetProposalLayerNode500Response struct {
 }
 

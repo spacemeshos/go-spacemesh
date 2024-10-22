@@ -190,3 +190,28 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 	copy(v[:], bytes)
 	return v, nil
 }
+
+func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, error) {
+	resp, err := s.client.GetProposalLayerNode(ctx, externalRef0.LayerID(layer), node.String())
+	if err != nil {
+		return nil, err
+	}
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNoContent:
+		// special case - no error but also no proposal, means
+		// we're no eligibile this epoch with this node ID
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read all: %w", err)
+	}
+
+	prop := types.Proposal{}
+	codec.MustDecode(bytes, &prop)
+
+	return &prop, nil
+}
