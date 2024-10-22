@@ -24,6 +24,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+func init() {
+	// systest runs with `fastnet` preset. this init need to generate addresses with same hrp network prefix as fastnet.
+	types.SetNetworkHRP("stest")
+}
+
 const (
 	attempts = 3
 )

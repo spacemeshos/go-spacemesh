@@ -28,6 +28,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+// TestSmeshing tests the network is healthy, smeshers are creating proposals, transactions are processed, and vesting
+// is working.
 func TestSmeshing(t *testing.T) {
 	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()

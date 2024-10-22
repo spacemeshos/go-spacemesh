@@ -32,13 +32,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	eg, ctx := errgroup.WithContext(tctx)
 	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
 	split := pct*cl.Total()/100 + 1
-	scheduleChaos(
-		ctx,
-		eg,
-		cl.Client(0),
-		tctx.Log.Desugar(),
-		startSplit,
-		rejoin,
+	scheduleChaos(ctx, eg, cl.Client(0), tctx.Log.Desugar(), startSplit, rejoin,
 		func(ctx context.Context) (chaos.Teardown, error) {
 			var (
 				left  []string
@@ -105,7 +99,8 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 						client: node.Name,
 					}
 					return true, nil
-				})
+				},
+			)
 		})
 	}
 
@@ -176,9 +171,10 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	}
 	require.NoError(t, finalErr)
 	require.True(t, pass)
-	_ = eg2.Wait()
+	eg2.Wait()
 }
 
+// TestPartition_30_70 tests the network partitioning with 30% and 70% of the nodes in each partition.
 func TestPartition_30_70(t *testing.T) {
 	t.Parallel()
 
@@ -193,6 +189,7 @@ func TestPartition_30_70(t *testing.T) {
 	testPartition(t, tctx, cl, 30, 6)
 }
 
+// TestPartition_50_50 tests the network partitioning with 50% of the nodes in each partition.
 func TestPartition_50_50(t *testing.T) {
 	t.Parallel()
 
