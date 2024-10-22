@@ -126,11 +126,15 @@ func NewRemoteBuilder(
 	clock layerClock,
 	publisher pubsub.Publisher,
 	svc nodeService,
+	layerSize uint32,
+	layersPerEpoch uint32,
 ) *RemoteProposalBuilder {
 	pb := &RemoteProposalBuilder{
 		cfg: config{
-			workersLimit: runtime.NumCPU(),
-			activeSet:    DefaultActiveSetPreparation(),
+			workersLimit:   runtime.NumCPU(),
+			activeSet:      DefaultActiveSetPreparation(),
+			layerSize:      layerSize,
+			layersPerEpoch: layersPerEpoch,
 		},
 		logger:    zap.NewNop(),
 		clock:     clock,
