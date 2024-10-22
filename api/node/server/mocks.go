@@ -278,12 +278,13 @@ func (m *MockproposalBuilder) EXPECT() *MockproposalBuilderMockRecorder {
 }
 
 // BuildFor mocks base method.
-func (m *MockproposalBuilder) BuildFor(layer types.LayerID, node types.NodeID) (*types.Proposal, error) {
+func (m *MockproposalBuilder) BuildFor(layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BuildFor", layer, node)
 	ret0, _ := ret[0].(*types.Proposal)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(types.VRFPostIndex)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // BuildFor indicates an expected call of BuildFor.
@@ -299,19 +300,19 @@ type MockproposalBuilderBuildForCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockproposalBuilderBuildForCall) Return(arg0 *types.Proposal, arg1 error) *MockproposalBuilderBuildForCall {
-	c.Call = c.Call.Return(arg0, arg1)
+func (c *MockproposalBuilderBuildForCall) Return(arg0 *types.Proposal, arg1 types.VRFPostIndex, arg2 error) *MockproposalBuilderBuildForCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockproposalBuilderBuildForCall) Do(f func(types.LayerID, types.NodeID) (*types.Proposal, error)) *MockproposalBuilderBuildForCall {
+func (c *MockproposalBuilderBuildForCall) Do(f func(types.LayerID, types.NodeID) (*types.Proposal, types.VRFPostIndex, error)) *MockproposalBuilderBuildForCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockproposalBuilderBuildForCall) DoAndReturn(f func(types.LayerID, types.NodeID) (*types.Proposal, error)) *MockproposalBuilderBuildForCall {
+func (c *MockproposalBuilderBuildForCall) DoAndReturn(f func(types.LayerID, types.NodeID) (*types.Proposal, types.VRFPostIndex, error)) *MockproposalBuilderBuildForCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -256,10 +256,12 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 			signer.signer.VRFSigner(),
 			layer.GetEpoch(),
 			proposal.Ballot.EpochData.Beacon,
-			ss.session.nonce, // atx nonce
+			111, //	ss.session.nonce, // atx nonce
 			proposal.Ballot.EpochData.EligibilityCount,
 			pb.cfg.layersPerEpoch,
 		)
+
+		fmt.Println(proofs)
 
 	}
 	return nil
