@@ -2,16 +2,16 @@ package tests
 
 import (
 	"context"
-	"slices"
+	"maps"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -35,15 +35,17 @@ func TestEquivocation(t *testing.T) {
 		require.NoError(t, err)
 		keys[i] = priv
 	}
+	malfeasants := make([]ed25519.PrivateKey, 0, len(keys)-honest)
 	for i := honest; i < len(keys); i += 2 {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		keys[i] = priv
 		keys[i+1] = priv
+		malfeasants = append(malfeasants, priv)
 	}
 	cctx.Log.Infow("fraction of nodes will have keys set up for equivocations",
 		zap.Int("honest", honest),
-		zap.Int("equivocators", len(keys)-honest),
+		zap.Int("equivocators", (len(keys)-honest)/2),
 	)
 	cl := cluster.New(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
@@ -58,20 +60,16 @@ func TestEquivocation(t *testing.T) {
 
 		eg      errgroup.Group
 		mu      sync.Mutex
-		results = map[string]map[int]string{}
-		proofs  = map[string]map[types.NodeID]struct{}{}
+		results = make(map[string]map[int]string)
 	)
-	ctx, cancel := context.WithCancel(cctx)
-	defer cancel()
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
-		results[client.Name] = map[int]string{}
+		results[client.Name] = make(map[int]string)
 		watchLayers(cctx, &eg, client, cctx.Log.Desugar(), func(resp *pb.LayerStreamResponse) (bool, error) {
 			if resp.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED {
 				return true, nil
 			}
 			if resp.Layer.Number.Number > stopTest {
-				cancel()
 				return false, nil
 			}
 			num := int(resp.Layer.Number.Number)
@@ -86,14 +84,6 @@ func TestEquivocation(t *testing.T) {
 			mu.Unlock()
 			return true, nil
 		})
-		proofs[client.Name] = map[types.NodeID]struct{}{}
-		watchMalfeasance(ctx, &eg, client, cctx.Log.Desugar(), func(msr *pb.MalfeasanceStreamResponse) (bool, error) {
-			malfeasant := types.BytesToNodeID(msr.Proof.SmesherId.Id)
-			mu.Lock()
-			proofs[client.Name][malfeasant] = struct{}{}
-			mu.Unlock()
-			return true, nil
-		})
 	}
 	eg.Wait()
 	reference := results[cl.Client(0).Name]
@@ -102,10 +92,19 @@ func TestEquivocation(t *testing.T) {
 			"reference: %v, client: %v", cl.Client(0).Name, cl.Client(i).Name,
 		)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	proofs := make(map[string]map[types.NodeID]struct{})
+	for i := 0; i < honest; i++ {
+		client := cl.Client(i)
+		proofs[client.Name] = make(map[types.NodeID]struct{})
+		malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
+			malfeasant := malf.GetProof().GetSmesherId().Id
+			proofs[client.Name][types.BytesToNodeID(malfeasant)] = struct{}{}
+			return true, nil
+		})
+	}
 
-	malfeasants := slices.CompactFunc(keys[honest:], func(key1, key2 ed25519.PrivateKey) bool {
-		return key1.Equal(key2)
-	})
 	for i := 0; i < honest; i++ {
 		reported := maps.Keys(proofs[cl.Client(i).Name])
 		assert.ElementsMatchf(t, malfeasants, reported, "client: %s", cl.Client(i).Name)

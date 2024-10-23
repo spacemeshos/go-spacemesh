@@ -144,7 +144,11 @@ BACKOFF:
 		state, err := states.Recv()
 		s, ok := status.FromError(err)
 		if ok && s.Code() != codes.OK {
-			logger.Warn("global state stream error",
+			if s.Code() == codes.Canceled {
+				return nil
+			}
+			logger.Warn(
+				"global state stream error",
 				zap.String("client", node.Name),
 				zap.Error(err),
 				zap.Any("status", s),
@@ -196,7 +200,15 @@ BACKOFF:
 		layer, err := layers.Recv()
 		s, ok := status.FromError(err)
 		if ok && s.Code() != codes.OK {
-			logger.Warn("layers stream error", zap.String("client", node.Name), zap.Error(err), zap.Any("status", s))
+			if s.Code() == codes.Canceled {
+				return nil
+			}
+			logger.Warn(
+				"layers stream error",
+				zap.String("client", node.Name),
+				zap.Error(err),
+				zap.Any("status", s),
+			)
 			if s.Code() == codes.Unavailable {
 				if retries == attempts {
 					return errors.New("layer stream unavailable")
@@ -213,18 +225,6 @@ BACKOFF:
 			return err
 		}
 	}
-}
-
-func watchMalfeasance(
-	ctx context.Context,
-	eg *errgroup.Group,
-	node *cluster.NodeClient,
-	logger *zap.Logger,
-	collector func(*pb.MalfeasanceStreamResponse) (bool, error),
-) {
-	eg.Go(func() error {
-		return malfeasanceStream(ctx, node, logger, collector)
-	})
 }
 
 func malfeasanceStream(
@@ -244,7 +244,11 @@ BACKOFF:
 		proof, err := proofs.Recv()
 		s, ok := status.FromError(err)
 		if ok && s.Code() != codes.OK {
-			logger.Warn("malfeasance stream error",
+			if s.Code() == codes.Canceled {
+				return nil
+			}
+			logger.Warn(
+				"malfeasance stream error",
 				zap.String("client", node.Name),
 				zap.Error(err),
 				zap.Any("status", s),
@@ -256,7 +260,6 @@ BACKOFF:
 				retries++
 				time.Sleep(retryBackoff)
 				goto BACKOFF
-
 			}
 		}
 		if err != nil {
@@ -334,7 +337,6 @@ func watchTransactionResults(ctx context.Context,
 	eg.Go(func() error {
 		retries := 0
 	BACKOFF:
-
 		api := pb.NewTransactionServiceClient(client.PubConn())
 		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
 		if err != nil {
@@ -344,7 +346,11 @@ func watchTransactionResults(ctx context.Context,
 			rst, err := rsts.Recv()
 			s, ok := status.FromError(err)
 			if ok && s.Code() != codes.OK {
-				log.Warn("transactions stream error",
+				if s.Code() == codes.Canceled {
+					return nil
+				}
+				log.Warn(
+					"transactions stream error",
 					zap.String("client", client.Name),
 					zap.Error(err),
 					zap.Any("status", s),
@@ -387,7 +393,11 @@ func watchProposals(
 			proposal, err := proposals.Recv()
 			s, ok := status.FromError(err)
 			if ok && s.Code() != codes.OK {
-				log.Warn("proposals stream error",
+				if s.Code() == codes.Canceled {
+					return nil
+				}
+				log.Warn(
+					"proposals stream error",
 					zap.String("client", client.Name),
 					zap.Error(err),
 					zap.Any("status", s),
