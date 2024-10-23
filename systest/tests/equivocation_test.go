@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"maps"
 	"sync"
 	"testing"
 	"time"
@@ -92,21 +91,19 @@ func TestEquivocation(t *testing.T) {
 			"reference: %v, client: %v", cl.Client(0).Name, cl.Client(i).Name,
 		)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	proofs := make(map[string]map[types.NodeID]struct{})
+	proofs := make(map[string][]types.NodeID)
 	for i := 0; i < honest; i++ {
 		client := cl.Client(i)
-		proofs[client.Name] = make(map[types.NodeID]struct{})
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
 		malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
 			malfeasant := malf.GetProof().GetSmesherId().Id
-			proofs[client.Name][types.BytesToNodeID(malfeasant)] = struct{}{}
-			return true, nil
+			proofs[client.Name] = append(proofs[client.Name], types.NodeID(malfeasant))
+			return len(proofs[client.Name]) < len(malfeasants), nil
 		})
 	}
 
 	for i := 0; i < honest; i++ {
-		reported := maps.Keys(proofs[cl.Client(i).Name])
-		assert.ElementsMatchf(t, malfeasants, reported, "client: %s", cl.Client(i).Name)
+		assert.ElementsMatchf(t, malfeasants, proofs[cl.Client(i).Name], "client: %s", cl.Client(i).Name)
 	}
 }
