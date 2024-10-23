@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -13,8 +14,8 @@ type PairwiseSetSyncer struct {
 	name        string
 	opts        []RangeSetReconcilerOption
 	conduitOpts []ConduitOption
-	sent        int
-	recv        int
+	sent        atomic.Int64
+	recv        atomic.Int64
 }
 
 func NewPairwiseSetSyncer(
@@ -32,8 +33,8 @@ func NewPairwiseSetSyncer(
 }
 
 func (pss *PairwiseSetSyncer) updateCounts(c *wireConduit) {
-	pss.sent += c.bytesSent()
-	pss.recv += c.bytesReceived()
+	pss.sent.Add(int64(c.bytesSent()))
+	pss.recv.Add(int64(c.bytesReceived()))
 }
 
 func (pss *PairwiseSetSyncer) Probe(
@@ -126,9 +127,9 @@ func (pss *PairwiseSetSyncer) Register(d *Dispatcher, os OrderedSet) {
 }
 
 func (pss *PairwiseSetSyncer) Sent() int {
-	return pss.sent
+	return int(pss.sent.Load())
 }
 
 func (pss *PairwiseSetSyncer) Received() int {
-	return pss.recv
+	return int(pss.recv.Load())
 }
