@@ -660,7 +660,9 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 	var (
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
-		cfg     = SmesherDeploymentConfig{}
+		cfg     = SmesherDeploymentConfig{
+			image: ctx.Image,
+		}
 	)
 	for _, opt := range opts {
 		opt(&cfg)
@@ -697,7 +699,7 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 			id := fmt.Sprintf("%s-%d", kind, i)
 			labels := nodeLabels(kind, id)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, id, key, labels, finalFlags); err != nil {
+			if err := deployNode(ctx, id, key, cfg.image, labels, finalFlags); err != nil {
 				return err
 			}
 			clients <- &NodeClient{
@@ -736,7 +738,9 @@ func deployRemoteNodes(
 	var (
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
-		cfg     = SmesherDeploymentConfig{}
+		cfg     = SmesherDeploymentConfig{
+			image: ctx.Image,
+		}
 	)
 	for _, opt := range opts {
 		opt(&cfg)
@@ -769,7 +773,7 @@ func deployRemoteNodes(
 		eg.Go(func() error {
 			labels := nodeLabels(smesherApp, nodeId)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, nodeId, cfg.keys[i-from], labels, finalFlags); err != nil {
+			if err := deployNode(ctx, nodeId, cfg.keys[i-from], cfg.image, labels, finalFlags); err != nil {
 				return err
 			}
 			deployNodeSvc(ctx, nodeId)
@@ -841,6 +845,7 @@ func deployNode(
 	ctx *testcontext.Context,
 	id string,
 	key ed25519.PrivateKey,
+	image string,
 	labels map[string]string,
 	flags []DeploymentFlag,
 ) error {
@@ -874,7 +879,7 @@ func deployNode(
 		)).
 		WithContainers(corev1.Container().
 			WithName("smesher").
-			WithImage(ctx.Image).
+			WithImage(image).
 			WithImagePullPolicy(apiv1.PullIfNotPresent).
 			WithPorts(
 				corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),

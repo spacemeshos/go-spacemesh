@@ -1,7 +1,7 @@
 # go-spacemesh needs at least ubuntu 22.04. newer versions of ubuntu might work as well, but are untested
 FROM ubuntu:22.04 AS linux
-ENV DEBIAN_FRONTEND noninteractive
-ENV SHELL /bin/bash
+ENV DEBIAN_FRONTEND=noninteractive
+ENV SHELL=/bin/bash
 ARG TZ=Etc/UTC
 ENV TZ=${TZ}
 USER root
@@ -22,11 +22,11 @@ RUN set -ex \
    && locale-gen en_US.UTF-8 \
    && update-locale LANG=en_US.UTF-8 \
    && echo "$TZ" > /etc/timezone
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US.UTF-8
-ENV LC_ALL en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
-FROM golang:1.23 as builder
+FROM golang:1.23 AS builder
 ARG VERSION=""
 ENV VERSION=${VERSION}
 RUN set -ex \

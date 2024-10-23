@@ -171,6 +171,7 @@ type Context struct {
 	BootnodeSize      int
 	RemoteSize        int
 	PoetSize          int
+	OldSize           int
 	BootstrapperSize  int
 	Generic           client.Client
 	TestID            string
@@ -358,6 +359,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		BootnodeSize:      max(2, (clSize/1000)*2),
 		RemoteSize:        0,
 		PoetSize:          poetSize.Get(p),
+		OldSize:           0,
 		BootstrapperSize:  bsSize.Get(p),
 		Image:             imageFlag.Get(p),
 		OldImage:          oldImageFlag.Get(p),

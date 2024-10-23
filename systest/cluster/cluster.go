@@ -89,7 +89,7 @@ func WithSmesherFlag(flag DeploymentFlag) Opt {
 	}
 }
 
-// WithKeys generates n prefunded keys.
+// WithKeys generates n pre-funded keys.
 func WithKeys(n int) Opt {
 	return func(c *Cluster) {
 		c.accounts = accounts{keys: genSigners(n)}
@@ -161,12 +161,13 @@ func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
 
-	smeshers := cctx.ClusterSize - cctx.BootnodeSize - cctx.RemoteSize
+	smeshers := cctx.ClusterSize - cctx.BootnodeSize - cctx.OldSize - cctx.RemoteSize
 
 	cctx.Log.Desugar().Info("Using the following nodes",
 		zap.Int("total", cctx.ClusterSize),
 		zap.Int("bootnodes", cctx.BootnodeSize),
 		zap.Int("smeshers", smeshers),
+		zap.Int("old smeshers", cctx.OldSize),
 		zap.Int("remote", cctx.RemoteSize),
 	)
 
@@ -194,12 +195,19 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err := cl.AddPoets(cctx); err != nil {
 		return nil, err
 	}
-	err = cl.AddSmeshers(cctx, smeshers, WithSmeshers(keys[cctx.BootnodeSize:cctx.BootnodeSize+smeshers]))
-	if err != nil {
+
+	smesherKeys := keys[cctx.BootnodeSize : cctx.BootnodeSize+smeshers]
+	if err := cl.AddSmeshers(cctx, smeshers, WithSmeshers(smesherKeys)); err != nil {
 		return nil, err
 	}
-	err = cl.AddRemoteSmeshers(cctx, cctx.RemoteSize, WithSmeshers(keys[cctx.BootnodeSize+smeshers:]))
-	if err != nil {
+
+	oldKeys := keys[cctx.BootnodeSize+smeshers : cctx.BootnodeSize+smeshers+cctx.OldSize]
+	if err := cl.AddSmeshers(cctx, cctx.OldSize, WithSmeshers(oldKeys), WithImage(cctx.OldImage)); err != nil {
+		return nil, err
+	}
+
+	remoteKeys := keys[cctx.BootnodeSize+smeshers+cctx.OldSize:]
+	if err := cl.AddRemoteSmeshers(cctx, cctx.RemoteSize, WithSmeshers(remoteKeys)); err != nil {
 		return nil, err
 	}
 	return cl, nil
@@ -556,16 +564,11 @@ type SmesherDeploymentConfig struct {
 	flags []DeploymentFlag
 	keys  []ed25519.PrivateKey
 
+	image          string
 	noDefaultPoets bool
 }
 
 type DeploymentOpt func(cfg *SmesherDeploymentConfig)
-
-func NoDefaultPoets() DeploymentOpt {
-	return func(cfg *SmesherDeploymentConfig) {
-		cfg.noDefaultPoets = true
-	}
-}
 
 func WithFlags(flags ...DeploymentFlag) DeploymentOpt {
 	return func(cfg *SmesherDeploymentConfig) {
@@ -576,6 +579,18 @@ func WithFlags(flags ...DeploymentFlag) DeploymentOpt {
 func WithSmeshers(keys []ed25519.PrivateKey) DeploymentOpt {
 	return func(cfg *SmesherDeploymentConfig) {
 		cfg.keys = keys
+	}
+}
+
+func WithImage(image string) DeploymentOpt {
+	return func(cfg *SmesherDeploymentConfig) {
+		cfg.image = image
+	}
+}
+
+func NoDefaultPoets() DeploymentOpt {
+	return func(cfg *SmesherDeploymentConfig) {
+		cfg.noDefaultPoets = true
 	}
 }
 
