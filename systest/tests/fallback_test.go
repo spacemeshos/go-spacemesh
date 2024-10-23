@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+// TestFallback tests the fallback mechanism for beacons.
 func TestFallback(t *testing.T) {
 	t.Parallel()
 
@@ -84,9 +85,8 @@ func TestFallback(t *testing.T) {
 		refActives, err := queryEpochAtxs(tctx, cl.Client(0), epoch)
 		cutoff := len(refActives)
 		if epoch > 2 {
-			cutoff = len(
-				refActives,
-			) * 3 / 4 // bootstrapper only sets 3/4 of the epoch atx to be the fallback active set
+			// bootstrapper only sets 3/4 of the epoch atx to be the fallback active set
+			cutoff = len(refActives) * 3 / 4
 		}
 		require.NoError(t, err, "query atxs from client", cl.Client(0).Name)
 		tctx.Log.Debugw("got atx ids from client", "epoch", epoch, "client", cl.Client(0).Name, "size", len(refActives))

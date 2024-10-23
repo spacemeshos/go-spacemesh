@@ -38,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+// TestPostMalfeasanceProof tests that nodes can detect an invalid PoST and create a malfeasance proof against it.
 func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 	testDir := t.TempDir()

@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+// TestEquivocation runs a network where ~40% of nodes are expected to be equivocated due to shared keys.
 func TestEquivocation(t *testing.T) {
 	t.Parallel()
 	const bootnodes = 2
@@ -31,15 +32,17 @@ func TestEquivocation(t *testing.T) {
 		require.NoError(t, err)
 		keys[i] = priv
 	}
+	// malfeasants := make([]ed25519.PrivateKey, 0, len(keys)-honest)
 	for i := honest; i < len(keys); i += 2 {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		keys[i] = priv
 		keys[i+1] = priv
+		// malfeasants = append(malfeasants, priv)
 	}
 	cctx.Log.Infow("fraction of nodes will have keys set up for equivocations",
 		zap.Int("honest", honest),
-		zap.Int("equivocators", len(keys)-honest),
+		zap.Int("equivocators", (len(keys)-honest)/2),
 	)
 	cl := cluster.New(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
@@ -54,11 +57,11 @@ func TestEquivocation(t *testing.T) {
 
 		eg      errgroup.Group
 		mu      sync.Mutex
-		results = map[string]map[int]string{}
+		results = make(map[string]map[int]string)
 	)
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
-		results[client.Name] = map[int]string{}
+		results[client.Name] = make(map[int]string)
 		watchLayers(cctx, &eg, client, cctx.Log.Desugar(), func(resp *pb.LayerStreamResponse) (bool, error) {
 			if resp.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED {
 				return true, nil
@@ -79,10 +82,31 @@ func TestEquivocation(t *testing.T) {
 			return true, nil
 		})
 	}
-	eg.Wait()
+	require.NoError(t, eg.Wait())
 	reference := results[cl.Client(0).Name]
 	for i := 1; i < cl.Total(); i++ {
 		assert.Equal(t, reference, results[cl.Client(i).Name],
-			"reference: %v, client: %v", cl.Client(0).Name, cl.Client(i).Name)
+			"reference: %v, client: %v", cl.Client(0).Name, cl.Client(i).Name,
+		)
 	}
+
+	// TODO(mafa): since the nodes running with shared keys are all perfectly synchronized, we can't
+	// detect equivocation directly. The two nodes sharing the same key will with high probability broadcast
+	// the same messages to other peers which won't trigger an equivocation
+	//
+	// For this test to work properly the nodes sharing keys need to be slightly out of sync from each other so
+	// they can broadcast different messages to the network.
+
+	// for i := 0; i < honest; i++ {
+	// 	client := cl.Client(i)
+	// 	proofs := make([]types.NodeID, 0, len(malfeasants))
+	// 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	// 	defer cancel()
+	// 	malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
+	// 		malfeasant := malf.GetProof().GetSmesherId().Id
+	// 		proofs = append(proofs, types.NodeID(malfeasant))
+	// 		return len(proofs) < len(malfeasants), nil
+	// 	})
+	// 	assert.ElementsMatchf(t, malfeasants, proofs, "client: %s", cl.Client(i).Name)
+	// }
 }

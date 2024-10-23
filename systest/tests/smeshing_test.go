@@ -28,12 +28,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+// TestSmeshing tests the network is healthy, smeshers are creating proposals, transactions are processed, and vesting
+// is working.
 func TestSmeshing(t *testing.T) {
 	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
 
 	tctx := testcontext.New(t)
 	tctx.RemoteSize = tctx.ClusterSize / 4 // 25% of nodes are remote
+	tctx.OldSize = tctx.ClusterSize / 4    // 25% of nodes are old
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
 		prepareVesting(t, 5, 8, 20, 1e15, 10e15),
