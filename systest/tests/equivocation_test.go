@@ -2,7 +2,7 @@ package tests
 
 import (
 	"context"
-	"maps"
+	"slices"
 	"sync"
 	"testing"
 
@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
@@ -103,12 +103,11 @@ func TestEquivocation(t *testing.T) {
 		)
 	}
 
+	malfeasants := slices.CompactFunc(keys[honest:], func(key1, key2 ed25519.PrivateKey) bool {
+		return key1.Equal(key2)
+	})
 	for i := 0; i < honest; i++ {
-		malfeasants := maps.Keys(proofs[cl.Client(i).Name])
-		for _, key := range keys[honest:] {
-			assert.Contains(t, malfeasants, types.NodeID(signing.Public(key)),
-				"client: %v, malfeasant: %v", cl.Client(i).Name, types.NodeID(signing.Public(key)),
-			)
-		}
+		reported := maps.Keys(proofs[cl.Client(i).Name])
+		assert.ElementsMatchf(t, malfeasants, reported, "client: %s", cl.Client(i).Name)
 	}
 }
