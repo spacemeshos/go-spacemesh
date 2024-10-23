@@ -7,28 +7,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
-func (t *SpawnArguments) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteArray(enc, t.PublicKey[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *SpawnArguments) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.PublicKey[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
 func (t *SpendArguments) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeByteArray(enc, t.Destination[:])

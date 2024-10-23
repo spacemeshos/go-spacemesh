@@ -87,8 +87,8 @@ func (c *Context) Handler() Handler {
 }
 
 // Spawn account.
-func (c *Context) Spawn(args scale.Encodable) error {
-	account, err := c.load(ComputePrincipal(c.Header.TemplateAddress, args))
+func (c *Context) Spawn(spawnArgs []byte) error {
+	account, err := c.load(ComputePrincipal(c.Header.TemplateAddress, spawnArgs))
 	if err != nil {
 		return err
 	}

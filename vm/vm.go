@@ -580,7 +580,7 @@ func parse(
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 
-	maxspend, err := ctx.PrincipalTemplate.MaxSpend(args)
+	maxspend, err := ctx.PrincipalTemplate.MaxSpend(ctx, loader, args)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -37,14 +37,12 @@ type (
 type Handler interface {
 	// Parse header from the payload.
 	Parse(*scale.Decoder) (ParseOutput, error)
-	// Args returns method arguments for the method.
-	Args([]byte) scale.Type
 
 	// Exec dispatches execution request based on the method selector.
 	Exec(Host, *StagedCache, []byte) error
 
 	// New instantiates Template from spawn arguments.
-	New(any) (Template, error)
+	New([]byte) (Template, error)
 	// Load template with stored immutable state.
 	Load([]byte) (Template, error)
 
@@ -58,7 +56,7 @@ type Handler interface {
 type Template interface {
 	// MaxSpend decodes MaxSpend value for the transaction. Transaction will fail
 	// if it spends more than that.
-	MaxSpend(any) (uint64, error)
+	MaxSpend(Host, AccountLoader, []byte) (uint64, error)
 	// TODO(lane): update to use the VM
 	// BaseGas is an intrinsic cost for executing a transaction. If this cost is not covered
 	// transaction will be ineffective.
@@ -111,10 +109,39 @@ type Host interface {
 	Balance() uint64
 }
 
-//go:generate scalegen -types Payload
+//go:generate scalegen -types Metadata
 
-// Payload is a generic payload for all transactions.
-type Payload struct {
+// Metadata contains generic metadata for all transactions.
+type Metadata struct {
 	Nonce    Nonce
 	GasPrice uint64
+}
+
+// Payload contains the opaque, Athena-encoded transaction payload including the method selector
+// and method args.
+type Payload []byte
+
+func (t *Payload) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteSlice(enc, *t)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+
+	return total, nil
+}
+
+func (t *Payload) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeByteSlice(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		*t = field
+	}
+
+	return total, nil
 }

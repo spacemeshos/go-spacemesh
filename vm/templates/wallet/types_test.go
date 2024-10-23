@@ -28,9 +28,9 @@ func TestGolden(t *testing.T) {
 		tester.GoldenTest[SpendArguments](t, filepath.Join(golden, "SpendArguments.json"))
 	})
 	t.Run("SpendPayload", func(t *testing.T) {
-		tester.GoldenTest[core.Payload](t, filepath.Join(golden, "SpendPayload.json"))
+		tester.GoldenTest[core.Metadata](t, filepath.Join(golden, "SpendPayload.json"))
 	})
 	t.Run("SpawnPayload", func(t *testing.T) {
-		tester.GoldenTest[core.Payload](t, filepath.Join(golden, "SpawnPayload.json"))
+		tester.GoldenTest[core.Metadata](t, filepath.Join(golden, "SpawnPayload.json"))
 	})
 }

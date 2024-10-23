@@ -29,7 +29,7 @@ type handler struct{}
 
 // Parse header.
 func (*handler) Parse(decoder *scale.Decoder) (output core.ParseOutput, err error) {
-	var p core.Payload
+	var p core.Metadata
 	if _, err = p.DecodeScale(decoder); err != nil {
 		err = fmt.Errorf("%w: %w", core.ErrMalformed, err)
 		return
@@ -40,8 +40,8 @@ func (*handler) Parse(decoder *scale.Decoder) (output core.ParseOutput, err erro
 }
 
 // New instatiates single sig wallet with spawn arguments.
-func (*handler) New(args any) (core.Template, error) {
-	return New(args.(*SpawnArguments)), nil
+func (*handler) New(spawnArgs []byte) (core.Template, error) {
+	return New(spawnArgs), nil
 }
 
 // Load single sig wallet from stored state.
@@ -81,13 +81,16 @@ func (*handler) Exec(host core.Host, cache *core.StagedCache, payload []byte) er
 	}
 
 	// Execute the transaction in the VM
-	maxgas := host.MaxGas()
-	if int64(maxgas) < 0 {
+	// Note: at this point, maxgas was already consumed from the principal account, so we don't
+	// need to check the account balance, but we still need to communicate the amount to the VM
+	// so it can short-circuit execution if the amount is exceeded.
+	maxgas := int64(host.MaxGas())
+	if maxgas < 0 {
 		return fmt.Errorf("gas limit exceeds maximum int64 value")
 	}
-	vmhost.Execute(
+	output, gasLeft, err := vmhost.Execute(
 		host.Layer(),
-		int64(maxgas),
+		maxgas,
 		host.Principal(),
 		host.Principal(),
 		payload,
@@ -98,25 +101,12 @@ func (*handler) Exec(host core.Host, cache *core.StagedCache, payload []byte) er
 		0,
 		templateAccount.State,
 	)
-	return nil
+	fmt.Printf("program execution: output len (discarded): %v, gasLeft: %v\n", len(output), gasLeft)
+	return err
 }
 
 func (h *handler) IsSpawn(payload []byte) bool {
 	// TODO(lane): rewrite to use the VM
 	// mock for now
 	return true
-}
-
-// Args ...
-func (h *handler) Args(payload []byte) scale.Type {
-	// TODO(lane): rewrite to use the VM
-	// mock for now
-	return &SpawnArguments{}
-	// switch method {
-	// case core.MethodSpawn:
-	// 	return &SpawnArguments{}
-	// case core.MethodSpend:
-	// 	return &SpendArguments{}
-	// }
-	// return nil
 }

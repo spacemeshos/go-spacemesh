@@ -78,45 +78,6 @@ func (c *MockTemplateBaseGasCall) DoAndReturn(f func() uint64) *MockTemplateBase
 	return c
 }
 
-// EncodeScale mocks base method.
-func (m *MockTemplate) EncodeScale(arg0 *scale.Encoder) (int, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EncodeScale", arg0)
-	ret0, _ := ret[0].(int)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// EncodeScale indicates an expected call of EncodeScale.
-func (mr *MockTemplateMockRecorder) EncodeScale(arg0 any) *MockTemplateEncodeScaleCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeScale", reflect.TypeOf((*MockTemplate)(nil).EncodeScale), arg0)
-	return &MockTemplateEncodeScaleCall{Call: call}
-}
-
-// MockTemplateEncodeScaleCall wrap *gomock.Call
-type MockTemplateEncodeScaleCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockTemplateEncodeScaleCall) Return(arg0 int, arg1 error) *MockTemplateEncodeScaleCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockTemplateEncodeScaleCall) Do(f func(*scale.Encoder) (int, error)) *MockTemplateEncodeScaleCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTemplateEncodeScaleCall) DoAndReturn(f func(*scale.Encoder) (int, error)) *MockTemplateEncodeScaleCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // ExecGas mocks base method.
 func (m *MockTemplate) ExecGas() uint64 {
 	m.ctrl.T.Helper()

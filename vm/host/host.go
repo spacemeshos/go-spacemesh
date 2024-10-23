@@ -11,10 +11,11 @@ import (
 
 	"github.com/ChainSafe/gossamer/pkg/scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
-func athenaLibPath() string {
+func AthenaLibPath() string {
 	var err error
 
 	cwd, err := os.Getwd()
@@ -54,6 +55,17 @@ type Host struct {
 	dynamicContext DynamicContext
 }
 
+// Instantiates a partially-functional VM host that can execute simplistic transactions
+// that do not rely on context or state.
+func NewHostLightweight(host core.Host) (*Host, error) {
+	vm, err := athcon.Load(AthenaLibPath())
+	if err != nil {
+		return nil, fmt.Errorf("loading Athena VM: %w", err)
+	}
+	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()})
+	return &Host{vm, host, cache, cache, StaticContext{}, DynamicContext{}}, nil
+}
+
 // Load the VM from the shared library and returns an instance of a Host.
 // It is the caller's responsibility to call Destroy when it
 // is no longer needed.
@@ -64,7 +76,7 @@ func NewHost(
 	staticContext StaticContext,
 	dynamicContext DynamicContext,
 ) (*Host, error) {
-	vm, err := athcon.Load(athenaLibPath())
+	vm, err := athcon.Load(AthenaLibPath())
 	if err != nil {
 		return nil, fmt.Errorf("loading Athena VM: %w", err)
 	}

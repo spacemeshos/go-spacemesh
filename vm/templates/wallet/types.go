@@ -6,11 +6,6 @@ import (
 
 //go:generate scalegen
 
-// SpawnArguments ...
-type SpawnArguments struct {
-	PublicKey core.PublicKey
-}
-
 // SpendArguments ...
 type SpendArguments struct {
 	Destination core.Address
