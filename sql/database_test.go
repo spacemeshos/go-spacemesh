@@ -21,7 +21,6 @@ func Test_ConReturnedToPool(t *testing.T) {
 	db := InMemory(
 		WithLogger(zaptest.NewLogger(t)),
 		WithConnections(1),
-		WithLatencyMetering(true),
 		WithDatabaseSchema(&Schema{
 			Script: `CREATE TABLE testing1 (
 				id varchar primary key,
