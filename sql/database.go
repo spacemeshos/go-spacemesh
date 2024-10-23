@@ -605,6 +605,15 @@ func (db *sqliteDatabase) getConn(ctx context.Context) *sqlite.Conn {
 	return conn
 }
 
+func (db *sqliteDatabase) returnConn(conn *sqlite.Conn) {
+	if conn.CheckReset() != "" {
+		ch := make(chan struct{})
+		conn.SetInterrupt(ch)
+		close(ch)
+	}
+	db.pool.Put(conn)
+}
+
 func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx, error) {
 	if db.closed {
 		return nil, ErrClosed
@@ -642,7 +651,7 @@ func (db *sqliteDatabase) startExclusive() error {
 	if conn == nil {
 		return ErrNoConnection
 	}
-	defer db.pool.Put(conn)
+	defer db.returnConn(conn)
 	// We don't need to wait for long if the database is busy
 	conn.SetBusyTimeout(1 * time.Millisecond)
 	// From SQLite docs:
@@ -737,7 +746,7 @@ func (db *sqliteDatabase) Exec(query string, encoder Encoder, decoder Decoder) (
 	if conn == nil {
 		return 0, ErrNoConnection
 	}
-	defer db.pool.Put(conn)
+	defer db.returnConn(conn)
 	if db.latency != nil {
 		start := time.Now()
 		defer func() {
@@ -994,6 +1003,8 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 	if err != nil {
 		return 0, fmt.Errorf("prepare %s: %w", query, err)
 	}
+    defer stmt.Reset()
+
 	if encoder != nil {
 		encoder(stmt)
 	}
@@ -1015,7 +1026,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 		}
 		if !decoder(stmt) {
 			if err := stmt.Reset(); err != nil {
-				return rows, fmt.Errorf("statement reset %w", err)
+				return rows, fmt.Errorf("statement reset: %w", err)
 			}
 			return rows, nil
 		}
@@ -1053,7 +1064,7 @@ func (tx *sqliteTx) Commit() error {
 
 // Release transaction. Every transaction that was created must be released.
 func (tx *sqliteTx) Release() error {
-	defer tx.db.pool.Put(tx.conn)
+	defer tx.db.returnConn(tx.conn)
 	if tx.committed {
 		return nil
 	}
