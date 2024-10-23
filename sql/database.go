@@ -1003,7 +1003,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 	if err != nil {
 		return 0, fmt.Errorf("prepare %s: %w", query, err)
 	}
-    defer stmt.Reset()
+	defer stmt.Reset()
 
 	if encoder != nil {
 		encoder(stmt)
