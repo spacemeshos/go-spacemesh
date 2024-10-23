@@ -310,11 +310,7 @@ func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) e
 	}
 }
 
-func waitTransaction(ctx context.Context,
-	eg *errgroup.Group,
-	client *cluster.NodeClient,
-	id []byte,
-) {
+func waitTransaction(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, id []byte) {
 	eg.Go(func() error {
 		api := pb.NewTransactionServiceClient(client.PubConn())
 		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true, Id: id})
