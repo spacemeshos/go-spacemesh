@@ -29,19 +29,26 @@ type handler struct{}
 
 // Parse header.
 func (*handler) Parse(decoder *scale.Decoder) (output core.ParseOutput, err error) {
-	var p core.Metadata
+	var m core.Metadata
+	var p core.Payload
+
+	if _, err = m.DecodeScale(decoder); err != nil {
+		err = fmt.Errorf("%w: %w", core.ErrMalformed, err)
+		return
+	}
 	if _, err = p.DecodeScale(decoder); err != nil {
 		err = fmt.Errorf("%w: %w", core.ErrMalformed, err)
 		return
 	}
-	output.GasPrice = p.GasPrice
-	output.Nonce = p.Nonce
+	output.GasPrice = m.GasPrice
+	output.Nonce = m.Nonce
+	output.Payload = p
 	return output, nil
 }
 
 // New instatiates single sig wallet with spawn arguments.
-func (*handler) New(spawnArgs []byte) (core.Template, error) {
-	return New(spawnArgs), nil
+func (*handler) New(host core.Host, cache core.AccountLoader, spawnArgs []byte) (core.Template, error) {
+	return New(host, cache, spawnArgs)
 }
 
 // Load single sig wallet from stored state.
@@ -62,14 +69,14 @@ func (*handler) Exec(host core.Host, cache *core.StagedCache, payload []byte) er
 	}
 
 	// Construct the context
-	staticContext := vmhost.StaticContext{
+	staticContext := core.StaticContext{
 		// Athena does not currently allow proxied calls, so by definition the principal is the
 		// same as the destination, for now. See https://github.com/athenavm/athena/issues/174.
 		Principal:   host.Principal(),
 		Destination: host.Principal(),
 		Nonce:       host.Nonce(),
 	}
-	dynamicContext := vmhost.DynamicContext{
+	dynamicContext := core.DynamicContext{
 		Template: host.TemplateAddress(),
 		Callee:   host.Principal(),
 	}

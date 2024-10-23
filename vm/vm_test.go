@@ -80,7 +80,7 @@ func (a *singlesigAccount) spawn(
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) []byte {
-	return sdkwallet.Spawn(a.pk, template, args, nonce, opts...)
+	return sdkwallet.Spawn(a.pk, template, nonce, opts...)
 }
 
 func (a *singlesigAccount) spawnArgs() scale.Encodable {

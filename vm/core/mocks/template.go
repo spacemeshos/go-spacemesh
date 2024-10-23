@@ -155,7 +155,7 @@ func (c *MockTemplateLoadGasCall) DoAndReturn(f func() uint64) *MockTemplateLoad
 }
 
 // MaxSpend mocks base method.
-func (m *MockTemplate) MaxSpend(arg0 any) (uint64, error) {
+func (m *MockTemplate) MaxSpend(arg0 []byte) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxSpend", arg0)
 	ret0, _ := ret[0].(uint64)
@@ -182,13 +182,13 @@ func (c *MockTemplateMaxSpendCall) Return(arg0 uint64, arg1 error) *MockTemplate
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTemplateMaxSpendCall) Do(f func(any) (uint64, error)) *MockTemplateMaxSpendCall {
+func (c *MockTemplateMaxSpendCall) Do(f func([]byte) (uint64, error)) *MockTemplateMaxSpendCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTemplateMaxSpendCall) DoAndReturn(f func(any) (uint64, error)) *MockTemplateMaxSpendCall {
+func (c *MockTemplateMaxSpendCall) DoAndReturn(f func([]byte) (uint64, error)) *MockTemplateMaxSpendCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

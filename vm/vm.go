@@ -543,17 +543,10 @@ func parse(
 	if err != nil {
 		return nil, nil, err
 	}
-	args := handler.Args(raw)
-	if args == nil {
-		return nil, nil, fmt.Errorf("%w: unknown method %s", core.ErrMalformed, *templateAddress)
-	}
-	if _, err := args.DecodeScale(decoder); err != nil {
-		return nil, nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
-	}
 	if handler.IsSpawn(raw) {
-		if core.ComputePrincipal(*templateAddress, args) == principal {
+		if core.ComputePrincipal(*templateAddress, raw) == principal {
 			// this is a self spawn. if it fails validation - discard it immediately
-			ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(args)
+			ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader, output.Payload)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -561,7 +554,7 @@ func parse(
 		} else if principalAccount.TemplateAddress == nil {
 			return nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
 		} else {
-			target, err := handler.New(args)
+			target, err := handler.New(ctx, loader, output.Payload)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -580,7 +573,7 @@ func parse(
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 
-	maxspend, err := ctx.PrincipalTemplate.MaxSpend(ctx, loader, args)
+	maxspend, err := ctx.PrincipalTemplate.MaxSpend(output.Payload)
 	if err != nil {
 		return nil, nil, err
 	}

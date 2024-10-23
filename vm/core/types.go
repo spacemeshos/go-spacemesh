@@ -42,7 +42,8 @@ type Handler interface {
 	Exec(Host, *StagedCache, []byte) error
 
 	// New instantiates Template from spawn arguments.
-	New([]byte) (Template, error)
+	New(Host, AccountLoader, []byte) (Template, error)
+
 	// Load template with stored immutable state.
 	Load([]byte) (Template, error)
 
@@ -56,7 +57,7 @@ type Handler interface {
 type Template interface {
 	// MaxSpend decodes MaxSpend value for the transaction. Transaction will fail
 	// if it spends more than that.
-	MaxSpend(Host, AccountLoader, []byte) (uint64, error)
+	MaxSpend([]byte) (uint64, error)
 	// TODO(lane): update to use the VM
 	// BaseGas is an intrinsic cost for executing a transaction. If this cost is not covered
 	// transaction will be ineffective.
@@ -87,12 +88,15 @@ type AccountUpdater interface {
 type ParseOutput struct {
 	Nonce    Nonce
 	GasPrice uint64
+	Payload  Payload
 }
 
 // HandlerRegistry stores handlers for templates.
 type HandlerRegistry interface {
 	Get(Address) Handler
 }
+
+//go:generate mockgen -typed -package=mocks -destination=./mocks/host.go github.com/spacemeshos/go-spacemesh/vm/core Host
 
 // Host API with methods and data that are required by templates.
 type Host interface {
@@ -107,6 +111,26 @@ type Host interface {
 	Layer() LayerID
 	GetGenesisID() Hash20
 	Balance() uint64
+}
+
+// static context is fixed for the lifetime of one transaction
+type StaticContext struct {
+	Principal   types.Address
+	Destination types.Address
+	Nonce       uint64
+}
+
+// dynamic context may change with each call frame
+type DynamicContext struct {
+	Template types.Address
+	Callee   types.Address
+}
+
+//go:generate mockgen -typed -package=mocks -destination=./mocks/vmhost.go github.com/spacemeshos/go-spacemesh/vm/core VMHost
+
+// VM Host API
+type VMHost interface {
+	Execute(types.LayerID, int64, types.Address, types.Address, []byte, uint64, []byte) ([]byte, int64, error)
 }
 
 //go:generate scalegen -types Metadata

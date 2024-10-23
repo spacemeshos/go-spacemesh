@@ -33,26 +33,15 @@ func AthenaLibPath() string {
 	}
 }
 
-// static context is fixed for the lifetime of one transaction
-type StaticContext struct {
-	Principal   types.Address
-	Destination types.Address
-	Nonce       uint64
-}
-
-// dynamic context may change with each call frame
-type DynamicContext struct {
-	Template types.Address
-	Callee   types.Address
-}
+//go:generate mockgen -typed -package=mocks -destination=./mocks/host.go github.com/spacemeshos/go-spacemesh/vm/core Host
 
 type Host struct {
 	vm             *athcon.VM
 	host           core.Host
 	loader         core.AccountLoader
 	updater        core.AccountUpdater
-	staticContext  StaticContext
-	dynamicContext DynamicContext
+	staticContext  core.StaticContext
+	dynamicContext core.DynamicContext
 }
 
 // Instantiates a partially-functional VM host that can execute simplistic transactions
@@ -63,7 +52,7 @@ func NewHostLightweight(host core.Host) (*Host, error) {
 		return nil, fmt.Errorf("loading Athena VM: %w", err)
 	}
 	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()})
-	return &Host{vm, host, cache, cache, StaticContext{}, DynamicContext{}}, nil
+	return &Host{vm, host, cache, cache, core.StaticContext{}, core.DynamicContext{}}, nil
 }
 
 // Load the VM from the shared library and returns an instance of a Host.
@@ -73,8 +62,8 @@ func NewHost(
 	host core.Host,
 	loader core.AccountLoader,
 	updater core.AccountUpdater,
-	staticContext StaticContext,
-	dynamicContext DynamicContext,
+	staticContext core.StaticContext,
+	dynamicContext core.DynamicContext,
 ) (*Host, error) {
 	vm, err := athcon.Load(AthenaLibPath())
 	if err != nil {
@@ -128,8 +117,8 @@ type hostContext struct {
 	host           core.Host
 	loader         core.AccountLoader
 	updater        core.AccountUpdater
-	staticContext  StaticContext
-	dynamicContext DynamicContext
+	staticContext  core.StaticContext
+	dynamicContext core.DynamicContext
 	vm             *athcon.VM
 }
 
@@ -293,7 +282,7 @@ func (h *hostContext) Call(
 
 	// construct and save context
 	oldContext := h.dynamicContext
-	h.dynamicContext = DynamicContext{
+	h.dynamicContext = core.DynamicContext{
 		Template: types.Address(sender),
 		Callee:   types.Address(recipient),
 	}
