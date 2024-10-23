@@ -605,8 +605,13 @@ func (db *sqliteDatabase) getConn(ctx context.Context) *sqlite.Conn {
 	return conn
 }
 
-func (db *sqliteDatabase) returnConn(conn *sqlite.Conn) {
+func (db *sqliteDatabase) putConn(conn *sqlite.Conn) {
 	if conn.CheckReset() != "" {
+		// On that connection there is a pending statement (or multiple of them).
+		// As there is no direct interface on that logic level to such statements
+		// we are adding a new channel to control connection interruption process.
+		// Interruption handles resetting statements and cleaning the connection
+		// on intercepting the closing of provided channel.
 		ch := make(chan struct{})
 		conn.SetInterrupt(ch)
 		close(ch)
@@ -651,7 +656,7 @@ func (db *sqliteDatabase) startExclusive() error {
 	if conn == nil {
 		return ErrNoConnection
 	}
-	defer db.returnConn(conn)
+	defer db.putConn(conn)
 	// We don't need to wait for long if the database is busy
 	conn.SetBusyTimeout(1 * time.Millisecond)
 	// From SQLite docs:
@@ -746,7 +751,7 @@ func (db *sqliteDatabase) Exec(query string, encoder Encoder, decoder Decoder) (
 	if conn == nil {
 		return 0, ErrNoConnection
 	}
-	defer db.returnConn(conn)
+	defer db.putConn(conn)
 	if db.latency != nil {
 		start := time.Now()
 		defer func() {
@@ -1064,7 +1069,7 @@ func (tx *sqliteTx) Commit() error {
 
 // Release transaction. Every transaction that was created must be released.
 func (tx *sqliteTx) Release() error {
-	defer tx.db.returnConn(tx.conn)
+	defer tx.db.putConn(tx.conn)
 	if tx.committed {
 		return nil
 	}
