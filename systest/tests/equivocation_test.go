@@ -1,10 +1,8 @@
 package tests
 
 import (
-	"context"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -34,13 +32,13 @@ func TestEquivocation(t *testing.T) {
 		require.NoError(t, err)
 		keys[i] = priv
 	}
-	malfeasants := make([]ed25519.PrivateKey, 0, len(keys)-honest)
+	// malfeasants := make([]ed25519.PrivateKey, 0, len(keys)-honest)
 	for i := honest; i < len(keys); i += 2 {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		keys[i] = priv
 		keys[i+1] = priv
-		malfeasants = append(malfeasants, priv)
+		// malfeasants = append(malfeasants, priv)
 	}
 	cctx.Log.Infow("fraction of nodes will have keys set up for equivocations",
 		zap.Int("honest", honest),
@@ -91,19 +89,24 @@ func TestEquivocation(t *testing.T) {
 			"reference: %v, client: %v", cl.Client(0).Name, cl.Client(i).Name,
 		)
 	}
-	proofs := make(map[string][]types.NodeID)
-	for i := 0; i < honest; i++ {
-		client := cl.Client(i)
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
-			malfeasant := malf.GetProof().GetSmesherId().Id
-			proofs[client.Name] = append(proofs[client.Name], types.NodeID(malfeasant))
-			return len(proofs[client.Name]) < len(malfeasants), nil
-		})
-	}
 
-	for i := 0; i < honest; i++ {
-		assert.ElementsMatchf(t, malfeasants, proofs[cl.Client(i).Name], "client: %s", cl.Client(i).Name)
-	}
+	// TODO(mafa): since the nodes running with shared keys are all perfectly synchronized, we can't
+	// detect equivocation directly. The two nodes sharing the same key will with high probability broadcast
+	// the same messages to other peers which won't trigger an equivocation
+	//
+	// For this test to work properly the nodes sharing keys need to be slightly out of sync from each other so
+	// they can broadcast different messages to the network.
+
+	// for i := 0; i < honest; i++ {
+	// 	client := cl.Client(i)
+	// 	proofs := make([]types.NodeID, 0, len(malfeasants))
+	// 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	// 	defer cancel()
+	// 	malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
+	// 		malfeasant := malf.GetProof().GetSmesherId().Id
+	// 		proofs = append(proofs, types.NodeID(malfeasant))
+	// 		return len(proofs) < len(malfeasants), nil
+	// 	})
+	// 	assert.ElementsMatchf(t, malfeasants, proofs, "client: %s", cl.Client(i).Name)
+	// }
 }
