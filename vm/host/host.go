@@ -18,19 +18,27 @@ import (
 func AthenaLibPath() string {
 	var err error
 
+	constructPath := func(path string) string {
+		switch runtime.GOOS {
+		case "windows":
+			return filepath.Join(path, "../build/libathenavmwrapper.dll")
+		case "darwin":
+			return filepath.Join(path, "../build/libathenavmwrapper.dylib")
+		default:
+			return filepath.Join(path, "../build/libathenavmwrapper.so")
+		}
+	}
+
+	// check first for an env var
+	if path := os.Getenv("ATHENA_LIB_PATH"); path != "" {
+		return constructPath(path)
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatalf("Failed to get current working directory: %v", err)
 	}
-
-	switch runtime.GOOS {
-	case "windows":
-		return filepath.Join(cwd, "../build/libathenavmwrapper.dll")
-	case "darwin":
-		return filepath.Join(cwd, "../build/libathenavmwrapper.dylib")
-	default:
-		return filepath.Join(cwd, "../build/libathenavmwrapper.so")
-	}
+	return constructPath(cwd)
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/host.go github.com/spacemeshos/go-spacemesh/vm/core Host

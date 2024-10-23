@@ -3,15 +3,17 @@ package wallet
 import (
 	"bytes"
 	"encoding/binary"
+	"os"
 	"testing"
 
-	// "github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/core/mocks"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 
 	"go.uber.org/mock/gomock"
 
@@ -52,10 +54,10 @@ func TestMaxSpend(t *testing.T) {
 	output := make([]byte, 8)
 	const amount = 100
 	binary.LittleEndian.PutUint64(output, amount)
-	testWallet.mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(1)
-	testWallet.mockHost.EXPECT().Principal().Return(types.Address{}).Times(2)
-	testWallet.mockHost.EXPECT().MaxGas().Return(1000).Times(2)
-	testWallet.mockVMHost.EXPECT().Execute(
+	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(1)
+	mockHost.EXPECT().Principal().Return(types.Address{}).Times(2)
+	mockHost.EXPECT().MaxGas().Return(1000).Times(2)
+	mockVMHost.EXPECT().Execute(
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 	).Return(output, 0, nil).Times(1)
 	t.Run("Spawn", func(t *testing.T) {
@@ -70,28 +72,62 @@ func TestMaxSpend(t *testing.T) {
 	})
 }
 
-// func TestVerify(t *testing.T) {
-// 	pub, pk, err := ed25519.GenerateKey(nil)
-// 	require.NoError(t, err)
-// 	spawn := &SpawnArguments{}
-// 	copy(spawn.PublicKey[:], pub)
-// 	wallet := New(spawn)
+func TestVerify(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockHost := mocks.NewMockHost(ctrl)
+	mockLoader := mocks.NewMockAccountLoader(ctrl)
+	// mockVMHost := mocks.NewMockVMHost(ctrl)
 
-// 	t.Run("Invalid", func(t *testing.T) {
-// 		buf64 := types.EdSignature{}
-// 		require.False(t, wallet.Verify(&core.Context{}, buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
-// 	})
-// 	t.Run("Empty", func(t *testing.T) {
-// 		require.False(t, wallet.Verify(&core.Context{}, nil, scale.NewDecoder(bytes.NewBuffer(nil))))
-// 	})
-// 	t.Run("Valid", func(t *testing.T) {
-// 		msg := []byte{1, 2, 3}
-// 		empty := types.Hash20{}
-// 		body := core.SigningBody(empty[:], msg)
-// 		sig := ed25519.Sign(pk, body[:])
-// 		require.True(
-// 			t,
-// 			wallet.Verify(&core.Context{GenesisID: empty}, append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))),
-// 		)
-// 	})
-// }
+	pub, pk, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	spawnPayload, _ := athcon.FromString("athexp_spawn")
+
+	// wallet.vmhost = mockVMHost
+
+	// outputTrue := []byte{1}
+	// outputFalse := []byte{0}
+
+	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(3)
+	mockHost.EXPECT().Principal().Return(types.Address{}).Times(6)
+	mockHost.EXPECT().MaxGas().Return(1000).Times(3)
+	mockHost.EXPECT().TemplateAddress().Return(types.Address{}).Times(3)
+	empty := types.Hash20{}
+	mockHost.EXPECT().GetGenesisID().Return(empty).Times(3)
+
+	mockTemplate := types.Account{
+		State: walletTemplate.PROGRAM,
+	}
+	mockLoader.EXPECT().Get(types.Address{}).Return(mockTemplate, nil).Times(3)
+
+	// point to the library path
+	os.Setenv("ATHENA_LIB_PATH", "../../../build")
+
+	wallet, err := New(mockHost, mockLoader, append(spawnPayload[:], pub...))
+	require.NoError(t, err)
+
+	t.Run("Invalid", func(t *testing.T) {
+		buf64 := types.EdSignature{}
+		// mockVMHost.EXPECT().Execute(
+		// 	gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		// ).Return(outputFalse, 0, nil).Times(1)
+		require.False(t, wallet.Verify(mockHost, buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
+	})
+	t.Run("Empty", func(t *testing.T) {
+		// mockVMHost.EXPECT().Execute(
+		// 	gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		// ).Return(outputFalse, 0, nil).Times(1)
+		require.False(t, wallet.Verify(mockHost, nil, scale.NewDecoder(bytes.NewBuffer(nil))))
+	})
+	t.Run("Valid", func(t *testing.T) {
+		msg := []byte{1, 2, 3}
+		body := core.SigningBody(empty[:], msg)
+		sig := ed25519.Sign(pk, body[:])
+		// mockVMHost.EXPECT().Execute(
+		// 	gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		// ).Return(outputTrue, 0, nil).Times(1)
+		require.True(
+			t,
+			wallet.Verify(mockHost, append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))),
+		)
+	})
+}

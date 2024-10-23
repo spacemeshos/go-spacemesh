@@ -82,7 +82,33 @@ func (s *Wallet) MaxSpend(spendArgs []byte) (uint64, error) {
 
 // Verify that transaction is signed by the owner of the PublicKey using ed25519.
 func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
-	return true
+	sig := core.Signature{}
+	n, err := sig.DecodeScale(dec)
+	if err != nil {
+		return false
+	}
+	rawTx := core.SigningBody(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
+
+	maxgas := int64(s.host.MaxGas())
+	if maxgas < 0 {
+		return false
+	}
+
+	// construct the payload
+	verifySelector, _ := athcon.FromString("athexp_verify")
+	payload := append(verifySelector[:], rawTx...)
+	payload = append(payload, sig[:]...)
+
+	output, _, err := s.vmhost.Execute(
+		s.host.Layer(),
+		maxgas,
+		s.host.Principal(),
+		s.host.Principal(),
+		payload,
+		0,
+		s.templateCode,
+	)
+	return err == nil && len(output) == 1 && output[0] == 1
 }
 
 func (s *Wallet) BaseGas() uint64 {

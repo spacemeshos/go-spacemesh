@@ -71,6 +71,8 @@ type Template interface {
 	Verify(Host, []byte, *scale.Decoder) bool
 }
 
+//go:generate mockgen -typed -package=mocks -destination=./mocks/loader.go github.com/spacemeshos/go-spacemesh/vm/core AccountLoader
+
 // AccountLoader is an interface for loading accounts.
 type AccountLoader interface {
 	Has(Address) (bool, error)

@@ -156,7 +156,7 @@ func (c *MockHandlerLoadCall) DoAndReturn(f func([]byte) (core.Template, error))
 }
 
 // New mocks base method.
-func (m *MockHandler) New(arg0 core.Host, arg1 *core.StagedCache, arg2 []byte) (core.Template, error) {
+func (m *MockHandler) New(arg0 core.Host, arg1 core.AccountLoader, arg2 []byte) (core.Template, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "New", arg0, arg1, arg2)
 	ret0, _ := ret[0].(core.Template)
@@ -183,13 +183,13 @@ func (c *MockHandlerNewCall) Return(arg0 core.Template, arg1 error) *MockHandler
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerNewCall) Do(f func(core.Host, *core.StagedCache, []byte) (core.Template, error)) *MockHandlerNewCall {
+func (c *MockHandlerNewCall) Do(f func(core.Host, core.AccountLoader, []byte) (core.Template, error)) *MockHandlerNewCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerNewCall) DoAndReturn(f func(core.Host, *core.StagedCache, []byte) (core.Template, error)) *MockHandlerNewCall {
+func (c *MockHandlerNewCall) DoAndReturn(f func(core.Host, core.AccountLoader, []byte) (core.Template, error)) *MockHandlerNewCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
