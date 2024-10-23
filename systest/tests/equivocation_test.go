@@ -82,7 +82,7 @@ func TestEquivocation(t *testing.T) {
 			return true, nil
 		})
 	}
-	eg.Wait()
+	require.NoError(t, eg.Wait())
 	reference := results[cl.Client(0).Name]
 	for i := 1; i < cl.Total(); i++ {
 		assert.Equal(t, reference, results[cl.Client(i).Name],
