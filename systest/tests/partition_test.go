@@ -166,9 +166,6 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		}
 		pass = pass && agree
 	}
-	if finalErr != nil {
-		tctx.Log.Errorw("test failed", "err", finalErr.Error())
-	}
 	require.NoError(t, finalErr)
 	require.True(t, pass)
 	eg2.Wait()

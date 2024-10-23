@@ -133,10 +133,9 @@ func stateHashStream(
 	retries := 0
 BACKOFF:
 	stateapi := pb.NewGlobalStateServiceClient(node.PubConn())
-	states, err := stateapi.GlobalStateStream(ctx,
-		&pb.GlobalStateStreamRequest{
-			GlobalStateDataFlags: uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH),
-		})
+	states, err := stateapi.GlobalStateStream(ctx, &pb.GlobalStateStreamRequest{
+		GlobalStateDataFlags: uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH),
+	})
 	if err != nil {
 		return err
 	}
