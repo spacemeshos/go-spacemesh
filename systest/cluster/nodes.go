@@ -1159,7 +1159,7 @@ type DeploymentFlag struct {
 	Name, Value string
 }
 
-// Flag returns parseable flag from Name and Value.
+// Flag returns parse-able flag from Name and Value.
 func (d DeploymentFlag) Flag() string {
 	return d.Name + "=" + d.Value
 }

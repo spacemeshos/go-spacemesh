@@ -57,9 +57,19 @@ func TestEquivocation(t *testing.T) {
 	for i := honest; i < len(keys); i += 2 {
 		// ensure that the two nodes sharing the same key are using different poet endpoints so they
 		// generate different proofs (otherwise they will be perfectly synchronized and won't trigger an equivocation)
-		err := cl.AddSmeshers(cctx, 1, cluster.WithSmeshers(keys[i:i+1]), cluster.WithFlags(cluster.PoetEndpoints(1)))
+		err := cl.AddSmeshers(cctx,
+			1,
+			cluster.WithSmeshers(keys[i:i+1]),
+			cluster.NoDefaultPoets(),
+			cluster.WithFlags(cluster.PoetEndpoints(1)),
+		)
 		require.NoError(t, err)
-		err = cl.AddSmeshers(cctx, 1, cluster.WithSmeshers(keys[i+1:i+2]), cluster.WithFlags(cluster.PoetEndpoints(2)))
+		err = cl.AddSmeshers(cctx,
+			1,
+			cluster.WithSmeshers(keys[i+1:i+2]),
+			cluster.NoDefaultPoets(),
+			cluster.WithFlags(cluster.PoetEndpoints(2)),
+		)
 		require.NoError(t, err)
 	}
 
