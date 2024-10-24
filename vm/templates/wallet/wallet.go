@@ -100,7 +100,23 @@ func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 	if err != nil {
 		return false
 	}
-	rawTx := core.SigningBody(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
+
+	// deconstruct the tx, temporarily removing the signature, and add the genesis ID
+	// TODO(lane): re-add support for genesisID
+	// see https://github.com/athenavm/athena/issues/178
+	// rawTx := core.SigningBody(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
+	rawTx := raw[:len(raw)-n]
+	// reconstruct, with the signature
+	// methodArgs := append(rawTx, sig[:]...)
+
+	// The input to the verify method must be SCALE-encoded.
+	verifyArgsEncoded, err := gossamerScale.Marshal(struct {
+		RawTx []byte
+		Sig   [64]byte
+	}{rawTx, sig})
+	if err != nil {
+		return false
+	}
 
 	maxgas := int64(s.host.MaxGas())
 	if maxgas < 0 {
@@ -109,10 +125,9 @@ func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 
 	// construct the payload: wallet state + payload (method selector + input (raw tx + signature))
 	verifySelector, _ := athcon.FromString("athexp_verify")
-	methodArgs := append(rawTx, sig[:]...)
 	payload := athcon.Payload{
 		Selector: &verifySelector,
-		Input:    methodArgs,
+		Input:    verifyArgsEncoded,
 	}
 	payloadEncoded, err := gossamerScale.Marshal(payload)
 	if err != nil {
@@ -120,6 +135,7 @@ func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 	}
 	executionPayload := athcon.EncodedExecutionPayload(s.walletState, payloadEncoded)
 
+	fmt.Println("running!")
 	output, _, err := s.vmhost.Execute(
 		s.host.Layer(),
 		maxgas,
