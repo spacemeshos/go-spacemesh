@@ -1,0 +1,32 @@
+{
+    "preset": "standalone",
+    "api": {
+        "grpc-public-listener": "0.0.0.0:9082",
+        "grpc-private-listener": "0.0.0.0:9083"
+    },
+    "genesis": {
+        "genesis-time": "2024-09-25T13:00:00.000Z"
+    },
+    "logging": {
+        "trtl": "WARN",
+        "beacon": "ERROR",
+        "proposalBuilder": "DEBUG",
+        "atxBuilder": "ERROR",
+        "hare": "ERROR"
+    },
+    "main": {
+        "node-service-address": "http://0.0.0.0:9099",
+        "data-folder": "/tmp/spacemesh-client2",
+        "filelock": "/tmp/spacemesh-client2/node.lock",
+        "poet-servers": [
+            {
+                "address": "http://127.0.0.1:10011"
+            }
+        ]
+    },
+    "smeshing": {
+        "smeshing-opts": {
+            "smeshing-opts-datadir": "/tmp/spacemesh-client2/post-data"
+        }
+    }
+}
