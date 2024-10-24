@@ -9,7 +9,6 @@ import (
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
-	"github.com/ChainSafe/gossamer/pkg/scale"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
@@ -204,10 +203,10 @@ func (h *hostContext) Call(
 	input []byte,
 	gas int64,
 	depth int,
-) (output []byte, gasLeft int64, createAddr athcon.Address, err error) {
+) (output []byte, gasLeft int64, err error) {
 	// check call depth
 	if depth > 10 {
-		return nil, 0, [24]byte{}, athcon.CallDepthExceeded
+		return nil, 0, athcon.CallDepthExceeded
 	}
 
 	// take snapshot of state
@@ -216,14 +215,14 @@ func (h *hostContext) Call(
 	// read origin account information
 	senderAccount, err := h.loader.Get(types.Address(sender))
 	if err != nil {
-		return nil, 0, [24]byte{}, athcon.Error{
+		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
 			Err:  fmt.Errorf("loading sender account: %w", err),
 		}
 	}
 	destinationAccount, err := h.loader.Get(types.Address(recipient))
 	if err != nil {
-		return nil, 0, [24]byte{}, athcon.Error{
+		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
 			Err:  fmt.Errorf("loading recipient account: %w", err),
 		}
@@ -235,7 +234,7 @@ func (h *hostContext) Call(
 	var templateAccount types.Account
 	if len(input) > 0 {
 		if template == nil || len(state) == 0 {
-			return nil, 0, [24]byte{}, athcon.Error{
+			return nil, 0, athcon.Error{
 				Code: athcon.InternalError.Code,
 				Err:  fmt.Errorf("missing template information"),
 			}
@@ -244,7 +243,7 @@ func (h *hostContext) Call(
 		// read template code
 		templateAccount, err = h.loader.Get(types.Address(*template))
 		if err != nil || len(templateAccount.State) == 0 {
-			return nil, 0, [24]byte{}, athcon.Error{
+			return nil, 0, athcon.Error{
 				Code: athcon.InternalError.Code,
 				Err:  fmt.Errorf("loading template account: %w", err),
 			}
@@ -256,10 +255,10 @@ func (h *hostContext) Call(
 
 	// safe math
 	if senderAccount.Balance < value {
-		return nil, 0, [24]byte{}, athcon.InsufficientBalance
+		return nil, 0, athcon.InsufficientBalance
 	}
 	if destinationAccount.Balance+value < destinationAccount.Balance {
-		return nil, 0, [24]byte{}, athcon.Error{
+		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
 			Err:  fmt.Errorf("account balance overflow"),
 		}
@@ -271,22 +270,12 @@ func (h *hostContext) Call(
 
 	if len(input) == 0 {
 		// short-circuit and return if this is a simple balance transfer
-		return nil, gas, [24]byte{}, nil
+		return nil, gas, nil
 	}
 
 	// enrich the message with the method selector and account state, then execute the call.
 	// note: we skip this step if there's no input (i.e., this is a simple balance transfer).
-	input, err = scale.Marshal(athcon.ExecutionPayload{
-		// TODO: figure out when to provide a state here
-		State:   []byte{},
-		Payload: input,
-	})
-	if err != nil {
-		return nil, 0, [24]byte{}, athcon.Error{
-			Code: athcon.InternalError.Code,
-			Err:  fmt.Errorf("marshalling input: %w", err),
-		}
-	}
+	input = athcon.EncodedExecutionPayload([]byte{}, input)
 
 	// construct and save context
 	oldContext := h.dynamicContext
@@ -308,9 +297,9 @@ func (h *hostContext) Call(
 		// rollback balance transfer
 		// rollback storage changes
 
-		return nil, 0, [24]byte{}, err
+		return nil, 0, err
 	}
-	return res.Output, res.GasLeft, [24]byte{}, nil
+	return res.Output, res.GasLeft, nil
 }
 
 func (h *hostContext) Deploy(blob []byte) athcon.Address {

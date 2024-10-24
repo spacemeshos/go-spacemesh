@@ -10,10 +10,13 @@ import (
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
+
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 )
 
 // New returns Wallet instance with SpawnArguments.
 func New(host core.Host, cache core.AccountLoader, spawnArgs []byte) (*Wallet, error) {
+	// Load the template account
 	templateAccount, err := cache.Get(host.TemplateAddress())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load template account: %w", err)
@@ -21,6 +24,15 @@ func New(host core.Host, cache core.AccountLoader, spawnArgs []byte) (*Wallet, e
 		return nil, fmt.Errorf("template account state is empty")
 	}
 	templateCode := templateAccount.State
+
+	// Load the wallet state
+	walletAccount, err := cache.Get(host.Principal())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load wallet principal account: %w", err)
+	} else if len(walletAccount.State) == 0 {
+		return nil, fmt.Errorf("wallet account state is empty")
+	}
+	walletState := walletAccount.State
 
 	// Instantiate the VM
 	vmhost, err := vmhost.NewHostLightweight(host)
@@ -30,7 +42,7 @@ func New(host core.Host, cache core.AccountLoader, spawnArgs []byte) (*Wallet, e
 
 	// store the pubkey, i.e., the constructor args (aka immutable state) required to instantiate
 	// the wallet program instance in Athena, so we can lazily instantiate it as required.
-	return &Wallet{host, vmhost, templateCode, spawnArgs}, nil
+	return &Wallet{host, vmhost, templateCode, walletState, spawnArgs}, nil
 }
 
 //go:generate scalegen
@@ -40,6 +52,7 @@ type Wallet struct {
 	host         core.Host
 	vmhost       core.VMHost
 	templateCode []byte
+	walletState  []byte
 	spawnArgs    []byte
 }
 
@@ -80,7 +93,7 @@ func (s *Wallet) MaxSpend(spendArgs []byte) (uint64, error) {
 	return maxspend, err
 }
 
-// Verify that transaction is signed by the owner of the PublicKey using ed25519.
+// Verify the transaction signature using the VM
 func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 	sig := core.Signature{}
 	n, err := sig.DecodeScale(dec)
@@ -94,17 +107,25 @@ func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 		return false
 	}
 
-	// construct the payload
+	// construct the payload: wallet state + payload (method selector + input (raw tx + signature))
 	verifySelector, _ := athcon.FromString("athexp_verify")
-	payload := append(verifySelector[:], rawTx...)
-	payload = append(payload, sig[:]...)
+	methodArgs := append(rawTx, sig[:]...)
+	payload := athcon.Payload{
+		Selector: &verifySelector,
+		Input:    methodArgs,
+	}
+	payloadEncoded, err := gossamerScale.Marshal(payload)
+	if err != nil {
+		return false
+	}
+	executionPayload := athcon.EncodedExecutionPayload(s.walletState, payloadEncoded)
 
 	output, _, err := s.vmhost.Execute(
 		s.host.Layer(),
 		maxgas,
 		s.host.Principal(),
 		s.host.Principal(),
-		payload,
+		executionPayload,
 		0,
 		s.templateCode,
 	)
