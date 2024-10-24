@@ -98,7 +98,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 		t,
 		cfg,
 		func(id []byte) *poetShared.Cert {
-			exp := time.Now().Add(epoch)
+			exp := time.Now().Add(5 * time.Minute)
 			return &poetShared.Cert{Pubkey: id, Expiration: &exp}
 		},
 		verifying.WithLabelScryptParams(scrypt),
@@ -114,6 +114,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 			URL:    (&url.URL{Scheme: "http", Host: address.String()}).String(),
 			PubKey: registration.Base64Enc(pubkey),
 		}),
+		WithTrustedKeysDirPath(t.TempDir()),
 	)
 	certClient := activation.NewCertifierClient(db, localDB, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDB, logger, certClient)

@@ -14,6 +14,7 @@ import (
 
 	rpcapi "github.com/spacemeshos/poet/release/proto/go/rpc/api/v1"
 	"github.com/spacemeshos/poet/server"
+	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -186,8 +187,21 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 }
 
 func TestPoetClient_CachesProof(t *testing.T) {
-	var proofsCalled atomic.Uint64
+	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
+	certifierPubKey := []byte("certifier-pubkey")
+	infoResp, err := protojson.Marshal(&rpcapi.InfoResponse{
+		ServicePubkey: []byte("pubkey"),
+		Certifier: &rpcapi.InfoResponse_Cerifier{
+			Url:    certifierAddress.String(),
+			Pubkey: certifierPubKey,
+		},
+	})
+	require.NoError(t, err)
+
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
+
+	var proofsCalled atomic.Uint64
 	mux.HandleFunc("GET /v1/proofs/", func(w http.ResponseWriter, r *http.Request) {
 		proofsCalled.Add(1)
 		resp, err := protojson.Marshal(&rpcapi.ProofResponse{})
@@ -213,7 +227,7 @@ func TestPoetClient_CachesProof(t *testing.T) {
 	require.NoError(t, err)
 	poet := NewPoetServiceWithClient(db, client, DefaultPoetConfig(), zaptest.NewLogger(t), testTickSize)
 
-	eg := errgroup.Group{}
+	var eg errgroup.Group
 	for range 20 {
 		eg.Go(func() error {
 			_, _, err := poet.Proof(ctx, "1")
@@ -381,6 +395,88 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 
 	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
+}
+
+func TestCheckCertifierPublickeyHint(t *testing.T) {
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	certifierAddress := &url.URL{Scheme: "http", Host: "certifier"}
+	certifierPubKey := []byte("certifier-pubkey")
+	infoResp, err := protojson.Marshal(&rpcapi.InfoResponse{
+		ServicePubkey: []byte("pubkey"),
+		Certifier: &rpcapi.InfoResponse_Cerifier{
+			Url:    certifierAddress.String(),
+			Pubkey: certifierPubKey,
+		},
+	})
+	require.NoError(t, err)
+
+	submitResp, err := protojson.Marshal(&rpcapi.SubmitResponse{})
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) { w.Write(infoResp) })
+
+	publicKeyHint := certifierPubKey[:shared.CertKeyHintSize]
+	mux.HandleFunc("POST /v1/submit", func(w http.ResponseWriter, r *http.Request) {
+		rawReq, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+			return
+		}
+
+		req := &rpcapi.SubmitRequest{}
+		if err := protojson.Unmarshal(rawReq, req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if len(req.CertificatePubkeyHint) > 0 && !bytes.Equal(publicKeyHint, req.CertificatePubkeyHint) {
+			http.Error(w, "Unknown public key hint", http.StatusUnauthorized)
+			return
+		}
+
+		w.Write(submitResp)
+	})
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	server := types.PoetServer{
+		Address: ts.URL,
+		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
+	}
+	cfg := PoetConfig{RequestTimeout: time.Millisecond * 100}
+	client, err := NewHTTPPoetClient(server, cfg, withCustomHttpClient(ts.Client()))
+	require.NoError(t, err)
+
+	cert := certifier.PoetCert{Data: []byte("abc")}
+	t.Run("public key hint is valid", func(t *testing.T) {
+		_, err = client.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID(),
+			PoetAuth{
+				PoetCert:   &cert,
+				CertPubKey: publicKeyHint,
+			})
+		require.NoError(t, err)
+	})
+
+	t.Run("no public key hint", func(t *testing.T) {
+		_, err = client.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID(),
+			PoetAuth{
+				PoetCert: &cert,
+			})
+		require.NoError(t, err)
+	})
+
+	t.Run("public key hint is invalid", func(t *testing.T) {
+		_, err = client.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID(),
+			PoetAuth{
+				PoetCert:   &cert,
+				CertPubKey: []byte{1, 2, 3, 4, 5},
+			})
+		require.ErrorIs(t, err, ErrUnauthorized)
+	})
 }
 
 func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {

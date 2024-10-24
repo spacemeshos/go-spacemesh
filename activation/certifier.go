@@ -314,7 +314,7 @@ func (c *CertifierClient) Certify(
 	if cert.Expiration != nil {
 		c.logger.Info("certificate has expiration date", zap.Time("expiration", *cert.Expiration))
 		if time.Until(*cert.Expiration) < 0 {
-			return nil, errors.New("certificate is expired")
+			return nil, shared.ErrCertExpired
 		}
 	}
 

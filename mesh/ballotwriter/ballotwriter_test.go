@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -22,12 +23,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
-func init() {
-	// otherwise we get a divide by zero error
-	types.SetLayersPerEpoch(1)
-}
-
 var testLayer = types.LayerID(5)
+
+func TestMain(m *testing.M) {
+	types.SetLayersPerEpoch(10)
+	res := m.Run()
+	os.Exit(res)
+}
 
 func TestWriteCoalesce_One(t *testing.T) {
 	w, db := newTestBallotWriter(t)

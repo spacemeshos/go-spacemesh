@@ -88,12 +88,19 @@ func WithCertifier(certifier *registration.CertifierConfig) HTTPPoetOpt {
 	}
 }
 
+func WithTrustedKeysDirPath(path string) HTTPPoetOpt {
+	return func(cfg *server.Config) {
+		cfg.Registration.Certifier.TrustedKeysDirPath = path
+	}
+}
+
 // NewHTTPPoetTestHarness returns a new instance of HTTPPoetHarness.
-func NewHTTPPoetTestHarness(ctx context.Context, poetdir string, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
+func NewHTTPPoetTestHarness(ctx context.Context, poetDir string, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
 	cfg := server.DefaultConfig()
-	cfg.PoetDir = poetdir
+	cfg.PoetDir = poetDir
 	cfg.RawRESTListener = "localhost:0"
 	cfg.RawRPCListener = "localhost:0"
+	cfg.ConfigRPCListener = "localhost:0"
 
 	for _, opt := range opts {
 		opt(cfg)
