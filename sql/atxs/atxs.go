@@ -1046,3 +1046,61 @@ func MergeConflict(db sql.Executor, marriage types.ATXID, publish types.EpochID)
 	}
 	return ids, nil
 }
+
+type PreviousAtxInfo struct {
+	ID            types.ATXID
+	SmesherID     types.NodeID
+	PublishEpoch  types.EpochID
+	NumUnits      uint32
+	Sequence      uint64
+	VRFNonce      uint64
+	CommitmentATX types.ATXID
+}
+
+type PositioningAtxInfo struct {
+	ID             types.ATXID
+	BaseTickHeight uint64
+	PublishEpoch   types.EpochID
+}
+
+// GetPreviousAndPositioning returns the previous ATX and the positioning ATX for the given ATX IDs.
+//
+// This routine is optimized with the following considerations in mind:
+// - doing an atx id match has to scan same btree index, with this query we do it once, instead of 2 times
+// - if positioning atx match previous we query main btree only once
+func GetPreviousAndPositioning(db sql.Executor, prev types.ATXID, prevEmpty bool, positioning types.ATXID, posGolden bool) (
+	*PreviousAtxInfo, *PositioningAtxInfo, error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, prev.Bytes())
+		stmt.BindBytes(2, positioning.Bytes())
+	}
+	var prevAtx *PreviousAtxInfo
+	var posAtx *PositioningAtxInfo
+	dec := func(stmt *sql.Statement) bool {
+		id := types.ATXID{}
+		stmt.ColumnBytes(0, id[:])
+		if id == prev && !prevEmpty {
+			prevAtx = &PreviousAtxInfo{}
+			prevAtx.ID = id
+			prevAtx.PublishEpoch = types.EpochID(stmt.ColumnInt(1))
+			stmt.ColumnBytes(2, prevAtx.SmesherID[:])
+			prevAtx.Sequence = uint64(stmt.ColumnInt64(3))
+			prevAtx.VRFNonce = uint64(stmt.ColumnInt64(4))
+			prevAtx.NumUnits = uint32(stmt.ColumnInt32(5))
+			stmt.ColumnBytes(7, prevAtx.CommitmentATX[:])
+		}
+		if id == positioning && !posGolden {
+			posAtx = &PositioningAtxInfo{}
+			posAtx.ID = id
+			posAtx.BaseTickHeight = uint64(stmt.ColumnInt64(6))
+			posAtx.PublishEpoch = types.EpochID(stmt.ColumnInt(1))
+		}
+		return prevAtx == nil || posAtx == nil
+	}
+	q := `select atxs.id, atxs.epoch, atxs.pubkey, atxs.sequence, atxs.nonce, atxs.effective_num_units,
+		atxs.base_tick_height, atxs.commitment_atx from atxs where id in (?1, ?2);`
+	if _, err := db.Exec(q, enc, dec); err != nil {
+		return nil, nil, fmt.Errorf("get prev ATX for id %v: %w", prev, err)
+	}
+	return prevAtx, posAtx, nil
+}
