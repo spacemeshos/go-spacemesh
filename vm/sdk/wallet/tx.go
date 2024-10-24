@@ -63,7 +63,8 @@ func Spawn(
 
 	tx := encode(&sdk.TxVersion, &principal, &template, &meta, &payload)
 
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
+	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
 	return append(tx, sig...)
 }
 
@@ -92,6 +93,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 
 	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
 
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
+	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
 	return append(tx, sig...)
 }
