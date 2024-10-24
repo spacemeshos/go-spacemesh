@@ -861,7 +861,7 @@ func deployNode(
 		"-c=" + configDir + attachedSmesherConfig,
 		"--pprof-server",
 		"--smeshing-opts-datadir=/data/post",
-		"-d=/data/state",
+		"-d=/data",
 		"--log-encoder=json",
 		"--metrics",
 		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
