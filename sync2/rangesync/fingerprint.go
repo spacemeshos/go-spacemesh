@@ -46,6 +46,12 @@ func (fp *Fingerprint) BitFromLeft(i int) bool {
 	return fp[bi]&(0x1<<uint(7-i%8)) != 0
 }
 
+// CombineFingerprints combines two fingerprints into one.
+func CombineFingerprints(a, b Fingerprint) Fingerprint {
+	a.Update(b[:])
+	return a
+}
+
 // RandomFingerprint generates a random fingerprint.
 func RandomFingerprint() Fingerprint {
 	var fp Fingerprint

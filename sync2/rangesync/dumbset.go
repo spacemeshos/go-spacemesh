@@ -81,7 +81,7 @@ func naiveRange(
 	}
 }
 
-var naiveFPFunc = func(items []KeyBytes) Fingerprint {
+func naiveFPFunc(items []KeyBytes) Fingerprint {
 	s := ""
 	for _, k := range items {
 		s += string(k)
@@ -89,22 +89,44 @@ var naiveFPFunc = func(items []KeyBytes) Fingerprint {
 	return stringToFP(s)
 }
 
-// dumbSet is a simple OrderedSet implementation that doesn't include any optimizations.
-// It is intended to be only used in tests.
-type dumbSet struct {
-	keys         []KeyBytes
-	DisableReAdd bool
-	added        map[string]bool
-	fpFunc       func(items []KeyBytes) Fingerprint
+func realFPFunc(items []KeyBytes) Fingerprint {
+	hasher := hash.GetHasher()
+	defer func() {
+		hasher.Reset()
+		hash.PutHasher(hasher)
+	}()
+	for _, h := range items {
+		hasher.Write(h[:])
+	}
+	var hashRes [32]byte
+	hasher.Sum(hashRes[:0])
+	var r Fingerprint
+	copy(r[:], hashRes[:])
+	return r
 }
 
-var _ OrderedSet = &dumbSet{}
+// DumbSet is a simple OrderedSet implementation that doesn't include any optimizations.
+// It is intended to be only used in tests.
+type DumbSet struct {
+	keys             []KeyBytes
+	received         map[string]int
+	added            map[string]bool
+	allowMutiReceive bool
+	FPFunc           func(items []KeyBytes) Fingerprint
+}
 
-// Receive implements the OrderedSet.
-func (ds *dumbSet) Receive(id KeyBytes) error {
+var _ OrderedSet = &DumbSet{}
+
+// SetAllowMultiReceive sets whether the set allows receiving the same item multiple times.
+func (ds *DumbSet) SetAllowMultiReceive(allow bool) {
+	ds.allowMutiReceive = allow
+}
+
+// AddUnchecked adds an item to the set without registerting the item for checks
+// as in case of Add and Receive.
+func (ds *DumbSet) AddUnchecked(id KeyBytes) {
 	if len(ds.keys) == 0 {
 		ds.keys = []KeyBytes{id}
-		return nil
 	}
 	p := slices.IndexFunc(ds.keys, func(other KeyBytes) bool {
 		return other.Compare(id) >= 0
@@ -113,25 +135,75 @@ func (ds *dumbSet) Receive(id KeyBytes) error {
 	case p < 0:
 		ds.keys = append(ds.keys, id)
 	case id.Compare(ds.keys[p]) == 0:
-		if ds.DisableReAdd {
-			if ds.added[string(id)] {
-				panic("hash sent twice: " + id.String())
-			}
-			if ds.added == nil {
-				ds.added = make(map[string]bool)
-			}
-			ds.added[string(id)] = true
-		}
 		// already present
 	default:
 		ds.keys = slices.Insert(ds.keys, p, id)
 	}
+}
 
+// AddReceived adds all the received items to the set.
+func (ds *DumbSet) AddReceived() {
+	sr := ds.Received()
+	for k := range sr.Seq {
+		ds.AddUnchecked(KeyBytes(k))
+	}
+	// DumbSet's Received implementation should never return an error
+	if sr.Error() != nil {
+		panic("unexpected error in Received")
+	}
+}
+
+// Add implements the OrderedSet.
+func (ds *DumbSet) Add(id KeyBytes) error {
+	if ds.added == nil {
+		ds.added = make(map[string]bool)
+	}
+	sid := string(id)
+	if ds.added[sid] {
+		panic("item already added via Add: " + id.String())
+	}
+	ds.added[sid] = true
+	// Add is invoked during recent sync.
+	// If the item was already received, this means it was received as part of the
+	// recent sync, and thus may be received again as the algorithm does not guarantee
+	// that items already in the set are not received from the remote peer, only that
+	// no item is received twice (with exception of recent sync).
+	if ds.received[sid] != 0 {
+		ds.received[sid] = 0
+	}
+	ds.AddUnchecked(id)
 	return nil
 }
 
+// Receive implements the OrderedSet.
+func (ds *DumbSet) Receive(id KeyBytes) error {
+	if ds.received == nil {
+		ds.received = make(map[string]int)
+	}
+	sid := string(id)
+	ds.received[sid]++
+	if !ds.allowMutiReceive && ds.received[sid] > 1 {
+		panic("item already received: " + id.String())
+	}
+	return nil
+}
+
+// Received implements the OrderedSet.
+func (ds *DumbSet) Received() SeqResult {
+	return SeqResult{
+		Seq: func(yield func(KeyBytes) bool) {
+			for k := range ds.received {
+				if !yield(KeyBytes(k)) {
+					break
+				}
+			}
+		},
+		Error: NoSeqError,
+	}
+}
+
 // seq returns an endless sequence as a SeqResult starting from the given index.
-func (ds *dumbSet) seq(n int) SeqResult {
+func (ds *DumbSet) seq(n int) SeqResult {
 	if n < 0 || n > len(ds.keys) {
 		panic("bad index")
 	}
@@ -151,7 +223,7 @@ func (ds *dumbSet) seq(n int) SeqResult {
 
 // seqFor returns an endless sequence as a SeqResult starting from the given key, or the
 // lowest key greater than the given key if the key is not present in the set.
-func (ds *dumbSet) seqFor(s KeyBytes) SeqResult {
+func (ds *DumbSet) seqFor(s KeyBytes) SeqResult {
 	n := slices.IndexFunc(ds.keys, func(k KeyBytes) bool {
 		return k.Compare(s) == 0
 	})
@@ -161,7 +233,7 @@ func (ds *dumbSet) seqFor(s KeyBytes) SeqResult {
 	return ds.seq(n)
 }
 
-func (ds *dumbSet) getRangeInfo(
+func (ds *DumbSet) getRangeInfo(
 	x, y KeyBytes,
 	count int,
 ) (r RangeInfo, end KeyBytes, err error) {
@@ -177,9 +249,9 @@ func (ds *dumbSet) getRangeInfo(
 		panic("BUG: bad X or Y")
 	}
 	rangeItems, start, end := naiveRange(ds.keys, x, y, count)
-	fpFunc := ds.fpFunc
+	fpFunc := ds.FPFunc
 	if fpFunc == nil {
-		fpFunc = naiveFPFunc
+		fpFunc = realFPFunc
 	}
 	r = RangeInfo{
 		Fingerprint: fpFunc(rangeItems),
@@ -197,13 +269,13 @@ func (ds *dumbSet) getRangeInfo(
 }
 
 // GetRangeInfo implements OrderedSet.
-func (ds *dumbSet) GetRangeInfo(x, y KeyBytes, count int) (RangeInfo, error) {
-	ri, _, err := ds.getRangeInfo(x, y, count)
+func (ds *DumbSet) GetRangeInfo(x, y KeyBytes) (RangeInfo, error) {
+	ri, _, err := ds.getRangeInfo(x, y, -1)
 	return ri, err
 }
 
 // SplitRange implements OrderedSet.
-func (ds *dumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
+func (ds *DumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
 	if count <= 0 {
 		panic("BUG: bad split count")
 	}
@@ -225,12 +297,12 @@ func (ds *dumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
 }
 
 // Empty implements OrderedSet.
-func (ds *dumbSet) Empty() (bool, error) {
+func (ds *DumbSet) Empty() (bool, error) {
 	return len(ds.keys) == 0, nil
 }
 
 // Items implements OrderedSet.
-func (ds *dumbSet) Items() SeqResult {
+func (ds *DumbSet) Items() SeqResult {
 	if len(ds.keys) == 0 {
 		return EmptySeqResult()
 	}
@@ -238,33 +310,13 @@ func (ds *dumbSet) Items() SeqResult {
 }
 
 // Copy implements OrderedSet.
-func (ds *dumbSet) Copy(syncScope bool) OrderedSet {
-	return &dumbSet{keys: slices.Clone(ds.keys)}
+func (ds *DumbSet) Copy(syncScope bool) OrderedSet {
+	return &DumbSet{
+		keys: slices.Clone(ds.keys),
+	}
 }
 
 // Recent implements OrderedSet.
-func (ds *dumbSet) Recent(since time.Time) (SeqResult, int) {
+func (ds *DumbSet) Recent(since time.Time) (SeqResult, int) {
 	return EmptySeqResult(), 0
-}
-
-// NewDumbSet creates a new dumbSet instance.
-// If disableReAdd is true, the set will panic if the same item is received twice.
-func NewDumbSet(disableReAdd bool) OrderedSet {
-	return &dumbSet{
-		DisableReAdd: disableReAdd,
-		fpFunc: func(items []KeyBytes) (r Fingerprint) {
-			hasher := hash.GetHasher()
-			defer func() {
-				hasher.Reset()
-				hash.PutHasher(hasher)
-			}()
-			var hashRes [32]byte
-			for _, h := range items {
-				hasher.Write(h[:])
-			}
-			hasher.Sum(hashRes[:0])
-			copy(r[:], hashRes[:])
-			return r
-		},
-	}
 }

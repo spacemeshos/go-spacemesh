@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -31,6 +32,7 @@ type incomingRequest struct {
 }
 
 type fakeRequester struct {
+	t       *testing.T
 	id      p2p.Peer
 	handler server.StreamHandler
 	peers   map[p2p.Peer]*fakeRequester
@@ -39,8 +41,14 @@ type fakeRequester struct {
 
 var _ rangesync.Requester = &fakeRequester{}
 
-func newFakeRequester(id p2p.Peer, handler server.StreamHandler, peers ...rangesync.Requester) *fakeRequester {
+func newFakeRequester(
+	t *testing.T,
+	id p2p.Peer,
+	handler server.StreamHandler,
+	peers ...rangesync.Requester,
+) *fakeRequester {
 	fr := &fakeRequester{
+		t:       t,
 		id:      id,
 		handler: handler,
 		reqCh:   make(chan incomingRequest),
@@ -65,7 +73,7 @@ func (fr *fakeRequester) Run(ctx context.Context) error {
 		case req = <-fr.reqCh:
 		}
 		if err := fr.handler(ctx, req.initialRequest, req.stream); err != nil {
-			panic("handler error: " + err.Error())
+			assert.Fail(fr.t, "handler error: %v", err)
 		}
 	}
 }
@@ -129,7 +137,7 @@ func TestWireConduit(t *testing.T) {
 	}
 	fp := rangesync.Fingerprint(hs[2][:12])
 	srv := newFakeRequester(
-		"srv",
+		t, "srv",
 		func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
 			require.Equal(t, []byte("hello"), initialRequest)
 			c := rangesync.StartWireConduit(ctx, stream)
@@ -163,7 +171,7 @@ func TestWireConduit(t *testing.T) {
 
 	runRequester(t, srv)
 
-	client := newFakeRequester("client", nil, srv)
+	client := newFakeRequester(t, "client", nil, srv)
 	require.NoError(t, client.StreamRequest(context.Background(), "srv", []byte("hello"),
 		func(ctx context.Context, stream io.ReadWriter) error {
 			c := rangesync.StartWireConduit(ctx, stream)
@@ -227,7 +235,7 @@ func TestWireConduit_Limits(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			errCh := make(chan error)
 			srv := newFakeRequester(
-				"srv",
+				t, "srv",
 				func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
 					c := rangesync.StartWireConduit(ctx, stream, tc.opts...)
 					defer c.Stop()
@@ -248,7 +256,7 @@ func TestWireConduit_Limits(t *testing.T) {
 
 			runRequester(t, srv)
 
-			client := newFakeRequester("client", nil, srv)
+			client := newFakeRequester(t, "client", nil, srv)
 			var eg errgroup.Group
 			ctx, cancel := context.WithCancel(context.Background())
 			defer func() {
@@ -285,7 +293,7 @@ func TestWireConduit_Limits(t *testing.T) {
 func TestWireConduit_StopSend(t *testing.T) {
 	started := make(chan struct{})
 	srv := newFakeRequester(
-		"srv",
+		t, "srv",
 		func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
 			close(started)
 			// This will hang
@@ -295,7 +303,7 @@ func TestWireConduit_StopSend(t *testing.T) {
 
 	runRequester(t, srv)
 
-	client := newFakeRequester("client", nil, srv)
+	client := newFakeRequester(t, "client", nil, srv)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	client.StreamRequest(ctx, "srv", []byte("hello"),

@@ -13,7 +13,23 @@ import (
 )
 
 const (
-	writeQueueSize = 10000
+	// TODO: currently, in RangeSetReconciler, the reconciliation process may block
+	// indefinitely if the send queue in wireConduit overflows, causing connection to
+	// time out, after which reconciliation is interrupted.
+	// A way to partly mitigate this issue would be the following:
+	// 1. Invoking Receive() immediately on any incoming set items.  It may help that
+	//    the set is only actually modified via Add() when handling items associated
+	//    with Recent messages.
+	// 2. Branch out into more goroutines when handling incoming messages upon sending
+	//    being blocked. This way, we'll allow the remote side to receive some
+	//    messages by handling the messages it sent us and unblocking its send queue.
+	// The OrderedSet is only added to by RangeSetReconciler when receiving recent
+	// items. Receive() semantics should be updated so that Receive() being called on
+	// OrderedSet's copies' does the same as Receive() being called on the original
+	// OrderedSet. After these changes, it should be easy enough to parallelize
+	// RangeSetReconciler's message handling as needed, passing copies of OrderedSet
+	// to the new goroutines.
+	sendQueueSize = 200000
 )
 
 var ErrLimitExceeded = errors.New("sync traffic/message limit exceeded")
@@ -58,7 +74,7 @@ var _ Conduit = &wireConduit{}
 func startWireConduit(ctx context.Context, s io.ReadWriter, opts ...ConduitOption) *wireConduit {
 	c := &wireConduit{
 		stream: s,
-		sendCh: make(chan SyncMessage, writeQueueSize),
+		sendCh: make(chan SyncMessage, sendQueueSize),
 		stopCh: make(chan struct{}),
 	}
 	for _, opt := range opts {
