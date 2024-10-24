@@ -10,5 +10,5 @@ TIME=$(date -u -d '2 minutes' "+%Y-%m-%dT%H:%M:%S%:z")
 sed -i "s/\"genesis-time\".*/\"genesis-time\"\:\"$TIME\"/g" config.standalone.client.json
 sed -i "s/\"genesis-time\".*/\"genesis-time\"\:\"$TIME\"/g" config.standalone.node-service.json
 
-rm -rf /tmp/spacemesh*
+rm -rf /tmp/space*
 docker compose up
