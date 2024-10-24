@@ -251,7 +251,7 @@ func validateAndPreserveData(
 	mclock := activation.NewMocklayerClock(ctrl)
 	mfetch := smocks.NewMockFetcher(ctrl)
 	mvalidator := activation.NewMocknipostValidator(ctrl)
-	mreceiver := activation.NewMockAtxReceiver(ctrl)
+	mreceiver := activation.NewMockatxReceiver(ctrl)
 	mtrtl := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
 	atxHandler := activation.NewHandler(

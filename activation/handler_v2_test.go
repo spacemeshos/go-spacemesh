@@ -3,6 +3,7 @@ package activation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"testing"
@@ -1482,7 +1483,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atx.Sign(sig)
 
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
-		require.ErrorContains(t, err, "previous atx is too new")
+		require.ErrorContains(t, err, fmt.Sprintf("previous atx (%s) is too new", prev.ID()))
 	})
 	t.Run("previous ATX by different smesher", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)

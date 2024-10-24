@@ -28,7 +28,7 @@ func AddProof(
 	nodeID types.NodeID,
 	marriageID *marriage.ID,
 	proof []byte,
-	domain int,
+	domain byte,
 	received time.Time,
 ) error {
 	_, err := db.Exec(`

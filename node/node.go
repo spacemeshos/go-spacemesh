@@ -729,7 +729,44 @@ func (app *App) initServices(ctx context.Context) error {
 		return nil
 	})
 
-	fetcherWrapped := &layerFetcher{}
+	proposalsStore := store.New(
+		store.WithEvictedLayer(app.clock.CurrentLayer()),
+		store.WithLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
+		store.WithCapacity(app.Config.Tortoise.Zdist+1),
+	)
+
+	flog := app.addLogger(Fetcher, lg)
+	fetcher, err := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
+		fetch.WithContext(ctx),
+		fetch.WithConfig(app.Config.FETCH),
+		fetch.WithLogger(flog.Zap()),
+	)
+	if err != nil {
+		return fmt.Errorf("creating fetcher: %w", err)
+	}
+	app.eg.Go(func() error {
+		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
+	})
+
+	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	// malfeasancePublisher := malfeasance.NewPublisher(
+	// 	malfeasanceLogger,
+	// 	app.cachedDB,
+	// 	trtl,
+	// 	app.host,
+	// )
+
+	// malfeasancePublisher2 := malfeasance2.NewPublisher(
+	// 	malfeasanceLogger,
+	// 	app.cachedDB,
+	// 	trtl,
+	// 	app.host,
+	// )
+
+	// atxMalPublisher := activation.NewATXMalfeasancePublisher(
+	// 	malfeasancePublisher,
+	//  malfeasancePublisher2,
+	// )
 
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
@@ -738,10 +775,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edVerifier,
 		app.clock,
 		app.host,
-		fetcherWrapped,
+		fetcher,
 		goldenATXID,
 		validator,
 		beaconProtocol,
+		// atxMalPublisher,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg).Zap(),
 		activation.WithTickSize(app.Config.TickSize),
@@ -752,7 +790,6 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-
 	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
 		return fmt.Errorf(
 			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
@@ -762,8 +799,13 @@ func (app *App) initServices(ctx context.Context) error {
 		)
 	}
 
-	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, trtl, msh,
-		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()))
+	blockHandler := blocks.NewHandler(
+		fetcher,
+		app.db,
+		trtl,
+		msh,
+		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()),
+	)
 
 	app.txHandler = txs.NewTxHandler(
 		app.conState,
@@ -812,26 +854,6 @@ func (app *App) initServices(ctx context.Context) error {
 	for _, sig := range app.signers {
 		app.certifier.Register(sig)
 	}
-
-	proposalsStore := store.New(
-		store.WithEvictedLayer(app.clock.CurrentLayer()),
-		store.WithLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
-		store.WithCapacity(app.Config.Tortoise.Zdist+1),
-	)
-
-	flog := app.addLogger(Fetcher, lg)
-	fetcher, err := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
-		fetch.WithContext(ctx),
-		fetch.WithConfig(app.Config.FETCH),
-		fetch.WithLogger(flog.Zap()),
-	)
-	if err != nil {
-		return fmt.Errorf("create fetcher: %w", err)
-	}
-	fetcherWrapped.Fetcher = fetcher
-	app.eg.Go(func() error {
-		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
-	})
 
 	patrol := layerpatrol.New()
 	syncerConf := app.Config.Sync
@@ -949,7 +971,7 @@ func (app *App) initServices(ctx context.Context) error {
 		propHare,
 		app.edVerifier,
 		app.host,
-		fetcherWrapped,
+		fetcher,
 		beaconProtocol,
 		msh,
 		trtl,
@@ -972,7 +994,7 @@ func (app *App) initServices(ctx context.Context) error {
 		proposalsStore,
 		executor,
 		msh,
-		fetcherWrapped,
+		fetcher,
 		app.certifier,
 		patrol,
 		blocks.WithConfig(blocks.Config{
@@ -1115,7 +1137,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
-	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	activationMH := activation.NewMalfeasanceHandler(
 		app.cachedDB,
 		malfeasanceLogger,
@@ -1205,13 +1226,13 @@ func (app *App) initServices(ctx context.Context) error {
 		),
 	)
 
-	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
+	checkSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToGossip() {
 			return nil
 		}
 		return errors.New("not synced for gossip")
 	}
-	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
+	checkAtxSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
 		if newSyncer.ListenToATXGossip() {
 			return nil
 		}
@@ -1221,45 +1242,49 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.Beacon.RoundsNumber > 0 {
 		app.host.Register(
 			pubsub.BeaconWeakCoinProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleWeakCoinProposal),
 			pubsub.WithValidatorInline(true),
 		)
 		app.host.Register(
 			pubsub.BeaconProposalProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleProposal),
 			pubsub.WithValidatorInline(true),
 		)
 		app.host.Register(
 			pubsub.BeaconFirstVotesProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFirstVotes),
 			pubsub.WithValidatorInline(true),
 		)
 		app.host.Register(
 			pubsub.BeaconFollowingVotesProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFollowingVotes),
 			pubsub.WithValidatorInline(true),
 		)
 	}
 	app.host.Register(
 		pubsub.ProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal),
+		pubsub.ChainGossipHandler(checkSynced, proposalListener.HandleProposal),
 	)
 	app.host.Register(
 		pubsub.AtxProtocol,
-		pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx),
+		pubsub.ChainGossipHandler(checkAtxSynced, atxHandler.HandleGossipAtx),
 		pubsub.WithValidatorConcurrency(app.Config.P2P.GossipAtxValidationThrottle),
 	)
 	app.host.Register(
 		pubsub.TxProtocol,
-		pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction),
+		pubsub.ChainGossipHandler(checkSynced, app.txHandler.HandleGossipTransaction),
 	)
 	app.host.Register(
 		pubsub.BlockCertify,
-		pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage),
+		pubsub.ChainGossipHandler(checkSynced, app.certifier.HandleCertifyMessage),
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
-		pubsub.ChainGossipHandler(atxSyncHandler, app.malfeasanceHandler.HandleMalfeasanceProof),
+		pubsub.ChainGossipHandler(checkAtxSynced, app.malfeasanceHandler.HandleMalfeasanceProof),
+	)
+	app.host.Register(
+		pubsub.MalfeasanceProof2,
+		pubsub.ChainGossipHandler(checkAtxSynced, app.malfeasanceHandler.HandleMalfeasanceProof),
 	)
 
 	app.proposalBuilder = proposalBuilder
@@ -2275,10 +2300,6 @@ func (app *App) preserveAfterRecovery(ctx context.Context, preserved checkpoint.
 
 func (app *App) Host() *p2p.Host {
 	return app.host
-}
-
-type layerFetcher struct {
-	system.Fetcher
 }
 
 func decodeLoggerLevel(cfg *config.Config, name string) (zap.AtomicLevel, error) {
