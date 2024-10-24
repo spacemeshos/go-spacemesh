@@ -9,14 +9,6 @@ services:
       - ./config.standalone.client.json:/config.json
     networks:
       - spacemesh-net
-  activation-service-2:
-    image: spacemeshos/go-spacemesh-dev:activation-service-poc.0
-    command: ["-c", "/config.json", "--node-service-address", "http://node-service:9099"]
-    volumes:
-      - /tmp/spacemesh-client2:/tmp/spacemesh-client2
-      - ./config.standalone.client2.json:/config.json
-    networks:
-      - spacemesh-net
 
   node-service:
     image: spacemeshos/go-spacemesh-dev:activation-service-poc.0
