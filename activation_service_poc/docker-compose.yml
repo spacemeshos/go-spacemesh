@@ -12,7 +12,7 @@ services:
 
   node-service:
     image: spacemeshos/go-spacemesh-dev:activation-service-poc.0
-    command: ["-c", "/config.json", "--smeshing-opts-datadir", "/tmp/spacemesh-node-post"]
+    command: ["-c", "/config.json"]
     volumes:
       - /tmp/spacemesh-node-service:/tmp/spacemesh-node-service
       - ./config.standalone.node-service.json:/config.json
