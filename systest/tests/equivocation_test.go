@@ -40,13 +40,13 @@ func TestEquivocation(t *testing.T) {
 	malicious := smeshers - honest
 
 	keys := make([]ed25519.PrivateKey, honest)
-	for i := 0; i < honest; i++ {
+	for i := range honest {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		keys[i] = priv
 	}
-	malfeasants := make([]ed25519.PrivateKey, malicious)
-	for i := 0; i < len(malfeasants); i += 2 {
+	malfeasants := make([]ed25519.PrivateKey, malicious/2)
+	for i := range malicious / 2 {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		malfeasants[i] = priv
