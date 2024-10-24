@@ -16,8 +16,8 @@
     },
     "main": {
         "node-service-address": "http://0.0.0.0:9099",
-        "data-folder": "/tmp/spacemesh-client",
-        "filelock": "/tmp/spacemesh-client/node.lock",
+        "data-folder": "/tmp/spacemesh-client2",
+        "filelock": "/tmp/spacemesh-client2/node.lock",
         "poet-servers": [
             {
                 "address": "http://127.0.0.1:10011"
@@ -26,7 +26,7 @@
     },
     "smeshing": {
         "smeshing-opts": {
-            "smeshing-opts-datadir": "/tmp/spacemesh-client/post-data"
+            "smeshing-opts-datadir": "/tmp/spacemesh-client2/post-data"
         }
     }
 }

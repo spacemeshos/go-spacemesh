@@ -95,6 +95,19 @@ func (cs *ConservativeState) SelectProposalTXs(lid types.LayerID, numEligibility
 	return getProposalTXs(logger, numTXs, predictedBlock, byAddrAndNonce)
 }
 
+func (cs *ConservativeState) PredictBlock(lid types.LayerID, numEligibility int) []types.TransactionID {
+	logger := cs.logger.With(zap.Uint32("layer_id", lid.Uint32()))
+	mi := newMempoolIterator(logger, cs.cache, cs.cfg.BlockGasLimit)
+	predictedBlock, _ := mi.PopAll()
+	numTXs := numEligibility * cs.cfg.NumTXsPerProposal
+	n := min(numTXs, len(predictedBlock))
+	txs := make([]types.TransactionID, 0, n)
+	for i, tx := range predictedBlock[:n] {
+		txs[i] = tx.ID
+	}
+	return txs
+}
+
 func getProposalTXs(
 	logger *zap.Logger,
 	numTXs int,

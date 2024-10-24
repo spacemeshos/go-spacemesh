@@ -744,7 +744,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		)
 		size, err := b.broadcast(ctx, atx)
 		if err == nil {
-			b.logger.Info("atx published", log.ZShortStringer("atx_id", atx.ID()), zap.Int("size", size))
+			b.logger.Info("atx published", log.ZShortStringer("atx_id", atx.ID()), zap.Stringer("coinbase", b.Coinbase()), zap.Int("size", size))
 			break
 		}
 

@@ -60,6 +60,9 @@ type ServerInterface interface {
 	// Store PoET proof
 	// (POST /poet)
 	PostPoet(w http.ResponseWriter, r *http.Request)
+	// Get a partial proposal for a given node in a layer
+	// (GET /proposal/{layer}/{node})
+	GetProposalLayerNode(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, node externalRef0.NodeID)
 	// Publish a blob in the given p2p protocol
 	// (POST /publish/{protocol})
 	PostPublishProtocol(w http.ResponseWriter, r *http.Request, protocol PostPublishProtocolParamsProtocol)
@@ -290,6 +293,40 @@ func (siw *ServerInterfaceWrapper) PostPoet(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// GetProposalLayerNode operation middleware
+func (siw *ServerInterfaceWrapper) GetProposalLayerNode(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "layer" -------------
+	var layer externalRef0.LayerID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "layer", r.PathValue("layer"), &layer, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "layer", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "node" -------------
+	var node externalRef0.NodeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "node", r.PathValue("node"), &node, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "node", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProposalLayerNode(w, r, layer, node)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PostPublishProtocol operation middleware
 func (siw *ServerInterfaceWrapper) PostPublishProtocol(w http.ResponseWriter, r *http.Request) {
 
@@ -443,6 +480,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/hare/total_weight/{layer}", wrapper.GetHareTotalWeightLayer)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/weight/{node_id}/{layer}", wrapper.GetHareWeightNodeIdLayer)
 	m.HandleFunc("POST "+options.BaseURL+"/poet", wrapper.PostPoet)
+	m.HandleFunc("GET "+options.BaseURL+"/proposal/{layer}/{node}", wrapper.GetProposalLayerNode)
 	m.HandleFunc("POST "+options.BaseURL+"/publish/{protocol}", wrapper.PostPublishProtocol)
 
 	return m
@@ -714,6 +752,50 @@ func (response PostPoet400PlaintextResponse) VisitPostPoetResponse(w http.Respon
 	return err
 }
 
+type GetProposalLayerNodeRequestObject struct {
+	Layer externalRef0.LayerID `json:"layer"`
+	Node  externalRef0.NodeID  `json:"node"`
+}
+
+type GetProposalLayerNodeResponseObject interface {
+	VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error
+}
+
+type GetProposalLayerNode200ApplicationoctetStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetProposalLayerNode200ApplicationoctetStreamResponse) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetProposalLayerNode204Response struct {
+}
+
+func (response GetProposalLayerNode204Response) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GetProposalLayerNode500Response struct {
+}
+
+func (response GetProposalLayerNode500Response) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
+}
+
 type PostPublishProtocolRequestObject struct {
 	Protocol PostPublishProtocolParamsProtocol `json:"protocol"`
 	Body     io.Reader
@@ -757,6 +839,9 @@ type StrictServerInterface interface {
 	// Store PoET proof
 	// (POST /poet)
 	PostPoet(ctx context.Context, request PostPoetRequestObject) (PostPoetResponseObject, error)
+	// Get a partial proposal for a given node in a layer
+	// (GET /proposal/{layer}/{node})
+	GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (GetProposalLayerNodeResponseObject, error)
 	// Publish a blob in the given p2p protocol
 	// (POST /publish/{protocol})
 	PostPublishProtocol(ctx context.Context, request PostPublishProtocolRequestObject) (PostPublishProtocolResponseObject, error)
@@ -995,6 +1080,33 @@ func (sh *strictHandler) PostPoet(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PostPoetResponseObject); ok {
 		if err := validResponse.VisitPostPoetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetProposalLayerNode operation middleware
+func (sh *strictHandler) GetProposalLayerNode(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, node externalRef0.NodeID) {
+	var request GetProposalLayerNodeRequestObject
+
+	request.Layer = layer
+	request.Node = node
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetProposalLayerNode(ctx, request.(GetProposalLayerNodeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetProposalLayerNode")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetProposalLayerNodeResponseObject); ok {
+		if err := validResponse.VisitGetProposalLayerNodeResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
