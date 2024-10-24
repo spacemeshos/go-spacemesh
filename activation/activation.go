@@ -104,8 +104,11 @@ type Builder struct {
 
 	posAtxFinder positioningAtxFinder
 
-	// states of each known identity
+	// post states of each known identity
 	postStates PostStates
+
+	// identity states of each known identity
+	identitiesStates IdentityStates
 
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
 	// since they (can) modify the fields below.
@@ -172,6 +175,12 @@ func WithPostStates(ps PostStates) BuilderOption {
 	}
 }
 
+func WithIdentityStates(is IdentityStates) BuilderOption {
+	return func(b *Builder) {
+		b.identitiesStates = is
+	}
+}
+
 func BuilderAtxVersions(v AtxVersions) BuilderOption {
 	return func(h *Builder) {
 		h.versions = append([]atxVersion{{0, types.AtxV1}}, v.asSlice()...)
@@ -206,6 +215,7 @@ func NewBuilder(
 		poetRetryInterval: defaultPoetRetryInterval,
 		postValidityDelay: 12 * time.Hour,
 		postStates:        NewPostStates(log),
+		identitiesStates:  NewIdentityStateStorage(),
 		versions:          []atxVersion{{0, types.AtxV1}},
 	}
 	for _, opt := range opts {
@@ -239,10 +249,24 @@ func (b *Builder) Smeshing() bool {
 	return b.stop != nil
 }
 
-// PostState returns the current state of the post service for each registered smesher.
+// PostStates returns the current state of the post service for each registered smesher.
 func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
 	states := b.postStates.Get()
 	res := make(map[types.IdentityDescriptor]types.PostState, len(states))
+	b.smeshingMutex.Lock()
+	defer b.smeshingMutex.Unlock()
+	for id, state := range states {
+		if sig, exists := b.signers[id]; exists {
+			res[sig] = state
+		}
+	}
+	return res
+}
+
+// IdentityStates returns the current state of the identity for each smesher.
+func (b *Builder) IdentityStates() map[types.IdentityDescriptor]IdentityState {
+	states := b.identitiesStates.All()
+	res := make(map[types.IdentityDescriptor]IdentityState, len(states))
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
 	for id, state := range states {
@@ -340,7 +364,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 }
 
-// SmesherID returns the ID of the smesher that created this activation.
+// SmesherIDs returns the ID of the smesher that created this activation.
 func (b *Builder) SmesherIDs() []types.NodeID {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -442,6 +466,14 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	}
 	eg.Wait()
 
+	if err := b.identitiesStates.Set(sig.NodeID(), IdentityStateWaitForATXSyncing); err != nil {
+		b.logger.Warn("failed to switch identity state",
+			zap.Stringer("smesherID", sig.NodeID()),
+			zap.Error(err),
+		)
+		return
+	}
+
 	for {
 		err := b.PublishActivationTx(ctx, sig)
 		if err == nil {
@@ -510,13 +542,21 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID))
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-b.syncer.RegisterForATXSynced():
 	}
-
 	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()
+
+	if err := b.identitiesStates.Set(nodeID, IdentityStateWaitForPoetRoundStart); err != nil {
+		b.logger.Warn("failed to switch identity state",
+			zap.Stringer("smesherID", nodeID),
+			zap.Error(err),
+		)
+		return nil, err
+	}
 
 	// Try to get existing challenge
 	existingChallenge, err := b.getExistingChallenge(logger, currentEpochId, nodeID)
@@ -734,6 +774,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	targetEpoch := challenge.PublishEpoch.Add(1)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime(targetEpoch.FirstLayer()))
 	defer cancel()
+
 	atx, err := b.createAtx(ctx, sig, challenge)
 	if err != nil {
 		return fmt.Errorf("create ATX: %w", err)
@@ -804,8 +845,9 @@ func (b *Builder) createAtx(
 	sig *signing.EdSigner,
 	challenge *types.NIPostChallenge,
 ) (builtAtx, error) {
-	version := b.version(challenge.PublishEpoch)
 	var challengeHash types.Hash32
+
+	version := b.version(challenge.PublishEpoch)
 	switch version {
 	case types.AtxV1:
 		challengeHash = wire.NIPostChallengeToWireV1(challenge).Hash()
@@ -815,6 +857,7 @@ func (b *Builder) createAtx(
 		return nil, fmt.Errorf("unknown ATX version: %v", version)
 	}
 	b.logger.Info("building ATX", zap.Stringer("smesherID", sig.NodeID()), zap.Stringer("version", version))
+
 	nipostState, err := b.nipostBuilder.BuildNIPost(ctx, sig, challengeHash, challenge)
 	if err != nil {
 		return nil, fmt.Errorf("build NIPost: %w", err)

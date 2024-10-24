@@ -87,6 +87,8 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	t.Cleanup(clock.Close)
 
 	localDB := localsql.InMemoryTest(t)
+	idStates := activation.NewIdentityStateStorage()
+
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -95,6 +97,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		clock,
 		validator,
 		activation.WithPoetServices(poetService),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -134,6 +137,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),
+		activation.WithIdentityStates(idStates),
 		activation.BuilderAtxVersions(atxVersions),
 	)
 	tab.Register(sig)
@@ -154,6 +158,9 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 			return err
 		},
 	)
+
+	err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForATXSyncing)
+	require.NoError(t, err)
 
 	require.NoError(t, tab.BuildInitialPost(ctx, sig.NodeID()))
 	require.NoError(t, tab.PublishActivationTx(ctx, sig))
@@ -218,6 +225,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		clock,
 		validator,
 		activation.WithPoetServices(poetService),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -233,6 +241,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.WithValidator(validator),
+		activation.WithIdentityStates(idStates),
 		activation.BuilderAtxVersions(atxVersions),
 	)
 	tab.Register(sig)

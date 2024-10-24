@@ -263,6 +263,8 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
+	idStates := activation.NewIdentityStateStorage()
+
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -271,6 +273,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		clock,
 		validator,
 		activation.WithPoetServices(poetSvc),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -315,6 +318,13 @@ func Test_MarryAndMerge(t *testing.T) {
 				InitialPost:    post,
 			}
 			challenge := wire.NIPostChallengeToWireV2(postChallenge).Hash()
+
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForATXSyncing)
+			require.NoError(t, err)
+
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
+			require.NoError(t, err)
+
 			nipost, err := nb.BuildNIPost(context.Background(), signer, challenge, postChallenge)
 			if err != nil {
 				return err

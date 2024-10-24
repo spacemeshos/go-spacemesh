@@ -202,6 +202,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	client := ae2e.NewTestPoetClient(1, poetCfg)
 	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
+	idStates := activation.NewIdentityStateStorage()
+
 	localDB := localsql.InMemory()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
@@ -211,10 +213,19 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 		mclock,
 		nil,
 		activation.WithPoetServices(poetService),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
 	challenge := types.RandomHash()
+
+	// set up proper identity state
+	err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForATXSyncing)
+	require.NoError(t, err)
+
+	err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
+	require.NoError(t, err)
+
 	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})
 	require.NoError(t, err)
 
@@ -289,6 +300,8 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
 	localDB := localsql.InMemory()
+	idStates := activation.NewIdentityStateStorage()
+
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -297,6 +310,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 		mclock,
 		validator,
 		activation.WithPoetServices(poetService),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -306,6 +320,12 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge, nil)
 			require.NoError(t, err)
 			err = nipost.AddPost(localDB, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
+			require.NoError(t, err)
+
+			err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForATXSyncing)
+			require.NoError(t, err)
+
+			err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
 			require.NoError(t, err)
 
 			nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})
