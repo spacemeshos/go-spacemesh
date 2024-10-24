@@ -115,6 +115,10 @@ func TestEquivocation(t *testing.T) {
 		)
 	}
 
+	expected := make([]types.NodeID, 0, len(malfeasants))
+	for _, key := range malfeasants {
+		expected = append(expected, types.NodeID(key.Public().(ed25519.PublicKey)))
+	}
 	for i := 0; i < honest; i++ {
 		client := cl.Client(i)
 		proofs := make([]types.NodeID, 0, len(malfeasants))
@@ -125,6 +129,6 @@ func TestEquivocation(t *testing.T) {
 			proofs = append(proofs, types.NodeID(malfeasant))
 			return len(proofs) < len(malfeasants), nil
 		})
-		assert.ElementsMatchf(t, malfeasants, proofs, "client: %s", cl.Client(i).Name)
+		assert.ElementsMatchf(t, expected, proofs, "client: %s", cl.Client(i).Name)
 	}
 }
