@@ -17,85 +17,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// Opt for configuring ProposalBuilder.
-// type Opt func(h *RemoteProposalBuilder)
-
-//// WithLayerSize defines the average number of proposal per layer.
-//func WithLayerSize(size uint32) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.cfg.layerSize = size
-//}
-//}
-
-//// WithWorkersLimit configures paralelization factor for builder operation when working with
-//// more than one signer.
-//func WithWorkersLimit(limit int) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.cfg.workersLimit = limit
-//}
-//}
-
-//// WithLayerPerEpoch defines the number of layers per epoch.
-//func WithLayerPerEpoch(layers uint32) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.cfg.layersPerEpoch = layers
-//}
-//}
-
-//func WithMinimalActiveSetWeight(weight []types.EpochMinimalActiveWeight) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.cfg.minActiveSetWeight = weight
-//}
-//}
-
-//// WithLogger defines the logger.
-//func WithLogger(logger *zap.Logger) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.logger = logger
-//}
-//}
-
-//func WithHdist(dist uint32) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.cfg.hdist = dist
-//}
-//}
-
-//func WithNetworkDelay(delay time.Duration) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.cfg.networkDelay = delay
-//}
-//}
-
-//func WithMinGoodAtxPercent(percent int) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.cfg.goodAtxPercent = percent
-//}
-//}
-
-//// WithSigners guarantees that builder will start execution with provided list of signers.
-//// Should be after logging.
-//func WithSigners(signers ...*signing.EdSigner) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//for _, signer := range signers {
-//pb.Register(signer)
-//}
-//}
-//}
-
-//// WithActivesetPreparation overwrites configuration for activeset preparation.
-//func WithActivesetPreparation(prep ActiveSetPreparation) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.cfg.activeSet = prep
-//}
-//}
-
-//func withAtxSearch(p atxSearch) Opt {
-//return func(pb *RemoteProposalBuilder) {
-//pb.atxs = p
-//}
-//}
-
 type nodeService interface {
 	Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error)
 }
@@ -103,19 +24,10 @@ type RemoteProposalBuilder struct {
 	logger *zap.Logger
 	cfg    config
 
-	// db      sql.Executor
-	// localdb sql.Executor
-	// atxsdata  *atxsdata.Data
 	clock     layerClock
 	publisher pubsub.Publisher
 	nodeSvc   nodeService
-	// conState  conservativeState
-	// tortoise  votesEncoder
-	// syncer    system.SyncStateProvider
-	// activeGen *activeSetGenerator
-	// atxs      atxSearch
-
-	signers struct {
+	signers   struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
