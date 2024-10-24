@@ -53,11 +53,7 @@ func testTransactions(
 
 	for i := range cl.Total() {
 		client := cl.Client(i)
-		watchTransactionResults(
-			tctx.Context,
-			eg,
-			client,
-			tctx.Log.Desugar(),
+		watchTransactionResults(tctx.Context, eg, client, tctx.Log.Desugar(),
 			func(rst *pb.TransactionResult) (bool, error) {
 				txs[i] = append(txs[i], rst.Tx)
 				count := len(txs[i])

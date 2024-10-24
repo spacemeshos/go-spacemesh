@@ -139,10 +139,10 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	myLogger := "anton"
 	subLogger := app.addLogger(myLogger, lg)
 	subLogger.Debug("should not get printed")
-	teststr := "should get printed"
-	subLogger.Info(teststr)
+	testStr := "should get printed"
+	subLogger.Info(testStr)
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, teststr),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, testStr),
 		buf.String(),
 	)
 }
@@ -339,8 +339,8 @@ func (f *noopHook) OnWrite(*zapcore.CheckedEntry, []zapcore.Field) {}
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
 	logger := logtest.New(t)
-	// errlog is used to simulate errors in the app
-	errlog := log.NewFromLog(
+	// errLog is used to simulate errors in the app
+	errLog := log.NewFromLog(
 		zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{}))),
 	)
 
@@ -430,9 +430,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Report two errors and make sure they're both received
 	eg.Go(func() error {
-		errlog.Error("test123")
-		errlog.Error("test456")
-		errlog.Panic("testPANIC")
+		errLog.Error("test123")
+		errLog.Error("test456")
+		errLog.Panic("testPANIC")
 		return nil
 	})
 
@@ -602,7 +602,7 @@ func TestConfig_Preset(t *testing.T) {
 		require.NoError(t, err)
 
 		conf := config.Config{}
-		require.NoError(t, loadConfig(&conf, name, ""))
+		require.NoError(t, LoadConfig(&conf, name, nil))
 		require.Equal(t, preset, conf)
 	})
 
@@ -615,7 +615,7 @@ func TestConfig_Preset(t *testing.T) {
 		cmd.AddFlags(&flags, &conf)
 
 		const lowPeers = 1234
-		require.NoError(t, loadConfig(&conf, name, ""))
+		require.NoError(t, LoadConfig(&conf, name, nil))
 		require.NoError(t, flags.Parse([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 		preset.P2P.LowPeers = lowPeers
 		require.Equal(t, preset, conf)
@@ -628,10 +628,8 @@ func TestConfig_Preset(t *testing.T) {
 		conf := config.Config{}
 		const lowPeers = 1234
 		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
-		path := filepath.Join(t.TempDir(), "config.json")
-		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
-		require.NoError(t, loadConfig(&conf, name, path))
+		require.NoError(t, LoadConfig(&conf, name, strings.NewReader(content)))
 		preset.P2P.LowPeers = lowPeers
 		require.Equal(t, preset, conf)
 	})
@@ -642,10 +640,8 @@ func TestConfig_Preset(t *testing.T) {
 
 		conf := config.Config{}
 		content := fmt.Sprintf(`{"preset": "%s"}`, name)
-		path := filepath.Join(t.TempDir(), "config.json")
-		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
-		require.NoError(t, loadConfig(&conf, name, path))
+		require.NoError(t, LoadConfig(&conf, name, strings.NewReader(content)))
 		require.NoError(t, err)
 		require.Equal(t, preset, conf)
 	})
@@ -719,7 +715,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 			var flags pflag.FlagSet
 			cmd.AddFlags(&flags, &conf)
 
-			require.NoError(t, loadConfig(&conf, "", ""))
+			require.NoError(t, LoadConfig(&conf, "", nil))
 			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
 			tc.updatePreset(t, &mainnet)
 			require.Equal(t, mainnet, conf)
@@ -730,10 +726,8 @@ func TestConfig_CustomTypes(t *testing.T) {
 			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
 
 			conf := config.MainnetConfig()
-			path := filepath.Join(t.TempDir(), "config.json")
-			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
 
-			require.NoError(t, loadConfig(&conf, "", path))
+			require.NoError(t, LoadConfig(&conf, "", strings.NewReader(tc.config)))
 			tc.updatePreset(t, &mainnet)
 			require.Equal(t, mainnet, conf)
 		})
@@ -746,7 +740,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 			var flags pflag.FlagSet
 			cmd.AddFlags(&flags, &conf)
 
-			require.NoError(t, loadConfig(&conf, name, ""))
+			require.NoError(t, LoadConfig(&conf, name, nil))
 			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
 			tc.updatePreset(t, &preset)
 			require.Equal(t, preset, conf)
@@ -757,10 +751,8 @@ func TestConfig_CustomTypes(t *testing.T) {
 			require.NoError(t, err)
 
 			conf := config.Config{}
-			path := filepath.Join(t.TempDir(), "config.json")
-			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
 
-			require.NoError(t, loadConfig(&conf, name, path))
+			require.NoError(t, LoadConfig(&conf, name, strings.NewReader(tc.config)))
 			tc.updatePreset(t, &preset)
 			require.Equal(t, preset, conf)
 		})
@@ -803,10 +795,8 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
 			conf := config.Config{}
 
-			path := filepath.Join(t.TempDir(), "config.json")
 			cfg := fmt.Sprintf(`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`, tc.configValue)
-			require.NoError(t, os.WriteFile(path, []byte(cfg), 0o600))
-			err := loadConfig(&conf, "", path)
+			err := LoadConfig(&conf, "", strings.NewReader(cfg))
 			require.ErrorContains(t, err, "invalid provider ID value")
 		})
 	}
@@ -816,18 +806,15 @@ func TestConfig_Load(t *testing.T) {
 	t.Run("invalid fails to load", func(t *testing.T) {
 		conf := config.Config{}
 
-		path := filepath.Join(t.TempDir(), "config.json")
-		require.NoError(t, os.WriteFile(path, []byte("}"), 0o600))
-
-		err := loadConfig(&conf, "", path)
-		require.ErrorContains(t, err, path)
+		err := LoadConfig(&conf, "", strings.NewReader("}"))
+		require.ErrorContains(t, err, "invalid character '}' looking for beginning of value")
 	})
 	t.Run("missing default doesn't fail", func(t *testing.T) {
 		conf := config.Config{}
 		var flags pflag.FlagSet
 		cmd.AddFlags(&flags, &conf)
 
-		require.NoError(t, loadConfig(&conf, "", ""))
+		require.NoError(t, LoadConfig(&conf, "", nil))
 		require.NoError(t, flags.Parse([]string{}))
 	})
 }
@@ -848,7 +835,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 		args = append(args, fmt.Sprintf("-a %s=%d", key, value))
 	}
 
-	require.NoError(t, loadConfig(&conf, "", ""))
+	require.NoError(t, LoadConfig(&conf, "", nil))
 	require.NoError(t, flags.Parse(args))
 	for _, key := range keys {
 		require.EqualValues(t, value, conf.Genesis.Accounts[key])
@@ -858,9 +845,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 func TestHRP(t *testing.T) {
 	conf := config.Config{}
 	data := `{"main": {"network-hrp": "TEST"}}`
-	cfg := filepath.Join(t.TempDir(), "config.json")
-	require.NoError(t, os.WriteFile(cfg, []byte(data), 0o600))
-	require.NoError(t, loadConfig(&conf, "", cfg))
+	require.NoError(t, LoadConfig(&conf, "", strings.NewReader(data)))
 	app := New(WithConfig(&conf))
 	require.NotNil(t, app)
 	require.Equal(t, "TEST", types.NetworkHRP())

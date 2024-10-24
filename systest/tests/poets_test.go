@@ -24,20 +24,19 @@ var layersToCheck = parameters.Int(
 	20,
 )
 
+// TestPoetsFailures tests that the network continues to operate when a poet dies.
 func TestPoetsFailures(t *testing.T) {
 	t.Parallel()
 	tctx := testcontext.New(t)
+	if tctx.PoetSize < 2 {
+		t.Skip("Skipping test for using different poets - test configured with less than 2 poets")
+	}
 	tctx.Log.Debug("TestPoetsFailures start")
 
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 	tctx.Log.Debug("Obtained cluster")
 
-	testPoetDies(t, tctx, cl)
-	tctx.Log.Debug("TestPoetsFailures is done")
-}
-
-func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 	layersCount := uint32(layersToCheck.Get(tctx.Parameters))
 	first := nextFirstLayer(currentLayer(tctx, t, cl.Client(0)), layersPerEpoch)
@@ -58,9 +57,9 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 				tctx.Log.Debug("proposal watcher is done")
 				return false, nil
 			}
-
 			if proposal.Status == pb.Proposal_Created {
-				tctx.Log.Desugar().Debug("received proposal event",
+				tctx.Log.Desugar().Debug(
+					"received proposal event",
 					zap.String("client", client.Name),
 					zap.Uint32("layer", proposal.Layer.Number),
 					zap.String("smesher", prettyHex(proposal.Smesher.Id)),
@@ -105,7 +104,8 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			if _, exist := beacons[proposal.Epoch.Number]; !exist {
 				beacons[proposal.Epoch.Number] = map[string]struct{}{}
 			}
-			tctx.Log.Desugar().Debug("new beacon",
+			tctx.Log.Desugar().Debug(
+				"new beacon",
 				zap.String("smesher", prettyHex(proposal.Smesher.Id)),
 				zap.String("beacon", prettyHex(edata.Beacon)),
 				zap.Uint32("epoch", proposal.Epoch.Number),
@@ -119,13 +119,15 @@ func testPoetDies(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	for epoch := range beacons {
 		assert.Len(t, beacons[epoch], 1, "epoch=%d", epoch)
 	}
+	tctx.Log.Debug("TestPoetsFailures is done")
 }
 
+// TestNodesUsingDifferentPoets tests that the network is able to operate with nodes using different poets.
 func TestNodesUsingDifferentPoets(t *testing.T) {
 	t.Parallel()
 	tctx := testcontext.New(t)
 	if tctx.PoetSize < 2 {
-		t.Skip("Skipping test for using different poets - test configured with less then 2 poets")
+		t.Skip("Skipping test for using different poets - test configured with less than 2 poets")
 	}
 
 	cl := cluster.New(tctx, cluster.WithKeys(tctx.ClusterSize))
