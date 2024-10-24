@@ -18,6 +18,9 @@ services:
       - ./config.standalone.node-service.json:/config.json
     networks:
       - spacemesh-net
+    ports:
+      - 9092:9092
+      - 9093:9093
 
 networks:
   spacemesh-net:
