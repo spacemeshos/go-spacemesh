@@ -39,7 +39,7 @@ type Handler interface {
 	Parse(*scale.Decoder) (ParseOutput, error)
 
 	// Exec dispatches execution request based on the method selector.
-	Exec(Host, *StagedCache, []byte) error
+	Exec(Host, AccountLoader, AccountUpdater, []byte) ([]byte, int64, error)
 
 	// New instantiates Template from spawn arguments.
 	New(Host, AccountLoader, []byte) (Template, error)

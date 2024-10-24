@@ -387,7 +387,7 @@ func (v *VM) execute(
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
-			err = ctx.PrincipalHandler.Exec(ctx, ss, tx.Payload)
+			err = ctx.PrincipalHandler.Exec(ctx, ss, ss, tx.Payload)
 		}
 		if err != nil {
 			logger.Debug("transaction failed",

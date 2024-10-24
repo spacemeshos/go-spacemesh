@@ -59,13 +59,13 @@ func (*handler) Load(state []byte) (core.Template, error) {
 }
 
 // Pass the transaction into the VM for execution.
-func (*handler) Exec(host core.Host, cache *core.StagedCache, payload []byte) error {
+func (*handler) Exec(host core.Host, loader core.AccountLoader, updater core.AccountUpdater, payload []byte) ([]byte, int64, error) {
 	// Load the template code
-	templateAccount, err := cache.Get(host.TemplateAddress())
+	templateAccount, err := loader.Get(host.TemplateAddress())
 	if err != nil {
-		return fmt.Errorf("failed to load template account: %w", err)
+		return []byte{}, 0, fmt.Errorf("failed to load template account: %w", err)
 	} else if len(templateAccount.State) == 0 {
-		return fmt.Errorf("template account state is empty")
+		return []byte{}, 0, fmt.Errorf("template account state is empty")
 	}
 
 	// Construct the context
@@ -82,9 +82,9 @@ func (*handler) Exec(host core.Host, cache *core.StagedCache, payload []byte) er
 	}
 
 	// Instantiate the VM
-	vmhost, err := vmhost.NewHost(host, cache, cache, staticContext, dynamicContext)
+	vmhost, err := vmhost.NewHost(host, loader, updater, staticContext, dynamicContext)
 	if err != nil {
-		return err
+		return []byte{}, 0, err
 	}
 
 	// Execute the transaction in the VM
@@ -93,9 +93,9 @@ func (*handler) Exec(host core.Host, cache *core.StagedCache, payload []byte) er
 	// so it can short-circuit execution if the amount is exceeded.
 	maxgas := int64(host.MaxGas())
 	if maxgas < 0 {
-		return fmt.Errorf("gas limit exceeds maximum int64 value")
+		return []byte{}, 0, fmt.Errorf("gas limit exceeds maximum int64 value")
 	}
-	output, gasLeft, err := vmhost.Execute(
+	return vmhost.Execute(
 		host.Layer(),
 		maxgas,
 		host.Principal(),
@@ -108,8 +108,6 @@ func (*handler) Exec(host core.Host, cache *core.StagedCache, payload []byte) er
 		0,
 		templateAccount.State,
 	)
-	fmt.Printf("program execution: output len (discarded): %v, gasLeft: %v\n", len(output), gasLeft)
-	return err
 }
 
 func (h *handler) IsSpawn(payload []byte) bool {

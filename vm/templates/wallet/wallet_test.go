@@ -3,6 +3,7 @@ package wallet
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"os"
 	"testing"
 
@@ -15,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/core/mocks"
 	"github.com/spacemeshos/go-spacemesh/vm/host"
 	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
-	walletSdk "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 
 	"go.uber.org/mock/gomock"
 
@@ -75,36 +75,59 @@ func TestMaxSpend(t *testing.T) {
 }
 
 func TestSpawn(t *testing.T) {
+	const PUBKEY = "0377a3c5108ad079c33678701885879fd0d27efcf5cdedbfe11e2aa8648a836e"
+	const PRINCIPAL = "00000000a7b6c0ce2129dd5111b48f6d59c9405d7079ff6b"
+	const WALLET_STATE = "000000000000000000000000000000000377a3c5108ad079c33678701885879fd0d27efcf5cdedbfe11e2aa8648a836e"
+
 	ctrl := gomock.NewController(t)
 	mockHost := mocks.NewMockHost(ctrl)
 	mockLoader := mocks.NewMockAccountLoader(ctrl)
+	mockUpdater := mocks.NewMockAccountUpdater(ctrl)
 
-	pub, pk, err := ed25519.GenerateKey(nil)
+	principalAddress := types.Address{1}
+	templateAddress := types.Address{2}
+	principalBytes, err := hex.DecodeString(PRINCIPAL)
 	require.NoError(t, err)
-	spawnPayload, _ := athcon.FromString("athexp_spawn")
+	expectedPrincipalAddress := types.Address(principalBytes)
+	pubkeyBytes, err := hex.DecodeString(PUBKEY)
+	require.NoError(t, err)
+	pubkey := athcon.Bytes32(pubkeyBytes)
+	expectedWalletState, err := hex.DecodeString(WALLET_STATE)
+	require.NoError(t, err)
 
 	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(1)
-	mockHost.EXPECT().Principal().Return(types.Address{1}).Times(2)
-	mockHost.EXPECT().MaxGas().Return(10000000).Times(1)
-	mockHost.EXPECT().TemplateAddress().Return(types.Address{1}).Times(1)
-	empty := types.Hash20{}
-	mockHost.EXPECT().GetGenesisID().Return(empty).Times(1)
+	mockHost.EXPECT().Principal().Return(principalAddress).Times(5)
+	mockHost.EXPECT().MaxGas().Return(100000).Times(1)
+	mockHost.EXPECT().TemplateAddress().Return(templateAddress).Times(2)
+	mockHost.EXPECT().Nonce().Return(uint64(0)).Times(1)
 
 	mockTemplate := types.Account{
 		State: walletTemplate.PROGRAM,
 	}
-	mockLoader.EXPECT().Get(types.Address{1}).Return(mockTemplate, nil).Times(1)
+	mockLoader.EXPECT().Get(templateAddress).Return(mockTemplate, nil).Times(1)
+	mockLoader.EXPECT().Get(expectedPrincipalAddress).Return(types.Account{}, nil).Times(1)
+
+	// spawn should call Update to store the newly-spawned account state
+	mockUpdater.EXPECT().Update(gomock.Any()).DoAndReturn(func(account types.Account) error {
+		require.Equal(t, expectedPrincipalAddress, account.Address)
+		require.Equal(t, expectedWalletState, account.State)
+		require.Equal(t, templateAddress, *account.TemplateAddress)
+		return nil
+	}).Times(1)
 
 	// point to the library path
 	os.Setenv("ATHENA_LIB_PATH", "../../../build")
 	vmLib, err := athcon.LoadLibrary(host.AthenaLibPath())
 	require.NoError(t, err)
 
-	athenaPayload := vmLib.EncodeTxSpawn(athcon.Bytes32(pub))
-	err := (&handler{}).Exec(mockHost, spawnPayload[:], athenaPayload)
-	// principal := core.ComputePrincipal(wallet.TemplateAddress, athenaPayload)
-	// payload := core.Payload(athenaPayload)
-	// tx := encode(&sdk.TxVersion, &principal, &template, &meta, &payload)
+	athenaPayload := vmLib.EncodeTxSpawn(athcon.Bytes32(pubkey))
+	executionPayload := athcon.EncodedExecutionPayload([]byte{}, athenaPayload)
+
+	// Execute the spawn and catch the result
+	output, gasLeft, err := (&handler{}).Exec(mockHost, mockLoader, mockUpdater, executionPayload)
+	require.Equal(t, int64(94964), gasLeft)
+	require.Equal(t, expectedPrincipalAddress, types.Address(output))
+	require.NoError(t, err)
 }
 
 func TestVerify(t *testing.T) {
@@ -127,10 +150,10 @@ func TestVerify(t *testing.T) {
 		State: walletTemplate.PROGRAM,
 	}
 	mockWallet := types.Account{
-		State: walletTemplate.PROGRAM,
+		State: nil, // TODO: need wallet state!
 	}
 	mockLoader.EXPECT().Get(types.Address{1}).Return(mockTemplate, nil).Times(3)
-	mockLoader.EXPECT().Get(types.Address{2}).Return(mockTemplate, nil).Times(3)
+	mockLoader.EXPECT().Get(types.Address{2}).Return(mockWallet, nil).Times(3)
 
 	// point to the library path
 	os.Setenv("ATHENA_LIB_PATH", "../../../build")

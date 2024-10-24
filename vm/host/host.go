@@ -1,6 +1,8 @@
 package host
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +12,7 @@ import (
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
@@ -307,8 +310,46 @@ func (h *hostContext) Deploy(blob []byte) athcon.Address {
 }
 
 func (h *hostContext) Spawn(blob []byte) athcon.Address {
-	// make sure the account isn't already spawned
+	emptyAddress := types.Address{}
 
-	// create a new account with the code
-	panic("unimplemented")
+	// make sure we have the required context
+	if h.staticContext.Principal == emptyAddress {
+		return athcon.Address(emptyAddress)
+	}
+	if h.dynamicContext.Template == emptyAddress {
+		return athcon.Address(emptyAddress)
+	}
+
+	// calculate the new principal address
+	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
+	hasher.Write(h.dynamicContext.Template[:])
+	hasher.Write(blob)
+	hasher.Write(h.staticContext.Principal[:])
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, h.staticContext.Nonce)
+	hasher.Write(nonceBytes)
+	sum := hasher.Sum(nil)
+	principalAddress := types.GenerateAddress(sum[12:])
+
+	// check if the account is already spawned
+	account, err := h.loader.Get(principalAddress)
+	if err != nil {
+		return athcon.Address(emptyAddress)
+	}
+	// the account is already spawned and contains different code. this should not happen.
+	if len(account.State) > 0 && !bytes.Equal(account.State, blob) {
+		return athcon.Address(emptyAddress)
+	}
+
+	// create a new account, or update existing account, with this code
+	account.Layer = h.layer
+	account.Address = principalAddress
+	account.State = blob
+	account.TemplateAddress = &h.dynamicContext.Template
+	if err = h.updater.Update(account); err != nil {
+		// don't silently swallow the error
+		fmt.Fprintf(os.Stderr, "failed to update account: %v\n", err)
+	}
+	return athcon.Address(principalAddress)
 }
