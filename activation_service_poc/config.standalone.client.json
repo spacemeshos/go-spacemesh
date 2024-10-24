@@ -10,9 +10,9 @@
     "logging": {
         "trtl": "WARN",
         "beacon": "ERROR",
-        "proposalBuilder": "ERROR",
-        "atxBuilder": "DEBUG",
-        "hare": "DEBUG"
+        "proposalBuilder": "DEBUG",
+        "atxBuilder": "ERROR",
+        "hare": "ERROR"
     },
     "main": {
         "node-service-address": "http://0.0.0.0:9099",

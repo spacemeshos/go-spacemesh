@@ -12,7 +12,7 @@
         "trtl": "WARN",
         "beacon": "ERROR",
         "proposalBuilder": "ERROR",
-        "hare": "DEBUG"
+        "hare": "ERROR"
     },
     "hare3": {
         "enable": true
