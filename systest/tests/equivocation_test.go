@@ -27,17 +27,25 @@ func TestEquivocation(t *testing.T) {
 	}
 
 	const bootnodes = 2
-	honest := int(float64(cctx.ClusterSize-bootnodes) * 0.6)
-	if (cctx.ClusterSize-bootnodes-honest)%2 != 0 {
+	cl := cluster.New(cctx, cluster.WithKeys(cctx.ClusterSize))
+	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
+	require.NoError(t, cl.AddBootstrappers(cctx))
+	require.NoError(t, cl.AddPoets(cctx))
+
+	smeshers := cctx.ClusterSize - cl.Total()
+	honest := int(float64(smeshers) * 0.6)
+	if (smeshers-honest)%2 != 0 {
 		honest++
 	}
+	malicious := smeshers - honest
+
 	keys := make([]ed25519.PrivateKey, honest)
 	for i := 0; i < honest; i++ {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		keys[i] = priv
 	}
-	malfeasants := make([]ed25519.PrivateKey, cctx.ClusterSize-bootnodes-honest)
+	malfeasants := make([]ed25519.PrivateKey, malicious)
 	for i := 0; i < len(malfeasants); i += 2 {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
@@ -45,12 +53,8 @@ func TestEquivocation(t *testing.T) {
 	}
 	cctx.Log.Infow("fraction of nodes will have keys set up for equivocations",
 		zap.Int("honest", honest),
-		zap.Int("equivocators", len(malfeasants)),
+		zap.Int("equivocators", malicious),
 	)
-	cl := cluster.New(cctx, cluster.WithKeys(cctx.ClusterSize))
-	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
-	require.NoError(t, cl.AddBootstrappers(cctx))
-	require.NoError(t, cl.AddPoets(cctx))
 	require.NoError(t, cl.AddSmeshers(cctx, honest, cluster.WithSmeshers(keys)))
 	for _, key := range malfeasants {
 		// ensure that the two nodes sharing the same key are using different poet endpoints so they
