@@ -921,7 +921,7 @@ func deployNode(
 					WithName("file-creator").
 					WithImage("busybox").
 					WithCommand("sh", "-c",
-						fmt.Sprintf("mkdir -p /data/identities && echo '%x' > /data/identities/local.key", key),
+						fmt.Sprintf("mkdir -p /data/identities && echo -n '%x' > /data/identities/local.key", key),
 					).
 					WithVolumeMounts(
 						corev1.VolumeMount().WithName("data").WithMountPath("/data"),
