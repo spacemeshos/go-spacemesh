@@ -24,6 +24,7 @@
     "smeshing": {
         "smeshing-opts": {
             "smeshing-opts-datadir": "/tmp/spacemesh-node-service/post-data"
-        }
+        },
+        "smeshing-start": true 
     }
 }
