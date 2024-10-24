@@ -273,8 +273,11 @@ var grpcLog = grpc_logsettable.ReplaceGrpcLoggerV2()
 func LoadConfig(cfg *config.Config, preset string, src io.Reader) error {
 	v := viper.New()
 	// read in config from src
-	if err := config.LoadConfig(src, v); err != nil {
-		return err
+	if src != nil {
+		v.SetConfigType("json")
+		if err := v.ReadConfig(src); err != nil {
+			return fmt.Errorf("can't load config: %w", err)
+		}
 	}
 
 	// override default config with preset if provided

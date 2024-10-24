@@ -66,7 +66,7 @@ var (
 	imageFlag = parameters.String(
 		"image",
 		"go-spacemesh image",
-		"spacemeshos/go-spacemesh-dev:v1.7.6", // repo doesn't have a `latest` tag we can default to
+		"", // repo doesn't have a `latest` tag we can default to
 	)
 	oldImageFlag = parameters.String(
 		"old-image",
@@ -76,7 +76,7 @@ var (
 	bsImage = parameters.String(
 		"bs-image",
 		"bootstrapper image",
-		"spacemeshos/spacemesh-dev-bs:v1.7.6", // repo doesn't have a `latest` tag we can default to
+		"", // repo doesn't have a `latest` tag we can default to
 	)
 	certifierImage = parameters.String(
 		"certifier-image",
@@ -315,7 +315,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 	config.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(50, 300)
 	require.NoError(t, err)
 
-	clientset, err := kubernetes.NewForConfig(config)
+	clientSet, err := kubernetes.NewForConfig(config)
 	require.NoError(t, err)
 
 	scheme := runtime.NewScheme()
@@ -331,7 +331,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 
 	podns, err := os.ReadFile(nsfile)
 	require.NoError(t, err, "reading nsfile at %s", nsfile)
-	paramsData, err := clientset.CoreV1().ConfigMaps(string(podns)).Get(ctx, *configname, apimetav1.GetOptions{})
+	paramsData, err := clientSet.CoreV1().ConfigMaps(string(podns)).Get(ctx, *configname, apimetav1.GetOptions{})
 	require.NoError(t, err, "get cfgmap %s/%s", string(podns), *configname)
 
 	p := parameters.FromValues(paramsData.Data)
@@ -344,14 +344,17 @@ func New(t *testing.T, opts ...Opt) *Context {
 		ns = "test-" + rngName()
 	}
 	clSize := clusterSize.Get(p)
-	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.IncreaseLevel(logLevel), zap.AddCaller(),
-		zap.AddStacktrace(zap.FatalLevel)))
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(
+		zap.IncreaseLevel(logLevel),
+		zap.AddCaller(),
+		zap.AddStacktrace(zap.FatalLevel),
+	))
 	cctx := &Context{
 		Context:           ctx,
 		Parameters:        p,
 		Namespace:         ns,
 		BootstrapDuration: bootstrapDuration.Get(p),
-		Client:            clientset,
+		Client:            clientSet,
 		Generic:           generic,
 		TestID:            testid.Get(p),
 		Keep:              keep.Get(p),

@@ -667,6 +667,9 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	if cfg.image == "" {
+		return nil, errors.New("go-spacemesh image must be set")
+	}
 	if delta := to - from; len(cfg.keys) > 0 && len(cfg.keys) != delta {
 		return nil, fmt.Errorf(
 			"keys must be overwritten for all or no members of the cluster: delta %d, keys %d %v",
@@ -744,6 +747,9 @@ func deployRemoteNodes(
 	)
 	for _, opt := range opts {
 		opt(&cfg)
+	}
+	if cfg.image == "" {
+		return nil, errors.New("go-spacemesh image must be set")
 	}
 	if delta := to - from; len(cfg.keys) != delta {
 		return nil, fmt.Errorf(
@@ -1087,6 +1093,10 @@ func deployBootstrapperD(
 	bsEpochs []int,
 	flags ...DeploymentFlag,
 ) (*NodeClient, error) {
+	if ctx.BootstrapperImage == "" {
+		return nil, errors.New("bootstrapper image must be set")
+	}
+
 	cmd := []string{
 		"/bin/go-bootstrapper",
 		commaSeparatedList(bsEpochs),
