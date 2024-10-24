@@ -693,16 +693,16 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 		} else {
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
 		}
+
 		var key ed25519.PrivateKey
 		if len(cfg.keys) > 0 {
 			key = cfg.keys[i-from]
 		}
-
 		eg.Go(func() error {
 			id := fmt.Sprintf("%s-%d", kind, i)
 			labels := nodeLabels(kind, id)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, id, key, cfg.image, labels, finalFlags); err != nil {
+			if err := deployNode(ctx, id, key, cfg.image, "local.key", labels, finalFlags); err != nil {
 				return err
 			}
 			clients <- &NodeClient{
@@ -775,18 +775,19 @@ func deployRemoteNodes(
 			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
 		}
 
-		nodeId := fmt.Sprintf("%s-%d", smesherApp, i)
+		key := cfg.keys[i-from]
+		id := fmt.Sprintf("%s-%d", smesherApp, i)
 		eg.Go(func() error {
-			labels := nodeLabels(smesherApp, nodeId)
+			labels := nodeLabels(smesherApp, id)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, nodeId, cfg.keys[i-from], cfg.image, labels, finalFlags); err != nil {
+			if err := deployNode(ctx, id, key, cfg.image, "remote.key", labels, finalFlags); err != nil {
 				return err
 			}
-			deployNodeSvc(ctx, nodeId)
+			deployNodeSvc(ctx, id)
 			clients <- &NodeClient{
 				session: ctx,
 				Node: Node{
-					Name:      nodeId,
+					Name:      id,
 					P2P:       7513,
 					GRPC_PUB:  9092,
 					GRPC_PRIV: 9093,
@@ -799,9 +800,9 @@ func deployRemoteNodes(
 			postId := fmt.Sprintf("%s-%d", postServiceApp, i)
 			labels := nodeLabels(postServiceApp, postId)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			labels["nodeId"] = nodeId
-			err := deployPostService(ctx, postId, labels, nodeId,
-				hex.EncodeToString(cfg.keys[i-from].Public().(ed25519.PublicKey)),
+			labels["nodeId"] = id
+			err := deployPostService(ctx, postId, labels, id,
+				hex.EncodeToString(key.Public().(ed25519.PublicKey)),
 				goldenAtxId.Hash32().String(),
 			)
 			return err
@@ -852,6 +853,7 @@ func deployNode(
 	id string,
 	key ed25519.PrivateKey,
 	image string,
+	keyName string,
 	labels map[string]string,
 	flags []DeploymentFlag,
 ) error {
@@ -921,7 +923,7 @@ func deployNode(
 					WithName("file-creator").
 					WithImage("busybox").
 					WithCommand("sh", "-c",
-						fmt.Sprintf("mkdir -p /data/identities && echo -n '%x' > /data/identities/local.key", key),
+						fmt.Sprintf("mkdir -p /data/identities && echo -n '%x' > /data/identities/%s", key, keyName),
 					).
 					WithVolumeMounts(
 						corev1.VolumeMount().WithName("data").WithMountPath("/data"),
