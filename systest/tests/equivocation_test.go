@@ -1,8 +1,10 @@
 package tests
 
 import (
+	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -19,9 +21,12 @@ import (
 // TestEquivocation runs a network where ~40% of nodes are expected to be equivocated due to shared keys.
 func TestEquivocation(t *testing.T) {
 	t.Parallel()
-	const bootnodes = 2
 	cctx := testcontext.New(t)
+	if cctx.PoetSize < 2 {
+		t.Skip("Skipping test for using different poets - test configured with less than 2 poets")
+	}
 
+	const bootnodes = 2
 	keys := make([]ed25519.PrivateKey, cctx.ClusterSize-bootnodes)
 	honest := int(float64(len(keys)) * 0.6)
 	if (len(keys)-honest)%2 != 0 {
@@ -32,13 +37,13 @@ func TestEquivocation(t *testing.T) {
 		require.NoError(t, err)
 		keys[i] = priv
 	}
-	// malfeasants := make([]ed25519.PrivateKey, 0, len(keys)-honest)
+	malfeasants := make([]ed25519.PrivateKey, 0, len(keys)-honest)
 	for i := honest; i < len(keys); i += 2 {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
 		keys[i] = priv
 		keys[i+1] = priv
-		// malfeasants = append(malfeasants, priv)
+		malfeasants = append(malfeasants, priv)
 	}
 	cctx.Log.Infow("fraction of nodes will have keys set up for equivocations",
 		zap.Int("honest", honest),
@@ -48,7 +53,15 @@ func TestEquivocation(t *testing.T) {
 	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
 	require.NoError(t, cl.AddBootstrappers(cctx))
 	require.NoError(t, cl.AddPoets(cctx))
-	require.NoError(t, cl.AddSmeshers(cctx, cctx.ClusterSize-bootnodes, cluster.WithSmeshers(keys)))
+	require.NoError(t, cl.AddSmeshers(cctx, honest, cluster.WithSmeshers(keys[:honest])))
+	for i := honest; i < len(keys); i += 2 {
+		// ensure that the two nodes sharing the same key are using different poet endpoints so they
+		// generate different proofs (otherwise they will be perfectly synchronized and won't trigger an equivocation)
+		err := cl.AddSmeshers(cctx, 1, cluster.WithSmeshers(keys[i:i+1]), cluster.WithFlags(cluster.PoetEndpoints(1)))
+		require.NoError(t, err)
+		err = cl.AddSmeshers(cctx, 1, cluster.WithSmeshers(keys[i+1:i+2]), cluster.WithFlags(cluster.PoetEndpoints(2)))
+		require.NoError(t, err)
+	}
 
 	var (
 		layers    = uint32(testcontext.LayersPerEpoch.Get(cctx.Parameters))
@@ -90,23 +103,16 @@ func TestEquivocation(t *testing.T) {
 		)
 	}
 
-	// TODO(mafa): since the nodes running with shared keys are all perfectly synchronized, we can't
-	// detect equivocation directly. The two nodes sharing the same key will with high probability broadcast
-	// the same messages to other peers which won't trigger an equivocation
-	//
-	// For this test to work properly the nodes sharing keys need to be slightly out of sync from each other so
-	// they can broadcast different messages to the network.
-
-	// for i := 0; i < honest; i++ {
-	// 	client := cl.Client(i)
-	// 	proofs := make([]types.NodeID, 0, len(malfeasants))
-	// 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	// 	defer cancel()
-	// 	malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
-	// 		malfeasant := malf.GetProof().GetSmesherId().Id
-	// 		proofs = append(proofs, types.NodeID(malfeasant))
-	// 		return len(proofs) < len(malfeasants), nil
-	// 	})
-	// 	assert.ElementsMatchf(t, malfeasants, proofs, "client: %s", cl.Client(i).Name)
-	// }
+	for i := 0; i < honest; i++ {
+		client := cl.Client(i)
+		proofs := make([]types.NodeID, 0, len(malfeasants))
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
+			malfeasant := malf.GetProof().GetSmesherId().Id
+			proofs = append(proofs, types.NodeID(malfeasant))
+			return len(proofs) < len(malfeasants), nil
+		})
+		assert.ElementsMatchf(t, malfeasants, proofs, "client: %s", cl.Client(i).Name)
+	}
 }
