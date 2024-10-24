@@ -5,7 +5,8 @@ go 1.23.2
 require (
 	cloud.google.com/go/storage v1.44.0
 	github.com/ALTree/bigfloat v0.2.0
-	github.com/athenavm/athena/ffi/athcon/bindings/go v0.4.1
+	github.com/ChainSafe/gossamer v0.9.0
+	github.com/athenavm/athena/ffi/athcon/bindings/go v0.4.2-0.20241024170254-df5ccd19158f
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20240930092556-24ddcc087ee2
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
@@ -119,7 +120,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/golang/snappy v0.0.4 // indirect
+	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8 // indirect
@@ -240,7 +241,7 @@ require (
 	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/net v0.29.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/term v0.24.0 // indirect
 	golang.org/x/text v0.18.0 // indirect
 	golang.org/x/tools v0.25.0 // indirect

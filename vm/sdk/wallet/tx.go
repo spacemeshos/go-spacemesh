@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
@@ -9,8 +10,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/host"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
+
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 )
 
 func encode(fields ...scale.Encodable) []byte {
@@ -27,15 +31,13 @@ func encode(fields ...scale.Encodable) []byte {
 
 // SelfSpawn creates a self-spawn transaction.
 func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
-	// self-spawn has not yet been implemented for Athena
-	panic("self-spawn not yet implemented")
+	return Spawn(pk, wallet.TemplateAddress, nonce, opts...)
 }
 
 // Spawn creates a spawn transaction.
 func Spawn(
 	pk signing.PrivateKey,
 	template core.Address,
-	args scale.Encodable,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) []byte {
@@ -44,17 +46,23 @@ func Spawn(
 		opt(options)
 	}
 
-	payload := core.Payload{}
-	payload.Nonce = nonce
-	payload.GasPrice = options.GasPrice
+	// Encode using the VM
+	vmlib, err := athcon.LoadLibrary(host.AthenaLibPath())
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
 
-	public := &core.PublicKey{}
-	copy(public[:], signing.Public(pk))
+	meta := core.Metadata{}
+	meta.Nonce = nonce
+	meta.GasPrice = options.GasPrice
+
 	// note that principal is computed from pk
-	principal := core.ComputePrincipal(wallet.TemplateAddress, public)
+	athenaPayload := vmlib.EncodeTxSpawn(athcon.Bytes32(signing.Public(pk)))
+	principal := core.ComputePrincipal(wallet.TemplateAddress, athenaPayload)
+	payload := core.Payload(athenaPayload)
 
-	// TODO(lane): fix encoding
-	tx := encode(&sdk.TxVersion, &principal, &template, &payload, args)
+	tx := encode(&sdk.TxVersion, &principal, &template, &meta, &payload)
+
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	return append(tx, sig...)
 }
@@ -66,20 +74,24 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 		opt(options)
 	}
 
-	spawnargs := wallet.SpawnArguments{}
-	copy(spawnargs.PublicKey[:], signing.Public(pk))
-	principal := core.ComputePrincipal(wallet.TemplateAddress, &spawnargs)
+	// Encode using the VM
+	vmlib, err := athcon.LoadLibrary(host.AthenaLibPath())
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
 
-	payload := core.Payload{}
-	payload.GasPrice = options.GasPrice
-	payload.Nonce = nonce
+	// We need a provisional spawn payload to calculate the principal address
+	spawnPayload := vmlib.EncodeTxSpawn(athcon.Bytes32(signing.Public(pk)))
+	principal := core.ComputePrincipal(wallet.TemplateAddress, spawnPayload)
 
-	args := wallet.SpendArguments{}
-	args.Destination = to
-	args.Amount = amount
+	payload := core.Payload(vmlib.EncodeTxSpend(athcon.Address(to), nonce))
 
-	// TODO(lane): fix encoding
-	tx := encode(&sdk.TxVersion, &principal, &payload, &args)
+	meta := core.Metadata{}
+	meta.GasPrice = options.GasPrice
+	meta.Nonce = nonce
+
+	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
+
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	return append(tx, sig...)
 }

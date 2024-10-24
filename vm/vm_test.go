@@ -80,7 +80,7 @@ func (a *singlesigAccount) spawn(
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) []byte {
-	return sdkwallet.Spawn(a.pk, template, args, nonce, opts...)
+	return sdkwallet.Spawn(a.pk, template, nonce, opts...)
 }
 
 func (a *singlesigAccount) spawnArgs() scale.Encodable {
@@ -1223,7 +1223,7 @@ func TestWallets(t *testing.T) {
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
-	t.Skip("TODO: new wallet SDK")
+	// t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	skipped, _, err := tt.Apply(types.GetEffectiveGenesis(), notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
@@ -1330,7 +1330,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 }
 
 func TestValidation(t *testing.T) {
-	t.Skip("TODO: new wallet SDK")
+	// t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	t.Run("SingleSig", func(t *testing.T) {
 		tt := newTester(t).

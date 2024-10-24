@@ -10,7 +10,7 @@ import (
 )
 
 // Context serves 2 purposes:
-// - maintains changes to the system state, that will be applied only after successful execution
+// - maintains changes to the system state, that will be applied only after succesful execution
 // - accumulates set of reusable objects and data.
 type Context struct {
 	Registry HandlerRegistry
@@ -43,9 +43,24 @@ type Context struct {
 	changed map[Address]*Account
 }
 
-// Principal returns address of the account that signed transaction.
+// Principal returns address of the account that signed the transaction and pays for the gas.
 func (c *Context) Principal() Address {
 	return c.PrincipalAccount.Address
+}
+
+// Nonce returns the transaction nonce.
+func (c *Context) Nonce() uint64 {
+	return c.ParseOutput.Nonce
+}
+
+// TemplateAddress returns the address of the principal account template.
+func (c *Context) TemplateAddress() Address {
+	return c.Header.TemplateAddress
+}
+
+// MaxGas returns the maximum amount of gas that can be consumed by the transaction.
+func (c *Context) MaxGas() uint64 {
+	return c.Header.MaxGas
 }
 
 // Layer returns block layer id.
@@ -58,7 +73,7 @@ func (c *Context) GetGenesisID() Hash20 {
 	return c.GenesisID
 }
 
-// Balance returns the account balance.
+// Balance returns the principal account balance.
 func (c *Context) Balance() uint64 { return c.PrincipalAccount.Balance }
 
 // Template of the principal account.
@@ -72,8 +87,8 @@ func (c *Context) Handler() Handler {
 }
 
 // Spawn account.
-func (c *Context) Spawn(args scale.Encodable) error {
-	account, err := c.load(ComputePrincipal(c.Header.TemplateAddress, args))
+func (c *Context) Spawn(spawnArgs []byte) error {
+	account, err := c.load(ComputePrincipal(c.Header.TemplateAddress, spawnArgs))
 	if err != nil {
 		return err
 	}
@@ -85,14 +100,14 @@ func (c *Context) Spawn(args scale.Encodable) error {
 		return fmt.Errorf("%w: spawn is called with unknown handler", ErrInternal)
 	}
 	buf := bytes.NewBuffer(nil)
-	instance, err := handler.New(args)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrMalformed, err)
-	}
-	_, err = instance.EncodeScale(scale.NewEncoder(buf))
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrInternal, err)
-	}
+	// instance, err := handler.New(args)
+	// if err != nil {
+	// 	return fmt.Errorf("%w: %w", ErrMalformed, err)
+	// }
+	// _, err = instance.EncodeScale(scale.NewEncoder(buf))
+	// if err != nil {
+	// 	return fmt.Errorf("%w: %w", ErrInternal, err)
+	// }
 	account.State = buf.Bytes()
 	account.TemplateAddress = &c.Header.TemplateAddress
 	c.change(account)
@@ -123,54 +138,6 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 	c.transferred += amount
 	from.Balance -= amount
 	account.Balance += amount
-	c.change(account)
-	return nil
-}
-
-// Relay call to the remote account.
-func (c *Context) Relay(remoteTemplate, address Address, call func(Host) error) error {
-	account, err := c.load(address)
-	if err != nil {
-		return err
-	}
-	if account.TemplateAddress == nil {
-		return ErrNotSpawned
-	}
-	if *account.TemplateAddress != remoteTemplate {
-		return fmt.Errorf(
-			"%w: %s != %s",
-			ErrTemplateMismatch,
-			remoteTemplate.String(),
-			account.TemplateAddress.String(),
-		)
-	}
-	handler := c.Registry.Get(remoteTemplate)
-	if handler == nil {
-		panic("template of the spawned account should exist in the registry")
-	}
-	template, err := handler.Load(account.State)
-	if err != nil {
-		return err
-	}
-
-	remote := &RemoteContext{
-		Context:  c,
-		remote:   account,
-		handler:  handler,
-		template: template,
-	}
-	if err := call(remote); err != nil {
-		return err
-	}
-	// ideally such changes would be serialized once for the whole block execution
-	// but it requires more changes in the cache, so can be done as an optimization
-	// if it proves meaningful (most likely wont)
-	buf := bytes.NewBuffer(nil)
-	encoder := scale.NewEncoder(buf)
-	if _, err := template.EncodeScale(encoder); err != nil {
-		return fmt.Errorf("%w: %w", ErrInternal, err)
-	}
-	account.State = buf.Bytes()
 	c.change(account)
 	return nil
 }
@@ -252,35 +219,4 @@ func (c *Context) change(account *Account) {
 		c.touched = append(c.touched, account.Address)
 	}
 	c.changed[account.Address] = account
-}
-
-// RemoteContext ...
-type RemoteContext struct {
-	*Context
-	remote   *Account
-	handler  Handler
-	template Template
-}
-
-// Balance returns the remote account balance.
-func (r *RemoteContext) Balance() uint64 {
-	return r.remote.Balance
-}
-
-// Template ...
-func (r *RemoteContext) Template() Template {
-	return r.template
-}
-
-// Handler ...
-func (r *RemoteContext) Handler() Handler {
-	return r.handler
-}
-
-// Transfer ...
-func (r *RemoteContext) Transfer(to Address, amount uint64) error {
-	if err := r.transfer(r.remote, to, amount, amount); err != nil {
-		return err
-	}
-	return nil
 }

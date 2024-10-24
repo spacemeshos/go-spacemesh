@@ -1,6 +1,11 @@
 package types
 
-import "go.uber.org/zap/zapcore"
+import (
+	"encoding/hex"
+	"fmt"
+
+	"go.uber.org/zap/zapcore"
+)
 
 //go:generate scalegen
 
@@ -9,12 +14,18 @@ import "go.uber.org/zap/zapcore"
 type TxHeader struct {
 	Principal       Address
 	TemplateAddress Address
-	Method          uint8
-	Nonce           Nonce
-	LayerLimits     LayerLimits
-	MaxGas          uint64
-	GasPrice        uint64
-	MaxSpend        uint64
+
+	// TODO(lane): Method is unused by the Athena VM, and should be removed.
+	Method uint8
+
+	Nonce       Nonce
+	LayerLimits LayerLimits
+	MaxGas      uint64
+	GasPrice    uint64
+	MaxSpend    uint64
+
+	// Payload is opaque to the host (go-spacemesh), and is passed into and interpreted by the VM.
+	Payload []byte
 }
 
 // Fee is a MaxGas multiplied by a GasPrice.
@@ -29,6 +40,7 @@ func (h *TxHeader) Spending() uint64 {
 
 // MarshalLogObject implements encoding for the tx header.
 func (h *TxHeader) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	payloadHash := hex.EncodeToString(h.Payload)
 	encoder.AddString("principal", h.Principal.String())
 	encoder.AddUint64("nonce_counter", h.Nonce)
 	encoder.AddUint32("layer_min", h.LayerLimits.Min)
@@ -36,6 +48,8 @@ func (h *TxHeader) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	encoder.AddUint64("max_gas", h.MaxGas)
 	encoder.AddUint64("gas_price", h.GasPrice)
 	encoder.AddUint64("max_spend", h.MaxSpend)
+	encoder.AddString("payload",
+		fmt.Sprintf("%s... (len %d)", payloadHash[:min(len(payloadHash), 5)], len(h.Payload)))
 	return nil
 }
 

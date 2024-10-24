@@ -14,6 +14,10 @@ func (db DBLoader) Get(address types.Address) (types.Account, error) {
 	return accounts.Latest(db.Executor, address)
 }
 
+func (db DBLoader) Has(address types.Address) (bool, error) {
+	return accounts.Has(db.Executor, address)
+}
+
 // NewStagedCache returns instance of the staged cache.
 func NewStagedCache(loader AccountLoader) *StagedCache {
 	return &StagedCache{loader: loader, cache: map[Address]stagedAccount{}}
@@ -39,6 +43,14 @@ func (ss *StagedCache) Get(address Address) (Account, error) {
 	}
 	ss.cache[address] = stagedAccount{Account: account}
 	return account, nil
+}
+
+// Has returns true if the account exists.
+func (ss *StagedCache) Has(address Address) (bool, error) {
+	if _, exist := ss.cache[address]; exist {
+		return true, nil
+	}
+	return ss.loader.Has(address)
 }
 
 // Update cache with a copy of the account state.

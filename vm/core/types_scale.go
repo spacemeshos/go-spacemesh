@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 )
 
-func (t *Payload) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *Metadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeCompact64(enc, uint64(t.Nonce))
 		if err != nil {
@@ -25,7 +25,7 @@ func (t *Payload) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *Payload) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *Metadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		field, n, err := scale.DecodeCompact64(dec)
 		if err != nil {

@@ -2,50 +2,44 @@ package vm
 
 import (
 	"encoding/binary"
-	"log"
-	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
-	"github.com/spacemeshos/go-spacemesh/vm/templates/getbalance"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/programs/getbalance"
+	hostprogram "github.com/spacemeshos/go-spacemesh/vm/programs/host"
 )
 
-func athenaLibPath() string {
-	var err error
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("Failed to get current working directory: %v", err)
+func getHost(t *testing.T) (*Host, *core.StagedCache) {
+	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
+	ctx := &core.Context{Loader: cache}
+	staticContext := StaticContext{
+		principal:   types.Address{1, 2, 3, 4},
+		destination: types.Address{5, 6, 7, 8},
+		nonce:       10,
 	}
-
-	switch runtime.GOOS {
-	case "windows":
-		return filepath.Join(cwd, "../build/libathenavmwrapper.dll")
-	case "darwin":
-		return filepath.Join(cwd, "../build/libathenavmwrapper.dylib")
-	default:
-		return filepath.Join(cwd, "../build/libathenavmwrapper.so")
+	dynamicContext := DynamicContext{
+		template: types.Address{11, 12, 13, 14},
+		callee:   types.Address{15, 16, 17, 18},
 	}
+	host, err := NewHost(ctx, cache, cache, staticContext, dynamicContext)
+	require.NoError(t, err)
+	return host, cache
 }
 
 func TestNewHost(t *testing.T) {
-	host, err := NewHost(athenaLibPath(), statesql.InMemoryTest(t))
-	require.NoError(t, err)
+	host, _ := getHost(t)
 	defer host.Destroy()
 
 	require.Equal(t, "Athena", host.vm.Name())
 }
 
 func TestGetBalance(t *testing.T) {
-	host, err := NewHost(athenaLibPath(), statesql.InMemoryTest(t))
-	require.NoError(t, err)
+	host, cache := getHost(t)
 	defer host.Destroy()
 
 	account := types.Account{
@@ -53,7 +47,7 @@ func TestGetBalance(t *testing.T) {
 		Address: types.Address{1, 2, 3, 4},
 		Balance: 100,
 	}
-	err = accounts.Update(host.db, &account)
+	err := cache.Update(account)
 	require.NoError(t, err)
 
 	out, gasLeft, err := host.Execute(
@@ -62,8 +56,7 @@ func TestGetBalance(t *testing.T) {
 		account.Address,
 		account.Address,
 		nil,
-		nil,
-		[32]byte{},
+		0,
 		getbalance.PROGRAM,
 	)
 
@@ -74,8 +67,7 @@ func TestGetBalance(t *testing.T) {
 }
 
 func TestNotEnoughGas(t *testing.T) {
-	host, err := NewHost(athenaLibPath(), statesql.InMemoryTest(t))
-	require.NoError(t, err)
+	host, _ := getHost(t)
 	defer host.Destroy()
 
 	_, gasLeft, err := host.Execute(
@@ -84,13 +76,59 @@ func TestNotEnoughGas(t *testing.T) {
 		types.Address{1, 2, 3, 4},
 		types.Address{1, 2, 3, 4},
 		nil,
-		nil,
-		[32]byte{},
+		0,
 		getbalance.PROGRAM,
 	)
 
-	// FIXME: export more errors in athcon
-	// 3 is "out of gas"
-	require.ErrorIs(t, err, athcon.Error(3))
+	require.ErrorIs(t, err, athcon.OutOfGas)
 	require.Zero(t, gasLeft)
+}
+
+func TestEmptyCode(t *testing.T) {
+	host, _ := getHost(t)
+	defer host.Destroy()
+
+	_, _, err := host.Execute(
+		10,
+		10,
+		types.Address{1, 2, 3, 4},
+		types.Address{1, 2, 3, 4},
+		nil,
+		0,
+		[]byte{},
+	)
+
+	require.Equal(t, athcon.Failure, err)
+}
+
+func TestSetGetStorge(t *testing.T) {
+	host, cache := getHost(t)
+	defer host.Destroy()
+
+	storageKey := athcon.Bytes32{0xc0, 0xff, 0xee}
+	storageValue := athcon.Bytes32{0xde, 0xad, 0xbe, 0xef}
+
+	address := types.Address{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+	account := types.Account{
+		Address: address,
+		Balance: 1000000,
+		Storage: []types.StorageItem{
+			{Key: storageKey, Value: storageValue},
+		},
+	}
+	err := cache.Update(account)
+	require.NoError(t, err)
+
+	_, gasLeft, err := host.Execute(
+		account.Layer,
+		100000,
+		account.Address,
+		account.Address,
+		nil,
+		0,
+		hostprogram.PROGRAM,
+	)
+
+	require.NoError(t, err)
+	require.NotZero(t, gasLeft)
 }

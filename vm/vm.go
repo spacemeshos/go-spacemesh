@@ -322,7 +322,6 @@ func (v *VM) execute(
 			continue
 		}
 		ctx := req.ctx
-		args := req.args
 
 		if header.GasPrice == 0 {
 			logger.Warn("ineffective transaction. zero gas price",
@@ -388,7 +387,7 @@ func (v *VM) execute(
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
-			err = ctx.PrincipalHandler.Exec(ctx, args)
+			_, _, err = ctx.PrincipalHandler.Exec(ctx, ss, ss, tx.Payload)
 		}
 		if err != nil {
 			logger.Debug("transaction failed",
@@ -437,9 +436,8 @@ type Request struct {
 	raw     types.RawTx
 	decoder *scale.Decoder
 
-	// both ctx and args are set after successful Parse
-	ctx  *core.Context
-	args scale.Encodable
+	// ctx set after successful Parse
+	ctx *core.Context
 }
 
 // Parse header from the raw transaction.
@@ -448,12 +446,11 @@ func (r *Request) Parse() (*core.Header, error) {
 	if len(r.raw.Raw) > core.TxSizeLimit {
 		return nil, fmt.Errorf("%w: tx size (%d) > limit (%d)", core.ErrTxLimit, len(r.raw.Raw), core.TxSizeLimit)
 	}
-	header, ctx, args, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
+	header, ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
 	r.ctx = ctx
-	r.args = args
 	transactionDurationParse.Observe(float64(time.Since(start)))
 	return header, nil
 }
@@ -477,131 +474,111 @@ func parse(
 	cfg Config,
 	raw []byte,
 	decoder *scale.Decoder,
-) (*core.Header, *core.Context, scale.Encodable, error) {
+) (*core.Header, *core.Context, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
+		return nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
 	}
-	// v1 is an Athena-compatible transaction
+	// v1 is athena compatible tx
 	if version != 1 {
-		return nil, nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
+		return nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
 	}
 
 	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
+		return nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
 	}
-	account, err := loader.Get(principal)
+	principalAccount, err := loader.Get(principal)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"%w: failed load state for principal %s - %w",
 			core.ErrInternal,
 			principal,
 			err,
 		)
 	}
-	logger.Debug("loaded account state", zap.Inline(&account))
+	logger.Debug("loaded principal account state", zap.Inline(&principalAccount))
 
 	ctx := &core.Context{
 		GenesisID:        cfg.GenesisID,
 		Registry:         reg,
 		Loader:           loader,
-		PrincipalAccount: account,
+		PrincipalAccount: principalAccount,
 		LayerID:          lid,
-	}
-
-	if account.TemplateAddress != nil {
-		ctx.PrincipalHandler = reg.Get(*account.TemplateAddress)
-		if ctx.PrincipalHandler == nil {
-			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.TemplateAddress)
-		}
-		ctx.PrincipalTemplate, err = ctx.PrincipalHandler.Load(account.State)
-		if err != nil {
-			return nil, nil, nil, err
-		}
 	}
 
 	var (
 		templateAddress *core.Address
 		handler         core.Handler
 	)
-	// TODO(lane): rewrite to use VM
-	// if method == core.MethodSpawn {
-	// 	// the transaction is either spawn or self-spawn
-	// 	templateAddress = &core.Address{}
-	// 	if _, err := templateAddress.DecodeScale(decoder); err != nil {
-	// 		return nil, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
-	// 	}
-	// 	handler = reg.Get(*templateAddress)
-	// 	if handler == nil {
-	// 		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
-	// 	}
-	// 	if ctx.PrincipalHandler == nil {
-	// 		// spawn is not possible if principal is not spawned
-	// 		// so this must be self-spawn, but we can't tell before decoding arguments
-	// 		ctx.PrincipalHandler = handler
-	// 	}
-	// } else {
-	// this is any other call transaction
-	if account.TemplateAddress == nil {
-		return nil, nil, nil, core.ErrNotSpawned
+
+	if principalAccount.TemplateAddress != nil {
+		ctx.PrincipalHandler = reg.Get(*principalAccount.TemplateAddress)
+		if ctx.PrincipalHandler == nil {
+			return nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *principalAccount.TemplateAddress)
+		}
+		ctx.PrincipalTemplate, err = ctx.PrincipalHandler.Load(principalAccount.State)
+		if err != nil {
+			return nil, nil, err
+		}
+		templateAddress = principalAccount.TemplateAddress
+		handler = ctx.PrincipalHandler
+	} else {
+		// the principal isn't spawned yet. check for spawn or self-spawn.
+		templateAddress = &core.Address{}
+		if _, err := templateAddress.DecodeScale(decoder); err != nil {
+			return nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
+		}
+		handler = reg.Get(*templateAddress)
+		if handler == nil {
+			return nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
+		}
+		if !handler.IsSpawn(raw) {
+			return nil, nil, core.ErrNotSpawned
+		}
+		ctx.PrincipalHandler = handler
 	}
-	templateAddress = account.TemplateAddress
-	handler = ctx.PrincipalHandler
-	// }
+
 	output, err := ctx.PrincipalHandler.Parse(decoder)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	args := handler.Args()
-	if args == nil {
-		return nil, nil, nil, fmt.Errorf("%w: unknown method %s", core.ErrMalformed, *templateAddress)
+	if handler.IsSpawn(raw) {
+		if core.ComputePrincipal(*templateAddress, raw) == principal {
+			// this is a self spawn. if it fails validation - discard it immediately
+			ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader, output.Payload)
+			if err != nil {
+				return nil, nil, err
+			}
+			ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
+		} else if principalAccount.TemplateAddress == nil {
+			return nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
+		} else {
+			target, err := handler.New(ctx, loader, output.Payload)
+			if err != nil {
+				return nil, nil, err
+			}
+			ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
+			ctx.Gas.FixedGas += target.ExecGas()
+		}
+	} else {
+		ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
+		ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
 	}
-	if _, err := args.DecodeScale(decoder); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
-	}
-	// TODO(lane): rewrite to use VM
-	// if method == core.MethodSpawn {
-	// 	if core.ComputePrincipal(*templateAddress, args) == principal {
-	// 		// this is a self spawn. if it fails validation - discard it immediately
-	// 		panic("self-spawn not implemented")
-	// 		// ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(args)
-	// 		// if err != nil {
-	// 		// 	return nil, nil, nil, err
-	// 		// }
-	// 		// ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
-	// 	} else if account.TemplateAddress == nil {
-	// 		return nil, nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself",
-	//			core.ErrNotSpawned)
-	// 	} else {
-	// 		target, err := handler.New(args)
-	// 		if err != nil {
-	// 			return nil, nil, nil, err
-	// 		}
-	// 		ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-	// 		ctx.Gas.FixedGas += target.ExecGas()
-	// 	}
-	// } else {
-	ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-	ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
-	// }
 	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
-
-	ctx.ParseOutput = output
 
 	ctx.Header.Principal = principal
 	ctx.Header.TemplateAddress = *templateAddress
 	ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
-	ctx.Args = args
 
-	maxspend, err := ctx.PrincipalTemplate.MaxSpend(args)
+	maxspend, err := ctx.PrincipalTemplate.MaxSpend(output.Payload)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	ctx.Header.MaxSpend = maxspend
-	return &ctx.Header, ctx, args, nil
+	return &ctx.Header, ctx, nil
 }
 
 func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
