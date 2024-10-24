@@ -69,7 +69,7 @@ type HandlerV2 struct {
 	tortoise        system.Tortoise
 	logger          *zap.Logger
 	fetcher         system.Fetcher
-	malPublisher    malfeasancePublisher
+	malPublisher    atxMalfeasancePublisher
 }
 
 func (h *HandlerV2) processATX(
@@ -691,14 +691,6 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx 
 		return true, nil
 	}
 
-	malicious, err = h.checkDoublePost(ctx, tx, atx)
-	if err != nil {
-		return malicious, fmt.Errorf("checking double post: %w", err)
-	}
-	if malicious {
-		return true, nil
-	}
-
 	malicious, err = h.checkDoubleMerge(ctx, tx, atx)
 	if err != nil {
 		return malicious, fmt.Errorf("checking double merge: %w", err)
@@ -762,31 +754,6 @@ func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx sql.Transaction, at
 	return false, nil
 }
 
-func (h *HandlerV2) checkDoublePost(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
-	for id := range atx.ids {
-		atxIDs, err := atxs.FindDoublePublish(tx, id, atx.PublishEpoch)
-		switch {
-		case errors.Is(err, sql.ErrNotFound):
-			continue
-		case err != nil:
-			return false, fmt.Errorf("searching for double publish: %w", err)
-		}
-		otherAtxId := slices.IndexFunc(atxIDs, func(other types.ATXID) bool { return other != atx.ID() })
-		otherAtx := atxIDs[otherAtxId]
-		h.logger.Debug(
-			"found ID that has already contributed its PoST in this epoch",
-			zap.Stringer("node_id", id),
-			zap.Stringer("atx_id", atx.ID()),
-			zap.Stringer("other_atx_id", otherAtx),
-			zap.Uint32("epoch", atx.PublishEpoch.Uint32()),
-		)
-		// TODO(mafa): finish proof
-		var proof wire.Proof
-		return true, h.malPublisher.Publish(ctx, id, proof)
-	}
-	return false, nil
-}
-
 func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
 	if atx.MarriageATX == nil {
 		return false, nil
@@ -828,22 +795,71 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 			log.ZShortStringer("expected", expectedPrevID),
 		)
 
-		atx1, atx2, err := atxs.PrevATXCollision(tx, data.previous, id)
+		collisions, err := atxs.PrevATXCollisions(tx, data.previous, id)
 		switch {
 		case errors.Is(err, sql.ErrNotFound):
 			continue
 		case err != nil:
-			return false, fmt.Errorf("checking for previous ATX collision: %w", err)
+			return true, fmt.Errorf("checking for previous ATX collision: %w", err)
+		}
+
+		var wireAtxV1 *wire.ActivationTxV1
+		var wireAtxV2 *wire.ActivationTxV2
+
+	collisionCheck:
+		for _, collision := range collisions {
+			if collision == atx.ID() {
+				continue
+			}
+			var blob sql.Blob
+			v, err := atxs.LoadBlob(ctx, tx, collision.Bytes(), &blob)
+			if err != nil {
+				return true, fmt.Errorf("get atx blob %s: %w", id.ShortString(), err)
+			}
+			switch v {
+			case types.AtxV1:
+				if wireAtxV1 == nil {
+					// we have at least one v2 ATX (the one we are validating right now) so we only need one
+					// v1 ATX to create the proof if no other v2 ATXs are found
+					wireAtxV1 = &wire.ActivationTxV1{}
+					codec.MustDecode(blob.Bytes, wireAtxV1)
+				}
+			case types.AtxV2:
+				if wireAtxV2 == nil {
+					wireAtxV2 = &wire.ActivationTxV2{}
+					codec.MustDecode(blob.Bytes, wireAtxV2)
+					break collisionCheck // if we have one v2 ATX we can create the proof
+				}
+			default:
+				h.logger.Fatal("Failed to create invalid previous ATX proof: unknown ATX version",
+					zap.Stringer("atx_id", collision),
+				)
+			}
+		}
+
+		if wireAtxV2 != nil {
+			// prefer creating a proof with 2 ATXs of version 2
+			h.logger.Debug("creating a malfeasance proof for invalid previous ATX",
+				log.ZShortStringer("smesherID", id),
+				log.ZShortStringer("atx1", wireAtxV2.ID()),
+				log.ZShortStringer("atx2", atx.ActivationTxV2.ID()),
+			)
+			proof, err := wire.NewInvalidPrevAtxProofV2(tx, atx.ActivationTxV2, wireAtxV2, id)
+			if err != nil {
+				return true, fmt.Errorf("creating invalid previous ATX proof: %w", err)
+			}
+			return true, h.malPublisher.Publish(ctx, id, proof)
 		}
 
 		h.logger.Debug("creating a malfeasance proof for invalid previous ATX",
 			log.ZShortStringer("smesherID", id),
-			log.ZShortStringer("atx1", atx1),
-			log.ZShortStringer("atx2", atx2),
+			log.ZShortStringer("atx1", wireAtxV1.ID()),
+			log.ZShortStringer("atx2", atx.ActivationTxV2.ID()),
 		)
-
-		// TODO(mafa): finish proof
-		var proof wire.Proof
+		proof, err := wire.NewInvalidPrevAtxProofV1(atx.ActivationTxV2, wireAtxV1, id)
+		if err != nil {
+			return true, fmt.Errorf("creating invalid previous ATX proof: %w", err)
+		}
 		return true, h.malPublisher.Publish(ctx, id, proof)
 	}
 	return false, nil

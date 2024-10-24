@@ -1788,64 +1788,6 @@ func Test_MarryingMalicious(t *testing.T) {
 	t.Run("other is malicious", tc(otherSig.NodeID()))
 }
 
-func TestContextualValidation_DoublePost(t *testing.T) {
-	t.Parallel()
-	golden := types.RandomATXID()
-	sig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	atxHandler := newV2TestHandler(t, golden)
-
-	// marry
-	otherSig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
-
-	mATX := newInitialATXv2(t, golden)
-	mATX.Marriages = []wire.MarriageCertificate{
-		{
-			Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-		},
-		{
-			ReferenceAtx: othersAtx.ID(),
-			Signature:    otherSig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-		},
-	}
-	mATX.Sign(sig)
-
-	atxHandler.expectInitialAtxV2(mATX)
-	err = atxHandler.processATX(context.Background(), "", mATX, time.Now())
-	require.NoError(t, err)
-
-	// publish merged
-	merged := newSoloATXv2(t, mATX.PublishEpoch+2, mATX.ID(), mATX.ID())
-	post := wire.SubPostV2{
-		MarriageIndex: 1,
-		NumUnits:      othersAtx.TotalNumUnits(),
-		PrevATXIndex:  1,
-	}
-	merged.NiPosts[0].Posts = append(merged.NiPosts[0].Posts, post)
-
-	mATXID := mATX.ID()
-	merged.MarriageATX = &mATXID
-
-	merged.PreviousATXs = []types.ATXID{mATX.ID(), othersAtx.ID()}
-	merged.Sign(sig)
-
-	atxHandler.expectMergedAtxV2(merged, []types.NodeID{sig.NodeID(), otherSig.NodeID()}, []uint64{poetLeaves})
-	err = atxHandler.processATX(context.Background(), "", merged, time.Now())
-	require.NoError(t, err)
-
-	// The otherSig tries to publish alone in the same epoch.
-	// This is malfeasance as it tries include his PoST twice.
-	doubled := newSoloATXv2(t, merged.PublishEpoch, othersAtx.ID(), othersAtx.ID())
-	doubled.Sign(otherSig)
-	atxHandler.expectAtxV2(doubled)
-	atxHandler.mMalPublish.EXPECT().Publish(gomock.Any(), otherSig.NodeID(), gomock.Any())
-	err = atxHandler.processATX(context.Background(), "", doubled, time.Now())
-	require.NoError(t, err)
-}
-
 func Test_CalculatingUnits(t *testing.T) {
 	t.Parallel()
 	t.Run("units on 1 nipost must not overflow", func(t *testing.T) {
