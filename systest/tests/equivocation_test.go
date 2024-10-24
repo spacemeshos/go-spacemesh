@@ -37,21 +37,21 @@ func TestEquivocation(t *testing.T) {
 		require.NoError(t, err)
 		keys[i] = priv
 	}
-	malfeasants := make([]ed25519.PrivateKey, 0, (len(keys)-honest)/2)
-	for i := honest; i < len(keys); i += 2 {
+	malfeasants := make([]ed25519.PrivateKey, cctx.ClusterSize-bootnodes-honest)
+	for i := 0; i < len(malfeasants); i += 2 {
 		_, priv, err := ed25519.GenerateKey(nil)
 		require.NoError(t, err)
-		malfeasants = append(malfeasants, priv)
+		malfeasants[i] = priv
 	}
 	cctx.Log.Infow("fraction of nodes will have keys set up for equivocations",
 		zap.Int("honest", honest),
-		zap.Int("equivocators", (len(keys)-honest)/2),
+		zap.Int("equivocators", len(malfeasants)),
 	)
 	cl := cluster.New(cctx, cluster.WithKeys(cctx.ClusterSize))
 	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
 	require.NoError(t, cl.AddBootstrappers(cctx))
 	require.NoError(t, cl.AddPoets(cctx))
-	require.NoError(t, cl.AddSmeshers(cctx, honest, cluster.WithSmeshers(keys[:honest])))
+	require.NoError(t, cl.AddSmeshers(cctx, honest, cluster.WithSmeshers(keys)))
 	for _, key := range malfeasants {
 		// ensure that the two nodes sharing the same key are using different poet endpoints so they
 		// generate different proofs (otherwise they will be perfectly synchronized and won't trigger an equivocation)
