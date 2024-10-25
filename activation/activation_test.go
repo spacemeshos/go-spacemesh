@@ -77,7 +77,7 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
-		db:          statesql.InMemoryTest(tb, ),
+		db:          statesql.InMemoryTest(tb),
 		localDb:     localsql.InMemoryTest(tb, sql.WithConnections(numSigners)),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 
