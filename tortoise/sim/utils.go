@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -29,7 +30,9 @@ func newCacheDB(tb testing.TB, logger *zap.Logger, conf config) *datastore.Cache
 			panic(err)
 		}
 	}
-	return datastore.NewCachedDB(db, logger)
+	cdb := datastore.NewCachedDB(db, logger)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
+	return cdb
 }
 
 func intInRange(rng *rand.Rand, ints [2]int) uint32 {

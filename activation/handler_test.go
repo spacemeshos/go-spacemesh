@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/verifying"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -197,6 +198,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)

@@ -112,15 +112,19 @@ func createP2PFetch(
 		sqlOpts = []sql.Opt{sql.WithQueryCache(true)}
 	}
 	clientDB := statesql.InMemoryTest(tb, sqlOpts...)
+	clientCDB := datastore.NewCachedDB(clientDB, lg)
+	tb.Cleanup(func() { assert.NoError(tb, clientDB.Close()) })
 	serverDB := statesql.InMemoryTest(tb, sqlOpts...)
+	serverCDB := datastore.NewCachedDB(serverDB, lg)
+	tb.Cleanup(func() { assert.NoError(tb, serverDB.Close()) })
 	tpf := &testP2PFetch{
 		tb:           tb,
 		clientPDB:    store.New(store.WithLogger(lg)),
-		clientCDB:    datastore.NewCachedDB(clientDB, lg),
+		clientCDB:    clientCDB,
 		serverID:     serverHost.ID(),
 		serverDB:     serverDB,
 		serverPDB:    store.New(store.WithLogger(lg)),
-		serverCDB:    datastore.NewCachedDB(serverDB, lg),
+		serverCDB:    serverCDB,
 		receivedData: make(map[blobKey][]byte),
 	}
 

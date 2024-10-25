@@ -206,9 +206,7 @@ func newDiskSqlite(tb testing.TB) sql.Database {
 
 	dir := tb.TempDir()
 	sqlDB, err := statesql.Open("file:" + filepath.Join(dir, "state.sql"))
-	if err != nil {
-		tb.Fatal(err)
-	}
+	require.NoError(tb, err)
 	tb.Cleanup(func() { sqlDB.Close() })
 	return sqlDB
 }

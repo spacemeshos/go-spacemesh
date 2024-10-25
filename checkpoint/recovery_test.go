@@ -254,6 +254,7 @@ func validateAndPreserveData(
 	mreceiver := activation.NewMockAtxReceiver(ctrl)
 	mtrtl := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	atxHandler := activation.NewHandler(
 		"",
 		cdb,
@@ -502,6 +503,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
+	defer oldDB.Close()
 
 	vAtxs1, proofs1 := createAtxChain(t, sig1)
 	vAtxs2, proofs2 := createAtxChain(t, sig2)
@@ -587,6 +589,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
+	defer oldDB.Close()
 
 	vAtxs1, proofs1 := createAtxChain(t, sig1)
 	vAtxs2, proofs2 := createInterlinkedAtxChain(t, sig2, sig3)
@@ -628,6 +631,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
 	require.NoError(t, err)
 	require.NotNil(t, localDB)
+	defer localDB.Close()
 
 	err = nipost.AddChallenge(localDB, sig1.NodeID(), &types.NIPostChallenge{
 		PublishEpoch:   posAtx1.PublishEpoch + 1,
@@ -697,6 +701,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
+	defer oldDB.Close()
 
 	vAtxs, proofs := createAtxChainDepsOnly(t)
 	validateAndPreserveData(t, oldDB, vAtxs)
@@ -721,6 +726,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 	localDB, err := localsql.Open("file:" + filepath.Join(cfg.DataDir, cfg.LocalDbFile))
 	require.NoError(t, err)
 	require.NotNil(t, localDB)
+	defer localDB.Close()
 
 	post := types.Post{
 		Indices: []byte{1, 2, 3},
@@ -787,6 +793,8 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
+	defer oldDB.Close()
+
 	vAtxs, proofs := createAtxChain(t, sig)
 	// make the first one from the previous snapshot
 	var golden wire.ActivationTxV1
@@ -863,6 +871,8 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	oldDB, err := statesql.Open("file:" + filepath.Join(cfg.DataDir, cfg.DbFile))
 	require.NoError(t, err)
 	require.NotNil(t, oldDB)
+	defer oldDB.Close()
+
 	vAtxs, proofs := createAtxChain(t, sig)
 	validateAndPreserveData(t, oldDB, vAtxs)
 	// the proofs are not valid, but save them anyway for the purpose of testing

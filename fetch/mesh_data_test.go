@@ -1000,6 +1000,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			cfg.GetAtxsConcurrency = getAtxConcurrency
 
 			cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+			t.Cleanup(func() { require.NoError(t, cdb.Close()) })
 			client := server.New(wrapHost(mesh.Hosts()[0]), hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)

@@ -55,6 +55,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	cfg := testPostConfig()
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 
 	opts := testPostSetupOpts(t)
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))

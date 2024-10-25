@@ -50,6 +50,7 @@ func getBytes(ctx context.Context, bs *datastore.BlobStore, hint datastore.Hint,
 func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
 	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
 	proof := types.RandomBytes(100)
@@ -66,6 +67,7 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 func TestIterateMalfeasanceProofs(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
 	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
 	proofs := map[types.NodeID][]byte{

@@ -226,6 +226,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 
 	dstDB, err := localsql.Open("file:" + filepath.Join(tmpDst, localDbFile))
 	require.NoError(t, err)
+	defer dstDB.Close()
 
 	sig1Ch := &types.NIPostChallenge{
 		PublishEpoch:   types.EpochID(rand.Uint32()),
@@ -285,6 +286,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 
 	srcDB, err := localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
+	defer srcDB.Close()
 
 	cAtx := types.RandomATXID()
 	sig2Ch := &types.NIPostChallenge{
@@ -391,6 +393,7 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 
 	srcDB, err := localsql.Open("file:" + filepath.Join(tmpSrc, localDbFile))
 	require.NoError(t, err)
+	defer srcDB.Close()
 
 	cAtx := types.RandomATXID()
 	sigCh := &types.NIPostChallenge{

@@ -35,6 +35,7 @@ func createTestHandler(tb testing.TB, opts ...sql.Opt) *testHandler {
 	lg := zaptest.NewLogger(tb)
 	db := statesql.InMemoryTest(tb, opts...)
 	cdb := datastore.NewCachedDB(db, lg)
+	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
 	return &testHandler{
 		handler: newHandler(cdb, datastore.NewBlobStore(cdb, store.New()), lg),
 		db:      db,

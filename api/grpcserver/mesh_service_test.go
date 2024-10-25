@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -142,8 +143,10 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -193,8 +196,10 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -301,8 +306,10 @@ func TestReadLayer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		&MeshAPIMockInstrumented{},
 		conStateAPI,
 		genTime,
@@ -324,7 +331,7 @@ func TestReadLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	srv = NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -339,7 +346,7 @@ func TestReadLayer(t *testing.T) {
 
 	// now instrument conStateAPI to return errors
 	srv = NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		&ConStateAPIMockInstrumented{*conStateAPI},
 		genTime,

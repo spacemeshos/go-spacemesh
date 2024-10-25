@@ -53,9 +53,11 @@ func createTestMesh(tb testing.TB) *testMesh {
 	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
 	ctrl := gomock.NewController(tb)
+	cdb := datastore.NewCachedDB(db, lg)
+	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
 	tm := &testMesh{
 		db:           db,
-		cdb:          datastore.NewCachedDB(db, lg),
+		cdb:          cdb,
 		atxsdata:     atxsdata,
 		mockVM:       mocks.NewMockvmState(ctrl),
 		mockState:    mocks.NewMockconservativeState(ctrl),

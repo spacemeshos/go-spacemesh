@@ -718,9 +718,10 @@ func TestMeshService(t *testing.T) {
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-	db := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	svc := NewMeshService(
-		db,
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -733,7 +734,7 @@ func TestMeshService(t *testing.T) {
 	require.NoError(
 		t,
 		activesets.Add(
-			db,
+			cdb,
 			ballot1.EpochData.ActiveSetHash,
 			&types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}},
 		),
@@ -1657,8 +1658,10 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	grpcService := NewMeshService(
-		datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -1837,10 +1840,11 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 
 	grpcService := NewMeshService(
-		db,
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -1982,9 +1986,12 @@ func TestMultiService(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
+
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
 	svc2 := NewMeshService(
-		datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -2472,8 +2479,11 @@ func TestMeshService_EpochStream(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	db := statesql.InMemoryTest(t)
+
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -129,6 +130,7 @@ func newTestSyncer(tb testing.TB, interval time.Duration) *testSyncer {
 	}
 	db := statesql.InMemoryTest(tb)
 	ts.cdb = datastore.NewCachedDB(db, lg)
+	ts.tb.Cleanup(func() { assert.NoError(tb, ts.cdb.Close()) })
 	var err error
 	atxsdata := atxsdata.New()
 	exec := mesh.NewExecutor(ts.cdb, atxsdata, ts.mVm, ts.mConState, lg)

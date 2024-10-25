@@ -211,6 +211,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	cfg := testPostConfig()
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	localDB := localsql.InMemoryTest(t)
 
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
