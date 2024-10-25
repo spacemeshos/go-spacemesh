@@ -2,7 +2,7 @@ package host
 
 import (
 	"bytes"
-	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -12,7 +12,6 @@ import (
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
@@ -215,14 +214,6 @@ func (h *hostContext) Call(
 	// take snapshot of state
 	// TODO: implement me
 
-	// read origin account information
-	senderAccount, err := h.loader.Get(types.Address(sender))
-	if err != nil {
-		return nil, 0, athcon.Error{
-			Code: athcon.InternalError.Code,
-			Err:  fmt.Errorf("loading sender account: %w", err),
-		}
-	}
 	destinationAccount, err := h.loader.Get(types.Address(recipient))
 	if err != nil {
 		return nil, 0, athcon.Error{
@@ -239,7 +230,7 @@ func (h *hostContext) Call(
 		if template == nil || len(state) == 0 {
 			return nil, 0, athcon.Error{
 				Code: athcon.InternalError.Code,
-				Err:  fmt.Errorf("missing template information"),
+				Err:  errors.New("missing template information"),
 			}
 		}
 
@@ -255,21 +246,12 @@ func (h *hostContext) Call(
 
 	// balance transfer
 	// this does not depend upon the recipient account status
-
-	// safe math
-	if senderAccount.Balance < value {
-		return nil, 0, athcon.InsufficientBalance
-	}
-	if destinationAccount.Balance+value < destinationAccount.Balance {
+	if err = h.host.Transfer(types.Address(recipient), value); err != nil {
 		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
-			Err:  fmt.Errorf("account balance overflow"),
+			Err:  fmt.Errorf("balance transfer failed: %w", err),
 		}
 	}
-	senderAccount.Balance -= value
-	destinationAccount.Balance += value
-	h.updater.Update(senderAccount)
-	h.updater.Update(destinationAccount)
 
 	if len(input) == 0 {
 		// short-circuit and return if this is a simple balance transfer
@@ -293,7 +275,18 @@ func (h *hostContext) Call(
 	}()
 
 	// execute the call
-	res, err := h.vm.Execute(h, athcon.Frontier, kind, depth+1, gas, recipient, sender, input, value, templateAccount.State)
+	res, err := h.vm.Execute(
+		h,
+		athcon.Frontier,
+		kind,
+		depth+1,
+		gas,
+		recipient,
+		sender,
+		input,
+		value,
+		templateAccount.State,
+	)
 	if err != nil {
 		// rollback in case of failure/revert
 		// TODO: implement me
@@ -314,6 +307,8 @@ func (h *hostContext) Spawn(blob []byte) athcon.Address {
 
 	// make sure we have the required context
 	if h.staticContext.Principal == emptyAddress {
+		// staticContext is unused today, but will be needed to read principal in the future.
+		// see https://github.com/spacemeshos/go-spacemesh/issues/6420
 		return athcon.Address(emptyAddress)
 	}
 	if h.dynamicContext.Template == emptyAddress {
@@ -321,16 +316,10 @@ func (h *hostContext) Spawn(blob []byte) athcon.Address {
 	}
 
 	// calculate the new principal address
-	hasher := hash.GetHasher()
-	defer hash.PutHasher(hasher)
-	hasher.Write(h.dynamicContext.Template[:])
-	hasher.Write(blob)
-	hasher.Write(h.staticContext.Principal[:])
-	nonceBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(nonceBytes, h.staticContext.Nonce)
-	hasher.Write(nonceBytes)
-	sum := hasher.Sum(nil)
-	principalAddress := types.GenerateAddress(sum[12:])
+	principalAddress := core.ComputePrincipal(
+		h.dynamicContext.Template,
+		blob,
+	)
 
 	// check if the account is already spawned
 	account, err := h.loader.Get(principalAddress)

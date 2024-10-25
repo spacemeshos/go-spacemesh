@@ -12,12 +12,13 @@ func SigningBody(genesis, tx []byte) []byte {
 	return full
 }
 
-// ComputePrincipal address as the last 20 bytes from blake3(template || spawn_args).
-func ComputePrincipal(template Address, spawnArgs []byte) Address {
+// ComputePrincipal address as the last 24 bytes of Hash(template || spawnArgs).
+// See https://github.com/spacemeshos/go-spacemesh/issues/6420 for more details.
+func ComputePrincipal(template types.Address, spawnArgs []byte) Address {
 	hasher := hash.GetHasher()
 	defer hash.PutHasher(hasher)
 	hasher.Write(template[:])
 	hasher.Write(spawnArgs)
 	sum := hasher.Sum(nil)
-	return types.GenerateAddress(sum[12:])
+	return types.GenerateAddress(sum)
 }

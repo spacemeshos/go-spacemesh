@@ -94,6 +94,7 @@ type HandlerRegistry interface {
 // Host API with methods and data that are required by templates.
 type Host interface {
 	Consume(uint64) error
+	Transfer(Address, uint64) error
 
 	Principal() Address
 	Nonce() uint64
@@ -106,14 +107,14 @@ type Host interface {
 	Balance() uint64
 }
 
-// static context is fixed for the lifetime of one transaction
+// static context is fixed for the lifetime of one transaction.
 type StaticContext struct {
 	Principal   types.Address
 	Destination types.Address
 	Nonce       uint64
 }
 
-// dynamic context may change with each call frame
+// dynamic context may change with each call frame.
 type DynamicContext struct {
 	Template types.Address
 	Callee   types.Address
@@ -121,7 +122,7 @@ type DynamicContext struct {
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/vmhost.go github.com/spacemeshos/go-spacemesh/vm/core VMHost
 
-// VM Host API
+// VM Host API.
 type VMHost interface {
 	Execute(types.LayerID, int64, types.Address, types.Address, []byte, uint64, []byte) ([]byte, int64, error)
 }

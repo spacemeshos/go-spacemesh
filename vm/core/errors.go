@@ -26,4 +26,6 @@ var (
 	ErrTemplateMismatch = errors.New("relay template mismatch")
 	// ErrTxLimit overflows max tx size.
 	ErrTxLimit = errors.New("overflows tx limit")
+	// ErrOverflow raised if balance overflows.
+	ErrOverflow = errors.New("balance overflow")
 )

@@ -13,18 +13,18 @@ import (
 
 func TestTransfer(t *testing.T) {
 	t.Run("NoBalance", func(t *testing.T) {
-		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{statesql.InMemory()})}
+		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()})}
 		require.ErrorIs(t, ctx.Transfer(core.Address{}, 100), core.ErrNoBalance)
 	})
 	t.Run("MaxSpend", func(t *testing.T) {
-		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{statesql.InMemory()})}
+		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()})}
 		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 100
 		require.NoError(t, ctx.Transfer(core.Address{1}, 50))
 		require.ErrorIs(t, ctx.Transfer(core.Address{2}, 100), core.ErrMaxSpend)
 	})
 	t.Run("ReducesBalance", func(t *testing.T) {
-		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{statesql.InMemory()})}
+		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()})}
 		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 1000
 		for _, amount := range []uint64{50, 100, 200, 255} {
@@ -65,7 +65,7 @@ func TestConsume(t *testing.T) {
 
 func TestApply(t *testing.T) {
 	t.Run("UpdatesNonce", func(t *testing.T) {
-		ss := core.NewStagedCache(core.DBLoader{statesql.InMemory()})
+		ss := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()})
 		ctx := core.Context{Loader: ss}
 		ctx.PrincipalAccount.Address = core.Address{1}
 		ctx.Header.Nonce = 10
@@ -78,7 +78,7 @@ func TestApply(t *testing.T) {
 		require.Equal(t, ctx.PrincipalAccount.NextNonce, account.NextNonce)
 	})
 	t.Run("ConsumeMaxGas", func(t *testing.T) {
-		ss := core.NewStagedCache(core.DBLoader{statesql.InMemory()})
+		ss := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()})
 
 		ctx := core.Context{Loader: ss}
 		ctx.PrincipalAccount.Balance = 1000
@@ -95,7 +95,7 @@ func TestApply(t *testing.T) {
 		require.Equal(t, ctx.Fee(), ctx.Header.MaxGas*ctx.Header.GasPrice)
 	})
 	t.Run("PreserveTransferOrder", func(t *testing.T) {
-		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{statesql.InMemory()})}
+		ctx := core.Context{Loader: core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()})}
 		ctx.PrincipalAccount.Address = core.Address{1}
 		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 1000

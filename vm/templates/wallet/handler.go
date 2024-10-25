@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -52,13 +53,18 @@ func (*handler) New(host core.Host, cache core.AccountLoader, spawnArgs []byte) 
 }
 
 // Pass the transaction into the VM for execution.
-func (*handler) Exec(host core.Host, loader core.AccountLoader, updater core.AccountUpdater, payload []byte) ([]byte, int64, error) {
+func (*handler) Exec(
+	host core.Host,
+	loader core.AccountLoader,
+	updater core.AccountUpdater,
+	payload []byte,
+) ([]byte, int64, error) {
 	// Load the template code
 	templateAccount, err := loader.Get(host.TemplateAddress())
 	if err != nil {
 		return []byte{}, 0, fmt.Errorf("failed to load template account: %w", err)
 	} else if len(templateAccount.State) == 0 {
-		return []byte{}, 0, fmt.Errorf("template account state is empty")
+		return []byte{}, 0, errors.New("template account state is empty")
 	}
 
 	// Construct the context
@@ -86,7 +92,7 @@ func (*handler) Exec(host core.Host, loader core.AccountLoader, updater core.Acc
 	// so it can short-circuit execution if the amount is exceeded.
 	maxgas := int64(host.MaxGas())
 	if maxgas < 0 {
-		return []byte{}, 0, fmt.Errorf("gas limit exceeds maximum int64 value")
+		return []byte{}, 0, errors.New("gas limit exceeds maximum int64 value")
 	}
 	return vmhost.Execute(
 		host.Layer(),

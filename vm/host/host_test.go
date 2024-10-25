@@ -1,4 +1,4 @@
-package vm
+package host
 
 import (
 	"encoding/binary"
@@ -17,14 +17,14 @@ import (
 func getHost(t *testing.T) (*Host, *core.StagedCache) {
 	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
 	ctx := &core.Context{Loader: cache}
-	staticContext := StaticContext{
-		principal:   types.Address{1, 2, 3, 4},
-		destination: types.Address{5, 6, 7, 8},
-		nonce:       10,
+	staticContext := core.StaticContext{
+		Principal:   types.Address{1, 2, 3, 4},
+		Destination: types.Address{5, 6, 7, 8},
+		Nonce:       10,
 	}
-	dynamicContext := DynamicContext{
-		template: types.Address{11, 12, 13, 14},
-		callee:   types.Address{15, 16, 17, 18},
+	dynamicContext := core.DynamicContext{
+		Template: types.Address{11, 12, 13, 14},
+		Callee:   types.Address{15, 16, 17, 18},
 	}
 	host, err := NewHost(ctx, cache, cache, staticContext, dynamicContext)
 	require.NoError(t, err)

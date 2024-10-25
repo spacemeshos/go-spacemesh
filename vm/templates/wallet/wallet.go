@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -21,7 +22,7 @@ func New(host core.Host, cache core.AccountLoader, spawnArgs []byte) (*Wallet, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to load template account: %w", err)
 	} else if len(templateAccount.State) == 0 {
-		return nil, fmt.Errorf("template account state is empty")
+		return nil, errors.New("template account state is empty")
 	}
 	templateCode := templateAccount.State
 
@@ -30,7 +31,7 @@ func New(host core.Host, cache core.AccountLoader, spawnArgs []byte) (*Wallet, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to load wallet principal account: %w", err)
 	} else if len(walletAccount.State) == 0 {
-		return nil, fmt.Errorf("wallet account state is empty")
+		return nil, errors.New("wallet account state is empty")
 	}
 	walletState := walletAccount.State
 
@@ -60,12 +61,12 @@ type Wallet struct {
 func (s *Wallet) MaxSpend(spendArgs []byte) (uint64, error) {
 	maxgas := int64(s.host.MaxGas())
 	if maxgas < 0 {
-		return 0, fmt.Errorf("gas limit exceeds maximum int64 value")
+		return 0, errors.New("gas limit exceeds maximum int64 value")
 	}
 
 	// Make sure we have a method selector
 	if len(spendArgs) < 4 {
-		return 0, fmt.Errorf("spendArgs is too short")
+		return 0, errors.New("spendArgs is too short")
 	}
 
 	// Check the method selector
@@ -93,7 +94,7 @@ func (s *Wallet) MaxSpend(spendArgs []byte) (uint64, error) {
 	return maxspend, err
 }
 
-// Verify the transaction signature using the VM
+// Verify the transaction signature using the VM.
 func (s *Wallet) Verify(host core.Host, raw []byte, dec *scale.Decoder) bool {
 	sig := core.Signature{}
 	n, err := sig.DecodeScale(dec)

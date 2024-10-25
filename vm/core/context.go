@@ -1,8 +1,8 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
+	"math"
 
 	"github.com/spacemeshos/go-scale"
 
@@ -10,7 +10,7 @@ import (
 )
 
 // Context serves 2 purposes:
-// - maintains changes to the system state, that will be applied only after succesful execution
+// - maintains changes to the system state, that will be applied only after successful execution
 // - accumulates set of reusable objects and data.
 type Context struct {
 	Registry HandlerRegistry
@@ -36,7 +36,7 @@ type Context struct {
 	consumed uint64
 	// fee is in coins units
 	fee uint64
-	// an amount transfrered to other accounts
+	// an amount transferred to other accounts
 	transferred uint64
 
 	touched []Address
@@ -86,37 +86,16 @@ func (c *Context) Handler() Handler {
 	return c.PrincipalHandler
 }
 
-// Spawn account.
-func (c *Context) Spawn(spawnArgs []byte) error {
-	account, err := c.load(ComputePrincipal(c.Header.TemplateAddress, spawnArgs))
-	if err != nil {
-		return err
-	}
-	if account.TemplateAddress != nil {
-		return ErrSpawned
-	}
-	handler := c.Registry.Get(c.Header.TemplateAddress)
-	if handler == nil {
-		return fmt.Errorf("%w: spawn is called with unknown handler", ErrInternal)
-	}
-	buf := bytes.NewBuffer(nil)
-	// instance, err := handler.New(args)
-	// if err != nil {
-	// 	return fmt.Errorf("%w: %w", ErrMalformed, err)
-	// }
-	// _, err = instance.EncodeScale(scale.NewEncoder(buf))
-	// if err != nil {
-	// 	return fmt.Errorf("%w: %w", ErrInternal, err)
-	// }
-	account.State = buf.Bytes()
-	account.TemplateAddress = &c.Header.TemplateAddress
-	c.change(account)
-	return nil
-}
-
 // Transfer amount to the address after validation passes.
 func (c *Context) Transfer(to Address, amount uint64) error {
 	return c.transfer(&c.PrincipalAccount, to, amount, c.Header.MaxSpend)
+}
+
+func safeAdd(a, b uint64) (uint64, error) {
+	if a > math.MaxUint64-b {
+		return 0, ErrOverflow
+	}
+	return a + b, nil
 }
 
 func (c *Context) transfer(from *Account, to Address, amount, max uint64) error {
@@ -127,17 +106,24 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 	if amount > from.Balance {
 		return ErrNoBalance
 	}
-	if c.transferred+amount > max {
+	if totalTransfer, err := safeAdd(c.transferred, amount); err != nil {
+		return err
+	} else if totalTransfer > max {
 		return fmt.Errorf("%w: %d", ErrMaxSpend, max)
 	}
+
 	// noop. only gas is consumed
 	if from.Address == to {
 		return nil
 	}
 
 	c.transferred += amount
+	if newBalance, err := safeAdd(account.Balance, amount); err != nil {
+		return err
+	} else {
+		account.Balance = newBalance
+	}
 	from.Balance -= amount
-	account.Balance += amount
 	c.change(account)
 	return nil
 }
