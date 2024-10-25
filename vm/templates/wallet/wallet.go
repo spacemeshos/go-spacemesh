@@ -155,7 +155,3 @@ func (s *Wallet) BaseGas() uint64 {
 func (s *Wallet) LoadGas() uint64 {
 	return LoadGas()
 }
-
-func (s *Wallet) ExecGas() uint64 {
-	return ExecGas()
-}

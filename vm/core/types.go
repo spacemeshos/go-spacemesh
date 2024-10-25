@@ -58,9 +58,6 @@ type Template interface {
 	BaseGas() uint64
 	// LoadGas is a cost to load account from disk.
 	LoadGas() uint64
-	// TODO(lane): update to use the VM
-	// ExecGas is a cost to execution a method.
-	ExecGas() uint64
 	// Verify security of the transaction.
 	Verify(Host, []byte, *scale.Decoder) bool
 }

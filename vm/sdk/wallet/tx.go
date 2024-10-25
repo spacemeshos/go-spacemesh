@@ -29,15 +29,9 @@ func encode(fields ...scale.Encodable) []byte {
 	return buf.Bytes()
 }
 
-// SelfSpawn creates a self-spawn transaction.
-func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
-	return Spawn(pk, wallet.TemplateAddress, nonce, opts...)
-}
-
 // Spawn creates a spawn transaction.
 func Spawn(
 	pk signing.PrivateKey,
-	template core.Address,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) []byte {
@@ -61,7 +55,7 @@ func Spawn(
 	principal := core.ComputePrincipal(wallet.TemplateAddress, athenaPayload)
 	payload := core.Payload(athenaPayload)
 
-	tx := encode(&sdk.TxVersion, &principal, &template, &meta, &payload)
+	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
 
 	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)

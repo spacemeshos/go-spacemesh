@@ -508,76 +508,74 @@ func parse(
 	}
 
 	var (
-		templateAddress *core.Address
+		isSpawn         bool
+		templateAddress core.Address
 	)
 
-	// Check if principal has been spawned
-	isSpawn := false
-	if principalAccount.TemplateAddress != nil {
-		// Principal is already spawned. Use its handler.
+	// There are three cases to consider:
+	// 1. Principal account does not exist at all (and has no balance). In this case, we can fail
+	// the tx immediately.
+	// 2. Principal account exists, and is spawned. In this case, we use the principal account
+	// template.
+	// 3. Principal account exists as a stub with a nonzero balance, but has not been spawned. In
+	// this case, we assume the tx is a self-spawn for the principal, and check that the calculated
+	// principal matches.
+
+	// NOTE: Athena currently does not allow a tx with principal A to directly call a method on
+	// template B where A != B. That will be handled by "proxied calls", where the target template
+	// is passed not explicitly as part of the tx, but implicitly in the args. This simplifies the
+	// logic here considerably.
+
+	if principalAccount.Address == (types.Address{}) {
+		// case 1: principal account does not exist at all
+		return nil, nil, fmt.Errorf("%w: principal account %s does not exist", core.ErrMalformed, principal)
+	} else if principalAccount.TemplateAddress != nil {
+		// case 2: principal account exists and is spawned
+		// attempt to load its template handler
+		// Note: the Wallet template is currently the only supported template, so we could skip this
+		// step and hardcode it here. But this is written in a more future-proof fashion, since we
+		// intend to add support for multiple templates soon.
 		ctx.PrincipalHandler = reg.Get(*principalAccount.TemplateAddress)
 		if ctx.PrincipalHandler == nil {
-			return nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *principalAccount.TemplateAddress)
+			return nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, principalAccount.TemplateAddress)
 		}
-		// ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader, principalAccount.State)
-		// if err != nil {
-		// 	return nil, nil, err
-		// }
-		templateAddress = principalAccount.TemplateAddress
-		// handler = ctx.PrincipalHandler
+		templateAddress = *principalAccount.TemplateAddress
 	} else {
-		// the principal isn't spawned yet. check for spawn or self-spawn.
-		// templateAddress = &core.Address{}
-		// if _, err := templateAddress.DecodeScale(decoder); err != nil {
-		// 	return nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
-		// }
-		// for now we can safely assume that the template address is the Wallet template.
-		templateAddress = &wallet.TemplateAddress
-		handler := reg.Get(wallet.TemplateAddress)
-		if handler == nil {
-			return nil, nil, fmt.Errorf("%w: wallet template missing", core.ErrMalformed)
+		// case 3: principal account exists but is not spawned
+		// go ahead and assume it's a self-spawn for a Wallet template
+		ctx.PrincipalHandler = reg.Get(wallet.TemplateAddress)
+		if ctx.PrincipalHandler == nil {
+			return nil, nil, fmt.Errorf("%w: wallet template missing", core.ErrInternal)
 		}
-		// if !handler.IsSpawn(raw) {
-		// 	return nil, nil, core.ErrNotSpawned
-		// }
-		ctx.PrincipalHandler = handler
-
-		// assume for now that this is a spawn operation
+		templateAddress = wallet.TemplateAddress
 		isSpawn = true
 	}
 
-	// now that we have a handler, parse the tx
+	// now that we have a template handler, go ahead and parse the tx
 	output, err := ctx.PrincipalHandler.Parse(decoder)
 	if err != nil {
 		return nil, nil, err
 	}
+	ctx.ParseOutput = output
 
-	if isSpawn {
-		if core.ComputePrincipal(*templateAddress, output.Payload) == principal {
-			// this is a self spawn. if it fails validation - discard it immediately
-			ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader, output.Payload)
-			if err != nil {
-				return nil, nil, err
-			}
-			ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
-		} else if principalAccount.TemplateAddress == nil {
-			return nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
-		} else {
-			target, err := ctx.PrincipalHandler.New(ctx, loader, output.Payload)
-			if err != nil {
-				return nil, nil, err
-			}
-			ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-			ctx.Gas.FixedGas += target.ExecGas()
-		}
-	} else {
-		ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-		ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
+	// in case of a self-spawn, we need to check that the calculated principal matches.
+	// only check this in case of spawn, because otherwise the payload may be for spend not spawn.
+	if isSpawn && core.ComputePrincipal(templateAddress, output.Payload) != principal {
+		return nil, nil, fmt.Errorf("%w: calculated spawn principal does not match %s", core.ErrMalformed, principal)
 	}
+
+	// At this point we've established that the transaction is correctly formed, but we haven't
+	// yet attempted to validate the signature. That happens later in Verify().
+	ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader, output.Payload)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: creating principal handler: %w", core.ErrInternal, err)
+	}
+
+	ctx.Gas.FixedGas = ctx.PrincipalTemplate.LoadGas()
 	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
 
 	ctx.Header.Principal = principal
-	ctx.Header.TemplateAddress = *templateAddress
+	ctx.Header.TemplateAddress = templateAddress
 	ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce

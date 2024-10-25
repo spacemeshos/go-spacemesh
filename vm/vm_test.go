@@ -18,7 +18,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -45,8 +44,7 @@ type testAccount interface {
 	spend(to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte
 	selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte
 
-	spawn(template core.Address, args scale.Encodable, nonce core.Nonce, opts ...sdk.Opt) []byte
-	spawnArgs() scale.Encodable
+	spawn(nonce core.Nonce, opts ...sdk.Opt) []byte
 
 	baseGas() int
 	loadGas() int
@@ -71,22 +69,14 @@ func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonc
 }
 
 func (a *singlesigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
-	return sdkwallet.SelfSpawn(a.pk, nonce, opts...)
+	return sdkwallet.Spawn(a.pk, nonce, opts...)
 }
 
 func (a *singlesigAccount) spawn(
-	template core.Address,
-	args scale.Encodable,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) []byte {
-	return sdkwallet.Spawn(a.pk, template, nonce, opts...)
-}
-
-func (a *singlesigAccount) spawnArgs() scale.Encodable {
-	args := wallet.SpawnArguments{}
-	copy(args.PublicKey[:], signing.Public(a.pk))
-	return &args
+	return sdkwallet.Spawn(a.pk, nonce, opts...)
 }
 
 func (a *singlesigAccount) baseGas() int {
@@ -181,7 +171,7 @@ func (t *tester) selfSpawn(i int, opts ...sdk.Opt) types.RawTx {
 
 func (t *tester) spawn(i, j int, opts ...sdk.Opt) types.RawTx {
 	nonce := t.nextNonce(i)
-	return types.NewRawTx(t.accounts[i].spawn(t.accounts[j].getTemplate(), t.accounts[j].spawnArgs(), nonce, opts...))
+	return types.NewRawTx(t.accounts[i].spawn(nonce, opts...))
 }
 
 func (t *tester) randSpendN(n int, amount uint64) []types.RawTx {
@@ -233,8 +223,7 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 }
 
 func (t *tester) estimateSpawnGas(principal, target int) int {
-	args := t.accounts[target].spawnArgs()
-	tx := t.accounts[principal].spawn(t.accounts[target].getTemplate(), args, 0)
+	tx := t.accounts[principal].spawn(0)
 	gas := t.accounts[principal].baseGas() +
 		t.accounts[target].execGas() +
 		int(core.TxDataGas(len(tx)))
