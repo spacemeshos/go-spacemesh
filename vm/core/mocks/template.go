@@ -78,44 +78,6 @@ func (c *MockTemplateBaseGasCall) DoAndReturn(f func() uint64) *MockTemplateBase
 	return c
 }
 
-// ExecGas mocks base method.
-func (m *MockTemplate) ExecGas() uint64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ExecGas")
-	ret0, _ := ret[0].(uint64)
-	return ret0
-}
-
-// ExecGas indicates an expected call of ExecGas.
-func (mr *MockTemplateMockRecorder) ExecGas() *MockTemplateExecGasCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecGas", reflect.TypeOf((*MockTemplate)(nil).ExecGas))
-	return &MockTemplateExecGasCall{Call: call}
-}
-
-// MockTemplateExecGasCall wrap *gomock.Call
-type MockTemplateExecGasCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockTemplateExecGasCall) Return(arg0 uint64) *MockTemplateExecGasCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockTemplateExecGasCall) Do(f func() uint64) *MockTemplateExecGasCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTemplateExecGasCall) DoAndReturn(f func() uint64) *MockTemplateExecGasCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // LoadGas mocks base method.
 func (m *MockTemplate) LoadGas() uint64 {
 	m.ctrl.T.Helper()

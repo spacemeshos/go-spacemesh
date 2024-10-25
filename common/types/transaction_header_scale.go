@@ -64,6 +64,13 @@ func (t *TxHeader) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Payload, 10000)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -128,6 +135,14 @@ func (t *TxHeader) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.MaxSpend = uint64(field)
+	}
+	{
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 10000)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Payload = field
 	}
 	return total, nil
 }
