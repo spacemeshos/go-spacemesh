@@ -566,7 +566,7 @@ func parse(
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().
-	ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader, output.Payload)
+	ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: creating principal handler: %w", core.ErrInternal, err)
 	}

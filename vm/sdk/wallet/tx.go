@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 
@@ -13,8 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/host"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
-
-	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 )
 
 func encode(fields ...scale.Encodable) []byte {

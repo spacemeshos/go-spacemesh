@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
-
-	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
-
-	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 )
 
 // New returns Wallet instance with SpawnArguments.

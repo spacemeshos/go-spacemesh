@@ -7,19 +7,17 @@ import (
 	"os"
 	"testing"
 
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/core/mocks"
 	"github.com/spacemeshos/go-spacemesh/vm/host"
 	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
-
-	"go.uber.org/mock/gomock"
-
-	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 )
 
 func FuzzVerify(f *testing.F) {

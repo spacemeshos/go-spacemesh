@@ -3,12 +3,12 @@ package wallet
 import (
 	"fmt"
 
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/host"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
-
-	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 )
 
 // Address computes wallet address from the public key.
