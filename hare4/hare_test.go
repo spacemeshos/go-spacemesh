@@ -224,6 +224,7 @@ func (n *node) withPublisher() *node {
 
 func (n *node) withStreamRequester() *node {
 	n.mockStreamRequester = hmock.NewMockstreamRequester(n.ctrl)
+	n.mockStreamRequester.EXPECT().Run(gomock.Any()).Return(nil).AnyTimes()
 	return n
 }
 
@@ -599,6 +600,7 @@ func (cl *lockstepCluster) drainInteractiveMessages() {
 				case <-n.tracer.compactReq:
 				case <-n.tracer.compactResp:
 				case <-done:
+					return
 				}
 			}
 		}()
