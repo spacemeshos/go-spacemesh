@@ -455,7 +455,7 @@ func (r *Request) Parse() (*core.Header, error) {
 	return header, nil
 }
 
-// Verify transaction. Will panic if called without Parse completing successfully.
+// Verify transaction. Will panic if called before Parse completes succcessfully.
 func (r *Request) Verify() bool {
 	if r.ctx == nil {
 		panic("Verify should be called after successful Parse")
@@ -509,42 +509,51 @@ func parse(
 
 	var (
 		templateAddress *core.Address
-		handler         core.Handler
 	)
 
+	// Check if principal has been spawned
+	isSpawn := false
 	if principalAccount.TemplateAddress != nil {
+		// Principal is already spawned. Use its handler.
 		ctx.PrincipalHandler = reg.Get(*principalAccount.TemplateAddress)
 		if ctx.PrincipalHandler == nil {
 			return nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *principalAccount.TemplateAddress)
 		}
-		ctx.PrincipalTemplate, err = ctx.PrincipalHandler.Load(principalAccount.State)
-		if err != nil {
-			return nil, nil, err
-		}
+		// ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader, principalAccount.State)
+		// if err != nil {
+		// 	return nil, nil, err
+		// }
 		templateAddress = principalAccount.TemplateAddress
-		handler = ctx.PrincipalHandler
+		// handler = ctx.PrincipalHandler
 	} else {
 		// the principal isn't spawned yet. check for spawn or self-spawn.
-		templateAddress = &core.Address{}
-		if _, err := templateAddress.DecodeScale(decoder); err != nil {
-			return nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
-		}
-		handler = reg.Get(*templateAddress)
+		// templateAddress = &core.Address{}
+		// if _, err := templateAddress.DecodeScale(decoder); err != nil {
+		// 	return nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
+		// }
+		// for now we can safely assume that the template address is the Wallet template.
+		templateAddress = &wallet.TemplateAddress
+		handler := reg.Get(wallet.TemplateAddress)
 		if handler == nil {
-			return nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
+			return nil, nil, fmt.Errorf("%w: wallet template missing", core.ErrMalformed)
 		}
-		if !handler.IsSpawn(raw) {
-			return nil, nil, core.ErrNotSpawned
-		}
+		// if !handler.IsSpawn(raw) {
+		// 	return nil, nil, core.ErrNotSpawned
+		// }
 		ctx.PrincipalHandler = handler
+
+		// assume for now that this is a spawn operation
+		isSpawn = true
 	}
 
+	// now that we have a handler, parse the tx
 	output, err := ctx.PrincipalHandler.Parse(decoder)
 	if err != nil {
 		return nil, nil, err
 	}
-	if handler.IsSpawn(raw) {
-		if core.ComputePrincipal(*templateAddress, raw) == principal {
+
+	if isSpawn {
+		if core.ComputePrincipal(*templateAddress, output.Payload) == principal {
 			// this is a self spawn. if it fails validation - discard it immediately
 			ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader, output.Payload)
 			if err != nil {
@@ -554,7 +563,7 @@ func parse(
 		} else if principalAccount.TemplateAddress == nil {
 			return nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself", core.ErrNotSpawned)
 		} else {
-			target, err := handler.New(ctx, loader, output.Payload)
+			target, err := ctx.PrincipalHandler.New(ctx, loader, output.Payload)
 			if err != nil {
 				return nil, nil, err
 			}

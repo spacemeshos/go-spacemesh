@@ -51,13 +51,6 @@ func (*handler) New(host core.Host, cache core.AccountLoader, spawnArgs []byte) 
 	return New(host, cache, spawnArgs)
 }
 
-// Load single sig wallet from stored state.
-func (*handler) Load(state []byte) (core.Template, error) {
-	// TODO(lane): pass blob into VM to instantiate the template instance (program)
-	var wallet Wallet
-	return &wallet, nil
-}
-
 // Pass the transaction into the VM for execution.
 func (*handler) Exec(host core.Host, loader core.AccountLoader, updater core.AccountUpdater, payload []byte) ([]byte, int64, error) {
 	// Load the template code
@@ -108,10 +101,4 @@ func (*handler) Exec(host core.Host, loader core.AccountLoader, updater core.Acc
 		0,
 		templateAccount.State,
 	)
-}
-
-func (h *handler) IsSpawn(payload []byte) bool {
-	// TODO(lane): rewrite to use the VM
-	// mock for now
-	return true
 }

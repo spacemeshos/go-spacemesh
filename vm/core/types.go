@@ -43,12 +43,6 @@ type Handler interface {
 
 	// New instantiates Template from spawn arguments.
 	New(Host, AccountLoader, []byte) (Template, error)
-
-	// Load template with stored immutable state.
-	Load([]byte) (Template, error)
-
-	// Whether or not this tx is a spawn transaction.
-	IsSpawn([]byte) bool
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template
