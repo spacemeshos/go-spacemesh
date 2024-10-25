@@ -25,7 +25,7 @@ type TxHeader struct {
 	MaxSpend    uint64
 
 	// Payload is opaque to the host (go-spacemesh), and is passed into and interpreted by the VM.
-	Payload []byte
+	Payload []byte `scale:"max=10000"` // See https://github.com/athenavm/athena/issues/177
 }
 
 // Fee is a MaxGas multiplied by a GasPrice.
