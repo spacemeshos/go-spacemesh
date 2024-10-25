@@ -872,14 +872,31 @@ func deployNode(
 		cmd = append(cmd, flag.Flag())
 	}
 
+	pvcName := fmt.Sprintf("data-%s", id)
+	pvc := corev1.PersistentVolumeClaim(pvcName, ctx.Namespace).
+		WithSpec(corev1.PersistentVolumeClaimSpec().
+			WithStorageClassName("premium-rwo").
+			WithAccessModes(apiv1.ReadWriteOnce).
+			WithResources(corev1.VolumeResourceRequirements().
+				WithRequests(apiv1.ResourceList{
+					apiv1.ResourceStorage: resource.MustParse(ctx.Storage.Size),
+				}),
+			),
+		)
+
+	_, err := ctx.Client.CoreV1().PersistentVolumeClaims(ctx.Namespace).
+		Apply(ctx, pvc, apimetav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return fmt.Errorf("apply pvc %s: %w", pvcName, err)
+	}
+
 	podSpec := corev1.PodSpec().
 		WithNodeSelector(ctx.NodeSelector).
 		WithVolumes(
 			corev1.Volume().WithName("config").
 				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
 			corev1.Volume().WithName("data").
-				WithEmptyDir(corev1.EmptyDirVolumeSource().
-					WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
+				WithPersistentVolumeClaim(corev1.PersistentVolumeClaimVolumeSource().WithClaimName(pvcName)),
 		).
 		WithDNSConfig(corev1.PodDNSConfig().WithOptions(
 			corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
@@ -947,7 +964,7 @@ func deployNode(
 				WithSpec(podSpec),
 			),
 		)
-	_, err := ctx.Client.AppsV1().
+	_, err = ctx.Client.AppsV1().
 		Deployments(ctx.Namespace).
 		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
@@ -997,6 +1014,25 @@ func deployPostService(
 		"-provider", "4294967295", // 0xffffffff = CPU Provider
 		"-yes", // to prevent checks for mainnet compatibility
 	}
+
+	pvcName := fmt.Sprintf("data-%s", id)
+	pvc := corev1.PersistentVolumeClaim(pvcName, ctx.Namespace).
+		WithSpec(corev1.PersistentVolumeClaimSpec().
+			WithStorageClassName("premium-rwo").
+			WithAccessModes(apiv1.ReadWriteOnce).
+			WithResources(corev1.VolumeResourceRequirements().
+				WithRequests(apiv1.ResourceList{
+					apiv1.ResourceStorage: resource.MustParse(ctx.Storage.Size),
+				}),
+			),
+		)
+
+	_, err := ctx.Client.CoreV1().PersistentVolumeClaims(ctx.Namespace).
+		Apply(ctx, pvc, apimetav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return fmt.Errorf("apply pvc %s: %w", pvcName, err)
+	}
+
 	deployment := appsv1.Deployment(id, ctx.Namespace).
 		WithLabels(labels).
 		WithSpec(appsv1.DeploymentSpec().
@@ -1010,24 +1046,18 @@ func deployPostService(
 						WithImage(ctx.PostInitImage).
 						WithImagePullPolicy(apiv1.PullIfNotPresent).
 						WithArgs(initArgs...).
-						WithVolumeMounts(
-							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
-						),
+						WithVolumeMounts(corev1.VolumeMount().WithName("data").WithMountPath("/data")),
 					).
 					WithNodeSelector(ctx.NodeSelector).
-					WithVolumes(
-						corev1.Volume().WithName("data").
-							WithEmptyDir(corev1.EmptyDirVolumeSource().
-								WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
-					).
+					WithVolumes(corev1.Volume().WithName("data").WithPersistentVolumeClaim(
+						corev1.PersistentVolumeClaimVolumeSource().WithClaimName(pvcName),
+					)).
 					WithContainers(corev1.Container().
 						WithName("post-service").
 						WithImage(ctx.PostServiceImage).
 						WithImagePullPolicy(apiv1.PullIfNotPresent).
 						WithArgs(args...).
-						WithVolumeMounts(
-							corev1.VolumeMount().WithName("data").WithMountPath("/data"),
-						).
+						WithVolumeMounts(corev1.VolumeMount().WithName("data").WithMountPath("/data")).
 						WithResources(corev1.ResourceRequirements().
 							WithRequests(smesherResources.Get(ctx.Parameters).Requests).
 							WithLimits(smesherResources.Get(ctx.Parameters).Limits),
@@ -1036,7 +1066,7 @@ func deployPostService(
 				),
 			),
 		)
-	_, err := ctx.Client.AppsV1().
+	_, err = ctx.Client.AppsV1().
 		Deployments(ctx.Namespace).
 		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
 	if err != nil {
