@@ -841,6 +841,10 @@ func deleteNode(ctx *testcontext.Context, id string) error {
 	if err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Delete(ctx, id, apimetav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("deleting configmap %s/%s: %w", ctx.Namespace, id, err)
 	}
+	if err := ctx.Client.CoreV1().PersistentVolumeClaims(ctx.Namespace).
+		Delete(ctx, fmt.Sprintf("data-%s", id), apimetav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("deleting pvc %s: %w", id, err)
+	}
 	if err := ctx.Client.AppsV1().Deployments(ctx.Namespace).
 		Delete(ctx, id, apimetav1.DeleteOptions{}); err != nil {
 		return err
