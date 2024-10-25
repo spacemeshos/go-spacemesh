@@ -16,7 +16,7 @@ import (
 )
 
 // New returns Wallet instance with SpawnArguments.
-func New(host core.Host, cache core.AccountLoader, spawnArgs []byte) (*Wallet, error) {
+func New(host core.Host, cache core.AccountLoader) (*Wallet, error) {
 	// Load the template account
 	templateAccount, err := cache.Get(host.TemplateAddress())
 	if err != nil {
@@ -43,7 +43,7 @@ func New(host core.Host, cache core.AccountLoader, spawnArgs []byte) (*Wallet, e
 
 	// store the pubkey, i.e., the constructor args (aka immutable state) required to instantiate
 	// the wallet program instance in Athena, so we can lazily instantiate it as required.
-	return &Wallet{host, vmhost, templateCode, walletState, spawnArgs}, nil
+	return &Wallet{host, vmhost, templateCode, walletState}, nil
 }
 
 //go:generate scalegen
@@ -54,7 +54,6 @@ type Wallet struct {
 	vmhost       core.VMHost
 	templateCode []byte
 	walletState  []byte
-	spawnArgs    []byte
 }
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.

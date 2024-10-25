@@ -41,8 +41,8 @@ type Handler interface {
 	// Exec dispatches execution request based on the method selector.
 	Exec(Host, AccountLoader, AccountUpdater, []byte) ([]byte, int64, error)
 
-	// New instantiates Template from spawn arguments.
-	New(Host, AccountLoader, []byte) (Template, error)
+	// New instantiates Template from host context.
+	New(Host, AccountLoader) (Template, error)
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template

@@ -48,8 +48,8 @@ func (*handler) Parse(decoder *scale.Decoder) (output core.ParseOutput, err erro
 }
 
 // New instatiates single sig wallet with spawn arguments.
-func (*handler) New(host core.Host, cache core.AccountLoader, spawnArgs []byte) (core.Template, error) {
-	return New(host, cache, spawnArgs)
+func (*handler) New(host core.Host, cache core.AccountLoader) (core.Template, error) {
+	return New(host, cache)
 }
 
 // Pass the transaction into the VM for execution.

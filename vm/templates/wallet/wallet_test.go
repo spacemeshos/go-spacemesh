@@ -30,23 +30,13 @@ func FuzzVerify(f *testing.F) {
 	})
 }
 
-type testWallet struct {
-	*Wallet
-	mockHost   *mocks.MockHost
-	mockVMHost *mocks.MockVMHost
-}
-
 func TestMaxSpend(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	wallet := Wallet{}
-	testWallet := testWallet{}
-	testWallet.Wallet = &wallet
+	testWallet := Wallet{}
 	mockHost := mocks.NewMockHost(ctrl)
 	mockVMHost := mocks.NewMockVMHost(ctrl)
 	testWallet.host = mockHost
-	testWallet.mockHost = mockHost
 	testWallet.vmhost = mockVMHost
-	testWallet.mockVMHost = mockVMHost
 
 	// construct spawn and spend payloads
 	// nothing in the payload after the selector matters
@@ -153,8 +143,6 @@ func TestVerify(t *testing.T) {
 	mockHost := mocks.NewMockHost(ctrl)
 	mockLoader := mocks.NewMockAccountLoader(ctrl)
 
-	spawnPayload, _ := athcon.FromString("athexp_spawn")
-
 	// Times counts the total number of times these methods are called.
 	// Note that wallet.Verify() short-circuits when called on empty input, so it only actually
 	// runs twice.
@@ -179,7 +167,7 @@ func TestVerify(t *testing.T) {
 	// point to the library path
 	os.Setenv("ATHENA_LIB_PATH", "../../../build")
 
-	wallet, err := New(mockHost, mockLoader, append(spawnPayload[:], pubkeyBytes...))
+	wallet, err := New(mockHost, mockLoader)
 	require.NoError(t, err)
 
 	t.Run("Invalid", func(t *testing.T) {

@@ -419,3 +419,41 @@ func (c *MockHostTemplateAddressCall) DoAndReturn(f func() types.Address) *MockH
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// Transfer mocks base method.
+func (m *MockHost) Transfer(arg0 types.Address, arg1 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Transfer", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Transfer indicates an expected call of Transfer.
+func (mr *MockHostMockRecorder) Transfer(arg0, arg1 any) *MockHostTransferCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Transfer", reflect.TypeOf((*MockHost)(nil).Transfer), arg0, arg1)
+	return &MockHostTransferCall{Call: call}
+}
+
+// MockHostTransferCall wrap *gomock.Call
+type MockHostTransferCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostTransferCall) Return(arg0 error) *MockHostTransferCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostTransferCall) Do(f func(types.Address, uint64) error) *MockHostTransferCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostTransferCall) DoAndReturn(f func(types.Address, uint64) error) *MockHostTransferCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
