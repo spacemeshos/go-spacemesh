@@ -81,7 +81,7 @@ func createFetch(tb testing.TB) *testFetch {
 
 	lg := zaptest.NewLogger(tb)
 	fetch, err := NewFetch(
-		datastore.NewCachedDB(statesql.InMemory(), lg),
+		datastore.NewCachedDB(statesql.InMemoryTest(tb), lg),
 		store.New(),
 		nil,
 		WithContext(context.Background()),
@@ -125,7 +125,7 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 func TestFetch_Start(t *testing.T) {
 	lg := zaptest.NewLogger(t)
 	f, err := NewFetch(
-		datastore.NewCachedDB(statesql.InMemory(), lg),
+		datastore.NewCachedDB(statesql.InMemoryTest(t), lg),
 		store.New(),
 		nil,
 		WithContext(context.Background()),
@@ -394,7 +394,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	defer eg.Wait()
 
 	fetcher, err := NewFetch(
-		datastore.NewCachedDB(statesql.InMemory(), lg),
+		datastore.NewCachedDB(statesql.InMemoryTest(t), lg),
 		store.New(),
 		h,
 		WithContext(ctx),

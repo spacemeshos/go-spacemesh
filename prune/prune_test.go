@@ -18,7 +18,7 @@ import (
 func TestPrune(t *testing.T) {
 	types.SetLayersPerEpoch(3)
 
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	current := types.LayerID(10)
 
 	lyrProps := make([]*types.Proposal, 0, current)

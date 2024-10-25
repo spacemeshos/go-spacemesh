@@ -141,7 +141,7 @@ func HareMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *wire.Malfea
 func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	srv := NewMeshService(
 		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		meshAPIMock,
@@ -192,7 +192,7 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	srv := NewMeshService(
 		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		meshAPIMock,
@@ -300,7 +300,7 @@ func (t *ConStateAPIMockInstrumented) GetLayerStateRoot(types.LayerID) (types.Ha
 func TestReadLayer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	srv := NewMeshService(
 		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
 		&MeshAPIMockInstrumented{},

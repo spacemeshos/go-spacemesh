@@ -66,7 +66,7 @@ func TestJsonApi(t *testing.T) {
 	conStateAPI := NewMockconservativeState(ctrl)
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build)
 	svc2 := NewMeshService(
-		datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t)),
+		datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t)),
 		meshAPIMock,
 		conStateAPI,
 		genTime,

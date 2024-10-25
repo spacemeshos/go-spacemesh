@@ -13,7 +13,7 @@ import (
 )
 
 func TestSyncState(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	for epoch := types.EpochID(1); epoch < types.EpochID(5); epoch++ {
 		state, err := GetSyncState(db, epoch)
 		require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestSyncState(t *testing.T) {
 }
 
 func TestNoRedundantUpdates(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	epochState := EpochSyncState{}
 	epochState[types.ATXID{1}] = &IDSyncState{Tries: 0}
 	epochState[types.ATXID{2}] = &IDSyncState{Tries: 0}
@@ -88,7 +88,7 @@ func TestNoRedundantUpdates(t *testing.T) {
 }
 
 func TestRequestTime(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	for epoch := types.EpochID(1); epoch < types.EpochID(5); epoch++ {
 		timestamp, total, downloaded, err := GetRequest(db, epoch)
 		require.ErrorIs(t, err, sql.ErrNotFound)
@@ -111,7 +111,7 @@ func TestRequestTime(t *testing.T) {
 }
 
 func TestClear(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	// add some state
 	for epoch := types.EpochID(1); epoch < types.EpochID(5); epoch++ {
 		states := EpochSyncState{}

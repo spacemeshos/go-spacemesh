@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"testing"
 	"time"
 
 	"go.uber.org/zap"
@@ -29,8 +30,8 @@ const (
 	units     = 10
 )
 
-func newCore(rng *rand.Rand, id string, logger *zap.Logger) *core {
-	cdb := datastore.NewCachedDB(statesql.InMemory(), logger)
+func newCore(tb testing.TB, rng *rand.Rand, id string, logger *zap.Logger) *core {
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), logger)
 	sig, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	if err != nil {
 		panic(err)

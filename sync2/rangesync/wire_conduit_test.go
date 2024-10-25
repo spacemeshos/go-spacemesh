@@ -99,25 +99,25 @@ func (fr *fakeRequester) StreamRequest(
 	return callback(ctx, clientStream)
 }
 
-func runRequester(t *testing.T, r rangesync.Requester) context.Context {
+func runRequester(tb testing.TB, r rangesync.Requester) context.Context {
 	var eg errgroup.Group
 	ctx, cancel := context.WithCancel(context.Background())
 	eg.Go(func() error {
 		return r.Run(ctx)
 	})
-	t.Cleanup(func() {
+	tb.Cleanup(func() {
 		cancel()
 		eg.Wait()
 	})
 	return ctx
 }
 
-func getMsgs(t *testing.T, c rangesync.Conduit, n int) []rangesync.SyncMessage {
+func getMsgs(tb testing.TB, c rangesync.Conduit, n int) []rangesync.SyncMessage {
 	msgs := make([]rangesync.SyncMessage, n)
 	for i := 0; i < n; i++ {
 		var err error
 		msgs[i], err = c.NextMessage()
-		require.NoError(t, err)
+		require.NoError(tb, err)
 	}
 	return msgs
 }

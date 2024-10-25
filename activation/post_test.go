@@ -369,7 +369,7 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
 
 	logger := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(statesql.InMemory(), logger)
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), logger)
 	mgr, err := NewPostSetupManager(DefaultPostConfig(), logger, cdb, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 

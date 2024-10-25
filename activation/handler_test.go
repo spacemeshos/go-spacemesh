@@ -756,11 +756,11 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 }
 
 func newInitialATXv1(
-	t testing.TB,
+	tb testing.TB,
 	goldenATXID types.ATXID,
 	opts ...func(*wire.ActivationTxV1),
 ) *wire.ActivationTxV1 {
-	t.Helper()
+	tb.Helper()
 	nonce := uint64(999)
 	poetRef := types.RandomHash()
 	atx := &wire.ActivationTxV1{
@@ -772,7 +772,7 @@ func newInitialATXv1(
 				CommitmentATXID:  &goldenATXID,
 				InitialPost:      &wire.PostV1{},
 			},
-			NIPost:   newNIPosV1tWithPoet(t, poetRef.Bytes()),
+			NIPost:   newNIPosV1tWithPoet(tb, poetRef.Bytes()),
 			VRFNonce: &nonce,
 			Coinbase: types.GenerateAddress([]byte("aaaa")),
 			NumUnits: 100,
@@ -785,11 +785,11 @@ func newInitialATXv1(
 }
 
 func newChainedActivationTxV1(
-	t testing.TB,
+	tb testing.TB,
 	prev *wire.ActivationTxV1,
 	pos types.ATXID,
 ) *wire.ActivationTxV1 {
-	t.Helper()
+	tb.Helper()
 	poetRef := types.RandomHash()
 	return &wire.ActivationTxV1{
 		InnerActivationTxV1: wire.InnerActivationTxV1{
@@ -798,7 +798,7 @@ func newChainedActivationTxV1(
 				PublishEpoch:     prev.PublishEpoch + 1,
 				PositioningATXID: pos,
 			},
-			NIPost:   newNIPosV1tWithPoet(t, poetRef.Bytes()),
+			NIPost:   newNIPosV1tWithPoet(tb, poetRef.Bytes()),
 			Coinbase: prev.Coinbase,
 			NumUnits: prev.NumUnits,
 		},

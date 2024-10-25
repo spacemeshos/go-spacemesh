@@ -32,6 +32,7 @@ import (
 type v2TestHandler struct {
 	*HandlerV2
 
+	tb testing.TB
 	handlerMocks
 }
 
@@ -65,6 +66,7 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 			tortoise:        mocks.mtortoise,
 			malPublisher:    mocks.mMalPublish,
 		},
+		tb:           tb,
 		handlerMocks: mocks,
 	}
 }
@@ -183,23 +185,23 @@ func (h *handlerMocks) expectMergedAtxV2(
 	h.expectStoreAtxV2(atx)
 }
 
-func (h *v2TestHandler) createAndProcessInitial(t testing.TB, sig *signing.EdSigner) *wire.ActivationTxV2 {
-	t.Helper()
-	atx := newInitialATXv2(t, h.handlerMocks.goldenATXID)
+func (h *v2TestHandler) createAndProcessInitial(sig *signing.EdSigner) *wire.ActivationTxV2 {
+	h.tb.Helper()
+	atx := newInitialATXv2(h.tb, h.handlerMocks.goldenATXID)
 	atx.Sign(sig)
-	err := h.processInitial(t, atx)
-	require.NoError(t, err)
+	err := h.processInitial(atx)
+	require.NoError(h.tb, err)
 	return atx
 }
 
-func (h *v2TestHandler) processInitial(t testing.TB, atx *wire.ActivationTxV2) error {
-	t.Helper()
+func (h *v2TestHandler) processInitial(atx *wire.ActivationTxV2) error {
+	h.tb.Helper()
 	h.expectInitialAtxV2(atx)
 	return h.processATX(context.Background(), peer.ID("peer"), atx, time.Now())
 }
 
-func (h *v2TestHandler) processSoloAtx(t testing.TB, atx *wire.ActivationTxV2) error {
-	t.Helper()
+func (h *v2TestHandler) processSoloAtx(atx *wire.ActivationTxV2) error {
+	h.tb.Helper()
 	h.expectAtxV2(atx)
 	return h.processATX(context.Background(), peer.ID("peer"), atx, time.Now())
 }
@@ -491,7 +493,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
 
-		prev := atxHandler.createAndProcessInitial(t, sig)
+		prev := atxHandler.createAndProcessInitial(sig)
 
 		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), prev.ID())
 		atx.Sign(sig)
@@ -536,7 +538,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 	t.Run("second ATX, increases space (nonce valid)", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
-		prev := atxHandler.createAndProcessInitial(t, sig)
+		prev := atxHandler.createAndProcessInitial(sig)
 
 		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), golden)
 		atx.NiPosts[0].Posts[0].NumUnits = prev.TotalNumUnits() * 10
@@ -555,7 +557,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 	t.Run("second ATX, increases space (nonce invalid)", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
-		prev := atxHandler.createAndProcessInitial(t, sig)
+		prev := atxHandler.createAndProcessInitial(sig)
 
 		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), golden)
 		atx.NiPosts[0].Posts[0].NumUnits = prev.TotalNumUnits() * 10
@@ -581,7 +583,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 	t.Run("second ATX, decreases space", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
-		prev := atxHandler.createAndProcessInitial(t, sig)
+		prev := atxHandler.createAndProcessInitial(sig)
 
 		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), golden)
 		atx.VRFNonce = uint64(123)
@@ -628,7 +630,7 @@ func marryIDs(
 	}}
 
 	for _, signer := range signers[1:] {
-		atx := atxHandler.createAndProcessInitial(tb, signer)
+		atx := atxHandler.createAndProcessInitial(signer)
 		other = append(other, atx)
 		mATX.Marriages = append(mATX.Marriages, wire.MarriageCertificate{
 			ReferenceAtx: atx.ID(),
@@ -1325,7 +1327,7 @@ func Test_ValidateMarriages(t *testing.T) {
 		for range 5 {
 			signer, err := signing.NewEdSigner()
 			require.NoError(t, err)
-			atx := atxHandler.createAndProcessInitial(t, signer)
+			atx := atxHandler.createAndProcessInitial(signer)
 			otherIds = append(otherIds, marriedId{signer, atx})
 		}
 
@@ -1341,7 +1343,7 @@ func Test_ValidateMarriages(t *testing.T) {
 		}
 		marriage.Sign(sig)
 
-		err := atxHandler.processInitial(t, marriage)
+		err := atxHandler.processInitial(marriage)
 		require.NoError(t, err)
 
 		atx := newSoloATXv2(t, 0, marriage.ID(), golden)
@@ -1476,7 +1478,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 	t.Run("previous ATX too new", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
 
-		prev := atxHandler.createAndProcessInitial(t, sig)
+		prev := atxHandler.createAndProcessInitial(sig)
 
 		atx := newSoloATXv2(t, 0, prev.ID(), golden)
 		atx.Sign(sig)
@@ -1489,7 +1491,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		prev := atxHandler.createAndProcessInitial(t, otherSig)
+		prev := atxHandler.createAndProcessInitial(otherSig)
 
 		atx := newSoloATXv2(t, 2, prev.ID(), golden)
 		atx.Sign(sig)
@@ -1601,11 +1603,11 @@ func Test_Marriages(t *testing.T) {
 
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
+		othersAtx := atxHandler.createAndProcessInitial(otherSig)
 
 		othersSecondAtx := newSoloATXv2(t, othersAtx.PublishEpoch+1, othersAtx.ID(), othersAtx.ID())
 		othersSecondAtx.Sign(otherSig)
-		err = atxHandler.processSoloAtx(t, othersSecondAtx)
+		err = atxHandler.processSoloAtx(othersSecondAtx)
 		require.NoError(t, err)
 
 		atx := newInitialATXv2(t, golden)
@@ -1638,7 +1640,7 @@ func Test_Marriages(t *testing.T) {
 		// otherSig2 cannot marry sig, trying to extend its set.
 		otherSig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		others2Atx := atxHandler.createAndProcessInitial(t, otherSig2)
+		others2Atx := atxHandler.createAndProcessInitial(otherSig2)
 		atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
 		atx2.Marriages = []wire.MarriageCertificate{
 			{
@@ -1692,7 +1694,7 @@ func Test_Marriages(t *testing.T) {
 		// otherSig2 cannot marry sig, trying to extend its set.
 		otherSig2, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		others2Atx := atxHandler.createAndProcessInitial(t, otherSig2)
+		others2Atx := atxHandler.createAndProcessInitial(otherSig2)
 		atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
 		atx2.Marriages = []wire.MarriageCertificate{
 			{
@@ -1721,7 +1723,7 @@ func Test_Marriages(t *testing.T) {
 
 		otherSig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
+		othersAtx := atxHandler.createAndProcessInitial(otherSig)
 
 		atx := newInitialATXv2(t, golden)
 		atx.Marriages = []wire.MarriageCertificate{
@@ -1751,7 +1753,7 @@ func Test_MarryingMalicious(t *testing.T) {
 	tc := func(malicious types.NodeID) func(t *testing.T) {
 		return func(t *testing.T) {
 			atxHandler := newV2TestHandler(t, golden)
-			othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
+			othersAtx := atxHandler.createAndProcessInitial(otherSig)
 
 			atx := newInitialATXv2(t, golden)
 			atx.Marriages = []wire.MarriageCertificate{
@@ -1799,7 +1801,7 @@ func TestContextualValidation_DoublePost(t *testing.T) {
 	// marry
 	otherSig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	othersAtx := atxHandler.createAndProcessInitial(t, otherSig)
+	othersAtx := atxHandler.createAndProcessInitial(otherSig)
 
 	mATX := newInitialATXv2(t, golden)
 	mATX.Marriages = []wire.MarriageCertificate{
@@ -1941,8 +1943,8 @@ func Test_CalculatingTicks(t *testing.T) {
 	require.EqualValues(t, 100, ns.minTicks())
 }
 
-func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
-	t.Helper()
+func newInitialATXv2(tb testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
+	tb.Helper()
 	atx := &wire.ActivationTxV2{
 		PositioningATX: golden,
 		Initial:        &wire.InitialAtxPartsV2{CommitmentATX: golden},
@@ -1963,8 +1965,8 @@ func newInitialATXv2(t testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
 	return atx
 }
 
-func newSoloATXv2(t testing.TB, publish types.EpochID, prev, pos types.ATXID) *wire.ActivationTxV2 {
-	t.Helper()
+func newSoloATXv2(tb testing.TB, publish types.EpochID, prev, pos types.ATXID) *wire.ActivationTxV2 {
+	tb.Helper()
 
 	atx := &wire.ActivationTxV2{
 		PublishEpoch:   publish,

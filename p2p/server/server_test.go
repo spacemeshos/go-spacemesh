@@ -29,10 +29,10 @@ func (hw *hostWrapper) PeerInfo() peerinfo.PeerInfo {
 	return hw.pi
 }
 
-func wrapHost(t *testing.T, h host.Host) Host {
+func wrapHost(tb testing.TB, h host.Host) Host {
 	pt := peerinfo.NewPeerInfoTracker()
 	pt.Start(h.Network())
-	t.Cleanup(pt.Stop)
+	tb.Cleanup(pt.Stop)
 	return &hostWrapper{Host: h, pi: pt}
 }
 

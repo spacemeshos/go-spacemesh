@@ -42,8 +42,8 @@ func edata(ids ...string) *fetch.EpochData {
 }
 
 func newTester(tb testing.TB, cfg Config) *tester {
-	localdb := localsql.InMemory()
-	db := statesql.InMemory()
+	localdb := localsql.InMemoryTest(tb)
+	db := statesql.InMemoryTest(tb)
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
 	syncer := New(fetcher, db, localdb, WithConfig(cfg), WithLogger(zaptest.NewLogger(tb)))

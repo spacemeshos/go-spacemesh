@@ -103,7 +103,7 @@ func verifyUpdate(tb testing.TB, data []byte, epoch types.EpochID, expBeacon str
 func TestGenerator_Generate(t *testing.T) {
 	t.Parallel()
 	targetEpoch := types.EpochID(3)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
 	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
 	t.Cleanup(cleanup)
@@ -168,7 +168,7 @@ func TestGenerator_Generate(t *testing.T) {
 
 func TestGenerator_Generate_CheckBitcoinAPIResilience(t *testing.T) {
 	targetEpoch := types.EpochID(3)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
 	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
 	t.Cleanup(cleanup)
@@ -240,7 +240,7 @@ func TestGenerator_Generate_CheckBitcoinAPIResilience(t *testing.T) {
 func TestGenerator_CheckAPI(t *testing.T) {
 	t.Parallel()
 	targetEpoch := types.EpochID(3)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lg := zaptest.NewLogger(t)
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
 	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, lg))

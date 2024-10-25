@@ -14,14 +14,14 @@ import (
 )
 
 func testTransactions(
-	t *testing.T,
+	tb testing.TB,
 	tctx *testcontext.Context,
 	cl *cluster.Cluster,
 	sendFor uint32,
 ) {
 	var (
 		// start sending transactions after two layers or after genesis
-		first       = max(currentLayer(tctx, t, cl.Client(0))+2, 8)
+		first       = max(currentLayer(tctx, tb, cl.Client(0))+2, 8)
 		stopSending = first + sendFor
 		batch       = 10
 		amount      = 100
@@ -41,12 +41,12 @@ func testTransactions(
 		tctx,
 		&pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}},
 	)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	eg, ctx := errgroup.WithContext(tctx)
 	require.NoError(
-		t,
+		tb,
 		sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending, receiver, batch, amount),
 	)
 	txs := make([][]*pb.Transaction, cl.Total())
@@ -67,13 +67,13 @@ func testTransactions(
 			},
 		)
 	}
-	require.NoError(t, eg.Wait())
+	require.NoError(tb, eg.Wait())
 
 	reference := txs[0]
 	for i, tested := range txs[1:] {
-		require.Len(t, tested, len(reference))
+		require.Len(tb, tested, len(reference))
 		for j := range reference {
-			require.Equal(t, reference[j], tested[j], "%s", cl.Client(i+1).Name)
+			require.Equal(tb, reference[j], tested[j], "%s", cl.Client(i+1).Name)
 		}
 	}
 
@@ -85,7 +85,7 @@ func testTransactions(
 			tctx,
 			&pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}},
 		)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 		after := response.AccountWrapper.StateCurrent.Balance
 		tctx.Log.Debugw("receiver state",
 			"before", before.Value,
@@ -93,7 +93,7 @@ func testTransactions(
 			"expected-diff", diff,
 			"diff", after.Value-before.Value,
 		)
-		require.Equal(t, int(before.Value)+diff,
+		require.Equal(tb, int(before.Value)+diff,
 			int(response.AccountWrapper.StateCurrent.Balance.Value), "client=%s", client.Name)
 	}
 }

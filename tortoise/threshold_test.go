@@ -165,7 +165,7 @@ func TestReferenceHeight(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := statesql.InMemory()
+			db := statesql.InMemoryTest(t)
 			for i, height := range tc.heights {
 				atx := &types.ActivationTx{
 					PublishEpoch: types.EpochID(tc.epoch) - 1,

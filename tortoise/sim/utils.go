@@ -3,6 +3,7 @@ package sim
 import (
 	"math/rand"
 	"path/filepath"
+	"testing"
 
 	"go.uber.org/zap"
 
@@ -15,13 +16,13 @@ const (
 	atxpath = "atx"
 )
 
-func newCacheDB(logger *zap.Logger, conf config) *datastore.CachedDB {
+func newCacheDB(tb testing.TB, logger *zap.Logger, conf config) *datastore.CachedDB {
 	var (
 		db  sql.StateDatabase
 		err error
 	)
 	if len(conf.Path) == 0 {
-		db = statesql.InMemory()
+		db = statesql.InMemoryTest(tb)
 	} else {
 		db, err = statesql.Open(filepath.Join(conf.Path, atxpath), sql.WithMigrationsDisabled())
 		if err != nil {

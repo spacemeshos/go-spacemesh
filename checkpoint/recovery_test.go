@@ -120,13 +120,13 @@ func verifyDbContent(tb testing.TB, db sql.StateDatabase) {
 	require.Empty(tb, extra)
 }
 
-func checkpointServer(t testing.TB) string {
+func checkpointServer(tb testing.TB) string {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /snapshot-15", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(checkpointData))
 	})
 	ts := httptest.NewServer(mux)
-	t.Cleanup(ts.Close)
+	tb.Cleanup(ts.Close)
 	return ts.URL
 }
 
@@ -169,8 +169,8 @@ func TestRecover(t *testing.T) {
 			}
 			bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-			db := statesql.InMemory()
-			localDB := localsql.InMemory()
+			db := statesql.InMemoryTest(t)
+			localDB := localsql.InMemoryTest(t)
 			data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
@@ -210,8 +210,8 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 	}
 	bsdir := filepath.Join(cfg.DataDir, bootstrap.DirName)
 	require.NoError(t, fs.MkdirAll(bsdir, 0o700))
-	db := statesql.InMemory()
-	localDB := localsql.InMemory()
+	db := statesql.InMemoryTest(t)
+	localDB := localsql.InMemoryTest(t)
 	types.SetEffectiveGenesis(0)
 	require.NoError(t, recovery.SetCheckpoint(db, types.LayerID(recoverLayer)))
 	preserve, err := checkpoint.RecoverWithDb(ctx, zaptest.NewLogger(t), db, localDB, fs, cfg)

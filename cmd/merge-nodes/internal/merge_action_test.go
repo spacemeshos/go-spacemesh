@@ -24,9 +24,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
-func oldSchema(t *testing.T) *sql.Schema {
+func oldSchema(tb testing.TB) *sql.Schema {
 	schema, err := localsql.Schema()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	schema.Migrations = schema.Migrations[:2]
 	return schema
 }

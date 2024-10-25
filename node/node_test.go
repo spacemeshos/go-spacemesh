@@ -189,19 +189,19 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(expected2, str)
 }
 
-func marshalProto(t *testing.T, msg proto.Message) []byte {
+func marshalProto(tb testing.TB, msg proto.Message) []byte {
 	buf, err := protojson.Marshal(msg)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return buf
 }
 
-func callEndpoint(t *testing.T, url string, payload []byte) ([]byte, int) {
+func callEndpoint(tb testing.TB, url string, payload []byte) ([]byte, int) {
 	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
-	require.NoError(t, err)
-	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	require.NoError(tb, err)
+	require.Equal(tb, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
+	require.NoError(tb, err)
+	require.NoError(tb, resp.Body.Close())
 
 	return buf, resp.StatusCode
 }
