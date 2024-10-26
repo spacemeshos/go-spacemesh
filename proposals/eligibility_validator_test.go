@@ -544,12 +544,12 @@ func TestEligibilityValidator(t *testing.T) {
 					return nil
 				}
 				return &tortoise.BallotData{
-					ID:           ballot.ID(),
-					Layer:        ballot.Layer,
-					ATXID:        ballot.AtxID,
-					Smesher:      ballot.SmesherID,
-					Beacon:       ballot.EpochData.Beacon,
-					Eligiblities: ballot.EpochData.EligibilityCount,
+					ID:            ballot.ID(),
+					Layer:         ballot.Layer,
+					ATXID:         ballot.AtxID,
+					Smesher:       ballot.SmesherID,
+					Beacon:        ballot.EpochData.Beacon,
+					Eligibilities: ballot.EpochData.EligibilityCount,
 				}
 			}).AnyTimes()
 

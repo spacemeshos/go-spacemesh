@@ -2,7 +2,21 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## v1.7.6
+
+### Upgrade information
+
+The previous version of go-spacemesh introduced a bug into the code that handles incoming ATXs. This bug would cause
+the node to store invalid data in the database and could lead to a node disagreeing about the state of the network with
+other nodes. This version fixes the bug. If you are running v1.7.5 you should upgrade to v1.7.6 as soon as possible and
+rebuild your `state.db`, either via quicksync, from a backup from before you upgraded or by full syncing from genesis.
+
+### Improvements
+
+* [#6398](https://github.com/spacemeshos/go-spacemesh/pull/6398) Fixed a bug where the node would store invalid
+  information about ATXs in the database.
+
+## v1.7.5
 
 ### Upgrade information
 
@@ -10,14 +24,13 @@ New event types introduced in the API of the node, see [API #382](https://github
 previously existing events where renamed. Old events were marked as deprecated. Please update your automations to use
 new event types.
 
-### Highlights
-
-### Features
-
 ### Improvements
 
 * [#6378](https://github.com/spacemeshos/go-spacemesh/pull/6387) Improved handling of malicious identities. This reduces
   the number of DB queries needed during ATX validation.
+
+* [#6386](https://github.com/spacemeshos/go-spacemesh/pull/6386) The API of the node now has its own DB connection pool
+  to reduce the load on the main DB connection pool.
 
 * [#6387](https://github.com/spacemeshos/go-spacemesh/pull/6387) Fix an issue were in rare cases invalid proofs for
   malicious identities were created.

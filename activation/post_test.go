@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -369,7 +370,8 @@ func newTestPostManager(tb testing.TB) *testPostManager {
 	syncer.EXPECT().RegisterForATXSynced().AnyTimes().Return(synced)
 
 	logger := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(statesql.InMemory(), logger)
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), logger)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	mgr, err := NewPostSetupManager(DefaultPostConfig(), logger, cdb, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 

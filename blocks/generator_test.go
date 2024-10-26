@@ -60,9 +60,9 @@ type testGenerator struct {
 	hareCh     chan hare4.ConsensusOutput
 }
 
-func createTestGenerator(t *testing.T) *testGenerator {
+func createTestGenerator(tb testing.TB) *testGenerator {
 	types.SetLayersPerEpoch(3)
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(tb)
 	ch := make(chan hare4.ConsensusOutput, 100)
 	tg := &testGenerator{
 		mockMesh:   mocks.NewMockmeshProvider(ctrl),
@@ -73,8 +73,8 @@ func createTestGenerator(t *testing.T) *testGenerator {
 		hareCh:     ch,
 	}
 	tg.mockMesh.EXPECT().ProcessedLayer().Return(types.LayerID(1)).AnyTimes()
-	lg := zaptest.NewLogger(t)
-	db := statesql.InMemory()
+	lg := zaptest.NewLogger(tb)
+	db := statesql.InMemoryTest(tb)
 	data := atxsdata.New()
 	proposals := store.New()
 	tg.Generator = NewGenerator(
@@ -92,8 +92,8 @@ func createTestGenerator(t *testing.T) *testGenerator {
 	return tg
 }
 
-func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
-	t.Helper()
+func genTx(tb testing.TB, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
+	tb.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount, nonce)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
@@ -124,13 +124,13 @@ func createAndSaveTxs(tb testing.TB, numOfTxs int, db sql.Executor) []types.Tran
 }
 
 func createATXs(
-	t *testing.T,
+	tb testing.TB,
 	data *atxsdata.Data,
 	lid types.LayerID,
 	numATXs int,
 ) ([]*signing.EdSigner, []*types.ActivationTx) {
 	return createModifiedATXs(
-		t,
+		tb,
 		data,
 		lid,
 		numATXs,
@@ -173,7 +173,7 @@ func createModifiedATXs(
 }
 
 func createProposals(
-	t *testing.T,
+	tb testing.TB,
 	db sql.Executor,
 	store *store.Store,
 	layerID types.LayerID,
@@ -182,10 +182,10 @@ func createProposals(
 	activeSet types.ATXIDList,
 	txIDs []types.TransactionID,
 ) []*types.Proposal {
-	t.Helper()
+	tb.Helper()
 	numProposals := len(signers)
 	// make sure proposals have overlapping transactions
-	require.Zero(t, len(txIDs)%numProposals)
+	require.Zero(tb, len(txIDs)%numProposals)
 	pieSize := len(txIDs) / numProposals
 	plist := make([]*types.Proposal, 0, numProposals)
 	for i := 0; i < numProposals; i++ {
@@ -194,14 +194,14 @@ func createProposals(
 		if to > len(txIDs) {
 			to = len(txIDs)
 		}
-		p := createProposal(t, db, store, activeSet, layerID, meshHash, activeSet[i], signers[i], txIDs[from:to], 1)
+		p := createProposal(tb, db, store, activeSet, layerID, meshHash, activeSet[i], signers[i], txIDs[from:to], 1)
 		plist = append(plist, p)
 	}
 	return plist
 }
 
 func createProposal(
-	t *testing.T,
+	tb testing.TB,
 	db sql.Executor,
 	store *store.Store,
 	activeSet types.ATXIDList,
@@ -212,7 +212,7 @@ func createProposal(
 	txIDs []types.TransactionID,
 	numEligibility int,
 ) *types.Proposal {
-	t.Helper()
+	tb.Helper()
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
@@ -234,22 +234,22 @@ func createProposal(
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
 	p.SmesherID = signer.NodeID()
-	require.NoError(t, p.Initialize())
-	require.NoError(t, ballots.Add(db, &p.Ballot))
+	require.NoError(tb, p.Initialize())
+	require.NoError(tb, ballots.Add(db, &p.Ballot))
 	store.Add(p)
 	activesets.Add(db, activeSet.Hash(), &types.EpochActiveSet{Set: activeSet})
 	return p
 }
 
-func checkRewards(t *testing.T, atxs []*types.ActivationTx, expWeightPer *big.Rat, rewards []types.AnyReward) {
-	t.Helper()
+func checkRewards(tb testing.TB, atxs []*types.ActivationTx, expWeightPer *big.Rat, rewards []types.AnyReward) {
+	tb.Helper()
 	sort.Slice(atxs, func(i, j int) bool {
 		return bytes.Compare(atxs[i].ID().Bytes(), atxs[j].ID().Bytes()) < 0
 	})
 	for i, r := range rewards {
-		require.Equal(t, atxs[i].ID(), r.AtxID)
+		require.Equal(tb, atxs[i].ID(), r.AtxID)
 		got := r.Weight.ToBigRat()
-		require.Equal(t, expWeightPer, got)
+		require.Equal(tb, expWeightPer, got)
 	}
 }
 
@@ -266,7 +266,7 @@ func Test_StopBeforeStart(t *testing.T) {
 }
 
 func genData(
-	t *testing.T,
+	tb testing.TB,
 	db sql.StateDatabase,
 	data *atxsdata.Data,
 	store *store.Store,
@@ -275,15 +275,15 @@ func genData(
 ) hare4.ConsensusOutput {
 	numTXs := 1000
 	numProposals := 10
-	txIDs := createAndSaveTxs(t, numTXs, db)
-	signers, atxes := createATXs(t, data, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
+	txIDs := createAndSaveTxs(tb, numTXs, db)
+	signers, atxes := createATXs(tb, data, (lid.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
 	var meshHash types.Hash32
 	if optimistic {
 		meshHash = types.RandomHash()
 	}
-	require.NoError(t, layers.SetMeshHash(db, lid.Sub(1), meshHash))
-	plist := createProposals(t, db, store, lid, meshHash, signers, activeSet, txIDs)
+	require.NoError(tb, layers.SetMeshHash(db, lid.Sub(1), meshHash))
+	plist := createProposals(tb, db, store, lid, meshHash, signers, activeSet, txIDs)
 	return hare4.ConsensusOutput{
 		Layer:     lid,
 		Proposals: types.ToProposalIDs(plist),

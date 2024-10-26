@@ -19,12 +19,12 @@ import (
 )
 
 func createTX(
-	t *testing.T,
+	tb testing.TB,
 	principal *signing.EdSigner,
 	dest types.Address,
 	nonce, amount, fee uint64,
 ) *types.Transaction {
-	t.Helper()
+	tb.Helper()
 
 	var raw []byte
 	if nonce == 0 {
@@ -62,16 +62,16 @@ func makeMeshTX(
 	}
 }
 
-func checkMeshTXEqual(t *testing.T, expected, got types.MeshTransaction) {
-	t.Helper()
-	require.EqualValues(t, expected.Received.UnixNano(), got.Received.UnixNano())
+func checkMeshTXEqual(tb testing.TB, expected, got types.MeshTransaction) {
+	tb.Helper()
+	require.EqualValues(tb, expected.Received.UnixNano(), got.Received.UnixNano())
 	got.Received = time.Time{}
 	expected.Received = time.Time{}
-	require.Equal(t, expected, got)
+	require.Equal(tb, expected, got)
 }
 
 func TestAddGetHas(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	rng := rand.New(rand.NewSource(1001))
 	signer1, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
@@ -110,7 +110,7 @@ func TestAddGetHas(t *testing.T) {
 }
 
 func TestAddUpdatesHeader(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	txs := []*types.Transaction{
 		{
 			RawTx:    types.NewRawTx([]byte{1, 2, 3}),
@@ -143,7 +143,7 @@ func TestAddUpdatesHeader(t *testing.T) {
 }
 
 func TestAddToProposal(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	rng := rand.New(rand.NewSource(1001))
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
@@ -167,7 +167,7 @@ func TestAddToProposal(t *testing.T) {
 }
 
 func TestDeleteProposalTxs(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	proposals := map[types.LayerID][]types.ProposalID{
 		types.LayerID(10): {{1, 1}, {1, 2}},
 		types.LayerID(11): {{2, 1}, {2, 2}},
@@ -198,7 +198,7 @@ func TestDeleteProposalTxs(t *testing.T) {
 }
 
 func TestAddToBlock(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	rng := rand.New(rand.NewSource(1001))
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
@@ -222,7 +222,7 @@ func TestAddToBlock(t *testing.T) {
 }
 
 func TestApply_AlreadyApplied(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	rng := rand.New(rand.NewSource(1001))
 	lid := types.LayerID(10)
@@ -252,7 +252,7 @@ func TestApply_AlreadyApplied(t *testing.T) {
 }
 
 func TestUndoLayers_Empty(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	require.NoError(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
 		return transactions.UndoLayers(dtx, types.LayerID(199))
@@ -260,7 +260,7 @@ func TestUndoLayers_Empty(t *testing.T) {
 }
 
 func TestApplyAndUndoLayers(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	rng := rand.New(rand.NewSource(1001))
 	firstLayer := types.LayerID(10)
@@ -301,7 +301,7 @@ func TestApplyAndUndoLayers(t *testing.T) {
 }
 
 func TestGetBlob(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 
 	rng := rand.New(rand.NewSource(1001))
@@ -334,7 +334,7 @@ func TestGetBlob(t *testing.T) {
 }
 
 func TestGetByAddress(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	rng := rand.New(rand.NewSource(1001))
 	signer1, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
@@ -370,7 +370,7 @@ func TestGetByAddress(t *testing.T) {
 }
 
 func TestGetAcctPendingFromNonce(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	rng := rand.New(rand.NewSource(1001))
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
@@ -405,7 +405,7 @@ func TestGetAcctPendingFromNonce(t *testing.T) {
 }
 
 func TestAppliedLayer(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	rng := rand.New(rand.NewSource(1001))
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	require.NoError(t, err)
@@ -456,7 +456,7 @@ func TestAddressesWithPendingTransactions(t *testing.T) {
 			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: 0},
 		},
 	}
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	for _, tx := range txs {
 		require.NoError(t, transactions.Add(db, &tx, time.Time{}))
 	}
@@ -521,7 +521,7 @@ func TestTransactionInProposal(t *testing.T) {
 		{2},
 		{3},
 	}
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	for i := range lids {
 		require.NoError(t, transactions.AddToProposal(db, tid, lids[i], pids[i]))
 	}
@@ -547,7 +547,7 @@ func TestTransactionInBlock(t *testing.T) {
 		{2},
 		{3},
 	}
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	for i := range lids {
 		require.NoError(t, transactions.AddToBlock(db, tid, lids[i], bids[i]))
 	}

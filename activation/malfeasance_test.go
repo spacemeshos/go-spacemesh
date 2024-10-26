@@ -44,7 +44,7 @@ type testMalfeasanceHandler struct {
 }
 
 func newTestMalfeasanceHandler(tb testing.TB) *testMalfeasanceHandler {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	observer, _ := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
@@ -239,7 +239,7 @@ type testInvalidPostIndexHandler struct {
 }
 
 func newTestInvalidPostIndexHandler(tb testing.TB) *testInvalidPostIndexHandler {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 
 	ctrl := gomock.NewController(tb)
 	postVerifier := NewMockPostVerifier(ctrl)
@@ -420,7 +420,7 @@ type testInvalidPrevATXHandler struct {
 }
 
 func newTestInvalidPrevATXHandler(tb testing.TB) *testInvalidPrevATXHandler {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 
 	h := NewInvalidPrevATXHandler(db, signing.NewEdVerifier())
 	return &testInvalidPrevATXHandler{
