@@ -28,6 +28,9 @@
         - [Range checksums](#range-checksums)
         - [Bloom filters for recent sync](#bloom-filters-for-recent-sync)
 - [Multi-peer Reconciliation](#multi-peer-reconciliation)
+    - [Deciding on the sync strategy](#deciding-on-the-sync-strategy)
+    - [Split sync](#split-sync)
+    - [Full sync](#full-sync)
 
 <!-- markdown-toc end -->
 
@@ -793,6 +796,8 @@ in the state database. The main set is refreshed from time to time to
 include the items that were recently added; this doesn't affect the
 derived copies currently in use for sync.
 
+## Deciding on the sync strategy
+
 When picking the peers for the purpose of multi-peer sync, each peer
 is [probed](#minhash-based-set-difference-estimation) to determine how
 many items it has in its set. The peers with substantially lower
@@ -824,6 +829,8 @@ stateDiagram-v2
     SplitSync --> FullSync : Sync succeeded
     FullSync --> Wait : Sync terminated
 ```
+
+## Split sync
 
 The split sync approach helps bringing nodes that went substantially
 out of sync relatively quickly while also making sure too much load is
@@ -898,6 +905,8 @@ sequenceDiagram
     A <<->> E: Sync [0xC0..., 0x00...)
   end
 ```
+
+## Full sync
 
 Full sync is used when this node's set is similar enough to its peers'
 sets, or when there's not enough peers for split sync. The full sync
