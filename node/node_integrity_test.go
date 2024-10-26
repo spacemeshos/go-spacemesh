@@ -29,6 +29,7 @@ func TestCheckDBValidity(t *testing.T) {
 
 	db, err := statesql.Open("file:state.sql")
 	require.NoError(t, err)
+	defer func() { require.NoError(t, db.Close()) }()
 
 	logger := zaptest.NewLogger(t)
 	cfg := config.MainnetConfig()
@@ -68,8 +69,10 @@ func TestCheckDBValidity(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	trtl := malfeasance.NewMocktortoise(ctrl)
+	cdb := datastore.NewCachedDB(db, logger.Named("cached_db"))
+	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
 	handler := malfeasance.NewHandler(
-		datastore.NewCachedDB(db, logger.Named("cached_db")),
+		cdb,
 		malfeasanceLogger,
 		"self",
 		nodeIDs,

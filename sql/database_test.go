@@ -195,14 +195,14 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-func execSQL(t *testing.T, db Executor, sql string, col int) (result string) {
+func execSQL(tb testing.TB, db Executor, sql string, col int) (result string) {
 	_, err := db.Exec(sql, nil, func(stmt *Statement) bool {
 		if col >= 0 {
 			result = stmt.ColumnText(col)
 		}
 		return true
 	})
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return result
 }
 

@@ -108,10 +108,13 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	}).AnyTimes()
 
 	// 1. Initialize
+	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zap.NewNop())
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
-		datastore.NewCachedDB(statesql.InMemory(), zap.NewNop()),
+		cdb,
 		atxsdata.New(),
 		cl.GoldenATX(),
 		syncer,
@@ -157,8 +160,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, grpcPrivateServer.Start())
 	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
 
-	db := statesql.InMemory()
-	localDb := localsql.InMemory()
+	localDb := localsql.InMemoryTest(t)
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
 	poetDb, err := activation.NewPoetDb(db, zap.NewNop())

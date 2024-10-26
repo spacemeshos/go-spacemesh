@@ -46,7 +46,8 @@ func TestUpgradeToV15(t *testing.T) {
 		db, err := statesql.Open(uri,
 			sql.WithDatabaseSchema(schema),
 			sql.WithForceMigrations(true),
-			sql.WithNoCheckSchemaDrift())
+			sql.WithNoCheckSchemaDrift(),
+		)
 		require.NoError(t, err)
 		require.NoError(t, db.Close())
 

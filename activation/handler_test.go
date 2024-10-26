@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/verifying"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -197,6 +198,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)
@@ -756,11 +758,11 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 }
 
 func newInitialATXv1(
-	t testing.TB,
+	tb testing.TB,
 	goldenATXID types.ATXID,
 	opts ...func(*wire.ActivationTxV1),
 ) *wire.ActivationTxV1 {
-	t.Helper()
+	tb.Helper()
 	nonce := uint64(999)
 	poetRef := types.RandomHash()
 	atx := &wire.ActivationTxV1{
@@ -772,7 +774,7 @@ func newInitialATXv1(
 				CommitmentATXID:  &goldenATXID,
 				InitialPost:      &wire.PostV1{},
 			},
-			NIPost:   newNIPosV1tWithPoet(t, poetRef.Bytes()),
+			NIPost:   newNIPosV1tWithPoet(tb, poetRef.Bytes()),
 			VRFNonce: &nonce,
 			Coinbase: types.GenerateAddress([]byte("aaaa")),
 			NumUnits: 100,
@@ -785,11 +787,11 @@ func newInitialATXv1(
 }
 
 func newChainedActivationTxV1(
-	t testing.TB,
+	tb testing.TB,
 	prev *wire.ActivationTxV1,
 	pos types.ATXID,
 ) *wire.ActivationTxV1 {
-	t.Helper()
+	tb.Helper()
 	poetRef := types.RandomHash()
 	return &wire.ActivationTxV1{
 		InnerActivationTxV1: wire.InnerActivationTxV1{
@@ -798,7 +800,7 @@ func newChainedActivationTxV1(
 				PublishEpoch:     prev.PublishEpoch + 1,
 				PositioningATXID: pos,
 			},
-			NIPost:   newNIPosV1tWithPoet(t, poetRef.Bytes()),
+			NIPost:   newNIPosV1tWithPoet(tb, poetRef.Bytes()),
 			Coinbase: prev.Coinbase,
 			NumUnits: prev.NumUnits,
 		},

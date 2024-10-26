@@ -34,7 +34,7 @@ type testMalfeasanceHandler struct {
 }
 
 func newHandler(tb testing.TB) *testMalfeasanceHandler {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	observer, _ := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
@@ -45,8 +45,10 @@ func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	ctrl := gomock.NewController(tb)
 	trt := NewMocktortoise(ctrl)
 	store := atxsdata.New()
+	cdb := datastore.NewCachedDB(db, logger, datastore.WithConsensusCache(store))
+	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
 	h := NewHandler(
-		datastore.NewCachedDB(db, logger, datastore.WithConsensusCache(store)),
+		cdb,
 		logger,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
